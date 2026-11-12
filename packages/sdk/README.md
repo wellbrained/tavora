@@ -93,9 +93,12 @@ shows, with the old hint.
 Tooltips are neutral (Tavora's own colours) unless `content.look` is `'poe'`, the Path of Exile 2 item look
 (Tavora 0.23.53 and newer; an older Tavora rejects a tooltip with `look`, so catch the failure).
 
-`content.layout: 'card'` shows an item card instead: the picture large on top, a name bar with the title, the subtitle
-as its type line, the badges, an effect box (`content.effect`: a text, or runs where `accent: true` ones take the accent
-colour), then properties and sections. A module can dress its cards in a skin of its own, defined once per name with
+`content.layout: 'card'` shows an item card instead: the picture large on top, the title with the badges beside it,
+the subtitle as its type line, an effect box (`content.effect`: a text, or runs where `accent: true` ones take the
+accent colour), then the stats and sections. A stat can say how much it grows (`per: '+3'`, say per level): the card
+then shows a third column in the accent colour, with `content.perHeading` ('Per level', translated) over it, and a stat
+with `per` may have an empty `value`. Without any `per` the stats keep two columns. On a Tavora without
+`sdk.supports("ui.tooltip.per")` the SDK puts `per` into the value ("12 · +3") and leaves the heading out. A module can dress its cards in a skin of its own, defined once per name with
 `ui.tooltip.defineSkin` and picked per card with `content.skin`: a nine-slice frame picture, colours (`#rrggbb`), a WOFF2
 font for the title and the effect box only, hard pixels and a title in capitals. Tavora checks the files (only from your
 own `dist/`, PNG or WebP and WOFF2 by their first bytes, up to 512 KB each) and the contrast (text, muted text, the

@@ -177,40 +177,56 @@ function renderCard(card: HTMLElement, c: TooltipContent, de: boolean) {
         art.append(image);
         item.append(art);
     }
+    // The title row: the name, and the badges right-aligned beside it (under it on their own when they don't fit).
     const name = node("div", undefined, "name");
     name.append(node("h2", c.title, c.tone));
-    item.append(name);
-    if (c.subtitle)
-        item.append(node("div", c.subtitle, "subtitle"));
     if (c.badges?.length) {
         const badges = node("div", undefined, "badges");
         for (const b of c.badges)
             badges.append(node("span", b, "badge"));
-        item.append(badges);
+        name.append(badges);
     }
+    item.append(name);
+    if (c.subtitle)
+        item.append(node("div", c.subtitle, "subtitle"));
     if (c.effect)
         item.append(effectBox(c.effect));
-    appendRows(item, c);
+    if (c.properties?.length)
+        item.append(stats(c.properties, c.perHeading));
+    const { properties: _stats, ...rows } = c;
+    appendRows(item, rows);
     // Requirements come last, as rows like the properties, under their own heading.
     if (c.requirements?.length) {
-        const section = node("section", undefined, "card-requirements"), rows = node("div", undefined, "properties");
-        section.append(node("small", de ? "Ben\u00f6tigt" : "Requires"));
-        for (const r of c.requirements) {
-            const row = node("div");
-            row.append(node("span", r.label + ": "), node("span", r.value, "value"));
-            rows.append(row);
-        }
-        section.append(rows);
+        const section = node("section", undefined, "card-requirements");
+        section.append(node("small", de ? "Ben\u00f6tigt" : "Requires"), stats(c.requirements));
         item.append(section);
     }
 }
 /** Properties and sections, the same in both layouts. */
+/**
+ * The card's stats: label, value and, when a row of the card has one, how much it grows (`per`) in a third column
+ * with its heading over it. No colons: the columns line the values up.
+ */
+function stats(rows: { label: string; value: string; per?: string }[], heading?: string) {
+    const per = rows.some(r => r.per !== undefined);
+    const grid = node("div", undefined, per ? "stats per" : "stats");
+    if (per && heading)
+        grid.append(node("span"), node("span"), node("small", heading, "per-heading"));
+    for (const r of rows) {
+        grid.append(node("span", r.label, "stats-label"), node("span", r.value, "value"));
+        if (per)
+            grid.append(node("span", r.per ?? "", "per"));
+    }
+    return grid;
+}
 function appendRows(details: HTMLElement, c: TooltipContent) {
     if (c.properties?.length) {
         const props = node("div", undefined, "properties");
         for (const p of c.properties) {
             const row = node("div");
-            row.append(node("span", p.label ? p.label + ": " : ""), node("span", p.value, "value"));
+            // The rich layout has no third column: what a stat grows by follows its value.
+            const value = p.per === undefined ? p.value : p.value.trim() ? p.value + " \u00b7 " + p.per : p.per;
+            row.append(node("span", p.label ? p.label + ": " : ""), node("span", value, "value"));
             props.append(row);
         }
         details.append(props);

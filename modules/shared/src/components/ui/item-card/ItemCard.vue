@@ -20,6 +20,9 @@ const props = defineProps<{
 
 const layout = computed(() => (props.content.layout === "card" ? "card" : "rich"))
 const skin = computed(() => (layout.value === "card" ? props.skin : undefined))
+// A third stats column only when a stat of this card grows (`per`); the rich layout puts it after the value instead.
+const hasPer = computed(() => !!props.content.properties?.some((p) => p.per !== undefined))
+const withPer = (p: { value: string; per?: string }) => (p.per === undefined ? p.value : p.value.trim() ? `${p.value} · ${p.per}` : p.per)
 const runs = computed(() => {
   const effect = props.content.effect
   return typeof effect === "string" ? [{ text: effect }] : (effect ?? [])
@@ -82,14 +85,17 @@ const style = computed<CSSProperties>(() => {
   >
     <template v-if="layout === 'card'">
       <div v-if="content.image" class="tavora-item-card-art"><img :src="content.image" alt="" /></div>
-      <div class="tavora-item-card-name"><h3>{{ content.title }}</h3></div>
-      <p v-if="content.subtitle" class="tavora-item-card-type">{{ content.subtitle }}</p>
-      <div v-if="content.badges?.length" class="tavora-item-card-badges">
-        <span v-for="(badge, i) in content.badges" :key="i" class="tavora-item-card-badge">{{ badge }}</span>
+      <div class="tavora-item-card-name">
+        <h3>{{ content.title }}</h3>
+        <div v-if="content.badges?.length" class="tavora-item-card-badges">
+          <span v-for="(badge, i) in content.badges" :key="i" class="tavora-item-card-badge">{{ badge }}</span>
+        </div>
       </div>
+      <p v-if="content.subtitle" class="tavora-item-card-type">{{ content.subtitle }}</p>
       <p v-if="runs.length" class="tavora-item-card-effect"><template v-for="(run, i) in runs" :key="i"><span v-if="'accent' in run && run.accent" data-accent>{{ run.text }}</span><template v-else>{{ run.text }}</template></template></p>
-      <dl v-if="content.properties?.length" class="tavora-item-card-props">
-        <template v-for="(p, i) in content.properties" :key="i"><dt>{{ p.label }}</dt><dd>{{ p.value }}</dd></template>
+      <dl v-if="content.properties?.length" class="tavora-item-card-stats" :data-per="hasPer ? '' : undefined">
+        <template v-if="hasPer && content.perHeading"><span /><span /><span class="tavora-item-card-per-heading">{{ content.perHeading }}</span></template>
+        <template v-for="(p, i) in content.properties" :key="i"><dt>{{ p.label }}</dt><dd>{{ p.value }}</dd><dd v-if="hasPer" data-per>{{ p.per ?? "" }}</dd></template>
       </dl>
       <section v-for="(s, i) in content.sections ?? []" :key="i" class="tavora-item-card-section">
         <p v-if="s.title">{{ s.title }}</p>
@@ -112,7 +118,7 @@ const style = computed<CSSProperties>(() => {
         <p v-if="content.subtitle" class="tavora-item-card-type">{{ content.subtitle }}</p>
         <p v-if="runs.length" class="tavora-item-card-effect"><template v-for="(run, i) in runs" :key="i"><span v-if="'accent' in run && run.accent" data-accent>{{ run.text }}</span><template v-else>{{ run.text }}</template></template></p>
         <dl v-if="content.properties?.length" class="tavora-item-card-props">
-          <template v-for="(p, i) in content.properties" :key="i"><dt>{{ p.label }}</dt><dd>{{ p.value }}</dd></template>
+          <template v-for="(p, i) in content.properties" :key="i"><dt>{{ p.label }}</dt><dd>{{ withPer(p) }}</dd></template>
         </dl>
         <section v-for="(s, i) in content.sections ?? []" :key="i" class="tavora-item-card-section">
           <p v-if="s.title">{{ s.title }}</p>

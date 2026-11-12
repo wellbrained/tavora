@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.32
+
+- New projects start on `@tavora/sdk` 0.3.17: item-card stats can show how much they grow (`per`, `perHeading`).
+
 ## 0.1.31
 
 - New projects start on `@tavora/sdk` 0.3.16: item cards (`layout: "card"`) with an effect box, and skins of your own (`ui.tooltip.defineSkin`).

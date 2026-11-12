@@ -1,3 +1,10 @@
+## 0.3.17
+
+Stats that grow on item cards. They come with the next Tavora (`ITEM_CARD_PER_TAVORA` in `protocol.ts`; the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.19.32).
+
+- A property takes `per` (how much it grows, e.g. `"×1.2"`), and `TooltipContent` takes `perHeading` (the heading over that column, e.g. "Per level"). The card shows a third column in the accent colour only when a property has `per`; with `per`, `value` may be empty. The rich layout shows it after the value.
+- On an older Tavora the SDK puts `per` into the value ("12 · +3") and leaves `perHeading` out. `sdk.supports("ui.tooltip.per")` tells which case you are in.
+
 ## 0.3.16
 
 Item cards and skins for the shared tooltip. They come with the next Tavora (`ITEM_CARD_TAVORA` in `protocol.ts`; `later`: the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.19.32).

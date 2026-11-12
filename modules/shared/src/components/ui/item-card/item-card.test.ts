@@ -25,10 +25,13 @@ const card: TooltipContent = { title: "Archer Tower", subtitle: "Tower", layout:
 const skin: ItemCardSkin = { frame: { image: "frame.png", slice: [6, 6, 6, 6] }, colors: { surface: "#14110f", text: "#f2ece0", accent: "#e8b04a" }, pixelArt: true, titleCaps: true }
 
 describe("ItemCard", () => {
-  it("lays the card out like the tooltip: picture, name bar, type line, badges, effect box, rows", () => {
+  it("lays the card out like the tooltip: picture, title with its badges, type line, effect box, stats, rows", () => {
     const el = mount(card)
     expect(el.dataset.layout).toBe("card")
-    expect([...el.children].map((c) => c.className)).toEqual(["tavora-item-card-art", "tavora-item-card-name", "tavora-item-card-type", "tavora-item-card-badges", "tavora-item-card-effect", "tavora-item-card-props", "tavora-item-card-section"])
+    expect([...el.children].map((c) => c.className)).toEqual(["tavora-item-card-art", "tavora-item-card-name", "tavora-item-card-type", "tavora-item-card-effect", "tavora-item-card-stats", "tavora-item-card-section"])
+    expect(el.querySelector(".tavora-item-card-name .tavora-item-card-badges")).not.toBeNull()
+    expect(el.querySelector(".tavora-item-card-stats")!.hasAttribute("data-per")).toBe(false)
+    expect(el.querySelectorAll(".tavora-item-card-stats > *")).toHaveLength(2)
     expect(el.querySelector("h3")!.textContent).toBe("Archer Tower")
     expect(el.querySelector(".tavora-item-card-effect")!.textContent).toBe("Shoots for 12 damage")
     expect([...el.querySelectorAll("[data-accent]")].map((a) => a.textContent)).toEqual(["12"])
@@ -47,6 +50,16 @@ describe("ItemCard", () => {
     expect(el.style.getPropertyValue("--ic-title-size")).toBe(`${ITEM_CARD_TYPE.skinTitle}px`)
     expect(el.style.getPropertyValue("--ic-effect-size")).toBe(`${ITEM_CARD_TYPE.skinEffect}px`)
     expect(el.style.borderImageSource).toContain("frame.png")
+  })
+
+  it("shows what a stat grows by in a third column with its heading, and after the value in the rich layout", () => {
+    const levels: TooltipContent = { ...card, perHeading: "Per level", properties: [{ label: "Damage", value: "12", per: "+3" }, { label: "Range", value: "3" }] }
+    const stats = mount(levels).querySelector(".tavora-item-card-stats")!
+    expect(stats.hasAttribute("data-per")).toBe(true)
+    expect(Array.from(stats.children, (c) => c.textContent)).toEqual(["", "", "Per level", "Damage", "12", "+3", "Range", "3", ""])
+    app!.unmount()
+    const rich = mount({ ...levels, layout: "rich" })
+    expect(Array.from(rich.querySelectorAll(".tavora-item-card-props dd"), (d) => d.textContent)).toEqual(["12 · +3", "3"])
   })
 
   it("shows the rich layout with the picture beside the text, and no skin there", () => {

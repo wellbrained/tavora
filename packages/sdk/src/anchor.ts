@@ -49,12 +49,21 @@ export function tooltipShowParams(request: TooltipShowOptions, hostVersion: stri
   if (request.pinnable === false && request.pinned === true) throw new TavoraError({ code: "INVALID_PARAMS", message: "A card that is not pinnable can't be pinned" });
   const params = tooltipParams(request);
   if (params.pinnable !== undefined && !supportsCall(hostVersion, "ui.tooltip.pinnable")) delete params.pinnable;
+  if (params.content && !supportsCall(hostVersion, "ui.tooltip.per")) params.content = withoutPer(params.content);
   const content = params.content as TooltipContent | undefined;
   if (content && (content.layout !== undefined || content.effect !== undefined || content.skin !== undefined) && !supportsCall(hostVersion, "ui.tooltip.skin")) {
     const { layout: _layout, effect, skin: _skin, ...older } = content;
     params.content = effect === undefined ? older : { ...older, sections: withEffectRow(older.sections, effect) };
   }
   return params;
+}
+
+/** For a Tavora without the stats' third column: each `per` goes into its value ("24 · ×1.2"), the heading goes. */
+function withoutPer(content: TooltipContent): TooltipContent {
+  if (content.perHeading === undefined && !content.properties?.some((p) => p.per !== undefined)) return content;
+  const { perHeading: _heading, ...rest } = content;
+  if (!rest.properties) return rest;
+  return { ...rest, properties: rest.properties.map(({ per, ...p }) => (per === undefined ? p : { ...p, value: p.value.trim() ? `${p.value} · ${per}` : per })) };
 }
 
 /**

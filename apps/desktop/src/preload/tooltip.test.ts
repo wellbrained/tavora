@@ -32,12 +32,16 @@ beforeAll(async () => {
 beforeEach(() => { document.body.className = ""; });
 
 describe("tooltip preload", () => {
-    it("lays a card out with the picture on top, the name bar, type line, badges, effect box and rows", () => {
+    it("lays a card out with the picture on top, the title with its badges, type line, effect box and stats", () => {
         const el = render(card);
         expect(document.body.classList.contains("card")).toBe(true);
         const item = el.querySelector(".item")!;
-        expect(Array.from(item.children).map(c => c.className)).toEqual(["card-art", "name", "subtitle", "badges", "effect", "properties"]);
+        expect(Array.from(item.children).map(c => c.className)).toEqual(["card-art", "name", "subtitle", "effect", "stats"]);
+        expect(Array.from(item.querySelector(".name")!.children).map(c => c.tagName.toLowerCase() + "." + c.className)).toEqual(["h2.", "div.badges"]);
         expect(item.querySelector(".name h2")!.textContent).toBe("Archer Tower");
+        // Two columns without a colon when no stat grows.
+        expect(Array.from(item.querySelector(".stats")!.children).map(c => c.textContent)).toEqual(["Range", "3"]);
+        expect(item.querySelector(".per, .per-heading")).toBeNull();
         expect(item.querySelector(".effect")!.textContent).toBe("Shoots for 12 damage");
         expect(Array.from(item.querySelectorAll(".effect .accent")).map(a => a.textContent)).toEqual(["12"]);
         expect(el.querySelector(".footer")!.textContent).toContain("Click to pin item details");
@@ -87,7 +91,23 @@ describe("tooltip preload", () => {
         const el = render({ ...card, requirements: [{ label: "Level", value: "12" }] }, { language: "de" });
         const last = el.querySelector(".item")!.lastElementChild!;
         expect(last.querySelector("small")!.textContent).toBe("Ben\u00f6tigt");
-        expect(last.querySelector(".properties")!.textContent).toBe("Level: 12");
+        expect(Array.from(last.querySelector(".stats")!.children).map(c => c.textContent)).toEqual(["Level", "12"]);
+    });
+
+    it("shows what a stat grows by in a third column with its heading, only when a stat of the card has it", () => {
+        const levels = { ...card, perHeading: "Per level", properties: [{ label: "Damage", value: "12", per: "+3" }, { label: "Speed", value: "", per: "\u00d71.1" }, { label: "Range", value: "3" }] };
+        const stats = render(levels).querySelector(".stats")!;
+        expect(stats.classList.contains("per")).toBe(true);
+        expect(Array.from(stats.children).map(c => c.textContent)).toEqual(["", "", "Per level", "Damage", "12", "+3", "Speed", "", "\u00d71.1", "Range", "3", ""]);
+        expect(stats.querySelector(".per-heading")!.tagName).toBe("SMALL");
+        // A heading without any per shows nothing.
+        const plain = render({ ...card, perHeading: "Per level" }).querySelector(".stats")!;
+        expect(plain.classList.contains("per")).toBe(false);
+        expect(plain.querySelector(".per-heading")).toBeNull();
+        // The rich layout has no third column: it follows the value.
+        const rich = render({ ...levels, layout: "rich" });
+        expect(Array.from(rich.querySelectorAll(".properties .value")).map(v => v.textContent)).toEqual(["12 \u00b7 +3", "\u00d71.1", "3"]);
+        expect(rich.querySelector(".per-heading")).toBeNull();
     });
 
     it("shows the rich layout as before, with no skin even when one is sent", () => {
