@@ -130,7 +130,7 @@ async function confirm(row: PickerRow | null) {
       return;
     }
     const moduleIds = ticksOf(row);
-    const added = await act({ type: "add-workspace", ...addInputFor(row, name.value) }, { quiet: true });
+    const added = await act({ type: "add-workspace", ...addInputFor(row, name.value) }, { quiet: true }).catch(() => ({ ok: false as const, error: t("error.generic") }));
     if (!added.ok) {
       error.value = added.error;
       return;

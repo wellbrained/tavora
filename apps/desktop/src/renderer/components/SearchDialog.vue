@@ -3,7 +3,7 @@
 // run an action or find a setting. Arrow keys move, Enter runs, Escape
 // closes.
 import { Blocks, Home, LayoutPanelLeft, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings, SlidersHorizontal } from "@lucide/vue";
-import { computed, ref, watch, type Component } from "vue";
+import { computed, ref, shallowRef, watch, type Component } from "vue";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import { useListNav } from "@/lib/list-nav";
@@ -70,7 +70,8 @@ watch([searchOpen, searchStart], ([open, start], [wasOpen]) => {
 const ONLINE_DELAY_MS = 250;
 const MAX_ADD_ITEMS = 3;
 const known = ref<CatalogMatch[]>([]);
-const online = ref<OnlineGame[]>([]);
+// Plain objects, not reactive ones: a picked result is sent to the main process as it is, and a proxy can't be.
+const online = shallowRef<OnlineGame[]>([]);
 let knownId = 0;
 let onlineId = 0;
 let onlineTimer: ReturnType<typeof setTimeout> | undefined;
