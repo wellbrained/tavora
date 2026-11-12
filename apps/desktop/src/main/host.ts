@@ -32,7 +32,7 @@ import {
 import type { TavoraTheme, TavoraWorkspace } from "@tavora/sdk/protocol";
 import type { IconTone } from "../shared/icon-tone";
 import type { PanelDialogSize } from "./bridge";
-import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, InstalledGameView, ModulePageResult, OfficialPublishRun, OfficialPublishView, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, PanelDialog, PanelPlacement, ProfileRanksView, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
+import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, InstalledGameView, ModulePageResult, OfficialPublishRun, OfficialPublishView, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, PanelDialog, PanelPlacement, ProfileRanksView, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView, UnlistedGame } from "../shared/host-api";
 import { resolveLanguage, translate, type Language, type MessageKey } from "../shared/i18n";
 import { suggestPrefix } from "../shared/id-prefix";
 import { compareModuleVersions } from "../shared/module-version";
@@ -139,7 +139,7 @@ import { OverlayCanvas } from "./overlay-canvas";
 import { PICTURES_FOLDER } from "./layout-pictures";
 import { parseLayoutMessage } from "../shared/layout-view";
 import { OverlayPreviews } from "./overlay-previews";
-import { GameWatcher } from "./game-watch";
+import { GameWatcher, unlistedToOffer } from "./game-watch";
 import { moveToWorkspaces } from "./workspace-move";
 import { Streaming } from "./streaming";
 import { findInstalledGames, normalizeName, type InstalledGame } from "./launcher-games";
@@ -531,6 +531,8 @@ export class Host {
     return this.installed.catalog;
   }
   private running: string[] = [];
+  /** The running games not in the library, the one started last at the end (game-watch.ts). */
+  private runningUnlisted: readonly UnlistedGame[] = [];
   /** When each workspace was last opened as of startup: the rail keeps this order until the next start. */
   private openedAtStart: Record<string, string> = {};
   private readonly gameWatcher = new GameWatcher({
@@ -539,6 +541,10 @@ export class Host {
     keyOf: gameKey,
     onSeen: (keys) => void this.gamesSeen.running(keys),
     onChange: (running, initial) => this.gamesRunning(running, initial),
+    onUnlisted: (games) => {
+      this.runningUnlisted = games;
+      if (!this.windowClosed) this.pushStateSoon();
+    },
     testSteamAppId: () => this.options.testSteamAppId,
     log: (line) => console.warn(`[tavora] ${line}`),
   });
@@ -2354,8 +2360,12 @@ export class Host {
         this.startWorkspace(id);
         this.saveLibrary();
         this.fetchIconsSoon();
-        // The game of a game workspace added just now may have been installed since the last look.
-        if (this.gameWatcher.active) void this.gameWatcher.refreshInstalled();
+        if (this.gameWatcher.active) {
+          // A game running now (the rail offered to add it) shows as running at once.
+          this.gameWatcher.libraryChanged();
+          // The game of a game workspace added just now may have been installed since the last look.
+          void this.gameWatcher.refreshInstalled();
+        }
         return id;
       },
       "rename-workspace": saved((action) => renameWorkspace(this.library, action.workspaceId, action.name)),
@@ -4814,6 +4824,15 @@ export class Host {
       ...pending,
       runningGameId: this.running.filter((id) => id !== this.workspaceId && isLive(this.library, id)).at(-1) ?? null,
       workspaceRunning: this.workspaceId !== null && this.running.includes(this.workspaceId),
+      // "When a game starts" off leaves `running` empty too: off means off.
+      runningUnlisted:
+        this.library.gameStart === "off" || !this.runningUnlisted.length
+          ? null
+          : unlistedToOffer(
+              this.runningUnlisted,
+              liveWorkspaces(this.library),
+              this.running.some((id) => isLive(this.library, id)),
+            ),
       pendingGameSwitch: pending.pendingGameSwitch && isLive(this.library, pending.pendingGameSwitch) ? pending.pendingGameSwitch : null,
       streaming: this.streaming.view(),
       gameOverlays: this.gameOverlays.view(),

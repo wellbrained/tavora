@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CatalogModuleView, InstalledGameView } from "../../shared/host-api";
-import { addInputFor, buildRows, defaultTicks, describeActivity, initials, modulesFor } from "./game-picker";
+import { addInputFor, addInputForUnlisted, buildRows, defaultTicks, describeActivity, initials, modulesFor } from "./game-picker";
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = new Date(2026, 10, 1, 12).getTime();
@@ -110,5 +110,13 @@ describe("initials", () => {
     expect(initials("Path of Exile 2")).toBe("PE2");
     expect(initials("Hades")).toBe("HAD");
     expect(initials("")).toBe("?");
+  });
+});
+
+describe("addInputForUnlisted", () => {
+  it("adds the built-in game, else the user's own game with its Steam id", () => {
+    expect(addInputForUnlisted({ name: "Diablo IV", steamAppId: 2344520, catalogId: "diablo-4" })).toEqual({ catalogId: "diablo-4" });
+    expect(addInputForUnlisted({ name: "9 Kings", steamAppId: 2784470, catalogId: null })).toEqual({ name: "9 Kings", steamAppId: 2784470 });
+    expect(addInputForUnlisted({ name: "Some Game", steamAppId: null, catalogId: null })).toEqual({ name: "Some Game" });
   });
 });

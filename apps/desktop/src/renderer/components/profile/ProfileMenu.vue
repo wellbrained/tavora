@@ -14,16 +14,15 @@ defineProps<{ expanded: boolean }>();
 const profile = computed(() => state.value!.profile);
 /**
  * The second line: the game running now, else whether the user is signed in. That is the game the rail offers to
- * switch to, else the open workspace's own game while it runs (runningGameId leaves that one out).
+ * switch to, else the open workspace's own game while it runs (runningGameId leaves that one out), else a game
+ * running that is not in the library.
  */
-const runningGame = computed(() => {
+const playing = computed(() => {
   const view = state.value!;
   const id = view.runningGameId ?? (view.workspaceRunning ? view.currentWorkspaceId : null);
-  return id ? (view.library.workspaces[id] ?? null) : null;
+  return (id ? view.library.workspaces[id]?.name : undefined) ?? view.runningUnlisted?.name ?? null;
 });
-const status = computed(() =>
-  runningGame.value ? t("rail.playing", { name: runningGame.value.name }) : account.value?.account ? t("rail.signedIn") : t("rail.signedOut"),
-);
+const status = computed(() => (playing.value ? t("rail.playing", { name: playing.value }) : account.value?.account ? t("rail.signedIn") : t("rail.signedOut")));
 </script>
 
 <template>
@@ -53,7 +52,7 @@ const status = computed(() =>
         </span>
         <span class="relative flex min-w-0 flex-col">
           <span class="truncate text-sm font-semibold">{{ profile.name.trim() || t("profile.label") }}</span>
-          <span :class="cn('truncate text-xs font-medium', runningGame ? 'text-success' : 'text-foreground/80')" data-testid="rail-profile-status">{{ status }}</span>
+          <span :class="cn('truncate text-xs font-medium', playing ? 'text-success' : 'text-foreground/80')" data-testid="rail-profile-status">{{ status }}</span>
         </span>
       </template>
       <RailFooterTile v-else>

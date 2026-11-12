@@ -1,4 +1,4 @@
-import type { CatalogMatch, CatalogModuleView, InstalledGameView, OnlineGame } from "../../shared/host-api";
+import type { CatalogMatch, CatalogModuleView, InstalledGameView, OnlineGame, UnlistedGame } from "../../shared/host-api";
 import { rank, rankByName } from "./search";
 
 /** One line of the Add a game list: a game on this PC, a built-in game or one from the online search. */
@@ -104,6 +104,12 @@ export function describeActivity(activity: { kind: "played" | "installed"; at: n
   if (days <= 14) return { key: played ? "addGame.played.daysAgo" : "addGame.installed.daysAgo", n: days };
   const month = new Date(activity.at);
   return { key: played ? "addGame.played.inMonth" : "addGame.installed.inMonth", month, withYear: month.getFullYear() !== new Date(now).getFullYear() };
+}
+
+/** The input `add-workspace` takes for a running game not in the library: the built-in game, else the user's own with its Steam id. */
+export function addInputForUnlisted(game: UnlistedGame): { catalogId: string } | { name: string; steamAppId?: number } {
+  if (game.catalogId) return { catalogId: game.catalogId };
+  return game.steamAppId === null ? { name: game.name } : { name: game.name, steamAppId: game.steamAppId };
 }
 
 /** The input `add-workspace` takes for a row, or for the typed name (no row) as the user's own game. */

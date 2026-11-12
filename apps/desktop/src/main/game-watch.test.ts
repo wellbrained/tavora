@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { gameFolderKey, GameWatcher, POLL_SECONDS, runningGames } from "./game-watch";
+import { gameFolderKey, GameWatcher, POLL_SECONDS, runningGames, runningUnlisted, unlistedToOffer } from "./game-watch";
+import type { UnlistedGame } from "../shared/host-api";
 import type { InstalledGame } from "./launcher-games";
 import { addWorkspace, emptyLibrary, liveWorkspaces, markOpened, trashWorkspace } from "./library";
 import type { ProgramLook } from "./program-list";
@@ -77,6 +78,68 @@ describe("runningGames", () => {
   });
 });
 
+describe("runningUnlisted", () => {
+  const KINGS: InstalledGame = { source: "steam", name: "9 Kings", steamAppId: 2784470, file: "E:\\Steam\\steamapps\\common\\9 Kings\\9Kings.exe", index: 0, folder: "E:\\Steam\\steamapps\\common\\9 Kings" };
+  // Steam writes its games into Windows' list of programs too, without the id.
+  const KINGS_LISTED: InstalledGame = { source: "windows", name: "9 Kings", file: "E:\\Steam\\steamapps\\common\\9 Kings\\9Kings.exe", index: 0, folder: "E:\\Steam\\steamapps\\common\\9 Kings" };
+  const EDGE: InstalledGame = { source: "windows", name: "Microsoft Edge", file: "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe", index: 0, folder: "C:\\Program Files (x86)\\Microsoft\\Edge\\Application" };
+  const kings: UnlistedGame = { name: "9 Kings", steamAppId: 2784470, catalogId: null };
+
+  it("finds a game Steam runs that is not in the library, named as Steam installed it", () => {
+    expect(runningUnlisted([], [KINGS, KINGS_LISTED, DIABLO], [], 2784470)).toEqual([kings]);
+  });
+
+  it("leaves out an app Steam runs but did not install", () => {
+    expect(runningUnlisted([], [DIABLO], [], 2784470)).toEqual([]);
+  });
+
+  it("finds a game by a program in the folder a launcher installed it in, once, its Steam copy first", () => {
+    expect(runningUnlisted([], [KINGS_LISTED, KINGS], ["E:\\Steam\\steamapps\\common\\9 Kings\\9Kings.exe"], null)).toEqual([kings]);
+    expect(runningUnlisted([], [FORTNITE], [FORTNITE.file], null)).toEqual([{ name: "Fortnite", steamAppId: null, catalogId: "fortnite" }]);
+  });
+
+  it("never takes a program from Windows' list for a game, unless it is a built-in one", () => {
+    expect(runningUnlisted([], [EDGE], [EDGE.file], null)).toEqual([]);
+    expect(runningUnlisted([], [KINGS_LISTED], [KINGS_LISTED.file], null)).toEqual([]);
+    const diablo = { ...DIABLO, source: "windows" as const };
+    expect(runningUnlisted([], [diablo], [DIABLO.file], null)).toEqual([{ name: "Diablo IV", steamAppId: null, catalogId: "diablo-4" }]);
+  });
+
+  it("counts a game whose copies are all in Trash as not in the library, and leaves out one that is", () => {
+    const library = emptyLibrary();
+    addWorkspace(library, { name: "9 Kings", steamAppId: 2784470 }, day(1));
+    expect(runningUnlisted(Object.values(library.workspaces), [KINGS], [], 2784470)).toEqual([]);
+    trashWorkspace(library, "local-9-kings", day(2));
+    expect(runningUnlisted(Object.values(library.workspaces), [KINGS], [], 2784470)).toEqual([kings]);
+    // By name too, for a copy added without its Steam id.
+    addWorkspace(library, { name: "9 Kings" }, day(3));
+    expect(runningUnlisted(Object.values(library.workspaces), [KINGS], [], 2784470)).toEqual([]);
+  });
+
+  it("ignores helpers in the folder and a folder two games claim", () => {
+    const shared = (name: string): InstalledGame => ({ source: "epic", name, file: "C:\\Tools\\Hub\\hub.exe", index: 0 });
+    expect(runningUnlisted([], [FORTNITE], ["D:\\Epic\\Fortnite\\CrashReportClient.exe"], null)).toEqual([]);
+    expect(runningUnlisted([], [shared("Alpha"), shared("Beta")], ["C:\\Tools\\Hub\\hub.exe"], null)).toEqual([]);
+  });
+});
+
+describe("unlistedToOffer", () => {
+  const a: UnlistedGame = { name: "Alpha", steamAppId: null, catalogId: null };
+  const b: UnlistedGame = { name: "Beta", steamAppId: 10, catalogId: null };
+
+  it("offers the one started last, unless a game of the library runs", () => {
+    expect(unlistedToOffer([a, b], [], false)).toEqual(b);
+    expect(unlistedToOffer([a, b], [], true)).toBeNull();
+    expect(unlistedToOffer([], [], false)).toBeNull();
+  });
+
+  it("leaves out a game added since the watcher last looked", () => {
+    const library = emptyLibrary();
+    addWorkspace(library, { name: "Beta", steamAppId: 10 }, day(1));
+    expect(unlistedToOffer([a, b], liveWorkspaces(library), false)).toEqual(a);
+  });
+});
+
 describe("GameWatcher", () => {
   const FORTNITE_EXE = FORTNITE.file;
   const look = (programs: [number, string][], steamAppId: number | null = null): ProgramLook => ({ programs: new Map(programs), steamAppId });
@@ -113,6 +176,39 @@ describe("GameWatcher", () => {
       const looks = probe.mock.calls.length;
       await vi.advanceTimersByTimeAsync(POLL_SECONDS * 1000 * 3);
       expect(probe).toHaveBeenCalledTimes(looks);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("reports running games not in the library in the order they started, and counts one added meanwhile as running", async () => {
+    vi.useFakeTimers();
+    try {
+      const library = emptyLibrary();
+      const kings: InstalledGame = { source: "steam", name: "9 Kings", steamAppId: 2784470, file: "E:\\Steam\\steamapps\\common\\9 Kings\\9Kings.exe", index: 0, folder: "E:\\Steam\\steamapps\\common\\9 Kings" };
+      let now = look([], 2784470);
+      const unlisted: string[][] = [];
+      const changes: [string[], boolean][] = [];
+      const watcher = new GameWatcher({
+        entries: () => liveWorkspaces(library),
+        findInstalled: async () => [FORTNITE, kings],
+        onChange: (running, initial) => changes.push([[...running], initial]),
+        onUnlisted: (games) => unlisted.push(games.map((game) => game.name)),
+        probe: () => now,
+        platform: "win32",
+      });
+      watcher.start();
+      await vi.advanceTimersByTimeAsync(0);
+      now = look([[1, FORTNITE_EXE]], 2784470);
+      await vi.advanceTimersByTimeAsync(POLL_SECONDS * 1000);
+      expect(unlisted).toEqual([["9 Kings"], ["9 Kings", "Fortnite"]]);
+      // Added while it runs: running at once, not just started.
+      addWorkspace(library, { name: "Fortnite" }, day(1));
+      watcher.libraryChanged();
+      expect(unlisted.at(-1)).toEqual(["9 Kings"]);
+      expect(changes.at(-1)).toEqual([["local-fortnite"], true]);
+      watcher.stop();
+      expect(unlisted.at(-1)).toEqual([]);
     } finally {
       vi.useRealTimers();
     }
