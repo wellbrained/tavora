@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it } from "vitest";
 import type { UpdateState } from "../shared/host-api";
-import { CHECK_EVERY_MS, FIRST_CHECK_MS, PreviewUpdater, PROGRESS_EVERY_MS, readReleaseNotes, UPDATER_HEADER, UpdateManager, type Timers, type UpdaterLike } from "./updates";
+import { CHECK_EVERY_MS, FIRST_CHECK_MS, LOG_REPEAT_MS, RETRY_EVERY_MS, PreviewUpdater, PROGRESS_EVERY_MS, readReleaseNotes, UPDATER_HEADER, UpdateManager, type Timers, type UpdaterLike } from "./updates";
 
 class FakeUpdater extends EventEmitter {
   autoDownload = true;
@@ -14,11 +14,18 @@ class FakeUpdater extends EventEmitter {
   failDownload = false;
   async checkForUpdates() {
     this.checks += 1;
-    if (this.failCheck) throw new Error("offline");
+    // Like electron-updater: an "error" event first, then the call rejects.
+    if (this.failCheck) {
+      this.emit("error", new Error("offline"));
+      throw new Error("offline");
+    }
   }
   async downloadUpdate() {
     this.downloads += 1;
-    if (this.failDownload) throw new Error("connection lost");
+    if (this.failDownload) {
+      this.emit("error", new Error("connection lost"));
+      throw new Error("connection lost");
+    }
   }
   quitAndInstall(silent?: boolean, run?: boolean) {
     this.installs.push([silent, run]);
@@ -153,10 +160,56 @@ describe("UpdateManager", () => {
     expect(logs).toEqual(["up to date", "update 0.3.0 available", "up to date"]);
   });
 
-  it("asks again about a version whose download failed, so the next check starts it over", async () => {
-    const { manager, updater } = make();
+  it("writes one line per failed check, and repeats a line once an hour so the log shows checks still run", async () => {
+    const { manager, updater, logs, clock } = make(false);
+    updater.failCheck = true;
+    await manager.check();
+    await manager.check();
+    expect(logs).toEqual(["update error: offline"]);
+    clock.ms += LOG_REPEAT_MS;
+    await manager.check();
+    expect(logs).toEqual(["update error: offline", "update error: offline"]);
+  });
+
+  it("a check that answers during the user's download leaves the download alone", async () => {
+    const { manager, updater } = make(false);
+    updater.emit("update-available", { version: "0.3.0" });
+    void manager.download();
+    expect(manager.state).toMatchObject({ status: "downloading", version: "0.3.0" });
+    updater.emit("update-available", { version: "0.3.0" });
+    expect(manager.state).toMatchObject({ status: "downloading", version: "0.3.0" });
+  });
+
+  it("keeps a failed download marked as failed through later checks, until a newer version comes", async () => {
+    const { manager, updater } = make(false);
+    updater.emit("update-available", { version: "0.3.0" });
+    updater.failDownload = true;
+    await manager.download();
+    expect(manager.state).toMatchObject({ status: "available", version: "0.3.0", failed: true });
+    updater.emit("update-available", { version: "0.3.0" });
+    expect(manager.state).toMatchObject({ status: "available", version: "0.3.0", failed: true });
+    updater.emit("update-available", { version: "0.3.1" });
+    expect(manager.state).toMatchObject({ status: "available", version: "0.3.1", failed: false });
+  });
+
+  it("with automatic download on, starts a failed download over at most once an hour", async () => {
+    const { manager, updater, clock } = make(true);
+    updater.emit("update-available", { version: "0.3.0" });
+    updater.emit("error", new Error("bad file"));
+    expect(manager.state).toMatchObject({ status: "available", failed: true });
+    const before = updater.checks;
+    await manager.check();
+    expect(updater.checks).toBe(before);
+    clock.ms += RETRY_EVERY_MS;
+    await manager.check();
+    expect(updater.checks).toBe(before + 1);
+  });
+
+  it("asks again about a version whose download failed, so a check after the wait starts it over", async () => {
+    const { manager, updater, clock } = make();
     updater.emit("update-available", { version: "0.3.0" });
     updater.emit("error", new Error("connection lost"));
+    clock.ms += RETRY_EVERY_MS;
     updater.failCheck = false;
     updater.checkForUpdates = async () => {
       updater.checks += 1;
