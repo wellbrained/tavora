@@ -93,10 +93,10 @@ const style = computed<CSSProperties>(() => {
       </div>
       <p v-if="content.subtitle" class="tavora-item-card-type">{{ content.subtitle }}</p>
       <p v-if="runs.length" class="tavora-item-card-effect"><template v-for="(run, i) in runs" :key="i"><span v-if="'accent' in run && run.accent" data-accent>{{ run.text }}</span><template v-else>{{ run.text }}</template></template></p>
-      <dl v-if="content.properties?.length" class="tavora-item-card-stats" :data-per="hasPer ? '' : undefined">
+      <div v-if="content.properties?.length" class="tavora-item-card-stats" :data-per="hasPer ? '' : undefined">
         <template v-if="hasPer && content.perHeading"><span /><span /><span class="tavora-item-card-per-heading">{{ content.perHeading }}</span></template>
-        <template v-for="(p, i) in content.properties" :key="i"><dt>{{ p.label }}</dt><dd>{{ p.value }}</dd><dd v-if="hasPer" data-per>{{ p.per ?? "" }}</dd></template>
-      </dl>
+        <template v-for="(p, i) in content.properties" :key="i"><span class="tavora-item-card-label">{{ p.label }}</span><span class="tavora-item-card-value">{{ p.value }}</span><span v-if="hasPer" class="tavora-item-card-per">{{ p.per ?? "" }}</span></template>
+      </div>
       <section v-for="(s, i) in content.sections ?? []" :key="i" class="tavora-item-card-section">
         <p v-if="s.title">{{ s.title }}</p>
         <ul>
@@ -105,7 +105,7 @@ const style = computed<CSSProperties>(() => {
       </section>
       <section v-if="content.requirements?.length" class="tavora-item-card-section">
         <p v-if="requiresLabel">{{ requiresLabel }}</p>
-        <dl class="tavora-item-card-props"><template v-for="(r, i) in content.requirements" :key="i"><dt>{{ r.label }}</dt><dd>{{ r.value }}</dd></template></dl>
+        <div class="tavora-item-card-stats"><template v-for="(r, i) in content.requirements" :key="i"><span class="tavora-item-card-label">{{ r.label }}</span><span class="tavora-item-card-value">{{ r.value }}</span></template></div>
       </section>
     </template>
     <div v-else class="tavora-item-card-rich">

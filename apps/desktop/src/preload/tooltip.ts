@@ -202,14 +202,13 @@ function renderCard(card: HTMLElement, c: TooltipContent, de: boolean) {
         item.append(section);
     }
 }
-/** Properties and sections, the same in both layouts. */
 /**
  * The card's stats: label, value and, when a row of the card has one, how much it grows (`per`) in a third column
- * with its heading over it. No colons: the columns line the values up.
+ * with its heading over it. No colons: the columns line the values up. Long values wrap; the label keeps its room.
  */
 function stats(rows: { label: string; value: string; per?: string }[], heading?: string) {
     const per = rows.some(r => r.per !== undefined);
-    const grid = node("div", undefined, per ? "stats per" : "stats");
+    const grid = node("div", undefined, per ? "stats has-per" : "stats");
     if (per && heading)
         grid.append(node("span"), node("span"), node("small", heading, "per-heading"));
     for (const r of rows) {
@@ -219,6 +218,7 @@ function stats(rows: { label: string; value: string; per?: string }[], heading?:
     }
     return grid;
 }
+/** Properties and sections, the same in both layouts. */
 function appendRows(details: HTMLElement, c: TooltipContent) {
     if (c.properties?.length) {
         const props = node("div", undefined, "properties");

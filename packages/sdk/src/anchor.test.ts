@@ -37,6 +37,11 @@ describe("tooltipShowParams and the stats' third column", () => {
     expect(tooltipShowParams({ id: "a", at, content }, OLD).content).toEqual({ title: "A", properties: [{ label: "Damage", value: "12 · +3" }, { label: "Speed", value: "×1.1" }, { label: "Range", value: "3" }] });
   });
 
+  it("keeps a folded value within the 300 characters an older Tavora takes", () => {
+    const long = { title: "A", properties: [{ label: "Note", value: "x".repeat(298), per: "+3" }] };
+    expect(tooltipShowParams({ id: "a", at, content: long }, ITEM_CARD_TAVORA).content.properties![0]!.value).toHaveLength(300);
+  });
+
   it("sends per and the heading as they are to a Tavora with the column, and leaves a card without them alone", () => {
     expect(tooltipShowParams({ id: "a", at, content }, ITEM_CARD_PER_TAVORA).content).toEqual(content);
     const plain = { title: "A", properties: [{ label: "Range", value: "3" }] };

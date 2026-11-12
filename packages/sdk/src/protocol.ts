@@ -1510,7 +1510,7 @@ export const ITEM_CARD_TAVORA = "0.24.29";
  * place that number is written. Set it to the version the pull request merges as, right before merging. Too low, and
  * the SDK sends a Tavora without it keys it refuses.
  */
-export const ITEM_CARD_PER_TAVORA = "0.24.32";
+export const ITEM_CARD_PER_TAVORA = "0.24.34";
 
 export const METHOD_INFO: Readonly<Record<CallName, MethodInfo>> = {
   "bridge.handshake": call("0.1.0"),

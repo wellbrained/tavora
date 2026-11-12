@@ -58,12 +58,16 @@ export function tooltipShowParams(request: TooltipShowOptions, hostVersion: stri
   return params;
 }
 
-/** For a Tavora without the stats' third column: each `per` goes into its value ("24 · ×1.2"), the heading goes. */
+/**
+ * For a Tavora without the stats' third column: each `per` goes into its value ("24 · ×1.2"), cut to the 300 characters
+ * a value may have there, and the heading goes.
+ */
 function withoutPer(content: TooltipContent): TooltipContent {
   if (content.perHeading === undefined && !content.properties?.some((p) => p.per !== undefined)) return content;
   const { perHeading: _heading, ...rest } = content;
   if (!rest.properties) return rest;
-  return { ...rest, properties: rest.properties.map(({ per, ...p }) => (per === undefined ? p : { ...p, value: p.value.trim() ? `${p.value} · ${per}` : per })) };
+  const folded = (value: string, per: string) => (value.trim() ? `${value} · ${per}` : per).slice(0, 300);
+  return { ...rest, properties: rest.properties.map(({ per, ...p }) => (per === undefined ? p : { ...p, value: folded(p.value, per) })) };
 }
 
 /**

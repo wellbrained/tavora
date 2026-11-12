@@ -97,12 +97,12 @@ describe("tooltip preload", () => {
     it("shows what a stat grows by in a third column with its heading, only when a stat of the card has it", () => {
         const levels = { ...card, perHeading: "Per level", properties: [{ label: "Damage", value: "12", per: "+3" }, { label: "Speed", value: "", per: "\u00d71.1" }, { label: "Range", value: "3" }] };
         const stats = render(levels).querySelector(".stats")!;
-        expect(stats.classList.contains("per")).toBe(true);
+        expect(stats.classList.contains("has-per")).toBe(true);
         expect(Array.from(stats.children).map(c => c.textContent)).toEqual(["", "", "Per level", "Damage", "12", "+3", "Speed", "", "\u00d71.1", "Range", "3", ""]);
         expect(stats.querySelector(".per-heading")!.tagName).toBe("SMALL");
         // A heading without any per shows nothing.
         const plain = render({ ...card, perHeading: "Per level" }).querySelector(".stats")!;
-        expect(plain.classList.contains("per")).toBe(false);
+        expect(plain.classList.contains("has-per")).toBe(false);
         expect(plain.querySelector(".per-heading")).toBeNull();
         // The rich layout has no third column: it follows the value.
         const rich = render({ ...levels, layout: "rich" });

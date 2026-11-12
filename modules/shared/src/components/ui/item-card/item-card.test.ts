@@ -62,6 +62,12 @@ describe("ItemCard", () => {
     expect(Array.from(rich.querySelectorAll(".tavora-item-card-props dd"), (d) => d.textContent)).toEqual(["12 · +3", "3"])
   })
 
+  it("lists requirements on the card in the same columns as the stats", () => {
+    const grid = mount({ ...card, requirements: [{ label: "Level", value: "12" }] }).querySelector(".tavora-item-card-section:last-child .tavora-item-card-stats")!
+    expect(Array.from(grid.children, (c) => c.className)).toEqual(["tavora-item-card-label", "tavora-item-card-value"])
+    expect(grid.closest("article")!.querySelector("dl")).toBeNull()
+  })
+
   it("shows the rich layout with the picture beside the text, and no skin there", () => {
     const el = mount({ ...card, layout: "rich" }, skin)
     expect(el.dataset.layout).toBe("rich")
