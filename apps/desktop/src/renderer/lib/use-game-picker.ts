@@ -66,7 +66,12 @@ export interface GamePickerOptions {
   list?: Ref<HTMLElement | null>;
   /** Enter on the highlighted item (a row's key, or CUSTOM_KEY for the typed name). */
   onEnter?: (key: string) => unknown;
+  /** The search field, for `keepSearchFocus` and `keysToSearch`; null while it isn't shown. */
+  search?: () => HTMLElement | null | undefined;
 }
+
+/** A button, a link or a field: what takes the focus and its keys for itself. */
+const ownsFocus = (target: EventTarget | null) => target instanceof Element && !!target.closest("button, a, input, textarea, select");
 
 /**
  * What the Add a game dialog and the first-run welcome share: the games on this PC (most recently played first),
@@ -192,6 +197,26 @@ export function useGamePicker(query: Ref<string>, options: GamePickerOptions = {
     void showActive();
   }
 
+  /**
+   * Put on the mousedown of what holds the search and the list: a press anywhere in it but a button, a link or a field
+   * leaves the focus in the search, so the arrows and Enter keep working after a click on the list's padding, a message
+   * or the footer. A press on the list's scrollbar still scrolls.
+   */
+  function keepSearchFocus(event: MouseEvent) {
+    if (!options.search?.() || ownsFocus(event.target)) return;
+    const box = options.list?.value;
+    if (box && event.target === box && box.offsetWidth > box.clientWidth && event.offsetX >= box.clientWidth) return;
+    event.preventDefault();
+  }
+
+  /** Put on its keydown: keys pressed while the focus is somewhere else in it (after a scrollbar press, say) go to the search. */
+  function keysToSearch(event: KeyboardEvent) {
+    const search = options.search?.();
+    if (!search || ownsFocus(event.target)) return;
+    search.focus();
+    onKey(event);
+  }
+
   /** The search's aria-activedescendant: the highlighted option of the list with `listId`. */
   const activeId = computed(() => (active.value !== null && options.listId ? optionId(options.listId, active.value) : undefined));
 
@@ -209,5 +234,5 @@ export function useGamePicker(query: Ref<string>, options: GamePickerOptions = {
   /** A row's badge and second line, as GamePickerList shows them. */
   const info = (row: PickerRow): PickerBadge => ({ modules: modulesOf(row).length, when: whenOf(row) });
 
-  return { name, lines, covers, custom, installed, installedLoaded, onlineStatus, catalogReady, info, coverOf, active, activeId, onKey, target, addInput };
+  return { name, lines, covers, custom, installed, installedLoaded, onlineStatus, catalogReady, info, coverOf, active, activeId, onKey, keepSearchFocus, keysToSearch, target, addInput };
 }

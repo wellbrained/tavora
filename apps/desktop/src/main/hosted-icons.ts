@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import { isGameId } from "@tavora/module-schema";
 import { writeFileAtomic } from "./fsutil";
-import { normalizeName } from "./launcher-games";
+import { normalizeName } from "../shared/same-game";
 import { hostedIconFileName, type IconResult } from "./steam-icons";
 
 

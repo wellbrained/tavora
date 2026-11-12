@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // Add a game and the empty game page: a click picks what the user saw, the keys keep working after a click anywhere in
-// the dialog, a game added since the list was found opens instead of being added again, the covers' art is asked for
+// the dialog (and in the welcome's game step), a game added since the list was found opens instead of being added again, the covers' art is asked for
 // once, and "Made for" loads, fails and waits in place. The host is a fake whose answers the test gives.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp, defineComponent, h, nextTick, ref, type App, type Component } from "vue";
@@ -15,10 +15,12 @@ const host = vi.hoisted(() => ({
     catalogIcon: vi.fn(),
     gameCovers: vi.fn(),
     installedGames: vi.fn(),
+    popularGames: vi.fn(),
     searchCatalog: vi.fn(),
     searchOnline: vi.fn(),
   },
   closeDialog: vi.fn(),
+  listOf: (items: string[]) => items.join(", "),
   openPanels: vi.fn(),
   installProgress: {},
 }));
@@ -43,6 +45,7 @@ vi.mock("./CatalogIcon.vue", async () => {
 import AddGameDialog from "./AddGameDialog.vue";
 import GamePickerList from "./GamePickerList.vue";
 import MadeForGame from "./workspace/MadeForGame.vue";
+import OnboardingGame from "./onboarding/OnboardingGame.vue";
 import { resetInstalledGames } from "../lib/installed-games";
 import { useCoverArt } from "../lib/use-game-picker";
 
@@ -66,6 +69,7 @@ beforeEach(() => {
   host.api.searchOnline.mockResolvedValue({ status: "ok", games: [] });
   host.api.gameCovers.mockResolvedValue({});
   host.api.installedGames.mockResolvedValue([]);
+  host.api.popularGames.mockResolvedValue([]);
   state().value = { modules: [], library: { workspaces: {}, onboarded: true, askedModules: [] } };
   resetInstalledGames();
   // jsdom has no layout: keeping the highlight in view does nothing here.
@@ -197,6 +201,38 @@ describe("AddGameDialog", () => {
     await settle();
     expect(host.act).not.toHaveBeenCalledWith(expect.objectContaining({ type: "install-catalog-module" }), expect.anything());
     expect(host.act).toHaveBeenCalledWith({ type: "open-workspace", workspaceId: "elden-ring" });
+  });
+});
+
+describe("OnboardingGame", () => {
+  it("keeps the focus in the search on a press anywhere in the step but a button, and sends keys back to it", async () => {
+    host.api.installedGames.mockResolvedValue([game("Hades"), game("Rust")]);
+    mount(OnboardingGame, () => ({ started: null }));
+    await settle();
+    const search = $("onboarding-search") as HTMLInputElement;
+    search.focus();
+    const step = $("onboarding-game")!;
+    const onTitle = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
+    step.querySelector("h1")!.dispatchEvent(onTitle);
+    expect(onTitle.defaultPrevented).toBe(true);
+    const onButton = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
+    $("onboarding-back")!.dispatchEvent(onButton);
+    expect(onButton.defaultPrevented).toBe(false);
+
+    // The focus went elsewhere in the step anyway (a scrollbar press): the arrows still move the highlight, Enter adds.
+    const padding = step.querySelector(".overflow-y-auto") as HTMLElement;
+    padding.tabIndex = -1;
+    padding.focus();
+    expect(search.getAttribute("aria-activedescendant")).toBe("onboarding-results-option-n:hades");
+    padding.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true }));
+    await nextTick();
+    expect(document.activeElement).toBe(search);
+    expect(search.getAttribute("aria-activedescendant")).toBe("onboarding-results-option-n:rust");
+    host.act.mockResolvedValue({ ok: false, error: "Nope" });
+    padding.focus();
+    padding.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    await settle();
+    expect(host.act).toHaveBeenCalledWith({ type: "add-workspace", name: "Rust" }, { quiet: true });
   });
 });
 

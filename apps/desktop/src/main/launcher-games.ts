@@ -47,9 +47,6 @@ export interface ScanOptions {
 
 // ── Names ────────────────────────────────────────────────────────────────
 
-// One rule for every list: shared/same-game.ts.
-export { normalizeName };
-
 /**
  * The installed game that goes with a library game, preferring the launchers in `ORDER`.
  * A Steam game is found by its Steam id first, since the id never differs in spelling.

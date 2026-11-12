@@ -5,7 +5,7 @@
 // modules made for it. Adding a game is the same add-workspace the Add game dialog uses and installing a module
 // the same install-catalog-module as the library's Browse; nothing opens until the welcome ends.
 import { ArrowLeft, Check, Search } from "@lucide/vue";
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, type ComponentPublicInstance } from "vue";
 import type { CatalogMatch, CatalogModuleView } from "../../../shared/host-api";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
@@ -31,9 +31,11 @@ const emit = defineEmits<{ start: [StartedGame]; next: []; back: [] }>();
 
 const query = ref("");
 const list = ref<HTMLElement | null>(null);
-// Games the user already has are left out.
-const picker = useGamePicker(query, { hideAdded: true, listId: "onboarding-results", list, onEnter: (key) => pick(key) });
-const { name, lines, custom, installed, installedLoaded, onlineStatus, info, active, activeId, onKey } = picker;
+/** The kit's search field; its element is the input. */
+const search = ref<ComponentPublicInstance | null>(null);
+// Games the user already has are left out. A press anywhere in the step keeps the focus in the search, as in Add a game.
+const picker = useGamePicker(query, { hideAdded: true, listId: "onboarding-results", list, search: () => search.value?.$el, onEnter: (key) => pick(key) });
+const { name, lines, custom, installed, installedLoaded, onlineStatus, info, active, activeId, onKey, keepSearchFocus, keysToSearch } = picker;
 /** Adding the game: it always ends (a throw shows as an error), so the list is usable again. */
 const adder = useTask({ describe: () => t("error.generic") });
 const busy = adder.busy;
@@ -145,7 +147,7 @@ function notNow() {
 </script>
 
 <template>
-  <section class="flex w-full max-w-[560px] flex-col items-center text-center" data-testid="onboarding-game" :data-status="adder.state.value.status">
+  <section class="flex w-full max-w-[560px] flex-col items-center text-center" data-testid="onboarding-game" :data-status="adder.state.value.status" @mousedown="keepSearchFocus" @keydown="keysToSearch">
     <!-- Pick -->
     <template v-if="phase === 'pick'">
       <h1 class="text-3xl font-semibold">{{ t("onboarding.game.title") }}</h1>
@@ -154,6 +156,7 @@ function notNow() {
       <div class="relative w-full text-left">
         <Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" :stroke-width="1.5" />
         <Input
+          ref="search"
           v-model="query"
           class="h-10 pl-9"
           :placeholder="t('addGame.search')"

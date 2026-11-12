@@ -82,6 +82,13 @@ describe("catalogIdFor", () => {
     expect(catalogIdFor("bg3")).toBe("baldurs-gate-3");
     expect(catalogIdFor("Unknown Indie")).toBeNull();
   });
+
+  it("doesn't take a Steam game named like a built-in game with another Steam id for it", () => {
+    expect(catalogIdFor("Apex Legends", 999999)).toBeNull();
+    expect(catalogIdFor("Apex Legends", 1172470)).toBe("apex-legends");
+    // A built-in game without a Steam id of its own is still found by name.
+    expect(catalogIdFor("Fortnite", 999999)).toBe("fortnite");
+  });
 });
 
 describe("parseInstallDate", () => {

@@ -21,8 +21,8 @@ const query = ref("");
 const input = ref<HTMLInputElement | null>(null);
 const list = ref<HTMLElement | null>(null);
 const shownRequest = dialog.value;
-const picker = useGamePicker(query, { covers: true, listId: "game-results", list, onEnter: (key) => pick(key) });
-const { name, lines, covers, custom, installedLoaded, onlineStatus, info, coverOf, active, activeId, onKey } = picker;
+const picker = useGamePicker(query, { covers: true, listId: "game-results", list, search: () => input.value, onEnter: (key) => pick(key) });
+const { name, lines, covers, custom, installedLoaded, onlineStatus, info, coverOf, active, activeId, onKey, keepSearchFocus, keysToSearch } = picker;
 
 /** Made-up games for the Skeleton while the games on this PC are found, with names of a few lengths. */
 const placeholder = (name: string, index: number): PickerRow => ({ key: `placeholder:${index}`, name, gameId: null, icon: null, installed: null, online: null, workspaceId: null, section: "pc" });
@@ -90,27 +90,6 @@ async function add(key: string, game: { row: PickerRow | null; name: string }): 
 
 function focusSearch() {
   void nextTick(() => input.value?.focus());
-}
-
-/** A button, a link or a field: what takes the focus and its keys for itself. */
-const ownsFocus = (target: EventTarget | null) => target instanceof Element && !!target.closest("button, a, input, textarea, select");
-
-/**
- * A press anywhere in the dialog but a button or a link leaves the focus in the search, so the arrows and Enter keep
- * working after a click on the list's padding, a message or the footer. A press on the list's scrollbar still scrolls.
- */
-function keepSearchFocus(event: MouseEvent) {
-  if (ownsFocus(event.target)) return;
-  const box = list.value;
-  if (box && event.target === box && box.offsetWidth > box.clientWidth && event.offsetX >= box.clientWidth) return;
-  event.preventDefault();
-}
-
-/** Keys pressed while the focus is somewhere else in the dialog (after a scrollbar press, say) go to the search. */
-function keysToSearch(event: KeyboardEvent) {
-  if (ownsFocus(event.target)) return;
-  input.value?.focus();
-  onKey(event);
 }
 </script>
 
