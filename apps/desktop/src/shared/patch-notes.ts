@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.35",
+    date: "2026-11-13",
+    title: "Item cards: a clearer effect box",
+    notes: [
+      "The effect box on an item card has a thin edge, so it stands apart from the rest of the card.",
+      "Game modules can give it an edge in their own colour.",
+    ],
+    prs: [
+      { number: 753, title: "Item cards: an edge around the effect box" },
+    ],
+    tags: ["privacy", "publishing", "sdk", "tooltips", "ui-kit", "website"],
+  },
+  {
     version: "0.24.34",
     date: "2026-11-12",
     title: "Item cards show what grows",
