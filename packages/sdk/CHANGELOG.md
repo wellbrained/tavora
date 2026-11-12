@@ -1,3 +1,10 @@
+## 0.3.18
+
+The item card's effect box gets an edge. It comes with the next Tavora (`ITEM_CARD_BOX_BORDER_TAVORA` in `protocol.ts`; the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.19.32).
+
+- A skin's `colors` take `boxBorder` (`#rrggbb`): a 2 px edge around the effect box, which needs a contrast of 3:1 with `box`. Without it a skinned box has no edge; a plain card's box now has a thin line in the theme's line colour.
+- An older Tavora refuses a colour it doesn't know, and with it the whole skin, so the SDK leaves `boxBorder` out of `defineSkin` there. `sdk.supports("ui.tooltip.boxBorder")` tells which case you are in.
+
 ## 0.3.17
 
 Stats that grow on item cards. They come with the next Tavora (`ITEM_CARD_PER_TAVORA` in `protocol.ts`; the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.19.32).

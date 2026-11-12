@@ -426,7 +426,8 @@ paths are accepted. Image reads stay inside that bundle and are limited to 512 K
 
 An item card may wear a skin the module defined (`ui.tooltip.defineSkin`). That is the one way a module's own colours,
 a frame picture and a font reach the host's tooltip window, and each is a checked value, never CSS: colours must be
-`#rrggbb` and readable (contrast 4.5:1 for text, 3:1 for the accent line on the surface), or the skin is refused. The frame picture and the
+`#rrggbb` and readable (contrast 4.5:1 for text, 3:1 for the accent line on the surface and for the effect box's edge),
+or the skin is refused. The frame picture and the
 font are read only from the module's own bundle under `dist/`, by the same path rules as the item picture (no `..`,
 no link or junction out of the bundle), and must be a PNG or WebP picture or a WOFF2 font by their first bytes, up to
 512 KB each (checked on the open file; the read stops one byte past the limit).

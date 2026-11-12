@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.33
+
+- New projects start on `@tavora/sdk` 0.3.18: an item-card skin can give the effect box an edge (`colors.boxBorder`).
+
 ## 0.1.32
 
 - New projects start on `@tavora/sdk` 0.3.17: item-card stats can show how much they grow (`per`, `perHeading`).

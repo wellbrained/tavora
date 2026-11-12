@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { tooltipShowParams } from "./anchor.js";
-import { ITEM_CARD_PER_TAVORA, ITEM_CARD_TAVORA } from "./protocol.js";
+import { skinParams, tooltipShowParams } from "./anchor.js";
+import { ITEM_CARD_BOX_BORDER_TAVORA, ITEM_CARD_PER_TAVORA, ITEM_CARD_TAVORA } from "./protocol.js";
 
 const at = { x: 1, y: 2 };
 const OLD = "0.24.0";
@@ -47,4 +47,27 @@ describe("tooltipShowParams and the stats' third column", () => {
     const plain = { title: "A", properties: [{ label: "Range", value: "3" }] };
     expect(tooltipShowParams({ id: "a", at, content: plain }, ITEM_CARD_TAVORA).content).toBe(plain);
   });
+});
+
+describe("skinParams and the effect box's edge", () => {
+  const skin = { colors: { surface: "#1e1610", text: "#f4e6c8", box: "#2c2016", boxBorder: "#a07c40" }, titleCaps: true };
+
+  it("leaves boxBorder out for a Tavora that would refuse the whole skin for it", () => {
+    expect(skinParams("gold", skin, ITEM_CARD_TAVORA)).toEqual({ name: "gold", skin: { colors: { surface: "#1e1610", text: "#f4e6c8", box: "#2c2016" }, titleCaps: true } });
+    expect(skin.colors.boxBorder).toBe("#a07c40");
+  });
+
+  it("sends it as it is to a Tavora that knows it, and a skin without it as it is everywhere", () => {
+    expect(skinParams("gold", skin, ITEM_CARD_BOX_BORDER_TAVORA).skin).toBe(skin);
+    const plain = { titleCaps: true };
+    expect(skinParams("gold", plain, ITEM_CARD_TAVORA).skin).toBe(plain);
+  });
+});
+
+it("is used by the memory host's defineSkin", async () => {
+  const { createMemoryHost } = await import("./testing.js");
+  const { sdk, host } = createMemoryHost({ version: ITEM_CARD_PER_TAVORA });
+  await sdk.ui.tooltip.defineSkin("gold", { colors: { surface: "#1e1610", text: "#f4e6c8", boxBorder: "#a07c40" } });
+  expect(sdk.supports("ui.tooltip.boxBorder")).toBe(false);
+  expect(host.calls["ui.tooltip.defineSkin"]).toEqual([{ name: "gold", skin: { colors: { surface: "#1e1610", text: "#f4e6c8" } } }]);
 });

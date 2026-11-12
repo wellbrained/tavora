@@ -4,7 +4,7 @@ import { footerTexts } from "../shared/tooltip-footer";
 /** A module's skin as the host checked it, its files read in as data: URLs (main/tooltip-skin.ts). */
 interface Skin {
     frame?: { image: string; slice: [number, number, number, number] };
-    colors?: { surface: string; text: string; muted: string; accent: string; box: string; boxText: string };
+    colors?: { surface: string; text: string; muted: string; accent: string; box: string; boxText: string; boxBorder?: string };
     font?: string;
     pixelArt: boolean;
     titleCaps: boolean;
@@ -25,7 +25,7 @@ const skins = new Map<number, Skin>();
 let current: Data | undefined;
 // The host made these; they are checked again here, so nothing but a colour or a base64 data: URL reaches the styles.
 const HEX = /^#[0-9a-f]{6}$/i, FRAME = /^data:image\/(?:png|webp);base64,[A-Za-z0-9+/]+={0,2}$/, FONT = /^data:font\/woff2;base64,[A-Za-z0-9+/]+={0,2}$/;
-const SKIN_VARS = { surface: "--skin-surface", text: "--skin-text", muted: "--skin-muted", accent: "--skin-accent", box: "--skin-box", boxText: "--skin-box-text" } as const;
+const SKIN_VARS = { surface: "--skin-surface", text: "--skin-text", muted: "--skin-muted", accent: "--skin-accent", box: "--skin-box", boxText: "--skin-box-text", boxBorder: "--skin-box-border" } as const;
 let face: FontFace | undefined, faceSource: string | undefined;
 // FontFaceSet is a set of FontFaces; the DOM types here leave out its add and delete.
 const fonts = () => document.fonts as unknown as Set<FontFace>;
@@ -53,8 +53,11 @@ function applySkin(card: HTMLElement, skin: Skin | undefined) {
         card.style.removeProperty(name);
     const colors = skin?.colors && Object.values(skin.colors).every(v => HEX.test(v)) ? skin.colors : undefined;
     if (colors)
-        for (const [key, name] of Object.entries(SKIN_VARS))
-            card.style.setProperty(name, colors[key as keyof typeof SKIN_VARS]);
+        for (const [key, name] of Object.entries(SKIN_VARS)) {
+            const value = colors[key as keyof typeof SKIN_VARS];
+            if (value)
+                card.style.setProperty(name, value);
+        }
     const frame = skin?.frame && FRAME.test(skin.frame.image) && skin.frame.slice.length === 4 && skin.frame.slice.every(n => Number.isInteger(n) && n >= 0 && n <= 64) ? skin.frame : undefined;
     if (frame) {
         card.style.setProperty("border-image-source", `url("${frame.image}")`);
@@ -64,6 +67,7 @@ function applySkin(card: HTMLElement, skin: Skin | undefined) {
     const font = skinFont(skin?.font && FONT.test(skin.font) ? skin.font : undefined);
     body.classList.toggle("skinned", !!skin);
     body.classList.toggle("skin-colors", !!colors);
+    body.classList.toggle("box-edge", !!colors?.boxBorder);
     body.classList.toggle("framed", !!frame);
     body.classList.toggle("skin-font", font);
     body.classList.toggle("caps", !!skin?.titleCaps);

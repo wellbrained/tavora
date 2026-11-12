@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.39",
+    "date": "2026-11-12",
+    "notes": [
+      "The Item cards specimen shows the effect box's edge, plain and in a skin's colour."
+    ]
+  },
+  {
     "version": "0.1.38",
     "date": "2026-11-12",
     "notes": [

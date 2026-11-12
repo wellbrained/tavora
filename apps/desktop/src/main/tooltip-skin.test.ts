@@ -52,6 +52,14 @@ describe("item-card skins", () => {
         expect(await define({ titleCaps: true })).toEqual({ pixelArt: false, titleCaps: true });
     });
 
+    it("takes an edge for the effect box that stands out from the box by 3:1, and refuses one that doesn't", async () => {
+        const colors = { surface: "#1e1610", text: "#f4e6c8", box: "#2c2016" };
+        expect((await define({ colors: { ...colors, boxBorder: "#A07C40" } })).colors!.boxBorder).toBe("#a07c40");
+        expect("boxBorder" in (await define({ colors })).colors!).toBe(false);
+        await expect(define({ colors: { ...colors, boxBorder: "#3a2c20" } })).rejects.toMatchObject({ code: "INVALID_PARAMS", message: expect.stringMatching(/colors.boxBorder on colors.box is too hard to see .*needs 3:1/) });
+        expect(() => checkSkinRequest({ name: "a", skin: { colors: { ...colors, boxBorder: "#abc" } } })).toThrow(/colors.boxBorder/);
+    });
+
     it("refuses a colour that isn't #rrggbb", async () => {
         for (const surface of ["#fff", "red", "rgb(0,0,0)", "#12345g", "#1234567", "#000000;x:y", 0])
             expect(() => checkSkinRequest({ name: "a", skin: { colors: { surface, text: "#ffffff" } } })).toThrow(/colors.surface/);

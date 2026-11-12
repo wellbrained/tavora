@@ -32,6 +32,9 @@
 .tavora-item-card-badge{font-size:var(--ic-small-size);line-height:1.4;padding:0 5px;border:1px solid var(--ic-line);border-radius:var(--radius-sm);color:var(--ic-muted);white-space:nowrap}
 .tavora-item-card-effect{padding:6px 8px;border-radius:var(--radius-md);background:var(--ic-box);color:var(--ic-box-text);font-size:var(--ic-effect-size);white-space:pre-wrap}
 .tavora-item-card[data-skinned] .tavora-item-card-effect{border-radius:0}
+/* The card's effect box has an edge: the theme's line on a plain card, the skin's boxBorder (2 px) when it has one. */
+.tavora-item-card[data-layout=card]:not([data-skinned]) .tavora-item-card-effect{border:1px solid var(--ic-line)}
+.tavora-item-card[data-layout=card][data-box-edge] .tavora-item-card-effect{border:2px solid var(--skin-box-border)}
 .tavora-item-card-effect [data-accent]{color:var(--ic-accent)}
 .tavora-item-card[data-font] h3,.tavora-item-card[data-font] .tavora-item-card-effect{font-family:var(--skin-font),var(--font-sans)}
 .tavora-item-card-props{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;margin:0}

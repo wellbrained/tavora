@@ -50,6 +50,17 @@ describe("ItemCard", () => {
     expect(el.style.getPropertyValue("--ic-title-size")).toBe(`${ITEM_CARD_TYPE.skinTitle}px`)
     expect(el.style.getPropertyValue("--ic-effect-size")).toBe(`${ITEM_CARD_TYPE.skinEffect}px`)
     expect(el.style.borderImageSource).toContain("frame.png")
+    expect(el.hasAttribute("data-box-edge")).toBe(false)
+  })
+
+  it("draws the skin's edge around the effect box only when the skin gives one", () => {
+    const el = mount(card, { ...skin, colors: { ...skin.colors, boxBorder: "#a07c40" } })
+    expect(el.hasAttribute("data-box-edge")).toBe(true)
+    expect(el.style.getPropertyValue("--skin-box-border")).toBe("#a07c40")
+    app!.unmount()
+    const plain = mount(card)
+    expect(plain.hasAttribute("data-box-edge")).toBe(false)
+    expect(plain.hasAttribute("data-skinned")).toBe(false)
   })
 
   it("shows what a stat grows by in a third column with its heading, and after the value in the rich layout", () => {

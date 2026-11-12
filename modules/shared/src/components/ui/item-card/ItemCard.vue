@@ -59,6 +59,7 @@ const style = computed<CSSProperties>(() => {
     style["--skin-accent"] = c.accent ?? c.text
     style["--skin-box"] = c.box ?? c.surface
     style["--skin-box-text"] = c.boxText ?? c.text
+    if (c.boxBorder) style["--skin-box-border"] = c.boxBorder
   }
   if (s?.frame) {
     style.borderImageSource = cssUrl(s.frame.image)
@@ -77,6 +78,7 @@ const style = computed<CSSProperties>(() => {
     :data-layout="layout"
     :data-skinned="skin ? '' : undefined"
     :data-colors="skin?.colors?.surface && skin.colors.text ? '' : undefined"
+    :data-box-edge="skin?.colors?.surface && skin.colors.text && skin.colors.boxBorder ? '' : undefined"
     :data-framed="skin?.frame ? '' : undefined"
     :data-font="skin?.font && family ? '' : undefined"
     :data-caps="skin?.titleCaps ? '' : undefined"

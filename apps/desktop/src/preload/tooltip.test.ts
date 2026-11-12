@@ -63,7 +63,14 @@ describe("tooltip preload", () => {
         expect(el.style.getPropertyValue("--skin-box-text")).toBe("#f2ece0");
         expect(el.style.getPropertyValue("border-image-source")).toContain(FRAME);
         expect(el.style.getPropertyValue("border-width")).toBe("6px 8px");
+        expect(document.body.classList.contains("box-edge")).toBe(false);
+        expect(el.style.getPropertyValue("--skin-box-border")).toBe("");
+        render(card, { skin: { ...skin, colors: { ...skin.colors, boxBorder: "#a07c40" } } });
+        expect(document.body.classList.contains("box-edge")).toBe(true);
+        expect(el.style.getPropertyValue("--skin-box-border")).toBe("#a07c40");
         render(card);
+        expect(document.body.classList.contains("box-edge")).toBe(false);
+        expect(el.style.getPropertyValue("--skin-box-border")).toBe("");
         expect(document.body.classList.contains("skinned")).toBe(false);
         expect(el.style.getPropertyValue("--skin-surface")).toBe("");
         expect(el.style.getPropertyValue("border-image-source")).toBe("");

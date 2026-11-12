@@ -20,9 +20,10 @@ const HEX = /^#[0-9a-fA-F]{6}$/;
 const PATH = (ext: string) => new RegExp(`^dist\\/(?:[a-zA-Z0-9_. -]+\\/)*[a-zA-Z0-9_. -]+\\.(?:${ext})$`, "i");
 const FRAME_PATH = PATH("png|webp");
 const FONT_PATH = PATH("woff2");
-const COLOR_KEYS = ["surface", "text", "muted", "accent", "box", "boxText"] as const;
+const COLOR_KEYS = ["surface", "text", "muted", "accent", "box", "boxText", "boxBorder"] as const;
 
-export type SkinColors = Record<(typeof COLOR_KEYS)[number], string>;
+/** A skin's colours, the ones left out filled in; `boxBorder` (the effect box's edge) has no default: no edge. */
+export type SkinColors = Record<Exclude<(typeof COLOR_KEYS)[number], "boxBorder">, string> & { boxBorder?: string };
 
 /** A checked skin with its files read in as data: URLs, as the tooltip window gets it. */
 export interface ResolvedSkin {
@@ -109,7 +110,7 @@ export function contrast(a: string, b: string): number {
 /**
  * A skin's colours with the ones left out filled in, refused when a pair is hard to read: text, muted text, the effect
  * box's text and the accent in the box (its numbers are text too) need 4.5:1 with what they sit on; the accent on the
- * surface, where it is only a line, 3:1.
+ * surface, where it is only a line, 3:1, and so does the effect box's edge with the box.
  */
 export function skinColors(colors: NonNullable<TooltipSkin["colors"]>): SkinColors {
     if (!colors.surface || !colors.text)
@@ -121,6 +122,7 @@ export function skinColors(colors: NonNullable<TooltipSkin["colors"]>): SkinColo
         accent: colors.accent ?? colors.text,
         box: colors.box ?? colors.surface,
         boxText: colors.boxText ?? colors.text,
+        ...(colors.boxBorder ? { boxBorder: colors.boxBorder } : {}),
     };
     const pairs: [keyof SkinColors, keyof SkinColors, number][] = [
         ["text", "surface", 4.5],
@@ -128,11 +130,12 @@ export function skinColors(colors: NonNullable<TooltipSkin["colors"]>): SkinColo
         ["boxText", "box", 4.5],
         ["accent", "box", 4.5],
         ["accent", "surface", 3],
+        ...(full.boxBorder ? [["boxBorder", "box", 3] as [keyof SkinColors, keyof SkinColors, number]] : []),
     ];
     for (const [fore, back, least] of pairs) {
-        const ratio = contrast(full[fore], full[back]);
+        const ratio = contrast(full[fore]!, full[back]!);
         if (ratio < least)
-            refuse(`colors.${fore} on colors.${back} is too hard to read (contrast ${ratio.toFixed(2)}:1, needs ${least}:1)`);
+            refuse(`colors.${fore} on colors.${back} is too hard to ${fore === "boxBorder" ? "see" : "read"} (contrast ${ratio.toFixed(2)}:1, needs ${least}:1)`);
     }
     return full;
 }

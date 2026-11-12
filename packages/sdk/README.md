@@ -102,8 +102,10 @@ with `per` may have an empty `value`. Without any `per` the stats keep two colum
 `ui.tooltip.defineSkin` and picked per card with `content.skin`: a nine-slice frame picture, colours (`#rrggbb`), a WOFF2
 font for the title and the effect box only, hard pixels and a title in capitals. Tavora checks the files (only from your
 own `dist/`, PNG or WebP and WOFF2 by their first bytes, up to 512 KB each) and the contrast (text, muted text, the
-effect box's text and the accent in the box 4.5:1, the accent on the surface 3:1), and refuses a skin that fails with
-`INVALID_PARAMS` and the reason. Every size stays Tavora's, and a skin's colours stay the same in every theme. A skin name that isn't defined shows the plain card.
+effect box's text and the accent in the box 4.5:1, the accent on the surface 3:1, `colors.boxBorder` on the box 3:1),
+and refuses a skin that fails with `INVALID_PARAMS` and the reason. `colors.boxBorder` gives the effect box a 2 px edge;
+a plain card's box has a thin line in the theme's line colour. On a Tavora without `sdk.supports("ui.tooltip.boxBorder")`
+the SDK leaves `boxBorder` out of `defineSkin`, so the skin is still taken (without the edge). Every size stays Tavora's, and a skin's colours stay the same in every theme. A skin name that isn't defined shows the plain card.
 It needs a Tavora with `sdk.supports("ui.tooltip.skin")`; on an older one the SDK leaves `layout` and `skin` out and
 puts the effect text into a section row (the card shows in the rich layout), and `defineSkin` does nothing. In a panel, the kit's
 `ItemCard` shows the same card.
