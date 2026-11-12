@@ -32,7 +32,7 @@ import {
 import type { TavoraTheme, TavoraWorkspace } from "@tavora/sdk/protocol";
 import type { IconTone } from "../shared/icon-tone";
 import type { PanelDialogSize } from "./bridge";
-import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, InstalledGameView, ModulePageResult, OfficialPublishRun, OfficialPublishView, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, PanelDialog, PanelPlacement, ProfileRanksView, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView } from "../shared/host-api";
+import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, InstalledGameView, ModulePageResult, OfficialPublishRun, OfficialPublishView, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, PanelDialog, PanelPlacement, ProfileRanksView, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView, UnlistedGame } from "../shared/host-api";
 import { resolveLanguage, translate, type Language, type MessageKey } from "../shared/i18n";
 import { suggestPrefix } from "../shared/id-prefix";
 import { compareModuleVersions } from "../shared/module-version";
@@ -130,7 +130,7 @@ import { createToneReader, iconVersion } from "./icon-tone";
 import { syncIcons } from "./icon-sync";
 import { fetchSteamLibrary, importSteamGames, MAX_IMPORT_GAMES, steamGameStatus, steamLibraryView } from "./steam-import";
 import { icoFrameNear, isShareCandidate, largestIcoFrame, shareableIconFile, shareSource, steamShareGames, submitIcon } from "./share-icons";
-import { AppInfoError, readClientIcons } from "./steam-appinfo";
+import { AppInfoError, readClientIcons, readSteamKinds } from "./steam-appinfo";
 import { GameOverlayWindow, type OverlayPanel } from "./game-overlay-window";
 import { GameOverlays, layerBinding, toggleBinding, type OverlayWindowRequest, type PanelInfo, type PanelLoan } from "./game-overlay-service";
 import { scopeForKind } from "./game-overlays";
@@ -139,7 +139,7 @@ import { OverlayCanvas } from "./overlay-canvas";
 import { PICTURES_FOLDER } from "./layout-pictures";
 import { parseLayoutMessage } from "../shared/layout-view";
 import { OverlayPreviews } from "./overlay-previews";
-import { GameWatcher } from "./game-watch";
+import { GameWatcher, unlistedToOffer } from "./game-watch";
 import { moveToWorkspaces } from "./workspace-move";
 import { Streaming } from "./streaming";
 import { findInstalledGames, normalizeName, type InstalledGame } from "./launcher-games";
@@ -531,14 +531,25 @@ export class Host {
     return this.installed.catalog;
   }
   private running: string[] = [];
+  /** The running games not in the library, the one started last at the end (game-watch.ts). */
+  private unlistedRunning: readonly UnlistedGame[] = [];
   /** When each workspace was last opened as of startup: the rail keeps this order until the next start. */
   private openedAtStart: Record<string, string> = {};
   private readonly gameWatcher = new GameWatcher({
     entries: () => liveWorkspaces(this.library),
     findInstalled: async () => findInstalledGames({ steamDir: await findSteamDir() }),
+    steamKinds: async (appIds) => {
+      const steamDir = await findSteamDir();
+      const appInfo = steamDir ? await loadAppInfo(steamDir) : null;
+      return appInfo ? readSteamKinds(appInfo, appIds) : new Map();
+    },
     keyOf: gameKey,
     onSeen: (keys) => void this.gamesSeen.running(keys),
     onChange: (running, initial) => this.gamesRunning(running, initial),
+    onUnlisted: (games) => {
+      this.unlistedRunning = games;
+      if (!this.windowClosed) this.pushStateSoon();
+    },
     testSteamAppId: () => this.options.testSteamAppId,
     log: (line) => console.warn(`[tavora] ${line}`),
   });
@@ -2354,8 +2365,8 @@ export class Host {
         this.startWorkspace(id);
         this.saveLibrary();
         this.fetchIconsSoon();
-        // The game of a game workspace added just now may have been installed since the last look.
-        if (this.gameWatcher.active) void this.gameWatcher.refreshInstalled();
+        // A game running now (the rail offered to add it) shows as running at once.
+        if (this.gameWatcher.active) void this.gameWatcher.libraryChanged(id);
         return id;
       },
       "rename-workspace": saved((action) => renameWorkspace(this.library, action.workspaceId, action.name)),
@@ -2373,7 +2384,11 @@ export class Host {
       "import-steam-games": (action) => this.importSteam(action.games),
       // Answers with the token that puts it back (undo-delete).
       "trash-workspace": (action) => this.trashWorkspaces([action.workspaceId], true),
-      "restore-workspace": saved((action) => restoreWorkspace(this.library, action.workspaceId)),
+      "restore-workspace": saved((action) => {
+        restoreWorkspace(this.library, action.workspaceId);
+        // A game running now comes back as running, not as one that just started (no switch or question).
+        if (this.gameWatcher.active) void this.gameWatcher.libraryChanged(action.workspaceId);
+      }),
       "delete-workspace": saved(async (action) => {
         const workspace = deleteTrashedWorkspace(this.library, action.workspaceId);
         this.saveLibrary();
@@ -2382,7 +2397,11 @@ export class Host {
       // Many at once: workspaces already gone are skipped, so a list the screen showed a moment ago still works.
       "trash-workspaces": (action) => this.trashWorkspaces(action.workspaceIds, false),
       "restore-workspaces": saved((action) => {
-        for (const id of action.workspaceIds) if (this.library.workspaces[id]?.trashedAt) restoreWorkspace(this.library, id);
+        for (const id of action.workspaceIds) {
+          if (!this.library.workspaces[id]?.trashedAt) continue;
+          restoreWorkspace(this.library, id);
+          if (this.gameWatcher.active) void this.gameWatcher.libraryChanged(id);
+        }
       }),
       "delete-workspaces": saved(async (action) => {
         const workspaces = action.workspaceIds.filter((id) => this.library.workspaces[id]?.trashedAt).map((id) => deleteTrashedWorkspace(this.library, id));
@@ -2424,6 +2443,8 @@ export class Host {
         this.library.gameStart = action.gameStart;
         if (action.gameStart !== "ask") this.questions.cancelKind("gameSwitch");
         this.syncGameWatcher();
+        // Game overlays may have kept the watcher looking while this was off: take the games running now as already running.
+        if (this.gameWatcher.active) this.gamesRunning(this.gameWatcher.runningNow, true);
       }),
       "set-game-end": saved((action) => {
         if (action.workspaceId !== null && !(isLive(this.library, action.workspaceId) && this.library.workspaces[action.workspaceId]!.kind === "personal")) {
@@ -4814,6 +4835,7 @@ export class Host {
       ...pending,
       runningGameId: this.running.filter((id) => id !== this.workspaceId && isLive(this.library, id)).at(-1) ?? null,
       workspaceRunning: this.workspaceId !== null && this.running.includes(this.workspaceId),
+      unlistedGame: this.unlistedRunning.length ? unlistedToOffer(this.unlistedRunning, liveWorkspaces(this.library), this.running, this.library.gameStart) : null,
       pendingGameSwitch: pending.pendingGameSwitch && isLive(this.library, pending.pendingGameSwitch) ? pending.pendingGameSwitch : null,
       streaming: this.streaming.view(),
       gameOverlays: this.gameOverlays.view(),

@@ -191,7 +191,8 @@ export function hostActionTable(c: HostChecks) {
     /** A game workspace (a built-in game, a game added by name, or one found online), or a personal workspace. */
     "add-workspace": variants(
       { catalogId: c.gameId },
-      { name: text() },
+      /** The user's own game; a game found running keeps its Steam id. */
+      { name: text(), steamAppId: optional(c.steamAppId) },
       { personal: text() },
       /** A game found by the online search. */
       { online: onlineGame },
