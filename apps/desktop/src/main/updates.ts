@@ -83,6 +83,11 @@ export interface UpdateManagerOptions {
  * the user asks) and installs it when Tavora quits or the user presses "Restart now" - never in the
  * middle of a session. Errors (offline, server down) are logged; the next check tries again.
  */
+/** Less than `ms` has passed; a clock set back (a negative gap) counts as time passed. */
+function within(elapsed: number, ms: number): boolean {
+  return elapsed >= 0 && elapsed < ms;
+}
+
 export class UpdateManager {
   private current: UpdateState = { status: "idle", checkedAt: null, failed: false };
   private readonly updater: UpdaterLike;
@@ -112,7 +117,7 @@ export class UpdateManager {
     let lastAt = 0;
     this.log = (line) => {
       const at = this.now().getTime();
-      if (line === last && at - lastAt < LOG_REPEAT_MS) return;
+      if (line === last && within(at - lastAt, LOG_REPEAT_MS)) return;
       last = line;
       lastAt = at;
       write(line);
@@ -189,14 +194,15 @@ export class UpdateManager {
   /**
    * Asks the server whether there is a newer version. Does nothing while one is downloading or ready.
    * A version that waits (or whose download failed) is asked about again: a newer one may be out, and
-   * with automatic download on, the download starts over.
+   * with automatic download on, the download starts over. After a failed download that waits an hour
+   * (RETRY_EVERY_MS), since the check itself would download again; a newer version is then found late.
    */
   async check(): Promise<void> {
     const u = this.current;
     const waiting = u.status === "available";
     if (u.status !== "idle" && !waiting) return;
     // With automatic download on, a check starts the download over: after a failure, wait a while first.
-    if (waiting && u.failed && this.updater.autoDownload && this.now().getTime() - this.failedAt < RETRY_EVERY_MS) return;
+    if (waiting && u.failed && this.updater.autoDownload && within(this.now().getTime() - this.failedAt, RETRY_EVERY_MS)) return;
     if (!waiting) this.set({ status: "checking" });
     this.errorLogged = false;
     try {
