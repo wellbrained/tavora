@@ -1,10 +1,13 @@
 <script setup lang="ts">
 // The shared tooltip's item card inside a panel: plain, with stats that grow per level (a third column, only when a
-// stat has `per`), and in a module's skin. The skin is the one the module gives sdk.ui.tooltip.defineSkin, with its
-// files as URLs here instead of paths in dist/.
+// stat has `per`) and icons before some of their labels, and in a module's skin. The skin and the icons are the ones
+// the module gives sdk.ui.tooltip, with their files as URLs here instead of paths in dist/.
 import type { TooltipContent } from "@tavora/sdk";
 import { ItemCard, type ItemCardSkin } from "@tavora/official-ui/components/ui/item-card";
 import frame from "../../assets/card-frame.png?url";
+import heart from "../../assets/stat-heart.png?url";
+import stopwatch from "../../assets/stat-stopwatch.png?url";
+import sword from "../../assets/stat-sword.png?url";
 
 const tower: TooltipContent = {
   title: "Archer Tower",
@@ -17,7 +20,8 @@ const tower: TooltipContent = {
 const levels: TooltipContent = {
   ...tower,
   perHeading: "Per level",
-  properties: [{ label: "Damage", value: "12", per: "+3" }, { label: "Attack speed", value: "", per: "×1.1" }, { label: "Range", value: "3 plots" }],
+  // Only the icons' shape counts: the card draws them in the label's colour. Range has none and still lines up.
+  properties: [{ label: "Health", value: "40", per: "+8", icon: heart }, { label: "Damage", value: "12", per: "+3", icon: sword }, { label: "Attack speed", value: "", per: "×1.1", icon: stopwatch }, { label: "Range", value: "3 plots" }],
 };
 const skin: ItemCardSkin = {
   frame: { image: frame, slice: [6, 6, 6, 6] },

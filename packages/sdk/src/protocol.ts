@@ -1517,6 +1517,12 @@ export const ITEM_CARD_PER_TAVORA = "0.24.34";
  * an older Tavora a colour it doesn't know, which makes it refuse the whole skin.
  */
 export const ITEM_CARD_BOX_BORDER_TAVORA = "0.24.35";
+/**
+ * The first Tavora that takes `icon` on an item card's stat (a small pictogram before its label): the one place that
+ * number is written. Set it to the version the pull request merges as, right before merging. Too low, and the SDK sends
+ * an older Tavora a key it refuses, and with it the whole tooltip.
+ */
+export const ITEM_CARD_ICON_TAVORA = "0.24.47";
 
 export const METHOD_INFO: Readonly<Record<CallName, MethodInfo>> = {
   "bridge.handshake": call("0.1.0"),
@@ -1668,7 +1674,7 @@ const SDK_CALLS = { "panel.openDialog": "panel.setDialog", "panel.closeDialog": 
  * Params of an existing call that only a newer Tavora knows. An older one rejects the unknown key (INVALID_PARAMS) for the
  * whole call, so the SDK leaves the key out there. They never raise `MIN_TAVORA`.
  */
-export const FIELD_SINCE = { "ui.tooltip.pinnable": "0.23.91", "ui.tooltip.skin": ITEM_CARD_TAVORA, "ui.tooltip.per": ITEM_CARD_PER_TAVORA, "ui.tooltip.boxBorder": ITEM_CARD_BOX_BORDER_TAVORA } as const;
+export const FIELD_SINCE = { "ui.tooltip.pinnable": "0.23.91", "ui.tooltip.skin": ITEM_CARD_TAVORA, "ui.tooltip.per": ITEM_CARD_PER_TAVORA, "ui.tooltip.boxBorder": ITEM_CARD_BOX_BORDER_TAVORA, "ui.tooltip.propertyIcon": ITEM_CARD_ICON_TAVORA } as const;
 
 /** A protocol call, a param only newer Tavoras know (`ui.tooltip.pinnable`), or one of the SDK calls named differently on the wire (`panel.openDialog`). */
 export type SupportedCall = CallName | keyof typeof SDK_CALLS | keyof typeof FIELD_SINCE;

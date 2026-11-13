@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { skinParams, tooltipShowParams } from "./anchor.js";
-import { ITEM_CARD_BOX_BORDER_TAVORA, ITEM_CARD_PER_TAVORA, ITEM_CARD_TAVORA } from "./protocol.js";
+import { ITEM_CARD_BOX_BORDER_TAVORA, ITEM_CARD_ICON_TAVORA, ITEM_CARD_PER_TAVORA, ITEM_CARD_TAVORA } from "./protocol.js";
 
 const at = { x: 1, y: 2 };
 const OLD = "0.24.0";
@@ -46,6 +46,33 @@ describe("tooltipShowParams and the stats' third column", () => {
     expect(tooltipShowParams({ id: "a", at, content }, ITEM_CARD_PER_TAVORA).content).toEqual(content);
     const plain = { title: "A", properties: [{ label: "Range", value: "3" }] };
     expect(tooltipShowParams({ id: "a", at, content: plain }, ITEM_CARD_TAVORA).content).toBe(plain);
+  });
+});
+
+describe("tooltipShowParams and the stats' icons", () => {
+  const content = { title: "A", layout: "card" as const, properties: [{ label: "HP", value: "40", icon: "dist/icons/heart.png" }, { label: "Damage", value: "12", per: "+3", icon: "dist/icons/sword.png" }, { label: "Range", value: "3" }] };
+
+  it("leaves the icons out for a Tavora that would refuse the tooltip for them, and keeps the labels", () => {
+    const sent = tooltipShowParams({ id: "a", at, content }, ITEM_CARD_BOX_BORDER_TAVORA).content;
+    expect(sent).toEqual({ title: "A", layout: "card", properties: [{ label: "HP", value: "40" }, { label: "Damage", value: "12", per: "+3" }, { label: "Range", value: "3" }] });
+    expect(content.properties[0]!.icon).toBe("dist/icons/heart.png");
+    // Older still: no icons and the growth folded into the value.
+    expect(tooltipShowParams({ id: "a", at, content }, ITEM_CARD_TAVORA).content.properties).toEqual([{ label: "HP", value: "40" }, { label: "Damage", value: "12 · +3" }, { label: "Range", value: "3" }]);
+  });
+
+  it("sends the icons as they are to a Tavora that knows them, and a card without them as it is everywhere", () => {
+    expect(tooltipShowParams({ id: "a", at, content }, ITEM_CARD_ICON_TAVORA).content).toEqual(content);
+    const plain = { title: "A", properties: [{ label: "Range", value: "3" }] };
+    expect(tooltipShowParams({ id: "a", at, content: plain }, ITEM_CARD_BOX_BORDER_TAVORA).content).toBe(plain);
+  });
+
+  it("is used by the memory host's show", async () => {
+    const { createMemoryHost } = await import("./testing.js");
+    const { sdk, host } = createMemoryHost({ version: ITEM_CARD_BOX_BORDER_TAVORA });
+    await sdk.ui.tooltip.show({ id: "a", at, content });
+    expect(sdk.supports("ui.tooltip.propertyIcon")).toBe(false);
+    const shown = (host.calls["ui.tooltip.show"] as { content: { properties: object[] } }[])[0]!.content;
+    expect(shown.properties.some((p) => "icon" in p)).toBe(false);
   });
 });
 

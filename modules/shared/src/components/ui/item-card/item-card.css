@@ -7,7 +7,7 @@
 .tavora-item-card[data-colors]{--ic-surface:var(--skin-surface);--ic-text:var(--skin-text);--ic-muted:var(--skin-muted);--ic-accent:var(--skin-accent);--ic-box:var(--skin-box);--ic-box-text:var(--skin-box-text);--ic-line:color-mix(in srgb,var(--skin-muted) 35%,var(--skin-surface));--ic-art:color-mix(in srgb,var(--skin-text) 6%,var(--skin-surface))}
 .tavora-item-card[data-skinned]{border-radius:0}
 .tavora-item-card[data-framed]{border-style:solid;border-image-repeat:stretch}
-.tavora-item-card[data-pixel] img,.tavora-item-card[data-pixel]{image-rendering:pixelated}
+.tavora-item-card[data-pixel] img,.tavora-item-card[data-pixel] .tavora-item-card-icon,.tavora-item-card[data-pixel]{image-rendering:pixelated}
 
 .tavora-item-card-art{display:flex;justify-content:center;padding:8px;border-radius:var(--radius-md);background:var(--ic-art)}
 .tavora-item-card-art img{display:block;max-width:100%;max-height:168px;width:auto;height:auto;object-fit:contain}
@@ -22,6 +22,11 @@
 .tavora-item-card-stats[data-per]{grid-template-columns:minmax(72px,1fr) fit-content(36%) auto}
 .tavora-item-card-stats>*{min-width:0;overflow-wrap:anywhere}
 .tavora-item-card-label{color:var(--ic-muted)}
+/* A stat's icon: only its shape, a mask in the label's colour, the label's height on its first line. When a stat of the
+   card has one, every label keeps its room (an icon without a picture paints nothing), so the labels line up. */
+.tavora-item-card-stats[data-icons] .tavora-item-card-label{display:flex;align-items:flex-start;gap:6px}
+.tavora-item-card-icon{flex:0 0 14px;width:14px;height:14px;margin-top:calc((1lh - 14px) / 2)}
+.tavora-item-card-icon[data-drawn]{background-color:currentColor;-webkit-mask:var(--ic-icon) center/contain no-repeat;mask:var(--ic-icon) center/contain no-repeat}
 .tavora-item-card-value,.tavora-item-card-per{text-align:right;font-variant-numeric:tabular-nums}
 .tavora-item-card-per{color:var(--ic-accent)}
 .tavora-item-card-per-heading{text-align:right;font-size:var(--ic-small-size);color:var(--ic-muted)}

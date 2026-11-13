@@ -53,6 +53,8 @@ describe("supports", () => {
     expect(latest.supports("ui.tooltip.skin")).toBe(true);
     expect(old.supports("ui.tooltip.per")).toBe(false);
     expect(latest.supports("ui.tooltip.per")).toBe(true);
+    expect(old.supports("ui.tooltip.propertyIcon")).toBe(false);
+    expect(latest.supports("ui.tooltip.propertyIcon")).toBe(true);
     await expect(old.storage.compareAndSet("k", null, 1)).rejects.toMatchObject({ code: "UNKNOWN_METHOD" });
   });
 });

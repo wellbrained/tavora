@@ -43,12 +43,13 @@ function point(target: AnchorTarget): TooltipAnchor["at"] {
  * The wire form of `ui.tooltip.show`. `pinnable: false` together with `pinned: true` is a mistake in every Tavora; an
  * older Tavora than `ui.tooltip.pinnable` would reject the unknown key, so it is left out there (the card still shows,
  * with the old hint). The same goes for the card's `layout`, `effect` and `skin` on a Tavora older than
- * `ui.tooltip.skin`: the card shows in the rich layout there.
+ * `ui.tooltip.skin`: the card shows in the rich layout there; and for a stat's `icon` before `ui.tooltip.propertyIcon`.
  */
 export function tooltipShowParams(request: TooltipShowOptions, hostVersion: string): Omit<TooltipShowOptions, "anchor" | "at"> & { at: TooltipAnchor["at"] } {
   if (request.pinnable === false && request.pinned === true) throw new TavoraError({ code: "INVALID_PARAMS", message: "A card that is not pinnable can't be pinned" });
   const params = tooltipParams(request);
   if (params.pinnable !== undefined && !supportsCall(hostVersion, "ui.tooltip.pinnable")) delete params.pinnable;
+  if (params.content && !supportsCall(hostVersion, "ui.tooltip.propertyIcon")) params.content = withoutIcons(params.content);
   if (params.content && !supportsCall(hostVersion, "ui.tooltip.per")) params.content = withoutPer(params.content);
   const content = params.content as TooltipContent | undefined;
   if (content && (content.layout !== undefined || content.effect !== undefined || content.skin !== undefined) && !supportsCall(hostVersion, "ui.tooltip.skin")) {
@@ -56,6 +57,12 @@ export function tooltipShowParams(request: TooltipShowOptions, hostVersion: stri
     params.content = effect === undefined ? older : { ...older, sections: withEffectRow(older.sections, effect) };
   }
   return params;
+}
+
+/** For a Tavora without stat icons: they go, the labels stay. */
+function withoutIcons(content: TooltipContent): TooltipContent {
+  if (!content.properties?.some((p) => p.icon !== undefined)) return content;
+  return { ...content, properties: content.properties.map(({ icon: _icon, ...p }) => p) };
 }
 
 /**

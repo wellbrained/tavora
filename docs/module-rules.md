@@ -56,7 +56,7 @@ classes where you use a control; never copy it.
 | A list the user reorders by dragging | `useReorderMotion` and `liftedDragImage` from `ui/reorder`: the others slide aside, the dropped item settles; keys reorder at once | a hand-made drop line only |
 | Menu | `ContextMenu`, `DropdownMenu`, or `sdk.ui.showMenu({ anchor: element })` | menu at the pointer, own popup |
 | Tooltip | `Tooltip` / `TooltipRows`, or a `title` (connectModule turns it into the kit tooltip) | own hover box |
-| An item card (a game's card, tower, item) in the shared tooltip or inline in a panel | `sdk.ui.tooltip.show` with `layout: "card"` (picture on top, title with its badges, type line, `effect` box, stats with an optional per-level column (`per`, `perHeading`), rows) and, inline, `ItemCard` with the same content; a game look is a skin (`sdk.ui.tooltip.defineSkin`, see [Item-card skins](#item-card-skins)) | own card markup, own hover card with game colours |
+| An item card (a game's card, tower, item) in the shared tooltip or inline in a panel | `sdk.ui.tooltip.show` with `layout: "card"` (picture on top, title with its badges, type line, `effect` box, stats with an optional per-level column (`per`, `perHeading`) and an optional icon before a stat's label (`icon`), rows) and, inline, `ItemCard` with the same content; a game look is a skin (`sdk.ui.tooltip.defineSkin`, see [Item-card skins](#item-card-skins)) | own card markup, own hover card with game colours |
 | Say why a control is off | `disabled-reason` next to `disabled` on `Button`, `Switch` / `SwitchField`, `Checkbox`, `Input`, `Select` (or its `SelectTrigger`), `DropdownMenuItem` and `ContextMenuItem`: the control stays hoverable and focusable, shows the reason in the kit tooltip and does nothing when used. A `Button` also does this with a `title` (or `hinted`, when you show the tooltip yourself) | a wrapper `span` with a `title` around a disabled control, a `title` on a native `disabled` control (it never shows), the reason in the label ("Pin (already pinned)") |
 | Floating panel | `Popover` | absolutely positioned `div` |
 | Dialog | `ConfirmDialog` (asks; only before what can't be put back, see [Deleting](#deleting)), `NameDialog` (asks for a name), else `Dialog` with `DialogHeader`, `DialogFooter`, `DialogButton` (see [Dialogs](#dialogs)) | own overlay |
@@ -162,6 +162,10 @@ the theme font and to "no all caps", **for skins only** (decided 2026-11-12):
   the accent on the surface 3:1, the effect box's edge `boxBorder` on the box 3:1).
 - The effect box has an edge: on a plain card a 1 px line in the theme's line colour, on a skinned card a 2 px edge in
   the skin's `boxBorder`, or none when the skin has none.
+- A stat may have an `icon` before its label, like the game's heart for health or sword for damage (decided
+  2026-11-13): a small pictogram (a transparent PNG or WebP from `dist/`, up to 64 KB; inline, a URL). Only its shape
+  counts: Tavora draws it 14 px high in the label's colour (the theme's softer text, or the skin's `muted`), with hard
+  pixels on a pixel skin. Labels line up whether or not a stat has one. It is decoration; the label stays the name.
 - A skin's colours are the game's: they stay the same in every theme, like the PoE look. In the module's source they
   get a `rules-allow: color` comment with that reason.
 - Files come from the module's own `dist/` (PNG or WebP frame, WOFF2 font, up to 512 KB each), and the font must be

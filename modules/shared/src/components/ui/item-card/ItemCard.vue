@@ -22,6 +22,19 @@ const layout = computed(() => (props.content.layout === "card" ? "card" : "rich"
 const skin = computed(() => (layout.value === "card" ? props.skin : undefined))
 // A third stats column only when a stat of this card grows (`per`); the rich layout puts it after the value instead.
 const hasPer = computed(() => !!props.content.properties?.some((p) => p.per !== undefined))
+// An icon before a stat's label; when a stat of the card has one, every label keeps its room so the labels line up.
+const hasIcons = computed(() => !!props.content.properties?.some((p) => p.icon !== undefined))
+// Made absolute against the page, so the stylesheet's own address can't change what a relative path points at.
+const icons = computed(() =>
+  (props.content.properties ?? []).map((p) => {
+    if (!p.icon) return undefined
+    try {
+      return cssUrl(new URL(p.icon, document.baseURI).href)
+    } catch {
+      return undefined
+    }
+  }),
+)
 const withPer = (p: { value: string; per?: string }) => (p.per === undefined ? p.value : p.value.trim() ? `${p.value} · ${p.per}` : p.per)
 const runs = computed(() => {
   const effect = props.content.effect
@@ -95,9 +108,9 @@ const style = computed<CSSProperties>(() => {
       </div>
       <p v-if="content.subtitle" class="tavora-item-card-type">{{ content.subtitle }}</p>
       <p v-if="runs.length" class="tavora-item-card-effect"><template v-for="(run, i) in runs" :key="i"><span v-if="'accent' in run && run.accent" data-accent>{{ run.text }}</span><template v-else>{{ run.text }}</template></template></p>
-      <div v-if="content.properties?.length" class="tavora-item-card-stats" :data-per="hasPer ? '' : undefined">
+      <div v-if="content.properties?.length" class="tavora-item-card-stats" :data-per="hasPer ? '' : undefined" :data-icons="hasIcons ? '' : undefined">
         <template v-if="hasPer && content.perHeading"><span /><span /><span class="tavora-item-card-per-heading">{{ content.perHeading }}</span></template>
-        <template v-for="(p, i) in content.properties" :key="i"><span class="tavora-item-card-label">{{ p.label }}</span><span class="tavora-item-card-value">{{ p.value }}</span><span v-if="hasPer" class="tavora-item-card-per">{{ p.per ?? "" }}</span></template>
+        <template v-for="(p, i) in content.properties" :key="i"><span class="tavora-item-card-label"><span v-if="hasIcons" class="tavora-item-card-icon" aria-hidden="true" :data-drawn="icons[i] ? '' : undefined" :style="icons[i] ? { '--ic-icon': icons[i] } : undefined" />{{ p.label }}</span><span class="tavora-item-card-value">{{ p.value }}</span><span v-if="hasPer" class="tavora-item-card-per">{{ p.per ?? "" }}</span></template>
       </div>
       <section v-for="(s, i) in content.sections ?? []" :key="i" class="tavora-item-card-section">
         <p v-if="s.title">{{ s.title }}</p>

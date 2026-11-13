@@ -24,7 +24,7 @@ export const PAGES = [
   // Actions
   { id: "buttons", group: "actions", keywords: "primary secondary ghost outline destructive danger remove link icon loading progress install split group menu toggle", examples: ["Variants", "Sizes", "WithIcons", "ProgressButtons", "IconOnly", "ToggleButtons", "SplitButtons", "WideButtons"] },
   { id: "menus", group: "actions", keywords: "dropdown menu context right-click submenu actions icon description row", examples: ["DescribedMenu", "Dropdown", "RightClick"] },
-  { id: "tooltips", group: "actions", keywords: "tooltip hover help readable keyboard shortcut arrow values rows divider disabled reason why off switched switch checkbox input select menu item card skin frame game effect", examples: ["FromTitle", "OnDisabled", "Rich", "Values", "ItemCards", "DisabledReasons"] },
+  { id: "tooltips", group: "actions", keywords: "tooltip hover help readable keyboard shortcut arrow values rows divider disabled reason why off switched switch checkbox input select menu item card skin frame game effect stat icon", examples: ["FromTitle", "OnDisabled", "Rich", "Values", "ItemCards", "DisabledReasons"] },
   { id: "popovers", group: "actions", keywords: "popover floating panel form anchor close", examples: ["WithField"] },
   { id: "dialogs", group: "actions", keywords: "dialog modal confirm delete rename name prompt busy footer scroll", examples: ["NameDialogs", "ConfirmDialogs", "FooterButtons", "LongDialog"] },
   { id: "toasts", group: "actions", keywords: "toast snackbar undo message notification status", examples: ["Kinds", "Loading", "WithButton", "DeleteWithUndo"] },
