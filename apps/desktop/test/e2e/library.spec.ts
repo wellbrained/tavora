@@ -697,14 +697,15 @@ test("the rail's two buttons open Add a game and a personal workspace, and Add a
   }
 });
 
-test("expanded, Personal turns the Add row into a name field: Esc drops it, Enter adds and opens the workspace", async () => {
+test("expanded, Personal adds a name row above the Add row: Esc drops it, Enter adds and opens the workspace", async () => {
   const userData = await newUserData();
   await writeFile(path.join(userData, "library.json"), JSON.stringify({ ...seedLibrary(), rail: { expanded: true, width: 280 } }));
   const { app, page } = await launch(userData);
   try {
     await page.getByTestId("rail-add-personal").click();
     await expect(page.getByTestId("add-personal-row")).toBeVisible();
-    await expect(page.getByTestId("rail-add")).toHaveCount(0);
+    await expect(page.getByTestId("rail-add")).toBeVisible();
+    await expect(page.getByTestId("rail-add-personal")).toHaveAttribute("aria-expanded", "true");
     await expect(page.getByTestId("add-personal-popover")).toHaveCount(0);
     await expect(page.getByTestId("personal-name")).toBeFocused();
 
@@ -712,6 +713,12 @@ test("expanded, Personal turns the Add row into a name field: Esc drops it, Ente
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("add-personal-row")).toHaveCount(0);
     await expect(page.getByTestId("rail-add-personal")).toBeFocused();
+
+    // Personal toggles it shut again.
+    await page.getByTestId("rail-add-personal").click();
+    await expect(page.getByTestId("add-personal-row")).toBeVisible();
+    await page.getByTestId("rail-add-personal").click();
+    await expect(page.getByTestId("add-personal-row")).toHaveCount(0);
 
     // A click elsewhere drops it too.
     await page.getByTestId("rail-add-personal").click();

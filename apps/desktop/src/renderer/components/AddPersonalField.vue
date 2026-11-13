@@ -1,15 +1,15 @@
 <script setup lang="ts">
 // Start a personal workspace (one that belongs to no game): just its name, typed right in the rail. Expanded (`inline`),
-// the Add row turns into the name field, where the new workspace will show; compact, the field hangs off the Personal
+// it is a row above the Add row, drawn like the workspace it will become; compact, the field hangs off the Personal
 // tile (`anchor`). Enter adds it and opens it; Esc or a click elsewhere drops it, and the focus goes back to Personal.
 import { createReusableTemplate, useEventListener } from "@vueuse/core";
 import { UserRound } from "@lucide/vue";
 import { computed, nextTick, ref, watch } from "vue";
 import { Input } from "@tavora/official-ui/components/ui/input";
-import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { Popover, PopoverAnchor, PopoverContent } from "@tavora/official-ui/components/ui/popover";
 import { useTask } from "@tavora/official-ui/use-task";
+import { cn } from "@tavora/official-ui/lib/utils";
 import { act, state, useFloating } from "../host";
 import { t } from "../i18n";
 
@@ -60,10 +60,12 @@ function onEscape(event: KeyboardEvent) {
   void cancel(true);
 }
 
-// Inline, a click or a Tab out of the row drops it; a click inside it (its hint, its error) or switching to another
-// window does not. While it adds, it stays; a later click elsewhere drops it if that went wrong.
+// Inline, a click or a Tab out of the row drops it; a click inside it (its error) or switching to another window does
+// not, and a click on Personal is its own toggle. While it adds, it stays; a later click elsewhere drops it if that
+// went wrong.
 useEventListener(document, "pointerdown", (event) => {
-  if (props.inline && open.value && !row.value?.contains(event.target as Node)) void cancel(false);
+  const target = event.target as Node;
+  if (props.inline && open.value && !row.value?.contains(target) && !props.anchor?.contains(target)) void cancel(false);
 });
 function onFocusOut(event: FocusEvent) {
   const to = event.relatedTarget as Node | null;
@@ -97,7 +99,7 @@ async function submit() {
       <Input
         ref="field"
         v-model="name"
-        class="h-8 min-w-0"
+        :class="cn('h-8 min-w-0', inline && 'border-primary rounded-none border-0 border-b-[1.5px] bg-transparent px-0 text-base font-medium shadow-none focus-visible:ring-0 dark:bg-transparent')"
         :aria-label="t('rail.addPersonal')"
         :placeholder="t('addPersonal.placeholder')"
         autocomplete="off"
@@ -105,19 +107,18 @@ async function submit() {
         data-testid="personal-name"
         @keydown.esc="onEscape"
       />
-      <p class="text-muted-foreground flex items-center gap-1 text-xs" aria-hidden="true">
-        <Kbd class="font-sans">↵</Kbd> {{ t("addPersonal.add") }} <span class="px-0.5">·</span> <Kbd class="font-sans">Esc</Kbd> {{ t("common.cancel") }}
-      </p>
       <Notice v-if="error" variant="error" data-testid="add-personal-error">{{ error }}</Notice>
     </form>
   </DefineForm>
 
   <!-- Expanded: in the rail itself, a row like the workspace it will become. -->
-  <div v-if="inline && open" ref="row" class="rail-entry flex items-start gap-2.5 px-4 py-1" data-testid="add-personal-row" @focusout="onFocusOut">
-    <span class="bg-card text-primary flex size-10 flex-none items-center justify-center rounded-[10px]" aria-hidden="true">
-      <UserRound class="size-5" :stroke-width="1.75" />
-    </span>
-    <Form />
+  <div v-if="inline && open" ref="row" class="rail-entry flex px-2" data-testid="add-personal-row" @focusout="onFocusOut">
+    <div class="flex min-w-0 flex-1 items-start gap-2.5 px-2 py-1">
+      <span class="bg-card text-primary flex size-10 flex-none items-center justify-center rounded-[10px]" aria-hidden="true">
+        <UserRound class="size-5" :stroke-width="1.75" />
+      </span>
+      <div class="flex min-w-0 flex-1 pt-1"><Form /></div>
+    </div>
   </div>
 
   <!-- Compact: next to the Personal tile, just the field. -->
