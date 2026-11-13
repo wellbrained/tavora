@@ -55,7 +55,7 @@ function panel() {
     devTools: false,
     background: () => "#000",
     sessionFor: () => ({}) as never,
-    isSharedSite: () => false,
+    isSharedSite: (url) => url.startsWith("https://shared.example/"),
     adblockOn: () => true,
     swap: () => undefined,
     onFocusAddress: () => undefined,
@@ -68,9 +68,9 @@ function panel() {
   const start = (url: string) => contents.emit("did-start-navigation", { url, isMainFrame: true, isSameDocument: false });
   const redirect = (url: string) => contents.emit("will-redirect", { url, isMainFrame: true, preventDefault: () => undefined });
   const commit = (url: string) => contents.emit("did-navigate", {}, url);
-  const cancel = (url: string) => contents.emit("did-fail-provisional-load", {}, -3, "ERR_ABORTED", url, true);
+  const stop = () => contents.emit("did-stop-loading");
   const fail = (url: string) => contents.emit("did-fail-load", {}, -105, "ERR_NAME_NOT_RESOLVED", url, true);
-  return { browser, start, redirect, commit, cancel, fail };
+  return { browser, contents, start, redirect, commit, stop, fail };
 }
 
 const LOCAL = "http://localhost:8080/";
@@ -105,24 +105,34 @@ describe("the address a Browser panel's requests are judged against", () => {
     expect(browser.topUrl).toBe(LOCAL);
   });
 
-  it("goes back to the page shown when a navigation is cancelled or fails", () => {
-    const { browser, start, commit, cancel, fail } = panel();
+  it("goes back to the page shown when a navigation stops without a page, or fails", () => {
+    const { browser, start, commit, stop, fail } = panel();
     commit(LOCAL);
+    // Stopped, a download or a 204: Electron reports no failure, loading just stops.
     start(PUBLIC);
-    cancel(PUBLIC);
+    stop();
     expect(browser.topUrl).toBe(LOCAL);
     start("https://unknown.example/");
     fail("https://unknown.example/");
     expect(browser.topUrl).toBe(LOCAL);
   });
 
-  it("isn't reset by the end of a navigation that another one replaced", () => {
-    const { browser, start, commit, cancel } = panel();
+  it("isn't reset by the failure of a navigation that another one replaced", () => {
+    const { browser, start, commit, fail } = panel();
     commit(LOCAL);
     start("https://first.example/");
     start(PUBLIC);
-    cancel("https://first.example/");
+    fail("https://first.example/");
     expect(browser.topUrl).toBe(PUBLIC);
+  });
+
+  it("ignores navigations of a page view the panel replaced", () => {
+    const { browser, contents, commit } = panel();
+    commit(LOCAL);
+    // A shared site opens in a new view; the old one may still report a navigation.
+    browser.navigate("https://shared.example/");
+    contents.emit("did-start-navigation", { url: PUBLIC, isMainFrame: true, isSameDocument: false });
+    expect(browser.topUrl).toBeNull();
   });
 });
 

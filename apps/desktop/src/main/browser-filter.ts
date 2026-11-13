@@ -75,10 +75,10 @@ export function adBlocker(engine: FiltersEngine): AdBlocker {
 }
 
 /**
- * The address a panel's requests are judged against. While the panel goes to
- * a public page, that page: its first requests can come before it commits,
- * and must not count as the local page the panel showed before. Otherwise the
- * page that committed.
+ * The address a panel's requests are judged against. It is the page that
+ * committed, except while the panel is on its way to a public page. Then it is
+ * that page, because its first requests can come before it commits, and they
+ * must not count as the local page the panel showed before.
  */
 export function judgedTopUrl(committedUrl: string | null, pendingUrl: string | null): string | null {
   return pendingUrl !== null && !isPrivateUrl(pendingUrl) ? pendingUrl : committedUrl;
