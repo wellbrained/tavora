@@ -565,3 +565,8 @@ export async function shootWindow(app: ElectronApplication, page: Page, file: st
 export function hintOf(locator: import("@playwright/test").Locator): Promise<string | null> {
   return locator.evaluate((element) => element.getAttribute("data-tavora-tooltip") || element.getAttribute("title"));
 }
+
+/** Every matching element's hover hint, in page order. Reading `title` alone gives "" for one the pointer happens to rest on. */
+export function hintsOf(locator: Locator): Promise<(string | null)[]> {
+  return locator.evaluateAll((elements) => elements.map((element) => element.getAttribute("data-tavora-tooltip") || element.getAttribute("title")));
+}
