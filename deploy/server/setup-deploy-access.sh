@@ -34,7 +34,7 @@ caddy_validate() {
   fi
   id "$user" >/dev/null 2>&1 || { echo "  Caddy's user $user doesn't exist" >&2; return 1; }
   # `systemctl reload caddy` must run as that user too: a + or ! prefix, or PermissionsStartOnly, makes it root.
-  if systemctl cat caddy 2>/dev/null | grep -qE '^(ExecReload=[-@:+!]*[+!]|PermissionsStartOnly=(yes|true|on|1))'; then
+  if systemctl cat caddy 2>/dev/null | grep -qiE '^[[:space:]]*(ExecReload[[:space:]]*=[[:space:]]*[-@:+!]*[+!]|PermissionsStartOnly[[:space:]]*=[[:space:]]*(yes|true|on|1))'; then
     echo "  caddy.service reloads as root (ExecReload with + or !, or PermissionsStartOnly); fix the unit first." >&2
     return 1
   fi
@@ -52,7 +52,8 @@ caddy_validate() {
     return 0
   fi
   echo "  Caddy (checked as $user) says:" >&2
-  tail -n 5 "$err" | sed 's/^/    /' >&2
+  # Printable characters only: what Caddy prints can quote hosting.caddy, which corehub writes.
+  tail -n 5 "$err" | LC_ALL=C tr -cd '[:print:]\n' | sed 's/^/    /' >&2
   if grep -qi 'permission denied' "$err"; then
     echo "  Caddy can't open that file either. If it's one of your sites' files, give $user access; if not (say, a log" >&2
     echo "  outside /var/log), the config itself is wrong: never grant that." >&2
