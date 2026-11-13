@@ -14,6 +14,14 @@ describe("folderView", () => {
     expect(view?.nameOnly).toEqual(["pem", "key", "p12", "pfx", "ppk"]);
   });
 
+  it("splits a two-part root such as AppData/LocalLow from the folders below it", () => {
+    const view = folderView("AppData/LocalLow/SadSocket/9Kings|json|");
+    expect(view?.root).toBe("AppData/LocalLow");
+    expect(view?.names).toEqual(["SadSocket", "9Kings"]);
+    expect(folderView("Saved Games/Game/Saves|sav|")?.names).toEqual(["Game", "Saves"]);
+    expect(folderView("AppData/Roaming/Discord|json|")).toBeNull();
+  });
+
   it("shows no read types when only key files are asked for", () => {
     const view = folderView("Documents/Game|pem,ppk|log");
     expect(view?.read).toEqual([]);

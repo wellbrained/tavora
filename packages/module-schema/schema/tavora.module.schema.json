@@ -634,7 +634,7 @@
           "type": "array",
           "minItems": 1,
           "maxItems": 4,
-          "description": "Folders on this PC the module asks to read, such as a game's replays: it can list them (subfolders too), read the files it names in read, see the files it names in names, and hear about new ones, but never change anything. Each needs the user's grant and a minTavora newer than 0.23.112.",
+          "description": "Folders on this PC the module asks to read, such as a game's replays: it can list them (subfolders too), read the files it names in read, see the files it names in names, and hear about new ones, but never change anything. Each needs the user's grant and a minTavora newer than 0.23.112 (newer than 0.24.42 for AppData/LocalLow).",
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -644,8 +644,8 @@
               "path": {
                 "type": "string",
                 "maxLength": 400,
-                "pattern": "^(?:Documents|Saved Games)(?:/(?!\\.\\.?(?:/|$))(?![ ])[^<>:\"/\\\\|?*\\u0000-\\u001f\\u007f]{0,63}[^<>:\"/\\\\|?*\\u0000-\\u001f\\u007f. ]){1,6}$",
-                "description": "Documents or Saved Games, then the folders below it joined by /, such as Documents/My Game. Never AppData, a drive or the user's folder itself."
+                "pattern": "^(?:(?:Documents|Saved Games)(?:/(?!\\.\\.?(?:/|$))(?![ ])[^<>:\"/\\\\|?*\\u0000-\\u001f\\u007f]{0,63}[^<>:\"/\\\\|?*\\u0000-\\u001f\\u007f. ]){1,6}|AppData/LocalLow/(?!(?:[Mm][Ii][Cc][Rr][Oo][Ss][Oo][Ff][Tt]|[Ss][Uu][Nn]|[Oo][Rr][Aa][Cc][Ll][Ee]|[Aa][Dd][Oo][Bb][Ee]|[Gg][Oo][Oo][Gg][Ll][Ee]|[Mm][Oo][Zz][Ii][Ll][Ll][Aa]|[Ii][Nn][Tt][Ee][Ll]|[Nn][Vv][Ii][Dd][Ii][Aa]|[Aa][Pp][Pp][Ll][Ee]|[Tt][Ee][Mm][Pp])(?:/|$))(?!\\.\\.?(?:/|$))(?![ ])[^<>:\"/\\\\|?*\\u0000-\\u001f\\u007f]{0,63}[^<>:\"/\\\\|?*\\u0000-\\u001f\\u007f. ](?:/(?!\\.\\.?(?:/|$))(?![ ])[^<>:\"/\\\\|?*\\u0000-\\u001f\\u007f]{0,63}[^<>:\"/\\\\|?*\\u0000-\\u001f\\u007f. ]){1,5})$",
+                "description": "Documents, Saved Games or AppData/LocalLow, then the folders below it joined by /, such as Documents/My Game or AppData/LocalLow/Company/Game (below AppData/LocalLow at least the company and the game, never Microsoft, Google or other system folders). Never the rest of AppData, a drive or the user's folder itself."
               },
               "read": {
                 "type": "array",

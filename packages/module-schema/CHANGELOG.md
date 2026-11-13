@@ -2,6 +2,11 @@
 
 What changed in `@tavora/module-schema`, newest first.
 
+## 0.1.10
+
+- `permissions.folders` may start at a third root, `AppData/LocalLow` (in `FOLDER_ROOTS`), where most Unity games keep their settings and saves: `{ "path": "AppData/LocalLow/Company/Game", "read": ["json"] }`. Below it a path names at least `LOCALLOW_MIN_DEPTH` (2) folders, the company and the game, and never starts at one of `LOCALLOW_REFUSED_FOLDERS` (`Microsoft`, `Sun`, `Oracle`, `Adobe`, `Google`, `Mozilla`, `Intel`, `NVIDIA`, `Apple`, `Temp`, in any case). The rest of AppData stays refused. A manifest with it needs a `minTavora` newer than `LAST_TAVORA_WITHOUT_LOCALLOW_FOLDERS` (0.24.42), except Tavora's own modules. The JSON Schema checks the path.
+- `splitFolderPath` splits a folder path into its root (which may have two parts) and the folders below it; `isLocalLowGameFolder` tells whether the folders below `AppData/LocalLow` may be a module's.
+
 ## 0.1.9
 
 - `panelLayout`: a module's starter layout for `panels.openMany` (`PanelLayoutNode`, `PanelLayoutSplit`), a `row` or `column` of parts, each `{ panel, size? }` or a split running the other way, 2 to `MAX_PANEL_TYPES` parts per split and at most `MAX_PANEL_LAYOUT_DEPTH` (3) splits inside each other. Each panel type at most once and only types in `panels`; `size` is a share above 0, up to `MAX_PANEL_LAYOUT_SIZE`. A manifest with it needs `panels` and a `minTavora` newer than `LAST_TAVORA_WITHOUT_PANEL_LAYOUT` (0.23.28), except Tavora's own modules. The JSON Schema checks the shape.

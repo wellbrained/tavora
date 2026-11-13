@@ -1,15 +1,15 @@
 // Folders on this PC a module may read (manifest permissions.folders, the decision log of 2026-11-05). The manifest
-// names a folder below Documents or Saved Games and the file extensions it may see; the user grants it like any other
-// permission (grants.ts). The module may list it (subfolders too), read the files of its `read` extensions, see the
-// files of its `names` extensions by name, and hear about changes. It never writes, never follows a link out of the
-// folder and never learns where the folder is: it names the folder by its manifest path and every file by its path
-// inside it. When the folder is not where the manifest says, the user can show Tavora where it is, in the system's own
+// names a folder below Documents, Saved Games or AppData\LocalLow (a game's own folder there, 2026-11-13) and the file
+// extensions it may see; the user grants it like any other permission (grants.ts). The module may list it (subfolders
+// too), read the files of its `read` extensions, see the files of its `names` extensions by name, and hear about
+// changes. It never writes, never follows a link out of the folder and never learns where the folder is: it names the
+// folder by its manifest path and every file by its path inside it. When the folder is not where the manifest says, the user can show Tavora where it is, in the system's own
 // folder dialog; that choice stays on this PC (outside backups and cloud copies), per publisher and module.
 
 import { realpathSync, watch, type FSWatcher } from "node:fs";
 import { lstat, mkdir, open, readdir, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
-import { folderKey, isFolderName, isModuleId, isOwnerId, type FolderAccess, type FolderRoot } from "@tavora/module-schema";
+import { folderKey, isFolderName, isLocalLowGameFolder, isModuleId, isOwnerId, splitFolderPath, type FolderAccess, type FolderRoot } from "@tavora/module-schema";
 import type { FolderChange, FolderEntry, FolderListing, FolderState } from "@tavora/sdk/protocol";
 import { KEY_EXTENSIONS } from "../shared/folder-keys";
 import { readBody } from "./clipboard-http";
@@ -99,13 +99,23 @@ function forms(place: string): string[] {
  * or Windows, Tavora's data folder and its own folders such as Documents\Tavora (anything in them or holding them),
  * and the known folders themselves (Documents, Saved Games, Desktop, Downloads...) or one holding them. A folder inside
  * a known folder, such as Documents\My Game, is fine. Every place counts as given and with its links resolved.
+ *
+ * The one way into AppData is a game's folder in AppData\LocalLow, as a manifest could name it (isLocalLowGameFolder):
+ * at least a company and a game folder below it, the company not one of the system's or a browser's. Only the folder
+ * really there counts, never LocalLow reached through a link: `folder` is a real path, so a junction from LocalLow into
+ * Local or Roaming ends up there and is refused like them.
  */
 export function isRefusedFolder(folder: string, full: Partial<FolderPlaces> & Pick<FolderPlaces, "home" | "userData">): boolean {
   const resolved = path.resolve(folder);
   if (win && (resolved.startsWith("\\\\") || resolved.startsWith("//"))) return true;
   const root = same(path.parse(resolved).root);
   if (root === same(resolved) || root === same(resolved + path.sep)) return true;
-  for (const home of forms(full.home)) {
+  const homes = forms(full.home);
+  // Below LocalLow (also where it really is, when it is a link), only a game's folder.
+  for (const low of homes.flatMap((home) => forms(path.join(home, "AppData", "LocalLow")))) {
+    if (within(resolved, low) && !isLocalLowGameFolder(path.relative(low, resolved).split(path.sep))) return true;
+  }
+  for (const home of homes) {
     if (within(home, resolved)) return true;
     // Another user's folder: inside the folder that holds the user's own (such as Users), but not inside the user's own.
     // Not when the user's folder sits right on a drive, where that would be the whole drive.
@@ -115,7 +125,7 @@ export function isRefusedFolder(folder: string, full: Partial<FolderPlaces> & Pi
       const first = path.relative(home, resolved).split(path.sep)[0] ?? "";
       if (first.startsWith(".")) return true;
     }
-    if (within(resolved, path.join(home, "AppData"))) return true;
+    if (within(resolved, path.join(home, "AppData")) && !within(resolved, path.join(home, "AppData", "LocalLow"))) return true;
   }
   for (const closed of (full.closed ?? []).flatMap(forms)) if (within(resolved, closed)) return true;
   // A drive as one of Tavora's own folders would shut every folder on it: drives are refused on their own above.
@@ -127,8 +137,8 @@ export function isRefusedFolder(folder: string, full: Partial<FolderPlaces> & Pi
 
 /** Where the manifest says the folder is: its root's folder, then the names below it. */
 export function defaultFolder(entry: FolderAccess, places: Pick<FolderPlaces, "roots">): string {
-  const [root, ...names] = entry.path.split("/");
-  return path.join(places.roots[root as FolderRoot], ...names);
+  const { root, names } = splitFolderPath(entry.path)!;
+  return path.join(places.roots[root], ...names);
 }
 
 /** The folder the user showed Tavora for a manifest path, kept per publisher and module, never given to a module. */
@@ -532,7 +542,7 @@ export function folderHost(options: FolderHostOptions): FolderHost {
     },
     choose: async (folder) => {
       const entry = need(folder);
-      const start = (await findFolder(entry, options.chosen, options.places())) ?? options.places().roots[entry.path.split("/")[0] as FolderRoot];
+      const start = (await findFolder(entry, options.chosen, options.places())) ?? options.places().roots[splitFolderPath(entry.path)!.root];
       const picked = await options.pick(start, entry);
       if (!picked || !granted(entry.path)) return false;
       const real = await realpath(picked).catch(() => null);

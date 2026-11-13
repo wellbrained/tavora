@@ -1145,6 +1145,7 @@ export const en = {
   "grant.foldersNote": "It can list and read those files and is told when new ones appear, but can't change, add or delete anything. It never learns where the folder is on your PC.",
   "folders.root.Documents": "Documents",
   "folders.root.Saved Games": "Saved Games",
+  "folders.root.AppData/LocalLow": "AppData\\LocalLow",
   "folders.refused": "Modules can't read that folder. Choose the game's own folder.",
   "dialog.chooseFolder": "Where is {folder} for {name}?",
   "grant.waiting": "Waiting for your OK",

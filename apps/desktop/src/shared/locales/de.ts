@@ -1147,6 +1147,7 @@ export const de: Record<keyof typeof en, string> = {
   "grant.foldersNote": "Es kann diese Dateien auflisten und lesen und erfährt, wenn neue dazukommen, kann aber nichts ändern, hinzufügen oder löschen. Wo der Ordner auf deinem PC liegt, erfährt es nie.",
   "folders.root.Documents": "Dokumente",
   "folders.root.Saved Games": "Gespeicherte Spiele",
+  "folders.root.AppData/LocalLow": "AppData\\LocalLow",
   "folders.refused": "Diesen Ordner dürfen Module nicht lesen. Wähle den Ordner des Spiels selbst.",
   "dialog.chooseFolder": "Wo ist {folder} für {name}?",
   "grant.waiting": "Wartet auf dein OK",

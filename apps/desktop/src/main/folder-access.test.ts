@@ -4,8 +4,9 @@ import { link, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { folderKey, type FolderAccess } from "@tavora/module-schema";
+import { FOLDER_ROOTS, folderKey, type FolderAccess } from "@tavora/module-schema";
 import type { FolderChange } from "@tavora/sdk/protocol";
+import { FOLDER_ROOT_NAMES } from "../shared/folder-keys";
 import { ChosenFolders, findFolder, folderHost, FolderWatch, insidePath, isRefusedFolder, listFolder, MAX_FOLDER_LEVELS, readFolderFile, revealTarget, serveFolderFile, type FolderPlaces } from "./folder-access";
 
 const replays: FolderAccess = { path: "Documents/Game", read: ["sc2replay"], names: ["lnk"] };
@@ -18,7 +19,7 @@ beforeEach(async () => {
   root = await mkdtemp(path.join(os.tmpdir(), "tavora-folders-"));
   const home = path.join(root, "Users", "me");
   places = {
-    roots: { Documents: path.join(home, "Documents"), "Saved Games": path.join(home, "Saved Games") },
+    roots: { Documents: path.join(home, "Documents"), "Saved Games": path.join(home, "Saved Games"), "AppData/LocalLow": path.join(home, "AppData", "LocalLow") },
     home,
     userData: path.join(home, "AppData", "Roaming", "Tavora"),
     known: [path.join(home, "Desktop"), path.join(home, "Downloads"), path.join(home, "OneDrive")],
@@ -111,6 +112,101 @@ describe("refused folders", () => {
     // Shown by the user for another manifest path: refused all the same.
     await chosen.set(replays.path, tavora);
     expect(await findFolder(replays, chosen, own)).toBeNull();
+  });
+});
+
+describe("AppData\\LocalLow", () => {
+  const settings: FolderAccess = { path: "AppData/LocalLow/SadSocket/9Kings", read: ["json"] };
+  const lowOf = (...names: string[]) => path.join(places.roots["AppData/LocalLow"], ...names);
+  const chosen = () => new ChosenFolders(places.userData, "local", "local.game");
+
+  it("is a root the host UI knows too", () => {
+    expect(FOLDER_ROOT_NAMES).toEqual(FOLDER_ROOTS);
+  });
+
+  it("takes a game's folder in LocalLow, never LocalLow itself, a whole company, a system folder or the rest of AppData", () => {
+    expect(isRefusedFolder(lowOf("SadSocket", "9Kings"), places)).toBe(false);
+    expect(isRefusedFolder(lowOf("SadSocket", "9Kings", "Saves"), places)).toBe(false);
+    expect(isRefusedFolder(lowOf(), places)).toBe(true);
+    expect(isRefusedFolder(lowOf("SadSocket"), places)).toBe(true);
+    for (const vendor of ["Microsoft", "microsoft", "Sun", "Oracle", "Adobe", "Google", "Mozilla", "Intel", "NVIDIA", "Apple", "Temp"]) {
+      expect(isRefusedFolder(lowOf(vendor, "Anything"), places)).toBe(true);
+    }
+    expect(isRefusedFolder(path.join(places.home, "AppData"), places)).toBe(true);
+    expect(isRefusedFolder(path.join(places.home, "AppData", "Local", "SadSocket", "9Kings"), places)).toBe(true);
+    expect(isRefusedFolder(path.join(places.home, "AppData", "Roaming", "SadSocket", "9Kings"), places)).toBe(true);
+    expect(isRefusedFolder(path.join(places.home, "AppData", "LocalLowish", "SadSocket", "9Kings"), places)).toBe(true);
+  });
+
+  it("finds, lists and reads a game's folder in LocalLow", async () => {
+    await mkdir(lowOf("SadSocket", "9Kings"), { recursive: true });
+    await writeFile(lowOf("SadSocket", "9Kings", "9KingsSettings.json"), "{}");
+    expect(await findFolder(settings, chosen(), places)).toBe(realpathSync.native(lowOf("SadSocket", "9Kings")));
+    const granted = folderHost({
+      folders: () => [settings],
+      allowed: () => new Set([folderKey(settings)]),
+      chosen: chosen(),
+      places: () => places,
+      pick: async () => undefined,
+      refused: vi.fn(),
+      scope: "local/local.game",
+    });
+    expect((await granted.list(settings.path)).files.map((file) => file.path)).toEqual(["9KingsSettings.json"]);
+    expect((await granted.read(settings.path, "9KingsSettings.json")).toString()).toBe("{}");
+  });
+
+  it("never reaches Local or Roaming through a junction in LocalLow, at the game or the company", async () => {
+    const discord = path.join(places.home, "AppData", "Roaming", "discord", "Local Storage");
+    const local = path.join(places.home, "AppData", "Local", "Google", "Chrome");
+    await mkdir(discord, { recursive: true });
+    await mkdir(local, { recursive: true });
+    await writeFile(path.join(discord, "settings.json"), "{\"token\":\"secret\"}");
+    await mkdir(lowOf("SadSocket"), { recursive: true });
+    await symlink(discord, lowOf("SadSocket", "9Kings"), "junction");
+    expect(await findFolder(settings, chosen(), places)).toBeNull();
+    // The company folder itself a junction into Local.
+    await symlink(path.dirname(local), lowOf("Evil"), "junction");
+    expect(await findFolder({ path: "AppData/LocalLow/Evil/Chrome", read: ["json"] }, chosen(), places)).toBeNull();
+    // Picked by the user: refused all the same, and the module is never told where it led.
+    const refused = vi.fn();
+    const granted = folderHost({
+      folders: () => [settings],
+      allowed: () => new Set([folderKey(settings)]),
+      chosen: chosen(),
+      places: () => places,
+      pick: async () => lowOf("Evil", "Chrome"),
+      refused,
+      scope: "local/local.game",
+    });
+    expect(await granted.choose(settings.path)).toBe(false);
+    expect(refused).toHaveBeenCalledOnce();
+    await expect(granted.read(settings.path, "settings.json")).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("never reaches Local through LocalLow when LocalLow itself is a junction there", async () => {
+    const local = path.join(places.home, "AppData", "Local");
+    await mkdir(path.join(local, "SadSocket", "9Kings"), { recursive: true });
+    await symlink(local, lowOf(), "junction");
+    expect(await findFolder(settings, chosen(), places)).toBeNull();
+  });
+
+  it("keeps the system folders shut when LocalLow lives elsewhere through a junction", async () => {
+    const elsewhere = path.join(root, "D", "LocalLow");
+    await mkdir(path.join(elsewhere, "SadSocket", "9Kings"), { recursive: true });
+    await mkdir(path.join(elsewhere, "Microsoft", "CryptnetUrlCache"), { recursive: true });
+    await mkdir(path.join(places.home, "AppData"), { recursive: true });
+    await symlink(elsewhere, lowOf(), "junction");
+    expect(await findFolder(settings, chosen(), places)).toBe(realpathSync.native(path.join(elsewhere, "SadSocket", "9Kings")));
+    expect(isRefusedFolder(realpathSync.native(path.join(elsewhere, "Microsoft", "CryptnetUrlCache")), places)).toBe(true);
+    expect(isRefusedFolder(realpathSync.native(path.join(elsewhere, "SadSocket")), places)).toBe(true);
+  });
+
+  it("refuses a system folder in LocalLow even for an entry no manifest could hold, or when the user picks it", async () => {
+    const crypt = lowOf("Microsoft", "CryptnetUrlCache");
+    await mkdir(crypt, { recursive: true });
+    expect(await findFolder({ path: "AppData/LocalLow/Microsoft/CryptnetUrlCache", read: ["dat"] }, chosen(), places)).toBeNull();
+    await chosen().set(settings.path, crypt);
+    expect(await findFolder(settings, chosen(), places)).toBeNull();
   });
 });
 
