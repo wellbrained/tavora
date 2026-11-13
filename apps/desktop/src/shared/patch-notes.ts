@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.51",
+    date: "2026-11-13",
+    title: "Your game's modules, however you added it",
+    notes: [
+      "Adding a running game with its Add button now finds it online first, just like Add a game does.",
+      "A game you typed in by name, or one from Epic, Battle.net or Xbox, now gets the modules made for it too.",
+      "Add a game counts the modules for the games on your PC, even ones the search didn't know yet.",
+    ],
+    prs: [
+      { number: 773, title: "Every way of adding a game finds its modules" },
+    ],
+    tags: ["catalog", "games", "modules", "privacy", "website", "workspace"],
+  },
+  {
     version: "0.24.50",
     date: "2026-11-13",
     title: "Modules for every game you added",
