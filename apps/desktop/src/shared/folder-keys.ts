@@ -4,7 +4,8 @@
 
 /**
  * Key and certificate files: never read from a folder, at most seen by name, wherever they are. Tavora's own key files
- * are .pem; a module has no use for a private key.
+ * are .pem; a module has no use for a private key. Written out here like FOLDER_ROOT_NAMES (module-schema KEY_EXTENSIONS;
+ * folder-access.test.ts checks they match).
  */
 export const KEY_EXTENSIONS: readonly string[] = ["pem", "key", "p12", "pfx", "ppk"];
 

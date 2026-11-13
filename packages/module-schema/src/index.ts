@@ -584,8 +584,7 @@ export function folderAccessProblem(value: unknown): string | null {
   if (problem) return problem;
   const entry = value as FolderAccess;
   if (isTavoraOwnFolder(entry.path)) return "path can't be Tavora's own folder (Documents/Tavora) or one below it";
-  const keys = (entry.read ?? []).filter((item) => KEY_EXTENSIONS.includes(item));
-  if (keys.length > 0) return `may list key files (${KEY_EXTENSIONS.join(", ")}) only in names, not read`;
+  if ((entry.read ?? []).some((item) => KEY_EXTENSIONS.includes(item))) return `may list key files (${KEY_EXTENSIONS.join(", ")}) only in names, not read`;
   return null;
 }
 

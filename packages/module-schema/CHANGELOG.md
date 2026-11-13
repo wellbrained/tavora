@@ -4,7 +4,7 @@ What changed in `@tavora/module-schema`, newest first.
 
 ## 0.1.11
 
-- `permissions.folders` no longer takes Tavora's own folder in Documents (`Documents/Tavora`, in any case, or any folder below it) and no longer takes key files (`KEY_EXTENSIONS`: `pem`, `key`, `p12`, `pfx`, `ppk`) in `read`; a key file may still be listed in `names`. Tavora already refused both at runtime (such a folder is never read, a key file in `read` is only a name); now the manifest check, the catalog upload and the JSON Schema refuse them too, so a module that asks for them is not accepted. `isTavoraOwnFolder` tells whether a path is Tavora's folder; `folderAccessProblem` and `isFolderAccess` apply both rules, `parseFolderKey` (a stored grant) still reads keys made before.
+- `permissions.folders` no longer takes Tavora's own folder in Documents (`Documents/Tavora`, in any case, or any folder below it) and no longer takes key files (`KEY_EXTENSIONS`: `pem`, `key`, `p12`, `pfx`, `ppk`) in `read`; a key file may still be listed in `names`. Tavora already refused both at runtime (such a folder is never read, a key file in `read` is only a name); now the manifest check, the catalog upload and the JSON Schema refuse them too, so a module that asks for them is not accepted. Pictures\Tavora and Downloads\Tavora need no rule here: a manifest path can only start at Documents, Saved Games or AppData/LocalLow. `isTavoraOwnFolder` tells whether a path is Tavora's folder; `folderAccessProblem` and `isFolderAccess` apply both rules, `parseFolderKey` (a stored grant) still reads keys made before.
 
 ## 0.1.10
 
