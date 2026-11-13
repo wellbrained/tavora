@@ -1527,6 +1527,7 @@ export const en = {
   "search.hint.close": "to close",
   "search.key.enter": "Enter",
   "search.key.esc": "Esc",
+  "search.key.tab": "Tab",
   "search.add": "Add {name}",
   "search.newGame": "New game",
   "search.homeKeywords": "welcome, start",

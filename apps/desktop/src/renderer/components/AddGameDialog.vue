@@ -149,8 +149,16 @@ async function openPersonal(workspaceId: string) {
   await act({ type: "open-workspace", workspaceId });
 }
 
-/** The field's keys: the search's in Game; in Personal, Enter adds. */
+/**
+ * The field's keys: Tab switches between Game and Personal (Shift+Tab still moves the focus, so the switch and the
+ * footer stay in reach); then the search's keys in Game, and in Personal, Enter adds.
+ */
 function onFieldKey(event: KeyboardEvent) {
+  if (event.key === "Tab" && !event.isComposing && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) {
+    event.preventDefault();
+    if (!adder.busy.value) mode.value = mode.value === "game" ? "personal" : "game";
+    return;
+  }
   if (mode.value === "game") return onKey(event);
   if (event.key !== "Enter" || event.isComposing) return;
   event.preventDefault();
@@ -270,12 +278,15 @@ function onDialogKey(event: KeyboardEvent) {
       </div>
 
       <div v-if="mode === 'personal'" class="text-muted-foreground flex flex-none items-center border-t px-4 py-2 text-xs">
-        <span aria-hidden="true"><Kbd class="font-sans">{{ t("search.key.enter") }}</Kbd> {{ t("addGame.hint.add") }}</span>
+        <span aria-hidden="true"
+          ><Kbd class="font-sans">{{ t("search.key.enter") }}</Kbd> {{ t("addGame.hint.add") }} · <Kbd class="font-sans">{{ t("search.key.tab") }}</Kbd> {{ t("add.mode.game") }}</span
+        >
       </div>
       <div v-else class="text-muted-foreground flex flex-none flex-wrap items-center gap-x-4 gap-y-1 border-t px-4 py-2 text-xs">
         <span aria-hidden="true"
           ><template v-if="covers.length"><Kbd class="font-sans">←</Kbd> <Kbd class="font-sans">→</Kbd> </template><Kbd class="font-sans">↑</Kbd> <Kbd class="font-sans">↓</Kbd>
-          {{ t("addGame.hint.move") }} · <Kbd class="font-sans">{{ t("search.key.enter") }}</Kbd> {{ t("addGame.hint.add") }}</span
+          {{ t("addGame.hint.move") }} · <Kbd class="font-sans">{{ t("search.key.enter") }}</Kbd> {{ t("addGame.hint.add") }} · <Kbd class="font-sans">{{ t("search.key.tab") }}</Kbd>
+          {{ t("add.mode.personal") }}</span
         >
         <span class="ml-auto flex gap-4">
           <button type="button" class="text-primary underline-offset-2 hover:underline" data-testid="open-steam-import" @click="dialog = { kind: 'steam-import' }">{{ t("addGame.steam") }}</button>

@@ -707,10 +707,15 @@ test("Personal in the Add dialog: a name and Enter add the workspace and open it
     await expect(page.getByTestId("personal-type-name")).toBeVisible();
     await page.keyboard.press("Enter");
     await expect(page.getByTestId("add-game-dialog")).toBeVisible();
-    // Back on Game, the search kept what was typed.
+    // Back on Game, the search kept what was typed. Tab switches too, and the focus stays in the field.
     await page.getByTestId("add-mode-game").click();
     await expect(page.getByTestId("game-search")).toHaveValue("Valheim");
-    await page.getByTestId("add-mode-personal").click();
+    await page.keyboard.press("Tab");
+    await expect(page.getByTestId("add-mode-personal")).toHaveAttribute("data-state", "checked");
+    await expect(page.getByTestId("personal-name")).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(page.getByTestId("game-search")).toBeFocused();
+    await page.keyboard.press("Tab");
 
     await page.keyboard.type("Stream");
     await expect(page.getByTestId("create-personal")).toContainText("Stream");
