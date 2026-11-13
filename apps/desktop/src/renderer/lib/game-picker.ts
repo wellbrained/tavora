@@ -180,10 +180,20 @@ export function stepActive(items: PickerItems, active: string | null, key: strin
   return undefined;
 }
 
+const officialFirst = (a: CatalogModuleView, b: CatalogModuleView) => Number(b.official) - Number(a.official) || a.name.localeCompare(b.name);
+
 /** The catalog modules made for a game, Tavora's own first, then by name. */
 export function modulesFor(modules: readonly CatalogModuleView[], gameId: string | null): CatalogModuleView[] {
   if (!gameId) return [];
-  return modules.filter((module) => module.gameIds.includes(gameId)).sort((a, b) => Number(b.official) - Number(a.official) || a.name.localeCompare(b.name));
+  return modules.filter((module) => module.gameIds.includes(gameId)).sort(officialFirst);
+}
+
+/**
+ * The modules made for the open workspace's game, as the host decided (`fits`, for every id the game goes by: a game
+ * added by name is `local-…`, never the id a module names), leaving out modules for any game. Tavora's own first.
+ */
+export function madeForWorkspace(modules: readonly CatalogModuleView[]): CatalogModuleView[] {
+  return modules.filter((module) => module.fits && module.gameIds.length > 0).sort(officialFirst);
 }
 
 /** The modules a pick adds with the game: Tavora's own. */

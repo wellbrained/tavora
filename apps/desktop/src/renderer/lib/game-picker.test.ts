@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CatalogModuleView, InstalledGameView } from "../../shared/host-api";
 import type { WorkspaceView } from "../../shared/host-api";
-import { addedWithGame, addInputFor, addInputForUnlisted, buildRows, describeActivity, initials, keepActive, keepOrder, modulesFor, optionId, playedLately, resolveAddInput, stepActive, withLiveCopies } from "./game-picker";
+import { addedWithGame, addInputFor, addInputForUnlisted, buildRows, describeActivity, initials, keepActive, keepOrder, madeForWorkspace, modulesFor, optionId, playedLately, resolveAddInput, stepActive, withLiveCopies } from "./game-picker";
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = new Date(2026, 10, 1, 12).getTime();
@@ -259,6 +259,19 @@ describe("modulesFor", () => {
 
   it("adds only Tavora's own with the game", () => {
     expect(addedWithGame(modulesFor(all, "satisfactory"))).toEqual(["tavora.sat"]);
+  });
+});
+
+describe("madeForWorkspace", () => {
+  it("takes the host's word on which modules fit the workspace's game, leaving out modules for any game", () => {
+    // A game added by name (local-9-kings) never matches a module's game ids itself; the host decided `fits`.
+    const listed = [
+      module("community.b", ["9-kings"], { fits: true }),
+      module("tavora.nine", ["9-kings"], { fits: true, official: true }),
+      module("other", ["factorio"], { fits: false }),
+      module("anywhere", [], { fits: true }),
+    ];
+    expect(madeForWorkspace(listed).map((item) => item.id)).toEqual(["tavora.nine", "community.b"]);
   });
 });
 

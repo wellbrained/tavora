@@ -14,7 +14,7 @@ import { useTask } from "@tavora/official-ui/use-task";
 import { useActionStatus } from "../../action-status";
 import { act, api, installProgress, openPanels, state } from "../../host";
 import { t } from "../../i18n";
-import { modulesFor } from "../../lib/game-picker";
+import { madeForWorkspace } from "../../lib/game-picker";
 import CatalogIcon from "../CatalogIcon.vue";
 
 const props = defineProps<{ workspace: WorkspaceView }>();
@@ -27,7 +27,7 @@ watch(
   async (workspaceId) => {
     made.value = null;
     const listed = await loader.run(() => api.browseCatalog({ workspaceId }));
-    if (listed?.status === "ok") made.value = modulesFor(listed.modules.filter((module) => module.fits), workspaceId);
+    if (listed?.status === "ok") made.value = madeForWorkspace(listed.modules);
   },
   { immediate: true },
 );

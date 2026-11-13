@@ -17,6 +17,7 @@ import { CATALOG, catalogGame } from "./catalog";
 import { DEFAULT_OVERLAY_PORT, MAX_OVERLAY_PORT, MIN_OVERLAY_PORT } from "./overlays";
 import { iconFileAllowed, isSteamAppId, needsIcon } from "./steam-icons";
 import { DEFAULT_THEME, isThemeRadius, isVariationId } from "./themes";
+import { isLearnableGameId } from "./workspace-game";
 
 export type { RootItem, RootSort, Startup };
 
@@ -41,6 +42,12 @@ export interface WorkspaceEntry {
   kind: WorkspaceKind;
   /** Set when the game was picked from the built-in list. */
   catalogId: string | null;
+  /**
+   * The game's id in Tavora's game list, for a game added by name (its id is `local-…`): learned from the game the
+   * catalog lists with the same Steam id, or from adding the game again online. Null otherwise. Which game a workspace
+   * is goes through workspace-game.ts, never through this field alone. Only added, so an older version still reads it.
+   */
+  gameId: string | null;
   /** Display name. Renaming never changes the id. */
   name: string;
   icon: WorkspaceIcon;
@@ -448,6 +455,7 @@ export function addWorkspace(library: Library, input: NewWorkspace, now: Date): 
     id,
     kind,
     catalogId,
+    gameId: null,
     name,
     icon: { kind: "monogram", text: monogram(name) },
     useOriginalIcon: kind === "game",
@@ -774,6 +782,7 @@ export function sanitizeLibrary(raw: unknown): Library {
         id: workspace.id,
         kind: "personal",
         catalogId: null,
+        gameId: null,
         name,
         icon: sanitizeIcon(workspace.icon, name),
         useOriginalIcon: false,
@@ -794,6 +803,8 @@ export function sanitizeLibrary(raw: unknown): Library {
       id: workspace.id,
       kind: "game",
       catalogId: typeof workspace.catalogId === "string" && catalogGame(workspace.catalogId) ? workspace.catalogId : null,
+      // Only a game added by name learns its game's id; any other workspace's id already is it.
+      gameId: workspace.id.startsWith("local-") && isLearnableGameId(workspace.gameId) ? workspace.gameId : null,
       name,
       icon: sanitizeIcon(workspace.icon, name),
       useOriginalIcon: workspace.useOriginalIcon !== false,

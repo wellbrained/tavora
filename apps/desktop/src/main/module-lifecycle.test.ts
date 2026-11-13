@@ -33,6 +33,7 @@ function listing(version: string, zip: Buffer, owner: string): CatalogEntry {
     version,
     minTavora: null,
     games: [],
+    gameInfo: [],
     personalWorkspaces: true,
     permissions: { network: [], connectors: [], folders: [] },
     owner,

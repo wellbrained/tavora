@@ -35,6 +35,7 @@ import type { PanelDialogSize } from "./bridge";
 import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, InstalledGameView, ModulePageResult, OfficialPublishRun, OfficialPublishView, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, PanelDialog, PanelPlacement, ProfileRanksView, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView, UnlistedGame } from "../shared/host-api";
 import { MAX_PICKER_COVERS } from "../shared/host-api";
 import { addOrRestoreWorkspace, gameCopyFinder } from "./game-copy";
+import { isForWorkspaceGame, learnGameIds, workspaceGameIds, type ListedGame } from "./workspace-game";
 import { resolveLanguage, translate, type Language, type MessageKey } from "../shared/i18n";
 import { suggestPrefix } from "../shared/id-prefix";
 import { compareModuleVersions } from "../shared/module-version";
@@ -644,7 +645,7 @@ export class Host {
     this.data = new DataRegistry(options.userData, () => this.files.root(), () => this.files.moving);
     this.onlineSearch = new OnlineSearch(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl });
     this.gamesSeen = new GamesSeen(path.join(options.userData, "games-seen.json"));
-    this.catalog = new CatalogClient(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl });
+    this.catalog = new CatalogClient({ ...(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl }), onGames: (games) => this.learnGameIds(games) });
     this.workspaces = new Workspaces(workspaces, {
       save: (state) => this.savedData.saveWorkspace(state),
     });
@@ -1499,7 +1500,7 @@ export class Host {
   /** The scope a host page asked for (a workspace, or a game), else the open workspace's. */
   private catalogScopeOf(target: unknown): CatalogScope | null {
     const asked = typeof target === "object" && target !== null ? (target as Record<string, unknown>) : {};
-    if (typeof asked.game === "string" && asked.game.length <= 80) return { game: asked.game };
+    if (typeof asked.game === "string" && asked.game.length <= 80) return { games: [asked.game] };
     if (typeof asked.workspaceId === "string") return this.catalogScope(asked.workspaceId);
     return this.catalogScope();
   }
@@ -1507,7 +1508,14 @@ export class Host {
   private catalogScope(id: string | null = this.workspaceId): CatalogScope | null {
     const workspace = id ? this.library.workspaces[id] : undefined;
     if (!workspace) return null;
-    return workspace.kind === "personal" ? { personal: true } : { game: workspace.catalogId ?? workspace.id };
+    return workspace.kind === "personal" ? { personal: true } : { games: workspaceGameIds(workspace) };
+  }
+
+  /** A game added by name learns its game's id from a catalog listing (workspace-game.ts); saved, and the rail sees what now fits. */
+  private learnGameIds(games: ListedGame[]): void {
+    if (!learnGameIds(this.library, games).length) return;
+    this.saveLibrary();
+    this.pushStateSoon();
   }
 
   /**
@@ -1949,13 +1957,14 @@ export class Host {
     ipcMain.handle("host:browse-catalog", async (event, target?: unknown): Promise<CatalogListResult> => {
       if (!fromHost(event)) return { status: "unreachable" };
       if (!this.library.onlineSearch) return { status: "off" };
-      const scope = this.catalogScopeOf(target);
-      return scope ? this.catalog.list(scope, this.language) : { status: "ok", modules: [] };
+      if (!this.catalogScopeOf(target)) return { status: "ok", modules: [] };
+      // Asked again once the listing was read: a game added by name may just have learned its game's id from it.
+      return this.catalog.list(() => this.catalogScopeOf(target) ?? { games: [] }, this.language);
     });
     ipcMain.handle("host:catalog-for-games", async (event): Promise<CatalogListResult> => {
       if (!fromHost(event)) return { status: "unreachable" };
       if (!this.library.onlineSearch) return { status: "off" };
-      return this.catalog.list({ game: "" }, this.language);
+      return this.catalog.list({ games: [] }, this.language);
     });
     ipcMain.handle("host:catalog-page", async (event, moduleId: unknown): Promise<CatalogPageResult> =>
       fromHost(event) && isModuleId(moduleId) ? this.catalogPage(moduleId) : { status: "gone" },
@@ -4656,9 +4665,8 @@ export class Host {
     const entry = this.library.workspaces[workspaceId];
     // A personal workspace belongs to no game: only modules for any game that did not opt out go there.
     if (entry?.kind === "personal") return allowsPersonalWorkspaces(module.manifest);
-    // A game workspace's id is its game's.
-    const catalogId = entry?.catalogId;
-    return games.length === 0 || games.includes(workspaceId) || (catalogId != null && games.includes(catalogId));
+    if (!entry) return games.length === 0 || games.includes(workspaceId);
+    return isForWorkspaceGame(games, entry);
   }
 
   /** A game workspace's own icon (its game's) as an address, with the version of its file so a replaced file shows at once, and how it sits in its tile. */
