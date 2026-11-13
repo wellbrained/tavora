@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronDown, PanelLeftClose, PanelLeftOpen, Gamepad2, Plus, Settings, UserRoundPlus } from "@lucide/vue";
+import { ChevronDown, PanelLeftClose, PanelLeftOpen, Plus, Settings } from "@lucide/vue";
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import type { FolderView, WorkspaceView, RootItem } from "../../shared/host-api";
@@ -12,7 +12,6 @@ import { folderMenu, workspaceMenu } from "../rail-actions";
 import MenuArea from "./menus/MenuArea.vue";
 import ProfileMenu from "./profile/ProfileMenu.vue";
 import RailFooterTile from "./RailFooterTile.vue";
-import AddPersonalField from "./AddPersonalField.vue";
 import RailInboxButton from "./RailInboxButton.vue";
 import RailModuleUpdates from "./RailModuleUpdates.vue";
 import RailOverlayButton from "./RailOverlayButton.vue";
@@ -43,23 +42,12 @@ function onNarrowChange() {
 narrowQuery.addEventListener("change", onNarrowChange);
 onBeforeUnmount(() => narrowQuery.removeEventListener("change", onNarrowChange));
 
-// Under the last workspace: add a game, or start a personal workspace (which belongs to no game). The labels are
-// short so both fit side by side in German too; the full name is the tooltip and the accessible name.
-const addButtons = computed(() => [
-  { testid: "rail-add-game", name: t("common.addGame"), label: t("rail.addGame.short"), icon: Gamepad2, badge: true, run: () => (dialog.value = { kind: "add-game" }) },
-  { testid: "rail-add-personal", name: t("rail.addPersonal"), label: t("rail.addPersonal.short"), icon: UserRoundPlus, badge: false, run: () => (personalOpen.value = !personalOpen.value) },
-]);
-/** The name field for a new personal workspace is out: in the rail when expanded, next to `personalEntry` when compact. */
-const personalOpen = ref(false);
-const personalEntry = ref<HTMLElement | null>(null);
 const expanded = computed(() => (narrow.value ? peek.value : library.value.rail.expanded));
 function toggleRail() {
   if (narrow.value) peek.value = !peek.value;
   else void act({ type: "set-rail", expanded: !expanded.value });
 }
 watch(railToggles, toggleRail);
-// The name field is drawn for one rail size: it does not carry over to the other.
-watch(expanded, () => (personalOpen.value = false));
 
 // While Ctrl is held, the expanded rail shows which workspace Ctrl+1 to 9 opens.
 const ctrlHeld = ref(false);
@@ -568,52 +556,35 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
           </div>
         </div>
       </AnimatedList>
-        <!-- Add game and Personal are one more entry under the last workspace: two quiet buttons side by side when
-             expanded (an even split), two tiles stacked when compact. -->
-        <AddPersonalField v-model:open="personalOpen" :anchor="personalEntry" :inline="expanded" />
-        <div :class="cn('mt-1 flex px-2', expanded ? 'gap-1' : 'flex-col gap-1')" data-testid="rail-add">
-          <div
-            v-for="add in addButtons"
-            :key="add.testid"
-            :ref="(el) => add.testid === 'rail-add-personal' && (personalEntry = el as HTMLElement | null)"
-            :class="cn('rail-entry group relative flex', expanded && 'min-w-0 flex-1')"
-          >
-            <RailTooltip :text="add.name" :disabled="add.testid === 'rail-add-personal' && personalOpen">
-              <button
-                type="button"
-                :class="
-                  cn(
-                    'flex min-w-0 flex-1 items-center rounded-lg text-left',
-                    expanded ? 'text-muted-foreground hover:text-foreground hover:bg-rail-hover aria-expanded:text-foreground aria-expanded:bg-rail-hover h-12 gap-1.5 px-2.5' : 'justify-center p-1',
-                  )
-                "
-                data-rail-item
-                :data-testid="add.testid"
-                :aria-label="add.name"
-                :aria-expanded="add.testid === 'rail-add-personal' ? personalOpen : undefined"
-                @click="add.run()"
+        <!-- Add is one more entry under the last workspace: a quiet full-width button when expanded, a tile when
+             compact. Its dialog adds a game or a personal workspace. -->
+        <div class="rail-entry group relative mt-1 flex px-2" data-testid="rail-add">
+          <RailTooltip :text="t('rail.add.full')">
+            <button
+              type="button"
+              :class="
+                cn(
+                  'flex min-w-0 flex-1 items-center rounded-lg text-left',
+                  expanded ? 'text-muted-foreground hover:text-foreground hover:bg-rail-hover h-12 gap-1.5 px-2.5' : 'justify-center p-1',
+                )
+              "
+              data-rail-item
+              data-testid="rail-add-game"
+              :aria-label="t('rail.add.full')"
+              @click="dialog = { kind: 'add-game' }"
+            >
+              <template v-if="expanded">
+                <Plus class="size-4 flex-none" :stroke-width="1.75" />
+                <span class="truncate text-sm font-medium">{{ t("rail.add") }}</span>
+              </template>
+              <span
+                v-else
+                class="rail-icon bg-card text-primary group-hover:bg-primary-fill group-hover:text-primary-fill-foreground flex size-10 flex-none items-center justify-center rounded-[10px]"
               >
-                <template v-if="expanded">
-                  <Plus class="size-4 flex-none" :stroke-width="1.75" />
-                  <span class="truncate text-sm font-medium">{{ add.label }}</span>
-                </template>
-                <span
-                  v-else
-                  class="rail-icon bg-card text-primary group-hover:bg-primary-fill group-hover:text-primary-fill-foreground flex size-10 flex-none items-center justify-center rounded-[10px]"
-                >
-                  <!-- The game's icon carries a small plus, as the person's does, so the two tiles read as a pair. -->
-                  <span class="relative flex">
-                    <component :is="add.icon" class="size-5" :stroke-width="1.75" />
-                    <Plus
-                      v-if="add.badge"
-                      class="bg-card group-hover:bg-primary-fill absolute -right-1 -bottom-1 size-2.5 rounded-full"
-                      :stroke-width="3"
-                    />
-                  </span>
-                </span>
-              </button>
-            </RailTooltip>
-          </div>
+                <Plus class="size-5" :stroke-width="1.75" />
+              </span>
+            </button>
+          </RailTooltip>
         </div>
     </div>
     </div>

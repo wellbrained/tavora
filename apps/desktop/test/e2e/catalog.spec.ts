@@ -524,7 +524,8 @@ test("the catalog asks for a personal workspace's modules, and stays offline wit
   const userData = await newUserData();
   const { app, page } = await launch(userData, [], { env: { TAVORA_API_URL: url } });
   try {
-    await page.getByTestId("rail-add-personal").click();
+    await page.getByTestId("rail-add-game").click();
+    await page.getByTestId("add-mode-personal").click();
     await page.getByTestId("personal-name").fill("Personal");
     await page.getByTestId("personal-name").press("Enter");
     await page.getByTestId("add-module").click();
