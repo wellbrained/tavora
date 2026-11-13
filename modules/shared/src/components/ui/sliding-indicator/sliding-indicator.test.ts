@@ -134,6 +134,15 @@ describe("sliding indicator", () => {
     expect(t.container.vars["--indicator-x"]).toBe("2.25px");
   });
 
+  it("measures as laid out while the container is drawn scaled (a dialog zooming in), so it fits once that ends", () => {
+    const t = setup();
+    // Drawn at half size: on screen the container is 300 wide but lays out at 600, and its items shrink with it.
+    Object.assign(t.container, { offsetWidth: 600, offsetHeight: 64 });
+    Object.assign(t.container.items[0]!, { left: 101.5, top: 51.5, width: 20, height: 14 });
+    t.resize();
+    expect(t.container.vars).toEqual({ "--indicator-x": "2px", "--indicator-y": "2px", "--indicator-w": "40px", "--indicator-h": "28px" });
+  });
+
   it("slides when the active item changes", () => {
     const t = setup();
     t.container.active = t.container.items[2]!;
