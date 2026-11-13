@@ -2,7 +2,7 @@ import { glob, readFile } from "node:fs/promises";
 import { Ajv } from "ajv";
 import { describe, expect, it } from "vitest";
 import schema from "../schema/tavora.module.schema.json" with { type: "json" };
-import { allowsPersonalWorkspaces, BLOCKED_LOCAL_PORTS, folderKey, isFolderPath, isLocalLowGameFolder, isLocalPort, LAST_TAVORA_WITHOUT_LOCAL_PORTS, LAST_TAVORA_WITHOUT_LOCALLOW_FOLDERS, parseFolderKey, splitFolderPath, localPortOf, CHANGELOG_LIMITS, connectorsAtAdd, continuingPanelType, firstKeyOf, isOfficialSigner, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, isReleaseVersion, LAST_TAVORA_WITHOUT_GAME_OVERLAYS, LAST_TAVORA_WITHOUT_BOARD_NAMES, LAST_TAVORA_WITHOUT_LEADERBOARDS, LAST_TAVORA_WITHOUT_PANEL_LAYOUT, LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES, LAST_TAVORA_WITHOUT_TRANSLATIONS, LAST_TAVORA_WITHOUT_WIDE_LAYOUT, needsNewerTavora, panelTypes, translateManifest, validateManifest, type ModuleManifest } from "./index";
+import { allowsPersonalWorkspaces, BLOCKED_LOCAL_PORTS, folderAccessProblem, folderKey, isFolderPath, isTavoraOwnFolder, isLocalLowGameFolder, isLocalPort, LAST_TAVORA_WITHOUT_LOCAL_PORTS, LAST_TAVORA_WITHOUT_LOCALLOW_FOLDERS, parseFolderKey, splitFolderPath, localPortOf, CHANGELOG_LIMITS, connectorsAtAdd, continuingPanelType, firstKeyOf, isOfficialSigner, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, isReleaseVersion, LAST_TAVORA_WITHOUT_GAME_OVERLAYS, LAST_TAVORA_WITHOUT_BOARD_NAMES, LAST_TAVORA_WITHOUT_LEADERBOARDS, LAST_TAVORA_WITHOUT_PANEL_LAYOUT, LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES, LAST_TAVORA_WITHOUT_TRANSLATIONS, LAST_TAVORA_WITHOUT_WIDE_LAYOUT, needsNewerTavora, panelTypes, translateManifest, validateManifest, type ModuleManifest } from "./index";
 
 const valid = {
   id: "community.example.campaign-companion",
@@ -90,6 +90,22 @@ describe("validateManifest", () => {
     const entry = { path: "AppData/LocalLow/SadSocket/9Kings", read: ["json"] };
     expect(parseFolderKey(folderKey(entry))).toEqual(entry);
     expect(parseFolderKey("AppData/LocalLow/Microsoft/X|json|")).toBeNull();
+  });
+
+  it("refuses Tavora's own folder and key files in read with a short message, but still parses a stored grant", () => {
+    expect(isTavoraOwnFolder("Documents/Tavora")).toBe(true);
+    expect(isTavoraOwnFolder("Documents/tAVORA/a")).toBe(true);
+    expect(isTavoraOwnFolder("Documents/Tavoras")).toBe(false);
+    expect(isTavoraOwnFolder("Saved Games/Tavora")).toBe(false);
+    expect(folderAccessProblem({ path: "Documents/Tavora/Keys", read: ["json"] })).toBe("path can't be Tavora's own folder (Documents/Tavora) or one below it");
+    expect(folderAccessProblem({ path: "Documents/Game", read: ["pem"] })).toBe("may list key files (pem, key, p12, pfx, ppk) only in names, not read");
+    expect(folderAccessProblem({ path: "Documents/Game", read: ["txt"], names: ["pem"] })).toBeNull();
+    expect(validateManifest({ ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "Documents/Game", read: ["key"] }] } })).toEqual({
+      ok: false,
+      errors: ["permissions.folders[0] may list key files (pem, key, p12, pfx, ppk) only in names, not read"],
+    });
+    expect(parseFolderKey("Documents/Tavora|json|")).not.toBeNull();
+    expect(parseFolderKey("Documents/Game|pem|")).not.toBeNull();
   });
 
   it("names the company and game rule only when that is what a LocalLow path breaks", () => {
@@ -473,7 +489,14 @@ const cases: [string, unknown, boolean][] = [
   ["a folder extension with a dot", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "Documents/Game", read: [".txt"] }] } }, false],
   ["a folder extension in capitals", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "Documents/Game", read: ["SC2Replay"] }] } }, false],
   ["shortcuts to read", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "Documents/Game", read: ["lnk"] }] } }, false],
-  ["a folder with an unknown field", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "Documents/Game", read: ["txt"], write: true }] } }, false],
+  ["key files to read", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "Documents/Game", read: ["txt", "pem"] }] } }, false],
+  ["each key file type to read", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "Documents/Game", read: ["key"] }, { path: "Documents/B", read: ["p12"] }, { path: "Documents/C", read: ["pfx"] }, { path: "Documents/D", read: ["ppk"] }] } }, false],
+  ["key files by name", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "Documents/Game", read: ["txt"], names: ["pem", "key", "p12", "pfx", "ppk"] }] } }, true],
+  ["Tavora's own folder in Documents", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "Documents/Tavora", read: ["json"] }] } }, false],
+  ["Tavora's own folder in other case", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "Documents/TAVORA", names: ["json"] }] } }, false],
+  ["a folder below Tavora's own", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "Documents/tavora/Modules/x", read: ["json"] }] } }, false],
+  ["a folder named like Tavora's own", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "Documents/Tavora Games", read: ["json"] }, { path: "Documents/Games/Tavora", read: ["json"] }, { path: "Saved Games/Tavora", read: ["json"] }] } }, true],
+  ["a folder with an unknown field",{ ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "Documents/Game", read: ["txt"], write: true }] } }, false],
   ["five folders", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: ["a","b","c","d","e"].map((name) => ({ path: `Documents/${name}`, read: ["txt"] })) } }, false],
   ["no folders", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [] } }, false],
   ["a game's folder in AppData/LocalLow", { ...valid, minTavora: "0.24.44", permissions: { network: [], folders: [{ path: "AppData/LocalLow/SadSocket/9Kings", read: ["json"] }] } }, true],
