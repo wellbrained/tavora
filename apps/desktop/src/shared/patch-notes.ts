@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.50",
+    date: "2026-11-13",
+    title: "Modules for every game you added",
+    notes: [
+      "A game you added with its running game's Add button, or from your Steam library, now gets the modules made for it.",
+      "A module for one game now names that game, such as 9 Kings, instead of showing an id.",
+    ],
+    prs: [
+      { number: 772, title: "Modules for games added by name" },
+    ],
+    tags: ["catalog", "games", "icons", "modules", "service", "website", "workspace"],
+  },
+  {
     version: "0.24.49",
     date: "2026-11-13",
     title: "A new Add, item cards and a steadier app",
