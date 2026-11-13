@@ -4,7 +4,7 @@ import { FOLDER_READ_PATH, READ_ONLY_FILE_PATH } from '@tavora/sdk/protocol';
 import { serveFolderFile, type FolderHost, type FolderWatch } from './folder-access';
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { app, BrowserWindow, clipboard, ClipboardItem, MessageChannelMain, session, shell, WebContentsView, type Session } from "electron";
+import { app, BrowserWindow, clipboard, ClipboardItem, MessageChannelMain, session, shell, WebContentsView, type Session, type WebContents } from "electron";
 import type { CallName, Capability, GameOverlayResult, ReadOnlyFile, SystemApps, SystemInfo, SystemTraffic, HotkeyBinding, HotkeySetResult, JsonValue, OverlayLinkResult, OverlaySource, TavoraTheme, TavoraViewport, TavoraWorkspace } from "@tavora/sdk/protocol";
 import type { ResolvedPanelType } from "@tavora/module-schema";
 import { modulePartition } from "./module-data";
@@ -394,6 +394,8 @@ export class ModuleView {
   private measuring = false;
   /** How the page is doing; changed only by `setStatus`, read as `status`. */
   private health: InstanceStatus = "loading";
+  /** Set by dispose: a page that finishes loading after it starts no timers (they would outlive the view). */
+  private disposed = false;
   /** False while the page is still loading or filling itself with data; the host keeps the view hidden until then. */
   revealed = false;
   private revealTimers: ReturnType<typeof setTimeout>[] = [];
@@ -485,7 +487,7 @@ export class ModuleView {
       void this.insertThemeCss(options.getTheme());
     });
     contents.on("did-finish-load", () => {
-      if (this.health !== "loading") return;
+      if (this.disposed || this.health !== "loading") return;
       this.setStatus("ready");
       this.startHeartbeat();
       this.startStorageWatch();
@@ -1382,10 +1384,12 @@ export class ModuleView {
    */
   private startHeartbeat(): void {
     this.stopHeartbeat();
+    if (this.disposed) return;
     this.lastPong = Date.now();
     this.heartbeat = setInterval(() => {
-      const contents = this.view.webContents;
-      if (contents.isDestroyed()) return this.stopHeartbeat();
+      // A closed view has no page any more (Electron drops it): stop, never touch it.
+      const contents = this.view.webContents as WebContents | undefined;
+      if (!contents || contents.isDestroyed()) return this.stopHeartbeat();
       contents.send("tavora:ping");
       if (this.health === "ready" && Date.now() - this.lastPong > UNRESPONSIVE_MS) this.setStatus("unresponsive");
     }, HEARTBEAT_MS);
@@ -1394,10 +1398,11 @@ export class ModuleView {
   /** Measures the module's browser storage now and then; a module cannot be left to fill the user's disk. */
   private startStorageWatch(): void {
     this.stopStorageWatch();
+    if (this.disposed) return;
     const limit = this.options.storageLimit ?? MODULE_STORAGE_LIMIT;
     this.storageWatch = setInterval(() => {
-      const contents = this.view.webContents;
-      if (contents.isDestroyed()) return this.stopStorageWatch();
+      const contents = this.view.webContents as WebContents | undefined;
+      if (!contents || contents.isDestroyed()) return this.stopStorageWatch();
       const folder = contents.session.storagePath;
       if (!folder || this.measuring) return;
       this.measuring = true;
@@ -1458,6 +1463,7 @@ export class ModuleView {
   }
 
   dispose(): void {
+    this.disposed = true;
     this.stopHeartbeat();
     this.stopStorageWatch();
     this.clearRevealTimers();

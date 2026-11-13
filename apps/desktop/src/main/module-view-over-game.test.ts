@@ -8,6 +8,8 @@ const made = vi.hoisted(() => ({
   serve: undefined as ((request: Request) => Promise<Response>) | undefined,
   /** What the module's calls hand to the system's file manager. */
   shell: { showItemInFolder: vi.fn(), openPath: vi.fn(async () => "") },
+  /** The last page's event handlers, by event name. */
+  handlers: {} as Record<string, (...args: unknown[]) => void>,
 }));
 
 vi.mock("electron", () => {
@@ -28,7 +30,8 @@ vi.mock("electron", () => {
       session: ses,
       setWindowOpenHandler: () => undefined,
       setWebRTCIPHandlingPolicy: () => undefined,
-      on: () => undefined,
+      on: (event: string, handler: (...args: unknown[]) => void) => void (made.handlers[event] = handler),
+      close: () => undefined,
       loadURL: async () => undefined,
       isDestroyed: () => false,
       isLoading: () => false,
@@ -94,6 +97,22 @@ function make(extra: Record<string, unknown> = {}) {
   };
   return new ModuleView(options as never);
 }
+
+describe("closing a panel", () => {
+  it("starts no timers when its page finishes loading only after it was closed", () => {
+    vi.useFakeTimers();
+    try {
+      const view = make();
+      view.dispose();
+      made.handlers["did-finish-load"]?.();
+      // Electron drops a closed view's page: a timer left running would read `isDestroyed` of undefined.
+      (view as unknown as { view: { webContents?: unknown } }).view.webContents = undefined;
+      expect(() => vi.advanceTimersByTime(5 * 60_000)).not.toThrow();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
 
 describe("one press", () => {
   const take = (view: InstanceType<typeof ModuleView>) => (view as unknown as { takeGesture(what: string): Promise<void> }).takeGesture("links.open");
