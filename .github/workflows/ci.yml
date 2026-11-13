@@ -114,8 +114,7 @@ jobs:
         run: |
           Set-DisplayResolution -Width 1920 -Height 1080 -Force
           Get-CimInstance Win32_VideoController | Select-Object CurrentHorizontalResolution, CurrentVerticalResolution
-      # TEMPORARY (#483 stress run, reverted before merge): only the whiteboard zoom test, 3 times per shard, no retry.
-      - run: pnpm --filter @tavora/desktop test:e2e test/e2e/whiteboard.spec.ts -g "zoomed far in" --repeat-each=3 --retries=0
+      - run: pnpm --filter @tavora/desktop test:e2e --shard=${{ matrix.shard }}/8
       - if: failure()
         uses: actions/upload-artifact@v7
         with:
