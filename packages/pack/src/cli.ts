@@ -132,7 +132,7 @@ async function main(): Promise<number> {
 
   const key = await keyFrom(values.key, (message) => new PackError(message));
   const dir = path.resolve(positionals[0]!);
-  const { manifest, zip } = await packModule(dir, key);
+  const { manifest, zip } = await packModule(dir, key, { keyFile: values.key });
   const out = path.resolve(values.out ?? `${manifest.id}-${manifest.version}.zip`);
   await writeFile(out, zip);
   console.log(`Packed ${manifest.name} ${manifest.version} into ${out} (${zip.length} bytes)`);

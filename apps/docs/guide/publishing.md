@@ -128,6 +128,7 @@ An account can publish 10 versions a day and keep 200 MB of zips in the catalog.
 | Your account has published as many versions as it can today | Wait a day. |
 | Your modules take as much room in the catalog as an account may have | Make the zip smaller. |
 | The zip was refused: … | The zip failed a check; the message names it. |
+| It holds …, which looks like a private key | Move that file out of the module folder and pack again. A key file (`.pem`, `.key`, `.p12`, `.pfx`, `.ppk`) or a file holding a private key never goes out with a module. |
 | This account can't publish to the catalog any more | The account was banned. The email says why; see [what's not allowed](./catalog-rules.md). |
 | Tavora declined this exact zip | Fix what the email says and publish a new version. |
 | … versions are waiting for review already | Wait for them, or withdraw one with `tavora-pack withdraw`. |
@@ -172,6 +173,8 @@ TAVORA_PUBLISH_TOKEN=tvp_… vp exec tavora-pack publish <id>-<version>.zip --ke
 ```
 
 :::
+
+Keep the key file out of the module folder: `tavora-pack` stops, naming the file, when the zip would hold it, any other key file (`.pem`, `.key`, `.p12`, `.pfx`, `.ppk`) or a file holding a private key. That can only happen when `entry` sits next to `tavora.module.json`, which packs the whole folder except dot files and `node_modules`.
 
 A token publishes only under id prefixes your account already holds, so publish the first version from Tavora, or claim your prefix there first. It works for a year, only together with a key linked to your account. You get an email for every upload, naming the token. Remove a token you don't need any more, and it stops working at once.
 

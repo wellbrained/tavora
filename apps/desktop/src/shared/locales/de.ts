@@ -478,6 +478,7 @@ export const de: Record<keyof typeof en, string> = {
   "publish.error.noProject": "Nur Module aus deinen Projektordnern lassen sich veröffentlichen.",
   "publish.error.idPublished": "Die ID lässt sich nach dem Veröffentlichen nicht mehr ändern.",
   "publish.error.pack": "Tavora kann es nicht packen: {message}",
+  "publish.error.privateKey": "{file} sieht wie ein privater Schlüssel aus und darf nicht mit deinem Modul raus. Verschieb die Datei aus dem Modulordner und versuch es noch mal.",
   "publish.error.badFile": "{file} lässt sich nicht lesen. Ist es gültiges JSON?",
   "publish.error.notes": "Diese Patchnotes gehen nicht: {message}",
   "publish.error.version": "Diese Version geht nicht.",

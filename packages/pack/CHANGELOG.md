@@ -2,6 +2,11 @@
 
 What changed in `@tavora/pack`, newest first.
 
+## 0.3.3
+
+- `packModule` and `tavora-pack` stop with a `PrivateKeyError` (a `PackError` naming the `file`) when the zip would hold a private key: a `.pem`, `.key`, `.p12`, `.pfx` or `.ppk` file, the `--key` file (`packModule(dir, key, { keyFile })`), or a file holding a PEM, OpenSSH, PGP or PuTTY private key. Before, `tavora-pack . --key publisher-key.pem` packed the key when `entry` sat next to the manifest. The catalog refuses such zips too.
+- New `privateKeyFile(files)`, `holdsPrivateKey(data)`, `hasKeyExtension(name)` and `PRIVATE_KEY_EXTENSIONS` for checking a zip's files.
+
 ## 0.3.2
 
 - `packModule` (and `tavora-pack`) refuses a pre-release version such as `1.0.0-beta.1`: module versions are plain `major.minor.patch`. The catalog refuses them too.

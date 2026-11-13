@@ -215,7 +215,7 @@ Tavora packs what's already built, so keep `dev` running or run the `build` scri
 
 The part of your module id before the first dot is your prefix, usually your developer name. Once it's yours, nobody else can publish under it; an account holds up to 3, and **Add another** under Module developer claims more. A module stays with the key that published its first version, and each new version must be newer. An account can publish 10 versions a day. [Publishing to the catalog](./publishing.md) covers the listing, updates, limits and reports.
 
-To share by hand instead, press **Save as zip** next to Publish (or in the module's menu in Add module). The zip holds `tavora.module.json`, the folder your `entry` is in (usually `dist/`), the icon and the changelog, plus `tavora.signature.json`; your sources and `node_modules` stay out. Users install it with **Settings > Modules > Install zip**.
+To share by hand instead, press **Save as zip** next to Publish (or in the module's menu in Add module). The zip holds `tavora.module.json`, the folder your `entry` is in (usually `dist/`), the icon and the changelog, plus `tavora.signature.json`; your sources and `node_modules` stay out. When `entry` sits next to `tavora.module.json`, everything in the folder goes in except dot files and `node_modules`, so build into `dist/` instead. A private key never goes in: if one would (a `.pem`, `.key`, `.p12`, `.pfx` or `.ppk` file, or a file holding a private key), Tavora stops and names it. Users install it with **Settings > Modules > Install zip**.
 
 To publish from a build server, see [Publish from CI](./publishing.md#publish-from-ci).
 

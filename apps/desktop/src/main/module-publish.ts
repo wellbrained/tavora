@@ -2,7 +2,7 @@ import type { KeyObject } from "node:crypto";
 import { lstat, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { folderKey, isReleaseVersion, manifestFiles, MAX_README_BYTES, validateChangelog, validateManifest, type ChangelogEntry, type ModuleManifest } from "@tavora/module-schema";
-import { MANIFEST_FILE, packModule, PackError, type Published } from "@tavora/pack";
+import { MANIFEST_FILE, packModule, PackError, PrivateKeyError, type Published } from "@tavora/pack";
 import type { AccountView, PrefixState, PublishProblem, PublishView, ReadmeBlock } from "../shared/host-api";
 import { suggestPrefix } from "../shared/id-prefix";
 import { parseReadme } from "./catalog-readme";
@@ -136,7 +136,7 @@ export class ModulePublisher {
     try {
       return await packModule(project, signer.key);
     } catch (error) {
-      if (error instanceof PackError) throw new UserError("publish.error.pack", { message: error.message });
+      if (error instanceof PackError) throw packProblem(error);
       throw error;
     }
   }
@@ -194,7 +194,7 @@ export class ModulePublisher {
       await this.options.check(zip);
     } catch (error) {
       if (!(error instanceof PackError) && !(error instanceof UserError)) throw error;
-      const message = error instanceof UserError ? this.options.translate(error) : this.options.translate(new UserError("publish.error.pack", { message: error.message }));
+      const message = this.options.translate(error instanceof UserError ? error : packProblem(error));
       view.problems.push({ kind: "invalid", message });
       return { view: { ...view, status: "ready" }, zip: null, key: null };
     }
@@ -211,6 +211,11 @@ export class ModulePublisher {
   private changed(): void {
     this.options.onChange(this.view());
   }
+}
+
+/** What the screen says when packing stops: a private key in the folder gets its own words. */
+function packProblem(error: PackError): UserError {
+  return error instanceof PrivateKeyError ? new UserError("publish.error.privateKey", { file: error.file }) : new UserError("publish.error.pack", { message: error.message });
 }
 
 function emptyView(project: string): PublishView {

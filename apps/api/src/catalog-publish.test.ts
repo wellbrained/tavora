@@ -169,6 +169,21 @@ describe("publishing to the catalog", () => {
     expect((await publish(moduleZip(key), publishSignature(key, moduleZip(key)), "application/json")).status).toBe(415);
   });
 
+  it("refuses a signed zip that holds a private key, and stores nothing", async () => {
+    const { catalog, developer, send } = setup();
+    const { key } = developer("dev@example.com");
+    const pem = Buffer.from(`-----BEGIN PRIVATE KEY-----
+${"A".repeat(64)}
+-----END PRIVATE KEY-----
+`);
+    for (const extra of [{ name: "publisher-key.pem", data: Buffer.from("x") }, { name: "dist/notes.txt", data: pem }]) {
+      const answer = await send(key, moduleZip(key, "wellbrained.timer", "1.0.0", [extra]));
+      expect(answer.status).toBe(400);
+      expect(await answer.json()).toMatchObject({ reason: "invalid", error: `It holds ${extra.name}, which looks like a private key. Move it out of the module folder and pack again.` });
+    }
+    expect(catalog.modules()).toEqual([]);
+  });
+
   it("refuses a zip bomb, a link and a .. path in a signed upload, and stores nothing (C8)", async () => {
     const { store, catalog, dir, developer, send } = setup();
     const { key, accountId } = developer("dev@example.com");

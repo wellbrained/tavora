@@ -335,6 +335,7 @@ Tavora keeps a developer's publisher keys (Settings > Developer > Publishing), s
 - **Only Tavora's own buttons sign.** Tavora signs when you press Publish on the review screen, or Save as zip in Settings > Developer or a module's menu, and at no other time. It opens no pipe, socket or port for signing, so no other program, web page or module can ask it to sign.
 - **What you see is what gets signed.** Tavora packs the zip itself from your module's project folder and shows the review screen from that zip: its name, version, patch notes and what it asks for. Pressing Publish there signs and uploads that zip and nothing else; the press is your yes.
 - **A key leaves Tavora only when you export it**, to a file you pick, to publish from CI (Settings > Developer > Publishing > Publisher keys and CI). Packing works with that file alone; publishing also needs a publish token.
+- **A private key never goes out in a module.** Tavora's Publish and Save as zip and `tavora-pack` take the manifest, the folders of the entry pages, the icons, screenshots, readme and changelog; when an entry page sits next to the manifest, the whole folder except dot files and `node_modules`. They stop, naming the file, when that would take a key file (`.pem`, `.key`, `.p12`, `.pfx`, `.ppk`, in any case), the `--key` file itself, or a file holding a PEM, OpenSSH, PGP or PuTTY private key. The catalog refuses a zip that holds one too, so one packed by an older `tavora-pack` isn't published.
 
 ### Publishing to the catalog
 

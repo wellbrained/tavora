@@ -163,6 +163,20 @@ describe("ModulePublisher", () => {
     expect(reviewer.view()).toMatchObject({ status: "ready", error: translate("en", "publish.error.dailyLimit"), published: null });
   });
 
+  it("stops with friendly words when a private key would go out with the module", async () => {
+    const dir = await project({ ...MANIFEST, entry: "index.html" });
+    await writeFile(path.join(dir, "index.html"), "<p>hi</p>");
+    await writeFile(path.join(dir, "publisher-key.pem"), "-----BEGIN PRIVATE KEY-----\n");
+    const { publisher: reviewer, uploads } = publisher();
+    await reviewer.open(dir);
+    const words = translate("en", "publish.error.privateKey", { file: "publisher-key.pem" });
+    expect(words).toContain("publisher-key.pem");
+    expect(reviewer.view()).toMatchObject({ problems: [{ kind: "invalid", message: words }], size: null });
+    await expect(reviewer.publish()).rejects.toMatchObject({ key: "publish.error.notReady" });
+    await expect(reviewer.pack(dir)).rejects.toMatchObject({ key: "publish.error.privateKey", params: { file: "publisher-key.pem" } });
+    expect(uploads).toHaveLength(0);
+  });
+
   it("needs a kept key", async () => {
     const dir = await project();
     const { publisher: reviewer } = publisher({ noKey: true });

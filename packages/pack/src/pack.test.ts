@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { isOwnerId } from "@tavora/module-schema";
 import { describe, expect, it } from "vitest";
-import { fingerprint, loadExistingKey, packModule, PackError, readZip, SIGNATURE_FILE, signFiles, verifyFiles, writeZip, ZIP_LIMITS, ZipError, type ZipFile } from "./index.ts";
+import { fingerprint, loadExistingKey, packModule, PackError, PrivateKeyError, privateKeyFile, readZip, SIGNATURE_FILE, signFiles, verifyFiles, writeZip, ZIP_LIMITS, ZipError, type ZipFile } from "./index.ts";
 
 const manifest = {
   id: "wellbrained.tracker",
@@ -88,6 +88,54 @@ describe("packModule versions", () => {
   it("refuses a pre-release version, so only plain major.minor.patch reaches users", async () => {
     const dir = await moduleFolder({ "tavora.module.json": JSON.stringify({ ...manifest, version: "0.1.0-alpha.44" }) });
     await expect(packModule(dir, key())).rejects.toThrow("version 0.1.0-alpha.44 is a pre-release; module versions are plain major.minor.patch, e.g. 0.1.0");
+  });
+});
+
+describe("packModule and private keys", () => {
+  const rootEntry = { ...manifest, entry: "index.html" };
+  const pem = (label: string) => `-----BEGIN ${label}-----\n${"MC4CAQAwBQYDK2VwBCIEIBn0cXXkq6oAQx3sF0kzM1v7Lw0aZ9vX4pOa2c3nRk1y".slice(0, 64)}\n-----END ${label}-----\n`;
+  const rootModule = (extra: Record<string, string> = {}) => moduleFolder({ "tavora.module.json": JSON.stringify(rootEntry), "index.html": "<p>hi</p>", ...extra });
+
+  it("stops when the module folder holds a key file, by its extension", async () => {
+    for (const name of ["publisher-key.pem", "id.KEY", "cert.p12", "cert.pfx", "putty.ppk", "keys/old.pem"]) {
+      const error = await packModule(await rootModule({ [name]: "anything" }), key()).catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(PrivateKeyError);
+      expect((error as PrivateKeyError).file).toBe(name);
+      expect((error as Error).message).toMatch(/private key/);
+    }
+  });
+
+  it("stops on a file that holds a private key, whatever its name", async () => {
+    for (const label of ["PRIVATE KEY", "RSA PRIVATE KEY", "OPENSSH PRIVATE KEY", "ENCRYPTED PRIVATE KEY", "PGP PRIVATE KEY BLOCK"]) {
+      await expect(packModule(await rootModule({ "notes.txt": `my key:\n${pem(label)}` }), key())).rejects.toThrow(PrivateKeyError);
+    }
+    // In a built bundle, escaped as a string.
+    await expect(packModule(await moduleFolder({ "dist/assets/app.js": `const k = ${JSON.stringify(pem("PRIVATE KEY"))};` }), key())).rejects.toThrow(/dist\/assets\/app\.js/);
+    // A legacy encrypted key has headers before its body.
+    const encrypted = `-----BEGIN RSA PRIVATE KEY-----\nProc-Type: 4,ENCRYPTED\nDEK-Info: AES-128-CBC,0123456789ABCDEF0123456789ABCDEF\n\n${"A".repeat(64)}\n-----END RSA PRIVATE KEY-----`;
+    await expect(packModule(await rootModule({ "data.bin": encrypted }), key())).rejects.toThrow(PrivateKeyError);
+    await expect(packModule(await rootModule({ "k": "PuTTY-User-Key-File-3: ssh-ed25519\nEncryption: none\n" }), key())).rejects.toThrow(PrivateKeyError);
+  });
+
+  it("stops on the --key file itself, found by its path", async () => {
+    const dir = await rootModule({ signing: "not a pem at all" });
+    await expect(packModule(dir, key(), { keyFile: path.join(dir, "signing") })).rejects.toThrow(PrivateKeyError);
+    // Outside the folder it is fine.
+    await expect(packModule(dir, key(), { keyFile: path.join(tmpdir(), "elsewhere.pem") })).resolves.toBeDefined();
+  });
+
+  it("packs code that only names a key format, and public keys and certificates", async () => {
+    const code = 'export const toPem = (b) => "-----BEGIN PRIVATE KEY-----\\n" + b + "\\n-----END PRIVATE KEY-----";';
+    const publicPem = pem("PUBLIC KEY") + pem("CERTIFICATE");
+    const { zip } = await packModule(await moduleFolder({ "dist/assets/pem.js": code, "dist/key.pub": publicPem, "dist/readme.txt": "Never ship your PRIVATE KEY." }), key());
+    expect(readZip(zip).map((file) => file.name)).toContain("dist/assets/pem.js");
+  });
+
+  it("finds a key among zip files for the catalog", () => {
+    const file = (name: string, body: string): ZipFile => ({ name, data: Buffer.from(body) });
+    expect(privateKeyFile([file("a.js", "x"), file("b.txt", pem("EC PRIVATE KEY"))])).toBe("b.txt");
+    expect(privateKeyFile([file("a.js", "x"), file("Key.PEM", "")])).toBe("Key.PEM");
+    expect(privateKeyFile([file("a.js", "x"), file("key.pub", pem("PUBLIC KEY"))])).toBeNull();
   });
 });
 

@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { allowsPersonalWorkspaces, folderKey, isGameId, isReleaseVersion, LOCAL_OWNER, manifestFiles, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, validateChangelog, validateManifest, type LeaderboardBoard, type ModuleManifest } from "@tavora/module-schema";
-import { MANIFEST_FILE, readZip, SIGNATURE_FILE, signedHash, verifyFiles, ZIP_LIMITS, ZipError, type ZipFile } from "@tavora/pack";
+import { MANIFEST_FILE, privateKeyFile, readZip, SIGNATURE_FILE, signedHash, verifyFiles, ZIP_LIMITS, ZipError, type ZipFile } from "@tavora/pack";
 import { inspectPng, isWebp } from "./png.ts";
 
 /**
@@ -193,6 +193,9 @@ export function checkCatalogZip(bytes: Buffer, options: { official?: boolean } =
     }
   };
   if (!file(MANIFEST_FILE)) throw new CatalogError(`It has no ${MANIFEST_FILE}.`);
+  // A private key never goes out with a module (decided 2026-11-13); older packers took one that sat next to the entry page.
+  const key = privateKeyFile(files);
+  if (key !== null) throw new CatalogError(`It holds ${key}, which looks like a private key. Move it out of the module folder and pack again.`);
   const result = validateManifest(json(MANIFEST_FILE));
   if (!result.ok) throw new CatalogError(`Its manifest is invalid: ${result.errors.slice(0, 2).join("; ")}.`);
   const { manifest } = result;
