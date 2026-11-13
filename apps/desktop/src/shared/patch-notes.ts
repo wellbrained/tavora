@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.41",
+    date: "2026-11-13",
+    title: "One Add button",
+    notes: [
+      "The rail has one Add again. It opens on Game; switch to Personal beside the search for a workspace without a game.",
+      "Personal shows your personal workspaces too, so you can open one from there.",
+    ],
+    prs: [
+      { number: 760, title: "One Add: Game or Personal in the Add dialog" },
+    ],
+    tags: ["games", "rail"],
+  },
+  {
     version: "0.24.40",
     date: "2026-11-13",
     title: "A tidier Personal name field",
