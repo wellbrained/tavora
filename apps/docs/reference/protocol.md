@@ -639,6 +639,14 @@ Values must be JSON: `null`, booleans, finite numbers, strings, arrays and plain
   rejects ordinary hover. The host prefers the right side, then left, bounded to
   the application window.
 - `ui.tooltip.move({ id, at })` moves only the owner's matching unpinned tooltip. In the SDK, `anchor` (an element or its box) can take the place of `at` in `show` and `move`; the SDK sends the middle of its right edge.
+- Hover (`show` without `pinned`, and `move`) is taken only while the panel's last reported pointer, at most 2 s old,
+  is within 40 px of `at` in x and in y; an unpinned `show` is also taken right after a click or key press. `show` and
+  `move` may carry `box: { x, y, width, height }`, the anchor element's box in the same CSS pixels: then the pointer may
+  be anywhere over it, plus 8 px. A box wider or taller than 600 px, without a size, or not around `at` (1 px for
+  rounding) is ignored and the 40 px rule applies; a box that isn't four finite numbers is refused with
+  `INVALID_PARAMS`. `box` needs a Tavora with `sdk.supports("ui.tooltip.anchorBox")`; an older one rejects the unknown
+  key, so the SDK sends it only there: the element's box for `anchor`, or a `box` given with `at` (a raw caller
+  checks the version itself).
 - `ui.tooltip.hide({ id })` ends hover, leaving a pin unchanged.
 - `ui.tooltip.close({ id })` explicitly closes the owner's matching tooltip.
 - `ui.tooltipClosed` carries `{ id }` when the host dismisses or replaces details.

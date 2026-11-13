@@ -90,6 +90,10 @@ A card shows "Click to pin item details" in its footer. If your module doesn't p
 leaves it out on an older one (check `sdk.supports("ui.tooltip.pinnable")`), where the card still
 shows, with the old hint.
 
+Pass the element as `anchor`: the card opens beside it, and Tavora takes the hover while the pointer is anywhere over
+it. With `at` (or on a Tavora without `sdk.supports("ui.tooltip.anchorBox")`) the pointer has to be within 40 px of
+that point, so a card for an element wider than about 80 px is refused while the pointer is over its far side.
+
 Tooltips are neutral (Tavora's own colours) unless `content.look` is `'poe'`, the Path of Exile 2 item look
 (Tavora 0.23.53 and newer; an older Tavora rejects a tooltip with `look`, so catch the failure).
 

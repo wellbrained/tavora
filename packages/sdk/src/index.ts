@@ -192,7 +192,7 @@ function localDay(at: number): string {
 }
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.3.19";
+export const SDK_VERSION = "0.3.20";
 
 /**
  * The oldest Tavora that has everything this SDK version offers, worked out from the table of calls
@@ -1101,7 +1101,7 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
       showMenu: async (request) => call("ui.showMenu", menuParams(request), MENU_TIMEOUT_MS),
       tooltip: {
         show: async request => call("ui.tooltip.show",tooltipShowParams(request,host.host.version)),
-        move: async anchor => { await call("ui.tooltip.move",tooltipParams(anchor)); },
+        move: async anchor => { await call("ui.tooltip.move",tooltipParams(anchor,host.host.version)); },
         hide: async id => { await call("ui.tooltip.hide",{id}); },
         close: async id => { await call("ui.tooltip.close",{id}); },
         onClose: fn => on("ui.tooltipClosed",fn),

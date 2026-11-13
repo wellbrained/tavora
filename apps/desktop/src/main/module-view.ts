@@ -16,6 +16,7 @@ import { BridgeSession, newBridgeBudget, type BridgeContext, type PanelDialogSiz
 import { moduleReadPage } from "./page-import";
 import type { CheckedMenu } from "./module-menu";
 import type {TooltipRequest,TooltipAnchor,TooltipSkin,FileKind} from "@tavora/sdk/protocol";
+import { pointerOverAnchor } from "./tooltip-pointer";
 import type { PanelContent, PanelLaunch } from "./panel-content";
 import { LIMITS, type PanelOpenManyResult, type PanelOpenResult } from "@tavora/sdk/protocol";
 import type { DiscordConnector, DiscordListener } from "./discord";
@@ -528,8 +529,8 @@ export class ModuleView {
   private tooltipAnchorAllowed(at:{x:number;y:number}):boolean{
     return at.x>=0&&at.y>=0&&at.x<=this.viewport.width&&at.y<=this.viewport.height&&!this.suspended;
   }
-  private tooltipPointerMatches(at:{x:number;y:number}):boolean{
-    const p=this.pointer;return !!p&&Date.now()-p.at<2000&&Math.abs(p.x-at.x)<40&&Math.abs(p.y-at.y)<40;
+  private tooltipPointerMatches(anchor:Pick<TooltipAnchor,"at"|"box">):boolean{
+    return pointerOverAnchor(this.pointer,anchor);
   }
   tooltipClosed(id:string):void{this.bridge?.emit("ui.tooltipClosed",{id});}
 
@@ -787,13 +788,13 @@ export class ModuleView {
             if(!this.tooltipAnchorAllowed(request.at))return false;
             if(request.pinned)await this.takeGesture("ui.tooltip.show", "a pinned ui.tooltip.show");
             else {
-              if(!this.tooltipPointerMatches(request.at))await new Promise(resolve=>setTimeout(resolve,40));
-              if(!this.tooltipPointerMatches(request.at)&&!unused(this.press))return false;
+              if(!this.tooltipPointerMatches(request))await new Promise(resolve=>setTimeout(resolve,40));
+              if(!this.tooltipPointerMatches(request)&&!unused(this.press))return false;
             }
             if(this.bridge!==bridge)return false;
             return this.options.tooltip?.show(request)??false;
           },
-          move:anchor=>{if(this.tooltipAnchorAllowed(anchor.at)&&this.tooltipPointerMatches(anchor.at))this.options.tooltip?.move(anchor);},
+          move:anchor=>{if(this.tooltipAnchorAllowed(anchor.at)&&this.tooltipPointerMatches(anchor))this.options.tooltip?.move(anchor);},
           close:(id,hoverOnly)=>this.options.tooltip?.close(id,hoverOnly),
           defineSkin:async(name,skin)=>{await this.options.tooltip?.defineSkin(name,skin);},
         },

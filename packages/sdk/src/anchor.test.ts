@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { skinParams, tooltipShowParams } from "./anchor.js";
-import { ITEM_CARD_BOX_BORDER_TAVORA, ITEM_CARD_ICON_TAVORA, ITEM_CARD_PER_TAVORA, ITEM_CARD_TAVORA } from "./protocol.js";
+import { skinParams, tooltipParams, tooltipShowParams } from "./anchor.js";
+import { ITEM_CARD_BOX_BORDER_TAVORA, ITEM_CARD_ICON_TAVORA, ITEM_CARD_PER_TAVORA, ITEM_CARD_TAVORA, TOOLTIP_ANCHOR_BOX_TAVORA } from "./protocol.js";
 
 const at = { x: 1, y: 2 };
 const OLD = "0.24.0";
@@ -97,4 +97,43 @@ it("is used by the memory host's defineSkin", async () => {
   await sdk.ui.tooltip.defineSkin("gold", { colors: { surface: "#1e1610", text: "#f4e6c8", boxBorder: "#a07c40" } });
   expect(sdk.supports("ui.tooltip.boxBorder")).toBe(false);
   expect(host.calls["ui.tooltip.defineSkin"]).toEqual([{ name: "gold", skin: { colors: { surface: "#1e1610", text: "#f4e6c8" } } }]);
+});
+
+describe("tooltip params and the anchor's box", () => {
+  const element = { getBoundingClientRect: () => ({ x: 10, y: 20, width: 86, height: 86 }) } as unknown as Element;
+  const content = { title: "Plot" };
+  const box = { x: 10, y: 20, width: 86, height: 86 };
+
+  it("sends the element's box beside at to a Tavora that takes it, for show and move", () => {
+    expect(tooltipShowParams({ id: "a", anchor: element, content }, TOOLTIP_ANCHOR_BOX_TAVORA)).toEqual({ id: "a", content, at: { x: 96, y: 63 }, box });
+    expect(tooltipParams({ id: "a", anchor: element }, TOOLTIP_ANCHOR_BOX_TAVORA)).toEqual({ id: "a", at: { x: 96, y: 63 }, box });
+    expect(tooltipParams({ id: "a", anchor: box }, TOOLTIP_ANCHOR_BOX_TAVORA)).toEqual({ id: "a", at: { x: 96, y: 63 }, box });
+  });
+
+  it("leaves it out for an older Tavora, which would refuse the whole call for it", () => {
+    expect(tooltipShowParams({ id: "a", anchor: element, content }, ITEM_CARD_ICON_TAVORA)).toEqual({ id: "a", content, at: { x: 96, y: 63 } });
+    expect(tooltipParams({ id: "a", anchor: element }, ITEM_CARD_ICON_TAVORA)).toEqual({ id: "a", at: { x: 96, y: 63 } });
+  });
+
+  it("sends no box for a point, or an anchor without a size", () => {
+    expect(tooltipShowParams({ id: "a", at, content }, TOOLTIP_ANCHOR_BOX_TAVORA)).toEqual({ id: "a", at, content });
+    expect(tooltipParams({ id: "a", anchor: { x: 5, y: 6 } }, TOOLTIP_ANCHOR_BOX_TAVORA)).toEqual({ id: "a", at: { x: 5, y: 6 } });
+  });
+
+  it("passes a box given with at on only where Tavora takes it", () => {
+    expect(tooltipShowParams({ id: "a", at: { x: 96, y: 63 }, box, content }, TOOLTIP_ANCHOR_BOX_TAVORA)).toEqual({ id: "a", at: { x: 96, y: 63 }, box, content });
+    expect(tooltipShowParams({ id: "a", at: { x: 96, y: 63 }, box, content }, ITEM_CARD_ICON_TAVORA)).toEqual({ id: "a", at: { x: 96, y: 63 }, content });
+  });
+
+  it("is used by the memory host's show and move", async () => {
+    const { createMemoryHost } = await import("./testing.js");
+    const { sdk, host } = createMemoryHost({ version: TOOLTIP_ANCHOR_BOX_TAVORA });
+    await sdk.ui.tooltip.show({ id: "a", anchor: element, content });
+    await sdk.ui.tooltip.move({ id: "a", anchor: element });
+    expect((host.calls["ui.tooltip.show"] as { box?: object }[])[0]!.box).toEqual(box);
+    expect((host.calls["ui.tooltip.move"] as { box?: object }[])[0]!.box).toEqual(box);
+    const old = createMemoryHost({ version: ITEM_CARD_ICON_TAVORA });
+    await old.sdk.ui.tooltip.move({ id: "a", anchor: element });
+    expect(old.host.calls["ui.tooltip.move"]![0]).not.toHaveProperty("box");
+  });
 });

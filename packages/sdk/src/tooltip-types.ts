@@ -117,6 +117,19 @@ export interface TooltipAnchor {
         x: number;
         y: number;
     };
+    /**
+     * The box of the element the card is for (CSS pixels in the panel, like `at`), which the SDK sends when you give an
+     * `anchor`. Hover follows the pointer: without a box Tavora takes `show` and `move` only while the pointer is within
+     * 40 px of `at`; with one, while it is over the box (plus 8 px). A box Tavora can't use (wider or taller than 600 px,
+     * or not around `at`) falls back to the 40 px rule. Needs `sdk.supports("ui.tooltip.anchorBox")`: an older Tavora
+     * rejects the unknown key, so the SDK leaves it out there.
+     */
+    box?: {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+    };
 }
 export interface TooltipRequest extends TooltipAnchor {
     content: TooltipContent;
