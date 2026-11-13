@@ -19,6 +19,6 @@ describe("tooltip page: the card's stats", () => {
         for (const rule of rules)
             expect(rule).not.toContain("nowrap");
         expect(TOOLTIP_DOCUMENT).toContain("body.card .stats>*{min-width:0;overflow-wrap:anywhere}");
-        expect(TOOLTIP_DOCUMENT).toMatch(/body\.card \.stats\.has-per\{grid-template-columns:minmax\(72px,1fr\) fit-content\(36%\) fit-content\(24%\)\}/);
+        expect(TOOLTIP_DOCUMENT).toMatch(/body\.card \.stats\.has-per\{grid-template-columns:minmax\(72px,1fr\) fit-content\(36%\) auto\}/);
     });
 });
