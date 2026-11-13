@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.46",
+    date: "2026-11-13",
+    title: "Hints stay available to screen readers",
+    notes: [
+      "A screen reader still reads an element's full hint after you've hovered it, such as a shortened folder path.",
+    ],
+    prs: [
+      { number: 767, title: "Kit: a hint moved off a title stays as the element's accessible description" },
+    ],
+    tags: ["ui-kit"],
+  },
+  {
     version: "0.24.45",
     date: "2026-11-13",
     title: "Tab between Game and Personal",
