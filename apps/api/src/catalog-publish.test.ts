@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { AccountStore } from "./account-store.ts";
 import { createApp } from "./app.ts";
 import type { PublishLimits } from "./catalog-publish.ts";
-import { CatalogStore } from "./catalog.ts";
+import { CatalogError, CatalogStore } from "./catalog.ts";
 import { buildDataset, writeDatabase } from "./dataset.ts";
 import { createTestInbox } from "./mail.ts";
 import { keyFingerprint } from "./publishers.ts";
@@ -17,6 +17,25 @@ import type { Scanner } from "./virus-scan.ts";
 const db = writeDatabase(":memory:", buildDataset({ builtIns: [{ id: "elden-ring", name: "Elden Ring" }], wikidata: [], steam: [] }));
 /** A virus scanner that finds nothing, so the tests of publishing see only the checks they mean to. */
 const cleanScanner: Scanner = { scan: async () => ({ clean: true }) };
+
+/** A clean scanner that holds every scan until the test lets them go, for what happens while a scan runs. */
+function heldScanner() {
+  let started = 0;
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  const scanner: Scanner = {
+    scan: async () => {
+      started += 1;
+      await gate;
+      return { clean: true };
+    },
+  };
+  /** Waits until this many scans are running. */
+  const running = async (count: number) => {
+    while (started < count) await new Promise((resolve) => setTimeout(resolve, 1));
+  };
+  return { scanner, running, release };
+}
 const roomy = () => createRateLimiter({ limit: 1000, windowMs: 60_000 });
 const rawKey = (key: KeyObject) => createPublicKey(key).export({ format: "der", type: "spki" }).subarray(12);
 /** A catalogue key for the tests, standing in for Tavora's offline one. */
@@ -41,7 +60,7 @@ function hostile(zip: Buffer, name: string, change: (out: Buffer, central: numbe
   throw new Error(`no entry ${name}`);
 }
 
-function setup(limits: Partial<PublishLimits> = {}, maintainerEmail?: string, prefixRateLimiter = roomy(), publishRateLimiter = roomy()) {
+function setup(limits: Partial<PublishLimits> = {}, maintainerEmail?: string, prefixRateLimiter = roomy(), publishRateLimiter = roomy(), scanner: Scanner = cleanScanner) {
   const store = new AccountStore(":memory:");
   const dir = mkdtempSync(path.join(tmpdir(), "tavora-catalog-"));
   const catalog = new CatalogStore(dir);
@@ -53,7 +72,7 @@ function setup(limits: Partial<PublishLimits> = {}, maintainerEmail?: string, pr
     rateLimiter: roomy(),
     publishRateLimiter,
     publishLimits: limits,
-    scanner: cleanScanner,
+    scanner,
     catalogueKey: catalogPublicKey(catalogue),
     accounts: { store, mailer: inbox, now: () => clock.now, prefixRateLimiter },
     ...(maintainerEmail ? { maintainerEmail } : {}),
@@ -215,6 +234,54 @@ describe("publishing to the catalog", () => {
     expect(await reason(await send(second.key, moduleZip(second.key, "delta.notes")))).toBe("too-many-prefixes");
     // Another module under a prefix the account holds needs nothing new.
     expect((await send(second.key, moduleZip(second.key, "alpha.timer"))).status).toBe(201);
+  });
+
+  it("checks the prefix again after the virus scan, so uploads at once can't give an account a fourth prefix", async () => {
+    const held = heldScanner();
+    const { store, catalog, developer, send, reason } = setup({}, undefined, roomy(), roomy(), held.scanner);
+    const { key, accountId } = developer("dev@example.com");
+    store.reservePrefix(accountId, "alpha", 0);
+    store.reservePrefix(accountId, "beta", 0);
+    // Both pass the first check while the account holds two prefixes, then wait for their scans.
+    const gamma = send(key, moduleZip(key, "gamma.notes"));
+    const delta = send(key, moduleZip(key, "delta.notes"));
+    await held.running(2);
+    held.release();
+    const answers = await Promise.all([gamma, delta]);
+    expect(answers.map((answer) => answer.status).sort()).toEqual([201, 403]);
+    expect(await reason(answers.find((answer) => answer.status === 403)!)).toBe("too-many-prefixes");
+    expect(store.prefixes(accountId)).toHaveLength(3);
+    expect(catalog.modules().map((module) => module.id)).toHaveLength(1);
+  });
+
+  it("refuses an upload whose prefix another account claimed during the scan, and adds nothing", async () => {
+    const held = heldScanner();
+    const { store, catalog, developer, send, reason, prefixes } = setup({}, undefined, roomy(), roomy(), held.scanner);
+    const first = developer("first@example.com");
+    const second = developer("second@example.com");
+    const upload = send(first.key, moduleZip(first.key, "gamma.notes"));
+    await held.running(1);
+    expect((await prefixes("POST", second.token, "gamma")).status).toBe(200);
+    held.release();
+    const answer = await upload;
+    expect(answer.status).toBe(403);
+    expect(await reason(answer)).toBe("prefix-taken");
+    expect(store.prefixHolder("gamma")).toBe(second.accountId);
+    expect(store.prefixes(first.accountId)).toEqual([]);
+    expect(catalog.modules()).toEqual([]);
+    expect(catalog.uploadsSince(first.accountId, new Date(0))).toBe(0);
+  });
+
+  it("gives back a prefix it reserved when the version can't be added", async () => {
+    const { store, catalog, developer, send, reason } = setup();
+    const { key, accountId } = developer("dev@example.com");
+    catalog.add = () => {
+      throw new CatalogError("gamma.notes belongs to another publisher key.");
+    };
+    const answer = await send(key, moduleZip(key, "gamma.notes"));
+    expect(answer.status).toBe(409);
+    expect(await reason(answer)).toBe("conflict");
+    expect(store.prefixes(accountId)).toEqual([]);
   });
 
   it("takes only newer versions, from the module's own key", async () => {

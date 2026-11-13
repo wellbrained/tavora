@@ -801,6 +801,11 @@ export class AccountStore {
     this.db.prepare("insert into module_prefixes (prefix, account_id, reserved_at) values (?, ?, ?)").run(prefix, accountId, now);
   }
 
+  /** Gives back a prefix reservePrefix just reserved for an upload that then wasn't added. Only the account's own. */
+  releasePrefix(accountId: string, prefix: string): void {
+    this.db.prepare("delete from module_prefixes where prefix = ? and account_id = ?").run(prefix, accountId);
+  }
+
   /** The prefixes an account holds, with when each was reserved (by a claim or its first publish). */
   heldPrefixes(accountId: string): { prefix: string; reservedAt: number }[] {
     return (this.db.prepare("select prefix, reserved_at from module_prefixes where account_id = ? order by prefix").all(accountId) as unknown as { prefix: string; reserved_at: number }[]).map(
