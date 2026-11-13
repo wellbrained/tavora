@@ -526,7 +526,7 @@ test("the catalog asks for a personal workspace's modules, and stays offline wit
   try {
     await page.getByTestId("rail-add-personal").click();
     await page.getByTestId("personal-name").fill("Personal");
-    await page.getByTestId("create-personal").click();
+    await page.getByTestId("personal-name").press("Enter");
     await page.getByTestId("add-module").click();
     await page.getByTestId("module-tab-browse").click();
     await expect(page.getByTestId("catalog-wellbrained.notes")).toBeVisible();
