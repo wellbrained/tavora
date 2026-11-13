@@ -106,7 +106,7 @@ export class UpdateManager {
   /** When a download of the waiting version last failed; it doesn't start over by itself for a while after. */
   private failedAt = 0;
   /** How many "error" events came; a call whose rejection came with one needs no second line. */
-  private errors = 0;
+  private errorEvents = 0;
 
   constructor(options: UpdateManagerOptions) {
     this.updater = options.updater;
@@ -134,8 +134,8 @@ export class UpdateManager {
     this.everyMs = options.everyMs ?? CHECK_EVERY_MS;
     this.now = options.now ?? (() => new Date());
 
-    // electron-updater would download inside the check, so a check could not run without starting the
-    // download over. The manager starts downloads itself: checks run every 5 minutes, retries wait an hour.
+    // electron-updater would download inside the check, so a check could not run without starting a
+    // failed download over. The manager starts downloads itself, so only the retry has to wait.
     this.autoDownload = options.autoDownload;
     this.updater.autoDownload = false;
     // A downloaded update installs by itself when Tavora is closed.
@@ -176,9 +176,9 @@ export class UpdateManager {
     });
     this.updater.on("error", (error) => {
       this.log(`update error: ${error.message}`);
-      this.errors += 1;
-      // A failed check goes back to idle. A download is never marked failed here: the error may be a
-      // check's that ran while it downloads; the download's own call says when it failed.
+      this.errorEvents += 1;
+      // A failed check goes back to idle. A download is never marked failed here: the error may come
+      // from a check that ran during the download; the download's own call says when it failed.
       if (this.current.status === "checking") this.set(this.idle(true));
     });
   }
@@ -209,11 +209,11 @@ export class UpdateManager {
     const waiting = u.status === "available";
     if (u.status !== "idle" && !waiting) return;
     if (!waiting) this.set({ status: "checking" });
-    const errors = this.errors;
+    const errorEvents = this.errorEvents;
     try {
       await this.updater.checkForUpdates();
     } catch (error) {
-      if (this.errors === errors) this.log(`update check failed: ${error instanceof Error ? error.message : String(error)}`);
+      this.logFailure("check", error, errorEvents);
       if (this.is("checking")) this.set(this.idle(true));
     }
     // An answer without any event (nothing to compare) still ends the check.
@@ -236,11 +236,11 @@ export class UpdateManager {
   /** Every download starts here, the user's and the automatic ones; a failure keeps the version to try again. */
   private async startDownload(version: string, notes: string[]): Promise<void> {
     this.set(this.downloading(version, notes));
-    const errors = this.errors;
+    const errorEvents = this.errorEvents;
     try {
       await this.updater.downloadUpdate();
     } catch (error) {
-      if (this.errors === errors) this.log(`update download failed: ${error instanceof Error ? error.message : String(error)}`);
+      this.logFailure("download", error, errorEvents);
       const u = this.current;
       if (u.status === "downloading" && u.version === version) this.set(this.downloadFailed(u));
     }
@@ -250,6 +250,12 @@ export class UpdateManager {
   restartNow(): void {
     if (this.current.status !== "ready") return;
     this.updater.quitAndInstall(true, true);
+  }
+
+  /** Logs a call that failed, unless an "error" event since `errorEvents` already wrote the line. */
+  private logFailure(call: "check" | "download", error: unknown, errorEvents: number): void {
+    if (this.errorEvents !== errorEvents) return;
+    this.log(`update ${call} failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 
   /** Re-reads the state, which events may have changed while a call was awaited. */
@@ -292,7 +298,7 @@ const PREVIEW_NOTES = ["This is a preview of an update.", "Nothing is downloaded
  * TAVORA_FAKE_UPDATE_FAIL=1 makes every download fail halfway.
  */
 export class PreviewUpdater implements UpdaterLike {
-  autoDownload = true;
+  autoDownload = false;
   autoInstallOnAppQuit = false;
   requestHeaders: Record<string, string> | null = null;
   private readonly listeners = new Map<string, ((value?: unknown) => void)[]>();
@@ -316,7 +322,6 @@ export class PreviewUpdater implements UpdaterLike {
   async checkForUpdates(): Promise<void> {
     await this.wait(600);
     this.emit("update-available", this.info());
-    if (this.autoDownload) void this.downloadUpdate().catch(() => undefined);
   }
 
   async downloadUpdate(): Promise<void> {
