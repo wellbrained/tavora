@@ -77,7 +77,6 @@ describe("title hints and screen readers", () => {
     element.removeAttribute("title")
     await settle()
     expect(element.hasAttribute("aria-description")).toBe(false)
-    expect(element.hasAttribute("data-tooltip-description")).toBe(false)
   })
 
   it("leaves an aria-description the author wrote alone", async () => {
@@ -87,6 +86,34 @@ describe("title hints and screen readers", () => {
     element.removeAttribute("title")
     await settle()
     expect(element.getAttribute("aria-description")).toBe("Mine")
+  })
+
+  it("leaves a control's own reason alone, also when it comes and goes", async () => {
+    const element = await add(`<button data-tavora-reason="Ask your admin." aria-description="Ask your admin." title="Save as">Save</button>`)
+    await settle()
+    expect(element.getAttribute("aria-description")).toBe("Ask your admin.")
+    element.removeAttribute("aria-description")
+    element.setAttribute("title", "Save as new")
+    await settle()
+    expect(element.hasAttribute("aria-description")).toBe(false)
+  })
+
+  it("does not take away a description set after its own", async () => {
+    const element = await add(`<span title="Full text here">Short</span>`)
+    await settle()
+    element.setAttribute("aria-description", "Later")
+    element.setAttribute("title", "Another")
+    await settle()
+    expect(element.getAttribute("aria-description")).toBe("Later")
+    element.removeAttribute("title")
+    await settle()
+    expect(element.getAttribute("aria-description")).toBe("Later")
+  })
+
+  it("adds nothing when the name already holds the hint", async () => {
+    const element = await add(`<button aria-label="Move C:\a\b" title="C:\a\b"></button>`)
+    await settle()
+    expect(element.hasAttribute("aria-description")).toBe(false)
   })
 
   it("still points aria-describedby at the open hint and takes it away again", async () => {
@@ -108,6 +135,5 @@ describe("title hints and screen readers", () => {
     dispose = undefined
     expect(element.getAttribute("title")).toBe("Full text here")
     expect(element.hasAttribute("aria-description")).toBe(false)
-    expect(element.hasAttribute("data-tooltip-description")).toBe(false)
   })
 })

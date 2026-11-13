@@ -2,9 +2,6 @@ import { createApp, h, reactive } from "vue";
 import Tooltip, { tooltipDelay } from "./components/tooltip/Tooltip";
 import type { TooltipSide } from "./components/tooltip/geometry";
 
-/** On an element whose `aria-description` is the hint moved from its `title`, so it can be taken away again. */
-const DESCRIPTION_MARK = "data-tooltip-description";
-
 const installed = new WeakMap<Document, () => void>();
 
 export interface TitleTooltipOptions {
@@ -30,6 +27,8 @@ export function installTitleTooltips(doc: Document = document, options: TitleToo
   const state = reactive({ open: false, title: "", side: "bottom" as TooltipSide, shortcut: undefined as string | undefined, anchor: { left: 0, top: 0, right: 0, bottom: 0 } });
   const id = "tavora-title-tooltip";
   const suppressed = new WeakSet<Element>();
+  /** The `aria-description` this layer wrote on an element, so only that is ever changed or taken away. */
+  const described = new WeakMap<Element, string>();
   let current: Element | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let readyTimer: ReturnType<typeof setTimeout> | undefined;
@@ -74,16 +73,16 @@ export function installTitleTooltips(doc: Document = document, options: TitleToo
   function describe(element: Element, value: string) {
     const name = (element.getAttribute("aria-label") ?? element.textContent ?? "").replace(/\s+/g, " ").trim();
     const hint = value.replace(/\s+/g, " ").trim();
-    // An `aria-description` the author set is theirs, and stays.
-    if (element.hasAttribute("aria-description") && !element.hasAttribute(DESCRIPTION_MARK)) return;
-    if (hint === name) return forgetDescription(element);
+    const now = element.getAttribute("aria-description");
+    // An `aria-description` somebody else set (the author, or a control's reason for being off) is theirs, and stays.
+    if (element.hasAttribute(REASON_ATTRIBUTE) || (now !== null && described.get(element) !== now)) return void described.delete(element);
+    if (name.includes(hint)) return forgetDescription(element);
     element.setAttribute("aria-description", value);
-    element.setAttribute(DESCRIPTION_MARK, "true");
+    described.set(element, value);
   }
   function forgetDescription(element: Element) {
-    if (!element.hasAttribute(DESCRIPTION_MARK)) return;
-    element.removeAttribute("aria-description");
-    element.removeAttribute(DESCRIPTION_MARK);
+    if (described.get(element) === element.getAttribute("aria-description")) element.removeAttribute("aria-description");
+    described.delete(element);
   }
   function target(event: Event) {
     return event.target instanceof Element ? event.target.closest(`[title],[data-tavora-tooltip],[${REASON_ATTRIBUTE}]`) : null;
