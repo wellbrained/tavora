@@ -43,11 +43,12 @@ watch(open, async (now) => {
   (field.value?.$el as HTMLInputElement | undefined)?.focus();
 });
 
-/** Drop it. From Esc the focus goes back to the Personal button, which is in the rail again once the field is gone. */
+/** Drop it. From Esc the focus goes back to the Personal button. */
 async function cancel(refocus: boolean) {
   if (task.busy.value) return;
   open.value = false;
   if (!refocus) return;
+  // Compact, the popover's field goes first, so the button is focused after it.
   await nextTick();
   document.querySelector<HTMLElement>('[data-testid="rail-add-personal"]')?.focus();
 }
@@ -69,7 +70,7 @@ useEventListener(document, "pointerdown", (event) => {
 });
 function onFocusOut(event: FocusEvent) {
   const to = event.relatedTarget as Node | null;
-  if (to && !row.value?.contains(to)) void cancel(false);
+  if (to && !row.value?.contains(to) && !props.anchor?.contains(to)) void cancel(false);
 }
 
 /** A press on the Personal button itself is its own toggle, not a click elsewhere: the button closes it. */
