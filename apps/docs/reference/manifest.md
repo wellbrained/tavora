@@ -198,7 +198,7 @@ Tavora's service reads a catalog module's boards from its newest listed version,
 
 The games built into Tavora, with the ids to put in `games`.
 
-Any other game goes by the id Tavora's game search gives it, such as `9-kings`. A player who added the game by its name (with the running game's Add button, or from a Steam library) still gets the module: Tavora finds the game by its Steam id when it reads the catalog.
+Any other game goes by the id Tavora's game search gives it, such as `9-kings`. A player who added the game by its name (typed in, or a game Tavora's search didn't know) still gets the module: Tavora finds the game by its Steam id, or by its name when it has none, when it reads the catalog.
 
 | Id | Game |
 | --- | --- |

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { addOrRestoreWorkspace } from "./game-copy";
 import { addWorkspace, emptyLibrary, sanitizeLibrary, type Library } from "./library";
-import { isForWorkspaceGame, learnGameIds, workspaceGameIds, type ListedGame } from "./workspace-game";
+import { isForWorkspaceGame, learnGameIds, withOnlineId, workspaceGameIds, type ListedGame } from "./workspace-game";
 
 const day = (n: number) => new Date(Date.UTC(2026, 10, n, 12));
 /** A module for 9 Kings, as the catalog lists its game. */
@@ -66,14 +66,26 @@ describe("which game a workspace is, whichever way it was added", () => {
     expect(library.workspaces[id]!.gameId).toBe("nine-kings");
   });
 
-  it("leaves a game without a Steam id, a game picked online and a personal workspace as they are", () => {
+  it("learns a game without a Steam id by its name, as every copy of a game is found, when one listed game has it", () => {
     const library = emptyLibrary();
-    const byName = addWorkspace(library, { name: "9 Kings" }, day(1));
+    // Typed by hand, added offline, or an Epic, Battle.net or Xbox game: only its name.
+    const byName = addWorkspace(library, { name: "9 Kings™" }, day(1));
+    const other = addWorkspace(library, { name: "Doom" }, day(1));
+    expect(learnGameIds(library, [...LISTED, { id: "doom", name: "DOOM", steamAppId: 379720 }, { id: "doom-1993", name: "Doom", steamAppId: 2280 }])).toEqual([byName]);
+    expect(fits(library, byName)).toBe(true);
+    // Two listed games of that name: not sure which, so neither.
+    expect(library.workspaces[other]!.gameId).toBeNull();
+    // With a Steam id on both sides, only the Steam id decides: a game of the same name with another id is another game.
+    const demo = addWorkspace(library, { name: "9 Kings", steamAppId: 1 }, day(2));
+    learnGameIds(library, LISTED);
+    expect(library.workspaces[demo]!.gameId).toBeNull();
+  });
+
+  it("leaves a game picked online and a personal workspace as they are", () => {
+    const library = emptyLibrary();
     const online = addWorkspace(library, { online: { id: "hades", name: "Hades", steamAppId: 1145360 } }, day(1));
-    const personal = addWorkspace(library, { personal: "Notes" }, day(1));
-    library.workspaces[personal]!.steamAppId = 2784470;
-    expect(learnGameIds(library, [...LISTED, { id: "hades-2", name: "Hades II", steamAppId: 1145360 }])).toEqual([]);
-    expect(fits(library, byName)).toBe(false);
+    const personal = addWorkspace(library, { personal: "9 Kings" }, day(1));
+    expect(learnGameIds(library, [...LISTED, { id: "hades-2", name: "Hades", steamAppId: 1145360 }])).toEqual([]);
     expect(workspaceGameIds(library.workspaces[online]!)).toEqual(["hades"]);
     expect(workspaceGameIds(library.workspaces[personal]!)).toEqual([]);
   });
@@ -93,5 +105,35 @@ describe("which game a workspace is, whichever way it was added", () => {
     // A library saved before the field reads as not known yet.
     delete (saved.workspaces[byName] as { gameId?: unknown }).gameId;
     expect(sanitizeLibrary(saved).workspaces[byName]!.gameId).toBeNull();
+  });
+
+  it("adds a game known by its name and Steam id as the game the online search lists with that Steam id", async () => {
+    const queries: string[] = [];
+    const search = async (query: string) => {
+      queries.push(query);
+      return { status: "ok" as const, games: [{ id: "9-kings-x", name: "9 Kings X", steamAppId: 7 }, { id: "9-kings", name: "9 Kings", steamAppId: 2784470 }] };
+    };
+    expect(await withOnlineId({ name: "Nine Kings", steamAppId: 2784470 }, search)).toEqual({ online: { id: "9-kings", name: "9 Kings", steamAppId: 2784470 } });
+    expect(queries).toEqual(["Nine Kings"]);
+    // So the running game's Add button gets the id modules are made for at once.
+    const library = emptyLibrary();
+    const { id } = addOrRestoreWorkspace(library, await withOnlineId({ name: "9 Kings", steamAppId: 2784470 }, search), day(1));
+    expect(id).toBe("9-kings");
+    expect(fits(library, id)).toBe(true);
+  });
+
+  it("adds it as it is when the search doesn't know it, is off, fails, or there is nothing to look up", async () => {
+    const input = { name: "9 Kings", steamAppId: 2784470 };
+    const none = async () => ({ status: "ok" as const, games: [{ id: "other", name: "9 Kings", steamAppId: 5 }] });
+    expect(await withOnlineId(input, none)).toBe(input);
+    expect(await withOnlineId(input, null)).toBe(input);
+    expect(await withOnlineId(input, () => Promise.reject(new Error("offline")))).toBe(input);
+    expect(await withOnlineId(input, async () => ({ status: "unreachable" as const, games: [] }))).toBe(input);
+    // A made-up id from the service is never taken.
+    expect(await withOnlineId(input, async () => ({ status: "ok" as const, games: [{ id: "local-x", name: "9 Kings", steamAppId: 2784470 }] }))).toBe(input);
+    let asked = false;
+    const spy = async () => ((asked = true), { status: "ok" as const, games: [] });
+    for (const other of [{ name: "9 Kings" }, { catalogId: "elden-ring" }, { personal: "Notes" }, { online: { id: "9-kings", name: "9 Kings" } }]) expect(await withOnlineId(other, spy)).toBe(other);
+    expect(asked).toBe(false);
   });
 });

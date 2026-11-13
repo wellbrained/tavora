@@ -10,7 +10,7 @@
 // there are, to open one instead. The dialog keeps its size either way.
 import { Loader, Search, UserRound } from "@lucide/vue";
 import { computed, nextTick, ref, watch } from "vue";
-import { act, closeDialog, dialog, openPanels, state } from "../host";
+import { act, api, closeDialog, dialog, openPanels, state } from "../host";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import { Notice } from "@tavora/official-ui/components/ui/notice";
@@ -18,7 +18,7 @@ import { SegmentedControl } from "@tavora/official-ui/components/ui/segmented-co
 import { Skeleton } from "@tavora/official-ui/components/ui/skeleton";
 import { useTask } from "@tavora/official-ui/use-task";
 import { t } from "../i18n";
-import { addedWithGame, modulesFor, type PickerLine, type PickerRow } from "../lib/game-picker";
+import { addedWithGame, madeForWorkspace, type PickerLine, type PickerRow } from "../lib/game-picker";
 import { noteAdded } from "../lib/installed-games";
 import { useGamePicker } from "../lib/use-game-picker";
 import GamePickerList from "./GamePickerList.vue";
@@ -44,7 +44,7 @@ const adder = useTask({ describe: () => t("error.generic") });
 const picked = ref<string | null>(null);
 const adding = computed(() => (adder.busy.value ? picked.value : null));
 /** The workspaces added here by key, so picking a game again after a module failed doesn't add it twice. */
-const made = new Map<string, { id: string; gameId: string | null; asItIs: boolean }>();
+const made = new Map<string, { id: string; asItIs: boolean }>();
 
 /** Enter, or a click: opens a game the user has, else adds it with Tavora's own modules for it and opens it. */
 async function pick(key: string) {
@@ -73,13 +73,13 @@ async function add(key: string, game: { row: PickerRow | null; name: string }): 
     if (!added.ok) return added.error;
     if (!added.id) return null;
     // A copy the user has, or one back from Trash, has its panels: nothing to add to it.
-    done = { id: added.id, gameId: resolved.gameId, asItIs: added.existing === true || added.restored === true };
+    done = { id: added.id, asItIs: added.existing === true || added.restored === true };
     made.set(key, done);
     if (game.row?.installed) noteAdded(game.row.key, done.id);
   }
-  const { id, gameId, asItIs } = done;
+  const { id, asItIs } = done;
   // Modules install the way Browse installs them; a failure is shown and the game stays added.
-  const moduleIds = asItIs ? [] : addedWithGame(modulesFor(await picker.catalogReady, gameId));
+  const moduleIds = asItIs ? [] : await modulesAddedWith(id);
   for (const moduleId of moduleIds) {
     if (state.value?.modules.some((module) => module.id === moduleId)) continue;
     const result = await act({ type: "install-catalog-module", moduleId }, { quiet: true });
@@ -93,6 +93,12 @@ async function add(key: string, game: { row: PickerRow | null; name: string }): 
   if (state.value?.library.onboarded || moduleIds.length) await act({ type: "open-workspace", workspaceId: id });
   for (const moduleId of moduleIds) await openPanels(moduleId, null, []);
   return null;
+}
+
+/** Tavora's own modules made for the added game, as the host matches modules to the workspace (workspace-game.ts). */
+async function modulesAddedWith(workspaceId: string): Promise<string[]> {
+  const listed = await api.browseCatalog({ workspaceId }).catch(() => null);
+  return listed?.status === "ok" ? addedWithGame(madeForWorkspace(listed.modules)) : [];
 }
 
 function focusSearch() {

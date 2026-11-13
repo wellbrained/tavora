@@ -5,9 +5,13 @@
 //   - by name (the running game's Add button, a Steam import, the search offline): the id is `local-…`, and the game's
 //     id is learned later as `gameId`, from the catalog's listing of the game with the same Steam id.
 // Everything that asks "is this module for this workspace" goes through `workspaceGameIds`, so no check can tell a
-// workspace's game apart from another check again. Host only.
+// workspace's game apart from another check again. A game is added by name only when the online search can't name it
+// (`withOnlineId`); it learns its game later by the rule every copy of a game is found by (`isSameGame`: the Steam id
+// when both have one, else the name). Host only.
 import { isGameId } from "@tavora/module-schema";
-import type { Library, WorkspaceEntry } from "./library";
+import type { OnlineSearchResult } from "../shared/host-api";
+import { isSameGame } from "../shared/same-game";
+import type { Library, NewWorkspace, WorkspaceEntry } from "./library";
 import { isSteamAppId } from "./steam-icons";
 
 /** A game as the catalog lists it next to a module: its id, its name and its Steam app id when the service knows them. */
@@ -44,25 +48,39 @@ export function learnsGameId(workspace: Pick<WorkspaceEntry, "id" | "kind" | "ca
 }
 
 /**
- * Gives each game workspace that was added by name the id of the listed game with its Steam app id, when exactly one
- * listed game has it. The service's game list is where game ids come from, so a listing that says otherwise corrects an
- * id learned before. Returns the ids of the workspaces whose id changed.
+ * Gives each game workspace that was added by name the id of the listed game it is, by `isSameGame` (the Steam id when
+ * both have one, else the name), when exactly one listed game is it. The service's game list is where game ids come
+ * from, so a listing that says otherwise corrects an id learned before. Returns the ids of the workspaces whose id changed.
  */
 export function learnGameIds(library: Library, listed: readonly ListedGame[]): string[] {
-  const bySteam = new Map<number, string | null>();
+  const games = new Map<string, { id: string; steamAppId: number | null; name: string }>();
   for (const game of listed) {
-    if (!isSteamAppId(game.steamAppId) || !isLearnableGameId(game.id)) continue;
-    const seen = bySteam.get(game.steamAppId);
-    // Two ids for one Steam app: not sure which game it is, so neither.
-    bySteam.set(game.steamAppId, seen === undefined || seen === game.id ? game.id : null);
+    if (!isLearnableGameId(game.id) || games.has(game.id)) continue;
+    games.set(game.id, { id: game.id, steamAppId: isSteamAppId(game.steamAppId) ? game.steamAppId : null, name: game.name ?? "" });
   }
   const learned: string[] = [];
   for (const workspace of Object.values(library.workspaces)) {
-    if (!learnsGameId(workspace) || workspace.steamAppId === null) continue;
-    const id = bySteam.get(workspace.steamAppId);
+    if (!learnsGameId(workspace)) continue;
+    const self = { id: null, steamAppId: workspace.steamAppId, name: workspace.name };
+    const matches = [...games.values()].filter((game) => isSameGame(self, game));
+    // None, or two games it could be: not sure which, so neither.
+    const id = matches.length === 1 ? matches[0]!.id : null;
     if (!id || id === workspace.gameId) continue;
     workspace.gameId = id;
     learned.push(workspace.id);
   }
   return learned;
+}
+
+/**
+ * What a game added by name with its Steam id is added as: the game the online search lists with that Steam id, so it
+ * gets the id modules are made for straight away; else as it is (the search doesn't know it, is off or can't be asked).
+ * Every add path goes through add-workspace and so through this, whoever calls it (the running game's Add button,
+ * Add a game, the welcome, Ctrl+K).
+ */
+export async function withOnlineId(input: NewWorkspace, search: ((query: string) => Promise<OnlineSearchResult>) | null): Promise<NewWorkspace> {
+  if (!search || !("name" in input) || !isSteamAppId(input.steamAppId)) return input;
+  const found = await search(input.name).catch(() => null);
+  const game = found?.status === "ok" ? found.games.find((online) => online.steamAppId === input.steamAppId && isLearnableGameId(online.id)) : undefined;
+  return game ? { online: { id: game.id, name: game.name, steamAppId: game.steamAppId } } : input;
 }

@@ -269,7 +269,7 @@ export function useGamePicker(query: Ref<string>, options: GamePickerOptions = {
   /** What add-workspace gets for a pick, and the game its modules are for (see resolveAddInput). */
   const addInput = (game: { row: PickerRow | null; name: string }) => resolveAddInput(game.row, game.name, (text) => api.searchOnline(text));
 
-  const modulesOf = (row: PickerRow | null) => modulesFor(catalogModules.value ?? [], row?.gameId ?? null);
+  const modulesOf = (row: PickerRow | null) => modulesFor(catalogModules.value ?? [], row?.gameId ?? null, row?.installed?.steamAppId ?? null);
   /** A row's badge and second line, as GamePickerList shows them. */
   const info = (row: PickerRow): PickerBadge => ({ modules: modulesOf(row).length, when: whenOf(row) });
 

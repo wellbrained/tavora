@@ -35,7 +35,7 @@ import type { PanelDialogSize } from "./bridge";
 import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, InstalledGameView, ModulePageResult, OfficialPublishRun, OfficialPublishView, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, PanelDialog, PanelPlacement, ProfileRanksView, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView, UnlistedGame } from "../shared/host-api";
 import { MAX_PICKER_COVERS } from "../shared/host-api";
 import { addOrRestoreWorkspace, gameCopyFinder } from "./game-copy";
-import { isForWorkspaceGame, learnGameIds, workspaceGameIds, type ListedGame } from "./workspace-game";
+import { isForWorkspaceGame, learnGameIds, withOnlineId, workspaceGameIds, type ListedGame } from "./workspace-game";
 import { resolveLanguage, translate, type Language, type MessageKey } from "../shared/i18n";
 import { suggestPrefix } from "../shared/id-prefix";
 import { compareModuleVersions } from "../shared/module-version";
@@ -2381,10 +2381,12 @@ export class Host {
 
       // Library
       "open-workspace": (action) => this.openWorkspace(action.workspaceId),
-      "add-workspace": (action) => {
-        // Whoever adds a game (Add a game, the welcome, Ctrl+K): one the user has is answered as it is, and one whose only
-        // copy is in Trash comes back with its panels.
-        const { id, restored, existing, learned } = addOrRestoreWorkspace(this.library, action, new Date());
+      "add-workspace": async (action) => {
+        // Whoever adds a game (Add a game, the welcome, Ctrl+K, the running game's Add button): one the user has is
+        // answered as it is, and one whose only copy is in Trash comes back with its panels. A game known only by its name
+        // and Steam id is looked up online first, so it gets the id modules are made for (workspace-game.ts).
+        const input = await withOnlineId(action, this.library.onlineSearch ? (query) => this.onlineSearch.search(query) : null);
+        const { id, restored, existing, learned } = addOrRestoreWorkspace(this.library, input, new Date());
         if (existing) {
           // The copy took the game's Steam id: saved, and the rail may now see it running.
           if (learned) {

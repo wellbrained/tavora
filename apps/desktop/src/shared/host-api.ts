@@ -1050,6 +1050,8 @@ export interface CatalogModuleView {
   forGames: string[];
   /** The same games by id (the game's own id in Tavora), to find the modules made for one game. */
   gameIds: string[];
+  /** The Steam app ids of those games, as the catalog knows them, to find the modules for a game on this PC no list named yet. */
+  gameSteamAppIds: number[];
   /** Whether Tavora itself published it (signed with the pinned Tavora key); the picker ticks these by default. */
   official: boolean;
   publishedAt: string;

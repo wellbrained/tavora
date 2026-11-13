@@ -182,10 +182,10 @@ export function stepActive(items: PickerItems, active: string | null, key: strin
 
 const officialFirst = (a: CatalogModuleView, b: CatalogModuleView) => Number(b.official) - Number(a.official) || a.name.localeCompare(b.name);
 
-/** The catalog modules made for a game, Tavora's own first, then by name. */
-export function modulesFor(modules: readonly CatalogModuleView[], gameId: string | null): CatalogModuleView[] {
-  if (!gameId) return [];
-  return modules.filter((module) => module.gameIds.includes(gameId)).sort(officialFirst);
+/** The catalog modules made for a game, by its id or (a game on this PC no list named yet) its Steam app id; Tavora's own first, then by name. */
+export function modulesFor(modules: readonly CatalogModuleView[], gameId: string | null, steamAppId: number | null = null): CatalogModuleView[] {
+  if (!gameId && steamAppId === null) return [];
+  return modules.filter((module) => (gameId !== null && module.gameIds.includes(gameId)) || (steamAppId !== null && module.gameSteamAppIds.includes(steamAppId))).sort(officialFirst);
 }
 
 /**

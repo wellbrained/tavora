@@ -19,6 +19,7 @@ export function placeholderModule(index: number): CatalogModuleView {
     fits: true,
     forGames: [],
     gameIds: [],
+    gameSteamAppIds: [],
     official: false,
     publishedAt: "",
     homepage: null,
