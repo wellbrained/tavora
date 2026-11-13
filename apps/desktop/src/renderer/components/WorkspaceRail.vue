@@ -571,7 +571,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
         <!-- Add game and Personal are one more entry under the last workspace: two quiet buttons side by side when
              expanded (an even split), two tiles stacked when compact. -->
         <AddPersonalField v-model:open="personalOpen" :anchor="personalEntry" :inline="expanded" />
-        <div v-if="!(expanded && personalOpen)" :class="cn('mt-1 flex px-2', expanded ? 'gap-1' : 'flex-col gap-1')" data-testid="rail-add">
+        <div :class="cn('mt-1 flex px-2', expanded ? 'gap-1' : 'flex-col gap-1')" data-testid="rail-add">
           <div
             v-for="add in addButtons"
             :key="add.testid"
@@ -584,7 +584,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
                 :class="
                   cn(
                     'flex min-w-0 flex-1 items-center rounded-lg text-left',
-                    expanded ? 'text-muted-foreground hover:text-foreground hover:bg-rail-hover h-12 gap-1.5 px-2.5' : 'justify-center p-1',
+                    expanded ? 'text-muted-foreground hover:text-foreground hover:bg-rail-hover aria-expanded:text-foreground aria-expanded:bg-rail-hover h-12 gap-1.5 px-2.5' : 'justify-center p-1',
                   )
                 "
                 data-rail-item
