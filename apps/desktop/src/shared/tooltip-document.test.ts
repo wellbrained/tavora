@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { TOOLTIP_DOCUMENT } from "./tooltip-document";
 
+// The growth column itself: main/item-card-layout.test.ts, beside the kit card's.
 // The card is 280 px wide and a stat's value may be 300 characters: the stats must wrap, not run out of the card.
 describe("tooltip page: the card's effect box", () => {
     it("has the theme's line around it on a plain card and the skin's 2 px edge only when the skin gives one", () => {
@@ -19,6 +20,5 @@ describe("tooltip page: the card's stats", () => {
         for (const rule of rules)
             expect(rule).not.toContain("nowrap");
         expect(TOOLTIP_DOCUMENT).toContain("body.card .stats>*{min-width:0;overflow-wrap:anywhere}");
-        expect(TOOLTIP_DOCUMENT).toMatch(/body\.card \.stats\.has-per\{grid-template-columns:minmax\(72px,1fr\) fit-content\(36%\) auto\}/);
     });
 });
