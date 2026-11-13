@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.58",
+    date: "2026-11-13",
+    title: "Hover cards on big things",
+    notes: [
+      "Hovering a big tile or card shows its details wherever your pointer is on it, not only near its right edge.",
+    ],
+    prs: [
+      { number: 784, title: "Hover cards take the pointer anywhere over their anchor" },
+    ],
+    tags: ["modules", "privacy", "publishing", "sdk", "tooltips", "website"],
+  },
+  {
     version: "0.24.57",
     date: "2026-11-13",
     title: "Discord sign-in stays yours",
