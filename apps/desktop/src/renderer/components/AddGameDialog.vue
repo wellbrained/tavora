@@ -154,7 +154,7 @@ async function openPersonal(workspaceId: string) {
  * footer stay in reach); then the search's keys in Game, and in Personal, Enter adds.
  */
 function onFieldKey(event: KeyboardEvent) {
-  if (event.key === "Tab" && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) {
+  if (event.key === "Tab" && !event.isComposing && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) {
     event.preventDefault();
     if (!adder.busy.value) mode.value = mode.value === "game" ? "personal" : "game";
     return;
