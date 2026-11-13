@@ -8,11 +8,20 @@
  */
 export const KEY_EXTENSIONS: readonly string[] = ["pem", "key", "p12", "pfx", "ppk"];
 
+/**
+ * Where a folder may start (module-schema FOLDER_ROOTS). Written out here: the host UI type-checks packages from their
+ * builds, which aren't there yet when CI type-checks. A root may have two parts (AppData/LocalLow).
+ */
+export const FOLDER_ROOT_NAMES: readonly string[] = ["Documents", "Saved Games", "AppData/LocalLow"];
+
 export interface FolderView {
   key: string;
   /** The path from the manifest, such as Documents/My Game. */
   path: string;
-  /** The root (Documents or Saved Games) and the folders below it. */
+  /**
+   * The root (Documents, Saved Games or AppData/LocalLow) and the folders below it. An empty root when the path starts
+   * at none this Tavora knows: then `names` is empty and the UI shows `path` as it is, so a folder is never left out.
+   */
   root: string;
   names: string[];
   /** Extensions it may read, and those it may only see by name (key files asked for in read go here: they are never read). */
@@ -23,11 +32,13 @@ export interface FolderView {
 export function folderView(key: string): FolderView | null {
   const parts = key.split("|");
   if (parts.length !== 3 || !parts[0]) return null;
-  const [root = "", ...names] = parts[0].split("/");
+  const path = parts[0];
+  const root = FOLDER_ROOT_NAMES.find((item) => path.startsWith(`${item}/`)) ?? "";
+  const names = root ? path.slice(root.length + 1).split("/") : [];
   const list = (text: string) => (text ? text.split(",") : []);
   const asked = list(parts[1]!);
   const isKey = (extension: string) => KEY_EXTENSIONS.includes(extension);
-  return { key, path: parts[0], root, names, read: asked.filter((extension) => !isKey(extension)), nameOnly: [...list(parts[2]!), ...asked.filter(isKey)] };
+  return { key, path, root, names, read: asked.filter((extension) => !isKey(extension)), nameOnly: [...list(parts[2]!), ...asked.filter(isKey)] };
 }
 
 /** Extensions as the user knows them: ".sav, .txt". */

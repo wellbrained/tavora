@@ -2,7 +2,7 @@ import { glob, readFile } from "node:fs/promises";
 import { Ajv } from "ajv";
 import { describe, expect, it } from "vitest";
 import schema from "../schema/tavora.module.schema.json" with { type: "json" };
-import { allowsPersonalWorkspaces, BLOCKED_LOCAL_PORTS, isLocalPort, LAST_TAVORA_WITHOUT_LOCAL_PORTS, localPortOf, CHANGELOG_LIMITS, connectorsAtAdd, continuingPanelType, firstKeyOf, isOfficialSigner, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, isReleaseVersion, LAST_TAVORA_WITHOUT_GAME_OVERLAYS, LAST_TAVORA_WITHOUT_BOARD_NAMES, LAST_TAVORA_WITHOUT_LEADERBOARDS, LAST_TAVORA_WITHOUT_PANEL_LAYOUT, LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES, LAST_TAVORA_WITHOUT_TRANSLATIONS, LAST_TAVORA_WITHOUT_WIDE_LAYOUT, needsNewerTavora, panelTypes, translateManifest, validateManifest, type ModuleManifest } from "./index";
+import { allowsPersonalWorkspaces, BLOCKED_LOCAL_PORTS, folderKey, isFolderPath, isLocalLowGameFolder, isLocalPort, LAST_TAVORA_WITHOUT_LOCAL_PORTS, LAST_TAVORA_WITHOUT_LOCALLOW_FOLDERS, parseFolderKey, splitFolderPath, localPortOf, CHANGELOG_LIMITS, connectorsAtAdd, continuingPanelType, firstKeyOf, isOfficialSigner, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, isReleaseVersion, LAST_TAVORA_WITHOUT_GAME_OVERLAYS, LAST_TAVORA_WITHOUT_BOARD_NAMES, LAST_TAVORA_WITHOUT_LEADERBOARDS, LAST_TAVORA_WITHOUT_PANEL_LAYOUT, LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES, LAST_TAVORA_WITHOUT_TRANSLATIONS, LAST_TAVORA_WITHOUT_WIDE_LAYOUT, needsNewerTavora, panelTypes, translateManifest, validateManifest, type ModuleManifest } from "./index";
 
 const valid = {
   id: "community.example.campaign-companion",
@@ -63,6 +63,46 @@ describe("validateManifest", () => {
     expect(validateManifest({ ...valid, workspaces: false }).ok).toBe(true);
     expect(validateManifest({ ...anyGame, workspaces: "yes" })).toEqual({ ok: false, errors: ["workspaces must be true or false"] });
     expect(validateManifest({ ...valid, workspaces: true })).toEqual({ ok: false, errors: ["workspaces can only be true for a module made for any game (games is empty)"] });
+  });
+
+  it("takes AppData/LocalLow in permissions.folders only from a minTavora that knows it", () => {
+    const low = { ...valid, permissions: { network: [], folders: [{ path: "AppData/LocalLow/SadSocket/9Kings", read: ["json"] }] } };
+    expect(validateManifest({ ...low, minTavora: "0.24.44" }).ok).toBe(true);
+    expect(validateManifest({ ...low, minTavora: LAST_TAVORA_WITHOUT_LOCALLOW_FOLDERS })).toEqual({
+      ok: false,
+      errors: [`AppData/LocalLow in permissions.folders needs a minTavora newer than ${LAST_TAVORA_WITHOUT_LOCALLOW_FOLDERS}, because older Tavoras refuse it`],
+    });
+    expect(validateManifest({ ...low, minTavora: undefined }).ok).toBe(false);
+    // Documents and Saved Games still need only a minTavora newer than 0.23.112.
+    expect(validateManifest({ ...low, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "Documents/Game", read: ["json"] }] } }).ok).toBe(true);
+    expect(validateManifest({ ...low, id: "tavora.notes", minTavora: undefined }).ok).toBe(true);
+  });
+
+  it("splits a folder path at its root, which may have two parts, and keeps AppData/LocalLow to a game's folder", () => {
+    expect(splitFolderPath("AppData/LocalLow/SadSocket/9Kings")).toEqual({ root: "AppData/LocalLow", names: ["SadSocket", "9Kings"] });
+    expect(splitFolderPath("Saved Games/Game")).toEqual({ root: "Saved Games", names: ["Game"] });
+    expect(splitFolderPath("AppData/Local/X")).toBeNull();
+    expect(splitFolderPath("AppData/LocalLow")).toBeNull();
+    expect(isLocalLowGameFolder(["SadSocket", "9Kings"])).toBe(true);
+    expect(isLocalLowGameFolder(["SadSocket"])).toBe(false);
+    for (const name of ["Microsoft", "SUN", "oracle", "Adobe", "google", "Mozilla", "Intel", "NVIDIA", "Apple", "temp"]) expect(isLocalLowGameFolder([name, "X"])).toBe(false);
+    expect(isFolderPath("AppData/LocalLow/NVIDIA/PerDriverVersion")).toBe(false);
+    const entry = { path: "AppData/LocalLow/SadSocket/9Kings", read: ["json"] };
+    expect(parseFolderKey(folderKey(entry))).toEqual(entry);
+    expect(parseFolderKey("AppData/LocalLow/Microsoft/X|json|")).toBeNull();
+  });
+
+  it("names the company and game rule only when that is what a LocalLow path breaks", () => {
+    const errorsFor = (folder: string) => {
+      const result = validateManifest({ ...valid, minTavora: "0.24.44", permissions: { network: [], folders: [{ path: folder, read: ["json"] }] } });
+      return result.ok ? [] : result.errors;
+    };
+    for (const folder of ["AppData/LocalLow/SadSocket", "AppData/LocalLow/webviewdata/2", "AppData/LocalLow/Microsoft/X"]) {
+      expect(errorsFor(folder)).toEqual([expect.stringContaining("must name the company and the game folder")]);
+    }
+    for (const folder of ["AppData/LocalLow/Studio/Game.", "AppData/LocalLow/Studio/..", "AppData/LocalLow/a/b/c/d/e/f/g", "AppData/LocalLow/"]) {
+      expect(errorsFor(folder)).toEqual([expect.stringContaining("path must start at Documents, Saved Games, AppData/LocalLow")]);
+    }
   });
 
   it("takes localhost:<port> in permissions.network only from a minTavora that knows it", () => {
@@ -436,6 +476,27 @@ const cases: [string, unknown, boolean][] = [
   ["a folder with an unknown field", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "Documents/Game", read: ["txt"], write: true }] } }, false],
   ["five folders", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: ["a","b","c","d","e"].map((name) => ({ path: `Documents/${name}`, read: ["txt"] })) } }, false],
   ["no folders", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [] } }, false],
+  ["a game's folder in AppData/LocalLow", { ...valid, minTavora: "0.24.44", permissions: { network: [], folders: [{ path: "AppData/LocalLow/SadSocket/9Kings", read: ["json"] }] } }, true],
+  ["a folder six deep in AppData/LocalLow", { ...valid, minTavora: "0.24.44", permissions: { network: [], folders: [{ path: "AppData/LocalLow/a/b/c/d/e/f", read: ["json"] }] } }, true],
+  ["a folder seven deep in AppData/LocalLow", { ...valid, minTavora: "0.24.44", permissions: { network: [], folders: [{ path: "AppData/LocalLow/a/b/c/d/e/f/g", read: ["json"] }] } }, false],
+  ["a whole company in AppData/LocalLow", { ...valid, minTavora: "0.24.44", permissions: { network: [], folders: [{ path: "AppData/LocalLow/SadSocket", read: ["json"] }] } }, false],
+  ["AppData/LocalLow itself", { ...valid, minTavora: "0.24.44", permissions: { network: [], folders: [{ path: "AppData/LocalLow", read: ["json"] }] } }, false],
+  ["AppData/LocalLow with a slash only", { ...valid, minTavora: "0.24.44", permissions: { network: [], folders: [{ path: "AppData/LocalLow/", read: ["json"] }] } }, false],
+  ["a folder in AppData/Local", { ...valid, minTavora: "0.24.44", permissions: { network: [], folders: [{ path: "AppData/Local/SadSocket/9Kings", read: ["json"] }] } }, false],
+  ["a folder in AppData/Roaming", { ...valid, minTavora: "0.24.44", permissions: { network: [], folders: [{ path: "AppData/Roaming/SadSocket/9Kings", read: ["json"] }] } }, false],
+  ["AppData/LocalLow in lowercase", { ...valid, minTavora: "0.24.44", permissions: { network: [], folders: [{ path: "appdata/locallow/SadSocket/9Kings", read: ["json"] }] } }, false],
+  ["AppData/Locallow", { ...valid, minTavora: "0.24.44", permissions: { network: [], folders: [{ path: "AppData/Locallow/SadSocket/9Kings", read: ["json"] }] } }, false],
+  ["Microsoft in AppData/LocalLow", { ...valid, minTavora: "0.24.44", permissions: { network: [], folders: [{ path: "AppData/LocalLow/Microsoft/X", read: ["json"] }] } }, false],
+  ["microsoft in lowercase in AppData/LocalLow", { ...valid, minTavora: "0.24.44", permissions: { network: [], folders: [{ path: "AppData/LocalLow/microsoft/Internet Explorer", read: ["json"] }] } }, false],
+  ["Google in AppData/LocalLow", { ...valid, minTavora: "0.24.44", permissions: { network: [], folders: [{ path: "AppData/LocalLow/GOOGLE/Chrome", read: ["json"] }] } }, false],
+  ["Temp in AppData/LocalLow", { ...valid, minTavora: "0.24.44", permissions: { network: [], folders: [{ path: "AppData/LocalLow/Temp/Game", read: ["json"] }] } }, false],
+  ["a company starting like a refused one", { ...valid, minTavora: "0.24.44", permissions: { network: [], folders: [{ path: "AppData/LocalLow/Sunblink/HELLCARD", read: ["json"] }] } }, true],
+  ["a game folder named like a refused one", { ...valid, minTavora: "0.24.44", permissions: { network: [], folders: [{ path: "AppData/LocalLow/SomeStudio/Temp", read: ["json"] }] } }, true],
+  ["AppData/LocalLow going up", { ...valid, minTavora: "0.24.44", permissions: { network: [], folders: [{ path: "AppData/LocalLow/../Local/X", read: ["json"] }] } }, false],
+  ["a WebView2 profile in AppData/LocalLow", { ...valid, minTavora: "0.24.44", permissions: { network: [], folders: [{ path: "AppData/LocalLow/webviewdata/2", read: ["ldb", "log"] }] } }, false],
+  ["Apple Computer in AppData/LocalLow", { ...valid, minTavora: "0.24.44", permissions: { network: [], folders: [{ path: "AppData/LocalLow/Apple Computer/Safari", read: ["ldb", "log"] }] } }, false],
+  ["AMD in AppData/LocalLow", { ...valid, minTavora: "0.24.44", permissions: { network: [], folders: [{ path: "AppData/LocalLow/amd/DxCache", read: ["ldb", "log"] }] } }, false],
+  ["AppData/LocalLow going up below the company", { ...valid, minTavora: "0.24.44", permissions: { network: [], folders: [{ path: "AppData/LocalLow/Studio/..", read: ["json"] }] } }, false],
   ["unknown panel field", { ...valid, panels: [{ id: "planner", name: "Planner", title: "x" }] }, false],
 ];
 

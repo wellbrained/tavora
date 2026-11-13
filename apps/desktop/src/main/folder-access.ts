@@ -1,15 +1,15 @@
 // Folders on this PC a module may read (manifest permissions.folders, the decision log of 2026-11-05). The manifest
-// names a folder below Documents or Saved Games and the file extensions it may see; the user grants it like any other
-// permission (grants.ts). The module may list it (subfolders too), read the files of its `read` extensions, see the
-// files of its `names` extensions by name, and hear about changes. It never writes, never follows a link out of the
-// folder and never learns where the folder is: it names the folder by its manifest path and every file by its path
-// inside it. When the folder is not where the manifest says, the user can show Tavora where it is, in the system's own
+// names a folder below Documents, Saved Games or AppData\LocalLow (a game's own folder there, 2026-11-13) and the file
+// extensions it may see; the user grants it like any other permission (grants.ts). The module may list it (subfolders
+// too), read the files of its `read` extensions, see the files of its `names` extensions by name, and hear about
+// changes. It never writes, never follows a link out of the folder and never learns where the folder is: it names the
+// folder by its manifest path and every file by its path inside it. When the folder is not where the manifest says, the user can show Tavora where it is, in the system's own
 // folder dialog; that choice stays on this PC (outside backups and cloud copies), per publisher and module.
 
 import { realpathSync, watch, type FSWatcher } from "node:fs";
 import { lstat, mkdir, open, readdir, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
-import { folderKey, isFolderName, isModuleId, isOwnerId, type FolderAccess, type FolderRoot } from "@tavora/module-schema";
+import { folderKey, isFolderName, isLocalLowGameFolder, isModuleId, isOwnerId, splitFolderPath, type FolderAccess, type FolderRoot } from "@tavora/module-schema";
 import type { FolderChange, FolderEntry, FolderListing, FolderState } from "@tavora/sdk/protocol";
 import { KEY_EXTENSIONS } from "../shared/folder-keys";
 import { readBody } from "./clipboard-http";
@@ -29,6 +29,46 @@ const CHANGE_WAIT_MS = 400;
 const MAX_CHANGES = 500;
 /** A Windows 8.3 short name, such as PASSWO~1.TXT. */
 const SHORT_NAME = /^[^.~]{1,6}~[0-9]+(?:\.[^.]{0,3})?$/;
+/**
+ * Folders that hold a browser's or WebView2's profile, with sign-ins in plain files (site storage, cookies), wherever
+ * they are: never listed, read or reported, under any root, as if they weren't there. Lowercase; compared without
+ * regard to case. A folder that directly holds a file named PROFILE_MARKER (Chromium's User Data folder) counts too.
+ */
+export const BROWSER_PROFILE_FOLDERS: readonly string[] = ["ebwebview", "local storage", "session storage", "indexeddb", "user data", "network", "cookies"];
+const PROFILE_MARKER = "Local State";
+const isProfileName = (name: string) => BROWSER_PROFILE_FOLDERS.includes(name.toLowerCase());
+
+/** Whether a folder directly holds PROFILE_MARKER (anything but a folder by that name). */
+async function holdsProfileMarker(dir: string): Promise<boolean> {
+  const info = await lstat(path.join(dir, PROFILE_MARKER)).catch(() => null);
+  return info !== null && !info.isDirectory();
+}
+
+/**
+ * Whether a folder on this PC is a browser profile or lies in one: a folder on its path named like one, or it or a
+ * folder above it holding PROFILE_MARKER.
+ */
+export async function isBrowserProfile(folder: string): Promise<boolean> {
+  const resolved = path.resolve(folder);
+  const { root } = path.parse(resolved);
+  if (path.relative(root, resolved).split(path.sep).some(isProfileName)) return true;
+  for (let at = resolved; ; ) {
+    if (await holdsProfileMarker(at)) return true;
+    const up = path.dirname(at);
+    if (up === at) return false;
+    at = up;
+  }
+}
+
+/**
+ * Whether `folders` below the granted folder `base` lead into a browser profile: a name like one, or PROFILE_MARKER in
+ * `base` (it may have come after the folder was found) or a folder on the way.
+ */
+async function inBrowserProfile(base: string, folders: readonly string[]): Promise<boolean> {
+  if (folders.some(isProfileName)) return true;
+  for (let depth = 0; depth <= folders.length; depth++) if (await holdsProfileMarker(path.join(base, ...folders.slice(0, depth)))) return true;
+  return false;
+}
 
 /** Where things are on this PC, for finding and checking folders. */
 export interface FolderPlaces {
@@ -99,13 +139,23 @@ function forms(place: string): string[] {
  * or Windows, Tavora's data folder and its own folders such as Documents\Tavora (anything in them or holding them),
  * and the known folders themselves (Documents, Saved Games, Desktop, Downloads...) or one holding them. A folder inside
  * a known folder, such as Documents\My Game, is fine. Every place counts as given and with its links resolved.
+ *
+ * The one way into AppData is a game's folder in AppData\LocalLow, as a manifest could name it (isLocalLowGameFolder):
+ * at least a company and a game folder below it, the company not one of the system's or a browser's. Only the folder
+ * really there counts, never LocalLow reached through a link: `folder` is a real path, so a junction from LocalLow into
+ * Local or Roaming ends up there and is refused like them.
  */
 export function isRefusedFolder(folder: string, full: Partial<FolderPlaces> & Pick<FolderPlaces, "home" | "userData">): boolean {
   const resolved = path.resolve(folder);
   if (win && (resolved.startsWith("\\\\") || resolved.startsWith("//"))) return true;
   const root = same(path.parse(resolved).root);
   if (root === same(resolved) || root === same(resolved + path.sep)) return true;
-  for (const home of forms(full.home)) {
+  const homes = forms(full.home);
+  // Below LocalLow (also where it really is, when it is a link), only a game's folder.
+  for (const low of homes.flatMap((home) => forms(path.join(home, "AppData", "LocalLow")))) {
+    if (within(resolved, low) && !isLocalLowGameFolder(path.relative(low, resolved).split(path.sep))) return true;
+  }
+  for (const home of homes) {
     if (within(home, resolved)) return true;
     // Another user's folder: inside the folder that holds the user's own (such as Users), but not inside the user's own.
     // Not when the user's folder sits right on a drive, where that would be the whole drive.
@@ -115,7 +165,7 @@ export function isRefusedFolder(folder: string, full: Partial<FolderPlaces> & Pi
       const first = path.relative(home, resolved).split(path.sep)[0] ?? "";
       if (first.startsWith(".")) return true;
     }
-    if (within(resolved, path.join(home, "AppData"))) return true;
+    if (within(resolved, path.join(home, "AppData")) && !within(resolved, path.join(home, "AppData", "LocalLow"))) return true;
   }
   for (const closed of (full.closed ?? []).flatMap(forms)) if (within(resolved, closed)) return true;
   // A drive as one of Tavora's own folders would shut every folder on it: drives are refused on their own above.
@@ -127,8 +177,8 @@ export function isRefusedFolder(folder: string, full: Partial<FolderPlaces> & Pi
 
 /** Where the manifest says the folder is: its root's folder, then the names below it. */
 export function defaultFolder(entry: FolderAccess, places: Pick<FolderPlaces, "roots">): string {
-  const [root, ...names] = entry.path.split("/");
-  return path.join(places.roots[root as FolderRoot], ...names);
+  const { root, names } = splitFolderPath(entry.path)!;
+  return path.join(places.roots[root], ...names);
 }
 
 /** The folder the user showed Tavora for a manifest path, kept per publisher and module, never given to a module. */
@@ -167,7 +217,7 @@ export async function findFolder(entry: FolderAccess, chosen: ChosenFolders, pla
   const place = (await chosen.get(entry.path)) ?? defaultFolder(entry, places);
   try {
     const real = await realpath(place);
-    if (!(await stat(real)).isDirectory() || isRefusedFolder(real, places)) return null;
+    if (!(await stat(real)).isDirectory() || isRefusedFolder(real, places) || (await isBrowserProfile(real))) return null;
     return real;
   } catch {
     return null;
@@ -200,6 +250,8 @@ export async function listFolder(base: string, entry: FolderAccess): Promise<Fol
       break;
     }
     const items = await readdir(dir, { withFileTypes: true }).catch(() => []);
+    // A browser profile's folder shows nothing, as if it weren't there.
+    if (items.some((item) => !item.isDirectory() && item.name.toLowerCase() === PROFILE_MARKER.toLowerCase())) continue;
     for (const item of items) {
       if (!isInsideName(item.name)) continue;
       let isDirectory = item.isDirectory();
@@ -213,7 +265,7 @@ export async function listFolder(base: string, entry: FolderAccess): Promise<Fol
         isFile = info.isFile();
       }
       if (isDirectory) {
-        if (rel.length < MAX_FOLDER_LEVELS) queue.push({ dir: path.join(dir, item.name), rel: [...rel, item.name] });
+        if (rel.length < MAX_FOLDER_LEVELS && !isProfileName(item.name)) queue.push({ dir: path.join(dir, item.name), rel: [...rel, item.name] });
         continue;
       }
       if (!isFile) continue;
@@ -276,6 +328,8 @@ export async function revealTarget(base: string, entry: FolderAccess, relative: 
   const parts = insidePath(relative);
   if (!parts) throw new HostError("INVALID_PARAMS", "Not a file in this folder.");
   if (!kindOf(parts.at(-1)!, entry)) throw new HostError("PERMISSION_DENIED", "This module may not see this kind of file.");
+  // In a browser profile there is nothing to show, not even its folder.
+  if (await inBrowserProfile(base, parts.slice(0, -1))) return null;
   const real = await exactly(base, parts);
   if (real && kindOf(path.basename(real), entry)) {
     const info = await lstat(real).catch(() => null);
@@ -305,8 +359,9 @@ export async function readFolderFile(base: string, entry: FolderAccess, relative
   if (active >= 2) throw new HostError("QUOTA_EXCEEDED", "Files are already being read. Try again.");
   reading.set(scope, active + 1);
   try {
-    // Missing, or not exactly this file (a short name, a link): the same answer, so nothing can be learned from it.
-    const real = await exactly(base, parts);
+    // Missing, not exactly this file (a short name, a link) or in a browser profile: the same answer, so nothing can be
+    // learned from it.
+    const real = (await inBrowserProfile(base, parts.slice(0, -1))) ? null : await exactly(base, parts);
     if (!real || kindOf(path.basename(real), entry) !== "read") throw new HostError("BAD_REQUEST", "Can't find this file. It may have moved.");
     const handle = await open(real, "r");
     try {
@@ -405,7 +460,7 @@ export class FolderWatch {
     let unsure = false;
     for (const name of names) {
       const parts = insidePath(name);
-      if (!parts) continue;
+      if (!parts || (await inBrowserProfile(this.base, parts.slice(0, -1)))) continue;
       const full = path.join(this.base, ...parts);
       const info = await lstat(full).catch(() => null);
       if (!info) {
@@ -532,12 +587,12 @@ export function folderHost(options: FolderHostOptions): FolderHost {
     },
     choose: async (folder) => {
       const entry = need(folder);
-      const start = (await findFolder(entry, options.chosen, options.places())) ?? options.places().roots[entry.path.split("/")[0] as FolderRoot];
+      const start = (await findFolder(entry, options.chosen, options.places())) ?? options.places().roots[splitFolderPath(entry.path)!.root];
       const picked = await options.pick(start, entry);
       if (!picked || !granted(entry.path)) return false;
       const real = await realpath(picked).catch(() => null);
       if (!real || !(await stat(real).catch(() => null))?.isDirectory()) return false;
-      if (isRefusedFolder(real, options.places())) {
+      if (isRefusedFolder(real, options.places()) || (await isBrowserProfile(real))) {
         options.refused();
         return false;
       }

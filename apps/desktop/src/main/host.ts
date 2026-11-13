@@ -4181,8 +4181,9 @@ export class Host {
   }
 
   /**
-   * Where Documents and Saved Games are on this PC, and the folders no module may read from (folder-access.ts). Looked
-   * up when a folder call needs them, so a PC whose known folders the system can't say still opens every panel.
+   * Where Documents, Saved Games and AppData\LocalLow are on this PC, and the folders no module may read from
+   * (folder-access.ts). Looked up when a folder call needs them, so a PC whose known folders the system can't say still
+   * opens every panel.
    */
   private folderPlaces(): FolderPlaces {
     const at = (name: Parameters<typeof app.getPath>[0]): string | null => {
@@ -4210,7 +4211,8 @@ export class Host {
     };
     const own = [tavora(documentsFolder), tavora(picturesFolder), tavora(exportsFolder), this.files.root(), this.copySync.view().folder];
     return {
-      roots: { Documents: documents, "Saved Games": path.join(home, "Saved Games") },
+      // LocalLow has no getPath: it is the known folder LocalAppDataLow, which Windows keeps in the user's AppData.
+      roots: { Documents: documents, "Saved Games": path.join(home, "Saved Games"), "AppData/LocalLow": path.join(home, "AppData", "LocalLow") },
       home,
       userData: app.getPath("userData"),
       known: known.filter((place): place is string => place !== null),

@@ -492,11 +492,21 @@ export interface FolderAccess {
 }
 
 /**
- * Where a folder in permissions.folders may start: the user's Documents and Saved Games folders. Never AppData, which
- * holds other programs' sign-ins, and never the user's folder itself or a drive.
+ * Where a folder in permissions.folders may start: the user's Documents and Saved Games folders, and AppData\LocalLow,
+ * where most Unity games keep their settings and saves (`AppData/LocalLow/<company>/<game>`, at least LOCALLOW_MIN_DEPTH
+ * folders below it). Never the rest of AppData (Local and Roaming), which holds other programs' sign-ins, and never the
+ * user's folder itself or a drive.
  */
-export const FOLDER_ROOTS = ["Documents", "Saved Games"] as const;
+export const FOLDER_ROOTS = ["Documents", "Saved Games", "AppData/LocalLow"] as const;
 export type FolderRoot = (typeof FOLDER_ROOTS)[number];
+/** How many folders a path below AppData/LocalLow names at least: the company and the game, never a whole company. */
+export const LOCALLOW_MIN_DEPTH = 2;
+/**
+ * Folders right below AppData\LocalLow that no module may read, whatever its manifest says: they belong to Windows,
+ * browsers, WebView2 profiles (webviewdata) and runtimes (Java, Flash, drivers), not games. Lowercase; compared without
+ * regard to case.
+ */
+export const LOCALLOW_REFUSED_FOLDERS: readonly string[] = ["microsoft", "sun", "oracle", "adobe", "google", "mozilla", "intel", "nvidia", "amd", "apple", "apple computer", "temp", "webviewdata"];
 /** Most folders one module may ask for, most extensions per list, and most folders below the root a path may name. */
 export const MAX_FOLDERS = 4;
 export const MAX_FOLDER_EXTENSIONS = 16;
@@ -522,17 +532,45 @@ export function isFolderName(value: string, max = 64): boolean {
   );
 }
 
-/** A `permissions.folders` path: a root of FOLDER_ROOTS, then 1 to MAX_FOLDER_DEPTH folder names, joined by `/`. */
+/**
+ * A `permissions.folders` path split into its root of FOLDER_ROOTS (matched exactly, case too) and the folder names
+ * below it, or null when it starts at none of them. Only splits; isFolderPath checks the names.
+ */
+export function splitFolderPath(value: string): { root: FolderRoot; names: string[] } | null {
+  const root = FOLDER_ROOTS.find((item) => value.startsWith(`${item}/`));
+  return root ? { root, names: value.slice(root.length + 1).split("/") } : null;
+}
+
+/**
+ * Whether the folders below AppData\LocalLow may be a module's: at least LOCALLOW_MIN_DEPTH of them, and the first not
+ * one of LOCALLOW_REFUSED_FOLDERS (in any case).
+ */
+export function isLocalLowGameFolder(names: readonly string[]): boolean {
+  return names.length >= LOCALLOW_MIN_DEPTH && !LOCALLOW_REFUSED_FOLDERS.includes(names[0]!.toLowerCase());
+}
+
+/**
+ * A `permissions.folders` path: a root of FOLDER_ROOTS, then 1 to MAX_FOLDER_DEPTH folder names, joined by `/`. Below
+ * AppData/LocalLow, at least LOCALLOW_MIN_DEPTH names, the first not one of LOCALLOW_REFUSED_FOLDERS.
+ */
 export function isFolderPath(value: unknown): value is string {
   if (typeof value !== "string" || value.length > 400) return false;
-  const [root, ...names] = value.split("/");
-  return (FOLDER_ROOTS as readonly string[]).includes(root!) && names.length >= 1 && names.length <= MAX_FOLDER_DEPTH && names.every((name) => isFolderName(name));
+  const split = splitFolderPath(value);
+  if (!split) return false;
+  const { root, names } = split;
+  if (root === "AppData/LocalLow" && !isLocalLowGameFolder(names)) return false;
+  return names.length >= 1 && names.length <= MAX_FOLDER_DEPTH && names.every((name) => isFolderName(name));
 }
 
 /** Why a `permissions.folders` entry is not one, or null when it is. */
 export function folderAccessProblem(value: unknown): string | null {
   if (!isRecord(value) || Object.keys(value).some((key) => key !== "path" && key !== "read" && key !== "names")) return "must be { path, read, names }";
-  if (!isFolderPath(value.path)) return `path must start at ${FOLDER_ROOTS.join(" or ")} and name folders below it with /, such as Documents/My Game`;
+  // A path that is fine but for the company and game rule of AppData/LocalLow says so; any other fault gets the general message.
+  const low = typeof value.path === "string" && value.path.length <= 400 ? splitFolderPath(value.path) : null;
+  if (low?.root === "AppData/LocalLow" && low.names.length <= MAX_FOLDER_DEPTH && low.names.every((name) => isFolderName(name)) && !isLocalLowGameFolder(low.names)) {
+    return `path below AppData/LocalLow must name the company and the game folder, such as AppData/LocalLow/Company/Game, and not ${LOCALLOW_REFUSED_FOLDERS.join(", ")}`;
+  }
+  if (!isFolderPath(value.path)) return `path must start at ${FOLDER_ROOTS.join(", ")} and name folders below it with /, such as Documents/My Game`;
   for (const key of ["read", "names"] as const) {
     if (value[key] === undefined) continue;
     const list = value[key];
@@ -595,6 +633,8 @@ export const LAST_TAVORA_WITHOUT_PANEL_LAYOUT = "0.23.28";
 export const LAST_TAVORA_WITHOUT_LOCAL_PORTS = "0.23.111";
 /** The last Tavora that refuses `permissions.folders`; a manifest with it needs a newer `minTavora`. */
 export const LAST_TAVORA_WITHOUT_FOLDERS = "0.23.112";
+/** The last Tavora that refuses AppData/LocalLow in `permissions.folders`; a manifest with it needs a newer `minTavora`. */
+export const LAST_TAVORA_WITHOUT_LOCALLOW_FOLDERS = "0.24.43";
 /** How many rows and columns a `panelLayout` may hold inside each other (the outer one counts), and the most a part's `size` may be. */
 export const MAX_PANEL_LAYOUT_DEPTH = 3;
 export const MAX_PANEL_LAYOUT_SIZE = 10_000;
@@ -1042,6 +1082,12 @@ export function validateManifest(input: unknown): ManifestResult {
         else if (new Set(folders.map((entry) => (entry as FolderAccess).path)).size !== folders.length) errors.push("permissions.folders lists a folder twice");
         else if (!officialId(input) && !needsNewerTavora({ minTavora: typeof input.minTavora === "string" ? input.minTavora : "" }, LAST_TAVORA_WITHOUT_FOLDERS)) {
           errors.push(`permissions.folders needs a minTavora newer than ${LAST_TAVORA_WITHOUT_FOLDERS}, because older Tavoras refuse it`);
+        } else if (
+          folders.some((entry) => splitFolderPath((entry as FolderAccess).path)?.root === "AppData/LocalLow") &&
+          !officialId(input) &&
+          !needsNewerTavora({ minTavora: typeof input.minTavora === "string" ? input.minTavora : "" }, LAST_TAVORA_WITHOUT_LOCALLOW_FOLDERS)
+        ) {
+          errors.push(`AppData/LocalLow in permissions.folders needs a minTavora newer than ${LAST_TAVORA_WITHOUT_LOCALLOW_FOLDERS}, because older Tavoras refuse it`);
         }
       }
     }
