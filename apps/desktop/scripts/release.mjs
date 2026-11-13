@@ -21,7 +21,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createInterface } from "node:readline/promises";
-import { AFTER_RELEASE, CHECKLIST, asksHandChecks, checkCi, checkDownload, checkInstalled, checkRelease, findDispatchedRun, readCiHashes, releaseFiles, releaseNotes, releaseRunTitle } from "./release-guards.mjs";
+import { AFTER_RELEASE, CHECKLIST, asksHandChecks, checkCi, checkDownload, checkInstalled, checkRelease, failedJobsHint, findDispatchedRun, readCiHashes, releaseFiles, releaseNotes, releaseRunTitle } from "./release-guards.mjs";
 import { hello, publish } from "../../../scripts/deploy-client.mjs";
 import { lockPath, takeLock } from "./release-lock.mjs";
 
@@ -174,7 +174,13 @@ try {
 } catch {
   // Also reached by Ctrl+C (it stops gh run watch too): stop the run as well; a finished run stays as it is.
   cancelRun(runId);
-  fail(`The Release build failed or was stopped; see the run above. Nothing was published or tagged.`);
+  let failed = "";
+  try {
+    failed = failedJobsHint(JSON.parse(run("gh", ["run", "view", runId, "--repo", REPO, "--json", "jobs"], { capture: true })).jobs);
+  } catch {
+    // Only a hint; the run's page says the same.
+  }
+  fail(`The Release build failed or was stopped; see the run above.${failed ? `\n${failed}\n` : " "}Nothing was published or tagged.`);
 }
 activeRun = null;
 

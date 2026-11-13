@@ -85,6 +85,18 @@ export function releaseRunTitle(version, e2e, nonce) {
 }
 
 /**
+ * The jobs to look at in a failed Release build, from `gh run view --json jobs`: a line for the console, or "" when
+ * none failed (it was stopped). One failed e2e shard cancels the others (fail-fast, see release-build.yml).
+ */
+export function failedJobsHint(jobs) {
+  const failed = jobs.filter((job) => job.conclusion === "failure" || job.conclusion === "timed_out").map((job) => job.name);
+  if (!failed.length) return "";
+  const cancelled = jobs.filter((job) => job.conclusion === "cancelled").length;
+  const stopped = cancelled === 1 ? "The cancelled job was" : `The ${cancelled} cancelled jobs were`;
+  return `Failed: ${failed.join(", ")}.${cancelled ? ` ${stopped} stopped because of that; a test shown as failed there was cut off, not broken.` : ""}`;
+}
+
+/**
  * The Release build run `pnpm release` just started, from `gh run list --json databaseId,headSha,displayTitle,event`.
  * Returns { run } or { wait: true } while GitHub hasn't listed it yet, or { problem } when it builds another commit.
  */
