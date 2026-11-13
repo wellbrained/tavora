@@ -23,7 +23,7 @@ test("Tavora follows a German system, and a pick from the list switches the text
   await expect(page.getByTestId("language-picker")).toContainText("System folgen");
   await page.getByTestId("settings-close").click();
   await expect(page.getByTestId("rail-home")).toHaveAttribute("aria-label", "Startseite");
-  await expect(page.getByTestId("rail-add-game")).toHaveAttribute("aria-label", "Spiel oder Arbeitsbereich hinzufügen");
+  await expect(page.getByTestId("rail-add-game")).toHaveAttribute("aria-label", "Spiel oder persönlichen Arbeitsbereich hinzufügen");
   await page.getByTestId("rail-settings").click();
 
   await pickLanguage(page, "en");

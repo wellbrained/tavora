@@ -675,7 +675,7 @@ test("the rail's Add opens the Add dialog on Game, which says it is looking whil
       ipcMain.removeHandler("host:installed-games");
       ipcMain.handle("host:installed-games", () => new Promise(() => undefined));
     });
-    await expect(page.getByTestId("rail-add-game")).toHaveAttribute("aria-label", "Add a game or workspace");
+    await expect(page.getByTestId("rail-add-game")).toHaveAttribute("aria-label", "Add a game or a personal workspace");
     await page.getByTestId("rail-add-game").click();
     await expect(page.getByTestId("add-game-dialog")).toBeVisible();
     await expect(page.getByTestId("add-game-loading")).toContainText("Looking for games on this PC");
