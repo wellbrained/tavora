@@ -6,6 +6,40 @@
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 
+# Checks /etc/caddy/Caddyfile as Caddy's own user and groups, the way Caddy runs it, never as root (CoreHub
+# #425): it imports /srv/corehub/shared/hosting.caddy, which the corehub user can write, and checking it opens
+# (creates, chmods) the log files it names, so as root a crafted log route could make any file. Same as
+# CoreHub's scripts/secure-caddy-admin.sh. On failure it says what Caddy said.
+caddy_validate() {
+  local user group groups home err
+  command -v setpriv >/dev/null || { echo '  setpriv is missing (package util-linux)' >&2; return 1; }
+  user="$(systemctl show -P User caddy 2>/dev/null || true)"
+  if [[ -z "$user" || "$user" == root ]]; then
+    echo "  Caddy's service runs as root (or isn't there); its config is never checked as root. Give caddy.service a User= first." >&2
+    return 1
+  fi
+  id "$user" >/dev/null 2>&1 || { echo "  Caddy's user $user doesn't exist" >&2; return 1; }
+  group="$(systemctl show -P Group caddy 2>/dev/null || true)"
+  group="${group:-$(id -gn "$user")}"
+  # Its groups from /etc/group, the unit's SupplementaryGroups and corehub (to read hosting.caddy), as Caddy has.
+  groups="$({ id -Gn "$user"; systemctl show -P SupplementaryGroups caddy 2>/dev/null || true; if getent group corehub >/dev/null; then echo corehub; fi; } | tr -s ' ' '\n' | grep -v '^$' | sort -u | paste -sd, -)"
+  home="$(getent passwd "$user" | cut -d: -f6)"
+  err="$(mktemp)"
+  if (cd / && setpriv --reuid="$user" --regid="$group" --groups="$groups" --inh-caps=-all --no-new-privs \
+    env -i PATH=/usr/bin:/bin HOME="${home:-/}" HETZNER_API_TOKEN=validate-only \
+    /usr/local/bin/caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile) </dev/null >/dev/null 2>"$err"; then
+    rm -f "$err"
+    return 0
+  fi
+  echo "  Caddy (checked as $user) says:" >&2
+  tail -n 5 "$err" | sed 's/^/    /' >&2
+  if grep -qi 'permission denied' "$err"; then
+    echo "  Caddy can't open that file either: give $user (or the corehub group) access to it." >&2
+  fi
+  rm -f "$err"
+  return 1
+}
+
 # --- DNS: updates.mytavora.app as a CNAME to mytavora.app, with the token Caddy already has.
 # shellcheck disable=SC1091
 set -a; . /etc/caddy/dns.env; set +a
@@ -40,13 +74,13 @@ if ! cmp -s "$here/tavora-updates.caddy" /etc/caddy/tavora-updates.caddy 2>/dev/
   cp -p /etc/caddy/Caddyfile "/etc/caddy/Caddyfile.before-tavora-updates-$stamp"
   install -m 644 "$here/tavora-updates.caddy" /etc/caddy/tavora-updates.caddy
   grep -qxF 'import /etc/caddy/tavora-updates.caddy' /etc/caddy/Caddyfile || printf '\nimport /etc/caddy/tavora-updates.caddy\n' >> /etc/caddy/Caddyfile
-  if HETZNER_API_TOKEN=validate-only /usr/local/bin/caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
+  if caddy_validate; then
     systemctl reload caddy
     echo 'Caddy reloaded with updates.mytavora.app'
   else
     cp -p "/etc/caddy/Caddyfile.before-tavora-updates-$stamp" /etc/caddy/Caddyfile
     rm -f /etc/caddy/tavora-updates.caddy
-    echo 'Caddy config did not validate; restored the previous Caddyfile.'
+    echo 'Caddy config did not validate (see above); restored the previous Caddyfile.'
     exit 1
   fi
 else

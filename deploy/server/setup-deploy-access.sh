@@ -19,12 +19,45 @@ export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 export LC_ALL=C
 die() { echo "setup: $*" >&2; exit 1; }
 say() { echo "  $*"; }
+# Checks /etc/caddy/Caddyfile as Caddy's own user and groups, the way Caddy runs it, never as root (CoreHub
+# #425): it imports /srv/corehub/shared/hosting.caddy, which the corehub user can write, and checking it opens
+# (creates, chmods) the log files it names, so as root a crafted log route could make any file. Same as
+# CoreHub's scripts/secure-caddy-admin.sh. On failure it says what Caddy said.
+caddy_validate() {
+  local user group groups home err
+  command -v setpriv >/dev/null || { echo '  setpriv is missing (package util-linux)' >&2; return 1; }
+  user="$(systemctl show -P User caddy 2>/dev/null || true)"
+  if [[ -z "$user" || "$user" == root ]]; then
+    echo "  Caddy's service runs as root (or isn't there); its config is never checked as root. Give caddy.service a User= first." >&2
+    return 1
+  fi
+  id "$user" >/dev/null 2>&1 || { echo "  Caddy's user $user doesn't exist" >&2; return 1; }
+  group="$(systemctl show -P Group caddy 2>/dev/null || true)"
+  group="${group:-$(id -gn "$user")}"
+  # Its groups from /etc/group, the unit's SupplementaryGroups and corehub (to read hosting.caddy), as Caddy has.
+  groups="$({ id -Gn "$user"; systemctl show -P SupplementaryGroups caddy 2>/dev/null || true; if getent group corehub >/dev/null; then echo corehub; fi; } | tr -s ' ' '\n' | grep -v '^$' | sort -u | paste -sd, -)"
+  home="$(getent passwd "$user" | cut -d: -f6)"
+  err="$(mktemp)"
+  if (cd / && setpriv --reuid="$user" --regid="$group" --groups="$groups" --inh-caps=-all --no-new-privs \
+    env -i PATH=/usr/bin:/bin HOME="${home:-/}" HETZNER_API_TOKEN=validate-only \
+    /usr/local/bin/caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile) </dev/null >/dev/null 2>"$err"; then
+    rm -f "$err"
+    return 0
+  fi
+  echo "  Caddy (checked as $user) says:" >&2
+  tail -n 5 "$err" | sed 's/^/    /' >&2
+  if grep -qi 'permission denied' "$err"; then
+    echo "  Caddy can't open that file either: give $user (or the corehub group) access to it." >&2
+  fi
+  rm -f "$err"
+  return 1
+}
 
 [[ "$(id -u)" == 0 ]] || die 'run this as root'
 src="${1:-}"
 [[ -n "$src" && -d "$src" ]] || die 'usage: setup-deploy-access.sh <folder with the uploaded files>'
 src="$(cd "$src" && pwd)"
-for tool in sshd ssh-keygen sudo visudo curl openssl sha256sum tar runuser systemctl base64 useradd install; do
+for tool in sshd ssh-keygen sudo visudo curl openssl sha256sum tar runuser systemctl base64 useradd install setpriv getent; do
   command -v "$tool" >/dev/null || die "$tool is missing"
 done
 
@@ -233,13 +266,13 @@ if ! cmp -s "$src/apps/api/deploy/tavora-api.caddy" /etc/caddy/tavora-api.caddy;
   had_site=0; [[ -f /etc/caddy/tavora-api.caddy ]] && { cp -p /etc/caddy/tavora-api.caddy "/etc/caddy/tavora-api.caddy.before-$stamp"; had_site=1; }
   install -m 644 "$src/apps/api/deploy/tavora-api.caddy" /etc/caddy/tavora-api.caddy
   grep -qxF 'import /etc/caddy/tavora-api.caddy' /etc/caddy/Caddyfile || printf '\nimport /etc/caddy/tavora-api.caddy\n' >> /etc/caddy/Caddyfile
-  if HETZNER_API_TOKEN=validate-only /usr/local/bin/caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
+  if caddy_validate; then
     systemctl reload caddy
     say 'Caddy reloaded with the new api.mytavora.app site'
   else
     cp -p "/etc/caddy/Caddyfile.before-tavora-api-$stamp" /etc/caddy/Caddyfile
     if [[ "$had_site" == 1 ]]; then cp -p "/etc/caddy/tavora-api.caddy.before-$stamp" /etc/caddy/tavora-api.caddy; else rm -f /etc/caddy/tavora-api.caddy; fi
-    die 'the Caddy config did not validate; put the previous one back'
+    die 'the Caddy config did not validate (see above); put the previous one back'
   fi
 fi
 installed+=(apps/api/deploy/tavora-api.caddy)
