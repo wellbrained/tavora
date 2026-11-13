@@ -938,6 +938,7 @@ export const de: Record<keyof typeof en, string> = {
   "addGame.title": "Spiel hinzufügen",
   "addGame.search": "Spiel hinzufügen…",
   "addGame.nothingOnPc": "Keine installierten Spiele gefunden. Suche oben nach einem.",
+  "addGame.allAdded": "Du hast alle Spiele auf diesem PC hinzugefügt. Suche oben nach weiteren.",
   "addGame.loadingPc": "Suche Spiele auf diesem PC…",
   "addGame.lately": "Zuletzt gespielt",
   "addGame.morePc": "Mehr auf diesem PC",

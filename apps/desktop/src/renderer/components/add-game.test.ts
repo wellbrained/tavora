@@ -235,6 +235,23 @@ describe("AddGameDialog", () => {
     expect(host.act).toHaveBeenCalledWith({ type: "add-workspace", catalogId: "elden-ring" }, { quiet: true });
   });
 
+  it("under the covers lists only games to add; one already added shows once typed for", async () => {
+    state().value = { ...state().value, library: { ...state().value.library, workspaces: { "local-rust": { id: "local-rust", kind: "game", name: "Rust", steamAppId: null } as WorkspaceView } } };
+    const search = await open([game("Rust"), game("Hades")]);
+    expect(root.querySelector('[data-testid$="n:rust"]')).toBeNull();
+    expect(root.querySelector('[data-testid$="n:hades"]')).not.toBeNull();
+    search.value = "rust";
+    search.dispatchEvent(new Event("input"));
+    await settle();
+    expect($("catalog-n:rust")!.textContent).toContain("Already added");
+  });
+
+  it("says every game here is added when nothing is left to add", async () => {
+    state().value = { ...state().value, library: { ...state().value.library, workspaces: { "local-rust": { id: "local-rust", kind: "game", name: "Rust", steamAppId: null } as WorkspaceView } } };
+    await open([game("Rust")]);
+    expect($("add-game-empty")!.textContent).toContain("every game on this PC");
+  });
+
   it("opens a game added since the list was found instead of adding it again", async () => {
     // The list was found before Hades was added: it still says not added.
     const search = await open([game("Hades", { steamAppId: 1145360, activity: { kind: "played", at: Date.now() } })]);

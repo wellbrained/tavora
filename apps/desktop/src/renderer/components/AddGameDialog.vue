@@ -29,7 +29,7 @@ const input = ref<HTMLInputElement | null>(null);
 const list = ref<HTMLElement | null>(null);
 const shownRequest = dialog.value;
 const picker = useGamePicker(query, { covers: true, listId: "game-results", list, search: () => input.value, onEnter: (key) => pick(key) });
-const { name, lines, covers, custom, installedLoaded, onlineStatus, info, coverOf, active, activeId, onKey, keepSearchFocus, keysToSearch } = picker;
+const { name, lines, covers, custom, installed, installedLoaded, onlineStatus, info, coverOf, active, activeId, onKey, keepSearchFocus, keysToSearch } = picker;
 
 /** Made-up games for the Skeleton while the games on this PC are found, with names of a few lengths. */
 const placeholder = (name: string, index: number): PickerRow => ({ key: `placeholder:${index}`, name, gameId: null, icon: null, installed: null, online: null, workspaceId: null, section: "pc" });
@@ -236,7 +236,9 @@ function onDialogKey(event: KeyboardEvent) {
           @hover="active = $event"
           @pick="pick"
         />
-        <p v-if="installedLoaded && !covers.length && !lines.length" class="text-muted-foreground px-5 py-4 text-sm" data-testid="add-game-empty">{{ t("addGame.nothingOnPc") }}</p>
+        <p v-if="installedLoaded && !covers.length && !lines.length" class="text-muted-foreground px-5 py-4 text-sm" data-testid="add-game-empty">
+          {{ installed.length ? t("addGame.allAdded") : t("addGame.nothingOnPc") }}
+        </p>
         <p v-if="onlineStatus === 'unreachable' && name" class="text-muted-foreground px-5 py-2 text-xs" data-testid="online-unreachable">{{ t("addGame.builtInOnly") }}</p>
         </template>
 

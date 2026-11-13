@@ -160,11 +160,21 @@ export function useGamePicker(query: Ref<string>, options: GamePickerOptions = {
     const byKey = new Map(rows.value.map((row) => [row.key, row]));
     return games.flatMap((game) => byKey.get(game.key) ?? []);
   });
-  /** The list under the covers, for what is typed: the rows that aren't a cover, then the typed name as the user's own game. */
+  /**
+   * The list under the covers, for what is typed: the rows that aren't a cover, then the typed name as the user's own
+   * game. Under the covers (nothing typed) it offers only games to add: the ones already added show once typed for. A
+   * row shown stays, also once its game is added, so nothing slips out from under the pointer.
+   */
   const shownLines = computed<{ name: string; lines: PickerLine[] }>((previous) => {
     const onCover = new Set(covers.value.map((row) => row.key));
-    const fresh: PickerLine[] = [...rows.value.filter((row) => !onCover.has(row.key)).map((row) => ({ key: row.key, row })), ...(custom.value ? [{ key: CUSTOM_KEY, row: null }] : [])];
-    const kept = previous?.name === name.value ? keepOrder(previous.lines.map((line) => line.key), fresh) : fresh;
+    const same = previous?.name === name.value;
+    const shown = new Set(same ? previous.lines.map((line) => line.key) : []);
+    const toAdd = (row: PickerRow) => !(options.covers && !name.value && row.workspaceId) || shown.has(row.key);
+    const fresh: PickerLine[] = [
+      ...rows.value.filter((row) => !onCover.has(row.key) && toAdd(row)).map((row) => ({ key: row.key, row })),
+      ...(custom.value ? [{ key: CUSTOM_KEY, row: null }] : []),
+    ];
+    const kept = same ? keepOrder(previous.lines.map((line) => line.key), fresh) : fresh;
     // Under the covers only the first few; typing finds the rest.
     const lines = options.covers && !name.value ? kept.slice(0, MAX_PICKER_LINES) : kept;
     return { name: name.value, lines };
