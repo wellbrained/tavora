@@ -68,6 +68,8 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 20
     strategy:
+      # One failed shard cancels the others. A cancelled shard shows the test it was in as failed ("Target page,
+      # context or browser has been closed"): it was cut off, not broken. Look at the shard that failed.
       fail-fast: true
       matrix:
         shard: [1, 2, 3, 4, 5, 6, 7, 8]
