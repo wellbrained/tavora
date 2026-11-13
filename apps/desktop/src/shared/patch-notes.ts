@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.44",
+    date: "2026-11-13",
+    title: "Folders for more games",
+    notes: [
+      "Modules can ask to read a game's folder in AppData\\LocalLow, where many games keep their saves and settings.",
+      "You still allow each folder yourself, and the rest of AppData stays closed.",
+      "Modules never see a browser's sign-ins, even inside a game's folder.",
+    ],
+    prs: [
+      { number: 764, title: "Modules can read a game's folder in AppData\\LocalLow (permissions.folders)" },
+    ],
+    tags: ["privacy", "publishing", "website"],
+  },
+  {
     version: "0.24.43",
     date: "2026-11-13",
     title: "New workspace",
