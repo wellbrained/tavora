@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.42",
+    date: "2026-11-13",
+    title: "Switches sit right in a dialog",
+    notes: [
+      "The highlight on a switch like Game | Personal fits its option from the moment a dialog opens.",
+    ],
+    prs: [
+      { number: 762, title: "Sliding indicator: measure as laid out while a dialog zooms in" },
+    ],
+    tags: ["ui-kit"],
+  },
+  {
     version: "0.24.41",
     date: "2026-11-13",
     title: "One Add button",
