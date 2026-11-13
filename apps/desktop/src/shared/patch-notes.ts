@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.54",
+    date: "2026-11-13",
+    title: "Safer Browser when you leave a local page",
+    notes: [
+      "A website you open from a page on your PC or local network can't reach your PC or network while it loads.",
+    ],
+    prs: [
+      { number: 781, title: "Browser: judge requests by the public page a panel is going to" },
+    ],
+    tags: ["privacy", "website"],
+  },
+  {
     version: "0.24.53",
     date: "2026-11-13",
     title: "Steadier app updates",
