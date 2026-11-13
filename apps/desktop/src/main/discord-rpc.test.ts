@@ -1,6 +1,6 @@
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { encodeFrame, FrameReader, ipcPaths, MAX_FRAME, RpcClient, RpcError } from "./discord-rpc";
+import { encodeFrame, FrameReader, ipcPaths, isOwnSocket, MAX_FRAME, RpcClient, RpcError } from "./discord-rpc";
 import { fakeDiscord, until, type FakeDiscord } from "./discord-fake.test-helper";
 
 let fake: FakeDiscord | undefined;
@@ -37,7 +37,48 @@ describe("Discord frames", () => {
   });
 });
 
+describe("isOwnSocket", () => {
+  const system = (platform: NodeJS.Platform, uid: number | undefined, owners: Record<string, number>) => ({
+    platform,
+    uid,
+    stat: async (file: string) => {
+      if (!(file in owners)) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      return { uid: owners[file]! };
+    },
+  });
+
+  it("takes a socket only when this user owns it, on Linux and macOS", async () => {
+    for (const platform of ["linux", "darwin"] as const) {
+      const owners = { "/tmp/discord-ipc-0": 1000, "/tmp/discord-ipc-1": 1001, "/tmp/discord-ipc-2": 0 };
+      expect(await isOwnSocket("/tmp/discord-ipc-0", system(platform, 1000, owners))).toBe(true);
+      // Another account, root too, could have made it first to catch the token.
+      expect(await isOwnSocket("/tmp/discord-ipc-1", system(platform, 1000, owners))).toBe(false);
+      expect(await isOwnSocket("/tmp/discord-ipc-2", system(platform, 1000, owners))).toBe(false);
+      expect(await isOwnSocket("/tmp/discord-ipc-9", system(platform, 1000, owners))).toBe(false);
+      // Without a user id there's nothing to compare.
+      expect(await isOwnSocket("/tmp/discord-ipc-0", system(platform, undefined, owners))).toBe(false);
+    }
+  });
+
+  it("doesn't check pipes on Windows", async () => {
+    expect(await isOwnSocket(ipcPaths("win32", {})[0]!, system("win32", undefined, {}))).toBe(true);
+  });
+});
+
 describe("RpcClient", () => {
+  it("skips a socket another account owns, and says nothing to it", async () => {
+    fake = await fakeDiscord();
+    const checked: string[] = [];
+    const isOurs = async (where: string) => {
+      checked.push(where);
+      return false;
+    };
+    const client = await RpcClient.connect("42", { onEvent: () => undefined, onClose: () => undefined }, [fake.path], isOurs);
+    expect(client).toBeNull();
+    expect(checked).toEqual([fake.path]);
+    expect(fake.clientId).toBeNull();
+  });
+
   it("returns null when no Discord app is running", async () => {
     const client = await RpcClient.connect("1", { onEvent: () => undefined, onClose: () => undefined }, ["/nonexistent/discord-ipc-0"]);
     expect(client).toBeNull();

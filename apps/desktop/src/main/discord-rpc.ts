@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { stat } from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
 
@@ -55,6 +56,27 @@ export function ipcPaths(platform: NodeJS.Platform, env: NodeJS.ProcessEnv): str
   return folders.flatMap((folder) => numbers.map((i) => path.join(folder, `discord-ipc-${i}`)));
 }
 
+export interface SocketSystem {
+  platform: NodeJS.Platform;
+  /** This process's user id; undefined on Windows. */
+  uid: number | undefined;
+  stat(file: string): Promise<{ uid: number }>;
+}
+
+const thisSystem: SocketSystem = { platform: process.platform, uid: process.getuid?.(), stat: (file) => stat(file) };
+
+/**
+ * Whether a Discord socket belongs to this user. On Linux and macOS the socket is a file another account could make
+ * first (in a shared TMPDIR or /tmp) to catch the access token Tavora sends, so only one owned by this user is used
+ * (decided 2026-11-13). Windows pipes aren't checked: there another account on the PC could claim the pipe name first.
+ */
+export async function isOwnSocket(where: string, system: SocketSystem = thisSystem): Promise<boolean> {
+  if (system.platform === "win32") return true;
+  if (system.uid === undefined) return false;
+  const info = await system.stat(where).catch(() => null);
+  return info?.uid === system.uid;
+}
+
 export class RpcError extends Error {
   constructor(
     readonly code: number,
@@ -109,8 +131,10 @@ export class RpcClient {
    * application's client id. Resolves once Discord is READY, or null when no
    * Discord app is running.
    */
-  static async connect(clientId: string, events: RpcEvents, paths = ipcPaths(process.platform, process.env)): Promise<RpcClient | null> {
+  static async connect(clientId: string, events: RpcEvents, paths = ipcPaths(process.platform, process.env), isOurs: (where: string) => Promise<boolean> = isOwnSocket): Promise<RpcClient | null> {
     for (const where of paths) {
+      // The access token goes to whoever listens here: never to another account's socket.
+      if (!(await isOurs(where))) continue;
       const socket = await openSocket(where);
       if (!socket) continue;
       const client = new RpcClient(socket, events);
