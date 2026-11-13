@@ -11,6 +11,7 @@ import { lstat, mkdir, open, readdir, readFile, realpath, stat } from "node:fs/p
 import path from "node:path";
 import { folderKey, isFolderName, isModuleId, isOwnerId, type FolderAccess, type FolderRoot } from "@tavora/module-schema";
 import type { FolderChange, FolderEntry, FolderListing, FolderState } from "@tavora/sdk/protocol";
+import { KEY_EXTENSIONS } from "../shared/folder-keys";
 import { readBody } from "./clipboard-http";
 import { HostError } from "./errors";
 import { writeFileAtomic } from "./fsutil";
@@ -26,11 +27,6 @@ export const MAX_FOLDER_READ_BYTES = 50 * 1024 * 1024;
 /** How long changes gather before the module hears of them, and most changed paths in one notice. */
 const CHANGE_WAIT_MS = 400;
 const MAX_CHANGES = 500;
-/**
- * Key and certificate files: never read from a folder, at most seen by name, wherever they are. Tavora's own key files
- * are .pem; a module has no use for a private key.
- */
-const KEY_EXTENSIONS: readonly string[] = ["pem", "key", "p12", "pfx", "ppk"];
 /** A Windows 8.3 short name, such as PASSWO~1.TXT. */
 const SHORT_NAME = /^[^.~]{1,6}~[0-9]+(?:\.[^.]{0,3})?$/;
 
