@@ -1528,6 +1528,7 @@ export const de: Record<keyof typeof en, string> = {
   "search.hint.close": "zum Schließen",
   "search.key.enter": "Eingabe",
   "search.key.esc": "Esc",
+  "search.key.tab": "Tab",
   "search.add": "{name} hinzufügen",
   "search.newGame": "Neues Spiel",
   "search.homeKeywords": "willkommen, start, startseite, welcome",
