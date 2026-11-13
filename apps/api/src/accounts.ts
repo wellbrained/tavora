@@ -113,7 +113,9 @@ const noEmail = (context: Context) => context.json({ error: "This account has no
 const noDiscord = (context: Context) => context.json({ error: "This account has no Discord login.", reason: "no-discord" }, 409);
 /** A suspended account (the maintainer did it, reversible): nothing signs in, and the app says so. */
 const suspended = (context: Context) => context.json({ error: "This account is suspended.", reason: "suspended" }, 403);
+const discordUnavailable = (context: Context) => context.json({ error: "Discord sign-in is not available right now.", reason: "unavailable" }, 503);
 const wrongCode = (context: Context) => context.json({ error: "That code is wrong or has expired.", reason: "wrong-code" }, 400);
+const wrongCurrentCode = (context: Context) => context.json({ error: "The code sent to your current address is wrong or has expired.", reason: "wrong-current-code" }, 400);
 /**
  * An app from before the email change needed proof of the current address. Older apps show the `error` of an
  * `invalid` answer as it is ("Tavora said no: …"), so it is in the user's language.
@@ -435,14 +437,15 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     if (input.confirmCurrent !== true) return updateToChange(context, language);
     if (email === account.email) return context.json({ error: "That is the address the account has.", reason: "same-email" }, 400);
     // A Discord-only account proves itself with Discord at the end: the code would be no use without it.
-    if (!account.email && !options.discord) return context.json({ error: "Discord sign-in is not available right now.", reason: "unavailable" }, 503);
+    if (!account.email && !options.discord) return discordUnavailable(context);
     if (usedUp(true, account.email ? 2 : 1)) return usedUpAnswer(context);
     // Both addresses or neither: the limits are checked before either code is made.
     const at = now();
     const waitFor = Math.max(store.codeWait(email, at), account.email ? store.codeWait(account.email, at) : 0);
     if (waitFor > 0) return tooMany(context, waitFor);
     if (account.email) {
-      const current = store.requestCode(account.email, "confirm-email-change", account.id, at);
+      // The current address's code holds only for this new address.
+      const current = store.requestCode(account.email, "confirm-email-change", account.id, at, email);
       if (!current.ok) return tooMany(context, current.retryAfter);
       const failed = await send(context, confirmEmailChangeMail(account.email, email, current.code, language));
       if (failed) return failed;
@@ -471,16 +474,14 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     // Every code is checked before any is spent (a wrong one counts as a try), and spent only once all proof holds.
     if (!store.checkCode(email, "change-email", account.id, input.code, now(), false)) return wrongCode(context);
     if (account.email) {
-      if (!store.checkCode(account.email, "confirm-email-change", account.id, input.currentCode as string, now(), false)) {
-        return context.json({ error: "The code sent to your current address is wrong or has expired.", reason: "wrong-current-code" }, 400);
-      }
+      if (!store.checkCode(account.email, "confirm-email-change", account.id, input.currentCode as string, now(), false, email)) return wrongCurrentCode(context);
     } else {
       const who = await identify(context, discordProof!);
       if (who instanceof Response) return who;
       if (!account.discord || account.discord.id !== who.id) return context.json({ error: "That is not the Discord login of this account.", reason: "discord-mismatch" }, 400);
     }
     if (!store.checkCode(email, "change-email", account.id, input.code, now(), true)) return wrongCode(context);
-    if (account.email && !store.checkCode(account.email, "confirm-email-change", account.id, input.currentCode as string, now(), true)) return wrongCode(context);
+    if (account.email && !store.checkCode(account.email, "confirm-email-change", account.id, input.currentCode as string, now(), true, email)) return wrongCurrentCode(context);
     if (store.changeEmail(account.id, email, context.get("session").id) === "taken") {
       return context.json({ error: "That address already has a Tavora account.", reason: "email-taken" }, 409);
     }
@@ -548,7 +549,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
 
   /** Who the user is on Discord, or an answer to send instead. */
   const identify = async (context: Context, input: Record<string, unknown>): Promise<DiscordIdentity | Response> => {
-    if (!options.discord) return context.json({ error: "Discord sign-in is not available right now.", reason: "unavailable" }, 503);
+    if (!options.discord) return discordUnavailable(context);
     if (!isDiscordCode(input.code) || !isPkceVerifier(input.verifier)) return context.json({ error: "Send { code, verifier }.", reason: "bad-request" }, 400);
     try {
       return await options.discord.identify(input.code, input.verifier);

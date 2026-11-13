@@ -236,6 +236,19 @@ describe("signed in", () => {
     expect((await (await call("GET", "", undefined, token)).json()) as unknown).toMatchObject({ account: { email: "old@example.com" } });
   });
 
+  it("takes the current address's code only for the new address it was sent for", async () => {
+    const { call, signIn, inbox, clock } = setup();
+    const token = await signIn("old@example.com");
+    clock.now += 15 * 60_000;
+    // A stolen sign-in asks for its own address first; the owner then asks for theirs and gets the newest current code.
+    await call("POST", "/email/code", { email: "theirs@example.com", confirmCurrent: true }, token);
+    const theirCode = codeTo(inbox, "theirs@example.com");
+    await call("POST", "/email/code", { email: "mine@example.com", confirmCurrent: true }, token);
+    const currentCode = codeTo(inbox, "old@example.com");
+    expect(await (await call("POST", "/email", { email: "theirs@example.com", code: theirCode, currentCode }, token)).json()).toMatchObject({ reason: "wrong-current-code" });
+    expect((await call("POST", "/email", { email: "mine@example.com", code: codeTo(inbox, "mine@example.com"), currentCode }, token)).status).toBe(200);
+  });
+
   it("drops the codes still waiting for the old address once it changed", async () => {
     const { call, signIn, inbox, clock } = setup();
     const token = await signIn("old@example.com");

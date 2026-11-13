@@ -159,6 +159,8 @@ export function cleanDeveloperName(input: unknown): string | null {
 // never became an account is not written down in the clear.
 const addressKey = (email: string) => sha256(`address:${email}`);
 const codeHash = (key: string, purpose: CodePurpose, code: string) => sha256(`code:${key}:${purpose}:${code}`);
+/** A code that holds only for one thing, such as the current address's code for one new address: that goes into its hash. */
+const bound = (code: string, bind: string | undefined) => (bind === undefined ? code : `${code}:${bind}`);
 
 /** Lower case and trimmed: the one form an address is stored and matched in. Dots and +tags are kept. */
 export function normalizeEmail(input: unknown): string | null {
@@ -363,7 +365,7 @@ export class AccountStore {
    * account ends, and every code still waiting for it or for the old address goes (decided 2026-11-13), so what a
    * stolen sign-in or an old mailbox started can't finish afterwards. `keepSession`: the sign-in that made the change.
    */
-  changeEmail(id: string, email: string, keepSession: string | null = null): "ok" | "taken" {
+  changeEmail(id: string, email: string, keepSession: string | null): "ok" | "taken" {
     if (this.accountByEmail(email)) return "taken";
     this.db.exec("begin");
     try {
@@ -984,7 +986,7 @@ export class AccountStore {
    * purpose, unless the address was sent too many lately. The limits count every
    * purpose together, so nobody can flood an inbox by switching between them.
    */
-  requestCode(email: string, purpose: CodePurpose, accountId: string | null, now: number): CodeRequest {
+  requestCode(email: string, purpose: CodePurpose, accountId: string | null, now: number, bind?: string): CodeRequest {
     this.sweep(now);
     const address = addressKey(email);
     const wait = this.codeWait(email, now);
@@ -993,7 +995,7 @@ export class AccountStore {
     this.db.prepare("insert into code_requests (address, at) values (?, ?)").run(address, now);
     this.db
       .prepare("insert or replace into codes (address, purpose, account_id, code_hash, expires_at, tries) values (?, ?, ?, ?, ?, 0)")
-      .run(address, purpose, accountId, codeHash(address, purpose, code), now + CODE_TTL_MS);
+      .run(address, purpose, accountId, codeHash(address, purpose, bound(code, bind)), now + CODE_TTL_MS);
     return { ok: true, code };
   }
 
@@ -1002,13 +1004,13 @@ export class AccountStore {
    * A right one is spent only when asked, so the app can learn that an address
    * has no account yet and ask the user before it creates one.
    */
-  checkCode(email: string, purpose: CodePurpose, accountId: string | null, code: string, now: number, spend: boolean): boolean {
+  checkCode(email: string, purpose: CodePurpose, accountId: string | null, code: string, now: number, spend: boolean, bind?: string): boolean {
     const address = addressKey(email);
     const row = this.db.prepare("select account_id, code_hash, expires_at, tries from codes where address = ? and purpose = ?").get(address, purpose) as
       | { account_id: string | null; code_hash: string; expires_at: number; tries: number }
       | undefined;
     if (!row || row.expires_at <= now || row.account_id !== accountId) return false;
-    const right = timingSafeEqual(Buffer.from(row.code_hash, "hex"), Buffer.from(codeHash(address, purpose, code), "hex"));
+    const right = timingSafeEqual(Buffer.from(row.code_hash, "hex"), Buffer.from(codeHash(address, purpose, bound(code, bind)), "hex"));
     if (!right) {
       if (row.tries + 1 >= CODE_MAX_TRIES) this.db.prepare("delete from codes where address = ? and purpose = ?").run(address, purpose);
       else this.db.prepare("update codes set tries = tries + 1 where address = ? and purpose = ?").run(address, purpose);
