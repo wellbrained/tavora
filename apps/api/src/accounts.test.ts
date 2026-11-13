@@ -192,34 +192,113 @@ describe("signed in", () => {
     expect((await call("GET", "", undefined, token)).status).toBe(401);
   });
 
-  it("changes the email with a code to the new address and tells the old one", async () => {
-    const { call, signIn, inbox, lastCode } = setup();
+  /** The code in the newest mail to an address. */
+  const codeTo = (inbox: ReturnType<typeof createTestInbox>, email: string) => /\n {4}(\d{6})\n/.exec(inbox.mails().find((mail) => mail.to === email)?.text ?? "")?.[1] ?? "";
+  const other = (code: string) => (code === "000000" ? "000001" : "000000");
+
+  it("changes the email only with codes to the new and the current address, signs the other devices out and tells the old one", async () => {
+    const { call, signIn, inbox, clock } = setup();
     const token = await signIn("old@example.com");
-    expect(await (await call("POST", "/email/code", { email: "old@example.com" }, token)).json()).toMatchObject({ reason: "same-email" });
-    await call("POST", "/email/code", { email: "new@example.com" }, token);
-    expect(inbox.mails()[0]!.to).toBe("new@example.com");
-    const changed = await call("POST", "/email", { email: "new@example.com", code: lastCode() }, token);
+    const laptop = await signIn("old@example.com");
+    clock.now += 15 * 60_000;
+    expect(await (await call("POST", "/email/code", { email: "old@example.com", confirmCurrent: true }, token)).json()).toMatchObject({ reason: "same-email" });
+    const sent = await call("POST", "/email/code", { email: "new@example.com", confirmCurrent: true, language: "de" }, token);
+    expect(sent.status).toBe(202);
+    expect(await sent.json()).toEqual({ status: "sent", current: "email" });
+    const [newCode, currentCode] = [codeTo(inbox, "new@example.com"), codeTo(inbox, "old@example.com")];
+    expect(inbox.mails().find((mail) => mail.to === "old@example.com")).toMatchObject({ subject: "Bestätige die Änderung deiner E-Mail bei Tavora" });
+    expect(inbox.mails().find((mail) => mail.to === "old@example.com")!.text).toContain("n•••@example.com");
+    // Each code is checked on its own, and a wrong one says which.
+    expect(await (await call("POST", "/email", { email: "new@example.com", code: newCode, currentCode: other(currentCode) }, token)).json()).toMatchObject({ reason: "wrong-current-code" });
+    expect(await (await call("POST", "/email", { email: "new@example.com", code: other(newCode), currentCode }, token)).json()).toMatchObject({ reason: "wrong-code" });
+    const changed = await call("POST", "/email", { email: "new@example.com", code: newCode, currentCode }, token);
     expect(await changed.json()).toMatchObject({ account: { email: "new@example.com" } });
     expect(inbox.mails()[0]).toMatchObject({ to: "old@example.com", subject: "The email of your Tavora account was changed" });
     expect(inbox.mails()[0]!.text).toContain("n•••@example.com");
-    expect((await (await call("GET", "", undefined, token)).json()) as unknown).toMatchObject({ account: { email: "new@example.com" } });
+    // The device that changed it stays signed in; every other one is signed out.
+    expect((await (await call("GET", "", undefined, token)).json()) as unknown).toMatchObject({ account: { email: "new@example.com" }, devices: [{ current: true }] });
+    expect((await call("GET", "", undefined, laptop)).status).toBe(401);
   });
 
-  it("says an address is taken only after its code was right", async () => {
-    const { call, signIn, lastCode } = setup();
+  it("refuses an app that proves only the new address, before any mail goes out", async () => {
+    const { call, signIn, inbox, clock } = setup();
+    const token = await signIn("old@example.com");
+    clock.now += 15 * 60_000;
+    const mails = inbox.mails().length;
+    const refused = await call("POST", "/email/code", { email: "new@example.com", language: "de" }, token);
+    expect(refused.status).toBe(400);
+    // An older Tavora shows the service's own sentence for "invalid".
+    expect(await refused.json()).toMatchObject({ reason: "invalid", error: "Aktualisiere Tavora, um deine E-Mail zu ändern." });
+    expect(inbox.mails()).toHaveLength(mails);
+    await call("POST", "/email/code", { email: "new@example.com", confirmCurrent: true }, token);
+    const newCode = codeTo(inbox, "new@example.com");
+    expect(await (await call("POST", "/email", { email: "new@example.com", code: newCode }, token)).json()).toMatchObject({ reason: "invalid", error: "Update Tavora to change your email." });
+    expect((await (await call("GET", "", undefined, token)).json()) as unknown).toMatchObject({ account: { email: "old@example.com" } });
+  });
+
+  it("takes the current address's code only for the new address it was sent for", async () => {
+    const { call, signIn, inbox, clock } = setup();
+    const token = await signIn("old@example.com");
+    clock.now += 15 * 60_000;
+    // A stolen sign-in asks for its own address first; the owner then asks for theirs and gets the newest current code.
+    await call("POST", "/email/code", { email: "theirs@example.com", confirmCurrent: true }, token);
+    const theirCode = codeTo(inbox, "theirs@example.com");
+    await call("POST", "/email/code", { email: "mine@example.com", confirmCurrent: true }, token);
+    const currentCode = codeTo(inbox, "old@example.com");
+    expect(await (await call("POST", "/email", { email: "theirs@example.com", code: theirCode, currentCode }, token)).json()).toMatchObject({ reason: "wrong-current-code" });
+    expect((await call("POST", "/email", { email: "mine@example.com", code: codeTo(inbox, "mine@example.com"), currentCode }, token)).status).toBe(200);
+  });
+
+  it("drops the codes still waiting for the old address once it changed", async () => {
+    const { call, signIn, inbox, clock } = setup();
+    const token = await signIn("old@example.com");
+    clock.now += 15 * 60_000;
+    await call("POST", "/delete/code", {}, token);
+    const deleteCode = codeTo(inbox, "old@example.com");
+    await call("POST", "/email/code", { email: "new@example.com", confirmCurrent: true }, token);
+    const currentCode = codeTo(inbox, "old@example.com");
+    await call("POST", "/code", { email: "old@example.com" });
+    const signInCode = codeTo(inbox, "old@example.com");
+    expect((await call("POST", "/email", { email: "new@example.com", code: codeTo(inbox, "new@example.com"), currentCode }, token)).status).toBe(200);
+    expect(await (await call("POST", "/delete", { code: deleteCode }, token)).json()).toMatchObject({ reason: "wrong-code" });
+    expect(await (await call("POST", "/verify", { email: "old@example.com", code: signInCode, create: true })).json()).toMatchObject({ reason: "wrong-code" });
+  });
+
+  it("asks for nothing it can't send: both addresses' limits and two of the day's emails come first", async () => {
+    const { call, signIn, inbox, clock, store } = setup({ mailDailyLimit: 30 });
+    const token = await signIn("old@example.com");
+    clock.now += 15 * 60_000;
+    for (let i = 0; i < 3; i++) await call("POST", "/code", { email: "new@example.com" });
+    const mails = inbox.mails().length;
+    expect((await call("POST", "/email/code", { email: "new@example.com", confirmCurrent: true }, token)).status).toBe(429);
+    expect(inbox.mails()).toHaveLength(mails);
+    // One email left today: not enough for two codes.
+    clock.now += 15 * 60_000;
+    const day = new Date(clock.now).toISOString().slice(0, 10);
+    while (store.mailsSent(day) < 29) store.countMail(day);
+    expect(await (await call("POST", "/email/code", { email: "new@example.com", confirmCurrent: true }, token)).json()).toMatchObject({ reason: "daily-limit" });
+    expect(inbox.mails()).toHaveLength(mails);
+  });
+
+  it("says an address is taken only after both codes were right", async () => {
+    const { call, signIn, inbox } = setup();
     await signIn("taken@example.com");
     const token = await signIn("me@example.com");
-    expect((await call("POST", "/email/code", { email: "taken@example.com" }, token)).status).toBe(202);
-    expect((await call("POST", "/email", { email: "taken@example.com", code: "000000" === lastCode() ? "000001" : "000000" }, token)).status).toBe(400);
-    expect(await (await call("POST", "/email", { email: "taken@example.com", code: lastCode() }, token)).json()).toMatchObject({ reason: "email-taken" });
+    expect((await call("POST", "/email/code", { email: "taken@example.com", confirmCurrent: true }, token)).status).toBe(202);
+    const [newCode, currentCode] = [codeTo(inbox, "taken@example.com"), codeTo(inbox, "me@example.com")];
+    expect((await call("POST", "/email", { email: "taken@example.com", code: other(newCode), currentCode }, token)).status).toBe(400);
+    expect((await call("POST", "/email", { email: "taken@example.com", code: newCode, currentCode: other(currentCode) }, token)).status).toBe(400);
+    expect(await (await call("POST", "/email", { email: "taken@example.com", code: newCode, currentCode }, token)).json()).toMatchObject({ reason: "email-taken" });
   });
 
   it("does not take a sign-in code as a change or delete code", async () => {
-    const { call, signIn, lastCode } = setup();
+    const { call, signIn, lastCode, clock } = setup();
     const token = await signIn("me@example.com");
+    clock.now += 15 * 60_000;
     await call("POST", "/code", { email: "other@example.com" });
-    expect((await call("POST", "/email", { email: "other@example.com", code: lastCode() }, token)).status).toBe(400);
+    const newCode = lastCode();
     await call("POST", "/code", { email: "me@example.com" });
+    expect((await call("POST", "/email", { email: "other@example.com", code: newCode, currentCode: lastCode() }, token)).status).toBe(400);
     expect((await call("POST", "/delete", { code: lastCode() }, token)).status).toBe(400);
   });
 
@@ -472,13 +551,22 @@ describe("Discord login", () => {
     expect(await (await call("POST", "/discord/code", {}, token)).json()).toMatchObject({ reason: "daily-limit" });
   });
 
-  it("adds an email to a Discord-only account with a code, and sends no change notice to a missing address", async () => {
+  it("adds an email to a Discord-only account with a code and a fresh Discord sign-in, and sends no change notice to a missing address", async () => {
     const { call, inbox, lastCode } = setupDiscord();
     const { ticket } = (await (await call("POST", "/discord/sign-in", { code: "codewellbrained", verifier: VERIFIER })).json()) as { ticket: string };
     const { token } = (await (await call("POST", "/discord/create", { ticket })).json()) as { token: string };
-    await call("POST", "/email/code", { email: "me@example.com" }, token);
-    expect(await (await call("POST", "/email", { email: "me@example.com", code: lastCode() }, token)).json()).toMatchObject({ account: { email: "me@example.com", discord: { name: "alex" } } });
+    const laptop = ((await (await call("POST", "/discord/sign-in", { code: "codewellbrained", verifier: VERIFIER })).json()) as { token: string }).token;
+    expect(await (await call("POST", "/email/code", { email: "me@example.com", confirmCurrent: true }, token)).json()).toEqual({ status: "sent", current: "discord" });
     expect(inbox.mails()).toHaveLength(1);
+    const code = lastCode();
+    expect(await (await call("POST", "/email", { email: "me@example.com", code }, token)).json()).toMatchObject({ reason: "invalid" });
+    expect(await (await call("POST", "/email", { email: "me@example.com", code, discord: { code: "codeother000", verifier: VERIFIER } }, token)).json()).toMatchObject({ reason: "discord-mismatch" });
+    expect(await (await call("POST", "/email", { email: "me@example.com", code, discord: { code: "codewellbrained", verifier: VERIFIER } }, token)).json()).toMatchObject({
+      account: { email: "me@example.com", discord: { name: "alex" } },
+    });
+    expect(inbox.mails()).toHaveLength(1);
+    expect((await call("GET", "", undefined, laptop)).status).toBe(401);
+    expect((await call("GET", "", undefined, token)).status).toBe(200);
   });
 
   it("deletes a Discord-only account by a fresh Discord sign-in with its own login", async () => {

@@ -2795,7 +2795,7 @@ export class Host {
       "account-sign-out-device": (action) => this.account.signOutDevice(action.deviceId),
       "account-rename-device": (action) => this.account.renameDevice(action.deviceId, action.name),
       "account-email-code": (action) => this.account.sendEmailCode(action.email),
-      "account-change-email": (action) => this.account.changeEmail(action.code),
+      "account-change-email": (action) => this.account.changeEmail(action.code, action.currentCode),
       "account-delete-code": () => this.account.sendDeleteCode(),
       "account-delete": async (action) => {
         await this.account.deleteAccount(action.code);

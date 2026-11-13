@@ -524,7 +524,8 @@ export function hostActionTable(c: HostChecks) {
     "account-sign-out-device": { deviceId },
     "account-rename-device": { deviceId, name: named(40) },
     "account-email-code": { email: text(254) },
-    "account-change-email": { code },
+    /** The code sent to the new address, and the one sent to the current address when the step asks for it. */
+    "account-change-email": { code, currentCode: optional(code) },
     "account-delete-code": {},
     "account-delete": { code },
     /** Discord login in the browser: sign in (or create), connect to the signed-in account, disconnect. */

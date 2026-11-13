@@ -3,7 +3,7 @@ import { readFile, rm } from "node:fs/promises";
 import { apiReason, type ApiReason } from "@tavora/module-schema";
 import { linkRequest, publishSignature, publishZip, type Published } from "@tavora/pack";
 import { assertNever } from "../shared/assert-never";
-import type { AccountDevice, AccountPending, AccountPrefix, AccountPublishToken, AccountView, DeviceOs, KeyRequestView, PrefixState } from "../shared/host-api";
+import type { AccountDevice, AccountPending, AccountPrefix, AccountPublishToken, AccountView, ChangeEmailProof, DeviceOs, KeyRequestView, PrefixState } from "../shared/host-api";
 import type { Language, MessageKey } from "../shared/i18n";
 import { isIdPrefix } from "../shared/id-prefix";
 import type { Encryptor } from "./discord-store";
@@ -132,6 +132,7 @@ const REASONS: Partial<Record<ApiReason, MessageKey>> = {
   "no-discord": "account.error.noDiscord",
   "bad-email": "account.error.badEmail",
   "wrong-code": "account.error.wrongCode",
+  "wrong-current-code": "account.error.wrongCurrentCode",
   "mail-failed": "account.error.mailFailed",
   unavailable: "account.error.unavailable",
   "email-taken": "account.error.emailTaken",
@@ -252,7 +253,7 @@ function pendingView(pending: Pending | null): AccountPending | null {
     case "discord-create":
       return { kind: pending.kind, name: pending.name };
     case "change-email":
-      return { kind: pending.kind, email: pending.email };
+      return { kind: pending.kind, email: pending.email, proof: pending.proof };
     case "remove-email":
     case "connect-discord":
     case "remove-discord":
@@ -715,20 +716,31 @@ export class AccountClient {
     await this.refresh();
   }
 
+  /**
+   * Changing the email sends a code to the new address and one to the current address; an account without an address
+   * proves itself with a fresh Discord sign-in instead (decided 2026-11-13). The service's answer says which; a service
+   * from before that answers neither and asks only for the new address's code.
+   */
   async sendEmailCode(email: string): Promise<void> {
     this.ensure(true);
     const address = email.trim();
-    await this.call("POST", "/email/code", { email: address, language: this.options.language() }, true);
-    this.pending = { kind: "change-email", email: address };
+    const answer = await this.call("POST", "/email/code", { email: address, confirmCurrent: true, language: this.options.language() }, true);
+    const proof: ChangeEmailProof = answer.current === "email" ? "code" : answer.current === "discord" ? "discord" : "none";
+    this.pending = { kind: "change-email", email: address, proof };
     this.changed();
   }
 
-  async changeEmail(code: string): Promise<void> {
+  /** The new address's code, and the current address's code or a fresh Discord sign-in, as the step asks. */
+  async changeEmail(code: string, currentCode?: string): Promise<void> {
     const pending = this.pending;
     if (pending?.kind !== "change-email" || !this.saved) throw new UserError("account.error.noCode");
-    const answer = await this.call("POST", "/email", { email: pending.email, code, language: this.options.language() }, true);
+    if (pending.proof === "code" && !currentCode) throw new UserError("account.error.wrongCurrentCode");
+    const proof = pending.proof === "code" ? { currentCode } : pending.proof === "discord" ? { discord: await this.discord() } : {};
+    const answer = await this.call("POST", "/email", { email: pending.email, code, ...proof, language: this.options.language() }, true);
     this.pending = null;
     await this.updated({ account: { email: pending.email, ...(answer.account as Record<string, unknown> | undefined) } });
+    // Every other device was signed out by the change.
+    await this.refresh().catch(() => undefined);
   }
 
   async sendDeleteCode(): Promise<void> {

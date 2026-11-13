@@ -96,18 +96,40 @@ export function maskEmail(email: string): string {
   return `${email.slice(0, 1)}•••${email.slice(at)}`;
 }
 
+/**
+ * Sent to the account's current address when it is asked to move to another (decided 2026-11-13): changing the
+ * address needs this code as well as the one sent to the new address, so a sign-in alone can't move the account.
+ */
+export function confirmEmailChangeMail(to: string, newEmail: string, code: string, language: MailLanguage): Mail {
+  return language === "de"
+    ? {
+        to,
+        subject: "Bestätige die Änderung deiner E-Mail bei Tavora",
+        text:
+          `Hier ist dein Code, um dein Tavora-Konto von dieser Adresse auf ${maskEmail(newEmail)} umzustellen:\n\n    ${code}\n\n` +
+          "Er gilt 10 Minuten. Wenn du das nicht warst, gib den Code nicht weiter und melde deine anderen Geräte ab: Tavora > Profil > Konto > Geräte.\n\nTavora\n",
+      }
+    : {
+        to,
+        subject: "Confirm changing your email for Tavora",
+        text:
+          `Here is your code to move your Tavora account from this address to ${maskEmail(newEmail)}:\n\n    ${code}\n\n` +
+          "It works for 10 minutes. If this wasn't you, don't share the code, and sign your other devices out: Tavora > Profile > Account > Devices.\n\nTavora\n",
+      };
+}
+
 /** Sent to the old address after the email of an account was changed. */
 export function emailChangedMail(to: string, newEmail: string, language: MailLanguage): Mail {
   return language === "de"
     ? {
         to,
         subject: "Die E-Mail deines Tavora-Kontos wurde geändert",
-        text: `Dein Tavora-Konto verwendet jetzt ${maskEmail(newEmail)} statt dieser Adresse.\n\nWenn du das nicht warst, schreib uns an tavora.app@gmail.com.\n\nTavora\n`,
+        text: `Dein Tavora-Konto verwendet jetzt ${maskEmail(newEmail)} statt dieser Adresse. Alle anderen Geräte wurden abgemeldet.\n\nWenn du das nicht warst, schreib uns an tavora.app@gmail.com.\n\nTavora\n`,
       }
     : {
         to,
         subject: "The email of your Tavora account was changed",
-        text: `Your Tavora account now uses ${maskEmail(newEmail)} instead of this address.\n\nIf this was not you, write to tavora.app@gmail.com.\n\nTavora\n`,
+        text: `Your Tavora account now uses ${maskEmail(newEmail)} instead of this address. Every other device was signed out.\n\nIf this was not you, write to tavora.app@gmail.com.\n\nTavora\n`,
       };
 }
 
