@@ -936,6 +936,7 @@ export const en = {
   "addGame.title": "Add a game",
   "addGame.search": "Add a game…",
   "addGame.nothingOnPc": "No installed games found. Search above to add one.",
+  "addGame.allAdded": "You've added every game on this PC. Search above for more.",
   "addGame.loadingPc": "Looking for games on this PC…",
   "addGame.lately": "Played lately",
   "addGame.morePc": "More on this PC",
