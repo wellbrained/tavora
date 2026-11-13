@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.55",
+    date: "2026-11-13",
+    title: "Your private key stays home",
+    notes: [
+      "Publish and Save as zip stop when your module folder holds a private key, and tell you which file to move out.",
+    ],
+    prs: [
+      { number: 780, title: "Stop packing private keys into module zips" },
+    ],
+    tags: ["catalog", "modules", "privacy", "publishing", "service", "website"],
+  },
+  {
     version: "0.24.54",
     date: "2026-11-13",
     title: "Safer Browser when you leave a local page",
