@@ -26,7 +26,7 @@ let current: Data | undefined;
 // The host made these; they are checked again here, so nothing but a colour or a base64 data: URL reaches the styles.
 const HEX = /^#[0-9a-f]{6}$/i, FRAME = /^data:image\/(?:png|webp);base64,[A-Za-z0-9+/]+={0,2}$/, FONT = /^data:font\/woff2;base64,[A-Za-z0-9+/]+={0,2}$/;
 // A stat's icon, read in by the host (main/tooltip-images.ts) and checked again before it reaches a style.
-const ICON = /^data:image\/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/]+={0,2}$/;
+const ICON = /^data:image\/(?:png|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
 const SKIN_VARS = { surface: "--skin-surface", text: "--skin-text", muted: "--skin-muted", accent: "--skin-accent", box: "--skin-box", boxText: "--skin-box-text", boxBorder: "--skin-box-border" } as const;
 let face: FontFace | undefined, faceSource: string | undefined;
 // FontFaceSet is a set of FontFaces; the DOM types here leave out its add and delete.

@@ -100,7 +100,7 @@ then shows a third column in the accent colour, with `content.perHeading` ('Per 
 with `per` may have an empty `value`. Without any `per` the stats keep two columns. On a Tavora without
 `sdk.supports("ui.tooltip.per")` the SDK puts `per` into the value ("12 · +3") and leaves the heading out. A stat can
 have a small `icon` before its label (a heart for HP, a sword for damage): a `dist/` path like `image`, up to 64 KB,
-drawn in the label's colour from its shape alone (a transparent PNG or WebP), the label's height; the labels line up
+but only a PNG or WebP, drawn in the label's colour from its shape alone (a transparent background), the label's height; the labels line up
 when only some stats have one. On a Tavora without `sdk.supports("ui.tooltip.propertyIcon")` the SDK leaves it out. A module can dress its cards in a skin of its own, defined once per name with
 `ui.tooltip.defineSkin` and picked per card with `content.skin`: a nine-slice frame picture, colours (`#rrggbb`), a WOFF2
 font for the title and the effect box only, hard pixels and a title in capitals. Tavora checks the files (only from your

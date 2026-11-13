@@ -137,7 +137,7 @@ describe("tooltip preload", () => {
     });
 
     it("never puts anything but a checked picture into an icon's style", () => {
-        const stats = render({ ...card, properties: [{ label: "A", value: "1", icon: 'data:image/png;base64,AA=="),url(https://example.org/x' }, { label: "B", value: "2", icon: "dist/icons/heart.png" }, { label: "C", value: "3", icon: "data:image/svg+xml;base64,PHN2Zz4=" }] }).querySelector(".stats")!;
+        const stats = render({ ...card, properties: [{ label: "A", value: "1", icon: 'data:image/png;base64,AA=="),url(https://example.org/x' }, { label: "B", value: "2", icon: "dist/icons/heart.png" }, { label: "C", value: "3", icon: "data:image/svg+xml;base64,PHN2Zz4=" }, { label: "D", value: "4", icon: "data:image/jpeg;base64,/9j/4AA=" }, { label: "E", value: "5", icon: "data:image/gif;base64,R0lGODlh" }] }).querySelector(".stats")!;
         for (const icon of Array.from(stats.querySelectorAll<HTMLElement>(".stat-icon"))) {
             expect(icon.classList.contains("drawn")).toBe(false);
             expect(icon.getAttribute("style")).toBeNull();

@@ -22,10 +22,15 @@ function effect(v: unknown): NonNullable<TooltipContent["effect"]> {
         fail();
     return runs;
 }
-/** A raster picture in the module's own bundle (`dist/…`): the item picture, or a stat's icon. Read in later (tooltip-images.ts). */
-function bundleImage(v: unknown): string {
+/**
+ * A raster picture in the module's own bundle (`dist/…`), read in later (tooltip-images.ts): the item picture (PNG,
+ * JPEG, WebP or GIF), or a stat's icon, which is a mask and so only PNG or WebP (a JPEG would be a filled square, a GIF
+ * would animate).
+ */
+const IMAGE_PATH = /^dist\/(?:[a-zA-Z0-9_. -]+\/)*[a-zA-Z0-9_. -]+\.(?:png|jpe?g|webp|gif)$/i, ICON_PATH = /\.(?:png|webp)$/i;
+function bundleImage(v: unknown, icon = false): string {
     const image = text(v, 500);
-    if (!/^dist\/(?:[a-zA-Z0-9_. -]+\/)*[a-zA-Z0-9_. -]+\.(?:png|jpe?g|webp|gif)$/i.test(image) || image.split("/").includes(".."))
+    if (!IMAGE_PATH.test(image) || (icon && !ICON_PATH.test(image)) || image.split("/").includes(".."))
         fail();
     return image;
 }
@@ -88,7 +93,7 @@ export function checkTooltip(v: unknown): TooltipRequest {
             fail();
         const row: NonNullable<TooltipContent["properties"]>[number] = p.per === undefined ? property({ label: p.label, value: p.value }) : { label: text(p.label, 100), value: p.value as string, per: text(p.per, 40) };
         if (p.icon !== undefined)
-            row.icon = bundleImage(p.icon);
+            row.icon = bundleImage(p.icon, true);
         return row;
     };
     if (c.properties !== undefined)

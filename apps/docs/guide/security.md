@@ -425,7 +425,7 @@ requirements and modifier rows, plus a raster asset inside the calling module's
 bundle. The look is the host's own: neutral in Tavora's theme colours, or the fixed `poe` look a module can pick
 by name. No HTML, module styles, links, scripts, remote images or arbitrary file
 paths are accepted. Image reads stay inside that bundle and are limited to 512 KB. An item card's stats may each name
-a small icon by the same path rules, read the same way and limited to 64 KB; the page shows it only as a mask in the
+a small icon by the same path rules (PNG or WebP only), read the same way and limited to 64 KB; the page shows it only as a mask in the
 label's colour, and only as a `data:` URL it checks again.
 
 An item card may wear a skin the module defined (`ui.tooltip.defineSkin`). That is the one way a module's own colours,
