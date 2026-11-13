@@ -4,7 +4,7 @@ import { appendFile, mkdtemp, readdir, readFile, rm, stat, writeFile } from "nod
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { isModuleId, validateChangelog, validateManifest } from "@tavora/module-schema";
-import { collectFiles, fingerprint, packModule, PackError, readZip, SIGNATURE_FILE, type Published } from "@tavora/pack";
+import { collectFiles, fingerprint, packModule, PackError, PrivateKeyError, readZip, SIGNATURE_FILE, type Published } from "@tavora/pack";
 import { assertNever } from "../shared/assert-never";
 import type { OfficialBuildStep, OfficialPublishOverview, OfficialPublishPreview, OfficialPublishRow, OfficialPublishRun, OfficialUploadStep } from "../shared/host-api";
 import { compareModuleVersions } from "../shared/module-version";
@@ -407,6 +407,7 @@ export class OfficialPublisher {
 
       step("pack");
       const { files } = await collectFiles(moduleDir).catch((error: unknown) => {
+        if (error instanceof PrivateKeyError) throw new UserError("publish.error.privateKey", { file: error.file });
         if (error instanceof PackError) throw new UserError("officialPublish.error.pack", { message: error.message });
         throw error;
       });
@@ -485,6 +486,7 @@ export class OfficialPublisher {
     try {
       step("sign");
       const { zip } = await packModule(prepared.moduleDir, key).catch((error: unknown) => {
+        if (error instanceof PrivateKeyError) throw new UserError("publish.error.privateKey", { file: error.file });
         if (error instanceof PackError) throw new UserError("officialPublish.error.pack", { message: error.message });
         throw error;
       });

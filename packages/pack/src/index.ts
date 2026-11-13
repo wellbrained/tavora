@@ -1,7 +1,7 @@
 export { createKeyFile, loadExistingKey } from "./keys.ts";
 export { cleanLinkCode, DEFAULT_API_URL, LINK_STATEMENT, LinkError, linkKey, linkRequest } from "./link.ts";
 export { collectFiles, MANIFEST_FILE, packModule, PackError, PrivateKeyError, type PackOptions } from "./pack.ts";
-export { hasKeyExtension, holdsPrivateKey, PRIVATE_KEY_EXTENSIONS, privateKeyFile, privateKeyMessage } from "./private-keys.ts";
+export { privateKeyFile } from "./private-keys.ts";
 export { CATALOG_RULES_URL, PUBLISH_STATEMENT, PublishError, publishSignature, publishZip, withdrawVersion, type Published } from "./publish.ts";
 export { fileHashes, fingerprint, publicKeyFromRaw, rawPublicKey, SIGNATURE_FILE, signatureFile, signedBytes, signedHash, signFiles, verifyFiles, type PackageSignature, type VerifyResult } from "./signature.ts";
 export { asSigner, keySigner, type Signer } from "./signer.ts";

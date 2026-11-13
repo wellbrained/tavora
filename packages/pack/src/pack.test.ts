@@ -114,6 +114,11 @@ describe("packModule and private keys", () => {
     // A legacy encrypted key has headers before its body.
     const encrypted = `-----BEGIN RSA PRIVATE KEY-----\nProc-Type: 4,ENCRYPTED\nDEK-Info: AES-128-CBC,0123456789ABCDEF0123456789ABCDEF\n\n${"A".repeat(64)}\n-----END RSA PRIVATE KEY-----`;
     await expect(packModule(await rootModule({ "data.bin": encrypted }), key())).rejects.toThrow(PrivateKeyError);
+    // On one line, as in a .env file or a CI variable, and with Windows line ends.
+    const body = "MC4CAQAwBQYDK2VwBCIEIBn0cXXkq6oAQx3sF0kzM1v7Lw0aZ9vX4pOa2c3nRk1y";
+    await expect(packModule(await rootModule({ "app.env": `KEY="-----BEGIN PRIVATE KEY----- ${body} -----END PRIVATE KEY-----"` }), key())).rejects.toThrow(PrivateKeyError);
+    await expect(packModule(await rootModule({ "app.env": `KEY=-----BEGIN PRIVATE KEY-----${body}-----END PRIVATE KEY-----` }), key())).rejects.toThrow(PrivateKeyError);
+    await expect(packModule(await rootModule({ "crlf.txt": pem("PRIVATE KEY").replaceAll("\n", "\r\n") }), key())).rejects.toThrow(PrivateKeyError);
     await expect(packModule(await rootModule({ "k": "PuTTY-User-Key-File-3: ssh-ed25519\nEncryption: none\n" }), key())).rejects.toThrow(PrivateKeyError);
   });
 
@@ -135,6 +140,7 @@ describe("packModule and private keys", () => {
     const file = (name: string, body: string): ZipFile => ({ name, data: Buffer.from(body) });
     expect(privateKeyFile([file("a.js", "x"), file("b.txt", pem("EC PRIVATE KEY"))])).toBe("b.txt");
     expect(privateKeyFile([file("a.js", "x"), file("Key.PEM", "")])).toBe("Key.PEM");
+    expect(privateKeyFile([file("a.js", "x"), file("dist/.p12", "")])).toBe("dist/.p12");
     expect(privateKeyFile([file("a.js", "x"), file("key.pub", pem("PUBLIC KEY"))])).toBeNull();
   });
 });

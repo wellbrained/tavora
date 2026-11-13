@@ -64,8 +64,8 @@ export async function collectFiles(dir: string, options: PackOptions = {}): Prom
   for (const entry of entries) if (!names.has(entry)) throw new PackError(`the entry page ${entry} is missing (is the module built?)`);
   names.delete(SIGNATURE_FILE);
 
-  const keyFile = options.keyFile === undefined ? null : await realPath(path.resolve(options.keyFile));
-  const realDir = await realPath(dir);
+  const keyFile = options.keyFile === undefined ? null : await realOrGiven(path.resolve(options.keyFile));
+  const realDir = await realOrGiven(dir);
   const files: ZipFile[] = [];
   let total = 0;
   for (const name of [...names].sort()) {
@@ -86,7 +86,7 @@ export async function collectFiles(dir: string, options: PackOptions = {}): Prom
 }
 
 /** The path with links resolved, or as given when it isn't there. */
-async function realPath(file: string): Promise<string> {
+async function realOrGiven(file: string): Promise<string> {
   return realpath(file).catch(() => file);
 }
 

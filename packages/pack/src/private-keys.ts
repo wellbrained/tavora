@@ -1,10 +1,8 @@
+import { KEY_EXTENSIONS } from "@tavora/module-schema";
 import type { ZipFile } from "./zip.ts";
 
-/**
- * Extensions of private key files. A module has no use for one, so a module zip never holds one: the packer stops and
- * the catalog refuses the zip (decided 2026-11-13). The same list as module-schema's KEY_EXTENSIONS for folder access.
- */
-export const PRIVATE_KEY_EXTENSIONS: readonly string[] = ["pem", "key", "p12", "pfx", "ppk"];
+// A module has no use for a private key, so a module zip never holds one: the packer stops and the catalog refuses the
+// zip (decided 2026-11-13). Key files are told by module-schema's KEY_EXTENSIONS, the list folder access uses too.
 
 /** Stops a pack: a file in the module folder is, or holds, a private key. */
 export function privateKeyMessage(file: string): string {
@@ -24,7 +22,8 @@ const AFTER_HIT = /^(?: BLOCK)?-----/;
 export function hasKeyExtension(name: string): boolean {
   const base = name.slice(name.lastIndexOf("/") + 1);
   const dot = base.lastIndexOf(".");
-  return dot > 0 && PRIVATE_KEY_EXTENSIONS.includes(base.slice(dot + 1).toLowerCase());
+  // ".pem" counts too: an entry page's folder goes in with its dot files.
+  return dot !== -1 && KEY_EXTENSIONS.includes(base.slice(dot + 1).toLowerCase());
 }
 
 /**
@@ -46,11 +45,13 @@ export function holdsPrivateKey(data: Buffer): boolean {
   return false;
 }
 
-/** After a key header: optional "Name: value" header lines and blank lines, then a line of base64. */
+/**
+ * After a key header: base64 on the header's own line (a key written on one line, as in a .env file), or optional
+ * "Name: value" header lines and blank lines, then a line of base64.
+ */
 function hasBody(text: string): boolean {
   const lines = text.replace(/\\r\\n|\\n|\\r/g, "\n").split(/\r?\n|\r/);
-  // The header line's own end leaves an empty first entry.
-  for (const line of lines.slice(1, 12)) {
+  for (const line of lines.slice(0, 12)) {
     const trimmed = line.trim();
     if (trimmed === "" || /^[A-Za-z][\w-]*: /.test(trimmed)) continue;
     return /^[A-Za-z0-9+/]{40,}/.test(trimmed);
