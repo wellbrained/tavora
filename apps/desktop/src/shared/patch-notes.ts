@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.53",
+    date: "2026-11-13",
+    title: "Steadier app updates",
+    notes: [
+      "A running update download no longer shows as failed by mistake.",
+      "After a download fails, a newer version still downloads within minutes.",
+    ],
+    prs: [
+      { number: 776, title: "Updater: a failed check leaves a download alone, newer versions found after a failed download" },
+    ],
+    tags: ["updates"],
+  },
+  {
     version: "0.24.52",
     date: "2026-11-13",
     title: "Safer folder permissions",
