@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.39",
+    date: "2026-11-13",
+    title: "Item cards: room for how stats grow",
+    notes: [
+      "What a stat gains per level stays on one line (\"+4.8 / +5.8\") instead of breaking in two.",
+      "On a card inside a panel, a long line under the stats wraps inside the card instead of running past its edge, in the card's text colour like the hover card.",
+    ],
+    prs: [
+      { number: 757, title: "Item cards: the growth column keeps its values whole; a row's text wraps" },
+    ],
+    tags: ["ui-kit"],
+  },
+  {
     version: "0.24.38",
     date: "2026-11-13",
     title: "Name a personal workspace right in the rail",
