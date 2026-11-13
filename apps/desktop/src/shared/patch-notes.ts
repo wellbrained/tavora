@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.45",
+    date: "2026-11-13",
+    title: "Tab between Game and Personal",
+    notes: [
+      "In the Add dialog, Tab switches between Game and Personal.",
+    ],
+    prs: [
+      { number: 765, title: "Add dialog: Tab switches between Game and Personal" },
+    ],
+    tags: ["games"],
+  },
+  {
     version: "0.24.44",
     date: "2026-11-13",
     title: "Folders for more games",
