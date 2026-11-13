@@ -309,8 +309,8 @@ The Browser panel shows any website, so here the attacker is any page:
 - Each workspace gets its own browser session, and a page cannot read module bundles. Only sites you sign in to for all workspaces open in the shared one, also when another site redirects there.
 - Only `http` and `https` pages open. `file:`, `tavora-module:` and other app protocols are refused, including through redirects.
 - No new windows open. A clicked link that asks for one opens as one new tab.
-- Downloads never write a file. Permissions are denied, except writing to the clipboard and fullscreen inside the panel.
-- A public page cannot reach the user's PC or local network: requests to loopback, private and link-local addresses, local name endings and common router names are cancelled.
+- Downloads never write a file. Permissions are denied, except writing to the clipboard and fullscreen inside the panel. No device pairs over Bluetooth.
+- A public page cannot reach the user's PC or local network: requests to loopback, private and link-local addresses, local name endings and common router names are cancelled. This holds from the moment the panel starts going to a public page, also when it leaves a local one, not only once the page has loaded.
 - Bad certificates are refused, with no way to click through. The toolbar shows the true address, with non-Latin labels shown as punycode.
 - A site that asks for a client certificate gets none, so no page learns who you are from one.
 - Ads and trackers are blocked in the main process, with EasyList and EasyPrivacy rules. No script is added to pages.

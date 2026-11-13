@@ -75,6 +75,16 @@ export function adBlocker(engine: FiltersEngine): AdBlocker {
 }
 
 /**
+ * The address a panel's requests are judged against. It is the page that
+ * committed, except while the panel is on its way to a public page. Then it is
+ * that page, because its first requests can come before it commits, and they
+ * must not count as the local page the panel showed before.
+ */
+export function judgedTopUrl(committedUrl: string | null, pendingUrl: string | null): string | null {
+  return pendingUrl !== null && !isPrivateUrl(pendingUrl) ? pendingUrl : committedUrl;
+}
+
+/**
  * Decides one request. The page the user asked for (the main frame) is
  * never blocked as an ad and never for being local: the address bar and
  * the navigation checks in browser-view.ts decide those.

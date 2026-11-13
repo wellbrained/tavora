@@ -3,7 +3,7 @@
 // UI, and the page is only ever told where to go by the main process.
 import { session, WebContentsView, type Session, type WebContents } from "electron";
 import type { BrowserError, BrowserState, InstanceStatus } from "../shared/host-api";
-import { judgeRequest, type AdBlocker } from "./browser-filter";
+import { judgedTopUrl, judgeRequest, type AdBlocker } from "./browser-filter";
 import { addressToUrl, displayHost, isPrivateUrl, isWebUrl, parseUrl, siteOfUrl } from "./browser-url";
 import { BROWSER_MODULE_ID } from "./registry";
 
@@ -70,6 +70,8 @@ export function browserSession(partition: string, hooks: BrowserSessionHooks): S
   ses.setPermissionRequestHandler((_contents, permission, callback) => callback(ALLOWED_PERMISSIONS.has(permission)));
   ses.setPermissionCheckHandler((_contents, permission) => ALLOWED_PERMISSIONS.has(permission));
   ses.setDevicePermissionHandler(() => false);
+  // Electron asks this on Windows and Linux only.
+  ses.setBluetoothPairingHandler?.((_details, callback) => callback({ confirmed: false }));
   ses.setDisplayMediaRequestHandler((_request, callback) => callback({}));
   ses.on("select-hid-device", (event, _details, callback) => {
     event.preventDefault();
@@ -125,9 +127,9 @@ export class BrowserPanel {
   private kind: BrowserKind = "workspace";
   private bounds: { x: number; y: number; width: number; height: number } | null = null;
   private visible = false;
-  /** The page's address once it committed; requests of the page are judged against it. */
+  /** The page's address once it committed; requests of the page are judged against it, unless a public page is on its way (hopUrl). */
   private committedUrl: string | null = null;
-  /** The address of the current hop of a navigation, to judge where a redirect goes. */
+  /** Where the main frame is going (the current hop of a navigation) until it commits or stops. Redirects are judged from it, and the page's requests too while it is public. */
   private hopUrl: string | null = null;
   /** The address last asked for: shown until a page commits, and tried again by Reload when it failed. */
   private requestedUrl: string | null = null;
@@ -170,7 +172,7 @@ export class BrowserPanel {
 
   /** The address requests of this panel's page are judged against. */
   get topUrl(): string | null {
-    return this.committedUrl;
+    return judgedTopUrl(this.committedUrl, this.hopUrl);
   }
 
   private createView(): WebContentsView {
@@ -232,10 +234,10 @@ export class BrowserPanel {
       if (!url || !["http:", "https:", "about:", "data:", "blob:"].includes(url.protocol)) event.preventDefault();
     });
     contents.on("did-start-navigation", (event) => {
-      if (!event.isMainFrame || event.isSameDocument) return;
+      if (!current() || !event.isMainFrame || event.isSameDocument) return;
       this.hopUrl = event.url;
       // Counted from here: the new page's first requests can be blocked before did-navigate arrives.
-      if (current()) this.blocked = 0;
+      this.blocked = 0;
     });
     contents.on("will-redirect", (event) => {
       if (!event.isMainFrame) return;
@@ -250,12 +252,13 @@ export class BrowserPanel {
         this.open(event.url, kind);
         return;
       }
-      this.hopUrl = event.url;
+      if (current()) this.hopUrl = event.url;
     });
     contents.on("did-navigate", (_event, url) => {
       if (!current()) return;
       this.redirectSwitches = 0;
       this.committedUrl = url;
+      this.hopUrl = null;
       this.error = null;
       this.requestedUrl = null;
       this.applyVisibility();
@@ -268,9 +271,17 @@ export class BrowserPanel {
       if (isWebUrl(url)) this.options.onAddress(url);
       this.changed();
     });
+    // A navigation that ends without a new page (stopped, refused, a download, a 204) reports no failure, but loading
+    // stops: nothing is on its way any more.
+    contents.on("did-stop-loading", () => {
+      if (current()) this.hopUrl = null;
+    });
     contents.on("did-fail-load", (_event, errorCode, description, url, isMainFrame) => {
+      if (!current() || !isMainFrame) return;
+      // Only the navigation under way ends here: one that replaced it may have started already.
+      if (url === this.hopUrl) this.hopUrl = null;
       // -3 is ERR_ABORTED: a navigation replaced by another, or one we refused.
-      if (!current() || !isMainFrame || errorCode === -3) return;
+      if (errorCode === -3) return;
       this.failed(url, loadError(errorCode, description));
     });
     for (const name of ["did-start-loading", "did-stop-loading", "page-title-updated", "audio-state-changed"] as const) {
