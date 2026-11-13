@@ -1522,6 +1522,8 @@ export const en = {
   "search.description": "Find a workspace, module, layout, action or setting.",
   "search.placeholder": "Search workspaces, modules, layouts and settings",
   "search.results": "Results",
+  "search.count.one": "1 result",
+  "search.count.other": "{count} results",
   "search.empty": "Nothing matches \"{query}\".",
   "search.hint.move": "to move",
   "search.hint.open": "to open",

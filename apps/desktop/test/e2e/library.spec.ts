@@ -511,6 +511,43 @@ test("the rail remembers whether it is expanded and how wide it is", async () =>
   await again.app.close();
 });
 
+test("the rail's edge: Escape takes a drag back, the keys and a double-click size it", async () => {
+  const { app, page } = await launch();
+  try {
+    const rail = page.getByTestId("rail");
+    const width = async () => (await rail.boundingBox())!.width;
+    await page.getByTestId("rail-toggle").click();
+    await expect(rail).toHaveAttribute("data-expanded", "true");
+    const before = await width();
+
+    // Drag wider, then Escape before letting go: the rail goes back and nothing is saved.
+    const handle = (await page.getByTestId("rail-resize").boundingBox())!;
+    const x = handle.x + handle.width / 2;
+    const y = handle.y + handle.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + 60, y, { steps: 5 });
+    await expect.poll(width).toBe(before + 60);
+    await page.keyboard.press("Escape");
+    await expect.poll(width).toBe(before);
+    await page.mouse.up();
+    await expect.poll(width).toBe(before);
+
+    await page.getByTestId("rail-resize").focus();
+    await page.keyboard.press("End");
+    await expect.poll(width).toBe(420);
+    await page.keyboard.press("Home");
+    await expect.poll(width).toBe(200);
+    await page.keyboard.press("Shift+ArrowRight");
+    await expect.poll(width).toBe(264);
+
+    await page.getByTestId("rail-resize").dblclick();
+    await expect.poll(width).toBe(280);
+  } finally {
+    await app.close();
+  }
+});
+
 test("nothing in the rail moves up or down when it opens or closes", async () => {
   const { app, page } = await launch();
   try {

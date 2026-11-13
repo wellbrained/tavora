@@ -1524,6 +1524,8 @@ export const de: Record<keyof typeof en, string> = {
   "search.description": "Finde einen Arbeitsbereich, ein Modul, Layout, eine Aktion oder Einstellung.",
   "search.placeholder": "Arbeitsbereiche, Module, Layouts und Einstellungen durchsuchen",
   "search.results": "Ergebnisse",
+  "search.count.one": "1 Treffer",
+  "search.count.other": "{count} Treffer",
   "search.empty": "Nichts passt zu „{query}“.",
   "search.hint.move": "zum Bewegen",
   "search.hint.open": "zum Öffnen",

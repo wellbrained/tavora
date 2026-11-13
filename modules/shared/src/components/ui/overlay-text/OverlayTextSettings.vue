@@ -9,7 +9,7 @@ import { SettingsRow, SettingsSection } from "../module-settings"
 import { SegmentedControl } from "../segmented-control"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../select"
 import { Switch } from "../switch"
-import { uiLanguage, uiText } from "../text"
+import { uiLocale, uiText } from "../text"
 import { OVERLAY_TEXT_BOXES, OVERLAY_TEXT_PAUSES, OVERLAY_TEXT_SPEEDS, OVERLAY_TEXT_TOO_LONG, type OverlayTextBoxSettings } from "./plan"
 
 const props = defineProps<{
@@ -26,7 +26,7 @@ const text = computed(() => uiText.value)
 const NAMES = { grow: "otGrow", fixed: "otFixed", scroll: "otScroll", shrink: "otShrink", cut: "otCut", slow: "otSlow", normal: "otNormal", fast: "otFast" } as const
 const options = <T extends keyof typeof NAMES>(values: readonly T[], testid: string) => values.map((value) => ({ value, label: text.value[NAMES[value]], testid: `${testid}-${value}` }))
 
-const seconds = computed(() => new Intl.NumberFormat(uiLanguage.value === "de" ? "de-DE" : "en-GB", { maximumFractionDigits: 1 }))
+const seconds = computed(() => new Intl.NumberFormat(uiLocale.value, { maximumFractionDigits: 1 }))
 const pauseLabel = (value: number) => (value === 0 ? text.value.otPauseOff : seconds.value.format(value))
 
 const box = computed({ get: () => props.value.box, set: (box) => emit("change", { box }) })

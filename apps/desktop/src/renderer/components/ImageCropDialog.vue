@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Crop, Minus, Plus, Save } from "@lucide/vue";
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Slider } from "@tavora/official-ui/components/ui/slider";
 import { Dialog, DialogButton, DialogContent, DialogFooter, DialogHeader } from "@tavora/official-ui/components/ui/dialog";
@@ -86,15 +86,41 @@ function resize(side: number) {
   place(x + (old - s) / 2, y + (old - s) / 2, s);
 }
 
-type Drag =
-  | { kind: "move"; pointerId: number; x: number; y: number; from: { x: number; y: number } }
-  | { kind: "resize"; pointerId: number; centre: { x: number; y: number }; area: DOMRect };
+// `before` is the frame when the drag started: Escape, or a pointer the system takes away (pointercancel), puts it back.
+type Drag = { pointerId: number; before: { x: number; y: number; side: number } } & (
+  | { kind: "move"; x: number; y: number }
+  | { kind: "resize"; centre: { x: number; y: number }; area: DOMRect }
+);
 let drag: Drag | null = null;
+
+function startDrag(next: Drag) {
+  drag = next;
+  window.addEventListener("keydown", onDragEscape, true);
+}
+
+function endDrag(revert: boolean) {
+  if (drag && revert) frame.value = { ...drag.before };
+  drag = null;
+  window.removeEventListener("keydown", onDragEscape, true);
+}
+
+// While dragging, Escape takes the drag back instead of closing the dialog.
+function onDragEscape(event: KeyboardEvent) {
+  if (event.key !== "Escape") return;
+  event.preventDefault();
+  event.stopPropagation();
+  endDrag(true);
+}
+onBeforeUnmount(() => endDrag(false));
+// The dialog closing mid-drag (Cancel by keyboard, the picture taken away) ends the drag too.
+watch(open, (isOpen) => {
+  if (!isOpen) endDrag(true);
+});
 
 function onMoveStart(event: PointerEvent) {
   if (event.button !== 0 || !image.value) return;
   (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-  drag = { kind: "move", pointerId: event.pointerId, x: event.clientX, y: event.clientY, from: { x: frame.value.x, y: frame.value.y } };
+  startDrag({ kind: "move", pointerId: event.pointerId, x: event.clientX, y: event.clientY, before: { ...frame.value } });
 }
 
 function onResizeStart(event: PointerEvent) {
@@ -103,13 +129,13 @@ function onResizeStart(event: PointerEvent) {
   (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
   const { x, y, side } = frame.value;
   const area = (event.currentTarget as HTMLElement).closest("[data-crop-area]")!.getBoundingClientRect();
-  drag = { kind: "resize", pointerId: event.pointerId, centre: { x: x + side / 2, y: y + side / 2 }, area };
+  startDrag({ kind: "resize", pointerId: event.pointerId, centre: { x: x + side / 2, y: y + side / 2 }, area, before: { ...frame.value } });
 }
 
 function onPointerMove(event: PointerEvent) {
   if (drag?.pointerId !== event.pointerId) return;
   if (drag.kind === "move") {
-    place(drag.from.x + event.clientX - drag.x, drag.from.y + event.clientY - drag.y, frame.value.side);
+    place(drag.before.x + event.clientX - drag.x, drag.before.y + event.clientY - drag.y, frame.value.side);
   } else {
     // The handle sits on the circle's edge (or the square's corner), so the
     // pointer's distance from the centre is the radius (or half the side).
@@ -120,7 +146,11 @@ function onPointerMove(event: PointerEvent) {
 }
 
 function onPointerUp(event: PointerEvent) {
-  if (drag?.pointerId === event.pointerId) drag = null;
+  if (drag?.pointerId === event.pointerId) endDrag(false);
+}
+
+function onPointerCancel(event: PointerEvent) {
+  if (drag?.pointerId === event.pointerId) endDrag(true);
 }
 
 function onWheel(event: WheelEvent) {
@@ -176,7 +206,7 @@ function onOpenChange(value: boolean) {
         data-testid="crop-area"
         @pointermove="onPointerMove"
         @pointerup="onPointerUp"
-        @pointercancel="onPointerUp"
+        @pointercancel="onPointerCancel"
         @wheel.prevent="onWheel"
         @keydown="onKey"
       >

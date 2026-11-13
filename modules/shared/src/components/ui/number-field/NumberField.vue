@@ -6,11 +6,14 @@ import { Minus, Plus } from "@lucide/vue"
 import { NumberFieldDecrement, NumberFieldIncrement, NumberFieldInput, NumberFieldRoot } from "reka-ui"
 import type { HTMLAttributes } from "vue"
 import { cn } from "../../../lib/utils"
+import { uiLocale } from "../text"
 
 const props = withDefaults(defineProps<{
   min?: number
   max?: number
   step?: number
+  /** How the number is shown and read, such as `{ style: "percent" }`. It is typed and read in Tavora's language. */
+  formatOptions?: Intl.NumberFormatOptions
   /** Names the number for screen readers ("Quantity of Meat Wrap"). */
   label: string
   /** The buttons have no text; modules pass translated names. */
@@ -29,6 +32,8 @@ const model = defineModel<number>({ required: true })
     :min="min"
     :max="max"
     :step="step"
+    :locale="uiLocale"
+    :format-options="formatOptions"
     :disabled="disabled"
     :class="cn(
       'border-input dark:bg-input/10 focus-within:border-ring focus-within:ring-ring/50 inline-flex h-8 w-fit items-center overflow-hidden rounded-md border bg-transparent shadow-xs transition-[color,box-shadow] focus-within:ring-3 data-[disabled]:opacity-50',

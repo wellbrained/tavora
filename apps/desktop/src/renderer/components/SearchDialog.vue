@@ -3,7 +3,7 @@
 // run an action or find a setting. Arrow keys move, Enter runs, Escape
 // closes.
 import { Blocks, Home, LayoutPanelLeft, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings, SlidersHorizontal } from "@lucide/vue";
-import { computed, ref, shallowRef, watch, type Component } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, watch, type Component } from "vue";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import { useListNav } from "@/lib/list-nav";
@@ -59,6 +59,7 @@ watch([searchOpen, searchStart], ([open, start], [wasOpen]) => {
   if (open && !wasOpen) {
     query.value = start;
     active.value = 0;
+    resetHover();
   } else if (open && start) query.value += start;
   if (start) searchStart.value = "";
 });
@@ -251,8 +252,29 @@ const shown = computed<Group[]>(() => {
 });
 
 const flat = computed(() => shown.value.flatMap((group) => group.items));
-const { active, onKey } = useListNav({ count: () => flat.value.length, list, onEnter: () => flat.value[active.value]?.run() });
-watch(query, () => (active.value = 0));
+// New text starts at the top; games that arrive a moment later don't move the highlight off the row it is on.
+const { active, onKey, onHover, resetHover } = useListNav({
+  count: () => flat.value.length,
+  list,
+  onEnter: () => flat.value[active.value]?.run(),
+  track: { keys: () => flat.value.map((item) => item.id), resetOn: () => query.value },
+});
+
+// Screen readers hear how many results there are once typing pauses, not on every key.
+const RESULTS_DELAY_MS = 500;
+const resultsText = ref("");
+let resultsTimer: ReturnType<typeof setTimeout> | undefined;
+watch([() => flat.value.length, query], ([count, text]) => {
+  clearTimeout(resultsTimer);
+  if (!text.trim()) {
+    resultsText.value = "";
+    return;
+  }
+  resultsTimer = setTimeout(() => {
+    resultsText.value = count ? t("search.count", { count }) : t("search.empty", { query: text.trim() });
+  }, RESULTS_DELAY_MS);
+});
+onBeforeUnmount(() => clearTimeout(resultsTimer));
 
 const optionId = (item: Item) => `search-option-${item.id}`;
 const activeId = computed(() => {
@@ -292,7 +314,8 @@ const activeId = computed(() => {
         />
       </div>
 
-      <div id="search-results" ref="list" class="max-h-[min(420px,60vh)] overflow-y-auto p-2" role="listbox" :aria-label="t('search.results')">
+      <span class="sr-only" role="status" data-testid="search-count">{{ resultsText }}</span>
+      <div id="search-results" ref="list" @mouseleave="resetHover" class="max-h-[min(420px,60vh)] overflow-y-auto p-2" role="listbox" :aria-label="t('search.results')">
         <p v-if="!flat.length" class="text-muted-foreground px-3 py-6 text-center" data-testid="search-empty">{{ t("search.empty", { query: query.trim() }) }}</p>
         <div v-for="group in shown" :key="group.id" role="group" :aria-label="group.label" class="pb-1">
           <div class="text-muted-foreground px-3 pt-2 pb-1 text-xs font-medium" aria-hidden="true">{{ group.label }}</div>
@@ -304,7 +327,7 @@ const activeId = computed(() => {
             :aria-selected="flat[active] === item"
             :class="cn('flex h-10 cursor-pointer items-center gap-3 rounded-lg px-3', group.quiet && 'text-muted-foreground', flat[active] === item && 'bg-accent')"
             :data-testid="`search-${item.id}`"
-            @mousemove="active = flat.indexOf(item)"
+            @mousemove="onHover(flat.indexOf(item), $event)"
             @click="item.run()"
           >
             <WorkspaceIcon v-if="item.workspace" :workspace="item.workspace" :size="24" />

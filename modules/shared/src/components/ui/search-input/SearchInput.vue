@@ -4,6 +4,7 @@
 // Attributes (placeholder, aria-label, data-testid) go to the input; `class` sizes the whole field.
 import { Search, X } from "@lucide/vue"
 import { ref, type HTMLAttributes } from "vue"
+import { isComposing } from "../../../lib/keys"
 import { cn } from "../../../lib/utils"
 import { Button } from "../button"
 import { Input } from "../input"
@@ -26,7 +27,8 @@ function clear() {
 }
 
 function onKeydown(event: KeyboardEvent) {
-  if (event.key !== "Escape" || !clearsOnEscape(model.value)) return
+  // Escape while an input method composes cancels the composition; the typed text stays.
+  if (event.key !== "Escape" || isComposing(event) || !clearsOnEscape(model.value)) return
   event.preventDefault()
   event.stopPropagation()
   model.value = ""
