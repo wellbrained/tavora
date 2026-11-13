@@ -234,11 +234,11 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     // Modules of the key this one succeeds count as the account's own, even once the lost key is unlinked.
     const succeeded = firstKey(checked.owner);
     const prefixState = () => (official ? "held" : store.prefixCheck(key.accountId, prefix, { ownersUnder: (under) => catalog.ownersUnder(under).filter((owner) => owner !== succeeded) }));
-    const prefixRefusal = (held: ReturnType<typeof prefixState>) => {
-      if (held === "taken") return refuse(context, 403, "prefix-taken", `The id prefix "${prefix}" belongs to another developer.`);
-      if (held === "reserved") return refuse(context, 403, "prefix-reserved", `The id prefix "${prefix}" is reserved.`);
-      if (held === "too-many") return refuse(context, 403, "too-many-prefixes", "Your account holds as many id prefixes as it can. Publish under one of them.");
-      if (held === "free" && by.token !== null) {
+    const prefixRefusal = (state: ReturnType<typeof prefixState>) => {
+      if (state === "taken") return refuse(context, 403, "prefix-taken", `The id prefix "${prefix}" belongs to another developer.`);
+      if (state === "reserved") return refuse(context, 403, "prefix-reserved", `The id prefix "${prefix}" is reserved.`);
+      if (state === "too-many") return refuse(context, 403, "too-many-prefixes", "Your account holds as many id prefixes as it can. Publish under one of them.");
+      if (state === "free" && by.token !== null) {
         return refuse(context, 403, "token-new-prefix", `A publish token publishes only under your account's id prefixes. Publish the first module under "${prefix}" from Tavora.`);
       }
       return null;

@@ -237,16 +237,16 @@ describe("publishing to the catalog", () => {
   });
 
   it("checks the prefix again after the virus scan, so uploads at once can't give an account a fourth prefix", async () => {
-    const held = heldScanner();
-    const { store, catalog, developer, send, reason } = setup({}, undefined, roomy(), roomy(), held.scanner);
+    const scan = heldScanner();
+    const { store, catalog, developer, send, reason } = setup({}, undefined, roomy(), roomy(), scan.scanner);
     const { key, accountId } = developer("dev@example.com");
     store.reservePrefix(accountId, "alpha", 0);
     store.reservePrefix(accountId, "beta", 0);
     // Both pass the first check while the account holds two prefixes, then wait for their scans.
     const gamma = send(key, moduleZip(key, "gamma.notes"));
     const delta = send(key, moduleZip(key, "delta.notes"));
-    await held.running(2);
-    held.release();
+    await scan.running(2);
+    scan.release();
     const answers = await Promise.all([gamma, delta]);
     expect(answers.map((answer) => answer.status).sort()).toEqual([201, 403]);
     expect(await reason(answers.find((answer) => answer.status === 403)!)).toBe("too-many-prefixes");
@@ -255,14 +255,14 @@ describe("publishing to the catalog", () => {
   });
 
   it("refuses an upload whose prefix another account claimed during the scan, and adds nothing", async () => {
-    const held = heldScanner();
-    const { store, catalog, developer, send, reason, prefixes } = setup({}, undefined, roomy(), roomy(), held.scanner);
+    const scan = heldScanner();
+    const { store, catalog, developer, send, reason, prefixes } = setup({}, undefined, roomy(), roomy(), scan.scanner);
     const first = developer("first@example.com");
     const second = developer("second@example.com");
     const upload = send(first.key, moduleZip(first.key, "gamma.notes"));
-    await held.running(1);
+    await scan.running(1);
     expect((await prefixes("POST", second.token, "gamma")).status).toBe(200);
-    held.release();
+    scan.release();
     const answer = await upload;
     expect(answer.status).toBe(403);
     expect(await reason(answer)).toBe("prefix-taken");
