@@ -28,6 +28,17 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.43",
+    date: "2026-11-13",
+    title: "New workspace",
+    notes: [
+      "The rail's Add button now says New workspace.",
+    ],
+    prs: [
+      { number: 763, title: "Rail: the Add button says New workspace" },
+    ],
+  },
+  {
     version: "0.24.42",
     date: "2026-11-13",
     title: "Switches sit right in a dialog",
