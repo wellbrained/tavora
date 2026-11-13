@@ -236,7 +236,7 @@ function onDialogKey(event: KeyboardEvent) {
           @hover="active = $event"
           @pick="pick"
         />
-        <p v-if="installedLoaded && !covers.length && !lines.length" class="text-muted-foreground px-5 py-4 text-sm" data-testid="add-game-empty">
+        <p v-if="installedLoaded && !name && !covers.length && !lines.length" class="text-muted-foreground px-5 py-4 text-sm" data-testid="add-game-empty">
           {{ installed.length ? t("addGame.allAdded") : t("addGame.nothingOnPc") }}
         </p>
         <p v-if="onlineStatus === 'unreachable' && name" class="text-muted-foreground px-5 py-2 text-xs" data-testid="online-unreachable">{{ t("addGame.builtInOnly") }}</p>
