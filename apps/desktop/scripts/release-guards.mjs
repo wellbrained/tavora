@@ -85,16 +85,15 @@ export function releaseRunTitle(version, e2e, nonce) {
 }
 
 /**
- * Which jobs to look at in a failed Release build, from `gh run view --json jobs`. Empty when none failed (it was
- * stopped). When one e2e shard fails, GitHub cancels the others (fail-fast), and a cancelled shard shows the test it
- * was in as failed ("Target page, context or browser has been closed"): that test was cut off, not broken.
+ * The jobs to look at in a failed Release build, from `gh run view --json jobs`: a line for the console, or "" when
+ * none failed (it was stopped). One failed e2e shard cancels the others (fail-fast, see release-build.yml).
  */
-export function failedJobs(jobs) {
+export function failedJobsHint(jobs) {
   const failed = jobs.filter((job) => job.conclusion === "failure" || job.conclusion === "timed_out").map((job) => job.name);
   if (!failed.length) return "";
   const cancelled = jobs.filter((job) => job.conclusion === "cancelled").length;
-  const after = cancelled === 1 ? "The 1 cancelled job was stopped" : `The ${cancelled} cancelled jobs were stopped`;
-  return `Failed: ${failed.join(", ")}.${cancelled ? ` ${after} because of it; a test shown as failed there was cut off, not broken.` : ""}`;
+  const stopped = cancelled === 1 ? "The cancelled job was" : `The ${cancelled} cancelled jobs were`;
+  return `Failed: ${failed.join(", ")}.${cancelled ? ` ${stopped} stopped because of that; a test shown as failed there was cut off, not broken.` : ""}`;
 }
 
 /**

@@ -21,7 +21,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createInterface } from "node:readline/promises";
-import { AFTER_RELEASE, CHECKLIST, asksHandChecks, checkCi, checkDownload, checkInstalled, checkRelease, failedJobs, findDispatchedRun, readCiHashes, releaseFiles, releaseNotes, releaseRunTitle } from "./release-guards.mjs";
+import { AFTER_RELEASE, CHECKLIST, asksHandChecks, checkCi, checkDownload, checkInstalled, checkRelease, failedJobsHint, findDispatchedRun, readCiHashes, releaseFiles, releaseNotes, releaseRunTitle } from "./release-guards.mjs";
 import { hello, publish } from "../../../scripts/deploy-client.mjs";
 import { lockPath, takeLock } from "./release-lock.mjs";
 
@@ -176,7 +176,7 @@ try {
   cancelRun(runId);
   let failed = "";
   try {
-    failed = failedJobs(JSON.parse(run("gh", ["run", "view", runId, "--repo", REPO, "--json", "jobs"], { capture: true })).jobs);
+    failed = failedJobsHint(JSON.parse(run("gh", ["run", "view", runId, "--repo", REPO, "--json", "jobs"], { capture: true })).jobs);
   } catch {
     // Only a hint; the run's page says the same.
   }

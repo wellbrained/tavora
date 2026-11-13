@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error - plain JavaScript module shared with scripts/release.mjs
-import { CHECKLIST, asksHandChecks, checkCi, checkDownload, checkInstalled, checkRelease, compareVersions, failedJobs, findDispatchedRun, lastReleased, readCiHashes, releaseFiles, releaseNotes, releaseRunTitle } from "./release-guards.mjs";
+import { CHECKLIST, asksHandChecks, checkCi, checkDownload, checkInstalled, checkRelease, compareVersions, failedJobsHint, findDispatchedRun, lastReleased, readCiHashes, releaseFiles, releaseNotes, releaseRunTitle } from "./release-guards.mjs";
 
 const ready = { branch: "main", dirty: false, ahead: 0, behind: 0, tags: [] as string[], noteVersions: ["0.4.0"] };
 
@@ -151,11 +151,11 @@ describe("the split release (CI builds, the PC checks and uploads)", () => {
       { name: "e2e (1/8)", conclusion: "cancelled" },
       { name: "package", conclusion: "skipped" },
     ];
-    expect(failedJobs(jobs)).toBe("Failed: e2e (2/8). The 2 cancelled jobs were stopped because of it; a test shown as failed there was cut off, not broken.");
-    expect(failedJobs(jobs.filter((job) => job.name !== "e2e (1/8)"))).toContain("The 1 cancelled job was stopped");
-    expect(failedJobs([{ name: "e2e (3/8)", conclusion: "timed_out" }])).toBe("Failed: e2e (3/8).");
+    expect(failedJobsHint(jobs)).toBe("Failed: e2e (2/8). The 2 cancelled jobs were stopped because of that; a test shown as failed there was cut off, not broken.");
+    expect(failedJobsHint(jobs.filter((job) => job.name !== "e2e (1/8)"))).toContain("The cancelled job was stopped");
+    expect(failedJobsHint([{ name: "e2e (3/8)", conclusion: "timed_out" }])).toBe("Failed: e2e (3/8).");
     // Stopped by hand (Ctrl+C): nothing failed, nothing to name.
-    expect(failedJobs([{ name: "e2e (2/8)", conclusion: "cancelled" }, { name: "test", conclusion: "success" }])).toBe("");
+    expect(failedJobsHint([{ name: "e2e (2/8)", conclusion: "cancelled" }, { name: "test", conclusion: "success" }])).toBe("");
   });
 
   it("reads the hashes CI printed, with the runner's log prefixes", () => {
