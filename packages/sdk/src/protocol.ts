@@ -1529,7 +1529,7 @@ export const ITEM_CARD_ICON_TAVORA = "0.24.48";
  * pull request merges as, right before merging. Too low, and the SDK sends an older Tavora a key it refuses, and with it
  * the whole tooltip.
  */
-export const TOOLTIP_ANCHOR_BOX_TAVORA = "0.24.56";
+export const TOOLTIP_ANCHOR_BOX_TAVORA = "0.24.58";
 
 export const METHOD_INFO: Readonly<Record<CallName, MethodInfo>> = {
   "bridge.handshake": call("0.1.0"),
