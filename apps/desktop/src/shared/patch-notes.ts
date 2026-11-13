@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.57",
+    date: "2026-11-13",
+    title: "Discord sign-in stays yours",
+    notes: [
+      "On Linux and macOS, Tavora talks only to a Discord connection that belongs to your own account.",
+    ],
+    prs: [
+      { number: 783, title: "Discord: talk only to a socket the user owns" },
+    ],
+    tags: ["discord", "privacy", "website"],
+  },
+  {
     version: "0.24.56",
     date: "2026-11-13",
     title: "Changing your email is safer",
