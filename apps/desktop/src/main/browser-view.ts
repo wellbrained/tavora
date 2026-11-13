@@ -3,7 +3,7 @@
 // UI, and the page is only ever told where to go by the main process.
 import { session, WebContentsView, type Session, type WebContents } from "electron";
 import type { BrowserError, BrowserState, InstanceStatus } from "../shared/host-api";
-import { judgeRequest, type AdBlocker } from "./browser-filter";
+import { judgedTopUrl, judgeRequest, type AdBlocker } from "./browser-filter";
 import { addressToUrl, displayHost, isPrivateUrl, isWebUrl, parseUrl, siteOfUrl } from "./browser-url";
 import { BROWSER_MODULE_ID } from "./registry";
 
@@ -70,6 +70,8 @@ export function browserSession(partition: string, hooks: BrowserSessionHooks): S
   ses.setPermissionRequestHandler((_contents, permission, callback) => callback(ALLOWED_PERMISSIONS.has(permission)));
   ses.setPermissionCheckHandler((_contents, permission) => ALLOWED_PERMISSIONS.has(permission));
   ses.setDevicePermissionHandler(() => false);
+  // Windows and Linux only; there is nothing to pair on macOS.
+  ses.setBluetoothPairingHandler?.((_details, callback) => callback({ confirmed: false }));
   ses.setDisplayMediaRequestHandler((_request, callback) => callback({}));
   ses.on("select-hid-device", (event, _details, callback) => {
     event.preventDefault();
@@ -127,7 +129,7 @@ export class BrowserPanel {
   private visible = false;
   /** The page's address once it committed; requests of the page are judged against it. */
   private committedUrl: string | null = null;
-  /** The address of the current hop of a navigation, to judge where a redirect goes. */
+  /** The address of the current hop of a main-frame navigation, until it commits or fails: where a redirect goes is judged from it, and requests too while it is public. */
   private hopUrl: string | null = null;
   /** The address last asked for: shown until a page commits, and tried again by Reload when it failed. */
   private requestedUrl: string | null = null;
@@ -170,7 +172,7 @@ export class BrowserPanel {
 
   /** The address requests of this panel's page are judged against. */
   get topUrl(): string | null {
-    return this.committedUrl;
+    return judgedTopUrl(this.committedUrl, this.hopUrl);
   }
 
   private createView(): WebContentsView {
@@ -256,6 +258,7 @@ export class BrowserPanel {
       if (!current()) return;
       this.redirectSwitches = 0;
       this.committedUrl = url;
+      this.hopUrl = null;
       this.error = null;
       this.requestedUrl = null;
       this.applyVisibility();
@@ -268,9 +271,17 @@ export class BrowserPanel {
       if (isWebUrl(url)) this.options.onAddress(url);
       this.changed();
     });
+    // A navigation that ends without a page (failed, stopped, refused, a download) is no longer under way. Electron
+    // reports one that was cancelled only as did-fail-provisional-load. Only the navigation under way is ended: one
+    // that replaced it may have started already.
+    contents.on("did-fail-provisional-load", (_event, _errorCode, _description, url, isMainFrame) => {
+      if (current() && isMainFrame && url === this.hopUrl) this.hopUrl = null;
+    });
     contents.on("did-fail-load", (_event, errorCode, description, url, isMainFrame) => {
+      if (!current() || !isMainFrame) return;
+      if (url === this.hopUrl) this.hopUrl = null;
       // -3 is ERR_ABORTED: a navigation replaced by another, or one we refused.
-      if (!current() || !isMainFrame || errorCode === -3) return;
+      if (errorCode === -3) return;
       this.failed(url, loadError(errorCode, description));
     });
     for (const name of ["did-start-loading", "did-stop-loading", "page-title-updated", "audio-state-changed"] as const) {
