@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.52",
+    date: "2026-11-13",
+    title: "Safer folder permissions",
+    notes: [
+      "A module that asks to read Tavora's own folder in Documents, or to read key files such as .pem, is now refused and shows as not valid.",
+      "Tavora never let them read either, so nothing your modules could see changes.",
+    ],
+    prs: [
+      { number: 777, title: "Manifest refuses Tavora's own folder and key files in read" },
+    ],
+    tags: ["privacy", "publishing", "website"],
+  },
+  {
     version: "0.24.51",
     date: "2026-11-13",
     title: "Your game's modules, however you added it",
