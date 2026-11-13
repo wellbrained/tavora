@@ -18,7 +18,8 @@
 /* The card's stats: label, value and (when a stat grows) how much, lined up in columns like the kit's TooltipRows. */
 /* Long values wrap; the label column keeps its room and the value and per columns stay within a share of the card. */
 .tavora-item-card-stats{display:grid;grid-template-columns:minmax(72px,1fr) fit-content(60%);gap:2px 12px}
-.tavora-item-card-stats[data-per]{grid-template-columns:minmax(72px,1fr) fit-content(36%) fit-content(24%)}
+/* What a stat grows by is short ("+20%", "+4.8 / +5.8"): its column takes what it needs and only the label gives way. */
+.tavora-item-card-stats[data-per]{grid-template-columns:minmax(72px,1fr) fit-content(36%) auto}
 .tavora-item-card-stats>*{min-width:0;overflow-wrap:anywhere}
 .tavora-item-card-label{color:var(--ic-muted)}
 .tavora-item-card-value,.tavora-item-card-per{text-align:right;font-variant-numeric:tabular-nums}
@@ -44,7 +45,8 @@
 .tavora-item-card-section ul{list-style:none;margin:0;padding:0}
 .tavora-item-card-section li{display:flex;justify-content:space-between;gap:8px}
 .tavora-item-card-section li[data-connected]{border-left:2px solid var(--ic-accent);padding-left:8px}
-.tavora-item-card-section li span:last-child{color:var(--ic-muted);white-space:nowrap}
+/* A row's status stays on one line; the row's own text wraps. */
+.tavora-item-card-section li span+span{color:var(--ic-muted);white-space:nowrap}
 
 /* The rich layout: the picture beside the text. */
 .tavora-item-card-rich{display:flex;gap:12px}
