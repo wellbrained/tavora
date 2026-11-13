@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.41",
+    "date": "2026-11-13",
+    "notes": [
+      "Lists has a new example: things you drag onto slots, with a swap and dragging off to empty a slot."
+    ]
+  },
+  {
     "version": "0.1.40",
     "date": "2026-11-13",
     "notes": [

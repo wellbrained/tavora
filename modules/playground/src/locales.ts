@@ -372,6 +372,9 @@ export const en = {
   "ex.lists.ReorderRows": "Rows you drag",
   "ex.lists.ReorderRows.note": "Drag a row below the next one and hold. The rows slide aside once and stay put.",
   "ex.lists.ReorderRows.rule": "A list the user reorders by dragging uses useReorderMotion: over(x, y) works out the place from the layout at the grab.",
+  "ex.lists.DropOnSlots": "Things you drag onto slots",
+  "ex.lists.DropOnSlots.note": "Drag an item onto a slot. The third slot takes only the gem. Drag a filled slot onto another to swap, or off the slots to empty it.",
+  "ex.lists.DropOnSlots.rule": "Dragging onto targets uses startDrag on the source and useDropTargets for the targets: they accept or refuse, and over shows where it would land. What a drop does stays with the page.",
   "ex.lists.SettingRows": "Setting rows",
   "ex.lists.Card": "Card",
 
@@ -810,6 +813,9 @@ export const de: Record<TextKey, string> = {
   "ex.lists.ReorderRows": "Zeilen ziehen",
   "ex.lists.ReorderRows.note": "Zieh eine Zeile unter die nächste und halte sie. Die Zeilen weichen einmal aus und bleiben stehen.",
   "ex.lists.ReorderRows.rule": "Eine Liste, die man per Ziehen umsortiert, nutzt useReorderMotion: over(x, y) bestimmt den Platz aus dem Layout beim Greifen.",
+  "ex.lists.DropOnSlots": "Auf Plätze ziehen",
+  "ex.lists.DropOnSlots.note": "Zieh ein Teil auf einen Platz. Der dritte Platz nimmt nur den Edelstein. Zieh einen belegten Platz auf einen anderen zum Tauschen oder neben die Plätze zum Leeren.",
+  "ex.lists.DropOnSlots.rule": "Ziehen auf Ziele nutzt startDrag an der Quelle und useDropTargets für die Ziele: Sie nehmen an oder lehnen ab, und over zeigt, wo es landen würde. Was ein Ablegen bewirkt, bestimmt die Seite.",
   "ex.lists.SettingRows": "Einstellungszeilen",
   "ex.lists.Card": "Karte",
 

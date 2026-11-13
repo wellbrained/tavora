@@ -54,6 +54,7 @@ classes where you use a control; never copy it.
 | Tag, count, status word | `Badge` | muted `span` |
 | A number that changes while it is on screen (a count, a total) | `CountTo` / `useCountTo` (counts to the new value; not for a number that ticks every second or one being typed) | a plain `{{ n }}` that jumps |
 | A list the user reorders by dragging | `useReorderMotion` and `liftedDragImage` from `ui/reorder`: the others slide aside, the dropped item settles; keys reorder at once | a hand-made drop line only |
+| Dragging a thing onto a target (a card onto a slot, an item onto a folder) | `startDrag` on the source and `useDropTargets` for the targets, from `ui/drag-drop`: the drag is kept for every target to read, a target accepts or refuses, `over` says where it would land, `outside` takes a drop next to the targets; the source lifts as in a reordered list. What a drop does (place, swap, clear) and how the landing looks are yours | own drag state in a module, `dataTransfer` read on dragover, a drop that ignores what the target takes |
 | Menu | `ContextMenu`, `DropdownMenu`, or `sdk.ui.showMenu({ anchor: element })` | menu at the pointer, own popup |
 | Tooltip | `Tooltip` / `TooltipRows`, or a `title` (connectModule turns it into the kit tooltip) | own hover box |
 | An item card (a game's card, tower, item) in the shared tooltip or inline in a panel | `sdk.ui.tooltip.show` with `layout: "card"` (picture on top, title with its badges, type line, `effect` box, stats with an optional per-level column (`per`, `perHeading`) and an optional icon before a stat's label (`icon`), rows) and, inline, `ItemCard` with the same content; a game look is a skin (`sdk.ui.tooltip.defineSkin`, see [Item-card skins](#item-card-skins)) | own card markup, own hover card with game colours |
@@ -80,7 +81,7 @@ classes where you use a control; never copy it.
 | A one-line text with `{placeholders}` | `TemplateInput` (marks the placeholders it knows; `insert` adds one at the cursor) | an `Input` with a hint about braces |
 | Welcome on first add (optional) | kit parts as in [module-welcome.md](../apps/docs/guide/module-welcome.md) (Palworld is the reference) | a tour, popups over the panel, own frame |
 
-Known gaps (ask before building, then add to the kit): number field with steps, tree, drop zone, scroll area, input
+Known gaps (ask before building, then add to the kit): number field with steps, tree, scroll area, input
 with a leading icon. Remove an entry here once the kit has it.
 
 ## 3. Look
