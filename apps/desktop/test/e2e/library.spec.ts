@@ -717,7 +717,7 @@ test("Personal in the Add dialog: a name and Enter add the workspace and open it
     await page.keyboard.press("Enter");
     await expect(page.getByTestId("add-game-dialog")).toHaveCount(0);
     const current = page.locator('[data-testid^="rail-workspace-"][aria-current="page"]');
-    await expect(current).toContainText("Stream");
+    await expect(current).toHaveAttribute("aria-label", "Stream");
 
     // It is listed under the personal workspaces now, and opens from there.
     await page.locator('[data-testid^="rail-workspace-"]:not([aria-current])').first().click();
@@ -725,7 +725,7 @@ test("Personal in the Add dialog: a name and Enter add the workspace and open it
     await page.getByTestId("add-mode-personal").click();
     await page.locator('[data-testid^="open-personal-"]', { hasText: "Stream" }).click();
     await expect(page.getByTestId("add-game-dialog")).toHaveCount(0);
-    await expect(current).toContainText("Stream");
+    await expect(current).toHaveAttribute("aria-label", "Stream");
   } finally {
     await app.close();
   }
