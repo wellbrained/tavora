@@ -35,7 +35,7 @@ import type { PanelDialogSize } from "./bridge";
 import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, InstalledGameView, ModulePageResult, OfficialPublishRun, OfficialPublishView, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, PanelDialog, PanelPlacement, ProfileRanksView, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView, UnlistedGame } from "../shared/host-api";
 import { MAX_PICKER_COVERS } from "../shared/host-api";
 import { addOrRestoreWorkspace, gameCopyFinder } from "./game-copy";
-import { isForWorkspaceGame, learnGameIds, workspaceGameIds, type ListedGame } from "./workspace-game";
+import { isForWorkspaceGame, learnGameIds, withOnlineId, workspaceGameIds, type ListedGame } from "./workspace-game";
 import { resolveLanguage, translate, type Language, type MessageKey } from "../shared/i18n";
 import { suggestPrefix } from "../shared/id-prefix";
 import { compareModuleVersions } from "../shared/module-version";
@@ -576,6 +576,8 @@ export class Host {
   /** Counts workspace openings, so the end of one that was left does not end the next. */
   private openings = 0;
   private readonly onlineSearch: OnlineSearch;
+  /** Looks up the game being added (add-workspace), apart from the search box, so neither cancels the other. */
+  private readonly gameLookup: OnlineSearch;
   /** When each installed game was last seen running; local only, it orders the Add a game list. */
   private readonly gamesSeen: GamesSeen;
   /** The icons the Add a game list read, by game key, so the PC's programs are opened once. */
@@ -644,6 +646,7 @@ export class Host {
     });
     this.data = new DataRegistry(options.userData, () => this.files.root(), () => this.files.moving);
     this.onlineSearch = new OnlineSearch(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl });
+    this.gameLookup = new OnlineSearch(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl });
     this.gamesSeen = new GamesSeen(path.join(options.userData, "games-seen.json"));
     this.catalog = new CatalogClient({ ...(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl }), onGames: (games) => this.learnFromCatalog(games) });
     this.workspaces = new Workspaces(workspaces, {
@@ -2381,10 +2384,12 @@ export class Host {
 
       // Library
       "open-workspace": (action) => this.openWorkspace(action.workspaceId),
-      "add-workspace": (action) => {
-        // Whoever adds a game (Add a game, the welcome, Ctrl+K): one the user has is answered as it is, and one whose only
-        // copy is in Trash comes back with its panels.
-        const { id, restored, existing, learned } = addOrRestoreWorkspace(this.library, action, new Date());
+      "add-workspace": async (action) => {
+        // Whoever adds a game (Add a game, the welcome, Ctrl+K, the running game's Add button): one the user has is
+        // answered as it is, and one whose only copy is in Trash comes back with its panels. A game known only by its name
+        // and Steam id is looked up online first, so it gets the id modules are made for (workspace-game.ts).
+        const input = await withOnlineId(action, this.library.onlineSearch ? (query) => this.gameLookup.search(query) : null);
+        const { id, restored, existing, learned } = addOrRestoreWorkspace(this.library, input, new Date());
         if (existing) {
           // The copy took the game's Steam id: saved, and the rail may now see it running.
           if (learned) {
@@ -3229,10 +3234,9 @@ export class Host {
   private importSteam(games: SteamImportGame[]): ActionResult {
     const added = importSteamGames(this.library, games, new Date());
     this.workspaces.addWorkspaces(added);
-    if (added.length > 0) {
-      this.saveLibrary();
-      this.fetchIconsSoon();
-    }
+    // Saved even with nothing added: a game already here may have learned its game's id from the import.
+    this.saveLibrary();
+    if (added.length > 0) this.fetchIconsSoon();
     return { ok: true, added: added.length };
   }
 

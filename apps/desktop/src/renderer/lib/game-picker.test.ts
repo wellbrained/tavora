@@ -18,7 +18,7 @@ const installed = (name: string, extra: Partial<InstalledGameView> = {}): Instal
 });
 
 const module = (id: string, gameIds: string[], extra: Partial<CatalogModuleView> = {}): CatalogModuleView =>
-  ({ id, name: id, gameIds, official: false, ...extra }) as CatalogModuleView;
+  ({ id, name: id, gameIds, gameSteamAppIds: [], official: false, ...extra }) as CatalogModuleView;
 
 describe("buildRows", () => {
   const pc = [installed("Zelda"), installed("Elden Ring", { catalogId: "elden-ring" })];
@@ -255,6 +255,13 @@ describe("modulesFor", () => {
     expect(modulesFor(all, "satisfactory").map((item) => item.id)).toEqual(["tavora.sat", "community.b"]);
     expect(modulesFor(all, null)).toEqual([]);
     expect(modulesFor(all, "unknown")).toEqual([]);
+  });
+
+  it("finds them by Steam app id for a game on this PC that no list named yet", () => {
+    const nine = module("community.nine", ["9-kings"], { gameSteamAppIds: [2784470] });
+    expect(modulesFor([...all, nine], null, 2784470).map((item) => item.id)).toEqual(["community.nine"]);
+    expect(modulesFor([...all, nine], null, 1)).toEqual([]);
+    expect(modulesFor([...all, nine], "satisfactory", 2784470).map((item) => item.id)).toEqual(["tavora.sat", "community.b", "community.nine"]);
   });
 
   it("adds only Tavora's own with the game", () => {

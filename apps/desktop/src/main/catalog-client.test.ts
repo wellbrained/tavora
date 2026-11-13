@@ -147,9 +147,9 @@ describe("CatalogClient.list", () => {
     expect(result).toEqual({
       status: "ok",
       modules: [
-        expect.objectContaining({ id: "wellbrained.tracker", fits: true, forGames: ["9 Kings", "No Steam", "unnamed"] }),
+        expect.objectContaining({ id: "wellbrained.tracker", fits: true, forGames: ["9 Kings", "No Steam", "unnamed"], gameSteamAppIds: [2784470] }),
         // A service from before gameInfo: the id as the name, as before.
-        expect.objectContaining({ id: "wellbrained.old", fits: true, forGames: ["9-kings"] }),
+        expect.objectContaining({ id: "wellbrained.old", fits: true, forGames: ["9-kings"], gameSteamAppIds: [] }),
       ],
     });
   });

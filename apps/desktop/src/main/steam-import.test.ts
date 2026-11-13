@@ -61,6 +61,13 @@ describe("importSteamGames", () => {
     expect(custom.id.startsWith("local-")).toBe(true);
     expect(importSteamGames(library, games, day)).toEqual([]);
   });
+
+  it("teaches a game already here by name the id the service gave it, so it gets its modules", () => {
+    const library = emptyLibrary();
+    const id = addWorkspace(library, { name: "9 Kings", steamAppId: 2784470 }, day);
+    expect(importSteamGames(library, [{ appid: 2784470, name: "9 Kings", id: "9-kings" }], day)).toEqual([]);
+    expect(library.workspaces[id]!.gameId).toBe("9-kings");
+  });
 });
 
 describe("fetchSteamLibrary", () => {

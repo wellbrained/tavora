@@ -20,6 +20,7 @@ export function pageModule(module: InstalledModule): CatalogModuleView {
     fits: module.available,
     forGames: [],
     gameIds: [],
+    gameSteamAppIds: [],
     official: false,
     publishedAt: "",
     homepage: null,

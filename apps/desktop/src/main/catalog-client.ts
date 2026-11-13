@@ -39,7 +39,7 @@ export interface CatalogScreenshot {
 }
 
 /** A listed module with the zip it comes as; only the main process sees the hash. */
-export interface CatalogEntry extends Omit<CatalogModuleView, "screenshots" | "icon" | "fits" | "forGames" | "gameIds" | "official"> {
+export interface CatalogEntry extends Omit<CatalogModuleView, "screenshots" | "icon" | "fits" | "forGames" | "gameIds" | "gameSteamAppIds" | "official"> {
   games: string[];
   /** Its games with name and Steam id, as the service knows them (none from a service before 2026-11). Only games in `games`. */
   gameInfo: ListedGame[];
@@ -307,7 +307,7 @@ export function shownTexts(entry: Pick<CatalogEntry, "name" | "description" | "t
  */
 export function catalogView({ games, gameInfo, personalWorkspaces, zip: _zip, notes: _notes, shots, icon, translations, ...view }: CatalogEntry, language: string, scope?: CatalogScope): CatalogModuleView {
   const fits = scope ? fitsScope({ games, personalWorkspaces }, scope) : true;
-  return { ...view, ...shownTexts({ ...view, translations }, language), fits, forGames: games.map((id) => gameName(id, gameInfo)), gameIds: games, official: officialOn(OFFICIAL_PINS) && view.owner === OFFICIAL_PINS.key, screenshots: shots.length, icon: icon !== null };
+  return { ...view, ...shownTexts({ ...view, translations }, language), fits, forGames: games.map((id) => gameName(id, gameInfo)), gameIds: games, gameSteamAppIds: gameInfo.flatMap((game) => (game.steamAppId === null ? [] : [game.steamAppId])), official: officialOn(OFFICIAL_PINS) && view.owner === OFFICIAL_PINS.key, screenshots: shots.length, icon: icon !== null };
 }
 
 export interface CatalogClientOptions {
