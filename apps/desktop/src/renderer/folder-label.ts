@@ -9,6 +9,7 @@ const separator = typeof navigator !== "undefined" && /Windows/i.test(navigator.
 export function folderLabel(folder: FolderView | string): string {
   const view = typeof folder === "string" ? folderView(folder) : folder;
   if (!view) return "";
+  if (!view.root) return view.path;
   return [t(`folders.root.${view.root}` as MessageKey), ...view.names].join(separator);
 }
 

@@ -18,7 +18,10 @@ export interface FolderView {
   key: string;
   /** The path from the manifest, such as Documents/My Game. */
   path: string;
-  /** The root (Documents, Saved Games or AppData/LocalLow) and the folders below it. */
+  /**
+   * The root (Documents, Saved Games or AppData/LocalLow) and the folders below it. An empty root when the path starts
+   * at none this Tavora knows: then `names` is empty and the UI shows `path` as it is, so a folder is never left out.
+   */
   root: string;
   names: string[];
   /** Extensions it may read, and those it may only see by name (key files asked for in read go here: they are never read). */
@@ -30,9 +33,8 @@ export function folderView(key: string): FolderView | null {
   const parts = key.split("|");
   if (parts.length !== 3 || !parts[0]) return null;
   const path = parts[0];
-  const root = FOLDER_ROOT_NAMES.find((item) => path.startsWith(`${item}/`));
-  if (!root) return null;
-  const names = path.slice(root.length + 1).split("/");
+  const root = FOLDER_ROOT_NAMES.find((item) => path.startsWith(`${item}/`)) ?? "";
+  const names = root ? path.slice(root.length + 1).split("/") : [];
   const list = (text: string) => (text ? text.split(",") : []);
   const asked = list(parts[1]!);
   const isKey = (extension: string) => KEY_EXTENSIONS.includes(extension);

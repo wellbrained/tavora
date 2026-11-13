@@ -4,7 +4,7 @@ What changed in `@tavora/module-schema`, newest first.
 
 ## 0.1.10
 
-- `permissions.folders` may start at a third root, `AppData/LocalLow` (in `FOLDER_ROOTS`), where most Unity games keep their settings and saves: `{ "path": "AppData/LocalLow/Company/Game", "read": ["json"] }`. Below it a path names at least `LOCALLOW_MIN_DEPTH` (2) folders, the company and the game, and never starts at one of `LOCALLOW_REFUSED_FOLDERS` (`Microsoft`, `Sun`, `Oracle`, `Adobe`, `Google`, `Mozilla`, `Intel`, `NVIDIA`, `Apple`, `Temp`, in any case). The rest of AppData stays refused. A manifest with it needs a `minTavora` newer than `LAST_TAVORA_WITHOUT_LOCALLOW_FOLDERS` (0.24.42), except Tavora's own modules. The JSON Schema checks the path.
+- `permissions.folders` may start at a third root, `AppData/LocalLow` (in `FOLDER_ROOTS`), where most Unity games keep their settings and saves: `{ "path": "AppData/LocalLow/Company/Game", "read": ["json"] }`. Below it a path names at least `LOCALLOW_MIN_DEPTH` (2) folders, the company and the game, and never starts at one of `LOCALLOW_REFUSED_FOLDERS` (`Microsoft`, `Sun`, `Oracle`, `Adobe`, `Google`, `Mozilla`, `Intel`, `NVIDIA`, `AMD`, `Apple`, `Apple Computer`, `Temp`, `webviewdata`, in any case). The rest of AppData stays refused. A manifest with it needs a `minTavora` newer than `LAST_TAVORA_WITHOUT_LOCALLOW_FOLDERS` (0.24.43), except Tavora's own modules. The JSON Schema checks the path.
 - `splitFolderPath` splits a folder path into its root (which may have two parts) and the folders below it; `isLocalLowGameFolder` tells whether the folders below `AppData/LocalLow` may be a module's.
 
 ## 0.1.9
