@@ -27,6 +27,8 @@ export function installTitleTooltips(doc: Document = document, options: TitleToo
   const state = reactive({ open: false, title: "", side: "bottom" as TooltipSide, shortcut: undefined as string | undefined, anchor: { left: 0, top: 0, right: 0, bottom: 0 } });
   const id = "tavora-title-tooltip";
   const suppressed = new WeakSet<Element>();
+  /** The `aria-description` this layer wrote on an element, so only that is ever changed or taken away. */
+  const described = new WeakMap<Element, string>();
   let current: Element | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let readyTimer: ReturnType<typeof setTimeout> | undefined;
@@ -63,7 +65,24 @@ export function installTitleTooltips(doc: Document = document, options: TitleToo
     if (element.hasAttribute("data-tooltip-label") || (!element.hasAttribute("aria-label") && !element.textContent?.trim())) {
       element.setAttribute("aria-label", value);
       element.setAttribute("data-tooltip-label", "true");
-    }
+      forgetDescription(element);
+    } else describe(element, value);
+  }
+  /** An element that has its own name keeps the hint as its description, so a screen reader still gets the full text
+   * (a shortened path, say) after the `title` has moved. A hint that only repeats the name adds nothing. */
+  function describe(element: Element, value: string) {
+    const name = (element.getAttribute("aria-label") ?? element.textContent ?? "").replace(/\s+/g, " ").trim();
+    const hint = value.replace(/\s+/g, " ").trim();
+    const now = element.getAttribute("aria-description");
+    // An `aria-description` somebody else set (the author, or a control's reason for being off) is theirs, and stays.
+    if (element.hasAttribute(REASON_ATTRIBUTE) || (now !== null && described.get(element) !== now)) return void described.delete(element);
+    if (name.includes(hint)) return forgetDescription(element);
+    element.setAttribute("aria-description", value);
+    described.set(element, value);
+  }
+  function forgetDescription(element: Element) {
+    if (described.get(element) === element.getAttribute("aria-description")) element.removeAttribute("aria-description");
+    described.delete(element);
   }
   function target(event: Event) {
     return event.target instanceof Element ? event.target.closest(`[title],[data-tavora-tooltip],[${REASON_ATTRIBUTE}]`) : null;
@@ -138,6 +157,7 @@ export function installTitleTooltips(doc: Document = document, options: TitleToo
       } else {
         element.removeAttribute("data-tavora-tooltip");
         if (element.hasAttribute("data-tooltip-label")) { element.removeAttribute("aria-label"); element.removeAttribute("data-tooltip-label"); }
+        forgetDescription(element);
         if (current === element) hide();
       }
     }
@@ -151,6 +171,7 @@ export function installTitleTooltips(doc: Document = document, options: TitleToo
       if (!element.getAttribute("title")) element.setAttribute("title", element.getAttribute("data-tavora-tooltip")!);
       element.removeAttribute("data-tavora-tooltip");
       if (element.hasAttribute("data-tooltip-label")) { element.removeAttribute("aria-label"); element.removeAttribute("data-tooltip-label"); }
+      forgetDescription(element);
     }
     app.unmount();
     container.remove();
