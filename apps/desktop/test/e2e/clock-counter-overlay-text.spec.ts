@@ -79,7 +79,8 @@ async function inPersonalWorkspace(): Promise<{ app: ElectronApplication; page: 
   await mkdir(userData, { recursive: true });
   await writeFile(path.join(userData, "library.json"), JSON.stringify({ ...seedLibrary(), gameOverlays: true }));
   const { app, page } = await launch(userData, [MODULES], { seed: false });
-  await page.getByTestId("rail-add-personal").click();
+  await page.getByTestId("rail-add-game").click();
+  await page.getByTestId("add-mode-personal").click();
   await page.getByTestId("personal-name").fill("Personal");
   await page.getByTestId("personal-name").press("Enter");
   await expect(page.getByTestId("rail-workspace-local-personal")).toHaveAttribute("aria-current", "page");

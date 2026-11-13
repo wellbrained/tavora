@@ -1,14 +1,20 @@
 <script setup lang="ts">
-// Add a game: one search field. With nothing typed, the covers of the games played lately on this PC, and the rest of
+// Add: a game, or (Personal, on the switch beside the search) a personal workspace that belongs to no game.
+//
+// Game: one search field. With nothing typed, the covers of the games played lately on this PC, and the rest of
 // this PC's games below them; typed, one list: this PC's games, then the built-in and online ones. Enter or a click
 // adds the game with Tavora's own modules for it and opens it; a game already added just opens. Keyboard first, in the
 // style of Ctrl+K.
-import { Loader, Search } from "@lucide/vue";
-import { computed, nextTick, ref } from "vue";
+//
+// Personal: the field takes the new workspace's name, Enter adds it and opens it. Below it, the personal workspaces
+// there are, to open one instead. The dialog keeps its size either way.
+import { Loader, Search, UserRound } from "@lucide/vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { act, closeDialog, dialog, openPanels, state } from "../host";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import { Notice } from "@tavora/official-ui/components/ui/notice";
+import { SegmentedControl } from "@tavora/official-ui/components/ui/segmented-control";
 import { Skeleton } from "@tavora/official-ui/components/ui/skeleton";
 import { useTask } from "@tavora/official-ui/use-task";
 import { t } from "../i18n";
@@ -16,6 +22,7 @@ import { addedWithGame, modulesFor, type PickerLine, type PickerRow } from "../l
 import { noteAdded } from "../lib/installed-games";
 import { useGamePicker } from "../lib/use-game-picker";
 import GamePickerList from "./GamePickerList.vue";
+import WorkspaceIcon from "./WorkspaceIcon.vue";
 
 const query = ref("");
 const input = ref<HTMLInputElement | null>(null);
@@ -91,6 +98,69 @@ async function add(key: string, game: { row: PickerRow | null; name: string }): 
 function focusSearch() {
   void nextTick(() => input.value?.focus());
 }
+
+// ── Personal ───────────────────────────────────────────────────────────
+
+/** What this adds: a game (the default; most adds are games) or a personal workspace. */
+type Mode = "game" | "personal";
+const mode = ref<Mode>("game");
+const modes = computed(() => [
+  { value: "game" as const, label: t("add.mode.game"), testid: "add-mode-game" },
+  { value: "personal" as const, label: t("add.mode.personal"), testid: "add-mode-personal" },
+]);
+const personalName = ref("");
+const typedName = computed(() => personalName.value.replace(/\s+/g, " ").trim());
+/** The field shows the search or the name, each kept while the other is shown. */
+const text = computed({
+  get: () => (mode.value === "game" ? query.value : personalName.value),
+  set: (value: string) => (mode.value === "game" ? (query.value = value) : (personalName.value = value)),
+});
+/** The personal workspaces there are, by name. */
+const personals = computed(() =>
+  Object.values(state.value?.library.workspaces ?? {})
+    .filter((workspace) => workspace.kind === "personal")
+    .sort((a, b) => a.name.localeCompare(b.name)),
+);
+// A switch puts the focus back in the field and clears a failure that was about the other one.
+watch(mode, () => {
+  adder.reset();
+  focusSearch();
+});
+
+/** Adds the personal workspace by its typed name and opens it. */
+async function addPersonal() {
+  const name = typedName.value;
+  if (!name || adder.busy.value) return;
+  picked.value = "personal";
+  const failed = await adder.run(async () => {
+    const added = await act({ type: "add-workspace", personal: name }, { quiet: true });
+    if (!added.ok) return added.error;
+    if (dialog.value !== shownRequest) return null;
+    closeDialog(shownRequest);
+    if (added.id && state.value?.library.onboarded) await act({ type: "open-workspace", workspaceId: added.id });
+    return null;
+  });
+  if (failed) adder.fail(failed);
+}
+
+async function openPersonal(workspaceId: string) {
+  if (adder.busy.value) return;
+  closeDialog(shownRequest);
+  await act({ type: "open-workspace", workspaceId });
+}
+
+/** The field's keys: the search's in Game; in Personal, Enter adds. */
+function onFieldKey(event: KeyboardEvent) {
+  if (mode.value === "game") return onKey(event);
+  if (event.key !== "Enter" || event.isComposing) return;
+  event.preventDefault();
+  void addPersonal();
+}
+
+/** Keys pressed elsewhere in the dialog go to the search, in Game. */
+function onDialogKey(event: KeyboardEvent) {
+  if (mode.value === "game") keysToSearch(event);
+}
 </script>
 
 <template>
@@ -105,35 +175,37 @@ function focusSearch() {
       :show-close-button="false"
       @open-auto-focus.prevent="focusSearch"
       @mousedown="keepSearchFocus"
-      @keydown="keysToSearch"
+      @keydown="onDialogKey"
     >
-      <DialogTitle class="sr-only">{{ t("addGame.title") }}</DialogTitle>
-      <DialogDescription class="sr-only">{{ t("addGame.search") }}</DialogDescription>
-      <div class="relative flex-none border-b">
-        <Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2" :stroke-width="1.5" />
+      <DialogTitle class="sr-only">{{ mode === "game" ? t("addGame.title") : t("addPersonal.new") }}</DialogTitle>
+      <DialogDescription class="sr-only">{{ mode === "game" ? t("addGame.search") : t("addPersonal.placeholder") }}</DialogDescription>
+      <div class="relative flex flex-none items-center gap-3 border-b pr-3">
+        <component :is="mode === 'game' ? Search : UserRound" class="text-muted-foreground pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2" :stroke-width="1.5" />
         <input
           id="game-search"
           ref="input"
-          v-model="query"
-          class="placeholder:text-muted-foreground h-14 w-full bg-transparent pr-16 pl-12 text-base focus-visible:outline-none"
-          :placeholder="t('addGame.search')"
-          :aria-label="t('addGame.title')"
-          role="combobox"
-          aria-expanded="true"
-          aria-controls="game-results"
-          aria-autocomplete="list"
-          :aria-activedescendant="activeId"
+          v-model="text"
+          class="placeholder:text-muted-foreground h-14 min-w-0 flex-1 bg-transparent pr-2 pl-12 text-base focus-visible:outline-none"
+          :placeholder="mode === 'game' ? t('addGame.search') : t('addPersonal.placeholder')"
+          :aria-label="mode === 'game' ? t('addGame.title') : t('addPersonal.new')"
+          :role="mode === 'game' ? 'combobox' : undefined"
+          :aria-expanded="mode === 'game' ? 'true' : undefined"
+          :aria-controls="mode === 'game' ? 'game-results' : undefined"
+          :aria-autocomplete="mode === 'game' ? 'list' : undefined"
+          :aria-activedescendant="mode === 'game' ? activeId : undefined"
           autocomplete="off"
           spellcheck="false"
           maxlength="80"
-          data-testid="game-search"
-          @keydown="onKey"
+          :data-testid="mode === 'game' ? 'game-search' : 'personal-name'"
+          @keydown="onFieldKey"
         />
-        <Kbd class="pointer-events-none absolute top-1/2 right-4 -translate-y-1/2 font-sans" aria-hidden="true">{{ t("search.key.esc") }}</Kbd>
+        <!-- Games come first; Personal is for the odd workspace that belongs to no game. -->
+        <SegmentedControl v-model="mode" :options="modes" :label="t('add.mode')" :disabled="adder.busy.value" data-testid="add-mode" />
       </div>
 
       <div ref="list" class="min-h-0 flex-1 overflow-y-auto py-2">
         <Notice v-if="adder.error.value" variant="error" class="mx-4 mb-2" data-testid="add-game-error">{{ adder.error.value }}</Notice>
+        <template v-if="mode === 'game'">
         <p v-if="!installedLoaded" class="text-muted-foreground flex items-center gap-2 px-5 pb-1 text-xs font-medium" role="status" data-testid="add-game-loading">
           <Loader class="size-3.5 flex-none animate-spin motion-reduce:animate-none" :stroke-width="1.75" aria-hidden="true" />{{ t("addGame.loadingPc") }}
         </p>
@@ -158,9 +230,49 @@ function focusSearch() {
         />
         <p v-if="installedLoaded && !covers.length && !lines.length" class="text-muted-foreground px-5 py-4 text-sm" data-testid="add-game-empty">{{ t("addGame.nothingOnPc") }}</p>
         <p v-if="onlineStatus === 'unreachable' && name" class="text-muted-foreground px-5 py-2 text-xs" data-testid="online-unreachable">{{ t("addGame.builtInOnly") }}</p>
+        </template>
+
+        <div v-else class="flex flex-col gap-1 px-2" data-testid="add-personal" :data-status="adder.state.value.status">
+          <button
+            v-if="typedName"
+            type="button"
+            class="bg-accent relative flex items-center gap-3 rounded-lg px-3 py-2 text-left"
+            data-testid="create-personal"
+            @click="addPersonal"
+          >
+            <span class="bg-primary absolute inset-y-1.5 left-0 w-0.5 rounded-full" aria-hidden="true" />
+            <span class="bg-background text-primary flex size-7 flex-none items-center justify-center rounded-md" aria-hidden="true"><UserRound class="size-4" :stroke-width="1.75" /></span>
+            <span class="min-w-0 flex-1">
+              <span class="block truncate font-medium">{{ typedName }}</span>
+              <span class="text-muted-foreground block truncate text-xs">{{ adder.busy.value ? t("addGame.adding") : t("addPersonal.new") }}</span>
+            </span>
+            <Loader v-if="adder.busy.value" class="text-muted-foreground size-4 flex-none animate-spin motion-reduce:animate-none" :stroke-width="1.75" aria-hidden="true" />
+            <span v-else class="text-muted-foreground flex flex-none items-center gap-1.5 text-xs" aria-hidden="true">{{ t("addGame.actionAdd") }} <Kbd class="font-sans">↵</Kbd></span>
+          </button>
+          <p v-else class="text-muted-foreground px-3 py-2 text-sm" data-testid="personal-type-name">{{ t("addPersonal.typeName") }}</p>
+
+          <template v-if="personals.length">
+            <p class="text-muted-foreground px-3 pt-3 pb-1 text-xs font-medium">{{ t("addPersonal.yours") }}</p>
+            <button
+              v-for="workspace in personals"
+              :key="workspace.id"
+              type="button"
+              class="hover:bg-accent group flex items-center gap-3 rounded-lg px-3 py-2 text-left"
+              :data-testid="`open-personal-${workspace.id}`"
+              @click="openPersonal(workspace.id)"
+            >
+              <span class="flex flex-none overflow-hidden rounded-md"><WorkspaceIcon :workspace="workspace" :size="28" /></span>
+              <span class="min-w-0 flex-1 truncate font-medium">{{ workspace.name }}</span>
+              <span class="text-muted-foreground flex-none text-xs opacity-0 group-hover:opacity-100">{{ t("addGame.actionOpen") }}</span>
+            </button>
+          </template>
+        </div>
       </div>
 
-      <div class="text-muted-foreground flex flex-none flex-wrap items-center gap-x-4 gap-y-1 border-t px-4 py-2 text-xs">
+      <div v-if="mode === 'personal'" class="text-muted-foreground flex flex-none items-center border-t px-4 py-2 text-xs">
+        <span aria-hidden="true"><Kbd class="font-sans">{{ t("search.key.enter") }}</Kbd> {{ t("addGame.hint.add") }}</span>
+      </div>
+      <div v-else class="text-muted-foreground flex flex-none flex-wrap items-center gap-x-4 gap-y-1 border-t px-4 py-2 text-xs">
         <span aria-hidden="true"
           ><template v-if="covers.length"><Kbd class="font-sans">←</Kbd> <Kbd class="font-sans">→</Kbd> </template><Kbd class="font-sans">↑</Kbd> <Kbd class="font-sans">↓</Kbd>
           {{ t("addGame.hint.move") }} · <Kbd class="font-sans">{{ t("search.key.enter") }}</Kbd> {{ t("addGame.hint.add") }}</span

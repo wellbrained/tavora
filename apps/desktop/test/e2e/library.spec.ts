@@ -521,12 +521,10 @@ test("nothing in the rail moves up or down when it opens or closes", async () =>
     await page.locator('[data-testid^="rail-folder-"][data-testid$="-toggle"]').click();
     await expect(page.getByTestId("rail-workspace-satisfactory")).toBeVisible();
 
-    // The Personal button is the one exception: it stacks under Add game when compact and sits beside it when expanded.
     const tops = () =>
       page.evaluate(() =>
         Object.fromEntries(
           Array.from(document.querySelectorAll<HTMLElement>('[data-testid="rail"] [data-rail-item]'))
-            .filter((item) => item.dataset.testid !== "rail-add-personal")
             .map((item) => [item.dataset.testid, Math.round(item.getBoundingClientRect().top)]),
         ),
       );
@@ -669,7 +667,7 @@ test("trying the welcome from Settings (dev build) writes nothing", async () => 
   await app.close();
 });
 
-test("the rail's two buttons open Add a game and a personal workspace, and Add a game says it is looking while the games load", async () => {
+test("the rail's Add opens the Add dialog on Game, which says it is looking while the games load, with Personal beside it", async () => {
   const { app, page } = await launch();
   try {
     // The search for games on this PC never ends here, so the loading state stays.
@@ -677,8 +675,7 @@ test("the rail's two buttons open Add a game and a personal workspace, and Add a
       ipcMain.removeHandler("host:installed-games");
       ipcMain.handle("host:installed-games", () => new Promise(() => undefined));
     });
-    await expect(page.getByTestId("rail-add-game")).toHaveAttribute("aria-label", "Add game");
-    await expect(page.getByTestId("rail-add-personal")).toHaveAttribute("aria-label", "New personal workspace");
+    await expect(page.getByTestId("rail-add-game")).toHaveAttribute("aria-label", "Add a game or workspace");
     await page.getByTestId("rail-add-game").click();
     await expect(page.getByTestId("add-game-dialog")).toBeVisible();
     await expect(page.getByTestId("add-game-loading")).toContainText("Looking for games on this PC");
@@ -690,64 +687,46 @@ test("the rail's two buttons open Add a game and a personal workspace, and Add a
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("add-game-dialog")).toHaveCount(0);
 
-    await page.getByTestId("rail-add-personal").click();
+    await page.getByTestId("rail-add-game").click();
+    await page.getByTestId("add-mode-personal").click();
     await expect(page.getByTestId("personal-name")).toBeVisible();
   } finally {
     await app.close();
   }
 });
 
-test("expanded, Personal adds a name row above the Add row: Esc drops it, Enter adds and opens the workspace", async () => {
-  const userData = await newUserData();
-  await writeFile(path.join(userData, "library.json"), JSON.stringify({ ...seedLibrary(), rail: { expanded: true, width: 280 } }));
-  const { app, page } = await launch(userData);
+test("Personal in the Add dialog: a name and Enter add the workspace and open it; the ones there are open from the list", async () => {
+  const { app, page } = await launch();
   try {
-    await page.getByTestId("rail-add-personal").click();
-    await expect(page.getByTestId("add-personal-row")).toBeVisible();
-    await expect(page.getByTestId("rail-add")).toBeVisible();
-    await expect(page.getByTestId("rail-add-personal")).toHaveAttribute("aria-expanded", "true");
-    await expect(page.getByTestId("add-personal-popover")).toHaveCount(0);
+    await page.getByTestId("rail-add-game").click();
+    await page.getByTestId("game-search").fill("Valheim");
+    await page.getByTestId("add-mode-personal").click();
+    // The name field starts empty and has the focus; Enter on nothing adds nothing.
     await expect(page.getByTestId("personal-name")).toBeFocused();
-
-    await page.keyboard.type("Stream");
-    await page.keyboard.press("Escape");
-    await expect(page.getByTestId("add-personal-row")).toHaveCount(0);
-    await expect(page.getByTestId("rail-add-personal")).toBeFocused();
-
-    // Personal toggles it shut again.
-    await page.getByTestId("rail-add-personal").click();
-    await expect(page.getByTestId("add-personal-row")).toBeVisible();
-    await page.getByTestId("rail-add-personal").click();
-    await expect(page.getByTestId("add-personal-row")).toHaveCount(0);
-
-    // A click elsewhere drops it too.
-    await page.getByTestId("rail-add-personal").click();
-    await expect(page.getByTestId("add-personal-row")).toBeVisible();
-    await page.locator('[data-testid^="rail-workspace-"]').first().click();
-    await expect(page.getByTestId("add-personal-row")).toHaveCount(0);
-
-    await page.getByTestId("rail-add-personal").click();
     await expect(page.getByTestId("personal-name")).toHaveValue("");
-    await page.keyboard.type("Stream");
+    await expect(page.getByTestId("personal-type-name")).toBeVisible();
     await page.keyboard.press("Enter");
-    await expect(page.getByTestId("add-personal-row")).toHaveCount(0);
-    await expect(page.locator('[data-testid^="rail-workspace-"][aria-current="page"]')).toContainText("Stream");
+    await expect(page.getByTestId("add-game-dialog")).toBeVisible();
+    // Back on Game, the search kept what was typed.
+    await page.getByTestId("add-mode-game").click();
+    await expect(page.getByTestId("game-search")).toHaveValue("Valheim");
+    await page.getByTestId("add-mode-personal").click();
+
+    await page.keyboard.type("Stream");
+    await expect(page.getByTestId("create-personal")).toContainText("Stream");
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("add-game-dialog")).toHaveCount(0);
+    const current = page.locator('[data-testid^="rail-workspace-"][aria-current="page"]');
+    await expect(current).toHaveAttribute("aria-label", "Stream");
+
+    // It is listed under the personal workspaces now, and opens from there.
+    await page.locator('[data-testid^="rail-workspace-"]:not([aria-current])').first().click();
+    await page.getByTestId("rail-add-game").click();
+    await page.getByTestId("add-mode-personal").click();
+    await page.locator('[data-testid^="open-personal-"]', { hasText: "Stream" }).click();
+    await expect(page.getByTestId("add-game-dialog")).toHaveCount(0);
+    await expect(current).toHaveAttribute("aria-label", "Stream");
   } finally {
     await app.close();
-  }
-});
-
-test("Add game and Personal share the expanded rail's row evenly, at any rail width", async () => {
-  for (const width of [200, 280, 420]) {
-    const userData = await newUserData();
-    await writeFile(path.join(userData, "library.json"), JSON.stringify({ ...seedLibrary(), rail: { expanded: true, width } }));
-    const { app, page } = await launch(userData, [], { locale: "de-DE" });
-    try {
-      const game = (await page.getByTestId("rail-add-game").boundingBox())!;
-      const personal = (await page.getByTestId("rail-add-personal").boundingBox())!;
-      expect(Math.abs(game.width - personal.width)).toBeLessThan(1);
-    } finally {
-      await app.close();
-    }
   }
 });
