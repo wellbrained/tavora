@@ -271,7 +271,7 @@ describe("what a code waits for", () => {
     const { account } = client(fetchImpl, { saved: SAVED });
     await account.init();
     await account.sendEmailCode("new@example.com");
-    expect(account.view().pending).toEqual({ kind: "change-email", email: "new@example.com" });
+    expect(account.view().pending).toEqual({ kind: "change-email", email: "new@example.com", proof: "none" });
     await account.signOut();
     expect(account.view().pending).toBeNull();
     expect(account.view().account).toBeNull();
@@ -332,19 +332,65 @@ describe("signed in", () => {
     expect(kept).toEqual([null]);
   });
 
-  it("changes the email with a code to the new address", async () => {
+  it("changes the email with a code to the new address and one to the current address, then reads the devices again", async () => {
     const { calls, fetchImpl } = service({
-      "POST /email/code": () => json({ status: "sent" }, 202),
+      "POST /email/code": () => json({ status: "sent", current: "email" }, 202),
       "POST /email": () => json({ account: { email: "new@example.com", createdAt: SAVED.createdAt } }),
+      "GET /": () => json({ account: { email: "new@example.com" }, devices: [DEVICE] }),
     });
     const { account, kept } = client(fetchImpl, { saved: SAVED });
     await account.init();
     await account.sendEmailCode("new@example.com");
-    expect(account.view().pending).toEqual({ kind: "change-email", email: "new@example.com" });
+    expect(calls[0]!.body).toEqual({ email: "new@example.com", confirmCurrent: true, language: "de" });
+    expect(account.view().pending).toEqual({ kind: "change-email", email: "new@example.com", proof: "code" });
+    // Without the current address's code nothing is sent.
+    await expect(account.changeEmail("111111")).rejects.toMatchObject({ key: "account.error.wrongCurrentCode" });
+    expect(calls).toHaveLength(1);
+    await account.changeEmail("111111", "222222");
+    expect(calls[1]!.body).toEqual({ email: "new@example.com", code: "111111", currentCode: "222222", language: "de" });
+    expect(account.view()).toMatchObject({ account: { email: "new@example.com" }, pending: null, devices: [DEVICE] });
+    expect(kept).toEqual([{ ...SAVED, email: "new@example.com" }]);
+  });
+
+  it("says which code was wrong and keeps the step", async () => {
+    const { fetchImpl } = service({
+      "POST /email/code": () => json({ status: "sent", current: "email" }, 202),
+      "POST /email": () => json({ error: "Wrong.", reason: "wrong-current-code" }, 400),
+    });
+    const { account } = client(fetchImpl, { saved: SAVED });
+    await account.init();
+    await account.sendEmailCode("new@example.com");
+    await expect(account.changeEmail("111111", "222222")).rejects.toMatchObject({ key: "account.error.wrongCurrentCode" });
+    expect(account.view().pending).toMatchObject({ kind: "change-email", proof: "code" });
+  });
+
+  it("adds an email to a Discord-only account with a code and a fresh Discord sign-in", async () => {
+    const { calls, fetchImpl } = service({
+      "POST /email/code": () => json({ status: "sent", current: "discord" }, 202),
+      "POST /email": () => json({ account: { email: "new@example.com", discord: { name: "alex" }, createdAt: SAVED.createdAt } }),
+      "GET /": () => json({ account: { email: "new@example.com" }, devices: [DEVICE] }),
+    });
+    const { account } = client(fetchImpl, { saved: { ...SAVED, email: null, discord: "alex" }, discordLogin: async () => ({ code: "discordcode", verifier: "v".repeat(43) }) });
+    await account.init();
+    await account.sendEmailCode("new@example.com");
+    expect(account.view().pending).toEqual({ kind: "change-email", email: "new@example.com", proof: "discord" });
+    await account.changeEmail("111111");
+    expect(calls[1]!.body).toEqual({ email: "new@example.com", code: "111111", discord: { code: "discordcode", verifier: "v".repeat(43) }, language: "de" });
+    expect(account.view()).toMatchObject({ account: { email: "new@example.com" }, pending: null });
+  });
+
+  it("with a service from before, asks only for the new address's code, as then", async () => {
+    const { calls, fetchImpl } = service({
+      "POST /email/code": () => json({ status: "sent" }, 202),
+      "POST /email": () => json({ account: { email: "new@example.com", createdAt: SAVED.createdAt } }),
+    });
+    const { account } = client(fetchImpl, { saved: SAVED });
+    await account.init();
+    await account.sendEmailCode("new@example.com");
+    expect(account.view().pending).toEqual({ kind: "change-email", email: "new@example.com", proof: "none" });
     await account.changeEmail("111111");
     expect(calls[1]!.body).toEqual({ email: "new@example.com", code: "111111", language: "de" });
     expect(account.view()).toMatchObject({ account: { email: "new@example.com" }, pending: null });
-    expect(kept).toEqual([{ ...SAVED, email: "new@example.com" }]);
   });
 
   it("deletes the account with a code and forgets it here", async () => {

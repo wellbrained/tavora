@@ -133,16 +133,18 @@ test("a user creates a Discord-only account in the browser, adds an email, and t
     await expect(page.getByTestId("account-discord")).toContainText("@pretend_user");
     await expect(page.getByTestId("account-discord-disconnect")).toHaveCount(0);
 
-    // Add an email with a code; then Discord may be disconnected.
+    // Add an email with a code to it and a fresh Discord sign-in (an account without an address has no other proof);
+    // then Discord may be disconnected.
     await page.getByTestId("account-change-email").click();
     await page.getByTestId("account-new-email").fill("discord@example.com");
     await page.getByTestId("account-email-code").click();
+    await expect(page.getByTestId("account-change-email-step")).toHaveAttribute("data-status", "discord");
     await page.getByTestId("account-code").fill(await codeFor("discord@example.com"));
     await page.getByTestId("account-confirm-email").click();
     await expect(page.getByTestId("account")).toContainText("discord@example.com");
 
-    // Each code form shows once its mail went out, so the newest code to the address is the right one. One
-    // address gets at most 3 codes in 15 minutes (A2), so the steps below use two addresses.
+    // Each code form shows once its mail went out, so the newest code to an address is the right one. One address
+    // gets at most 3 codes in 15 minutes (A2), so the steps below use each address three times at most.
 
     // Disconnecting Discord needs the code sent to the email (A6), not the Discord login itself.
     await page.getByTestId("account-discord-disconnect").click();
@@ -151,21 +153,24 @@ test("a user creates a Discord-only account in the browser, adds an email, and t
     await page.getByTestId("account-confirm-discord").click();
     await expect(page.getByTestId("account-discord-connect")).toBeVisible();
 
-    // Connecting it again needs a code to the email too, then the Discord sign-in in the browser.
-    await page.getByTestId("account-discord-connect").click();
-    await expect(page.getByTestId("account-confirm-discord")).toBeVisible();
-    await page.getByTestId("account-code").fill(await codeFor("discord@example.com"));
-    await page.getByTestId("account-confirm-discord").click();
-    await expect(page.getByTestId("account-discord")).toContainText("@pretend_user");
-
-    // Moved to another address, the email can then be removed with a code sent to it; Discord stays the way in.
+    // Moving to another address needs a code to the new address and one to the current address (A6).
     await page.getByTestId("account-change-email").click();
     await page.getByTestId("account-new-email").fill("second@example.com");
     await page.getByTestId("account-email-code").click();
-    await expect(page.getByTestId("account-confirm-email")).toBeVisible();
+    await expect(page.getByTestId("account-change-email-step")).toHaveAttribute("data-status", "code");
     await page.getByTestId("account-code").fill(await codeFor("second@example.com"));
+    await page.getByTestId("account-current-code").fill(await codeFor("discord@example.com"));
     await page.getByTestId("account-confirm-email").click();
     await expect(page.getByTestId("account")).toContainText("second@example.com");
+
+    // Connecting Discord again needs a code to the email too, then the Discord sign-in in the browser.
+    await page.getByTestId("account-discord-connect").click();
+    await expect(page.getByTestId("account-confirm-discord")).toBeVisible();
+    await page.getByTestId("account-code").fill(await codeFor("second@example.com"));
+    await page.getByTestId("account-confirm-discord").click();
+    await expect(page.getByTestId("account-discord")).toContainText("@pretend_user");
+
+    // The email can then be removed with a code sent to it; Discord stays the way in.
     await page.getByTestId("account-remove-email").click();
     await expect(page.getByTestId("account-confirm-remove-email")).toBeVisible();
     await page.getByTestId("account-code").fill(await codeFor("second@example.com"));

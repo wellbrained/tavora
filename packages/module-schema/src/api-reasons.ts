@@ -92,6 +92,7 @@ export const API_REASONS = [
   "vault-changed",
   "wrong-account",
   "wrong-code",
+  "wrong-current-code",
 ] as const;
 
 export type ApiReason = (typeof API_REASONS)[number];

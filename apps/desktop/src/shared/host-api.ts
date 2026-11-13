@@ -229,12 +229,20 @@ export interface AccountDevice {
   current: boolean;
 }
 
+/** How changing the email proves the current address: see AccountPending's change-email. */
+export type ChangeEmailProof = "code" | "discord" | "none";
+
 /** Where a code is waiting: signing in (and, for a new address, asking to create the account), changing the email, deleting. */
 export type AccountPending =
   | { kind: "sign-in"; email: string; step: "code" | "create" }
   /** A Discord login with no account yet: the user is asked before one is made. */
   | { kind: "discord-create"; name: string }
-  | { kind: "change-email"; email: string }
+  /**
+   * Changing the email waits for the code sent to the new address and the proof of the current one: a code sent there
+   * (`code`), or a fresh Discord sign-in for an account without an address (`discord`). `none`: a service from before
+   * that asks only for the new address's code.
+   */
+  | { kind: "change-email"; email: string; proof: ChangeEmailProof }
   /** Removing the email waits for the code sent to it. */
   | { kind: "remove-email" }
   /** Connecting or disconnecting Discord waits for the code sent to the account's address. */

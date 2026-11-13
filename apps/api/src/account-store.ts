@@ -31,8 +31,11 @@ const SESSION_TOUCH_MS = 60 * 60_000;
 export const DEVICE_OS = ["windows", "linux", "macos", "other"] as const;
 export type DeviceOs = (typeof DEVICE_OS)[number];
 
-/** What a code is for. A sign-in code also creates the account when the address has none. */
-export type CodePurpose = "sign-in" | "change-email" | "remove-email" | "connect-discord" | "remove-discord" | "delete";
+/**
+ * What a code is for. A sign-in code also creates the account when the address has none. Changing the address takes
+ * two: "change-email" to the new address and "confirm-email-change" to the current one.
+ */
+export type CodePurpose = "sign-in" | "change-email" | "confirm-email-change" | "remove-email" | "connect-discord" | "remove-discord" | "delete";
 
 /** A Discord login: the user id is the identity, the username only a label shown to the owner. */
 export interface DiscordLogin {
@@ -355,10 +358,26 @@ export class AccountStore {
     return { id, email: methods.email ?? null, discord: methods.discord ?? null, createdAt: new Date(now).toISOString() };
   }
 
-  /** Sets or changes the email address (a Discord-only account gets its first one this way). */
-  changeEmail(id: string, email: string): "ok" | "taken" {
+  /**
+   * Sets or changes the email address (a Discord-only account gets its first one this way). Every other sign-in of the
+   * account ends, and every code still waiting for it or for the old address goes (decided 2026-11-13), so what a
+   * stolen sign-in or an old mailbox started can't finish afterwards. `keepSession`: the sign-in that made the change.
+   */
+  changeEmail(id: string, email: string, keepSession: string | null = null): "ok" | "taken" {
     if (this.accountByEmail(email)) return "taken";
-    this.db.prepare("update accounts set email = ? where id = ?").run(email, id);
+    this.db.exec("begin");
+    try {
+      const old = this.account(id)?.email ?? null;
+      this.db.prepare("update accounts set email = ? where id = ?").run(email, id);
+      this.db.prepare("delete from sessions where account_id = ? and id is not ?").run(id, keepSession);
+      this.db.prepare("delete from codes where account_id = ?").run(id);
+      // Sign-in codes wait under the old address with no account id.
+      if (old) this.db.prepare("delete from codes where address = ?").run(addressKey(old));
+      this.db.exec("commit");
+    } catch (error) {
+      this.db.exec("rollback");
+      throw error;
+    }
     return "ok";
   }
 
@@ -951,6 +970,15 @@ export class AccountStore {
 
   // ── Codes ──────────────────────────────────────────────────────────────
 
+  /** Seconds until the address may be sent another code; 0 when it may now. A step that mails two addresses asks first, so it sends both or neither. */
+  codeWait(email: string, now: number): number {
+    const recent = this.db.prepare("select at from code_requests where address = ? and at > ? order by at").all(addressKey(email), now - DAY_MS) as unknown as { at: number }[];
+    if (recent.length >= CODES_PER_DAY) return secondsUntil(recent[recent.length - CODES_PER_DAY]!.at + DAY_MS, now);
+    const inWindow = recent.filter((row) => row.at > now - CODE_WINDOW_MS);
+    if (inWindow.length >= CODES_PER_WINDOW) return secondsUntil(inWindow[inWindow.length - CODES_PER_WINDOW]!.at + CODE_WINDOW_MS, now);
+    return 0;
+  }
+
   /**
    * Makes a new code for an address, replacing one still waiting for the same
    * purpose, unless the address was sent too many lately. The limits count every
@@ -959,12 +987,8 @@ export class AccountStore {
   requestCode(email: string, purpose: CodePurpose, accountId: string | null, now: number): CodeRequest {
     this.sweep(now);
     const address = addressKey(email);
-    const recent = this.db.prepare("select at from code_requests where address = ? and at > ? order by at").all(address, now - DAY_MS) as unknown as { at: number }[];
-    if (recent.length >= CODES_PER_DAY) return { ok: false, retryAfter: secondsUntil(recent[recent.length - CODES_PER_DAY]!.at + DAY_MS, now) };
-    const inWindow = recent.filter((row) => row.at > now - CODE_WINDOW_MS);
-    if (inWindow.length >= CODES_PER_WINDOW) {
-      return { ok: false, retryAfter: secondsUntil(inWindow[inWindow.length - CODES_PER_WINDOW]!.at + CODE_WINDOW_MS, now) };
-    }
+    const wait = this.codeWait(email, now);
+    if (wait > 0) return { ok: false, retryAfter: wait };
     const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
     this.db.prepare("insert into code_requests (address, at) values (?, ?)").run(address, now);
     this.db

@@ -269,6 +269,7 @@ const ACCEPTED: [{ type: string; [field: string]: unknown }][] = [
   [{ type: "account-sign-out-device", deviceId: "dev_1" }],
   [{ type: "account-email-code", email: "new@example.com" }],
   [{ type: "account-change-email", code: "123456" }],
+  [{ type: "account-change-email", code: "123456", currentCode: "654321" }],
   [{ type: "account-delete-code" }],
   [{ type: "account-delete", code: "123456" }],
   [{ type: "account-discord-sign-in" }],
@@ -544,6 +545,7 @@ describe("parseAction", () => {
     // Removing the email needs the code sent to it; a removal without one, or with anything else, is refused.
     [{ type: "account-email-remove" }],
     [{ type: "account-email-remove", code: "12345" }],
+    [{ type: "account-change-email", code: "123456", currentCode: "12345" }],
     [{ type: "account-email-remove-code", email: "a@b.c" }],
     [{ type: "account-discord-disconnect", code: "x" }],
     // Connecting or disconnecting Discord needs the emailed code.

@@ -33,14 +33,19 @@ const accountProfile = computed(() => {
 });
 
 const code = ref("");
+/** Changing the email: the code sent to the current address, next to the new address's code. */
+const currentCode = ref("");
 const newEmail = ref("");
 const changing = ref(false);
 const busy = ref(false);
 /** True while Discord's page is open in the browser and Tavora waits for its return. */
 const waitingDiscord = ref(false);
 
-// A new step always starts with an empty code box.
-watch(pending, () => (code.value = ""));
+// A new step always starts with empty code boxes.
+watch(pending, () => {
+  code.value = "";
+  currentCode.value = "";
+});
 
 onMounted(() => {
   // The devices and the address as the service has them now; quietly, offline is fine.
@@ -59,6 +64,18 @@ async function run(action: HostAction): Promise<boolean> {
 
 const cleanCode = computed(() => codeDigits(code.value));
 const codeReady = computed(() => cleanCode.value.length === 6);
+
+/** How changing the email proves the current address (AccountPending's change-email), while that step waits. */
+const changeProof = computed(() => (pending.value?.kind === "change-email" ? pending.value.proof : null));
+const cleanCurrentCode = computed(() => codeDigits(currentCode.value));
+const changeReady = computed(() => codeReady.value && (changeProof.value !== "code" || cleanCurrentCode.value.length === 6));
+
+/** Both codes, or the new address's code and then Discord in the browser. */
+function confirmChange() {
+  if (!changeReady.value) return;
+  if (changeProof.value === "discord") return runDiscord({ type: "account-change-email", code: cleanCode.value });
+  return run({ type: "account-change-email", code: cleanCode.value, ...(changeProof.value === "code" ? { currentCode: cleanCurrentCode.value } : {}) });
+}
 
 /** A Discord step: the browser opens, and the page says Tavora is waiting for it. */
 async function runDiscord(action: HostAction): Promise<boolean> {
@@ -188,7 +205,7 @@ function startDelete() {
       </SettingRow>
 
       <form v-if="changing" class="flex flex-col gap-3 border-b py-4" @submit.prevent="newEmail.trim() && sendEmailCode()">
-        <span class="text-muted-foreground">{{ t("account.email.newHint") }}</span>
+        <span class="text-muted-foreground">{{ t(signedIn.email ? "account.email.newHint" : "account.email.addHint") }}</span>
         <div class="flex gap-2">
           <Input v-model="newEmail" type="email" class="max-w-80" autocomplete="email" maxlength="254" :placeholder="t('account.email.placeholder')" :aria-label="t('account.email.new')" data-testid="account-new-email" />
           <Button type="submit" :disabled="busy || !newEmail.trim()" data-testid="account-email-code">{{ t("account.code.send") }}</Button>
@@ -196,15 +213,27 @@ function startDelete() {
         </div>
       </form>
 
-      <form
-        v-if="pending?.kind === 'change-email'"
-        class="flex flex-col gap-3 border-b py-4"
-        @submit.prevent="codeReady && run({ type: 'account-change-email', code: cleanCode })"
-      >
-        <span class="text-muted-foreground">{{ t("account.code.sent", { email: pending.email }) }}</span>
-        <div class="flex gap-2">
+      <!-- Changing the email needs the new address's code and proof of the current one: its code, or Discord (A6). -->
+      <form v-if="pending?.kind === 'change-email'" class="flex flex-col gap-3 border-b py-4" :data-status="pending.proof" data-testid="account-change-email-step" @submit.prevent="confirmChange()">
+        <template v-if="pending.proof === 'code'">
+          <span class="text-muted-foreground">{{ t("account.email.codesSent", { email: pending.email, current: signedIn.email ?? "" }) }}</span>
+          <div class="flex flex-wrap gap-4">
+            <div class="flex min-w-0 flex-col gap-1">
+              <span class="text-muted-foreground truncate text-sm">{{ t("account.email.newCode", { email: pending.email }) }}</span>
+              <CodeInput v-model="code" :placeholder="t('account.code.placeholder')" :aria-label="t('account.email.newCode', { email: pending.email })" data-testid="account-code" />
+            </div>
+            <div class="flex min-w-0 flex-col gap-1">
+              <span class="text-muted-foreground truncate text-sm">{{ t("account.email.currentCode", { email: signedIn.email ?? "" }) }}</span>
+              <CodeInput v-model="currentCode" :placeholder="t('account.code.placeholder')" :aria-label="t('account.email.currentCode', { email: signedIn.email ?? '' })" data-testid="account-current-code" />
+            </div>
+          </div>
+        </template>
+        <template v-else>
+          <span class="text-muted-foreground">{{ t(pending.proof === "discord" ? "account.email.discordCodeSent" : "account.code.sent", { email: pending.email }) }}</span>
           <CodeInput v-model="code" :placeholder="t('account.code.placeholder')" :aria-label="t('account.code.label')" data-testid="account-code" />
-          <Button type="submit" :disabled="busy || !codeReady" data-testid="account-confirm-email">{{ t("account.email.confirm") }}</Button>
+        </template>
+        <div class="flex gap-2">
+          <Button type="submit" :disabled="busy || !changeReady" data-testid="account-confirm-email">{{ t(pending.proof === "discord" ? "account.email.confirmDiscord" : "account.email.confirm") }}</Button>
           <Button type="button" variant="secondary" :disabled="busy" @click="run({ type: 'account-cancel' })">{{ t("common.cancel") }}</Button>
         </div>
       </form>
