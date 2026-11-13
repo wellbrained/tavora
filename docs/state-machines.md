@@ -41,7 +41,7 @@ Update this page in the pull request that adds, removes or changes a flow.
 | --- | --- | --- | --- |
 | Module page | `main/module-view.ts` (`PagePhase`) | `loading → settling → revealed → drawn`, or `failed \| unresponsive \| crashed \| unavailable` | the panel's `InstanceStatus` in the view state |
 | Module update install | `main/catalog-updates.ts` | one install per module at a time; a second press joins the install that is going | `installProgress` |
-| App update | `main/updates.ts`, `shared/host-api.ts` (`UpdateState`) | `idle \| checking \| available \| downloading \| ready` | the view state's `update` |
+| App update | `main/updates.ts`, `shared/host-api.ts` (`UpdateState`) | `idle \| checking \| available \| downloading \| ready`; the manager starts every download itself (the updater's own `autoDownload` stays off), so checks run every 5 minutes and only a retry of the same failed version waits an hour; only the download's own call marks it failed | the view state's `update` |
 | Official publish | `main/official-publish.ts` (`RunState`) | `idle \| building \| preview \| confirming \| uploading \| discarding` | `OfficialPublishView` |
 | Module publish review | `main/module-publish.ts` | `checking \| ready \| publishing \| published`; a newer look drops an older one | `PublishView.status` |
 | Sign-in | `main/account.ts` (`Pending`) | none, or `sign-in` (`code \| create`), `discord-create`, … | `AccountView.pending` |
