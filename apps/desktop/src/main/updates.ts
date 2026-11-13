@@ -39,7 +39,7 @@ export const UPDATER_HEADER = "X-Tavora-Update";
 export const FIRST_CHECK_MS = 0;
 /** The feed is one small file, so asking often costs next to nothing. */
 export const CHECK_EVERY_MS = 5 * 60 * 1000;
-/** A download that failed by itself starts over at most this often, so a broken file isn't fetched every few minutes. */
+/** A failed download of the same version starts over by itself at most this often, so a broken file isn't fetched every few minutes. */
 export const RETRY_EVERY_MS = 60 * 60 * 1000;
 /** A line the log already has is written again after this long, so the log still shows that checks run. */
 export const LOG_REPEAT_MS = 60 * 60 * 1000;
@@ -101,10 +101,12 @@ export class UpdateManager {
   private first: unknown;
   private every: unknown;
   private progressSentAt = 0;
-  /** When a download of the waiting version last failed; checks leave it alone for a while after. */
+  /** Whether found versions download by themselves. The updater's own switch stays off: this class starts every download. */
+  private autoDownload: boolean;
+  /** When a download of the waiting version last failed; it doesn't start over by itself for a while after. */
   private failedAt = 0;
-  /** The updater sent an "error" during the running call, so its rejection needs no second line. */
-  private errorLogged = false;
+  /** How many "error" events came; a call whose rejection came with one needs no second line. */
+  private errorEvents = 0;
 
   constructor(options: UpdateManagerOptions) {
     this.updater = options.updater;
@@ -132,7 +134,10 @@ export class UpdateManager {
     this.everyMs = options.everyMs ?? CHECK_EVERY_MS;
     this.now = options.now ?? (() => new Date());
 
-    this.updater.autoDownload = options.autoDownload;
+    // electron-updater would download inside the check, so a check could not run without starting a
+    // failed download over. The manager starts downloads itself, so only the retry has to wait.
+    this.autoDownload = options.autoDownload;
+    this.updater.autoDownload = false;
     // A downloaded update installs by itself when Tavora is closed.
     this.updater.autoInstallOnAppQuit = true;
     this.updater.requestHeaders = { ...this.updater.requestHeaders, [UPDATER_HEADER]: "1" };
@@ -141,10 +146,13 @@ export class UpdateManager {
       if (this.current.status === "downloading" || this.current.status === "ready") return;
       this.log(`update ${info.version} available`);
       const notes = readReleaseNotes(info.releaseNotes);
-      if (this.updater.autoDownload) return this.set(this.downloading(info.version, notes));
       // A failed download stays marked as failed until the user tries again, unless a newer version came out.
       const u = this.current;
       const failed = u.status === "available" && u.version === info.version && u.failed;
+      // By itself, a failed download starts over at most once an hour; a newer version downloads right away.
+      if (this.autoDownload && !(failed && within(this.now().getTime() - this.failedAt, RETRY_EVERY_MS))) {
+        return void this.startDownload(info.version, notes);
+      }
       this.set({ status: "available", version: info.version, notes, failed });
     });
     this.updater.on("download-progress", (progress) => {
@@ -168,10 +176,10 @@ export class UpdateManager {
     });
     this.updater.on("error", (error) => {
       this.log(`update error: ${error.message}`);
-      this.errorLogged = true;
-      // A failed check goes back to idle; a failed download keeps the version so it can be tried again.
+      this.errorEvents += 1;
+      // A failed check goes back to idle. A download is never marked failed here: the error may come
+      // from a check that ran during the download; the download's own call says when it failed.
       if (this.current.status === "checking") this.set(this.idle(true));
-      else if (this.current.status === "downloading") this.set(this.downloadFailed(this.current));
     });
   }
 
@@ -194,21 +202,18 @@ export class UpdateManager {
   /**
    * Asks the server whether there is a newer version. Does nothing while one is downloading or ready.
    * A version that waits (or whose download failed) is asked about again: a newer one may be out, and
-   * with automatic download on, the download starts over. After a failed download that waits an hour
-   * (RETRY_EVERY_MS), since the check itself would download again; a newer version is then found late.
+   * with automatic download on, a failed download starts over once RETRY_EVERY_MS has passed.
    */
   async check(): Promise<void> {
     const u = this.current;
     const waiting = u.status === "available";
     if (u.status !== "idle" && !waiting) return;
-    // With automatic download on, a check starts the download over: after a failure, wait a while first.
-    if (waiting && u.failed && this.updater.autoDownload && within(this.now().getTime() - this.failedAt, RETRY_EVERY_MS)) return;
     if (!waiting) this.set({ status: "checking" });
-    this.errorLogged = false;
+    const errorEvents = this.errorEvents;
     try {
       await this.updater.checkForUpdates();
     } catch (error) {
-      if (!this.errorLogged) this.log(`update check failed: ${error instanceof Error ? error.message : String(error)}`);
+      this.logFailure("check", error, errorEvents);
       if (this.is("checking")) this.set(this.idle(true));
     }
     // An answer without any event (nothing to compare) still ends the check.
@@ -217,7 +222,7 @@ export class UpdateManager {
 
   /** The Settings switch: whether found versions download by themselves. Turning it on starts a waiting one. */
   setAutoDownload(enabled: boolean): void {
-    this.updater.autoDownload = enabled;
+    this.autoDownload = enabled;
     if (enabled && this.current.status === "available") void this.download();
   }
 
@@ -225,13 +230,19 @@ export class UpdateManager {
   async download(): Promise<void> {
     const u = this.current;
     if (u.status !== "available") return;
-    this.set(this.downloading(u.version, u.notes));
-    this.errorLogged = false;
+    await this.startDownload(u.version, u.notes);
+  }
+
+  /** Every download starts here, the user's and the automatic ones; a failure keeps the version to try again. */
+  private async startDownload(version: string, notes: string[]): Promise<void> {
+    this.set(this.downloading(version, notes));
+    const errorEvents = this.errorEvents;
     try {
       await this.updater.downloadUpdate();
     } catch (error) {
-      if (!this.errorLogged) this.log(`update download failed: ${error instanceof Error ? error.message : String(error)}`);
-      if (this.current.status === "downloading") this.set(this.downloadFailed(this.current));
+      this.logFailure("download", error, errorEvents);
+      const u = this.current;
+      if (u.status === "downloading" && u.version === version) this.set(this.downloadFailed(u));
     }
   }
 
@@ -239,6 +250,12 @@ export class UpdateManager {
   restartNow(): void {
     if (this.current.status !== "ready") return;
     this.updater.quitAndInstall(true, true);
+  }
+
+  /** Logs a call that failed, unless an "error" event since `errorEvents` already wrote the line. */
+  private logFailure(call: "check" | "download", error: unknown, errorEvents: number): void {
+    if (this.errorEvents !== errorEvents) return;
+    this.log(`update ${call} failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 
   /** Re-reads the state, which events may have changed while a call was awaited. */
@@ -281,7 +298,7 @@ const PREVIEW_NOTES = ["This is a preview of an update.", "Nothing is downloaded
  * TAVORA_FAKE_UPDATE_FAIL=1 makes every download fail halfway.
  */
 export class PreviewUpdater implements UpdaterLike {
-  autoDownload = true;
+  autoDownload = false;
   autoInstallOnAppQuit = false;
   requestHeaders: Record<string, string> | null = null;
   private readonly listeners = new Map<string, ((value?: unknown) => void)[]>();
@@ -305,7 +322,6 @@ export class PreviewUpdater implements UpdaterLike {
   async checkForUpdates(): Promise<void> {
     await this.wait(600);
     this.emit("update-available", this.info());
-    if (this.autoDownload) void this.downloadUpdate().catch(() => undefined);
   }
 
   async downloadUpdate(): Promise<void> {

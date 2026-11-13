@@ -12,6 +12,8 @@ class FakeUpdater extends EventEmitter {
   installs: [boolean | undefined, boolean | undefined][] = [];
   failCheck = false;
   failDownload = false;
+  /** The version the feed offers; a check without one answers without any event. */
+  found: string | null = null;
   async checkForUpdates() {
     this.checks += 1;
     // Like electron-updater: an "error" event first, then the call rejects.
@@ -19,6 +21,10 @@ class FakeUpdater extends EventEmitter {
       this.emit("error", new Error("offline"));
       throw new Error("offline");
     }
+    if (!this.found) return;
+    this.emit("update-available", { version: this.found });
+    // Like electron-updater: with its own autoDownload on, the check starts the download itself.
+    if (this.autoDownload) void this.downloadUpdate().catch(() => undefined);
   }
   async downloadUpdate() {
     this.downloads += 1;
@@ -64,11 +70,20 @@ function make(autoDownload = true, onDownloaded?: (version: string) => void) {
 }
 
 describe("UpdateManager", () => {
-  it("sets the updater up: automatic download as chosen, install on quit always", () => {
+  it("sets the updater up: it never downloads by itself (the manager starts downloads), install on quit always", () => {
     const on = make(true);
-    expect(on.updater.autoDownload).toBe(true);
+    expect(on.updater.autoDownload).toBe(false);
     expect(on.updater.autoInstallOnAppQuit).toBe(true);
     expect(make(false).updater.autoDownload).toBe(false);
+  });
+
+  it("with automatic download on, a check that finds a version downloads it once", async () => {
+    const { manager, updater } = make(true);
+    updater.found = "0.3.0";
+    await manager.check();
+    await Promise.resolve();
+    expect(updater.downloads).toBe(1);
+    expect(manager.state).toMatchObject({ status: "downloading", version: "0.3.0" });
   });
 
   it("marks the updater's requests, so the feed can tell them from an installer download", () => {
@@ -134,8 +149,9 @@ describe("UpdateManager", () => {
     updater.emit("update-available", { version: "0.3.0" });
     manager.setAutoDownload(true);
     await Promise.resolve();
-    expect(updater.autoDownload).toBe(true);
+    expect(updater.autoDownload).toBe(false);
     expect(updater.downloads).toBe(1);
+    expect(manager.state).toMatchObject({ status: "downloading", version: "0.3.0" });
   });
 
   it("logs errors: an offline check goes back to idle, a failed download keeps the version to try again", async () => {
@@ -145,9 +161,50 @@ describe("UpdateManager", () => {
     expect(manager.state).toMatchObject({ status: "idle" });
     expect(logs.some((l) => l.includes("offline"))).toBe(true);
 
+    updater.failDownload = true;
     updater.emit("update-available", { version: "0.3.0", releaseNotes: "- One" });
-    updater.emit("error", new Error("connection lost"));
+    await Promise.resolve();
     expect(manager.state).toEqual({ status: "available", version: "0.3.0", notes: ["One"], failed: true });
+  });
+
+  it("writes one line for a failed download, though the updater both sends an error and rejects", async () => {
+    const off = make(false);
+    off.updater.emit("update-available", { version: "0.3.0" });
+    off.updater.failDownload = true;
+    await off.manager.download();
+    expect(off.logs).toEqual(["update 0.3.0 available", "update error: connection lost"]);
+
+    const on = make(true);
+    on.updater.failDownload = true;
+    on.updater.found = "0.3.0";
+    await on.manager.check();
+    await Promise.resolve();
+    expect(on.logs).toEqual(["update 0.3.0 available", "update error: connection lost"]);
+  });
+
+  it("a check that fails while the user's download runs leaves the download alone", async () => {
+    const { manager, updater, states } = make(false);
+    updater.emit("update-available", { version: "0.3.0" });
+    let failCheck!: () => void;
+    updater.checkForUpdates = () =>
+      new Promise<void>((_, reject) => {
+        failCheck = () => {
+          updater.emit("error", new Error("500 on latest.yml"));
+          reject(new Error("500 on latest.yml"));
+        };
+      });
+    const check = manager.check();
+    let finish!: () => void;
+    updater.downloadUpdate = () => new Promise<void>((resolve) => (finish = resolve));
+    const download = manager.download();
+    failCheck();
+    await check;
+    expect(manager.state).toMatchObject({ status: "downloading", version: "0.3.0" });
+    expect(states.some((s) => s.status === "available" && s.failed)).toBe(false);
+    updater.emit("update-downloaded", { version: "0.3.0" });
+    finish();
+    await download;
+    expect(manager.state).toMatchObject({ status: "ready", version: "0.3.0" });
   });
 
   it("logs a line only when it differs from the last one, so checks every few minutes don't fill the log", () => {
@@ -192,25 +249,60 @@ describe("UpdateManager", () => {
     expect(manager.state).toMatchObject({ status: "available", version: "0.3.1", failed: false });
   });
 
-  it("with automatic download on, starts a failed download over at most once an hour", async () => {
+  it("with automatic download on, starts a failed download over at most once an hour, still checking every time", async () => {
     const { manager, updater, clock } = make(true);
-    updater.emit("update-available", { version: "0.3.0" });
-    updater.emit("error", new Error("bad file"));
-    expect(manager.state).toMatchObject({ status: "available", failed: true });
-    const before = updater.checks;
+    updater.found = "0.3.0";
+    updater.failDownload = true;
     await manager.check();
-    expect(updater.checks).toBe(before);
+    await Promise.resolve();
+    expect(manager.state).toMatchObject({ status: "available", version: "0.3.0", failed: true });
+    expect(updater.downloads).toBe(1);
+    updater.failDownload = false;
+    clock.ms += CHECK_EVERY_MS;
+    await manager.check();
+    expect(updater.checks).toBe(2);
+    expect(updater.downloads).toBe(1);
+    expect(manager.state).toMatchObject({ status: "available", version: "0.3.0", failed: true });
     clock.ms += RETRY_EVERY_MS;
     await manager.check();
-    expect(updater.checks).toBe(before + 1);
+    expect(updater.downloads).toBe(2);
+    expect(manager.state).toMatchObject({ status: "downloading", version: "0.3.0" });
+  });
+
+  it("with automatic download on, downloads a newer version right away after a failed download", async () => {
+    const { manager, updater, clock } = make(true);
+    updater.found = "0.3.0";
+    updater.failDownload = true;
+    await manager.check();
+    await Promise.resolve();
+    expect(manager.state).toMatchObject({ status: "available", version: "0.3.0", failed: true });
+    updater.failDownload = false;
+    updater.found = "0.3.1";
+    clock.ms += CHECK_EVERY_MS;
+    await manager.check();
+    expect(updater.downloads).toBe(2);
+    expect(manager.state).toMatchObject({ status: "downloading", version: "0.3.1" });
+  });
+
+  it("starts a failed download over when the clock was set back", async () => {
+    const { manager, updater, clock } = make(true);
+    updater.found = "0.3.0";
+    updater.failDownload = true;
+    await manager.check();
+    await Promise.resolve();
+    updater.failDownload = false;
+    clock.ms -= 24 * 60 * 60 * 1000;
+    await manager.check();
+    expect(updater.downloads).toBe(2);
   });
 
   it("asks again about a version whose download failed, so a check after the wait starts it over", async () => {
     const { manager, updater, clock } = make();
+    updater.failDownload = true;
     updater.emit("update-available", { version: "0.3.0" });
-    updater.emit("error", new Error("connection lost"));
+    await Promise.resolve();
+    updater.failDownload = false;
     clock.ms += RETRY_EVERY_MS;
-    updater.failCheck = false;
     updater.checkForUpdates = async () => {
       updater.checks += 1;
       // Never shows checking in between: the marker stays.
