@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.56",
+    date: "2026-11-13",
+    title: "Changing your email is safer",
+    notes: [
+      "Changing your email now needs a code from your new address and one from your current address.",
+      "No email on your account yet? You confirm with Discord instead.",
+      "Once it's changed, your other devices are signed out.",
+    ],
+    prs: [
+      { number: 782, title: "Changing the account email needs proof of the current address" },
+    ],
+    tags: ["accounts", "privacy", "publishing", "security", "service", "settings", "website"],
+  },
+  {
     version: "0.24.55",
     date: "2026-11-13",
     title: "Your private key stays home",
