@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.38",
+    date: "2026-11-13",
+    title: "Name a personal workspace right in the rail",
+    notes: [
+      "Click Personal and type the name where the workspace will show. Enter adds it, Esc drops it.",
+      "With the rail folded, the name field opens next to the Personal tile.",
+    ],
+    prs: [
+      { number: 756, title: "Personal: name it right in the rail" },
+    ],
+    tags: ["rail"],
+  },
+  {
     version: "0.24.37",
     date: "2026-11-13",
     title: "Key files show as names only",
