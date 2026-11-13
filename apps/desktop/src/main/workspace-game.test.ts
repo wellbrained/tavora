@@ -57,8 +57,9 @@ describe("which game a workspace is, whichever way it was added", () => {
     expect(learnGameIds(library, [...LISTED, { id: "nine-kings", name: "Nine Kings", steamAppId: 2784470 }])).toEqual([]);
     expect(learnGameIds(library, [{ id: "local-9-kings", name: "9 Kings", steamAppId: 2784470 }])).toEqual([]);
     expect(learnGameIds(library, [{ id: "9-kings", name: "9 Kings", steamAppId: 1 }])).toEqual([]);
-    // The same game listed by two modules is one game.
-    expect(learnGameIds(library, [...LISTED, ...LISTED])).toEqual([id]);
+    // Listed twice by its module list, still one game:
+    // The same game listed by two modules is one game, with what either knows about it.
+    expect(learnGameIds(library, [{ id: "9-kings", name: null, steamAppId: null }, ...LISTED])).toEqual([id]);
     // Known already: nothing changes.
     expect(learnGameIds(library, LISTED)).toEqual([]);
     // The service's game list is where ids come from: a listing that says otherwise corrects it.
@@ -79,6 +80,10 @@ describe("which game a workspace is, whichever way it was added", () => {
     const demo = addWorkspace(library, { name: "9 Kings", steamAppId: 1 }, day(2));
     learnGameIds(library, LISTED);
     expect(library.workspaces[demo]!.gameId).toBeNull();
+    // A game with a Steam id goes by it alone, even against a listed game the service has no Steam id for.
+    const steamDoom = addWorkspace(library, { name: "Doom", steamAppId: 2280 }, day(3));
+    learnGameIds(library, [{ id: "doom", name: "Doom", steamAppId: null }]);
+    expect(library.workspaces[steamDoom]!.gameId).toBeNull();
   });
 
   it("leaves a game picked online and a personal workspace as they are", () => {

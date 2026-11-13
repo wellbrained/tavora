@@ -4,6 +4,7 @@ import { hasMessage, translate, type Language, type MessageKey } from "../shared
 import { gameCopyFinder } from "./game-copy";
 import { addWorkspace, type Library } from "./library";
 import { isSteamAppId } from "./steam-icons";
+import { isLearnableGameId, learnsGameId } from "./workspace-game";
 
 
 export const MAX_PROFILE_LENGTH = 200;
@@ -25,7 +26,13 @@ export function steamGameStatus(library: Library, game: SteamImportGame, find = 
 export function importSteamGames(library: Library, games: SteamImportGame[], now: Date): string[] {
   const added: string[] = [];
   for (const game of games) {
-    if (steamGameStatus(library, game) !== "new") continue;
+    // Asked anew for each game: one listed twice is added once.
+    const copy = gameCopyFinder(library)({ id: game.id, steamAppId: game.appid, name: game.name });
+    if (copy) {
+      // A copy added by name learns the id the service gave this game (workspace-game.ts).
+      if (game.id !== null && learnsGameId(copy) && copy.gameId === null && isLearnableGameId(game.id)) copy.gameId = game.id;
+      continue;
+    }
     try {
       added.push(
         addWorkspace(library, game.id ? { online: { id: game.id, name: game.name, steamAppId: game.appid } } : { name: game.name, steamAppId: game.appid }, now),

@@ -2,12 +2,12 @@
 // list; a workspace can carry that id three ways, depending on how the game was added:
 //   - picked online or from the built-in list: the workspace's id is the game's id (`9-kings`, `elden-ring`);
 //   - from the built-in list under an older id: `catalogId`;
-//   - by name (the running game's Add button, a Steam import, the search offline): the id is `local-…`, and the game's
-//     id is learned later as `gameId`, from the catalog's listing of the game with the same Steam id.
+//   - by name (typed in, a game the search didn't know, the search offline or off, a Steam game the service didn't
+//     name): the id is `local-…`, and the game's id is learned later as `gameId`: from the catalog's listing of the game
+//     (by Steam id, else by name), from adding the game again online, or from a Steam import that names it.
 // Everything that asks "is this module for this workspace" goes through `workspaceGameIds`, so no check can tell a
 // workspace's game apart from another check again. A game is added by name only when the online search can't name it
-// (`withOnlineId`); it learns its game later by the rule every copy of a game is found by (`isSameGame`: the Steam id
-// when both have one, else the name). Host only.
+// (`withOnlineId`). Host only.
 import { isGameId } from "@tavora/module-schema";
 import type { OnlineSearchResult } from "../shared/host-api";
 import { isSameGame } from "../shared/same-game";
@@ -48,22 +48,25 @@ export function learnsGameId(workspace: Pick<WorkspaceEntry, "id" | "kind" | "ca
 }
 
 /**
- * Gives each game workspace that was added by name the id of the listed game it is, by `isSameGame` (the Steam id when
- * both have one, else the name), when exactly one listed game is it. The service's game list is where game ids come
- * from, so a listing that says otherwise corrects an id learned before. Returns the ids of the workspaces whose id changed.
+ * Gives each game workspace that was added by name the id of the listed game it is, when exactly one listed game is it:
+ * by Steam id when the workspace has one (a game of the same name with another Steam id is another game), else by name
+ * as `isSameGame` compares them. The service's game list is where game ids come from, so a listing that names one other
+ * game corrects an id learned before; one that could be two games changes nothing. Returns the ids of the workspaces whose id changed.
  */
 export function learnGameIds(library: Library, listed: readonly ListedGame[]): string[] {
   const games = new Map<string, { id: string; steamAppId: number | null; name: string }>();
   for (const game of listed) {
-    if (!isLearnableGameId(game.id) || games.has(game.id)) continue;
-    games.set(game.id, { id: game.id, steamAppId: isSteamAppId(game.steamAppId) ? game.steamAppId : null, name: game.name ?? "" });
+    if (!isLearnableGameId(game.id)) continue;
+    // One game listed by several modules: what any of them knows about it.
+    const seen = games.get(game.id);
+    const steamAppId = isSteamAppId(game.steamAppId) ? game.steamAppId : null;
+    games.set(game.id, { id: game.id, steamAppId: seen?.steamAppId ?? steamAppId, name: seen?.name || game.name || "" });
   }
   const learned: string[] = [];
   for (const workspace of Object.values(library.workspaces)) {
     if (!learnsGameId(workspace)) continue;
     const self = { id: null, steamAppId: workspace.steamAppId, name: workspace.name };
-    const matches = [...games.values()].filter((game) => isSameGame(self, game));
-    // None, or two games it could be: not sure which, so neither.
+    const matches = [...games.values()].filter((game) => (workspace.steamAppId !== null ? game.steamAppId === workspace.steamAppId : isSameGame(self, game)));
     const id = matches.length === 1 ? matches[0]!.id : null;
     if (!id || id === workspace.gameId) continue;
     workspace.gameId = id;
@@ -75,8 +78,8 @@ export function learnGameIds(library: Library, listed: readonly ListedGame[]): s
 /**
  * What a game added by name with its Steam id is added as: the game the online search lists with that Steam id, so it
  * gets the id modules are made for straight away; else as it is (the search doesn't know it, is off or can't be asked).
- * Every add path goes through add-workspace and so through this, whoever calls it (the running game's Add button,
- * Add a game, the welcome, Ctrl+K).
+ * add-workspace runs every add through this, whoever calls it (the running game's Add button, Add a game, the
+ * welcome, Ctrl+K); the Steam import gets its ids from the service with the Steam library instead.
  */
 export async function withOnlineId(input: NewWorkspace, search: ((query: string) => Promise<OnlineSearchResult>) | null): Promise<NewWorkspace> {
   if (!search || !("name" in input) || !isSteamAppId(input.steamAppId)) return input;

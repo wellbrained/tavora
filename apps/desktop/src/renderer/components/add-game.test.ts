@@ -272,12 +272,12 @@ describe("AddGameDialog", () => {
     host.api.browseCatalog.mockResolvedValue({
       status: "ok",
       modules: [
-        { id: "tavora.nine", name: "Nine", gameIds: ["9-kings"], gameSteamAppIds: [], official: true, fits: true },
-        { id: "tavora.other", name: "Other", gameIds: ["satisfactory"], gameSteamAppIds: [], official: true, fits: false },
-        { id: "tavora.any", name: "Any", gameIds: [], gameSteamAppIds: [], official: true, fits: true },
+        { id: "tavora.nine", name: "Nine", gameIds: ["9-kings"], gameSteamAppIds: [] as number[], official: true, fits: true },
+        { id: "tavora.other", name: "Other", gameIds: ["satisfactory"], gameSteamAppIds: [] as number[], official: true, fits: false },
+        { id: "tavora.any", name: "Any", gameIds: [], gameSteamAppIds: [] as number[], official: true, fits: true },
       ] as CatalogModuleView[],
     });
-    host.api.catalogForGames.mockResolvedValue({ status: "ok", modules: [{ id: "tavora.nine", name: "Nine", gameIds: ["9-kings"], gameSteamAppIds: [], official: true } as CatalogModuleView] });
+    host.api.catalogForGames.mockResolvedValue({ status: "ok", modules: [{ id: "tavora.nine", name: "Nine", gameIds: ["9-kings"], gameSteamAppIds: [] as number[], official: true } as CatalogModuleView] });
     host.api.searchOnline.mockResolvedValue({ status: "ok", games: [{ id: "9-kings", name: "9 Kings", steamAppId: 2784470 }] });
     const search = await open([game("Nine Kings", { steamAppId: 2784470, activity: { kind: "played", at: Date.now() } })]);
     host.act.mockImplementation(async (action: { type: string }) => (action.type === "add-workspace" ? { ok: true, id: "9-kings" } : { ok: true }));
@@ -292,7 +292,7 @@ describe("AddGameDialog", () => {
   });
 
   it("opens the copy the user has when add-workspace answers with it, and adds no modules to it", async () => {
-    host.api.catalogForGames.mockResolvedValue({ status: "ok", modules: [{ id: "tavora.elden", name: "Map", gameIds: ["elden-ring"], gameSteamAppIds: [], official: true } as CatalogModuleView] });
+    host.api.catalogForGames.mockResolvedValue({ status: "ok", modules: [{ id: "tavora.elden", name: "Map", gameIds: ["elden-ring"], gameSteamAppIds: [] as number[], official: true } as CatalogModuleView] });
     host.api.searchCatalog.mockResolvedValue([{ id: "elden-ring", name: "Elden Ring" }]);
     const search = await open();
     search.value = "Elden Ring";
