@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.40",
+    date: "2026-11-13",
+    title: "A tidier Personal name field",
+    notes: [
+      "Click Personal and a new row shows under your workspaces, ready for its name. Add game and Personal stay where they are.",
+    ],
+    prs: [
+      { number: 759, title: "Personal: a name row above the Add row" },
+    ],
+    tags: ["rail"],
+  },
+  {
     version: "0.24.39",
     date: "2026-11-13",
     title: "Item cards: room for how stats grow",
