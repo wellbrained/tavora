@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.47",
+    date: "2026-11-13",
+    title: "Only new games under the covers",
+    notes: [
+      "Opening Add, the list under the covers shows only games you have not added yet. Type to find the others.",
+    ],
+    prs: [
+      { number: 768, title: "Add dialog: under the covers, only games to add" },
+    ],
+    tags: ["games"],
+  },
+  {
     version: "0.24.46",
     date: "2026-11-13",
     title: "Hints stay available to screen readers",
