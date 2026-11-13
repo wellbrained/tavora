@@ -255,7 +255,10 @@ test("development folders close, stay closed, and go in the order the developer 
     // The arrow keys on the grip move a folder; so does dragging it.
     await folders.nth(1).getByTestId("move-development-folder").press("ArrowUp");
     await expect.poll(() => paths(first.page)).toEqual([missing, dir]);
-    await folders.nth(0).getByTestId("move-development-folder").dragTo(folders.nth(1), { targetPosition: { x: 40, y: 50 } });
+    // The app puts a folder below another once the pointer is past that row's middle, so drop three quarters down its own height.
+    const target = await folders.nth(1).boundingBox();
+    if (!target) throw new Error("The second folder has no box");
+    await folders.nth(0).getByTestId("move-development-folder").dragTo(folders.nth(1), { targetPosition: { x: 40, y: Math.round(target.height * 0.75) } });
     await expect.poll(() => paths(first.page)).toEqual([dir, missing]);
     await folders.nth(0).getByTestId("move-development-folder").press("ArrowDown");
     await expect.poll(() => paths(first.page)).toEqual([missing, dir]);
