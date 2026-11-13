@@ -28,6 +28,17 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.37",
+    date: "2026-11-13",
+    title: "Key files show as names only",
+    notes: [
+      "The Allow dialog lists key files (.pem, .key, .p12, .pfx, .ppk) under names only. Tavora never lets a module read them.",
+    ],
+    prs: [
+      { number: 755, title: "Allow dialog: leave key files out of what a module reads" },
+    ],
+  },
+  {
     version: "0.24.36",
     date: "2026-11-13",
     title: "Add a game and Personal sit right",
