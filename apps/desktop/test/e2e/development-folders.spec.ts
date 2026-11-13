@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { expectModuleText, hintOf, launch, newUserData, openWorkspace, openModule, PLAYGROUND, seedLibrary, VUE } from "./harness";
+import { expectModuleText, hintOf, hintsOf, launch, newUserData, openWorkspace, openModule, PLAYGROUND, seedLibrary, VUE } from "./harness";
 
 const ID = "devtest.tracker";
 
@@ -237,7 +237,8 @@ test("development folders close, stay closed, and go in the order the developer 
   const missing = path.join(dir, "not-a-module");
   const userData = await newUserData();
   await writeFile(path.join(userData, "library.json"), JSON.stringify({ ...seedLibrary(), developmentFolders: [dir, missing] }));
-  const paths = (page: import("@playwright/test").Page) => page.getByTestId("development-folder-path").evaluateAll((items) => items.map((item) => item.getAttribute("title")));
+  // Each folder's full path is its hint. A hovered hint's `title` moves to `data-tavora-tooltip`, so it is read as a hint.
+  const paths = (page: import("@playwright/test").Page) => hintsOf(page.getByTestId("development-folder-path"));
   const first = await launch(userData);
   try {
     await first.page.getByTestId("rail-settings").click();
@@ -248,6 +249,9 @@ test("development folders close, stay closed, and go in the order the developer 
     await folders.nth(0).getByTestId("development-folder-toggle").click();
     await expect(folders.nth(0).getByTestId(`module-${ID}`)).toHaveCount(0);
     await expect(folders.nth(0).getByTestId("development-folder-count")).toHaveText("1 project");
+    // The pointer can rest on a folder's path, as after that click when the path is long enough: the order still reads right.
+    await folders.nth(0).getByTestId("development-folder-path").hover();
+    await expect(folders.nth(0).getByTestId("development-folder-path")).toHaveAttribute("title", "");
     // The arrow keys on the grip move a folder; so does dragging it.
     await folders.nth(1).getByTestId("move-development-folder").press("ArrowUp");
     await expect.poll(() => paths(first.page)).toEqual([missing, dir]);
