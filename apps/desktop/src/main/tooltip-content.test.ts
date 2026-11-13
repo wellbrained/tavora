@@ -40,6 +40,16 @@ describe("tooltip boundary", () => {
         for (const extra of [{ properties: [{ label: "Range", value: "" }] }, { properties: [{ label: "Range", value: "3", per: "" }] }, { properties: [{ label: "Range", value: "3", per: "x".repeat(41) }] }, { properties: [{ label: "Range", value: "3", per: 3 }] }, { properties: [{ label: "Range", value: 3, per: "+1" }] }, { properties: [{ label: "Range", value: "x".repeat(301), per: "+1" }] }, { properties: [{ label: "Range", value: "3", per: "+1", color: "red" }] }, { perHeading: "" }, { perHeading: "x".repeat(61) }, { perHeading: 1 }])
             expect(() => checkTooltip({ ...base, content: { title: "x", ...extra } })).toThrow();
     });
+    it("takes a stat's icon from the module's bundle by the picture's path rules, with or without a per", () => {
+        const content = { title: "x", layout: "card", properties: [{ label: "HP", value: "40", icon: "dist/icons/heart.png" }, { label: "Damage", value: "", per: "+3", icon: "dist/icons/sword.webp" }, { label: "Range", value: "3" }] };
+        expect(checkTooltip({ ...base, content }).content).toEqual(content);
+        for (const icon of ["https://example.org/a.png", "file:///secret.png", "data:image/png;base64,iVBORw0KGgo=", "/dist/a.png", "dist/../a.png", "dist/a/../../b.png", "dist/a.svg", "dist/a.jpg", "dist/a.jpeg", "dist/a.gif", "icons/a.png", "", "dist/" + "a".repeat(500) + ".png", 1, null])
+            expect(() => checkTooltip({ ...base, content: { title: "x", properties: [{ label: "HP", value: "40", icon }] } })).toThrow();
+        expect(() => checkTooltip({ ...base, content: { title: "x", requirements: [{ label: "Level", value: "2", icon: "dist/a.png" }] } })).toThrow();
+        // Only the icon is a mask: the item picture still takes JPEG and GIF.
+        for (const image of ["dist/a.jpg", "dist/a.jpeg", "dist/a.gif"])
+            expect(checkTooltip({ ...base, content: { title: "x", image } }).content.image).toBe(image);
+    });
     it("rejects another layout, a bad skin name and effects that are too long or not text", () => {
         for (const extra of [{ layout: "grid" }, { layout: "CARD" }, { skin: "Chaos King" }, { skin: "x".repeat(33) }, { skin: "" }, { effect: "" }, { effect: "x".repeat(1001) }, { effect: [] }, { effect: [{ text: " " }] }, { effect: [{ text: "a", accent: "yes" }] }, { effect: [{ text: "a", color: "#ff0000" }] }, { effect: [{ text: "x".repeat(600) }, { text: "x".repeat(401) }] }, { effect: Array.from({ length: 41 }, () => ({ text: "a" })) }, { effect: [{ html: "<b>a</b>" }] }])
             expect(() => checkTooltip({ ...base, content: { title: "x", ...extra } })).toThrow();

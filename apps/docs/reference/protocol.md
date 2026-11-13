@@ -664,6 +664,15 @@ These need a Tavora with `ui.tooltip.defineSkin` (its version is in the table ab
   card has `per`. The rich layout shows it after the value ("12 · +3"). `per` and `perHeading` need a Tavora with
   `sdk.supports("ui.tooltip.per")`; on an older one the SDK puts `per` into the value and leaves the heading out (a raw
   caller does that itself).
+- A property may have `icon`: a small pictogram before its label (a heart for health, a sword for damage). It follows
+  the rules of `image` (a `dist/` path, up to 500 characters, read only from the module's own bundle), but must be a
+  PNG or WebP (it is a mask: a JPEG would draw a filled square, a GIF would animate), up to 64 KB. Only its shape counts: the card draws it as a mask in the label's colour (the
+  theme's softer text, the PoE look's or the skin's `muted`), 14 px high, centred on the label's first line, with hard
+  pixels on a `pixelArt` skin, so give it a transparent background. When a property of the card has one, every label keeps
+  its room, so they line up. An icon that can't be read shows nothing; the rich layout shows none. It is decoration
+  (hidden from screen readers); the label stays the stat's name. `icon` needs a Tavora with
+  `sdk.supports("ui.tooltip.propertyIcon")`: an older one refuses the unknown key, and with it the whole tooltip, so
+  the SDK leaves it out there (a raw caller does that itself).
 - `content.effect` is a text (up to 1,000 characters) or up to 40 runs `{ text, accent? }` (1,000 characters in all);
   `accent: true` runs take the accent colour.
 - `content.skin` names one of the module's skins; only the card layout wears it. A name that isn't defined shows the

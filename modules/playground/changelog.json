@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.40",
+    "date": "2026-11-13",
+    "notes": [
+      "The Item cards specimen shows icons before some of the stats, plain and in a skin."
+    ]
+  },
+  {
     "version": "0.1.39",
     "date": "2026-11-12",
     "notes": [

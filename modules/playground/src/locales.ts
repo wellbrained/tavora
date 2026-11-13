@@ -221,7 +221,7 @@ export const en = {
   "ex.tooltips.Values": "Values",
   "ex.tooltips.Values.note": "A chart bar, a game item.",
   "ex.tooltips.ItemCards": "Item cards",
-  "ex.tooltips.ItemCards.note": "The tooltip's card in a panel: plain, with stats per level, and in a module's skin.",
+  "ex.tooltips.ItemCards.note": "The tooltip's card in a panel: plain, with stats per level and their icons, and in a module's skin.",
   "ex.tooltips.ItemCards.rule": "A skin may give the title and the effect its own font and colours; the rest keeps the theme font.",
 
   "ex.popovers.WithField": "Popover with a field",
@@ -659,7 +659,7 @@ export const de: Record<TextKey, string> = {
   "ex.tooltips.Values": "Werte",
   "ex.tooltips.Values.note": "Ein Balken im Diagramm, ein Gegenstand im Spiel.",
   "ex.tooltips.ItemCards": "Gegenstandskarten",
-  "ex.tooltips.ItemCards.note": "Die Karte des Tooltips in einem Panel: schlicht, mit Werten pro Stufe und im Look eines Moduls.",
+  "ex.tooltips.ItemCards.note": "Die Karte des Tooltips in einem Panel: schlicht, mit Werten pro Stufe und ihren Symbolen und im Look eines Moduls.",
   "ex.tooltips.ItemCards.rule": "Ein Look darf Titel und Effekt eine eigene Schrift und Farben geben; der Rest bleibt in der Schrift des Themes.",
 
   "ex.popovers.WithField": "Popover mit einem Feld",

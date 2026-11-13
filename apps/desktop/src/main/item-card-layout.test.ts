@@ -18,3 +18,14 @@ describe("tooltip page and the kit's card: what a stat grows by, and rows under 
         expect(KIT_CSS).not.toContain("li span:last-child");
     });
 });
+
+describe("tooltip page and the kit's card: a stat's icon", () => {
+    it("draw it alike: a mask in the label's colour, 14 px on the label's first line, 6 px before the label", () => {
+        expect(TOOLTIP_DOCUMENT).toContain("body.card .stat-icon{flex:0 0 14px;width:14px;height:14px;margin-top:calc((1lh - 14px) / 2)}");
+        expect(KIT_CSS).toContain(".tavora-item-card-icon{flex:0 0 14px;width:14px;height:14px;margin-top:calc((1lh - 14px) / 2)}");
+        expect(TOOLTIP_DOCUMENT).toContain("body.card .stats.has-icons .stats-label{display:flex;align-items:flex-start;gap:6px}");
+        expect(KIT_CSS).toContain(".tavora-item-card-stats[data-icons] .tavora-item-card-label{display:flex;align-items:flex-start;gap:6px}");
+        expect(KIT_CSS).toContain(".tavora-item-card-icon[data-drawn]{background-color:currentColor;-webkit-mask:var(--ic-icon) center/contain no-repeat;mask:var(--ic-icon) center/contain no-repeat}");
+        expect(KIT_CSS).toContain(".tavora-item-card[data-pixel] .tavora-item-card-icon");
+    });
+});

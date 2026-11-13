@@ -42,11 +42,17 @@ export interface TooltipContent {
      * card layout shows it in a third column, in the accent colour, and the column appears only when a row of the card
      * has one; with `per`, `value` may be empty (a stat that only grows). The rich layout shows it after the value.
      * Needs `sdk.supports("ui.tooltip.per")`: on an older Tavora the SDK puts it into the value ("24 · ×1.2").
+     * A row's `icon` is a small pictogram before its label (a heart for HP, a sword for damage), given like `image`: a
+     * bundle-relative path to a PNG or WebP (dist/icons/heart.png, up to 64 KB; for the kit's `ItemCard`, a URL the page
+     * can load). Only its shape counts: the card draws it in the label's colour, so give it a transparent background; it
+     * is the label's height, and left out when it can't be read. Only the card layout shows it. Needs `sdk.supports("ui.tooltip.propertyIcon")`: on
+     * an older Tavora the SDK leaves it out.
      */
     properties?: {
         label: string;
         value: string;
         per?: string;
+        icon?: string;
     }[];
     /** The heading over the `per` column ("Per level"), in the user's language, up to 60 characters; shown only with a `per`. */
     perHeading?: string;

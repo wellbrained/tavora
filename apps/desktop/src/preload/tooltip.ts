@@ -25,6 +25,8 @@ const skins = new Map<number, Skin>();
 let current: Data | undefined;
 // The host made these; they are checked again here, so nothing but a colour or a base64 data: URL reaches the styles.
 const HEX = /^#[0-9a-f]{6}$/i, FRAME = /^data:image\/(?:png|webp);base64,[A-Za-z0-9+/]+={0,2}$/, FONT = /^data:font\/woff2;base64,[A-Za-z0-9+/]+={0,2}$/;
+// A stat's icon, read in by the host (main/tooltip-images.ts) and checked again before it reaches a style.
+const ICON = /^data:image\/(?:png|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
 const SKIN_VARS = { surface: "--skin-surface", text: "--skin-text", muted: "--skin-muted", accent: "--skin-accent", box: "--skin-box", boxText: "--skin-box-text", boxBorder: "--skin-box-border" } as const;
 let face: FontFace | undefined, faceSource: string | undefined;
 // FontFaceSet is a set of FontFaces; the DOM types here leave out its add and delete.
@@ -209,18 +211,35 @@ function renderCard(card: HTMLElement, c: TooltipContent, de: boolean) {
 /**
  * The card's stats: label, value and, when a row of the card has one, how much it grows (`per`) in a third column
  * with its heading over it. No colons: the columns line the values up. Long values wrap; the label keeps its room.
+ * When a row has an icon, every label keeps room for one, so the labels still line up.
  */
-function stats(rows: { label: string; value: string; per?: string }[], heading?: string) {
-    const per = rows.some(r => r.per !== undefined);
-    const grid = node("div", undefined, per ? "stats has-per" : "stats");
+function stats(rows: { label: string; value: string; per?: string; icon?: string }[], heading?: string) {
+    const per = rows.some(r => r.per !== undefined), icons = rows.some(r => r.icon !== undefined);
+    const grid = node("div", undefined, "stats" + (per ? " has-per" : "") + (icons ? " has-icons" : ""));
     if (per && heading)
         grid.append(node("span"), node("span"), node("small", heading, "per-heading"));
     for (const r of rows) {
-        grid.append(node("span", r.label, "stats-label"), node("span", r.value, "value"));
+        const label = node("span", icons ? undefined : r.label, "stats-label");
+        if (icons)
+            label.append(statIcon(r.icon), document.createTextNode(r.label));
+        grid.append(label, node("span", r.value, "value"));
         if (per)
             grid.append(node("span", r.per ?? "", "per"));
     }
     return grid;
+}
+/**
+ * A stat's icon: only its shape, as a mask in the label's colour (so it follows the theme and the skin). It is
+ * decoration, the label stays the stat's name. Without a usable picture it only keeps the room.
+ */
+function statIcon(src: string | undefined) {
+    const icon = node("span", undefined, "stat-icon");
+    icon.setAttribute("aria-hidden", "true");
+    if (src && ICON.test(src)) {
+        icon.classList.add("drawn");
+        icon.style.setProperty("--stat-icon", `url("${src}")`);
+    }
+    return icon;
 }
 /** Properties and sections, the same in both layouts. */
 function appendRows(details: HTMLElement, c: TooltipContent) {

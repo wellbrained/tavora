@@ -22,6 +22,18 @@ function effect(v: unknown): NonNullable<TooltipContent["effect"]> {
         fail();
     return runs;
 }
+/**
+ * A raster picture in the module's own bundle (`dist/…`), read in later (tooltip-images.ts): the item picture (PNG,
+ * JPEG, WebP or GIF), or a stat's icon, which is a mask and so only PNG or WebP (a JPEG would be a filled square, a GIF
+ * would animate).
+ */
+const IMAGE_PATH = /^dist\/(?:[a-zA-Z0-9_. -]+\/)*[a-zA-Z0-9_. -]+\.(?:png|jpe?g|webp|gif)$/i, ICON_PATH = /\.(?:png|webp)$/i;
+function bundleImage(v: unknown, icon = false): string {
+    const image = text(v, 500);
+    if (!IMAGE_PATH.test(image) || (icon && !ICON_PATH.test(image)) || image.split("/").includes(".."))
+        fail();
+    return image;
+}
 export function tooltipId(v: unknown): string { const o = obj(v, ["id"]); const id = text(o.id, 64); if (!ID.test(id))
     fail(); return id; }
 export function checkTooltipAnchor(v: unknown): TooltipAnchor {
@@ -54,12 +66,8 @@ export function checkTooltip(v: unknown): TooltipRequest {
             fail();
         content.tone = c.tone as NonNullable<TooltipContent["tone"]>;
     }
-    if (c.image !== undefined) {
-        const image = text(c.image, 500);
-        if (!/^dist\/(?:[a-zA-Z0-9_. -]+\/)*[a-zA-Z0-9_. -]+\.(?:png|jpe?g|webp|gif)$/i.test(image) || image.split("/").includes(".."))
-            fail();
-        content.image = image;
-    }
+    if (c.image !== undefined)
+        content.image = bundleImage(c.image);
     if (c.layout !== undefined) {
         if (!["rich", "card"].includes(c.layout as string))
             fail();
@@ -77,11 +85,19 @@ export function checkTooltip(v: unknown): TooltipRequest {
     const property = (v: unknown) => { const p = obj(v, ["label", "value"]); return { label: text(p.label, 100), value: text(p.value, 300) }; };
     if (c.requirements !== undefined)
         content.requirements = list(c.requirements, 8, property);
-    // A stat may grow by `per` (a third column on the card); with it, its value may be empty (it only grows).
+    // A stat may grow by `per` (a third column on the card); with it, its value may be empty (it only grows). Its `icon`
+    // is a picture in the module's bundle, by the same rules as `image`.
+    const stat = (v: unknown) => {
+        const p = obj(v, ["label", "value", "per", "icon"]);
+        if (p.per !== undefined && (typeof p.value !== "string" || p.value.length > 300))
+            fail();
+        const row: NonNullable<TooltipContent["properties"]>[number] = p.per === undefined ? property({ label: p.label, value: p.value }) : { label: text(p.label, 100), value: p.value as string, per: text(p.per, 40) };
+        if (p.icon !== undefined)
+            row.icon = bundleImage(p.icon, true);
+        return row;
+    };
     if (c.properties !== undefined)
-        content.properties = list(c.properties, 20, v => { const p = obj(v, ["label", "value", "per"]); if (p.per === undefined)
-            return property({ label: p.label, value: p.value }); const per = text(p.per, 40); if (typeof p.value !== "string" || p.value.length > 300)
-            fail(); return { label: text(p.label, 100), value: p.value, per }; });
+        content.properties = list(c.properties, 20, stat);
     if (c.perHeading !== undefined)
         content.perHeading = text(c.perHeading, 60);
     let rows = 0;

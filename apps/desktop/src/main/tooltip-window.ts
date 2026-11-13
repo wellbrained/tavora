@@ -1,8 +1,7 @@
 import { BrowserWindow } from "electron";
 import { randomUUID } from "node:crypto";
-import { readFile, stat } from "node:fs/promises";
 import type { TooltipRequest, TooltipSkin, TavoraTheme } from "@tavora/sdk/protocol";
-import { resolveAsset, contentTypeFor } from "./assets";
+import { withBundleImages } from "./tooltip-images";
 import { TooltipState, tooltipBounds, type OpenTooltip } from "./tooltip-state";
 import { TOOLTIP_DOCUMENT } from "../shared/tooltip-document";
 import { SkinStore } from "./tooltip-skin";
@@ -64,22 +63,10 @@ export class TooltipWindow {
         w.setIgnoreMouseEvents(!request.pinned || this.options.hidden, { forward: true });
         w.setFocusable(!!request.pinned && !this.options.hidden);
         this.size = { width: 520, height: 2000 };
-        let image: string | undefined;
-        if (request.content.image) {
-            const file = await resolveAsset(source.root, "/" + request.content.image);
-            try {
-                if (file && (await stat(file)).size <= 512000) {
-                    const bytes = await readFile(file);
-                    if (bytes.length <= 512000)
-                        image = `data:${contentTypeFor(file)};base64,${bytes.toString("base64")}`;
-                }
-            }
-            catch { /* Missing artwork leaves the text intact. */ }
-        }
+        const content = await withBundleImages(source.root, request.content);
         if (this.state.current !== open)
             return false;
-        const { image: _bundleImage, ...content } = request.content;
-        open.request = { ...open.request, content: { ...content, ...(image ? { image } : {}) } };
+        open.request = { ...open.request, content };
         if (this.ready)
             this.render(open);
         return true;

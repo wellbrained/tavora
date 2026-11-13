@@ -117,6 +117,39 @@ describe("tooltip preload", () => {
         expect(rich.querySelector(".per-heading")).toBeNull();
     });
 
+    it("draws a stat's icon before its label as a mask, and keeps its room on every label when only some have one", () => {
+        const HEART = "data:image/png;base64,iVBORw0KGgo=";
+        const stats = render({ ...card, perHeading: "Per level", properties: [{ label: "HP", value: "40", icon: HEART }, { label: "Damage", value: "12", per: "+3", icon: "data:image/webp;base64,UklGRg==" }, { label: "Range", value: "3" }] }).querySelector(".stats")!;
+        expect(stats.className).toBe("stats has-per has-icons");
+        const labels = Array.from(stats.querySelectorAll(".stats-label"));
+        // The label's text stays its name; the icon is decoration.
+        expect(labels.map(l => l.textContent)).toEqual(["HP", "Damage", "Range"]);
+        const icons = labels.map(l => l.firstElementChild as HTMLElement);
+        expect(icons.map(i => i.className)).toEqual(["stat-icon drawn", "stat-icon drawn", "stat-icon"]);
+        expect(icons.every(i => i.getAttribute("aria-hidden") === "true" && !i.textContent)).toBe(true);
+        expect(icons[0]!.style.getPropertyValue("--stat-icon")).toBe(`url("${HEART}")`);
+        expect(icons[2]!.style.getPropertyValue("--stat-icon")).toBe("");
+        expect(Array.from(stats.children).map(c => c.textContent)).toEqual(["", "", "Per level", "HP", "40", "", "Damage", "12", "+3", "Range", "3", ""]);
+        // Without any icon the labels are plain text, as before.
+        const plain = render(card).querySelector(".stats")!;
+        expect(plain.className).toBe("stats");
+        expect(plain.querySelector(".stat-icon")).toBeNull();
+    });
+
+    it("never puts anything but a checked picture into an icon's style", () => {
+        const stats = render({ ...card, properties: [{ label: "A", value: "1", icon: 'data:image/png;base64,AA=="),url(https://example.org/x' }, { label: "B", value: "2", icon: "dist/icons/heart.png" }, { label: "C", value: "3", icon: "data:image/svg+xml;base64,PHN2Zz4=" }, { label: "D", value: "4", icon: "data:image/jpeg;base64,/9j/4AA=" }, { label: "E", value: "5", icon: "data:image/gif;base64,R0lGODlh" }] }).querySelector(".stats")!;
+        for (const icon of Array.from(stats.querySelectorAll<HTMLElement>(".stat-icon"))) {
+            expect(icon.classList.contains("drawn")).toBe(false);
+            expect(icon.getAttribute("style")).toBeNull();
+        }
+    });
+
+    it("shows no icons in the rich layout", () => {
+        const rich = render({ ...card, layout: "rich", properties: [{ label: "HP", value: "40", icon: "data:image/png;base64,iVBORw0KGgo=" }] });
+        expect(rich.querySelector(".stat-icon")).toBeNull();
+        expect(rich.querySelector(".properties")!.textContent).toBe("HP: 40");
+    });
+
     it("shows the rich layout as before, with no skin even when one is sent", () => {
         const el = render({ ...card, layout: "rich" }, { skin });
         expect(document.body.classList.contains("card")).toBe(false);

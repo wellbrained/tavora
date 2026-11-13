@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.34
+
+- New projects start on `@tavora/sdk` 0.3.19: item-card stats can have an icon before their label (`icon`).
+
 ## 0.1.33
 
 - New projects start on `@tavora/sdk` 0.3.18: an item-card skin can give the effect box an edge (`colors.boxBorder`).

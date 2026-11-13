@@ -73,6 +73,33 @@ describe("ItemCard", () => {
     expect(Array.from(rich.querySelectorAll(".tavora-item-card-props dd"), (d) => d.textContent)).toEqual(["12 · +3", "3"])
   })
 
+  it("draws a stat's icon before its label as a mask, and keeps its room on every label when only some have one", () => {
+    const icons: TooltipContent = { ...card, perHeading: "Per level", properties: [{ label: "HP", value: "40", icon: "icons/heart.png" }, { label: "Damage", value: "12", per: "+3", icon: "data:image/png;base64,iVBORw0KGgo=" }, { label: "Range", value: "3" }] }
+    const stats = mount(icons).querySelector(".tavora-item-card-stats")!
+    expect(stats.hasAttribute("data-icons")).toBe(true)
+    const labels = Array.from(stats.querySelectorAll(".tavora-item-card-label"))
+    // The label's text stays its name; the icon is decoration.
+    expect(labels.map((l) => l.textContent)).toEqual(["HP", "Damage", "Range"])
+    const marks = labels.map((l) => l.firstElementChild as HTMLElement)
+    expect(marks.map((m) => m.className)).toEqual(["tavora-item-card-icon", "tavora-item-card-icon", "tavora-item-card-icon"])
+    expect(marks.map((m) => m.hasAttribute("data-drawn"))).toEqual([true, true, false])
+    expect(marks.every((m) => m.getAttribute("aria-hidden") === "true")).toBe(true)
+    // A page path is made absolute against the page, so the stylesheet's address can't change it.
+    expect(marks[0]!.style.getPropertyValue("--ic-icon")).toBe(`url("${new URL("icons/heart.png", document.baseURI).href}")`)
+    expect(marks[2]!.style.getPropertyValue("--ic-icon")).toBe("")
+    expect(Array.from(stats.children, (c) => c.textContent)).toEqual(["", "", "Per level", "HP", "40", "", "Damage", "12", "+3", "Range", "3", ""])
+    app!.unmount()
+    // A quote in the path can't end the url early.
+    const odd = mount({ ...card, properties: [{ label: "HP", value: "40", icon: 'a.png"),url(b.png' }] }).querySelector<HTMLElement>(".tavora-item-card-icon")!
+    expect(odd.style.getPropertyValue("--ic-icon")).not.toContain('"),url(')
+    app!.unmount()
+    // Without any icon the labels are plain text, as before; the rich layout shows none.
+    expect(mount(card).querySelector(".tavora-item-card-stats")!.hasAttribute("data-icons")).toBe(false)
+    expect(document.querySelector(".tavora-item-card-icon")).toBeNull()
+    app!.unmount()
+    expect(mount({ ...icons, layout: "rich" }).querySelector(".tavora-item-card-icon")).toBeNull()
+  })
+
   it("lists requirements on the card in the same columns as the stats", () => {
     const grid = mount({ ...card, requirements: [{ label: "Level", value: "12" }] }).querySelector(".tavora-item-card-section:last-child .tavora-item-card-stats")!
     expect(Array.from(grid.children, (c) => c.className)).toEqual(["tavora-item-card-label", "tavora-item-card-value"])

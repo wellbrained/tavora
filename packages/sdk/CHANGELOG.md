@@ -1,3 +1,10 @@
+## 0.3.19
+
+Icons on an item card's stats. They come with the next Tavora (`ITEM_CARD_ICON_TAVORA` in `protocol.ts`; the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.19.32).
+
+- A property takes `icon`: a small pictogram before its label, like a heart for HP or a sword for damage. It is a `dist/` path like `image`, but only to a PNG or WebP (up to 64 KB); for the kit's `ItemCard` it is a URL your page can load. Only its shape counts: the card draws it in the label's colour, so give it a transparent background. When some stats have one, every label keeps the icon's room, so they still line up. Only the card layout shows it.
+- An older Tavora refuses a key it doesn't know, and with it the whole tooltip, so the SDK leaves `icon` out there. `sdk.supports("ui.tooltip.propertyIcon")` tells which case you are in.
+
 ## 0.3.18
 
 The item card's effect box gets an edge. It comes with the next Tavora (`ITEM_CARD_BOX_BORDER_TAVORA` in `protocol.ts`; the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.19.32).
