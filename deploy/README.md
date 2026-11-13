@@ -44,10 +44,12 @@ could rewrite Caddy and reach the update feed, the Hetzner DNS token and the TLS
 keep using `systemctl reload caddy`, which finds the socket in the Caddyfile. CoreHub's
 `scripts/secure-caddy-admin.sh --check` (as root on the server) says whether it is still in place.
 
-The root helpers check the Caddyfile **as Caddy's own user and groups, never as root** (CoreHub #425). It
-imports `/srv/corehub/shared/hosting.caddy`, which CoreHub can write, and checking a config opens the log files
-it names (creating them, changing their mode), so a check as root would let CoreHub make or chmod any file. If
-the check says "permission denied", Caddy itself can't open that file either.
+The setup scripts (`server/setup-deploy-access.sh`, `../apps/desktop/deploy/tavora-updates-setup.sh`) check the
+Caddyfile **as Caddy's own user and groups, never as root** (CoreHub #425). The Caddyfile imports
+`/srv/corehub/shared/hosting.caddy`, which CoreHub can write, and checking a config opens the log files it names
+(creating them, changing their mode), so a check as root would let CoreHub make or chmod any file. They stop when
+Caddy's service runs or reloads as root. If the check says "permission denied", Caddy itself can't open that
+file either: grant access only to a file that belongs to a site, never to one a log route shouldn't touch.
 
 ## Change the server setup
 

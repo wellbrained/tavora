@@ -22,7 +22,8 @@ say() { echo "  $*"; }
 # Checks /etc/caddy/Caddyfile as Caddy's own user and groups, the way Caddy runs it, never as root (CoreHub
 # #425): it imports /srv/corehub/shared/hosting.caddy, which the corehub user can write, and checking it opens
 # (creates, chmods) the log files it names, so as root a crafted log route could make any file. Same as
-# CoreHub's scripts/secure-caddy-admin.sh. On failure it says what Caddy said.
+# CoreHub's scripts/secure-caddy-admin.sh. On failure it says what Caddy said. Keep in step with the copy in
+# apps/desktop/deploy/tavora-updates-setup.sh.
 caddy_validate() {
   local user group groups home err
   command -v setpriv >/dev/null || { echo '  setpriv is missing (package util-linux)' >&2; return 1; }
@@ -32,12 +33,18 @@ caddy_validate() {
     return 1
   fi
   id "$user" >/dev/null 2>&1 || { echo "  Caddy's user $user doesn't exist" >&2; return 1; }
+  # `systemctl reload caddy` must run as that user too: a + or ! prefix, or PermissionsStartOnly, makes it root.
+  if systemctl cat caddy 2>/dev/null | grep -qE '^(ExecReload=[-@:+!]*[+!]|PermissionsStartOnly=(yes|true|on|1))'; then
+    echo "  caddy.service reloads as root (ExecReload with + or !, or PermissionsStartOnly); fix the unit first." >&2
+    return 1
+  fi
   group="$(systemctl show -P Group caddy 2>/dev/null || true)"
   group="${group:-$(id -gn "$user")}"
-  # Its groups from /etc/group, the unit's SupplementaryGroups and corehub (to read hosting.caddy), as Caddy has.
-  groups="$({ id -Gn "$user"; systemctl show -P SupplementaryGroups caddy 2>/dev/null || true; if getent group corehub >/dev/null; then echo corehub; fi; } | tr -s ' ' '\n' | grep -v '^$' | sort -u | paste -sd, -)"
+  # Exactly the groups Caddy runs with: its /etc/group memberships and the unit's SupplementaryGroups (where the
+  # corehub group for hosting.caddy comes from, CoreHub #422). Nothing more, so a pass means Caddy can read it too.
+  groups="$({ id -Gn "$user"; systemctl show -P SupplementaryGroups caddy 2>/dev/null || true; } | tr -s ' ' '\n' | grep -v '^$' | sort -u | paste -sd, -)"
   home="$(getent passwd "$user" | cut -d: -f6)"
-  err="$(mktemp)"
+  err="$(mktemp)" || { echo '  could not make a temporary file' >&2; return 1; }
   if (cd / && setpriv --reuid="$user" --regid="$group" --groups="$groups" --inh-caps=-all --no-new-privs \
     env -i PATH=/usr/bin:/bin HOME="${home:-/}" HETZNER_API_TOKEN=validate-only \
     /usr/local/bin/caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile) </dev/null >/dev/null 2>"$err"; then
@@ -47,7 +54,8 @@ caddy_validate() {
   echo "  Caddy (checked as $user) says:" >&2
   tail -n 5 "$err" | sed 's/^/    /' >&2
   if grep -qi 'permission denied' "$err"; then
-    echo "  Caddy can't open that file either: give $user (or the corehub group) access to it." >&2
+    echo "  Caddy can't open that file either. If it's one of your sites' files, give $user access; if not (say, a log" >&2
+    echo "  outside /var/log), the config itself is wrong: never grant that." >&2
   fi
   rm -f "$err"
   return 1
