@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.48",
+    date: "2026-11-13",
+    title: "Icons on item card stats",
+    notes: [
+      "Game modules can put a small icon before a stat on an item card, like a heart for health or a sword for damage.",
+    ],
+    prs: [
+      { number: 769, title: "Item cards: an icon before a stat's label" },
+    ],
+    tags: ["privacy", "publishing", "sdk", "tooltips", "ui-kit", "website"],
+  },
+  {
     version: "0.24.47",
     date: "2026-11-13",
     title: "Only new games under the covers",
