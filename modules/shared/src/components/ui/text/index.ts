@@ -19,3 +19,6 @@ export const uiText = computed(() => texts[language.value])
 
 /** The language the controls speak now ("en" or "de"), for numbers they write out. */
 export const uiLanguage = computed(() => language.value)
+
+/** The locale for `Intl` in that language, so controls read and write numbers the way the user sees them. */
+export const uiLocale = computed(() => (language.value === "de" ? "de-DE" : "en-GB"))

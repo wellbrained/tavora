@@ -127,28 +127,67 @@ const dragWidth = ref<number | null>(null);
 const width = computed(() => (expanded.value ? (dragWidth.value ?? library.value.rail.width) : COMPACT));
 const clampWidth = (value: number) => Math.round(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, value)));
 
+// A drag saves the width when the button is let go. Escape, or a pointer the system takes away (pointercancel),
+// puts the rail back as it was; so does the handle going away mid-drag (Ctrl+\ folds the rail), which would
+// otherwise leave the Escape listener behind.
+let cancelResize: (() => void) | undefined;
+watch(expanded, (open) => {
+  if (!open) cancelResize?.();
+});
+onBeforeUnmount(() => cancelResize?.());
+
 function startResize(event: PointerEvent) {
+  if (event.button !== 0) return;
+  cancelResize?.();
   const handle = event.currentTarget as HTMLElement;
   const startX = event.clientX;
   const startWidth = width.value;
   handle.setPointerCapture(event.pointerId);
   const move = (next: PointerEvent) => (dragWidth.value = clampWidth(startWidth + next.clientX - startX));
-  const end = () => {
+  const stop = () => {
     handle.removeEventListener("pointermove", move);
-    handle.removeEventListener("pointerup", end);
-    handle.removeEventListener("pointercancel", end);
+    handle.removeEventListener("pointerup", save);
+    handle.removeEventListener("pointercancel", revert);
+    window.removeEventListener("keydown", onEscape, true);
+    if (handle.isConnected && handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
+    cancelResize = undefined;
+  };
+  const save = () => {
+    stop();
     if (dragWidth.value !== null) void act({ type: "set-rail", width: dragWidth.value }).then(() => (dragWidth.value = null));
   };
+  const revert = () => {
+    stop();
+    dragWidth.value = null;
+  };
+  const onEscape = (key: KeyboardEvent) => {
+    if (key.key !== "Escape") return;
+    key.preventDefault();
+    key.stopPropagation();
+    revert();
+  };
   handle.addEventListener("pointermove", move);
-  handle.addEventListener("pointerup", end);
-  handle.addEventListener("pointercancel", end);
+  handle.addEventListener("pointerup", save);
+  handle.addEventListener("pointercancel", revert);
+  window.addEventListener("keydown", onEscape, true);
+  cancelResize = revert;
 }
 
+/** The width a new library starts with (the host's RAIL.defaultWidth); a double-click on the handle goes back to it. */
+const DEFAULT_WIDTH = 280;
+const KEY_STEP = 16;
+const BIG_KEY_STEP = 64;
+
+const setWidth = (next: number) => void act({ type: "set-rail", width: clampWidth(next) });
+
 function resizeByKey(event: KeyboardEvent) {
-  const step = event.key === "ArrowRight" ? 16 : event.key === "ArrowLeft" ? -16 : 0;
-  if (!step) return;
+  const step = event.shiftKey ? BIG_KEY_STEP : KEY_STEP;
+  if (event.key === "ArrowRight") setWidth(width.value + step);
+  else if (event.key === "ArrowLeft") setWidth(width.value - step);
+  else if (event.key === "Home") setWidth(MIN_WIDTH);
+  else if (event.key === "End") setWidth(MAX_WIDTH);
+  else return;
   event.preventDefault();
-  void act({ type: "set-rail", width: clampWidth(width.value + step) });
 }
 
 // ── Keyboard: arrows move between rail items ───────────────────────────
@@ -647,6 +686,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
       data-testid="rail-resize"
       @pointerdown.prevent="startResize"
       @keydown="resizeByKey"
+      @dblclick="setWidth(DEFAULT_WIDTH)"
     />
   </nav>
 </template>

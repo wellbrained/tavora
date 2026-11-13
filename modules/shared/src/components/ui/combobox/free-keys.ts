@@ -1,13 +1,15 @@
 // The keys of a ComboboxInput in free mode (the text is the value, the list only suggests): Enter keeps what is typed unless the arrow keys
 // moved to a suggestion since the text last changed or the list was last closed. Kept apart from the component so the rules can be tested.
+import { isComposing } from "../../../lib/keys"
+
 export function freeKeys() {
   /** Whether the arrow keys moved to a suggestion that Enter would pick. */
   let arrowed = false
   return {
     /** What to do with a key press: "commit" (keep the typed text, and the list gets no Enter) or "pass" (the list handles it). */
-    press(event: { key: string, isComposing?: boolean }): "commit" | "pass" {
+    press(event: { key: string, isComposing?: boolean, keyCode?: number }): "commit" | "pass" {
       // Text still being composed (an input method): Enter confirms the composition, never the value.
-      if (event.isComposing) return "pass"
+      if (isComposing(event)) return "pass"
       if (event.key === "ArrowDown" || event.key === "ArrowUp") arrowed = true
       else if (event.key === "Enter") {
         if (!arrowed) return "commit"
