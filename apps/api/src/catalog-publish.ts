@@ -233,13 +233,18 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     const prefix = checked.manifest.id.split(".")[0]!;
     // Modules of the key this one succeeds count as the account's own, even once the lost key is unlinked.
     const succeeded = firstKey(checked.owner);
-    const held = official ? "held" : store.prefixCheck(key.accountId, prefix, { ownersUnder: (under) => catalog.ownersUnder(under).filter((owner) => owner !== succeeded) });
-    if (held === "taken") return refuse(context, 403, "prefix-taken", `The id prefix "${prefix}" belongs to another developer.`);
-    if (held === "reserved") return refuse(context, 403, "prefix-reserved", `The id prefix "${prefix}" is reserved.`);
-    if (held === "too-many") return refuse(context, 403, "too-many-prefixes", "Your account holds as many id prefixes as it can. Publish under one of them.");
-    if (held === "free" && by.token !== null) {
-      return refuse(context, 403, "token-new-prefix", `A publish token publishes only under your account's id prefixes. Publish the first module under "${prefix}" from Tavora.`);
-    }
+    const prefixState = () => (official ? "held" : store.prefixCheck(key.accountId, prefix, { ownersUnder: (under) => catalog.ownersUnder(under).filter((owner) => owner !== succeeded) }));
+    const prefixRefusal = (state: ReturnType<typeof prefixState>) => {
+      if (state === "taken") return refuse(context, 403, "prefix-taken", `The id prefix "${prefix}" belongs to another developer.`);
+      if (state === "reserved") return refuse(context, 403, "prefix-reserved", `The id prefix "${prefix}" is reserved.`);
+      if (state === "too-many") return refuse(context, 403, "too-many-prefixes", "Your account holds as many id prefixes as it can. Publish under one of them.");
+      if (state === "free" && by.token !== null) {
+        return refuse(context, 403, "token-new-prefix", `A publish token publishes only under your account's id prefixes. Publish the first module under "${prefix}" from Tavora.`);
+      }
+      return null;
+    };
+    const refused = prefixRefusal(prefixState());
+    if (refused) return refused;
 
     const at = now();
     // The maintainer's own account (MAINTAINER_EMAIL) ships as often and as much as it needs: no hourly, daily, waiting
@@ -268,13 +273,20 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     // Tavora's own modules skip the first-module and new-picture rules; the other checks still run and are kept for the admin page.
     const subject = { accountId: key.accountId, fingerprints: store.keys(key.accountId).map((linked) => linked.fingerprint) };
     const reasons = official ? await runChecks({ catalog, scanner }, checked, bytes, subject) : await reviewUpload({ catalog, scanner }, checked, bytes, subject);
+    // The scan can take minutes, and the prefix may have changed hands meanwhile: another upload of this account may have
+    // taken its last free prefix, or another account claimed this one. So it is checked again and reserved with nothing
+    // awaited before the version is added, and a reservation made here goes again when the version isn't added.
+    const held = prefixState();
+    const refusedNow = prefixRefusal(held);
+    if (refusedNow) return refusedNow;
+    if (held === "free") store.reservePrefix(key.accountId, prefix, at);
     try {
       catalog.add(bytes, new Date(at), key.accountId, checked, firstKey, { reasons, language: languageOf(context), token: by.token, ...(official ? { official: true } : {}) });
     } catch (error) {
+      if (held === "free") store.releasePrefix(key.accountId, prefix);
       if (error instanceof CatalogError) return refuse(context, 409, "conflict", error.message);
       throw error;
     }
-    if (held === "free") store.reservePrefix(key.accountId, prefix, at);
     if (reasons.length > 0 && !official) {
       await tellWaiting(store, context, key.accountId, checked, reasons, at);
       return context.json(
