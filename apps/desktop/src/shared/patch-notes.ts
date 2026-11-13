@@ -30,374 +30,64 @@ export const PATCH_NOTES: readonly PatchNote[] = [
   {
     version: "0.24.49",
     date: "2026-11-13",
-    title: "Search and resizing feel steadier",
+    title: "A new Add, item cards and a steadier app",
     notes: [
-      "Ctrl+K search: the highlight stays on its row when more results come in, and a resting mouse no longer moves it.",
-      "Ctrl+K search: Page Up and Page Down jump ten rows, Ctrl+Home and Ctrl+End to the first and last one.",
+      "One Add for everything: the rail's New workspace button opens it on Game, and Personal sits beside the search. Tab switches between them.",
+      "Add a game opens in the middle of the window with covers of six games you played lately and the next ten below, only ones you haven't added yet. Click one or press Enter and it's added and opened.",
+      "Type to search: your PC's games come first, more games below, and nothing jumps around while results come in. Picking a game the online search found now adds it. A game on your PC that Tavora didn't know is matched to the one the search finds, so its modules are offered.",
+      "A game you already have just opens, one in Trash comes back with its panels, and a game from your PC keeps its Steam link so it isn't added twice. Tavora's own modules for the game come along; the rest wait on its page, one click each.",
+      "Personal: type the name, press Enter, and the new workspace opens. Your personal workspaces are listed below to open one.",
+      "Removed workspaces stay in Trash for 7 days instead of 30. Anything in Trash for longer is deleted for good when you update.",
+      "Your profile card says which game you're playing, even when it isn't in your games, and adds it in one click.",
+      "Tavora looks for a new version as soon as it starts, then every 5 minutes and when your PC wakes up.",
+      "Modules can show their hover details as item cards: a large picture, the name, badges, small icons before stats, a highlighted effect and stats that grow per level. Game modules can dress them like the game; Tavora checks they stay readable.",
+      "Modules can ask to read a game's folder in AppData\\LocalLow, where many games keep their saves. You allow each folder yourself, and the rest of AppData stays closed.",
+      "Modules never see a browser's sign-ins or key files (.pem, .key, .p12, .pfx, .ppk), even inside a folder you allowed. The Allow dialog lists key files by name only.",
+      "Ctrl+K search: the highlight stays on its row when more results come in and a resting mouse no longer moves it; Page Up and Down jump ten rows, Ctrl+Home and Ctrl+End to the ends.",
       "Typing Japanese, Chinese or Korean in a search no longer opens a result or clears the field by accident.",
-      "Screen readers hear how many results a search found.",
       "Number fields read and show numbers in Tavora's language, such as \"1,5\" in German.",
-      "Drag the sidebar's edge and press Escape to put it back. Double-click the edge for the normal width; Shift+arrows and Home or End size it from the keyboard.",
-      "Press Escape while dragging the crop frame to put it back.",
-    ],
-    prs: [
-      { number: 770, title: "Kit and app: steadier Ctrl+K, number fields in Tavora's language, cancelable resizing" },
-    ],
-    tags: ["rail", "ui-kit"],
-  },
-  {
-    version: "0.24.48",
-    date: "2026-11-13",
-    title: "Icons on item card stats",
-    notes: [
-      "Game modules can put a small icon before a stat on an item card, like a heart for health or a sword for damage.",
-    ],
-    prs: [
-      { number: 769, title: "Item cards: an icon before a stat's label" },
-    ],
-    tags: ["privacy", "publishing", "sdk", "tooltips", "ui-kit", "website"],
-  },
-  {
-    version: "0.24.47",
-    date: "2026-11-13",
-    title: "Only new games under the covers",
-    notes: [
-      "Opening Add, the list under the covers shows only games you have not added yet. Type to find the others.",
-    ],
-    prs: [
-      { number: 768, title: "Add dialog: under the covers, only games to add" },
-    ],
-    tags: ["games"],
-  },
-  {
-    version: "0.24.46",
-    date: "2026-11-13",
-    title: "Hints stay available to screen readers",
-    notes: [
-      "A screen reader still reads an element's full hint after you've hovered it, such as a shortened folder path.",
-    ],
-    prs: [
-      { number: 767, title: "Kit: a hint moved off a title stays as the element's accessible description" },
-    ],
-    tags: ["ui-kit"],
-  },
-  {
-    version: "0.24.45",
-    date: "2026-11-13",
-    title: "Tab between Game and Personal",
-    notes: [
-      "In the Add dialog, Tab switches between Game and Personal.",
-    ],
-    prs: [
-      { number: 765, title: "Add dialog: Tab switches between Game and Personal" },
-    ],
-    tags: ["games"],
-  },
-  {
-    version: "0.24.44",
-    date: "2026-11-13",
-    title: "Folders for more games",
-    notes: [
-      "Modules can ask to read a game's folder in AppData\\LocalLow, where many games keep their saves and settings.",
-      "You still allow each folder yourself, and the rest of AppData stays closed.",
-      "Modules never see a browser's sign-ins, even inside a game's folder.",
-    ],
-    prs: [
-      { number: 764, title: "Modules can read a game's folder in AppData\\LocalLow (permissions.folders)" },
-    ],
-    tags: ["privacy", "publishing", "website"],
-  },
-  {
-    version: "0.24.43",
-    date: "2026-11-13",
-    title: "New workspace",
-    notes: [
-      "The rail's Add button now says New workspace.",
-    ],
-    prs: [
-      { number: 763, title: "Rail: the Add button says New workspace" },
-    ],
-  },
-  {
-    version: "0.24.42",
-    date: "2026-11-13",
-    title: "Switches sit right in a dialog",
-    notes: [
+      "Drag the sidebar's edge and press Escape to put it back. Double-click it for the normal width; Shift+arrows and Home or End size it from the keyboard. Escape also puts back a crop frame you're dragging.",
+      "Screen readers hear how many results a search found, and still read an element's full hint after you've hovered it.",
+      "The Catalog, a module's page and its reviews say when they can't load and offer Try again. Pictures from Discord and the catalog that didn't load try again later.",
+      "A button that was working no longer gets stuck when something goes wrong, and a module icon that can't load shows the puzzle piece.",
+      "Turning the cloud copy or stream overlays off, or signing out, while they start now keeps them off. Later on a cloud copy question puts off just that one.",
+      "Signing out while your publisher keys load no longer shows the old keys.",
+      "A module that couldn't be fully removed loses its permissions anyway, and adding a PC that didn't get through can be tried again.",
+      "Cancel on a link, new panel or game question no longer skips the next one, and the recovery key question after signing in waits for the open dialog.",
+      "Pressing Skip twice on the welcome no longer opens your panels twice. Publish, Update all and Browse after publishing work while the module library is open.",
       "The highlight on a switch like Game | Personal fits its option from the moment a dialog opens.",
     ],
     prs: [
+      { number: 770, title: "Kit and app: steadier Ctrl+K, number fields in Tavora's language, cancelable resizing" },
+      { number: 769, title: "Item cards: an icon before a stat's label" },
+      { number: 768, title: "Add dialog: under the covers, only games to add" },
+      { number: 767, title: "Kit: a hint moved off a title stays as the element's accessible description" },
+      { number: 765, title: "Add dialog: Tab switches between Game and Personal" },
+      { number: 764, title: "Modules can read a game's folder in AppData\\LocalLow (permissions.folders)" },
+      { number: 763, title: "Rail: the Add button says New workspace" },
       { number: 762, title: "Sliding indicator: measure as laid out while a dialog zooms in" },
-    ],
-    tags: ["ui-kit"],
-  },
-  {
-    version: "0.24.41",
-    date: "2026-11-13",
-    title: "One Add button",
-    notes: [
-      "The rail has one Add again. It opens on Game; switch to Personal beside the search for a workspace without a game.",
-      "Personal shows your personal workspaces too, so you can open one from there.",
-    ],
-    prs: [
       { number: 760, title: "One Add: Game or Personal in the Add dialog" },
-    ],
-    tags: ["games", "rail"],
-  },
-  {
-    version: "0.24.40",
-    date: "2026-11-13",
-    title: "A tidier Personal name field",
-    notes: [
-      "Click Personal and a new row shows under your workspaces, ready for its name. Add game and Personal stay where they are.",
-    ],
-    prs: [
       { number: 759, title: "Personal: a name row above the Add row" },
-    ],
-    tags: ["rail"],
-  },
-  {
-    version: "0.24.39",
-    date: "2026-11-13",
-    title: "Item cards: room for how stats grow",
-    notes: [
-      "What a stat gains per level stays on one line (\"+4.8 / +5.8\") instead of breaking in two.",
-      "On a card inside a panel, a long line under the stats wraps inside the card instead of running past its edge, in the card's text colour like the hover card.",
-    ],
-    prs: [
       { number: 757, title: "Item cards: the growth column keeps its values whole; a row's text wraps" },
-    ],
-    tags: ["ui-kit"],
-  },
-  {
-    version: "0.24.38",
-    date: "2026-11-13",
-    title: "Name a personal workspace right in the rail",
-    notes: [
-      "Click Personal and type the name where the workspace will show. Enter adds it, Esc drops it.",
-      "With the rail folded, the name field opens next to the Personal tile.",
-    ],
-    prs: [
       { number: 756, title: "Personal: name it right in the rail" },
-    ],
-    tags: ["rail"],
-  },
-  {
-    version: "0.24.37",
-    date: "2026-11-13",
-    title: "Key files show as names only",
-    notes: [
-      "The Allow dialog lists key files (.pem, .key, .p12, .pfx, .ppk) under names only. Tavora never lets a module read them.",
-    ],
-    prs: [
       { number: 755, title: "Allow dialog: leave key files out of what a module reads" },
-    ],
-  },
-  {
-    version: "0.24.36",
-    date: "2026-11-13",
-    title: "Add a game and Personal sit right",
-    notes: [
-      "Add a game opens in the middle of the window, like Settings.",
-      "Personal's name field shows above your panels.",
-    ],
-    prs: [
-      { number: 751, title: "Add a game in the middle; Personal's name field above the panels" },
-    ],
-    tags: ["games"],
-  },
-  {
-    version: "0.24.35",
-    date: "2026-11-13",
-    title: "Item cards: a clearer effect box",
-    notes: [
-      "The effect box on an item card has a thin edge, so it stands apart from the rest of the card.",
-      "Game modules can give it an edge in their own colour.",
-    ],
-    prs: [
       { number: 753, title: "Item cards: an edge around the effect box" },
-    ],
-    tags: ["privacy", "publishing", "sdk", "tooltips", "ui-kit", "website"],
-  },
-  {
-    version: "0.24.34",
-    date: "2026-11-12",
-    title: "Item cards show what grows",
-    notes: [
-      "Item cards put their badges beside the name, with the type line right under it.",
-      "A card's stats can show how much they grow, per level for example, in a column of their own.",
-    ],
-    prs: [
+      { number: 751, title: "Add a game in the middle; Personal's name field above the panels" },
       { number: 750, title: "Item cards: badges beside the title, stats that grow per level" },
-    ],
-    tags: ["publishing", "sdk", "tooltips", "ui-kit", "website"],
-  },
-  {
-    version: "0.24.33",
-    date: "2026-11-12",
-    title: "A quicker personal workspace",
-    notes: [
-      "Personal now asks only for a name, right next to the button.",
-    ],
-    prs: [
       { number: 749, title: "Rail: Personal asks for a name in a popover next to it" },
-    ],
-    tags: ["rail"],
-  },
-  {
-    version: "0.24.32",
-    date: "2026-11-12",
-    title: "Add a game stays put",
-    notes: [
-      "The window keeps its height while you type.",
-    ],
-    prs: [
       { number: 748, title: "Add a game: one height, no jumping while typing" },
-    ],
-    tags: ["games"],
-  },
-  {
-    version: "0.24.31",
-    date: "2026-11-12",
-    title: "Add a game shows more at a glance",
-    notes: [
-      "Six of your recent games as covers, in a wider window.",
-      "Below them your next ten games; type to find the rest.",
-    ],
-    prs: [
       { number: 747, title: "Add a game: wider, six covers, ten games below" },
-    ],
-    tags: ["games"],
-  },
-  {
-    version: "0.24.30",
-    date: "2026-11-12",
-    title: "A simpler Add a game",
-    notes: [
-      "Add a game opens with covers of the games you played lately. Click one, or press Enter, and it's added and opened.",
-      "Type to search: your PC's games come first, more games below. Nothing jumps around while results come in.",
-      "Enter and a click always work, in the welcome too, and the game you're adding shows that it's working.",
-      "Tavora's own modules for the game come along. The rest wait on the game's empty page, one click each.",
-      "A game you already have just opens, and one you put in Trash comes back with its panels. That goes for Add on your profile card too.",
-      "A game from your PC keeps its Steam link, so it isn't added twice.",
-    ],
-    prs: [
-      { number: 744, title: "Add a game: covers of games played lately, one list, Enter and click always work" },
-    ],
-    tags: ["games", "icons", "privacy", "ui-kit", "website", "workspace"],
-  },
-  {
-    version: "0.24.29",
-    date: "2026-11-12",
-    title: "Item cards for modules",
-    notes: [
-      "A module can show its hover details as an item card: a large picture, the name, a highlighted effect text and the details below.",
-      "Game modules can dress their cards like the game, with a frame, colours and a title font. Tavora checks they stay readable.",
-      "The UI Playground shows item cards under Tooltips.",
-    ],
-    prs: [
       { number: 746, title: "Item cards and module skins for the shared tooltip" },
-    ],
-    tags: ["modules", "privacy", "publishing", "sdk", "tooltips", "ui-kit", "website"],
-  },
-  {
-    version: "0.24.28",
-    date: "2026-11-12",
-    title: "Playing a game that isn't in your games yet?",
-    notes: [
-      "Your profile card says which game you're playing, even when it isn't in your games.",
-      "Add it in one click from the card above your profile.",
-    ],
-    prs: [
-      { number: 743, title: "Rail: show and offer to add a running game that isn't in your games" },
-    ],
-    tags: ["accounts", "games"],
-  },
-  {
-    version: "0.24.27",
-    date: "2026-11-12",
-    title: "Trash empties sooner",
-    notes: [
-      "Removed workspaces stay in Trash for 7 days instead of 30.",
-      "Anything that was in Trash for longer is deleted for good when you update.",
-    ],
-    prs: [
       { number: 745, title: "Trash: removed workspaces stay 7 days instead of 30" },
-    ],
-    tags: ["games", "settings"],
-  },
-  {
-    version: "0.24.26",
-    date: "2026-11-12",
-    title: "Adding games from the search",
-    notes: [
-      "Picking a game the online search found now adds it; before, nothing happened.",
-      "A game on your PC that Tavora didn't know is now matched to the one the search finds, so its modules are offered.",
-    ],
-    prs: [
+      { number: 744, title: "Add a game: covers of games played lately, one list, Enter and click always work" },
+      { number: 743, title: "Rail: show and offer to add a running game that isn't in your games" },
       { number: 742, title: "Add a game: games from the online search can be added again" },
-    ],
-    tags: ["games"],
-  },
-  {
-    version: "0.24.25",
-    date: "2026-11-12",
-    title: "Updates show up sooner",
-    notes: [
-      "Tavora looks for a new version as soon as it starts, so you see it in the rail right away.",
-      "After that it looks every 5 minutes, and still when your PC wakes up.",
-    ],
-    prs: [
       { number: 741, title: "Updates: check right at start, then every 5 minutes" },
-    ],
-    tags: ["updates"],
-  },
-  {
-    version: "0.24.24",
-    date: "2026-11-11",
-    title: "Off means off",
-    notes: [
-      "Turning the cloud copy off, or signing out, while it turns on, uploads, moves or starts over now keeps it off.",
-      "Stream overlays switched off while they start stay off.",
-      "Signing out while your publisher keys load no longer shows the old keys.",
-      "A module that couldn't be fully removed loses its permissions anyway.",
-      "When adding a PC didn't get through, you can try again.",
-      "Pictures from Discord and the catalog that didn't load try again later.",
-      "Later on a cloud copy question now puts off just that one; a new one still asks.",
-    ],
-    prs: [
-      { number: 738, title: "App: turning something off ends what it started" },
-    ],
-    tags: ["accounts", "catalog", "cloud-copy", "discord", "modules", "overlays", "publishing"],
-  },
-  {
-    version: "0.24.23",
-    date: "2026-11-11",
-    title: "Nothing keeps loading",
-    notes: [
-      "The Catalog, a module's page and its reviews now say when they can't load, and have a Try again button.",
-      "A button that was working no longer gets stuck when something goes wrong, so you can press it again.",
-      "A module icon that can't load shows the puzzle piece.",
-    ],
-    prs: [
       { number: 740, title: "App: nothing keeps loading after a failure" },
-    ],
-    tags: ["accounts", "catalog", "icons", "settings", "workspace"],
-  },
-  {
-    version: "0.24.22",
-    date: "2026-11-11",
-    title: "Dialogs stay where you are",
-    notes: [
-      "Publish and Update all open their next step only while you're still where you pressed them.",
-      "Browse after publishing, and Updates in the sidebar, now work while the module library is open.",
-      "Cancel on a link, new panel or game question no longer skips the next one.",
-      "Pressing Skip twice on the welcome no longer opens your panels twice, and you can try again when it couldn't finish.",
-      "After you sign in, the recovery key question waits for the open dialog to close instead of being skipped.",
-    ],
-    prs: [
+      { number: 738, title: "App: turning something off ends what it started" },
       { number: 737, title: "App: a dialog that waited goes on only where it started" },
     ],
-    tags: ["modules", "onboarding", "settings"],
+    tags: ["accounts", "catalog", "cloud-copy", "discord", "games", "icons", "modules", "onboarding", "overlays", "privacy", "publishing", "rail", "sdk", "settings", "tooltips", "ui-kit", "updates", "website", "workspace"],
   },
   {
     version: "0.24.21",
