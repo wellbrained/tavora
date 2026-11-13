@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { lstat, stat } from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
 
@@ -55,6 +56,38 @@ export function ipcPaths(platform: NodeJS.Platform, env: NodeJS.ProcessEnv): str
   return folders.flatMap((folder) => numbers.map((i) => path.join(folder, `discord-ipc-${i}`)));
 }
 
+export interface SocketSystem {
+  platform: NodeJS.Platform;
+  /** This process's user id; undefined on Windows. */
+  uid: number | undefined;
+  /** Follows links, as connecting does. */
+  stat(file: string): Promise<{ uid: number }>;
+  /** Doesn't follow links. */
+  lstat(file: string): Promise<{ uid: number }>;
+}
+
+const thisSystem: SocketSystem = { platform: process.platform, uid: process.getuid?.(), stat: (file) => stat(file), lstat: (file) => lstat(file) };
+
+/**
+ * Whether a Discord socket belongs to this user. On Linux and macOS the socket is a file another account could make
+ * first (in a shared TMPDIR or /tmp) to catch the access token Tavora sends, so only one owned by this user is used
+ * (decided 2026-11-13). Every folder on its way must be this user's or root's too, or another account could swap the
+ * socket between this check and connecting. Windows pipes aren't checked, so there another account on the PC could
+ * still claim the pipe name first.
+ */
+export async function isOwnSocket(where: string, system: SocketSystem = thisSystem): Promise<boolean> {
+  if (system.platform === "win32") return true;
+  const { uid } = system;
+  if (uid === undefined) return false;
+  const socket = await system.stat(where).catch(() => null);
+  if (socket?.uid !== uid) return false;
+  for (let folder = path.posix.dirname(where); ; folder = path.posix.dirname(folder)) {
+    const info = await system.lstat(folder).catch(() => null);
+    if (!info || (info.uid !== uid && info.uid !== 0)) return false;
+    if (path.posix.dirname(folder) === folder) return true;
+  }
+}
+
 export class RpcError extends Error {
   constructor(
     readonly code: number,
@@ -107,10 +140,12 @@ export class RpcClient {
   /**
    * Connects to the first Discord app that answers and says hello with the
    * application's client id. Resolves once Discord is READY, or null when no
-   * Discord app is running.
+   * Discord app is running (or only another account's socket is there).
    */
-  static async connect(clientId: string, events: RpcEvents, paths = ipcPaths(process.platform, process.env)): Promise<RpcClient | null> {
+  static async connect(clientId: string, events: RpcEvents, paths = ipcPaths(process.platform, process.env), system = thisSystem): Promise<RpcClient | null> {
     for (const where of paths) {
+      // The access token goes to whoever listens here: never to another account's socket.
+      if (!(await isOwnSocket(where, system))) continue;
       const socket = await openSocket(where);
       if (!socket) continue;
       const client = new RpcClient(socket, events);
