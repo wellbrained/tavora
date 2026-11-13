@@ -81,7 +81,7 @@ async function inPersonalWorkspace(): Promise<{ app: ElectronApplication; page: 
   const { app, page } = await launch(userData, [MODULES], { seed: false });
   await page.getByTestId("rail-add-personal").click();
   await page.getByTestId("personal-name").fill("Personal");
-  await page.getByTestId("create-personal").click();
+  await page.getByTestId("personal-name").press("Enter");
   await expect(page.getByTestId("rail-workspace-local-personal")).toHaveAttribute("aria-current", "page");
   await openModule(page, ID);
   await waitForShown(app, ID);

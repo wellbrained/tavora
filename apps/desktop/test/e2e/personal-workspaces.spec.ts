@@ -27,8 +27,12 @@ test("a personal workspace offers only modules for any game, and is worded as a 
   try {
     // The rail has a Personal button next to Add game.
     await page.getByTestId("rail-add-personal").click();
+    // Compact, Esc closes the field next to the tile.
+    await page.getByTestId("personal-name").press("Escape");
+    await expect(page.getByTestId("add-personal-popover")).toHaveCount(0);
+    await page.getByTestId("rail-add-personal").click();
     await page.getByTestId("personal-name").fill("Personal");
-    await page.getByTestId("create-personal").click();
+    await page.getByTestId("personal-name").press("Enter");
     await expect(page.getByTestId("rail-workspace-local-personal")).toHaveAttribute("aria-current", "page");
     await expect(page.getByTestId("empty-workspace")).toBeVisible();
 

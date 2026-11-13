@@ -12,7 +12,7 @@ import { folderMenu, workspaceMenu } from "../rail-actions";
 import MenuArea from "./menus/MenuArea.vue";
 import ProfileMenu from "./profile/ProfileMenu.vue";
 import RailFooterTile from "./RailFooterTile.vue";
-import AddPersonalPopover from "./AddPersonalPopover.vue";
+import AddPersonalField from "./AddPersonalField.vue";
 import RailInboxButton from "./RailInboxButton.vue";
 import RailModuleUpdates from "./RailModuleUpdates.vue";
 import RailOverlayButton from "./RailOverlayButton.vue";
@@ -49,7 +49,7 @@ const addButtons = computed(() => [
   { testid: "rail-add-game", name: t("common.addGame"), label: t("rail.addGame.short"), icon: Gamepad2, badge: true, run: () => (dialog.value = { kind: "add-game" }) },
   { testid: "rail-add-personal", name: t("rail.addPersonal"), label: t("rail.addPersonal.short"), icon: UserRoundPlus, badge: false, run: () => (personalOpen.value = !personalOpen.value) },
 ]);
-/** The Personal button's name popover is open; `personalEntry` is what it opens next to. */
+/** The name field for a new personal workspace is out: in the rail when expanded, next to `personalEntry` when compact. */
 const personalOpen = ref(false);
 const personalEntry = ref<HTMLElement | null>(null);
 const expanded = computed(() => (narrow.value ? peek.value : library.value.rail.expanded));
@@ -58,6 +58,8 @@ function toggleRail() {
   else void act({ type: "set-rail", expanded: !expanded.value });
 }
 watch(railToggles, toggleRail);
+// The name field is drawn for one rail size: it does not carry over to the other.
+watch(expanded, () => (personalOpen.value = false));
 
 // While Ctrl is held, the expanded rail shows which workspace Ctrl+1 to 9 opens.
 const ctrlHeld = ref(false);
@@ -568,8 +570,8 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
       </AnimatedList>
         <!-- Add game and Personal are one more entry under the last workspace: two quiet buttons side by side when
              expanded (an even split), two tiles stacked when compact. -->
-        <AddPersonalPopover v-model:open="personalOpen" :anchor="personalEntry" />
-        <div :class="cn('mt-1 flex px-2', expanded ? 'gap-1' : 'flex-col gap-1')" data-testid="rail-add">
+        <AddPersonalField v-model:open="personalOpen" :anchor="personalEntry" :inline="expanded" />
+        <div v-if="!(expanded && personalOpen)" :class="cn('mt-1 flex px-2', expanded ? 'gap-1' : 'flex-col gap-1')" data-testid="rail-add">
           <div
             v-for="add in addButtons"
             :key="add.testid"

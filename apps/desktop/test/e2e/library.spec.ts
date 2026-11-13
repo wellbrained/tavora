@@ -697,6 +697,39 @@ test("the rail's two buttons open Add a game and a personal workspace, and Add a
   }
 });
 
+test("expanded, Personal turns the Add row into a name field: Esc drops it, Enter adds and opens the workspace", async () => {
+  const userData = await newUserData();
+  await writeFile(path.join(userData, "library.json"), JSON.stringify({ ...seedLibrary(), rail: { expanded: true, width: 280 } }));
+  const { app, page } = await launch(userData);
+  try {
+    await page.getByTestId("rail-add-personal").click();
+    await expect(page.getByTestId("add-personal-row")).toBeVisible();
+    await expect(page.getByTestId("rail-add")).toHaveCount(0);
+    await expect(page.getByTestId("add-personal-popover")).toHaveCount(0);
+    await expect(page.getByTestId("personal-name")).toBeFocused();
+
+    await page.keyboard.type("Stream");
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("add-personal-row")).toHaveCount(0);
+    await expect(page.getByTestId("rail-add-personal")).toBeFocused();
+
+    // A click elsewhere drops it too.
+    await page.getByTestId("rail-add-personal").click();
+    await expect(page.getByTestId("add-personal-row")).toBeVisible();
+    await page.locator('[data-testid^="rail-workspace-"]').first().click();
+    await expect(page.getByTestId("add-personal-row")).toHaveCount(0);
+
+    await page.getByTestId("rail-add-personal").click();
+    await expect(page.getByTestId("personal-name")).toHaveValue("");
+    await page.keyboard.type("Stream");
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("add-personal-row")).toHaveCount(0);
+    await expect(page.locator('[data-testid^="rail-workspace-"][aria-current="page"]')).toContainText("Stream");
+  } finally {
+    await app.close();
+  }
+});
+
 test("Add game and Personal share the expanded rail's row evenly, at any rail width", async () => {
   for (const width of [200, 280, 420]) {
     const userData = await newUserData();
