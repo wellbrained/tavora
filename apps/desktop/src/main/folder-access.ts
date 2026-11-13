@@ -9,9 +9,8 @@
 import { realpathSync, watch, type FSWatcher } from "node:fs";
 import { lstat, mkdir, open, readdir, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
-import { folderKey, isFolderName, isLocalLowGameFolder, isModuleId, isOwnerId, splitFolderPath, type FolderAccess, type FolderRoot } from "@tavora/module-schema";
+import { folderKey, isFolderName, isLocalLowGameFolder, KEY_EXTENSIONS, isModuleId, isOwnerId, splitFolderPath, type FolderAccess, type FolderRoot } from "@tavora/module-schema";
 import type { FolderChange, FolderEntry, FolderListing, FolderState } from "@tavora/sdk/protocol";
-import { KEY_EXTENSIONS } from "../shared/folder-keys";
 import { readBody } from "./clipboard-http";
 import { HostError } from "./errors";
 import { writeFileAtomic } from "./fsutil";

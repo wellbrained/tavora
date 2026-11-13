@@ -644,16 +644,16 @@
               "path": {
                 "type": "string",
                 "maxLength": 400,
-                "pattern": "^(?:(?:Documents|Saved Games)(?:/(?!\\.\\.?(?:/|$))(?![ ])[^<>:\"/\\\\|?*\\u0000-\\u001f\\u007f]{0,63}[^<>:\"/\\\\|?*\\u0000-\\u001f\\u007f. ]){1,6}|AppData/LocalLow/(?!(?:[Mm][Ii][Cc][Rr][Oo][Ss][Oo][Ff][Tt]|[Ss][Uu][Nn]|[Oo][Rr][Aa][Cc][Ll][Ee]|[Aa][Dd][Oo][Bb][Ee]|[Gg][Oo][Oo][Gg][Ll][Ee]|[Mm][Oo][Zz][Ii][Ll][Ll][Aa]|[Ii][Nn][Tt][Ee][Ll]|[Nn][Vv][Ii][Dd][Ii][Aa]|[Aa][Mm][Dd]|[Aa][Pp][Pp][Ll][Ee]|[Aa][Pp][Pp][Ll][Ee] [Cc][Oo][Mm][Pp][Uu][Tt][Ee][Rr]|[Tt][Ee][Mm][Pp]|[Ww][Ee][Bb][Vv][Ii][Ee][Ww][Dd][Aa][Tt][Aa])(?:/|$))(?!\\.\\.?(?:/|$))(?![ ])[^<>:\"/\\\\|?*\\u0000-\\u001f\\u007f]{0,63}[^<>:\"/\\\\|?*\\u0000-\\u001f\\u007f. ](?:/(?!\\.\\.?(?:/|$))(?![ ])[^<>:\"/\\\\|?*\\u0000-\\u001f\\u007f]{0,63}[^<>:\"/\\\\|?*\\u0000-\\u001f\\u007f. ]){1,5})$",
-                "description": "Documents, Saved Games or AppData/LocalLow, then the folders below it joined by /, such as Documents/My Game or AppData/LocalLow/Company/Game (below AppData/LocalLow at least the company and the game, never Microsoft, Google, webviewdata or other system folders). Never the rest of AppData, a drive or the user's folder itself."
+                "pattern": "^(?:(?:Documents(?!/[Tt][Aa][Vv][Oo][Rr][Aa](?:/|$))|Saved Games)(?:/(?!\\.\\.?(?:/|$))(?![ ])[^<>:\"/\\\\|?*\\u0000-\\u001f\\u007f]{0,63}[^<>:\"/\\\\|?*\\u0000-\\u001f\\u007f. ]){1,6}|AppData/LocalLow/(?!(?:[Mm][Ii][Cc][Rr][Oo][Ss][Oo][Ff][Tt]|[Ss][Uu][Nn]|[Oo][Rr][Aa][Cc][Ll][Ee]|[Aa][Dd][Oo][Bb][Ee]|[Gg][Oo][Oo][Gg][Ll][Ee]|[Mm][Oo][Zz][Ii][Ll][Ll][Aa]|[Ii][Nn][Tt][Ee][Ll]|[Nn][Vv][Ii][Dd][Ii][Aa]|[Aa][Mm][Dd]|[Aa][Pp][Pp][Ll][Ee]|[Aa][Pp][Pp][Ll][Ee] [Cc][Oo][Mm][Pp][Uu][Tt][Ee][Rr]|[Tt][Ee][Mm][Pp]|[Ww][Ee][Bb][Vv][Ii][Ee][Ww][Dd][Aa][Tt][Aa])(?:/|$))(?!\\.\\.?(?:/|$))(?![ ])[^<>:\"/\\\\|?*\\u0000-\\u001f\\u007f]{0,63}[^<>:\"/\\\\|?*\\u0000-\\u001f\\u007f. ](?:/(?!\\.\\.?(?:/|$))(?![ ])[^<>:\"/\\\\|?*\\u0000-\\u001f\\u007f]{0,63}[^<>:\"/\\\\|?*\\u0000-\\u001f\\u007f. ]){1,5})$",
+                "description": "Documents, Saved Games or AppData/LocalLow, then the folders below it joined by /, such as Documents/My Game or AppData/LocalLow/Company/Game (below AppData/LocalLow at least the company and the game, never Microsoft, Google, webviewdata or other system folders). Never the rest of AppData, a drive, the user's folder itself or Tavora's own folder (Documents/Tavora)."
               },
               "read": {
                 "type": "array",
                 "minItems": 1,
                 "maxItems": 16,
                 "uniqueItems": true,
-                "description": "Extensions of the files the module may list and read: lowercase, without the dot. lnk and url may only be names.",
-                "items": { "type": "string", "pattern": "^(?!(?:lnk|url)$)[a-z0-9]{1,16}$" }
+                "description": "Extensions of the files the module may list and read: lowercase, without the dot. lnk and url, and key files (pem, key, p12, pfx, ppk), may only be names.",
+                "items": { "type": "string", "pattern": "^(?!(?:lnk|url|pem|key|p12|pfx|ppk)$)[a-z0-9]{1,16}$" }
               },
               "names": {
                 "type": "array",

@@ -4,9 +4,9 @@ import { link, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { FOLDER_ROOTS, folderKey, type FolderAccess } from "@tavora/module-schema";
+import { FOLDER_ROOTS, folderKey, KEY_EXTENSIONS, type FolderAccess } from "@tavora/module-schema";
 import type { FolderChange } from "@tavora/sdk/protocol";
-import { FOLDER_ROOT_NAMES } from "../shared/folder-keys";
+import { FOLDER_ROOT_NAMES, KEY_EXTENSIONS as HOST_UI_KEY_EXTENSIONS } from "../shared/folder-keys";
 import { ChosenFolders, findFolder, folderHost, FolderWatch, insidePath, isRefusedFolder, listFolder, MAX_FOLDER_LEVELS, readFolderFile, revealTarget, serveFolderFile, type FolderPlaces } from "./folder-access";
 
 const replays: FolderAccess = { path: "Documents/Game", read: ["sc2replay"], names: ["lnk"] };
@@ -122,6 +122,10 @@ describe("AppData\\LocalLow", () => {
 
   it("is a root the host UI knows too", () => {
     expect(FOLDER_ROOT_NAMES).toEqual(FOLDER_ROOTS);
+  });
+
+  it("lists the same key file types as the manifest rules", () => {
+    expect(HOST_UI_KEY_EXTENSIONS).toEqual(KEY_EXTENSIONS);
   });
 
   it("takes a game's folder in LocalLow, never LocalLow itself, a whole company, a system folder or the rest of AppData", () => {

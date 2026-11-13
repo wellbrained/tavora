@@ -513,6 +513,13 @@ export const MAX_FOLDER_EXTENSIONS = 16;
 export const MAX_FOLDER_DEPTH = 6;
 /** Extensions a module may only see by name: a shortcut's content holds where things are on the PC. */
 export const NAME_ONLY_EXTENSIONS: readonly string[] = ["lnk", "url"];
+/** Key and certificate files: a module may only see them by name (`names`), never read them, wherever they are. */
+export const KEY_EXTENSIONS: readonly string[] = ["pem", "key", "p12", "pfx", "ppk"];
+/**
+ * The folder right below Documents that is Tavora's own (Documents\Tavora: key files, module zips, every module's saved
+ * files). No module may read it or anything below it. Compared without regard to case, like Windows does.
+ */
+export const TAVORA_DOCUMENTS_FOLDER = "Tavora";
 const FOLDER_EXTENSION = /^[a-z0-9]{1,16}$/;
 const WINDOWS_RESERVED = /^(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\..*)?$/i;
 
@@ -562,8 +569,28 @@ export function isFolderPath(value: unknown): value is string {
   return names.length >= 1 && names.length <= MAX_FOLDER_DEPTH && names.every((name) => isFolderName(name));
 }
 
+/**
+ * Whether a `permissions.folders` path is Tavora's own folder in Documents (Documents/Tavora, in any case) or below it.
+ * The host refuses such a folder at runtime; the manifest may not ask for it either.
+ */
+export function isTavoraOwnFolder(value: string): boolean {
+  const split = splitFolderPath(value);
+  return split?.root === "Documents" && split.names[0]!.toLowerCase() === TAVORA_DOCUMENTS_FOLDER.toLowerCase();
+}
+
 /** Why a `permissions.folders` entry is not one, or null when it is. */
 export function folderAccessProblem(value: unknown): string | null {
+  const problem = folderShapeProblem(value);
+  if (problem) return problem;
+  const entry = value as FolderAccess;
+  if (isTavoraOwnFolder(entry.path)) return "path can't be Tavora's own folder (Documents/Tavora) or one below it";
+  const keys = (entry.read ?? []).filter((item) => KEY_EXTENSIONS.includes(item));
+  if (keys.length > 0) return `may list key files (${KEY_EXTENSIONS.join(", ")}) only in names, not read`;
+  return null;
+}
+
+/** What a folder entry must look like, without the rules the host also enforces on every folder (Tavora's own, key files). */
+function folderShapeProblem(value: unknown): string | null {
   if (!isRecord(value) || Object.keys(value).some((key) => key !== "path" && key !== "read" && key !== "names")) return "must be { path, read, names }";
   // A path that is fine but for the company and game rule of AppData/LocalLow says so; any other fault gets the general message.
   const low = typeof value.path === "string" && value.path.length <= 400 ? splitFolderPath(value.path) : null;
@@ -608,7 +635,9 @@ export function parseFolderKey(key: unknown): FolderAccess | null {
   const entry: FolderAccess = { path: parts[0]! };
   if (parts[1]) entry.read = parts[1].split(",");
   if (parts[2]) entry.names = parts[2].split(",");
-  return isFolderAccess(entry) && folderKey(entry) === key ? entry : null;
+  // Shape only: a grant or catalog entry made before the manifest refused Tavora's folder or key files in read still parses
+  // (the host refuses the folder and serves key files by name only).
+  return folderShapeProblem(entry) === null && folderKey(entry) === key ? entry : null;
 }
 
 /** Most languages one manifest may translate into. */
