@@ -645,7 +645,7 @@ export class Host {
     this.data = new DataRegistry(options.userData, () => this.files.root(), () => this.files.moving);
     this.onlineSearch = new OnlineSearch(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl });
     this.gamesSeen = new GamesSeen(path.join(options.userData, "games-seen.json"));
-    this.catalog = new CatalogClient({ ...(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl }), onGames: (games) => this.learnGameIds(games) });
+    this.catalog = new CatalogClient({ ...(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl }), onGames: (games) => this.learnFromCatalog(games) });
     this.workspaces = new Workspaces(workspaces, {
       save: (state) => this.savedData.saveWorkspace(state),
     });
@@ -1512,7 +1512,7 @@ export class Host {
   }
 
   /** A game added by name learns its game's id from a catalog listing (workspace-game.ts); saved, and the rail sees what now fits. */
-  private learnGameIds(games: ListedGame[]): void {
+  private learnFromCatalog(games: ListedGame[]): void {
     if (!learnGameIds(this.library, games).length) return;
     this.saveLibrary();
     this.pushStateSoon();

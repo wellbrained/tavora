@@ -4,7 +4,7 @@ import { isSameGame, type GameIdentity } from "../shared/same-game";
 import { catalogGame } from "./catalog";
 import { addWorkspace, restoreWorkspace, type Library, type NewWorkspace, type WorkspaceEntry } from "./library";
 import { isSteamAppId } from "./steam-icons";
-import { isLearnableGameId, workspaceGameIds } from "./workspace-game";
+import { isLearnableGameId, learnsGameId, workspaceGameIds } from "./workspace-game";
 
 /**
  * Finds the user's copy of a game, Trash included, by `isSameGame`. A copy in use wins over one in Trash. A personal
@@ -45,7 +45,7 @@ export function addOrRestoreWorkspace(library: Library, input: NewWorkspace, now
     const learnedSteam = copy.steamAppId === null && game.steamAppId !== null;
     if (learnedSteam) copy.steamAppId = game.steamAppId;
     // A copy added by name takes the id of the game picked online (adding 9 Kings again finds the `local-9-kings` copy).
-    const learnedGame = "online" in input && copy.id.startsWith("local-") && copy.catalogId === null && copy.gameId === null && isLearnableGameId(game.id);
+    const learnedGame = "online" in input && learnsGameId(copy) && copy.gameId === null && isLearnableGameId(game.id);
     if (learnedGame) copy.gameId = game.id;
     const learned = learnedSteam || learnedGame;
     const known = learned ? { learned: true as const } : {};

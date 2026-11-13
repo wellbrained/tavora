@@ -59,9 +59,11 @@ describe("which game a workspace is, whichever way it was added", () => {
     expect(learnGameIds(library, [{ id: "9-kings", name: "9 Kings", steamAppId: 1 }])).toEqual([]);
     // The same game listed by two modules is one game.
     expect(learnGameIds(library, [...LISTED, ...LISTED])).toEqual([id]);
-    // Once known, it stays.
-    expect(learnGameIds(library, [{ id: "other", name: "Other", steamAppId: 2784470 }])).toEqual([]);
-    expect(library.workspaces[id]!.gameId).toBe("9-kings");
+    // Known already: nothing changes.
+    expect(learnGameIds(library, LISTED)).toEqual([]);
+    // The service's game list is where ids come from: a listing that says otherwise corrects it.
+    expect(learnGameIds(library, [{ id: "nine-kings", name: "Nine Kings", steamAppId: 2784470 }])).toEqual([id]);
+    expect(library.workspaces[id]!.gameId).toBe("nine-kings");
   });
 
   it("leaves a game without a Steam id, a game picked online and a personal workspace as they are", () => {

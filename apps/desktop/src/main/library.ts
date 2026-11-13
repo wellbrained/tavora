@@ -17,7 +17,7 @@ import { CATALOG, catalogGame } from "./catalog";
 import { DEFAULT_OVERLAY_PORT, MAX_OVERLAY_PORT, MIN_OVERLAY_PORT } from "./overlays";
 import { iconFileAllowed, isSteamAppId, needsIcon } from "./steam-icons";
 import { DEFAULT_THEME, isThemeRadius, isVariationId } from "./themes";
-import { isLearnableGameId } from "./workspace-game";
+import { isLearnableGameId, learnsGameId } from "./workspace-game";
 
 export type { RootItem, RootSort, Startup };
 
@@ -799,12 +799,13 @@ export function sanitizeLibrary(raw: unknown): Library {
     }
     const wrongDiabloId = workspace.steamAppId === WRONG_DIABLO_ID && (workspace.id === "diablo-4" || workspace.catalogId === "diablo-4");
     const steamAppId = wrongDiabloId ? (catalogGame("diablo-4")?.steamAppId ?? null) : isSteamAppId(workspace.steamAppId) ? workspace.steamAppId : (catalogGame(workspace.id)?.steamAppId ?? null);
+    const catalogId = typeof workspace.catalogId === "string" && catalogGame(workspace.catalogId) ? workspace.catalogId : null;
     library.workspaces[workspace.id] = {
       id: workspace.id,
       kind: "game",
-      catalogId: typeof workspace.catalogId === "string" && catalogGame(workspace.catalogId) ? workspace.catalogId : null,
+      catalogId,
       // Only a game added by name learns its game's id; any other workspace's id already is it.
-      gameId: workspace.id.startsWith("local-") && isLearnableGameId(workspace.gameId) ? workspace.gameId : null,
+      gameId: learnsGameId({ id: workspace.id, kind: "game", catalogId }) && isLearnableGameId(workspace.gameId) ? workspace.gameId : null,
       name,
       icon: sanitizeIcon(workspace.icon, name),
       useOriginalIcon: workspace.useOriginalIcon !== false,
