@@ -329,6 +329,21 @@ describe("catalog routes", () => {
     expect((await get("/v1/catalog/zips/../catalog.sqlite")).status).toBe(404);
   });
 
+  it("names each game a module is for, with its Steam appid, so the app knows a game added by name", async () => {
+    const games = writeDatabase(":memory:", [{ id: "9-kings", name: "9 Kings", aliases: [], steamAppId: 2784470, wikidata: null, builtIn: false }]);
+    const catalog = store();
+    const app = createApp({ db: games, catalog, rateLimiter: createRateLimiter({ limit: 1000, windowMs: 60_000 }) });
+    catalog.add(moduleZip({ games: ["9-kings", "unknown-game"] }));
+    const index = (await (await app.request("http://tavora.test/v1/catalog")).json()) as { modules: { gameInfo: unknown }[] };
+    const expected = [
+      { id: "9-kings", name: "9 Kings", steamAppId: 2784470 },
+      { id: "unknown-game", name: null, steamAppId: null },
+    ];
+    expect(index.modules[0]!.gameInfo).toEqual(expected);
+    const page = (await (await app.request("http://tavora.test/v1/catalog/modules/wellbrained.timer")).json()) as { module: { gameInfo: unknown } };
+    expect(page.module.gameInfo).toEqual(expected);
+  });
+
   it("serves a listed screenshot as a plain picture", async () => {
     const { catalog, get } = setup();
     const shot = png();

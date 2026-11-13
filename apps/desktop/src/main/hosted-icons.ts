@@ -88,9 +88,10 @@ export async function fetchHostedList(options: HostedOptions): Promise<HostedLis
   }
 }
 
-/** The hosted icon for a game: the same id, the built-in game it is, or the same name as any name listed. */
-export function matchHosted(game: { id: string; name: string; catalogId: string | null }, list: HostedList): HostedIcon | null {
-  const byId = list.icons.find((icon) => icon.id === game.id || (game.catalogId !== null && icon.id === game.catalogId));
+/** The hosted icon for a game: the same id, the built-in game it is, the game a game added by name learned it is, or the same name as any name listed. */
+export function matchHosted(game: { id: string; name: string; catalogId: string | null; gameId?: string | null }, list: HostedList): HostedIcon | null {
+  const ids = [game.id, game.catalogId, game.gameId ?? null].filter((id): id is string => id !== null);
+  const byId = list.icons.find((icon) => ids.includes(icon.id));
   if (byId) return byId;
   const wanted = normalizeName(game.name);
   return wanted ? (list.icons.find((icon) => icon.names.some((name) => normalizeName(name) === wanted)) ?? null) : null;

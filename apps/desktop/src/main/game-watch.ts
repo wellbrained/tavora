@@ -5,6 +5,7 @@ import { catalogIdFor, pickGames, type Signs } from "./installed-list";
 import { isSameGame, normalizeName, type GameIdentity } from "../shared/same-game";
 import { NOT_THE_GAME, type InstalledGame } from "./launcher-games";
 import { windowsProgramProbe, type ProgramLook, type ProgramProbe } from "./program-list";
+import { workspaceGameIds } from "./workspace-game";
 
 /**
  * Notices which games of the library are running, so Tavora can switch to one
@@ -57,7 +58,7 @@ function identityOfRef(game: GameRef): GameIdentity {
  */
 function entryIsGame(entry: WorkspaceEntry, game: GameRef): boolean {
   const identity = identityOfRef(game);
-  return isSameGame(entry, identity) || (entry.catalogId !== null && entry.catalogId === identity.id);
+  return isSameGame(entry, identity) || (identity.id !== null && workspaceGameIds(entry).includes(identity.id));
 }
 
 /** The live game entries of the library: a game in Trash is not in it. */

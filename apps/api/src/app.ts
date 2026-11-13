@@ -113,6 +113,17 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     );
     return idByAppid;
   };
+  // Game id -> the game's name and Steam appid, for the games a listed module is for; looked up once per id.
+  const gameInfos = new Map<string, { id: string; name: string | null; steamAppId: number | null }>();
+  const gameInfo = (id: string) => {
+    let info = gameInfos.get(id);
+    if (!info) {
+      const row = db.prepare("select name, steam_appid as steamAppId from games where id = ?").get(id) as { name: string; steamAppId: number | null } | undefined;
+      info = { id, name: row?.name ?? null, steamAppId: row?.steamAppId ?? null };
+      gameInfos.set(id, info);
+    }
+    return info;
+  };
 
   // The query is what a user typed: never cached, never logged here. Only the
   // hosted icons, which are the same for everyone, say otherwise themselves.
@@ -231,9 +242,12 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
   // "by <name>" comes from the account the key is linked to, never from the listing (C13).
   // `installs` counts installs from Browse (POST /installed), never who installed.
   // Its rating is every version's ratings together; the app shows "New" below MIN_RATINGS_SHOWN.
+  // `gameInfo` names each of its games with their Steam appid, so the app knows a game the user added by name
+  // (`local-…`) as the game a module is for, and shows the game's name instead of its id.
   const ratings = accounts?.reviews;
   const listed = (entry: CatalogEntry, summaries?: ReturnType<ReviewStore["summaries"]>) => ({
     ...entry,
+    gameInfo: entry.games.map(gameInfo),
     publisher: accounts?.store.publisherName(entry.owner) ?? null,
     installs: catalog?.installCount(entry.id) ?? 0,
     rating: (summaries ? summaries.get(entry.id) : ratings?.summary(entry.id)) ?? null,

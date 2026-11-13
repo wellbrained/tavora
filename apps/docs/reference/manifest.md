@@ -198,6 +198,8 @@ Tavora's service reads a catalog module's boards from its newest listed version,
 
 The games built into Tavora, with the ids to put in `games`.
 
+Any other game goes by the id Tavora's game search gives it, such as `9-kings`. A player who added the game by its name (with the running game's Add button, or from a Steam library) still gets the module: Tavora finds the game by its Steam id when it reads the catalog.
+
 | Id | Game |
 | --- | --- |
 | `age-of-empires-2` | Age of Empires II |

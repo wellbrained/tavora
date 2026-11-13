@@ -15,6 +15,8 @@ import { UserError } from "./messages";
 import { MAX_MODULE_ICON, pictureDataUrl } from "./module-icon";
 import { serviceUrl } from "./service-url";
 import { isPublisherName } from "./publisher-names";
+import { isSteamAppId } from "./steam-icons";
+import type { ListedGame } from "./workspace-game";
 
 export const LIST_TIMEOUT_MS = 8000;
 export const DOWNLOAD_TIMEOUT_MS = 60_000;
@@ -39,6 +41,8 @@ export interface CatalogScreenshot {
 /** A listed module with the zip it comes as; only the main process sees the hash. */
 export interface CatalogEntry extends Omit<CatalogModuleView, "screenshots" | "icon" | "fits" | "forGames" | "gameIds" | "official"> {
   games: string[];
+  /** Its games with name and Steam id, as the service knows them (none from a service before 2026-11). Only games in `games`. */
+  gameInfo: ListedGame[];
   /** Whether it may be added to a personal workspace. */
   personalWorkspaces: boolean;
   zip: { sha256: string; size: number };
@@ -75,8 +79,23 @@ export interface CatalogVersion {
 const MAX_NOTES = 50;
 const MAX_VERSIONS = 200;
 
-/** Where the user is: a game workspace (its game's catalog id) or a personal workspace. */
-export type CatalogScope = { game: string } | { personal: true };
+/** Where the user is: a game workspace (every id its game goes by, from workspace-game.ts) or a personal workspace. */
+export type CatalogScope = { games: string[] } | { personal: true };
+
+/** A listing's games with their names and Steam ids: each a game of the listing, once, with fields of the right shape. */
+function parseGameInfo(raw: unknown, games: readonly string[]): ListedGame[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const listed: ListedGame[] = [];
+  for (const value of raw.slice(0, 100)) {
+    if (typeof value !== "object" || value === null) continue;
+    const { id, steamAppId } = value as Record<string, unknown>;
+    if (typeof id !== "string" || !games.includes(id) || seen.has(id)) continue;
+    seen.add(id);
+    listed.push({ id, name: plain((value as Record<string, unknown>).name, 100), steamAppId: isSteamAppId(steamAppId) ? steamAppId : null });
+  }
+  return listed;
+}
 
 export class CatalogError extends UserError {}
 
@@ -242,6 +261,7 @@ export function parseCatalogEntry(raw: unknown): CatalogEntry | null {
     version,
     minTavora: typeof minTavora === "string" ? minTavora : null,
     games: [...games],
+    gameInfo: parseGameInfo(entry.gameInfo, games),
     // A service deployed before the Game → Workspace rename sends it as `workspaces` only.
     personalWorkspaces: (typeof personalWorkspaces === "boolean" ? personalWorkspaces : workspaces) !== false,
     permissions: { network: [...new Set(network as string[])], connectors: [...new Set(connectors as Connector[])], folders: [...new Set(folders as string[])] },
@@ -267,7 +287,12 @@ export function parseCatalogEntry(raw: unknown): CatalogEntry | null {
 /** Whether a module may go where the user is; the service filters too, but it is not trusted to. */
 export function fitsScope(entry: Pick<CatalogEntry, "games" | "personalWorkspaces">, scope: CatalogScope): boolean {
   if ("personal" in scope) return entry.games.length === 0 && entry.personalWorkspaces;
-  return entry.games.length === 0 || entry.games.includes(scope.game);
+  return entry.games.length === 0 || entry.games.some((game) => scope.games.includes(game));
+}
+
+/** A game's name to show: the built-in list's, else the service's, else its id. */
+function gameName(id: string, info: readonly ListedGame[]): string {
+  return catalogGame(id)?.name ?? info.find((game) => game.id === id)?.name ?? id;
 }
 
 /** A listing's name and description in `language` (Tavora's), each from the first translation that has it, else as listed. */
@@ -280,9 +305,9 @@ export function shownTexts(entry: Pick<CatalogEntry, "name" | "description" | "t
  * The view the host UI gets: no hash, the name and description in `language`, the games by name, whether it fits
  * where the user is, and only whether there are pictures.
  */
-export function catalogView({ games, personalWorkspaces, zip: _zip, notes: _notes, shots, icon, translations, ...view }: CatalogEntry, language: string, scope?: CatalogScope): CatalogModuleView {
+export function catalogView({ games, gameInfo, personalWorkspaces, zip: _zip, notes: _notes, shots, icon, translations, ...view }: CatalogEntry, language: string, scope?: CatalogScope): CatalogModuleView {
   const fits = scope ? fitsScope({ games, personalWorkspaces }, scope) : true;
-  return { ...view, ...shownTexts({ ...view, translations }, language), fits, forGames: games.map((id) => catalogGame(id)?.name ?? id), gameIds: games, official: officialOn(OFFICIAL_PINS) && view.owner === OFFICIAL_PINS.key, screenshots: shots.length, icon: icon !== null };
+  return { ...view, ...shownTexts({ ...view, translations }, language), fits, forGames: games.map((id) => gameName(id, gameInfo)), gameIds: games, official: officialOn(OFFICIAL_PINS) && view.owner === OFFICIAL_PINS.key, screenshots: shots.length, icon: icon !== null };
 }
 
 export interface CatalogClientOptions {
@@ -291,6 +316,11 @@ export interface CatalogClientOptions {
   listTimeoutMs?: number;
   downloadTimeoutMs?: number;
   now?: () => number;
+  /**
+   * Called with the games of every listing read (list, index, a module's page), before anything is decided from it, so
+   * the host can learn which game a workspace added by name is (workspace-game.ts).
+   */
+  onGames?: (games: ListedGame[]) => void;
 }
 
 const REQUEST = { credentials: "omit", referrerPolicy: "no-referrer", redirect: "error" } as const;
@@ -307,6 +337,7 @@ export class CatalogClient {
   /** Icons that did not come, by hash, with when: asked for again a minute later, not on every look. */
   private readonly missingIcons = new Map<string, number>();
   private readonly now: () => number;
+  private readonly onGames: (games: ListedGame[]) => void;
 
   constructor(options: CatalogClientOptions = {}) {
     this.baseUrl = serviceUrl(options.baseUrl);
@@ -314,13 +345,26 @@ export class CatalogClient {
     this.listTimeoutMs = options.listTimeoutMs ?? LIST_TIMEOUT_MS;
     this.downloadTimeoutMs = options.downloadTimeoutMs ?? DOWNLOAD_TIMEOUT_MS;
     this.now = options.now ?? Date.now;
+    this.onGames = options.onGames ?? (() => {});
+  }
+
+  /** Hands the listings' games to `onGames`; what the host does with them never breaks a listing. */
+  private noteGames(entries: readonly CatalogEntry[]): void {
+    const games = entries.flatMap((entry) => entry.gameInfo);
+    if (!games.length) return;
+    try {
+      this.onGames(games);
+    } catch {
+      // Learning is a bonus; the listing stays as it is.
+    }
   }
 
   /**
    * Every listed module, in `language`: those that fit the workspace first, then the rest, each by
    * name. The whole index is asked for, so the service doesn't learn which workspace is open. Never throws.
+   * A function for `scope` is asked after the listing's games were handed to `onGames`, so it sees what was learned.
    */
-  async list(scope: CatalogScope, language: string): Promise<CatalogListResult> {
+  async list(scopeOf: CatalogScope | (() => CatalogScope), language: string): Promise<CatalogListResult> {
     try {
       const response = await this.get("/v1/catalog", this.listTimeoutMs, "application/json");
       const failed = failure(response.status);
@@ -328,9 +372,12 @@ export class CatalogClient {
       const body = (await response.json()) as { modules?: unknown } | null;
       const raw = Array.isArray(body?.modules) ? body.modules.slice(0, MAX_MODULES) : [];
       const seen = new Set<string>();
-      const entries = raw
+      const parsed = raw
         .map(parseCatalogEntry)
-        .filter((entry): entry is CatalogEntry => entry !== null && !seen.has(entry.id) && Boolean(seen.add(entry.id)))
+        .filter((entry): entry is CatalogEntry => entry !== null && !seen.has(entry.id) && Boolean(seen.add(entry.id)));
+      this.noteGames(parsed);
+      const scope = typeof scopeOf === "function" ? scopeOf() : scopeOf;
+      const entries = parsed
         .map((entry) => ({ entry, fits: fitsScope(entry, scope), name: shownTexts(entry, language).name }))
         .sort((a, b) => Number(b.fits) - Number(a.fits) || a.name.localeCompare(b.name))
         .map(({ entry }) => entry);
@@ -353,7 +400,9 @@ export class CatalogClient {
       const body = (await response.json()) as { modules?: unknown } | null;
       const raw = Array.isArray(body?.modules) ? body.modules.slice(0, MAX_MODULES) : [];
       const seen = new Set<string>();
-      return raw.map(parseCatalogEntry).filter((entry): entry is CatalogEntry => entry !== null && !seen.has(entry.id) && Boolean(seen.add(entry.id)));
+      const entries = raw.map(parseCatalogEntry).filter((entry): entry is CatalogEntry => entry !== null && !seen.has(entry.id) && Boolean(seen.add(entry.id)));
+      this.noteGames(entries);
+      return entries;
     } catch {
       return null;
     }
@@ -378,6 +427,7 @@ export class CatalogClient {
     const body = (await response.json().catch(() => null)) as { module?: unknown; versions?: unknown; readme?: unknown } | null;
     const entry = parseCatalogEntry(body?.module);
     if (!entry || entry.id !== id) throw new CatalogError("error.catalogNotListed");
+    this.noteGames([entry]);
     const versions = (Array.isArray(body?.versions) ? body.versions.slice(0, MAX_VERSIONS) : []).map(parseCatalogVersion).filter((version): version is CatalogVersion => version !== null);
     const readme = typeof body?.readme === "string" && Buffer.byteLength(body.readme) <= MAX_README_BYTES ? body.readme : null;
     return { entry, versions, readme };

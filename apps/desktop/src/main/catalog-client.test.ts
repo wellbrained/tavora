@@ -104,8 +104,8 @@ describe("parseCatalogEntry", () => {
     expect(fitsScope({ games: [], personalWorkspaces: true }, { personal: true })).toBe(true);
     expect(fitsScope({ games: [], personalWorkspaces: false }, { personal: true })).toBe(false);
     expect(fitsScope({ games: ["poe2"], personalWorkspaces: false }, { personal: true })).toBe(false);
-    expect(fitsScope({ games: ["poe2"], personalWorkspaces: false }, { game: "poe2" })).toBe(true);
-    expect(fitsScope({ games: ["poe2"], personalWorkspaces: false }, { game: "satisfactory" })).toBe(false);
+    expect(fitsScope({ games: ["poe2"], personalWorkspaces: false }, { games: ["poe2"] })).toBe(true);
+    expect(fitsScope({ games: ["poe2"], personalWorkspaces: false }, { games: ["satisfactory"] })).toBe(false);
   });
 });
 
@@ -114,7 +114,7 @@ describe("CatalogClient.list", () => {
     const { impl, calls } = fakeFetch(() =>
       json({ modules: [entry({ id: "wellbrained.another", name: "Another", games: ["satisfactory"], installs: 12 }), entry(), entry({ id: "bad id" }), entry()] }),
     );
-    const result = await new CatalogClient({ baseUrl: "https://catalog.test/", fetchImpl: impl }).list({ game: "poe2" }, "en");
+    const result = await new CatalogClient({ baseUrl: "https://catalog.test/", fetchImpl: impl }).list({ games: ["poe2"] }, "en");
     expect(calls.map((call) => call.url)).toEqual(["https://catalog.test/v1/catalog"]);
     expect(calls[0]!.init).toMatchObject({ credentials: "omit", referrerPolicy: "no-referrer", redirect: "error" });
     expect(result).toEqual({
@@ -125,6 +125,42 @@ describe("CatalogClient.list", () => {
       ],
     });
     expect(JSON.stringify(result)).not.toContain(SHA);
+  });
+
+  it("hands the listing's games to onGames before it decides what fits, and names games the built-in list doesn't know", async () => {
+    const gameInfo = [
+      { id: "9-kings", name: "9 Kings", steamAppId: 2784470 },
+      { id: "not-its-game", name: "Forged", steamAppId: 1 },
+      { id: "9-kings", name: "Again", steamAppId: 5 },
+      { id: "no-steam", name: "No Steam‮", steamAppId: -3 },
+    ];
+    const { impl } = fakeFetch(() => json({ modules: [entry({ games: ["9-kings", "no-steam", "unnamed"], gameInfo }), entry({ id: "wellbrained.old", games: ["9-kings"] })] }));
+    const seen: unknown[] = [];
+    let learned = false;
+    const client = new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: impl, onGames: (games) => ((learned = true), seen.push(...games)) });
+    const result = await client.list(() => ({ games: learned ? ["local-9-kings", "9-kings"] : ["local-9-kings"] }), "en");
+    // Only the listing's own games, once each, in their shape: a Steam id that isn't one is dropped, hidden marks too.
+    expect(seen).toEqual([
+      { id: "9-kings", name: "9 Kings", steamAppId: 2784470 },
+      { id: "no-steam", name: "No Steam", steamAppId: null },
+    ]);
+    expect(result).toEqual({
+      status: "ok",
+      modules: [
+        expect.objectContaining({ id: "wellbrained.tracker", fits: true, forGames: ["9 Kings", "No Steam", "unnamed"] }),
+        // A service from before gameInfo: the id as the name, as before.
+        expect.objectContaining({ id: "wellbrained.old", fits: true, forGames: ["9-kings"] }),
+      ],
+    });
+  });
+
+  it("keeps a listing when onGames throws", async () => {
+    const { impl } = fakeFetch(() => json({ modules: [entry({ games: ["9-kings"], gameInfo: [{ id: "9-kings", name: "9 Kings", steamAppId: 2784470 }] })] }));
+    const client = new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: impl, onGames: () => {
+      throw new Error("no");
+    } });
+    expect(await client.list({ games: ["9-kings"] }, "en")).toEqual({ status: "ok", modules: [expect.objectContaining({ fits: true })] });
+    expect(await client.index()).toHaveLength(1);
   });
 
   it("marks modules for a game as not fitting a personal workspace", async () => {
@@ -138,10 +174,10 @@ describe("CatalogClient.list", () => {
     const translations = { de: { name: "Zeitmesser", description: "Zählt runter." }, "x-bad": { name: "Bad" }, fr: { description: 5 } };
     const { impl } = fakeFetch(() => json({ modules: [entry({ id: "wellbrained.another", name: "Another" }), entry({ name: "Tracker", translations })] }));
     const client = new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: impl });
-    const german = await client.list({ game: "poe2" }, "de-at");
+    const german = await client.list({ games: ["poe2"] }, "de-at");
     expect(german).toMatchObject({ status: "ok", modules: [{ name: "Another" }, { name: "Zeitmesser", description: "Zählt runter." }] });
     expect(german).toMatchObject({ modules: [{}, expect.not.objectContaining({ translations: expect.anything() })] });
-    expect(await client.list({ game: "poe2" }, "fr")).toMatchObject({ modules: [{ name: "Another" }, { name: "Tracker" }] });
+    expect(await client.list({ games: ["poe2"] }, "fr")).toMatchObject({ modules: [{ name: "Another" }, { name: "Tracker" }] });
     expect(parseCatalogEntry(entry({ translations }))?.translations).toEqual({ de: { name: "Zeitmesser", description: "Zählt runter." } });
   });
 
@@ -166,11 +202,11 @@ describe("CatalogClient.list", () => {
 
   it("says when the catalog is off, busy or unreachable", async () => {
     const client = (answer: () => Response) => new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: fakeFetch(answer).impl });
-    expect(await client(() => json({}, 503)).list({ game: "poe2" }, "en")).toEqual({ status: "unavailable" });
-    expect(await client(() => new Response("", { status: 429, headers: { "retry-after": "30" } })).list({ game: "poe2" }, "en")).toEqual({ status: "busy" });
-    expect(await client(() => new Response("not json")).list({ game: "poe2" }, "en")).toEqual({ status: "unreachable" });
+    expect(await client(() => json({}, 503)).list({ games: ["poe2"] }, "en")).toEqual({ status: "unavailable" });
+    expect(await client(() => new Response("", { status: 429, headers: { "retry-after": "30" } })).list({ games: ["poe2"] }, "en")).toEqual({ status: "busy" });
+    expect(await client(() => new Response("not json")).list({ games: ["poe2"] }, "en")).toEqual({ status: "unreachable" });
     const offline = new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: (async () => Promise.reject(new TypeError("offline"))) as typeof fetch });
-    expect(await offline.list({ game: "poe2" }, "en")).toEqual({ status: "unreachable" });
+    expect(await offline.list({ games: ["poe2"] }, "en")).toEqual({ status: "unreachable" });
   });
 });
 
@@ -232,7 +268,7 @@ describe("CatalogClient.icon", () => {
     const { impl, calls } = fakeFetch((url) => (url.includes("/pictures/") ? new Response(new Uint8Array(png)) : json({ modules: [entry({ icon })] })));
     const client = new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: impl });
     expect(await client.icon("wellbrained.tracker")).toBeNull();
-    const listed = await client.list({ game: "poe2" }, "en");
+    const listed = await client.list({ games: ["poe2"] }, "en");
     expect(listed).toMatchObject({ status: "ok", modules: [{ icon: true }] });
     expect(await client.icon("wellbrained.tracker")).toBe(`data:image/png;base64,${png.toString("base64")}`);
     expect(await client.icon("wellbrained.tracker")).not.toBeNull();
@@ -247,7 +283,7 @@ describe("CatalogClient.icon", () => {
     let now = 0;
     const { impl, calls } = fakeFetch((url) => (url.includes("/pictures/") ? (fails-- > 0 ? new Response("busy", { status: 503 }) : new Response(new Uint8Array(png))) : json({ modules: [entry({ icon })] })));
     const client = new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: impl, now: () => now });
-    await client.list({ game: "poe2" }, "en");
+    await client.list({ games: ["poe2"] }, "en");
     expect(await client.icon("wellbrained.tracker")).toBeNull();
     // Not on every look, so an icon that never comes isn't fetched over and over.
     expect(await client.icon("wellbrained.tracker")).toBeNull();

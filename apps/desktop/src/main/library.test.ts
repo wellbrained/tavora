@@ -126,7 +126,9 @@ describe("adding games", () => {
     addWorkspace(library, { name: "Hollow Knight™" }, day(1));
     for (const id of ["elden-ring", "local-9-kings", "local-hollow-knight"]) trashWorkspace(library, id, day(2));
     expect(addOrRestoreWorkspace(library, { catalogId: "elden-ring" }, day(3))).toEqual({ id: "elden-ring", restored: true });
-    expect(addOrRestoreWorkspace(library, { online: { id: "9-kings", name: "Nine Kings", steamAppId: 2784470 } }, day(3))).toEqual({ id: "local-9-kings", restored: true });
+    expect(addOrRestoreWorkspace(library, { online: { id: "9-kings", name: "Nine Kings", steamAppId: 2784470 } }, day(3))).toEqual({ id: "local-9-kings", restored: true, learned: true });
+    // The copy added by name now knows it is the game picked online, so modules for that game go in it.
+    expect(library.workspaces["local-9-kings"]!.gameId).toBe("9-kings");
     expect(addOrRestoreWorkspace(library, { name: "hollow knight" }, day(3))).toEqual({ id: "local-hollow-knight", restored: true });
     expect(Object.values(library.workspaces).map((workspace) => [workspace.id, workspace.trashedAt])).toEqual([
       ["elden-ring", null],
@@ -140,7 +142,8 @@ describe("adding games", () => {
     const library = emptyLibrary();
     expect(addOrRestoreWorkspace(library, { name: "Rust", steamAppId: 252490 }, day(1))).toEqual({ id: "local-rust" });
     expect(library.workspaces["local-rust"]!.steamAppId).toBe(252490);
-    expect(addOrRestoreWorkspace(library, { online: { id: "rust", name: "Rust", steamAppId: 252490 } }, day(2))).toEqual({ id: "local-rust", existing: true });
+    expect(addOrRestoreWorkspace(library, { online: { id: "rust", name: "Rust", steamAppId: 252490 } }, day(2))).toEqual({ id: "local-rust", existing: true, learned: true });
+    expect(library.workspaces["local-rust"]!.gameId).toBe("rust");
     expect(addOrRestoreWorkspace(library, { catalogId: "elden-ring" }, day(2))).toEqual({ id: "elden-ring" });
     // Typed by hand: "Elden Ring" is the built-in game already there, not a new local-elden-ring.
     expect(addOrRestoreWorkspace(library, { name: "elden ring" }, day(3))).toEqual({ id: "elden-ring", existing: true });
