@@ -1,3 +1,10 @@
+## 0.3.20
+
+Hover cards on big elements. They come with the next Tavora (`TOOLTIP_ANCHOR_BOX_TAVORA` in `protocol.ts`; the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.19.32).
+
+- Tavora takes a hover card (`ui.tooltip.show` without `pinned`, and `ui.tooltip.move`) only while the pointer is near where it opens. That used to be within 40 px of `at`, the middle of the anchor's right edge, so on an element wider than about 80 px a card was refused while the pointer was over its left part. With `anchor`, the SDK now also sends the element's box (`box`), and Tavora takes the card while the pointer is anywhere over it (plus 8 px). A box wider or taller than 600 px, or one `at` is not on, falls back to the 40 px rule.
+- An older Tavora refuses a key it doesn't know, and with it the whole tooltip, so the SDK leaves `box` out there. `sdk.supports("ui.tooltip.anchorBox")` tells which case you are in. With `at` instead of `anchor` you can give `box` yourself; it is left out there the same way.
+
 ## 0.3.19
 
 Icons on an item card's stats. They come with the next Tavora (`ITEM_CARD_ICON_TAVORA` in `protocol.ts`; the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.19.32).

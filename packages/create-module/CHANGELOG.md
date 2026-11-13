@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.36
+
+- New projects start on `@tavora/sdk` 0.3.20: hover cards show anywhere over a big element (`anchor` sends its box).
+
 ## 0.1.35
 
 - New projects pack with `@tavora/pack` 0.3.3, which stops when the zip would hold a private key (such as the `--key` file next to `tavora.module.json`).

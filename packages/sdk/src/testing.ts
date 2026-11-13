@@ -1086,7 +1086,7 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
       showMenu: async (request) => call("ui.showMenu", menuParams(request)),
       tooltip: {
         show: async (request) => call("ui.tooltip.show", tooltipShowParams(request, shared.version)),
-        move: async (anchor) => void (await call("ui.tooltip.move", tooltipParams(anchor))),
+        move: async (anchor) => void (await call("ui.tooltip.move", tooltipParams(anchor, shared.version))),
         hide: async (id) => void (await call("ui.tooltip.hide", { id })),
         close: async (id) => void (await call("ui.tooltip.close", { id })),
         onClose: (fn) => on("ui.tooltipClosed", fn),

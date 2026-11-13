@@ -37,14 +37,24 @@ function bundleImage(v: unknown, icon = false): string {
 export function tooltipId(v: unknown): string { const o = obj(v, ["id"]); const id = text(o.id, 64); if (!ID.test(id))
     fail(); return id; }
 export function checkTooltipAnchor(v: unknown): TooltipAnchor {
-    const o = obj(v, ["id", "at"]), id = tooltipId({ id: o.id }), p = obj(o.at, ["x", "y"]);
+    const o = obj(v, ["id", "at", "box"]), id = tooltipId({ id: o.id }), p = obj(o.at, ["x", "y"]);
     for (const n of [p.x, p.y])
         if (typeof n !== "number" || !Number.isFinite(n) || n < 0 || n > 100000)
             fail();
-    return { id, at: { x: p.x as number, y: p.y as number } };
+    const anchor: TooltipAnchor = { id, at: { x: p.x as number, y: p.y as number } };
+    // The anchor element's box only widens where the pointer may be (tooltip-pointer.ts); its shape is checked here, and
+    // whether it is plausible there. An element partly scrolled out of the panel has a negative x or y.
+    if (o.box !== undefined) {
+        const b = obj(o.box, ["x", "y", "width", "height"]);
+        for (const n of [b.x, b.y, b.width, b.height])
+            if (typeof n !== "number" || !Number.isFinite(n) || Math.abs(n) > 100000)
+                fail();
+        anchor.box = { x: b.x as number, y: b.y as number, width: b.width as number, height: b.height as number };
+    }
+    return anchor;
 }
 export function checkTooltip(v: unknown): TooltipRequest {
-    const o = obj(v, ["id", "at", "content", "pinned", "pinnable"]), anchor = checkTooltipAnchor({ id: o.id, at: o.at });
+    const o = obj(v, ["id", "at", "box", "content", "pinned", "pinnable"]), anchor = checkTooltipAnchor({ id: o.id, at: o.at, ...(o.box === undefined ? {} : { box: o.box }) });
     if (o.pinned !== undefined && typeof o.pinned !== "boolean")
         fail();
     if (o.pinnable !== undefined && typeof o.pinnable !== "boolean")

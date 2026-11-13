@@ -55,4 +55,14 @@ describe("tooltip boundary", () => {
             expect(() => checkTooltip({ ...base, content: { title: "x", ...extra } })).toThrow();
     });
     it("never interprets text as HTML", () => { expect(checkTooltip({ ...base, content: { title: "<b>literal</b>" } }).content.title).toBe("<b>literal</b>"); });
+    it("keeps the anchor's box and refuses a malformed one", () => {
+        const box = { x: -4, y: 0, width: 86, height: 86 };
+        expect(checkTooltipAnchor({ id: "x", at: { x: 82, y: 43 }, box })).toEqual({ id: "x", at: { x: 82, y: 43 }, box });
+        expect(checkTooltip({ ...base, box }).box).toEqual(box);
+        expect(checkTooltip(base)).not.toHaveProperty("box");
+        expect(() => checkTooltipAnchor({ id: "x", at: { x: 1, y: 1 }, box: { x: 0, y: 0, width: NaN, height: 1 } })).toThrow();
+        expect(() => checkTooltipAnchor({ id: "x", at: { x: 1, y: 1 }, box: { x: 0, y: 0, width: 1 } })).toThrow();
+        expect(() => checkTooltip({ ...base, box: { x: 0, y: 0, width: 1, height: 1, z: 1 } })).toThrow();
+        expect(() => checkTooltip({ ...base, box: [0, 0, 1, 1] })).toThrow();
+    });
 });

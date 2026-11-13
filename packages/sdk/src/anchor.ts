@@ -9,10 +9,10 @@ export type MenuOptions = Omit<MenuRequest, "at"> &
   ({ anchor: AnchorTarget; at?: undefined } | { at: MenuRequest["at"]; anchor?: undefined });
 
 /** ui.tooltip.move: the tooltip's id, and `anchor` (an element or its box) or `at` (a point). */
-export type TooltipMoveOptions = { id: string } & ({ anchor: AnchorTarget; at?: undefined } | { at: TooltipAnchor["at"]; anchor?: undefined });
+export type TooltipMoveOptions = { id: string } & ({ anchor: AnchorTarget; at?: undefined; box?: undefined } | { at: TooltipAnchor["at"]; box?: TooltipAnchor["box"]; anchor?: undefined });
 
 /** ui.tooltip.show: a tooltip request with `anchor` instead of `at`, if you like. */
-export type TooltipShowOptions = Omit<TooltipRequest, "at"> & ({ anchor: AnchorTarget; at?: undefined } | { at: TooltipAnchor["at"]; anchor?: undefined });
+export type TooltipShowOptions = Omit<TooltipRequest, "at" | "box"> & ({ anchor: AnchorTarget; at?: undefined; box?: undefined } | { at: TooltipAnchor["at"]; box?: TooltipAnchor["box"]; anchor?: undefined });
 
 function box(target: AnchorTarget): { x: number; y: number; width: number; height: number } {
   const rect: { x: number; y: number; width?: number; height?: number } =
@@ -45,9 +45,9 @@ function point(target: AnchorTarget): TooltipAnchor["at"] {
  * with the old hint). The same goes for the card's `layout`, `effect` and `skin` on a Tavora older than
  * `ui.tooltip.skin`: the card shows in the rich layout there; and for a stat's `icon` before `ui.tooltip.propertyIcon`.
  */
-export function tooltipShowParams(request: TooltipShowOptions, hostVersion: string): Omit<TooltipShowOptions, "anchor" | "at"> & { at: TooltipAnchor["at"] } {
+export function tooltipShowParams(request: TooltipShowOptions, hostVersion: string): Omit<TooltipShowOptions, "anchor" | "at"> & Pick<TooltipAnchor, "at" | "box"> {
   if (request.pinnable === false && request.pinned === true) throw new TavoraError({ code: "INVALID_PARAMS", message: "A card that is not pinnable can't be pinned" });
-  const params = tooltipParams(request);
+  const params = tooltipParams(request, hostVersion);
   if (params.pinnable !== undefined && !supportsCall(hostVersion, "ui.tooltip.pinnable")) delete params.pinnable;
   if (params.content && !supportsCall(hostVersion, "ui.tooltip.propertyIcon")) params.content = withoutIcons(params.content);
   if (params.content && !supportsCall(hostVersion, "ui.tooltip.per")) params.content = withoutPer(params.content);
@@ -99,8 +99,15 @@ export function skinParams(name: string, skin: TooltipSkin, hostVersion: string)
   return { name, skin: { ...skin, colors } };
 }
 
-export function tooltipParams<T extends TooltipMoveOptions | TooltipShowOptions>(request: T): Omit<T, "anchor" | "at"> & { at: TooltipAnchor["at"] } {
-  const { anchor, at, ...rest } = request as T & { anchor?: AnchorTarget; at?: TooltipAnchor["at"] };
-  if (anchor) return { ...rest, at: point(anchor) } as never;
-  return at ? ({ ...rest, at } as never) : missing();
+/**
+ * The wire form of `ui.tooltip.show` and `ui.tooltip.move`: `at` next to the anchor, and the anchor's box as `box`, so
+ * Tavora takes the hover anywhere over a big element, not only near `at`. An older Tavora than `ui.tooltip.anchorBox`
+ * rejects the unknown key, so it is left out there (the card then shows only while the pointer is near `at`, as before).
+ */
+export function tooltipParams<T extends TooltipMoveOptions | TooltipShowOptions>(request: T, hostVersion: string): Omit<T, "anchor" | "at"> & Pick<TooltipAnchor, "at" | "box"> {
+  const { anchor, at, box: given, ...rest } = request as T & { anchor?: AnchorTarget; at?: TooltipAnchor["at"]; box?: TooltipAnchor["box"] };
+  if (!anchor && !at) missing();
+  const b = anchor ? box(anchor) : given;
+  const sendBox = !!b && b.width > 0 && b.height > 0 && supportsCall(hostVersion, "ui.tooltip.anchorBox");
+  return { ...rest, at: anchor ? point(b!) : at, ...(sendBox ? { box: b } : {}) } as never;
 }

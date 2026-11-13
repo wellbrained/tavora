@@ -449,8 +449,9 @@ describe("workspace and ui", () => {
       await sdk.ui.tooltip.move({ id: "t", anchor: element({ x: 10, y: 20, width: 30, height: 40 }) });
       await sdk.ui.tooltip.move({ id: "t", at: { x: 1, y: 2 } });
       await sdk.ui.tooltip.show({ id: "t", anchor: { x: 0, y: 0, width: 10, height: 10 }, content: { title: "T" } });
-      expect(host.calls["ui.tooltip.move"]).toEqual([{ id: "t", at: { x: 40, y: 40 } }, { id: "t", at: { x: 1, y: 2 } }]);
-      expect(host.calls["ui.tooltip.show"]).toEqual([{ id: "t", content: { title: "T" }, at: { x: 10, y: 5 } }]);
+      // With the box, so a Tavora takes the hover anywhere over the element.
+      expect(host.calls["ui.tooltip.move"]).toEqual([{ id: "t", at: { x: 40, y: 40 }, box: { x: 10, y: 20, width: 30, height: 40 } }, { id: "t", at: { x: 1, y: 2 } }]);
+      expect(host.calls["ui.tooltip.show"]).toEqual([{ id: "t", content: { title: "T" }, at: { x: 10, y: 5 }, box: { x: 0, y: 0, width: 10, height: 10 } }]);
       expect(await failure(sdk.ui.tooltip.move({ id: "t" } as never))).toMatchObject({ code: "INVALID_PARAMS" });
     });
   });
