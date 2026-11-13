@@ -713,6 +713,12 @@ test("expanded, Personal turns the Add row into a name field: Esc drops it, Ente
     await expect(page.getByTestId("add-personal-row")).toHaveCount(0);
     await expect(page.getByTestId("rail-add-personal")).toBeFocused();
 
+    // A click elsewhere drops it too.
+    await page.getByTestId("rail-add-personal").click();
+    await expect(page.getByTestId("add-personal-row")).toBeVisible();
+    await page.locator('[data-testid^="rail-workspace-"]').first().click();
+    await expect(page.getByTestId("add-personal-row")).toHaveCount(0);
+
     await page.getByTestId("rail-add-personal").click();
     await expect(page.getByTestId("personal-name")).toHaveValue("");
     await page.keyboard.type("Stream");
