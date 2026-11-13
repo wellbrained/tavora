@@ -30,90 +30,26 @@ export const PATCH_NOTES: readonly PatchNote[] = [
   {
     version: "0.24.58",
     date: "2026-11-13",
-    title: "Hover cards on big things",
+    title: "Safer accounts, steadier updates",
     notes: [
-      "Hovering a big tile or card shows its details wherever your pointer is on it, not only near its right edge.",
+      "Changing your email needs a code from your new address and one from your current address (no email yet? You confirm with Discord). Your other devices are signed out once it's changed.",
+      "A running update download no longer shows as failed by mistake, and after a failed download a newer version still arrives within minutes.",
+      "Publish and Save as zip stop when your module folder holds a private key, and tell you which file to move out.",
+      "A website you open from a page on your PC or local network can't reach your PC or network while it loads.",
+      "A module that asks to read Tavora's own folder in Documents, or key files such as .pem, shows as not valid. Tavora never let it read either.",
+      "On Linux and macOS, Tavora talks only to a Discord connection that belongs to your own account.",
+      "Hovering a big tile or card shows its details wherever your pointer is on it.",
     ],
     prs: [
       { number: 784, title: "Hover cards take the pointer anywhere over their anchor" },
-    ],
-    tags: ["modules", "privacy", "publishing", "sdk", "tooltips", "website"],
-  },
-  {
-    version: "0.24.57",
-    date: "2026-11-13",
-    title: "Discord sign-in stays yours",
-    notes: [
-      "On Linux and macOS, Tavora talks only to a Discord connection that belongs to your own account.",
-    ],
-    prs: [
       { number: 783, title: "Discord: talk only to a socket the user owns" },
-    ],
-    tags: ["discord", "privacy", "website"],
-  },
-  {
-    version: "0.24.56",
-    date: "2026-11-13",
-    title: "Changing your email is safer",
-    notes: [
-      "Changing your email now needs a code from your new address and one from your current address.",
-      "No email on your account yet? You confirm with Discord instead.",
-      "Once it's changed, your other devices are signed out.",
-    ],
-    prs: [
       { number: 782, title: "Changing the account email needs proof of the current address" },
-    ],
-    tags: ["accounts", "privacy", "publishing", "security", "service", "settings", "website"],
-  },
-  {
-    version: "0.24.55",
-    date: "2026-11-13",
-    title: "Your private key stays home",
-    notes: [
-      "Publish and Save as zip stop when your module folder holds a private key, and tell you which file to move out.",
-    ],
-    prs: [
-      { number: 780, title: "Stop packing private keys into module zips" },
-    ],
-    tags: ["catalog", "modules", "privacy", "publishing", "service", "website"],
-  },
-  {
-    version: "0.24.54",
-    date: "2026-11-13",
-    title: "Safer Browser when you leave a local page",
-    notes: [
-      "A website you open from a page on your PC or local network can't reach your PC or network while it loads.",
-    ],
-    prs: [
       { number: 781, title: "Browser: judge requests by the public page a panel is going to" },
-    ],
-    tags: ["privacy", "website"],
-  },
-  {
-    version: "0.24.53",
-    date: "2026-11-13",
-    title: "Steadier app updates",
-    notes: [
-      "A running update download no longer shows as failed by mistake.",
-      "After a download fails, a newer version still downloads within minutes.",
-    ],
-    prs: [
+      { number: 780, title: "Stop packing private keys into module zips" },
+      { number: 777, title: "Manifest refuses Tavora's own folder and key files in read" },
       { number: 776, title: "Updater: a failed check leaves a download alone, newer versions found after a failed download" },
     ],
-    tags: ["updates"],
-  },
-  {
-    version: "0.24.52",
-    date: "2026-11-13",
-    title: "Safer folder permissions",
-    notes: [
-      "A module that asks to read Tavora's own folder in Documents, or to read key files such as .pem, is now refused and shows as not valid.",
-      "Tavora never let them read either, so nothing your modules could see changes.",
-    ],
-    prs: [
-      { number: 777, title: "Manifest refuses Tavora's own folder and key files in read" },
-    ],
-    tags: ["privacy", "publishing", "website"],
+    tags: ["accounts", "catalog", "discord", "modules", "privacy", "publishing", "sdk", "security", "service", "settings", "tooltips", "updates", "website"],
   },
   {
     version: "0.24.51",
