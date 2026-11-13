@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.35
+
+- New projects pack with `@tavora/pack` 0.3.3, which stops when the zip would hold a private key (such as the `--key` file next to `tavora.module.json`).
+
 ## 0.1.34
 
 - New projects start on `@tavora/sdk` 0.3.19: item-card stats can have an icon before their label (`icon`).

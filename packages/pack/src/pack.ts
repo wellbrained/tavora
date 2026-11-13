@@ -1,7 +1,8 @@
 import type { KeyObject } from "node:crypto";
-import { lstat, readdir, readFile } from "node:fs/promises";
+import { lstat, readdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { CHANGELOG_LIMITS, isReleaseVersion, manifestFiles, MAX_README_BYTES, validateChangelog, validateManifest, type ModuleManifest } from "@tavora/module-schema";
+import { hasKeyExtension, holdsPrivateKey, privateKeyMessage } from "./private-keys.ts";
 import { fileHashes, SIGNATURE_FILE, signatureFile } from "./signature.ts";
 import { asSigner, type Signer } from "./signer.ts";
 import { isSafeEntryName, readZip, writeZip, ZIP_LIMITS, ZipError, type ZipFile } from "./zip.ts";
@@ -10,12 +11,28 @@ export const MANIFEST_FILE = "tavora.module.json";
 
 export class PackError extends Error {}
 
+/** The pack stopped because a file it would take is, or holds, a private key. */
+export class PrivateKeyError extends PackError {
+  /** The file, as named in the zip. */
+  readonly file: string;
+  constructor(file: string) {
+    super(privateKeyMessage(file));
+    this.file = file;
+  }
+}
+
+export interface PackOptions {
+  /** The key file the zip is signed with (tavora-pack --key): it never goes in, whatever its name or content. */
+  keyFile?: string;
+}
+
 /**
  * The files of a module folder that go into its zip: the manifest, the folders
  * its entry pages are in (usually dist/), the icons, the screenshots, the readme and the changelog. When the entry page sits
- * next to the manifest, everything goes except node_modules and dot files.
+ * next to the manifest, everything goes except node_modules and dot files. Stops with a PrivateKeyError when a file
+ * would go in that is, or holds, a private key.
  */
-export async function collectFiles(dir: string): Promise<{ manifest: ModuleManifest; files: ZipFile[] }> {
+export async function collectFiles(dir: string, options: PackOptions = {}): Promise<{ manifest: ModuleManifest; files: ZipFile[] }> {
   let raw: unknown;
   try {
     raw = JSON.parse(await readFile(path.join(dir, MANIFEST_FILE), "utf8"));
@@ -47,19 +64,35 @@ export async function collectFiles(dir: string): Promise<{ manifest: ModuleManif
   for (const entry of entries) if (!names.has(entry)) throw new PackError(`the entry page ${entry} is missing (is the module built?)`);
   names.delete(SIGNATURE_FILE);
 
+  const keyFile = options.keyFile === undefined ? null : await realOrGiven(path.resolve(options.keyFile));
+  const realDir = await realOrGiven(dir);
   const files: ZipFile[] = [];
   let total = 0;
   for (const name of [...names].sort()) {
     if (!isSafeEntryName(name)) throw new PackError(`${name} cannot go into a module zip (its name is not allowed)`);
+    // A private key never goes in, not even by accident (decided 2026-11-13): stop, so the author moves it out.
+    if (hasKeyExtension(name) || (keyFile !== null && samePath(path.join(realDir, name), keyFile))) throw new PrivateKeyError(name);
     await refuseLinks(dir, name);
     const info = await lstat(path.join(dir, name)).catch(() => null);
     if (!info?.isFile()) throw new PackError(`${name} is missing or not a plain file`);
     total += info.size;
     if (total > ZIP_LIMITS.maxUnpackedBytes) throw new PackError("the module is bigger than a module zip may be");
-    files.push({ name, data: await readFile(path.join(dir, name)) });
+    const data = await readFile(path.join(dir, name));
+    if (holdsPrivateKey(data)) throw new PrivateKeyError(name);
+    files.push({ name, data });
   }
   if (files.length > ZIP_LIMITS.maxFiles - 1) throw new PackError(`a module zip may have at most ${ZIP_LIMITS.maxFiles - 1} files`);
   return { manifest, files };
+}
+
+/** The path with links resolved, or as given when it isn't there. */
+async function realOrGiven(file: string): Promise<string> {
+  return realpath(file).catch(() => file);
+}
+
+/** Windows and macOS paths ignore case; Linux paths don't. */
+function samePath(a: string, b: string): boolean {
+  return process.platform === "linux" ? a === b : a.toLowerCase() === b.toLowerCase();
 }
 
 /** Refuses a file or folder whose path, from the module folder down, passes through a link: it could lead out of the module. */
@@ -92,8 +125,8 @@ async function walk(root: string, folder: string): Promise<string[]> {
 }
 
 /** Packs a module folder into a zip signed with the publisher's key, or by Tavora with one it keeps. */
-export async function packModule(dir: string, key: KeyObject | Signer): Promise<{ manifest: ModuleManifest; zip: Buffer }> {
-  const { manifest, files } = await collectFiles(dir);
+export async function packModule(dir: string, key: KeyObject | Signer, options: PackOptions = {}): Promise<{ manifest: ModuleManifest; zip: Buffer }> {
+  const { manifest, files } = await collectFiles(dir, options);
   const signer = asSigner(key);
   const hashes = fileHashes(files);
   const manifestFile = files.find((file) => file.name === MANIFEST_FILE)!;

@@ -33,7 +33,7 @@ export default defineConfig(moduleConfig({ pages: ["index", "overlay"], plugins:
 
 ## Pack
 
-`tavora-pack <module folder> --key <key file> [--out <file.zip>]` checks `tavora.module.json`, takes the manifest, the folder its `entry` page is in (usually `dist/`), the icon and the changelog, and writes a zip with a signature of every file. Build the module first.
+`tavora-pack <module folder> --key <key file> [--out <file.zip>]` checks `tavora.module.json`, takes the manifest, the folder its `entry` page is in (usually `dist/`), the icon and the changelog, and writes a zip with a signature of every file. Build the module first. When `entry` sits next to the manifest, the whole folder goes in except dot files and `node_modules`. It stops, naming the file, when the zip would hold a private key: a `.pem`, `.key`, `.p12`, `.pfx` or `.ppk` file, the `--key` file, or a file holding a private key. Keep your key file outside the module folder.
 
 ## Publish
 

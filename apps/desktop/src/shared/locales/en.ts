@@ -476,6 +476,7 @@ export const en = {
   "publish.error.noProject": "Only modules from your project folders can be published.",
   "publish.error.idPublished": "The id can't change once it's published.",
   "publish.error.pack": "Tavora can't pack it: {message}",
+  "publish.error.privateKey": "{file} looks like a private key, so it can't go out with your module. Move it out of the module folder and try again.",
   "publish.error.badFile": "Can't read {file}. Is it valid JSON?",
   "publish.error.notes": "These patch notes don't work: {message}",
   "publish.error.version": "That version doesn't work.",
