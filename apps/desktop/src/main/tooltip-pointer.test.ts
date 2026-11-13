@@ -20,8 +20,15 @@ describe("pointerOverAnchor", () => {
   it("refuses a pointer outside the box and its margin", () => {
     expect(pointerOverAnchor(pointer(1, 63), plot, now)).toBe(false);
     expect(pointerOverAnchor(pointer(50, 116), plot, now)).toBe(false);
-    // Near at but outside the box: the box decides, not the 40 px rule.
-    expect(pointerOverAnchor(pointer(130, 63), plot, now)).toBe(false);
+    // Outside the box and more than 40 px from at.
+    expect(pointerOverAnchor(pointer(140, 63), plot, now)).toBe(false);
+  });
+
+  it("keeps the 40 px around at for a small anchor", () => {
+    // A 16 px icon: a pointer 30 px right of it is outside the box but near at, as an old Tavora took it.
+    const icon = { at: { x: 116, y: 108 }, box: { x: 100, y: 100, width: 16, height: 16 } };
+    expect(pointerOverAnchor(pointer(146, 108), icon, now)).toBe(true);
+    expect(pointerOverAnchor(pointer(160, 108), icon, now)).toBe(false);
   });
 
   it("falls back to the 40 px rule for a box it can't use", () => {

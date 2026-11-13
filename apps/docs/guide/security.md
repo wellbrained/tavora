@@ -450,7 +450,8 @@ bridge, and no permissions. Its footer identifies the source module.
 
 Hover requires recent trusted pointer or keyboard input in a visible source panel: the pointer the panel's preload
 reports must be near the card's anchor point, or over the anchor's box when the module sends one (at most 600 px a side,
-with the point on it). The box only moves where in its own panel a module's hover is taken; it reaches nothing new.
+with the point on it). The box only widens where in its own panel a module's hover is taken: the card may then open up
+to 600 px from the pointer, still anchored inside that panel.
 Hover details pass mouse input through and do not freeze the workspace. Pinning
 requires a real click or key press, once per gesture. One tooltip is shared by the
 window; ordinary hover cannot replace a pin. Only the owning panel can move or

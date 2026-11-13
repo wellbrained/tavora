@@ -9,10 +9,10 @@ export type MenuOptions = Omit<MenuRequest, "at"> &
   ({ anchor: AnchorTarget; at?: undefined } | { at: MenuRequest["at"]; anchor?: undefined });
 
 /** ui.tooltip.move: the tooltip's id, and `anchor` (an element or its box) or `at` (a point). */
-export type TooltipMoveOptions = { id: string } & ({ anchor: AnchorTarget; at?: undefined } | { at: TooltipAnchor["at"]; anchor?: undefined });
+export type TooltipMoveOptions = { id: string } & ({ anchor: AnchorTarget; at?: undefined; box?: undefined } | { at: TooltipAnchor["at"]; box?: TooltipAnchor["box"]; anchor?: undefined });
 
 /** ui.tooltip.show: a tooltip request with `anchor` instead of `at`, if you like. */
-export type TooltipShowOptions = Omit<TooltipRequest, "at"> & ({ anchor: AnchorTarget; at?: undefined } | { at: TooltipAnchor["at"]; anchor?: undefined });
+export type TooltipShowOptions = Omit<TooltipRequest, "at" | "box"> & ({ anchor: AnchorTarget; at?: undefined; box?: undefined } | { at: TooltipAnchor["at"]; box?: TooltipAnchor["box"]; anchor?: undefined });
 
 function box(target: AnchorTarget): { x: number; y: number; width: number; height: number } {
   const rect: { x: number; y: number; width?: number; height?: number } =

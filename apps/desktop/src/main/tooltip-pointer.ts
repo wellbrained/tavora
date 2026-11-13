@@ -26,11 +26,12 @@ function usableBox(anchor: Pick<TooltipAnchor, "at" | "box">): TooltipAnchor["bo
 
 /**
  * Whether a hover card (`ui.tooltip.show` without a pin, `ui.tooltip.move`) follows the user's pointer: a fresh report
- * over the anchor's box (plus BOX_MARGIN) when the module sent a usable one, otherwise within POINTER_NEAR of `at`.
+ * within POINTER_NEAR of `at`, or over the anchor's box (plus BOX_MARGIN) when the module sent a usable one. The box only
+ * adds room, so a small anchor keeps the 40 px it always had.
  */
 export function pointerOverAnchor(pointer: ReportedPointer | null, anchor: Pick<TooltipAnchor, "at" | "box">, now = Date.now()): boolean {
   if (!pointer || now - pointer.at >= POINTER_FRESH_MS) return false;
   const b = usableBox(anchor);
-  if (b) return pointer.x >= b.x - BOX_MARGIN && pointer.x <= b.x + b.width + BOX_MARGIN && pointer.y >= b.y - BOX_MARGIN && pointer.y <= b.y + b.height + BOX_MARGIN;
+  if (b && pointer.x >= b.x - BOX_MARGIN && pointer.x <= b.x + b.width + BOX_MARGIN && pointer.y >= b.y - BOX_MARGIN && pointer.y <= b.y + b.height + BOX_MARGIN) return true;
   return Math.abs(pointer.x - anchor.at.x) < POINTER_NEAR && Math.abs(pointer.y - anchor.at.y) < POINTER_NEAR;
 }
