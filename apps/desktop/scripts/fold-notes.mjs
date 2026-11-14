@@ -49,8 +49,11 @@ export function formatEntry(entry, eol = "\n") {
  * Returns { text, folded } (folded: the versions folded away), { nothing } when there is nothing to fold (the normal
  * case right after a release; not an error), or { problem }.
  */
-export function foldText(text, entries, previous) {
+export function foldText(text, entries, previous, catalogVersion) {
   const fold = unreleased(entries, previous);
+  // The release that has the catalog (1.0.0): every earlier entry is dropped, not folded, and the entry keeps only
+  // its own notes; the app shows the catalog in their place (src/shared/release-catalog.ts).
+  if (catalogVersion && fold.some((entry) => entry.version === catalogVersion)) return catalogText(text, entries, catalogVersion);
   if (fold.length < 2) return { nothing: `Nothing to fold: ${fold.length ? `only ${fold[0].version} is` : "no entry is"} newer than ${previous ?? "the start"}.` };
   if (entries.slice(0, fold.length).some((entry, i) => entry !== fold[i])) return { problem: "The patch-notes entries are not newest first; sort them before folding." };
   const eol = text.includes("\r\n") ? "\r\n" : "\n";
@@ -64,6 +67,28 @@ export function foldText(text, entries, previous) {
   const to = fold.length < starts.length ? starts[fold.length].index : text.lastIndexOf("];");
   return { text: text.slice(0, from) + formatEntry(foldEntries(fold), eol) + text.slice(to), folded: fold.slice(1).map((entry) => entry.version) };
 }
+
+/**
+ * patch-notes.ts for the catalog release: only the `catalogVersion` entry stays, which has to be the newest. It keeps
+ * its own notes (they go into latest.yml and the GitHub release) and every pull request and tag of the dropped
+ * entries, so Tavora Admin can still search them.
+ */
+function catalogText(text, entries, catalogVersion) {
+  if (entries[0].version !== catalogVersion) return { problem: `The ${catalogVersion} entry must be the newest; newer entries can't come before the release catalog.` };
+  // Only the first entry is read from the text; the rest is cut off whatever its layout.
+  const first = /^ {2}\{\r?\n {4}version: "(\d+\.\d+\.\d+)"/m.exec(text);
+  if (first?.[1] !== entries[0].version || text.lastIndexOf("];") < first.index) {
+    return { problem: "patch-notes.ts is not laid out as expected (the first entry starting with `  {` and then its version line)." };
+  }
+  const eol = text.includes("\r\n") ? "\r\n" : "\n";
+  const entry = { ...foldEntries(entries), notes: entries[0].notes };
+  return { text: text.slice(0, first.index) + formatEntry(entry, eol) + text.slice(text.lastIndexOf("];")), folded: entries.slice(1).map((e) => e.version) };
+}
+
+export const CATALOG_CHECKLIST = [
+  `Every entry before the release was dropped; the entry keeps only its own notes. They are the release's text in latest.yml and on GitHub, so keep them to a few friendly lines.`,
+  "Settings > Patch notes shows the catalog from src/shared/release-catalog.ts in this entry's place: check that it still matches what the app has.",
+];
 
 export const WORDING_CHECKLIST = [
   "Give the release a title that covers it as a whole, a few words.",
@@ -84,7 +109,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   git("fetch", "origin", "--tags", "--quiet");
   const previous = lastReleased(git("tag", "--list", "v*").split(/\r?\n/).filter(Boolean));
   const { PATCH_NOTES } = await import(pathToFileURL(file).href);
-  const result = foldText(readFileSync(file, "utf8"), PATCH_NOTES, previous);
+  const { CATALOG_VERSION } = await import(pathToFileURL(path.join(desktop, "src", "shared", "release-catalog.ts")).href);
+  const result = foldText(readFileSync(file, "utf8"), PATCH_NOTES, previous, CATALOG_VERSION);
   if (result.nothing) {
     console.log(result.nothing);
     process.exit(0);
@@ -100,7 +126,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   }
   writeFileSync(file, result.text);
   console.log(`Folded ${result.folded.join(", ")} into ${version} (last release: ${previous ?? "none"}) in src/shared/patch-notes.ts.`);
-  console.log("\nThis is a draft. Before the pull request, go over the wording:");
-  for (const item of WORDING_CHECKLIST) console.log(`  - ${item}`);
+  const catalog = version === CATALOG_VERSION;
+  console.log(catalog ? "\nThis is the release with the catalog. Before the pull request, check:" : "\nThis is a draft. Before the pull request, go over the wording:");
+  for (const item of catalog ? CATALOG_CHECKLIST : WORDING_CHECKLIST) console.log(`  - ${item}`);
   console.log(`\nThen commit ("Fold the patch notes since ${previous ?? "the start"} into ${version}"), open the pull request (no change note) and merge it before pnpm release.`);
 }

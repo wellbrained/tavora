@@ -743,6 +743,8 @@ export const de: Record<keyof typeof en, string> = {
   "shortcuts.ctrl": "Strg",
   "settings.patchNotes.intro": "Was neu ist, das Neueste zuerst.",
   "settings.patchNotes.installed": "Installiert",
+  "settings.patchNotes.catalogTitle": "Tavora 1.0",
+  "settings.patchNotes.catalogIntro": "Die erste öffentliche Version. Das alles kann Tavora.",
   "settings.trash.empty": "Der Papierkorb ist leer.",
   "settings.trash.deleteOn": "Wird am {date} endgültig gelöscht",
   "settings.trash.restore": "Wiederherstellen",

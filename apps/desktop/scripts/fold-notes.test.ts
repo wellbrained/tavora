@@ -49,6 +49,55 @@ describe("fold-notes", () => {
     expect(foldText(text, entries, "0.4.2").nothing).toMatch(/no entry is newer than 0.4.2/);
   });
 
+  describe("the release with the catalog", () => {
+    const major = { version: "1.0.0", date: "2026-11-15", title: "Tavora 1.0", notes: ["First public version."], prs: [{ number: 20, title: "D pr" }], tags: ["z"] };
+    const all = [major, ...entries];
+    const file = `export const PATCH_NOTES = [\n${all.map((entry) => formatEntry(entry)).join("")}];\n`;
+
+    it("leaves only its own entry: own notes, every pull request and tag, nothing else", () => {
+      const result = foldText(file, all, "0.4.0", "1.0.0");
+      expect(result.folded).toEqual(["0.4.2", "0.4.1", "0.4.0"]);
+      expect(result.text).toBe(
+        `export const PATCH_NOTES = [\n${formatEntry({ ...major, prs: [{ number: 20, title: "D pr" }, { number: 12, title: "C pr" }, { number: 11, title: "B pr" }, { number: 9, title: "A pr" }], tags: ["a", "b", "c", "z"] })}];\n`,
+      );
+    });
+
+    it("also drops entries from before the last release, and works when it is the only new entry", () => {
+      const result = foldText(file, all, "0.4.2", "1.0.0");
+      expect(result.text).not.toContain("0.4.");
+      expect(result.text).toContain('version: "1.0.0"');
+    });
+
+    it("does nothing to the file twice, and not at all once 1.0.0 is released", () => {
+      const once = foldText(file, all, "0.4.0", "1.0.0");
+      const left = { ...major, prs: [{ number: 20, title: "D pr" }, { number: 12, title: "C pr" }, { number: 11, title: "B pr" }, { number: 9, title: "A pr" }], tags: ["a", "b", "c", "z"] };
+      expect(foldText(once.text, [left], null, "1.0.0").text).toBe(once.text);
+      expect(foldText(once.text, [major], "1.0.0", "1.0.0").nothing).toMatch(/Nothing to fold/);
+    });
+
+    it("refuses when a newer entry comes before it", () => {
+      const newer = [{ ...major, version: "1.0.1" }, ...all];
+      const text = `export const PATCH_NOTES = [\n${newer.map((entry) => formatEntry(entry)).join("")}];\n`;
+      expect(foldText(text, newer, "0.4.0", "1.0.0").problem).toMatch(/must be the newest/);
+    });
+
+    it("works on the real patch-notes.ts: one entry is left, the release guards are happy", () => {
+      const real = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "../src/shared/patch-notes.ts"), "utf8").replace(/\r\n/g, "\n");
+      const top = { version: "1.0.0", date: "2026-11-15", title: "Tavora 1.0", notes: ["First public version."] };
+      const start = "export const PATCH_NOTES: readonly PatchNote[] = [\n";
+      const text = real.replace(start, start + formatEntry(top));
+      const result = foldText(text, [top, ...PATCH_NOTES], PATCH_NOTES[0]!.version, "1.0.0");
+      expect(result.problem).toBeUndefined();
+      expect([...result.text.matchAll(/^ {4}version: "/gm)]).toHaveLength(1);
+      expect(result.text.startsWith(real.slice(0, real.indexOf(start) + start.length))).toBe(true);
+      expect(result.text.trimEnd().endsWith("];")).toBe(true);
+    });
+
+    it("leaves ordinary folds alone before 1.0.0", () => {
+      expect(foldText(text, entries, "0.4.0", "1.0.0").folded).toEqual(["0.4.1"]);
+    });
+  });
+
   it("writes entries exactly as patch-notes.ts has them", () => {
     const file = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "../src/shared/patch-notes.ts"), "utf8").replace(/\r\n/g, "\n");
     for (const entry of PATCH_NOTES.slice(0, 5)) expect(file).toContain(formatEntry(entry));

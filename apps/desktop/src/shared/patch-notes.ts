@@ -5,7 +5,7 @@
  * apps/desktop/changes/ (the Number workflow); a test keeps them in step with
  * apps/desktop/package.json. Write for users, in plain friendly words. At 1.0 these
  * entries are replaced by a "1.0 release catalog" of all features, and a fresh
- * changelog starts (the decision log).
+ * changelog starts (the decision log): see release-catalog.ts.
  */
 export interface PatchNote {
   /** major.minor.patch, as in apps/desktop/package.json. */
