@@ -8,6 +8,6 @@
 // (`pnpm tavora-update-key check`) and refuse to ship while either is empty, since such an app could install no update.
 // A key changed here counts only for apps built with it: an installed app keeps checking against the keys it shipped with.
 export const PINNED_UPDATE_KEYS = {
-  release: "",
-  backup: "",
+  release: "0Twdnc7/qc3dXr2/Ab5o80B3e/ZzkNIXWm5lKyMYVas=",
+  backup: "ItBvSIM6sacLN7Q3vX+HV3QQguaZwiN3ysta/uQiSDg=",
 };
