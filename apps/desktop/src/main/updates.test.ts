@@ -1,7 +1,8 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it } from "vitest";
 import type { UpdateState } from "../shared/host-api";
-import { CHECK_EVERY_MS, FIRST_CHECK_MS, LOG_REPEAT_MS, RETRY_EVERY_MS, PreviewUpdater, PROGRESS_EVERY_MS, readReleaseNotes, UPDATER_HEADER, UpdateManager, type Timers, type UpdaterLike } from "./updates";
+import type { UpdateCheck } from "./update-signature";
+import { CHECK_EVERY_MS, FIRST_CHECK_MS, LOG_REPEAT_MS, RETRY_EVERY_MS, PreviewUpdater, previewCheck, PROGRESS_EVERY_MS, readReleaseNotes, UPDATER_HEADER, UpdateManager, type DownloadedInfoLike, type Timers, type UpdaterLike } from "./updates";
 
 class FakeUpdater extends EventEmitter {
   autoDownload = true;
@@ -36,7 +37,16 @@ class FakeUpdater extends EventEmitter {
   quitAndInstall(silent?: boolean, run?: boolean) {
     this.installs.push([silent, run]);
   }
+  quitInstalls: [boolean | undefined, boolean | undefined][] = [];
+  install(silent?: boolean, run?: boolean) {
+    this.quitInstalls.push([silent, run]);
+    return true;
+  }
 }
+
+/** Lets the signature check (a promise) finish. */
+const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+const SIGNED: UpdateCheck = { ok: true, key: "release" };
 
 /** Timers the test runs by hand. */
 function fakeTimers() {
@@ -51,14 +61,17 @@ function fakeTimers() {
   return { timers, pending };
 }
 
-function make(autoDownload = true, onDownloaded?: (version: string) => void) {
+function make(autoDownload = true, onDownloaded?: (version: string) => void, verify: (info: DownloadedInfoLike) => Promise<UpdateCheck> = async () => SIGNED) {
   const updater = new FakeUpdater();
+  const refused: DownloadedInfoLike[] = [];
   const states: UpdateState[] = [];
   const logs: string[] = [];
   const { timers, pending } = fakeTimers();
   const clock = { ms: Date.parse("2026-10-16T09:30:00.000Z") };
   const manager = new UpdateManager({
     updater: updater as unknown as UpdaterLike,
+    verify,
+    onRefused: (info) => refused.push(info),
     autoDownload,
     onChange: (s) => states.push(s),
     ...(onDownloaded ? { onDownloaded } : {}),
@@ -66,14 +79,15 @@ function make(autoDownload = true, onDownloaded?: (version: string) => void) {
     timers,
     now: () => new Date(clock.ms),
   });
-  return { updater, manager, states, logs, pending, clock };
+  return { updater, manager, states, logs, pending, clock, refused };
 }
 
 describe("UpdateManager", () => {
-  it("sets the updater up: it never downloads by itself (the manager starts downloads), install on quit always", () => {
+  it("sets the updater up: it never downloads or installs by itself (the manager starts both, after the signature check)", () => {
     const on = make(true);
     expect(on.updater.autoDownload).toBe(false);
-    expect(on.updater.autoInstallOnAppQuit).toBe(true);
+    expect(on.updater.autoInstallOnAppQuit).toBe(false);
+    expect((on.updater as unknown as { disableWebInstaller?: boolean }).disableWebInstaller).toBe(true);
     expect(make(false).updater.autoDownload).toBe(false);
   });
 
@@ -90,12 +104,13 @@ describe("UpdateManager", () => {
     expect(make().updater.requestHeaders).toEqual({ [UPDATER_HEADER]: "1" });
   });
 
-  it("tells the host once when a version finished downloading, with its number", () => {
+  it("tells the host once when a version finished downloading, with its number", async () => {
     const seen: string[] = [];
     const { updater } = make(true, (version) => seen.push(version));
     updater.emit("update-available", { version: "0.3.0" });
     expect(seen).toEqual([]);
     updater.emit("update-downloaded", { version: "0.3.0" });
+    await settle();
     expect(seen).toEqual(["0.3.0"]);
   });
 
@@ -115,15 +130,18 @@ describe("UpdateManager", () => {
     expect(pending).toHaveLength(0);
   });
 
-  it("goes found -> downloading -> ready, and restarts into the new version", () => {
+  it("goes found -> downloading -> ready, and restarts into the new version", async () => {
     const { manager, updater, states } = make();
     updater.emit("update-available", { version: "0.3.0" });
     expect(manager.state).toEqual({ status: "downloading", version: "0.3.0", notes: [], percent: 0 });
     updater.emit("update-downloaded", { version: "0.3.0" });
+    // Shown as downloaded but still downloading while the signature is checked.
+    expect(manager.state).toEqual({ status: "downloading", version: "0.3.0", notes: [], percent: 100 });
+    await settle();
     expect(manager.state).toEqual({ status: "ready", version: "0.3.0", notes: [] });
     manager.restartNow();
     expect(updater.installs).toEqual([[true, true]]);
-    expect(states.map((s) => s.status)).toEqual(["downloading", "ready"]);
+    expect(states.map((s) => s.status)).toEqual(["downloading", "downloading", "ready"]);
   });
 
   it("does not restart before the download is done", () => {
@@ -164,7 +182,7 @@ describe("UpdateManager", () => {
     updater.failDownload = true;
     updater.emit("update-available", { version: "0.3.0", releaseNotes: "- One" });
     await Promise.resolve();
-    expect(manager.state).toEqual({ status: "available", version: "0.3.0", notes: ["One"], failed: true });
+    expect(manager.state).toEqual({ status: "available", version: "0.3.0", notes: ["One"], failed: "download" });
   });
 
   it("writes one line for a failed download, though the updater both sends an error and rejects", async () => {
@@ -204,6 +222,7 @@ describe("UpdateManager", () => {
     updater.emit("update-downloaded", { version: "0.3.0" });
     finish();
     await download;
+    await settle();
     expect(manager.state).toMatchObject({ status: "ready", version: "0.3.0" });
   });
 
@@ -242,11 +261,139 @@ describe("UpdateManager", () => {
     updater.emit("update-available", { version: "0.3.0" });
     updater.failDownload = true;
     await manager.download();
-    expect(manager.state).toMatchObject({ status: "available", version: "0.3.0", failed: true });
+    expect(manager.state).toMatchObject({ status: "available", version: "0.3.0", failed: "download" });
     updater.emit("update-available", { version: "0.3.0" });
-    expect(manager.state).toMatchObject({ status: "available", version: "0.3.0", failed: true });
+    expect(manager.state).toMatchObject({ status: "available", version: "0.3.0", failed: "download" });
     updater.emit("update-available", { version: "0.3.1" });
     expect(manager.state).toMatchObject({ status: "available", version: "0.3.1", failed: false });
+  });
+
+  it("hands the signature check what the updater downloaded: the parsed latest.yml and the file", async () => {
+    const seen: DownloadedInfoLike[] = [];
+    const { updater } = make(true, undefined, async (info) => (seen.push(info), SIGNED));
+    updater.emit("update-available", { version: "0.3.0" });
+    const info = { version: "0.3.0", downloadedFile: "C:\\cache\\Tavora-Setup-0.3.0.exe", tavoraSignature: "c2ln" };
+    updater.emit("update-downloaded", info);
+    await settle();
+    expect(seen).toEqual([info]);
+  });
+
+  it("refuses a version whose signature does not check out: never ready, never installed, logged, and the file goes", async () => {
+    const downloaded: string[] = [];
+    const { manager, updater, logs, refused } = make(true, (version) => downloaded.push(version), async () => ({ ok: false, reason: "latest.yml has no Tavora signature" }));
+    updater.emit("update-available", { version: "0.3.0", releaseNotes: "- One" });
+    const info = { version: "0.3.0", downloadedFile: "C:\\cache\\Tavora-Setup-0.3.0.exe" };
+    updater.emit("update-downloaded", info);
+    await settle();
+    expect(manager.state).toEqual({ status: "available", version: "0.3.0", notes: ["One"], failed: "refused" });
+    expect(logs).toContain("update 0.3.0 refused: latest.yml has no Tavora signature");
+    expect(refused).toEqual([info]);
+    // Not counted as an update, and neither Restart now nor quitting installs it.
+    expect(downloaded).toEqual([]);
+    manager.restartNow();
+    manager.installOnQuit(0);
+    expect(updater.installs).toEqual([]);
+    expect(updater.quitInstalls).toEqual([]);
+  });
+
+  it("refuses a version whose check throws", async () => {
+    const { manager, updater, logs } = make(true, undefined, async () => {
+      throw new Error("EBUSY");
+    });
+    updater.emit("update-available", { version: "0.3.0" });
+    updater.emit("update-downloaded", { version: "0.3.0" });
+    await settle();
+    expect(manager.state).toMatchObject({ status: "available", failed: "refused" });
+    expect(logs).toContain("update 0.3.0 refused: the check failed (EBUSY)");
+  });
+
+  it("logs which pinned key signed a version it takes", async () => {
+    const { updater, logs } = make(true, undefined, async () => ({ ok: true, key: "backup" }));
+    updater.emit("update-available", { version: "0.3.0" });
+    updater.emit("update-downloaded", { version: "0.3.0" });
+    await settle();
+    expect(logs).toContain("update 0.3.0 signature checked (backup key)");
+  });
+
+  it("after a refused version keeps checking, downloads it again by itself only after an hour, and a newer one at once", async () => {
+    let signed = false;
+    const { manager, updater, clock } = make(true, undefined, async () => (signed ? SIGNED : { ok: false, reason: "bad" }));
+    updater.found = "0.3.0";
+    await manager.check();
+    updater.emit("update-downloaded", { version: "0.3.0" });
+    await settle();
+    expect(manager.state).toMatchObject({ status: "available", version: "0.3.0", failed: "refused" });
+    expect(updater.downloads).toBe(1);
+    clock.ms += CHECK_EVERY_MS;
+    await manager.check();
+    expect(updater.checks).toBe(2);
+    expect(updater.downloads).toBe(1);
+    expect(manager.state).toMatchObject({ status: "available", version: "0.3.0", failed: "refused" });
+    clock.ms += RETRY_EVERY_MS;
+    await manager.check();
+    expect(updater.downloads).toBe(2);
+    // A fixed feed: the next download checks out.
+    signed = true;
+    updater.emit("update-downloaded", { version: "0.3.0" });
+    await settle();
+    expect(manager.state).toMatchObject({ status: "ready", version: "0.3.0" });
+  });
+
+  it("a refused version can be tried again by hand", async () => {
+    const { manager, updater } = make(false, undefined, async () => ({ ok: false, reason: "bad" }));
+    updater.emit("update-available", { version: "0.3.0" });
+    await manager.download();
+    updater.emit("update-downloaded", { version: "0.3.0" });
+    await settle();
+    expect(manager.state).toMatchObject({ status: "available", failed: "refused" });
+    await manager.download();
+    expect(updater.downloads).toBe(2);
+    expect(manager.state).toMatchObject({ status: "downloading", version: "0.3.0" });
+  });
+
+  it("a check that a newer download overtook changes nothing", async () => {
+    const answers: ((check: UpdateCheck) => void)[] = [];
+    const { manager, updater } = make(true, undefined, () => new Promise<UpdateCheck>((resolve) => answers.push(resolve)));
+    updater.emit("update-available", { version: "0.3.0" });
+    updater.emit("update-downloaded", { version: "0.3.0" });
+    updater.emit("update-downloaded", { version: "0.3.1" });
+    answers[1]!(SIGNED);
+    await settle();
+    expect(manager.state).toMatchObject({ status: "ready", version: "0.3.1" });
+    answers[0]!({ ok: false, reason: "bad" });
+    await settle();
+    expect(manager.state).toMatchObject({ status: "ready", version: "0.3.1" });
+  });
+
+  it("installs a checked version when Tavora quits cleanly, silently and without starting it again", async () => {
+    const { manager, updater, logs } = make(true);
+    manager.installOnQuit(0);
+    updater.emit("update-available", { version: "0.3.0" });
+    manager.installOnQuit(0);
+    updater.emit("update-downloaded", { version: "0.3.0" });
+    // Still being checked: nothing installs yet.
+    manager.installOnQuit(0);
+    expect(updater.quitInstalls).toEqual([]);
+    await settle();
+    manager.installOnQuit(1);
+    expect(updater.quitInstalls).toEqual([]);
+    manager.installOnQuit(0);
+    expect(updater.quitInstalls).toEqual([[true, false]]);
+    expect(logs).toContain("installing 0.3.0 on quit");
+    manager.installOnQuit(0);
+    expect(updater.quitInstalls).toHaveLength(1);
+  });
+
+  it("after Restart now, quitting starts no second installer", async () => {
+    const { manager, updater, logs } = make(true);
+    updater.emit("update-available", { version: "0.3.0" });
+    updater.emit("update-downloaded", { version: "0.3.0" });
+    await settle();
+    manager.restartNow();
+    manager.installOnQuit(0);
+    expect(updater.installs).toEqual([[true, true]]);
+    expect(updater.quitInstalls).toEqual([]);
+    expect(logs).not.toContain("installing 0.3.0 on quit");
   });
 
   it("with automatic download on, starts a failed download over at most once an hour, still checking every time", async () => {
@@ -255,14 +402,14 @@ describe("UpdateManager", () => {
     updater.failDownload = true;
     await manager.check();
     await Promise.resolve();
-    expect(manager.state).toMatchObject({ status: "available", version: "0.3.0", failed: true });
+    expect(manager.state).toMatchObject({ status: "available", version: "0.3.0", failed: "download" });
     expect(updater.downloads).toBe(1);
     updater.failDownload = false;
     clock.ms += CHECK_EVERY_MS;
     await manager.check();
     expect(updater.checks).toBe(2);
     expect(updater.downloads).toBe(1);
-    expect(manager.state).toMatchObject({ status: "available", version: "0.3.0", failed: true });
+    expect(manager.state).toMatchObject({ status: "available", version: "0.3.0", failed: "download" });
     clock.ms += RETRY_EVERY_MS;
     await manager.check();
     expect(updater.downloads).toBe(2);
@@ -275,7 +422,7 @@ describe("UpdateManager", () => {
     updater.failDownload = true;
     await manager.check();
     await Promise.resolve();
-    expect(manager.state).toMatchObject({ status: "available", version: "0.3.0", failed: true });
+    expect(manager.state).toMatchObject({ status: "available", version: "0.3.0", failed: "download" });
     updater.failDownload = false;
     updater.found = "0.3.1";
     clock.ms += CHECK_EVERY_MS;
@@ -314,11 +461,12 @@ describe("UpdateManager", () => {
     expect(manager.state).toMatchObject({ status: "downloading", version: "0.3.0" });
   });
 
-  it("carries the release's notes, and keeps them when the download event has none", () => {
+  it("carries the release's notes, and keeps them when the download event has none", async () => {
     const { manager, updater } = make();
     updater.emit("update-available", { version: "0.3.0", releaseNotes: "- Faster start\n- Fixed the eraser\n" });
     expect(manager.state).toMatchObject({ notes: ["Faster start", "Fixed the eraser"] });
     updater.emit("update-downloaded", { version: "0.3.0" });
+    await settle();
     expect(manager.state).toEqual({ status: "ready", version: "0.3.0", notes: ["Faster start", "Fixed the eraser"] });
   });
 
@@ -346,6 +494,8 @@ describe("UpdateManager", () => {
     await manager.check();
     updater.emit("update-downloaded", { version: "0.3.0" });
     await manager.check();
+    await settle();
+    await manager.check();
     expect(updater.checks).toBe(1);
   });
 
@@ -354,7 +504,7 @@ describe("UpdateManager", () => {
     updater.emit("update-available", { version: "0.3.0" });
     updater.failDownload = true;
     await manager.download();
-    expect(manager.state).toEqual({ status: "available", version: "0.3.0", notes: [], failed: true });
+    expect(manager.state).toEqual({ status: "available", version: "0.3.0", notes: [], failed: "download" });
     updater.failDownload = false;
     await manager.download();
     expect(updater.downloads).toBe(2);
@@ -414,10 +564,11 @@ describe("readReleaseNotes", () => {
 describe("PreviewUpdater", () => {
   it("finds the next patch version, downloads it step by step, and ends the preview on restart", async () => {
     const updater = new PreviewUpdater("0.23.99", { stepMs: 0 });
-    const manager = new UpdateManager({ updater, autoDownload: false, onChange: () => {}, timers: fakeTimers().timers });
+    const manager = new UpdateManager({ updater, verify: previewCheck(false), autoDownload: false, onChange: () => {}, timers: fakeTimers().timers });
     await manager.check();
     expect(manager.state).toMatchObject({ status: "available", version: "0.23.100" });
     await manager.download();
+    await settle();
     expect(manager.state).toMatchObject({ status: "ready", version: "0.23.100" });
     manager.restartNow();
     expect(manager.state).toMatchObject({ status: "idle" });
@@ -425,9 +576,18 @@ describe("PreviewUpdater", () => {
 
   it("fails the download halfway when asked to, so the failed step can be seen", async () => {
     const updater = new PreviewUpdater("0.23.99", { stepMs: 0, fail: true });
-    const manager = new UpdateManager({ updater, autoDownload: false, onChange: () => {}, timers: fakeTimers().timers });
+    const manager = new UpdateManager({ updater, verify: previewCheck(false), autoDownload: false, onChange: () => {}, timers: fakeTimers().timers });
     await manager.check();
     await manager.download();
-    expect(manager.state).toMatchObject({ status: "available", failed: true });
+    expect(manager.state).toMatchObject({ status: "available", failed: "download" });
+  });
+
+  it("refuses the downloaded version when asked to, so the refused step can be seen", async () => {
+    const updater = new PreviewUpdater("0.23.99", { stepMs: 0 });
+    const manager = new UpdateManager({ updater, verify: previewCheck(true), autoDownload: false, onChange: () => {}, timers: fakeTimers().timers });
+    await manager.check();
+    await manager.download();
+    await settle();
+    expect(manager.state).toMatchObject({ status: "available", version: "0.23.100", failed: "refused" });
   });
 });

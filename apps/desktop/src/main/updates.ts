@@ -1,4 +1,5 @@
 import type { UpdateState } from "../shared/host-api";
+import type { DownloadedUpdate, UpdateCheck } from "./update-signature";
 
 /** What electron-updater tells about a version it found or downloaded. */
 export interface UpdateInfoLike {
@@ -7,19 +8,27 @@ export interface UpdateInfoLike {
   releaseNotes?: string | { version: string; note: string | null }[] | null;
 }
 
+/** What electron-updater says it downloaded: the parsed latest.yml (the Tavora signature too) and where it saved the installer. */
+export type DownloadedInfoLike = UpdateInfoLike & DownloadedUpdate;
+
 /** The part of electron-updater's `autoUpdater` this module uses, so tests can stand in for it. */
 export interface UpdaterLike {
   autoDownload: boolean;
   autoInstallOnAppQuit: boolean;
+  /** On: a feed can't make the updater fetch a second, unsigned package (a web installer). */
+  disableWebInstaller?: boolean;
   /** Sent with every request to the update feed. */
   requestHeaders?: Record<string, string> | null;
-  on(event: "update-available" | "update-downloaded", listener: (info: UpdateInfoLike) => void): unknown;
+  on(event: "update-available", listener: (info: UpdateInfoLike) => void): unknown;
+  on(event: "update-downloaded", listener: (info: DownloadedInfoLike) => void): unknown;
   on(event: "update-not-available" | "checking-for-update", listener: () => void): unknown;
   on(event: "download-progress", listener: (progress: { percent: number }) => void): unknown;
   on(event: "error", listener: (error: Error) => void): unknown;
   checkForUpdates(): Promise<unknown>;
   downloadUpdate(): Promise<unknown>;
   quitAndInstall(isSilent?: boolean, isForceRunAfter?: boolean): void;
+  /** Starts the downloaded installer without quitting: what electron-updater's own quit handler does. */
+  install(isSilent?: boolean, isForceRunAfter?: boolean): boolean;
 }
 
 export interface Timers {
@@ -66,6 +75,13 @@ export function readReleaseNotes(notes: UpdateInfoLike["releaseNotes"]): string[
 
 export interface UpdateManagerOptions {
   updater: UpdaterLike;
+  /**
+   * Whether a downloaded version may be installed: Tavora's signature over its version, file name and SHA-512
+   * (update-signature.ts). Only a version that passes becomes ready; nothing else is ever installed.
+   */
+  verify: (info: DownloadedInfoLike) => Promise<UpdateCheck>;
+  /** A downloaded version was refused (the host deletes the file). */
+  onRefused?: (info: DownloadedInfoLike) => void;
   /** Whether new versions download by themselves (a Settings switch). */
   autoDownload: boolean;
   onChange: (state: UpdateState) => void;
@@ -78,19 +94,26 @@ export interface UpdateManagerOptions {
   now?: () => Date;
 }
 
-/**
- * Looks for a new Tavora version right at start and every 5 minutes, downloads it (by itself or when
- * the user asks) and installs it when Tavora quits or the user presses "Restart now" - never in the
- * middle of a session. Errors (offline, server down) are logged; the next check tries again.
- */
 /** Less than `ms` has passed; a clock set back (a negative gap) counts as time passed. */
 function within(elapsed: number, ms: number): boolean {
   return elapsed >= 0 && elapsed < ms;
 }
 
+/**
+ * Looks for a new Tavora version right at start and every 5 minutes, downloads it (by itself or when
+ * the user asks) and installs it when Tavora quits or the user presses "Restart now" - never in the
+ * middle of a session. Errors (offline, server down) are logged; the next check tries again.
+ *
+ * A downloaded version is installed only once its Tavora signature checked out (`verify`). Until then it shows as
+ * downloading; one that fails is refused and waits like a failed download, so Tavora goes on with the version it has
+ * and keeps checking. electron-updater never installs by itself (its autoInstallOnAppQuit stays off): Restart now and
+ * quitting (installOnQuit) install only a version that is ready, and ready means checked.
+ */
 export class UpdateManager {
   private current: UpdateState = { status: "idle", checkedAt: null, failed: false };
   private readonly updater: UpdaterLike;
+  private readonly verify: (info: DownloadedInfoLike) => Promise<UpdateCheck>;
+  private readonly onRefused: (info: DownloadedInfoLike) => void;
   private readonly onChange: (state: UpdateState) => void;
   private readonly onDownloaded: (version: string) => void;
   private readonly log: (line: string) => void;
@@ -107,9 +130,15 @@ export class UpdateManager {
   private failedAt = 0;
   /** How many "error" events came; a call whose rejection came with one needs no second line. */
   private errorEvents = 0;
+  /** Goes up with every downloaded version: a signature check that a newer one overtook changes nothing. */
+  private checkTurn = 0;
+  /** The installer was started (Restart now, or on quit); it starts once. */
+  private installStarted = false;
 
   constructor(options: UpdateManagerOptions) {
     this.updater = options.updater;
+    this.verify = options.verify;
+    this.onRefused = options.onRefused ?? (() => {});
     this.onChange = options.onChange;
     this.onDownloaded = options.onDownloaded ?? (() => {});
     // A check every few minutes says the same thing again and again; the log keeps a line when it changes,
@@ -138,8 +167,11 @@ export class UpdateManager {
     // failed download over. The manager starts downloads itself, so only the retry has to wait.
     this.autoDownload = options.autoDownload;
     this.updater.autoDownload = false;
-    // A downloaded update installs by itself when Tavora is closed.
-    this.updater.autoInstallOnAppQuit = true;
+    // A downloaded update still installs when Tavora is closed, but through installOnQuit, which installs only a
+    // checked version; electron-updater's own quit handler would install whatever it downloaded.
+    this.updater.autoInstallOnAppQuit = false;
+    // Tavora ships one full installer; a web installer's package would not be covered by the signature.
+    this.updater.disableWebInstaller = true;
     this.updater.requestHeaders = { ...this.updater.requestHeaders, [UPDATER_HEADER]: "1" };
     this.updater.on("update-available", (info) => {
       // A check that answers while the user's download runs (or is done) changes nothing.
@@ -164,12 +196,7 @@ export class UpdateManager {
       this.progressSentAt = at;
       this.set({ ...u, percent });
     });
-    this.updater.on("update-downloaded", (info) => {
-      this.log(`update ${info.version} downloaded`);
-      const notes = readReleaseNotes(info.releaseNotes);
-      this.set({ status: "ready", version: info.version, notes: notes.length ? notes : this.notes() });
-      this.onDownloaded(info.version);
-    });
+    this.updater.on("update-downloaded", (info) => void this.downloaded(info));
     this.updater.on("update-not-available", () => {
       this.log("up to date");
       this.set(this.idle(false));
@@ -249,7 +276,46 @@ export class UpdateManager {
   /** Quits, installs the downloaded version and starts Tavora again. */
   restartNow(): void {
     if (this.current.status !== "ready") return;
+    this.installStarted = true;
     this.updater.quitAndInstall(true, true);
+  }
+
+  /**
+   * Tavora is quitting (app "quit", with its exit code): a ready version installs now, silently and without starting
+   * Tavora again, as electron-updater's own quit handler would. Only a clean quit installs.
+   */
+  installOnQuit(exitCode: number): void {
+    // After Restart now the installer already runs (electron-updater would ignore a second start anyway).
+    if (this.current.status !== "ready" || exitCode !== 0 || this.installStarted) return;
+    this.installStarted = true;
+    this.log(`installing ${this.current.version} on quit`);
+    this.updater.install(true, false);
+  }
+
+  /** A version finished downloading: it stays "downloading" (at 100%) while its signature is checked, then is ready or refused. */
+  private async downloaded(info: DownloadedInfoLike): Promise<void> {
+    const turn = ++this.checkTurn;
+    this.log(`update ${info.version} downloaded`);
+    const found = readReleaseNotes(info.releaseNotes);
+    const notes = found.length ? found : this.notes();
+    this.set({ status: "downloading", version: info.version, notes, percent: 100 });
+    let check: UpdateCheck;
+    try {
+      check = await this.verify(info);
+    } catch (error) {
+      check = { ok: false, reason: `the check failed (${error instanceof Error ? error.message : String(error)})` };
+    }
+    if (turn !== this.checkTurn) return;
+    if (!check.ok) {
+      this.log(`update ${info.version} refused: ${check.reason}`);
+      this.onRefused(info);
+      this.failedAt = this.now().getTime();
+      this.set({ status: "available", version: info.version, notes, failed: "refused" });
+      return;
+    }
+    this.log(`update ${info.version} signature checked (${check.key} key)`);
+    this.set({ status: "ready", version: info.version, notes });
+    this.onDownloaded(info.version);
   }
 
   /** Logs a call that failed, unless an "error" event since `errorEvents` already wrote the line. */
@@ -275,7 +341,7 @@ export class UpdateManager {
 
   private downloadFailed(u: { version: string; notes: string[] }): UpdateState {
     this.failedAt = this.now().getTime();
-    return { status: "available", version: u.version, notes: u.notes, failed: true };
+    return { status: "available", version: u.version, notes: u.notes, failed: "download" };
   }
 
   private idle(failed: boolean): UpdateState {
@@ -286,6 +352,14 @@ export class UpdateManager {
     this.current = state;
     this.onChange(state);
   }
+}
+
+/**
+ * Dev builds only: the signature check of the preview's made-up version, which has no file. It passes, or with
+ * TAVORA_FAKE_UPDATE_UNSIGNED=1 is refused, so the refused step can be seen.
+ */
+export function previewCheck(refuse: boolean): () => Promise<UpdateCheck> {
+  return async () => (refuse ? { ok: false, reason: "preview: refused on purpose" } : { ok: true, key: "release" });
 }
 
 /** Notes the preview's made-up version shows. */
@@ -339,6 +413,11 @@ export class PreviewUpdater implements UpdaterLike {
 
   quitAndInstall(): void {
     this.emit("update-not-available");
+  }
+
+  /** Quitting the preview installs nothing. */
+  install(): boolean {
+    return false;
   }
 
   private info(): UpdateInfoLike {

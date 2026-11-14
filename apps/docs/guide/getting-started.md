@@ -1,9 +1,9 @@
 # Getting started
 
-A Tavora module is a web page that runs in a sandboxed panel inside Tavora Desktop, next to a game or any other workspace. It talks to the host through `@tavora/sdk`, and it ships as a folder with a [`tavora.module.json`](../reference/manifest.md) manifest and its built files.
+A Tavora module is a web page that runs in a sandboxed panel inside Tavora Desktop, next to a game or any other workspace. Tavora runs on Windows 10 and 11 only. It talks to the host through `@tavora/sdk`, and it ships as a folder with a [`tavora.module.json`](../reference/manifest.md) manifest and its built files.
 
-::: warning Preview
-`@tavora/sdk` speaks [bridge protocol v1](../reference/protocol.md). Until Tavora's first public release it can still change in ways that break modules; the [changelog](../reference/changelog.md) marks each such change and says which Tavora a version needs.
+::: tip Stable from 1.0
+`@tavora/sdk` speaks [bridge protocol v1](../reference/protocol.md), and from Tavora 1.0 a module you build keeps working. Things are added, not taken away: anything that has to go is deprecated first, and removed only in a new major version. The [changelog](../reference/changelog.md) says what changed and which Tavora a version needs.
 :::
 
 ## Make a project
@@ -197,13 +197,13 @@ A module made for one game, such as a build planner for Path of Exile 2, lists t
 
 Tavora then offers it only in workspaces of that game: anywhere else it is not in Add module at all. `"games": []` means any game. The starter asks which game the module is for and fills this in. The ids of Tavora's built-in games are in the [manifest reference](../reference/manifest.md#game-ids).
 
-Every item on Tavora's rail is a workspace: a game workspace, linked to a game, or a personal workspace, which belongs to no game, for modules such as notes or a whiteboard. A module for any game is offered in personal workspaces too. If yours only makes sense in a game, add `"personalWorkspaces": false` (Tavora 0.21.43 or newer; set `minTavora` to at least `0.21.43`). `tavora.workspace.getCurrent()` says which one a panel is in: its `kind` is `"game"` or `"personal"`, and for a game workspace the `id` is the game's. `tavora.game.getCurrent()` and the manifest's `workspaces` field still work, but they are deprecated and go away before 1.0.
+Every item on Tavora's rail is a workspace: a game workspace, linked to a game, or a personal workspace, which belongs to no game, for modules such as notes or a whiteboard. A module for any game is offered in personal workspaces too. If yours only makes sense in a game, add `"personalWorkspaces": false` (Tavora 0.21.43 or newer; set `minTavora` to at least `0.21.43`). `tavora.workspace.getCurrent()` says which one a panel is in: its `kind` is `"game"` or `"personal"`, and for a game workspace the `id` is the game's.
 
 ## Build the module
 
 - Bundle everything. A module's page has no network access, so no CDN scripts, web fonts or remote images. To reach a web API, name its host in `permissions.network` and call [`network.fetch`](../reference/protocol.md#network) once the user has granted it.
 - Use relative asset paths (Vite: `base: "./"`). `moduleConfig()` from `@tavora/pack/vite` sets this and the rest of what a module's build needs (a self-contained `dist/` for Tavora's browser, one input per page); the starter's `vite.config.ts` is just `export default defineConfig(moduleConfig({ plugins: [vue()] }))`. Add `pages: ["index", "overlay"]` for more pages and `notices: { VUE: "vue", MODULE: "./LICENSE" }` to copy licence files into `dist/`. Its `tsconfig.json` extends `@tavora/pack/tsconfig.module.json`. The page is served from `tavora-module://<module-id>/`.
-- Don't use Ctrl+K (Cmd+K on macOS) as a shortcut. Tavora takes it for its own search before your page sees the key.
+- Don't use Ctrl+K as a shortcut. Tavora takes it for its own search before your page sees the key.
 - Point the manifest's `entry` at the built HTML file.
 - Add `"$schema"` to the manifest so your editor checks it. The schema is published at `https://docs.mytavora.app/schema/tavora.module.schema.json`.
 

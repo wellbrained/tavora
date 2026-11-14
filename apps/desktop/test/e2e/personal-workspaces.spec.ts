@@ -1,5 +1,5 @@
 // Personal workspaces: places on the rail that belong to no game, for modules such as Notes.
-// Only modules for any game are offered there, unless a module opts out with `"workspaces": false`.
+// Only modules for any game are offered there, unless a module opts out with `"personalWorkspaces": false`.
 
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -7,11 +7,11 @@ import path from "node:path";
 import { expect, test } from "@playwright/test";
 import { launch, newUserData, openModule, panels, seedLibrary } from "./harness";
 
-async function project(id: string, manifest: { games: string[]; workspaces?: boolean }): Promise<string> {
+async function project(id: string, manifest: { games: string[]; personalWorkspaces?: boolean }): Promise<string> {
   const dir = await mkdtemp(path.join(tmpdir(), "tavora-project-"));
   await writeFile(
     path.join(dir, "tavora.module.json"),
-    JSON.stringify({ id, name: id, version: "0.1.0", apiVersion: "1", entry: "dist/index.html", ...manifest, viewport: { minWidth: 200, minHeight: 150 }, permissions: { network: [] } }),
+    JSON.stringify({ id, name: id, version: "0.1.0", apiVersion: "1", entry: "dist/index.html", ...(manifest.personalWorkspaces === undefined ? {} : { minTavora: "0.21.43" }), ...manifest, viewport: { minWidth: 200, minHeight: 150 }, permissions: { network: [] } }),
   );
   await mkdir(path.join(dir, "dist"), { recursive: true });
   await writeFile(path.join(dir, "dist", "index.html"), `<!doctype html><meta charset="utf-8"><p>${id}</p>`);
@@ -20,7 +20,7 @@ async function project(id: string, manifest: { games: string[]; workspaces?: boo
 
 test("a personal workspace offers only modules for any game, and is worded as a workspace", async () => {
   const forOneGame = await project("devtest.tracker", { games: ["satisfactory"] });
-  const needsAGame = await project("devtest.overlay", { games: [], workspaces: false });
+  const needsAGame = await project("devtest.overlay", { games: [], personalWorkspaces: false });
   const userData = await newUserData();
   await writeFile(path.join(userData, "library.json"), JSON.stringify({ ...seedLibrary(), developmentFolders: [forOneGame, needsAGame] }));
   const { app, page } = await launch(userData);

@@ -1,6 +1,6 @@
 # Bridge protocol v1
 
-**Status:** Version 1 is what `@tavora/sdk` speaks. It may still change before Tavora's first public release; after that, breaking changes need a new major version (see [Versioning](#versioning)). What changed when is in the [changelog](./changelog.md).
+**Status:** Version 1 is what `@tavora/sdk` speaks. It is stable from Tavora 1.0: what exists stays as it is, and breaking changes need a new major version (see [Versioning](#versioning)). What changed when is in the [changelog](./changelog.md).
 
 Module authors normally use `@tavora/sdk` and never see these messages. This page is for people writing another SDK, reviewing the host, or debugging.
 
@@ -49,8 +49,7 @@ Methods without params must be sent with `params` left out.
 | Method | Params | Result |
 | --- | --- | --- |
 | `bridge.handshake` | `{ protocol: 1, sdkVersion: string }` | `{ protocol: 1, host: { name: "tavora-desktop", version }, module: { id, version }, capabilities, panel: { type } }`: `capabilities` lists what the user has granted, such as `["network"]`; `panel.type` is the [panel type](./manifest.md#panel-types) this panel shows, or `null` for a module without panel types (Tavora 0.17.12 and newer) |
-| `workspace.getCurrent` | none | `{ id, displayName, kind }` of the workspace this panel is in; `kind` is `"game"` for a game workspace (its `id` is the game's id, the one a manifest's `games` lists) or `"personal"` for a personal workspace that belongs to no game (Tavora 0.21.43 and newer; the SDK asks `game.getCurrent` on an older Tavora) |
-| `game.getCurrent` | none | Deprecated: the same in the old words, `{ id, displayName, kind }` with `kind` `"game"`, or `"workspace"` for a personal workspace (Tavora 0.18.1 and newer; an older Tavora leaves `kind` out, which means a game). Answered until Tavora 1.0; use `workspace.getCurrent` |
+| `workspace.getCurrent` | none | `{ id, displayName, kind }` of the workspace this panel is in; `kind` is `"game"` for a game workspace (its `id` is the game's id, the one a manifest's `games` lists) or `"personal"` for a personal workspace that belongs to no game (Tavora 0.21.43 and newer) |
 | `storage.get` | `{ key }` | the stored JSON value, or `null` |
 | `storage.set` | `{ key, value }` | `null` |
 | `storage.delete` | `{ key }` | `null` |
@@ -378,13 +377,12 @@ Every call with the first Tavora that answers it, its capability and whether it 
 <!-- protocol-index:start -->
 <!-- generated from METHOD_INFO by apps/docs/scripts/protocol-index.ts; do not edit -->
 
-A Tavora older than **Since** throws `UNKNOWN_METHOD` for the call; `sdk.supports(call)` tells beforehand. **Click** says the call must come right after a click or key press in the panel, always or for the params named. `MIN_TAVORA` is 0.19.32: the newest of the calls not marked later (the ones before it work on every Tavora the SDK supports).
+A Tavora older than **Since** throws `UNKNOWN_METHOD` for the call; `sdk.supports(call)` tells beforehand. **Click** says the call must come right after a click or key press in the panel, always or for the params named. `MIN_TAVORA` is 0.21.43: the newest of the calls not marked later (the ones before it work on every Tavora the SDK supports).
 
 | Call | Since | Capability | Click |
 | --- | --- | --- | --- |
 | `bridge.handshake` | always |  |  |
 | `workspace.getCurrent` | 0.21.43 |  |  |
-| `game.getCurrent` | always |  |  |
 | `storage.get` | always |  |  |
 | `storage.set` | always |  |  |
 | `storage.delete` | always |  |  |
@@ -627,7 +625,7 @@ Values must be JSON: `null`, booleans, finite numbers, strings, arrays and plain
 - Within a major version, the host may add methods, events, optional params, result fields and error codes. Modules must ignore event names and result fields they do not know.
 - Removing or changing anything existing needs a new major version. A host should keep serving the previous major version for as long as published modules use it.
 - The manifest's `apiVersion` names the major version the module was built for, and `minTavora` the oldest Tavora that has everything it uses.
-- Before Tavora 1.0, version 1 may still change in ways that break modules. Each such change raises `@tavora/sdk`'s minor version and is marked **Breaking** in the [changelog](./changelog.md). From 1.0 on, the rules above apply.
+- From Tavora 1.0, version 1 is stable. Calls, events, manifest fields and result fields are only added. Something that has to go is deprecated first: it keeps working, and the [changelog](./changelog.md) and this page say what replaces it. It is removed only in a new major version.
 
 ## Shared rich tooltips (Tavora 0.18.18+)
 

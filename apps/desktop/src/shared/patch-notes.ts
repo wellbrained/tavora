@@ -28,6 +28,31 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.62",
+    date: "2026-11-14",
+    title: "Updates signed by Tavora",
+    notes: [
+      "Tavora installs an update only when Tavora signed it.",
+      "An update Tavora can't confirm is skipped, and your version keeps working.",
+    ],
+    prs: [
+      { number: 793, title: "Updates install only with Tavora's own signature" },
+    ],
+    tags: ["privacy", "security", "settings", "updates", "website"],
+  },
+  {
+    version: "0.24.61",
+    date: "2026-11-14",
+    title: "Modules are ready for 1.0",
+    notes: [
+      "A module that still uses an old setting won't load until its maker updates it.",
+    ],
+    prs: [
+      { number: 791, title: "Lock the SDK and protocol for 1.0" },
+    ],
+    tags: ["catalog", "publishing", "sdk", "service", "website"],
+  },
+  {
     version: "0.24.60",
     date: "2026-11-14",
     title: "Discord is taking a break",

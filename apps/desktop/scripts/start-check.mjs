@@ -21,7 +21,7 @@ const APP_WINDOW_CLASS = "Chrome_WidgetWin_1";
 const APP_WINDOW_TITLE = "Tavora";
 
 /** The visible top-level windows of every process with this exe's name: [{ pid, cls, title }] (Windows only). */
-function visibleWindows(exe) {
+export function visibleWindows(exe) {
   const script = path.join(path.dirname(fileURLToPath(import.meta.url)), "windows.ps1");
   const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, "-Name", path.basename(exe, ".exe")], { encoding: "utf8" });
   // A broken probe must fail loudly, not look like "no window yet".

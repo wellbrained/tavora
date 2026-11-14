@@ -122,7 +122,9 @@ import { countAppUpdate } from "./usage-counts";
 import { askedName, newInstallId, sendModuleRequest } from "./module-request";
 import { askKey, type AskedGame } from "../shared/module-request";
 import { PublisherNames } from "./publisher-names";
-import { PreviewUpdater, UpdateManager, type UpdaterLike } from "./updates";
+import { PreviewUpdater, previewCheck, UpdateManager, type UpdaterLike } from "./updates";
+import { PINNED_UPDATE_KEYS } from "./update-keys";
+import { checkDownloadedUpdate } from "./update-signature";
 import { fetchHostedList, type HostedList } from "./hosted-icons";
 import { OfficialPublisher, PublishCancelled } from "./official-publish";
 import { OfficialKeyStore } from "./official-key-store";
@@ -1026,6 +1028,9 @@ export class Host {
    * wakes up. Only an installed app does this; updates come from the feed address built into the
    * installer. pnpm dev and other unpackaged runs never look on their own: there "Check now" in
    * Settings runs a made-up update (PreviewUpdater), so the marker and its steps can be tried.
+   *
+   * A downloaded version installs only when Tavora's signature checks out against the keys pinned in
+   * update-keys.ts (update-signature.ts); a refused installer is deleted, and Tavora goes on with its version.
    */
   private async startUpdates(): Promise<void> {
     try {
@@ -1034,6 +1039,18 @@ export class Host {
         : new PreviewUpdater(app.getVersion(), { fail: process.env.TAVORA_FAKE_UPDATE_FAIL === "1" });
       this.updates = new UpdateManager({
         updater,
+        verify: app.isPackaged
+          ? (info) => checkDownloadedUpdate(info, PINNED_UPDATE_KEYS, app.getVersion())
+          : previewCheck(process.env.TAVORA_FAKE_UPDATE_UNSIGNED === "1"),
+        // The refused installer goes, and so does the blockmap electron-updater kept from it (in its pending folder and
+        // the cache folder above), so the next download doesn't plan against the refused file.
+        onRefused: (info) => {
+          if (!app.isPackaged || typeof info.downloadedFile !== "string") return;
+          const pending = path.dirname(info.downloadedFile);
+          for (const file of [info.downloadedFile, path.join(pending, "current.blockmap"), path.join(path.dirname(pending), "current.blockmap")]) {
+            void rm(file, { force: true }).catch(() => undefined);
+          }
+        },
         autoDownload: this.library.autoUpdate,
         onChange: () => this.pushState(),
         onDownloaded: (version) => {
@@ -1042,6 +1059,8 @@ export class Host {
         log: (line) => this.logUpdate(line),
       });
       if (!app.isPackaged) return;
+      // What electron-updater's own quit handler did (it is off): a checked version installs when Tavora quits.
+      app.once("quit", (_event, exitCode) => this.updates?.installOnQuit(exitCode));
       this.updates.start();
       powerMonitor.on("resume", () => void this.updates?.check());
     } catch (error) {

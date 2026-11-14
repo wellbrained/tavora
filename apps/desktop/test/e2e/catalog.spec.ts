@@ -46,7 +46,6 @@ function listing(id: string, name: string, zip: Buffer, owner: string, fields: R
     minTavora: null,
     games: [],
     personalWorkspaces: true,
-    workspaces: true,
     permissions: { network: [], connectors: [] },
     owner,
     publisher: null,
@@ -175,7 +174,7 @@ test("a user browses the catalog for a game, sees who publishes a module and ins
   const { url, server, asked } = await catalogServer([
     { entry: listing("wellbrained.tracker", "Tracker", tracker, owner, { publisher: "wellbrained", description: "<b>Tracks</b> your runs" }), body: tracker },
     // Made for another game: listed, but it says which game and Install stays greyed out.
-    { entry: listing("wellbrained.factory", "Factory", other, owner, { games: ["satisfactory"], personalWorkspaces: false, workspaces: false }), body: other },
+    { entry: listing("wellbrained.factory", "Factory", other, owner, { games: ["satisfactory"], personalWorkspaces: false }), body: other },
   ]);
   const { app, page, userData } = await launch(undefined, [], { env: { TAVORA_API_URL: url } });
   try {

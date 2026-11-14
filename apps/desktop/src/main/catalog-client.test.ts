@@ -18,7 +18,6 @@ const entry = (fields: Record<string, unknown> = {}) => ({
   minTavora: null,
   games: [],
   personalWorkspaces: true,
-  workspaces: true,
   permissions: { network: ["api.example.com"], connectors: [] },
   owner: OWNER,
   publisher: "wellbrained",
@@ -43,10 +42,8 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 describe("parseCatalogEntry", () => {
   it("keeps a valid listing and leaves the hash out of the view", () => {
     expect(parseCatalogEntry(entry())).toMatchObject({ id: "wellbrained.tracker", name: "Tracker", publisher: "wellbrained", zip: { sha256: SHA, size: 1234 } });
-    // A service deployed before the workspace names sends only the old name.
-    expect(parseCatalogEntry(entry({ personalWorkspaces: undefined, workspaces: false }))?.personalWorkspaces).toBe(false);
-    expect(parseCatalogEntry(entry({ personalWorkspaces: false, workspaces: true }))?.personalWorkspaces).toBe(false);
-    expect(parseCatalogEntry(entry({ personalWorkspaces: undefined, workspaces: undefined }))?.personalWorkspaces).toBe(true);
+    expect(parseCatalogEntry(entry({ personalWorkspaces: false }))?.personalWorkspaces).toBe(false);
+    expect(parseCatalogEntry(entry({ personalWorkspaces: undefined }))?.personalWorkspaces).toBe(true);
   });
 
   it("keeps HTML in a description as plain text and drops hidden direction marks (C10)", () => {

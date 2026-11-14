@@ -1,3 +1,11 @@
+## 0.4.0
+
+**Breaking.** The last deprecated pieces go, so the protocol is ready to be locked for Tavora 1.0. `MIN_TAVORA` is now `0.21.43` (Tavora 0.21.43).
+
+- `tavora.game.getCurrent()`, the `game.getCurrent` call and the type `TavoraGame` are gone. Use `tavora.workspace.getCurrent()`, which answers `{ id, displayName, kind }` with `kind` `"game"` or `"personal"`.
+- `workspace.getCurrent` no longer falls back to `game.getCurrent` on an older Tavora, so the SDK needs Tavora 0.21.43 or newer (it was 0.19.32). A module that must run on an older Tavora can't use this SDK version.
+- `@tavora/sdk/testing`: the memory host loses `game.getCurrent` too, and a host older than 0.21.43 answers `workspace.getCurrent` with `UNKNOWN_METHOD`.
+
 ## 0.3.20
 
 Hover cards on big elements. They come with the next Tavora (`TOOLTIP_ANCHOR_BOX_TAVORA` in `protocol.ts`; the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.19.32).
@@ -265,7 +273,7 @@ Requires the JSON export host (Tavora 0.19.17). Adds `files.exportJson(value, na
 
 # Changelog
 
-What changed in `@tavora/sdk` and the bridge protocol it speaks, newest first. Before Tavora 1.0 the SDK may still change in ways that break modules; each such change raises the minor version (0.2 → 0.3) and is marked **Breaking** here. Anything else raises the patch version. To make sure players have a Tavora that knows what your module uses, set [`minTavora`](https://docs.mytavora.app/reference/manifest) in its manifest.
+What changed in `@tavora/sdk` and the bridge protocol it speaks, newest first. From Tavora 1.0 the bridge protocol and the SDK are stable: calls and events are added, never removed or changed, until a new major version, and a call is deprecated here first. Until then a change that breaks modules raises the minor version (0.3 → 0.4) and is marked **Breaking** here. Anything else raises the patch version. To make sure players have a Tavora that knows what your module uses, set [`minTavora`](https://docs.mytavora.app/reference/manifest) in its manifest.
 
 ## 0.2.9
 

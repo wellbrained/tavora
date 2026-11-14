@@ -1,15 +1,16 @@
 // A throwaway update feed for testing: serves the `release` folder over http so
 // a test installer (built with --config.publish.url=http://127.0.0.1:<port>)
 // can find, download and install a newer test build. Never used for real
-// releases; those go to updates.mytavora.app with `pnpm release`.
+// releases; those go to updates.mytavora.app with `pnpm release`. scripts/update-check.mjs serves its test
+// feeds with it.
 //
-//   node scripts/serve-feed.mjs [port]      (default 8765)
+//   node scripts/serve-feed.mjs [port] [folder]      (default 8765 and the release folder)
 import { createReadStream, statSync } from "node:fs";
 import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const root = path.join(path.dirname(path.dirname(fileURLToPath(import.meta.url))), "release");
+const root = process.argv[3] ? path.resolve(process.argv[3]) : path.join(path.dirname(path.dirname(fileURLToPath(import.meta.url))), "release");
 const port = Number(process.argv[2] ?? 8765);
 
 createServer((request, response) => {

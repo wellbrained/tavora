@@ -93,7 +93,6 @@ import {
   type PanelOpenResult,
   type PutDocumentParams,
   type TavoraDocument,
-  type TavoraGame,
   type TavoraTheme,
   type TavoraWorkspace,
   type TavoraViewport,
@@ -172,7 +171,6 @@ export type {
   PanelOpenResult,
   PutDocumentParams,
   TavoraDocument,
-  TavoraGame,
   TavoraTheme,
   TavoraViewport,
   TavoraWorkspace,
@@ -192,7 +190,7 @@ function localDay(at: number): string {
 }
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.3.20";
+export const SDK_VERSION = "0.4.0";
 
 /**
  * The oldest Tavora that has everything this SDK version offers, worked out from the table of calls
@@ -265,11 +263,6 @@ export interface TavoraSDK {
    * `supports("panel.openDialog")`. Use it to pick a fallback before calling; a call the Tavora does not have throws `UNKNOWN_METHOD`.
    */
   supports(call: SupportedCall): boolean;
-  /** @deprecated Use `workspace.getCurrent`. Tavora answers it until its 1.0 preparation. */
-  game: {
-    /** @deprecated Use `workspace.getCurrent`. */
-    getCurrent(): Promise<TavoraGame>;
-  };
   /** Small key/value settings, private to this module in the current workspace. */
   storage: KeyValueStore & {
     /** The same, shared by every workspace: settings that should not change from one workspace to the next. */
@@ -383,10 +376,7 @@ export interface TavoraSDK {
     openMany(types: string[]): Promise<Record<string, PanelOpenManyResult>>;
   };
   workspace: {
-    /**
-     * The workspace this panel is in: a game workspace (`kind` "game", its id is the game's) or a personal one. On a
-     * Tavora older than 0.21.43 this asks `game.getCurrent` and puts its answer in the new words.
-     */
+    /** The workspace this panel is in: a game workspace (`kind` "game", its id is the game's) or a personal one. */
     getCurrent(): Promise<TavoraWorkspace>;
     getViewport(): Promise<TavoraViewport>;
     onResize(fn: (viewport: TavoraViewport) => void): Unsubscribe;
@@ -1004,9 +994,6 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
   return {
     host,
     supports: (call) => supportsCall(host.host.version, call),
-    game: {
-      getCurrent: () => call("game.getCurrent"),
-    },
     storage: {
       get: <T = JsonValue>(key: string) => call("storage.get", { key }) as Promise<T | null>,
       set: async (key, value) => {
@@ -1082,13 +1069,7 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
       openMany: (types) => call("panels.openMany", { types: [...types] }),
     },
     workspace: {
-      getCurrent: () =>
-        call("workspace.getCurrent").catch(async (error: unknown) => {
-          if (!(error instanceof TavoraError) || error.code !== "UNKNOWN_METHOD") throw error;
-          // A Tavora older than 0.21.43 knows the workspace by its old name.
-          const game = await call("game.getCurrent");
-          return { id: game.id, displayName: game.displayName, kind: game.kind === "workspace" ? "personal" : "game" } satisfies TavoraWorkspace;
-        }),
+      getCurrent: () => call("workspace.getCurrent"),
       getViewport: () => call("workspace.getViewport"),
       onResize: (fn) => on("workspace.resize", fn),
     },

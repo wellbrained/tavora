@@ -34,8 +34,9 @@ admin work and is never in a `TAVORA_*` setting.
 
 What a stolen deploy key can still do (accepted 2026-10-31): the API key runs code as the `tavora-api` service
 (that is what a deploy is), the docs key can change the docs, the Admin key can change the panel, and the
-updates key can ship a bad installer until updates are signed (parked until the first public release). The
-tailnet-only rule and the passphrases below make using a stolen key harder.
+updates key can hold updates back (a bogus newer version that apps refuse), but no longer ship a bad installer: apps that
+check Tavora's update signature (see [The update key](#the-update-key-maintainer-once)) refuse any installer it
+didn't sign. The tailnet-only rule and the passphrases below make using a stolen key harder.
 
 **Caddy's admin API** listens only on the Unix socket `/run/caddy-admin/admin.sock`, which only root, Caddy
 and CoreHub (the `corehub` group) can open (CoreHub #422, decided 2026-10-31). Before, it listened on
@@ -124,3 +125,43 @@ both in your password manager.
    ```
    It must say `old key lines left: 0`, and `keys left` must be at least 1 (the new root key). Then delete the old key:
    `Remove-Item "D:\Server\old-root.key", "D:\Server\old-root.key.pub" -ErrorAction SilentlyContinue`.
+
+## The update key (maintainer, once)
+
+`pnpm release` signs every app update with Tavora's **update key**, and the app installs an update only when one of
+the two keys pinned in `apps/desktop/src/main/update-keys.ts` signed it (CoreHub #476, decided 2026-11-10). The
+**release key** signs; the **backup key** is for when the release key is lost or leaks, and its private half stays
+apart (on a USB stick in a drawer, not on this PC). Neither private half ever goes to CI, the repo, the server or a log.
+Every step is yours: no agent handles the keys. Until both public keys are pasted in, `pnpm release` and the Release
+build refuse to ship, because such an app could install no update at all.
+
+1. **Make both keys**, offline, on this PC (each file is readable only by you):
+   ```powershell
+   pnpm tavora-update-key key "$HOME\.tavora\update-release.pem"
+   pnpm tavora-update-key key "$HOME\.tavora\update-backup.pem"
+   ```
+   Each prints `Public key for apps/desktop/src/main/update-keys.ts: …`. Back up the release key like the catalogue
+   key (password manager or an offline copy), then move the backup key's file off this PC (a USB stick in a drawer).
+   Make keys in your user folder: on a drive without permissions (a FAT stick) it refuses to write one.
+2. **Pin the public halves**: paste the first into `release: "…"` and the second into `backup: "…"` in
+   `apps/desktop/src/main/update-keys.ts`, then check and merge that change like any other pull request:
+   ```powershell
+   pnpm tavora-update-key check
+   ```
+3. **Tell `pnpm release` where the release key is** (then open a new terminal):
+   ```powershell
+   setx TAVORA_UPDATE_KEY "$HOME\.tavora\update-release.pem"
+   ```
+   `pnpm release` checks it before anything is built: it must be one of the two pinned keys. It signs after the files
+   passed the SHA-256 and attestation checks, and `pnpm release --dry-run` shows what it would sign, with or without
+   `TAVORA_UPDATE_KEY`. `pnpm tavora-update-key verify <latest.yml> <installer>` checks a signed release the way the app does.
+
+**Lost or leaked release key:** sign the next release with the backup key (`TAVORA_UPDATE_KEY` pointing at it; the
+release says so), and in that same release pin a new key pair: the backup becomes `release`, a fresh key `backup`.
+Installed apps take that release because the backup key signed it, and from then on trust only the new pair. A
+leaked key stays trusted by every app that has not updated past the release that dropped it.
+
+`pnpm release` checks the keys against the **last release's** `update-keys.ts`, since that is what installed apps pin:
+it refuses to sign with a key that release doesn't pin, refuses a release that changes both keys at once, and asks
+you to confirm any change of the pins. Until both keys are pinned, even `pnpm release --dry-run` stops early (the
+Release build would refuse to build); after that, a dry run needs no private key and shows what it would sign.

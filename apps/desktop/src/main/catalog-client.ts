@@ -236,7 +236,7 @@ export function parseCatalogVersion(raw: unknown): CatalogVersion | null {
 export function parseCatalogEntry(raw: unknown): CatalogEntry | null {
   if (typeof raw !== "object" || raw === null) return null;
   const entry = raw as Record<string, unknown>;
-  const { id, version, minTavora, games, personalWorkspaces, workspaces, permissions, owner, publisher, zip, publishedAt } = entry;
+  const { id, version, minTavora, games, personalWorkspaces, permissions, owner, publisher, zip, publishedAt } = entry;
   if (!isModuleId(id) || typeof version !== "string" || !SEMVER.test(version) || version.length > 64) return null;
   const name = plain(entry.name, 100);
   if (!name) return null;
@@ -262,8 +262,7 @@ export function parseCatalogEntry(raw: unknown): CatalogEntry | null {
     minTavora: typeof minTavora === "string" ? minTavora : null,
     games: [...games],
     gameInfo: parseGameInfo(entry.gameInfo, games),
-    // A service deployed before the Game → Workspace rename sends it as `workspaces` only.
-    personalWorkspaces: (typeof personalWorkspaces === "boolean" ? personalWorkspaces : workspaces) !== false,
+    personalWorkspaces: personalWorkspaces !== false,
     permissions: { network: [...new Set(network as string[])], connectors: [...new Set(connectors as Connector[])], folders: [...new Set(folders as string[])] },
     owner,
     // Only the name the service gives for the key's account, never a name the listing claims elsewhere.
