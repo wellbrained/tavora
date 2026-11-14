@@ -4,10 +4,10 @@ import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch, type Compo
 import { handleUndoKey, setWindowBehind, toast, undoable } from "@tavora/official-ui/components/ui/toast";
 import { EMPTY_INBOX, type InboxView } from "../shared/conversations";
 import type { AccountView, ActionResult, ReleaseCopy, ReleaseStatus, ModuleConnector, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, HostAction, PairingView, HostShortcut, HostViewState, ModuleMenu, PanelDialog, PublishView } from "../shared/host-api";
-import { shortcutForKey } from "../shared/shortcut-keys";
+import { keyInput, shortcutForKey } from "../shared/shortcuts";
 import { noteShortcut } from "./shortcut-origin";
 import { SETTING_SECTIONS, type SettingsPlace, type SettingsSection } from "./components/settings/settings-index";
-import { numberedWorkspaces } from "./shortcuts";
+import { MAC, numberedWorkspaces } from "./shortcuts";
 import { isLanguageReady, loadLanguage, setLanguage, t } from "./i18n";
 import { applyTheme } from "./theme";
 import { developerSetup } from "./developer-setup";
@@ -672,10 +672,7 @@ api.onShortcut((shortcut) => {
 // there, so this never runs twice for one press). This covers key events that
 // reach the page without passing through main, such as synthetic ones in tests.
 addEventListener("keydown", (event) => {
-  const shortcut = shortcutForKey(
-    { type: "keyDown", key: event.key, control: event.ctrlKey, meta: event.metaKey, alt: event.altKey, shift: event.shiftKey },
-    navigator.platform.startsWith("Mac"),
-  );
+  const shortcut = shortcutForKey(keyInput(event), MAC);
   if (!shortcut) return;
   event.preventDefault();
   runShortcut(shortcut);

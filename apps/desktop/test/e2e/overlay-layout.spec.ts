@@ -145,11 +145,14 @@ test("Reset position and Reset size work from the page, Take picture says why it
     await expect(takePicture).toBeDisabled();
     await takePicture.hover();
     await expect(page.locator("[role=tooltip]")).toHaveText("Start the game first.");
-    // Undo and redo name their shortcut.
+    // Undo and redo name their shortcut, from the shortcut table, as key caps beside the hint.
+    await expect(page.getByTestId("layout-redo")).toHaveAttribute("aria-keyshortcuts", /^(Control|Meta)\+Y$/);
     await page.getByTestId("layout-redo").hover();
-    await expect(page.locator("[role=tooltip]")).toHaveText(/^Redo \((Ctrl|Cmd)\+Y\)$/);
+    await expect(page.locator("[role=tooltip] p")).toHaveText("Redo");
+    await expect(page.locator("[role=tooltip] kbd")).toHaveText([/^(Ctrl|Cmd)$/, "Y"]);
     await page.getByTestId("layout-undo").hover();
-    await expect(page.locator("[role=tooltip]")).toHaveText(/^Undo \((Ctrl|Cmd)\+Z\)$/);
+    await expect(page.locator("[role=tooltip] p")).toHaveText("Undo");
+    await expect(page.locator("[role=tooltip] kbd")).toHaveText([/^(Ctrl|Cmd)$/, "Z"]);
     expect((await state(page)).pictureHint).toBe("start");
 
     // The sidebar is on the right until Settings says otherwise, and the Overlay button stays in the header, lit.

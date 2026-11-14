@@ -5,6 +5,7 @@ import { session, WebContentsView, type Session, type WebContents } from "electr
 import type { BrowserError, BrowserState, InstanceStatus } from "../shared/host-api";
 import { judgedTopUrl, judgeRequest, type AdBlocker } from "./browser-filter";
 import { addressToUrl, displayHost, isPrivateUrl, isWebUrl, parseUrl, siteOfUrl } from "./browser-url";
+import { shortcutIn } from "../shared/shortcuts";
 import { BROWSER_MODULE_ID } from "./registry";
 
 /** Logins in a workspace's own session, or in the one shared by every workspace. */
@@ -297,15 +298,15 @@ export class BrowserPanel {
     });
     // Esc always leaves fullscreen, whatever the page does with the key.
     // Browser keys come before the page: Ctrl+L, Alt+Left and Alt+Right.
+    // The keys are in the shortcut table (shared/shortcuts.ts).
     contents.on("before-input-event", (event, input) => {
-      if (input.type !== "keyDown") return;
-      const mod = process.platform === "darwin" ? input.meta : input.control;
-      if (this.fullscreen && input.key === "Escape") this.exitFullscreen();
-      else if (mod && !input.alt && !input.shift && input.key.toLowerCase() === "l") this.options.onFocusAddress();
-      else if (mod && !input.alt && !input.shift && input.key.toLowerCase() === "t") this.options.onOpenTab(null, false);
-      else if (mod && !input.alt && !input.shift && input.key.toLowerCase() === "w") this.options.onCloseTab();
-      else if (input.alt && !mod && input.key === "ArrowLeft") this.back();
-      else if (input.alt && !mod && input.key === "ArrowRight") this.forward();
+      const shortcut = shortcutIn("browser", input, process.platform === "darwin");
+      if (shortcut === "browser.leave-fullscreen" && this.fullscreen) this.exitFullscreen();
+      else if (shortcut === "browser.address") this.options.onFocusAddress();
+      else if (shortcut === "browser.new-tab") this.options.onOpenTab(null, false);
+      else if (shortcut === "browser.close-tab") this.options.onCloseTab();
+      else if (shortcut === "browser.back") this.back();
+      else if (shortcut === "browser.forward") this.forward();
       else return;
       event.preventDefault();
     });

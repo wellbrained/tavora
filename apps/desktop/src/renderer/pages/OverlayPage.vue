@@ -20,7 +20,7 @@ import OverlaySettings from "../components/layout/OverlaySettings.vue";
 import OverlaySources from "../components/layout/OverlaySources.vue";
 import { selectedItems, send, stills, useLayoutKeys, view } from "../components/layout/layout-state";
 import { watchRemovals } from "../components/layout/removal-undo";
-import { withShortcut } from "../shortcuts";
+import { keyshortcuts } from "../shortcuts";
 
 useLayoutKeys();
 
@@ -184,8 +184,8 @@ const picture = computed(() => (view.value?.picture ? `${PICTURE_ORIGIN}${view.v
             <Picker v-model="previewChoice" :options="previewOptions" :label="t('overlays.layout.previewAs')" testid="layout-preview" />
           </label>
           <div class="flex items-center gap-1">
-            <Button variant="ghost" size="icon-sm" :disabled="!view.canUndo" :aria-label="t('overlays.layout.undo')" :title="withShortcut(t('overlays.layout.undo'), 'Z')" data-testid="layout-undo" @click="send({ type: 'undo' })"><Undo2 :stroke-width="1.5" /></Button>
-            <Button variant="ghost" size="icon-sm" :disabled="!view.canRedo" :aria-label="t('overlays.layout.redo')" :title="withShortcut(t('overlays.layout.redo'), 'Y')" data-testid="layout-redo" @click="send({ type: 'redo' })"><Redo2 :stroke-width="1.5" /></Button>
+            <Button variant="ghost" size="icon-sm" :disabled="!view.canUndo" :aria-label="t('overlays.layout.undo')" :title="t('overlays.layout.undo')" :aria-keyshortcuts="keyshortcuts('layout.undo')" data-testid="layout-undo" @click="send({ type: 'undo' })"><Undo2 :stroke-width="1.5" /></Button>
+            <Button variant="ghost" size="icon-sm" :disabled="!view.canRedo" :aria-label="t('overlays.layout.redo')" :title="t('overlays.layout.redo')" :aria-keyshortcuts="keyshortcuts('layout.redo')" data-testid="layout-redo" @click="send({ type: 'redo' })"><Redo2 :stroke-width="1.5" /></Button>
           </div>
           <div class="ml-auto flex flex-wrap items-center gap-2">
             <!-- Off, it still shows why: a disabled button with a title keeps its hint (see the kit's Button). Everywhere and All games have no one window to take. -->

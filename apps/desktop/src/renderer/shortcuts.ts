@@ -1,14 +1,27 @@
+import { isModalOpen } from "@tavora/official-ui/components/ui/dialog";
 import type { HostViewState } from "../shared/host-api";
+import { ariaKeys, SHORTCUT_GROUPS, SHORTCUTS, shortcutSpec, type ShortcutId, type ShortcutScope } from "../shared/shortcuts";
 import { t } from "./i18n";
 
-// What Settings > Keyboard shortcuts (Ctrl+/) lists. The Tavora-wide ones are
-// caught in main/shortcuts.ts; keep both in step.
+// The host page's side of the shortcut table (shared/shortcuts.ts): what Settings > Shortcuts (Ctrl+/) lists, and the
+// keys a button names in `aria-keyshortcuts`, which its tooltip shows as key caps.
 
 export const MAC = navigator.platform.startsWith("Mac");
 /** The modifier key's name: Cmd on a Mac, otherwise Ctrl (Strg in German). */
 export const MOD = (): string => (MAC ? "Cmd" : t("shortcuts.ctrl"));
-/** A label with its shortcut after it, as a tooltip shows it: "Undo (Ctrl+Z)", "Undo (Cmd+Z)" on a Mac. */
-export const withShortcut = (label: string, key: string): string => `${label} (${MOD()}+${key})`;
+
+const CAPS: Record<string, string> = { Escape: "Esc", ArrowUp: "↑", ArrowDown: "↓", ArrowLeft: "←", ArrowRight: "→", "1-9": "1–9" };
+
+/** A shortcut's keys as key caps, in the language shown: ["Ctrl", "K"], ["Cmd", "K"] on a Mac, ["Strg", "K"] in German. */
+export function keyCaps(id: ShortcutId): string[] {
+  return shortcutSpec(id)
+    .keys.split(" ")
+    .flatMap((alternative) => alternative.split(/\+(?!$)/))
+    .map((key) => (key === "Mod" ? MOD() : key === "Control" ? t("shortcuts.ctrl") : (CAPS[key] ?? (key.length === 1 ? key.toUpperCase() : key))));
+}
+
+/** For a button's `aria-keyshortcuts`: screen readers announce it, and the button's tooltip shows it as key caps. */
+export const keyshortcuts = (id: ShortcutId): string => ariaKeys(id, MAC);
 
 export interface ShortcutRow {
   action: string;
@@ -16,59 +29,21 @@ export interface ShortcutRow {
   keys: string[];
 }
 
+/** Settings > Shortcuts: every shortcut, under its group's heading. */
 export function shortcutGroups(): { title: string; rows: ShortcutRow[] }[] {
-  const mod = MOD();
-  return [
-    {
-      title: t("shortcuts.group.general"),
-      rows: [
-        { action: t("shortcuts.search"), keys: [mod, "K"] },
-        { action: t("shortcuts.shortcuts"), keys: [mod, "/"] },
-        { action: t("shortcuts.settings"), keys: [mod, ","] },
-        { action: t("shortcuts.home"), keys: [mod, "H"] },
-        { action: t("shortcuts.rail"), keys: [mod, "\\"] },
-      ],
-    },
-    {
-      title: t("shortcuts.group.workspaces"),
-      rows: [
-        { action: t("shortcuts.openWorkspace"), keys: [mod, "1–9"] },
-        { action: t("shortcuts.nextTab"), keys: [t("shortcuts.ctrl"), "Tab"] },
-        { action: t("shortcuts.previousTab"), keys: [t("shortcuts.ctrl"), "Shift", "Tab"] },
-      ],
-    },
-    {
-      // Only while a panel's tab has focus (dock-preview.ts), so not caught in main.
-      title: t("shortcuts.group.panels"),
-      rows: [
-        { action: t("shortcuts.movePanel"), keys: [mod, "M"] },
-        { action: t("shortcuts.pickPlace"), keys: ["←", "↑", "↓", "→"] },
-        { action: t("shortcuts.everyPlace"), keys: ["Tab"] },
-        { action: t("shortcuts.dropPanel"), keys: ["Enter"] },
-        { action: t("shortcuts.cancelMove"), keys: ["Esc"] },
-      ],
-    },
-    {
-      title: t("shortcuts.group.browser"),
-      rows: [
-        { action: t("shortcuts.address"), keys: [mod, "L"] },
-        { action: t("shortcuts.newTab"), keys: [mod, "T"] },
-        { action: t("shortcuts.closeTab"), keys: [mod, "W"] },
-        { action: t("shortcuts.back"), keys: ["Alt", "←"] },
-        { action: t("shortcuts.forward"), keys: ["Alt", "→"] },
-        { action: t("shortcuts.leaveFullscreen"), keys: ["Esc"] },
-      ],
-    },
-    {
-      title: t("shortcuts.group.lists"),
-      rows: [
-        { action: t("shortcuts.moveList"), keys: ["↑", "↓"] },
-        { action: t("shortcuts.resizeList"), keys: ["←", "→"] },
-        { action: t("shortcuts.pick"), keys: ["Enter"] },
-        { action: t("shortcuts.closeDialog"), keys: ["Esc"] },
-      ],
-    },
-  ];
+  return SHORTCUT_GROUPS.map((group) => ({
+    title: t(`shortcuts.group.${group}`),
+    rows: SHORTCUTS.filter((spec) => spec.group === group).map((spec) => ({ action: t(spec.label), keys: keyCaps(spec.id) })),
+  }));
+}
+
+/**
+ * Whether a dialog on top holds a scope's shortcuts back. Tavora-wide ones work over dialogs too (main catches them
+ * before any page sees the key); the others stand down while one is open. Every shortcut that cares asks here, so
+ * this is the one place to change when dialogs, menus and popovers say which layer is on top.
+ */
+export function heldBackByModal(scope: ShortcutScope): boolean {
+  return scope !== "app" && isModalOpen();
 }
 
 /**
