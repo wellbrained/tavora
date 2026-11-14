@@ -748,7 +748,6 @@ export const de: Record<keyof typeof en, string> = {
   "shortcuts.everyPlace": "Alle Plätze durchgehen",
   "shortcuts.dropPanel": "Dort ablegen",
   "shortcuts.cancelMove": "Verschieben abbrechen",
-  "shortcuts.ctrl": "Strg",
   "settings.patchNotes.intro": "Was neu ist, das Neueste zuerst.",
   "settings.patchNotes.installed": "Installiert",
   "settings.trash.empty": "Der Papierkorb ist leer.",

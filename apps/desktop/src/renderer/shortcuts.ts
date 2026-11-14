@@ -9,7 +9,7 @@ import { t } from "./i18n";
 
 export const MAC = navigator.platform.startsWith("Mac");
 /** The modifier key's name: Cmd on a Mac, otherwise Ctrl (Strg in German). */
-export const MOD = (): string => (MAC ? "Cmd" : t("shortcuts.ctrl"));
+export const MOD = (): string => keyCaps("search")[0]!;
 
 /**
  * A shortcut's keys as key caps, the way its tooltip shows them (the kit's `shortcutKeys`): ["Ctrl", "K"], ["Cmd", "K"]

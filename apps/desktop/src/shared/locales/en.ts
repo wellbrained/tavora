@@ -746,7 +746,6 @@ export const en = {
   "shortcuts.everyPlace": "Go through every place",
   "shortcuts.dropPanel": "Put it there",
   "shortcuts.cancelMove": "Cancel the move",
-  "shortcuts.ctrl": "Ctrl",
   "settings.patchNotes.intro": "What's new, newest first.",
   "settings.patchNotes.installed": "Installed",
   "settings.trash.empty": "Trash is empty.",

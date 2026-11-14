@@ -79,7 +79,7 @@ export type AppShortcut = Extract<MatchedShortcut, Extract<(typeof SHORTCUTS)[nu
 
 const SPECS: readonly ShortcutSpec[] = SHORTCUTS;
 
-export function shortcutSpec(id: ShortcutId): ShortcutSpec {
+function shortcutSpec(id: ShortcutId): ShortcutSpec {
   return SPECS.find((spec) => spec.id === id)!;
 }
 
@@ -128,7 +128,7 @@ function written(spec: ShortcutSpec, mac: boolean): { held: Modifier[]; key: str
 }
 
 /** Every press of a spec on a platform, loose modifiers held or not, each with what it matches as. */
-export function pressesOf(spec: ShortcutSpec, mac: boolean): { combo: string; id: string }[] {
+function pressesOf(spec: ShortcutSpec, mac: boolean): { combo: string; id: string }[] {
   return written(spec, mac).flatMap(({ held, key, id }) => {
     const loose = (spec.loose ?? []).map((name) => modifierOf(name, mac)!).filter((modifier) => !held.includes(modifier));
     return Array.from({ length: 1 << loose.length }, (_, mask) => ({ combo: combo([...held, ...loose.filter((_, index) => mask & (1 << index))], key), id }));
@@ -184,12 +184,10 @@ export function shortcutClashes(specs: readonly ShortcutSpec[], mac: boolean): s
   return [...new Set(clashes)];
 }
 
-const ARIA_NAMES: Record<Modifier, string> = { control: "Control", meta: "Meta", alt: "Alt", shift: "Shift" };
-
 /** A shortcut's keys for `aria-keyshortcuts` on a platform, every press that counts: "Control+T", "Meta+T" on a Mac. */
 export function ariaKeys(id: ShortcutId, mac: boolean): string {
   return written(shortcutSpec(id), mac)
-    .map(({ held, key }) => [...MODIFIERS.filter((modifier) => held.includes(modifier)).map((modifier) => ARIA_NAMES[modifier]), key].join("+"))
+    .map(({ held, key }) => [...MODIFIERS.filter((modifier) => held.includes(modifier)).map((modifier) => modifier[0]!.toUpperCase() + modifier.slice(1)), key].join("+"))
     .join(" ");
 }
 
