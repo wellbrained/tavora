@@ -149,9 +149,18 @@ export function checkDownload(version, downloaded, ciHashes, latestYml) {
   return problems;
 }
 
+/** Whether a version is a preview build: everything before 1.0.0, the first public release. */
+const isPreview = (version) => Number(version.split(".")[0]) < 1;
+
+/** The GitHub release's title: "(preview build)" only before 1.0.0. */
+export function releaseTitle(version) {
+  return isPreview(version) ? `Tavora ${version} (preview build)` : `Tavora ${version}`;
+}
+
 /** The GitHub release's text: the patch-notes entry of this version. */
 export function releaseNotes(note) {
-  const lines = ["Windows preview build of Tavora. These are the same verified files currently published through Tavora's update service.", "", `### In ${note.version}`, ""];
+  const intro = isPreview(note.version) ? "Windows preview build of Tavora." : "Tavora for Windows.";
+  const lines = [`${intro} These are the same verified files currently published through Tavora's update service.`, "", `### In ${note.version}`, ""];
   for (const line of note.notes) lines.push(`- ${line}`);
   return lines.join("\n");
 }
