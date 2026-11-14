@@ -38,6 +38,17 @@ export function shortcutGroups(): { title: string; rows: ShortcutRow[] }[] {
       ],
     },
     {
+      // Only while a panel's tab has focus (dock-preview.ts), so not caught in main.
+      title: t("shortcuts.group.panels"),
+      rows: [
+        { action: t("shortcuts.movePanel"), keys: [mod, "M"] },
+        { action: t("shortcuts.pickPlace"), keys: ["←", "↑", "↓", "→"] },
+        { action: t("shortcuts.everyPlace"), keys: ["Tab"] },
+        { action: t("shortcuts.dropPanel"), keys: ["Enter"] },
+        { action: t("shortcuts.cancelMove"), keys: ["Esc"] },
+      ],
+    },
+    {
       title: t("shortcuts.group.browser"),
       rows: [
         { action: t("shortcuts.address"), keys: [mod, "L"] },

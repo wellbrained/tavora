@@ -275,6 +275,50 @@ test("a tab dragged to the edge of the dock makes a column, and the preview show
   await app.close();
 });
 
+test("a panel moves with the keyboard: Ctrl+M on its tab, arrow keys aim with the same preview, Esc puts it back, Enter drops", async () => {
+  const { app, page } = await launch();
+  await openModule(page, VANILLA);
+  await openModule(page, REACT);
+  await expect(groups(page)).toHaveCount(1);
+  const tab = page.locator(".dv-tab", { has: panels(page, REACT) });
+  const preview = page.getByTestId("dock-preview");
+  const status = page.getByTestId("dock-move-status");
+
+  // Lifted, aimed at its own place; module views step aside as for a drag.
+  await tab.focus();
+  await page.keyboard.press("Control+m");
+  await expect(preview).toHaveAttribute("data-target", "tab");
+  await expect(page.getByTestId("dock-same-place")).toBeVisible();
+  await expect(status).toContainText("Moving");
+  await expect(page.locator("[data-testid^='panel-content-'] img").first()).toBeAttached();
+  // Down from its tab is a new row at the top of its group, read out; Esc leaves everything as it was.
+  await page.keyboard.press("ArrowDown");
+  await expect(preview).toHaveAttribute("data-target", "split-top");
+  await expect(status).toContainText("New row above");
+  await page.keyboard.press("Escape");
+  await expect(preview).toHaveCount(0);
+  await expect(status).toContainText("Move canceled");
+  await expect(groups(page)).toHaveCount(1);
+  await expect(tab).toBeFocused();
+
+  // Right: a new column beside its group, then the dock's right edge; Enter drops it there and the tab keeps the focus.
+  await page.keyboard.press("Control+m");
+  await page.keyboard.press("ArrowRight");
+  await expect(preview).toHaveAttribute("data-target", "split-right");
+  await page.keyboard.press("ArrowRight");
+  await expect(preview).toHaveAttribute("data-target", "edge-right");
+  await expect(page.getByTestId("dock-edge-right")).toHaveAttribute("data-lit", "true");
+  await page.keyboard.press("Enter");
+  await expect(preview).toHaveCount(0);
+  await expect(groups(page)).toHaveCount(2);
+  await expect(status).toContainText("moved");
+  const left = (await panels(page, VANILLA).boundingBox())!;
+  const right = (await panels(page, REACT).boundingBox())!;
+  expect(right.x).toBeGreaterThan(left.x + 300);
+  await expect(page.locator(".dv-tab", { has: panels(page, REACT) })).toBeFocused();
+  await app.close();
+});
+
 test("dragging a column beside another in its row moves it there, keeping widths", async () => {
   const { app, page } = await launch();
   await setContentSize(app, RAIL_WIDTH + 1500, 800);
