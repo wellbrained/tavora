@@ -108,14 +108,9 @@ export interface ModuleManifest {
   /**
    * Whether the module may be added to a personal workspace, which belongs to no game. Only modules for any game
    * (an empty `games`) can be; leave it out for true, and set false for one that only makes sense in a game. Needs a
-   * `minTavora` newer than LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES; for an older one, set `workspaces` instead.
+   * `minTavora` newer than LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES.
    */
   personalWorkspaces?: boolean;
-  /**
-   * @deprecated The old name of `personalWorkspaces`, from before Tavora 0.21.43 called every item on the rail a
-   * workspace. Read until Tavora's 1.0 preparation; never together with `personalWorkspaces`.
-   */
-  workspaces?: boolean;
   viewport: ModuleViewport;
   /** Named panel types. Without them the module has one panel, made from `entry`, `icon` and `viewport`. */
   panels?: ModulePanelType[];
@@ -223,7 +218,7 @@ const GAME_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?$/;
 const RELEASE_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const MAX_VIEWPORT = 10_000;
-const FIELDS = ["$schema", "id", "name", "description", "version", "apiVersion", "minTavora", "entry", "icon", "changelog", "homepage", "support", "readme", "screenshots", "games", "personalWorkspaces", "workspaces", "viewport", "panels", "panelLayout", "inGame", "overlay", "overlaySize", "actions", "translations", "leaderboards", "permissions"];
+const FIELDS = ["$schema", "id", "name", "description", "version", "apiVersion", "minTavora", "entry", "icon", "changelog", "homepage", "support", "readme", "screenshots", "games", "personalWorkspaces", "viewport", "panels", "panelLayout", "inGame", "overlay", "overlaySize", "actions", "translations", "leaderboards", "permissions"];
 const VIEWPORT_FIELDS = ["minWidth", "minHeight", "preferredWidth", "preferredHeight", "wide"];
 
 /** Most screenshots a manifest may name, and the longest homepage address. */
@@ -398,9 +393,9 @@ export function isGameId(value: unknown): value is string {
   return typeof value === "string" && GAME_ID.test(value);
 }
 
-/** Whether a module may go into a personal workspace: it is made for any game and did not opt out (`personalWorkspaces`, or its old name `workspaces`). */
-export function allowsPersonalWorkspaces(manifest: Pick<ModuleManifest, "games" | "personalWorkspaces" | "workspaces">): boolean {
-  return manifest.games.length === 0 && (manifest.personalWorkspaces ?? manifest.workspaces) !== false;
+/** Whether a module may go into a personal workspace: it is made for any game and did not opt out (`personalWorkspaces`). */
+export function allowsPersonalWorkspaces(manifest: Pick<ModuleManifest, "games" | "personalWorkspaces">): boolean {
+  return manifest.games.length === 0 && manifest.personalWorkspaces !== false;
 }
 
 /**
@@ -649,7 +644,7 @@ export const LAST_TAVORA_WITHOUT_IN_GAME_PANELS = "0.21.2";
 export const LAST_TAVORA_WITHOUT_TRANSLATIONS = "0.20.12";
 /** The last Tavora that refuses `overlaySize`; a manifest with it needs a newer `minTavora`. */
 export const LAST_TAVORA_WITHOUT_OVERLAY_SIZE = "0.21.27";
-/** The last Tavora that refuses `personalWorkspaces` (it knows `workspaces`); a manifest with it needs a newer `minTavora`. */
+/** The last Tavora that refuses `personalWorkspaces`; a manifest with it needs a newer `minTavora`. */
 export const LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES = "0.21.42";
 /** The last Tavora that refuses `leaderboards` and its connector; a manifest with them needs a newer `minTavora`. */
 export const LAST_TAVORA_WITHOUT_LEADERBOARDS = "0.21.91";
@@ -1037,15 +1032,13 @@ export function validateManifest(input: unknown): ManifestResult {
   if (!Array.isArray(input.games) || !input.games.every(isGameId)) {
     errors.push("games must be an array of game ids (empty means any game)");
   }
-  for (const field of ["personalWorkspaces", "workspaces"] as const) {
-    if (input[field] !== undefined && typeof input[field] !== "boolean") errors.push(`${field} must be true or false`);
-    else if (input[field] === true && Array.isArray(input.games) && input.games.length > 0) {
-      errors.push(`${field} can only be true for a module made for any game (games is empty)`);
-    }
+  if (input.personalWorkspaces !== undefined && typeof input.personalWorkspaces !== "boolean") errors.push("personalWorkspaces must be true or false");
+  else if (input.personalWorkspaces === true && Array.isArray(input.games) && input.games.length > 0) {
+    errors.push("personalWorkspaces can only be true for a module made for any game (games is empty)");
   }
-  if (input.personalWorkspaces !== undefined && input.workspaces !== undefined) errors.push("use personalWorkspaces only: workspaces is its old name");
+  if (input.workspaces !== undefined) errors.push("workspaces was renamed personalWorkspaces; use that");
   else if (input.personalWorkspaces !== undefined && !officialId(input) && !needsNewerTavora({ minTavora: typeof input.minTavora === "string" ? input.minTavora : "" }, LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES)) {
-    errors.push(`personalWorkspaces needs a minTavora newer than ${LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES}, because older Tavoras refuse it; set workspaces for them`);
+    errors.push(`personalWorkspaces needs a minTavora newer than ${LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES}, because older Tavoras refuse it`);
   }
 
   const wideAllowed = officialId(input) || needsNewerTavora({ minTavora: typeof input.minTavora === "string" ? input.minTavora : "" }, LAST_TAVORA_WITHOUT_WIDE_LAYOUT);
@@ -1144,7 +1137,7 @@ export function validateManifest(input: unknown): ManifestResult {
     if (!leaderboardsConnector && input.leaderboards !== undefined) errors.push('leaderboards need the "leaderboards" connector');
   }
 
-  const extra = Object.keys(input).filter((key) => !FIELDS.includes(key));
+  const extra = Object.keys(input).filter((key) => !FIELDS.includes(key) && key !== "workspaces");
   if (extra.length > 0) errors.push(`unknown fields: ${extra.join(", ")}`);
 
   if (errors.length > 0) return { ok: false, errors };

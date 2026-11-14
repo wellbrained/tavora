@@ -247,8 +247,6 @@ export interface CatalogEntry {
   games: string[];
   /** Whether it may be added to a personal workspace (only modules for any game can be). */
   personalWorkspaces: boolean;
-  /** @deprecated The same, for Tavora 0.21.42 and older, which read it under this name. Sent until Tavora's 1.0 preparation. */
-  workspaces: boolean;
   /** `folders`: permissions.folders as grant keys (folderKey); Tavora 0.23.112 and older ignore it. */
   permissions: { network: string[]; connectors: string[]; folders: string[] };
   /** The fingerprint of the publisher key that signed this version: the module's first key, or its successor. */
@@ -365,7 +363,6 @@ function entryOf(row: VersionSql): CatalogEntry {
     minTavora: manifest.minTavora ?? null,
     games: manifest.games,
     personalWorkspaces: allowsPersonalWorkspaces(manifest),
-    workspaces: allowsPersonalWorkspaces(manifest),
     permissions: { network: manifest.permissions.network, connectors: manifest.permissions.connectors ?? [], folders: (manifest.permissions.folders ?? []).map(folderKey) },
     owner: row.owner,
     zip: { sha256: row.sha256, size: row.size },

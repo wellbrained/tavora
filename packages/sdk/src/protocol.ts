@@ -23,19 +23,6 @@ export interface TavoraWorkspace {
   kind: "game" | "personal";
 }
 
-/**
- * What `game.getCurrent` answers: the workspace, in the words Tavora used before 0.21.43.
- * @deprecated Use `TavoraWorkspace` and `workspace.getCurrent`. Tavora answers `game.getCurrent` until its 1.0 preparation.
- */
-export interface TavoraGame {
-  id: string;
-  displayName: string;
-  /**
-   * A game workspace, or `"workspace"` for a personal workspace. Tavora older than 0.18.1 leaves it out, which means a game.
-   */
-  kind?: "game" | "workspace";
-}
-
 export interface TavoraViewport {
   width: number;
   height: number;
@@ -851,8 +838,6 @@ export interface Methods {
   "bridge.handshake": { params: { protocol: number; sdkVersion: string }; result: HandshakeResult };
   /** The workspace the panel is in. Tavora 0.21.43 and newer. */
   "workspace.getCurrent": { params: undefined; result: TavoraWorkspace };
-  /** @deprecated The same in the old words (`TavoraGame`); use workspace.getCurrent. Answered until Tavora's 1.0 preparation. */
-  "game.getCurrent": { params: undefined; result: TavoraGame };
   "storage.get": { params: { key: string }; result: JsonValue | null };
   "storage.set": { params: { key: string; value: JsonValue }; result: null };
   "storage.delete": { params: { key: string }; result: null };
@@ -1533,8 +1518,7 @@ export const TOOLTIP_ANCHOR_BOX_TAVORA = "0.24.58";
 
 export const METHOD_INFO: Readonly<Record<CallName, MethodInfo>> = {
   "bridge.handshake": call("0.1.0"),
-  "workspace.getCurrent": later("0.21.43"),
-  "game.getCurrent": call("0.1.0"),
+  "workspace.getCurrent": call("0.21.43"),
   "storage.get": call("0.1.0"),
   "storage.set": call("0.1.0"),
   "storage.delete": call("0.1.0"),
@@ -1554,11 +1538,11 @@ export const METHOD_INFO: Readonly<Record<CallName, MethodInfo>> = {
   "panel.getLaunch": call("0.17.17"),
   "panel.setContent": call("0.17.17"),
   "panel.navigated": call("0.17.18"),
-  "panel.isMaximized": later("0.20.20"),
-  "panel.setMaximized": later("0.20.20", null, flag("maximized", "making it fill the workspace")),
+  "panel.isMaximized": call("0.20.20"),
+  "panel.setMaximized": call("0.20.20", null, flag("maximized", "making it fill the workspace")),
   "panel.setDialog": later("0.21.95", null, flag("open", "opening")),
   "panel.setDialogTitle": later("0.23.71"),
-  "panel.setLive": later("0.21.11"),
+  "panel.setLive": call("0.21.11"),
   "panels.open": call("0.17.18", null, true),
   "panels.openMany": later("0.23.29", null, true),
   "workspace.getViewport": call("0.1.0"),
@@ -1587,16 +1571,16 @@ export const METHOD_INFO: Readonly<Record<CallName, MethodInfo>> = {
   "leaderboards.submit": later("0.21.92", "leaderboards"),
   "leaderboards.top": later("0.21.92", "leaderboards"),
   "leaderboards.mine": later("0.21.97", "leaderboards"),
-  "systemInfo.info": later("0.21.1", "systemInfo"),
-  "systemInfo.watch": later("0.21.1", "systemInfo"),
-  "systemInfo.connectionLog": later("0.21.22", "systemInfo"),
-  "systemInfo.clearConnectionLog": later("0.21.22", "systemInfo", true),
-  "systemInfo.connectionSettings": later("0.21.22", "systemInfo"),
-  "systemInfo.setConnectionSettings": later("0.21.22", "systemInfo", true),
-  "systemInfo.apps": later("0.21.21", "systemInfo"),
-  "systemInfo.traffic": later("0.21.31", "systemInfo"),
-  "media.watch": later("0.21.18", "media"),
-  "media.control": later("0.21.18", "media", true),
+  "systemInfo.info": call("0.21.1", "systemInfo"),
+  "systemInfo.watch": call("0.21.1", "systemInfo"),
+  "systemInfo.connectionLog": call("0.21.22", "systemInfo"),
+  "systemInfo.clearConnectionLog": call("0.21.22", "systemInfo", true),
+  "systemInfo.connectionSettings": call("0.21.22", "systemInfo"),
+  "systemInfo.setConnectionSettings": call("0.21.22", "systemInfo", true),
+  "systemInfo.apps": call("0.21.21", "systemInfo"),
+  "systemInfo.traffic": call("0.21.31", "systemInfo"),
+  "media.watch": call("0.21.18", "media"),
+  "media.control": call("0.21.18", "media", true),
   "discord.state": call("0.16.11", "discord"),
   "discord.connect": call("0.16.11", "discord", true),
   "discord.allowControl": call("0.16.11", "discord", true),
@@ -1614,11 +1598,11 @@ export const METHOD_INFO: Readonly<Record<CallName, MethodInfo>> = {
   "overlay.remove": call("0.19.26"),
   "overlay.copyLink": call("0.19.26", "overlay", true),
   "overlay.resetLink": call("0.19.26", "overlay"),
-  "overlay.showOverGame": later("0.20.51", null, true),
-  "overlay.hideOverGame": later("0.21.3"),
-  "overlay.overGame": later("0.21.3"),
+  "overlay.showOverGame": call("0.20.51", null, true),
+  "overlay.hideOverGame": call("0.21.3"),
+  "overlay.overGame": call("0.21.3"),
   "overlay.setSources": later("0.23.43"),
-  "overlay.preview": later("0.21.3", null, true),
+  "overlay.preview": call("0.21.3", null, true),
   "overlay.openPage": later("0.23.77", null, true),
   "hotkeys.list": call("0.19.26"),
   "hotkeys.set": call("0.19.26", null, true),
@@ -1626,11 +1610,11 @@ export const METHOD_INFO: Readonly<Record<CallName, MethodInfo>> = {
   "blobs.put": call("0.12.0"),
   "blobs.app.put": later("0.23.101"),
   "clipboard.writeImage": call("0.14.1", null, true),
-  "files.pickReadOnly": later("0.21.13", null, true),
-  "files.forget": later("0.21.13"),
+  "files.pickReadOnly": call("0.21.13", null, true),
+  "files.forget": call("0.21.13"),
   "files.check": later("0.23.6"),
   "files.showInFolder": later("0.23.6", null, true),
-  "files.read": later("0.21.13"),
+  "files.read": call("0.21.13"),
   "folders.state": later("0.23.113", "folders"),
   "folders.list": later("0.23.113", "folders"),
   "folders.watch": later("0.23.113", "folders"),
@@ -1638,8 +1622,8 @@ export const METHOD_INFO: Readonly<Record<CallName, MethodInfo>> = {
   "folders.showInFolder": later("0.23.116", "folders", true),
   "folders.read": later("0.23.113", "folders"),
   "files.exportJson": call("0.19.17", null, true),
-  "files.saveJson": later("0.21.13", null, true),
-  "files.openJson": later("0.21.13", null, true),
+  "files.saveJson": call("0.21.13", null, true),
+  "files.openJson": call("0.21.13", null, true),
   "files.save": later("0.23.102", null, true),
   "files.open": later("0.23.102", null, true),
   "pictures.save": call("0.17.19", null, true),

@@ -2,8 +2,8 @@
 
 A Tavora module is a web page that runs in a sandboxed panel inside Tavora Desktop, next to a game or any other workspace. It talks to the host through `@tavora/sdk`, and it ships as a folder with a [`tavora.module.json`](../reference/manifest.md) manifest and its built files.
 
-::: warning Preview
-`@tavora/sdk` speaks [bridge protocol v1](../reference/protocol.md). Until Tavora's first public release it can still change in ways that break modules; the [changelog](../reference/changelog.md) marks each such change and says which Tavora a version needs.
+::: tip Stable from 1.0
+`@tavora/sdk` speaks [bridge protocol v1](../reference/protocol.md), and from Tavora 1.0 a module you build keeps working. Things are added, not taken away: anything that has to go is deprecated first, and removed only in a new major version. The [changelog](../reference/changelog.md) says what changed and which Tavora a version needs.
 :::
 
 ## Make a project
