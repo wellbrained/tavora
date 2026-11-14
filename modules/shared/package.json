@@ -19,6 +19,7 @@
     "./tooltip-typography": "./src/components/tooltip/typography.ts",
     "./title-tooltips": "./src/title-tooltips.ts",
     "./lib/utils": "./src/lib/utils.ts",
+    "./lib/bind-drag": "./src/lib/bind-drag.ts",
     "./lib/keys": "./src/lib/keys.ts"
   },
   "dependencies": {

@@ -3,6 +3,7 @@
 // components (components/ui/…), never this entry, so the SDK stays out of the host UI.
 
 export { cn } from "./lib/utils";
+export { bindDrag, type BindDragOptions, type DragBinding, type DragDelta, type DragHandlers, type DragPhase, type StartOptions } from "./lib/bind-drag";
 export { createTranslator, type Params, type Translator } from "./i18n";
 export { connectModule, type ConnectModuleOptions, type ModuleHandle } from "./connect-module";
 export { default as ConfirmDialog } from "./components/ConfirmDialog.vue";

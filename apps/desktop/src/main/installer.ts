@@ -10,7 +10,8 @@ import { isModuleId, isOwnerId, LOCAL_OWNER, manifestFiles, needsNewerTavora, OF
 import { MANIFEST_FILE, readZip, signedHash, verifyFiles, ZIP_LIMITS, ZipError, type ZipFile } from "@tavora/pack";
 import { compareModuleVersions } from "../shared/module-version";
 import { writeFileAtomic } from "./fsutil";
-import { readJsonOrSetAside } from "./json";
+import { readSavedFile } from "./json";
+import { SUPPORTED_VERSIONS } from "./saved-versions";
 import { UserError } from "./messages";
 import { MOVED_MODULES } from "./moved-modules";
 import type { OfficialUpdates } from "./official-updates";
@@ -40,7 +41,7 @@ const RECORDS = OWNER_RECORDS_FILE;
  * in the module's folder, so a folder cannot name its own owner.
  */
 export async function readOwnerRecords(userData: string): Promise<OwnerRecords> {
-  const parsed = await readJsonOrSetAside<{ folders?: unknown }>(path.join(userData, RECORDS));
+  const parsed = await readSavedFile(path.join(userData, RECORDS), { version: SUPPORTED_VERSIONS[OWNER_RECORDS_FILE] });
   const records: OwnerRecords = {};
   const folders = parsed?.folders;
   if (typeof folders !== "object" || folders === null) return records;
@@ -57,7 +58,7 @@ export async function readOwnerRecords(userData: string): Promise<OwnerRecords> 
 }
 
 async function writeOwnerRecords(userData: string, records: OwnerRecords): Promise<void> {
-  await writeFileAtomic(path.join(userData, RECORDS), `${JSON.stringify({ version: 1, folders: records }, null, 2)}\n`);
+  await writeFileAtomic(path.join(userData, RECORDS), `${JSON.stringify({ version: SUPPORTED_VERSIONS[OWNER_RECORDS_FILE], folders: records }, null, 2)}\n`);
 }
 
 /**

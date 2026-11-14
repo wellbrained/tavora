@@ -20,15 +20,30 @@ export class SerialQueue {
   }
 }
 
-/** Copies a file's old content into a backup folder. A copy an earlier start made stays; a different one gets a new name. */
-export async function keepCopy(dir: string, name: string, old: Buffer): Promise<void> {
+/**
+ * Copies a file's old content into a backup folder, and answers with the copy's path. A copy an earlier start made
+ * stays; a different one gets a new name.
+ */
+export async function keepCopy(dir: string, name: string, old: Buffer): Promise<string> {
+  return (await keepCopyAt(dir, name, old)).target;
+}
+
+/** keepCopy, also saying whether it wrote a new copy (false: the same bytes were kept already). */
+export async function keepCopyAt(dir: string, name: string, old: Buffer): Promise<{ target: string; wrote: boolean }> {
   for (let n = 1; ; n++) {
     const target = path.join(dir, n === 1 ? name : `${name}.${n}`);
+    // Only a missing name is free: any other error throws, so no copy is ever written over.
     const existing = await stat(target).then(
       () => readFile(target),
-      () => null,
+      (error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") return null;
+        throw error;
+      },
     );
-    if (existing?.equals(old)) return;
-    if (existing === null) return writeFileAtomic(target, old);
+    if (existing?.equals(old)) return { target, wrote: false };
+    if (existing === null) {
+      await writeFileAtomic(target, old);
+      return { target, wrote: true };
+    }
   }
 }

@@ -4,12 +4,18 @@ import path from 'node:path';
 import { isGameId, isModuleId, isOwnerId } from '@tavora/module-schema';
 import { HostError } from './errors';
 import { writeFileAtomic } from './fsutil';
+import { keepNewerCopy, setAside } from './json';
+import { STORE_VERSIONS } from './saved-versions';
 import type { ReadOnlyFile, ReadOnlyFileState } from '@tavora/sdk/protocol';
 
 export const READ_ONLY_FILES_DIR = 'read-only-files';
 export const MAX_READ_ONLY_BYTES = 50 * 1024 * 1024;
 const ID = /^[a-f0-9]{32}$/;
-type Entry = { path: string; target: string; name: string };
+/** One linked file. `version` is the file's format, kept on every entry: Tavora 0.24 refuses a file with anything else in it. */
+type Entry = { path: string; target: string; name: string; version?: number };
+const VERSION = STORE_VERSIONS.readOnlyFiles;
+/** The saved links can't be read: set aside (never written over) before the links start again. */
+class Unreadable extends HostError {}
 const queues = new Map<string, Promise<unknown>>();
 const reads = new Map<string,number>();
 let activeReads = 0;
@@ -42,22 +48,29 @@ export class ReadOnlyFiles {
     for (let step = 0; step < Math.min(3, Math.max(0, up)); step++) directory = path.dirname(directory);
     return (await stat(directory).catch(() => null))?.isDirectory() ? directory : undefined;
   }
+  /** The links. One a newer Tavora wrote (an entry of a higher version) is copied aside first; a damaged file throws Unreadable. */
   private async entries(): Promise<Record<string, Entry>> {
+    let bytes: Buffer;
     try {
-      const entries = JSON.parse(await readFile(this.file, 'utf8'));
-      if (!entries || typeof entries !== 'object' || Array.isArray(entries) || Object.entries(entries).some(([id,e]: [string,any]) => !ID.test(id) || !e || typeof e.path !== 'string' || !path.isAbsolute(e.path) || typeof e.target !== 'string' || !path.isAbsolute(e.target) || typeof e.name !== 'string')) throw Error('Invalid file references');
-      return entries;
+      bytes = await readFile(this.file);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return {};
       throw new HostError('INTERNAL', 'Saved file access is unavailable. Choose your files again.');
     }
+    let entries: unknown;
+    try { entries = JSON.parse(bytes.toString('utf8')); } catch { entries = null; }
+    if (!entries || typeof entries !== 'object' || Array.isArray(entries) || Object.entries(entries).some(([id,e]: [string,any]) => !ID.test(id) || !e || typeof e.path !== 'string' || !path.isAbsolute(e.path) || typeof e.target !== 'string' || !path.isAbsolute(e.target) || typeof e.name !== 'string')) throw new Unreadable('INTERNAL', 'Saved file access is unavailable. Choose your files again.');
+    const newest = Math.max(0, ...Object.values(entries as Record<string, Entry>).map(e => typeof e.version === 'number' && Number.isFinite(e.version) ? e.version : 0));
+    if (newest > VERSION) await keepNewerCopy(this.file, newest, bytes);
+    return entries as Record<string, Entry>;
   }
   private async update<T>(change: (entries: Record<string,Entry>) => Promise<T>, recover = false): Promise<T> {
     const next = (queues.get(this.file) ?? Promise.resolve()).catch(() => {}).then(async () => {
-      const entries = await this.entries().catch(error=>{if(!recover)throw error;return {} as Record<string,Entry>;});
+      // Only a damaged file starts again, after it was set aside; one that can't be read right now is never written over.
+      const entries = await this.entries().catch(async error=>{if(!recover || !(error instanceof Unreadable))throw error;await setAside(this.file, true);return {} as Record<string,Entry>;});
       const result = await change(entries);
       await mkdir(path.dirname(this.file), {recursive:true});
-      await writeFileAtomic(this.file, JSON.stringify(entries));
+      await writeFileAtomic(this.file, JSON.stringify(Object.fromEntries(Object.entries(entries).map(([id, entry]) => [id, {...entry, version: VERSION}]))));
       return result;
     });
     queues.set(this.file,next);

@@ -178,6 +178,15 @@ Up to 256 KiB, and it goes away when the user closes the panel. Use it so a pane
 
 Save when something changes, not when the panel closes. `lifecycle.onDispose` may never arrive: Tavora can quit, crash or remove the panel without it. Writes are atomic, so a crash leaves the old or the new value, never half of one.
 
+## When Tavora can't read a file
+
+Tavora keeps your module's settings, documents and panel state in files of its own, each with a format version. It never writes over one it can't use:
+
+- A file that is damaged is set aside (kept next to it, renamed) and your module starts that part empty, as if nothing was saved. The user is told some saved data couldn't be opened.
+- A file a newer Tavora wrote (after the user went back to an older Tavora) is copied aside first, then read as far as this Tavora can.
+
+So always handle "nothing saved yet": a setting can be missing, and a document list can be empty, even after the user saved.
+
 ## Whose data it is
 
 Data belongs to your module's id together with who published it: the key that signed the zip, or "local" for an unsigned folder. So:

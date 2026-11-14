@@ -6,6 +6,8 @@ import { isOwnerId } from "@tavora/module-schema";
 import { DATA_DIRS, PICTURE_DIRS } from "./backup";
 import { copyKeys, open, PART_ID_BYTES, partId, seal } from "./copy-crypto";
 import { writeFileAtomic } from "./fsutil";
+import { readSavedFile } from "./json";
+import { STORE_VERSIONS } from "./saved-versions";
 import { OWNER_RECORDS_FILE } from "./installer";
 import { FILES_DIR } from "./module-files";
 import { DATA_FILES } from "./saved-data";
@@ -577,10 +579,15 @@ export async function swapInCopy(staging: string, roots: CopyRoot[], keepIn: str
 // What this PC keeps about the copy: the state in cloud-copy.json (paths, sizes, hashes and part ids,
 // nothing of the content). The key is the account's (account-key.ts).
 
+/**
+ * The state as saved. One a newer Tavora wrote is copied aside, and one that is damaged copied aside and left where it
+ * is, as its being there says the copy is on (readSavedFile; the user isn't told, as nothing of theirs is in it). Both
+ * start from the empty state, as a missing one does.
+ */
 export async function loadCopyState(file: string): Promise<CopyState> {
   try {
-    const saved = JSON.parse(await readFile(file, "utf8")) as { v?: unknown; version?: unknown; pictures?: unknown; files?: unknown; kept?: unknown };
-    if (saved.v !== 1 || typeof saved.version !== "number" || typeof saved.files !== "object" || saved.files === null) return EMPTY_STATE;
+    const saved = await readSavedFile(file, { version: STORE_VERSIONS.cloudCopy, versionKey: "v", notice: false, leaveInPlace: true });
+    if (saved?.v !== STORE_VERSIONS.cloudCopy || typeof saved.version !== "number" || typeof saved.files !== "object" || saved.files === null) return EMPTY_STATE;
     return { version: saved.version, pictures: saved.pictures !== false, files: saved.files as Record<string, SyncedFile>, ...(saved.kept === true ? { kept: true } : {}) };
   } catch {
     return EMPTY_STATE;
@@ -588,5 +595,5 @@ export async function loadCopyState(file: string): Promise<CopyState> {
 }
 
 export async function saveCopyState(file: string, state: CopyState): Promise<void> {
-  await writeFileAtomic(file, JSON.stringify({ v: 1, version: state.version, pictures: state.pictures, files: state.files, ...(state.kept ? { kept: true } : {}) }));
+  await writeFileAtomic(file, JSON.stringify({ v: STORE_VERSIONS.cloudCopy, version: state.version, pictures: state.pictures, files: state.files, ...(state.kept ? { kept: true } : {}) }));
 }

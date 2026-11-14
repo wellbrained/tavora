@@ -13,7 +13,8 @@ import { SYSTEM_PING_TARGET, type SystemConnection, type SystemConnectionLog, ty
 import { mkdirSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { HostError } from "./errors";
-import { readJsonOrSetAside } from "./json";
+import { readSavedFile } from "./json";
+import { SUPPORTED_VERSIONS } from "./saved-versions";
 import { writeFileAtomic } from "./fsutil";
 import { isPublicAddress } from "./network";
 import { parseConnectionTarget, parseIpv4, type ConnectionSettingsChange } from "./system-info-parse";
@@ -30,6 +31,8 @@ export const LOSS_WINDOW = 100;
 export const LOG_DAYS = 30;
 /** The most drops kept, the oldest go first. */
 const MAX_OUTAGES = 500;
+/** The format of connection.json (saved-versions.ts). */
+const VERSION = SUPPORTED_VERSIONS["connection.json"];
 /** An address found for a name is used this long before asking again. */
 const RESOLVE_TTL_MS = 5 * 60 * 1000;
 /** A name that could not be found, or came out on this PC or the local network, is asked again after this long. */
@@ -116,22 +119,31 @@ export interface ConnectionStore {
 /** connection.json in the data folder, written in order, never half. */
 export class ConnectionFile implements ConnectionStore {
   private writing: Promise<void> = Promise.resolve();
+  /** The file couldn't be read at start: this run works from the defaults and never writes over it. */
+  private unread = false;
 
   constructor(private readonly file: string) {}
 
   async load(): Promise<StoredConnection> {
-    return sanitizeStored(await readJsonOrSetAside<unknown>(this.file).catch(() => null));
+    try {
+      return sanitizeStored(await readSavedFile(this.file, { version: VERSION }));
+    } catch {
+      this.unread = true;
+      return sanitizeStored(null);
+    }
   }
 
   save(data: StoredConnection): void {
-    const body = `${JSON.stringify({ version: 1, ...data }, null, 2)}\n`;
+    if (this.unread) return;
+    const body = `${JSON.stringify({ version: VERSION, ...data }, null, 2)}\n`;
     this.writing = this.writing.then(() => writeFileAtomic(this.file, body)).catch(() => undefined);
   }
 
   saveNow(data: StoredConnection): void {
+    if (this.unread) return;
     try {
       mkdirSync(path.dirname(this.file), { recursive: true });
-      writeFileSync(`${this.file}.now`, `${JSON.stringify({ version: 1, ...data }, null, 2)}\n`);
+      writeFileSync(`${this.file}.now`, `${JSON.stringify({ version: VERSION, ...data }, null, 2)}\n`);
       renameSync(`${this.file}.now`, this.file);
     } catch {
       // The log of this run may be lost; nothing else depends on it.

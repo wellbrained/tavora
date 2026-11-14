@@ -1239,6 +1239,7 @@ export const en = {
   "settings.language.searchPlaceholder": "Search languages",
   "settings.language.none": "No language matches.",
   "error.generic": "Something went wrong. Please try again.",
+  "savedData.keptAside": "Some of your saved data couldn't be opened, so Tavora kept a copy and started that part fresh.",
   "error.notAllowed": "Not allowed.",
   "error.notUnderstood": "Tavora did not understand that request.",
   "error.unreachable": "Can't reach Tavora's service. Check your connection and try again.",

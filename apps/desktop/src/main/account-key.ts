@@ -3,6 +3,8 @@ import { CopyError } from "./cloud-copy";
 import { newCopyKey, openVault, parseRecoveryKey, recoveryKey, sealVault } from "./copy-crypto";
 import type { Encryptor } from "./discord-store";
 import { writeFileAtomic } from "./fsutil";
+import { forgetSealedFile, openSealedFile } from "./json";
+import { STORE_VERSIONS } from "./saved-versions";
 import { UserError } from "./messages";
 
 // The account's key (decided 2026-10-20, "one recovery key"): one random 256-bit root key per account,
@@ -216,7 +218,8 @@ export class AccountKey {
   async forget(): Promise<void> {
     this.generation++;
     this.key = null;
-    await rm(this.options.file, { force: true });
+    await forgetSealedFile(this.options.file);
+    if (this.options.legacyFile) await forgetSealedFile(this.options.legacyFile);
     if (this.options.cacheFile) await rm(this.options.cacheFile, { force: true });
   }
 
@@ -234,7 +237,7 @@ export class AccountKey {
   private async save(key: Buffer, generation: number): Promise<void> {
     if (!this.canKeep) throw new UserError("cloudCopy.error.cantKeep");
     if (generation !== this.generation) throw new CopyError("signed-out");
-    await writeFileAtomic(this.options.file, JSON.stringify({ v: 1, data: this.options.encryptor.encrypt(key.toString("base64")).toString("base64") }));
+    await writeFileAtomic(this.options.file, JSON.stringify({ v: STORE_VERSIONS.sealed, data: this.options.encryptor.encrypt(key.toString("base64")).toString("base64") }));
     if (generation !== this.generation) {
       await rm(this.options.file, { force: true });
       throw new CopyError("signed-out");
@@ -308,12 +311,10 @@ function openContent(key: Buffer, sealed: Uint8Array): VaultContent | null {
 
 async function readKey(file: string, encryptor: Encryptor): Promise<Buffer | null> {
   if (!encryptor.isAvailable()) return null;
-  try {
-    const saved = JSON.parse(await readFile(file, "utf8")) as { v?: unknown; data?: unknown };
-    if (saved.v !== 1 || typeof saved.data !== "string") return null;
-    const key = Buffer.from(encryptor.decrypt(Buffer.from(saved.data, "base64")), "base64");
-    return key.length === 32 ? key : null;
-  } catch {
-    return null;
-  }
+  // Missing, newer, damaged, or sealed by another user or PC: none (openSealedFile keeps the file aside).
+  return openSealedFile(file, (data) => {
+    const key = Buffer.from(encryptor.decrypt(Buffer.from(data, "base64")), "base64");
+    if (key.length !== 32) throw new Error("not a key");
+    return key;
+  });
 }
