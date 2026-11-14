@@ -7,7 +7,8 @@
  * switched off nothing is read or kept. The TrafficBook below is pure; the reading and the file come in from outside.
  */
 import type { SystemTraffic, SystemTrafficPeriod } from "@tavora/sdk/protocol";
-import { readJsonOrSetAside } from "./json";
+import { readSavedFile } from "./json";
+import { SUPPORTED_VERSIONS } from "./saved-versions";
 import { writeFileAtomic } from "./fsutil";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -21,6 +22,8 @@ export const TRAFFIC_FRESH_MS = 5 * 60 * 1000;
 const SETTLED_MS = DAY_MS;
 /** The months kept in the file. */
 const KEEP_MONTHS = 12;
+/** The format of traffic.json (saved-versions.ts). */
+const VERSION = SUPPORTED_VERSIONS["traffic.json"];
 
 /** Bytes received and sent in one range. */
 export interface TrafficBytes {
@@ -96,11 +99,11 @@ export class TrafficFile implements TrafficStore {
   constructor(private readonly file: string) {}
 
   async load(): Promise<StoredMonth[]> {
-    return sanitizeMonths(await readJsonOrSetAside<unknown>(this.file).catch(() => null));
+    return sanitizeMonths(await readSavedFile(this.file, { version: VERSION }).catch(() => null));
   }
 
   save(months: StoredMonth[]): void {
-    const body = `${JSON.stringify({ version: 1, months }, null, 2)}\n`;
+    const body = `${JSON.stringify({ version: VERSION, months }, null, 2)}\n`;
     this.writing = this.writing.then(() => writeFileAtomic(this.file, body)).catch(() => undefined);
   }
 

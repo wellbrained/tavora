@@ -1,0 +1,61 @@
+// The format version of every file that holds the user's data, in one place, so a newer Tavora's file is never written
+// over by an older one. This module imports nothing: every store takes its version from here.
+//
+// Rules (the decision log, saved data, 2026-11-14):
+// - Every file holding the user's data has a version and is read with readSavedFile (json.ts). One a newer Tavora
+//   wrote is copied aside (`<file>.from-version-<n>`) before this one can write over it; one that can't be read is set
+//   aside (`<file>.corrupt-<time>`) before starting fresh, and the user is told. Caches, derived files and logs have
+//   neither (they are listed at the end).
+// - Raise a file's version for any new field, and for any change an older Tavora could misread. Never rename or
+//   restructure what is saved in one step: add to it, and read both forms.
+
+/**
+ * The files in the data folder itself, with the version this Tavora writes. SavedData.keepNewerFiles copies aside, at
+ * start and before anything rewrites them, the ones a newer Tavora wrote; each store checks its file again when it reads it.
+ */
+export const SUPPORTED_VERSIONS = {
+  "library.json": 2,
+  "workspace.json": 3,
+  "profile.json": 1,
+  "grants.json": 1,
+  "hotkeys.json": 2,
+  "overlays.json": 2,
+  "game-overlays.json": 5,
+  "module-owners.json": 1,
+  "official-updates.json": 1,
+  "connection.json": 1,
+  "traffic.json": 1,
+  "ai-usage.json": 2,
+  "module-data-pending.json": 1,
+} as const;
+
+/**
+ * Files kept per module, panel or document, and the sealed ones (versioned as `v`): each store checks them when it reads
+ * them, before it can write.
+ */
+export const STORE_VERSIONS = {
+  /** module-data/<owner>/<module>/<workspace or _app>/storage.json */
+  moduleSettings: 1,
+  /** panel-state/<panel>.json */
+  panelState: 1,
+  /** module-data/…/documents/<id>.json (their index.json is rebuilt from them, so it is not checked). */
+  document: 1,
+  /** folder-access/<owner>/<module>/folders.json: the version sits next to the folders, which are never called "version". */
+  chosenFolders: 1,
+  /**
+   * read-only-files/<owner>/<module>/<game>/sources.json: the version is on each entry, as Tavora 0.24 refuses a file
+   * with anything but entries in it.
+   */
+  readOnlyFiles: 1,
+  /** account.json, cloud-copy-key.json (and the older account-key.json), discord.json: sealed, `v`. */
+  sealed: 1,
+  /** cloud-copy.json, cloud-copy-place.json: `v`. */
+  cloudCopy: 1,
+} as const;
+
+// Not checked, as nothing of the user's is lost with them: window.json (where the window was), open-times.json (how
+// fast layouts open here), games-seen.json (when games were seen running), inbox.json (which notes were shown),
+// publisher-names.json and catalog-lists.json (downloaded), the documents' index.json (rebuilt), picker.json (a hint),
+// the cloud copy's staged.json (one take at a time), pairing's steps (one pairing at a time), the vault cache (a copy of
+// the account's), official-publisher-key.bin (development builds; the key file stays with its developer), and pictures
+// and icons (not JSON).

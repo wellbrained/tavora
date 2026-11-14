@@ -7,13 +7,15 @@
 // folder dialog; that choice stays on this PC (outside backups and cloud copies), per publisher and module.
 
 import { realpathSync, watch, type FSWatcher } from "node:fs";
-import { lstat, mkdir, open, readdir, readFile, realpath, stat } from "node:fs/promises";
+import { lstat, mkdir, open, readdir, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { folderKey, isFolderName, isLocalLowGameFolder, isModuleId, isOwnerId, KEY_EXTENSIONS, splitFolderPath, type FolderAccess, type FolderRoot } from "@tavora/module-schema";
 import type { FolderChange, FolderEntry, FolderListing, FolderState } from "@tavora/sdk/protocol";
 import { readBody } from "./clipboard-http";
 import { HostError } from "./errors";
 import { writeFileAtomic } from "./fsutil";
+import { readSavedFile } from "./json";
+import { STORE_VERSIONS } from "./saved-versions";
 
 export const FOLDER_ACCESS_DIR = "folder-access";
 /** Most files one listing holds, and most folders below the granted one it goes into. */
@@ -180,31 +182,34 @@ export function defaultFolder(entry: FolderAccess, places: Pick<FolderPlaces, "r
   return path.join(places.roots[root], ...names);
 }
 
-/** The folder the user showed Tavora for a manifest path, kept per publisher and module, never given to a module. */
+/**
+ * The folder the user showed Tavora for a manifest path, kept per publisher and module, never given to a module. The
+ * file maps each manifest path to its folder, with the file's `version` next to them (a manifest path always has a
+ * "/", so it is never "version"; Tavora 0.24 skips it as it isn't a folder).
+ */
 export class ChosenFolders {
   private readonly file: string;
   constructor(userData: string, owner: string, moduleId: string) {
     if (!isOwnerId(owner) || !isModuleId(moduleId)) throw Error("Invalid folder scope");
     this.file = path.join(userData, FOLDER_ACCESS_DIR, owner, moduleId, "folders.json");
   }
+  /**
+   * The folders chosen. A file a newer Tavora wrote is copied aside and one that is damaged set aside (readSavedFile);
+   * one that can't be read right now throws, so set() never writes over it.
+   */
   private async all(): Promise<Record<string, string>> {
-    try {
-      const value = JSON.parse(await readFile(this.file, "utf8")) as unknown;
-      if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-      return Object.fromEntries(Object.entries(value).filter((pair): pair is [string, string] => typeof pair[1] === "string" && path.isAbsolute(pair[1])));
-    } catch {
-      return {};
-    }
+    const value = await readSavedFile(this.file, { version: STORE_VERSIONS.chosenFolders });
+    return Object.fromEntries(Object.entries(value ?? {}).filter((pair): pair is [string, string] => typeof pair[1] === "string" && path.isAbsolute(pair[1])));
   }
   async get(folder: string): Promise<string | undefined> {
-    return (await this.all())[folder];
+    return (await this.all().catch(() => ({}) as Record<string, string>))[folder];
   }
   async set(folder: string, place: string | null): Promise<void> {
     const all = await this.all();
     if (place) all[folder] = place;
     else delete all[folder];
     await mkdir(path.dirname(this.file), { recursive: true });
-    await writeFileAtomic(this.file, JSON.stringify(all));
+    await writeFileAtomic(this.file, JSON.stringify({ version: STORE_VERSIONS.chosenFolders, ...all }));
   }
 }
 

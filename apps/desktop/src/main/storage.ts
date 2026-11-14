@@ -6,7 +6,8 @@ import { BlobStore } from "./blobs";
 import { DocumentStore } from "./documents";
 import { HostError } from "./errors";
 import { SerialQueue, writeFileAtomic } from "./fsutil";
-import { readJsonOrSetAside, serializeJson } from "./json";
+import { readSavedFile, serializeJson } from "./json";
+import { STORE_VERSIONS } from "./saved-versions";
 import { INSTANCE_ID } from "./ids";
 import { isWorkspaceId } from "./workspace-id";
 import { defaultFilesRoot } from "./module-files";
@@ -110,8 +111,8 @@ export class ModuleStore {
   private async load(): Promise<Map<string, string>> {
     if (this.entries) return this.entries;
     const entries = new Map<string, string>();
-    const parsed = await readJsonOrSetAside<{ entries: Record<string, JsonValue> }>(this.file);
-    if (parsed && typeof parsed.entries === "object" && parsed.entries !== null) {
+    const parsed = (await readSavedFile(this.file, { version: STORE_VERSIONS.moduleSettings })) as { entries?: Record<string, JsonValue> } | null;
+    if (parsed && typeof parsed.entries === "object" && parsed.entries !== null && !Array.isArray(parsed.entries)) {
       for (const [key, value] of Object.entries(parsed.entries)) entries.set(key, JSON.stringify(value));
     }
     this.bytes = [...entries].reduce((sum, [key, value]) => sum + entrySize(key, value), 0);
@@ -120,7 +121,7 @@ export class ModuleStore {
   }
 
   private persist(entries: Map<string, string>): Promise<void> {
-    const body = `{"version":1,"entries":{${[...entries]
+    const body = `{"version":${STORE_VERSIONS.moduleSettings},"entries":{${[...entries]
       .map(([key, value]) => `${JSON.stringify(key)}:${value}`)
       .join(",")}}}`;
     return writeFileAtomic(this.file, body);
@@ -155,7 +156,12 @@ export class PanelStateStore {
 
   get(instanceId: string): Promise<JsonValue | null> {
     const file = this.file(instanceId);
-    return this.queue.run(async () => (await readJsonOrSetAside<{ value: JsonValue }>(file))?.value ?? null);
+    return this.queue.run(async () => ((await this.read(file))?.value as JsonValue | undefined) ?? null);
+  }
+
+  /** The saved file of a panel: one a newer Tavora wrote is copied aside, an unreadable one set aside (readSavedFile). */
+  private read(file: string): Promise<Record<string, unknown> | null> {
+    return readSavedFile(file, { version: STORE_VERSIONS.panelState });
   }
 
   set(instanceId: string, value: unknown): Promise<void> {
@@ -165,7 +171,11 @@ export class PanelStateStore {
     if (Buffer.byteLength(serialized) > LIMITS.maxPanelStateBytes) {
       throw new HostError("QUOTA_EXCEEDED", `panel state is limited to ${LIMITS.maxPanelStateBytes} bytes`);
     }
-    return this.queue.run(() => writeFileAtomic(file, `{"version":1,"value":${serialized}}`));
+    return this.queue.run(async () => {
+      // Read before it is written over, so a newer Tavora's file is copied aside first.
+      await this.read(file);
+      await writeFileAtomic(file, `{"version":${STORE_VERSIONS.panelState},"value":${serialized}}`);
+    });
   }
 
   remove(instanceId: string): Promise<void> {

@@ -10,7 +10,8 @@ import { isModuleId, isOfficialSigner, OFFICIAL_PINS, officialOn, validateManife
 import { MANIFEST_FILE, signedHash, verifyFiles, ZIP_LIMITS, type ZipFile } from "@tavora/pack";
 import { compareModuleVersions } from "../shared/module-version";
 import { writeFileAtomic } from "./fsutil";
-import { readJsonOrSetAside } from "./json";
+import { readSavedFile } from "./json";
+import { SUPPORTED_VERSIONS } from "./saved-versions";
 import type { SafetyCheck } from "./safety-lists";
 
 export const OFFICIAL_UPDATES_DIR = "official-updates";
@@ -51,7 +52,8 @@ export function resolveOfficialPins(packaged: boolean, env: Record<string, strin
 const isVersion = (value: unknown): value is string => typeof value === "string" && /^\d+\.\d+\.\d+$/.test(value);
 
 export async function readOfficialRecords(userData: string): Promise<OfficialRecords> {
-  const parsed = await readJsonOrSetAside<{ modules?: unknown }>(path.join(userData, OFFICIAL_UPDATES_FILE));
+  // An unreadable file is set aside (kept, never written over) before the records start again.
+  const parsed = await readSavedFile(path.join(userData, OFFICIAL_UPDATES_FILE), { version: SUPPORTED_VERSIONS[OFFICIAL_UPDATES_FILE] });
   const records: OfficialRecords = {};
   const modules = parsed?.modules;
   if (typeof modules !== "object" || modules === null) return records;
@@ -192,7 +194,7 @@ export class OfficialUpdates {
     const before = records[entry.id];
     const highWater = before && compareModuleVersions(before.highWater, entry.version) > 0 ? before.highWater : entry.version;
     this.records = { ...records, [entry.id]: { ...entry, highWater } };
-    await writeFileAtomic(path.join(this.options.userData, OFFICIAL_UPDATES_FILE), `${JSON.stringify({ version: 1, modules: this.records }, null, 2)}\n`);
+    await writeFileAtomic(path.join(this.options.userData, OFFICIAL_UPDATES_FILE), `${JSON.stringify({ version: SUPPORTED_VERSIONS[OFFICIAL_UPDATES_FILE], modules: this.records }, null, 2)}\n`);
   }
 
   /**

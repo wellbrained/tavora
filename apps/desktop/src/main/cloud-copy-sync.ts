@@ -22,6 +22,8 @@ import { AccountKey } from "./account-key";
 import type { Encryptor } from "./discord-store";
 import { checkFolder, FolderStorage } from "./copy-folder";
 import { writeFileAtomic } from "./fsutil";
+import { readSavedFile } from "./json";
+import { STORE_VERSIONS } from "./saved-versions";
 import { UserError } from "./messages";
 import { LIBRARY_FILE, libraryFile, PC_SETTINGS } from "./saved-data";
 
@@ -959,13 +961,17 @@ async function keepPcSettings(file: string, own: Record<string, unknown> | null,
 /** The copy was sealed with a key the account no longer has: another PC started over. */
 class KeyChanged extends Error {}
 
-/** Where the copy is kept: a folder, or null for the service. */
+/**
+ * Where the copy is kept: a folder, or null for the service. A file a newer Tavora wrote is copied aside, and one that
+ * is damaged set aside and the user told (readSavedFile), before the service is taken.
+ */
 async function loadPlace(file: string): Promise<string | null> {
-  const saved = await readJson(file);
-  return saved?.v === 1 && typeof saved.folder === "string" && path.isAbsolute(saved.folder) ? saved.folder : null;
+  const saved = await readSavedFile(file, { version: STORE_VERSIONS.cloudCopy, versionKey: "v" }).catch(() => null);
+  // A newer Tavora's file is read too: its folder is never mistaken for the service.
+  return typeof saved?.v === "number" && saved.v >= STORE_VERSIONS.cloudCopy && typeof saved.folder === "string" && path.isAbsolute(saved.folder) ? saved.folder : null;
 }
 
 async function savePlace(file: string, folder: string | null): Promise<void> {
   if (folder === null) await rm(file, { force: true });
-  else await writeFileAtomic(file, JSON.stringify({ v: 1, folder }));
+  else await writeFileAtomic(file, JSON.stringify({ v: STORE_VERSIONS.cloudCopy, folder }));
 }

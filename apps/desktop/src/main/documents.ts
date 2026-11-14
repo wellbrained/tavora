@@ -13,10 +13,13 @@ import {
 } from "@tavora/sdk/protocol";
 import { HostError } from "./errors";
 import { SerialQueue, writeFileAtomic } from "./fsutil";
-import { readJsonOrSetAside, serializeJson } from "./json";
+import { readJsonOrSetAside, readSavedFile, serializeJson } from "./json";
+import { STORE_VERSIONS } from "./saved-versions";
+
+const VERSION = STORE_VERSIONS.document;
 
 interface StoredDocument {
-  version: 1;
+  version: typeof VERSION;
   id: string;
   title: string;
   revision: number;
@@ -39,12 +42,15 @@ export interface DocumentLimits {
  * Named documents for one module in one workspace, one file each. A small index
  * makes listing cheap; it is rebuilt from the document files whenever it is
  * missing or older than any of them, so a crash between the two writes
- * never loses a change.
+ * never loses a change. A document file a newer Tavora wrote is copied aside
+ * before this one writes it (json.ts readSavedFile); the index is not checked.
  *
  * Emits "change" with (change, origin) so other panels can refresh.
  */
 export class DocumentStore extends EventEmitter<{ change: [DocumentChange, unknown] }> {
   private index: Map<string, DocumentSummary> | undefined;
+  /** Documents whose file was read this run, so a newer Tavora's file is copied aside before a write. */
+  private readonly checked = new Set<string>();
   private readonly queue = new SerialQueue();
 
   constructor(
@@ -64,7 +70,7 @@ export class DocumentStore extends EventEmitter<{ change: [DocumentChange, unkno
     const docId = validateId(id);
     return this.queue.run(async () => {
       if (!(await this.load()).has(docId)) return null;
-      const stored = await readJsonOrSetAside<StoredDocument>(this.file(docId));
+      const stored = await this.read(docId);
       if (!stored) return null;
       const { version: _version, ...document } = stored;
       return { ...document, bytes: Buffer.byteLength(JSON.stringify(stored.data)) };
@@ -108,7 +114,8 @@ export class DocumentStore extends EventEmitter<{ change: [DocumentChange, unkno
         bytes,
       };
       const { bytes: _bytes, ...meta } = summary;
-      await writeFileAtomic(this.file(docId), `${JSON.stringify({ version: 1, ...meta }).slice(0, -1)},"data":${serialized}}`);
+      if (!this.checked.has(docId)) await this.read(docId);
+      await writeFileAtomic(this.file(docId), `${JSON.stringify({ version: VERSION, ...meta }).slice(0, -1)},"data":${serialized}}`);
       index.set(docId, summary);
       await this.persistIndex(index);
       this.emit("change", { id: docId, revision: summary.revision, deleted: false }, origin);
@@ -137,6 +144,13 @@ export class DocumentStore extends EventEmitter<{ change: [DocumentChange, unkno
     return path.join(this.dir, `${id}.json`);
   }
 
+  /** A document's file: one a newer Tavora wrote is copied aside, an unreadable one set aside (readSavedFile). */
+  private async read(id: string): Promise<StoredDocument | null> {
+    const stored = (await readSavedFile(this.file(id), { version: VERSION })) as StoredDocument | null;
+    this.checked.add(id);
+    return stored;
+  }
+
   private get indexFile(): string {
     return path.join(this.dir, "index.json");
   }
@@ -163,7 +177,7 @@ export class DocumentStore extends EventEmitter<{ change: [DocumentChange, unkno
   private async rebuild(): Promise<Map<string, DocumentSummary>> {
     const index = new Map<string, DocumentSummary>();
     for (const name of await this.documentFiles()) {
-      const stored = await readJsonOrSetAside<StoredDocument>(path.join(this.dir, name));
+      const stored = await this.read(name.slice(0, -".json".length));
       if (!stored || stored.id !== name.slice(0, -".json".length)) continue;
       index.set(stored.id, {
         id: stored.id,
@@ -189,7 +203,7 @@ export class DocumentStore extends EventEmitter<{ change: [DocumentChange, unkno
   }
 
   private persistIndex(index: Map<string, DocumentSummary>): Promise<void> {
-    return writeFileAtomic(this.indexFile, JSON.stringify({ version: 1, documents: Object.fromEntries(index) }));
+    return writeFileAtomic(this.indexFile, JSON.stringify({ version: VERSION, documents: Object.fromEntries(index) }));
   }
 }
 

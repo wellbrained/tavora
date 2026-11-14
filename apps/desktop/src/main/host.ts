@@ -168,7 +168,8 @@ import { DataRegistry } from "./storage";
 import type { CheckedMenu } from "./module-menu";
 import {TooltipWindow} from "./tooltip-window";
 import { ToastView } from "./toast-view";
-import { AiUsageConnector } from "./ai-usage";
+import { AI_USAGE_VERSION, AiUsageConnector } from "./ai-usage";
+import { checkSavedFile, onUnreadableFileKept, unreadableFilesKept } from "./json";
 import { ConnectionFile, ConnectionWatcher, SYSTEM_MONITOR_ID } from "./connection";
 import { connectionProbe } from "./connection-windows";
 import { SystemMonitorThread } from "./system-info-thread";
@@ -622,6 +623,8 @@ export class Host {
     private readonly savedData: SavedData,
   ) {
     this.installed = prepared.installed;
+    // A file of the user's set aside from now on (unreadable) reaches the host UI, which says so (keptAside).
+    onUnreadableFileKept(() => this.pushStateSoon());
     this.copySync = prepared.copySync;
     this.safetyLists = prepared.safetyLists;
     this.official = prepared.official;
@@ -839,11 +842,12 @@ export class Host {
     const copySync = Host.cloudCopy(options, encryptor, signIn, { root: () => (loaded ? (loaded.moduleFilesFolder ?? null) : savedFolder) ?? defaultFolder });
     await copySync.beforeLoad();
     const savedData = new SavedData(userData);
+    // A file saved by a newer Tavora (a cloud copy taken just now included) is copied aside before this one, or a move
+    // below, can overwrite it.
+    await savedData.keepNewerFiles();
     // Before anything reads the files (a cloud copy taken just now included): what was saved under the old names of the
     // Game → Workspace rename gets the new ones. When that fails, Tavora does not start on files it can't read.
     await moveToWorkspaces(userData, (line) => console.warn(`[tavora] ${line}`));
-    // A file saved by a newer Tavora is copied aside before this one can overwrite it.
-    await savedData.keepNewerFiles();
     const library = await savedData.loadLibrary();
     loaded = library;
     const safetyLists = new SafetyLists({
@@ -2106,6 +2110,7 @@ export class Host {
       this.closeOverlayWindows();
       void this.gameOverlays.shutdown().catch((error: unknown) => console.error("[tavora]", error));
       this.panels.disposeAll();
+      onUnreadableFileKept(null);
       this.cover.dispose();
       this.toastView.dispose();
       this.discord.dispose();
@@ -3723,6 +3728,7 @@ export class Host {
       readClaudeEmail: (directory) => readClaudeEmail(directory),
       fetch: (input, init) => fetch(input, init),
       readText: (file) => readFile(file, "utf8").catch(() => null),
+      check: (file, text) => checkSavedFile(file, text, { version: AI_USAGE_VERSION }),
       isDirectory: (directory) => stat(directory).then((info) => info.isDirectory(), () => false),
       writeText: (file, text) => writeFileAtomic(file, text),
       readCodex: (directory, signal) => readCodexUsage(directory, app.getVersion(), signal),
@@ -4901,6 +4907,7 @@ export class Host {
       moduleFiles: { folder: this.files.root(), custom: this.files.custom, available: this.files.available, moving: this.files.moving },
       snapshots: workspace.snapshots.map(({ id, name, savedAt }) => ({ id, name, savedAt })),
       notice: this.notice,
+      keptAside: unreadableFilesKept(),
       profile: {
         name: this.profile.name,
         initials: this.profile.initials,

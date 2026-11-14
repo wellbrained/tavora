@@ -1,7 +1,9 @@
-import { readFile, rm } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import { isGameId } from "@tavora/module-schema";
 import { isSnowflake } from "./discord-parse";
 import { writeFileAtomic } from "./fsutil";
+import { openSealedFile } from "./json";
+import { STORE_VERSIONS } from "./saved-versions";
 
 // The Discord sign-in (token), kept in discord.json in the user data folder and
 // encrypted with the operating system's key store (Electron's safeStorage: DPAPI
@@ -87,16 +89,19 @@ function games(value: unknown): Record<string, DiscordGame> {
 
 export async function loadDiscordSecrets(file: string, encryptor: Encryptor): Promise<DiscordSecrets> {
   if (!encryptor.isAvailable()) return EMPTY;
+  // Missing, newer, damaged, or encrypted by another user or PC: start without (openSealedFile keeps the file aside).
+  const raw = await openSealedFile(file, (data) => {
+    const value: unknown = JSON.parse(encryptor.decrypt(Buffer.from(data, "base64")));
+    if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("not Discord's secrets");
+    return value as Record<string, unknown>;
+  });
+  if (!raw) return EMPTY;
   try {
-    const saved = JSON.parse(await readFile(file, "utf8")) as { v?: unknown; data?: unknown };
-    if (saved.v !== 1 || typeof saved.data !== "string") return EMPTY;
-    const raw = JSON.parse(encryptor.decrypt(Buffer.from(saved.data, "base64"))) as Record<string, unknown>;
     const secrets = { token: token(raw.token), last: last(raw.last), games: games(raw.games) };
     // A file from before 0.6.1 holds a Client Secret: write it again without.
     if ("secret" in raw) await saveDiscordSecrets(file, encryptor, secrets).catch(() => undefined);
     return secrets;
   } catch {
-    // Missing, damaged, or encrypted by another user or PC: start without.
     return EMPTY;
   }
 }
@@ -108,5 +113,5 @@ export async function saveDiscordSecrets(file: string, encryptor: Encryptor, sec
   }
   if (!encryptor.isAvailable()) throw new Error("No secure storage on this PC.");
   const data = encryptor.encrypt(JSON.stringify(secrets)).toString("base64");
-  await writeFileAtomic(file, JSON.stringify({ v: 1, data }));
+  await writeFileAtomic(file, JSON.stringify({ v: STORE_VERSIONS.sealed, data }));
 }

@@ -20,15 +20,21 @@ export class SerialQueue {
   }
 }
 
-/** Copies a file's old content into a backup folder. A copy an earlier start made stays; a different one gets a new name. */
-export async function keepCopy(dir: string, name: string, old: Buffer): Promise<void> {
+/**
+ * Copies a file's old content into a backup folder, and answers with the copy's path. A copy an earlier start made
+ * stays; a different one gets a new name.
+ */
+export async function keepCopy(dir: string, name: string, old: Buffer): Promise<string> {
   for (let n = 1; ; n++) {
     const target = path.join(dir, n === 1 ? name : `${name}.${n}`);
     const existing = await stat(target).then(
       () => readFile(target),
       () => null,
     );
-    if (existing?.equals(old)) return;
-    if (existing === null) return writeFileAtomic(target, old);
+    if (existing?.equals(old)) return target;
+    if (existing === null) {
+      await writeFileAtomic(target, old);
+      return target;
+    }
   }
 }

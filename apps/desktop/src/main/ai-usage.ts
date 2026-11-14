@@ -8,6 +8,10 @@ import { CodexMissingError, type CodexReading } from "./ai-usage-codex";
 import { HostError } from "./errors";
 import { isJsonValue } from "./json";
 import { UserError } from "./messages";
+import { SUPPORTED_VERSIONS } from "./saved-versions";
+
+/** The format of ai-usage.json (saved-versions.ts). */
+export const AI_USAGE_VERSION = SUPPORTED_VERSIONS["ai-usage.json"];
 
 // The AI Usage connector (the decision log, AI Usage rows of 2026-10-17): the Claude and Codex
 // accounts the user set up in Settings > Integrations, and their usage read for a granted module.
@@ -34,7 +38,7 @@ interface StoredAccount {
 }
 
 interface Stored {
-  version: 2;
+  version: typeof AI_USAGE_VERSION;
   accounts: StoredAccount[];
 }
 
@@ -58,6 +62,11 @@ export interface AiUsageDeps {
   fetch: typeof fetch;
   /** The text of a file, or null when it does not exist or can't be read. */
   readText(file: string): Promise<string | null>;
+  /**
+   * Checks the text read from ai-usage.json before it is used (json.ts checkSavedFile): copies aside a file a newer
+   * Tavora wrote, and sets aside a damaged one (null). Without it, the text is only parsed.
+   */
+  check?(file: string, text: string): Promise<Record<string, unknown> | null>;
   isDirectory(directory: string): Promise<boolean>;
   writeText(file: string, text: string): Promise<void>;
   readCodex(directory: string, signal: AbortSignal): Promise<CodexReading>;
@@ -155,6 +164,10 @@ export class AiUsageConnector {
   /** The saved file, null when there is none yet. */
   private async readFile(): Promise<Record<string, unknown> | null> {
     const text = await this.deps.readText(this.deps.file);
+    if (text !== null && this.deps.check) {
+      // Set aside when damaged: it starts empty, like a damaged file always did, so nothing is offered again.
+      return (await this.deps.check(this.deps.file, text).catch(() => null)) ?? {};
+    }
     try {
       const parsed: unknown = text === null ? null : JSON.parse(text);
       return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
@@ -186,7 +199,7 @@ export class AiUsageConnector {
   }
 
   private async save(): Promise<void> {
-    const stored: Stored = { version: 2, accounts: this.accounts };
+    const stored: Stored = { version: AI_USAGE_VERSION, accounts: this.accounts };
     await this.deps.writeText(this.deps.file, JSON.stringify(stored, null, 2)).catch((error: unknown) => console.error("[tavora] ai-usage save failed", error));
   }
 
