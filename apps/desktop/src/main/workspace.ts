@@ -6,7 +6,7 @@ import { INSTANCE_ID } from "./ids";
 import { readSavedFile, unknownFields } from "./json";
 import { UserError } from "./messages";
 import { gridTemplate, type LayoutTemplate } from "../shared/layout-templates";
-import { LAYOUT_LIMITS, layoutPanels, parseLayout, pruneLayout, templateLayout, vacateLayout, type SavedLayout } from "./layout";
+import { LAYOUT_LIMITS, layoutPanels, parseSavedLayout, pruneLayout, templateLayout, vacateLayout, type SavedLayout } from "./layout";
 import { checkPanelContent, type PanelContent } from "./panel-content";
 import { SUPPORTED_VERSIONS } from "./saved-versions";
 
@@ -100,7 +100,7 @@ function parseSnapshot(raw: unknown, isInstalled: (moduleId: string) => boolean)
   for (const [slot, moduleId] of Object.entries(raw.modules)) {
     if (typeof moduleId === "string" && isInstalled(moduleId)) modules[slot] = moduleId;
   }
-  const layout = pruneLayout(parseLayout(raw.layout, true), (slot) => slot in modules);
+  const layout = pruneLayout(parseSavedLayout(raw.layout), (slot) => slot in modules);
   if (!layout) return null;
   for (const slot of Object.keys(modules)) if (!layoutPanels(layout).includes(slot)) delete modules[slot];
   const panelTypes: Record<string, string> = {};
@@ -151,7 +151,7 @@ export async function loadWorkspace(
     state.workspaces[workspaceId] = {
       ...unknownFields(workspace, WORKSPACE_FIELDS),
       instances,
-      layout: pruneLayout(parseLayout(workspace.layout, true), (id) => open.has(id)),
+      layout: pruneLayout(parseSavedLayout(workspace.layout), (id) => open.has(id)),
       snapshots,
     };
   }

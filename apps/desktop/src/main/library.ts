@@ -165,6 +165,11 @@ export interface Library {
   /** Browser panel sites: signed in for all workspaces instead of per workspace, and ad blocking turned off. */
   browser: { sharedSites: string[]; adblockOff: string[] };
   lastWorkspaceId: string | null;
+  /**
+   * Settings that belong to this PC and came after 1.0, by name, kept as they were saved. A cloud copy from another PC
+   * never replaces them (PC_SETTINGS): a Tavora that doesn't know one still puts back this PC's own as a whole.
+   */
+  pc: Record<string, unknown>;
 }
 
 export const GAME_START_CHOICES: readonly GameStart[] = ["switch", "ask", "show", "off"];
@@ -277,6 +282,7 @@ export function emptyLibrary(): Library {
     seenVersion: null,
     browser: { sharedSites: [], adblockOff: [] },
     lastWorkspaceId: null,
+    pc: {},
   };
 }
 
@@ -942,6 +948,7 @@ export function sanitizeLibrary(raw: unknown): Library {
   const browser = asRecord(saved.browser);
   library.browser = { sharedSites: siteList(browser.sharedSites), adblockOff: siteList(browser.adblockOff) };
   if (typeof saved.lastWorkspaceId === "string" && isLive(library, saved.lastWorkspaceId)) library.lastWorkspaceId = saved.lastWorkspaceId;
+  library.pc = { ...asRecord(saved.pc) };
   return { ...unknownFields(saved, Object.keys(library)), ...library };
 }
 

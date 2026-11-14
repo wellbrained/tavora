@@ -21,10 +21,21 @@ const extent = (value: unknown): value is number =>
  * Checks a layout sent by the host UI and returns a clean copy, or null if
  * anything about it is malformed. Every panel may appear only once; a
  * group without panels is an empty slot. One group with panels may be maximized, and one group focused.
- * `saved` reads a layout from workspace.json: fields a newer Tavora added are left out of the copy instead of
- * refusing the whole layout. One from the host UI may have none.
+ * A field it doesn't know is refused.
  */
-export function parseLayout(raw: unknown, saved = false): SavedLayout | null {
+export function parseLayout(raw: unknown): SavedLayout | null {
+  return checkLayout(raw, false);
+}
+
+/**
+ * parseLayout for a layout read from workspace.json: fields a newer Tavora added are left out of the copy instead of
+ * refusing the whole layout. Only for saved files; one from the host UI goes through parseLayout.
+ */
+export function parseSavedLayout(raw: unknown): SavedLayout | null {
+  return checkLayout(raw, true);
+}
+
+function checkLayout(raw: unknown, saved: boolean): SavedLayout | null {
   const only = (value: Fields, ...keys: string[]) => saved || Object.keys(value).every((key) => keys.includes(key));
   if (!isObject(raw) || !only(raw, "width", "height", "direction", "root")) return null;
   if (!extent(raw.width) || !extent(raw.height)) return null;

@@ -4,9 +4,9 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { parseLayout } from "./layout";
+import { parseLayout, parseSavedLayout } from "./layout";
 import { deleteFolder, emptyLibrary, renameWorkspace, sanitizeLibrary, trashWorkspace, undeleteFolder } from "./library";
-import { loadLibrary, SavedData } from "./saved-data";
+import { loadLibrary, PC_SETTINGS, SavedData } from "./saved-data";
 import { ModuleStore, PanelStateStore } from "./storage";
 import { loadWorkspace, saveWorkspace, Workspaces } from "./workspace";
 
@@ -63,6 +63,12 @@ describe("library.json", () => {
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
     expect(Object.getPrototypeOf(library)).toBe(Object.prototype);
     expect(Object.getPrototypeOf(library.workspaces.poe2)).toBe(Object.prototype);
+  });
+
+  it("keeps this PC's later settings in `pc` as they were, and a cloud copy never replaces them", () => {
+    expect(sanitizeLibrary({ pc: { gpuFolder: "D:\\Games", nested: { a: [1] } } }).pc).toEqual({ gpuFolder: "D:\\Games", nested: { a: [1] } });
+    expect(sanitizeLibrary({ pc: "nonsense" }).pc).toEqual({});
+    expect(PC_SETTINGS).toContain("pc");
   });
 
   it("drops a broken workspace as before, unknown fields and all", () => {
@@ -123,7 +129,7 @@ describe("workspace.json", () => {
 
   it("still refuses a layout from the host UI with a field it doesn't know", () => {
     expect(parseLayout(layout([P1], { futureLayoutField: 1 }))).toBeNull();
-    expect(parseLayout(layout([P1], { futureLayoutField: 1 }), true)).not.toBeNull();
+    expect(parseSavedLayout(layout([P1], { futureLayoutField: 1 }))).not.toBeNull();
   });
 
   it("still drops the panels of a module that is gone, and a workspace not in the library", async () => {

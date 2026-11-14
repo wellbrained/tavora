@@ -22,7 +22,7 @@ import { loadLibrary, SavedData } from "./saved-data";
 import { STORE_VERSIONS, SUPPORTED_VERSIONS } from "./saved-versions";
 import { ModuleStore, PanelStateStore } from "./storage";
 import { TrafficFile } from "./traffic";
-import { loadWorkspace } from "./workspace";
+import { loadWorkspace, saveWorkspace } from "./workspace";
 import { moveToWorkspaces } from "./workspace-move";
 
 const SAMPLES = path.join(__dirname, "saved-samples");
@@ -46,6 +46,8 @@ async function place(sample: string, ...where: string[]): Promise<string> {
   await writeFile(file, text);
   return file;
 }
+/** A sample as it is in the folder, parsed. */
+const sample = async (name: string) => JSON.parse(await readFile(path.join(SAMPLES, name), "utf8")) as Record<string, any>;
 const inData = (...names: string[]) => path.join(dir, ...names).split(path.sep).join("/");
 
 /** Opens a sample the way Tavora does at start: old names moved first (workspace-move.ts), then the store reads it. */
@@ -62,6 +64,8 @@ const SAMPLE_TESTS: Record<string, () => Promise<void>> = {
     expect(library.workspaces["local-my-game"]!.trashedAt).toBe("2026-11-12T08:00:00.000Z");
     expect(library.folders["44444444-4444-4444-8444-444444444444"]).toMatchObject({ name: "Souls", label: "SL", workspaces: ["elden-ring"] });
     expect(library).toMatchObject({ favorites: ["poe2"], language: "de", gameStart: "ask", gameEndWorkspaceId: "local-notes", lastWorkspaceId: "poe2", radius: 8 });
+    // Read and written again, it is the same file: nothing in it is lost.
+    expect(JSON.parse(JSON.stringify(library))).toEqual(await sample("library.v2.json"));
   },
   "library.v1.json": async () => {
     await place("library.v1.json", "library.json");
@@ -83,6 +87,9 @@ const SAMPLE_TESTS: Record<string, () => Promise<void>> = {
     expect(poe2.instances[1]!.panelType).toBe("planner");
     expect(poe2.layout).not.toBeNull();
     expect(poe2.snapshots).toMatchObject([{ name: "Mapping", panelTypes: { "22222222-2222-4222-8222-222222222222": "planner" } }]);
+    // Read and written again, it is the same file: nothing in it is lost.
+    await saveWorkspace(file, state);
+    expect(JSON.parse(await readFile(file, "utf8"))).toEqual(await sample("workspace.v3.json"));
   },
   "workspace.v2.json": async () => {
     const file = await place("workspace.v2.json", "workspace.json");
@@ -190,10 +197,16 @@ const SAMPLE_TESTS: Record<string, () => Promise<void>> = {
     const store = new ModuleStore(file);
     expect(await store.get("view")).toEqual({ tab: "builds", zoom: 1.25 });
     expect(await store.keys()).toEqual(["favorites", "view"]);
+    // A write keeps every other entry as it was.
+    await store.set("new", 1);
+    expect(JSON.parse(await readFile(file, "utf8"))).toEqual({ ...(await sample("storage.v1.json")), entries: { ...(await sample("storage.v1.json")).entries, new: 1 } });
   },
   "panel-state.v1.json": async () => {
     await place("panel-state.v1.json", "panel-state", `${PANEL}.json`);
-    expect(await new PanelStateStore(path.join(dir, "panel-state")).get(PANEL)).toEqual({ scroll: 340, open: ["a"] });
+    const store = new PanelStateStore(path.join(dir, "panel-state"));
+    expect(await store.get(PANEL)).toEqual({ scroll: 340, open: ["a"] });
+    await store.set(PANEL, { scroll: 0 });
+    expect(JSON.parse(await readFile(path.join(dir, "panel-state", `${PANEL}.json`), "utf8"))).toEqual({ ...(await sample("panel-state.v1.json")), value: { scroll: 0 } });
   },
   "document.v1.json": async () => {
     await place("document.v1.json", "documents", "build-1.json");
