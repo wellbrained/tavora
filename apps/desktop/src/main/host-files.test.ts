@@ -117,11 +117,21 @@ describe("holdLeftovers", () => {
     expect(await holdLeftovers(userData, true, leftovers(["gone"]))).toEqual(leftovers([]));
   });
 
-  it("keeps everything while the hold file can't be read", async () => {
+  it("sets a damaged hold file aside, keeps everything this start and clears the fresh hold later", async () => {
     const userData = await tempDir();
     await writeFile(path.join(userData, SWEEP_HOLD_FILE), "{not json");
     expect(await holdLeftovers(userData, true, leftovers(["a"], ["p"]))).toEqual(leftovers(["a"], ["p"]));
-    expect(await readFile(path.join(userData, SWEEP_HOLD_FILE), "utf8")).toBe("{not json");
+    expect((await readdir(userData)).some((name) => name.startsWith(`${SWEEP_HOLD_FILE}.corrupt-`))).toBe(true);
+    expect(JSON.parse(await readFile(path.join(userData, SWEEP_HOLD_FILE), "utf8"))).toMatchObject({ version: 1, workspaces: ["a"], panels: ["p"] });
+    expect(await holdLeftovers(userData, true, leftovers([]))).toEqual(leftovers([]));
+    expect(await held(userData)).toBe(false);
+  });
+
+  it("copies a newer Tavora's hold file aside and keeps everything this start", async () => {
+    const userData = await tempDir();
+    await writeFile(path.join(userData, SWEEP_HOLD_FILE), JSON.stringify({ version: 2, workspaces: [], panels: [] }));
+    expect(await holdLeftovers(userData, true, leftovers(["a"]))).toEqual(leftovers(["a"]));
+    expect((await readdir(userData)).some((name) => name.startsWith(`${SWEEP_HOLD_FILE}.from-version-2`))).toBe(true);
   });
 
   it("reads a partition's workspace", () => {
