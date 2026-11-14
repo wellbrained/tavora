@@ -128,7 +128,9 @@ export class DockPreview {
     if (event.dataTransfer) event.dataTransfer.dropEffect = plan && (plan.ok || plan.reason === "same-spot") ? "move" : "none";
   };
   private readonly onEnter = (event: DragEvent) => {
-    if (this.by === "keyboard" || !this.take(event)) return;
+    // A file dragged in from outside ends a keyboard move: the page's own drag handling takes over.
+    if (this.by === "keyboard") return this.letGo("end");
+    if (!this.take(event)) return;
     event.preventDefault();
     event.stopPropagation();
   };
@@ -156,7 +158,8 @@ export class DockPreview {
 
   /**
    * Before dockview's own keys on a tab (the arrows move the focus, Enter shows the tab, Delete closes it): Ctrl+M lifts
-   * the focused tab's panel, and while the keyboard moves it every key is the move's.
+   * the focused tab's panel, and while the keyboard moves it every plain key is the move's. Keys with Ctrl, Alt or Cmd
+   * pass (Alt+F4, F12); one that takes the focus away ends the move.
    */
   private readonly onKey = (event: KeyboardEvent) => {
     const by = this.by;
@@ -169,7 +172,7 @@ export class DockPreview {
       this.lift(panelId);
       return;
     }
-    if (by !== "keyboard") return;
+    if (by !== "keyboard" || event.ctrlKey || event.altKey || event.metaKey) return;
     event.preventDefault();
     event.stopPropagation();
     const side = ARROWS[event.key];
@@ -182,6 +185,20 @@ export class DockPreview {
   private readonly onInterrupt = () => {
     if (this.by === "keyboard") this.letGo("end");
   };
+
+  /**
+   * The dock changed size or layout (the rail folded, a module opened a panel, a layout was applied): a keyboard move ends,
+   * since its places were read from the dock as it was. A pointer drag's places are read anew on every move. The page
+   * calls this on dockview's layout changes and on resizes of the dock; aiming changes neither.
+   */
+  dockChanged(): void {
+    if (this.drag.phase === "idle" || this.drag.by !== "keyboard") return;
+    const { scene } = this.drag;
+    const box = this.root()?.querySelector<HTMLElement>(".dv-dockview")?.getBoundingClientRect();
+    const layout = this.dock()?.toJSON();
+    const same = !!box && !!layout && box.width === scene.box.width && box.height === scene.box.height && JSON.stringify(layout.grid) === JSON.stringify(scene.layout.grid);
+    if (!same) this.letGo("end");
+  }
 
   attach(): void {
     addEventListener("dragstart", this.onStart);
@@ -221,7 +238,20 @@ export class DockPreview {
     const here = scene.spots.find((spot) => sameTarget(spot.target, { kind: "tab", group: group.id, index })) ?? scene.spots.find((spot) => spot.target.kind === "tab" && spot.target.group === group.id);
     this.onLift();
     if (here) this.setTarget(here.target);
-    this.said.value = t("dock.move.start", { name: scene.title });
+    this.say(t("dock.move.start", { name: scene.title }));
+  }
+
+  /** Into the live region; a text the same as the last is changed a little, so it is read out again. */
+  private say(text: string): void {
+    this.said.value = text === this.said.value ? `${text} ` : text;
+  }
+
+  /** The place aimed at now, read out with why it can't take the panel. */
+  private sayPlace(): void {
+    if (this.drag.phase !== "aiming") return;
+    const { target, plan, scene } = this.drag;
+    const place = describe(target, scene);
+    this.say(plan.ok ? place : plan.reason === "too-small" ? t("dock.move.noRoom", { place }) : plan.reason === "same-spot" ? t("dock.move.samePlace", { place }) : place);
   }
 
   /** An arrow key or Tab: aims at the place `pick` chooses (from the index of the one aimed at now), and reads it out. */
@@ -230,25 +260,25 @@ export class DockPreview {
     if (drag.phase === "idle") return;
     const all = drag.scene.spots;
     const next = pick(all, drag.phase === "aiming" ? all.findIndex((spot) => sameTarget(spot.target, drag.target)) : -1);
-    if (!next) return;
+    if (!next) return this.say(t("dock.move.noFurther"));
     this.setTarget(next.target);
-    if (this.drag.phase !== "aiming") return;
-    const { target, plan, scene } = this.drag;
-    const place = describe(target, scene);
-    const text = plan.ok ? place : plan.reason === "too-small" ? t("dock.move.noRoom", { place }) : plan.reason === "same-spot" ? t("dock.move.samePlace", { place }) : place;
-    // Two places can read the same (a group's middle and the end of its tab row): a changed text is read out again.
-    this.said.value = text === this.said.value ? `${text} ` : text;
+    // Two places can read the same (a group's middle and the end of its tab row): `say` reads it out again.
+    this.sayPlace();
   }
 
-  /** Enter drops where the keyboard aims; Escape, or the move being interrupted, leaves everything as it was. */
+  /**
+   * Enter drops where the keyboard aims; Escape, or the move being interrupted, leaves everything as it was. Enter on a
+   * place without room keeps the move going and says why, so you can pick another place.
+   */
   private letGo(type: "drop" | "end"): void {
     if (this.drag.phase === "idle") return;
+    if (type === "drop" && this.drag.phase === "aiming" && !this.drag.plan.ok && this.drag.plan.reason === "too-small") return this.sayPlace();
     const name = this.drag.scene.title;
     const panelId = this.drag.dragged.panelId;
     const { drop } = this.apply({ type });
     const dock = this.dock();
     const moved = !!dock && !!drop && this.commit(dock, drop.dragged, drop.target, drop.plan);
-    this.said.value = moved ? t("dock.move.moved", { name }) : type === "drop" ? t("dock.move.stays", { name }) : t("dock.move.canceled", { name });
+    this.say(moved ? t("dock.move.moved", { name }) : type === "drop" ? t("dock.move.stays", { name }) : t("dock.move.canceled", { name }));
     this.onDone();
     // Dockview draws the moved tab anew: the focus goes with it.
     if (moved && panelId) requestAnimationFrame(() => this.root()?.querySelector<HTMLElement>(`.dv-tab[data-tab-panel-id="${CSS.escape(panelId)}"]`)?.focus());
@@ -440,9 +470,10 @@ export class DockPreview {
 
   /** Puts back what the drag changed in dockview's elements. */
   private reset(scene: Scene): void {
+    // The way back doesn't animate: the fade and the slide belong to what is taken off here (dock.css).
     scene.lifted?.classList.remove(LIFTED);
-    const root = this.root();
-    root?.removeAttribute(AIMING);
+    this.root()?.removeAttribute(AIMING);
+    this.root()?.removeAttribute(KEYBOARD);
     for (const tabs of scene.tabs.values()) {
       for (const tab of tabs) {
         tab.el.style.transform = "";
@@ -450,10 +481,6 @@ export class DockPreview {
         tab.el.style.opacity = "";
       }
     }
-    if (!root?.hasAttribute(KEYBOARD)) return;
-    // The page takes on the group's and the tabs' way back while nothing animates (dock.css), then animates again.
-    void root.offsetWidth;
-    root.removeAttribute(KEYBOARD);
   }
 
   stop(): void {

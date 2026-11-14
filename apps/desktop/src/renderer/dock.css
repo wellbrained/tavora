@@ -284,8 +284,7 @@
     transition: none !important;
   }
 }
-/* A panel moved with the keyboard: what a key does shows at once, the group's way back after Enter or Escape too
-   (dock-preview.ts takes the attribute off once the page has taken that on). */
+/* A panel moved with the keyboard: what a key does shows at once. */
 [data-dock-keyboard] .dockview-theme-tavora .dv-groupview,
 [data-dock-keyboard] .dockview-theme-tavora .dv-tab,
 [data-dock-keyboard] .dock-fade,

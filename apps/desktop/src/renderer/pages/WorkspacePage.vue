@@ -52,7 +52,10 @@ function info(instanceId: string): PanelInfo | undefined {
 // ── Where panels are ───────────────────────────────────────────────────
 
 const elements = new Map<string, HTMLElement>();
-const resizes = new ResizeObserver(() => reportSoon());
+const resizes = new ResizeObserver(() => {
+  reportSoon();
+  preview.dockChanged();
+});
 let dock: DockviewApi | null = null;
 let lastReport = "";
 let lastArea = "";
@@ -384,6 +387,7 @@ function onReady({ api }: DockviewReadyEvent) {
   dock = api;
   restore(api);
   api.onDidLayoutChange(() => {
+    preview.dockChanged();
     // Sizes changed, so what each group may be dragged to next changed too.
     updateConstraints(api);
     refreshColumns();

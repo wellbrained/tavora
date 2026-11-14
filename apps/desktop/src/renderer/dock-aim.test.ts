@@ -97,6 +97,13 @@ describe("the keyboard's places", () => {
     expect(targets).toContainEqual({ kind: "edge", side: "right" });
   });
 
+  it("reach the splits of a narrow group at the dock's edge, past the dock's edge strip", () => {
+    const narrow: Aim = { width: 1000, height: 600, rects: { a: { x: 0, y: 0, width: 60, height: 600 }, b: { x: 60, y: 0, width: 940, height: 600 } }, slots: { a: [], b: [] } };
+    const found = spots(narrow);
+    expect(found.map((spot) => spot.target)).toContainEqual({ kind: "split", group: "a", side: "left" });
+    for (const spot of found) expect(aimAt(narrow, spot.x, spot.y)).toEqual(spot.target);
+  });
+
   it("step with the arrow keys to the nearest place that way, straight ahead first", () => {
     const right = (from: Spot) => stepToward(all, from, "right")!;
     let spot = at({ kind: "tab", group: "a" });

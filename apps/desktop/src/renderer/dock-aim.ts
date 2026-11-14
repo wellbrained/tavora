@@ -86,12 +86,15 @@ export function spots(aim: Aim): Spot[] {
     const target = aimAt(aim, x, y);
     if (target && !found.some((spot) => sameTarget(spot.target, target))) found.push({ target, x, y });
   };
-  // A dock edge beside a tab strip is that strip's: try a few points along it.
+  const rects = Object.values(aim.rects);
+  // A dock edge beside a tab strip is that strip's: try its middle, then beside each group's content.
   const edge = (side: Side) => {
     const near = OUTER_ZONE / 2;
-    for (const along of [0.5, 0.25, 0.75]) {
-      const x = side === "left" ? near : side === "right" ? width - near : width * along;
-      const y = side === "top" ? near : side === "bottom" ? height - near : height * along;
+    const across = side === "left" || side === "right";
+    const along = [across ? height / 2 : width / 2, ...rects.map((rect) => (across ? rect.y + (rect.height + TAB_HEIGHT) / 2 : rect.x + rect.width / 2))];
+    for (const at of along) {
+      const x = side === "left" ? near : side === "right" ? width - near : at;
+      const y = side === "top" ? near : side === "bottom" ? height - near : at;
       const target = aimAt(aim, x, y);
       if (target?.kind === "edge" && target.side === side) {
         add(x, y);
@@ -113,12 +116,13 @@ export function spots(aim: Aim): Spot[] {
     }
     const top = rect.y + TAB_HEIGHT;
     const content = rect.height - TAB_HEIGHT;
-    const inset = EDGE_ZONE / 2;
-    add(rect.x + rect.width / 2, top + content * inset);
-    add(rect.x + rect.width * inset, top + content / 2);
+    // Inside the edge zone, and past the dock's own edge strip where the zone has room for it (a narrow group at the dock's edge).
+    const inset = (size: number) => (size * EDGE_ZONE > OUTER_ZONE ? (OUTER_ZONE + size * EDGE_ZONE) / 2 : (size * EDGE_ZONE) / 2);
+    add(rect.x + rect.width / 2, top + inset(content));
+    add(rect.x + inset(rect.width), top + content / 2);
     add(rect.x + rect.width / 2, top + content / 2);
-    add(rect.x + rect.width * (1 - inset), top + content / 2);
-    add(rect.x + rect.width / 2, top + content * (1 - inset));
+    add(rect.x + rect.width - inset(rect.width), top + content / 2);
+    add(rect.x + rect.width / 2, top + content - inset(content));
   }
   edge("right");
   edge("bottom");
