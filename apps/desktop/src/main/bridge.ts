@@ -37,7 +37,6 @@ import {
   type PanelLaunch,
   type PanelOpenManyResult,
   type PanelOpenResult,
-  type TavoraGame,
   type TavoraTheme,
   type TavoraViewport,
   type TavoraWorkspace,
@@ -362,11 +361,6 @@ function pickNear(value: unknown): import('@tavora/sdk/protocol').PickNear | und
   return { file: near.file, up };
 }
 
-/** A workspace as game.getCurrent says it. */
-function legacyGame({ id, displayName, kind }: TavoraWorkspace): TavoraGame {
-  return { id, displayName, kind: kind === "personal" ? "workspace" : "game" };
-}
-
 const handlers = new Map<string, Handler>([
   ['folders.state', (s,params) => { const folder = folderParam(params); needs(s,'folders','folders.state'); return folderContext(s).state(folder); }],
   ['folders.list', (s,params) => { const folder = folderParam(params); needs(s,'folders','folders.list'); return folderContext(s).list(folder); }],
@@ -409,9 +403,6 @@ const handlers = new Map<string, Handler>([
     await s.context.readOnlyFiles.showInFolder(id); return null;
   }],
   ["workspace.getCurrent", (s, params) => (noParams(params), { ...s.context.workspace })],
-  // Deprecated: the same in the words of Tavora before 0.21.43 (a personal workspace's kind was "workspace"). Answered
-  // until the 1.0 preparation, so modules made before it keep working.
-  ["game.getCurrent", (s, params) => (noParams(params), legacyGame(s.context.workspace))],
 
   ["storage.get", (s, params) => s.context.data.settings.get(object(params).key)],
   ["storage.keys", (s, params) => (noParams(params), s.context.data.settings.keys())],

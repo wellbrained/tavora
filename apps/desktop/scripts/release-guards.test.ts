@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error - plain JavaScript module shared with scripts/release.mjs
-import { CHECKLIST, asksHandChecks, checkCi, checkDownload, checkInstalled, checkRelease, compareVersions, failedJobsHint, findDispatchedRun, lastReleased, readCiHashes, releaseFiles, releaseNotes, releaseRunTitle } from "./release-guards.mjs";
+import { CHECKLIST, asksHandChecks, checkCi, checkDownload, checkInstalled, checkRelease, compareVersions, failedJobsHint, findDispatchedRun, lastReleased, readCiHashes, releaseFiles, releaseNotes, releaseRunTitle, releaseTitle } from "./release-guards.mjs";
 
 const ready = { branch: "main", dirty: false, ahead: 0, behind: 0, tags: [] as string[], noteVersions: ["0.4.0"] };
 
@@ -190,5 +190,13 @@ describe("the split release (CI builds, the PC checks and uploads)", () => {
 
   it("writes the GitHub release text from the patch notes", () => {
     expect(releaseNotes({ version: "0.24.0", notes: ["One.", "Two."] })).toContain("### In 0.24.0\n\n- One.\n- Two.");
+  });
+
+  it("calls only versions before 1.0.0 a preview build", () => {
+    expect(releaseTitle("0.24.58")).toBe("Tavora 0.24.58 (preview build)");
+    expect(releaseTitle("1.0.0")).toBe("Tavora 1.0.0");
+    expect(releaseNotes({ version: "0.24.0", notes: [] })).toMatch(/^Windows preview build of Tavora\./);
+    expect(releaseNotes({ version: "1.0.0", notes: [] })).toMatch(/^Tavora for Windows\./);
+    expect(releaseNotes({ version: "1.0.0", notes: [] })).not.toContain("preview");
   });
 });

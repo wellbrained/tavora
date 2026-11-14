@@ -10,7 +10,7 @@ Tavora is a local-first gaming companion for your second monitor. Keep notes, to
 
 *A Satisfactory workspace with sample notes and a factory checklist. The screenshots below use an isolated demo profile.*
 
-> **Early development:** Tavora has installable Windows preview builds, but has not reached its first public 1.0 release. Features, saved-data formats and module APIs can still change. Windows is the primary platform; Linux has a source-build AppImage target and receives less testing. There is no macOS build.
+> **Windows only:** Tavora runs on Windows 10 and 11. There are no Linux or macOS builds; they may come later if people ask for them. Module APIs can still change before they are declared stable (see [Build a module](#build-a-module)).
 
 ## What you can do
 
@@ -37,13 +37,13 @@ Tavora is a local-first gaming companion for your second monitor. Keep notes, to
 
 *Themes apply to the host and modules. Each built-in theme includes light and dark variations.*
 
-## Try the Windows preview
+## Get Tavora for Windows
 
-Download the current preview for Windows from the [latest release](https://github.com/wellbrained/tavora/releases/latest) (the `Tavora-Setup-<version>.exe` file). The [update feed](https://updates.mytavora.app/latest.yml) lists the latest published build. Install it, add a game, choose a layout, and use **Add module** to fill the panels. You can also start with the [source build](#run-from-source).
+Download the installer from [mytavora.app](https://mytavora.app/) (it comes from `updates.mytavora.app`). Install it, add a game, choose a layout, and use **Add module** to fill the panels. You can also start with the [source build](#run-from-source).
 
-Preview builds are unsigned, so Windows may show an unrecognized-app warning. Installed Windows builds check for updates through `updates.mytavora.app`; automatic downloading can be changed in Settings.
+The installer is unsigned, so Windows may show an unrecognized-app warning. Installed Tavora checks for updates through `updates.mytavora.app`; automatic downloading can be changed in Settings.
 
-An account is optional: email-code or Discord sign-in is available, but your local game library, notes and layouts do not require one. **Signing in does not sync game workspaces between PCs yet.** Modules from other people come from the module catalogue inside the app, or as ZIP files.
+An account is optional: email-code or Discord sign-in is available, but your local game library, notes and layouts do not require one. With an account you can turn on an encrypted cloud copy of your workspaces, panels and modules and restore it on another PC. Live sync between PCs isn't there yet. Modules from other people come from the module catalogue inside the app, or as ZIP files.
 
 ## Your data and module permissions
 
@@ -91,7 +91,6 @@ After `pnpm build`:
 
 ```sh
 pnpm --filter @tavora/desktop package --win    # Windows installer, update files and ZIP
-pnpm --filter @tavora/desktop package --linux  # AppImage; build on Linux
 ```
 
 Artifacts go to `apps/desktop/release/`. Packaged builds use the installed-app profile and include the official modules, themes and example modules. Unlike development runs, a packaged build ignores development-only profile and server overrides.
@@ -102,7 +101,7 @@ A module is a small web app with a `tavora.module.json` manifest and built asset
 
 Start with the [developer guide](https://docs.mytavora.app/guide/getting-started), or an example in [vanilla TypeScript](examples/vanilla-module), [React](examples/react-module) or [Vue](examples/vue-module), and one with [several panel types](examples/panels-module). The official modules use the same SDK. The UI Playground shows Tavora's shared controls and styling.
 
-The SDK and packaging tools currently live in this repository and are not published to npm. Signed module ZIPs, permission prompts and publisher-bound updates are implemented; the broader outside-developer workflow is still being built. APIs are not stable before 1.0. The [manifest reference](apps/docs/reference/manifest.md), [bridge protocol](apps/docs/reference/protocol.md) and [theme format](apps/docs/reference/theme.md) describe the current contracts.
+The SDK and packaging tools are developed in this repository and published on npm as `@tavora/sdk`, `@tavora/module-schema`, `@tavora/pack` and `@tavora/create-module` (`npm create @tavora/module` starts a new module). Signed module ZIPs, permission prompts and publisher-bound updates are implemented; the broader outside-developer workflow is still being built. APIs are not stable before 1.0. The [manifest reference](apps/docs/reference/manifest.md), [bridge protocol](apps/docs/reference/protocol.md) and [theme format](apps/docs/reference/theme.md) describe the current contracts.
 
 ## Repository map
 
@@ -133,7 +132,7 @@ pnpm test:e2e
 pnpm lint        # oxlint: unused code and slips; warnings only, not part of check or CI
 ```
 
-Electron tests need a display and must run as a normal user with Chromium's sandbox enabled. On headless Linux, use `xvfb-run -a pnpm test:e2e`.
+Electron tests need a display and must run as a normal user with Chromium's sandbox enabled.
 
 GitHub **Checks** runs typechecking, unit tests, builds, and a Windows install/start check on pull requests and pushes to `main`. The full Electron suite also runs on release tags, or on a manual workflow run when selected. `pnpm check` runs it locally. The root checks and builds exclude `apps/docs`; the docs site has its own build/deploy commands.
 

@@ -104,11 +104,10 @@ window.runProbes = async ({ serverUrl, otherModuleUrl }) => {
   port.start();
   results.bridge = {
     // Protocol rules come before anything else.
-    beforeHandshake: await rpc(port, { method: "game.getCurrent" }),
+    beforeHandshake: await rpc(port, { method: "workspace.getCurrent" }),
     futureProtocol: await rpc(port, { method: "bridge.handshake", params: { protocol: 2, sdkVersion: "9.9.9" } }),
     handshake: await rpc(port, { method: "bridge.handshake", params: { protocol: 1, sdkVersion: "0.1.0" } }),
-    game: await rpc(port, { method: "game.getCurrent" }),
-    gameWithSpoofedParams: await rpc(port, { method: "game.getCurrent", params: { gameId: "satisfactory" } }),
+    removedGame: await rpc(port, { method: "game.getCurrent" }),
     workspace: await rpc(port, { method: "workspace.getCurrent" }),
     workspaceWithSpoofedParams: await rpc(port, { method: "workspace.getCurrent", params: { workspaceId: "satisfactory" } }),
     spoofedStorageRead: await rpc(port, {
@@ -121,7 +120,7 @@ window.runProbes = async ({ serverUrl, otherModuleUrl }) => {
     }),
     protoMethod: await rpc(port, { method: "__proto__" }),
     constructorMethod: await rpc(port, { method: "constructor" }),
-    wrongVersion: await rpc(port, { v: 0, method: "game.getCurrent" }),
+    wrongVersion: await rpc(port, { v: 0, method: "workspace.getCurrent" }),
     nonJsonValue: await rpc(port, { method: "storage.set", params: { key: "d", value: new Date() } }),
     oversized: await rpc(port, { method: "storage.set", params: { key: "big", value: "x".repeat(9 * 1024 * 1024) } }),
     overQuota: await rpc(port, { method: "storage.set", params: { key: "big", value: "x".repeat(6 * 1024 * 1024) } }),

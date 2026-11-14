@@ -26,7 +26,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createInterface } from "node:readline/promises";
-import { AFTER_RELEASE, CHECKLIST, asksHandChecks, checkCi, checkDownload, checkInstalled, checkRelease, failedJobsHint, findDispatchedRun, lastReleased, readCiHashes, releaseFiles, releaseNotes, releaseRunTitle } from "./release-guards.mjs";
+import { AFTER_RELEASE, CHECKLIST, asksHandChecks, checkCi, checkDownload, checkInstalled, checkRelease, failedJobsHint, findDispatchedRun, lastReleased, readCiHashes, releaseFiles, releaseNotes, releaseRunTitle, releaseTitle } from "./release-guards.mjs";
 import { hello, publish } from "../../../scripts/deploy-client.mjs";
 import { lockPath, takeLock } from "./release-lock.mjs";
 import { checkPinChange, describeSigned, loadUpdateSigningKey, readPinsFromSource, signLatestYml } from "./update-feed.mjs";
@@ -342,7 +342,7 @@ try {
     `${version} is published, but tagging failed (${error.message}). Finish by hand:\n` +
       `  git tag -a v${version} ${built} -m "Tavora ${version}"   (skip if the tag exists)\n` +
       `  git push origin v${version}\n` +
-      `  gh release create v${version} --repo ${REPO} --verify-tag --title "Tavora ${version} (preview build)" --notes "Windows preview build of Tavora." ${allFiles.map((name) => `"${path.join(releaseDir, name)}"`).join(" ")}`,
+      `  gh release create v${version} --repo ${REPO} --verify-tag --title "${releaseTitle(version)}" --notes "See Settings > Patch notes in Tavora ${version}." ${allFiles.map((name) => `"${path.join(releaseDir, name)}"`).join(" ")}`,
   );
 }
 
@@ -353,7 +353,7 @@ try {
   const note = PATCH_NOTES.find((entry) => entry.version === version);
   const notesFile = path.join(tmpdir(), `tavora-release-notes-${version}.md`);
   writeFileSync(notesFile, releaseNotes(note));
-  run("gh", ["release", "create", `v${version}`, "--repo", REPO, "--verify-tag", "--title", `Tavora ${version} (preview build)`, "--notes-file", notesFile, ...allFiles.map((name) => path.join(releaseDir, name))]);
+  run("gh", ["release", "create", `v${version}`, "--repo", REPO, "--verify-tag", "--title", releaseTitle(version), "--notes-file", notesFile, ...allFiles.map((name) => path.join(releaseDir, name))]);
   rmSync(notesFile, { force: true });
 } catch (error) {
   console.error(`The update is published and tagged, but the GitHub release failed (${error.message}). Create it by hand from ${releaseDir}.`);

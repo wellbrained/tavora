@@ -28,6 +28,32 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.61",
+    date: "2026-11-14",
+    title: "Modules are ready for 1.0",
+    notes: [
+      "A module that still uses an old setting won't load until its maker updates it.",
+    ],
+    prs: [
+      { number: 791, title: "Lock the SDK and protocol for 1.0" },
+    ],
+    tags: ["catalog", "publishing", "sdk", "service", "website"],
+  },
+  {
+    version: "0.24.60",
+    date: "2026-11-14",
+    title: "Discord is taking a break",
+    notes: [
+      "Discord voice is paused for now: Discord only lets a few testers use it until it approves Tavora.",
+      "Your Discord panels stay where they are and say so; you can close them any time.",
+      "Signing in with Discord still works.",
+    ],
+    prs: [
+      { number: 789, title: "Pause the Discord voice connection" },
+    ],
+    tags: ["discord", "modules", "overlays", "privacy", "website", "workspace"],
+  },
+  {
     version: "0.24.59",
     date: "2026-11-14",
     title: "No crash when a panel closes while it loads",

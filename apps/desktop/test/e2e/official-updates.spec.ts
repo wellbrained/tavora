@@ -114,7 +114,6 @@ test.describe("a built-in module updating from the catalogue", () => {
       minTavora: "0.1.0",
       games: [],
       personalWorkspaces: true,
-      workspaces: true,
       permissions: { network: [], connectors: [] },
       owner,
       publisher: null,

@@ -247,8 +247,6 @@ export interface CatalogEntry {
   games: string[];
   /** Whether it may be added to a personal workspace (only modules for any game can be). */
   personalWorkspaces: boolean;
-  /** @deprecated The same, for Tavora 0.21.42 and older, which read it under this name. Sent until Tavora's 1.0 preparation. */
-  workspaces: boolean;
   /** `folders`: permissions.folders as grant keys (folderKey); Tavora 0.23.112 and older ignore it. */
   permissions: { network: string[]; connectors: string[]; folders: string[] };
   /** The fingerprint of the publisher key that signed this version: the module's first key, or its successor. */
@@ -365,7 +363,6 @@ function entryOf(row: VersionSql): CatalogEntry {
     minTavora: manifest.minTavora ?? null,
     games: manifest.games,
     personalWorkspaces: allowsPersonalWorkspaces(manifest),
-    workspaces: allowsPersonalWorkspaces(manifest),
     permissions: { network: manifest.permissions.network, connectors: manifest.permissions.connectors ?? [], folders: (manifest.permissions.folders ?? []).map(folderKey) },
     owner: row.owner,
     zip: { sha256: row.sha256, size: row.size },
@@ -1199,7 +1196,7 @@ export class CatalogStore {
 
 /**
  * The filter a request asks for: `?game=<id>`, `?personal=1` (modules for a personal workspace), or neither for the
- * whole catalog. Tavora 0.21.42 and older ask for the personal ones as `?workspace=1`; that is answered until its 1.0 preparation.
+ * whole catalog. Tavora 0.21.42 and older ask for the personal ones as `?workspace=1`; Tavora keeps answering it, so those versions still get the right list.
  */
 export function catalogFilter(game: string | undefined, personal: string | undefined, oldPersonal?: string): CatalogFilter | null {
   if ([game, personal, oldPersonal].filter((value) => value !== undefined).length > 1) return null;

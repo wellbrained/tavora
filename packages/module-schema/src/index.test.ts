@@ -56,13 +56,8 @@ describe("validateManifest", () => {
     });
   });
 
-  it("takes workspaces (the old name of personalWorkspaces) only as a boolean, and true only for a module for any game", () => {
-    const anyGame = { ...valid, games: [] };
-    expect(validateManifest({ ...anyGame, workspaces: false }).ok).toBe(true);
-    expect(validateManifest({ ...anyGame, workspaces: true }).ok).toBe(true);
-    expect(validateManifest({ ...valid, workspaces: false }).ok).toBe(true);
-    expect(validateManifest({ ...anyGame, workspaces: "yes" })).toEqual({ ok: false, errors: ["workspaces must be true or false"] });
-    expect(validateManifest({ ...valid, workspaces: true })).toEqual({ ok: false, errors: ["workspaces can only be true for a module made for any game (games is empty)"] });
+  it("refuses workspaces, which was renamed personalWorkspaces", () => {
+    expect(validateManifest({ ...valid, games: [], workspaces: false })).toEqual({ ok: false, errors: ["workspaces was renamed personalWorkspaces; use that"] });
   });
 
   it("takes AppData/LocalLow in permissions.folders only from a minTavora that knows it", () => {
@@ -135,21 +130,19 @@ describe("validateManifest", () => {
     for (const port of BLOCKED_LOCAL_PORTS) expect(isLocalPort(`localhost:${port}`)).toBe(false);
   });
 
-  it("takes personalWorkspaces like workspaces, from a minTavora that knows it, and never both", () => {
+  it("takes personalWorkspaces as a boolean, true only for a module for any game, from a minTavora that knows it", () => {
     const anyGame = { ...valid, games: [], minTavora: "0.21.43" };
     expect(validateManifest({ ...anyGame, personalWorkspaces: false }).ok).toBe(true);
     expect(validateManifest({ ...anyGame, personalWorkspaces: "no" })).toEqual({ ok: false, errors: ["personalWorkspaces must be true or false"] });
     expect(validateManifest({ ...anyGame, games: ["poe2"], personalWorkspaces: true })).toEqual({ ok: false, errors: ["personalWorkspaces can only be true for a module made for any game (games is empty)"] });
-    expect(validateManifest({ ...anyGame, personalWorkspaces: false, workspaces: false })).toEqual({ ok: false, errors: ["use personalWorkspaces only: workspaces is its old name"] });
     expect(validateManifest({ ...anyGame, minTavora: LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES, personalWorkspaces: false }).ok).toBe(false);
     expect(validateManifest({ ...anyGame, minTavora: undefined, id: "tavora.notes", personalWorkspaces: false }).ok).toBe(true);
   });
 
-  it("lets a module into personal workspaces when it is for any game and did not opt out, under either name", () => {
+  it("lets a module into personal workspaces when it is for any game and did not opt out", () => {
     expect(allowsPersonalWorkspaces({ games: [] })).toBe(true);
     expect(allowsPersonalWorkspaces({ games: ["poe2"] })).toBe(false);
     expect(allowsPersonalWorkspaces({ games: [], personalWorkspaces: false })).toBe(false);
-    expect(allowsPersonalWorkspaces({ games: [], workspaces: false })).toBe(false);
     expect(allowsPersonalWorkspaces({ games: [], personalWorkspaces: true })).toBe(true);
   });
 

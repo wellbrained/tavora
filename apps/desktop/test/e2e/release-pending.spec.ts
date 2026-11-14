@@ -28,7 +28,6 @@ function listed(id: string, version: string): Record<string, unknown> {
     version,
     minTavora: null,
     games: [],
-    workspaces: true,
     permissions: { network: [], connectors: [] },
     owner: "a".repeat(32),
     publisher: null,

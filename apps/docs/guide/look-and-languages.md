@@ -94,7 +94,7 @@ Your module's name, description and panel names come from the manifest. Add [`tr
 
 ## Shortcuts and size
 
-- Tavora takes Ctrl+K (Cmd+K on macOS) for its own search before your page sees it. Choose other shortcuts.
+- Tavora takes Ctrl+K for its own search before your page sees it. Choose other shortcuts.
 - Panels can be narrow. Set `viewport.minWidth` and `minHeight` in the manifest to what your module really needs, and follow `tavora.workspace.onResize`. A module that looks different when wide can set a second minimum for that, see [Tall and wide](#tall-and-wide).
 - Pause timers and animations on `tavora.lifecycle.onSuspend` and start them again on `onResume`: a hidden panel shouldn't use the user's CPU while they play.
 - Use `tavora.ui.showMenu` for menus, so they aren't cut off at your panel's edge and look like Tavora's own. See [Menus](../reference/protocol.md#menus).

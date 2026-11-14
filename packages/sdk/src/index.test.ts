@@ -163,7 +163,7 @@ describe("requests", () => {
   it("times out requests the host never answers", async () => {
     hosts.push(fakeHost((request) => (request.method === "bridge.handshake" ? { result: handshake } : undefined)));
     const tavora = await sdk.connect({ requestTimeoutMs: 20 });
-    await expect(tavora.game.getCurrent()).rejects.toMatchObject({ code: "TIMEOUT" });
+    await expect(tavora.workspace.getCurrent()).rejects.toMatchObject({ code: "TIMEOUT" });
   });
 
   it("sends network.fetch with the address and options, and waits longer than for other calls", async () => {
@@ -250,32 +250,16 @@ describe("language", () => {
 });
 
 describe("events", () => {
-  it("asks for the workspace, and asks an older Tavora by the old name, in the new words", async () => {
+  it("asks the host for the workspace", async () => {
     const current = fakeHost(({ method }) => (method === "workspace.getCurrent" ? { result: { id: "local-notes", displayName: "Notes", kind: "personal" } } : standard({ v: 1, id: 0, method })));
     hosts.push(current);
     await expect((await sdk.connect()).workspace.getCurrent()).resolves.toEqual({ id: "local-notes", displayName: "Notes", kind: "personal" });
-
-    vi.resetModules();
-    sdk = await import("./index.js");
-    const games = new Map([["poe2", { id: "poe2", displayName: "Path of Exile 2" }], ["local-notes", { id: "local-notes", displayName: "Notes", kind: "workspace" }], ["elden-ring", { id: "elden-ring", displayName: "Elden Ring", kind: "game" }]]);
-    let bound = "poe2";
-    const older = fakeHost((request) => (request.method === "game.getCurrent" ? { result: games.get(bound) } : standard(request)));
-    hosts.push(older);
-    const tavora = await sdk.connect();
-    // Before 0.18.1 there was no kind: a game.
-    await expect(tavora.workspace.getCurrent()).resolves.toEqual({ id: "poe2", displayName: "Path of Exile 2", kind: "game" });
-    bound = "local-notes";
-    await expect(tavora.workspace.getCurrent()).resolves.toEqual({ id: "local-notes", displayName: "Notes", kind: "personal" });
-    bound = "elden-ring";
-    await expect(tavora.workspace.getCurrent()).resolves.toEqual({ id: "elden-ring", displayName: "Elden Ring", kind: "game" });
-    expect(older.requests.map((request) => request.method)).toContain("workspace.getCurrent");
   });
 
-  it("passes on other errors of workspace.getCurrent as they are", async () => {
+  it("passes on the errors of workspace.getCurrent as they are", async () => {
     const host = fakeHost((request) => (request.method === "workspace.getCurrent" ? { error: { code: "INTERNAL", message: "broken" } } : standard(request)));
     hosts.push(host);
     await expect((await sdk.connect()).workspace.getCurrent()).rejects.toMatchObject({ code: "INTERNAL" });
-    expect(host.requests.map((request) => request.method)).not.toContain("game.getCurrent");
   });
 
   it("delivers events to listeners until they unsubscribe", async () => {
