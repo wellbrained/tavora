@@ -6,8 +6,8 @@ import { Blocks, Home, LayoutPanelLeft, PanelLeftClose, PanelLeftOpen, Plus, Sea
 import { computed, onBeforeUnmount, ref, shallowRef, watch, type Component } from "vue";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
-import { useListNav } from "@/lib/list-nav";
-import { rank, rankByName, startsOrIsWord } from "@/lib/search";
+import { useListNav } from "../lib/list-nav";
+import { rank, rankByName, startsOrIsWord } from "../lib/search";
 import { cn } from "@tavora/official-ui/lib/utils";
 import type { CatalogMatch, OnlineGame, WorkspaceView } from "../../shared/host-api";
 import { LAYOUT_TEMPLATES } from "../../shared/layout-templates";
@@ -57,6 +57,8 @@ function onFocus(event: FocusEvent) {
 
 watch([searchOpen, searchStart], ([open, start], [wasOpen]) => {
   if (open && !wasOpen) {
+    opening++;
+    adding.value = null;
     query.value = start;
     active.value = 0;
     resetHover();
@@ -95,6 +97,31 @@ watch(query, (text) => {
 });
 
 type NewGame = { catalogId: string } | { online: OnlineGame };
+
+/** Raised each time the box opens, so a game added from an earlier opening doesn't close the box opened since. */
+let opening = 0;
+/**
+ * The "Add" row whose game is being added: adding takes a moment (online games are looked up first), so the box stays
+ * open with that row busy, takes no other row meanwhile, and closes once the game is open.
+ */
+const adding = shallowRef<string | null>(null);
+const addThenClose = (id: string, input: NewGame) => async () => {
+  if (adding.value) return;
+  adding.value = id;
+  const mine = opening;
+  try {
+    await addAndOpen(input);
+  } finally {
+    if (mine === opening) {
+      adding.value = null;
+      searchOpen.value = false;
+    }
+  }
+};
+/** Runs a row, unless a game is being added. */
+const choose = (item: Item | undefined) => {
+  if (item && !adding.value) void item.run();
+};
 async function addAndOpen(input: NewGame) {
   try {
     const added = await act({ type: "add-workspace", ...input });
@@ -119,7 +146,7 @@ const addItems = computed<Item[]>(() => {
       label: t("search.add", { name: row.name }),
       hint: t("search.newGame"),
       icon: Plus,
-      run: close(() => addAndOpen(row.input)),
+      run: addThenClose(`add-game-${row.id}`, row.input),
     }));
 });
 
@@ -256,7 +283,7 @@ const flat = computed(() => shown.value.flatMap((group) => group.items));
 const { active, onKey, onHover, resetHover } = useListNav({
   count: () => flat.value.length,
   list,
-  onEnter: () => flat.value[active.value]?.run(),
+  onEnter: () => choose(flat.value[active.value]),
   track: { keys: () => flat.value.map((item) => item.id), resetOn: () => query.value },
 });
 
@@ -325,10 +352,11 @@ const activeId = computed(() => {
             :key="item.id"
             role="option"
             :aria-selected="flat[active] === item"
-            :class="cn('flex h-10 cursor-pointer items-center gap-3 rounded-lg px-3', group.quiet && 'text-muted-foreground', flat[active] === item && 'bg-accent')"
+            :aria-busy="adding === item.id || undefined"
+            :class="cn('tavora-busy flex h-10 cursor-pointer items-center gap-3 rounded-lg px-3 aria-busy:cursor-progress', group.quiet && 'text-muted-foreground', (flat[active] === item || adding === item.id) && 'bg-accent')"
             :data-testid="`search-${item.id}`"
             @mousemove="onHover(flat.indexOf(item), $event)"
-            @click="item.run()"
+            @click="choose(item)"
           >
             <WorkspaceIcon v-if="item.workspace" :workspace="item.workspace" :size="24" />
             <component :is="item.icon" v-else class="text-muted-foreground size-5 flex-none" :stroke-width="1.5" />

@@ -433,7 +433,7 @@ async function addPicture(event: Event) {
       <DropdownMenu>
         <DropdownMenuTrigger as-child><Button class="board-actions-menu" variant="ghost" size="icon-sm" :aria-label="t('board.actions')" :title="t('board.actions')" data-testid="board-actions"><MoreHorizontal class="size-4" /></Button></DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem data-testid="compact-copy-picture" :disabled="boardState.empty || copying" :disabled-reason="boardState.empty ? t('board.nothingYet') : undefined" @select="copyAsPicture">{{ t("copy.button") }}</DropdownMenuItem>
+          <DropdownMenuItem data-testid="compact-copy-picture" :disabled="boardState.empty" :disabled-reason="t('board.nothingYet')" :action="copyAsPicture">{{ t("copy.button") }}</DropdownMenuItem>
           <DropdownMenuItem data-testid="compact-save-picture" :disabled="boardState.empty || copying" :disabled-reason="boardState.empty ? t('board.nothingYet') : undefined" @select="saveAsPicture">{{ t("savePicture.button") }}</DropdownMenuItem>
           <DropdownMenuSeparator v-if="boardState.pictures.count > 0" />
           <DropdownMenuItem v-if="boardState.pictures.count > 0" @select="togglePictureLocks">{{ t(boardState.pictures.allLocked ? "image.unlock" : "image.lock") }}</DropdownMenuItem>
