@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aimAt, EDGE_ZONE, OUTER_ZONE, spots, stepToward, zone, type Aim, type Spot } from "./dock-aim";
+import { aimAt, EDGE_ZONE, OUTER_ZONE, sameTarget, spots, stepToward, zone, type Aim, type Spot } from "./dock-aim";
 import type { DropTarget } from "./dock-model";
 
 // Two groups side by side in a 1000 x 600 dock: a at 0..500, b at 500..1000.
@@ -63,7 +63,7 @@ describe("the dock's edges", () => {
 
 describe("the keyboard's places", () => {
   const all = spots(aim);
-  const at = (target: DropTarget): Spot => all.find((spot) => JSON.stringify(spot.target) === JSON.stringify(target))!;
+  const at = (target: DropTarget): Spot => all.find((spot) => sameTarget(spot.target, target))!;
 
   it("are every place the pointer can aim at, once each, in reading order, each with a point that aims there", () => {
     expect(all.map((spot) => spot.target)).toEqual([

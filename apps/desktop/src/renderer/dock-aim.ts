@@ -93,7 +93,10 @@ export function spots(aim: Aim): Spot[] {
       const x = side === "left" ? near : side === "right" ? width - near : width * along;
       const y = side === "top" ? near : side === "bottom" ? height - near : height * along;
       const target = aimAt(aim, x, y);
-      if (target?.kind === "edge" && target.side === side) return add(x, y);
+      if (target?.kind === "edge" && target.side === side) {
+        add(x, y);
+        return;
+      }
     }
   };
   edge("top");

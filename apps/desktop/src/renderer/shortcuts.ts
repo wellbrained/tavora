@@ -4,7 +4,7 @@ import { t } from "./i18n";
 // What Settings > Keyboard shortcuts (Ctrl+/) lists. The Tavora-wide ones are
 // caught in main/shortcuts.ts; keep both in step.
 
-const MAC = navigator.platform.startsWith("Mac");
+export const MAC = navigator.platform.startsWith("Mac");
 /** The modifier key's name: Cmd on a Mac, otherwise Ctrl (Strg in German). */
 export const MOD = (): string => (MAC ? "Cmd" : t("shortcuts.ctrl"));
 /** A label with its shortcut after it, as a tooltip shows it: "Undo (Ctrl+Z)", "Undo (Cmd+Z)" on a Mac. */

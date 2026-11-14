@@ -13,6 +13,7 @@ import { dockDragStep, type DockDrag, type DockDragEvent, type DockDragStep, typ
 import { diffLayouts, planDrop, type Dragged, type DropPlan, type DropTarget, type Rect, type Side } from "./dock-model";
 import type { PanelInfo } from "./dock";
 import { t } from "./i18n";
+import { MAC } from "./shortcuts";
 
 /** What DockPreview.vue draws. All rectangles are in the dock's own coordinates. */
 export interface PreviewView {
@@ -54,7 +55,7 @@ interface Scene {
   tabWidth: number;
   /** The dragged panel's group, faded while it is dragged. */
   lifted: HTMLElement | null;
-  /** Every place to aim at, for the keyboard. */
+  /** Every place to aim at, for the keyboard (a pointer drag needs none). */
   spots: Spot[];
   /** What each group is called when a place is read out: its shown panel (not the dragged one). */
   names: Record<string, string>;
@@ -67,7 +68,6 @@ const AIMING = "data-dock-aiming";
 /** On the root while the keyboard moves a panel: nothing a key starts animates (dock.css). */
 const KEYBOARD = "data-dock-keyboard";
 const ARROWS: Record<string, Side> = { ArrowLeft: "left", ArrowRight: "right", ArrowUp: "top", ArrowDown: "bottom" };
-const MAC = navigator.platform.startsWith("Mac");
 
 /** Ctrl+M (Cmd+M on a Mac): lifts the focused tab's panel. */
 const isMoveKey = (event: KeyboardEvent): boolean =>
@@ -329,7 +329,7 @@ export class DockPreview {
       stripStart,
       tabWidth: own?.width ?? tabsOf.get(dragged.groupId)?.[0]?.width ?? 140,
       lifted: source?.element ?? null,
-      spots: spots({ width: box.width, height: box.height, rects, slots: slotsOf }),
+      spots: by === "keyboard" ? spots({ width: box.width, height: box.height, rects, slots: slotsOf }) : [],
       names,
     };
     this.apply({ type: "start", by, dragged, scene });
@@ -457,7 +457,6 @@ export class DockPreview {
   stop(): void {
     this.apply({ type: "end" });
     this.root()?.removeAttribute(AIMING);
-    this.root()?.removeAttribute(KEYBOARD);
     this.view.value = null;
   }
 }
