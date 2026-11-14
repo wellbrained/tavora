@@ -24,7 +24,7 @@ const found = computed(() => {
   const u = update.value;
   return u.status === "available" || u.status === "downloading" || u.status === "ready" ? u : null;
 });
-const failed = computed(() => found.value?.status === "available" && found.value.failed);
+const failed = computed(() => (found.value?.status === "available" ? found.value.failed : false));
 
 const label = computed(() => {
   const u = found.value;
@@ -37,6 +37,7 @@ const label = computed(() => {
 const title = computed(() => {
   const u = found.value;
   if (!u) return "";
+  if (failed.value === "refused") return t("update.popover.refused");
   if (failed.value) return t("update.popover.failed");
   if (u.status === "ready") return t("update.popover.ready", { version: u.version });
   if (u.status === "downloading") return t("update.popover.downloading", { version: u.version });
@@ -99,7 +100,7 @@ const more = computed(() => !allNotes.value && (found.value?.notes.length ?? 0) 
           <h2 class="text-sm font-semibold" data-testid="update-popover-title">{{ title }}</h2>
           <span v-if="!failed" class="text-muted-foreground ml-auto text-xs whitespace-nowrap">{{ t("update.popover.current", { version: state!.appVersion }) }}</span>
         </div>
-        <p v-if="failed" class="text-muted-foreground mt-1 text-sm">{{ t("update.popover.failedText") }}</p>
+        <p v-if="failed" class="text-muted-foreground mt-1 text-sm" data-testid="update-popover-problem">{{ failed === "refused" ? t("update.popover.refusedText") : t("update.popover.failedText") }}</p>
         <template v-else-if="notes.length">
           <ul class="mt-3 flex flex-col gap-1.5 text-sm" data-testid="update-popover-notes">
             <li v-for="note in notes" :key="note" class="flex gap-2">

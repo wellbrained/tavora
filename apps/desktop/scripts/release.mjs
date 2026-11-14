@@ -14,6 +14,11 @@
 // attestation, then uploads them with the restricted tavora-updates key (deploy/README.md). On the server tavora-receive puts the
 // installer and its blockmap first and latest.yml last, so a manifest never points at a file that is not
 // there yet, and refuses a version that is not newer than the live one.
+//
+// Signed updates (CoreHub #476): after those checks, this PC signs the version, the installer's name and its SHA-512
+// with the update key (TAVORA_UPDATE_KEY, a file made by `pnpm tavora-update-key key`) into latest.yml. The app installs
+// an update only with that signature by one of the keys pinned in src/main/update-keys.ts, so a release stops before
+// anything is built while the app pins no real keys or the key here is not one of them. --dry-run needs no key.
 import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -24,6 +29,9 @@ import { createInterface } from "node:readline/promises";
 import { AFTER_RELEASE, CHECKLIST, asksHandChecks, checkCi, checkDownload, checkInstalled, checkRelease, failedJobsHint, findDispatchedRun, readCiHashes, releaseFiles, releaseNotes, releaseRunTitle } from "./release-guards.mjs";
 import { hello, publish } from "../../../scripts/deploy-client.mjs";
 import { lockPath, takeLock } from "./release-lock.mjs";
+import { describeSigned, loadUpdateSigningKey, signLatestYml } from "./update-feed.mjs";
+import { PINNED_UPDATE_KEYS } from "../src/main/update-keys.ts";
+import { readPinnedUpdateKeys } from "../src/main/update-signature.ts";
 
 /** The version of the Tavora installed for this user (asar is off, so its package.json is a plain file), or null. */
 function readInstalledVersion() {
@@ -52,6 +60,14 @@ if (!dryRun) {
     process.exit(1);
   }
 }
+// So is the update key: the app pins two real keys, and TAVORA_UPDATE_KEY is one of them. A dry run only says what's missing.
+const signing = loadUpdateSigningKey(process.env.TAVORA_UPDATE_KEY?.trim(), PINNED_UPDATE_KEYS);
+if (signing.problem && !dryRun) {
+  console.error(`Not releasing: ${signing.problem}\nNothing was built or published.`);
+  process.exit(1);
+}
+if (signing.problem) console.warn(`Dry run without signing: ${signing.problem}`);
+else if (signing.which === "backup") console.warn("Signing with the BACKUP update key. Make a new backup key afterwards (deploy/README.md, \"The update key\").");
 // Ctrl+C anywhere: stop this run's Release build on GitHub (once there is one), then exit, which removes the lock.
 let activeRun = null;
 process.on("SIGINT", () => {
@@ -168,7 +184,7 @@ if (!ciRun) fail(`GitHub did not list the Release build "${title}" within two mi
 const runId = String(ciRun.databaseId);
 // From here on, stopping early (a failed check, Ctrl+C) also stops the run on GitHub.
 activeRun = runId;
-console.log(`https://github.com/${REPO}/actions/runs/${runId} (about ${skipE2e ? "10 minutes, without e2e" : "15 minutes"})`);
+console.log(`https://github.com/${REPO}/actions/runs/${runId} (about 25 minutes: the signed-update check takes longest)`);
 try {
   run("gh", ["run", "watch", runId, "--repo", REPO, "--exit-status", "--interval", "30"]);
 } catch {
@@ -218,8 +234,27 @@ for (const name of allFiles) {
 }
 console.log(`The files match what the Release build made from ${built.slice(0, 7)} (SHA-256 and attestation), and latest.yml points at the installer.`);
 
+// Only now, on files that passed every check above: Tavora's signature into latest.yml (src/main/update-signature.ts).
+step("Signing the update");
+const signed = { version, file: installer, sha512: downloaded.get(installer).sha512 };
+console.log(describeSigned(signed).map((line) => `  ${line}`).join("\n"));
+if (signing.problem) {
+  console.log(`\nDry run: this is what a release signs. A real release would stop before building: ${signing.problem}`);
+  console.log("Nothing was signed, published or tagged.");
+  // A key missing on this PC is this PC's matter; an app that pins no real keys can't be released from anywhere.
+  process.exit(readPinnedUpdateKeys(PINNED_UPDATE_KEYS).ok ? 0 : 1);
+}
+try {
+  const latestPath = path.join(releaseDir, "latest.yml");
+  const { text, key } = signLatestYml({ latestYml, ...signed, privateKey: signing.key, pinned: PINNED_UPDATE_KEYS });
+  writeFileSync(latestPath, text);
+  console.log(`Signed with the ${key} key; latest.yml carries the signature, and it checks out against the app's pinned keys.`);
+} catch (error) {
+  fail(`Signing failed (${error.message}). Nothing was published or tagged.`);
+}
+
 if (dryRun) {
-  console.log("\nDry run: stopping before the upload. Nothing was published or tagged.");
+  console.log("\nDry run: signed the local copy of latest.yml, stopping before the upload. Nothing was published or tagged.");
   process.exit(0);
 }
 
