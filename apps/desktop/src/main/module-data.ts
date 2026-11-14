@@ -1,8 +1,10 @@
-import { mkdir, readdir, readFile, rename, rm, rmdir, stat } from "node:fs/promises";
+import { mkdir, readdir, rename, rm, rmdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { isModuleId, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER } from "@tavora/module-schema";
 import { isWorkspaceId } from "./workspace-id";
 import { writeFileAtomic } from "./fsutil";
+import { readSavedFile } from "./json";
+import { SUPPORTED_VERSIONS } from "./saved-versions";
 import { defaultFilesRoot } from "./module-files";
 import { OFFICIAL_PREFIX } from "./registry";
 import { APP_DATA_DIR } from "./storage";
@@ -151,16 +153,16 @@ interface PendingChanges {
 
 const PENDING = "module-data-pending.json";
 
+/**
+ * What waits for the next start. A file a newer Tavora wrote is copied aside first, and a damaged one set aside
+ * (readSavedFile); one that can't be read right now throws, so nothing queued is written over.
+ */
 async function readPending(userData: string): Promise<PendingChanges> {
-  try {
-    const parsed = JSON.parse(await readFile(path.join(userData, PENDING), "utf8")) as PendingChanges;
-    return {
-      moves: (Array.isArray(parsed.moves) ? parsed.moves : []).filter((move) => isModuleId(move?.moduleId) && isOwnerId(move?.to) && move.to !== LOCAL_OWNER && move.to !== OFFICIAL_OWNER),
-      deletePartitions: (Array.isArray(parsed.deletePartitions) ? parsed.deletePartitions : []).filter((name) => typeof name === "string" && /^persist:module:[a-z0-9]+:[a-z0-9.-]+@[a-z0-9-]+$/.test(name)),
-    };
-  } catch {
-    return {};
-  }
+  const parsed = ((await readSavedFile(path.join(userData, PENDING), { version: SUPPORTED_VERSIONS[PENDING] })) ?? {}) as PendingChanges;
+  return {
+    moves: (Array.isArray(parsed.moves) ? parsed.moves : []).filter((move) => isModuleId(move?.moduleId) && isOwnerId(move?.to) && move.to !== LOCAL_OWNER && move.to !== OFFICIAL_OWNER),
+    deletePartitions: (Array.isArray(parsed.deletePartitions) ? parsed.deletePartitions : []).filter((name) => typeof name === "string" && /^persist:module:[a-z0-9]+:[a-z0-9.-]+@[a-z0-9-]+$/.test(name)),
+  };
 }
 
 async function queue(userData: string, change: PendingChanges): Promise<void> {
@@ -169,7 +171,7 @@ async function queue(userData: string, change: PendingChanges): Promise<void> {
     moves: [...(pending.moves ?? []), ...(change.moves ?? [])],
     deletePartitions: [...new Set([...(pending.deletePartitions ?? []), ...(change.deletePartitions ?? [])])],
   };
-  await writeFileAtomic(path.join(userData, PENDING), `${JSON.stringify(next, null, 2)}\n`);
+  await writeFileAtomic(path.join(userData, PENDING), `${JSON.stringify({ version: SUPPORTED_VERSIONS[PENDING], ...next }, null, 2)}\n`);
 }
 
 /**

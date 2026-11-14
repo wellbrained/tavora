@@ -400,6 +400,11 @@ export class Streaming {
     };
   }
 
+  /** Writes the last overlay states and leaves keys and the overlay server running (the cloud copy saves before it copies). */
+  save(): Promise<void> {
+    return this.overlays.save();
+  }
+
   /** Quitting: keys go back to the system, and the last overlay states are written. */
   async shutdown(): Promise<void> {
     this.pending?.resolve("cancelled");

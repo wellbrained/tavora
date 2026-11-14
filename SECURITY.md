@@ -6,4 +6,4 @@ Tavora runs community modules on users' machines, so isolation bugs matter.
 
 Useful details: what a module or page can do that it should not, steps or a minimal module that reproduces it, and the Tavora commit or version.
 
-The current isolation guarantees and known limits are in the [security model](https://docs.mytavora.app/guide/security). Tavora is pre-release; there are no supported release versions yet.
+The current isolation guarantees and known limits are in the [security model](https://docs.mytavora.app/guide/security). Security fixes go into the newest release, so update to it before you report.

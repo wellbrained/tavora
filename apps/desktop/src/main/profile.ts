@@ -29,11 +29,14 @@ export const MAX_PICTURE_BYTES = 512 * 1024;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const PICTURE_FILE = /^avatar-[0-9a-f]{8}\.png$/;
 
+/** Whether a saved id is one Tavora made (a random UUID). */
+export const isProfileId = (value: unknown): value is string => typeof value === "string" && UUID.test(value);
+
 export function sanitizeProfile(saved: unknown): Profile {
   const value = (typeof saved === "object" && saved !== null ? saved : {}) as Partial<Record<keyof Profile, unknown>>;
   return {
     version: 1,
-    id: typeof value.id === "string" && UUID.test(value.id) ? value.id : randomUUID(),
+    id: isProfileId(value.id) ? value.id : randomUUID(),
     name: typeof value.name === "string" ? clipName(value.name) : "",
     initials: typeof value.initials === "string" ? clipInitials(value.initials) : "",
     picture: typeof value.picture === "string" && PICTURE_FILE.test(value.picture) ? value.picture : null,

@@ -1,12 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isPanelTypeId } from "@tavora/module-schema";
 import { INSTANCE_ID } from "./ids";
+import { readSavedFile } from "./json";
 import { UserError } from "./messages";
 import { gridTemplate, type LayoutTemplate } from "../shared/layout-templates";
 import { LAYOUT_LIMITS, layoutPanels, parseLayout, pruneLayout, templateLayout, vacateLayout, type SavedLayout } from "./layout";
 import { checkPanelContent, type PanelContent } from "./panel-content";
+import { SUPPORTED_VERSIONS } from "./saved-versions";
 
 export { INSTANCE_ID } from "./ids";
 
@@ -104,9 +106,10 @@ function parseSnapshot(raw: unknown, isInstalled: (moduleId: string) => boolean)
 
 /**
  * Reads the saved workspace, keeping only workspaces in the library (Trash
- * included) and modules that are still installed. A missing or unreadable
- * file gives empty workspaces. Version 1 files (panels without a layout)
- * are read as they are; the host UI places their panels.
+ * included) and modules that are still installed. A missing file gives empty
+ * workspaces; an unreadable one is set aside first, and one a newer Tavora
+ * wrote is copied aside (json.ts readSavedFile). Version 1 files (panels
+ * without a layout) are read as they are; the host UI places their panels.
  */
 export async function loadWorkspace(
   file: string,
@@ -114,12 +117,8 @@ export async function loadWorkspace(
   isInstalled: (moduleId: string) => boolean,
 ): Promise<WorkspaceState> {
   const state = emptyWorkspaces(workspaceIds);
-  let saved: { workspaces?: Record<string, Partial<Record<keyof Workspace, unknown>>> };
-  try {
-    saved = JSON.parse(await readFile(file, "utf8")) as typeof saved;
-  } catch {
-    return state;
-  }
+  const saved = (await readSavedFile(file, { version: SUPPORTED_VERSIONS["workspace.json"] })) as { workspaces?: Record<string, Partial<Record<keyof Workspace, unknown>>> } | null;
+  if (!saved) return state;
   for (const workspaceId of workspaceIds) {
     const workspace = saved.workspaces?.[workspaceId];
     if (!isRecord(workspace)) continue;

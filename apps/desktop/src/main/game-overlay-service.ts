@@ -1686,6 +1686,11 @@ export class GameOverlays {
     return this.has(subject) || this.panelOfKey({ ...subject, target: subject.key }) !== undefined;
   }
 
+  /** Writes the last changes and leaves everything running (the cloud copy saves before it copies). */
+  save(): Promise<void> {
+    return this.store.save();
+  }
+
   /** Quitting: every window closes and the last changes are written. */
   async shutdown(): Promise<void> {
     this.closeNow();

@@ -12,7 +12,8 @@ import { LIMITS, OVERLAY_STATE_PATH, type JsonValue } from "@tavora/sdk/protocol
 import { contentTypeFor, resolveAsset } from "./assets";
 import { HostError } from "./errors";
 import { SerialQueue, writeFileAtomic } from "./fsutil";
-import { isJsonValue, readJsonOrSetAside } from "./json";
+import { isJsonValue, readSavedFile } from "./json";
+import { SUPPORTED_VERSIONS } from "./saved-versions";
 import { trackOwnServer } from "./own-ports";
 
 export const OVERLAYS_FILE = "overlays.json";
@@ -41,7 +42,9 @@ export interface OverlayLink extends OverlaySubject {
   token: string;
 }
 
-type OverlayFile = { version: 2; links: (OverlayLink & { state?: JsonValue })[] };
+const VERSION = SUPPORTED_VERSIONS[OVERLAYS_FILE];
+
+type OverlayFile = { version: typeof VERSION; links: (OverlayLink & { state?: JsonValue })[] };
 
 const sameSubject = (a: OverlaySubject, b: OverlaySubject) => a.owner === b.owner && a.moduleId === b.moduleId && a.workspaceId === b.workspaceId && a.key === b.key;
 
@@ -63,7 +66,7 @@ export class OverlayStore {
 
   static async load(userData: string): Promise<OverlayStore> {
     const file = path.join(userData, OVERLAYS_FILE);
-    const raw = await readJsonOrSetAside<Partial<OverlayFile>>(file);
+    const raw = (await readSavedFile(file, { version: VERSION })) as Partial<OverlayFile> | null;
     const links = new Map<string, OverlayLink>();
     const states = new Map<string, JsonValue>();
     for (const entry of Array.isArray(raw?.links) ? raw.links : []) {
@@ -192,7 +195,7 @@ export class OverlayStore {
     clearTimeout(this.saveTimer);
     this.saveTimer = undefined;
     const body: OverlayFile = {
-      version: 2,
+      version: VERSION,
       links: [...this.links.values()].map((link) => (this.states.has(link.token) ? { ...link, state: this.states.get(link.token)! } : { ...link })),
     };
     const text = `${JSON.stringify(body, null, 2)}\n`;

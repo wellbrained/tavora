@@ -1,18 +1,18 @@
-import { copyFile, readFile, stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { writeFileAtomic } from "./fsutil";
-import { GRANTS_FILE, GRANTS_VERSION } from "./grants";
-import { readJsonOrSetAside } from "./json";
+import { keepNewerCopy, readJsonOrSetAside, readSavedFile, setAside } from "./json";
 import { sanitizeLibrary, type Library } from "./library";
-import { sanitizeProfile, type Profile } from "./profile";
+import { isProfileId, sanitizeProfile, type Profile } from "./profile";
+import { SUPPORTED_VERSIONS } from "./saved-versions";
 import type { WindowState } from "./window-state";
 import { loadWorkspace, saveWorkspace, type WorkspaceState } from "./workspace";
 
 // The files the host keeps in the data folder: the library, the workspaces, the profile and the
 // window. This module is the only one that knows their names. It reads them, writes them one after
 // another, and says which are the user's own (backed up and in the cloud copy) and which library
-// settings belong to this PC. Grants keep their own file (grants.ts); only their version is listed here.
+// settings belong to this PC. Every file's version is in saved-versions.ts, with the rules for raising one.
 
 export const LIBRARY_FILE = "library.json";
 export const WORKSPACE_FILE = "workspace.json";
@@ -23,11 +23,7 @@ export const WINDOW_FILE = "window.json";
 /** The user's own data files: backed up every day and part of the cloud copy. */
 export const DATA_FILES = [LIBRARY_FILE, WORKSPACE_FILE, PROFILE_FILE] as const;
 
-/**
- * The file versions this Tavora understands (the "version" inside each file). A test keeps these
- * equal to what the code writes; raise one when its format changes in a way an older Tavora could misread.
- */
-export const SUPPORTED_VERSIONS = { [LIBRARY_FILE]: 2, [WORKSPACE_FILE]: 3, [PROFILE_FILE]: 1, [GRANTS_FILE]: GRANTS_VERSION } as const;
+export { SUPPORTED_VERSIONS } from "./saved-versions";
 
 /** Library settings that belong to this PC; a cloud copy from another PC never replaces them. */
 export const PC_SETTINGS = ["moduleFilesFolder", "developmentFolders", "collapsedDevelopmentFolders", "dialogFolders", "moduleFolders", "steamProfile", "installId", "askedModules"] as const satisfies readonly (keyof Library)[];
@@ -44,9 +40,9 @@ export async function hasLibrary(userData: string): Promise<boolean> {
   );
 }
 
-/** The saved library, cleaned up; a missing or unreadable file gives an empty one. */
+/** The saved library, cleaned up; a missing file gives an empty one, and an unreadable one is set aside first. */
 export async function loadLibrary(userData: string): Promise<Library> {
-  return sanitizeLibrary(await readJsonOrSetAside(libraryFile(userData)));
+  return sanitizeLibrary(await readSavedFile(libraryFile(userData), { version: SUPPORTED_VERSIONS[LIBRARY_FILE] }));
 }
 
 /**
@@ -66,23 +62,20 @@ export function readGrayscaleText(userData: string): boolean {
  * A file written by a newer Tavora (its `version` is above what this one
  * understands) is copied aside before this version can overwrite it, so
  * going back to an older Tavora never loses what the newer one saved.
- * Returns the copy's path, or null when nothing was needed.
+ * Returns the copy's path, or null when nothing was needed. Missing and
+ * unreadable files are left to the code that reads them.
  */
 export async function keepNewerFile(file: string, supportedVersion: number): Promise<string | null> {
+  let bytes: Buffer;
   let version: unknown;
   try {
-    version = (JSON.parse(await readFile(file, "utf8")) as { version?: unknown } | null)?.version;
+    bytes = await readFile(file);
+    version = (JSON.parse(bytes.toString("utf8")) as { version?: unknown } | null)?.version;
   } catch {
-    return null; // missing or unreadable files are handled where they are read
+    return null;
   }
   if (typeof version !== "number" || !(version > supportedVersion)) return null;
-  const copy = `${file}.from-version-${version}`;
-  const copied = await stat(copy).then(
-    () => true,
-    () => false,
-  );
-  if (!copied) await copyFile(file, copy);
-  return copy;
+  return keepNewerCopy(file, version, bytes);
 }
 
 /**
@@ -94,7 +87,10 @@ export class SavedData {
 
   constructor(private readonly userData: string) {}
 
-  /** Copies aside every file a newer Tavora wrote, before anything here can overwrite it. */
+  /**
+   * Copies aside every file in the data folder a newer Tavora wrote, before anything here (a move of old names
+   * included) can overwrite it. One that can't be copied now is tried again by the store that reads it.
+   */
   async keepNewerFiles(): Promise<void> {
     for (const [name, version] of Object.entries(SUPPORTED_VERSIONS)) {
       await keepNewerFile(path.join(this.userData, name), version).catch(() => null);
@@ -110,8 +106,17 @@ export class SavedData {
     return loadWorkspace(this.file(WORKSPACE_FILE), workspaceIds, isInstalled);
   }
 
+  /**
+   * The profile, and whether there was one. One without a usable id is set aside like an unreadable one, before a
+   * new id is made: the id never changes, so the old one is kept.
+   */
   async loadProfile(): Promise<{ profile: Profile; saved: boolean }> {
-    const saved = await readJsonOrSetAside(this.file(PROFILE_FILE));
+    const file = this.file(PROFILE_FILE);
+    let saved = await readSavedFile(file, { version: SUPPORTED_VERSIONS[PROFILE_FILE] });
+    if (saved !== null && !isProfileId(saved.id)) {
+      await setAside(file, true);
+      saved = null;
+    }
     return { profile: sanitizeProfile(saved), saved: saved !== null };
   }
 

@@ -832,6 +832,11 @@ export interface HostViewState {
   pendingGameSwitch: string | null;
   snapshots: SnapshotView[];
   notice: string | null;
+  /**
+   * How many of the user's saved files couldn't be opened this run: each was set aside (kept, never written over) and
+   * Tavora started that part fresh. The host UI says so once each time it grows.
+   */
+  keptAside: number;
   /** The user's local profile. */
   profile: { name: string; initials: string; pictureUrl: string | null; ranks: ProfileRanksSetting; banner: ProfileBanner };
   /** A setting that only applies on start was changed since Tavora started. */
