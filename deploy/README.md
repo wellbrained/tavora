@@ -138,10 +138,11 @@ build refuse to ship, because such an app could install no update at all.
 1. **Make both keys**, offline, on this PC (each file is readable only by you):
    ```powershell
    pnpm tavora-update-key key "$HOME\.tavora\update-release.pem"
-   pnpm tavora-update-key key "E:\tavora-update-backup.pem"
+   pnpm tavora-update-key key "$HOME\.tavora\update-backup.pem"
    ```
    Each prints `Public key for apps/desktop/src/main/update-keys.ts: …`. Back up the release key like the catalogue
-   key (password manager or an offline copy) and move the backup key's file off this PC.
+   key (password manager or an offline copy), then move the backup key's file off this PC (a USB stick in a drawer).
+   Make keys in your user folder: on a drive without permissions (a FAT stick) it refuses to write one.
 2. **Pin the public halves**: paste the first into `release: "…"` and the second into `backup: "…"` in
    `apps/desktop/src/main/update-keys.ts`, then check and merge that change like any other pull request:
    ```powershell
@@ -153,9 +154,14 @@ build refuse to ship, because such an app could install no update at all.
    ```
    `pnpm release` checks it before anything is built: it must be one of the two pinned keys. It signs after the files
    passed the SHA-256 and attestation checks, and `pnpm release --dry-run` shows what it would sign, with or without
-   the key. `pnpm tavora-update-key verify <latest.yml> <installer>` checks a signed release the way the app does.
+   `TAVORA_UPDATE_KEY`. `pnpm tavora-update-key verify <latest.yml> <installer>` checks a signed release the way the app does.
 
 **Lost or leaked release key:** sign the next release with the backup key (`TAVORA_UPDATE_KEY` pointing at it; the
 release says so), and in that same release pin a new key pair: the backup becomes `release`, a fresh key `backup`.
 Installed apps take that release because the backup key signed it, and from then on trust only the new pair. A
 leaked key stays trusted by every app that has not updated past the release that dropped it.
+
+`pnpm release` checks the keys against the **last release's** `update-keys.ts`, since that is what installed apps pin:
+it refuses to sign with a key that release doesn't pin, refuses a release that changes both keys at once, and asks
+you to confirm any change of the pins. Until both keys are pinned, even `pnpm release --dry-run` stops early (the
+Release build would refuse to build); after that, a dry run needs no private key and shows what it would sign.

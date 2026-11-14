@@ -197,6 +197,14 @@ describe("checkUpdate", () => {
     expect(checkUpdate(signed, UPDATE.sha512, { release: "", backup: "" }, "1.0.0")).toMatchObject({ ok: false, reason: expect.stringMatching(/still empty/) });
   });
 
+  it("refuses feed fields the signature doesn't cover that change how the installer runs", () => {
+    expect(checkUpdate({ ...signed, files: [{ url: "Tavora-Setup-1.0.1.exe", isAdminRightsRequired: true }] }, UPDATE.sha512, pinned, "1.0.0")).toEqual({ ok: false, reason: "the feed asks to install with admin rights" });
+    expect(checkUpdate({ ...signed, isAdminRightsRequired: true }, UPDATE.sha512, pinned, "1.0.0").ok).toBe(false);
+    expect(checkUpdate({ ...signed, packages: { x64: { path: "x.7z" } } }, UPDATE.sha512, pinned, "1.0.0")).toEqual({ ok: false, reason: "the feed names an extra package to download" });
+    // What electron-builder writes for Tavora passes.
+    expect(checkUpdate({ ...signed, files: [{ url: "Tavora-Setup-1.0.1.exe", sha512: UPDATE.sha512, size: 1 }] }, UPDATE.sha512, pinned, "1.0.0").ok).toBe(true);
+  });
+
   it("takes the backup key, and only the two pinned keys", () => {
     expect(checkUpdate({ ...signed, [UPDATE_SIGNATURE_FIELD]: signUpdate(UPDATE, backup.privateKey) }, UPDATE.sha512, pinned, "1.0.0")).toEqual({ ok: true, key: "backup" });
     expect(checkUpdate({ ...signed, [UPDATE_SIGNATURE_FIELD]: signUpdate(UPDATE, stranger.privateKey) }, UPDATE.sha512, pinned, "1.0.0").ok).toBe(false);

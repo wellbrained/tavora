@@ -14,7 +14,7 @@
 //   Checks a signed latest.yml and its installer the way the app does, against the pinned keys.
 import { spawnSync } from "node:child_process";
 import { createHash, createPrivateKey } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { userInfo } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -29,24 +29,34 @@ const USAGE = [
   "       tavora-update-key verify <latest.yml> <installer>",
 ].join("\n");
 
-/** Writes a new private key file that only this user can read (on Windows, its ACL lists only this user). Never replaces a file. */
+/**
+ * Writes a new private key file that only this user can read (on Windows, its ACL lists only this user). Never
+ * replaces a file. On Windows the file is made empty first and limited before the key goes in; where that can't be
+ * done (a drive without permissions, such as a FAT USB stick), nothing is written and it throws.
+ */
 export function writeKeyFile(file, pem) {
   mkdirSync(path.dirname(path.resolve(file)), { recursive: true });
   // "wx" never replaces a key; 0600 keeps it the owner's where modes count.
-  writeFileSync(file, pem, { flag: "wx", mode: 0o600 });
-  if (process.platform !== "win32") return true;
+  if (process.platform !== "win32") {
+    writeFileSync(file, pem, { flag: "wx", mode: 0o600 });
+    return;
+  }
+  writeFileSync(file, "", { flag: "wx" });
   const user = process.env.USERDOMAIN ? `${process.env.USERDOMAIN}\\${userInfo().username}` : userInfo().username;
   const result = spawnSync("icacls", [path.resolve(file), "/inheritance:r", "/grant:r", `${user}:F`], { encoding: "utf8" });
-  return result.status === 0;
+  if (result.status !== 0) {
+    rmSync(file, { force: true });
+    throw new Error(`could not limit who can read ${path.resolve(file)}, so no key was written there. Make it on an NTFS drive (your user folder), then copy it where you keep it.`);
+  }
+  writeFileSync(file, pem);
 }
 
 function main(argv) {
   const [command, ...rest] = argv;
   if (command === "key" && rest.length === 1) {
     const { privateKey, publicKey } = makeUpdateKey();
-    const tight = writeKeyFile(rest[0], privateKey.export({ format: "pem", type: "pkcs8" }));
-    console.log(`Made an update key: ${path.resolve(rest[0])}`);
-    if (!tight) console.warn("Could not limit who can read it (icacls failed): check its permissions by hand.");
+    writeKeyFile(rest[0], privateKey.export({ format: "pem", type: "pkcs8" }));
+    console.log(`Made an update key: ${path.resolve(rest[0])} (only you can read it)`);
     console.log("Keep it offline and back it up. Whoever holds it can sign a Tavora update that every installed app accepts.");
     console.log(`Public key for apps/desktop/src/main/update-keys.ts: ${publicKey}`);
     return 0;

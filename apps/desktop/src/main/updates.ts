@@ -15,6 +15,8 @@ export type DownloadedInfoLike = UpdateInfoLike & DownloadedUpdate;
 export interface UpdaterLike {
   autoDownload: boolean;
   autoInstallOnAppQuit: boolean;
+  /** On: a feed can't make the updater fetch a second, unsigned package (a web installer). */
+  disableWebInstaller?: boolean;
   /** Sent with every request to the update feed. */
   requestHeaders?: Record<string, string> | null;
   on(event: "update-available", listener: (info: UpdateInfoLike) => void): unknown;
@@ -130,6 +132,8 @@ export class UpdateManager {
   private errorEvents = 0;
   /** Goes up with every downloaded version: a signature check that a newer one overtook changes nothing. */
   private checkTurn = 0;
+  /** The installer was started (Restart now, or on quit); it starts once. */
+  private installStarted = false;
 
   constructor(options: UpdateManagerOptions) {
     this.updater = options.updater;
@@ -166,6 +170,8 @@ export class UpdateManager {
     // A downloaded update still installs when Tavora is closed, but through installOnQuit, which installs only a
     // checked version; electron-updater's own quit handler would install whatever it downloaded.
     this.updater.autoInstallOnAppQuit = false;
+    // Tavora ships one full installer; a web installer's package would not be covered by the signature.
+    this.updater.disableWebInstaller = true;
     this.updater.requestHeaders = { ...this.updater.requestHeaders, [UPDATER_HEADER]: "1" };
     this.updater.on("update-available", (info) => {
       // A check that answers while the user's download runs (or is done) changes nothing.
@@ -270,6 +276,7 @@ export class UpdateManager {
   /** Quits, installs the downloaded version and starts Tavora again. */
   restartNow(): void {
     if (this.current.status !== "ready") return;
+    this.installStarted = true;
     this.updater.quitAndInstall(true, true);
   }
 
@@ -278,7 +285,9 @@ export class UpdateManager {
    * Tavora again, as electron-updater's own quit handler would. Only a clean quit installs.
    */
   installOnQuit(exitCode: number): void {
-    if (this.current.status !== "ready" || exitCode !== 0) return;
+    // After Restart now the installer already runs (electron-updater would ignore a second start anyway).
+    if (this.current.status !== "ready" || exitCode !== 0 || this.installStarted) return;
+    this.installStarted = true;
     this.log(`installing ${this.current.version} on quit`);
     this.updater.install(true, false);
   }

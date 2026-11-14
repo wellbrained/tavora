@@ -65,7 +65,7 @@ test("an update that isn't signed by Tavora is skipped, says so, and can be trie
     await expect(marker).toHaveAttribute("data-status", "available", { timeout: 20_000 });
     await marker.click();
     await expect(page.getByTestId("update-popover-title")).toHaveText("Update skipped");
-    await expect(page.getByTestId("update-popover-problem")).toHaveText("It wasn't signed by Tavora, so it wasn't installed. Your version keeps working.");
+    await expect(page.getByTestId("update-popover-problem")).toHaveText("Tavora couldn't confirm it's really from Tavora, so it wasn't installed. Your version keeps working.");
     await expect(page.getByTestId("update-popover-download")).toHaveText("Try again");
   } finally {
     await app.close();

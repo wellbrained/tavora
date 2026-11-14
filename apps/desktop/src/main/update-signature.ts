@@ -127,6 +127,10 @@ function compareVersions(a: string, b: string): number {
 export interface DownloadedUpdate {
   version?: unknown;
   downloadedFile?: unknown;
+  /** Unsigned feed fields that change how the installer runs; Tavora's feed never has them. */
+  files?: unknown;
+  packages?: unknown;
+  isAdminRightsRequired?: unknown;
   [UPDATE_SIGNATURE_FIELD]?: unknown;
 }
 
@@ -144,6 +148,13 @@ export function checkUpdate(update: DownloadedUpdate, sha512: string, pinned: un
   const keys = readPinnedUpdateKeys(pinned);
   if (!keys.ok) return { ok: false, reason: keys.problem };
   if (typeof update.downloadedFile !== "string" || update.downloadedFile === "") return { ok: false, reason: "the updater named no downloaded file" };
+  // The signature doesn't cover these, and Tavora (installed per user, one full installer) never needs them: a feed
+  // that asks to run the installer as admin or to fetch an extra package is refused.
+  const files = Array.isArray(update.files) ? update.files : [];
+  if (update.isAdminRightsRequired || files.some((file) => typeof file === "object" && file !== null && (file as { isAdminRightsRequired?: unknown }).isAdminRightsRequired)) {
+    return { ok: false, reason: "the feed asks to install with admin rights" };
+  }
+  if (update.packages !== undefined && update.packages !== null) return { ok: false, reason: "the feed names an extra package to download" };
   const fields = { version: update.version, file: baseName(update.downloadedFile), sha512 };
   const signed = verifyUpdateSignature(fields, update[UPDATE_SIGNATURE_FIELD], keys.keys);
   if (!signed.ok) return signed;

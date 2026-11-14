@@ -1038,8 +1038,14 @@ export class Host {
         verify: app.isPackaged
           ? (info) => checkDownloadedUpdate(info, PINNED_UPDATE_KEYS, app.getVersion())
           : previewCheck(process.env.TAVORA_FAKE_UPDATE_UNSIGNED === "1"),
+        // The refused installer goes, and so does the blockmap electron-updater kept from it (in its pending folder and
+        // the cache folder above), so the next download doesn't plan against the refused file.
         onRefused: (info) => {
-          if (app.isPackaged && typeof info.downloadedFile === "string") void rm(info.downloadedFile, { force: true }).catch(() => undefined);
+          if (!app.isPackaged || typeof info.downloadedFile !== "string") return;
+          const pending = path.dirname(info.downloadedFile);
+          for (const file of [info.downloadedFile, path.join(pending, "current.blockmap"), path.join(path.dirname(pending), "current.blockmap")]) {
+            void rm(file, { force: true }).catch(() => undefined);
+          }
         },
         autoDownload: this.library.autoUpdate,
         onChange: () => this.pushState(),

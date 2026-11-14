@@ -26,12 +26,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createInterface } from "node:readline/promises";
-import { AFTER_RELEASE, CHECKLIST, asksHandChecks, checkCi, checkDownload, checkInstalled, checkRelease, failedJobsHint, findDispatchedRun, readCiHashes, releaseFiles, releaseNotes, releaseRunTitle } from "./release-guards.mjs";
+import { AFTER_RELEASE, CHECKLIST, asksHandChecks, checkCi, checkDownload, checkInstalled, checkRelease, failedJobsHint, findDispatchedRun, lastReleased, readCiHashes, releaseFiles, releaseNotes, releaseRunTitle } from "./release-guards.mjs";
 import { hello, publish } from "../../../scripts/deploy-client.mjs";
 import { lockPath, takeLock } from "./release-lock.mjs";
-import { describeSigned, loadUpdateSigningKey, signLatestYml } from "./update-feed.mjs";
+import { checkPinChange, describeSigned, loadUpdateSigningKey, readPinsFromSource, signLatestYml } from "./update-feed.mjs";
 import { PINNED_UPDATE_KEYS } from "../src/main/update-keys.ts";
-import { readPinnedUpdateKeys } from "../src/main/update-signature.ts";
+import { rawUpdatePublicKey, readPinnedUpdateKeys } from "../src/main/update-signature.ts";
 
 /** The version of the Tavora installed for this user (asar is off, so its package.json is a plain file), or null. */
 function readInstalledVersion() {
@@ -64,6 +64,11 @@ if (!dryRun) {
 const signing = loadUpdateSigningKey(process.env.TAVORA_UPDATE_KEY?.trim(), PINNED_UPDATE_KEYS);
 if (signing.problem && !dryRun) {
   console.error(`Not releasing: ${signing.problem}\nNothing was built or published.`);
+  process.exit(1);
+}
+// Without real pins the Release build refuses to build (update-key.mjs check), so a dry run would only wait for that.
+if (!readPinnedUpdateKeys(PINNED_UPDATE_KEYS).ok) {
+  console.error(`Dry run stopped: ${signing.problem}\nThe Release build refuses to build an app that pins no real update keys (deploy/README.md, "The update key").`);
   process.exit(1);
 }
 if (signing.problem) console.warn(`Dry run without signing: ${signing.problem}`);
@@ -137,6 +142,39 @@ if (problems.length) {
   process.exit(1);
 }
 console.log("Version, branch, tags and patch notes are in order.");
+
+// Installed apps check this release against the keys their own build pins: those of the last release, not this checkout.
+{
+  const previousVersion = lastReleased(git("tag", "--list", "v*").split(/\r?\n/).filter(Boolean));
+  let previousSource = null;
+  if (previousVersion) {
+    try {
+      previousSource = git("show", `v${previousVersion}:apps/desktop/src/main/update-keys.ts`);
+    } catch {
+      // That release was from before signed updates.
+    }
+  }
+  const previous = readPinsFromSource(previousSource);
+  // A release is shipped only with real pins, so a file that is there must read as two keys.
+  if (previousSource !== null && !previous) fail(`Can't read the update keys ${previousVersion} pins. Nothing was built or published.`);
+  const signingPublic = signing.problem ? null : rawUpdatePublicKey(signing.key);
+  const pins = checkPinChange(previous, PINNED_UPDATE_KEYS, signingPublic);
+  if (pins.problems.length) {
+    console.error(`\nNot releasing ${version}:`);
+    for (const problem of pins.problems) console.error(`  - ${problem}`);
+    process.exit(1);
+  }
+  if (pins.first) console.log(`No earlier release pins update keys${previousVersion ? ` (${previousVersion} is from before signed updates)` : ""}: this is the first that checks them.`);
+  else if (pins.changed) {
+    console.warn(`\nThe pinned update keys change in this release:\n  before  release ${previous.release}, backup ${previous.backup}\n  now     release ${PINNED_UPDATE_KEYS.release}, backup ${PINNED_UPDATE_KEYS.backup}`);
+    if (!dryRun) {
+      const ask = createInterface({ input: process.stdin, output: process.stdout });
+      const answer = (await ask.question("Every app that installs this release will trust only the new pair. Did you make and keep the new key yourself? Type yes: ")).trim().toLowerCase();
+      ask.close();
+      if (answer !== "yes") fail("Not releasing: the key change was not confirmed. Nothing was built or published.");
+    }
+  } else console.log(`The update keys are the ones ${previousVersion} pins, and this release is signed with one of them.`);
+}
 
 // The commit that gets built, uploaded and tagged. If main moves meanwhile (another
 // session pulls into this checkout), the tag must still name what was built.
@@ -241,8 +279,8 @@ console.log(describeSigned(signed).map((line) => `  ${line}`).join("\n"));
 if (signing.problem) {
   console.log(`\nDry run: this is what a release signs. A real release would stop before building: ${signing.problem}`);
   console.log("Nothing was signed, published or tagged.");
-  // A key missing on this PC is this PC's matter; an app that pins no real keys can't be released from anywhere.
-  process.exit(readPinnedUpdateKeys(PINNED_UPDATE_KEYS).ok ? 0 : 1);
+  // Only the key on this PC is missing (real pins were checked at the start).
+  process.exit(0);
 }
 try {
   const latestPath = path.join(releaseDir, "latest.yml");

@@ -74,7 +74,7 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           BY_HAND: ${{ inputs.e2e }}
           PATHS: ^(apps/desktop/|modules/|examples/|packages/(sdk|pack|module-schema)/|patches/|package\.json$|pnpm-lock\.yaml$|pnpm-workspace\.yaml$|\.github/workflows/ci\.yml$)
-          UPDATE_PATHS: ^(apps/desktop/src/main/(updates|update-[a-z-]+|host|index)\.ts$|apps/desktop/scripts/(update-[a-z-]+|serve-feed|start-check|windows|release|after-pack)\.(mjs|cjs|ps1)$|apps/desktop/package\.json$|patches/|pnpm-lock\.yaml$|\.github/workflows/(ci|release-build)\.yml$)
+          UPDATE_PATHS: ^(apps/desktop/src/main/(updates|update-[a-z-]+)\.ts$|apps/desktop/scripts/(update-[a-z-]+|serve-feed|start-check|windows|release|after-pack)\.(mjs|cjs|ps1)$|apps/desktop/package\.json$|patches/|pnpm-lock\.yaml$|\.github/workflows/(ci|release-build)\.yml$)
         run: |
           if [[ "$REF" == refs/tags/* ]]; then run=true; update=true
           elif [[ "$EVENT" == workflow_dispatch ]]; then run=$BY_HAND; update=$BY_HAND
@@ -140,6 +140,8 @@ jobs:
     timeout-minutes: 50
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:

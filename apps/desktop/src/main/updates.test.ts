@@ -87,6 +87,7 @@ describe("UpdateManager", () => {
     const on = make(true);
     expect(on.updater.autoDownload).toBe(false);
     expect(on.updater.autoInstallOnAppQuit).toBe(false);
+    expect((on.updater as unknown as { disableWebInstaller?: boolean }).disableWebInstaller).toBe(true);
     expect(make(false).updater.autoDownload).toBe(false);
   });
 
@@ -379,6 +380,20 @@ describe("UpdateManager", () => {
     manager.installOnQuit(0);
     expect(updater.quitInstalls).toEqual([[true, false]]);
     expect(logs).toContain("installing 0.3.0 on quit");
+    manager.installOnQuit(0);
+    expect(updater.quitInstalls).toHaveLength(1);
+  });
+
+  it("after Restart now, quitting starts no second installer", async () => {
+    const { manager, updater, logs } = make(true);
+    updater.emit("update-available", { version: "0.3.0" });
+    updater.emit("update-downloaded", { version: "0.3.0" });
+    await settle();
+    manager.restartNow();
+    manager.installOnQuit(0);
+    expect(updater.installs).toEqual([[true, true]]);
+    expect(updater.quitInstalls).toEqual([]);
+    expect(logs).not.toContain("installing 0.3.0 on quit");
   });
 
   it("with automatic download on, starts a failed download over at most once an hour, still checking every time", async () => {

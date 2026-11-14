@@ -6,7 +6,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { checkUpdate, makeUpdateKey, UPDATE_SIGNATURE_FIELD } from "../src/main/update-signature";
 // @ts-expect-error - plain JavaScript module shared with scripts/release.mjs
-import { addSignatureToLatestYml, loadUpdateSigningKey, readLatestYml, signLatestYml } from "./update-feed.mjs";
+import { addSignatureToLatestYml, checkPinChange, loadUpdateSigningKey, readLatestYml, readPinsFromSource, signLatestYml } from "./update-feed.mjs";
 
 // The parser the app itself reads latest.yml with (electron-updater's generic provider).
 const { parseUpdateInfo } = createRequire(import.meta.url)("electron-updater/out/providers/Provider.js") as { parseUpdateInfo: (text: string, file: string, url: string) => Record<string, unknown> };
@@ -92,7 +92,51 @@ describe("readLatestYml", () => {
   });
 });
 
+describe("readPinsFromSource", () => {
+  it("reads the two keys from update-keys.ts as git has it, or null when it pins none", () => {
+    const source = `export const PINNED_UPDATE_KEYS = {\n  release: "${release.publicKey}",\n  backup: "${backup.publicKey}",\n};\n`;
+    expect(readPinsFromSource(source)).toEqual(pinned);
+    expect(readPinsFromSource(source.replaceAll("\n", "\r\n"))).toEqual(pinned);
+    expect(readPinsFromSource('export const PINNED_UPDATE_KEYS = {\n  release: "",\n  backup: "",\n};\n')).toBeNull();
+    expect(readPinsFromSource(null)).toBeNull();
+    expect(readPinsFromSource("nothing here")).toBeNull();
+  });
+});
+
+describe("checkPinChange", () => {
+  const next = makeUpdateKey();
+
+  it("passes the first release with pins, and one signed with a key the last release pins", () => {
+    expect(checkPinChange(null, pinned, release.publicKey)).toMatchObject({ problems: [], first: true });
+    expect(checkPinChange(pinned, pinned, release.publicKey)).toMatchObject({ problems: [], changed: false });
+    expect(checkPinChange(pinned, pinned, backup.publicKey)).toMatchObject({ problems: [], changed: false });
+  });
+
+  it("refuses a signing key installed apps don't pin, though this checkout does (they would refuse the release)", () => {
+    const moved = { release: next.publicKey, backup: backup.publicKey };
+    expect(checkPinChange(pinned, moved, next.publicKey).problems).toEqual([expect.stringMatching(/not one the last release pins/)]);
+  });
+
+  it("takes one new key per release (rotation after a lost key), and says the pins changed", () => {
+    expect(checkPinChange(pinned, { release: backup.publicKey, backup: next.publicKey }, backup.publicKey)).toMatchObject({ problems: [], changed: true });
+    expect(checkPinChange(pinned, { release: release.publicKey, backup: next.publicKey }, release.publicKey)).toMatchObject({ problems: [], changed: true });
+    expect(checkPinChange(pinned, { release: backup.publicKey, backup: release.publicKey }, release.publicKey)).toMatchObject({ problems: [], changed: true });
+  });
+
+  it("refuses both keys changing at once", () => {
+    const other = makeUpdateKey();
+    expect(checkPinChange(pinned, { release: next.publicKey, backup: other.publicKey }, release.publicKey).problems).toEqual([expect.stringMatching(/Both pinned update keys change/)]);
+  });
+});
+
 describe("loadUpdateSigningKey", () => {
+  it("never repeats a key pasted into the setting instead of a path", () => {
+    const pem = release.privateKey.export({ format: "pem", type: "pkcs8" }) as string;
+    const result = loadUpdateSigningKey(pem, pinned);
+    expect(result.problem).toMatch(/path to the key file, not the key itself/);
+    expect(result.problem).not.toContain(pem.split("\n")[1]);
+  });
+
   it("takes a pinned key's private half and says which one it is", async () => {
     const file = await keyFile(release.privateKey.export({ format: "pem", type: "pkcs8" }) as string);
     expect(loadUpdateSigningKey(file, pinned)).toMatchObject({ which: "release" });

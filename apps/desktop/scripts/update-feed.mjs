@@ -40,17 +40,48 @@ export function loadUpdateSigningKey(file, pinned) {
   const keys = readPinnedUpdateKeys(pinned);
   if (!keys.ok) return { problem: `${keys.problem}.` };
   if (!file) return { problem: "Set TAVORA_UPDATE_KEY to the path of the update key (deploy/README.md, \"The update key\")." };
+  // The key itself pasted into the setting must never be printed back (nor any message that would quote it).
+  if (/-----BEGIN|[\r\n]/.test(file) || file.length > 1000) return { problem: "TAVORA_UPDATE_KEY must be the path to the key file, not the key itself. Set it to the path and keep the key out of your environment." };
   let key;
   try {
     key = createPrivateKey(readFileSync(file, "utf8"));
   } catch (error) {
-    return { problem: `Can't read the update key at ${file} (${error instanceof Error ? error.message : String(error)}).` };
+    // Only the error's code: a message about a file that is not a key could quote what is in it.
+    const code = error && typeof error === "object" && "code" in error ? String(error.code) : "not a key";
+    return { problem: `Can't read the update key at ${file} (${code}).` };
   }
   if (key.asymmetricKeyType !== "ed25519") return { problem: `${file} is not an Ed25519 key.` };
   const publicKey = rawUpdatePublicKey(key);
   const which = publicKey === pinned.release ? "release" : publicKey === pinned.backup ? "backup" : null;
   if (!which) return { problem: `The update key at ${file} (public key ${publicKey}) is neither of the keys pinned in apps/desktop/src/main/update-keys.ts.` };
   return { key, which };
+}
+
+/** The keys update-keys.ts pins, read from its text (as git has it at a release tag), or null when it pins no real ones. */
+export function readPinsFromSource(text) {
+  if (typeof text !== "string") return null;
+  const release = /^\s*release:\s*"([^"]*)"/m.exec(text)?.[1];
+  const backup = /^\s*backup:\s*"([^"]*)"/m.exec(text)?.[1];
+  if (release === undefined || backup === undefined) return null;
+  return readPinnedUpdateKeys({ release, backup }).ok ? { release, backup } : null;
+}
+
+/**
+ * Whether the apps of the last release will take this one. What counts is the keys their builds pin, not this
+ * checkout's: the signing key must be one of those, and the pins may gain at most one new key per release, so an app
+ * that updated once still trusts a key the maintainer holds. `previous` null: no release pinned keys yet (the first).
+ * `changed`: the pins differ, which the release asks about before it goes on.
+ */
+export function checkPinChange(previous, current, signingPublicKey) {
+  if (!previous) return { problems: [], changed: false, first: true };
+  const old = new Set([previous.release, previous.backup]);
+  const problems = [];
+  if (signingPublicKey && !old.has(signingPublicKey)) {
+    problems.push(`The update key signing this release is not one the last release pins, so every installed app would refuse it. Sign with one of those keys (release ${previous.release}, backup ${previous.backup}).`);
+  }
+  const added = [current.release, current.backup].filter((key) => !old.has(key));
+  if (added.length > 1) problems.push("Both pinned update keys change in this release. Change one at a time, so installed apps keep trusting a key you hold.");
+  return { problems, changed: added.length > 0 || previous.release !== current.release || previous.backup !== current.backup, first: false };
 }
 
 /**
