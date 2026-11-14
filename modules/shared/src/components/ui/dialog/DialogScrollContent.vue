@@ -13,7 +13,7 @@ import { computed } from "vue"
 import { InertBehind } from "../../../lib/inert-behind"
 import { cn } from "../../../lib/utils"
 import { uiText } from "../text"
-import { useDialogDismissal, type DismissAttempt } from "./dismissal"
+import { useDialogDismissal, withoutDismissListener, type DismissAttempt } from "./dismissal"
 import { provideDialogInstant } from "./instant"
 import { trackModal } from "./track-modal"
 
@@ -42,10 +42,7 @@ trackModal()
 
 // Reka's own events go on to Reka; `dismiss-attempt` is the kit's and stays here.
 const forwardedAll = useForwardPropsEmits(delegatedProps, emits)
-const forwarded = computed(() => {
-  const { onDismissAttempt: _, ...rest } = forwardedAll.value as typeof forwardedAll.value & { onDismissAttempt?: unknown }
-  return rest
-})
+const forwarded = computed(() => withoutDismissListener(forwardedAll.value))
 const dismissal = useDialogDismissal(() => props, attempt => emits("dismiss-attempt", attempt))
 
 /** A press on the page's scrollbar is not a press outside; anything else goes through the dismissal rules. */

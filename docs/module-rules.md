@@ -189,7 +189,7 @@ each pattern.
   an icon, even when it is the primary one: `<DialogButton close>Done</DialogButton>`.
 - **Forms**: make the `form` `class="contents"` and put the `DialogFooter` inside it, so the Save button submits.
 - **Closing**: Escape, a click outside and the X close a dialog. While work it waits for runs, pass `:busy` (`useTask`'s
-  `busy`) to `DialogContent`: nothing closes it and the X is off. Where closing would lose something (typed text), set
+  `busy`) to `DialogContent` (or `DialogScrollContent`, or the app's `ModalDialog`): nothing closes it and the X is off. Where closing would lose something (typed text), set
   `:dismissible="false"` and answer `@dismiss-attempt` (its `reason`: `escape`, `outside`, `close-button`), for example
   with "Discard changes?". Don't handle `escape-key-down` or `pointer-down-outside` yourself. Playground: Actions >
   Dialogs > Ask before closing.

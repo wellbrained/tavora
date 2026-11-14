@@ -15,7 +15,7 @@ import { cn } from "../../../lib/utils"
 import { uiText } from "../text"
 import { dialogChromeKey, dialogCloseClass } from "./chrome"
 import DialogOverlay from "./DialogOverlay.vue"
-import { useDialogDismissal, type DismissAttempt } from "./dismissal"
+import { useDialogDismissal, withoutDismissListener, type DismissAttempt } from "./dismissal"
 import { provideDialogInstant } from "./instant"
 import { trackModal } from "./track-modal"
 
@@ -52,10 +52,7 @@ provide(dialogChromeKey, { showClose: toRef(props, "showCloseButton"), headerClo
 
 // Reka's own events go on to Reka; `dismiss-attempt` is the kit's and stays here.
 const forwardedAll = useForwardPropsEmits(delegatedProps, emits)
-const forwarded = computed(() => {
-  const { onDismissAttempt: _, ...rest } = forwardedAll.value as typeof forwardedAll.value & { onDismissAttempt?: unknown }
-  return rest
-})
+const forwarded = computed(() => withoutDismissListener(forwardedAll.value))
 const dismissal = useDialogDismissal(() => props, attempt => emits("dismiss-attempt", attempt))
 
 // The header's close X comes first in the page, so the dialog's own focus would land on it. Focus what the user came

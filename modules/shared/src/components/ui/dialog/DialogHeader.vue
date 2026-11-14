@@ -59,7 +59,7 @@ onBeforeUnmount(() => {
       <slot />
     </div>
     <button
-      v-if="chrome?.showClose.value && dismissal"
+      v-if="dismissal && chrome?.showClose.value"
       type="button"
       data-slot="dialog-close"
       :disabled="dismissal.busy.value"

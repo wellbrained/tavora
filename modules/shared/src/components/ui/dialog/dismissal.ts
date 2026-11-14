@@ -26,12 +26,12 @@ export interface DismissOptions {
 }
 
 /** What a refused or allowed try comes to: close, refuse and tell the page, or refuse without a word. */
-export type DismissVerdict = "close" | "attempt" | "refuse"
+export type DismissVerdict = "close" | "ask" | "refuse"
 
 /** Whether a try to close goes ahead (see the top of this file). */
 export function dismissVerdict(options: DismissOptions): DismissVerdict {
   if (options.busy) return "refuse"
-  return options.dismissible === false ? "attempt" : "close"
+  return options.dismissible === false ? "ask" : "close"
 }
 
 /** A right-click, or Ctrl with the left button (the Mac's right-click): Reka doesn't count it as a press outside. */
@@ -59,7 +59,7 @@ export function useDialogDismissal(options: () => DismissOptions, attempted: (at
   /** Whether the dialog may close for `reason`; tells the page when it was a refused try. */
   function allows(reason: DismissReason): boolean {
     const verdict = dismissVerdict(options())
-    if (verdict === "attempt") attempted({ reason })
+    if (verdict === "ask") attempted({ reason })
     return verdict === "close"
   }
   const dismissal: DialogDismissal = {
@@ -80,6 +80,12 @@ export function useDialogDismissal(options: () => DismissOptions, attempted: (at
       if (!allows("outside")) event.preventDefault()
     },
   }
+}
+
+/** The kit's own `dismiss-attempt` listener, taken out of what a content forwards to Reka's DialogContent. */
+export function withoutDismissListener<T extends object>(forwarded: T): Omit<T, "onDismissAttempt"> {
+  const { onDismissAttempt: _, ...rest } = forwarded as T & { onDismissAttempt?: unknown }
+  return rest
 }
 
 /** For a close button inside a dialog: the kit content's rules, or a plain close outside one. */

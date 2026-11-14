@@ -18,7 +18,7 @@ describe("dismissVerdict", () => {
   });
 
   it("leaves it to the page when the dialog is not dismissible", () => {
-    expect(dismissVerdict({ dismissible: false })).toBe("attempt");
+    expect(dismissVerdict({ dismissible: false })).toBe("ask");
   });
 
   it("refuses without a word while busy, dismissible or not", () => {

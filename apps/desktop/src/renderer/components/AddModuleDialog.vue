@@ -195,7 +195,7 @@ useEventListener(document, "pointerdown", (event) => {
   if (expanded.value && !(event.target as Element | null)?.closest(`[data-panel-menu="${CSS.escape(expanded.value)}"]`)) expanded.value = null;
 });
 
-/** Escape closes an open panel list before the library itself. */
+/** While a panel list is open, Escape folds it and leaves the library open; a click outside or the X closes the library. */
 function foldListFirst({ reason }: DismissAttempt) {
   if (reason === "escape") expanded.value = null;
   else dialog.value = null;

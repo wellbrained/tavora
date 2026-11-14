@@ -11,7 +11,7 @@ an agent finds where a flow lives and what it can be in, without reading it all.
   goes on to the next one with `followDialog(from, next)`, so whatever the user opened meanwhile, or a question that came
   up, stays.
 - **Closing a kit dialog** (`modules/shared/src/components/ui/dialog/dismissal.ts`): each try (Escape, a press outside,
-  the X) is `close`, `attempt` (not `dismissible`: `dismiss-attempt` tells the page, which decides) or `refuse` (`busy`:
+  the X) is `close`, `ask` (not `dismissible`: `dismiss-attempt` tells the page, which decides) or `refuse` (`busy`:
   refused without a word, `busy` winning). `dismissVerdict` is the step, with tests.
 - **Real transitions** get a pure step function over the union, with tests (`dockDragStep` in `renderer/dock-drag.ts`).
 - **Seen from outside**: the value goes on the view's root as `data-status` (`data-gesture` for a gesture), for tests and

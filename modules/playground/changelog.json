@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.44",
+    "date": "2026-11-15",
+    "notes": [
+      "Dialogs has a new example: a note that asks before it is thrown away, and stays open while it saves."
+    ]
+  },
+  {
     "version": "0.1.43",
     "date": "2026-11-14",
     "notes": [
