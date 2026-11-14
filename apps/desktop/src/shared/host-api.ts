@@ -151,6 +151,8 @@ export interface PanelView {
   placement?: PanelPlacement;
   /** The panel of a module that left Tavora for the catalog (Discord, AI Usage) and is not installed: it offers to install it. */
   moved?: boolean;
+  /** A panel of the Discord module while Discord voice is paused (shared/discord-voice.ts): it says so and doesn't run. */
+  paused?: boolean;
 }
 
 /**

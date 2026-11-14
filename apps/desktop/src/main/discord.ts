@@ -6,6 +6,7 @@ import { HostError } from "./errors";
 import { AUTHORIZE_TIMEOUT_MS, RpcClient, RpcError, type RpcEvents } from "./discord-rpc";
 import { imageUrl, isSnowflake, MAX_IMAGE, parseScopes, parseUser, pngDataUrl } from "./discord-parse";
 import type { DiscordGame, DiscordLast, DiscordSecrets, DiscordToken } from "./discord-store";
+import { DISCORD_VOICE_PAUSED } from "../shared/discord-voice";
 
 // The Discord connector (decision log, module grants row of 2026-10-16, point 8):
 // the connection to the Discord desktop app on this PC, Tavora's Discord sign-in
@@ -57,6 +58,12 @@ export interface DiscordDeps {
   save(secrets: DiscordSecrets): Promise<void>;
   /** False where this PC can't encrypt, so the sign-in lasts only until Tavora closes. */
   canSaveSignIn: boolean;
+  /**
+   * Discord voice is paused (shared/discord-voice.ts, the default): the Discord app is never connected to and Discord's
+   * image server never asked. The saved sign-in is still read, and kept as it is, so it all works again once unpaused.
+   * Tests of the working connection say false.
+   */
+  paused?: boolean;
   /** For Settings > Integrations > Discord. */
   onChange(view: DiscordView): void;
   now?: () => number;
@@ -141,6 +148,10 @@ export class DiscordConnector {
     };
   }
 
+  private get paused(): boolean {
+    return this.deps.paused ?? DISCORD_VOICE_PAUSED;
+  }
+
   private get wanted(): boolean {
     return this.listeners.size > 0;
   }
@@ -177,6 +188,8 @@ export class DiscordConnector {
 
   async signOut(): Promise<void> {
     await this.loaded;
+    // Paused: nothing offers it, and the saved sign-in waits as it is for when Discord voice comes back.
+    if (this.paused) return;
     this.secrets = { token: null };
     await this.deps.save(this.secrets);
     this.user = null;
@@ -233,7 +246,7 @@ export class DiscordConnector {
 
   /** A picture from Discord's image server as a small PNG data address; null for any other address or on any problem. */
   image(url: string): Promise<string | null> {
-    const address = imageUrl(url);
+    const address = this.paused ? null : imageUrl(url);
     if (!address) return Promise.resolve(null);
     // One that did not come is kept as missing for a minute, then fetched again: a gone avatar isn't asked for on every
     // redraw, and one that failed offline comes back.
@@ -290,6 +303,7 @@ export class DiscordConnector {
   }
 
   private async start(interactive: boolean, reauthorize = false): Promise<void> {
+    if (this.paused) return;
     this.stop(this.status);
     const attempt = this.attempt;
     const live = () => attempt === this.attempt && this.wanted;

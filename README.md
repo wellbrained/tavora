@@ -20,10 +20,10 @@ Tavora is a local-first gaming companion for your second monitor. Keep notes, to
 - **Track To-Dos.** Colored groups, sub-to-dos, pinned objectives, descriptions, and undo for finishing or deleting a task.
 - **Sketch on a Whiteboard.** Multiple boards per workspace, drawing tools, pictures, and Copy as picture. Built on [Excalidraw](https://github.com/excalidraw/excalidraw).
 - **Keep guides nearby.** The built-in Browser has per-workspace tabs and sign-ins, ad blocking, and a choice to share a site's sign-in across workspaces.
-- **Add more tools.** Notes, To-Dos, a Whiteboard and a few more come with Tavora; everything else, such as Discord and AI Usage, you install from the catalog or a ZIP file. Modules ask before using capabilities such as named websites or host connectors.
+- **Add more tools.** Notes, To-Dos, a Whiteboard and a few more come with Tavora; everything else, such as AI Usage, you install from the catalog or a ZIP file. Modules ask before using capabilities such as named websites or host connectors.
 - **Make it comfortable.** Three built-in themes, light/dark modes that can follow the system, custom themes, English and German, keyboard shortcuts, and Ctrl+K search.
 
-**Discord voice access is currently limited to approved testers of Tavora's Discord app.** Discord account sign-in is separate. AI Usage reads supported Claude and Codex accounts on this PC through the host; modules do not receive their credentials.
+**Discord voice is paused for now.** Discord limits voice to a few approved testers until it approves Tavora's app, so the Discord connector and module are switched off until then. Signing in to your Tavora account with Discord still works. AI Usage reads supported Claude and Codex accounts on this PC through the host; modules do not receive their credentials.
 
 ### A place to think things through
 
@@ -114,7 +114,7 @@ The SDK and packaging tools currently live in this repository and are not publis
 | `packages/sdk` | Typed module client and wire-protocol types |
 | `packages/module-schema` | Manifest types, validation, JSON Schema and ID rules |
 | `packages/pack` | Module ZIP packing, signatures and archive validation |
-| `modules/` | Notes, To-Dos, Whiteboard, Discord, AI Usage, UI Playground and shared UI code |
+| `modules/` | Notes, To-Dos, Whiteboard, UI Playground and shared UI code |
 | `examples/` | Vanilla, React and Vue module examples, plus a theme starter |
 | `themes/` | Tavora, Hearthwood and Nightfall theme packages |
 | `docs/screenshots` | Screenshots used in this README |

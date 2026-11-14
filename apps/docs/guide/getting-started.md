@@ -183,7 +183,7 @@ Settings go in `tavora.storage`, the user's work in `tavora.documents`, pictures
 | `tavora.connectors.aiUsage` | The usage of the user's Claude and Codex accounts, with the `ai-usage` connector. |
 | `tavora.connectors.systemInfo` | Your PC's hardware, how busy it is (CPU, graphics card, memory, drives) and how its connection is doing (ping, lost pings, drops), with the `system-info` connector. |
 | `tavora.connectors.media` | What plays on the PC (Spotify, browsers, video players) with play/pause, next and previous, with the `media` connector. |
-| `tavora.connectors.discord` | The Discord app on this PC through Tavora's Discord sign-in, with the `discord` connector: voice channels, mute and deafen, voice events. |
+| `tavora.connectors.discord` | The Discord app on this PC through Tavora's Discord sign-in, with the `discord` connector: voice channels, mute and deafen, voice events. Paused for now: the connection to Discord doesn't start. |
 
 What reaches outside the panel needs the user's yes first; see [Permissions and consent](./permissions.md). Following the theme and the language is in [Look and languages](./look-and-languages.md).
 

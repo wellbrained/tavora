@@ -5,6 +5,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
+import { DISCORD_VOICE_PAUSED } from "../../src/shared/discord-voice";
 import { HOSTILE, launch, layOutColumns, newUserData, openModule, panels } from "./harness";
 
 test("panels of the old Discord and AI Usage modules say they moved, and their settings stay hidden", async () => {
@@ -47,11 +48,22 @@ test("panels of the old Discord and AI Usage modules say they moved, and their s
   const { app, page } = await launch(userData);
   try {
     // Both panels are kept, handed to the catalog modules, and offer to install them (not clicked: that would reach the catalog).
+    // While Discord voice is paused (shared/discord-voice.ts), the Discord panel only says so.
     const moved = page.locator('[data-testid^="panel-module-moved-"]');
-    await expect(moved).toHaveCount(2);
-    await expect(moved.first()).toContainText("Discord");
-    await expect(moved.nth(1)).toContainText("AI Usage");
-    await expect(page.getByTestId("install-moved-module")).toHaveCount(2);
+    const paused = page.locator('[data-testid^="panel-paused-"]');
+    if (DISCORD_VOICE_PAUSED) {
+      await expect(paused).toHaveCount(1);
+      await expect(paused).toContainText("Discord is taking a break");
+      await expect(moved).toHaveCount(1);
+      await expect(moved).toContainText("AI Usage");
+      await expect(page.getByTestId("install-moved-module")).toHaveCount(1);
+    } else {
+      await expect(paused).toHaveCount(0);
+      await expect(moved).toHaveCount(2);
+      await expect(moved.first()).toContainText("Discord");
+      await expect(moved.nth(1)).toContainText("AI Usage");
+      await expect(page.getByTestId("install-moved-module")).toHaveCount(2);
+    }
     const kept = JSON.parse(await readFile(file, "utf8")).workspaces.poe2.instances as { moduleId: string }[];
     expect(kept.map((record) => record.moduleId).sort()).toEqual(["wellbrained.ai-usage", "wellbrained.discord"]);
 

@@ -80,6 +80,8 @@ async function setup({ secrets = { token: null }, running = true, tokenStatus = 
     load: async () => secrets,
     save: async (next) => void saved.push(next),
     canSaveSignIn: true,
+    // The working connection, as when Discord voice isn't paused (shared/discord-voice.ts).
+    paused: false,
     onChange: () => undefined,
     setTimer: (fn) => {
       timers.push(fn);

@@ -38,6 +38,7 @@ import { addOrRestoreWorkspace, gameCopyFinder } from "./game-copy";
 import { isForWorkspaceGame, learnGameIds, withOnlineId, workspaceGameIds, type ListedGame } from "./workspace-game";
 import { resolveLanguage, translate, type Language, type MessageKey } from "../shared/i18n";
 import { suggestPrefix } from "../shared/id-prefix";
+import { isVoicePaused } from "../shared/discord-voice";
 import { compareModuleVersions } from "../shared/module-version";
 import { UserError } from "./messages";
 import { UndoGoneError, UndoShelf } from "./undo-shelf";
@@ -1105,7 +1106,8 @@ export class Host {
 
   private panelTypeOf(record: InstanceRecord): ResolvedPanelType | null | undefined {
     const module = this.modules.get(record.moduleId);
-    if (!module) return undefined;
+    // Discord voice is paused (shared/discord-voice.ts): its panels never start, and their slot says so.
+    if (!module || isVoicePaused(record.moduleId)) return undefined;
     const types = panelTypes(this.shown(module.manifest));
     if (types.length === 0) return null;
     return types.find((type) => type.id === record.panelType);
@@ -3635,7 +3637,7 @@ export class Host {
     const workspace = this.workspace;
     const record = workspace && this.records(workspace.id).find((item) => item.instanceId === instanceId);
     if (!workspace || !record) throw new WorkspaceError("error.panelClosed");
-    if (this.panelTypeOf(record) !== undefined) return;
+    if (this.panelTypeOf(record) !== undefined || isVoicePaused(record.moduleId)) return;
     const module = this.modules.get(record.moduleId);
     if (!module || !panelTypes(module.manifest).some((type) => type.id === panelType)) throw new WorkspaceError("error.panelTypeGone");
     record.panelType = panelType;
@@ -4836,9 +4838,21 @@ export class Host {
         const openedFrom = this.panels.openedFrom(record.instanceId);
         const placement = this.panels.placement(record.instanceId);
         if (type === undefined) {
+          // Discord voice is paused (shared/discord-voice.ts), installed or not: its panel says so and offers nothing.
+          const paused = isVoicePaused(record.moduleId);
           // A module that left Tavora for the catalog and is not installed yet: its panel offers to install it.
-          const moved = !module && movedModule(record.moduleId) !== undefined;
-          return { instanceId: record.instanceId, moduleId: record.moduleId, panelType, name: moved ? name : (record.panelType ?? name), status: "unavailable" as const, waiting: false, content: null, ...(moved ? { moved } : {}) };
+          const moved = !paused && !module && movedModule(record.moduleId) !== undefined;
+          return {
+            instanceId: record.instanceId,
+            moduleId: record.moduleId,
+            panelType,
+            name: moved || paused ? name : (record.panelType ?? name),
+            status: "unavailable" as const,
+            waiting: false,
+            content: null,
+            ...(moved ? { moved } : {}),
+            ...(paused ? { paused } : {}),
+          };
         }
         const content = record.content?.title ?? null;
         if (!(view instanceof BrowserPanel)) {

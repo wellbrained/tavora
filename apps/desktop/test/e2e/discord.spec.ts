@@ -10,11 +10,16 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test, type ElectronApplication } from "@playwright/test";
 import { fakeDiscord, type FakeDiscord } from "../../src/main/discord-fake.test-helper";
+import { DISCORD_VOICE_PAUSED } from "../../src/shared/discord-voice";
 import { clickInModule, desktopDir, expectModuleText, inModule, launch, gesture } from "./harness";
 
 const DISCORD = "local.test.discord-probe";
 /** Not in test/fixtures, which every launch loads: a module asking for Discord would show its settings in every spec. */
 const PROBES = path.join(desktopDir, "test/connector-fixtures");
+
+// Discord voice is paused (shared/discord-voice.ts): the connector never starts, so this runs again once it's back.
+// main/discord-paused.test.ts covers the pause itself.
+test.skip(DISCORD_VOICE_PAUSED, "Discord voice is paused");
 
 let fake: FakeDiscord;
 let tokens: Server;

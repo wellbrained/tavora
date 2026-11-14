@@ -9,7 +9,8 @@
 // A panel that is over the game right now (the in-game layer is open) leaves a quiet note in its slot (game-overlay-window.ts).
 // A panel whose type the module no longer offers says so, with Remove and the
 // module's other panel types (the decision log, named panels round 4).
-// A panel of Discord or AI Usage, which left Tavora for the catalog, offers to install it.
+// A panel of Discord or AI Usage, which left Tavora for the catalog, offers to install it. While Discord voice is paused
+// (shared/discord-voice.ts) a Discord panel only says so, installed or not; closing its tab closes it as usual.
 // A panel whose module asks for access first shows the question as its content, or waits while another of its panels
 // asks (decision of 2026-10-28; main/host.ts questionOf). Tavora's question before a module's leaderboard results go
 // public shows the same way, in the panel that asked (LeaderboardQuestion.vue).
@@ -35,7 +36,7 @@ const panel = computed(() => state.value?.panels.find((item) => item.instanceId 
 const image = computed(() => frozen.value[id]);
 const module = computed(() => state.value?.modules.find((item) => item.id === panel.value?.moduleId));
 /** A running panel whose module asks for more after an update (it keeps what was granted): the bar offers a review. */
-const reviewNeeded = computed(() => module.value !== undefined && !panel.value?.question && needsGrant(module.value));
+const reviewNeeded = computed(() => module.value !== undefined && !panel.value?.question && !panel.value?.paused && needsGrant(module.value));
 /** The leaderboards question this panel asked for (leaderboards.show). */
 const leaderboardQuestion = computed(() => {
   const pending = state.value?.pendingLeaderboard;
@@ -50,7 +51,7 @@ const question = computed<GrantRequest | null>(() => {
   }
   return { kind: "grant", moduleId: panel.value.moduleId, slot: null, review: false };
 });
-const updateWaiting = computed(() => module.value?.update ?? null);
+const updateWaiting = computed(() => (panel.value?.paused ? null : (module.value?.update ?? null)));
 
 // Discord and AI Usage left Tavora for the catalog: their panels install them from there with one press.
 // The install always ends, so the button can be pressed again; a throw says so (a refusal `act` says itself).
@@ -145,7 +146,11 @@ onBeforeUnmount(() => dock.unregister(id, element.value!));
       class="flex size-full flex-col items-center justify-center gap-3 overflow-y-auto p-4 text-center"
       :data-testid="`panel-type-gone-${id}`"
     >
-      <template v-if="panel.moved">
+      <template v-if="panel.paused">
+        <p class="font-medium" :data-testid="`panel-paused-${id}`">{{ t("panel.discordPaused") }}</p>
+        <p class="text-muted-foreground max-w-sm text-sm">{{ t("panel.discordPausedText") }}</p>
+      </template>
+      <template v-else-if="panel.moved">
         <p class="max-w-sm text-sm" :data-testid="`panel-module-moved-${id}`">{{ t("panel.moved", { module: panel.name }) }}</p>
         <p v-if="!state?.library.onlineSearch" class="text-muted-foreground max-w-sm text-sm">{{ t("panel.movedOffline") }}</p>
         <!-- The panel turns into the module once it is in, so this button never gets to say it is done. -->
@@ -155,7 +160,7 @@ onBeforeUnmount(() => dock.unregister(id, element.value!));
       </template>
       <p v-else-if="!module" class="max-w-sm text-sm" :data-testid="`panel-module-waiting-${id}`">{{ t("panel.moduleWaiting", { module: panel.name }) }}</p>
       <p v-else class="max-w-sm text-sm">{{ t("panel.typeGone", { module: module.name, type: panel.name }) }}</p>
-      <template v-if="module?.panels.length">
+      <template v-if="!panel.paused && module?.panels.length">
         <p class="text-muted-foreground text-sm">{{ t("panel.typeGoneChoose", { module: module.name }) }}</p>
         <div class="flex max-w-md flex-wrap justify-center gap-2">
           <Button
@@ -170,7 +175,7 @@ onBeforeUnmount(() => dock.unregister(id, element.value!));
           </Button>
         </div>
       </template>
-      <Button size="sm" variant="danger" data-testid="remove-unavailable-panel" @click="act({ type: 'close-panel', instanceId: id })">{{ t("panel.remove") }}</Button>
+      <Button v-if="!panel.paused" size="sm" variant="danger" data-testid="remove-unavailable-panel" @click="act({ type: 'close-panel', instanceId: id })">{{ t("panel.remove") }}</Button>
     </div>
     <div v-else-if="panel?.browser?.error" class="flex size-full flex-col items-center justify-center gap-3 p-4 text-center" :data-testid="`browser-error-${id}`">
       <p class="font-medium">{{ t(`browser.error.${panel.browser.error.kind}`, { detail: panel.browser.error.detail }) }}</p>

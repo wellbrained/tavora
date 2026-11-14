@@ -1597,6 +1597,8 @@ export const de: Record<keyof typeof en, string> = {
   "panel.moduleWaiting": "{module} kann gerade nicht laden, zum Beispiel während es gebaut wird. Dieses Panel kommt zurück, sobald es lädt.",
   "panel.moved": "{module} ist jetzt ein eigenes Modul. Installier es, um es hier weiter zu nutzen; deine Einstellungen kommen mit.",
   "panel.movedOffline": "Schalte in den Einstellungen die Online-Funktionen ein, um es zu installieren.",
+  "panel.discordPaused": "Discord macht gerade Pause",
+  "panel.discordPausedText": "Wir haben Discord in Tavora vorerst pausiert. Deine Einstellungen bleiben, und dieses Panel kommt zurück, sobald es wieder da ist.",
   "panel.typeGoneChoose": "Wähle ein anderes Panel von {module}:",
   "panel.remove": "Entfernen",
   "panel.reload": "Neu laden",

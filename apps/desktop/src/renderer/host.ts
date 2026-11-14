@@ -12,6 +12,7 @@ import { isLanguageReady, loadLanguage, setLanguage, t } from "./i18n";
 import { applyTheme } from "./theme";
 import { developerSetup } from "./developer-setup";
 import { createDialogQueue } from "./dialog-queue";
+import { DISCORD_VOICE_PAUSED } from "../shared/discord-voice";
 
 export const api = window.tavoraHost;
 export const state = shallowRef<HostViewState | null>(null);
@@ -212,13 +213,14 @@ export const makesModules = computed(() => Boolean(state.value?.library.makesMod
 
 
 /**
- * Single settings not shown on this run: Discord and AI usage until an installed module asks for them, Leaderboards
- * until one offers them, and the game overlays on a PC that can't show them.
+ * Single settings not shown on this run: Discord and AI usage until an installed module asks for them (Discord also
+ * while its voice connection is paused, shared/discord-voice.ts), Leaderboards until one offers them, and the game
+ * overlays on a PC that can't show them.
  */
 export const hiddenSettingIds = computed<ReadonlySet<string>>(
   () =>
     new Set([
-      ...(asksFor("discord") ? [] : ["discord-connection"]),
+      ...(asksFor("discord") && !DISCORD_VOICE_PAUSED ? [] : ["discord-connection"]),
       ...(asksFor("ai-usage") ? [] : ["ai-usage-accounts"]),
       ...(asksFor("leaderboards") ? [] : ["leaderboards"]),
       ...(state.value?.gameOverlays.supported ? [] : GAME_OVERLAY_SETTINGS),

@@ -9,9 +9,11 @@ import { defaultFilesRoot } from "./module-files";
 import { OVERLAYS_FILE } from "./overlays";
 import { WORKSPACE_FILE } from "./saved-data";
 import { APP_DATA_DIR } from "./storage";
+import { DISCORD_MODULE_ID } from "../shared/discord-voice";
 
-/** The Discord and AI Usage modules in the catalog. */
-export const DISCORD_MODULE_ID = "wellbrained.discord";
+export { DISCORD_MODULE_ID };
+
+/** The AI Usage module in the catalog (Discord's id lives with its pause switch, shared/discord-voice.ts). */
 export const AI_USAGE_MODULE_ID = "wellbrained.ai-usage";
 
 /**
