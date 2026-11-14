@@ -191,7 +191,9 @@ each pattern.
 - **Closing**: Escape, a click outside and the X close a dialog. While work it waits for runs, pass `:busy` (`useTask`'s
   `busy`) to `DialogContent` (or `DialogScrollContent`, or the app's `ModalDialog`): nothing closes it and the X is off. Where closing would lose something (typed text), set
   `:dismissible="false"` and answer `@dismiss-attempt` (its `reason`: `escape`, `outside`, `close-button`), for example
-  with "Discard changes?". Don't handle `escape-key-down` or `pointer-down-outside` yourself. Playground: Actions >
+  with "Discard changes?". Don't keep a dialog open with your own `escape-key-down` or `pointer-down-outside` handler; one that
+  takes Escape for something inside the dialog first (folding an open list) may still prevent it, and the kit then
+  doesn't count it as a try. Playground: Actions >
   Dialogs > Ask before closing.
 - **Texts**: a title of a few words, one short sentence under it, in English and German like everything else.
 

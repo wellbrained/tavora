@@ -12,8 +12,8 @@ import {
 import { computed } from "vue"
 import { InertBehind } from "../../../lib/inert-behind"
 import { cn } from "../../../lib/utils"
-import { uiText } from "../text"
-import { useDialogDismissal, withoutDismissListener, type DismissAttempt } from "./dismissal"
+import DialogCloseX from "./DialogCloseX.vue"
+import { useDialogDismissal, withoutDismissListener, type DismissEmits, type DismissOptions } from "./dismissal"
 import { provideDialogInstant } from "./instant"
 import { trackModal } from "./track-modal"
 
@@ -21,19 +21,15 @@ defineOptions({
   inheritAttrs: false,
 })
 
-const props = withDefaults(defineProps<DialogContentProps & {
+const props = withDefaults(defineProps<DialogContentProps & DismissOptions & {
   class?: HTMLAttributes["class"]
   instant?: boolean
-  /** `false`: Escape, a press outside and the close X don't close it; each try emits `dismiss-attempt` (dismissal.ts). */
-  dismissible?: boolean
-  /** Work the dialog waits for runs (`useTask`'s `busy`): nothing the user does closes it, and the X is off. */
-  busy?: boolean
 }>(), {
   instant: false,
   dismissible: true,
   busy: false,
 })
-const emits = defineEmits<DialogContentEmits & { "dismiss-attempt": [attempt: DismissAttempt] }>()
+const emits = defineEmits<DialogContentEmits & DismissEmits>()
 
 const delegatedProps = reactiveOmit(props, "class", "instant", "dismissible", "busy")
 const instant = provideDialogInstant(() => props.instant)
@@ -75,16 +71,9 @@ function onPointerDownOutside(event: CustomEvent<{ originalEvent: PointerEvent }
         <InertBehind />
         <slot />
 
-        <button
-          type="button"
-          data-slot="dialog-close"
-          :disabled="busy"
-          class="absolute top-4 right-4 p-0.5 transition-colors rounded-md hover:bg-secondary disabled:pointer-events-none disabled:opacity-50"
-          @click="dismissal.close"
-        >
+        <DialogCloseX class="absolute top-4 right-4 p-0.5 transition-colors rounded-md hover:bg-secondary disabled:pointer-events-none disabled:opacity-50">
           <X class="w-4 h-4" />
-          <span class="sr-only">{{ uiText.close }}</span>
-        </button>
+        </DialogCloseX>
       </DialogContent>
     </DialogOverlay>
   </DialogPortal>

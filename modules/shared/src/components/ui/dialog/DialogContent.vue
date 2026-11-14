@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { DialogContentEmits, DialogContentProps } from "reka-ui"
 import type { HTMLAttributes } from "vue"
-import { X } from "@lucide/vue"
 import { reactiveOmit, useEventListener, useResizeObserver } from "@vueuse/core"
 import {
   DialogContent,
@@ -12,10 +11,10 @@ import {
 import { computed, nextTick, provide, ref, shallowRef, toRef, watch } from "vue"
 import { InertBehind } from "../../../lib/inert-behind"
 import { cn } from "../../../lib/utils"
-import { uiText } from "../text"
 import { dialogChromeKey, dialogCloseClass } from "./chrome"
+import DialogCloseX from "./DialogCloseX.vue"
 import DialogOverlay from "./DialogOverlay.vue"
-import { useDialogDismissal, withoutDismissListener, type DismissAttempt } from "./dismissal"
+import { useDialogDismissal, withoutDismissListener, type DismissEmits, type DismissOptions } from "./dismissal"
 import { provideDialogInstant } from "./instant"
 import { trackModal } from "./track-modal"
 
@@ -23,21 +22,17 @@ defineOptions({
   inheritAttrs: false,
 })
 
-const props = withDefaults(defineProps<DialogContentProps & {
+const props = withDefaults(defineProps<DialogContentProps & DismissOptions & {
   class?: HTMLAttributes["class"]
   showCloseButton?: boolean
   instant?: boolean
-  /** `false`: Escape, a press outside and the close X don't close it; each try emits `dismiss-attempt` (dismissal.ts). */
-  dismissible?: boolean
-  /** Work the dialog waits for runs (`useTask`'s `busy`): nothing the user does closes it, and the X is off. */
-  busy?: boolean
 }>(), {
   showCloseButton: true,
   instant: false,
   dismissible: true,
   busy: false,
 })
-const emits = defineEmits<DialogContentEmits & { "dismiss-attempt": [attempt: DismissAttempt] }>()
+const emits = defineEmits<DialogContentEmits & DismissEmits>()
 
 const delegatedProps = reactiveOmit(props, "class", "showCloseButton", "instant", "dismissible", "busy")
 
@@ -135,17 +130,7 @@ useEventListener(window, "resize", place)
       <InertBehind />
       <slot />
 
-      <button
-        v-if="showCloseButton && !headerClose"
-        type="button"
-        data-slot="dialog-close"
-        :disabled="busy"
-        :class="cn(dialogCloseClass, 'absolute top-[17px] right-6')"
-        @click="dismissal.close"
-      >
-        <X :stroke-width="1.5" />
-        <span class="sr-only">{{ uiText.close }}</span>
-      </button>
+      <DialogCloseX v-if="showCloseButton && !headerClose" :class="cn(dialogCloseClass, 'absolute top-[17px] right-6')" />
     </DialogContent>
   </DialogPortal>
 </template>

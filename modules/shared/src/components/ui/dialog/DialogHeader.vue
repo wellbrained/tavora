@@ -3,13 +3,11 @@
 // kit's header: an optional icon box, the title with an optional one-line description under it, and the close X
 // on the right, all centred against each other. Anything in the default slot goes under the description.
 import type { Component, HTMLAttributes } from "vue"
-import { X } from "@lucide/vue"
 import { inject, onBeforeUnmount, watchEffect } from "vue"
 import { cn } from "../../../lib/utils"
-import { uiText } from "../text"
 import { dialogChromeKey, dialogCloseClass } from "./chrome"
+import DialogCloseX from "./DialogCloseX.vue"
 import DialogDescription from "./DialogDescription.vue"
-import { injectDialogDismissal } from "./dismissal"
 import DialogTitle from "./DialogTitle.vue"
 
 const props = defineProps<{
@@ -22,7 +20,6 @@ const props = defineProps<{
 }>()
 
 const chrome = inject(dialogChromeKey, null)
-const dismissal = chrome ? injectDialogDismissal() : null
 // The header draws the close X itself, so it sits centred against the title and not in the corner.
 watchEffect(() => {
   if (chrome) chrome.headerClose.value = props.title !== undefined
@@ -58,16 +55,6 @@ onBeforeUnmount(() => {
       <DialogDescription v-if="description">{{ description }}</DialogDescription>
       <slot />
     </div>
-    <button
-      v-if="dismissal && chrome?.showClose.value"
-      type="button"
-      data-slot="dialog-close"
-      :disabled="dismissal.busy.value"
-      :class="dialogCloseClass"
-      @click="dismissal.close"
-    >
-      <X :stroke-width="1.5" />
-      <span class="sr-only">{{ uiText.close }}</span>
-    </button>
+    <DialogCloseX v-if="chrome?.showClose.value" :class="dialogCloseClass" />
   </div>
 </template>

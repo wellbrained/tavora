@@ -18,6 +18,10 @@ export interface DismissAttempt {
   reason: DismissReason
 }
 
+/** The event a kit dialog content adds to Reka's. */
+export type DismissEmits = { "dismiss-attempt": [attempt: DismissAttempt] }
+
+/** The props a kit dialog content adds to Reka's. */
 export interface DismissOptions {
   /** `false`: Escape, a press outside and the close X don't close it; each try emits `dismiss-attempt`. */
   dismissible?: boolean
@@ -50,8 +54,8 @@ const dismissalKey: InjectionKey<DialogDismissal> = Symbol("dialog-dismissal")
 type PointerOutside = CustomEvent<{ originalEvent: PointerEvent }>
 
 /**
- * For the content of a dialog: the handlers that put Escape and a press outside through the rules, and the close the
- * X uses (shared with the header and footer inside it). A caller's own handler on the same event runs first; when it
+ * For the content of a dialog: the handlers that put Escape and a press outside through the rules; the close X and
+ * the footer's Close find the same rules with `injectDialogDismissal`. A caller's own handler on the same event runs first; when it
  * prevents the default (Escape taken by something inside), that is not a try to close the dialog.
  */
 export function useDialogDismissal(options: () => DismissOptions, attempted: (attempt: DismissAttempt) => void) {
@@ -62,15 +66,14 @@ export function useDialogDismissal(options: () => DismissOptions, attempted: (at
     if (verdict === "ask") attempted({ reason })
     return verdict === "close"
   }
-  const dismissal: DialogDismissal = {
+  // The X (DialogCloseX) and the footer's Close, anywhere inside, close through the same rules.
+  provide(dismissalKey, {
     busy: computed(() => Boolean(options().busy)),
     close() {
       if (allows("close-button")) root.onOpenChange(false)
     },
-  }
-  provide(dismissalKey, dismissal)
+  })
   return {
-    ...dismissal,
     onEscapeKeyDown(event: KeyboardEvent) {
       if (event.defaultPrevented) return
       if (!allows("escape")) event.preventDefault()
