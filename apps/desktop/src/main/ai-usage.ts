@@ -195,7 +195,11 @@ export class AiUsageConnector {
         await this.save();
       }
       await Promise.all(this.accounts.map((account) => this.refreshPlan(account)));
-    })();
+    })().catch((error: unknown) => {
+      // A file that can't be read right now (busy): the next ask tries again instead of failing until a restart.
+      this.loaded = undefined;
+      throw error;
+    });
     return this.loaded;
   }
 

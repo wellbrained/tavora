@@ -191,12 +191,15 @@ export class OfficialUpdates {
 
   private async write(entry: Omit<OfficialRecord, "highWater">): Promise<void> {
     const records = await readOfficialRecords(this.options.userData);
-    // The highest seen, on disk or in memory: a file set aside since this run read it never lowers it.
-    const highWater = [records[entry.id]?.highWater, this.records[entry.id]?.highWater].reduce<string>(
-      (high, seen) => (seen && compareModuleVersions(seen, high) > 0 ? seen : high),
-      entry.version,
-    );
-    this.records = { ...records, [entry.id]: { ...entry, highWater } };
+    // The highest seen, on disk or in memory, for every module: a file set aside since this run read it never lowers one.
+    const higher = (...seen: (string | undefined)[]) => seen.reduce<string | undefined>((high, one) => (one && (!high || compareModuleVersions(one, high) > 0) ? one : high), undefined);
+    const merged = { ...this.records, ...records };
+    for (const id of Object.keys(merged)) {
+      const highWater = higher(records[id]?.highWater, this.records[id]?.highWater);
+      if (highWater) merged[id] = { ...merged[id]!, highWater };
+    }
+    merged[entry.id] = { ...entry, highWater: higher(entry.version, records[entry.id]?.highWater, this.records[entry.id]?.highWater)! };
+    this.records = merged;
     await writeFileAtomic(path.join(this.options.userData, OFFICIAL_UPDATES_FILE), `${JSON.stringify({ version: SUPPORTED_VERSIONS[OFFICIAL_UPDATES_FILE], modules: this.records }, null, 2)}\n`);
   }
 

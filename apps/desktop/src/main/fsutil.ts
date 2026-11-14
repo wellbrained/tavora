@@ -25,6 +25,11 @@ export class SerialQueue {
  * stays; a different one gets a new name.
  */
 export async function keepCopy(dir: string, name: string, old: Buffer): Promise<string> {
+  return (await keepCopyAt(dir, name, old)).target;
+}
+
+/** keepCopy, also saying whether it wrote a new copy (false: the same bytes were kept already). */
+export async function keepCopyAt(dir: string, name: string, old: Buffer): Promise<{ target: string; wrote: boolean }> {
   for (let n = 1; ; n++) {
     const target = path.join(dir, n === 1 ? name : `${name}.${n}`);
     // Only a missing name is free: any other error throws, so no copy is ever written over.
@@ -35,10 +40,10 @@ export async function keepCopy(dir: string, name: string, old: Buffer): Promise<
         throw error;
       },
     );
-    if (existing?.equals(old)) return target;
+    if (existing?.equals(old)) return { target, wrote: false };
     if (existing === null) {
       await writeFileAtomic(target, old);
-      return target;
+      return { target, wrote: true };
     }
   }
 }

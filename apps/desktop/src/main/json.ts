@@ -2,7 +2,7 @@ import { readdir, readFile, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import type { JsonValue } from "@tavora/sdk/protocol";
 import { HostError } from "./errors";
-import { keepCopy } from "./fsutil";
+import { keepCopy, keepCopyAt } from "./fsutil";
 import { STORE_VERSIONS } from "./saved-versions";
 
 const MAX_DEPTH = 64;
@@ -141,9 +141,10 @@ export async function checkSavedFile(file: string, bytes: Buffer | string, rules
   }
   if (!isSavedRecord(value)) {
     if (rules.leaveInPlace) {
-      await keepCopy(path.dirname(file), `${path.basename(file)}.corrupt`, Buffer.from(bytes));
+      const { wrote } = await keepCopyAt(path.dirname(file), `${path.basename(file)}.corrupt`, Buffer.from(bytes));
       console.error(`[tavora] unreadable file has been copied aside: ${file}`);
-      if (rules.notice !== false) tellKept();
+      // Left where it is, the same damaged file is read again at every start: tell the user once, when the copy is new.
+      if (wrote && rules.notice !== false) tellKept();
     } else await setAside(file, rules.notice !== false);
     return null;
   }

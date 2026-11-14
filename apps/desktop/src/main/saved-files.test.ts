@@ -131,6 +131,15 @@ describe("readSavedFile", () => {
     expect(await checkSavedFile(at("ai.json"), "{", { version: 2 })).toBeNull();
     expect((await copiesOf(at("ai.json")))[0]).toMatch(/\.corrupt-/);
   });
+
+  it("tells the user once about a damaged file left in place, not at every read of it", async () => {
+    await put(at("place.json"), "{");
+    const before = unreadableFilesKept();
+    expect(await readSavedFile(at("place.json"), { version: 1, leaveInPlace: true })).toBeNull();
+    expect(await readSavedFile(at("place.json"), { version: 1, leaveInPlace: true })).toBeNull();
+    expect(unreadableFilesKept() - before).toBe(1);
+    expect(await readFile(at("place.json"), "utf8")).toBe("{");
+  });
 });
 
 describe("openSealedFile", () => {
