@@ -102,7 +102,7 @@ function pick(value: unknown) {
         align="start"
         :side-offset="6"
         :collision-padding="8"
-        :class="cn('bg-popover text-popover-foreground tavora-popup z-50 w-max max-w-80 min-w-(--reka-popover-trigger-width) overflow-hidden rounded-lg border shadow-lg', search && 'min-w-[max(16rem,var(--reka-popover-trigger-width))]')"
+        :class="cn('bg-popover text-popover-foreground tavora-popup z-50 w-max max-w-[min(20rem,var(--reka-popover-content-available-width))] min-w-[min(var(--reka-popover-trigger-width),var(--reka-popover-content-available-width))] overflow-hidden rounded-lg border shadow-lg', search && 'min-w-[min(max(16rem,var(--reka-popover-trigger-width)),var(--reka-popover-content-available-width))]')"
         :data-testid="part('menu')"
       >
         <ListboxRoot :model-value="model" highlight-on-hover @update:model-value="pick">
