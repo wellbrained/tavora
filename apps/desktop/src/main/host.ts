@@ -820,7 +820,8 @@ export class Host {
     });
     // The cloud copy started before there was a window: from here it flushes the saved data and tells the page.
     this.copySync.attach({
-      flush: () => this.flush(),
+      // Only writes what is pending: flush() is for quitting and would close game overlays, hotkeys and the OBS server.
+      flush: () => this.saveAll(),
       onChange: (view) => {
         if (!this.window.isDestroyed()) this.window.webContents.send("host:cloud-copy", view);
         this.developerKeys.keyMaybeChanged();
@@ -5278,7 +5279,14 @@ export class Host {
     this.panels.applyBounds();
   }
 
-  /** Resolves once pending writes are on disk; keys go back to the system and the overlay server stops. */
+  /** Resolves once pending writes are on disk, with everything still running (the cloud copy calls this before each sync). */
+  async saveAll(): Promise<void> {
+    await this.gameOverlays?.save();
+    await this.streaming?.save();
+    return this.savedData.flush();
+  }
+
+  /** Quitting: resolves once pending writes are on disk; keys go back to the system and the overlay server stops. */
   async flush(): Promise<void> {
     await this.gameOverlays?.shutdown();
     await this.streaming?.shutdown();

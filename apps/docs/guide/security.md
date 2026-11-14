@@ -1,6 +1,6 @@
 # Security model
 
-Tavora runs modules written by other people on users' PCs, next to their games. This page says what the host guarantees, how a module is kept inside its panel, and what is not covered. It describes the desktop host as it is today; Tavora is pre-release, and the guarantees are tested in the repository's gate tests (`apps/desktop/test/e2e`).
+Tavora runs modules written by other people on users' PCs, next to their games. This page says what the host guarantees, how a module is kept inside its panel, and what is not covered. It describes the desktop host as it is today, and the guarantees are tested in the repository's gate tests (`apps/desktop/test/e2e`).
 
 The attacker assumed throughout is a module whose author is hostile, or whose dependencies were compromised. It controls all the JavaScript, HTML and CSS in its own bundle and can send any message over its bridge port. It does not control the host or other modules.
 
@@ -59,7 +59,7 @@ A module page still cannot load remote code (`script-src 'self'`), even from a g
 
 Connectors are capabilities built for one purpose. The host holds the connection, the sign-in and the token, and a module only reaches a fixed list of commands and answers.
 
-- **Discord** (paused for now: Tavora doesn't connect to the Discord app or Discord's servers for it at all) shows and controls the user's own voice state through the Discord app on the same PC. A module sends only fixed commands with fixed fields, and never sees a token. Joining or leaving a channel, muting and unmuting need a real click in the module's panel. A granted module does see the user's voice channels, servers and who is in them, and the consent dialog says so. On Windows the connector would use a named pipe (see [Known limits](#known-limits)). On Windows it doesn't check (see [Known limits](#known-limits)).
+- **Discord** (paused for now: Tavora doesn't connect to the Discord app or Discord's servers for it at all) shows and controls the user's own voice state through the Discord app on the same PC. A module sends only fixed commands with fixed fields, and never sees a token. Joining or leaving a channel, muting and unmuting need a real click in the module's panel. A granted module does see the user's voice channels, servers and who is in them, and the consent dialog says so. See [Known limits](#known-limits) for the named pipe it would use on Windows.
 - **AI Usage** reads usage limits of AI subscriptions signed in on the PC. A module gets account names, plans and readings, never a login, a token or where it is stored. Each account is read at most once a minute for all modules together. Tavora doesn't look for AI accounts or read a login until a module that asks for this connector is installed.
 - **System info** lets a module read this PC's hardware and how busy it is: processor, memory, graphics cards, drives and Tavora's own use, and how the connection is doing (pings to the router and one internet address), see [System info](#system-info).
 - **Media** lets a module see what plays on this PC and play, pause or skip it, see [Media](#media).

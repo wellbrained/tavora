@@ -204,6 +204,18 @@ describe("overlay links", () => {
       await streaming.shutdown();
     }
   });
+
+  it("keep the overlay server running when the cloud copy saves before a sync", async () => {
+    const { streaming, world } = await setup();
+    let port = 48600 + Math.floor(Math.random() * 300);
+    for (world.settings.overlayPort = port; (await streaming.setOverlays(true), streaming.view().overlays.status) !== "running"; ) await streaming.setPort(++port);
+    try {
+      await streaming.save();
+      expect(streaming.view().overlays.status).toBe("running");
+    } finally {
+      await streaming.shutdown();
+    }
+  });
 });
 
 describe("publishing without the connector", () => {
