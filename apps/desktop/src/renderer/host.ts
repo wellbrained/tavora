@@ -2,7 +2,7 @@
 // dialog, menu and toast that are shown over it.
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch, type Component } from "vue";
 import { handleUndoKey, setWindowBehind, toast, undoable } from "@tavora/official-ui/components/ui/toast";
-import { layers } from "@tavora/official-ui/lib/layers";
+import { layers, openDialogLayers } from "@tavora/official-ui/lib/layers";
 import { EMPTY_INBOX, type InboxView } from "../shared/conversations";
 import type { AccountView, ActionResult, ReleaseCopy, ReleaseStatus, ModuleConnector, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, HostAction, PairingView, HostShortcut, HostViewState, ModuleMenu, PanelDialog, PublishView } from "../shared/host-api";
 import { keyInput, shortcutForKey } from "../shared/shortcuts";
@@ -388,34 +388,18 @@ export type DialogRequest =
   | { kind: "report-module"; moduleId: string; name: string };
 
 // Dialogs open on the page, from the kit's layer registry (lib/layers.ts): every dialog is built on the kit's Dialog, so a
-// new one is covered without being listed anywhere. Counted once it is on the page, until it starts to close. The module
+// new one is covered without being listed anywhere, and told apart by its `data-testid`. Counted from the moment it opens
+// until it starts to close, so one dialog in the slot handing over to the next never reads as none in between. The module
 // panels (native views above this page) step aside for them, and the queue of dialogs (below) looks at them.
 /** The panel shown big in a dialog. It is open on purpose and its view stays in sight, so it is not one that covers it. */
-const PANEL_DIALOG = '[data-testid="panel-dialog"]';
+const PANEL_DIALOG = "panel-dialog";
 /** Settings and the profile are places to work in: a question the host asks may open on top of them, as a confirmation does. */
-const STACKABLE = `${PANEL_DIALOG}, [data-testid="settings"], [data-testid="profile-dialog"]`;
-/** The open dialogs on the page now (the panel dialog too), oldest first. */
-const dialogsOnPage = (): HTMLElement[] => layers.value.flatMap((layer) => (layer.kind === "dialog" && layer.state === "open" && layer.element ? [layer.element] : []));
-// The same, read once Vue has finished drawing: one dialog in the slot handing over to the next (a v-if in App.vue)
-// leaves the list while the next is drawn, and the counts must not read one short in between (the panels would step
-// back over the page, the window buttons flicker).
-const shownDialogs = shallowRef<HTMLElement[]>([]);
-let recount = false;
-watch(
-  layers,
-  () => {
-    if (recount) return;
-    recount = true;
-    void nextTick(() => {
-      recount = false;
-      shownDialogs.value = dialogsOnPage();
-    });
-  },
-  { flush: "sync" },
-);
+const STACKABLE = new Set([PANEL_DIALOG, "settings", "profile-dialog"]);
+/** The open dialogs (the panel dialog too), oldest first. */
+const shownDialogs = computed(() => openDialogLayers(layers.value));
 const openDialogs = computed(() => shownDialogs.value.length);
 /** How many of them are not the panel dialog. */
-const pageDialogs = computed(() => shownDialogs.value.filter((element) => !element.matches(PANEL_DIALOG)).length);
+const pageDialogs = computed(() => shownDialogs.value.filter((layer) => layer.name !== PANEL_DIALOG).length);
 // The system draws the window buttons above the page, so a dialog backdrop can't dim them: while one is open, the host
 // dims them instead.
 watch(
@@ -425,7 +409,7 @@ watch(
 
 /** Dialogs open that a question the host asks on its own must not stack on: all but its own slot, Settings, the profile and the panel dialog. */
 function blockingDialogs(): number {
-  return dialogsOnPage().filter((element) => !element.matches(STACKABLE)).length - (dialog.value ? 1 : 0);
+  return shownDialogs.value.filter((layer) => !STACKABLE.has(layer.name ?? "")).length - (dialog.value ? 1 : 0);
 }
 
 const dialogSlot = shallowRef<DialogRequest | null>(null);

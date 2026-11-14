@@ -8,7 +8,7 @@ import {
   injectDialogRootContext,
   useForwardPropsEmits,
 } from "reka-ui"
-import { computed, nextTick, provide, ref, shallowRef, toRef, watch } from "vue"
+import { computed, nextTick, provide, ref, shallowRef, toRef, useAttrs, watch } from "vue"
 import { LayerAnchor, useLayer } from "../../../lib/layers"
 import { cn } from "../../../lib/utils"
 import { dialogChromeKey, dialogCloseClass } from "./chrome"
@@ -39,7 +39,8 @@ const delegatedProps = reactiveOmit(props, "class", "showCloseButton", "instant"
 const instant = provideDialogInstant(() => props.instant)
 const root = injectDialogRootContext()
 // On top of the page while open: page keys such as Ctrl+Z stand down and the page around it is inert (layers.ts).
-const layer = useLayer("dialog", root.open)
+const attrs = useAttrs()
+const layer = useLayer("dialog", root.open, { name: () => attrs["data-testid"] as string | undefined })
 
 // A DialogHeader with a title draws the close X itself (centred against the title); without one the X sits in the corner.
 const headerClose = ref(false)

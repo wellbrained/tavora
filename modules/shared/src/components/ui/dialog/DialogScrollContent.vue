@@ -10,7 +10,7 @@ import {
   injectDialogRootContext,
   useForwardPropsEmits,
 } from "reka-ui"
-import { computed } from "vue"
+import { computed, useAttrs } from "vue"
 import { LayerAnchor, useLayer } from "../../../lib/layers"
 import { cn } from "../../../lib/utils"
 import DialogCloseX from "./DialogCloseX.vue"
@@ -34,7 +34,8 @@ const emits = defineEmits<DialogContentEmits & DismissEmits>()
 const delegatedProps = reactiveOmit(props, "class", "instant", "dismissible", "busy")
 const instant = provideDialogInstant(() => props.instant)
 // On top of the page while open: page keys such as Ctrl+Z stand down and the page around it is inert (layers.ts).
-const layer = useLayer("dialog", injectDialogRootContext().open)
+const attrs = useAttrs()
+const layer = useLayer("dialog", injectDialogRootContext().open, { name: () => attrs["data-testid"] as string | undefined })
 
 // Reka's own events go on to Reka; `dismiss-attempt` is the kit's and stays here.
 const forwardedAll = useForwardPropsEmits(delegatedProps, emits)

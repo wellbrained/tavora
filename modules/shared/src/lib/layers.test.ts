@@ -17,7 +17,7 @@ beforeAll(() => {
 })
 
 describe("reading the list", () => {
-  const layer = (id: number, change: Partial<Layer> = {}): Layer => ({ id, kind: "dialog", modal: true, state: "open", element: null, ...change })
+  const layer = (id: number, change: Partial<Layer> = {}): Layer => ({ id, kind: "dialog", modal: true, state: "open", element: null, name: undefined, ...change })
   const element = () => document.createElement("div")
 
   it("the top layer is the newest open one; a leaving one is not on top", () => {

@@ -30,7 +30,7 @@ const delegatedProps = reactiveOmit(props, "class")
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
 const root = injectDropdownMenuRootContext()
 // On top of the page while open; a modal menu makes the page around it inert (layers.ts).
-useLayer("menu", root.open, () => root.modal.value)
+useLayer("menu", root.open, { modal: () => root.modal.value })
 </script>
 
 <template>
