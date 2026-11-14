@@ -284,6 +284,8 @@ export const en = {
   "ex.pick.ComboboxFree.note": "The text is the value and the list only suggests: Enter keeps what you typed, the arrow keys and Enter pick a suggestion.",
   "ex.pick.Picker": "Picker",
   "ex.pick.Picker.note": "A button with the list under it.",
+  "ex.pick.PickerGroups": "Picker with groups",
+  "ex.pick.PickerGroups.note": "Options under their group's heading, badges in each row, and toggles above the list that narrow it.",
   "ex.pick.DropdownIcons": "Dropdown icons",
   "ex.pick.DropdownIcons.rule": "A control where you pick a value has ⇕; a button that opens a menu of actions has ⌄. Never a down arrow on a picker.",
 
@@ -725,6 +727,8 @@ export const de: Record<TextKey, string> = {
   "ex.pick.ComboboxFree.note": "Der Text ist der Wert, die Liste schlägt nur vor: Enter übernimmt, was du getippt hast; mit den Pfeiltasten und Enter wählst du einen Vorschlag.",
   "ex.pick.Picker": "Picker",
   "ex.pick.Picker.note": "Ein Button mit der Liste darunter.",
+  "ex.pick.PickerGroups": "Picker mit Gruppen",
+  "ex.pick.PickerGroups.note": "Optionen unter der Überschrift ihrer Gruppe, Badges in jeder Zeile und Schalter über der Liste, die sie eingrenzen.",
   "ex.pick.DropdownIcons": "Pfeile an Auswahlfeldern",
   "ex.pick.DropdownIcons.rule": "Wo du einen Wert wählst, steht ⇕; ein Button, der ein Menü mit Aktionen öffnet, hat ⌄. Nie ein Pfeil nach unten an einem Picker.",
 
