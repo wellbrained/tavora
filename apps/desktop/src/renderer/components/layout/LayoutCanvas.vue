@@ -13,6 +13,7 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { ContextMenu, ContextMenuTrigger } from "@tavora/official-ui/components/ui/context-menu";
 import { Popover, PopoverAnchor, PopoverContent } from "@tavora/official-ui/components/ui/popover";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
+import { bindDrag, type DragDelta } from "@tavora/official-ui/lib/bind-drag";
 import { cn } from "@tavora/official-ui/lib/utils";
 import { hotkeyKeys } from "../../../shared/hotkey-keys";
 import { boundsOf, snapMove, snapResize, touches, type Edges, type Guide } from "../../../shared/layout-math";
@@ -42,12 +43,12 @@ onMounted(() => {
   root.value?.focus();
   // A page that was loaded again knows of no drag; the main process may still hold where the last one was.
   send({ type: "drag-end" });
-  addEventListener("blur", abort);
+  addEventListener("blur", gesture.cancel);
   addEventListener("keydown", menuKey);
 });
 onBeforeUnmount(() => {
   observer?.disconnect();
-  removeEventListener("blur", abort);
+  removeEventListener("blur", gesture.cancel);
   removeEventListener("keydown", menuKey);
 });
 
@@ -55,15 +56,19 @@ onBeforeUnmount(() => {
 const scale = computed(() => (view.value ? width.value / view.value.canvas.width : 1));
 const mac = navigator.platform.startsWith("Mac");
 
+/**
+ * One gesture at a time: a frame moved or resized, or a box drawn on the empty canvas. It begins 3 px from the press;
+ * the window losing the focus puts it back too. Escape keeps its own meaning here: it lets go of the selection.
+ */
+const gesture = bindDrag({ threshold: 3, escape: false });
+
 interface Drag {
   /** The frame grabbed; with `edges`, the one resized. */
   id: string;
   /** Every frame that moves (the grabbed one and the others selected with it). */
   ids: string[];
   edges: Edges | null;
-  start: { x: number; y: number };
   origins: Record<string, Rect>;
-  pointer: number;
   /** A click on one of several selected frames that didn't move selects only it. */
   only: string | null;
   moved: boolean;
@@ -136,20 +141,25 @@ function begin(event: PointerEvent, item: LayoutItemView, edges: Edges | null) {
     ids = [item.id];
     if (view.value?.selection !== item.id || selected.length !== 1) send({ type: "select", id: item.id });
   }
-  // A locked frame is selected and clicked like any other, but never moves (with others, they move and it stays).
-  const moving = shown.value.filter((one) => ids.includes(one.id) && !one.locked);
-  drag.value = { id: item.id, ids: moving.map((one) => one.id), edges, start: { x: event.clientX, y: event.clientY }, origins: Object.fromEntries(moving.map((one) => [one.id, rectOf(one)])), pointer: event.pointerId, only, moved: false };
-  root.value?.setPointerCapture(event.pointerId);
+  // Set up once a gesture still going on is put back, so its clean-up can't clear this one.
+  gesture.start(
+    event,
+    () => {
+      // A locked frame is selected and clicked like any other, but never moves (with others, they move and it stays).
+      const moving = shown.value.filter((one) => ids.includes(one.id) && !one.locked);
+      drag.value = { id: item.id, ids: moving.map((one) => one.id), edges, origins: Object.fromEntries(moving.map((one) => [one.id, rectOf(one)])), only, moved: false };
+      return { move, drop: end, release: end, cancel: abort };
+    },
+    { capture: root.value },
+  );
 }
 
-function move(event: PointerEvent) {
-  if (band.value) return moveBand(event);
+function move(event: PointerEvent, delta: DragDelta) {
   const current = drag.value;
   const now = view.value;
   if (!current || !now || current.ids.length === 0) return;
-  const dx = (event.clientX - current.start.x) / scale.value;
-  const dy = (event.clientY - current.start.y) / scale.value;
-  if (!current.moved && Math.hypot(dx, dy) * scale.value < 3) return;
+  const dx = delta.x / scale.value;
+  const dy = delta.y / scale.value;
   current.moved = true;
   const others = shown.value.filter((item) => !current.ids.includes(item.id)).map(rectOf);
   const options = { cell: now.cell, threshold: 8 / scale.value, free: event.altKey };
@@ -190,8 +200,7 @@ function move(event: PointerEvent) {
   });
 }
 
-function end(event: PointerEvent) {
-  if (band.value) return endBand(event);
+function end() {
   const current = drag.value;
   if (!current) return;
   drag.value = null;
@@ -199,7 +208,6 @@ function end(event: PointerEvent) {
   cancelAnimationFrame(frame);
   frame = 0;
   pending = null;
-  if (root.value?.hasPointerCapture(event.pointerId)) root.value.releasePointerCapture(event.pointerId);
   if (!current.moved) {
     // A click on one of several selected frames: only that one stays selected.
     if (current.only) send({ type: "select", id: current.only });
@@ -216,18 +224,12 @@ function end(event: PointerEvent) {
 
 /** The pointer was lost (cancelled, the window lost the focus): the drag ends without a drop, and the items stay where they were. */
 function abort() {
-  if (band.value) {
-    band.value = null;
-    return;
-  }
-  const current = drag.value;
-  if (!current) return;
+  if (!drag.value) return;
   drag.value = null;
   guides.value = [];
   cancelAnimationFrame(frame);
   frame = 0;
   pending = null;
-  if (root.value?.hasPointerCapture(current.pointer)) root.value.releasePointerCapture(current.pointer);
   local.value = {};
   send({ type: "drag-end" });
 }
@@ -253,7 +255,7 @@ interface Band {
   base: string[];
   /** What it selects now: the base and every frame it touches. */
   ids: string[];
-  pointer: number;
+  /** Past the threshold: it is drawn and selects what it touches. */
   moved: boolean;
 }
 const band = ref<Band | null>(null);
@@ -272,26 +274,31 @@ const bandRect = computed<Rect | null>(() => {
 function beginBand(event: PointerEvent) {
   root.value?.focus();
   if (event.button !== 0) return;
-  const base = adds(event) ? [...(view.value?.selected ?? [])] : [];
-  const at = pointAt(event);
-  band.value = { from: at, to: at, base, ids: base, pointer: event.pointerId, moved: false };
-  root.value?.setPointerCapture(event.pointerId);
+  gesture.start(
+    event,
+    () => {
+      const base = adds(event) ? [...(view.value?.selected ?? [])] : [];
+      const at = pointAt(event);
+      band.value = { from: at, to: at, base, ids: base, moved: false };
+      return { move: moveBand, drop: endBand, release: endBand, cancel: () => (band.value = null) };
+    },
+    { capture: root.value },
+  );
 }
 
 function moveBand(event: PointerEvent) {
-  const current = band.value!;
+  const current = band.value;
+  if (!current) return;
   const to = pointAt(event);
-  const moved = current.moved || Math.hypot(to.x - current.from.x, to.y - current.from.y) * scale.value >= 3;
-  const next = { ...current, to, moved };
-  const rect = { x: Math.min(next.from.x, to.x), y: Math.min(next.from.y, to.y), width: Math.abs(to.x - next.from.x), height: Math.abs(to.y - next.from.y) };
-  const touched = moved ? shown.value.filter((item) => touches(rect, rectOf(item))).map((item) => item.id) : [];
-  band.value = { ...next, ids: [...next.base, ...touched.filter((id) => !next.base.includes(id))] };
+  const rect = { x: Math.min(current.from.x, to.x), y: Math.min(current.from.y, to.y), width: Math.abs(to.x - current.from.x), height: Math.abs(to.y - current.from.y) };
+  const touched = shown.value.filter((item) => touches(rect, rectOf(item))).map((item) => item.id);
+  band.value = { ...current, to, moved: true, ids: [...current.base, ...touched.filter((id) => !current.base.includes(id))] };
 }
 
-function endBand(event: PointerEvent) {
-  const current = band.value!;
+function endBand() {
+  const current = band.value;
+  if (!current) return;
   band.value = null;
-  if (root.value?.hasPointerCapture(event.pointerId)) root.value.releasePointerCapture(event.pointerId);
   // A click on the empty canvas lets go of the selection (with Ctrl or Shift, it keeps it).
   // Copies: what is sent can't be the page's own reactive lists.
   send({ type: "select", ids: [...(current.moved ? current.ids : current.base)] });
@@ -408,11 +415,7 @@ const keyOf = (item: LayoutItemView) => (item.mode === "toggle" && item.hotkey ?
     class="canvas-layer relative h-screen w-screen overflow-hidden outline-none select-none"
     tabindex="0"
     @pointerdown.self="beginBand"
-    @pointermove="move"
-    @pointerup="end"
     @dblclick="openSettingsAt"
-    @pointercancel="abort"
-    @lostpointercapture="abort"
   >
     <!-- An empty setup says where to find something to add instead of staying blank. -->
     <p

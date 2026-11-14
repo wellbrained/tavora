@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.65",
+    date: "2026-11-14",
+    title: "Steadier dragging",
+    notes: [
+      "While you drag a tab, the sidebar edge, the crop frame or an overlay, another finger or pen moving or lifting no longer drops it.",
+    ],
+    prs: [
+      { number: 798, title: "Kit: one bindDrag for pointer drags" },
+    ],
+    tags: ["pdf-viewer", "rail", "ui-kit"],
+  },
+  {
     version: "0.24.64",
     date: "2026-11-14",
     title: "Your saved data stays safe",
