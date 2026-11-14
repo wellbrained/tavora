@@ -134,6 +134,14 @@ describe("useFocusRecovery", () => {
     expect(active()).toBe("trash-c");
   });
 
+  it("leaves a control alone that was blurred on purpose", async () => {
+    makeList(["a", "b"]);
+    byTestid("title-a").focus();
+    byTestid("title-a").blur();
+    await settle();
+    expect(document.activeElement).toBe(document.body);
+  });
+
   it("finds a row drawn anew by its key", async () => {
     const { list } = makeList(["a", "b"]);
     byTestid("trash-a").focus();

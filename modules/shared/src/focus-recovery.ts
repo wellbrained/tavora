@@ -7,7 +7,7 @@
 // 3. else the first control of the list's empty state (Add …), or the list itself.
 //
 // It never takes the focus from something else: a dialog, a menu, a field outside the list. A row that only moved (Alt+↑,
-// a drag) or was drawn anew keeps the focus. It waits until the page has settled, so a component that puts the focus
+// a drag) or was drawn anew keeps the focus; one blurred on purpose (`blur()`) is left alone. It waits until the page has settled, so a component that puts the focus
 // somewhere itself after a change (an editor opening in the row) wins. An optimistic delete is a row that goes and
 // perhaps comes back: the going is handled like any delete; after Undo, or a delete that could not be saved and was
 // put back, `restore(key)` gives the row the focus again once it is there.
@@ -50,6 +50,10 @@ interface Hold {
   rows: HTMLElement[]
   /** Outside a row: how many of those rows come before the control. */
   before: number
+  /** The control was taken out of the page since (and maybe put back: its row moved). */
+  moved: boolean
+  /** The control itself let go of the focus to nothing (a `blur()`, or a move, which also takes it out). */
+  blurred: boolean
 }
 
 /** A row `restore` waits for, until its timer runs out. */
@@ -162,15 +166,15 @@ function holdFor(list: HTMLElement, control: HTMLElement, lists: Set<HTMLElement
   const row = rowAround(list, control, lists)
   const controls = row ? controlsOf(row) : []
   const index = controls.indexOf(control)
-  const hold: Hold = { row, control, spot: index >= 0 ? { index, count: controls.length } : null, rows: [], before: 0 }
+  const hold: Hold = { row, control, spot: index >= 0 ? { index, count: controls.length } : null, rows: [], before: 0, moved: false, blurred: false }
   readRows(hold, list, lists)
   return hold
 }
 
-/** Where the focus goes now that it fell off the held row. */
-function landing(hold: Hold, list: HTMLElement, lists: Set<HTMLElement>): HTMLElement {
-  // Still there (its row moved, or the page dropped the focus): it keeps it.
-  if (list.contains(hold.control) && usable(hold.control)) return hold.control
+/** Where the focus goes now that it fell off the held row; null when it was let go on purpose. */
+function landing(hold: Hold, list: HTMLElement, lists: Set<HTMLElement>): HTMLElement | null {
+  // Still there: it gets the focus back (its row moved, or a menu over it closed), unless it was blurred on purpose.
+  if (list.contains(hold.control) && usable(hold.control)) return hold.blurred && !hold.moved ? null : hold.control
   const rows = rowsOf(list, lists).filter(usable)
   /** The row as it is now: the same element, or one drawn anew with its key. */
   const now = (seen: HTMLElement) => {
@@ -230,13 +234,24 @@ function check() {
     if (list.closest("[inert]")) continue
     if (lost(document.activeElement, list)) {
       entry.hold = null
-      focusOn(landing(hold, list, lists))
+      const to = landing(hold, list, lists)
+      if (to) focusOn(to)
     } else if (hold.row ? list.contains(hold.row) && !hold.row.closest("[inert]") : list.contains(hold.control)) {
       // Kept up to date while the row is there; once it is gone, the rows as they were tell its neighbours.
       readRows(hold, list, lists)
     }
   }
   sync()
+}
+
+/** Notes a held control that was taken out (a row that moves is taken out and put back), then looks once the page settles. */
+function onMutations(records: MutationRecord[]) {
+  for (const record of records) {
+    for (const node of record.removedNodes) {
+      for (const entry of entries) if (entry.hold && node.contains(entry.hold.control)) entry.hold.moved = true
+    }
+  }
+  schedule()
 }
 
 /** Looks once the page has settled: after Vue's render and whatever its components do with the focus right after. */
@@ -270,7 +285,9 @@ function onFocusIn(event: FocusEvent) {
 
 /** The focus went nowhere (no new element): look once the page has settled, in case it fell off without a change to the page. */
 function onFocusOut(event: FocusEvent) {
-  if (event.relatedTarget === null) schedule()
+  if (event.relatedTarget !== null) return
+  for (const entry of entries) if (entry.hold?.control === event.target) entry.hold.blurred = true
+  schedule()
 }
 
 /**
@@ -293,7 +310,7 @@ function onPointerDown(event: PointerEvent) {
 function sync() {
   const needed = [...entries].some((entry) => entry.hold || entry.awaited)
   if (needed && !observer) {
-    observer = new MutationObserver(schedule)
+    observer = new MutationObserver(onMutations)
     observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["inert"] })
   } else if (!needed && observer) {
     observer.disconnect()
