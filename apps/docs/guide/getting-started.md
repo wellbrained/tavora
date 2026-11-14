@@ -197,7 +197,7 @@ A module made for one game, such as a build planner for Path of Exile 2, lists t
 
 Tavora then offers it only in workspaces of that game: anywhere else it is not in Add module at all. `"games": []` means any game. The starter asks which game the module is for and fills this in. The ids of Tavora's built-in games are in the [manifest reference](../reference/manifest.md#game-ids).
 
-Every item on Tavora's rail is a workspace: a game workspace, linked to a game, or a personal workspace, which belongs to no game, for modules such as notes or a whiteboard. A module for any game is offered in personal workspaces too. If yours only makes sense in a game, add `"personalWorkspaces": false` (Tavora 0.21.43 or newer; set `minTavora` to at least `0.21.43`). `tavora.workspace.getCurrent()` says which one a panel is in: its `kind` is `"game"` or `"personal"`, and for a game workspace the `id` is the game's. `tavora.game.getCurrent()` and the manifest's `workspaces` field still work, but they are deprecated and go away before 1.0.
+Every item on Tavora's rail is a workspace: a game workspace, linked to a game, or a personal workspace, which belongs to no game, for modules such as notes or a whiteboard. A module for any game is offered in personal workspaces too. If yours only makes sense in a game, add `"personalWorkspaces": false` (Tavora 0.21.43 or newer; set `minTavora` to at least `0.21.43`). `tavora.workspace.getCurrent()` says which one a panel is in: its `kind` is `"game"` or `"personal"`, and for a game workspace the `id` is the game's.
 
 ## Build the module
 

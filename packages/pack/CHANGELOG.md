@@ -2,6 +2,10 @@
 
 What changed in `@tavora/pack`, newest first.
 
+## 0.3.4
+
+- Packs with `@tavora/module-schema` 0.2.0: a manifest with the old field `workspaces` is refused, and the `personalWorkspaces` message no longer sends you to it.
+
 ## 0.3.3
 
 - `packModule`, `collectFiles` and `tavora-pack` stop with a `PrivateKeyError` (a `PackError` naming the `file`) when the zip would hold a private key: a key file by module-schema's `KEY_EXTENSIONS` (`.pem`, `.key`, `.p12`, `.pfx`, `.ppk`), the `--key` file (`PackOptions.keyFile`, the new last argument of both), or a file holding a PEM, OpenSSH, PGP or PuTTY private key. Before, `tavora-pack . --key publisher-key.pem` packed the key when `entry` sat next to the manifest. The catalog refuses such zips too.

@@ -4,7 +4,7 @@ What changed in `@tavora/create-module`, newest first.
 
 ## 0.1.37
 
-- New projects start on `@tavora/sdk` 0.4.0 and set `minTavora` to 0.21.43, the oldest Tavora that SDK supports.
+- New projects pack with `@tavora/pack` 0.3.4. New projects start on `@tavora/sdk` 0.4.0 and set `minTavora` to 0.21.43, the oldest Tavora that SDK supports.
 
 ## 0.1.36
 

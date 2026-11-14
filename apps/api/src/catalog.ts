@@ -1196,7 +1196,7 @@ export class CatalogStore {
 
 /**
  * The filter a request asks for: `?game=<id>`, `?personal=1` (modules for a personal workspace), or neither for the
- * whole catalog. Tavora 0.21.42 and older ask for the personal ones as `?workspace=1`; that is answered until its 1.0 preparation.
+ * whole catalog. Tavora 0.21.42 and older ask for the personal ones as `?workspace=1`; Tavora keeps answering it, so those versions still get the right list.
  */
 export function catalogFilter(game: string | undefined, personal: string | undefined, oldPersonal?: string): CatalogFilter | null {
   if ([game, personal, oldPersonal].filter((value) => value !== undefined).length > 1) return null;

@@ -77,8 +77,7 @@ type Limits = { [K in keyof typeof LIMITS]: number };
 export interface MemoryHostOptions {
   /**
    * The Tavora version the host claims, in the handshake. Methods a newer Tavora added throw UNKNOWN_METHOD, as an older
-   * Tavora does. Default: the newest
-   * Tavora the SDK knows.
+   * Tavora does. Default: the newest Tavora the SDK knows.
    */
   version?: string;
   /** The module's id and version in the handshake. */
