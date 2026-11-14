@@ -65,4 +65,35 @@ describe("Picker", () => {
     expect(headings()).toEqual(["King of Stone", "King of Greed"])
     expect(document.querySelector("[data-testid=pick-filters] [data-testid=only-endless]")).not.toBeNull()
   })
+
+  it("puts options without groups right in the list, with no group around them", async () => {
+    await mount({ options: OPTIONS.map(({ group: _group, ...option }) => option) })
+    expect(rows()).toEqual(["tower", "gold", "free", "towers"])
+    expect(document.querySelector("[role=listbox] [role=group]")).toBeNull()
+  })
+
+  it("moves through the rows by key in the order shown, across the groups, and Enter picks", async () => {
+    const picked: string[] = []
+    await mount({ search: "Search builds", "onUpdate:modelValue": (value: string) => picked.push(value) })
+    const field = document.querySelector<HTMLInputElement>("[data-testid=pick-search]")!
+    const press = async (key: string) => {
+      field.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }))
+      for (let tick = 0; tick < 4; tick++) await nextTick()
+    }
+    const highlighted = () => document.querySelector<HTMLElement>("[data-highlighted]")?.dataset.testid
+    await press("Home")
+    expect(highlighted()).toBe("pick-option-free")
+    await press("ArrowDown")
+    await press("ArrowDown")
+    expect(highlighted()).toBe("pick-option-towers")
+    await press("ArrowDown")
+    expect(highlighted()).toBe("pick-option-gold")
+    await press("Enter")
+    expect(picked).toEqual(["gold"])
+  })
+
+  it("gives the current slot no option while the value isn't in the list", async () => {
+    const root = await mount({ modelValue: "gone" }, { current: ({ option }: { option?: PickerOption }) => h("b", { "data-testid": "current" }, option ? option.label : "none") })
+    expect(root.querySelector("[data-testid=current]")?.textContent).toBe("none")
+  })
 })
