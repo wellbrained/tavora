@@ -1,4 +1,4 @@
-import { isModalOpen } from "@tavora/official-ui/components/ui/dialog";
+import { isModalOpen } from "@tavora/official-ui/lib/layers";
 import { shortcutKeys } from "@tavora/official-ui/components/tooltip";
 import type { HostViewState } from "../shared/host-api";
 import { ariaKeys, SHORTCUT_GROUPS, SHORTCUTS, shownKeys, type ShortcutId, type ShortcutScope } from "../shared/shortcuts";
@@ -39,9 +39,10 @@ export function shortcutGroups(): { title: string; rows: ShortcutRow[] }[] {
 }
 
 /**
- * Whether a dialog on top holds a scope's shortcuts back. Tavora-wide ones work over dialogs too (main catches them
- * before any page sees the key); the Overlays editor's stand down while one is open. The place to ask once Tavora
- * knows which layer is on top. (The Browser panel's keys need no asking: a dialog takes the focus away from them.)
+ * Whether a dialog on top holds a scope's shortcuts back: the one place the page's shortcuts ask the kit's layer registry
+ * (lib/layers.ts), which knows what is open and in which order. Tavora-wide ones work over dialogs too (main catches them
+ * before any page sees the key); the Overlays editor's, Escape included, stand down while one is open. (The Browser
+ * panel's keys need no asking: a dialog takes the focus away from them.)
  */
 export function heldBackByModal(scope: ShortcutScope): boolean {
   return scope !== "app" && isModalOpen();

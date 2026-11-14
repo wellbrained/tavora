@@ -9,14 +9,13 @@ import {
   useForwardPropsEmits,
 } from "reka-ui"
 import { computed, nextTick, provide, ref, shallowRef, toRef, watch } from "vue"
-import { InertBehind } from "../../../lib/inert-behind"
+import { LayerAnchor, useLayer } from "../../../lib/layers"
 import { cn } from "../../../lib/utils"
 import { dialogChromeKey, dialogCloseClass } from "./chrome"
 import DialogCloseX from "./DialogCloseX.vue"
 import DialogOverlay from "./DialogOverlay.vue"
 import { useDialogDismissal, withoutDismissListener, type DismissEmits, type DismissOptions } from "./dismissal"
 import { provideDialogInstant } from "./instant"
-import { trackModal } from "./track-modal"
 
 defineOptions({
   inheritAttrs: false,
@@ -38,8 +37,9 @@ const delegatedProps = reactiveOmit(props, "class", "showCloseButton", "instant"
 
 // Opened by a key (or closed with Escape), or `instant` for a dialog that never animates: no rise, no fade (instant.ts).
 const instant = provideDialogInstant(() => props.instant)
-// Page keys such as Ctrl+Z stand down while it is open (modal.ts).
-trackModal()
+const root = injectDialogRootContext()
+// On top of the page while open: page keys such as Ctrl+Z stand down and the page around it is inert (layers.ts).
+useLayer("dialog", root.open)
 
 // A DialogHeader with a title draws the close X itself (centred against the title); without one the X sits in the corner.
 const headerClose = ref(false)
@@ -69,7 +69,6 @@ function focusFirst(event: Event) {
 // dialog pinned near the window's top sticks out above a tall dialog like Settings. The styles are set
 // here rather than bound, so a dialog keeps its own width unless it is wider than the room it has.
 const INSET = 16
-const root = injectDialogRootContext()
 const parents = shallowRef<HTMLElement[]>([])
 const content = () => (root.open.value ? root.contentElement.value : undefined)
 
@@ -127,7 +126,7 @@ useEventListener(window, "resize", place)
           props.class,
         )"
     >
-      <InertBehind />
+      <LayerAnchor />
       <slot />
 
       <DialogCloseX v-if="showCloseButton && !headerClose" :class="cn(dialogCloseClass, 'absolute top-[17px] right-6')" />

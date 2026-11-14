@@ -5,17 +5,17 @@ import { X } from "@lucide/vue"
 import { reactiveOmit } from "@vueuse/core"
 import {
   DialogContent,
+  injectDialogRootContext,
   DialogOverlay,
   DialogPortal,
   useForwardPropsEmits,
 } from "reka-ui"
 import { computed } from "vue"
-import { InertBehind } from "../../../lib/inert-behind"
+import { LayerAnchor, useLayer } from "../../../lib/layers"
 import { cn } from "../../../lib/utils"
 import DialogCloseX from "./DialogCloseX.vue"
 import { useDialogDismissal, withoutDismissListener, type DismissEmits, type DismissOptions } from "./dismissal"
 import { provideDialogInstant } from "./instant"
-import { trackModal } from "./track-modal"
 
 defineOptions({
   inheritAttrs: false,
@@ -33,8 +33,8 @@ const emits = defineEmits<DialogContentEmits & DismissEmits>()
 
 const delegatedProps = reactiveOmit(props, "class", "instant", "dismissible", "busy")
 const instant = provideDialogInstant(() => props.instant)
-// Page keys such as Ctrl+Z stand down while it is open (modal.ts).
-trackModal()
+// On top of the page while open: page keys such as Ctrl+Z stand down and the page around it is inert (layers.ts).
+useLayer("dialog", injectDialogRootContext().open)
 
 // Reka's own events go on to Reka; `dismiss-attempt` is the kit's and stays here.
 const forwardedAll = useForwardPropsEmits(delegatedProps, emits)
@@ -68,7 +68,7 @@ function onPointerDownOutside(event: CustomEvent<{ originalEvent: PointerEvent }
         @escape-key-down="dismissal.onEscapeKeyDown"
         @pointer-down-outside="onPointerDownOutside"
       >
-        <InertBehind />
+        <LayerAnchor />
         <slot />
 
         <DialogCloseX class="absolute top-4 right-4 p-0.5 transition-colors rounded-md hover:bg-secondary disabled:pointer-events-none disabled:opacity-50">
