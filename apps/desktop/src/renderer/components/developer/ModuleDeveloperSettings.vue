@@ -6,6 +6,7 @@
 import { computed, ref, watch } from "vue";
 import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { Field } from "@tavora/official-ui/components/ui/field";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import type { AccountPublishToken, HostAction } from "../../../shared/host-api";
 import { suggestPrefix } from "../../../shared/id-prefix";
@@ -145,14 +146,17 @@ function removeToken(token: AccountPublishToken) {
 <template>
   <SettingGroup :title="t('account.developer.title')" :description="view?.developer ? undefined : t('account.developer.hint')">
     <div class="-mx-5 px-5 py-4 transition-colors duration-500" :class="highlight === 'module-developer' && 'bg-primary/10'" data-setting="module-developer" data-testid="account-developer">
-      <form class="flex flex-col gap-1" @submit.prevent="saveDeveloperName">
-        <label class="text-sm font-medium" for="account-developer-name">{{ t("account.developer.name") }}</label>
-        <div class="flex gap-2">
-          <Input id="account-developer-name" v-model="developerName" class="max-w-60" maxlength="32" autocomplete="off" spellcheck="false" data-testid="account-developer-name" />
-          <Button type="submit" :disabled="busy || !developerName.trim() || developerName.trim() === view?.developer?.name" data-testid="account-developer-save">{{ t("account.developer.save") }}</Button>
-        </div>
-        <span class="text-muted-foreground text-xs" data-testid="account-developer-name-hint">{{ nameHint }}</span>
-        <span v-if="namePrefix" class="text-muted-foreground text-xs" data-testid="account-developer-name-prefix">{{ t("devStart.name.prefix", { prefix: namePrefix }) }}</span>
+      <form @submit.prevent="saveDeveloperName">
+        <Field :label="t('account.developer.name')">
+          <div class="flex gap-2">
+            <Input v-model="developerName" class="max-w-60" maxlength="32" autocomplete="off" spellcheck="false" data-testid="account-developer-name" />
+            <Button type="submit" :disabled="busy || !developerName.trim() || developerName.trim() === view?.developer?.name" data-testid="account-developer-save">{{ t("account.developer.save") }}</Button>
+          </div>
+          <template #hint>
+            <span class="block" data-testid="account-developer-name-hint">{{ nameHint }}</span>
+            <span v-if="namePrefix" class="mt-1 block" data-testid="account-developer-name-prefix">{{ t("devStart.name.prefix", { prefix: namePrefix }) }}</span>
+          </template>
+        </Field>
       </form>
 
       <div v-if="prefixes && view?.developer" class="mt-6" data-testid="developer-prefixes">

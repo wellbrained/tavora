@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.43",
+    "date": "2026-11-14",
+    "notes": [
+      "Text fields show the new Field: a label, a hint and an error tied to any control, also beside the label."
+    ]
+  },
+  {
     "version": "0.1.42",
     "date": "2026-11-14",
     "notes": [

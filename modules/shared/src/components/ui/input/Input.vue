@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import type { HTMLAttributes } from "vue"
 import { useVModel } from "@vueuse/core"
+import { ref } from "vue"
 import { useSoftDisabled } from "../../../lib/soft-disabled"
 import { cn } from "../../../lib/utils"
+import { useFieldControl } from "../field/use-field-control"
 
 defineOptions({ inheritAttrs: false })
 const props = defineProps<{
@@ -27,13 +29,16 @@ const modelValue = useVModel(props, "modelValue", emits, {
 })
 // Enter in a read-only field would still submit its form.
 const soft = useSoftDisabled(() => ({ disabled: props.disabled, reason: props.disabledReason }), { keys: new Set(["Enter"]), pointer: false })
+const element = ref<HTMLInputElement | null>(null)
+const field = useFieldControl({ element: () => element.value, value: () => modelValue.value, disabled: () => props.disabled })
 </script>
 
 <template>
   <input
+    ref="element"
     v-model="modelValue"
     data-slot="input"
-    v-bind="soft.attrs()"
+    v-bind="{ ...soft.attrs(), ...field.attrs() }"
     :disabled="soft.disabled()"
     :readonly="soft.soft() || undefined"
     :class="cn(

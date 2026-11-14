@@ -5,6 +5,7 @@ import { Grid3x3, List } from "@lucide/vue"
 import { SegmentedControl, type SegmentedOption } from "."
 import { isSoftOption, optionHint } from "./options"
 import { installTitleTooltips } from "../../../title-tooltips"
+import { ariaProblems } from "../../../testing"
 
 const wait = (ms = 30) => new Promise((resolve) => setTimeout(resolve, ms))
 let app: App | undefined
@@ -58,6 +59,7 @@ describe("plain options", () => {
     expect(item("grid").hasAttribute("aria-label")).toBe(false)
     expect(item("grid").className).not.toContain("inline-flex")
     expect(item("list").getAttribute("aria-checked")).toBe("true")
+    expect(ariaProblems(root)).toEqual([])
   })
 
   it("pick on a click and on the arrow keys", async () => {

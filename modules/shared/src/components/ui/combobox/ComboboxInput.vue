@@ -7,6 +7,7 @@ import { ComboboxInput, useForwardPropsEmits } from "reka-ui"
 import { onMounted, ref } from "vue"
 import { cn } from "../../../lib/utils"
 import { Button } from "../button"
+import { useFieldControl } from "../field/use-field-control"
 import { freeKeys } from "./free-keys"
 
 defineOptions({
@@ -31,6 +32,8 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
 const box = ref<HTMLElement | null>(null)
 const text = ref("")
 const input = () => box.value?.querySelector<HTMLInputElement>("input") ?? null
+
+const field = useFieldControl({ element: input, value: () => text.value, disabled: () => props.disabled })
 
 const keys = freeKeys()
 function onKeyCapture(event: KeyboardEvent) {
@@ -69,7 +72,7 @@ function clear() {
     />
     <ComboboxInput
       data-slot="combobox-input"
-      v-bind="{ ...$attrs, ...forwarded }"
+      v-bind="{ ...$attrs, ...forwarded, ...field.attrs() }"
       autocomplete="off"
       spellcheck="false"
       :class="cn(

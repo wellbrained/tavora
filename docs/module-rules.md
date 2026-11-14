@@ -42,6 +42,7 @@ classes where you use a control; never copy it.
 | 2 to 4 views or choices | `SegmentedControl`. An option can have an `icon` (with `iconOnly`, the icon alone: its `label` becomes the tooltip and `aria-label`), be `disabled` by itself, and carry a `tooltip`. Say why an option is off with `disabledReason`: it shows as the option's tooltip, and the option stays hoverable and focusable (the arrow keys land on it) but can't be picked | a row of buttons acting as tabs, icons teleported into the items, a wrapper `span` with a tooltip around a disabled option |
 | Tabs | `Tabs`; closable, reorderable or renamable tabs: `TabStrip` | own tab bar |
 | Text, number, code field | `Input`, `Textarea`, `CodeInput`, `Label` | own input with an icon positioned by hand |
+| A field's label, hint and error | `Field` around one control (`Input`, `Textarea`, `NumberField`, `Select`, `Combobox`, `Switch`, `Checkbox`): `label`, `hint` (or its `hint` slot) and `error` are tied to the control for screen readers, and the error is read out when it appears. `orientation="horizontal"` puts the control beside the label and moves it under the label when the row is too narrow | a `Label` with `for`, ids and `aria-describedby` wired by hand; an error shown only as a red border |
 | Pick one | `Select` (short list), `Combobox` (searchable), `Picker`, `RadioGroup` | native `<select>` |
 | A field where the user types their own value or picks a suggestion (a format) | `Combobox` with `free` on its `ComboboxInput`, `ignore-filter` and a `ComboboxTrigger` chevron; the list starts at the field's left edge and is as wide | an `Input` with a "···" button beside it and a menu of its own |
 | Yes/no setting | `Switch` / `SwitchField`, `Checkbox` | own switch |
@@ -67,7 +68,7 @@ classes where you use a control; never copy it.
 | A list, card or page that loads | `Skeleton` around the real template with placeholder data (see [Loading](#loading)) | generic grey bars, a spinner, "Loading…" |
 | A game's tall cover | `GameCover` (2:3, the game's tile as fallback, name beside it) | an own `<img>` box per module |
 | A picture that may arrive late | `FadeImage` (reserved box, fades in, keeps a fallback icon if it fails) | a bare `<img>` that pops in and shifts the layout |
-| Error or warning in place | `Notice` | red text in a `<p>` |
+| Error or warning in place | `Notice`; a field's own error is the `error` of its `Field` | red text in a `<p>` |
 | Short message | `toast()` from `ui/toast` (the `Toaster` follows the user's toast position) | own status line |
 | Work a view waits for (a confirm, an import, a load) | `useTask()` from `@tavora/official-ui/use-task`: one `state` (`idle`, `running`, `failed` with its message), always ends, drops an answer that is no longer the newest (`mode: "latest"` for loads) | `busy` and `error` refs set by hand around an `await` |
 | Delete something that can be put back | `undoable()` from `ui/toast`: delete at once, then "… deleted" with Undo (see [Deleting](#deleting)) | "Are you sure?" first, a toast with an own Undo button |
@@ -280,7 +281,10 @@ The UI Playground (Tavora features > Settings) shows one page, several pages and
 - **Overlays and drop targets** inside a panel use token colours and the kit's radius like everything else.
 - **Data**: bundled with the module, loaded once and shared between panels. Modules reach the network only through the hosts the user granted (`permissions.network`, `network.fetch`), and a program on this PC, such as a game's local API, only read-only as `localhost:<port>`. A folder on this PC, such as a game's replays or saves, is read only through `permissions.folders` and `folders` once the user allowed it; for a single file the user picks, use `files.pickReadOnly`.
 - **Accessibility**: icon-only buttons have a label, everything works by keyboard, a tree or list with a role also has
-  its arrow keys, state is never shown by colour alone.
+  its arrow keys, state is never shown by colour alone. In component tests, `ariaProblems(root)` from
+  `@tavora/official-ui/testing` finds ids that `aria-labelledby`, `aria-describedby`, `aria-controls` or a label's `for`
+  point at but nothing has, and a radio group, tab list, menu or list that Tab stops on more than once;
+  `focusLostAfter(action)` finds an action that drops the focus to the page body.
 
 ### Loading
 
