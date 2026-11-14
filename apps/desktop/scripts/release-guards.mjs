@@ -150,7 +150,7 @@ export function checkDownload(version, downloaded, ciHashes, latestYml) {
 }
 
 /** Whether a version is a preview build: everything before 1.0.0, the first public release. */
-const isPreview = (version) => Number(version.split(".")[0]) < 1;
+const isPreview = (version) => compareVersions(version, "1.0.0") < 0;
 
 /** The GitHub release's title: "(preview build)" only before 1.0.0. */
 export function releaseTitle(version) {
