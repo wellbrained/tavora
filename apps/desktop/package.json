@@ -121,14 +121,6 @@
       ],
       "icon": "assets/tavora.ico"
     },
-    "linux": {
-      "target": [
-        "AppImage"
-      ],
-      "icon": "assets/icon-256.png",
-      "category": "Game",
-      "executableName": "tavora"
-    },
     "nsis": {
       "oneClick": true,
       "perMachine": false,
