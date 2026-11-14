@@ -788,11 +788,18 @@ const handlers = new Map<string, Handler>([
   ["ui.tooltip.defineSkin",async(s,p)=>{const {name,skin}=checkSkinRequest(p);await s.context.tooltip.defineSkin(name,skin);return null;}],
 ]);
 
+/** What a page whose panel was closed may still call while it saves (`BridgeSession.closing`): its data, and nothing on screen. */
+export function servedWhileClosing(method: string): boolean {
+  return /^(storage|documents|blobs)\./.test(method) || method === "panel.getState" || method === "panel.setState";
+}
+
 /** Serves one module panel over one port. */
 export class BridgeSession {
   private inFlight = 0;
   private served = 0;
   private closed = false;
+  /** The panel was closed: the port stays open a moment longer, for the page's saves only. */
+  private closingDown = false;
   private handshakeDone = false;
   /** What the panel's calls hold now, this port's and those of its earlier ports still running. */
   readonly budget: BridgeBudget;
@@ -826,6 +833,16 @@ export class BridgeSession {
     if (this.closed) return;
     this.port.close();
     this.markClosed();
+  }
+
+  /** The panel was closed but its page may still save: from now on only its saves are answered, until `close`. */
+  closing(): void {
+    this.closingDown = true;
+  }
+
+  /** Requests started and not answered yet. */
+  get busy(): boolean {
+    return this.inFlight > 0;
   }
 
   private readonly onDocumentChange = (change: DocumentChange, origin: unknown) => {
@@ -893,6 +910,8 @@ export class BridgeSession {
         result = this.handshake(params);
       } else if (!this.handshakeDone) {
         throw new HostError("BAD_REQUEST", "call bridge.handshake first");
+      } else if (this.closingDown && !servedWhileClosing(method)) {
+        throw new HostError("BAD_REQUEST", `${method} is not available while the panel closes; only saves are`);
       } else if (Object.hasOwn(RESERVED_METHODS, method)) {
         const capability = RESERVED_METHODS[method]!;
         // Nothing can grant these yet; the check is here so the error shape

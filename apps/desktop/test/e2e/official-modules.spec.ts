@@ -185,6 +185,35 @@ test("notes: write, pin and search notes, and find them again after a restart", 
   await again.app.close();
 });
 
+/** How many Notes pages run, a closed panel's page that is still saving included. */
+const notesPages = (app: ElectronApplication) =>
+  app.evaluate(({ webContents }, id) => webContents.getAllWebContents().filter((contents) => contents.getURL().startsWith(`tavora-module://${id}/`)).length, NOTES);
+
+test("notes: what you typed just before the panel closed is still there", async () => {
+  const { app, page, userData } = await launch();
+  await openModule(page, NOTES);
+  await ready(app, NOTES, "editor");
+  await inModule(app, NOTES, `${q("editor")}.focus()`);
+  // Away at once, well within the note's save delay: the page saves as it closes.
+  await typeInModule(app, NOTES, "Left at once");
+  await openWorkspace(page, "satisfactory");
+  // The old page is gone before the new one is read, so it can't stand in for it.
+  await expect.poll(() => notesPages(app)).toBe(0);
+  await openWorkspace(page, "poe2");
+  await ready(app, NOTES, "editor");
+  await expect.poll(() => editorText(app)).toBe("Left at once");
+
+  // Quitting right after typing keeps it too.
+  await inModule(app, NOTES, `(() => { const editor = ${q("editor")}; editor.focus(); getSelection().selectAllChildren(editor); getSelection().collapseToEnd(); })()`);
+  await typeInModule(app, NOTES, " and quit");
+  await app.close();
+  const again = await launch(userData);
+  await openWorkspace(again.page, "poe2");
+  await ready(again.app, NOTES, "editor");
+  await expect.poll(() => editorText(again.app)).toBe("Left at once and quit");
+  await again.app.close();
+});
+
 test("notes: two panels show the same notes and follow each other's changes", async () => {
   const { app, page } = await launch();
   await openModule(page, NOTES);

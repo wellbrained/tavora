@@ -83,7 +83,11 @@ export interface PanelViewAdapter {
   setMaximized(maximized: boolean): void;
   /** A still image of the page as a data: URL, or null when there is none. */
   capture(): Promise<string | null>;
-  dispose(): void;
+  /**
+   * Closes the page for good. A module page may save for a moment first (at most CLOSE_CAP_MS); resolves once it is
+   * closed. `now` closes it without waiting, for a panel whose data is being deleted.
+   */
+  dispose(now?: boolean): Promise<void>;
 }
 
 /** What `open` builds: the adapter, and how it joins the window once it is registered. */
@@ -319,9 +323,12 @@ export class PanelViews {
 
   // ── Cleanup ─────────────────────────────────────────────────────────
 
-  /** The panel closes for good: its view, place, waiting, launch and keep state go. Settings and documents are not Panel views'. */
-  close(instanceId: string): void {
-    this.remove(instanceId, true);
+  /**
+   * The panel closes for good: its view, place, waiting, launch and keep state go. Settings and documents are not Panel
+   * views'. `discard`: its data is being deleted, so its page doesn't get the moment to save.
+   */
+  close(instanceId: string, discard = false): void {
+    this.remove(instanceId, true, discard);
   }
 
   /** Only the view goes (its workspace is left, or the overlays let it go); it comes back with its workspace. */
@@ -337,15 +344,24 @@ export class PanelViews {
     this.bounds.clear();
   }
 
-  /** The window is gone: the views are disposed with it. */
-  disposeAll(): void {
-    for (const { adapter } of this.entries.values()) adapter.dispose();
+  /** The window goes or Tavora quits: every view is disposed. Resolves once their pages saved and closed (at most CLOSE_CAP_MS). */
+  disposeAll(): Promise<void> {
+    const closing = [...this.entries.values()].map(({ adapter }) => {
+      try {
+        return adapter.dispose();
+      } catch (error) {
+        // One page that fails to close must not keep the window open.
+        console.error("[tavora] closing a panel failed", error);
+        return Promise.resolve();
+      }
+    });
     this.entries.clear();
     this.byContents.clear();
     this.lent.clear();
+    return Promise.all(closing).then(() => undefined);
   }
 
-  private remove(instanceId: string, forget: boolean): void {
+  private remove(instanceId: string, forget: boolean, discard = false): void {
     this.deps.releasing(instanceId, forget);
     if (forget) {
       this.keep.delete(instanceId);
@@ -368,7 +384,7 @@ export class PanelViews {
         revoked?.();
       }
       this.deps.unmount(adapter);
-      adapter.dispose();
+      void adapter.dispose(discard);
       const { moduleId } = entry.record;
       if (![...this.entries.values()].some((other) => other.record.moduleId === moduleId)) this.deps.moduleGone?.(moduleId);
     }

@@ -1115,3 +1115,32 @@ describe("shared tooltips",()=>{
   expect(skins).toHaveLength(1);
  });
 });
+
+describe("a panel that closes", () => {
+  it("still answers its saves, and nothing else", async () => {
+    const opened: unknown[] = [];
+    const p = new FakePort();
+    const session = new BridgeSession(p, { ...makeContext(), showMenu: (menu) => (opened.push(menu), Promise.resolve(null)) });
+    expect(await call(p, "bridge.handshake", { protocol: 1, sdkVersion: "0.1.0" })).toMatchObject({ ok: true });
+    session.closing();
+    expect(await call(p, "storage.set", { key: "note", value: "last words" })).toMatchObject({ ok: true });
+    expect(await call(p, "storage.get", { key: "note" })).toMatchObject({ ok: true, result: "last words" });
+    expect(await call(p, "documents.put", { title: "Note", data: { text: "hi" } })).toMatchObject({ ok: true });
+    expect(await call(p, "panel.setState", { value: { scroll: 3 } })).toMatchObject({ ok: true });
+    expect(await call(p, "ui.showMenu", { items: [{ id: "a", label: "A" }] })).toMatchObject({ ok: false, error: { code: "BAD_REQUEST" } });
+    expect(await call(p, "panels.open", { type: "x" })).toMatchObject({ ok: false, error: { code: "BAD_REQUEST" } });
+    expect(opened).toEqual([]);
+    // Until the host closes the port.
+    session.close();
+    expect(p.closed).toBe(true);
+    expect(session.ready).toBe(false);
+  });
+
+  it("says whether requests are still running", async () => {
+    const p = new FakePort();
+    const session = new BridgeSession(p, makeContext());
+    expect(session.busy).toBe(false);
+    expect(await call(p, "bridge.handshake", { protocol: 1, sdkVersion: "0.1.0" })).toMatchObject({ ok: true });
+    expect(session.busy).toBe(false);
+  });
+});

@@ -47,8 +47,12 @@ export class MemoryPanelView implements PanelViewAdapter {
   capture(): Promise<string | null> {
     return Promise.resolve(this.image);
   }
-  dispose(): void {
+  /** How the last dispose was asked for: `now` when the panel's data is being deleted. */
+  disposedNow: boolean | undefined;
+  dispose(now?: boolean): Promise<void> {
     this.disposed = true;
+    this.disposedNow = now ?? false;
+    return Promise.resolve();
   }
 }
 

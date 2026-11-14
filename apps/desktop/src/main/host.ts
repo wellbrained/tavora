@@ -154,7 +154,7 @@ import { readSteamLastPlayed } from "./steam-played";
 import { readIcoFromFile } from "./pe-icon";
 import { coverReader, findSteamDir, isSteamAppId, loadAppInfo, readLibraryCover, readSteamClientIcon, removeSteamIcon } from "./steam-icons";
 import { readShortcutIcons, shortcutFolders } from "./steam-shortcuts";
-import { documentsFolder, exportsFolder, ModuleView, picturesFolder, REVEAL_CAP_MS } from "./module-view";
+import { CLOSE_CAP_MS, documentsFolder, exportsFolder, ModuleView, picturesFolder, REVEAL_CAP_MS } from "./module-view";
 import { readJsonText } from "./json-file-http";
 import { kindOfName, readTableFile } from "./table-file-http";
 import { freeFileName } from "./picture-save-http";
@@ -566,6 +566,11 @@ export class Host {
   private buttonsBackground?: string;
   /** True once the window has closed. */
   private windowClosed = false;
+  /**
+   * The panels' pages as the window closes or Tavora quits: `running`; `closing` while they save what was typed just
+   * before (at most CLOSE_CAP_MS); `closed`. No page starts after `running`.
+   */
+  private panelPages: { step: "running" } | { step: "closing" | "closed"; done: Promise<void> } = { step: "running" };
   /** True while the window is minimized or hidden. */
   private windowHidden = false;
   /** Tavora's window is behind another program (the game): it lost the focus. */
@@ -2091,6 +2096,12 @@ export class Host {
     this.window.on("move", () => this.saveWindowSoon());
     this.window.on("close", (event) => {
       this.saveWindow();
+      // The panels write what was typed just before first (Alt+F4 right after typing); the window closes once their pages have.
+      if (this.panelPages.step !== "closed") {
+        event.preventDefault();
+        if (this.panelPages.step === "running") void this.closePanelPages().then(() => !this.window.isDestroyed() && this.window.close());
+        return;
+      }
       // The last changes go to the cloud copy first; the window closes once they are up.
       if (this.copySync.holdClose(() => this.window.close())) event.preventDefault();
     });
@@ -2125,7 +2136,7 @@ export class Host {
       // The overlay windows (and the keys for arranging) go with the main window; they would keep Tavora running.
       this.closeOverlayWindows();
       void this.gameOverlays.shutdown().catch((error: unknown) => console.error("[tavora]", error));
-      this.panels.disposeAll();
+      void this.closePanelPages();
       this.cover.dispose();
       this.toastView.dispose();
       this.discord.dispose();
@@ -3467,7 +3478,8 @@ export class Host {
   private async forgetWorkspaceData(workspace: WorkspaceEntry): Promise<void> {
     const records = this.workspaces.forgetWorkspace(workspace.id);
     // A panel of this workspace that was over its game closes with it.
-    for (const record of records) this.panels.close(record.instanceId);
+    // Its data goes, so its pages don't get the moment to save that a closed panel gets.
+    for (const record of records) this.panels.close(record.instanceId, true);
     await Promise.all(records.map((record) => this.data.panelState.remove(record.instanceId)));
     this.data.forgetWorkspace(workspace.id);
     this.streaming.forgetWorkspace(workspace.id);
@@ -3911,6 +3923,8 @@ export class Host {
 
   /** openedAt is when the user asked for the panel; its time to a loaded page is measured from there. */
   private createView(record: InstanceRecord, workspace: TavoraWorkspace, openedAt?: number): void {
+    // The window is closing or Tavora quits: no page starts any more.
+    if (this.panelPages.step !== "running") return;
     // Its panel is in the in-game layer and kept running there while another workspace was shown: it comes back when the layer closes.
     if (this.panels.has(record.instanceId)) return;
     if (record.moduleId === BROWSER_MODULE_ID) return this.createBrowser(record, workspace);
@@ -5279,6 +5293,20 @@ export class Host {
     this.panels.applyBounds();
   }
 
+  /**
+   * Every panel's page saves what it still has and closes, once, as the window closes or Tavora quits. Resolves when
+   * they have, at most a moment after CLOSE_CAP_MS whatever a page does.
+   */
+  private closePanelPages(): Promise<void> {
+    if (this.panelPages.step !== "running") return this.panelPages.done;
+    const limit = new Promise<void>((resolve) => setTimeout(resolve, CLOSE_CAP_MS + 500).unref());
+    const done: Promise<void> = Promise.race([Promise.resolve().then(() => this.panels.disposeAll()), limit])
+      .catch((error: unknown) => console.error("[tavora] closing the panels failed", error))
+      .then(() => void (this.panelPages = { step: "closed", done }));
+    this.panelPages = { step: "closing", done };
+    return done;
+  }
+
   /** Resolves once pending writes are on disk, with everything still running (the cloud copy calls this before each sync). */
   async saveAll(): Promise<void> {
     await this.gameOverlays?.save();
@@ -5288,6 +5316,7 @@ export class Host {
 
   /** Quitting: resolves once pending writes are on disk; keys go back to the system and the overlay server stops. */
   async flush(): Promise<void> {
+    await this.closePanelPages();
     await this.gameOverlays?.shutdown();
     await this.streaming?.shutdown();
     return this.savedData.flush();

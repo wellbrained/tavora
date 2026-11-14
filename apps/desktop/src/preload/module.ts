@@ -36,7 +36,8 @@ for (const type of ["pointerdown", "keydown"]) {
   );
 }
 
-ipcRenderer.on("tavora:ping", () => ipcRenderer.send("tavora:pong"));
+// The host's ping may carry a number (a panel closing waits for the answer to its own ping); it comes back as it went.
+ipcRenderer.on("tavora:ping", (_event, token: unknown) => ipcRenderer.send("tavora:pong", typeof token === "number" ? token : undefined));
 
 // The host shows a panel see-through (or under a cover) until it has drawn. A frame callback runs just before a
 // frame is drawn, and only while the page is shown; the second one runs once the first frame is out.
