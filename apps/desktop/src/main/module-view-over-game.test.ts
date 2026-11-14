@@ -102,9 +102,11 @@ describe("closing a panel", () => {
   it("starts no timers when its page finishes loading only after it was closed", () => {
     vi.useFakeTimers();
     try {
-      const view = make();
+      const view = make({ onStatus: () => undefined });
       view.dispose();
-      made.handlers["did-finish-load"]?.();
+      const finished = made.handlers["did-finish-load"];
+      expect(finished).toBeTypeOf("function");
+      finished!();
       // Electron drops a closed view's page: a timer left running would read `isDestroyed` of undefined.
       (view as unknown as { view: { webContents?: unknown } }).view.webContents = undefined;
       expect(() => vi.advanceTimersByTime(5 * 60_000)).not.toThrow();

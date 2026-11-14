@@ -1463,6 +1463,7 @@ export class ModuleView {
   }
 
   dispose(): void {
+    if (this.disposed) return;
     this.disposed = true;
     this.stopHeartbeat();
     this.stopStorageWatch();
