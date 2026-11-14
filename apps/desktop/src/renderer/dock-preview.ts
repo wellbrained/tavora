@@ -235,7 +235,9 @@ export class DockPreview {
     if (this.drag.phase !== "aiming") return;
     const { target, plan, scene } = this.drag;
     const place = describe(target, scene);
-    this.said.value = plan.ok ? place : plan.reason === "too-small" ? t("dock.move.noRoom", { place }) : plan.reason === "same-spot" ? t("dock.move.samePlace", { place }) : place;
+    const text = plan.ok ? place : plan.reason === "too-small" ? t("dock.move.noRoom", { place }) : plan.reason === "same-spot" ? t("dock.move.samePlace", { place }) : place;
+    // Two places can read the same (a group's middle and the end of its tab row): a changed text is read out again.
+    this.said.value = text === this.said.value ? `${text} ` : text;
   }
 
   /** Enter drops where the keyboard aims; Escape, or the move being interrupted, leaves everything as it was. */
