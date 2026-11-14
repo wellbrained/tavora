@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.46",
+    "date": "2026-11-15",
+    "notes": [
+      "Lists has a new example: where the focus goes after a delete."
+    ]
+  },
+  {
     "version": "0.1.45",
     "date": "2026-11-15",
     "notes": [

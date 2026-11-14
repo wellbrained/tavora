@@ -73,6 +73,7 @@ classes where you use a control; never copy it.
 | Short message | `toast()` from `ui/toast` (the `Toaster` follows the user's toast position) | own status line |
 | Work a view waits for (a confirm, an import, a load) | `useTask()` from `@tavora/official-ui/use-task`: one `state` (`idle`, `running`, `failed` with its message), always ends, drops an answer that is no longer the newest (`mode: "latest"` for loads) | `busy` and `error` refs set by hand around an `await` |
 | Delete something that can be put back | `undoable()` from `ui/toast`: delete at once, then "… deleted" with Undo (see [Deleting](#deleting)) | "Are you sure?" first, a toast with an own Undo button |
+| A list whose rows can be deleted, or go away by themselves | `useFocusRecovery(list)` from `@tavora/official-ui` (in the app `@tavora/official-ui/focus-recovery`), each row marked `data-focus-row="<id>"`: when the focused row goes, the focus moves to the same spot in the next row, else the row before, else the first control of the empty state (`data-focus-empty`) or the list. `data-focus-target` names a row's main control, for rows that differ. Undo calls `restore(id)` (see [Deleting](#deleting)). `NavList` and `DataGrid` do it themselves | focusing a neighbour by hand after a timeout, `document.querySelector` for the next row, the focus left on the page |
 | Key hint | `Kbd` | |
 | Zoomable picture, map, tree or canvas | `ZoomPane` (one control group: −, %, +, Whole map, and your own buttons in `extras`; `hundred` sets what 100 % is; `persist-key` remembers the view; a game that draws itself, canvas or SVG, uses `view-only`) and `TileMap` for tiles and pins | own wheel, drag, double-click or zoom buttons, own zoom controls per game |
 | A tooltip for a canvas node or anything without an element to hover | `ZoomTip` with `useZoomTip()`: you pass the box on the pane, the kit tooltip opens beside it | a tooltip at the pointer, own hover box |
@@ -263,7 +264,7 @@ The UI Playground (Tavora features > Settings) shows one page, several pages and
 - **Deleting**<a id="deleting"></a>: what can be put back exactly as it was (an item of the module's own document: a to-do, a
   group, a saved value) is deleted at once and saved, then `undoable({ title, undo })` shows "<Thing> deleted" with Undo
   for a few seconds; Ctrl+Z outside text fields takes back the newest one (`handleUndoKey(event)` in the page's
-  keydown; it stands down while a kit dialog is open and for keys pressed inside a menu, list or popover). Each delete gets its own toast; `undo` puts back only its own thing, in its place, with its id, and
+  keydown; it stands down while a kit dialog is open and for keys pressed inside a menu, list or popover). The focus stays in the list ([`useFocusRecovery`](#2-kit-map)); its `restore(id)` in `undo` gives the thing back the focus. Each delete gets its own toast; `undo` puts back only its own thing, in its place, with its id, and
   answers `false` when it can't any more (its place is gone, something took its name): the kit then says so. Check that
   on the list as it is now, since a store change may run again on a newer one. A closed panel or app keeps the delete
   (it is saved already); end open offers in `onBeforeUnmount` with `close()`. `ConfirmDialog` stays for what can't be

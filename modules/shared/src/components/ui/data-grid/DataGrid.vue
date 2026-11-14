@@ -21,6 +21,7 @@
 // - The `cell` slot draws a cell (`{ row, col, text, active, selected }`); without it the text is shown.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type HTMLAttributes, type StyleValue } from "vue"
 import { useResizeObserver } from "@vueuse/core"
+import { useFocusRecovery } from "../../../focus-recovery"
 import { cn } from "../../../lib/utils"
 import { uiText } from "../text"
 import { columnName, hitIndex, makeAxis, scrollToShow, visibleRange, type Axis } from "./geometry"
@@ -114,6 +115,8 @@ const editing = defineModel<GridEdit | null>("editing", { default: null })
 const scroll = defineModel<GridScroll>("scroll", { default: () => ({ top: 0, left: 0 }) })
 
 const root = ref<HTMLElement | null>(null)
+// The grid takes the focus back when its cell editor goes (its row was deleted, say), instead of the page's body.
+useFocusRecovery(root)
 const editor = ref<HTMLTextAreaElement | null>(null)
 // The editor sits inside the area loop, where a plain ref would be a list.
 const setEditor = (el: unknown) => {
@@ -306,12 +309,13 @@ onMounted(() => {
   nextTick(() => applyScroll(scroll.value))
 })
 
-// Rows or columns that went away must not leave the selection outside the grid.
+// Rows or columns that went away must not leave the selection outside the grid, nor an edit in a cell that is gone.
 watch(
   () => [props.rows, props.cols] as const,
   ([rows, cols]) => {
     const fitted = clampSelection(selection.value, Math.max(1, rows), Math.max(1, cols))
     if (JSON.stringify(fitted) !== JSON.stringify(selection.value)) selection.value = fitted
+    if (editing.value && (editing.value.row >= rows || editing.value.col >= cols)) editing.value = null
   },
 )
 

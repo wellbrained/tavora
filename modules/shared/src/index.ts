@@ -15,6 +15,7 @@ export { useItemSession, type UseItemSession } from "./use-item-session";
 export { errorMessage } from "./documents";
 export { createOptimistic, useOptimistic, useOptimisticKeyed, type Optimistic, type OptimisticOptions, type UseOptimistic, type UseOptimisticKeyed } from "./optimistic";
 export { useTask, type Task, type TaskOptions, type TaskState, type TaskStatus } from "./use-task";
+export { createFocusRecovery, FOCUS_ROW, useFocusRecovery, type FocusRecovery, type FocusRecoveryOptions } from "./focus-recovery";
 
 export{Tooltip,TooltipRows,type TooltipRow}from"./components/tooltip";
 export{ItemCard,type ItemCardSkin}from"./components/ui/item-card";

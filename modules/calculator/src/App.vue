@@ -10,14 +10,14 @@
 // The history and the values are one document of the workspace, so every panel of the workspace shares them and sees
 // another panel's change at once.
 import { BookmarkPlus, Check, Copy, Delete, Ellipsis, Eraser, History, Pencil, Settings as SettingsIcon, Trash2 } from "@lucide/vue";
-import { connectModule, errorMessage, SegmentedControl } from "@tavora/official-ui";
+import { connectModule, errorMessage, SegmentedControl, useFocusRecovery } from "@tavora/official-ui";
 import { settingsDialogSize } from "@tavora/official-ui/components/ui/module-settings";
 import { handleUndoKey, Toaster, undoable, type Undoable } from "@tavora/official-ui/components/ui/toast";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@tavora/official-ui/components/ui/tabs";
 import type { TavoraSDK } from "@tavora/sdk";
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, type ComponentPublicInstance } from "vue";
 import { copyText, decimalComma, EMPTY, evaluate, format, insert, press, pretty, reference, rounded, segments, type Entry } from "./calc";
 import { remember, restoreHistory, type Calculation } from "./history";
 import { BASIC, keyAction, pasteKeys, PLUS, type Key } from "./keys";
@@ -226,6 +226,10 @@ function offerUndo(title: string, undo: () => boolean | void): void {
   offers.add(offer);
 }
 
+// A deleted value hands the focus to the next one (or the one before, or the list); Undo gives it back.
+const valuesList = ref<ComponentPublicInstance | null>(null);
+const valuesFocus = useFocusRecovery(valuesList);
+
 /** Deletes a value at once; Undo puts it back in its place, unless a value took its name meanwhile. */
 function removeValue(name: string): void {
   const index = values.value.findIndex((item) => sameName(item.name, name));
@@ -235,6 +239,7 @@ function removeValue(name: string): void {
   offerUndo(t("values.deleted", { name: value.name }), () => {
     if (!restoreValue(values.value, value, index)) return false;
     saveValues((items) => restoreValue(items, value, index) ?? items);
+    valuesFocus.restore(value.name);
   });
 }
 
@@ -491,10 +496,10 @@ onBeforeUnmount(() => {
               </li>
             </ol>
           </TabsContent>
-          <TabsContent value="values" class="flex min-h-0 flex-col" data-testid="values-list">
+          <TabsContent ref="valuesList" value="values" class="flex min-h-0 flex-col" data-testid="values-list">
             <p v-if="!values.length" class="text-muted-foreground py-2 text-sm">{{ t("values.empty") }}</p>
             <ul v-else class="min-h-0 flex-1 overflow-y-auto">
-              <li v-for="item in values" :key="item.name" class="flex items-center gap-1">
+              <li v-for="item in values" :key="item.name" class="flex items-center gap-1" :data-focus-row="item.name">
                 <Button
                   variant="ghost"
                   class="h-auto min-w-0 flex-1 justify-between gap-3 px-2 py-1 font-normal"

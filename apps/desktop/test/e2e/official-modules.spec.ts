@@ -481,11 +481,15 @@ test("to-dos: Enter in a to-do starts a new one right below it", async () => {
   await expect.poll(() => inModule(app, TODOS, `${taskTitled("Bring meat")}?.dataset.depth`)).toBe("1");
   await expect.poll(() => taskTitles(app)).toEqual(["Craft a bow", "Gather wood", "Find flint", "Tame a wolf", "Bring meat", "Build a hut"]);
 
-  // The trash button deletes in one click, with its sub-to-dos, and Undo puts them back.
-  await inModule(app, TODOS, `${taskTitled("Tame a wolf")}.querySelector('[data-testid="task-delete"]').click()`);
+  // The trash button deletes in one press, with its sub-to-dos, and Undo puts them back. The focus moves on to the
+  // next to-do left (its title, as the rows differ), never to the page, and comes back with Undo.
+  await inModule(app, TODOS, `${taskTitled("Tame a wolf")}.querySelector('[data-testid="task-delete"]').focus()`);
+  await typeInModule(app, TODOS, "\n");
   await expect.poll(() => taskTitles(app)).toEqual(["Craft a bow", "Gather wood", "Find flint", "Build a hut"]);
+  await expect.poll(() => inModule(app, TODOS, `document.activeElement === ${taskTitled("Build a hut")}.querySelector('[data-testid="task-open"]')`)).toBe(true);
   await clickSelector(app, TODOS, `[data-testid="undo"]`);
   await expect.poll(() => taskTitles(app)).toEqual(["Craft a bow", "Gather wood", "Find flint", "Tame a wolf", "Bring meat", "Build a hut"]);
+  await expect.poll(() => inModule(app, TODOS, `document.activeElement === ${taskTitled("Tame a wolf")}.querySelector('[data-testid="task-open"]')`)).toBe(true);
   await app.close();
 });
 
