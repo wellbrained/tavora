@@ -146,7 +146,7 @@ test("Reset position and Reset size work from the page, Take picture says why it
     await takePicture.hover();
     await expect(page.locator("[role=tooltip]")).toHaveText("Start the game first.");
     // Undo and redo name their shortcut, from the shortcut table, as key caps beside the hint.
-    await expect(page.getByTestId("layout-redo")).toHaveAttribute("aria-keyshortcuts", /^(Control|Meta)\+Y$/);
+    await expect(page.getByTestId("layout-redo")).toHaveAttribute("aria-keyshortcuts", /^(Control|Meta)\+Y .*\+Shift\+Z$/);
     await page.getByTestId("layout-redo").hover();
     await expect(page.locator("[role=tooltip] p")).toHaveText("Redo");
     await expect(page.locator("[role=tooltip] kbd")).toHaveText([/^(Ctrl|Cmd)$/, "Y"]);
