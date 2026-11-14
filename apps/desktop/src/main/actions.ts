@@ -34,7 +34,8 @@ const CHECKS: HostChecks = {
   ),
   variationId: check(isVariationId),
   gameStart: check((value) => GAME_START_CHOICES.some((choice) => choice === value)),
-  layout: parsed(parseLayout),
+  // Strict: the host UI may send no field a saved layout of a newer Tavora could have.
+  layout: parsed((value) => parseLayout(value)),
   networkHosts: check(
     (value) => Array.isArray(value) && value.length <= MAX_NETWORK_HOSTS && value.every(isNetworkEntry) && new Set(value).size === value.length,
   ),

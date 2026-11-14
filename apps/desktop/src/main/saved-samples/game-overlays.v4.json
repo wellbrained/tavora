@@ -1,0 +1,141 @@
+{
+  "version": 4,
+  "exclusiveHintShown": true,
+  "layout": {
+    "grid": "fine",
+    "window": {
+      "bounds": {
+        "x": 100,
+        "y": 80,
+        "width": 1200,
+        "height": 800
+      },
+      "maximized": false
+    },
+    "seen": {
+      "elden-ring": {
+        "width": 2560,
+        "height": 1440
+      },
+      "satisfactory": {
+        "width": 1920,
+        "height": 1080
+      }
+    },
+    "games": {
+      "elden-ring": {
+        "detached": false,
+        "positions": {
+          "official\ntavora.clock-counter\nlocal-personal\ntimer": {
+            "h": "right",
+            "v": "bottom",
+            "x": 0.6,
+            "y": 0.5,
+            "width": 0.2,
+            "height": 0.1
+          }
+        }
+      }
+    }
+  },
+  "overlays": [
+    {
+      "owner": "official",
+      "moduleId": "tavora.clock-counter",
+      "workspaceId": "elden-ring",
+      "key": "deaths",
+      "scope": "game",
+      "mode": "always",
+      "opacity": 100,
+      "hideFromCapture": false,
+      "rect": {
+        "x": 0.05,
+        "y": 0.05,
+        "width": 0.2,
+        "height": 0.1
+      },
+      "anchor": {
+        "h": "left",
+        "v": "top",
+        "x": 0.05,
+        "y": 0.05,
+        "width": 0.2,
+        "height": 0.1
+      }
+    },
+    {
+      "owner": "official",
+      "moduleId": "tavora.clock-counter",
+      "workspaceId": "local-personal",
+      "key": "timer",
+      "scope": "all",
+      "mode": "toggle",
+      "opacity": 75,
+      "hideFromCapture": true,
+      "rect": {
+        "x": 0.05,
+        "y": 0.05,
+        "width": 0.2,
+        "height": 0.1
+      },
+      "anchor": {
+        "h": "left",
+        "v": "top",
+        "x": 0.05,
+        "y": 0.05,
+        "width": 0.2,
+        "height": 0.1
+      }
+    }
+  ],
+  "panels": [
+    {
+      "owner": "official",
+      "moduleId": "tavora.todos",
+      "workspaceId": "local-personal",
+      "scope": "all",
+      "instanceId": "aaaaaaaa-0000-4000-8000-000000000002",
+      "rect": {
+        "x": 0.05,
+        "y": 0.05,
+        "width": 0.2,
+        "height": 0.1
+      },
+      "anchor": {
+        "h": "left",
+        "v": "top",
+        "x": 0.05,
+        "y": 0.05,
+        "width": 0.2,
+        "height": 0.1
+      },
+      "mode": "always",
+      "opacity": 100,
+      "hideFromCapture": false
+    },
+    {
+      "owner": "official",
+      "moduleId": "tavora.notes",
+      "workspaceId": "elden-ring",
+      "scope": "game",
+      "instanceId": "aaaaaaaa-0000-4000-8000-000000000001",
+      "rect": {
+        "x": 0.05,
+        "y": 0.05,
+        "width": 0.2,
+        "height": 0.1
+      },
+      "anchor": {
+        "h": "left",
+        "v": "top",
+        "x": 0.05,
+        "y": 0.05,
+        "width": 0.2,
+        "height": 0.1
+      },
+      "mode": "toggle",
+      "opacity": 25,
+      "hideFromCapture": true
+    }
+  ]
+}

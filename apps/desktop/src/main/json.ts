@@ -198,3 +198,12 @@ export async function forgetSealedFile(file: string): Promise<void> {
   const copies = (await readdir(path.dirname(file)).catch(() => [] as string[])).filter((name) => [".corrupt-", ".from-version-", ".unopened"].some((kind) => name.startsWith(`${base}${kind}`)));
   for (const name of copies) await rm(path.join(path.dirname(file), name), { force: true });
 }
+
+/**
+ * The fields of a saved record this Tavora doesn't know (a newer Tavora's), to be written back as they were. Library,
+ * workspace and module storage keep them, so a PC on an older Tavora loses nothing a newer one saved (the cloud copy).
+ */
+export function unknownFields(saved: unknown, known: readonly string[]): SavedRecord {
+  if (!isSavedRecord(saved)) return {};
+  return Object.fromEntries(Object.entries(saved).filter(([key]) => !known.includes(key)));
+}

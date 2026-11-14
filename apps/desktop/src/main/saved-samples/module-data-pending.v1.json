@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "moves": [
+    {
+      "moduleId": "local.notes",
+      "to": "0123456789abcdef0123456789abcdef"
+    }
+  ],
+  "deletePartitions": []
+}

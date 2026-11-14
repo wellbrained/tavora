@@ -975,7 +975,7 @@ class KeyChanged extends Error {}
  * can't be read right now, or it is damaged (copied aside, left where it is, and the user told; readSavedFile). A newer
  * Tavora's file is read too, so a folder is never mistaken for the service.
  */
-async function loadPlace(file: string): Promise<string | null | undefined> {
+export async function loadPlace(file: string): Promise<string | null | undefined> {
   let saved: Record<string, unknown> | null;
   try {
     saved = await readSavedFile(file, { version: STORE_VERSIONS.cloudCopy, versionKey: "v", leaveInPlace: true });

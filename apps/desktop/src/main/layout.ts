@@ -16,14 +16,16 @@ const isObject = (value: unknown): value is Fields =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 const extent = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= LAYOUT_LIMITS.extent;
-const only = (value: Fields, ...keys: string[]) => Object.keys(value).every((key) => keys.includes(key));
 
 /**
  * Checks a layout sent by the host UI and returns a clean copy, or null if
  * anything about it is malformed. Every panel may appear only once; a
  * group without panels is an empty slot. One group with panels may be maximized, and one group focused.
+ * `saved` reads a layout from workspace.json: fields a newer Tavora added are left out of the copy instead of
+ * refusing the whole layout. One from the host UI may have none.
  */
-export function parseLayout(raw: unknown): SavedLayout | null {
+export function parseLayout(raw: unknown, saved = false): SavedLayout | null {
+  const only = (value: Fields, ...keys: string[]) => saved || Object.keys(value).every((key) => keys.includes(key));
   if (!isObject(raw) || !only(raw, "width", "height", "direction", "root")) return null;
   if (!extent(raw.width) || !extent(raw.height)) return null;
   if (raw.direction !== "row" && raw.direction !== "column") return null;

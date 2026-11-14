@@ -1,0 +1,11 @@
+{
+  "moves": [
+    {
+      "moduleId": "local.notes",
+      "to": "0123456789abcdef0123456789abcdef"
+    }
+  ],
+  "deletePartitions": [
+    "persist:module:local:local.old@poe2"
+  ]
+}

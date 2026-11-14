@@ -18,6 +18,7 @@ import { DEFAULT_OVERLAY_PORT, MAX_OVERLAY_PORT, MIN_OVERLAY_PORT } from "./over
 import { iconFileAllowed, isSteamAppId, needsIcon } from "./steam-icons";
 import { DEFAULT_THEME, isThemeRadius, isVariationId } from "./themes";
 import { isLearnableGameId, learnsGameId } from "./workspace-game";
+import { unknownFields } from "./json";
 
 export type { RootItem, RootSort, Startup };
 
@@ -760,13 +761,35 @@ const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
 /** The Steam id the built-in list once had for Diablo IV (it is "D4: Dark Dreams Don't Die"). */
 const WRONG_DIABLO_ID = 358090;
 
+// The fields this Tavora knows on a workspace and a folder. The rest (a newer Tavora's) are kept as they were.
+const WORKSPACE_ENTRY_FIELDS = Object.keys({
+  id: true,
+  kind: true,
+  catalogId: true,
+  gameId: true,
+  name: true,
+  icon: true,
+  useOriginalIcon: true,
+  steamAppId: true,
+  iconFile: true,
+  iconCheckedAt: true,
+  iconSharedAt: true,
+  showNews: true,
+  addedAt: true,
+  lastOpenedAt: true,
+  trashedAt: true,
+} satisfies Record<keyof WorkspaceEntry, true>);
+const FOLDER_FIELDS = Object.keys({ id: true, name: true, label: true, workspaces: true } satisfies Record<keyof Folder, true>);
+
 /**
- * Turns whatever was saved into a consistent library: unknown or broken
- * entries are dropped, and every live workspace ends up placed exactly once.
+ * Turns whatever was saved into a consistent library: broken entries are
+ * dropped, and every live workspace ends up placed exactly once. Fields this
+ * Tavora doesn't know, at the top, on a workspace or on a folder, are kept as
+ * they were and saved again (a newer Tavora's, say from the cloud copy).
  */
 export function sanitizeLibrary(raw: unknown): Library {
   const library = emptyLibrary();
-  if (typeof raw !== "object" || raw === null) return library;
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return library;
   const saved = raw as Partial<Record<keyof Library, unknown>>;
 
   for (const value of Object.values(asRecord(saved.workspaces))) {
@@ -779,6 +802,7 @@ export function sanitizeLibrary(raw: unknown): Library {
     // Only an id made on this PC can be a personal workspace, so a built-in game is never turned into one.
     if (workspace.kind === "personal" && workspace.id.startsWith("local-")) {
       library.workspaces[workspace.id] = {
+        ...unknownFields(workspace, WORKSPACE_ENTRY_FIELDS),
         id: workspace.id,
         kind: "personal",
         catalogId: null,
@@ -801,6 +825,7 @@ export function sanitizeLibrary(raw: unknown): Library {
     const steamAppId = wrongDiabloId ? (catalogGame("diablo-4")?.steamAppId ?? null) : isSteamAppId(workspace.steamAppId) ? workspace.steamAppId : (catalogGame(workspace.id)?.steamAppId ?? null);
     const catalogId = typeof workspace.catalogId === "string" && catalogGame(workspace.catalogId) ? workspace.catalogId : null;
     library.workspaces[workspace.id] = {
+      ...unknownFields(workspace, WORKSPACE_ENTRY_FIELDS),
       id: workspace.id,
       kind: "game",
       catalogId,
@@ -837,6 +862,7 @@ export function sanitizeLibrary(raw: unknown): Library {
       const value = savedFolders[entry.id] as Partial<Folder> | undefined;
       if (!value || typeof value.name !== "string" || !value.name.trim()) continue;
       library.folders[entry.id] = {
+        ...unknownFields(value, FOLDER_FIELDS),
         id: entry.id,
         name: value.name.trim().slice(0, MAX_NAME),
         label: typeof value.label === "string" && value.label.trim() ? [...value.label.trim()].slice(0, MAX_LABEL).join("") : null,
@@ -916,7 +942,7 @@ export function sanitizeLibrary(raw: unknown): Library {
   const browser = asRecord(saved.browser);
   library.browser = { sharedSites: siteList(browser.sharedSites), adblockOff: siteList(browser.adblockOff) };
   if (typeof saved.lastWorkspaceId === "string" && isLive(library, saved.lastWorkspaceId)) library.lastWorkspaceId = saved.lastWorkspaceId;
-  return library;
+  return { ...unknownFields(saved, Object.keys(library)), ...library };
 }
 
 /** Most sites a Browser list keeps. */

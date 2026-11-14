@@ -1,0 +1,159 @@
+{
+  "version": 1,
+  "games": {
+    "elden-ring": {
+      "id": "elden-ring",
+      "kind": "game",
+      "catalogId": "elden-ring",
+      "name": "Elden Ring",
+      "icon": {
+        "kind": "monogram",
+        "text": "ER"
+      },
+      "useOriginalIcon": true,
+      "steamAppId": 1245620,
+      "iconFile": "1245620.ico",
+      "iconCheckedAt": null,
+      "iconSharedAt": null,
+      "showNews": true,
+      "addedAt": "2026-10-01T10:00:00.000Z",
+      "lastPlayedAt": "2026-10-26T20:00:00.000Z",
+      "trashedAt": null
+    },
+    "local-my-mod": {
+      "id": "local-my-mod",
+      "kind": "game",
+      "catalogId": null,
+      "name": "My Mod",
+      "icon": {
+        "kind": "image",
+        "file": "local-my-mod-1a2b3c4d.png"
+      },
+      "useOriginalIcon": true,
+      "steamAppId": null,
+      "iconFile": null,
+      "iconCheckedAt": "2026-10-20T10:00:00.000Z",
+      "iconSharedAt": null,
+      "showNews": true,
+      "addedAt": "2026-10-02T10:00:00.000Z",
+      "lastPlayedAt": null,
+      "trashedAt": null
+    },
+    "local-personal": {
+      "id": "local-personal",
+      "kind": "workspace",
+      "catalogId": null,
+      "name": "Personal",
+      "icon": {
+        "kind": "monogram",
+        "text": "P"
+      },
+      "useOriginalIcon": false,
+      "steamAppId": null,
+      "iconFile": null,
+      "iconCheckedAt": null,
+      "iconSharedAt": null,
+      "showNews": false,
+      "addedAt": "2026-10-03T10:00:00.000Z",
+      "lastPlayedAt": "2026-10-27T08:00:00.000Z",
+      "trashedAt": null
+    },
+    "satisfactory": {
+      "id": "satisfactory",
+      "kind": "game",
+      "catalogId": "satisfactory",
+      "name": "Satisfactory",
+      "icon": {
+        "kind": "monogram",
+        "text": "S"
+      },
+      "useOriginalIcon": true,
+      "steamAppId": 526870,
+      "iconFile": null,
+      "iconCheckedAt": null,
+      "iconSharedAt": null,
+      "showNews": true,
+      "addedAt": "2026-10-04T10:00:00.000Z",
+      "lastPlayedAt": null,
+      "trashedAt": "2026-10-25T10:00:00.000Z"
+    }
+  },
+  "folders": {
+    "bbbbbbbb-0000-4000-8000-000000000001": {
+      "id": "bbbbbbbb-0000-4000-8000-000000000001",
+      "name": "Souls",
+      "label": null,
+      "games": [
+        "elden-ring"
+      ]
+    }
+  },
+  "root": [
+    {
+      "kind": "folder",
+      "id": "bbbbbbbb-0000-4000-8000-000000000001"
+    },
+    {
+      "kind": "game",
+      "id": "local-my-mod"
+    },
+    {
+      "kind": "game",
+      "id": "local-personal"
+    }
+  ],
+  "favorites": [
+    "local-personal"
+  ],
+  "sort": "manual",
+  "rail": {
+    "expanded": true,
+    "width": 280
+  },
+  "startup": "last-game",
+  "gameStart": "ask",
+  "gameEndWorkspace": "local-personal",
+  "grayscaleText": false,
+  "onlineSearch": true,
+  "autoUpdate": true,
+  "autoUpdateModules": false,
+  "steamIcons": true,
+  "moduleIcons": true,
+  "streamOverlays": true,
+  "overlayPort": 47820,
+  "gameOverlays": true,
+  "overlaysStay": true,
+  "overlaySidebar": "right",
+  "moduleFilesFolder": null,
+  "developmentFolders": [],
+  "dialogFolders": {
+    "game-image": "%USERDATA%/Pictures",
+    "save-picture": "%USERDATA%/Pictures/Tavora"
+  },
+  "moduleFolders": {},
+  "moduleNotesSeen": {
+    "official:tavora.notes": "1.4.0"
+  },
+  "steamProfile": null,
+  "installId": null,
+  "askedModules": [],
+  "iconsOffered": [
+    "hades"
+  ],
+  "language": "system",
+  "theme": {
+    "id": "tavora.default",
+    "variation": "dark"
+  },
+  "followSystem": true,
+  "radius": null,
+  "onboarded": true,
+  "makesModules": false,
+  "browser": {
+    "sharedSites": [
+      "youtube.com"
+    ],
+    "adblockOff": []
+  },
+  "lastGameId": "local-personal"
+}

@@ -6,8 +6,15 @@
 //   wrote is copied aside (`<file>.from-version-<n>`) before this one can write over it; one that can't be read is set
 //   aside (`<file>.corrupt-<time>`) before starting fresh, and the user is told. Caches, derived files and logs have
 //   neither (they are listed at the end).
-// - Raise a file's version for any new field, and for any change an older Tavora could misread. Never rename or
-//   restructure what is saved in one step: add to it, and read both forms.
+// - library.json, workspace.json and module storage (storage.json, panel-state) keep the fields they don't know when
+//   they save: at the top, on each workspace and folder of the library, each workspace, panel and snapshot of
+//   workspace.json (json.ts unknownFields). So add fields to them freely, and raise their version only for a change an
+//   older Tavora could misread. An older Tavora writes its own version with the newer fields still in: a migration
+//   expects them there, as the newer Tavora last wrote them, and a field name once retired is never used again.
+// - Every other file: raise its version for any new field, and for any change an older Tavora could misread. Never
+//   rename or restructure what is saved in one step: add to it, and read both forms.
+// - saved-samples/ holds each file as Tavora wrote it, at every version still read; saved-samples.test.ts opens them
+//   all. A new format adds its sample, and no later Tavora may stop opening one.
 
 /**
  * The files in the data folder itself, with the version this Tavora writes. SavedData.keepNewerFiles copies aside, at

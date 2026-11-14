@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "hotkeys": [
+    {
+      "owner": "official",
+      "moduleId": "tavora.clock-counter",
+      "workspaceId": "poe2",
+      "action": "increment",
+      "target": "deaths",
+      "label": "Deaths",
+      "accelerator": "Ctrl+Shift+D"
+    }
+  ]
+}

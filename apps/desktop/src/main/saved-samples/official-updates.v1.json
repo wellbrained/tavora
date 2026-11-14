@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "modules": {
+    "tavora.notes": {
+      "id": "tavora.notes",
+      "version": "1.4.0",
+      "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "signedSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "signer": "fedcba9876543210fedcba9876543210",
+      "highWater": "1.5.0"
+    }
+  }
+}
