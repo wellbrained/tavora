@@ -22,6 +22,7 @@ Update this page in the pull request that adds, removes or changes a flow.
 | --- | --- | --- | --- |
 | Dialog slot and its queue | `renderer/host.ts`, `renderer/dialog-queue.ts` | one request or none; host questions wait by rank (consent 4, new panel 3, link 2, game switch 1) | the dialog's `data-testid` |
 | Dock drag | `renderer/dock-drag.ts` (`dockDragStep`) | `idle → lifted ⇄ aiming → idle` | |
+| Pointer drags (TabStrip, rail width, crop frame, Overlay layout frames and box) | kit `lib/bind-drag.ts` (`bindDrag`) | `idle → pressing → dragging → idle`: let go after the threshold drops, before it is a click; Escape (not on the layout canvas), `pointercancel`, the holder losing the pointer, `cancel()` and unmounting put it back | `phase` on the binding |
 | Add a game highlight | `renderer/lib/game-picker.ts` (`keepActive`, `stepActive`), `lib/use-game-picker.ts` | one key (a cover, a row, or the typed name) or none; kept while answers come in, the first item only when that game is gone. Items shown keep their places while the same thing is typed (`keepOrder`); the typed name's line, and an Enter, wait for the built-in list's answer; a click on an item that came under a still pointer after the items changed only highlights, unless it is the highlighted one | `aria-selected` on the item, `aria-activedescendant` on the search |
 | Made for a game (empty game page) | `components/workspace/MadeForGame.vue` | the list loads (`useTask` `latest`); each Add is `idle \| busy \| done` (`useActionStatus`); Ask for a module is a `useTask` | `data-status` on the Add button |
 | Work a dialog waits for | `ConfirmDialog`, `AddGameDialog` (adding the picked game or a personal workspace), `SteamImportDialog`, `PromptDialog`, `ShareIconsDialog`, `CatalogModuleDialog` (its links), `ProfileEditor`, the inbox dialogs, `LeaderboardQuestion`, the welcome's game and personal screens, `PanelContent` (install), `ConversationView` | `useTask`: `idle \| running \| failed` | `data-status` on the view's root, where it has one |
@@ -97,7 +98,8 @@ the pull request that makes it explicit.
 - **Press windows** (`main/module-view.ts` `Press`, `browser-view.ts` `lastGesture`, tooltips) → one `GestureWindow`.
 
 - **Gestures** (`WorkspaceRail` resize, `LayoutCanvas` drag and band, `WorkspacePage` panel drag) → one `gesture` union
-  each, ended by blur too, with `data-gesture`.
+  each, ended by blur too, with `data-gesture`. The rail and the canvas run on `bindDrag`, whose `phase` is that
+  union's start; what each drag holds (`dragWidth`, `drag`, `band`) is still kept beside it.
 
 - **System info worker** (`main/system-info-thread.ts`): one timer for two meanings → `none | running | idle-stopping |
   restart-waiting`.

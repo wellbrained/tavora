@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { Crop, Minus, Plus, Save } from "@lucide/vue";
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Slider } from "@tavora/official-ui/components/ui/slider";
 import { Dialog, DialogButton, DialogContent, DialogFooter, DialogHeader } from "@tavora/official-ui/components/ui/dialog";
+import { bindDrag } from "@tavora/official-ui/lib/bind-drag";
 import { t } from "../i18n";
 
 // Crops a picked image to a square. The whole image stays still and fitted;
@@ -86,71 +87,39 @@ function resize(side: number) {
   place(x + (old - s) / 2, y + (old - s) / 2, s);
 }
 
-// `before` is the frame when the drag started: Escape, or a pointer the system takes away (pointercancel), puts it back.
-type Drag = { pointerId: number; before: { x: number; y: number; side: number } } & (
-  | { kind: "move"; x: number; y: number }
-  | { kind: "resize"; centre: { x: number; y: number }; area: DOMRect }
-);
-let drag: Drag | null = null;
-
-function startDrag(next: Drag) {
-  drag = next;
-  window.addEventListener("keydown", onDragEscape, true);
-}
-
-function endDrag(revert: boolean) {
-  if (drag && revert) frame.value = { ...drag.before };
-  drag = null;
-  window.removeEventListener("keydown", onDragEscape, true);
-}
-
-// While dragging, Escape takes the drag back instead of closing the dialog.
-function onDragEscape(event: KeyboardEvent) {
-  if (event.key !== "Escape") return;
-  event.preventDefault();
-  event.stopPropagation();
-  endDrag(true);
-}
-onBeforeUnmount(() => endDrag(false));
+// A drag of the frame or of its handle. Escape (instead of closing the dialog), or a pointer the system takes away
+// (pointercancel), puts the frame back where it was when the drag started.
+const drag = bindDrag();
 // The dialog closing mid-drag (Cancel by keyboard, the picture taken away) ends the drag too.
 watch(open, (isOpen) => {
-  if (!isOpen) endDrag(true);
+  if (!isOpen) drag.cancel();
 });
+
+function startDrag(event: PointerEvent, move: (event: PointerEvent, delta: { x: number; y: number }) => void) {
+  const before = { ...frame.value };
+  drag.start(event, { move, cancel: () => (frame.value = before) }, { capture: event.currentTarget as HTMLElement });
+}
 
 function onMoveStart(event: PointerEvent) {
   if (event.button !== 0 || !image.value) return;
-  (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-  startDrag({ kind: "move", pointerId: event.pointerId, x: event.clientX, y: event.clientY, before: { ...frame.value } });
+  const { x, y } = frame.value;
+  // The wheel may size the frame while it moves.
+  startDrag(event, (_, delta) => place(x + delta.x, y + delta.y, frame.value.side));
 }
 
 function onResizeStart(event: PointerEvent) {
   if (event.button !== 0 || !image.value) return;
   event.stopPropagation();
-  (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
   const { x, y, side } = frame.value;
+  const centre = { x: x + side / 2, y: y + side / 2 };
   const area = (event.currentTarget as HTMLElement).closest("[data-crop-area]")!.getBoundingClientRect();
-  startDrag({ kind: "resize", pointerId: event.pointerId, centre: { x: x + side / 2, y: y + side / 2 }, area, before: { ...frame.value } });
-}
-
-function onPointerMove(event: PointerEvent) {
-  if (drag?.pointerId !== event.pointerId) return;
-  if (drag.kind === "move") {
-    place(drag.before.x + event.clientX - drag.x, drag.before.y + event.clientY - drag.y, frame.value.side);
-  } else {
+  startDrag(event, (next) => {
     // The handle sits on the circle's edge (or the square's corner), so the
     // pointer's distance from the centre is the radius (or half the side).
-    const dx = event.clientX - drag.area.left - drag.centre.x;
-    const dy = event.clientY - drag.area.top - drag.centre.y;
+    const dx = next.clientX - area.left - centre.x;
+    const dy = next.clientY - area.top - centre.y;
     resize(2 * (props.round ? Math.hypot(dx, dy) : Math.max(Math.abs(dx), Math.abs(dy))));
-  }
-}
-
-function onPointerUp(event: PointerEvent) {
-  if (drag?.pointerId === event.pointerId) endDrag(false);
-}
-
-function onPointerCancel(event: PointerEvent) {
-  if (drag?.pointerId === event.pointerId) endDrag(true);
+  });
 }
 
 function onWheel(event: WheelEvent) {
@@ -204,9 +173,6 @@ function onOpenChange(value: boolean) {
         :aria-label="t('crop.area')"
         data-crop-area
         data-testid="crop-area"
-        @pointermove="onPointerMove"
-        @pointerup="onPointerUp"
-        @pointercancel="onPointerCancel"
         @wheel.prevent="onWheel"
         @keydown="onKey"
       >
