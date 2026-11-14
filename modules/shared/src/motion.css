@@ -339,6 +339,7 @@
    starts at full strength, so a quick action hardly shows it. Reduced motion: it holds still, a little dimmer. */
 @layer components {
   .tavora-busy[aria-busy="true"] {
+    cursor: progress;
     animation: tavora-busy-pulse var(--duration-pulse) var(--ease-in-out-strong) infinite;
   }
   @keyframes tavora-busy-pulse {

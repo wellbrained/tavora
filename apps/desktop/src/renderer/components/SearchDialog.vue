@@ -349,7 +349,7 @@ const activeId = computed(() => {
             role="option"
             :aria-selected="flat[active] === item"
             :aria-busy="adding === item.id || undefined"
-            :class="cn('tavora-busy flex h-10 cursor-pointer items-center gap-3 rounded-lg px-3 aria-busy:cursor-progress', group.quiet && 'text-muted-foreground', (flat[active] === item || adding === item.id) && 'bg-accent')"
+            :class="cn('tavora-busy flex h-10 cursor-pointer items-center gap-3 rounded-lg px-3', group.quiet && 'text-muted-foreground', (flat[active] === item || adding === item.id) && 'bg-accent')"
             :data-testid="`search-${item.id}`"
             @mousemove="onHover(flat.indexOf(item), $event)"
             @click="item.run()"
