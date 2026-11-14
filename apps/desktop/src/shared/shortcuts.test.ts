@@ -80,6 +80,20 @@ describe("aria-keyshortcuts", () => {
   it("lists every digit and every alternative", () => {
     expect(ariaKeys("workspace", false)).toBe("Control+1 Control+2 Control+3 Control+4 Control+5 Control+6 Control+7 Control+8 Control+9");
     expect(ariaKeys("list.move", false)).toBe("ArrowUp ArrowDown");
+    // Presses that also count are named too; the key caps show the first.
+    expect(ariaKeys("layout.undo", true)).toBe("Meta+Z Control+Z");
+  });
+});
+
+describe("Overlays editor keys", () => {
+  it("take Ctrl and Cmd on every platform, and Redo also as Shift+Z", () => {
+    for (const mac of [false, true]) {
+      expect(shortcutIn("layout", press("z", { control: true }), mac)).toBe("layout.undo");
+      expect(shortcutIn("layout", press("z", { meta: true }), mac)).toBe("layout.undo");
+      expect(shortcutIn("layout", press("Z", { control: true, shift: true }), mac)).toBe("layout.redo");
+      expect(shortcutIn("layout", press("y", { meta: true, shift: true }), mac)).toBe("layout.redo");
+      expect(shortcutIn("layout", press("z", { control: true, alt: true }), mac)).toBeNull();
+    }
   });
 });
 

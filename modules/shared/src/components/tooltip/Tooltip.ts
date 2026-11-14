@@ -12,7 +12,8 @@ const KEY_CAPS: Record<string, string> = { Escape: 'Esc', ArrowUp: '↑', ArrowD
  * the first.
  */
 export function shortcutKeys(shortcut: string): string[] {
-  const first = shortcut.replace(/\s*\+\s*/g, '+').trim().split(/\s+/)[0] ?? '';
+  // Alternatives are split where a new one starts with a modifier, so a plain "Ctrl + Mouse wheel" stays whole.
+  const first = shortcut.replace(/\s*\+\s*/g, '+').trim().split(/\s+(?=(?:Control|Ctrl|Meta|Alt|Shift)\+)/)[0] ?? '';
   return first.split(/\+(?!$)/).filter(Boolean).map(key => {
     if (key === 'Control' || key === 'Ctrl') return uiText.value.ctrl;
     if (key === 'Meta') return MAC ? 'Cmd' : 'Win';

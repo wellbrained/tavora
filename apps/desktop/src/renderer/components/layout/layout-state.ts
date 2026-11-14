@@ -5,7 +5,8 @@ import { nextTick, onBeforeUnmount, onMounted, shallowRef } from "vue";
 import type { LayoutItemView, LayoutMessage, LayoutStills, LayoutView } from "../../../shared/layout-view";
 import { boundsOf, moveGroup, nudge } from "../../../shared/layout-math";
 import { api } from "../../host";
-import { heldBackByModal } from "../../shortcuts";
+import { keyInput, shortcutIn } from "../../../shared/shortcuts";
+import { heldBackByModal, MAC } from "../../shortcuts";
 
 export const view = shallowRef<LayoutView | null>(null);
 api.layout.onState((next) => (view.value = next));
@@ -44,15 +45,14 @@ export function onLayoutKey(event: KeyboardEvent): void {
   const current = view.value;
   // Nothing here while a dialog is open, even when the focus has slipped to the page behind it (Ctrl+Z would undo a frame).
   if (!current || belongsToControl(event.target) || heldBackByModal("layout")) return;
-  const key = event.key.toLowerCase();
-  if ((event.ctrlKey || event.metaKey) && !event.altKey) {
-    if (key === "z" && !event.shiftKey) send({ type: "undo" });
-    else if (key === "y" || (key === "z" && event.shiftKey)) send({ type: "redo" });
-    else return;
+  const shortcut = shortcutIn("layout", keyInput(event), MAC);
+  if (shortcut === "layout.undo" || shortcut === "layout.redo") {
+    send({ type: shortcut === "layout.undo" ? "undo" : "redo" });
     event.preventDefault();
     return;
   }
   if (event.ctrlKey || event.metaKey || event.altKey) return;
+  const key = event.key.toLowerCase();
   if (key === "escape") {
     send({ type: "select", id: null });
     return;

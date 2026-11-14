@@ -56,6 +56,6 @@ describe("Settings > Shortcuts", () => {
   it("gives buttons the platform's keys", () => {
     expect(keyCaps("search")).toEqual([MOD(), "K"]);
     expect(keyshortcuts("browser.new-tab")).toBe(MAC ? "Meta+T" : "Control+T");
-    expect(keyshortcuts("layout.redo")).toBe(MAC ? "Meta+Y" : "Control+Y");
+    expect(keyshortcuts("layout.redo")).toBe(MAC ? "Meta+Y Control+Y Meta+Shift+Z Control+Shift+Z" : "Control+Y Meta+Y Control+Shift+Z Meta+Shift+Z");
   });
 });

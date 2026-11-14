@@ -1,8 +1,9 @@
 import type { MessageKey } from "./i18n-core";
 
-// Every keyboard shortcut Tavora has, in one table. The main process matches keys against it, Settings > Shortcuts
-// lists it, buttons take their `aria-keyshortcuts` (and so their tooltip's key caps) from it, and shortcuts.test.ts
-// fails when two of it share a key. Add a shortcut here first; the place that runs it asks `shortcutIn`.
+// The keyboard shortcuts Settings > Shortcuts lists, in one table. The main process, the Browser panel and the Overlays
+// editor match keys against it (`shortcutIn`), the list and buttons' `aria-keyshortcuts` (so their tooltip's key caps)
+// come from it, and shortcuts.test.ts fails when two of it share a key. A new shortcut goes in here first.
+// Keys that work inside one control only (Del or the arrows on the Overlays canvas, Page Up in a list) stay with it.
 
 /**
  * Where a shortcut works, and so which others it must not share a key with.
@@ -29,6 +30,8 @@ export interface ShortcutSpec {
    * (`workspace` matches as `workspace-3`).
    */
   keys: string;
+  /** More presses that do the same, written like `keys`; they count, but the list and the key caps show `keys` only. */
+  also?: string;
   scope: ShortcutScope;
   /** Listed in Settings > Shortcuts under this heading. */
   group: ShortcutGroup;
@@ -58,8 +61,9 @@ export const SHORTCUTS = [
   // Esc always leaves full screen, whatever else is held.
   { id: "browser.leave-fullscreen", keys: "Escape", scope: "browser", group: "browser", label: "shortcuts.leaveFullscreen", loose: ["Shift", "Alt", "Control", "Meta"] },
 
-  { id: "layout.undo", keys: "Mod+Z", scope: "layout", group: "overlays", label: "overlays.layout.undo" },
-  { id: "layout.redo", keys: "Mod+Y", scope: "layout", group: "overlays", label: "overlays.layout.redo" },
+  // Ctrl and Cmd both work here, on every platform.
+  { id: "layout.undo", keys: "Mod+Z", also: "OtherMod+Z", scope: "layout", group: "overlays", label: "overlays.layout.undo", loose: ["OtherMod"] },
+  { id: "layout.redo", keys: "Mod+Y", also: "OtherMod+Y Mod+Shift+Z OtherMod+Shift+Z", scope: "layout", group: "overlays", label: "overlays.layout.redo", loose: ["OtherMod", "Shift"] },
 
   { id: "list.move", keys: "ArrowUp ArrowDown", scope: "list", group: "lists", label: "shortcuts.moveList" },
   { id: "list.resize", keys: "ArrowLeft ArrowRight", scope: "list", group: "lists", label: "shortcuts.resizeList" },
@@ -97,9 +101,10 @@ export function keyInput(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey
 type Modifier = "control" | "meta" | "alt" | "shift";
 const MODIFIERS: readonly Modifier[] = ["control", "meta", "alt", "shift"];
 
-/** One way to press a shortcut on a platform, as a string two specs share exactly when they share the press. */
-function combo(held: ReadonlySet<Modifier>, key: string): string {
-  return `${MODIFIERS.filter((modifier) => held.has(modifier)).join("+")}:${key.length === 1 ? key.toLowerCase() : key}`;
+/** A press as a lookup key: the modifiers held and the key, a letter in lower case. */
+function combo(held: Iterable<Modifier>, key: string): string {
+  const set = new Set(held);
+  return `${MODIFIERS.filter((modifier) => set.has(modifier)).join("+")}:${key.length === 1 ? key.toLowerCase() : key}`;
 }
 
 function modifierOf(name: string, mac: boolean): Modifier | null {
@@ -109,34 +114,36 @@ function modifierOf(name: string, mac: boolean): Modifier | null {
   return null;
 }
 
-/** Every press of a spec on a platform, each with what it matches as. */
-export function pressesOf(spec: ShortcutSpec, mac: boolean): { combo: string; id: string }[] {
-  const presses: { combo: string; id: string }[] = [];
-  for (const alternative of spec.keys.split(" ")) {
+const DIGITS = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
+
+/** A spec's presses on a platform as written (`keys`, then `also`), each with the id it matches as. */
+function written(spec: ShortcutSpec, mac: boolean): { held: Modifier[]; key: string; id: string }[] {
+  const alternatives = [...spec.keys.split(" "), ...(spec.also?.split(" ") ?? [])];
+  return alternatives.flatMap((alternative) => {
     const parts = alternative.split(/\+(?!$)/);
     const key = parts.pop()!;
-    const held = new Set(parts.map((part) => modifierOf(part, mac)!));
-    const loose = (spec.loose ?? []).map((name) => modifierOf(name, mac)!).filter((modifier) => !held.has(modifier));
-    const keys = key === "1-9" ? ["1", "2", "3", "4", "5", "6", "7", "8", "9"] : [key];
-    for (const each of keys) {
-      // Every choice of loose modifiers held or not.
-      for (let mask = 0; mask < 1 << loose.length; mask++) {
-        const all = new Set([...held, ...loose.filter((_, index) => mask & (1 << index))]);
-        presses.push({ combo: combo(all, each), id: key === "1-9" ? `${spec.id}-${each}` : spec.id });
-      }
-    }
-  }
-  return presses;
+    const held = parts.map((part) => modifierOf(part, mac)!);
+    return key === "1-9" ? DIGITS.map((digit) => ({ held, key: digit, id: `${spec.id}-${digit}` })) : [{ held, key, id: spec.id }];
+  });
 }
 
-const maps = new Map<string, Map<string, string>>();
+/** Every press of a spec on a platform, loose modifiers held or not, each with what it matches as. */
+export function pressesOf(spec: ShortcutSpec, mac: boolean): { combo: string; id: string }[] {
+  return written(spec, mac).flatMap(({ held, key, id }) => {
+    const loose = (spec.loose ?? []).map((name) => modifierOf(name, mac)!).filter((modifier) => !held.includes(modifier));
+    return Array.from({ length: 1 << loose.length }, (_, mask) => ({ combo: combo([...held, ...loose.filter((_, index) => mask & (1 << index))], key), id }));
+  });
+}
+
+/** Per scope and platform: each press and the shortcut it stands for. */
+const pressMaps = new Map<string, Map<string, string>>();
 function pressMap(scope: ShortcutScope, mac: boolean): Map<string, string> {
   const name = `${scope}:${mac}`;
-  let map = maps.get(name);
+  let map = pressMaps.get(name);
   if (!map) {
     map = new Map();
     for (const spec of SPECS) if (spec.scope === scope) for (const press of pressesOf(spec, mac)) if (!map.has(press.combo)) map.set(press.combo, press.id);
-    maps.set(name, map);
+    pressMaps.set(name, map);
   }
   return map;
 }
@@ -144,8 +151,7 @@ function pressMap(scope: ShortcutScope, mac: boolean): Map<string, string> {
 /** The shortcut of a scope a key press stands for, if any. */
 export function shortcutIn(scope: ShortcutScope, input: KeyInput, mac: boolean): MatchedShortcut | null {
   if (input.type !== "keyDown") return null;
-  const held = new Set(MODIFIERS.filter((modifier) => input[modifier]));
-  return (pressMap(scope, mac).get(combo(held, input.key)) as MatchedShortcut | undefined) ?? null;
+  return (pressMap(scope, mac).get(combo(MODIFIERS.filter((modifier) => input[modifier]), input.key)) as MatchedShortcut | undefined) ?? null;
 }
 
 /**
@@ -178,13 +184,17 @@ export function shortcutClashes(specs: readonly ShortcutSpec[], mac: boolean): s
   return [...new Set(clashes)];
 }
 
-/** A shortcut's keys for `aria-keyshortcuts` on a platform: "Control+T", "Meta+T" on a Mac. */
+const ARIA_NAMES: Record<Modifier, string> = { control: "Control", meta: "Meta", alt: "Alt", shift: "Shift" };
+
+/** A shortcut's keys for `aria-keyshortcuts` on a platform, every press that counts: "Control+T", "Meta+T" on a Mac. */
 export function ariaKeys(id: ShortcutId, mac: boolean): string {
-  return shortcutSpec(id)
-    .keys.split(" ")
-    .flatMap((alternative) => {
-      const named = alternative.replace(/^Mod\+/, mac ? "Meta+" : "Control+");
-      return named.endsWith("1-9") ? ["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => named.slice(0, -3) + digit) : [named];
-    })
+  return written(shortcutSpec(id), mac)
+    .map(({ held, key }) => [...MODIFIERS.filter((modifier) => held.includes(modifier)).map((modifier) => ARIA_NAMES[modifier]), key].join("+"))
     .join(" ");
+}
+
+/** A shortcut's keys as shown (`keys`, not `also`), with `Mod` and `OtherMod` named for the platform: "Control+1-9", "Meta+T". */
+export function shownKeys(id: ShortcutId, mac: boolean): string[] {
+  const spec = shortcutSpec(id);
+  return spec.keys.split(" ").map((alternative) => alternative.replace(/^Mod\+/, mac ? "Meta+" : "Control+").replace(/^OtherMod\+/, mac ? "Control+" : "Meta+"));
 }

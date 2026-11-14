@@ -14,6 +14,8 @@ describe("shortcutKeys", () => {
 
   it("shows the first of several alternatives", () => {
     expect(shortcutKeys("Control+1 Control+2")).toEqual(["Ctrl", "1"]);
+    // Plain text with a space in a key stays whole.
+    expect(shortcutKeys("Ctrl + Mouse wheel")).toEqual(["Ctrl", "Mouse wheel"]);
   });
 
   it("names Ctrl in the language shown", () => {

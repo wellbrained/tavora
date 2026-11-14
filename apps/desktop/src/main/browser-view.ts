@@ -296,9 +296,8 @@ export class BrowserPanel {
       this.fullscreen = false;
       this.changed();
     });
-    // Esc always leaves fullscreen, whatever the page does with the key.
-    // Browser keys come before the page: Ctrl+L, Alt+Left and Alt+Right.
-    // The keys are in the shortcut table (shared/shortcuts.ts).
+    // Browser keys come before the page (the table: shared/shortcuts.ts). Esc always leaves fullscreen, whatever the
+    // page does with the key.
     contents.on("before-input-event", (event, input) => {
       const shortcut = shortcutIn("browser", input, process.platform === "darwin");
       if (shortcut === "browser.leave-fullscreen" && this.fullscreen) this.exitFullscreen();

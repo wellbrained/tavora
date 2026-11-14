@@ -1,6 +1,7 @@
 import { isModalOpen } from "@tavora/official-ui/components/ui/dialog";
+import { shortcutKeys } from "@tavora/official-ui/components/tooltip";
 import type { HostViewState } from "../shared/host-api";
-import { ariaKeys, SHORTCUT_GROUPS, SHORTCUTS, shortcutSpec, type ShortcutId, type ShortcutScope } from "../shared/shortcuts";
+import { ariaKeys, SHORTCUT_GROUPS, SHORTCUTS, shownKeys, type ShortcutId, type ShortcutScope } from "../shared/shortcuts";
 import { t } from "./i18n";
 
 // The host page's side of the shortcut table (shared/shortcuts.ts): what Settings > Shortcuts (Ctrl+/) lists, and the
@@ -10,14 +11,14 @@ export const MAC = navigator.platform.startsWith("Mac");
 /** The modifier key's name: Cmd on a Mac, otherwise Ctrl (Strg in German). */
 export const MOD = (): string => (MAC ? "Cmd" : t("shortcuts.ctrl"));
 
-const CAPS: Record<string, string> = { Escape: "Esc", ArrowUp: "↑", ArrowDown: "↓", ArrowLeft: "←", ArrowRight: "→", "1-9": "1–9" };
-
-/** A shortcut's keys as key caps, in the language shown: ["Ctrl", "K"], ["Cmd", "K"] on a Mac, ["Strg", "K"] in German. */
+/**
+ * A shortcut's keys as key caps, the way its tooltip shows them (the kit's `shortcutKeys`): ["Ctrl", "K"], ["Cmd", "K"]
+ * on a Mac, ["Strg", "K"] in German. Alternatives follow each other: ["↑", "↓"].
+ */
 export function keyCaps(id: ShortcutId): string[] {
-  return shortcutSpec(id)
-    .keys.split(" ")
-    .flatMap((alternative) => alternative.split(/\+(?!$)/))
-    .map((key) => (key === "Mod" ? MOD() : key === "Control" ? t("shortcuts.ctrl") : (CAPS[key] ?? (key.length === 1 ? key.toUpperCase() : key))));
+  return shownKeys(id, MAC)
+    .flatMap(shortcutKeys)
+    .map((key) => (key === "1-9" ? "1–9" : key));
 }
 
 /** For a button's `aria-keyshortcuts`: screen readers announce it, and the button's tooltip shows it as key caps. */
@@ -39,8 +40,8 @@ export function shortcutGroups(): { title: string; rows: ShortcutRow[] }[] {
 
 /**
  * Whether a dialog on top holds a scope's shortcuts back. Tavora-wide ones work over dialogs too (main catches them
- * before any page sees the key); the others stand down while one is open. Every shortcut that cares asks here, so
- * this is the one place to change when dialogs, menus and popovers say which layer is on top.
+ * before any page sees the key); the Overlays editor's stand down while one is open. The place to ask once Tavora
+ * knows which layer is on top. (The Browser panel's keys need no asking: a dialog takes the focus away from them.)
  */
 export function heldBackByModal(scope: ShortcutScope): boolean {
   return scope !== "app" && isModalOpen();
