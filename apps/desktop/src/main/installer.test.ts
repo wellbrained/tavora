@@ -65,6 +65,23 @@ describe("installZip", () => {
     expect(await readdir(path.join(userData, "module-staging"))).toEqual([]);
   });
 
+  it("keeps every owner record when two modules install at once", async () => {
+    const { userData, userModules } = await setup();
+    const key = generateKeyPairSync("ed25519").privateKey;
+    const zips = await Promise.all(
+      ["wellbrained.one", "wellbrained.two", "wellbrained.three"].map((id) => {
+        const files = packageFiles(id);
+        return zipFile(userData, [...files, signFiles(files, key)]);
+      }),
+    );
+    await Promise.all(zips.map((zip) => installZip(zip, { userData, userModules, tavoraVersion: TAVORA, modules: new Map() })));
+    expect(Object.keys(await readOwnerRecords(userData)).sort()).toEqual(["wellbrained.one", "wellbrained.three", "wellbrained.two"]);
+    // Forgetting two at once forgets both.
+    await Promise.all([forgetOwner(userData, "wellbrained.one"), forgetOwner(userData, "wellbrained.two")]);
+    expect(Object.keys(await readOwnerRecords(userData))).toEqual(["wellbrained.three"]);
+    expect((await readdir(userData)).filter((name) => name.endsWith(".tmp"))).toEqual([]);
+  });
+
   it("installs an unsigned zip as local", async () => {
     const { userData, userModules } = await setup();
     const installed = await installZip(await zipFile(userData, packageFiles("wellbrained.tracker")), { userData, userModules, tavoraVersion: TAVORA, modules: new Map() });

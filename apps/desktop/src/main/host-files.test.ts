@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, modulePartition, orphanedPartitions, queueLocalDataMove } from "./module-data";
+import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, modulePartition, orphanedPartitions, partitionsOf, queueLocalDataMove, startSweepAllowed, SWEEP_HOLD_FILE } from "./module-data";
 import { IconError, imageType, importIcon, MAX_ICON_BYTES } from "./icons";
 import { initialBounds } from "./window-state";
 
@@ -76,6 +76,43 @@ describe("orphanedPartitions", () => {
       ...rawPartition,
     ]);
     expect(await orphanedPartitions(await tempDir(), new Set())).toEqual([]);
+  });
+});
+
+describe("partitionsOf", () => {
+  it("finds only the partitions of the workspaces named", async () => {
+    const userData = await tempDir();
+    for (const name of ["module%3Alocal%3Alocal.example.a@poe2", "browser%40poe2", "browser%40kept", "module%3Alocal%3Alocal.example.a@kept", "browser"]) {
+      await mkdir(path.join(userData, "Partitions", name), { recursive: true });
+    }
+    expect((await partitionsOf(userData, ["poe2"])).map((dir) => path.basename(dir)).sort()).toEqual(["browser%40poe2", "module%3Alocal%3Alocal.example.a@poe2"]);
+    expect(await partitionsOf(userData, [])).toEqual([]);
+  });
+});
+
+describe("startSweepAllowed", () => {
+  const held = async (userData: string) => (await readdir(userData)).includes(SWEEP_HOLD_FILE);
+
+  it("sweeps when the files were read and nothing holds it", async () => {
+    const userData = await tempDir();
+    expect(await startSweepAllowed(userData, true, true)).toBe(true);
+    expect(await held(userData)).toBe(false);
+  });
+
+  it("keeps everything from a start with a lost library or workspace file until nothing is left to delete", async () => {
+    const userData = await tempDir();
+    // A fresh install: nothing to delete, nothing held.
+    expect(await startSweepAllowed(userData, false, false)).toBe(false);
+    expect(await held(userData)).toBe(false);
+    // The library was set aside: what looks left over is kept, now and at the starts after it.
+    expect(await startSweepAllowed(userData, false, true)).toBe(false);
+    expect(await held(userData)).toBe(true);
+    expect(await startSweepAllowed(userData, true, true)).toBe(false);
+    expect(await held(userData)).toBe(true);
+    // The user put the file back, so nothing is left over: the hold lifts, and later sweeps run again.
+    expect(await startSweepAllowed(userData, true, false)).toBe(false);
+    expect(await held(userData)).toBe(false);
+    expect(await startSweepAllowed(userData, true, true)).toBe(true);
   });
 });
 

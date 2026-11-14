@@ -1,13 +1,24 @@
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GameOverlayStore } from "./game-overlays";
 import { HotkeyStore } from "./hotkeys";
 import { sanitizeLibrary } from "./library";
 import { OverlayStore } from "./overlays";
 import { SavedData } from "./saved-data";
 import { BEFORE_WORKSPACES_DIR, MOVED_VERSIONS, moveToWorkspaces } from "./workspace-move";
+
+// Names of files whose next writes fail, as on a full disk.
+const failingWrites = vi.hoisted(() => new Set<string>());
+vi.mock("./fsutil", async (importOriginal) => {
+  const real = await importOriginal<typeof import("./fsutil")>();
+  return {
+    ...real,
+    writeFileAtomic: (file: string, body: string | Uint8Array) =>
+      [...failingWrites].some((name) => file.endsWith(name)) ? Promise.reject(new Error("disk full")) : real.writeFileAtomic(file, body),
+  };
+});
 
 // A folder a dialog last opened in: absolute on the system the tests run on, as Tavora only keeps absolute ones.
 const PICTURES = process.platform === "win32" ? "C:\\Users\\User\\Pictures" : "/home/user/Pictures";
@@ -302,11 +313,10 @@ describe("moving saved data to the workspace names", () => {
 
   it("finishes the rest after a start that stopped half way, and keeps the first backup", async () => {
     await writeOld();
-    // The crash: the library and the workspace were written, then writing the game overlays failed (a folder stands
-    // where its temp file goes) and Tavora stopped.
-    await mkdir(path.join(dir, "game-overlays.json.tmp"));
+    // The crash: the library and the workspace were written, then writing the game overlays failed and Tavora stopped.
+    failingWrites.add("game-overlays.json");
     await expect(moveToWorkspaces(dir)).rejects.toThrow();
-    await rm(path.join(dir, "game-overlays.json.tmp"), { recursive: true });
+    failingWrites.clear();
     expect((await read("library.json")).version).toBe(2);
     expect((await read("workspace.json")).version).toBe(3);
     expect((await read("game-overlays.json")).version).toBe(3);

@@ -56,7 +56,17 @@ export async function deleteModuleData(userData: string, workspaceId: string, bl
  * not in `keep`, so they can be deleted at startup before any session for
  * them is opened.
  */
-export async function orphanedPartitions(userData: string, keep: ReadonlySet<string>): Promise<string[]> {
+export function orphanedPartitions(userData: string, keep: ReadonlySet<string>): Promise<string[]> {
+  return partitionsWhere(userData, (workspaceId) => !keep.has(workspaceId));
+}
+
+/** The partition directories (as orphanedPartitions finds them) of the given workspaces only. */
+export function partitionsOf(userData: string, workspaceIds: Iterable<string>): Promise<string[]> {
+  const ids = new Set([...workspaceIds].map((id) => id.toLowerCase()));
+  return partitionsWhere(userData, (workspaceId) => ids.has(workspaceId));
+}
+
+async function partitionsWhere(userData: string, pick: (workspaceId: string) => boolean): Promise<string[]> {
   const root = path.join(userData, "Partitions");
   let names: string[];
   try {
@@ -68,9 +78,36 @@ export async function orphanedPartitions(userData: string, keep: ReadonlySet<str
     .filter((name) => {
       const decoded = safeDecode(name);
       const match = /^(?:module:(?:[a-z0-9]+:)?[a-z0-9.-]+|browser)@([a-z0-9-]+)$/.exec(decoded);
-      return match !== null && !keep.has(match[1]!);
+      return match !== null && pick(match[1]!);
     })
     .map((name) => path.join(root, name));
+}
+
+/** In the data folder while what the start sweep would delete is kept (startSweepAllowed). */
+export const SWEEP_HOLD_FILE = "sweep-hold.json";
+
+/**
+ * Whether this start may delete the browser storage of workspaces that aren't in the library and the panel state of
+ * panels that aren't in any workspace. When library.json or workspace.json was missing or unreadable this start
+ * (`filesRead` false), what looks left over is most likely the user's, back once they put the file back: nothing is
+ * deleted, and a hold file keeps it that way at later starts too, as Tavora saves new files meanwhile. The hold lifts
+ * at a start with nothing to delete (the files came back, or there never was anything).
+ */
+export async function startSweepAllowed(userData: string, filesRead: boolean, anythingToDelete: boolean): Promise<boolean> {
+  const hold = path.join(userData, SWEEP_HOLD_FILE);
+  if (!anythingToDelete) {
+    await rm(hold, { force: true });
+    return false;
+  }
+  if (!filesRead) {
+    await writeFileAtomic(hold, JSON.stringify({ since: new Date().toISOString() }));
+    return false;
+  }
+  // Only a hold that is surely not there lets the sweep run.
+  return stat(hold).then(
+    () => false,
+    (error: NodeJS.ErrnoException) => error.code === "ENOENT",
+  );
 }
 
 /**

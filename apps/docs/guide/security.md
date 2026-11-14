@@ -434,6 +434,7 @@ Tavora updates itself from `updates.mytavora.app`. That server alone is not trus
 - **Unsigned local modules are known only by their id.** Another local module put in the same folder under the same id gets its grants.
 - **A development folder is a module's whole bundle.** A module loaded from a development folder (Settings > Developer > Project folders) can read every file in its project folder, such as its sources or a `.env` file, because G6 is measured from that folder. It is an unsigned local module, known only by its id. Add only your own projects.
 - **A downloaded built-in module is checked when Tavora starts or looks at its modules, not on every file read.** Someone who can edit files in Tavora's data folder while it runs could still change a file after the check. They can already act as the user (see above); the next start checks the folder again and falls back to the shipped copy.
+- **Stream overlays share one origin in OBS.** Every overlay link is served from `127.0.0.1` on the same port, so inside OBS's browser the overlay pages of all modules share local storage and IndexedDB. An overlay page could read what another module's overlay page keeps there; what Tavora gives an overlay (the state its module published) stays its own.
 - **WebAssembly is allowed only for Tavora's own modules** that ask for it, because the Whiteboard needs it. Community modules do not get it.
 
 ## Shared item tooltips

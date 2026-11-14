@@ -1,12 +1,21 @@
-import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
+import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-/** Writes to a temp file and renames it over the target, so readers never see half a file. */
+/**
+ * Writes to a temp file and renames it over the target, so readers never see half a file. Each write has a temp file
+ * of its own, so two writes of the same file at once can't move each other's half-written one into place.
+ */
 export async function writeFileAtomic(file: string, body: string | Uint8Array): Promise<void> {
   await mkdir(path.dirname(file), { recursive: true });
-  const temp = `${file}.tmp`;
-  await writeFile(temp, body);
-  await rename(temp, file);
+  const temp = `${file}.${randomBytes(6).toString("hex")}.tmp`;
+  try {
+    await writeFile(temp, body);
+    await rename(temp, file);
+  } catch (error) {
+    await rm(temp, { force: true }).catch(() => undefined);
+    throw error;
+  }
 }
 
 /** Runs tasks one at a time, in order. A failed task does not block later ones. */
