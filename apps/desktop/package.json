@@ -1,6 +1,6 @@
 {
   "name": "@tavora/desktop",
-  "version": "0.24.59",
+  "version": "0.24.60",
   "private": true,
   "type": "module",
   "scripts": {
@@ -120,14 +120,6 @@
         "zip"
       ],
       "icon": "assets/tavora.ico"
-    },
-    "linux": {
-      "target": [
-        "AppImage"
-      ],
-      "icon": "assets/icon-256.png",
-      "category": "Game",
-      "executableName": "tavora"
     },
     "nsis": {
       "oneClick": true,

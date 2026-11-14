@@ -1,6 +1,6 @@
 # Getting started
 
-A Tavora module is a web page that runs in a sandboxed panel inside Tavora Desktop, next to a game or any other workspace. It talks to the host through `@tavora/sdk`, and it ships as a folder with a [`tavora.module.json`](../reference/manifest.md) manifest and its built files.
+A Tavora module is a web page that runs in a sandboxed panel inside Tavora Desktop, next to a game or any other workspace. Tavora runs on Windows 10 and 11 only. It talks to the host through `@tavora/sdk`, and it ships as a folder with a [`tavora.module.json`](../reference/manifest.md) manifest and its built files.
 
 ::: tip Stable from 1.0
 `@tavora/sdk` speaks [bridge protocol v1](../reference/protocol.md), and from Tavora 1.0 a module you build keeps working. Things are added, not taken away: anything that has to go is deprecated first, and removed only in a new major version. The [changelog](../reference/changelog.md) says what changed and which Tavora a version needs.
@@ -203,7 +203,7 @@ Every item on Tavora's rail is a workspace: a game workspace, linked to a game, 
 
 - Bundle everything. A module's page has no network access, so no CDN scripts, web fonts or remote images. To reach a web API, name its host in `permissions.network` and call [`network.fetch`](../reference/protocol.md#network) once the user has granted it.
 - Use relative asset paths (Vite: `base: "./"`). `moduleConfig()` from `@tavora/pack/vite` sets this and the rest of what a module's build needs (a self-contained `dist/` for Tavora's browser, one input per page); the starter's `vite.config.ts` is just `export default defineConfig(moduleConfig({ plugins: [vue()] }))`. Add `pages: ["index", "overlay"]` for more pages and `notices: { VUE: "vue", MODULE: "./LICENSE" }` to copy licence files into `dist/`. Its `tsconfig.json` extends `@tavora/pack/tsconfig.module.json`. The page is served from `tavora-module://<module-id>/`.
-- Don't use Ctrl+K (Cmd+K on macOS) as a shortcut. Tavora takes it for its own search before your page sees the key.
+- Don't use Ctrl+K as a shortcut. Tavora takes it for its own search before your page sees the key.
 - Point the manifest's `entry` at the built HTML file.
 - Add `"$schema"` to the manifest so your editor checks it. The schema is published at `https://docs.mytavora.app/schema/tavora.module.schema.json`.
 
