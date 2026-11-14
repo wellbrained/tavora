@@ -14,7 +14,7 @@ import { GameOverlayStore } from "./game-overlays";
 import { GrantStore } from "./grants";
 import { HotkeyStore } from "./hotkeys";
 import { readOwnerRecords } from "./installer";
-import { checkSavedFile, onUnreadableFileKept, openSealedFile, readSavedFile, unreadableFilesKept } from "./json";
+import { checkSavedFile, forgetSealedFile, onUnreadableFileKept, openSealedFile, readSavedFile, setAside, unreadableFilesKept } from "./json";
 import { loadLibrary, SavedData } from "./saved-data";
 import { queueLocalDataMove } from "./module-data";
 import { readOfficialRecords } from "./official-updates";
@@ -152,18 +152,57 @@ describe("openSealedFile", () => {
     expect(await readFile(at("a.json"), "utf8")).toBe('{"v":2,"data":"new"}');
   });
 
-  it("sets aside one that is damaged or doesn't open here, and tells the user", async () => {
+  it("sets aside one that is damaged, under a name of its own each time, and tells the user", async () => {
     const before = unreadableFilesKept();
-    for (const text of ["{", '{"v":1}', '{"v":1,"data":"other"}']) {
+    // Set aside within the same millisecond: no copy takes another's name.
+    for (const text of ["{", '{"v":1}', "[]"]) {
       await put(at("a.json"), text);
       expect(await openSealedFile(at("a.json"), open)).toBeNull();
     }
-    expect((await copiesOf(at("a.json"))).filter((name) => name.includes(".corrupt-"))).toHaveLength(3);
+    const aside = (await copiesOf(at("a.json"))).filter((name) => name.includes(".corrupt-"));
+    expect(aside).toHaveLength(3);
+    expect((await Promise.all(aside.map((name) => readFile(at(name), "utf8")))).sort()).toEqual(['{"v":1}', "[]", "{"].sort());
     expect(unreadableFilesKept()).toBe(before + 3);
+  });
+
+  it("leaves one whose data doesn't open here where it is, for the next start, with a copy aside", async () => {
+    const before = unreadableFilesKept();
+    await put(at("a.json"), '{"v":1,"data":"other"}');
+    expect(await openSealedFile(at("a.json"), open)).toBeNull();
+    expect(await openSealedFile(at("a.json"), open)).toBeNull();
+    expect(await readFile(at("a.json"), "utf8")).toBe('{"v":1,"data":"other"}');
+    expect(await copiesOf(at("a.json"))).toEqual(["a.json.unopened"]);
+    expect(unreadableFilesKept()).toBe(before);
+  });
+
+  it("forgets a sealed file together with every copy of it", async () => {
+    await put(at("a.json"), '{"v":2,"data":"new"}');
+    await openSealedFile(at("a.json"), open);
+    await put(at("a.json"), '{"v":1,"data":"other"}');
+    await openSealedFile(at("a.json"), open);
+    await put(at("a.json"), "{");
+    await openSealedFile(at("a.json"), open);
+    await put(at("a.json"), '{"v":1,"data":"ok"}');
+    await put(at("a.json.unrelated"), "keep");
+    expect((await copiesOf(at("a.json"))).length).toBe(4);
+    await forgetSealedFile(at("a.json"));
+    expect(await readdir(dir)).toEqual(["a.json.unrelated"]);
   });
 
   it("gives null for a missing one, quietly", async () => {
     expect(await openSealedFile(at("none.json"), open)).toBeNull();
+  });
+});
+
+describe("setAside", () => {
+  it("never takes a name another copy has", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(1_000);
+    for (const text of ["1", "2", "3"]) {
+      await put(at("b.json"), text);
+      await setAside(at("b.json"));
+    }
+    expect(await copiesOf(at("b.json"))).toEqual(["b.json.corrupt-1000", "b.json.corrupt-1000-2", "b.json.corrupt-1000-3"]);
+    expect(await readFile(at("b.json.corrupt-1000"), "utf8")).toBe("1");
   });
 });
 
@@ -220,15 +259,32 @@ describe("each file of the user's", () => {
     expect(unreadableFilesKept()).toBe(before + 1);
   });
 
-  it("the cloud copy's state is set aside quietly: nothing of the user's is in it", async () => {
+  it("the cloud copy's state is copied aside quietly and stays, as its being there says the copy is on", async () => {
     const before = unreadableFilesKept();
     await put(at("cloud-copy.json"), "{");
     expect((await loadCopyState(at("cloud-copy.json"))).version).toBe(0);
-    expect(await copiesOf(at("cloud-copy.json"))).toHaveLength(1);
+    expect((await loadCopyState(at("cloud-copy.json"))).version).toBe(0);
+    expect(await copiesOf(at("cloud-copy.json"))).toEqual(["cloud-copy.json.corrupt"]);
+    expect(await readFile(at("cloud-copy.json"), "utf8")).toBe("{");
     expect(unreadableFilesKept()).toBe(before);
     await put(at("cloud-copy.json"), '{"v":2,"version":5,"files":{}}');
     await loadCopyState(at("cloud-copy.json"));
     expect(await copiesOf(at("cloud-copy.json"))).toContain("cloud-copy.json.from-version-2");
+  });
+
+  it.each([
+    ["connection.json", () => new ConnectionFile(at("connection.json")), (file: ConnectionFile) => file.save({ enabled: true, target: "1.1.1.1", outages: [], savedAt: 1 } as never)],
+    ["traffic.json", () => new TrafficFile(at("traffic.json")), (file: TrafficFile) => file.save([])],
+  ] as const)("%s: one that can't be read right now is never written over this run", async (name, make, save) => {
+    // A folder in its place can't be read as a file.
+    await mkdir(at(name));
+    const store = make() as never;
+    await (store as { load(): Promise<unknown> }).load();
+    await rm(at(name), { recursive: true });
+    (save as (file: never) => void)(store);
+    await (store as { flush?(): Promise<void> }).flush?.();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(await readdir(dir)).not.toContain(name);
   });
 
   it("a profile without a usable id is set aside before a new id is made", async () => {

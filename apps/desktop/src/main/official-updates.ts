@@ -191,8 +191,11 @@ export class OfficialUpdates {
 
   private async write(entry: Omit<OfficialRecord, "highWater">): Promise<void> {
     const records = await readOfficialRecords(this.options.userData);
-    const before = records[entry.id];
-    const highWater = before && compareModuleVersions(before.highWater, entry.version) > 0 ? before.highWater : entry.version;
+    // The highest seen, on disk or in memory: a file set aside since this run read it never lowers it.
+    const highWater = [records[entry.id]?.highWater, this.records[entry.id]?.highWater].reduce<string>(
+      (high, seen) => (seen && compareModuleVersions(seen, high) > 0 ? seen : high),
+      entry.version,
+    );
     this.records = { ...records, [entry.id]: { ...entry, highWater } };
     await writeFileAtomic(path.join(this.options.userData, OFFICIAL_UPDATES_FILE), `${JSON.stringify({ version: SUPPORTED_VERSIONS[OFFICIAL_UPDATES_FILE], modules: this.records }, null, 2)}\n`);
   }

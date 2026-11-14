@@ -1,8 +1,7 @@
-import { rm } from "node:fs/promises";
 import { isGameId } from "@tavora/module-schema";
 import { isSnowflake } from "./discord-parse";
 import { writeFileAtomic } from "./fsutil";
-import { openSealedFile } from "./json";
+import { forgetSealedFile, openSealedFile } from "./json";
 import { STORE_VERSIONS } from "./saved-versions";
 
 // The Discord sign-in (token), kept in discord.json in the user data folder and
@@ -108,7 +107,7 @@ export async function loadDiscordSecrets(file: string, encryptor: Encryptor): Pr
 
 export async function saveDiscordSecrets(file: string, encryptor: Encryptor, secrets: DiscordSecrets): Promise<void> {
   if (!secrets.token && !secrets.last && Object.keys(secrets.games ?? {}).length === 0) {
-    await rm(file, { force: true });
+    await forgetSealedFile(file);
     return;
   }
   if (!encryptor.isAvailable()) throw new Error("No secure storage on this PC.");

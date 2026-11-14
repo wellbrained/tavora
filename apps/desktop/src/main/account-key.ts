@@ -3,7 +3,7 @@ import { CopyError } from "./cloud-copy";
 import { newCopyKey, openVault, parseRecoveryKey, recoveryKey, sealVault } from "./copy-crypto";
 import type { Encryptor } from "./discord-store";
 import { writeFileAtomic } from "./fsutil";
-import { openSealedFile } from "./json";
+import { forgetSealedFile, openSealedFile } from "./json";
 import { STORE_VERSIONS } from "./saved-versions";
 import { UserError } from "./messages";
 
@@ -218,7 +218,8 @@ export class AccountKey {
   async forget(): Promise<void> {
     this.generation++;
     this.key = null;
-    await rm(this.options.file, { force: true });
+    await forgetSealedFile(this.options.file);
+    if (this.options.legacyFile) await forgetSealedFile(this.options.legacyFile);
     if (this.options.cacheFile) await rm(this.options.cacheFile, { force: true });
   }
 

@@ -3727,7 +3727,7 @@ export class Host {
       ...(options.aiUsageUrl ? { usageUrl: options.aiUsageUrl } : {}),
       readClaudeEmail: (directory) => readClaudeEmail(directory),
       fetch: (input, init) => fetch(input, init),
-      readText: (file) => readFile(file, "utf8").catch(() => null),
+      readText: (file) => readFile(file, "utf8").catch((error: NodeJS.ErrnoException) => (error.code === "ENOENT" ? null : Promise.reject(error))),
       check: (file, text) => checkSavedFile(file, text, { version: AI_USAGE_VERSION }),
       isDirectory: (directory) => stat(directory).then((info) => info.isDirectory(), () => false),
       writeText: (file, text) => writeFileAtomic(file, text),

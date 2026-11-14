@@ -321,7 +321,16 @@ export class CopySync {
         () => false,
       );
       this.state = this.on ? await loadCopyState(this.stateFile) : EMPTY_STATE;
-      if (this.copyOn) this.use(await loadPlace(this.placeFile));
+      if (this.copyOn) {
+        const place = await loadPlace(this.placeFile);
+        // Where the copy is kept can't be told: it stays off this run rather than going to the wrong place.
+        if (place === undefined) {
+          this.copyOn = false;
+          this.log("cloud copy: where it is kept can't be read; it is off until the next start");
+          return;
+        }
+        this.use(place);
+      }
       if (await this.takeStaged()) return;
       if (!this.on) return;
       let late = false;
@@ -962,13 +971,19 @@ async function keepPcSettings(file: string, own: Record<string, unknown> | null,
 class KeyChanged extends Error {}
 
 /**
- * Where the copy is kept: a folder, or null for the service. A file a newer Tavora wrote is copied aside, and one that
- * is damaged set aside and the user told (readSavedFile), before the service is taken.
+ * Where the copy is kept: a folder, null for the service (no file), or undefined when that can't be told: the file
+ * can't be read right now, or it is damaged (copied aside, left where it is, and the user told; readSavedFile). A newer
+ * Tavora's file is read too, so a folder is never mistaken for the service.
  */
-async function loadPlace(file: string): Promise<string | null> {
-  const saved = await readSavedFile(file, { version: STORE_VERSIONS.cloudCopy, versionKey: "v" }).catch(() => null);
-  // A newer Tavora's file is read too: its folder is never mistaken for the service.
-  return typeof saved?.v === "number" && saved.v >= STORE_VERSIONS.cloudCopy && typeof saved.folder === "string" && path.isAbsolute(saved.folder) ? saved.folder : null;
+async function loadPlace(file: string): Promise<string | null | undefined> {
+  let saved: Record<string, unknown> | null;
+  try {
+    saved = await readSavedFile(file, { version: STORE_VERSIONS.cloudCopy, versionKey: "v", leaveInPlace: true });
+  } catch {
+    return undefined;
+  }
+  if (saved === null) return (await stat(file).then(() => true, () => false)) ? undefined : null;
+  return typeof saved.v === "number" && saved.v >= STORE_VERSIONS.cloudCopy && typeof saved.folder === "string" && path.isAbsolute(saved.folder) ? saved.folder : undefined;
 }
 
 async function savePlace(file: string, folder: string | null): Promise<void> {

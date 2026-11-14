@@ -95,14 +95,22 @@ export function sanitizeMonths(raw: unknown): StoredMonth[] {
 /** traffic.json in the data folder. */
 export class TrafficFile implements TrafficStore {
   private writing: Promise<void> = Promise.resolve();
+  /** The file couldn't be read: this run keeps no months and never writes over it. */
+  private unread = false;
 
   constructor(private readonly file: string) {}
 
   async load(): Promise<StoredMonth[]> {
-    return sanitizeMonths(await readSavedFile(this.file, { version: VERSION }).catch(() => null));
+    try {
+      return sanitizeMonths(await readSavedFile(this.file, { version: VERSION }));
+    } catch {
+      this.unread = true;
+      return [];
+    }
   }
 
   save(months: StoredMonth[]): void {
+    if (this.unread) return;
     const body = `${JSON.stringify({ version: VERSION, months }, null, 2)}\n`;
     this.writing = this.writing.then(() => writeFileAtomic(this.file, body)).catch(() => undefined);
   }

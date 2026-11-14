@@ -580,12 +580,13 @@ export async function swapInCopy(staging: string, roots: CopyRoot[], keepIn: str
 // nothing of the content). The key is the account's (account-key.ts).
 
 /**
- * The state as saved. One a newer Tavora wrote is copied aside and one that is damaged set aside (readSavedFile; the
- * user isn't told, as nothing of theirs is in it); both start from the empty state, as a missing one does.
+ * The state as saved. One a newer Tavora wrote is copied aside, and one that is damaged copied aside and left where it
+ * is, as its being there says the copy is on (readSavedFile; the user isn't told, as nothing of theirs is in it). Both
+ * start from the empty state, as a missing one does.
  */
 export async function loadCopyState(file: string): Promise<CopyState> {
   try {
-    const saved = await readSavedFile(file, { version: STORE_VERSIONS.cloudCopy, versionKey: "v", notice: false });
+    const saved = await readSavedFile(file, { version: STORE_VERSIONS.cloudCopy, versionKey: "v", notice: false, leaveInPlace: true });
     if (saved?.v !== STORE_VERSIONS.cloudCopy || typeof saved.version !== "number" || typeof saved.files !== "object" || saved.files === null) return EMPTY_STATE;
     return { version: saved.version, pictures: saved.pictures !== false, files: saved.files as Record<string, SyncedFile>, ...(saved.kept === true ? { kept: true } : {}) };
   } catch {

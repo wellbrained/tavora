@@ -146,6 +146,8 @@ function sameJson(a: JsonValue | null, b: JsonValue | null): boolean {
 /** UI state for one panel instance. Removed when the panel is closed. */
 export class PanelStateStore {
   private readonly queue = new SerialQueue();
+  /** Panels whose file was read this run, so a newer Tavora's file is copied aside before the first write only. */
+  private readonly checked = new Set<string>();
 
   constructor(private readonly dir: string) {}
 
@@ -160,8 +162,10 @@ export class PanelStateStore {
   }
 
   /** The saved file of a panel: one a newer Tavora wrote is copied aside, an unreadable one set aside (readSavedFile). */
-  private read(file: string): Promise<Record<string, unknown> | null> {
-    return readSavedFile(file, { version: STORE_VERSIONS.panelState });
+  private async read(file: string): Promise<Record<string, unknown> | null> {
+    const saved = await readSavedFile(file, { version: STORE_VERSIONS.panelState });
+    this.checked.add(file);
+    return saved;
   }
 
   set(instanceId: string, value: unknown): Promise<void> {
@@ -172,8 +176,8 @@ export class PanelStateStore {
       throw new HostError("QUOTA_EXCEEDED", `panel state is limited to ${LIMITS.maxPanelStateBytes} bytes`);
     }
     return this.queue.run(async () => {
-      // Read before it is written over, so a newer Tavora's file is copied aside first.
-      await this.read(file);
+      // Read before it is first written over, so a newer Tavora's file is copied aside first.
+      if (!this.checked.has(file)) await this.read(file);
       await writeFileAtomic(file, `{"version":${STORE_VERSIONS.panelState},"value":${serialized}}`);
     });
   }

@@ -27,9 +27,13 @@ export class SerialQueue {
 export async function keepCopy(dir: string, name: string, old: Buffer): Promise<string> {
   for (let n = 1; ; n++) {
     const target = path.join(dir, n === 1 ? name : `${name}.${n}`);
+    // Only a missing name is free: any other error throws, so no copy is ever written over.
     const existing = await stat(target).then(
       () => readFile(target),
-      () => null,
+      (error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") return null;
+        throw error;
+      },
     );
     if (existing?.equals(old)) return target;
     if (existing === null) {

@@ -60,7 +60,7 @@ export interface AiUsageDeps {
   /** Where Claude's usage is asked; only tests change it. */
   usageUrl?: string;
   fetch: typeof fetch;
-  /** The text of a file, or null when it does not exist or can't be read. */
+  /** The text of a file, or null when it does not exist. Throws when it can't be read right now, so ai-usage.json is never started anew over it. */
   readText(file: string): Promise<string | null>;
   /**
    * Checks the text read from ai-usage.json before it is used (json.ts checkSavedFile): copies aside a file a newer
@@ -165,8 +165,9 @@ export class AiUsageConnector {
   private async readFile(): Promise<Record<string, unknown> | null> {
     const text = await this.deps.readText(this.deps.file);
     if (text !== null && this.deps.check) {
-      // Set aside when damaged: it starts empty, like a damaged file always did, so nothing is offered again.
-      return (await this.deps.check(this.deps.file, text).catch(() => null)) ?? {};
+      // Set aside when damaged: it starts empty, like a damaged file always did, so nothing is offered again. A copy
+      // aside that fails throws, so nothing is saved over a newer Tavora's file.
+      return (await this.deps.check(this.deps.file, text)) ?? {};
     }
     try {
       const parsed: unknown = text === null ? null : JSON.parse(text);
@@ -331,7 +332,7 @@ export class AiUsageConnector {
 
   /** The profile's saved login file, parsed. Only this process reads it; nothing from it is kept but the plan. */
   private async credentials(account: StoredAccount): Promise<unknown> {
-    const text = await this.deps.readText(path.join(account.directory, account.provider === "claude" ? ".credentials.json" : "auth.json"));
+    const text = await this.deps.readText(path.join(account.directory, account.provider === "claude" ? ".credentials.json" : "auth.json")).catch(() => null);
     if (text === null) return null;
     try {
       return JSON.parse(text);

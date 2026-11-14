@@ -119,19 +119,28 @@ export interface ConnectionStore {
 /** connection.json in the data folder, written in order, never half. */
 export class ConnectionFile implements ConnectionStore {
   private writing: Promise<void> = Promise.resolve();
+  /** The file couldn't be read at start: this run works from the defaults and never writes over it. */
+  private unread = false;
 
   constructor(private readonly file: string) {}
 
   async load(): Promise<StoredConnection> {
-    return sanitizeStored(await readSavedFile(this.file, { version: VERSION }).catch(() => null));
+    try {
+      return sanitizeStored(await readSavedFile(this.file, { version: VERSION }));
+    } catch {
+      this.unread = true;
+      return sanitizeStored(null);
+    }
   }
 
   save(data: StoredConnection): void {
+    if (this.unread) return;
     const body = `${JSON.stringify({ version: VERSION, ...data }, null, 2)}\n`;
     this.writing = this.writing.then(() => writeFileAtomic(this.file, body)).catch(() => undefined);
   }
 
   saveNow(data: StoredConnection): void {
+    if (this.unread) return;
     try {
       mkdirSync(path.dirname(this.file), { recursive: true });
       writeFileSync(`${this.file}.now`, `${JSON.stringify({ version: VERSION, ...data }, null, 2)}\n`);

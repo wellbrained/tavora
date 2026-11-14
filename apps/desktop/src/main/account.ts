@@ -1,5 +1,4 @@
 import type { KeyObject } from "node:crypto";
-import { rm } from "node:fs/promises";
 import { apiReason, type ApiReason } from "@tavora/module-schema";
 import { linkRequest, publishSignature, publishZip, type Published } from "@tavora/pack";
 import { assertNever } from "../shared/assert-never";
@@ -8,7 +7,7 @@ import type { Language, MessageKey } from "../shared/i18n";
 import { isIdPrefix } from "../shared/id-prefix";
 import type { Encryptor } from "./discord-store";
 import { writeFileAtomic } from "./fsutil";
-import { openSealedFile } from "./json";
+import { forgetSealedFile, openSealedFile } from "./json";
 import { STORE_VERSIONS } from "./saved-versions";
 import type { DiscordLoginResult } from "./discord-login";
 import { UserError } from "./messages";
@@ -59,7 +58,7 @@ export async function loadAccount(file: string, encryptor: Encryptor): Promise<S
 
 export async function saveAccount(file: string, encryptor: Encryptor, account: SavedAccount | null): Promise<void> {
   if (!account) {
-    await rm(file, { force: true });
+    await forgetSealedFile(file);
     return;
   }
   if (!encryptor.isAvailable()) return;

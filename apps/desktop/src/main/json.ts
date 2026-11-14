@@ -1,4 +1,4 @@
-import { readFile, rename } from "node:fs/promises";
+import { readdir, readFile, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import type { JsonValue } from "@tavora/sdk/protocol";
 import { HostError } from "./errors";
@@ -41,16 +41,34 @@ export function onUnreadableFileKept(listener: (() => void) | null): void {
   keptListener = listener;
 }
 
-/**
- * Renames a file aside (never overwrites it), so an unreadable file is kept and the store starts empty. With `notice`
- * it is one of the user's own files: it is counted, and the host UI says some saved data couldn't be opened.
- */
-export async function setAside(file: string, notice = false): Promise<void> {
-  await rename(file, `${file}.corrupt-${Date.now()}`);
-  console.error(`[tavora] unreadable file has been set aside: ${file}`);
-  if (!notice) return;
+/** Counts one of the user's files kept aside, so the host UI says some saved data couldn't be opened. */
+function tellKept(): void {
   keptCount++;
   keptListener?.();
+}
+
+/**
+ * Renames a file aside to `<file>.corrupt-<time>` (`-2`, `-3`, … when that name is taken), so an unreadable file is
+ * kept, never written over, and the store starts empty. With `notice` it is one of the user's own files: it is
+ * counted, and the host UI says some saved data couldn't be opened.
+ */
+export async function setAside(file: string, notice = false): Promise<void> {
+  const stamp = `${file}.corrupt-${Date.now()}`;
+  for (let n = 1; ; n++) {
+    const target = n === 1 ? stamp : `${stamp}-${n}`;
+    const taken = await stat(target).then(
+      () => true,
+      (error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") return false;
+        throw error;
+      },
+    );
+    if (taken) continue;
+    await rename(file, target);
+    break;
+  }
+  console.error(`[tavora] unreadable file has been set aside: ${file}`);
+  if (notice) tellKept();
 }
 
 /**
@@ -75,7 +93,7 @@ export async function readJsonOrSetAside<T>(file: string): Promise<T | null> {
 
 /**
  * How one of the user's saved files is kept safe (readSavedFile). Every file holding the user's data has a version
- * and is read this way; caches, derived files and logs are not. The rules for raising a version are in saved-data.ts.
+ * and is read this way; caches, derived files and logs are not. The rules for raising a version are in saved-versions.ts.
  */
 export interface SavedFileRules {
   /** The newest format of the file this Tavora understands. */
@@ -84,6 +102,11 @@ export interface SavedFileRules {
   versionKey?: "version" | "v";
   /** Tell the user when the file is set aside. Off for bookkeeping they would never miss; on by default. */
   notice?: boolean;
+  /**
+   * An unreadable file is copied aside (`<file>.corrupt`, once per content) and left where it is, instead of renamed:
+   * for a file whose being there means something (the cloud copy's own files say it is on).
+   */
+  leaveInPlace?: boolean;
 }
 
 export type SavedRecord = Record<string, unknown>;
@@ -117,7 +140,11 @@ export async function checkSavedFile(file: string, bytes: Buffer | string, rules
     value = undefined;
   }
   if (!isSavedRecord(value)) {
-    await setAside(file, rules.notice !== false);
+    if (rules.leaveInPlace) {
+      await keepCopy(path.dirname(file), `${path.basename(file)}.corrupt`, Buffer.from(bytes));
+      console.error(`[tavora] unreadable file has been copied aside: ${file}`);
+      if (rules.notice !== false) tellKept();
+    } else await setAside(file, rules.notice !== false);
     return null;
   }
   const version = value[rules.versionKey ?? "version"];
@@ -137,8 +164,10 @@ export function keepNewerCopy(file: string, version: number, bytes: Buffer): Pro
 /**
  * Opens one of the sealed files (`{ "v": 1, "data": … }`, the data sealed by the system: account, keys, Discord) with
  * `open`. Missing, or a file that can't be read right now, gives null. One a newer Tavora wrote is copied aside and
- * gives null. One that is damaged or doesn't open here (sealed by another Windows user, or `open` refuses it) is set
- * aside, the user is told, and it gives null: whatever is written next never lands on it. Never throws.
+ * gives null. One that is damaged is set aside, the user is told, and it gives null. One whose data doesn't open here
+ * (sealed by another Windows user, a keyring that is locked for now, or `open` refuses it) stays where it is, so the
+ * next start can try again, and a copy goes aside (`<file>.unopened`) in case something is written over it meanwhile.
+ * Never throws. Copies of a sealed file hold what it held: forgetSealedFile removes them with it.
  */
 export async function openSealedFile<T>(file: string, open: (data: string) => T | Promise<T>): Promise<T | null> {
   const version = STORE_VERSIONS.sealed;
@@ -149,11 +178,22 @@ export async function openSealedFile<T>(file: string, open: (data: string) => T 
     return null;
   }
   if (saved === null || (typeof saved.v === "number" && saved.v > version)) return null;
-  try {
-    if (saved.v !== version || typeof saved.data !== "string") throw new Error("not a sealed file");
-    return await open(saved.data);
-  } catch {
+  if (saved.v !== version || typeof saved.data !== "string") {
     await setAside(file, true).catch(() => undefined);
     return null;
   }
+  try {
+    return await open(saved.data);
+  } catch {
+    await keepCopy(path.dirname(file), `${path.basename(file)}.unopened`, Buffer.from(JSON.stringify(saved))).catch(() => undefined);
+    return null;
+  }
+}
+
+/** Removes a sealed file and every copy of it set aside (signing out forgets them all). */
+export async function forgetSealedFile(file: string): Promise<void> {
+  await rm(file, { force: true });
+  const base = path.basename(file);
+  const copies = (await readdir(path.dirname(file)).catch(() => [] as string[])).filter((name) => [".corrupt-", ".from-version-", ".unopened"].some((kind) => name.startsWith(`${base}${kind}`)));
+  for (const name of copies) await rm(path.join(path.dirname(file), name), { force: true });
 }
