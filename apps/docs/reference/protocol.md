@@ -118,7 +118,7 @@ Methods without params must be sent with `params` left out.
 
 | Kind | Scope | Removed when |
 | --- | --- | --- |
-| `storage` | module + workspace, shared by all its panels | never by closing panels; later by uninstalling (Milestone C) |
+| `storage` | module + workspace, shared by all its panels | never by closing panels; with the module's data in Settings > Modules |
 | `storage.app` | module, shared by all its panels in every workspace | never by closing panels or deleting a workspace; with the module's data in Settings > Modules |
 | `documents` | module + workspace, shared by all its panels | as above |
 | `blobs` (pictures, PDFs, sounds) | module + workspace, shared by all its panels | the workspace is deleted from the Trash; never by closing panels |

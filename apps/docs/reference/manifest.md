@@ -1,6 +1,6 @@
 # Module manifest (`tavora.module.json`)
 
-**Status:** Milestone B, 2026-10-14. `apiVersion` `"1"`.
+**Status:** `apiVersion` `"1"`, stable from Tavora 1.0.
 
 Every module package has a `tavora.module.json` at its root. Tavora refuses to load a module whose manifest has errors, including fields it does not know: a typo should fail loudly, not be ignored.
 
@@ -27,7 +27,7 @@ The JSON Schema ([download](/schema/tavora.module.schema.json), [source](https:/
 | Field | Required | Rules |
 | --- | --- | --- |
 | `$schema` | no | Any string. Ignored by Tavora. |
-| `id` | yes | `publisher.module-name`: 2 to 5 dot-separated parts, lowercase letters, digits and `-`, starting with a letter, at most 128 characters. Data and (later) permissions are keyed on it, so never change it after release. |
+| `id` | yes | `publisher.module-name`: 2 to 5 dot-separated parts, lowercase letters, digits and `-`, starting with a letter, at most 128 characters. Data and permissions are keyed on it, so never change it after release. |
 | `name` | yes | 1 to 80 characters, not only spaces. |
 | `description` | no | 1 to 300 characters, not only spaces. |
 | `version` | yes | `major.minor.patch`, e.g. `1.0.0`. Only plain versions can be packed and published; a pre-release such as `2.0.0-beta.1` still loads from a folder, but `tavora-pack` and the catalog refuse it. |
@@ -259,6 +259,5 @@ Any other game goes by the id Tavora's game search gives it, such as `9-kings`. 
 
 ## What is not in v1 yet
 
-- Permissions other than `network`, `connectors` and `webAssembly`. `sharedData`, `files` and `clipboard` arrive with their capabilities (see [Capabilities](./protocol.md#capabilities)).
-- Author, homepage, license and screenshots. These belong to the catalog listing (Milestone E), not to what the desktop host needs to run a module.
-- Localized names.
+- Permissions other than `network`, `connectors`, `folders`, `onRequest` and `webAssembly`. `sharedData`, `files` and `clipboard` arrive with their capabilities (see [Capabilities](./protocol.md#capabilities)).
+- Author and license. These belong to the catalog listing, not to what the desktop host needs to run a module.

@@ -89,7 +89,7 @@ describe("fetchSteamLibrary", () => {
   it("passes the service's message for a refusal and words the other failures", async () => {
     const refuse = (status: number, body: unknown) => fetchSteamLibrary(options((async () => answer(body, status)) as unknown as typeof fetch), "x");
     expect(await refuse(404, { error: "Steam has no profile with that name." })).toEqual({ status: "error", error: "Steam has no profile with that name." });
-    expect(await refuse(429, { error: "Too many requests." })).toMatchObject({ status: "error", error: expect.stringContaining("wait") });
+    expect(await refuse(429, { error: "Too many requests." })).toMatchObject({ status: "error", error: expect.stringMatching(/wait/i) });
     expect(await refuse(503, "nope")).toMatchObject({ status: "error", error: expect.stringContaining("isn't working right now") });
     expect(await refuse(200, { games: "no" })).toMatchObject({ status: "error" });
     const down = (async () => {

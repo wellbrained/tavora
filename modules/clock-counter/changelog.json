@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.31",
+    "date": "2026-11-15",
+    "notes": [
+      "The Delete key now shows in your language."
+    ]
+  },
+  {
     "version": "0.1.30",
     "date": "2026-11-14",
     "notes": [

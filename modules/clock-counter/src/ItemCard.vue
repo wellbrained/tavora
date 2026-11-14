@@ -155,7 +155,7 @@ const startLabel = computed(() => {
             <DropdownMenuItem :disabled="!canDown" :data-testid="`menu-down-${item.id}`" @select="panel.move(item.id, 1)"><ArrowDown :stroke-width="1.5" />{{ t("item.moveDown") }}</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem variant="destructive" :data-testid="`delete-${item.id}`" @select="panel.remove(item)">
-              <Trash2 :stroke-width="1.5" />{{ t("edit.delete") }}<DropdownMenuShortcut>Del</DropdownMenuShortcut>
+              <Trash2 :stroke-width="1.5" />{{ t("edit.delete") }}<DropdownMenuShortcut>{{ t("edit.deleteKey") }}</DropdownMenuShortcut>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
