@@ -26,7 +26,7 @@ export const PAGES = [
   { id: "menus", group: "actions", keywords: "dropdown menu context right-click submenu actions icon description row", examples: ["DescribedMenu", "Dropdown", "RightClick"] },
   { id: "tooltips", group: "actions", keywords: "tooltip hover help readable keyboard shortcut arrow values rows divider disabled reason why off switched switch checkbox input select menu item card skin frame game effect stat icon", examples: ["FromTitle", "OnDisabled", "Rich", "Values", "ItemCards", "DisabledReasons"] },
   { id: "popovers", group: "actions", keywords: "popover floating panel form anchor close", examples: ["WithField"] },
-  { id: "dialogs", group: "actions", keywords: "dialog modal confirm delete rename name prompt busy footer scroll", examples: ["NameDialogs", "ConfirmDialogs", "FooterButtons", "LongDialog"] },
+  { id: "dialogs", group: "actions", keywords: "dialog modal confirm delete rename name prompt busy footer scroll dismiss escape discard unsaved", examples: ["NameDialogs", "ConfirmDialogs", "FooterButtons", "AskBeforeClosing", "LongDialog"] },
   { id: "toasts", group: "actions", keywords: "toast snackbar undo message notification status", examples: ["Kinds", "Loading", "WithButton", "DeleteWithUndo"] },
   // Inputs
   { id: "fields", group: "inputs", keywords: "input textarea search clear escape magnifier label hint error invalid field aria describedby beside horizontal code one-time mono template placeholder braces insert highlight", examples: ["Basic", "Errors", "FieldControls", "FieldBeside", "Search", "Monospace", "Code", "TextArea", "Template"] },

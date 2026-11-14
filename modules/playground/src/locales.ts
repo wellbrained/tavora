@@ -235,6 +235,8 @@ export const en = {
   "ex.dialogs.FooterButtons.rule": "A button that only closes (Cancel, Close, Done, OK) gets close and never an icon.",
   "ex.dialogs.LongDialog": "A long dialog",
   "ex.dialogs.LongDialog.note": "It scrolls inside the page (DialogScrollContent).",
+  "ex.dialogs.AskBeforeClosing": "Ask before closing",
+  "ex.dialogs.AskBeforeClosing.note": "With dismissible off, Escape, a click outside and the X ask first. busy keeps it open while work runs.",
 
   "ex.toasts.Kinds": "Kinds",
   "ex.toasts.Kinds.note": "Up to three stack; pointing at them spreads them out and stops their time.",
@@ -682,6 +684,8 @@ export const de: Record<TextKey, string> = {
   "ex.dialogs.FooterButtons.rule": "Ein Button, der nur schließt (Abbrechen, Schließen, Fertig, OK), bekommt close und nie ein Icon.",
   "ex.dialogs.LongDialog": "Ein langer Dialog",
   "ex.dialogs.LongDialog.note": "Er scrollt mit der Seite (DialogScrollContent).",
+  "ex.dialogs.AskBeforeClosing": "Vor dem Schließen fragen",
+  "ex.dialogs.AskBeforeClosing.note": "Ohne dismissible fragen Escape, ein Klick daneben und das X erst nach. busy hält ihn offen, solange etwas läuft.",
 
   "ex.toasts.Kinds": "Arten",
   "ex.toasts.Kinds.note": "Bis zu drei stapeln sich; zeigst du darauf, fächern sie sich auf und ihre Zeit hält an.",

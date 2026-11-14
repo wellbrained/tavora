@@ -20,7 +20,7 @@ import { Input } from "@tavora/official-ui/components/ui/input";
 import { cn } from "@tavora/official-ui/lib/utils";
 import { t } from "../i18n";
 import { Activity, Blocks, ChevronDown, CloudDownload, Code, FileArchive, Globe, LayoutGrid, NotebookPen, Search, Settings2, Upload, X } from "@lucide/vue";
-import { Dialog, DialogClose, DialogContent, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
+import { Dialog, DialogClose, DialogContent, DialogTitle, type DismissAttempt } from "@tavora/official-ui/components/ui/dialog";
 import ModuleIcon from "./ModuleIcon.vue";
 import CatalogBrowse from "./CatalogBrowse.vue";
 import CatalogModuleDialog from "./CatalogModuleDialog.vue";
@@ -196,10 +196,9 @@ useEventListener(document, "pointerdown", (event) => {
 });
 
 /** Escape closes an open panel list before the library itself. */
-function closeMenuFirst(event: KeyboardEvent) {
-  if (!expanded.value) return;
-  event.preventDefault();
-  expanded.value = null;
+function foldListFirst({ reason }: DismissAttempt) {
+  if (reason === "escape") expanded.value = null;
+  else dialog.value = null;
 }
 
 /** A module from a project folder can be published or saved as a zip from its menu (with accounts on). */
@@ -221,7 +220,8 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
       data-testid="add-module-dialog"
       :show-close-button="false"
       :aria-describedby="undefined"
-      @escape-key-down="closeMenuFirst"
+      :dismissible="!expanded"
+      @dismiss-attempt="foldListFirst"
     >
       <aside class="thin-scroll module-menu bg-background flex shrink-0 flex-col gap-3 border-b px-4 pb-4 sm:w-56 sm:overflow-y-auto sm:border-r sm:border-b-0 lg:w-64">
         <form class="relative flex h-16 flex-none items-center" @submit.prevent="submit">

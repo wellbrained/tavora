@@ -4,15 +4,16 @@ import type { HTMLAttributes } from "vue"
 import { X } from "@lucide/vue"
 import { reactiveOmit } from "@vueuse/core"
 import {
-  DialogClose,
   DialogContent,
   DialogOverlay,
   DialogPortal,
   useForwardPropsEmits,
 } from "reka-ui"
+import { computed } from "vue"
 import { InertBehind } from "../../../lib/inert-behind"
 import { cn } from "../../../lib/utils"
 import { uiText } from "../text"
+import { useDialogDismissal, type DismissAttempt } from "./dismissal"
 import { provideDialogInstant } from "./instant"
 import { trackModal } from "./track-modal"
 
@@ -20,17 +21,40 @@ defineOptions({
   inheritAttrs: false,
 })
 
-const props = withDefaults(defineProps<DialogContentProps & { class?: HTMLAttributes["class"], instant?: boolean }>(), {
+const props = withDefaults(defineProps<DialogContentProps & {
+  class?: HTMLAttributes["class"]
+  instant?: boolean
+  /** `false`: Escape, a press outside and the close X don't close it; each try emits `dismiss-attempt` (dismissal.ts). */
+  dismissible?: boolean
+  /** Work the dialog waits for runs (`useTask`'s `busy`): nothing the user does closes it, and the X is off. */
+  busy?: boolean
+}>(), {
   instant: false,
+  dismissible: true,
+  busy: false,
 })
-const emits = defineEmits<DialogContentEmits>()
+const emits = defineEmits<DialogContentEmits & { "dismiss-attempt": [attempt: DismissAttempt] }>()
 
-const delegatedProps = reactiveOmit(props, "class", "instant")
+const delegatedProps = reactiveOmit(props, "class", "instant", "dismissible", "busy")
 const instant = provideDialogInstant(() => props.instant)
 // Page keys such as Ctrl+Z stand down while it is open (modal.ts).
 trackModal()
 
-const forwarded = useForwardPropsEmits(delegatedProps, emits)
+// Reka's own events go on to Reka; `dismiss-attempt` is the kit's and stays here.
+const forwardedAll = useForwardPropsEmits(delegatedProps, emits)
+const forwarded = computed(() => {
+  const { onDismissAttempt: _, ...rest } = forwardedAll.value as typeof forwardedAll.value & { onDismissAttempt?: unknown }
+  return rest
+})
+const dismissal = useDialogDismissal(() => props, attempt => emits("dismiss-attempt", attempt))
+
+/** A press on the page's scrollbar is not a press outside; anything else goes through the dismissal rules. */
+function onPointerDownOutside(event: CustomEvent<{ originalEvent: PointerEvent }>) {
+  const originalEvent = event.detail.originalEvent
+  const target = originalEvent.target as HTMLElement
+  if (originalEvent.offsetX > target.clientWidth || originalEvent.offsetY > target.clientHeight) event.preventDefault()
+  dismissal.onPointerDownOutside(event)
+}
 </script>
 
 <template>
@@ -48,23 +72,22 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
           )
         "
         v-bind="{ ...$attrs, ...forwarded }"
-        @pointer-down-outside="(event) => {
-          const originalEvent = event.detail.originalEvent;
-          const target = originalEvent.target as HTMLElement;
-          if (originalEvent.offsetX > target.clientWidth || originalEvent.offsetY > target.clientHeight) {
-            event.preventDefault();
-          }
-        }"
+        @escape-key-down="dismissal.onEscapeKeyDown"
+        @pointer-down-outside="onPointerDownOutside"
       >
         <InertBehind />
         <slot />
 
-        <DialogClose
-          class="absolute top-4 right-4 p-0.5 transition-colors rounded-md hover:bg-secondary"
+        <button
+          type="button"
+          data-slot="dialog-close"
+          :disabled="busy"
+          class="absolute top-4 right-4 p-0.5 transition-colors rounded-md hover:bg-secondary disabled:pointer-events-none disabled:opacity-50"
+          @click="dismissal.close"
         >
           <X class="w-4 h-4" />
           <span class="sr-only">{{ uiText.close }}</span>
-        </DialogClose>
+        </button>
       </DialogContent>
     </DialogOverlay>
   </DialogPortal>

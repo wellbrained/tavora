@@ -66,10 +66,9 @@ function cancel() {
   <Dialog :open="open" @update:open="(value: boolean) => !value && cancel()">
     <DialogContent
       class="top-[12vh] translate-y-0 sm:max-w-[420px]"
+      :busy="busy"
       data-testid="name-dialog"
       @open-auto-focus="focusName"
-      @escape-key-down="(e: Event) => busy && e.preventDefault()"
-      @interact-outside="(e: Event) => busy && e.preventDefault()"
     >
       <form ref="form" class="contents" @submit.prevent="submit">
         <DialogHeader :icon="icon" :title="title" :description="description" />
