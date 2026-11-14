@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.59",
+    date: "2026-11-14",
+    title: "No crash when a panel closes while it loads",
+    notes: [
+      "Tavora no longer crashes when you close a panel, or its module updates, while the panel is still loading.",
+    ],
+    prs: [
+      { number: 786, title: "A panel closed while its page loads starts no timers" },
+    ],
+    tags: ["modules"],
+  },
+  {
     version: "0.24.58",
     date: "2026-11-13",
     title: "Safer accounts, steadier updates",
