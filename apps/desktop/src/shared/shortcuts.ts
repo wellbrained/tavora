@@ -9,14 +9,15 @@ import type { MessageKey } from "./i18n-core";
  * Where a shortcut works, and so which others it must not share a key with.
  * - `app`: anywhere in Tavora, also while a module panel has the focus. Main catches these before any page sees the
  *   key, so none may be a key editors use, like Ctrl+B. They clash with every other scope.
+ * - `panels`: on a focused panel tab (Ctrl+M lifts its panel), and while the keyboard moves one (dock-preview.ts).
  * - `browser`: in a Browser panel, its page or its toolbar.
  * - `layout`: on the Overlays page's editor.
  * - `list`: keys lists and dialogs share. Each list handles them itself; the table only names them.
  */
-export type ShortcutScope = "app" | "browser" | "layout" | "list";
+export type ShortcutScope = "app" | "panels" | "browser" | "layout" | "list";
 
 /** The heading a shortcut is listed under in Settings > Shortcuts, in this order. */
-export const SHORTCUT_GROUPS = ["general", "workspaces", "browser", "overlays", "lists"] as const;
+export const SHORTCUT_GROUPS = ["general", "workspaces", "panels", "browser", "overlays", "lists"] as const;
 export type ShortcutGroup = (typeof SHORTCUT_GROUPS)[number];
 
 /** A modifier that may be held or not without changing the shortcut. `OtherMod` is whichever of Ctrl and Cmd `Mod` isn't. */
@@ -52,6 +53,13 @@ export const SHORTCUTS = [
   // Ctrl+Tab is Ctrl on a Mac too, as in browsers.
   { id: "next-tab", keys: "Control+Tab", scope: "app", group: "workspaces", label: "shortcuts.nextTab" },
   { id: "previous-tab", keys: "Control+Shift+Tab", scope: "app", group: "workspaces", label: "shortcuts.previousTab" },
+
+  { id: "panel.move", keys: "Mod+M", scope: "panels", group: "panels", label: "shortcuts.movePanel" },
+  // While a panel moves; the move handles these keys itself.
+  { id: "panel.pick-place", keys: "ArrowLeft ArrowUp ArrowDown ArrowRight", scope: "panels", group: "panels", label: "shortcuts.pickPlace" },
+  { id: "panel.every-place", keys: "Tab", scope: "panels", group: "panels", label: "shortcuts.everyPlace" },
+  { id: "panel.drop", keys: "Enter", scope: "panels", group: "panels", label: "shortcuts.dropPanel" },
+  { id: "panel.cancel-move", keys: "Escape", scope: "panels", group: "panels", label: "shortcuts.cancelMove" },
 
   { id: "browser.address", keys: "Mod+L", scope: "browser", group: "browser", label: "shortcuts.address", loose: ["OtherMod"] },
   { id: "browser.new-tab", keys: "Mod+T", scope: "browser", group: "browser", label: "shortcuts.newTab", loose: ["OtherMod"] },

@@ -24,6 +24,16 @@ describe("Settings > Shortcuts", () => {
         ],
       },
       {
+        title: "Panels",
+        rows: [
+          { action: "Move the panel of the focused tab", keys: [mod, "M"] },
+          { action: "Pick a place for it", keys: ["←", "↑", "↓", "→"] },
+          { action: "Go through every place", keys: ["Tab"] },
+          { action: "Put it there", keys: ["Enter"] },
+          { action: "Cancel the move", keys: ["Esc"] },
+        ],
+      },
+      {
         title: "Browser panel",
         rows: [
           { action: "Go to the address bar", keys: [mod, "L"] },

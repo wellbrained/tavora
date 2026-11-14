@@ -85,6 +85,16 @@ describe("aria-keyshortcuts", () => {
   });
 });
 
+describe("panel keys", () => {
+  it("lift a panel with Tavora's modifier and M, nothing else held", () => {
+    expect(shortcutIn("panels", press("m", { control: true }), false)).toBe("panel.move");
+    expect(shortcutIn("panels", press("M", { meta: true }), true)).toBe("panel.move");
+    expect(shortcutIn("panels", press("m", { meta: true }), false)).toBeNull();
+    expect(shortcutIn("panels", press("m", { control: true, shift: true }), false)).toBeNull();
+    expect(shortcutIn("panels", press("m", { control: true, meta: true }), true)).toBeNull();
+  });
+});
+
 describe("Overlays editor keys", () => {
   it("take Ctrl and Cmd on every platform, and Redo also as Shift+Z", () => {
     for (const mac of [false, true]) {
