@@ -11,6 +11,7 @@
 // Done, a `DialogClose` it placed) are its own to guard. A right-click outside is never a try.
 import { injectDialogRootContext } from "reka-ui"
 import { computed, inject, provide, type ComputedRef, type InjectionKey } from "vue"
+import type { LayerHandle } from "../../../lib/layers"
 
 export type DismissReason = "escape" | "outside" | "close-button"
 
@@ -58,7 +59,7 @@ type PointerOutside = CustomEvent<{ originalEvent: PointerEvent }>
  * the footer's Close find the same rules with `injectDialogDismissal`. A caller's own handler on the same event runs first; when it
  * prevents the default (Escape taken by something inside), that is not a try to close the dialog.
  */
-export function useDialogDismissal(options: () => DismissOptions, attempted: (attempt: DismissAttempt) => void) {
+export function useDialogDismissal(options: () => DismissOptions, attempted: (attempt: DismissAttempt) => void, layer: LayerHandle) {
   const root = injectDialogRootContext()
   /** Whether the dialog may close for `reason`; tells the page when it was a refused try. */
   function allows(reason: DismissReason): boolean {
@@ -75,6 +76,8 @@ export function useDialogDismissal(options: () => DismissOptions, attempted: (at
   })
   return {
     onEscapeKeyDown(event: KeyboardEvent) {
+      // Only the top layer takes Escape (layers.ts). Reka hands it only to its highest layer too; this keeps it so.
+      if (!layer.isTop()) return event.preventDefault()
       if (event.defaultPrevented) return
       if (!allows("escape")) event.preventDefault()
     },

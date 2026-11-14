@@ -394,8 +394,25 @@ export type DialogRequest =
 const PANEL_DIALOG = '[data-testid="panel-dialog"]';
 /** Settings and the profile are places to work in: a question the host asks may open on top of them, as a confirmation does. */
 const STACKABLE = `${PANEL_DIALOG}, [data-testid="settings"], [data-testid="profile-dialog"]`;
-/** The open dialogs on the page (the panel dialog too), oldest first. */
-const shownDialogs = computed(() => layers.value.flatMap((layer) => (layer.kind === "dialog" && layer.state === "open" && layer.element ? [layer.element] : [])));
+/** The open dialogs on the page now (the panel dialog too), oldest first. */
+const dialogsOnPage = (): HTMLElement[] => layers.value.flatMap((layer) => (layer.kind === "dialog" && layer.state === "open" && layer.element ? [layer.element] : []));
+// The same, read once Vue has finished drawing: one dialog in the slot handing over to the next (a v-if in App.vue)
+// leaves the list while the next is drawn, and the counts must not read one short in between (the panels would step
+// back over the page, the window buttons flicker).
+const shownDialogs = shallowRef<HTMLElement[]>([]);
+let recount = false;
+watch(
+  layers,
+  () => {
+    if (recount) return;
+    recount = true;
+    void nextTick(() => {
+      recount = false;
+      shownDialogs.value = dialogsOnPage();
+    });
+  },
+  { flush: "sync" },
+);
 const openDialogs = computed(() => shownDialogs.value.length);
 /** How many of them are not the panel dialog. */
 const pageDialogs = computed(() => shownDialogs.value.filter((element) => !element.matches(PANEL_DIALOG)).length);
@@ -408,7 +425,7 @@ watch(
 
 /** Dialogs open that a question the host asks on its own must not stack on: all but its own slot, Settings, the profile and the panel dialog. */
 function blockingDialogs(): number {
-  return shownDialogs.value.filter((element) => !element.matches(STACKABLE)).length - (dialog.value ? 1 : 0);
+  return dialogsOnPage().filter((element) => !element.matches(STACKABLE)).length - (dialog.value ? 1 : 0);
 }
 
 const dialogSlot = shallowRef<DialogRequest | null>(null);

@@ -39,7 +39,7 @@ const delegatedProps = reactiveOmit(props, "class", "showCloseButton", "instant"
 const instant = provideDialogInstant(() => props.instant)
 const root = injectDialogRootContext()
 // On top of the page while open: page keys such as Ctrl+Z stand down and the page around it is inert (layers.ts).
-useLayer("dialog", root.open)
+const layer = useLayer("dialog", root.open)
 
 // A DialogHeader with a title draws the close X itself (centred against the title); without one the X sits in the corner.
 const headerClose = ref(false)
@@ -48,7 +48,7 @@ provide(dialogChromeKey, { showClose: toRef(props, "showCloseButton"), headerClo
 // Reka's own events go on to Reka; `dismiss-attempt` is the kit's and stays here.
 const forwardedAll = useForwardPropsEmits(delegatedProps, emits)
 const forwarded = computed(() => withoutDismissListener(forwardedAll.value))
-const dismissal = useDialogDismissal(() => props, attempt => emits("dismiss-attempt", attempt))
+const dismissal = useDialogDismissal(() => props, attempt => emits("dismiss-attempt", attempt), layer)
 
 // The header's close X comes first in the page, so the dialog's own focus would land on it. Focus what the user came
 // to do instead: an `autofocus` element, else the first field or button that is not the X. A caller's own

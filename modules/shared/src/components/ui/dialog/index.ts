@@ -10,5 +10,6 @@ export { default as DialogScrollContent } from "./DialogScrollContent.vue"
 export { default as DialogTitle } from "./DialogTitle.vue"
 export { default as DialogTrigger } from "./DialogTrigger.vue"
 export { dialogIsInstant } from "./instant"
+// Where modules have always found it; the kit and the app read it from lib/layers.
 export { isModalOpen } from "../../../lib/layers"
 export type { DismissAttempt, DismissReason } from "./dismissal"

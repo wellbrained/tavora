@@ -5,9 +5,9 @@ import { X } from "@lucide/vue"
 import { reactiveOmit } from "@vueuse/core"
 import {
   DialogContent,
-  injectDialogRootContext,
   DialogOverlay,
   DialogPortal,
+  injectDialogRootContext,
   useForwardPropsEmits,
 } from "reka-ui"
 import { computed } from "vue"
@@ -34,12 +34,12 @@ const emits = defineEmits<DialogContentEmits & DismissEmits>()
 const delegatedProps = reactiveOmit(props, "class", "instant", "dismissible", "busy")
 const instant = provideDialogInstant(() => props.instant)
 // On top of the page while open: page keys such as Ctrl+Z stand down and the page around it is inert (layers.ts).
-useLayer("dialog", injectDialogRootContext().open)
+const layer = useLayer("dialog", injectDialogRootContext().open)
 
 // Reka's own events go on to Reka; `dismiss-attempt` is the kit's and stays here.
 const forwardedAll = useForwardPropsEmits(delegatedProps, emits)
 const forwarded = computed(() => withoutDismissListener(forwardedAll.value))
-const dismissal = useDialogDismissal(() => props, attempt => emits("dismiss-attempt", attempt))
+const dismissal = useDialogDismissal(() => props, attempt => emits("dismiss-attempt", attempt), layer)
 
 /** A press on the page's scrollbar is not a press outside; anything else goes through the dismissal rules. */
 function onPointerDownOutside(event: CustomEvent<{ originalEvent: PointerEvent }>) {

@@ -12,7 +12,7 @@
 // and gone once its content is unmounted. Escape belongs to the top layer: Reka already hands it only to its highest one,
 // and a page's own keys ask `isModalOpen` before they act. Popovers, selects and context menus are not listed: they
 // don't wait on the user, and a key pressed inside one belongs to it.
-import { defineComponent, getCurrentInstance, inject, onBeforeUnmount, onMounted, onScopeDispose, provide, shallowRef, watch, type InjectionKey, type Ref } from "vue"
+import { defineComponent, getCurrentInstance, inject, onMounted, onScopeDispose, onUnmounted, provide, shallowRef, watch, type InjectionKey, type Ref } from "vue"
 import { inertBehind } from "./inert-behind"
 
 export type LayerKind = "dialog" | "menu"
@@ -49,8 +49,10 @@ export function inertHolder(list: readonly Layer[] = stack.value): Layer | undef
 }
 
 let nextId = 1
+/** Content on the page per layer id, from its LayerAnchor: a content kept on the page while closed (`forceMount`) has it before it opens. */
+const anchored = new Map<number, HTMLElement>()
 
-function change(id: number, update: (layer: Layer) => Layer | null): void {
+function updateLayer(id: number, update: (layer: Layer) => Layer | null): void {
   stack.value = stack.value.flatMap((layer) => {
     if (layer.id !== id) return [layer]
     const next = update(layer)
@@ -58,30 +60,32 @@ function change(id: number, update: (layer: Layer) => Layer | null): void {
   })
 }
 
-/** Opens a layer on top (or brings a leaving one back on top, open again). */
-function open(id: number, kind: LayerKind, modal: boolean): void {
-  const before = stack.value.find((layer) => layer.id === id)
-  stack.value = [...stack.value.filter((layer) => layer.id !== id), { id, kind, modal, state: "open", element: before?.element ?? null }]
+/** Puts a layer on top, open (a leaving one comes back on top). */
+function openLayer(id: number, kind: LayerKind, modal: boolean): void {
+  const element = anchored.get(id) ?? null
+  stack.value = [...stack.value.filter((layer) => layer.id !== id), { id, kind, modal, state: "open", element }]
 }
 
-/** Closing: it stays while its content is on the page, and goes at once when it never got there. */
-function close(id: number): void {
-  change(id, (layer) => (layer.element ? { ...layer, state: "closing" } : null))
+/** It stays, leaving, while its content is on the page, and goes at once when it never got there. */
+function closeLayer(id: number): void {
+  updateLayer(id, (layer) => (layer.element ? { ...layer, state: "closing" } : null))
 }
 
-const remove = (id: number) => change(id, () => null)
+function removeLayer(id: number): void {
+  updateLayer(id, () => null)
+}
 
 // Only the top modal layer holds the page inert. The next holder takes it before the last one lets go, so the page is
 // never reachable in between (inert-behind.ts counts holds).
-let held: HTMLElement | null = null
-let letGo: (() => void) | undefined
+let holder: HTMLElement | null = null
+let releaseInert: (() => void) | undefined
 watch(
   () => inertHolder(stack.value)?.element ?? null,
   (element) => {
-    if (element === held) return
-    const before = letGo
-    held = element
-    letGo = element ? inertBehind(element) : undefined
+    if (element === holder) return
+    const before = releaseInert
+    holder = element
+    releaseInert = element ? inertBehind(element) : undefined
     before?.()
   },
   { flush: "sync" },
@@ -89,21 +93,27 @@ watch(
 
 const layerKey: InjectionKey<number> = Symbol("layer")
 
+export interface LayerHandle {
+  /** Whether this layer is the top open one: only it takes Escape. */
+  isTop(): boolean
+}
+
 /**
  * For the content of a dialog or menu: lists it as a layer for as long as `open` is true (sync, so it counts before it is
- * drawn), as leaving after that until its `LayerAnchor` is unmounted. Put a `LayerAnchor` inside the content.
+ * drawn), as leaving after that until its `LayerAnchor` leaves the page. Put a `LayerAnchor` inside the content.
  */
-export function useLayer(kind: LayerKind, isOpen: Readonly<Ref<boolean>>, modal: () => boolean = () => true): void {
+export function useLayer(kind: LayerKind, isOpen: Readonly<Ref<boolean>>, modal: () => boolean = () => true): LayerHandle {
   const id = nextId++
   provide(layerKey, id)
-  watch(isOpen, (value) => (value ? open(id, kind, modal()) : close(id)), { flush: "sync", immediate: true })
-  watch(modal, (value) => change(id, (layer) => ({ ...layer, modal: value })), { flush: "sync" })
-  onScopeDispose(() => remove(id))
+  watch(isOpen, (value) => (value ? openLayer(id, kind, modal()) : closeLayer(id)), { flush: "sync", immediate: true })
+  watch(modal, (value) => updateLayer(id, (layer) => ({ ...layer, modal: value })), { flush: "sync" })
+  onScopeDispose(() => removeLayer(id))
+  return { isTop: () => topLayer()?.id === id }
 }
 
 /**
  * Inside a layer's content (it draws nothing): tells the layer its element while the content is on the page, and ends a
- * leaving layer when the content goes.
+ * leaving layer once the content is gone (after, so the next layer down takes the page from a content no longer there).
  */
 export const LayerAnchor = defineComponent({
   name: "LayerAnchor",
@@ -112,10 +122,14 @@ export const LayerAnchor = defineComponent({
     const instance = getCurrentInstance()
     onMounted(() => {
       const element = (instance?.vnode.el as Node | null)?.parentElement ?? null
-      if (id !== null) change(id, (layer) => ({ ...layer, element }))
+      if (id === null || !element) return
+      anchored.set(id, element)
+      updateLayer(id, (layer) => ({ ...layer, element }))
     })
-    onBeforeUnmount(() => {
-      if (id !== null) change(id, (layer) => (layer.state === "closing" ? null : { ...layer, element: null }))
+    onUnmounted(() => {
+      if (id === null) return
+      anchored.delete(id)
+      updateLayer(id, (layer) => (layer.state === "closing" ? null : { ...layer, element: null }))
     })
     return () => null
   },
