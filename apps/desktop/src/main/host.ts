@@ -5316,7 +5316,8 @@ export class Host {
 
   /** Quitting: resolves once pending writes are on disk; keys go back to the system and the overlay server stops. */
   async flush(): Promise<void> {
-    await this.closePanelPages();
+    // What is waiting goes to disk at once (an update's installer doesn't wait long), and again once the pages have saved.
+    await Promise.all([this.closePanelPages(), this.savedData.flush()]);
     await this.gameOverlays?.shutdown();
     await this.streaming?.shutdown();
     return this.savedData.flush();

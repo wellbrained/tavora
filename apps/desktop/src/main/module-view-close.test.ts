@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const made = vi.hoisted(() => ({
   /** The host's end of the page's port, once the page connected. */
   ports: [] as unknown[],
+  /** What the session answers for the module's own addresses (its files). */
+  serve: undefined as ((request: Request) => Promise<Response>) | undefined,
   /** The page's event handlers, by event name. */
   handlers: {} as Record<string, (...args: unknown[]) => void>,
   page: {
@@ -34,7 +36,7 @@ vi.mock("electron", async () => {
     }
   }
   const ses = {
-    protocol: { handle: () => undefined },
+    protocol: { handle: (_scheme: string, serve: (request: Request) => Promise<Response>) => void (made.serve = serve) },
     webRequest: { onBeforeRequest: () => undefined },
     setProxy: async () => undefined,
     setPermissionRequestHandler: () => undefined,
@@ -105,6 +107,8 @@ interface Port extends EventEmitter {
 /** What the module's settings hold, and how long a write takes to reach the disk. */
 let saved: Map<string, unknown>;
 let writeMs: number;
+/** How long storing a picture takes. */
+let pictureMs: number;
 let calls: { status: string[]; released: number; menus: number };
 
 function make() {
@@ -116,7 +120,12 @@ function make() {
     hostVersion: "0.0.0",
     launch: () => ({ reason: "restore", content: null }),
     data: {
-      blobs: {},
+      blobs: {
+        put: async () => {
+          await new Promise((resolve) => setTimeout(resolve, pictureMs));
+          return { id: "0".repeat(32), type: "image/png", bytes: 3 };
+        },
+      },
       documents: { on: () => undefined, off: () => undefined },
       settings: {
         set: async (key: string, value: unknown) => {
@@ -165,6 +174,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   saved = new Map();
   writeMs = 50;
+  pictureMs = 400;
   calls = { status: [], released: 0, menus: 0 };
   made.ports = [];
   made.handlers = {};
@@ -225,6 +235,19 @@ describe("closing a panel right after typing", () => {
     made.page.ipc.emit("tavora:pong", { senderFrame: { parent: null } }, -1);
     await vi.advanceTimersByTimeAsync(CLOSE_QUIET_MS * 2);
     expect(port.closed).toBe(false);
+  });
+
+  it("waits for a picture the page is still writing", async () => {
+    // Pictures go up through the module's own address, not the bridge (Whiteboard uploads one before it saves the board).
+    let stored = false;
+    const { view, port } = await running(() => void made.serve!(new Request("tavora-module://tavora.notes/_blobs/", { method: "POST", body: "png" })).then(() => (stored = true)));
+    void view.dispose();
+    await vi.advanceTimersByTimeAsync(5 + CLOSE_QUIET_MS + 50);
+    expect(port.closed).toBe(false);
+    await vi.advanceTimersByTimeAsync(pictureMs);
+    expect(stored).toBe(true);
+    await vi.advanceTimersByTimeAsync(CLOSE_QUIET_MS);
+    expect(port.closed).toBe(true);
   });
 
   it("closes a hung page after the cap", async () => {

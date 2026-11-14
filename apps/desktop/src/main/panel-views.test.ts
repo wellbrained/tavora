@@ -231,6 +231,31 @@ describe("visibility", () => {
     expect(done).toBe(true);
   });
 
+  it("disposing everything waits for a page closed a moment ago that is still saving", async () => {
+    const rig = panelViewsRig();
+    const a = rig.add(A);
+    let closePage!: () => void;
+    a.dispose = () => ((a.disposed = true), new Promise<void>((resolve) => (closePage = resolve)));
+    rig.views.close(A);
+    let done = false;
+    void rig.views.disposeAll().then(() => (done = true));
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(done).toBe(false);
+    closePage();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(done).toBe(true);
+  });
+
+  it("deleting a panel's data closes at once its page still saving from an earlier release", () => {
+    const rig = panelViewsRig();
+    const a = rig.add(A);
+    const asked: (boolean | undefined)[] = [];
+    a.dispose = (now?: boolean) => (asked.push(now), new Promise<void>(() => undefined));
+    rig.views.release(A);
+    rig.views.close(A, true);
+    expect(asked).toEqual([false, true]);
+  });
+
   it("disposing everything goes on past a page that fails to close", async () => {
     const rig = panelViewsRig();
     const a = rig.add(A);

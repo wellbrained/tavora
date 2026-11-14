@@ -325,10 +325,31 @@ export class PanelViews {
 
   /**
    * The panel closes for good: its view, place, waiting, launch and keep state go. Settings and documents are not Panel
-   * views'. `discard`: its data is being deleted, so its page doesn't get the moment to save.
+   * views'. `discard`: its data is being deleted, so its page doesn't get the moment to save, nor does a page of it
+   * still saving from an earlier close.
    */
   close(instanceId: string, discard = false): void {
     this.remove(instanceId, true, discard);
+    if (discard) for (const page of this.closing) if (page.instanceId === instanceId) void page.adapter.dispose(true);
+  }
+
+  /** Pages of panels that went and may still be saving (at most CLOSE_CAP_MS): quitting waits for them too. */
+  private readonly closing = new Set<{ instanceId: string; adapter: PanelViewAdapter; done: Promise<void> }>();
+
+  /** Disposes a view that has left `entries`, keeping its page in `closing` until it has closed. */
+  private disposeView(instanceId: string, adapter: PanelViewAdapter, now: boolean): Promise<void> {
+    let done: Promise<void>;
+    try {
+      done = adapter.dispose(now);
+    } catch (error) {
+      // One page that fails to close must not keep the window open.
+      console.error("[tavora] closing a panel failed", error);
+      done = Promise.resolve();
+    }
+    const page = { instanceId, adapter, done };
+    this.closing.add(page);
+    void done.finally(() => this.closing.delete(page));
+    return done;
   }
 
   /** Only the view goes (its workspace is left, or the overlays let it go); it comes back with its workspace. */
@@ -346,19 +367,13 @@ export class PanelViews {
 
   /** The window goes or Tavora quits: every view is disposed. Resolves once their pages saved and closed (at most CLOSE_CAP_MS). */
   disposeAll(): Promise<void> {
-    const closing = [...this.entries.values()].map(({ adapter }) => {
-      try {
-        return adapter.dispose();
-      } catch (error) {
-        // One page that fails to close must not keep the window open.
-        console.error("[tavora] closing a panel failed", error);
-        return Promise.resolve();
-      }
-    });
+    const entries = [...this.entries];
     this.entries.clear();
     this.byContents.clear();
     this.lent.clear();
-    return Promise.all(closing).then(() => undefined);
+    for (const [instanceId, { adapter }] of entries) void this.disposeView(instanceId, adapter, false);
+    // Pages closed a moment ago and still saving are waited for too.
+    return Promise.all([...this.closing].map((page) => page.done)).then(() => undefined);
   }
 
   private remove(instanceId: string, forget: boolean, discard = false): void {
@@ -384,7 +399,7 @@ export class PanelViews {
         revoked?.();
       }
       this.deps.unmount(adapter);
-      void adapter.dispose(discard);
+      void this.disposeView(instanceId, adapter, discard);
       const { moduleId } = entry.record;
       if (![...this.entries.values()].some((other) => other.record.moduleId === moduleId)) this.deps.moduleGone?.(moduleId);
     }

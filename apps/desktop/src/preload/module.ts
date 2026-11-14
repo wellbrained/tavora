@@ -14,11 +14,24 @@ window.addEventListener("message", (event) => {
   ipcRenderer.send("tavora:hello");
 });
 
+/** The current port passed lifecycle.dispose on to the page; a closing ping that came first waits for it. */
+let disposeRelayed = false;
+let closingPing: number | undefined;
+// After the page's own message task, so its dispose handlers have run and sent their first saves.
+const answerClosing = (token: number) => setTimeout(() => ipcRenderer.send("tavora:pong", token), 0);
+
 ipcRenderer.on("tavora:port", (event) => {
   const [hostPort] = event.ports;
   if (!hostPort) return;
   const { port1, port2 } = new MessageChannel();
-  relayBridge(hostPort, port1);
+  disposeRelayed = false;
+  closingPing = undefined;
+  relayBridge(hostPort, port1, (name) => {
+    if (name !== "lifecycle.dispose") return;
+    disposeRelayed = true;
+    if (closingPing !== undefined) answerClosing(closingPing);
+    closingPing = undefined;
+  });
   window.postMessage({ type: PORT_MESSAGE, v: PROTOCOL_VERSION }, window.location.origin, [port2]);
 });
 
@@ -36,8 +49,13 @@ for (const type of ["pointerdown", "keydown"]) {
   );
 }
 
-// The host's ping may carry a number (a panel closing waits for the answer to its own ping); it comes back as it went.
-ipcRenderer.on("tavora:ping", (_event, token: unknown) => ipcRenderer.send("tavora:pong", typeof token === "number" ? token : undefined));
+// The heartbeat's ping is answered at once. A closing panel's ping carries a number: it comes back once the page has
+// had lifecycle.dispose, so the host waits for the saves that sends.
+ipcRenderer.on("tavora:ping", (_event, token: unknown) => {
+  if (typeof token !== "number") return ipcRenderer.send("tavora:pong");
+  if (disposeRelayed) answerClosing(token);
+  else closingPing = token;
+});
 
 // The host shows a panel see-through (or under a cover) until it has drawn. A frame callback runs just before a
 // frame is drawn, and only while the page is shown; the second one runs once the first frame is out.

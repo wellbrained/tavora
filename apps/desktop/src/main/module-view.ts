@@ -201,6 +201,35 @@ interface SessionGesture {
   refuse?: () => void;
 }
 
+/** Files a session's pages are writing now (blobs.put goes through the module's address, not the bridge). */
+interface Uploads {
+  running: number;
+  /** Told whenever one starts or ends: a closing panel waits until none runs. */
+  readonly changed: Set<() => void>;
+}
+const sessionUploads = new WeakMap<Session, Uploads>();
+
+function uploadsOf(ses: Session): Uploads {
+  let uploads = sessionUploads.get(ses);
+  if (!uploads) sessionUploads.set(ses, (uploads = { running: 0, changed: new Set() }));
+  return uploads;
+}
+
+/** Answers a request to the files address, counting one that writes for as long as it runs. */
+async function countWrite(ses: Session, request: Request, serve: () => Promise<Response>): Promise<Response> {
+  if (request.method === "GET" || request.method === "HEAD") return serve();
+  const uploads = uploadsOf(ses);
+  const tell = () => [...uploads.changed].forEach((changed) => changed());
+  uploads.running++;
+  tell();
+  try {
+    return await serve();
+  } finally {
+    uploads.running--;
+    tell();
+  }
+}
+
 function gestureOf(ses: Session): SessionGesture {
   let gesture = sessionGestures.get(ses);
   if (!gesture) sessionGestures.set(ses, (gesture = { press: null }));
@@ -267,8 +296,8 @@ function moduleSession(module: InstalledModule, workspace: TavoraWorkspace, blob
     if (url.host !== module.manifest.id) return new Response("Not found", { status: 404 });
     if (url.pathname.startsWith(READ_ONLY_FILE_PATH)) return serveReadOnlyFile(request,url.pathname.slice(READ_ONLY_FILE_PATH.length),new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,workspace.id));
     if (url.pathname === FOLDER_READ_PATH) return serveFolderFile(request, files.folders);
-    if (url.pathname.startsWith(BLOB_PATH)) return serveBlobs(blobs, request, url);
-    if (url.pathname.startsWith(APP_BLOB_PATH)) return serveBlobs(appBlobs, request, url, APP_BLOB_PATH);
+    if (url.pathname.startsWith(BLOB_PATH)) return countWrite(ses, request, () => serveBlobs(blobs, request, url));
+    if (url.pathname.startsWith(APP_BLOB_PATH)) return countWrite(ses, request, () => serveBlobs(appBlobs, request, url, APP_BLOB_PATH));
     if (url.pathname === CLIPBOARD_PATH) return serveClipboard(request, { ...pressCheck(gestureOf(ses)), write: writeClipboardPicture });
     if (url.pathname === JSON_EXPORT_PATH) {
       return serveJsonExport(request, url, { ...pressCheck(gestureOf(ses)), save: (data, name) => saveJsonExport(exportsFolder(), data, name) });
@@ -1491,8 +1520,9 @@ export class ModuleView {
 
   /**
    * Closes the panel's page for good (the panel is closed, its workspace left, or the window goes). The page is hidden
-   * at once and told (lifecycle.dispose); it keeps its port, for saves only, until it has answered a ping and its calls
-   * have been quiet for CLOSE_QUIET_MS, or CLOSE_CAP_MS is up. Then port and page close and the promise resolves.
+   * at once and told (lifecycle.dispose); it keeps its port, for saves only, until it has answered a ping (the preload
+   * answers once the page has had the event) and its calls and file writes have been quiet for CLOSE_QUIET_MS, or
+   * CLOSE_CAP_MS is up. Then port and page close and the promise resolves.
    * `now` closes without waiting: for a panel whose data is being deleted.
    */
   dispose(now = false): Promise<void> {
@@ -1511,21 +1541,23 @@ export class ModuleView {
     let quiet: ReturnType<typeof setTimeout> | undefined;
     let cap: ReturnType<typeof setTimeout> | undefined;
     const token = ++closePings;
+    const uploads = contents && !contents.isDestroyed() ? uploadsOf(contents.session) : undefined;
     const onPong = (event: IpcMainEvent, answer: unknown) => {
-      if (answer !== token || event.senderFrame?.parent != null) return;
+      if (answer !== token || event.senderFrame?.parent !== null) return;
       answered = true;
       settle();
     };
-    // Quiet: the page answered the ping sent after the event, and nothing it asked since is still running.
+    // Quiet: the page answered the ping sent after the event, and nothing it asked or writes since is still running.
     const settle = () => {
       clearTimeout(quiet);
-      quiet = answered && !this.bridge?.busy ? setTimeout(close, CLOSE_QUIET_MS) : undefined;
+      quiet = answered && !this.bridge?.busy && !uploads?.running ? setTimeout(close, CLOSE_QUIET_MS) : undefined;
     };
     const close = () => {
       if (this.end.step !== "saving" || this.end.done !== done) return;
       clearTimeout(quiet);
       clearTimeout(cap);
       this.end = { step: "closed", done };
+      uploads?.changed.delete(settle);
       const alive = contents !== undefined && !contents.isDestroyed();
       if (alive && listening) contents.ipc.removeListener("tavora:pong", onPong);
       const port = this.bridge;
@@ -1551,6 +1583,7 @@ export class ModuleView {
       // The host finds pages by their panel, which is gone: this page's answer is heard here.
       contents.ipc.on("tavora:pong", onPong);
       listening = true;
+      uploads?.changed.add(settle);
       contents.send("tavora:ping", token);
     } catch (error) {
       console.warn(`[tavora] module ${this.moduleId} could not wait for its page to save`, error);

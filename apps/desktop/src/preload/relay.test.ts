@@ -41,6 +41,16 @@ describe("relayBridge", () => {
     expect(host.started && page.started).toBe(true);
   });
 
+  it("says which host event it passed on, after passing it", () => {
+    const host = new FakePort();
+    const page = new FakePort();
+    const heard: [string, number][] = [];
+    relayBridge(host, page, (name) => heard.push([name, page.posted.length]));
+    host.receive({ v: 1, event: "lifecycle.dispose", data: null });
+    host.receive({ v: 1, id: 3, ok: true, result: null });
+    expect(heard).toEqual([["lifecycle.dispose", 1]]);
+  });
+
   it("passes host events through", () => {
     const { host, page } = setup();
     host.receive({ v: 1, event: "ui.theme", data: {} });
