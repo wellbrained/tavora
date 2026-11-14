@@ -71,7 +71,7 @@ describe("fold-notes", () => {
     it("does nothing to the file twice, and not at all once 1.0.0 is released", () => {
       const once = foldText(file, all, "0.4.0", "1.0.0");
       const left = { ...major, prs: [{ number: 20, title: "D pr" }, { number: 12, title: "C pr" }, { number: 11, title: "B pr" }, { number: 9, title: "A pr" }], tags: ["a", "b", "c", "z"] };
-      expect(foldText(once.text, [left], null, "1.0.0").text).toBe(once.text);
+      expect(foldText(once.text, [left], null, "1.0.0").nothing).toMatch(/only entry/);
       expect(foldText(once.text, [major], "1.0.0", "1.0.0").nothing).toMatch(/Nothing to fold/);
     });
 

@@ -53,7 +53,11 @@ export function foldText(text, entries, previous, catalogVersion) {
   const fold = unreleased(entries, previous);
   // The release that has the catalog (1.0.0): every earlier entry is dropped, not folded, and the entry keeps only
   // its own notes; the app shows the catalog in their place (src/shared/release-catalog.ts).
-  if (catalogVersion && fold.some((entry) => entry.version === catalogVersion)) return catalogText(text, entries, catalogVersion);
+  if (catalogVersion && fold.some((entry) => entry.version === catalogVersion)) {
+    const result = catalogText(text, entries, catalogVersion);
+    // Run again after the fold was merged: the file is already as it should be.
+    return result.text === text ? { nothing: `Nothing to fold: ${catalogVersion} is the only entry.` } : result;
+  }
   if (fold.length < 2) return { nothing: `Nothing to fold: ${fold.length ? `only ${fold[0].version} is` : "no entry is"} newer than ${previous ?? "the start"}.` };
   if (entries.slice(0, fold.length).some((entry, i) => entry !== fold[i])) return { problem: "The patch-notes entries are not newest first; sort them before folding." };
   const eol = text.includes("\r\n") ? "\r\n" : "\n";

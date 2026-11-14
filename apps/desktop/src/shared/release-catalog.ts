@@ -79,7 +79,7 @@ export const RELEASE_CATALOG: readonly CatalogGroup[] = [
       { en: "A game's own modules come along when you add it.", de: "Die Module eines Spiels kommen mit, wenn du es hinzufügst." },
       { en: "Ask for a module for a game that has none yet.", de: "Wünsch dir ein Modul für ein Spiel, das noch keins hat." },
       { en: "Modules ask before they use anything, and you can take it back any time.", de: "Module fragen, bevor sie etwas nutzen, und du kannst es jederzeit zurücknehmen." },
-      { en: "Updates wait for your OK, or install on their own if you prefer.", de: "Updates warten auf dein Ok oder installieren sich selbst, wenn du das willst." },
+      { en: "Updates wait for your OK, or install on their own if you prefer.", de: "Updates warten auf dein OK oder installieren sich selbst, wenn du das willst." },
       { en: "Write to a module's developer, and read their answer in your inbox.", de: "Schreib den Entwicklern eines Moduls und lies die Antwort in deinem Posteingang." },
       { en: "Make your own modules and share them with everyone.", de: "Bau eigene Module und teil sie mit allen." },
     ],
@@ -97,7 +97,7 @@ export const RELEASE_CATALOG: readonly CatalogGroup[] = [
   },
   {
     id: "look",
-    title: { en: "Make it yours", de: "Mach es zu deinem" },
+    title: { en: "Make it yours", de: "Nach deinem Geschmack" },
     items: [
       { en: "Pick a theme, in light or dark, or let it follow your PC.", de: "Wähl ein Design, hell oder dunkel, oder lass es deinem PC folgen." },
       { en: "Round the corners the way you like, or make a theme of your own.", de: "Runde die Ecken, wie du willst, oder bau dir ein eigenes Design." },
@@ -112,7 +112,7 @@ export const RELEASE_CATALOG: readonly CatalogGroup[] = [
       { en: "Your games, notes and layouts stay on your PC unless you turn something on.", de: "Deine Spiele, Notizen und Layouts bleiben auf deinem PC, es sei denn, du schaltest etwas ein." },
       { en: "Modules only get what you allow, and can't reach your passwords.", de: "Module bekommen nur, was du erlaubst, und kommen nicht an deine Passwörter." },
       { en: "Game search and game icons have switches in Settings.", de: "Spielesuche und Spielicons haben Schalter in den Einstellungen." },
-      { en: "Tavora updates itself in the background and installs when you restart.", de: "Tavora aktualisiert sich im Hintergrund und installiert beim Neustart." },
+      { en: "Tavora updates itself in the background and installs when you close it.", de: "Tavora aktualisiert sich im Hintergrund und installiert, wenn du es schließt." },
     ],
   },
 ];
