@@ -110,7 +110,7 @@ export const RELEASE_CATALOG: readonly CatalogGroup[] = [
     title: { en: "Safe and private", de: "Sicher und privat" },
     items: [
       { en: "Your games, notes and layouts stay on your PC unless you turn something on.", de: "Deine Spiele, Notizen und Layouts bleiben auf deinem PC, es sei denn, du schaltest etwas ein." },
-      { en: "Modules only get what you allow, and can't reach your passwords.", de: "Module bekommen nur, was du erlaubst, und kommen nicht an deine Passwörter." },
+      { en: "Modules only get what you allow. Your sign-ins stay with you.", de: "Module bekommen nur, was du erlaubst. Deine Anmeldungen bleiben bei dir." },
       { en: "Game search and game icons have switches in Settings.", de: "Spielesuche und Spielicons haben Schalter in den Einstellungen." },
       { en: "Tavora updates itself in the background and installs when you close it.", de: "Tavora aktualisiert sich im Hintergrund und installiert, wenn du es schließt." },
     ],

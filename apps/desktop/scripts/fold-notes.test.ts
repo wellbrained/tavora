@@ -81,7 +81,9 @@ describe("fold-notes", () => {
       expect(foldText(text, newer, "0.4.0", "1.0.0").problem).toMatch(/must be the newest/);
     });
 
-    it("works on the real patch-notes.ts: one entry is left, the release guards are happy", () => {
+    // A rehearsal of release day on the real file, as long as it is still before 1.0.0. Once the 1.0.0 entry is
+    // numbered (and after the fold), there is nothing left to rehearse, so it skips instead of failing main.
+    it.skipIf(!PATCH_NOTES[0]!.version.startsWith("0."))("works on the real patch-notes.ts: one entry is left, the release guards are happy", () => {
       const real = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "../src/shared/patch-notes.ts"), "utf8").replace(/\r\n/g, "\n");
       const top = { version: "1.0.0", date: "2026-11-15", title: "Tavora 1.0", notes: ["First public version."] };
       const start = "export const PATCH_NOTES: readonly PatchNote[] = [\n";

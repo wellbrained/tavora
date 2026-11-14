@@ -17,7 +17,8 @@ import { createSubmissions } from "./submissions.ts";
 const TOKEN = "t0ken-".repeat(5);
 const DAY = 86_400_000;
 const NOW = Date.parse("2026-10-26T12:00:00Z");
-const FEED_VERSION = PATCH_NOTES[1]!.version;
+// The version on the feed: the second newest, so there is a waiting one above it; with a single entry (right after the 1.0 fold) the only one.
+const FEED_VERSION = PATCH_NOTES[Math.min(1, PATCH_NOTES.length - 1)]!.version;
 
 const probes = (over: Partial<Probes> = {}): Probes => ({
   feed: async () => ({ version: FEED_VERSION, releasedAt: "2026-10-20T10:00:00.000Z", installerSize: 1234 }),
@@ -88,8 +89,8 @@ describe("the panel's own pages", () => {
     expect(updates.feed).toMatchObject({ version: FEED_VERSION });
     const states = Object.fromEntries(updates.versions.map((version: { version: string; state: string }) => [version.version, version.state]));
     expect(states[FEED_VERSION]).toBe("on-feed");
-    expect(Object.values(states)).toContain("waiting");
-    expect(Object.values(states)).toContain("earlier");
+    if (PATCH_NOTES.length > 1) expect(Object.values(states)).toContain("waiting");
+    if (PATCH_NOTES.length > 2) expect(Object.values(states)).toContain("earlier");
     expect(updates.versions[0].notes.length).toBeGreaterThan(0);
     const down = await ask(make({ probes: probes({ feed: async () => null }) }), "/api/updates");
     expect(down.feed).toBeNull();
