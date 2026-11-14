@@ -3,7 +3,7 @@
 // list; which settings are open is each panel's own. Running clocks tick here only while the panel is visible: they
 // keep their start time, so nothing is lost while it is hidden. Hotkeys arrive at the panel used last.
 import { Hash, Hourglass, Link, Plus, Timer } from "@lucide/vue";
-import { connectModule, errorMessage } from "@tavora/official-ui";
+import { connectModule, errorMessage, useFocusRecovery } from "@tavora/official-ui";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
@@ -173,8 +173,9 @@ function addItem(kind: ItemKind, settings = true): void {
 
 // The rows slide aside for the dragged one and settle into place when it is dropped; Alt+arrows move them at once.
 const listEl = ref<HTMLElement | null>(null);
-/** The panel's scroller: it holds the focus when the last row is deleted. */
+/** The panel's scroller. A deleted row hands the focus to the next row's ··· button (or the one before), or to the empty page's first Add button. */
 const scroller = ref<HTMLElement | null>(null);
+const rowFocus = useFocusRecovery(scroller);
 const reorder = useReorderMotion(listEl);
 const dragId = ref<string | null>(null);
 const drop = ref<{ id: string; after: boolean } | null>(null);
@@ -288,9 +289,6 @@ function forget(item: Item): void {
 }
 
 function removeItem(item: Item): void {
-  // The focus goes to the next row's ··· button (or the one before), or to the list when it was the last one.
-  const at = order.value.findIndex((other) => other.id === item.id);
-  const neighbour = order.value[at + 1] ?? order.value[at - 1];
   const index = list.value.items.findIndex((other) => other.id === item.id);
   if (undo.value) {
     clearTimeout(undo.value.timer);
@@ -302,8 +300,6 @@ function removeItem(item: Item): void {
   void store.value?.apply([item.id, ...(group?.members.map((member) => member.id) ?? [])], (data) => remove(data, item.id));
   void hideOverGame(item.id).catch(() => undefined);
   if (editing.value === item.id) closeEditing();
-  // The row is gone and the menu that held the focus closes: give it back once both have happened.
-  setTimeout(() => (neighbour ? document.querySelector<HTMLElement>(`[data-testid="more-${neighbour.id}"]`) : scroller.value)?.focus(), 60);
   const shown = toast({
     title: t("app.deleted", { label: item.label || t(`kind.${item.kind}`) }),
     duration: UNDO_MS,
@@ -332,6 +328,7 @@ function runUndo(): void {
   offer.toast.dismiss();
   // Back with the same id, so its OBS link and hotkeys work again.
   void store.value?.apply([offer.item.id], (data) => insert(data, offer.item, offer.index));
+  rowFocus.restore(offer.item.id);
 }
 
 // ── Calls that need the click ────────────────────────────────────────
@@ -584,7 +581,7 @@ onBeforeUnmount(() => {
     </header>
 
     <div ref="scroller" class="min-h-0 flex-1 overflow-y-auto p-2 outline-none" tabindex="-1">
-      <div v-if="!list.items.length" class="flex h-full flex-col items-center justify-center gap-3 px-4 py-10 text-center" data-testid="empty">
+      <div v-if="!list.items.length" class="flex h-full flex-col items-center justify-center gap-3 px-4 py-10 text-center" data-testid="empty" data-focus-empty>
         <p class="text-muted-foreground text-sm">{{ t("app.empty") }}</p>
         <div class="flex flex-wrap justify-center gap-2">
           <Button v-for="kind in KINDS" :key="kind" variant="secondary" size="sm" :data-testid="`add-${kind}`" @click="addItem(kind)">

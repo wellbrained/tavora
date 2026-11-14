@@ -458,7 +458,7 @@ test("a row's ··· menu moves it up and down (off at the ends), and a right-cl
   }
 });
 
-test("Del deletes from a row's ··· button, not from its other buttons, and the focus moves to a neighbour or the list", async () => {
+test("Del deletes from a row's ··· button, not from its other buttons, and the focus moves to a neighbour or the empty page's first Add button", async () => {
   const { app, page } = await inPersonalWorkspace();
   try {
     await threeRows(app, page);
@@ -475,7 +475,7 @@ test("Del deletes from a row's ··· button, not from its other buttons, and th
     await expect.poll(count).toBe(2);
     await expect.poll(active).toMatch(/^more-/);
     expect(await inModule<boolean>(app, ID, `document.activeElement === document.querySelector('[data-testid^="more-"]')`)).toBe(true);
-    // From the menu too; the last row's neighbour is the one before it, and with no row left the list holds the focus.
+    // From the menu too; the last row's neighbour is the one before it, and with no row left the empty page's first Add button takes the focus.
     await inModule(app, ID, `document.querySelectorAll('[data-testid^="more-"]')[1].click()`);
     await inModule(app, ID, `document.querySelector('[data-testid^="delete-"]').click()`);
     await expect.poll(count).toBe(1);
@@ -483,7 +483,7 @@ test("Del deletes from a row's ··· button, not from its other buttons, and th
     await inModule(app, ID, `document.querySelector('[data-testid^="more-"]').click()`);
     await inModule(app, ID, `document.querySelector('[data-testid^="delete-"]').click()`);
     await expect.poll(count).toBe(0);
-    await expect.poll(active).toContain("overflow-y-auto");
+    await expect.poll(active).toMatch(/^add-/);
   } finally {
     await app.close();
   }

@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.30",
+    "date": "2026-11-14",
+    "notes": [
+      "Undo gives the brought-back clock or counter the focus again."
+    ]
+  },
+  {
     "version": "0.1.29",
     "date": "2026-11-08",
     "notes": [

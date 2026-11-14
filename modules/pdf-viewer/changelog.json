@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.19",
+    "date": "2026-11-14",
+    "notes": [
+      "Removing a file moves the focus to the next file in the list."
+    ]
+  },
+  {
     "version": "0.1.18",
     "date": "2026-11-14",
     "notes": [

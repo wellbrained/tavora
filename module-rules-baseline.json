@@ -9,7 +9,6 @@
     },
     "modules/clock-counter/src/App.vue": {
       "dom-query": {
-        "setTimeout(() => (neighbour ? document.querySelector<HTMLElement>(`[data-testid=\"more-${neighbour.id}\"]`) : scroller.value)?.focus(), 60);": 1,
         "setTimeout(() => document.querySelector<HTMLElement>(focus)?.focus(), 60);": 1
       },
       "focus-ring": {

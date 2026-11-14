@@ -28,6 +28,33 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.72",
+    date: "2026-11-15",
+    title: "Focus stays put after a delete",
+    notes: [
+      "Delete something in a list with the keyboard and the focus moves to the next row, not off the page.",
+      "Undo puts the focus back on what came back.",
+    ],
+    prs: [
+      { number: 805, title: "Kit: focus stays in a list after a delete (useFocusRecovery)" },
+    ],
+    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "settings", "todos", "ui-kit"],
+  },
+  {
+    version: "0.24.71",
+    date: "2026-11-15",
+    title: "Menus wait for slow actions",
+    notes: [
+      "A menu entry that takes a moment keeps the menu open and pulses until it's done, then the menu closes. If it fails, a message says so.",
+      "Settings > Modules > More > Reload and Whiteboard's Copy as picture work this way.",
+      "Ctrl+K: adding a game keeps the search open until the game is ready.",
+    ],
+    prs: [
+      { number: 803, title: "Kit menus: entries that wait for their action" },
+    ],
+    tags: ["settings", "ui-kit", "whiteboard"],
+  },
+  {
     version: "0.24.70",
     date: "2026-11-15",
     title: "Steadier dialogs",

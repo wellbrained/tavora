@@ -4,11 +4,12 @@
 // the build changes. Each folder lists what it loaded, or says what to do next for a project that loaded nothing;
 // the developer closes folders and drags them into their own order. Publishing is on Your modules.
 import { CircleAlert, FolderCode, FolderOpen, GripVertical, Trash2 } from "@lucide/vue";
-import { computed, ref } from "vue";
+import { computed, ref, type ComponentPublicInstance } from "vue";
 import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@tavora/official-ui/components/ui/collapsible";
 import { liftedDragImage, reducedMotion, useReorderMotion } from "@tavora/official-ui/components/ui/reorder";
+import { useFocusRecovery } from "@tavora/official-ui/focus-recovery";
 import { cn } from "@tavora/official-ui/lib/utils";
 import type { DevelopmentProblemKind } from "../../../shared/host-api";
 import { problemText, type ModuleProblemValues } from "../../../shared/module-problem";
@@ -42,6 +43,10 @@ async function addFolder() {
   const result = await act({ type: "add-development-folder" });
   if (result.ok && result.id) showToast(t("settings.devFolders.added", { folder: result.id }));
 }
+
+// A removed folder hands the focus to the next folder's Remove (or the one before), or to Add folder once none is left.
+const section = ref<ComponentPublicInstance | null>(null);
+useFocusRecovery(section);
 
 function removeFolder(folder: string) {
   confirmAction({
@@ -137,14 +142,14 @@ function advice(kind: DevelopmentProblemKind | null, values: ModuleProblemValues
 </script>
 
 <template>
-  <SettingGroup>
+  <SettingGroup ref="section">
     <SettingRow
       :label="t('settings.development-folders.label')"
       :description="t('settings.development-folders.description')"
       setting="development-folders"
       :highlighted="highlight === 'development-folders'"
     >
-      <Button variant="secondary" class="flex-none" data-testid="add-development-folder" @click="addFolder">
+      <Button variant="secondary" class="flex-none" data-testid="add-development-folder" data-focus-empty @click="addFolder">
         <FolderCode :stroke-width="1.5" /> {{ t("settings.devFolders.add") }}
       </Button>
     </SettingRow>
@@ -156,6 +161,7 @@ function advice(kind: DevelopmentProblemKind | null, values: ModuleProblemValues
         :open="!entry.collapsed"
         :class="cn('relative flex flex-col border-b last:border-b-0', dragging === entry.folder && 'opacity-50')"
         data-testid="development-folder"
+        :data-focus-row="entry.folder"
         :data-reorder-id="entry.folder"
         :data-collapsed="entry.collapsed || undefined"
         @update:open="(open: boolean) => act({ type: 'collapse-development-folder', folder: entry.folder, collapsed: !open })"
@@ -203,6 +209,7 @@ function advice(kind: DevelopmentProblemKind | null, values: ModuleProblemValues
             class="flex-none"
             :aria-label="t('settings.devFolders.removeLabel', { folder: entry.folder })"
             data-testid="remove-development-folder"
+            data-focus-target
             @click="removeFolder(entry.folder)"
           >
             <Trash2 :stroke-width="1.5" /> {{ t("settings.devFolders.remove") }}

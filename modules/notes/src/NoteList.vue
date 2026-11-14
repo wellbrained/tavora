@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // The list of notes: search, the scratchpad, pinned notes, then the rest.
 import { NotebookPen, PanelLeftClose, PanelLeftOpen, Pin, Plus, Search, X } from "@lucide/vue";
-import { cn } from "@tavora/official-ui";
+import { cn, useFocusRecovery } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { liftedDragImage, reducedMotion, useReorderMotion } from "@tavora/official-ui/components/ui/reorder";
@@ -23,6 +23,12 @@ const emit = defineEmits<{
 }>();
 
 const query = defineModel<string>("query", { required: true });
+
+// A deleted note hands the focus to the next one (or the one before, or the search when no result is left), never to
+// the page; Undo gives it back.
+const root = ref<HTMLElement | null>(null);
+const focus = useFocusRecovery(root);
+defineExpose({ restoreFocus: (id: string) => focus.restore(id) });
 
 const grouped = computed(() => sections(props.entries.values(), props.order));
 const results = computed(() => {
@@ -120,7 +126,7 @@ function onSearchKey(event: KeyboardEvent) {
 </script>
 
 <template>
-  <nav v-if="collapsed && !narrow" class="flex h-full min-w-0 flex-col items-center" :aria-label="t('list.label')" data-testid="notes-rail">
+  <nav v-if="collapsed && !narrow" ref="root" class="flex h-full min-w-0 flex-col items-center" :aria-label="t('list.label')" data-testid="notes-rail">
     <div class="border-primary/25 bg-primary/5 flex h-10 w-full flex-none items-center justify-center border-b">
       <Button variant="ghost" size="icon-sm" data-testid="expand-sidebar" :aria-label="t('list.expand')" :title="t('list.expand')" @click="emit('toggleCollapsed')">
         <PanelLeftOpen :stroke-width="1.5" />
@@ -138,6 +144,7 @@ function onSearchKey(event: KeyboardEvent) {
           :aria-current="entry.id === selectedId ? 'true' : undefined"
           :title="railTitle(entry)"
           :data-testid="`rail-${entry.id}`"
+          :data-focus-row="entry.id"
           @click="emit('select', entry.id)"
         >
           <NotebookPen v-if="entry.id === SCRATCHPAD_ID" class="text-primary size-4" :stroke-width="1.5" aria-hidden="true" />
@@ -151,9 +158,9 @@ function onSearchKey(event: KeyboardEvent) {
       </li>
     </ul>
   </nav>
-  <nav v-else class="flex h-full min-w-0 flex-col" :aria-label="t('list.label')">
+  <nav v-else ref="root" class="flex h-full min-w-0 flex-col" :aria-label="t('list.label')">
     <div class="border-primary/25 bg-primary/5 flex h-10 flex-none items-center gap-1 border-b px-2">
-      <label class="relative flex min-w-0 flex-1 items-center">
+      <label class="relative flex min-w-0 flex-1 items-center" data-focus-empty>
         <Search class="text-muted-foreground pointer-events-none absolute left-2 size-4" :stroke-width="1.5" aria-hidden="true" />
         <input
           v-model="query"

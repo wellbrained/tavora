@@ -1,6 +1,7 @@
 // What a To-Dos panel shares with its groups and rows: this panel's own view
 // (which to-do is being edited, what is folded, what just finished) and the
 // undo offer. None of it is stored in the shared list.
+import type { FocusRecovery } from "@tavora/official-ui";
 import type { MenuOptions } from "@tavora/sdk";
 import type { InjectionKey, Ref } from "vue";
 
@@ -33,6 +34,9 @@ export interface PanelContext {
 }
 
 export const PANEL: InjectionKey<PanelContext> = Symbol("todos-panel");
+
+/** The list a row sits in (its group's, or the objectives), which gives the row the focus back after Undo. */
+export const ROW_FOCUS: InjectionKey<FocusRecovery> = Symbol("todos-row-focus");
 
 /** How long a finished to-do stays before it vanishes; finishing another one restarts the wait for all. */
 export const LINGER_MS = 1500;

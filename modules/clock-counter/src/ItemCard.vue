@@ -94,6 +94,7 @@ const startLabel = computed(() => {
     :class="[ROW_FADE, !grouped && ACTIVE_ROW]"
     tabindex="-1"
     :data-testid="`item-${item.id}`"
+    :data-focus-row="item.id"
     :data-menu-open="menuOpen || undefined"
     @contextmenu="onContextMenu"
     @keydown="onKey"
@@ -144,7 +145,7 @@ const startLabel = computed(() => {
 
         <DropdownMenu v-model:open="menuOpen">
           <DropdownMenuTrigger as-child>
-            <Button variant="ghost" size="icon-sm" :aria-label="t('item.more', { label: name })" :title="t('item.more', { label: name })" :data-testid="`more-${item.id}`">
+            <Button variant="ghost" size="icon-sm" :aria-label="t('item.more', { label: name })" :title="t('item.more', { label: name })" :data-testid="`more-${item.id}`" data-focus-target>
               <Ellipsis :stroke-width="1.5" />
             </Button>
           </DropdownMenuTrigger>

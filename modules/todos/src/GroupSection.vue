@@ -5,13 +5,13 @@
 // panel, so its Color submenu is never cut off in a narrow panel.
 import type { MenuEntry } from "@tavora/sdk";
 import { ChevronRight, Ellipsis } from "@lucide/vue";
-import { cn } from "@tavora/official-ui";
+import { cn, useFocusRecovery } from "@tavora/official-ui";
 import { leaveRow } from "@tavora/official-ui/components/ui/animated-list";
 import { CountTo } from "@tavora/official-ui/components/ui/count-to";
-import { computed, inject, nextTick, onBeforeUnmount, ref } from "vue";
+import { computed, inject, nextTick, onBeforeUnmount, provide, ref } from "vue";
 import AddInput from "./AddInput.vue";
 import { plural, t } from "./i18n";
-import { PANEL } from "./panel";
+import { PANEL, ROW_FOCUS } from "./panel";
 import type { TodoStore } from "./store";
 import TaskRow from "./TaskRow.vue";
 import {
@@ -59,6 +59,10 @@ const emit = defineEmits<{
   drop: [];
 }>();
 const panel = inject(PANEL)!;
+
+// A deleted to-do hands the focus to the next one in this group (or the one before, or the group's add field).
+const tasksEl = ref<HTMLElement | null>(null);
+provide(ROW_FOCUS, useFocusRecovery(tasksEl));
 
 /** "None" first, then each color. */
 const COLOR_OPTIONS: GroupColor[] = ["", ...GROUP_COLORS];
@@ -278,6 +282,7 @@ function dropMark(position: number): "before" | "after" | null {
     "
     :aria-label="group.name"
     :data-testid="`group-${group.id}`"
+    :data-focus-row="group.id"
     @dragover="overGroup"
     @drop.prevent="emit('drop')"
   >
@@ -345,13 +350,14 @@ function dropMark(position: number): "before" | "after" | null {
         aria-haspopup="menu"
         :aria-expanded="menuOpen"
         data-testid="group-menu"
+        data-focus-target
         @click="onMenuButton"
       >
         <Ellipsis class="size-4" :stroke-width="1.5" />
       </button>
     </header>
 
-    <div v-if="!collapsed" class="p-1">
+    <div v-if="!collapsed" ref="tasksEl" class="p-1">
       <TransitionGroup tag="ul" role="list" :css="false" @leave="leaveRow">
         <li v-for="entry in entries" :key="'draft' in entry ? 'draft' : entry.row.task.id" :data-reorder-id="'draft' in entry ? undefined : entry.row.task.id" @dragover="'draft' in entry || overTask($event, entry.at)">
           <AddInput
@@ -394,6 +400,7 @@ function dropMark(position: number): "before" | "after" | null {
         :title="maxAddLevel ? t('group.addHint') : undefined"
         :maxlength="MAX.title"
         :data-testid="`add-task-${group.id}`"
+        data-focus-empty
         @add="add"
       />
     </div>
