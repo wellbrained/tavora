@@ -175,15 +175,15 @@ function onPointerDown(event: PointerEvent, id: string) {
       lifting.value = !reducedMotion();
       reorder.begin(id, { lift: true });
     },
-    move(event, delta) {
+    move(next, delta) {
       reorder.follow(delta.x, 0);
       const el = scroller.value;
       if (el) {
         const box = el.getBoundingClientRect();
-        if (event.clientX < box.left + 24) el.scrollLeft -= 12;
-        else if (event.clientX > box.right - 24) el.scrollLeft += 12;
+        if (next.clientX < box.left + 24) el.scrollLeft -= 12;
+        else if (next.clientX > box.right - 24) el.scrollLeft += 12;
       }
-      const place = dropPlace(places(), event.clientX);
+      const place = dropPlace(places(), next.clientX);
       // No line where the drop would change nothing.
       drop.value = place && moveTab(ids(), id, place.target, place.after).join("\n") !== ids().join("\n") ? place : null;
       reorder.preview(drop.value ? { id: drop.value.target, after: drop.value.after } : null);

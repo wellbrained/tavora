@@ -13,7 +13,7 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { ContextMenu, ContextMenuTrigger } from "@tavora/official-ui/components/ui/context-menu";
 import { Popover, PopoverAnchor, PopoverContent } from "@tavora/official-ui/components/ui/popover";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
-import { bindDrag } from "@tavora/official-ui/lib/bind-drag";
+import { bindDrag, type DragDelta } from "@tavora/official-ui/lib/bind-drag";
 import { cn } from "@tavora/official-ui/lib/utils";
 import { hotkeyKeys } from "../../../shared/hotkey-keys";
 import { boundsOf, snapMove, snapResize, touches, type Edges, type Guide } from "../../../shared/layout-math";
@@ -141,13 +141,20 @@ function begin(event: PointerEvent, item: LayoutItemView, edges: Edges | null) {
     ids = [item.id];
     if (view.value?.selection !== item.id || selected.length !== 1) send({ type: "select", id: item.id });
   }
-  // A locked frame is selected and clicked like any other, but never moves (with others, they move and it stays).
-  const moving = shown.value.filter((one) => ids.includes(one.id) && !one.locked);
-  drag.value = { id: item.id, ids: moving.map((one) => one.id), edges, origins: Object.fromEntries(moving.map((one) => [one.id, rectOf(one)])), only, moved: false };
-  gesture.start(event, { move, drop: end, release: end, cancel: abort }, { capture: root.value });
+  // Set up once a gesture still going on is put back, so its clean-up can't clear this one.
+  gesture.start(
+    event,
+    () => {
+      // A locked frame is selected and clicked like any other, but never moves (with others, they move and it stays).
+      const moving = shown.value.filter((one) => ids.includes(one.id) && !one.locked);
+      drag.value = { id: item.id, ids: moving.map((one) => one.id), edges, origins: Object.fromEntries(moving.map((one) => [one.id, rectOf(one)])), only, moved: false };
+      return { move, drop: end, release: end, cancel: abort };
+    },
+    { capture: root.value },
+  );
 }
 
-function move(event: PointerEvent, delta: { x: number; y: number }) {
+function move(event: PointerEvent, delta: DragDelta) {
   const current = drag.value;
   const now = view.value;
   if (!current || !now || current.ids.length === 0) return;
@@ -267,10 +274,16 @@ const bandRect = computed<Rect | null>(() => {
 function beginBand(event: PointerEvent) {
   root.value?.focus();
   if (event.button !== 0) return;
-  const base = adds(event) ? [...(view.value?.selected ?? [])] : [];
-  const at = pointAt(event);
-  band.value = { from: at, to: at, base, ids: base, moved: false };
-  gesture.start(event, { move: moveBand, drop: endBand, release: endBand, cancel: () => (band.value = null) }, { capture: root.value });
+  gesture.start(
+    event,
+    () => {
+      const base = adds(event) ? [...(view.value?.selected ?? [])] : [];
+      const at = pointAt(event);
+      band.value = { from: at, to: at, base, ids: base, moved: false };
+      return { move: moveBand, drop: endBand, release: endBand, cancel: () => (band.value = null) };
+    },
+    { capture: root.value },
+  );
 }
 
 function moveBand(event: PointerEvent) {

@@ -19,11 +19,17 @@ import { getCurrentScope, onScopeDispose, readonly, ref, type Ref } from "vue"
 /** `pressing`: the button is down but the pointer hasn't moved far enough yet. */
 export type DragPhase = "idle" | "pressing" | "dragging"
 
+/** How far the pointer is from where it pressed, in CSS pixels. */
+export interface DragDelta {
+  x: number
+  y: number
+}
+
 export interface DragHandlers {
   /** The pointer moved past the threshold: the drag begins. `move` follows at once with the same event. */
   start?(event: PointerEvent): void
-  /** Each move once the drag has begun; `delta` is how far the pointer is from where it pressed, in CSS pixels. */
-  move?(event: PointerEvent, delta: { x: number, y: number }): void
+  /** Each move once the drag has begun. */
+  move?(event: PointerEvent, delta: DragDelta): void
   /** Let go after the drag began: keep the result. */
   drop?(event: PointerEvent): void
   /** Let go before the drag began: it was a click. */
@@ -49,8 +55,12 @@ export interface StartOptions {
 export interface DragBinding {
   /** Where the drag is now. */
   readonly phase: Readonly<Ref<DragPhase>>
-  /** Call from `pointerdown`. Check the button and anything else first: this starts it. */
-  start(event: PointerEvent, handlers: DragHandlers, options?: StartOptions): void
+  /**
+   * Call from `pointerdown`. Check the button and anything else first: this starts it. A drag still going on is put
+   * back first; give a function for `handlers` when they read state that putting it back changes (a width, a frame),
+   * so they read it afterwards.
+   */
+  start(event: PointerEvent, handlers: DragHandlers | (() => DragHandlers), options?: StartOptions): void
   /** Ends the drag going on now and puts it back; nothing happens when there is none. */
   cancel(): void
 }
@@ -58,21 +68,17 @@ export interface DragBinding {
 export function bindDrag(options: BindDragOptions = {}): DragBinding {
   const threshold = options.threshold ?? 0
   const phase = ref<DragPhase>("idle")
-  /** Ends the current drag's listeners; set while one runs. */
-  let stop: (() => void) | null = null
-  let handlers: DragHandlers = {}
+  /** Ends the drag going on now and puts it back; set while one runs. */
+  let putBack: (() => void) | null = null
 
-  function cancel() {
-    if (!stop) return
-    const current = handlers
-    stop()
-    current.cancel?.()
-  }
+  const cancel = () => putBack?.()
 
-  function start(event: PointerEvent, next: DragHandlers, { capture = null }: StartOptions = {}) {
+  function start(event: PointerEvent, setup: DragHandlers | (() => DragHandlers), { capture = null }: StartOptions = {}) {
     cancel()
-    handlers = next
     const pointerId = event.pointerId
+    // Before anything is set up, so a pointer that can't be held leaves nothing half started.
+    capture?.setPointerCapture(pointerId)
+    const handlers = typeof setup === "function" ? setup() : setup
     const from = { x: event.clientX, y: event.clientY }
     phase.value = "pressing"
 
@@ -93,12 +99,11 @@ export function bindDrag(options: BindDragOptions = {}): DragBinding {
     }
     const onUp = (e: PointerEvent) => {
       if (!own(e)) return
-      const current = handlers
       const dragged = phase.value === "dragging"
       finish()
-      if (!dragged) return current.release?.(e)
+      if (!dragged) return handlers.release?.(e)
       swallowNextClick()
-      current.drop?.(e)
+      handlers.drop?.(e)
     }
     const onCancel = (e: PointerEvent) => {
       if (own(e)) cancel()
@@ -114,7 +119,6 @@ export function bindDrag(options: BindDragOptions = {}): DragBinding {
       cancel()
     }
 
-    capture?.setPointerCapture(pointerId)
     window.addEventListener("pointermove", onMove, true)
     window.addEventListener("pointerup", onUp, true)
     window.addEventListener("pointercancel", onCancel, true)
@@ -128,11 +132,13 @@ export function bindDrag(options: BindDragOptions = {}): DragBinding {
       window.removeEventListener("lostpointercapture", onLost, true)
       window.removeEventListener("keydown", onKey, true)
       if (capture?.isConnected && capture.hasPointerCapture(pointerId)) capture.releasePointerCapture(pointerId)
-      stop = null
-      handlers = {}
+      putBack = null
       phase.value = "idle"
     }
-    stop = finish
+    putBack = () => {
+      finish()
+      handlers.cancel?.()
+    }
   }
 
   if (getCurrentScope()) onScopeDispose(cancel)

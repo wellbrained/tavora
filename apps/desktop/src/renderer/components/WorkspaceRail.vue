@@ -137,15 +137,17 @@ watch(expanded, (open) => {
 
 function startResize(event: PointerEvent) {
   if (event.button !== 0) return;
-  const startWidth = width.value;
   resizing.start(
     event,
-    {
-      move: (_, delta) => (dragWidth.value = clampWidth(startWidth + delta.x)),
-      drop() {
-        if (dragWidth.value !== null) void act({ type: "set-rail", width: dragWidth.value }).then(() => (dragWidth.value = null));
-      },
-      cancel: () => (dragWidth.value = null),
+    () => {
+      const startWidth = width.value;
+      return {
+        move: (_, delta) => (dragWidth.value = clampWidth(startWidth + delta.x)),
+        drop() {
+          if (dragWidth.value !== null) void act({ type: "set-rail", width: dragWidth.value }).then(() => (dragWidth.value = null));
+        },
+        cancel: () => (dragWidth.value = null),
+      };
     },
     { capture: event.currentTarget as HTMLElement },
   );

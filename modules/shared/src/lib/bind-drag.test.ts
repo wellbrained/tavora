@@ -180,6 +180,21 @@ describe("bindDrag", () => {
     expect(second.calls).toEqual(["release"])
   })
 
+  it("sets a drag up from a function only after the one before is put back", () => {
+    const drag = bindDrag()
+    let value = 0
+    drag.start(press(), { move: () => void (value = 5), cancel: () => void (value = 0) })
+    pointer("pointermove", 10, 0)
+    expect(value).toBe(5)
+    let seen = -1
+    drag.start(press(), () => {
+      seen = value
+      return {}
+    })
+    expect(seen).toBe(0)
+    drag.cancel()
+  })
+
   it("does nothing on cancel() when no drag runs", () => {
     const drag = bindDrag()
     const { calls, handlers } = spies()
@@ -234,6 +249,21 @@ describe("bindDrag", () => {
       expect(drag.phase.value).toBe("dragging")
       pointer("lostpointercapture", 0, 0, 1, el)
       expect(calls).toEqual(["start", "move 10,0", "cancel"])
+      el.remove()
+    })
+
+    it("starts nothing when the pointer can't be held", () => {
+      const el = holder()
+      el.setPointerCapture = () => {
+        throw new DOMException("No active pointer", "NotFoundError")
+      }
+      const drag = bindDrag()
+      const { calls, handlers } = spies()
+      expect(() => drag.start(press(), handlers, { capture: el })).toThrow()
+      expect(drag.phase.value).toBe("idle")
+      pointer("pointermove", 10, 0)
+      pointer("pointerup", 10, 0)
+      expect(calls).toEqual([])
       el.remove()
     })
 

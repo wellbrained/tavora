@@ -1,3 +1,3 @@
 # Steadier dragging
 
-- A second finger or pen no longer gets in the way while you drag a tab, the sidebar edge, the crop frame or an overlay.
+- While you drag a tab, the sidebar edge, the crop frame or an overlay, another finger or pen moving or lifting no longer drops it.

@@ -4,7 +4,7 @@ import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Slider } from "@tavora/official-ui/components/ui/slider";
 import { Dialog, DialogButton, DialogContent, DialogFooter, DialogHeader } from "@tavora/official-ui/components/ui/dialog";
-import { bindDrag } from "@tavora/official-ui/lib/bind-drag";
+import { bindDrag, type DragDelta } from "@tavora/official-ui/lib/bind-drag";
 import { t } from "../i18n";
 
 // Crops a picked image to a square. The whole image stays still and fitted;
@@ -95,30 +95,41 @@ watch(open, (isOpen) => {
   if (!isOpen) drag.cancel();
 });
 
-function startDrag(event: PointerEvent, move: (event: PointerEvent, delta: { x: number; y: number }) => void) {
-  const before = { ...frame.value };
-  drag.start(event, { move, cancel: () => (frame.value = before) }, { capture: event.currentTarget as HTMLElement });
+/** `follow` runs once a drag still going on is put back: it reads the frame and gives what each move does. */
+function dragFrame(event: PointerEvent, follow: () => (event: PointerEvent, delta: DragDelta) => void) {
+  drag.start(
+    event,
+    () => {
+      const before = { ...frame.value };
+      return { move: follow(), cancel: () => (frame.value = before) };
+    },
+    { capture: event.currentTarget as HTMLElement },
+  );
 }
 
 function onMoveStart(event: PointerEvent) {
   if (event.button !== 0 || !image.value) return;
-  const { x, y } = frame.value;
-  // The wheel may size the frame while it moves.
-  startDrag(event, (_, delta) => place(x + delta.x, y + delta.y, frame.value.side));
+  dragFrame(event, () => {
+    const { x, y } = frame.value;
+    // The wheel may size the frame while it moves.
+    return (_, delta) => place(x + delta.x, y + delta.y, frame.value.side);
+  });
 }
 
 function onResizeStart(event: PointerEvent) {
   if (event.button !== 0 || !image.value) return;
   event.stopPropagation();
-  const { x, y, side } = frame.value;
-  const centre = { x: x + side / 2, y: y + side / 2 };
   const area = (event.currentTarget as HTMLElement).closest("[data-crop-area]")!.getBoundingClientRect();
-  startDrag(event, (next) => {
-    // The handle sits on the circle's edge (or the square's corner), so the
-    // pointer's distance from the centre is the radius (or half the side).
-    const dx = next.clientX - area.left - centre.x;
-    const dy = next.clientY - area.top - centre.y;
-    resize(2 * (props.round ? Math.hypot(dx, dy) : Math.max(Math.abs(dx), Math.abs(dy))));
+  dragFrame(event, () => {
+    const { x, y, side } = frame.value;
+    const centre = { x: x + side / 2, y: y + side / 2 };
+    return (next) => {
+      // The handle sits on the circle's edge (or the square's corner), so the
+      // pointer's distance from the centre is the radius (or half the side).
+      const dx = next.clientX - area.left - centre.x;
+      const dy = next.clientY - area.top - centre.y;
+      resize(2 * (props.round ? Math.hypot(dx, dy) : Math.max(Math.abs(dx), Math.abs(dy))));
+    };
   });
 }
 
