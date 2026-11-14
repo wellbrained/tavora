@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest"
-import { ariaProblems, danglingReferences, extraTabStops, focusLostAfter, isTabStop, tabStops } from "./testing"
+import { isTabStop, tabStops } from "./aria-patterns"
+import { ariaProblems, danglingReferences, extraTabStops, focusLostAfter } from "./testing"
 
 afterEach(() => {
   document.body.innerHTML = ""
@@ -101,10 +102,9 @@ describe("extraTabStops", () => {
     expect(extraTabStops(root)).toEqual([])
   })
 
-  it("leaves a plain group of buttons alone, and takes its own roles", () => {
+  it("leaves a plain group of buttons alone", () => {
     const root = page(`<div role="group"><button>A</button><button>B</button></div>`)
     expect(extraTabStops(root)).toEqual([])
-    expect(extraTabStops(root, ["group"])).toHaveLength(1)
   })
 })
 

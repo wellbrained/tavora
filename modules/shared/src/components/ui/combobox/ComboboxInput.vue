@@ -33,7 +33,7 @@ const box = ref<HTMLElement | null>(null)
 const text = ref("")
 const input = () => box.value?.querySelector<HTMLInputElement>("input") ?? null
 
-const field = useFieldControl({ element: input, value: () => text.value, disabled: () => props.disabled })
+const field = useFieldControl({ element: input, value: () => text.value })
 
 const keys = freeKeys()
 function onKeyCapture(event: KeyboardEvent) {

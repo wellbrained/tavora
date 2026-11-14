@@ -30,7 +30,7 @@ const modelValue = useVModel(props, "modelValue", emits, {
 // Enter in a read-only field would still submit its form.
 const soft = useSoftDisabled(() => ({ disabled: props.disabled, reason: props.disabledReason }), { keys: new Set(["Enter"]), pointer: false })
 const element = ref<HTMLInputElement | null>(null)
-const field = useFieldControl({ element: () => element.value, value: () => modelValue.value, disabled: () => props.disabled })
+const field = useFieldControl({ element: () => element.value, value: () => modelValue.value })
 </script>
 
 <template>

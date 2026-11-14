@@ -103,9 +103,9 @@ describe("Field with an Input", () => {
     expect(ariaProblems(root)).toEqual([])
   })
 
-  it("doesn't mark an input that is off as invalid", async () => {
+  it("keeps an input that is off invalid while there is an error, as Reka does for a Select", async () => {
     const { target } = await inField(() => h(Input, { disabled: true }), { label: "Name", error: "Not like this." })
-    expect(target?.hasAttribute("aria-invalid")).toBe(false)
+    expect(target?.getAttribute("aria-invalid")).toBe("true")
   })
 
   it("labels one control only, so no two share an id", async () => {
@@ -132,6 +132,15 @@ describe("Field with the other kit controls", () => {
     expect(target?.matches("[data-slot=number-field-input]")).toBe(true)
     expect(target?.hasAttribute("aria-label")).toBe(false)
     expect(described(target)).toEqual([hint!.id])
+    expect(ariaProblems(root)).toEqual([])
+  })
+
+  it("NumberField: a description it was given goes on the number box only", async () => {
+    const { root, hint, target } = await inField(() => [h("p", { id: "extra" }, "More"), h(NumberField, { modelValue: 3, "aria-describedby": "extra", "data-testid": "count" })], { label: "Copies", hint: "Up to nine." })
+    expect(described(target).sort()).toEqual(["extra", hint!.id].sort())
+    const frame = root.querySelector("[data-slot=number-field]")!
+    expect(frame.getAttribute("data-testid")).toBe("count")
+    expect(frame.hasAttribute("aria-describedby")).toBe(false)
     expect(ariaProblems(root)).toEqual([])
   })
 

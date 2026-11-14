@@ -7,7 +7,7 @@
 const REFERENCES = ["aria-labelledby", "aria-describedby", "aria-controls", "aria-errormessage", "aria-activedescendant", "aria-owns", "aria-details", "aria-flowto"] as const
 
 /** Widgets the keyboard enters with one Tab stop and moves through with the arrow keys. */
-export const COMPOSITE_ROLES: readonly string[] = ["grid", "listbox", "menu", "menubar", "radiogroup", "tablist", "toolbar", "tree", "treegrid"]
+const COMPOSITE_ROLES = ["grid", "listbox", "menu", "menubar", "radiogroup", "tablist", "toolbar", "tree", "treegrid"]
 
 /** What a finding calls an element: its test id, its label, its text, or else its tag and role. */
 export function describeElement(element: Element): string {
@@ -97,15 +97,14 @@ export function tabStops(root: ParentNode = document): Element[] {
 }
 
 /**
- * Every composite widget in `root` (a `radiogroup`, `tablist`, `listbox`, `menu`, `grid`, `tree`, `toolbar`…; `roles`
- * replaces the list) that Tab stops on more than once inside. Such a widget has one stop, and the arrow keys move inside
+ * Every composite widget in `root` (a `radiogroup`, `tablist`, `listbox`, `menu`, `grid`, `tree`, `toolbar`…) that Tab stops on more than once inside. Such a widget has one stop, and the arrow keys move inside
  * it. The widget's own element isn't counted: Reka's groups keep it reachable only to pass the focus on to the current
- * item, and a listbox with `aria-activedescendant` is the stop itself.
+ * item, and a listbox with `aria-activedescendant` is the stop itself. So a hand-made root with `tabindex="0"` that
+ * doesn't pass the focus on goes unnoticed here.
  */
-export function extraTabStops(root: ParentNode = document, roles: readonly string[] = COMPOSITE_ROLES): string[] {
+export function extraTabStops(root: ParentNode = document): string[] {
   const problems: string[] = []
-  const selector = roles.map((role) => `[role="${role}"]`).join(",")
-  if (!selector) return problems
+  const selector = COMPOSITE_ROLES.map((role) => `[role="${role}"]`).join(",")
   const widgets = everyElement(root).filter((element) => element.matches(selector))
   for (const widget of widgets) {
     const stops = tabStops(widget).filter((stop) => stop !== widget)
@@ -121,12 +120,8 @@ export function ariaProblems(root: ParentNode = document): string[] {
   return [...danglingReferences(root), ...extraTabStops(root)]
 }
 
-export interface FocusAfterOptions {
-  /** Waits until the action's effects are on the page. Default: a task, then an animation frame when there is one. */
-  settle?: () => Promise<unknown>
-}
-
-const settleDefault = async () => {
+/** A task, then an animation frame when there is one: long enough for what the action set off to land. */
+const settle = async () => {
   await new Promise((resolve) => setTimeout(resolve, 0))
   if (typeof requestAnimationFrame === "function") await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)))
 }
@@ -136,11 +131,11 @@ const settleDefault = async () => {
  * body afterwards: the keyboard user is lost and the next Tab starts from the top. Focus that was on the body before
  * the action is not counted.
  */
-export async function focusLostAfter(action: () => unknown, options: FocusAfterOptions = {}): Promise<string[]> {
+export async function focusLostAfter(action: () => unknown): Promise<string[]> {
   const before = document.activeElement
   const from = before && before !== document.body ? describeElement(before) : null
   await action()
-  await (options.settle ?? settleDefault)()
+  await settle()
   const now = document.activeElement
   if (from === null || (now && now !== document.body && now !== document.documentElement)) return []
   return [`The focus fell to the page body after the action (it was on ${from})`]

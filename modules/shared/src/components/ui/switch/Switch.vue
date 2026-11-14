@@ -21,7 +21,7 @@ const delegatedProps = reactiveOmit(props, "class", "disabledReason")
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
 const soft = useSoftDisabled(() => ({ disabled: props.disabled, reason: props.disabledReason }), { keys: ACTIVATE_KEYS })
 const root = ref<{ $el?: HTMLElement } | null>(null)
-const field = useFieldControl({ element: () => root.value?.$el, value: () => props.modelValue, id: () => props.id, disabled: () => props.disabled })
+const field = useFieldControl({ element: () => root.value?.$el, value: () => props.modelValue, id: () => props.id })
 </script>
 
 <template>

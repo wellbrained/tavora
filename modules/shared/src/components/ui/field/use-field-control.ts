@@ -16,12 +16,10 @@ export interface FieldControlOptions {
   value: () => unknown
   /** The id the control got as a prop. An `id` attribute is read on its own. */
   id?: () => string | undefined
-  /** An off control is never marked invalid. Default: its `disabled` attribute. */
-  disabled?: () => boolean | undefined
 }
 
 /** Space-separated ids, empty ones left out; `undefined` when there are none. */
-export function joinIds(...ids: unknown[]): string | undefined {
+function joinIds(...ids: unknown[]): string | undefined {
   return ids.filter((id): id is string => typeof id === "string" && id.trim() !== "").join(" ") || undefined
 }
 
@@ -36,7 +34,6 @@ export function useFieldControl(options: FieldControlOptions) {
   const field = found && !taken.has(found) ? found : null
   if (field) taken.add(field)
 
-  const off = options.disabled ?? (() => given.disabled !== undefined && given.disabled !== false && given.disabled !== "false")
   const id = () => options.id?.() ?? (given.id as string | undefined) ?? field?.fieldId.value
 
   let unregister: (() => void) | undefined
@@ -49,8 +46,6 @@ export function useFieldControl(options: FieldControlOptions) {
   })
 
   return {
-    /** Whether this control is the one its Field labels. */
-    inField: field !== null,
     /** The id the label points at; `undefined` outside a Field. */
     id: (): string | undefined => (field ? id() : undefined),
     attrs(): Record<string, unknown> {
@@ -59,7 +54,7 @@ export function useFieldControl(options: FieldControlOptions) {
         id: id(),
         "aria-labelledby": joinIds(given["aria-labelledby"], field.labelId.value),
         "aria-describedby": joinIds(given["aria-describedby"], field.describedBy.value),
-        "aria-invalid": given["aria-invalid"] ?? (field.invalid.value && !off() ? "true" : undefined),
+        "aria-invalid": given["aria-invalid"] ?? (field.invalid.value ? "true" : undefined),
       }
     },
   }
