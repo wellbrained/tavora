@@ -2,8 +2,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createFocusRecovery, type FocusRecovery } from "./focus-recovery";
 
-/** Lets the page's MutationObserver run. */
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+/** Lets the page settle: its MutationObserver, then the look that waits a task. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 10));
 
 const stops: FocusRecovery[] = [];
 afterEach(() => {
@@ -218,6 +218,43 @@ describe("useFocusRecovery", () => {
     group.remove();
     await settle();
     expect(active()).toBe("menu-g2");
+  });
+
+  it("lets a component that focuses something itself right after the change win", async () => {
+    const { list } = makeList(["a", "b"]);
+    byTestid("title-a").focus();
+    const field = document.createElement("input");
+    field.dataset.testid = "editor";
+    byTestid("title-a").replaceWith(field);
+    // As Vue's nextTick: the editor takes the focus once the render is done.
+    await Promise.resolve();
+    field.focus();
+    await settle();
+    expect(active()).toBe("editor");
+    expect(list.contains(document.activeElement)).toBe(true);
+  });
+
+  it("doesn't pull the focus back after a click beside the controls inside the row", async () => {
+    makeList(["a", "b"]);
+    byTestid("title-a").focus();
+    rowOf("a").dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    byTestid("title-a").blur();
+    await settle();
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it("handles an optimistic delete: the row goes at once, and comes back with the focus when saving fails", async () => {
+    const { list, recovery } = makeList(["a", "b"]);
+    byTestid("trash-a").focus();
+    const gone = rowOf("a");
+    gone.remove();
+    await settle();
+    expect(active()).toBe("trash-b");
+    // The save failed: the row is put back, and the caller hands it the focus again.
+    list.prepend(gone);
+    recovery.restore("a");
+    await settle();
+    expect(active()).toBe("title-a");
   });
 
   describe("restore", () => {

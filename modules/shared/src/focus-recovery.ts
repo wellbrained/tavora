@@ -7,8 +7,10 @@
 // 3. else the first control of the list's empty state (Add …), or the list itself.
 //
 // It never takes the focus from something else: a dialog, a menu, a field outside the list. A row that only moved (Alt+↑,
-// a drag) or was drawn anew keeps the focus. After Undo, or an optimistic delete that failed, `restore(key)` gives the
-// row back the focus once it is there again.
+// a drag) or was drawn anew keeps the focus. It waits until the page has settled, so a component that puts the focus
+// somewhere itself after a change (an editor opening in the row) wins. An optimistic delete is a row that goes and
+// perhaps comes back: the going is handled like any delete; after Undo, or a delete that could not be saved and was
+// put back, `restore(key)` gives the row the focus again once it is there.
 //
 // Mark the parts in the template; nothing else is needed:
 //   data-focus-row="<id>"   on each row (a list inside a row is a list of its own: its rows are not the outer list's)
@@ -17,21 +19,16 @@
 import { unrefElement, type MaybeElementRef } from "@vueuse/core"
 import { getCurrentScope, onScopeDispose } from "vue"
 
-export const FOCUS_ROW = "data-focus-row"
-const ROW = `[${FOCUS_ROW}]`
+const ROW_ATTR = "data-focus-row"
+const ROW = `[${ROW_ATTR}]`
 const TARGET = "[data-focus-target]"
 const EMPTY = "[data-focus-empty]"
 const FOCUSABLE = "a[href], button, input:not([type='hidden']), select, textarea, [tabindex]:not([tabindex='-1']), [contenteditable]:not([contenteditable='false'])"
-/** Layers that take the focus for a moment on the list's behalf (a row's menu, a confirm, the Undo toast): the list keeps its row. */
-const LAYER = "[role='menu'], [role='dialog'], [role='alertdialog'], [role='listbox'], [data-reka-popper-content-wrapper], [data-slot='toaster-host'], [data-tooltip-layer]"
 const TOASTER = "[data-slot='toaster-host']"
+/** Layers that take the focus for a moment on the list's behalf (a row's menu, a confirm, the Undo toast): the list keeps its row. */
+const LAYER = `[role='menu'], [role='dialog'], [role='alertdialog'], [role='listbox'], [data-reka-popper-content-wrapper], [data-tooltip-layer], ${TOASTER}`
 /** How long `restore` waits for its row to come back. */
 const RESTORE_MS = 3000
-
-export interface FocusRecoveryOptions {
-  /** The empty state, when it is not marked `data-focus-empty` inside the list. */
-  empty?: () => HTMLElement | null | undefined
-}
 
 export interface FocusRecovery {
   /**
@@ -43,35 +40,34 @@ export interface FocusRecovery {
   stop(): void
 }
 
-interface Seen {
-  key: string
-  el: HTMLElement
-}
-
 interface Hold {
   /** The row the focus is in; null when it is in the list but not in a row. */
   row: HTMLElement | null
-  key: string
   control: HTMLElement
   /** The control's place among the row's controls, to land on the same spot in a row like it. */
   spot: { index: number; count: number } | null
-  /** The list's rows when last seen whole, in order; kept as they were once the row is gone. */
-  rows: Seen[]
+  /** The list's rows when last seen whole, in order; kept as they were once the row is gone (a gone row keeps its key). */
+  rows: HTMLElement[]
   /** Outside a row: how many of those rows come before the control. */
   before: number
 }
 
+/** A row `restore` waits for, until its timer runs out. */
+interface Awaited {
+  key: string
+  timer: ReturnType<typeof setTimeout>
+}
+
 interface Entry {
   list: () => HTMLElement | null
-  empty?: () => HTMLElement | null | undefined
   hold: Hold | null
-  wish: { key: string; until: number } | null
+  awaited: Awaited | null
 }
 
 const entries = new Set<Entry>()
 let observer: MutationObserver | null = null
 let wired = false
-let wishTimer: ReturnType<typeof setTimeout> | undefined
+let scheduled: ReturnType<typeof setTimeout> | undefined
 
 // ── Reading the page ─────────────────────────────────────────────────
 
@@ -103,12 +99,12 @@ function rowsOf(list: HTMLElement, lists: Set<HTMLElement>): HTMLElement[] {
 
 function rowAround(list: HTMLElement, node: Element, lists: Set<HTMLElement>): HTMLElement | null {
   for (let at: Element | null = node; at && at !== list; at = at.parentElement) {
-    if (at.hasAttribute(FOCUS_ROW) && ownerOf(at, lists) === list) return at as HTMLElement
+    if (at.hasAttribute(ROW_ATTR) && ownerOf(at, lists) === list) return at as HTMLElement
   }
   return null
 }
 
-const keyOf = (row: HTMLElement) => row.getAttribute(FOCUS_ROW) ?? ""
+const keyOf = (row: HTMLElement) => row.getAttribute(ROW_ATTR) ?? ""
 
 function controlsOf(el: HTMLElement): HTMLElement[] {
   const found = Array.from(el.querySelectorAll<HTMLElement>(FOCUSABLE))
@@ -122,15 +118,17 @@ function controlIn(row: HTMLElement, spot: Hold["spot"]): HTMLElement {
   if (spot && controls.length === spot.count) return controls[spot.index]!
   const target = row.matches(TARGET) ? row : row.querySelector<HTMLElement>(TARGET)
   if (target && usable(target)) return target
-  return controls[0] ?? focusable(row)
+  return controls[0] ?? row
 }
 
-/** Lets an element that is not a control take the focus for now; it lets go of it again on blur. */
-function focusable(el: HTMLElement): HTMLElement {
-  if (el.matches(FOCUSABLE) || el.hasAttribute("tabindex")) return el
-  el.setAttribute("tabindex", "-1")
-  el.addEventListener("blur", () => el.removeAttribute("tabindex"), { once: true })
-  return el
+/** Focuses an element; one that is not a control takes the focus for as long as it keeps it. */
+function focusOn(el: HTMLElement) {
+  const lent = !el.matches(FOCUSABLE) && !el.hasAttribute("tabindex")
+  if (lent) el.setAttribute("tabindex", "-1")
+  el.focus()
+  if (!lent) return
+  if (document.activeElement === el) el.addEventListener("blur", () => el.removeAttribute("tabindex"), { once: true })
+  else el.removeAttribute("tabindex")
 }
 
 /** The focus fell off: to the body, with an element that left the page, or into a row of this list that is leaving. */
@@ -155,79 +153,74 @@ function depth(el: Element): number {
 // ── Holding and moving the focus ─────────────────────────────────────
 
 /** Takes in the list's rows as they are now. */
-function look(hold: Hold, list: HTMLElement, lists: Set<HTMLElement>) {
-  const rows = rowsOf(list, lists)
-  hold.rows = rows.map((el) => ({ key: keyOf(el), el }))
-  if (!hold.row) hold.before = rows.filter((row) => row.compareDocumentPosition(hold.control) & Node.DOCUMENT_POSITION_FOLLOWING).length
+function readRows(hold: Hold, list: HTMLElement, lists: Set<HTMLElement>) {
+  hold.rows = rowsOf(list, lists)
+  if (!hold.row) hold.before = hold.rows.filter((row) => row.compareDocumentPosition(hold.control) & Node.DOCUMENT_POSITION_FOLLOWING).length
 }
 
 function holdFor(list: HTMLElement, control: HTMLElement, lists: Set<HTMLElement>): Hold {
   const row = rowAround(list, control, lists)
   const controls = row ? controlsOf(row) : []
   const index = controls.indexOf(control)
-  const hold: Hold = { row, key: row ? keyOf(row) : "", control, spot: index >= 0 ? { index, count: controls.length } : null, rows: [], before: 0 }
-  look(hold, list, lists)
+  const hold: Hold = { row, control, spot: index >= 0 ? { index, count: controls.length } : null, rows: [], before: 0 }
+  readRows(hold, list, lists)
   return hold
 }
 
 /** Where the focus goes now that it fell off the held row. */
-function landing(entry: Entry, hold: Hold, list: HTMLElement, lists: Set<HTMLElement>): HTMLElement {
+function landing(hold: Hold, list: HTMLElement, lists: Set<HTMLElement>): HTMLElement {
   // Still there (its row moved, or the page dropped the focus): it keeps it.
   if (list.contains(hold.control) && usable(hold.control)) return hold.control
   const rows = rowsOf(list, lists).filter(usable)
-  const now = ({ key, el }: Seen) => (key ? rows.find((row) => keyOf(row) === key) : rows.includes(el) ? el : undefined)
+  /** The row as it is now: the same element, or one drawn anew with its key. */
+  const now = (seen: HTMLElement) => {
+    const key = keyOf(seen)
+    return key ? rows.find((row) => keyOf(row) === key) : rows.includes(seen) ? seen : undefined
+  }
+  /** The first row still there, walking the rows as they were from `from` by `step`. */
+  const firstLeft = (from: number, step: 1 | -1) => {
+    for (let i = from; i >= 0 && i < hold.rows.length; i += step) {
+      const row = now(hold.rows[i]!)
+      if (row) return row
+    }
+    return undefined
+  }
   if (hold.row) {
-    // The same row, drawn anew.
-    const same = hold.key ? now({ key: hold.key, el: hold.row }) : undefined
-    if (same) return controlIn(same, hold.spot)
-    const at = hold.rows.findIndex((row) => row.el === hold.row || (hold.key !== "" && row.key === hold.key))
-    if (at >= 0) {
-      for (let i = at + 1; i < hold.rows.length; i++) {
-        const row = now(hold.rows[i]!)
-        if (row) return controlIn(row, hold.spot)
-      }
-      for (let i = at - 1; i >= 0; i--) {
-        const row = now(hold.rows[i]!)
-        if (row) return controlIn(row, hold.spot)
-      }
-    } else if (rows[0]) return controlIn(rows[0], hold.spot)
+    // The same row drawn anew, else the next, else the one before.
+    const at = hold.rows.indexOf(hold.row)
+    const row = at >= 0 ? (firstLeft(at, 1) ?? firstLeft(at - 1, -1)) : (now(hold.row) ?? rows[0])
+    if (row) return controlIn(row, hold.spot)
   } else {
     // A control between the rows (a field for a new row, say) went: the row before it, else the one after.
-    for (let i = Math.min(hold.before, hold.rows.length) - 1; i >= 0; i--) {
-      const row = now(hold.rows[i]!)
-      if (row) return controlIn(row, null)
-    }
-    for (let i = hold.before; i < hold.rows.length; i++) {
-      const row = now(hold.rows[i]!)
-      if (row) return controlIn(row, null)
-    }
+    const row = firstLeft(Math.min(hold.before, hold.rows.length) - 1, -1) ?? firstLeft(hold.before, 1)
+    if (row) return controlIn(row, null)
   }
   // No row left: the empty state's first control (Add …), else the list itself.
-  const empty = entry.empty?.() ?? Array.from(list.querySelectorAll<HTMLElement>(EMPTY)).find((el) => ownerOf(el, lists) === list)
-  return (empty && usable(empty) && controlsOf(empty)[0]) || focusable(list)
+  const empty = Array.from(list.querySelectorAll<HTMLElement>(EMPTY)).find((el) => ownerOf(el, lists) === list)
+  return (empty && usable(empty) && controlsOf(empty)[0]) || list
 }
 
-/** Runs after every change to the page while a list holds a row or waits for one: moves the focus where it fell off. */
+/** Runs once the page has settled after a change, while a list holds a row or waits for one: moves the focus where it fell off. */
 function check() {
-  const lists = listsNow()
-  const live = [...entries]
-    .map((entry) => ({ entry, list: entry.list() }))
-    .filter((item): item is { entry: Entry; list: HTMLElement } => {
-      if (item.list?.isConnected) return true
-      item.entry.hold = null
-      return false
-    })
-    // A list inside another goes first: its row is the nearer one.
-    .sort((a, b) => depth(b.list) - depth(a.list))
+  scheduled = undefined
+  const lists = new Set<HTMLElement>()
+  const live: { entry: Entry; list: HTMLElement }[] = []
+  for (const entry of entries) {
+    const list = entry.list()
+    if (list) lists.add(list)
+    if (!list?.isConnected) entry.hold = null
+    else if (entry.hold || entry.awaited) live.push({ entry, list })
+  }
+  // A list inside another goes first: its row is the nearer one.
+  live.sort((a, b) => depth(b.list) - depth(a.list))
   for (const { entry, list } of live) {
-    if (entry.wish) {
-      const wish = entry.wish
+    const awaited = entry.awaited
+    if (awaited) {
       const active = document.activeElement
-      const row = Date.now() > wish.until ? null : rowsOf(list, lists).find((el) => keyOf(el) === wish.key && usable(el))
-      if (Date.now() > wish.until) entry.wish = null
-      else if (row && (lost(active, list) || list.contains(active) || !!active?.closest(TOASTER))) {
-        entry.wish = null
-        controlIn(row, null).focus()
+      const row = rowsOf(list, lists).find((el) => keyOf(el) === awaited.key && usable(el))
+      if (row && (lost(active, list) || list.contains(active) || !!active?.closest(TOASTER))) {
+        endAwaited(entry)
+        focusOn(controlIn(row, null))
         continue
       }
     }
@@ -237,13 +230,23 @@ function check() {
     if (list.closest("[inert]")) continue
     if (lost(document.activeElement, list)) {
       entry.hold = null
-      landing(entry, hold, list, lists).focus()
-    } else if (hold.row ? list.contains(hold.row) && usable(hold.row) : list.contains(hold.control)) {
+      focusOn(landing(hold, list, lists))
+    } else if (hold.row ? list.contains(hold.row) && !hold.row.closest("[inert]") : list.contains(hold.control)) {
       // Kept up to date while the row is there; once it is gone, the rows as they were tell its neighbours.
-      look(hold, list, lists)
+      readRows(hold, list, lists)
     }
   }
   sync()
+}
+
+/** Looks once the page has settled: after Vue's render and whatever its components do with the focus right after. */
+function schedule() {
+  scheduled ??= setTimeout(check, 0)
+}
+
+function endAwaited(entry: Entry) {
+  if (entry.awaited) clearTimeout(entry.awaited.timer)
+  entry.awaited = null
 }
 
 // ── Listening ────────────────────────────────────────────────────────
@@ -256,10 +259,10 @@ function onFocusIn(event: FocusEvent) {
     const list = entry.list()
     if (list?.contains(target)) {
       entry.hold = holdFor(list, target, lists)
-      if (entry.wish && entry.hold.key !== entry.wish.key) entry.wish = null
+      if (entry.awaited && (!entry.hold.row || keyOf(entry.hold.row) !== entry.awaited.key)) endAwaited(entry)
     } else if (!inLayer(target, list)) {
       entry.hold = null
-      entry.wish = null
+      endAwaited(entry)
     }
   }
   sync()
@@ -267,28 +270,30 @@ function onFocusIn(event: FocusEvent) {
 
 /** The focus went nowhere (no new element): look once the page has settled, in case it fell off without a change to the page. */
 function onFocusOut(event: FocusEvent) {
-  if (event.relatedTarget === null) setTimeout(check, 0)
+  if (event.relatedTarget === null) schedule()
 }
 
-/** A press outside the held row lets go of it: what the user does there is theirs, even if it drops the focus. */
+/**
+ * A press that doesn't land on a control lets go of the held row: what the user does there is theirs, even if it drops
+ * the focus (a click beside a field to leave it). A press on a control moves the focus there anyway.
+ */
 function onPointerDown(event: PointerEvent) {
   const target = event.target instanceof Element ? event.target : null
   if (!target) return
   for (const entry of entries) {
     const list = entry.list()
     if (inLayer(target, list)) continue
-    const hold = entry.hold
-    if (hold && !(hold.row ?? hold.control).contains(target)) entry.hold = null
-    if (entry.wish && !list?.contains(target)) entry.wish = null
+    if (entry.hold && !(list?.contains(target) && target.closest(FOCUSABLE))) entry.hold = null
+    if (entry.awaited && !list?.contains(target)) endAwaited(entry)
   }
   sync()
 }
 
 /** Watches the page only while a list holds a row or waits for one. */
 function sync() {
-  const needed = [...entries].some((entry) => entry.hold || entry.wish)
+  const needed = [...entries].some((entry) => entry.hold || entry.awaited)
   if (needed && !observer) {
-    observer = new MutationObserver(check)
+    observer = new MutationObserver(schedule)
     observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["inert"] })
   } else if (!needed && observer) {
     observer.disconnect()
@@ -307,13 +312,15 @@ function wire(on: boolean) {
     document.removeEventListener("focusin", onFocusIn, true)
     document.removeEventListener("focusout", onFocusOut, true)
     document.removeEventListener("pointerdown", onPointerDown, true)
+    clearTimeout(scheduled)
+    scheduled = undefined
   }
 }
 
 /** Watches a list without Vue. `list` is read each time, so it may come and go. */
-export function createFocusRecovery(list: () => HTMLElement | null, options: FocusRecoveryOptions = {}): FocusRecovery {
-  const entry: Entry = { list, empty: options.empty, hold: null, wish: null }
+export function createFocusRecovery(list: () => HTMLElement | null): FocusRecovery {
   if (typeof document === "undefined") return { restore() {}, stop() {} }
+  const entry: Entry = { list, hold: null, awaited: null }
   entries.add(entry)
   wire(true)
   // The list may already have the focus (a component made while its list was focused).
@@ -324,19 +331,18 @@ export function createFocusRecovery(list: () => HTMLElement | null, options: Foc
   return {
     restore(key) {
       if (!entries.has(entry)) return
-      entry.wish = { key, until: Date.now() + RESTORE_MS }
-      sync()
+      endAwaited(entry)
+      const timer = setTimeout(() => {
+        endAwaited(entry)
+        sync()
+      }, RESTORE_MS)
+      entry.awaited = { key, timer }
       check()
-      // Nothing changes on the page when the row never comes back: let go once the time is up.
-      clearTimeout(wishTimer)
-      wishTimer = setTimeout(check, RESTORE_MS + 50)
     },
     stop() {
       if (!entries.delete(entry)) return
-      if (!entries.size) {
-        wire(false)
-        clearTimeout(wishTimer)
-      }
+      endAwaited(entry)
+      if (!entries.size) wire(false)
       sync()
     },
   }
@@ -346,8 +352,8 @@ export function createFocusRecovery(list: () => HTMLElement | null, options: Foc
  * Keeps the focus in a list when its focused row goes: to the next row, else the one before, else the empty state or the
  * list. Mark rows `data-focus-row="<id>"` (see the top of this file); call `restore(id)` after Undo.
  */
-export function useFocusRecovery(list: MaybeElementRef, options: FocusRecoveryOptions = {}): FocusRecovery {
-  const recovery = createFocusRecovery(() => (unrefElement(list) as HTMLElement | null | undefined) ?? null, options)
+export function useFocusRecovery(list: MaybeElementRef): FocusRecovery {
+  const recovery = createFocusRecovery(() => (unrefElement(list) as HTMLElement | null | undefined) ?? null)
   if (getCurrentScope()) onScopeDispose(recovery.stop)
   return recovery
 }
