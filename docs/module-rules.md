@@ -148,8 +148,8 @@ themes; anything hard-coded breaks in one of them.
   nothing to add); their timers wait while the panel is hidden (the kit follows the page and `lifecycle`).
   Rows the user adds or removes in a vertical list use `AnimatedList`, and a page that replaces another in the same
   frame uses `usePageMotion`; don't hand-roll either. Neither moves for a key press or when a whole list is replaced.
-  Waiting is the one thing that may repeat: a skeleton's slow pulse (`--duration-pulse`), and the same pulse on a busy menu
-  row (`tavora-busy`), off for reduced motion.
+  Waiting is the one thing that may repeat: a skeleton's slow pulse (`--duration-pulse`), and the same pulse on a busy row of a menu
+  or Ctrl+K (`tavora-busy`), off for reduced motion.
 - **Page base**: one stylesheet per module for `html, body, #app` (no margin, full height, theme colours), imported by
   every panel; a panel's own CSS adds to it and never repeats it.
 

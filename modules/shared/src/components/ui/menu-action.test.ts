@@ -2,7 +2,7 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 import { createApp, defineComponent, h, nextTick, ref, type App, type Component } from "vue"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "./context-menu"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./dropdown-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "./dropdown-menu"
 import { toasts } from "./toast/toast"
 
 // A menu row with an `action` that returns a Promise: the menu stays open with the row busy until it settles, the row
@@ -162,6 +162,39 @@ describe("menu row action", () => {
     expect(other).toHaveBeenCalledTimes(1)
     expect(open.value).toBe(false)
     work.resolve()
+  })
+
+  it("a row in a submenu that closed meanwhile still closes the menu when it is done", async () => {
+    const work = later()
+    const open = ref(true)
+    const sub = ref(false)
+    mount(
+      defineComponent({
+        render: () =>
+          h(DropdownMenu, { open: open.value, "onUpdate:open": (value: boolean) => (open.value = value), modal: false }, () => [
+            h(DropdownMenuTrigger, null, () => "Menu"),
+            h(DropdownMenuContent, null, () => [
+              h(DropdownMenuSub, { open: sub.value, "onUpdate:open": (value: boolean) => (sub.value = value) }, () => [
+                h(DropdownMenuSubTrigger, null, () => "More"),
+                h(DropdownMenuSubContent, null, () => [h(DropdownMenuItem, { action: () => work.promise }, () => "Reload")]),
+              ]),
+            ]),
+          ]),
+      }),
+    )
+    await wait()
+    sub.value = true
+    await wait(50)
+    row("Reload")!.click()
+    await wait()
+    expect(open.value).toBe(true)
+
+    sub.value = false
+    await wait()
+    expect(row("Reload")).toBeUndefined()
+    work.resolve()
+    await wait()
+    expect(open.value).toBe(false)
   })
 
   it("works the same in a context menu", async () => {

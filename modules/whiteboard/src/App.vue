@@ -61,7 +61,9 @@ const shown = shallowRef<Shown | null>(null);
 const board = shallowRef<BoardSession | null>(null);
 const boardState = shallowRef<BoardState>(initialBoardState(emptyBoard()));
 const deleted = ref(false);
-const copying = ref(false);
+/** The picture being copied or saved, if any: one at a time, and a second Copy waits for the one going. */
+const pictureJob = shallowRef<Promise<void> | null>(null);
+const copying = computed(() => pictureJob.value !== null);
 // Panel state crosses a MessagePort; keep this object plain rather than sending a Vue proxy.
 const palette = shallowRef<PalettePlace>(DEFAULT_PALETTE);
 const toolbar = ref<ToolbarPlace>("top");
@@ -264,17 +266,21 @@ async function rename(value: string) {
 }
 
 /** Runs a picture action from a click or key press; the host only takes the picture right after that press. */
-async function pictureAction(run: (session: BoardSession) => Promise<void>, failed: (reason: unknown) => string) {
+function pictureAction(run: (session: BoardSession) => Promise<void>, failed: (reason: unknown) => string): Promise<void> {
   const session = board.value;
-  if (!session || copying.value) return;
-  copying.value = true;
-  try {
-    await run(session);
-  } catch (reason) {
-    notify(failed(reason));
-  } finally {
-    copying.value = false;
-  }
+  if (!session) return Promise.resolve();
+  if (pictureJob.value) return pictureJob.value;
+  const job = (async () => {
+    try {
+      await run(session);
+    } catch (reason) {
+      notify(failed(reason));
+    } finally {
+      pictureJob.value = null;
+    }
+  })();
+  pictureJob.value = job;
+  return job;
 }
 
 /** What went wrong with a picture, in words for the user. */

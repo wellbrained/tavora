@@ -40,7 +40,7 @@ const soft = useSoftDisabled(() => ({ disabled: props.disabled, reason: props.di
 const item = ref<{ $el?: unknown } | null>(null)
 useAriaDisabled(() => item.value, soft.soft)
 const root = injectDropdownMenuRootContext(null)
-const menu = useMenuAction(() => props.action, () => root?.onOpenChange(false))
+const menu = useMenuAction(() => props.action, root)
 </script>
 
 <template>

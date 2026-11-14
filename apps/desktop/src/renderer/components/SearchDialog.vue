@@ -58,7 +58,6 @@ function onFocus(event: FocusEvent) {
 watch([searchOpen, searchStart], ([open, start], [wasOpen]) => {
   if (open && !wasOpen) {
     opening++;
-    adding.value = null;
     query.value = start;
     active.value = 0;
     resetHover();
@@ -98,34 +97,31 @@ watch(query, (text) => {
 
 type NewGame = { catalogId: string } | { online: OnlineGame };
 
-/** Raised each time the box opens, so a game added from an earlier opening doesn't close the box opened since. */
+/** Raised each time the box opens, so a game added from an earlier opening neither opens nor closes the box opened since. */
 let opening = 0;
 /**
- * The "Add" row whose game is being added: adding takes a moment (online games are looked up first), so the box stays
- * open with that row busy, takes no other row meanwhile, and closes once the game is open.
+ * The "Add" row whose game is being added. Adding takes a moment (online games are looked up first), so the box stays
+ * open with that row busy, and closes once the game is open. Another Add waits until it is done, even after the box
+ * was closed and opened again. Escape doesn't stop it; once the box was opened again the game is added but not opened,
+ * so it doesn't jump over what the user does there.
  */
 const adding = shallowRef<string | null>(null);
 const addThenClose = (id: string, input: NewGame) => async () => {
   if (adding.value) return;
   adding.value = id;
   const mine = opening;
+  const same = () => mine === opening;
   try {
-    await addAndOpen(input);
+    await addAndOpen(input, same);
   } finally {
-    if (mine === opening) {
-      adding.value = null;
-      searchOpen.value = false;
-    }
+    adding.value = null;
+    if (same()) searchOpen.value = false;
   }
 };
-/** Runs a row, unless a game is being added. */
-const choose = (item: Item | undefined) => {
-  if (item && !adding.value) void item.run();
-};
-async function addAndOpen(input: NewGame) {
+async function addAndOpen(input: NewGame, open: () => boolean) {
   try {
     const added = await act({ type: "add-workspace", ...input });
-    if (added.ok && added.id) await act({ type: "open-workspace", workspaceId: added.id });
+    if (added.ok && added.id && open()) await act({ type: "open-workspace", workspaceId: added.id });
   } catch (reason) {
     // The call itself failed (not an answer from Tavora): say so instead of nothing.
     console.error("[tavora] adding a game failed", reason);
@@ -283,7 +279,7 @@ const flat = computed(() => shown.value.flatMap((group) => group.items));
 const { active, onKey, onHover, resetHover } = useListNav({
   count: () => flat.value.length,
   list,
-  onEnter: () => choose(flat.value[active.value]),
+  onEnter: () => flat.value[active.value]?.run(),
   track: { keys: () => flat.value.map((item) => item.id), resetOn: () => query.value },
 });
 
@@ -356,7 +352,7 @@ const activeId = computed(() => {
             :class="cn('tavora-busy flex h-10 cursor-pointer items-center gap-3 rounded-lg px-3 aria-busy:cursor-progress', group.quiet && 'text-muted-foreground', (flat[active] === item || adding === item.id) && 'bg-accent')"
             :data-testid="`search-${item.id}`"
             @mousemove="onHover(flat.indexOf(item), $event)"
-            @click="choose(item)"
+            @click="item.run()"
           >
             <WorkspaceIcon v-if="item.workspace" :workspace="item.workspace" :size="24" />
             <component :is="item.icon" v-else class="text-muted-foreground size-5 flex-none" :stroke-width="1.5" />

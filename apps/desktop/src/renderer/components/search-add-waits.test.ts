@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// Ctrl+K (SearchDialog.vue): an "Add <game>" row keeps the box open with the row busy while the game is added, takes
-// no other row meanwhile, and closes the box once the game is open. The host is a fake whose answers the test gives.
+// Ctrl+K (SearchDialog.vue): an "Add <game>" row keeps the box open with the row busy while the game is added, adds it
+// once, and closes the box once the game is open. The host is a fake whose answers the test gives.
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp, defineComponent, h, nextTick, type App } from "vue";
 import type { HostViewState } from "../../shared/host-api";
@@ -90,7 +90,7 @@ describe("Ctrl+K add a game", () => {
     expect(searchOpen.value).toBe(true);
     expect(row()!.getAttribute("aria-busy")).toBe("true");
 
-    // Chosen again, or Enter on any row, while it adds: nothing more runs.
+    // Chosen again, by click or Enter, while it adds: nothing more runs.
     row()!.click();
     input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
     await settle();
@@ -102,7 +102,7 @@ describe("Ctrl+K add a game", () => {
     expect(searchOpen.value).toBe(false);
   });
 
-  it("doesn't close a box opened again after it was closed while adding", async () => {
+  it("a box opened again while adding is neither closed nor jumped over, and can't add the game twice", async () => {
     const adding = deferred<{ ok: boolean; id?: string }>();
     host.act.mockImplementation(() => adding.promise);
     await openWith("hollow");
@@ -113,8 +113,33 @@ describe("Ctrl+K add a game", () => {
     await settle();
     searchOpen.value = true;
     await settle();
-    adding.resolve({ ok: false });
+    const input = document.querySelector<HTMLInputElement>('[data-testid="search-input"]')!;
+    input.value = "hollow";
+    input.dispatchEvent(new Event("input"));
+    await settle();
+    expect(row()!.getAttribute("aria-busy")).toBe("true");
+    row()!.click();
+    await settle();
+    expect(host.act).toHaveBeenCalledTimes(1);
+
+    adding.resolve({ ok: true, id: "hollow-knight" });
     await settle();
     expect(searchOpen.value).toBe(true);
+    expect(host.act).not.toHaveBeenCalledWith({ type: "open-workspace", workspaceId: "hollow-knight" });
+    expect(row()!.hasAttribute("aria-busy")).toBe(false);
+  });
+
+  it("Escape doesn't stop it: the game still opens", async () => {
+    const adding = deferred<{ ok: boolean; id?: string }>();
+    host.act.mockImplementation((action: { type: string }) => (action.type === "add-workspace" ? adding.promise : Promise.resolve({ ok: true })));
+    await openWith("hollow");
+    row()!.click();
+    await settle();
+    searchOpen.value = false;
+    await settle();
+    adding.resolve({ ok: true, id: "hollow-knight" });
+    await settle();
+    expect(host.act).toHaveBeenLastCalledWith({ type: "open-workspace", workspaceId: "hollow-knight" });
+    expect(searchOpen.value).toBe(false);
   });
 });
