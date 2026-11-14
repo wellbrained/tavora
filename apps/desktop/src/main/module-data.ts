@@ -1,4 +1,4 @@
-import { mkdir, readdir, rename, rm, rmdir, stat } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, rm, rmdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { isModuleId, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER } from "@tavora/module-schema";
 import { isWorkspaceId } from "./workspace-id";
@@ -76,38 +76,53 @@ async function partitionsWhere(userData: string, pick: (workspaceId: string) => 
   }
   return names
     .filter((name) => {
-      const decoded = safeDecode(name);
-      const match = /^(?:module:(?:[a-z0-9]+:)?[a-z0-9.-]+|browser)@([a-z0-9-]+)$/.exec(decoded);
-      return match !== null && pick(match[1]!);
+      const workspaceId = partitionWorkspace(name);
+      return workspaceId !== null && pick(workspaceId);
     })
     .map((name) => path.join(root, name));
 }
 
-/** In the data folder while what the start sweep would delete is kept (startSweepAllowed). */
+/** The workspace a module or Browser partition directory belongs to (lower case), or null for any other directory. */
+export function partitionWorkspace(dir: string): string | null {
+  const match = /^(?:module:(?:[a-z0-9]+:)?[a-z0-9.-]+|browser)@([a-z0-9-]+)$/.exec(safeDecode(path.basename(dir)));
+  return match?.[1] ?? null;
+}
+
+/** In the data folder while some left-over browser storage and panel state is kept (holdLeftovers). */
 export const SWEEP_HOLD_FILE = "sweep-hold.json";
 
+/** What the start sweep would delete: browser storage of workspaces not in the library, state of panels in no workspace. */
+export interface Leftovers {
+  workspaces: ReadonlySet<string>;
+  panels: ReadonlySet<string>;
+}
+
 /**
- * Whether this start may delete the browser storage of workspaces that aren't in the library and the panel state of
- * panels that aren't in any workspace. When library.json or workspace.json was missing or unreadable this start
- * (`filesRead` false), what looks left over is most likely the user's, back once they put the file back: nothing is
- * deleted, and a hold file keeps it that way at later starts too, as Tavora saves new files meanwhile. The hold lifts
- * at a start with nothing to delete (the files came back, or there never was anything).
+ * Which leftovers this start keeps; the sweep deletes the rest. When library.json or workspace.json was missing or
+ * unreadable this start (`filesRead` false), every leftover is most likely the user's, back once they restore the file:
+ * all are kept, and the hold file names them, so later starts keep them too while Tavora saves new files meanwhile.
+ * A later start keeps those that are still left over and sweeps everything else; once none is, the hold file goes.
+ * A hold file that can't be read keeps everything.
  */
-export async function startSweepAllowed(userData: string, filesRead: boolean, anythingToDelete: boolean): Promise<boolean> {
-  const hold = path.join(userData, SWEEP_HOLD_FILE);
-  if (!anythingToDelete) {
-    await rm(hold, { force: true });
-    return false;
+export async function holdLeftovers(userData: string, filesRead: boolean, leftovers: Leftovers): Promise<Leftovers> {
+  const file = path.join(userData, SWEEP_HOLD_FILE);
+  let held: { workspaces: string[]; panels: string[] };
+  try {
+    const saved = JSON.parse(await readFile(file, "utf8")) as { workspaces?: unknown; panels?: unknown } | null;
+    const strings = (value: unknown) => (Array.isArray(value) && value.every((item) => typeof item === "string") ? (value as string[]) : null);
+    const workspaces = strings(saved?.workspaces);
+    const panels = strings(saved?.panels);
+    if (!workspaces || !panels) return leftovers;
+    held = { workspaces, panels };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") return leftovers;
+    held = { workspaces: [], panels: [] };
   }
-  if (!filesRead) {
-    await writeFileAtomic(hold, JSON.stringify({ since: new Date().toISOString() }));
-    return false;
-  }
-  // Only a hold that is surely not there lets the sweep run.
-  return stat(hold).then(
-    () => false,
-    (error: NodeJS.ErrnoException) => error.code === "ENOENT",
-  );
+  const keep = (old: string[], now: ReadonlySet<string>) => new Set(filesRead ? old.filter((id) => now.has(id)) : [...old, ...now]);
+  const result = { workspaces: keep(held.workspaces, leftovers.workspaces), panels: keep(held.panels, leftovers.panels) };
+  if (result.workspaces.size === 0 && result.panels.size === 0) await rm(file, { force: true });
+  else await writeFileAtomic(file, JSON.stringify({ version: 1, workspaces: [...result.workspaces], panels: [...result.panels] }));
+  return result;
 }
 
 /**

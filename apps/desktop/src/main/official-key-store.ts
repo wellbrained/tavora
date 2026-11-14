@@ -1,6 +1,6 @@
 import { createPrivateKey, type KeyObject } from "node:crypto";
 import { existsSync } from "node:fs";
-import { readFile, rm } from "node:fs/promises";
+import { readdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import type { Encryptor } from "./discord-store";
 import { writeFileAtomic } from "./fsutil";
@@ -68,9 +68,11 @@ export class OfficialKeyStore {
     }
   }
 
-  /** Deletes the saved key, and a half-written copy a failed save left. */
+  /** Deletes the saved key, and any half-written copy a failed save left (`<file>.tmp`, or `<file>.<random>.tmp` since). */
   async forget(): Promise<void> {
-    await rm(`${this.file}.tmp`, { force: true });
+    const base = path.basename(this.file);
+    const temps = (await readdir(path.dirname(this.file)).catch(() => [] as string[])).filter((name) => name === `${base}.tmp` || (name.startsWith(`${base}.`) && /^\.[0-9a-f]+\.tmp$/.test(name.slice(base.length))));
+    for (const name of temps) await rm(path.join(path.dirname(this.file), name), { force: true });
     await rm(this.file, { force: true });
     this.saved = existsSync(this.file);
   }

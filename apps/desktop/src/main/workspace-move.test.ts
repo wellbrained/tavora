@@ -203,6 +203,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  failingWrites.clear();
   await rm(dir, { recursive: true, force: true });
 });
 
