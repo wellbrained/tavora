@@ -4,6 +4,7 @@
 import { clipboard, desktopCapturer, globalShortcut, nativeImage, screen, BrowserWindow } from "electron";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
+import { isVoicePaused } from "../shared/discord-voice";
 import { translate, type Language } from "../shared/i18n";
 import { HOST_SCHEME } from "./assets";
 import { GameOverlayWindow, type OverlayPanel } from "./game-overlay-window";
@@ -87,6 +88,7 @@ export interface OverlayWiring {
 /** The services, in the order they depend on each other: Streaming, then game overlays on its stores, then the Overlay page on those. */
 export async function createOverlayServices(wiring: OverlayWiring): Promise<OverlayServices> {
   const { options, library, ports } = wiring;
+  const installed = overlayModules(wiring.installed);
   const streaming = await Streaming.create({
     userData: options.userData,
     settings: () => library,
@@ -95,7 +97,7 @@ export async function createOverlayServices(wiring: OverlayWiring): Promise<Over
       if (next.overlayPort !== undefined) library.overlayPort = next.overlayPort;
       ports.saveLibrary();
     },
-    installed: wiring.installed,
+    installed,
     grants: wiring.grants,
     askConnector: ports.askConnector,
     workspaceId: ports.workspaceId,
@@ -110,7 +112,7 @@ export async function createOverlayServices(wiring: OverlayWiring): Promise<Over
   const gameOverlays = await GameOverlays.create({
     userData: options.userData,
     streaming,
-    installed: wiring.installed,
+    installed,
     workspaces: wiring.workspaces,
     settings: library,
     watcher: wiring.watcher,
@@ -135,7 +137,7 @@ export async function createOverlayServices(wiring: OverlayWiring): Promise<Over
   streaming.useOverlayKeys(gameOverlays);
   const previews = new OverlayPreviews({
     overlays: streaming.overlayStore,
-    installed: wiring.installed,
+    installed,
     openWindow: (request) =>
       new OverlayPreviewWindow(request, {
         hidden: options.hidden,
@@ -223,4 +225,21 @@ function overlayLayout(wiring: OverlayWiring, gameOverlays: GameOverlays): Overl
       }
     },
   });
+}
+
+/**
+ * The installed modules as the overlays see them. While Discord voice is paused (shared/discord-voice.ts) the Discord
+ * module has no overlay page: its game and stream overlays aren't shown or served and none can be added, but they stay
+ * saved (nothing is forgotten for a missing page, only for another publisher's module) and come back with it.
+ */
+export function overlayModules(installed: Installed): Pick<Installed, "shown" | "get"> {
+  return {
+    shown: (moduleId) => {
+      const module = installed.shown(moduleId);
+      if (!module || !isVoicePaused(moduleId)) return module;
+      const { overlay: _paused, ...manifest } = module.manifest;
+      return { ...module, manifest };
+    },
+    get: (moduleId) => installed.get(moduleId),
+  };
 }

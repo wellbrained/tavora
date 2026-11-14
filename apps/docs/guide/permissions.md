@@ -32,7 +32,7 @@ When a user adds your module, Tavora shows its own dialog, which your page can't
 
 How to get your name there is in [Your publisher key](./publisher-key.md#show-your-name).
 
-If the user cancels, the module isn't added. They can take a grant back any time in Settings (Modules > Website access for websites, Integrations for Discord and AI usage, Streaming for overlays), which removes the module's panels. An update that asks for more keeps what was granted, and its panels offer the user to review the new hosts, which they can put off with **Not now**.
+If the user cancels, the module isn't added. They can take a grant back any time in Settings (Modules > Website access for websites, Integrations for AI usage and Discord, which is paused for now and hidden there, Streaming for overlays), which removes the module's panels. An update that asks for more keeps what was granted, and its panels offer the user to review the new hosts, which they can put off with **Not now**.
 
 ## Check before you call
 

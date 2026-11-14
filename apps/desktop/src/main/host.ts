@@ -3037,7 +3037,8 @@ export class Host {
       for (const record of this.records(entry.id)) {
         const module = this.modules.get(record.moduleId);
         const name = this.panelName(record.instanceId);
-        if (!module || !name) continue;
+        // A paused Discord panel doesn't run (shared/discord-voice.ts), so it has nothing to show over a game.
+        if (!module || !name || isVoicePaused(record.moduleId)) continue;
         sources.push({
           instanceId: record.instanceId,
           name,

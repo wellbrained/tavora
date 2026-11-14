@@ -1596,7 +1596,7 @@ export const en = {
   "panel.moved": "{module} is now a separate module. Install it to keep using it here; your settings come along.",
   "panel.movedOffline": "Turn on online features in Settings to install it.",
   "panel.discordPaused": "Discord is taking a break",
-  "panel.discordPausedText": "We've paused Discord in Tavora for now. Your settings are safe, and this panel comes back once it returns.",
+  "panel.discordPausedText": "We've paused Discord voice in Tavora for now. Your settings are safe, and this panel comes back with it.",
   "panel.typeGoneChoose": "Choose another panel of {module}:",
   "panel.remove": "Remove",
   "panel.reload": "Reload",

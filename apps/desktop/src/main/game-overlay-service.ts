@@ -12,6 +12,7 @@
 // panels return to their workspace slots, overlays are click-through again, and the game gets the keyboard back.
 //
 // Tavora only reads which window is in front (foreground.ts) and draws its own windows above it.
+import { isVoicePaused } from "../shared/discord-voice";
 import type { GameOverlayResult, JsonValue, OverlaySource } from "@tavora/sdk/protocol";
 import type { GameOverlaysView } from "../shared/host-api";
 import { translate, type Language } from "../shared/i18n";
@@ -1042,7 +1043,8 @@ export class GameOverlays {
         if (!entry) {
           entry = this.createPanel(panel, id, setup) ?? undefined;
           if (!entry) {
-            gone.push(panel);
+            // A paused Discord panel doesn't start (shared/discord-voice.ts), but it isn't gone: it stays in its setup.
+            if (!isVoicePaused(panel.moduleId)) gone.push(panel);
             continue;
           }
         }

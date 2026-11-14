@@ -3,8 +3,9 @@
 // not deleted: setting DISCORD_VOICE_PAUSED to false brings all of it back.
 //
 // While paused, the connection to the Discord app never starts (main/discord.ts), Settings > Connections and its search
-// leave Discord out (renderer/host.ts hiddenSettingIds), and panels of the Discord module say it's paused instead of
-// loading it or offering to install it (main/host.ts panelTypeOf, PanelContent.vue). Nothing saved is changed: panels,
+// leave Discord out (renderer/host.ts hiddenSettingIds), panels of the Discord module say it's paused instead of
+// loading it or offering to install it (main/host.ts panelTypeOf, PanelContent.vue), and its overlay page isn't shown
+// over games or in streaming software (main/overlay-wiring.ts). Nothing saved is changed: panels, overlays,
 // settings, module data and the Discord sign-in stay as they are. Signing in to the Tavora account with Discord is a
 // different thing and stays.
 
@@ -14,8 +15,11 @@ export const DISCORD_VOICE_PAUSED: boolean = true;
 /** The Discord module in the catalog. */
 export const DISCORD_MODULE_ID = "wellbrained.discord";
 
-/** The Discord module, and the official one it replaced (main/moved-modules.ts moves those panels over at start). */
-const DISCORD_VOICE_MODULES: readonly string[] = [DISCORD_MODULE_ID, "tavora.discord"];
+/**
+ * The Discord module, its development copy (the dev Tavora loads it as `local.discord`), and the official one it
+ * replaced (main/moved-modules.ts moves those panels over at start).
+ */
+const DISCORD_VOICE_MODULES: readonly string[] = [DISCORD_MODULE_ID, "local.discord", "tavora.discord"];
 
 /** Whether a panel of this module shows the paused note instead of running. */
 export function isVoicePaused(moduleId: string, paused: boolean = DISCORD_VOICE_PAUSED): boolean {

@@ -5,6 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp, h, nextTick, type App } from "vue";
 import type { HostViewState } from "../shared/host-api";
+import { DISCORD_VOICE_PAUSED } from "../shared/discord-voice";
 
 vi.hoisted(() => {
   // Every listener is taken and never called, every other call answers nothing: the test sets the state itself.
@@ -67,7 +68,7 @@ function mountPanel(panel: Record<string, unknown>) {
 }
 const shown = (selector: string) => root.querySelector(selector);
 
-describe("Discord voice, paused", () => {
+describe.runIf(DISCORD_VOICE_PAUSED)("Discord voice, paused", () => {
   it("leaves Discord out of Settings > Connections and its search, though an installed module asks for it", () => {
     expect(hiddenSettingIds.value.has("discord-connection")).toBe(true);
     expect(settingEntries(new Set(), hiddenSettingIds.value).some((entry) => entry.id === "discord-connection")).toBe(false);
@@ -77,7 +78,7 @@ describe("Discord voice, paused", () => {
     mountPanel({ instanceId: "p1", moduleId: "wellbrained.discord", panelType: "voice", name: "Discord", status: "unavailable", waiting: false, content: null, paused: true });
     await nextTick();
     expect(shown('[data-testid="panel-paused-p1"]')?.textContent).toBe("Discord is taking a break");
-    expect(root.textContent).toContain("We've paused Discord in Tavora for now.");
+    expect(root.textContent).toContain("We've paused Discord voice in Tavora for now.");
     expect(shown('[data-testid="install-moved-module"]')).toBeNull();
     expect(shown('[data-testid="remove-unavailable-panel"]')).toBeNull();
     expect(shown('[data-testid="choose-panel-type-voice"]')).toBeNull();
