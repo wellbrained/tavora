@@ -195,7 +195,9 @@ export async function openSealedFile<T>(file: string, open: (data: string) => T 
 export async function forgetSealedFile(file: string): Promise<void> {
   await rm(file, { force: true });
   const base = path.basename(file);
-  const copies = (await readdir(path.dirname(file)).catch(() => [] as string[])).filter((name) => [".corrupt-", ".from-version-", ".unopened"].some((kind) => name.startsWith(`${base}${kind}`)));
+  // The copies set aside, and any half-written temp a crash left (`<file>.tmp`, or `<file>.<random>.tmp`).
+  const temp = (name: string) => name === `${base}.tmp` || (name.startsWith(`${base}.`) && /^\.[0-9a-f]+\.tmp$/.test(name.slice(base.length)));
+  const copies = (await readdir(path.dirname(file)).catch(() => [] as string[])).filter((name) => temp(name) || [".corrupt-", ".from-version-", ".unopened"].some((kind) => name.startsWith(`${base}${kind}`)));
   for (const name of copies) await rm(path.join(path.dirname(file), name), { force: true });
 }
 

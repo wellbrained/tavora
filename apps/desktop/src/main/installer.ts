@@ -9,7 +9,7 @@ import path from "node:path";
 import { isModuleId, isOwnerId, LOCAL_OWNER, manifestFiles, needsNewerTavora, OFFICIAL_OWNER, validateManifest, type ModuleManifest } from "@tavora/module-schema";
 import { MANIFEST_FILE, readZip, signedHash, verifyFiles, ZIP_LIMITS, ZipError, type ZipFile } from "@tavora/pack";
 import { compareModuleVersions } from "../shared/module-version";
-import { writeFileAtomic } from "./fsutil";
+import { SerialQueue, writeFileAtomic } from "./fsutil";
 import { readSavedFile } from "./json";
 import { SUPPORTED_VERSIONS } from "./saved-versions";
 import { UserError } from "./messages";
@@ -57,8 +57,16 @@ export async function readOwnerRecords(userData: string): Promise<OwnerRecords> 
   return records;
 }
 
-async function writeOwnerRecords(userData: string, records: OwnerRecords): Promise<void> {
-  await writeFileAtomic(path.join(userData, RECORDS), `${JSON.stringify({ version: SUPPORTED_VERSIONS[OWNER_RECORDS_FILE], folders: records }, null, 2)}\n`);
+/** Changes to the records, one at a time: two installs at once would otherwise each write back what they read, and one record would be lost. */
+const recordChanges = new SerialQueue();
+
+/** Reads the records, lets `change` edit them (false: nothing to write) and writes them back, after any change before it. */
+function changeOwnerRecords(userData: string, change: (records: OwnerRecords) => boolean | void): Promise<void> {
+  return recordChanges.run(async () => {
+    const records = await readOwnerRecords(userData);
+    if (change(records) === false) return;
+    await writeFileAtomic(path.join(userData, RECORDS), `${JSON.stringify({ version: SUPPORTED_VERSIONS[OWNER_RECORDS_FILE], folders: records }, null, 2)}\n`);
+  });
 }
 
 /**
@@ -76,10 +84,10 @@ export function applyOwners(modules: Map<string, InstalledModule>, userModulesRo
 
 /** Forgets the recorded owner of a folder that was removed. Its data stays under that owner. */
 export async function forgetOwner(userData: string, folder: string): Promise<void> {
-  const records = await readOwnerRecords(userData);
-  if (!(folder in records)) return;
-  delete records[folder];
-  await writeOwnerRecords(userData, records);
+  await changeOwnerRecords(userData, (records) => {
+    if (!(folder in records)) return false;
+    delete records[folder];
+  });
 }
 
 export interface InstallOptions {
@@ -288,10 +296,10 @@ async function writeFiles({ files, manifest, owner, signer, sha256, signedSha256
     await official.save({ id: manifest.id, version: manifest.version, sha256, signer, ...(signedSha256 ? { signedSha256 } : {}) });
     return { manifest, owner, sha256, updated };
   }
-  const records = await readOwnerRecords(userData);
-  if (owner === LOCAL_OWNER) delete records[folder];
-  else records[folder] = { id: manifest.id, owner, ...(signer !== owner ? { signer } : {}), sha256, ...(signedSha256 ? { signedSha256 } : {}), ...(catalog ? { catalog: true as const } : {}) };
-  await writeOwnerRecords(userData, records);
+  await changeOwnerRecords(userData, (records) => {
+    if (owner === LOCAL_OWNER) delete records[folder];
+    else records[folder] = { id: manifest.id, owner, ...(signer !== owner ? { signer } : {}), sha256, ...(signedSha256 ? { signedSha256 } : {}), ...(catalog ? { catalog: true as const } : {}) };
+  });
   return { manifest, owner, sha256, updated };
 }
 

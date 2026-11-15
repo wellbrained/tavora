@@ -334,6 +334,21 @@
   }
 }
 
+/* Work a control waits for: a menu row whose action is running (aria-busy) breathes with the slow pulse of a placeholder
+   that waits (Skeleton), the only motion that repeats. Nothing is added to the row; it keeps its highlight. The pulse
+   starts at full strength, so a quick action hardly shows it. Reduced motion: it holds still, a little dimmer. */
+@layer components {
+  .tavora-busy[aria-busy="true"] {
+    cursor: progress;
+    animation: tavora-busy-pulse var(--duration-pulse) var(--ease-in-out-strong) infinite;
+  }
+  @keyframes tavora-busy-pulse {
+    50% {
+      opacity: 0.55;
+    }
+  }
+}
+
 /* The plain fade. Outside the reduced-motion block, because the dialog overlay, the workspace page and the reduced
    rules below all use it. */
 @keyframes tavora-fade-in {
@@ -422,6 +437,11 @@
   .tavora-dialog[data-state="closed"],
   .tavora-dialog-overlay[data-state="closed"] {
     animation: tavora-fade-out 80ms linear forwards !important;
+  }
+  /* A busy menu row holds still, a little dimmer. */
+  .tavora-busy[aria-busy="true"] {
+    animation: none !important;
+    opacity: 0.7;
   }
   /* A dialog a key opened or Escape closed has no fade either. */
   .tavora-dialog[data-instant][data-state],

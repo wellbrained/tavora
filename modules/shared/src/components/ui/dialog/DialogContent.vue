@@ -1,46 +1,55 @@
 <script setup lang="ts">
 import type { DialogContentEmits, DialogContentProps } from "reka-ui"
 import type { HTMLAttributes } from "vue"
-import { X } from "@lucide/vue"
 import { reactiveOmit, useEventListener, useResizeObserver } from "@vueuse/core"
 import {
-  DialogClose,
   DialogContent,
   DialogPortal,
   injectDialogRootContext,
   useForwardPropsEmits,
 } from "reka-ui"
-import { nextTick, provide, ref, shallowRef, toRef, watch } from "vue"
-import { InertBehind } from "../../../lib/inert-behind"
+import { computed, nextTick, provide, ref, shallowRef, toRef, useAttrs, watch } from "vue"
+import { LayerAnchor, useLayer } from "../../../lib/layers"
 import { cn } from "../../../lib/utils"
-import { uiText } from "../text"
 import { dialogChromeKey, dialogCloseClass } from "./chrome"
+import DialogCloseX from "./DialogCloseX.vue"
 import DialogOverlay from "./DialogOverlay.vue"
+import { useDialogDismissal, withoutDismissListener, type DismissEmits, type DismissOptions } from "./dismissal"
 import { provideDialogInstant } from "./instant"
-import { trackModal } from "./track-modal"
 
 defineOptions({
   inheritAttrs: false,
 })
 
-const props = withDefaults(defineProps<DialogContentProps & { class?: HTMLAttributes["class"], showCloseButton?: boolean, instant?: boolean }>(), {
+const props = withDefaults(defineProps<DialogContentProps & DismissOptions & {
+  class?: HTMLAttributes["class"]
+  showCloseButton?: boolean
+  instant?: boolean
+}>(), {
   showCloseButton: true,
   instant: false,
+  dismissible: true,
+  busy: false,
 })
-const emits = defineEmits<DialogContentEmits>()
+const emits = defineEmits<DialogContentEmits & DismissEmits>()
 
-const delegatedProps = reactiveOmit(props, "class", "showCloseButton", "instant")
+const delegatedProps = reactiveOmit(props, "class", "showCloseButton", "instant", "dismissible", "busy")
 
 // Opened by a key (or closed with Escape), or `instant` for a dialog that never animates: no rise, no fade (instant.ts).
 const instant = provideDialogInstant(() => props.instant)
-// Page keys such as Ctrl+Z stand down while it is open (modal.ts).
-trackModal()
+const root = injectDialogRootContext()
+// On top of the page while open: page keys such as Ctrl+Z stand down and the page around it is inert (layers.ts).
+const attrs = useAttrs()
+const layer = useLayer("dialog", root.open, { name: () => attrs["data-testid"] as string | undefined })
 
 // A DialogHeader with a title draws the close X itself (centred against the title); without one the X sits in the corner.
 const headerClose = ref(false)
 provide(dialogChromeKey, { showClose: toRef(props, "showCloseButton"), headerClose })
 
-const forwarded = useForwardPropsEmits(delegatedProps, emits)
+// Reka's own events go on to Reka; `dismiss-attempt` is the kit's and stays here.
+const forwardedAll = useForwardPropsEmits(delegatedProps, emits)
+const forwarded = computed(() => withoutDismissListener(forwardedAll.value))
+const dismissal = useDialogDismissal(() => props, attempt => emits("dismiss-attempt", attempt), layer)
 
 // The header's close X comes first in the page, so the dialog's own focus would land on it. Focus what the user came
 // to do instead: an `autofocus` element, else the first field or button that is not the X. A caller's own
@@ -61,7 +70,6 @@ function focusFirst(event: Event) {
 // dialog pinned near the window's top sticks out above a tall dialog like Settings. The styles are set
 // here rather than bound, so a dialog keeps its own width unless it is wider than the room it has.
 const INSET = 16
-const root = injectDialogRootContext()
 const parents = shallowRef<HTMLElement[]>([])
 const content = () => (root.open.value ? root.contentElement.value : undefined)
 
@@ -111,23 +119,18 @@ useEventListener(window, "resize", place)
       :data-instant="instant ? '' : undefined"
       v-bind="{ ...$attrs, ...forwarded }"
       @open-auto-focus="focusFirst"
+      @escape-key-down="dismissal.onEscapeKeyDown"
+      @pointer-down-outside="dismissal.onPointerDownOutside"
       :class="
         cn(
           'tavora-dialog bg-background fixed top-[50%] left-[50%] z-50 grid w-full max-w-[min(420px,calc(100%-2rem))] translate-x-[-50%] translate-y-[-50%] gap-6 rounded-lg border p-6 shadow-lg',
           props.class,
         )"
     >
-      <InertBehind />
+      <LayerAnchor />
       <slot />
 
-      <DialogClose
-        v-if="showCloseButton && !headerClose"
-        data-slot="dialog-close"
-        :class="cn(dialogCloseClass, 'absolute top-[17px] right-6')"
-      >
-        <X :stroke-width="1.5" />
-        <span class="sr-only">{{ uiText.close }}</span>
-      </DialogClose>
+      <DialogCloseX v-if="showCloseButton && !headerClose" :class="cn(dialogCloseClass, 'absolute top-[17px] right-6')" />
     </DialogContent>
   </DialogPortal>
 </template>

@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.3.18",
+    "date": "2026-11-14",
+    "notes": [
+      "Copy as picture in the ⋯ menu keeps the menu open until the picture is copied."
+    ]
+  },
+  {
     "version": "0.3.17",
     "date": "2026-11-08",
     "notes": [

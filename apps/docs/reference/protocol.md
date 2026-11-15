@@ -332,7 +332,7 @@ When the user presses it, one panel of the module in the workspace shown now, th
 
 A document is a named JSON value with a title and a revision. `DocumentSummary` is `{ id, title, revision, updatedAt, bytes }`; `updatedAt` is an ISO 8601 timestamp and `bytes` the size of `data` as stored.
 
-- `id`: 1 to 64 characters from `A-Z a-z 0-9 _ -`, starting with a letter or digit. Leave it out of `documents.put` to get a new random id.
+- `id`: 1 to 64 characters from `A-Z a-z 0-9 _ -`, starting with a letter or digit. Leave it out of `documents.put` to get a new random id. Ids are saved as file names. So a new document can't be called `index` or a name Windows keeps for devices (`con`, `prn`, `aux`, `nul`, `com1` to `com9`, `lpt1` to `lpt9`), in any case. Its id also can't differ from an existing document's id only by case (`Notes` next to `notes`). `documents.put` refuses these with `INVALID_PARAMS`; documents saved under such ids before stay readable.
 - `revision` starts at 1 and goes up by one on every put.
 - `ifRevision` makes a put or delete conditional: it fails with `CONFLICT` (and `error.revision` set to the current revision) unless the stored revision equals it. `ifRevision: 0` means "only if it does not exist yet".
 - After a successful put or delete, every **other** connected panel of the same module and workspace gets a `documents.changed` event. The panel that made the change does not.

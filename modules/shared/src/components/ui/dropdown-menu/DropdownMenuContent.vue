@@ -8,7 +8,7 @@ import {
   injectDropdownMenuRootContext,
   useForwardPropsEmits,
 } from "reka-ui"
-import { InertBehind } from "../../../lib/inert-behind"
+import { LayerAnchor, useLayer } from "../../../lib/layers"
 import { cn } from "../../../lib/utils"
 
 defineOptions({
@@ -29,6 +29,8 @@ const delegatedProps = reactiveOmit(props, "class")
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
 const root = injectDropdownMenuRootContext()
+// On top of the page while open; a modal menu makes the page around it inert (layers.ts).
+useLayer("menu", root.open, { modal: () => root.modal.value })
 </script>
 
 <template>
@@ -38,7 +40,7 @@ const root = injectDropdownMenuRootContext()
       v-bind="{ ...$attrs, ...forwarded }"
       :class="cn('bg-popover text-popover-foreground tavora-popup z-50 max-h-(--reka-dropdown-menu-content-available-height) min-w-[max(8rem,var(--reka-dropdown-menu-trigger-width))] overflow-x-hidden overflow-y-auto rounded-xl border p-1 shadow-lg', props.class)"
     >
-      <InertBehind :active="root.modal.value" />
+      <LayerAnchor />
       <slot />
     </DropdownMenuContent>
   </DropdownMenuPortal>

@@ -97,6 +97,7 @@ export class DocumentStore extends EventEmitter<{ change: [DocumentChange, unkno
     return this.queue.run(async () => {
       const index = await this.load();
       const existing = index.get(docId);
+      if (!existing) checkNewId(docId, index);
       checkRevision(existing, ifRevision);
       if (!existing && index.size >= this.limits.maxDocuments) {
         throw new HostError("QUOTA_EXCEEDED", `a module may keep at most ${this.limits.maxDocuments} documents per workspace`);
@@ -162,6 +163,8 @@ export class DocumentStore extends EventEmitter<{ change: [DocumentChange, unkno
       saved && typeof saved.documents === "object" && !(await this.newerThanIndex())
         ? new Map(Object.entries(saved.documents))
         : await this.rebuild();
+    // A put of `index` (before such ids were refused) wrote over the index itself: there is no such document.
+    for (const id of this.index.keys()) if (id.toLowerCase() === "index") this.index.delete(id);
     return this.index;
   }
 
@@ -194,7 +197,7 @@ export class DocumentStore extends EventEmitter<{ change: [DocumentChange, unkno
   private async documentFiles(): Promise<string[]> {
     try {
       return (await readdir(this.dir)).filter(
-        (name) => name.endsWith(".json") && name !== "index.json" && DOCUMENT_ID.test(name.slice(0, -".json".length)),
+        (name) => name.endsWith(".json") && name.toLowerCase() !== "index.json" && DOCUMENT_ID.test(name.slice(0, -".json".length)),
       );
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
@@ -212,6 +215,23 @@ function validateId(id: unknown): string {
     throw new HostError("INVALID_PARAMS", "document id must be 1 to 64 letters, digits, '-' or '_'");
   }
   return id;
+}
+
+/**
+ * Ids a new document can't have, in any case: `index` is the store's own file, and Windows keeps the device names
+ * (`con`, `nul`, `com1`, …) for itself, so `con.json` is no file. A document saved under one elsewhere stays readable.
+ */
+const RESERVED_ID = /^(?:index|con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+
+/**
+ * Refuses an id a new document can't have: a reserved one, or one that differs from a saved document's id only by
+ * case, as Windows doesn't tell `Notes.json` from `notes.json` and one would write over the other.
+ */
+function checkNewId(id: string, index: Map<string, DocumentSummary>): void {
+  if (RESERVED_ID.test(id)) throw new HostError("INVALID_PARAMS", `"${id}" can't be a document id: Windows or Tavora keeps that name for itself`);
+  const lower = id.toLowerCase();
+  const other = [...index.keys()].find((saved) => saved.toLowerCase() === lower);
+  if (other !== undefined) throw new HostError("INVALID_PARAMS", `document id "${id}" differs from "${other}" only by case`);
 }
 
 function checkRevision(existing: DocumentSummary | undefined, ifRevision: number | undefined): void {

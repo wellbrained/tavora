@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { createApp, defineComponent, h, nextTick, ref, type App } from "vue"
+import { createApp, defineComponent, h, nextTick, ref, type App, type Ref } from "vue"
 import { DataGrid, cell, rangeOf, single, type FillPlan, type GridEdit, type GridRange, type GridSelection } from "."
 
 // jsdom has no layout: the grid's box is made up, as in the ZoomPane tests.
@@ -40,14 +40,14 @@ interface Mounted {
   fills: FillPlan[]
 }
 
-async function mount(options: { rows?: number; cols?: number; readonly?: boolean; frozenRows?: number; data?: Map<string, string> } = {}): Promise<Mounted> {
+async function mount(options: { rows?: number | Ref<number>; cols?: number; readonly?: boolean; frozenRows?: number; data?: Map<string, string> } = {}): Promise<Mounted> {
   const data = options.data ?? new Map<string, string>()
   const selection = ref<GridSelection>(single(cell(0, 0)))
   const editing = ref<GridEdit | null>(null)
   const result: Mounted = { root: null as unknown as HTMLElement, selection, editing, commits: [], clears: [], fills: [] }
   const Host = defineComponent(() => () =>
     h(DataGrid, {
-      rows: options.rows ?? 10_000,
+      rows: typeof options.rows === "object" ? options.rows.value : (options.rows ?? 10_000),
       cols: options.cols ?? 26,
       readonly: options.readonly ?? false,
       frozenRows: options.frozenRows ?? 0,
@@ -197,6 +197,24 @@ describe("DataGrid", () => {
     expect(grid.editing.value?.text).toBe("=SU");
     bar.remove();
   });
+
+  it("drops an edit whose row was deleted and keeps the focus in the grid", async () => {
+    const rows = ref(5)
+    const grid = await mount({ rows })
+    grid.selection.value = single(cell(4, 0))
+    await flush()
+    grid.root.focus()
+    await press(grid.root, "F2")
+    const editor = grid.root.querySelector<HTMLTextAreaElement>("[data-grid-editor]")!
+    expect(document.activeElement).toBe(editor)
+    rows.value = 4
+    await flush()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(grid.editing.value).toBeNull()
+    expect(grid.commits).toEqual([])
+    expect(grid.selection.value.active).toEqual(cell(3, 0))
+    expect(document.activeElement).toBe(grid.root)
+  })
 
   it("draws frozen rows on their own", async () => {
     const { root } = await mount({ frozenRows: 2 })

@@ -215,7 +215,8 @@ function remove(module: ModuleView) {
             <DropdownMenuItem data-testid="open-modules-folder" @select="act({ type: 'open-modules-folder' })">
               <FolderOpen aria-hidden="true" /> {{ t("common.openFolder") }}
             </DropdownMenuItem>
-            <DropdownMenuItem data-testid="reload-modules" @select="act({ type: 'reload-modules' })">
+            <!-- Looking through every module folder takes a moment: the menu stays open until it is done. -->
+            <DropdownMenuItem data-testid="reload-modules" :action="() => act({ type: 'reload-modules' })">
               <RefreshCw aria-hidden="true" /> {{ t("common.reload") }}
             </DropdownMenuItem>
           </DropdownMenuContent>

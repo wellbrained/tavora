@@ -13,6 +13,7 @@ import { dockDragStep, type DockDrag, type DockDragEvent, type DockDragStep, typ
 import { diffLayouts, planDrop, type Dragged, type DropPlan, type DropTarget, type Rect, type Side } from "./dock-model";
 import type { PanelInfo } from "./dock";
 import { t } from "./i18n";
+import { keyInput, shortcutIn } from "../shared/shortcuts";
 import { MAC } from "./shortcuts";
 
 /** What DockPreview.vue draws. All rectangles are in the dock's own coordinates. */
@@ -69,9 +70,8 @@ const AIMING = "data-dock-aiming";
 const KEYBOARD = "data-dock-keyboard";
 const ARROWS: Record<string, Side> = { ArrowLeft: "left", ArrowRight: "right", ArrowUp: "top", ArrowDown: "bottom" };
 
-/** Ctrl+M (Cmd+M on a Mac): lifts the focused tab's panel. */
-const isMoveKey = (event: KeyboardEvent): boolean =>
-  event.key.toLowerCase() === "m" && !event.altKey && !event.shiftKey && (MAC ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey);
+/** Ctrl+M (Cmd+M on a Mac): lifts the focused tab's panel (the table: shared/shortcuts.ts). */
+const isMoveKey = (event: KeyboardEvent): boolean => shortcutIn("panels", keyInput(event), MAC) === "panel.move";
 
 /** A place read out: the dock's edge, beside a group, or a tab's place in a group. */
 function describe(target: DropTarget, scene: Scene): string {

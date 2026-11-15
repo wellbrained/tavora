@@ -61,7 +61,9 @@ const shown = shallowRef<Shown | null>(null);
 const board = shallowRef<BoardSession | null>(null);
 const boardState = shallowRef<BoardState>(initialBoardState(emptyBoard()));
 const deleted = ref(false);
-const copying = ref(false);
+/** The picture being copied or saved, if any: one at a time, and a second Copy waits for the one going. */
+const pictureJob = shallowRef<Promise<void> | null>(null);
+const copying = computed(() => pictureJob.value !== null);
 // Panel state crosses a MessagePort; keep this object plain rather than sending a Vue proxy.
 const palette = shallowRef<PalettePlace>(DEFAULT_PALETTE);
 const toolbar = ref<ToolbarPlace>("top");
@@ -264,17 +266,18 @@ async function rename(value: string) {
 }
 
 /** Runs a picture action from a click or key press; the host only takes the picture right after that press. */
-async function pictureAction(run: (session: BoardSession) => Promise<void>, failed: (reason: unknown) => string) {
+function pictureAction(run: (session: BoardSession) => Promise<void>, failed: (reason: unknown) => string): Promise<void> {
   const session = board.value;
-  if (!session || copying.value) return;
-  copying.value = true;
-  try {
-    await run(session);
-  } catch (reason) {
-    notify(failed(reason));
-  } finally {
-    copying.value = false;
-  }
+  if (!session) return Promise.resolve();
+  return (pictureJob.value ??= (async () => {
+    try {
+      await run(session);
+    } catch (reason) {
+      notify(failed(reason));
+    } finally {
+      pictureJob.value = null;
+    }
+  })());
 }
 
 /** What went wrong with a picture, in words for the user. */
@@ -433,7 +436,7 @@ async function addPicture(event: Event) {
       <DropdownMenu>
         <DropdownMenuTrigger as-child><Button class="board-actions-menu" variant="ghost" size="icon-sm" :aria-label="t('board.actions')" :title="t('board.actions')" data-testid="board-actions"><MoreHorizontal class="size-4" /></Button></DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem data-testid="compact-copy-picture" :disabled="boardState.empty || copying" :disabled-reason="boardState.empty ? t('board.nothingYet') : undefined" @select="copyAsPicture">{{ t("copy.button") }}</DropdownMenuItem>
+          <DropdownMenuItem data-testid="compact-copy-picture" :disabled="boardState.empty" :disabled-reason="boardState.empty ? t('board.nothingYet') : undefined" :action="copyAsPicture">{{ t("copy.button") }}</DropdownMenuItem>
           <DropdownMenuItem data-testid="compact-save-picture" :disabled="boardState.empty || copying" :disabled-reason="boardState.empty ? t('board.nothingYet') : undefined" @select="saveAsPicture">{{ t("savePicture.button") }}</DropdownMenuItem>
           <DropdownMenuSeparator v-if="boardState.pictures.count > 0" />
           <DropdownMenuItem v-if="boardState.pictures.count > 0" @select="togglePictureLocks">{{ t(boardState.pictures.allLocked ? "image.unlock" : "image.lock") }}</DropdownMenuItem>

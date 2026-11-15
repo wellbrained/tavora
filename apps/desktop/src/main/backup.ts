@@ -3,6 +3,7 @@ import path from "node:path";
 import { isOwnerId } from "@tavora/module-schema";
 import { FILES_DIR } from "./module-files";
 import { DATA_FILES, hasLibrary } from "./saved-data";
+import { SWEEP_HOLD_FILE } from "./module-data";
 
 /** How many daily snapshots are kept. */
 export const BACKUP_KEEP = 7;
@@ -129,7 +130,9 @@ export async function backupData(options: BackupOptions): Promise<BackupResult> 
     throw error;
   }
 
-  await pruneBackups(root, options.keep ?? BACKUP_KEEP);
+  // While a start held storage back for a lost library (sweep-hold.json), the older backups may hold the only good copy:
+  // none is pruned until the user's data is back.
+  if (!(await exists(path.join(userData, SWEEP_HOLD_FILE)))) await pruneBackups(root, options.keep ?? BACKUP_KEEP);
   log(`backup ${day} made${withPictures ? "" : " (without pictures)"}`);
   return { status: "made", dir: target, withPictures };
 }

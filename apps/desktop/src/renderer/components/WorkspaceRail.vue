@@ -8,7 +8,7 @@ import { bindDrag } from "@tavora/official-ui/lib/bind-drag";
 import { cn } from "@tavora/official-ui/lib/utils";
 import { act, dialog, openSettings, prompt, railToggles, state, submitAction } from "../host";
 import { t } from "../i18n";
-import { numberedWorkspaces } from "../shortcuts";
+import { keyshortcuts, numberedWorkspaces } from "../shortcuts";
 import { folderMenu, workspaceMenu } from "../rail-actions";
 import MenuArea from "./menus/MenuArea.vue";
 import ProfileMenu from "./profile/ProfileMenu.vue";
@@ -403,6 +403,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
           data-rail-item
           data-testid="rail-home"
           :aria-label="t('rail.home')"
+          :aria-keyshortcuts="keyshortcuts('home')"
           :aria-current="state!.screen === 'welcome' ? 'page' : undefined"
           @click="act({ type: 'show-welcome' })"
         >
@@ -434,6 +435,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
         data-testid="rail-toggle"
         :aria-label="expanded ? t('rail.collapse') : t('rail.expand')"
         :title="expanded ? t('rail.collapse') : t('rail.expand')"
+        :aria-keyshortcuts="keyshortcuts('toggle-rail')"
         :aria-expanded="expanded"
         @click="toggleRail"
       >
@@ -638,6 +640,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
           data-rail-item
           data-testid="rail-settings"
           :aria-label="t('rail.settings')"
+          :aria-keyshortcuts="keyshortcuts('settings')"
           aria-haspopup="dialog"
           @click="openSettings()"
         >

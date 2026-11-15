@@ -23,7 +23,7 @@ import {
 import { Popover, PopoverAnchor, PopoverContent } from "@tavora/official-ui/components/ui/popover";
 import { computed, inject, nextTick, ref } from "vue";
 import { t } from "./i18n";
-import { PANEL } from "./panel";
+import { PANEL, ROW_FOCUS } from "./panel";
 import type { TodoStore } from "./store";
 import {
   canIndent,
@@ -63,6 +63,8 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ dragstart: [event: DragEvent]; dragend: [] }>();
 const panel = inject(PANEL)!;
+/** Gives this row the focus back once Undo has brought it back. */
+const rowFocus = inject(ROW_FOCUS, null);
 
 const menuOpen = ref(false);
 const title = ref("");
@@ -89,7 +91,11 @@ function setTaskDone(done: boolean) {
   const taskId = id.value;
   if (done) panel.linger(taskId, props.task.pinned);
   change((data) => setDone(data, taskId, done, at));
-  if (done) panel.offerUndo(t("app.undoFinished", { title: props.task.title }), () => change((data) => restoreDone(data, before)));
+  if (done)
+    panel.offerUndo(t("app.undoFinished", { title: props.task.title }), () => {
+      change((data) => restoreDone(data, before));
+      rowFocus?.restore(taskId);
+    });
 }
 
 function remove() {
@@ -102,6 +108,7 @@ function remove() {
     // Checked on the list as it is now (its group may be gone since); the change may run again on a newer one.
     if (!canRestoreBlock(store.list.value, removed)) return false;
     store.apply((data) => void restoreBlock(data, removed));
+    rowFocus?.restore(taskId);
   });
 }
 
@@ -249,6 +256,7 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
     "
     :style="!compact && depth ? { marginLeft: `${depth * 24}px` } : undefined"
     :data-testid="`task-${task.id}`"
+    :data-focus-row="task.id"
     :data-done="task.done"
     :data-pinned="task.pinned"
     :data-depth="depth"
@@ -313,6 +321,7 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
               class="block w-full cursor-text rounded-sm px-1 py-1.5 text-left font-(family-name:--todo-font) text-(length:--todo-text) leading-(--todo-leading) break-words"
               :aria-label="t('task.edit', { title: task.title })"
               data-testid="task-open"
+              data-focus-target
               @click="startEdit"
             >
               <!-- Done: the line draws across the title and the text fades to muted (the kit's .tavora-strike). -->

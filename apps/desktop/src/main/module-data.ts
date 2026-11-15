@@ -1,9 +1,9 @@
-import { mkdir, readdir, rename, rm, rmdir, stat } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, rm, rmdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { isModuleId, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER } from "@tavora/module-schema";
 import { isWorkspaceId } from "./workspace-id";
 import { writeFileAtomic } from "./fsutil";
-import { readSavedFile } from "./json";
+import { keepNewerCopy, readSavedFile, setAside } from "./json";
 import { SUPPORTED_VERSIONS } from "./saved-versions";
 import { defaultFilesRoot } from "./module-files";
 import { OFFICIAL_PREFIX } from "./registry";
@@ -56,7 +56,17 @@ export async function deleteModuleData(userData: string, workspaceId: string, bl
  * not in `keep`, so they can be deleted at startup before any session for
  * them is opened.
  */
-export async function orphanedPartitions(userData: string, keep: ReadonlySet<string>): Promise<string[]> {
+export function orphanedPartitions(userData: string, keep: ReadonlySet<string>): Promise<string[]> {
+  return partitionsWhere(userData, (workspaceId) => !keep.has(workspaceId));
+}
+
+/** The partition directories (as orphanedPartitions finds them) of the given workspaces only. */
+export function partitionsOf(userData: string, workspaceIds: Iterable<string>): Promise<string[]> {
+  const ids = new Set([...workspaceIds].map((id) => id.toLowerCase()));
+  return partitionsWhere(userData, (workspaceId) => ids.has(workspaceId));
+}
+
+async function partitionsWhere(userData: string, pick: (workspaceId: string) => boolean): Promise<string[]> {
   const root = path.join(userData, "Partitions");
   let names: string[];
   try {
@@ -66,11 +76,75 @@ export async function orphanedPartitions(userData: string, keep: ReadonlySet<str
   }
   return names
     .filter((name) => {
-      const decoded = safeDecode(name);
-      const match = /^(?:module:(?:[a-z0-9]+:)?[a-z0-9.-]+|browser)@([a-z0-9-]+)$/.exec(decoded);
-      return match !== null && !keep.has(match[1]!);
+      const workspaceId = partitionWorkspace(name);
+      return workspaceId !== null && pick(workspaceId);
     })
     .map((name) => path.join(root, name));
+}
+
+/** The workspace a module or Browser partition directory belongs to (lower case), or null for any other directory. */
+export function partitionWorkspace(dir: string): string | null {
+  const match = /^(?:module:(?:[a-z0-9]+:)?[a-z0-9.-]+|browser)@([a-z0-9-]+)$/.exec(safeDecode(path.basename(dir)));
+  return match?.[1] ?? null;
+}
+
+/** In the data folder while some left-over browser storage and panel state is kept (holdLeftovers). */
+export const SWEEP_HOLD_FILE = "sweep-hold.json";
+const SWEEP_HOLD_VERSION = 1;
+
+/** What the start sweep would delete: browser storage of workspaces not in the library, state of panels in no workspace. */
+export interface Leftovers {
+  workspaces: ReadonlySet<string>;
+  panels: ReadonlySet<string>;
+}
+
+/**
+ * Which leftovers this start keeps; the sweep deletes the rest. When library.json or workspace.json was missing or
+ * unreadable this start (`filesRead` false), every leftover is most likely the user's, back once they restore the file:
+ * all are kept, and the hold file names them, so later starts keep them too while Tavora saves new files meanwhile.
+ * A later start keeps those that are still left over and sweeps everything else; once none is, the hold file goes.
+ * A hold file that can't be read right now keeps everything this start. One that is damaged is set aside, and one a
+ * newer Tavora wrote is copied aside; either way this start keeps everything and writes a fresh hold, which clears
+ * the normal way later (so cleanup never stops for good).
+ */
+export async function holdLeftovers(userData: string, filesRead: boolean, leftovers: Leftovers): Promise<Leftovers> {
+  const file = path.join(userData, SWEEP_HOLD_FILE);
+  let held: { workspaces: string[]; panels: string[] } = { workspaces: [], panels: [] };
+  let keepAll = !filesRead;
+  let bytes: Buffer | null;
+  try {
+    bytes = await readFile(file);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") return leftovers;
+    bytes = null;
+  }
+  if (bytes) {
+    const text = bytes.toString("utf8");
+    const saved = ((): { version?: unknown; workspaces?: unknown; panels?: unknown } | null => {
+      try {
+        return JSON.parse(text) as { version?: unknown; workspaces?: unknown; panels?: unknown } | null;
+      } catch {
+        return null;
+      }
+    })();
+    const strings = (value: unknown) => (Array.isArray(value) && value.every((item) => typeof item === "string") ? (value as string[]) : null);
+    const workspaces = strings(saved?.workspaces);
+    const panels = strings(saved?.panels);
+    if (typeof saved?.version === "number" && saved.version > SWEEP_HOLD_VERSION) {
+      await keepNewerCopy(file, saved.version, bytes);
+      keepAll = true;
+    }
+    if (workspaces && panels) held = { workspaces, panels };
+    else {
+      await setAside(file);
+      keepAll = true;
+    }
+  }
+  const keep = (old: string[], now: ReadonlySet<string>) => new Set(keepAll ? [...old, ...now] : old.filter((id) => now.has(id)));
+  const result = { workspaces: keep(held.workspaces, leftovers.workspaces), panels: keep(held.panels, leftovers.panels) };
+  if (result.workspaces.size === 0 && result.panels.size === 0) await rm(file, { force: true });
+  else await writeFileAtomic(file, JSON.stringify({ version: SWEEP_HOLD_VERSION, workspaces: [...result.workspaces], panels: [...result.panels] }));
+  return result;
 }
 
 /**

@@ -28,6 +28,96 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.73",
+    date: "2026-11-15",
+    title: "Safer saved data",
+    notes: [
+      "If your library can't be opened, your modules' and Browser panel's saved data waits until you bring it back from a backup.",
+      "Installing two modules at once remembers who made both.",
+      "Modules can't give a document a name that would mix it up with another file.",
+    ],
+    prs: [
+      { number: 807, title: "Keep saved data safe after a lost library, parallel installs and odd document ids" },
+    ],
+    tags: ["cloud-copy", "modules", "privacy", "updates", "website", "workspace"],
+  },
+  {
+    version: "0.24.72",
+    date: "2026-11-15",
+    title: "Focus stays put after a delete",
+    notes: [
+      "Delete something in a list with the keyboard and the focus moves to the next row, not off the page.",
+      "Undo puts the focus back on what came back.",
+    ],
+    prs: [
+      { number: 805, title: "Kit: focus stays in a list after a delete (useFocusRecovery)" },
+    ],
+    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "settings", "todos", "ui-kit"],
+  },
+  {
+    version: "0.24.71",
+    date: "2026-11-15",
+    title: "Menus wait for slow actions",
+    notes: [
+      "A menu entry that takes a moment keeps the menu open and pulses until it's done, then the menu closes. If it fails, a message says so.",
+      "Settings > Modules > More > Reload and Whiteboard's Copy as picture work this way.",
+      "Ctrl+K: adding a game keeps the search open until the game is ready.",
+    ],
+    prs: [
+      { number: 803, title: "Kit menus: entries that wait for their action" },
+    ],
+    tags: ["settings", "ui-kit", "whiteboard"],
+  },
+  {
+    version: "0.24.70",
+    date: "2026-11-15",
+    title: "Steadier dialogs",
+    notes: [
+      "While a dialog is busy, its close button is greyed out, so you can see it can't close yet.",
+    ],
+    prs: [
+      { number: 804, title: "Kit dialogs: dismissible, busy and dismiss-attempt" },
+    ],
+    tags: ["cloud-copy", "publishing", "ui-kit"],
+  },
+  {
+    version: "0.24.69",
+    date: "2026-11-15",
+    title: "Shortcuts in the hints",
+    notes: [
+      "Buttons with a shortcut show its keys beside their hint: Back, Forward, New tab and Exit full screen in the Browser panel, Undo and Redo on the Overlays page, and the rail's collapse button.",
+      "Settings > Shortcuts now lists Undo and Redo for Overlays too.",
+    ],
+    prs: [
+      { number: 799, title: "Shortcuts come from one table" },
+    ],
+    tags: ["hotkeys", "onboarding", "overlays", "rail", "ui-kit", "workspace"],
+  },
+  {
+    version: "0.24.68",
+    date: "2026-11-15",
+    title: "Fields that explain themselves",
+    notes: [
+      "Screen readers read a field's name and hint with it, starting with your developer name and AI accounts in Settings.",
+    ],
+    prs: [
+      { number: 802, title: "Kit: Field (label, hint, error) and ARIA pattern checks" },
+    ],
+    tags: ["accessibility", "publishing", "settings", "ui-kit"],
+  },
+  {
+    version: "0.24.67",
+    date: "2026-11-15",
+    title: "Nothing lost when you close a panel",
+    notes: [
+      "What you typed just before closing a panel, switching workspaces or quitting Tavora is saved.",
+    ],
+    prs: [
+      { number: 801, title: "A closed panel's last typing is saved before its page goes" },
+    ],
+    tags: ["modules", "privacy", "website", "workspace"],
+  },
+  {
     version: "0.24.66",
     date: "2026-11-14",
     title: "Move panels with the keyboard",

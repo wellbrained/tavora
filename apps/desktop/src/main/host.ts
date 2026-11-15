@@ -47,7 +47,7 @@ import { popularGames } from "./catalog";
 import { gridTemplate, layoutTemplate } from "../shared/layout-templates";
 import { parseAction, runAction, type ActionHandlers } from "./actions";
 import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
-import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, orphanedPartitions, queueLocalDataMove } from "./module-data";
+import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, holdLeftovers, orphanedPartitions, partitionsOf, partitionWorkspace, queueLocalDataMove } from "./module-data";
 import { AI_USAGE_MODULE_ID, DISCORD_MODULE_ID, movedModule, MOVED_MODULES_OWNER, moveOfficialModules } from "./moved-modules";
 import { checkZipData, readOwnerRecords } from "./installer";
 import { Installed, loadInstalledModules, type InstalledModules } from "./installed-modules";
@@ -112,7 +112,7 @@ import {
 import { MODULE_FONTS } from "./module-fonts";
 import { moduleBaseCss } from "./module-style";
 import { backupData, backupsDir } from "./backup";
-import { loadLibrary, SavedData } from "./saved-data";
+import { hasLibrary, loadLibrary, SavedData, WORKSPACE_FILE } from "./saved-data";
 import { CatalogClient, catalogView, type CatalogScope } from "./catalog-client";
 import { parseReadme, readmeAllowsLink } from "./catalog-readme";
 import { CHECK_INTERVAL_MS } from "./catalog-updates";
@@ -858,6 +858,8 @@ export class Host {
     await moveToWorkspaces(userData, (line) => console.warn(`[tavora] ${line}`));
     const library = await savedData.loadLibrary();
     loaded = library;
+    // Missing or set aside (unreadable): workspaces it doesn't list may well be the user's, so the sweep below waits.
+    const libraryRead = await hasLibrary(userData);
     const safetyLists = new SafetyLists({
       file: path.join(userData, "catalog-lists.json"),
       baseUrl: serviceUrl(options.apiUrl),
@@ -881,6 +883,8 @@ export class Host {
     const waiting = waitingModules(moduleProblems);
     // A module that left Tavora for the catalog keeps its panels while it is not installed: they offer to install it.
     const workspaces = await savedData.loadWorkspace(Object.keys(library.workspaces), (id) => modules.has(id) || waiting.has(id) || movedModule(id) !== undefined);
+    // Missing or set aside (unreadable): panels it doesn't list may well be the user's, so the sweep below waits.
+    const workspaceRead = existsSync(path.join(userData, WORKSPACE_FILE));
     settlePanelTypes(workspaces, panelTypesOf(modules));
     const { profile, saved: profileSaved } = await savedData.loadProfile();
     const windowState = initialBounds(
@@ -940,15 +944,18 @@ export class Host {
     });
     // The id is made once and kept, so a new profile is written straight away.
     if (!profileSaved) host.saveProfile().catch(() => undefined); // logged by saveProfile
-    // Browser storage of workspaces that are gone, removed before any session opens it.
-    for (const dir of await orphanedPartitions(userData, new Set(Object.keys(library.workspaces)))) {
-      await rm(dir, { recursive: true, force: true });
-    }
+    // Browser storage of workspaces that are gone, removed before any session opens it, and the saved state of panels
+    // that are gone. What a lost library or workspace file may have listed is kept (holdLeftovers).
+    const orphaned = await orphanedPartitions(userData, new Set(Object.keys(library.workspaces)));
+    const livePanels = new Set(Object.values(workspaces.workspaces).flatMap((workspace) => workspace.instances.map((i) => i.instanceId)));
+    const stalePanels = (await readdir(path.join(userData, "panel-state")).catch(() => [] as string[])).filter((name) => name.endsWith(".json") && !livePanels.has(name.slice(0, -".json".length))).map((name) => name.slice(0, -".json".length));
+    const leftovers = { workspaces: new Set(orphaned.map((dir) => partitionWorkspace(dir)!)), panels: new Set(stalePanels) };
+    const held = await holdLeftovers(userData, libraryRead && workspaceRead, leftovers).catch(() => leftovers);
+    for (const dir of orphaned) if (!held.workspaces.has(partitionWorkspace(dir)!)) await rm(dir, { recursive: true, force: true });
+    await host.data.panelState.prune(new Set([...livePanels, ...held.panels]));
     for (const workspace of expired) await host.deleteWorkspaceData(workspace);
     // Version 0.2.0 saved Steam covers here; they were replaced by Steam's own icons.
     await rm(path.join(userData, "steam-art"), { recursive: true, force: true });
-    const livePanels = new Set(Object.values(workspaces.workspaces).flatMap((workspace) => workspace.instances.map((i) => i.instanceId)));
-    await host.data.panelState.prune(livePanels);
     if (expired.length) host.saveLibrary();
 
     host.screen = library.startup === "last-workspace" && library.lastWorkspaceId ? "workspace" : "welcome";
@@ -2485,7 +2492,7 @@ export class Host {
         const workspaces = action.workspaceIds.filter((id) => this.library.workspaces[id]?.trashedAt).map((id) => deleteTrashedWorkspace(this.library, id));
         this.saveLibrary();
         for (const workspace of workspaces) await this.forgetWorkspaceData(workspace);
-        await this.clearOrphanedSessions();
+        await this.clearSessionsOf(workspaces.map((workspace) => workspace.id));
       }),
       favorite: saved((action) => placeFavorite(this.library, action.workspaceId, action.index)),
       unfavorite: saved((action) => removeFavorite(this.library, action.workspaceId)),
@@ -3476,7 +3483,7 @@ export class Host {
   /** Deletes everything stored for a workspace that left the library for good. */
   private async deleteWorkspaceData(workspace: WorkspaceEntry): Promise<void> {
     await this.forgetWorkspaceData(workspace);
-    await this.clearOrphanedSessions();
+    await this.clearSessionsOf([workspace.id]);
   }
 
   /** deleteWorkspaceData without the browser sessions, so many workspaces can be deleted and the sessions cleared once. */
@@ -3496,11 +3503,10 @@ export class Host {
     if (workspace.iconFile && !iconFileShared(this.library, workspace.iconFile, workspace.id)) await removeSteamIcon(this.steamIconDir, workspace.iconFile);
   }
 
-  private async clearOrphanedSessions(): Promise<void> {
-    // Sessions may already be open in this run, so clear them; their
-    // directories are removed at the next start.
-    const keep = new Set(Object.keys(this.library.workspaces));
-    for (const dir of await orphanedPartitions(this.options.userData, keep)) {
+  private async clearSessionsOf(workspaceIds: string[]): Promise<void> {
+    // Sessions may already be open in this run, so clear them; their directories are removed at the next start. Only
+    // these workspaces': after a lost library, others not in it may be the user's (holdLeftovers).
+    for (const dir of await partitionsOf(this.options.userData, workspaceIds)) {
       const ses = session.fromPartition(`persist:${decodeURIComponent(path.basename(dir))}`);
       await ses.clearStorageData();
       await ses.clearCache();

@@ -8,7 +8,8 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { cn } from "@tavora/official-ui/lib/utils";
 import { act, addressFocus, showToast } from "../../host";
 import { t } from "../../i18n";
-import { MOD } from "../../shortcuts";
+import { keyInput, shortcutIn } from "../../../shared/shortcuts";
+import { keyshortcuts, MAC } from "../../shortcuts";
 
 const props = defineProps<{ instanceId: string; browser: BrowserState }>();
 
@@ -57,11 +58,9 @@ function newTab() {
 
 // The same tab keys as in the page, for when the toolbar has the focus.
 function onKeydown(event: KeyboardEvent) {
-  const mod = navigator.platform.startsWith("Mac") ? event.metaKey : event.ctrlKey;
-  if (!mod || event.altKey || event.shiftKey) return;
-  const key = event.key.toLowerCase();
-  if (key === "t") newTab();
-  else if (key === "w") void act({ type: "close-panel", instanceId: props.instanceId });
+  const shortcut = shortcutIn("browser", keyInput(event), MAC);
+  if (shortcut === "browser.new-tab") newTab();
+  else if (shortcut === "browser.close-tab") void act({ type: "close-panel", instanceId: props.instanceId });
   else return;
   event.preventDefault();
 }
@@ -85,10 +84,10 @@ function toggleAdblock() {
 
 <template>
   <div class="flex h-10 flex-none items-center gap-0.5 border-b px-1.5" :data-testid="`browser-toolbar-${instanceId}`" @keydown="onKeydown">
-    <Button variant="ghost" size="icon-sm" :aria-label="t('browser.back')" :title="t('browser.backTitle')" :disabled="!browser.canGoBack" data-testid="browser-back" @click="command('back')">
+    <Button variant="ghost" size="icon-sm" :aria-label="t('browser.back')" :title="t('browser.back')" :aria-keyshortcuts="keyshortcuts('browser.back')" :disabled="!browser.canGoBack" data-testid="browser-back" @click="command('back')">
       <ArrowLeft :stroke-width="1.5" />
     </Button>
-    <Button variant="ghost" size="icon-sm" :aria-label="t('browser.forward')" :title="t('browser.forwardTitle')" :disabled="!browser.canGoForward" data-testid="browser-forward" @click="command('forward')">
+    <Button variant="ghost" size="icon-sm" :aria-label="t('browser.forward')" :title="t('browser.forward')" :aria-keyshortcuts="keyshortcuts('browser.forward')" :disabled="!browser.canGoForward" data-testid="browser-forward" @click="command('forward')">
       <ArrowRight :stroke-width="1.5" />
     </Button>
     <Button v-if="browser.loading" variant="ghost" size="icon-sm" :aria-label="t('browser.stop')" :title="t('browser.stop')" data-testid="browser-stop" @click="command('stop')">
@@ -127,7 +126,7 @@ function toggleAdblock() {
       />
     </form>
 
-    <Button v-if="browser.fullscreen" variant="ghost" size="icon-sm" :aria-label="t('browser.exitFullscreen')" :title="t('browser.exitFullscreenTitle')" data-testid="browser-exit-fullscreen" @click="command('exit-fullscreen')">
+    <Button v-if="browser.fullscreen" variant="ghost" size="icon-sm" :aria-label="t('browser.exitFullscreen')" :title="t('browser.exitFullscreen')" :aria-keyshortcuts="keyshortcuts('browser.leave-fullscreen')" data-testid="browser-exit-fullscreen" @click="command('exit-fullscreen')">
       <Minimize2 :stroke-width="1.5" />
     </Button>
     <Button
@@ -178,7 +177,7 @@ function toggleAdblock() {
     >
       <Users :stroke-width="1.5" />
     </Button>
-    <Button variant="ghost" size="icon-sm" :aria-label="t('browser.newTab')" :title="t('browser.newTabTitle', { mod: MOD() })" data-testid="browser-new-tab" @click="newTab">
+    <Button variant="ghost" size="icon-sm" :aria-label="t('browser.newTab')" :title="t('browser.newTab')" :aria-keyshortcuts="keyshortcuts('browser.new-tab')" data-testid="browser-new-tab" @click="newTab">
       <Plus :stroke-width="1.5" />
     </Button>
     <Button variant="ghost" size="icon-sm" :aria-label="t('browser.external')" :title="t('browser.external')" :disabled="!browser.url" data-testid="browser-external" @click="command('open-external')">
