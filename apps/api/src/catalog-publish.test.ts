@@ -287,6 +287,50 @@ ${"A".repeat(64)}
     expect(catalog.uploadsSince(first.accountId, new Date(0))).toBe(0);
   });
 
+  it("refuses an upload whose account was banned during the scan, and adds nothing", async () => {
+    const scan = heldScanner();
+    const { store, catalog, developer, send, reason, clock } = setup({}, undefined, roomy(), roomy(), scan.scanner);
+    const { key, accountId } = developer("dev@example.com");
+    const upload = send(key, moduleZip(key));
+    await scan.running(1);
+    store.ban(accountId, "spam", null, [], clock.now);
+    scan.release();
+    const answer = await upload;
+    expect(answer.status).toBe(403);
+    expect(await reason(answer)).toBe("banned");
+    expect(catalog.modules()).toEqual([]);
+    expect(store.prefixes(accountId)).toEqual([]);
+  });
+
+  it("refuses an upload whose account was suspended during the scan, and adds nothing", async () => {
+    const scan = heldScanner();
+    const { store, catalog, developer, send, reason, clock } = setup({}, undefined, roomy(), roomy(), scan.scanner);
+    const { key, accountId } = developer("dev@example.com");
+    const upload = send(key, moduleZip(key));
+    await scan.running(1);
+    store.suspend(accountId, "spam", null, clock.now);
+    scan.release();
+    const answer = await upload;
+    expect(answer.status).toBe(403);
+    expect(await reason(answer)).toBe("suspended");
+    expect(catalog.modules()).toEqual([]);
+  });
+
+  it("checks the daily limit again after the scan, so uploads at once can't go past it", async () => {
+    const scan = heldScanner();
+    const { catalog, developer, send, reason } = setup({ uploadsPerDay: 1 }, undefined, roomy(), roomy(), scan.scanner);
+    const { key, accountId } = developer("dev@example.com");
+    // Both pass the first check while nothing is uploaded yet, then wait for their scans.
+    const first = send(key, moduleZip(key, "wellbrained.timer", "1.0.0"));
+    const second = send(key, moduleZip(key, "wellbrained.timer", "1.0.1"));
+    await scan.running(2);
+    scan.release();
+    const answers = await Promise.all([first, second]);
+    expect(answers.map((answer) => answer.status).sort()).toEqual([201, 429]);
+    expect(await reason(answers.find((answer) => answer.status === 429)!)).toBe("daily-limit");
+    expect(catalog.uploadsSince(accountId, new Date(0))).toBe(1);
+  });
+
   it("gives back a prefix it reserved when the version can't be added", async () => {
     const { store, catalog, developer, send, reason } = setup();
     const { key, accountId } = developer("dev@example.com");

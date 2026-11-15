@@ -198,11 +198,16 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     }
     if (by.accountId !== key.accountId) return refuse(context, 403, "wrong-account", "This publisher key is linked to another Tavora account than the one publishing.");
     // A banned developer publishes nothing, with any of the account's keys, a sign-in or a token (decided 2026-10-26).
-    if (store.isBanned(key.accountId) || store.isBannedKey(checked.owner)) return refuse(context, 403, "banned", "This account can't publish to the catalog any more. Check your email for why.");
     // A suspended account publishes nothing either, until it is unsuspended (decided 2026-10-26).
-    if (store.isSuspended(key.accountId) || store.isSuspended(by.accountId)) {
-      return refuse(context, 403, "suspended", "This account is suspended and can't publish to the catalog. Check your email for why.");
-    }
+    const barred = () => {
+      if (store.isBanned(key.accountId) || store.isBannedKey(checked.owner)) return refuse(context, 403, "banned", "This account can't publish to the catalog any more. Check your email for why.");
+      if (store.isSuspended(key.accountId) || store.isSuspended(by.accountId)) {
+        return refuse(context, 403, "suspended", "This account is suspended and can't publish to the catalog. Check your email for why.");
+      }
+      return null;
+    };
+    const barredNow = barred();
+    if (barredNow) return barredNow;
     if (catalog.isDeclined(checked.sha256)) return refuse(context, 403, "declined", "Tavora declined this exact zip. Fix the problem and publish a new version.");
     const trust = catalogTrust(catalog, catalogueKey);
     if (trust.revoked(checked.owner, checked.sha256)) return refuse(context, 403, "key-revoked", "This publisher key was revoked and publishes nothing new. Link a new key to your account.");
@@ -251,31 +256,55 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     // or account limit (decided 2026-10-29). The catalog's own size limit still holds, as it guards the server's disk.
     // Tavora's own account has none of the account limits either.
     const owner = official || isMaintainer(store, key.accountId);
-    if (!owner && catalog.uploadsSince(key.accountId, new Date(at - 86_400_000)) >= uploadsPerDay) {
-      return refuse(context, 429, "daily-limit", `An account can publish ${uploadsPerDay} versions a day. Try again tomorrow.`);
-    }
-    if (!owner && catalog.waitingCount(key.accountId) >= waitingPerAccount) {
-      return refuse(context, 429, "too-many-waiting", `${waitingPerAccount} of your versions are waiting for review already. Wait for them, or withdraw one.`);
-    }
     // Only a module's newest versions keep their zips, so what this version pushes out doesn't count against it.
     const id = checked.manifest.id;
-    if (!owner && catalog.storedBytes(key.accountId) - catalog.freedByNextVersion(id, keepVersions, key.accountId) + checked.size > accountBytes) {
-      return refuse(context, 413, "account-full", `Your modules may take at most ${accountBytes / 1024 / 1024} MB in the catalog.`);
-    }
-    const usedBytes = catalog.storedBytes();
-    if (usedBytes - catalog.freedByNextVersion(id, keepVersions) + checked.size > catalogBytes) {
-      console.warn("[tavora-api] The module catalog is full: uploads are refused until there is room.");
+    // The daily, waiting and storage limits. Checked before the scan and again right before the version is added.
+    // Nothing in it is awaited, so the check after the scan and the adding of the version have nothing between them.
+    let usedBytes = 0;
+    const overLimit = () => {
+      if (!owner && catalog.uploadsSince(key.accountId, new Date(at - 86_400_000)) >= uploadsPerDay) {
+        return refuse(context, 429, "daily-limit", `An account can publish ${uploadsPerDay} versions a day. Try again tomorrow.`);
+      }
+      if (!owner && catalog.waitingCount(key.accountId) >= waitingPerAccount) {
+        return refuse(context, 429, "too-many-waiting", `${waitingPerAccount} of your versions are waiting for review already. Wait for them, or withdraw one.`);
+      }
+      if (!owner && catalog.storedBytes(key.accountId) - catalog.freedByNextVersion(id, keepVersions, key.accountId) + checked.size > accountBytes) {
+        return refuse(context, 413, "account-full", `Your modules may take at most ${accountBytes / 1024 / 1024} MB in the catalog.`);
+      }
+      usedBytes = catalog.storedBytes();
+      if (usedBytes - catalog.freedByNextVersion(id, keepVersions) + checked.size > catalogBytes) {
+        console.warn("[tavora-api] The module catalog is full: uploads are refused until there is room.");
+        return { full: refuse(context, 507, "catalog-full", "The catalog has no room right now. Tavora has been told.") };
+      }
+      return null;
+    };
+    /** The refusal for a limit, or null; a full catalog also tells the maintainer. */
+    const refusedByLimit = async () => {
+      const over = overLimit();
+      if (!over) return null;
+      if (over instanceof Response) return over;
       await tellFull(catalog, store, at, usedBytes);
-      return refuse(context, 507, "catalog-full", "The catalog has no room right now. Tavora has been told.");
-    }
+      return over.full;
+    };
+    const overNow = await refusedByLimit();
+    if (overNow) return overNow;
 
     // The automatic checks. They never throw: one that cannot run is a reason to wait.
     // Tavora's own modules skip the first-module and new-picture rules; the other checks still run and are kept for the admin page.
     const subject = { accountId: key.accountId, fingerprints: store.keys(key.accountId).map((linked) => linked.fingerprint) };
     const reasons = official ? await runChecks({ catalog, scanner }, checked, bytes, subject) : await reviewUpload({ catalog, scanner }, checked, bytes, subject);
-    // The scan can take minutes, and the prefix may have changed hands meanwhile: another upload of this account may have
-    // taken its last free prefix, or another account claimed this one. So it is checked again and reserved with nothing
-    // awaited before the version is added, and a reservation made here goes again when the version isn't added.
+    // The scan can take minutes, and the account may have been banned or suspended, or reached a limit, meanwhile; the
+    // prefix may have changed hands too: another upload of this account may have taken its last free prefix, or another
+    // account claimed this one. So all of it is checked again, and the prefix reserved, with nothing awaited before the
+    // version is added, and a reservation made here goes again when the version isn't added.
+    const barredAfter = barred();
+    if (barredAfter) return barredAfter;
+    const overAfter = overLimit();
+    if (overAfter instanceof Response) return overAfter;
+    if (overAfter) {
+      await tellFull(catalog, store, at, usedBytes);
+      return overAfter.full;
+    }
     const held = prefixState();
     const refusedNow = prefixRefusal(held);
     if (refusedNow) return refusedNow;

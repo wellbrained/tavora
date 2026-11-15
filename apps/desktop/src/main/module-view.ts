@@ -441,6 +441,12 @@ export class ModuleView {
   private get disposed(): boolean {
     return this.end.step !== "open";
   }
+
+  /** The page, or undefined once it is gone: Electron drops a closed view's page, and a destroyed one throws on use. */
+  private contents(): WebContents | undefined {
+    const contents = this.view.webContents as WebContents | undefined;
+    return contents && !contents.isDestroyed() ? contents : undefined;
+  }
   /** False while the page is still loading or filling itself with data; the host keeps the view hidden until then. */
   revealed = false;
   private revealTimers: ReturnType<typeof setTimeout>[] = [];
@@ -595,7 +601,9 @@ export class ModuleView {
     if (!gestureCounts(this.overGame !== null, this.overGame?.arranging() ?? false)) return;
     this.press = { at: Date.now(), used: false };
     this.usedAt = this.press.at;
-    const shared = gestureOf(this.view.webContents.session);
+    const page = this.contents();
+    if (!page) return;
+    const shared = gestureOf(page.session);
     shared.press = this.press;
     shared.overGame = this.overGame !== null;
     shared.refuse = () => this.needsTavora();
@@ -677,6 +685,7 @@ export class ModuleView {
 
   /** Starts counting for a new page: it is hidden until it settles or the cap runs out. */
   private hideUntilSettled(): void {
+    if (this.disposed) return;
     this.pageStartedAt = Date.now();
     this.revealed = false;
     this.firstDrawn = false;
@@ -1300,9 +1309,9 @@ export class ModuleView {
     this.refreshBehind();
     this.view.setBackgroundColor(this.options.getTheme().tokens.background);
     // After any style being set or removed, so the style it inserts last isn't left behind.
-    const contents = this.view.webContents;
     this.gameOpacityQueue = this.gameOpacityQueue.then(async () => {
-      if (!away.css || contents.isDestroyed()) return;
+      const contents = this.contents();
+      if (!away.css || !contents) return;
       const css = away.css;
       away.css = undefined;
       await contents.removeInsertedCSS(css).catch(() => undefined);
@@ -1328,10 +1337,10 @@ export class ModuleView {
   private gameOpacityQueue: Promise<void> = Promise.resolve();
 
   private applyGameOpacity(): Promise<void> {
-    const contents = this.view.webContents;
     this.gameOpacityQueue = this.gameOpacityQueue.then(async () => {
       const away = this.overGame;
-      if (contents.isDestroyed() || !away) return;
+      const contents = this.contents();
+      if (!contents || !away) return;
       try {
         if (away.css) await contents.removeInsertedCSS(away.css);
         const rules = [away.opacity === 100 ? "" : `opacity:${away.opacity / 100} !important;`, away.zoom === 1 ? "" : `zoom:${away.zoom} !important;`].join("");
@@ -1444,8 +1453,8 @@ export class ModuleView {
     this.lastPong = Date.now();
     this.heartbeat = setInterval(() => {
       // A closed view has no page any more (Electron drops it): stop, never touch it.
-      const contents = this.view.webContents as WebContents | undefined;
-      if (!contents || contents.isDestroyed()) return this.stopHeartbeat();
+      const contents = this.contents();
+      if (!contents) return this.stopHeartbeat();
       contents.send("tavora:ping");
       if (this.health === "ready" && Date.now() - this.lastPong > UNRESPONSIVE_MS) this.setStatus("unresponsive");
     }, HEARTBEAT_MS);
@@ -1457,8 +1466,8 @@ export class ModuleView {
     if (this.disposed) return;
     const limit = this.options.storageLimit ?? MODULE_STORAGE_LIMIT;
     this.storageWatch = setInterval(() => {
-      const contents = this.view.webContents as WebContents | undefined;
-      if (!contents || contents.isDestroyed()) return this.stopStorageWatch();
+      const contents = this.contents();
+      if (!contents) return this.stopStorageWatch();
       const folder = contents.session.storagePath;
       if (!folder || this.measuring) return;
       this.measuring = true;
@@ -1485,10 +1494,11 @@ export class ModuleView {
   reload(next?: InstalledModule): void {
     if (next && next.manifest.id === this.options.module.manifest.id && next.owner === this.options.module.owner) {
       this.options.module = next;
-      serving.set(this.view.webContents.session, next);
+      const page = this.contents();
+      if (page) serving.set(page.session, next);
     }
     this.setStatus("loading");
-    this.view.webContents.reload();
+    this.contents()?.reload();
   }
 
   /**
@@ -1533,7 +1543,7 @@ export class ModuleView {
     this.clearRevealTimers();
     const bridge = this.bridge;
     // Electron drops a closed view's page, so it may be gone already.
-    const contents = this.view.webContents as WebContents | undefined;
+    const contents = this.contents();
     let resolve!: () => void;
     const done = new Promise<void>((settled) => (resolve = settled));
     let answered = false;

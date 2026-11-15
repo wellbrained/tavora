@@ -3963,8 +3963,8 @@ export class Host {
       ...(this.options.moduleStorageLimit === undefined ? {} : { storageLimit: this.options.moduleStorageLimit }),
       onStorageOver: () => {
         // A page closed while it was measured needs no clearing.
-        const contents = view.view.webContents;
-        if (!contents.isDestroyed()) void this.purgeModuleStorage(module.manifest.id, workspace.id, contents.session);
+        const contents = view.view.webContents as WebContents | undefined;
+        if (contents && !contents.isDestroyed()) void this.purgeModuleStorage(module.manifest.id, workspace.id, contents.session);
       },
       onReveal: () => {
         this.panels.applyBounds();
