@@ -210,10 +210,18 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     if (barredNow) return barredNow;
     if (catalog.isDeclined(checked.sha256)) return refuse(context, 403, "declined", "Tavora declined this exact zip. Fix the problem and publish a new version.");
     const trust = catalogTrust(catalog, catalogueKey);
-    if (trust.revoked(checked.owner, checked.sha256)) return refuse(context, 403, "key-revoked", "This publisher key was revoked and publishes nothing new. Link a new key to your account.");
-    // Reported as leaked in the app: nothing new from it while the revocation waits to be signed.
-    const reported = store.keyRequest(checked.owner);
-    if (reported?.leaked && reported.declinedAt === null) return refuse(context, 403, "key-leaked", "You reported this publisher key as leaked, so it publishes nothing new. Publish with your new key.");
+    // The key's own state. Checked before the scan and again right after it, like bans: a key may be unlinked, revoked
+    // or reported as leaked while the scan runs, and that's when an upload signed with it matters most.
+    const keyRefused = () => {
+      if (store.publisherKey(checked.owner)?.accountId !== key.accountId) return refuse(context, 403, "key-not-linked", "This publisher key is not linked to a Tavora account.");
+      if (trust.revoked(checked.owner, checked.sha256)) return refuse(context, 403, "key-revoked", "This publisher key was revoked and publishes nothing new. Link a new key to your account.");
+      // Reported as leaked in the app: nothing new from it while the revocation waits to be signed.
+      const reported = store.keyRequest(checked.owner);
+      if (reported?.leaked && reported.declinedAt === null) return refuse(context, 403, "key-leaked", "You reported this publisher key as leaked, so it publishes nothing new. Publish with your new key.");
+      return null;
+    };
+    const keyNow = keyRefused();
+    if (keyNow) return keyNow;
     // A successor key counts for its account's first key only when the succession names this account.
     const firstKey = (fingerprint: string) => {
       const first = trust.firstKey(fingerprint);
@@ -299,6 +307,8 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     // version is added, and a reservation made here goes again when the version isn't added.
     const barredAfter = barred();
     if (barredAfter) return barredAfter;
+    const keyAfter = keyRefused();
+    if (keyAfter) return keyAfter;
     const overAfter = overLimit();
     if (overAfter instanceof Response) return overAfter;
     if (overAfter) {

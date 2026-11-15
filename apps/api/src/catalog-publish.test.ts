@@ -316,6 +316,22 @@ ${"A".repeat(64)}
     expect(catalog.modules()).toEqual([]);
   });
 
+  it("refuses an upload whose key was reported as leaked during the scan, and adds nothing", async () => {
+    const scan = heldScanner();
+    const { store, catalog, developer, send, reason, clock } = setup({}, undefined, roomy(), roomy(), scan.scanner);
+    const { key, accountId } = developer("dev@example.com");
+    const next = generateKeyPairSync("ed25519").privateKey;
+    store.linkKey(accountId, keyFingerprint(rawKey(next)), rawKey(next).toString("base64"), clock.now);
+    const upload = send(key, moduleZip(key));
+    await scan.running(1);
+    expect(store.requestReplacement(accountId, keyFingerprint(rawKey(key)), keyFingerprint(rawKey(next)), true, clock.now)).toBe("ok");
+    scan.release();
+    const answer = await upload;
+    expect(answer.status).toBe(403);
+    expect(await reason(answer)).toBe("key-leaked");
+    expect(catalog.modules()).toEqual([]);
+  });
+
   it("checks the daily limit again after the scan, so uploads at once can't go past it", async () => {
     const scan = heldScanner();
     const { catalog, developer, send, reason } = setup({ uploadsPerDay: 1 }, undefined, roomy(), roomy(), scan.scanner);

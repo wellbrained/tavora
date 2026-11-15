@@ -138,6 +138,21 @@ describe("closing a panel", () => {
       vi.useRealTimers();
     }
   });
+
+  it("does not fail when its page goes while a change over the game is still queued", async () => {
+    vi.useFakeTimers();
+    try {
+      const view = make({ onStatus: () => undefined });
+      view.enterGame(() => false);
+      view.setGameOpacity(50);
+      // Electron drops the page before the queued steps run.
+      (view as unknown as { view: { webContents?: unknown } }).view.webContents = undefined;
+      view.leaveGame();
+      await expect(vi.runAllTimersAsync()).resolves.not.toThrow();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("one press", () => {

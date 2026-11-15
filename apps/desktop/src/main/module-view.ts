@@ -597,6 +597,8 @@ export class ModuleView {
   private readonly gestureWaiters = new Set<() => void>();
 
   noteGesture(): void {
+    // A closed panel's last click opens nothing more (see letGo).
+    if (this.disposed) return;
     // Over the game the window takes input only while the layer is open; any report at another time is not the user's.
     if (!gestureCounts(this.overGame !== null, this.overGame?.arranging() ?? false)) return;
     this.press = { at: Date.now(), used: false };
@@ -1497,8 +1499,11 @@ export class ModuleView {
       const page = this.contents();
       if (page) serving.set(page.session, next);
     }
+    const page = this.contents();
+    // Without a page there is nothing to load, so the panel isn't left saying "loading".
+    if (!page) return;
     this.setStatus("loading");
-    this.contents()?.reload();
+    page.reload();
   }
 
   /**
