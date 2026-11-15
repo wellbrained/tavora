@@ -2,12 +2,13 @@
 // dialog, menu and toast that are shown over it.
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch, type Component } from "vue";
 import { handleUndoKey, setWindowBehind, toast, undoable } from "@tavora/official-ui/components/ui/toast";
+import { layers, openDialogLayers } from "@tavora/official-ui/lib/layers";
 import { EMPTY_INBOX, type InboxView } from "../shared/conversations";
 import type { AccountView, ActionResult, ReleaseCopy, ReleaseStatus, ModuleConnector, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, HostAction, PairingView, HostShortcut, HostViewState, ModuleMenu, PanelDialog, PublishView } from "../shared/host-api";
-import { shortcutForKey } from "../shared/shortcut-keys";
+import { keyInput, shortcutForKey } from "../shared/shortcuts";
 import { noteShortcut } from "./shortcut-origin";
 import { SETTING_SECTIONS, type SettingsPlace, type SettingsSection } from "./components/settings/settings-index";
-import { numberedWorkspaces } from "./shortcuts";
+import { MAC, numberedWorkspaces } from "./shortcuts";
 import { isLanguageReady, loadLanguage, setLanguage, t } from "./i18n";
 import { applyTheme } from "./theme";
 import { developerSetup } from "./developer-setup";
@@ -386,50 +387,29 @@ export type DialogRequest =
   /** Report a catalog module to Tavora (Settings > Modules). */
   | { kind: "report-module"; moduleId: string; name: string };
 
-// Dialogs open on the page, counted from the page itself: every dialog is built on the kit's Dialog, so a new one is
-// covered without being listed anywhere. The module panels (native views above this page) step aside for them, and the
-// queue of dialogs (below) looks at them.
-const DIALOG_OPEN = '[data-slot="dialog-content"][data-state="open"]';
-/** What a dialog is made of on the page that has an open/closed state: the box and the backdrop behind it. */
-const DIALOG_PART = '[data-slot="dialog-content"], [data-slot="dialog-overlay"]';
+// Dialogs open on the page, from the kit's layer registry (lib/layers.ts): every dialog is built on the kit's Dialog, so a
+// new one is covered without being listed anywhere, and told apart by its `data-testid`. Counted from the moment it opens
+// until it starts to close, so one dialog in the slot handing over to the next never reads as none in between. The module
+// panels (native views above this page) step aside for them, and the queue of dialogs (below) looks at them.
 /** The panel shown big in a dialog. It is open on purpose and its view stays in sight, so it is not one that covers it. */
-const PANEL_DIALOG = '[data-testid="panel-dialog"]';
+const PANEL_DIALOG = "panel-dialog";
 /** Settings and the profile are places to work in: a question the host asks may open on top of them, as a confirmation does. */
-const STACKABLE = `${PANEL_DIALOG}, [data-testid="settings"], [data-testid="profile-dialog"]`;
-/** How many dialogs are open (the panel dialog too), and how many of those are not the panel dialog. */
-const openDialogs = ref(0);
-const pageDialogs = ref(0);
-let dimmed = false;
-function countDialogs(): void {
-  const open = [...document.querySelectorAll(DIALOG_OPEN)];
-  openDialogs.value = open.length;
-  pageDialogs.value = open.filter((element) => !element.matches(PANEL_DIALOG)).length;
-  // The system draws the window buttons above the page, so a dialog backdrop can't dim them: while one is open,
-  // the host dims them instead.
-  const now = document.querySelector('[data-slot="dialog-overlay"][data-state="open"]') !== null;
-  if (now === dimmed) return;
-  dimmed = now;
-  api.setDimmed(now);
-}
-// A dialog's parts are teleported to the body (DialogPortal), so the body's own children say when one comes or goes,
-// and each part is watched for its open/closed state while it is there. Nothing else in the page is looked at: a
-// whole-page watch would run for every menu, tab and tooltip that changes its data-state.
-const dialogParts = new MutationObserver(countDialogs);
-function watchDialogParts(root: Element | Document): void {
-  for (const part of [...(root instanceof Element && root.matches(DIALOG_PART) ? [root] : []), ...root.querySelectorAll(DIALOG_PART)]) {
-    dialogParts.observe(part, { attributes: true, attributeFilter: ["data-state"] });
-  }
-}
-new MutationObserver((records) => {
-  for (const record of records) for (const node of record.addedNodes) if (node instanceof Element) watchDialogParts(node);
-  countDialogs();
-}).observe(document.body, { childList: true });
-watchDialogParts(document);
+const STACKABLE = new Set([PANEL_DIALOG, "settings", "profile-dialog"]);
+/** The open dialogs (the panel dialog too), oldest first. */
+const shownDialogs = computed(() => openDialogLayers(layers.value));
+const openDialogs = computed(() => shownDialogs.value.length);
+/** How many of them are not the panel dialog. */
+const pageDialogs = computed(() => shownDialogs.value.filter((layer) => layer.name !== PANEL_DIALOG).length);
+// The system draws the window buttons above the page, so a dialog backdrop can't dim them: while one is open, the host
+// dims them instead.
+watch(
+  () => openDialogs.value > 0,
+  (dimmed) => api.setDimmed(dimmed),
+);
 
 /** Dialogs open that a question the host asks on its own must not stack on: all but its own slot, Settings, the profile and the panel dialog. */
 function blockingDialogs(): number {
-  const open = [...document.querySelectorAll(DIALOG_OPEN)].filter((element) => !element.matches(STACKABLE)).length;
-  return open - (dialog.value ? 1 : 0);
+  return shownDialogs.value.filter((layer) => !STACKABLE.has(layer.name ?? "")).length - (dialog.value ? 1 : 0);
 }
 
 const dialogSlot = shallowRef<DialogRequest | null>(null);
@@ -672,10 +652,7 @@ api.onShortcut((shortcut) => {
 // there, so this never runs twice for one press). This covers key events that
 // reach the page without passing through main, such as synthetic ones in tests.
 addEventListener("keydown", (event) => {
-  const shortcut = shortcutForKey(
-    { type: "keyDown", key: event.key, control: event.ctrlKey, meta: event.metaKey, alt: event.altKey, shift: event.shiftKey },
-    navigator.platform.startsWith("Mac"),
-  );
+  const shortcut = shortcutForKey(keyInput(event), MAC);
   if (!shortcut) return;
   event.preventDefault();
   runShortcut(shortcut);

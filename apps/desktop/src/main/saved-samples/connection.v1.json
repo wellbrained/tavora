@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "enabled": true,
+  "target": "1.1.1.1",
+  "outages": [
+    {
+      "start": 1762000000000,
+      "end": 1762000060000,
+      "kind": "no-internet"
+    }
+  ],
+  "savedAt": 1763100000000
+}

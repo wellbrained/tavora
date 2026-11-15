@@ -77,8 +77,7 @@ type Limits = { [K in keyof typeof LIMITS]: number };
 export interface MemoryHostOptions {
   /**
    * The Tavora version the host claims, in the handshake. Methods a newer Tavora added throw UNKNOWN_METHOD, as an older
-   * Tavora does (`workspace.getCurrent` then falls back to `game.getCurrent`, as the real client does). Default: the newest
-   * Tavora the SDK knows.
+   * Tavora does. Default: the newest Tavora the SDK knows.
    */
   version?: string;
   /** The module's id and version in the handshake. */
@@ -523,7 +522,6 @@ function blobUsage(shared: Shared, blobs: Map<string, BlobInfo>): BlobUsage {
 const handlers: Handlers = {
   "bridge.handshake": (panel) => handshakeOf(panel),
   "workspace.getCurrent": (panel) => ({ ...panel.shared.workspace }),
-  "game.getCurrent": ({ shared }) => ({ id: shared.workspace.id, displayName: shared.workspace.displayName, kind: shared.workspace.kind === "personal" ? "workspace" : "game" }),
   "workspace.getViewport": ({ shared }) => ({ ...shared.viewport }),
 
   "storage.get": ({ shared }, params) => storeOps(shared, shared.settings, () => shared.limits.maxStoreBytes).get(params),
@@ -1033,7 +1031,6 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
   const sdk: TavoraSDK = {
     host: handshake,
     supports: (name) => supportsCall(shared.version, name),
-    game: { getCurrent: () => call("game.getCurrent") },
     storage: { ...store("storage"), app: store("storage.app") },
     documents: {
       list: () => call("documents.list"),
@@ -1069,12 +1066,7 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
       openMany: (types) => call("panels.openMany", { types: [...types] }),
     },
     workspace: {
-      getCurrent: () =>
-        call("workspace.getCurrent").catch(async (error: unknown) => {
-          if (!(error instanceof TavoraError) || error.code !== "UNKNOWN_METHOD") throw error;
-          const game = await call("game.getCurrent");
-          return { id: game.id, displayName: game.displayName, kind: game.kind === "workspace" ? "personal" : "game" } satisfies TavoraWorkspace;
-        }),
+      getCurrent: () => call("workspace.getCurrent"),
       getViewport: () => call("workspace.getViewport"),
       onResize: (fn) => on("workspace.resize", fn),
     },

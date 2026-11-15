@@ -1,6 +1,6 @@
 # Bridge protocol v1
 
-**Status:** Version 1 is what `@tavora/sdk` speaks. It may still change before Tavora's first public release; after that, breaking changes need a new major version (see [Versioning](#versioning)). What changed when is in the [changelog](./changelog.md).
+**Status:** Version 1 is what `@tavora/sdk` speaks. It is stable from Tavora 1.0: what exists stays as it is, and breaking changes need a new major version (see [Versioning](#versioning)). What changed when is in the [changelog](./changelog.md).
 
 Module authors normally use `@tavora/sdk` and never see these messages. This page is for people writing another SDK, reviewing the host, or debugging.
 
@@ -49,8 +49,7 @@ Methods without params must be sent with `params` left out.
 | Method | Params | Result |
 | --- | --- | --- |
 | `bridge.handshake` | `{ protocol: 1, sdkVersion: string }` | `{ protocol: 1, host: { name: "tavora-desktop", version }, module: { id, version }, capabilities, panel: { type } }`: `capabilities` lists what the user has granted, such as `["network"]`; `panel.type` is the [panel type](./manifest.md#panel-types) this panel shows, or `null` for a module without panel types (Tavora 0.17.12 and newer) |
-| `workspace.getCurrent` | none | `{ id, displayName, kind }` of the workspace this panel is in; `kind` is `"game"` for a game workspace (its `id` is the game's id, the one a manifest's `games` lists) or `"personal"` for a personal workspace that belongs to no game (Tavora 0.21.43 and newer; the SDK asks `game.getCurrent` on an older Tavora) |
-| `game.getCurrent` | none | Deprecated: the same in the old words, `{ id, displayName, kind }` with `kind` `"game"`, or `"workspace"` for a personal workspace (Tavora 0.18.1 and newer; an older Tavora leaves `kind` out, which means a game). Answered until Tavora 1.0; use `workspace.getCurrent` |
+| `workspace.getCurrent` | none | `{ id, displayName, kind }` of the workspace this panel is in; `kind` is `"game"` for a game workspace (its `id` is the game's id, the one a manifest's `games` lists) or `"personal"` for a personal workspace that belongs to no game (Tavora 0.21.43 and newer) |
 | `storage.get` | `{ key }` | the stored JSON value, or `null` |
 | `storage.set` | `{ key, value }` | `null` |
 | `storage.delete` | `{ key }` | `null` |
@@ -119,7 +118,7 @@ Methods without params must be sent with `params` left out.
 
 | Kind | Scope | Removed when |
 | --- | --- | --- |
-| `storage` | module + workspace, shared by all its panels | never by closing panels; later by uninstalling (Milestone C) |
+| `storage` | module + workspace, shared by all its panels | never by closing panels; with the module's data in Settings > Modules |
 | `storage.app` | module, shared by all its panels in every workspace | never by closing panels or deleting a workspace; with the module's data in Settings > Modules |
 | `documents` | module + workspace, shared by all its panels | as above |
 | `blobs` (pictures, PDFs, sounds) | module + workspace, shared by all its panels | the workspace is deleted from the Trash; never by closing panels |
@@ -291,7 +290,7 @@ Tavora serves the page and the files next to it from `127.0.0.1` only, under a r
 
 The same [`overlay`](./manifest.md#overlay) page can also be shown over the user's game, in a window of Tavora's own, with `overlay.showOverGame(key)`. Call it from the click or key press that asked for it, for example a Show over game button. The page and what it publishes work exactly as for Stream overlays (one page per key, `overlay.publish`, `watchOverlay`), and it needs no connector and no permission: the user decides in Settings > Overlays.
 
-- The call gives `"off"` while the user has Game overlays off (they are off at first); Tavora then opens Settings > Overlays. It gives `"full"` when the setup the overlay lands in already has 8 items; the user can remove one on the Overlay page. Otherwise it gives `"shown"`, also when the overlay was already added.
+- The call gives `"off"` while the user has Game overlays off (they are off at first); Tavora then opens Settings > Overlays & Streaming. It gives `"full"` when the setup the overlay lands in already has 8 items; the user can remove one on the Overlay page. Otherwise it gives `"shown"`, also when the overlay was already added.
 - The overlay shows only while its game is running and in front (or, in All games, any library game without a setup of its own), and hides when the user switches to another window, Tavora included. The user picks per overlay whether it is always shown or toggled by a key, how see-through it is, and whether it hides from screen capture (it shows in capture at first). They place and resize it on the Overlay page, or in the game by holding the in-game layer open with the "Tavora over game" key. Its place sticks to the nearest corner or edge of the game window and scales with the window's height, and the page is scaled the same way: it is laid out as in a 1080 px high window, and shown bigger or smaller with the game window.
 - Tavora keeps overlays in setups: Everywhere (over any program), All games, and one per game workspace. An overlay asked for from a game workspace lands in that game's setup, which Tavora adds when there is none; one asked for from a personal workspace lands in All games. Your module never puts anything in Everywhere; the user does. Each setup has room for 8 items (`LIMITS.maxGameOverlays`), panels in game included. In Everywhere the overlay is placed and scaled on the main screen instead of a game window, so lay it out for any size.
 - Tavora draws its own window above the game. It does not touch the game: nothing is injected into it or drawn by it. Games that run in exclusive full screen hide it; the user is told to switch the game to borderless. Windows only; elsewhere the call gives `"off"`.
@@ -333,7 +332,7 @@ When the user presses it, one panel of the module in the workspace shown now, th
 
 A document is a named JSON value with a title and a revision. `DocumentSummary` is `{ id, title, revision, updatedAt, bytes }`; `updatedAt` is an ISO 8601 timestamp and `bytes` the size of `data` as stored.
 
-- `id`: 1 to 64 characters from `A-Z a-z 0-9 _ -`, starting with a letter or digit. Leave it out of `documents.put` to get a new random id.
+- `id`: 1 to 64 characters from `A-Z a-z 0-9 _ -`, starting with a letter or digit. Leave it out of `documents.put` to get a new random id. Ids are saved as file names. So a new document can't be called `index` or a name Windows keeps for devices (`con`, `prn`, `aux`, `nul`, `com1` to `com9`, `lpt1` to `lpt9`), in any case. Its id also can't differ from an existing document's id only by case (`Notes` next to `notes`). `documents.put` refuses these with `INVALID_PARAMS`; documents saved under such ids before stay readable.
 - `revision` starts at 1 and goes up by one on every put.
 - `ifRevision` makes a put or delete conditional: it fails with `CONFLICT` (and `error.revision` set to the current revision) unless the stored revision equals it. `ifRevision: 0` means "only if it does not exist yet".
 - After a successful put or delete, every **other** connected panel of the same module and workspace gets a `documents.changed` event. The panel that made the change does not.
@@ -378,13 +377,12 @@ Every call with the first Tavora that answers it, its capability and whether it 
 <!-- protocol-index:start -->
 <!-- generated from METHOD_INFO by apps/docs/scripts/protocol-index.ts; do not edit -->
 
-A Tavora older than **Since** throws `UNKNOWN_METHOD` for the call; `sdk.supports(call)` tells beforehand. **Click** says the call must come right after a click or key press in the panel, always or for the params named. `MIN_TAVORA` is 0.19.32: the newest of the calls not marked later (the ones before it work on every Tavora the SDK supports).
+A Tavora older than **Since** throws `UNKNOWN_METHOD` for the call; `sdk.supports(call)` tells beforehand. **Click** says the call must come right after a click or key press in the panel, always or for the params named. `MIN_TAVORA` is 0.21.43: the newest of the calls not marked later (the ones before it work on every Tavora the SDK supports).
 
 | Call | Since | Capability | Click |
 | --- | --- | --- | --- |
 | `bridge.handshake` | always |  |  |
 | `workspace.getCurrent` | 0.21.43 |  |  |
-| `game.getCurrent` | always |  |  |
 | `storage.get` | always |  |  |
 | `storage.set` | always |  |  |
 | `storage.delete` | always |  |  |
@@ -515,7 +513,7 @@ A Tavora older than **Since** throws `UNKNOWN_METHOD` for the call; `sdk.support
 | `lifecycle.suspend` | `null` | the panel is hidden (window minimized or hidden, its tab is in the background, or another group is maximized); pause timers and animations. Also sent right after the handshake if the panel connects while hidden |
 | `lifecycle.resume` | `null` | the panel is visible again |
 | `lifecycle.behind` | `{ behind }` | Tavora's window went behind another program, usually the game (`behind: true`), or came back in front. The panel is not hidden and keeps running; only what the user must be there to see, such as a toast with Undo, should wait. A panel shown over the game is never behind. Also sent right after the handshake if the panel connects while the window is behind. The SDK hands it to `lifecycle.onBehindChange` (Tavora 0.23.82 and newer) |
-| `lifecycle.dispose` | `null` | the panel is closing. Best effort only: it may never arrive, so never rely on it to save |
+| `lifecycle.dispose` | `null` | the panel is closing. Saves sent right after it are still answered for a moment (at most a second), nothing else. Best effort only: it may never arrive, so never rely on it to save |
 
 ## Default look
 
@@ -627,7 +625,7 @@ Values must be JSON: `null`, booleans, finite numbers, strings, arrays and plain
 - Within a major version, the host may add methods, events, optional params, result fields and error codes. Modules must ignore event names and result fields they do not know.
 - Removing or changing anything existing needs a new major version. A host should keep serving the previous major version for as long as published modules use it.
 - The manifest's `apiVersion` names the major version the module was built for, and `minTavora` the oldest Tavora that has everything it uses.
-- Before Tavora 1.0, version 1 may still change in ways that break modules. Each such change raises `@tavora/sdk`'s minor version and is marked **Breaking** in the [changelog](./changelog.md). From 1.0 on, the rules above apply.
+- From Tavora 1.0, version 1 is stable. Calls, events, manifest fields and result fields are only added. Something that has to go is deprecated first: it keeps working, and the [changelog](./changelog.md) and this page say what replaces it. It is removed only in a new major version.
 
 ## Shared rich tooltips (Tavora 0.18.18+)
 

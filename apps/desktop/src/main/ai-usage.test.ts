@@ -1,7 +1,7 @@
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { AiUsageView } from "../shared/host-api";
-import { AiUsageConnector, MAX_ANSWER_BYTES, USAGE_URL, type AiUsageDeps } from "./ai-usage";
+import { AI_USAGE_VERSION, AiUsageConnector, MAX_ANSWER_BYTES, USAGE_URL, type AiUsageDeps } from "./ai-usage";
 import { parseClaudeStatus } from "./ai-usage-claude";
 import { profileEnv } from "./ai-usage-cli";
 import { CodexMissingError, type CodexReading } from "./ai-usage-codex";
@@ -164,6 +164,20 @@ describe("AiUsageConnector accounts", () => {
   it("starts empty from a damaged file instead of failing, and offers nothing", async () => {
     const { connector } = setup({}, { [FILE]: "{not json" });
     expect((await connector.view()).accounts).toEqual([]);
+  });
+
+  it("has the saved file checked before it is used: set aside when damaged, still offering nothing", async () => {
+    const check = vi.fn(async (_file: string, _text: string) => null);
+    const { connector } = setup({ check }, { [FILE]: "{not json" });
+    expect((await connector.view()).accounts).toEqual([]);
+    expect(check).toHaveBeenCalledWith(FILE, "{not json");
+  });
+
+  it("reads what the check gives back, so a newer file still opens as far as it can", async () => {
+    const saved = { version: AI_USAGE_VERSION + 1, accounts: [{ id: "a", provider: "claude", label: "Mine", directory: CLAUDE_DIR }] };
+    const check = vi.fn(async (_file: string, text: string) => JSON.parse(text) as Record<string, unknown>);
+    const { connector } = setup({ check }, { [FILE]: JSON.stringify(saved) });
+    expect((await connector.view()).accounts.map((account) => account.label)).toEqual(["Mine"]);
   });
 
   it("drops saved accounts that are not valid", async () => {

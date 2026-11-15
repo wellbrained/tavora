@@ -66,13 +66,16 @@ describe("a library saved by 0.1.0", () => {
 });
 
 describe("a library from a newer Tavora", () => {
-  it("keeps the workspaces it understands and ignores fields it does not know", () => {
+  it("keeps the workspaces it understands, and the fields it does not know as they were, to save them again", () => {
     const moved = moveLibrary(structuredClone(LIBRARY_0_1_0))!;
     const workspaces = moved.workspaces as Record<string, object>;
     const newer = { ...moved, version: 7, somethingNew: { a: 1 }, workspaces: { ...workspaces, poe2: { ...workspaces.poe2, futureField: true } } };
     const library = sanitizeLibrary(newer);
     expect(Object.keys(library.workspaces).sort()).toEqual(["elden-ring", "local-my-game", "poe2"]);
-    expect(library.workspaces.poe2).not.toHaveProperty("futureField");
+    expect(library.workspaces.poe2).toHaveProperty("futureField", true);
+    expect(library).toHaveProperty("somethingNew", { a: 1 });
+    // Written as this version: the newer Tavora reads it as one an older Tavora saved.
+    expect(library.version).toBe(2);
   });
 });
 

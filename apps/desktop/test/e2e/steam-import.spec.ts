@@ -40,7 +40,7 @@ test("a user who can't import from Steam is told what happened and what to do", 
     // Too many tries.
     answer = { status: 429, body: { error: "Too many requests." } };
     await lookUp("https://steamcommunity.com/id/someone");
-    await expect(error).toHaveText("Too many tries. Please wait a minute and try again.");
+    await expect(error).toHaveText("Too many tries. Wait a minute and try again.");
 
     // Tavora's service can't be reached, or answers something unreadable.
     answer = "drop";

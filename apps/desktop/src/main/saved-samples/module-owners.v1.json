@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "folders": {
+    "wellbrained.poe2-builds": {
+      "id": "wellbrained.poe2-builds",
+      "owner": "0123456789abcdef0123456789abcdef",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "signedSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "catalog": true
+    },
+    "local.notes": {
+      "id": "local.notes",
+      "owner": "local"
+    }
+  }
+}

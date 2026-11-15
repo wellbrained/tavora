@@ -14,6 +14,11 @@
 // attestation, then uploads them with the restricted tavora-updates key (deploy/README.md). On the server tavora-receive puts the
 // installer and its blockmap first and latest.yml last, so a manifest never points at a file that is not
 // there yet, and refuses a version that is not newer than the live one.
+//
+// Signed updates (CoreHub #476): after those checks, this PC signs the version, the installer's name and its SHA-512
+// with the update key (TAVORA_UPDATE_KEY, a file made by `pnpm tavora-update-key key`) into latest.yml. The app installs
+// an update only with that signature by one of the keys pinned in src/main/update-keys.ts, so a release stops before
+// anything is built while the app pins no real keys or the key here is not one of them. --dry-run needs no key.
 import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -21,9 +26,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createInterface } from "node:readline/promises";
-import { AFTER_RELEASE, CHECKLIST, asksHandChecks, checkCi, checkDownload, checkInstalled, checkRelease, failedJobsHint, findDispatchedRun, readCiHashes, releaseFiles, releaseNotes, releaseRunTitle } from "./release-guards.mjs";
+import { AFTER_RELEASE, CHECKLIST, asksHandChecks, checkCi, checkDownload, checkInstalled, checkRelease, failedJobsHint, findDispatchedRun, lastReleased, readCiHashes, releaseFiles, releaseNotes, releaseRunTitle, releaseTitle } from "./release-guards.mjs";
 import { hello, publish } from "../../../scripts/deploy-client.mjs";
 import { lockPath, takeLock } from "./release-lock.mjs";
+import { checkPinChange, describeSigned, loadUpdateSigningKey, readPinsFromSource, signLatestYml } from "./update-feed.mjs";
+import { PINNED_UPDATE_KEYS } from "../src/main/update-keys.ts";
+import { rawUpdatePublicKey, readPinnedUpdateKeys } from "../src/main/update-signature.ts";
 
 /** The version of the Tavora installed for this user (asar is off, so its package.json is a plain file), or null. */
 function readInstalledVersion() {
@@ -52,6 +60,19 @@ if (!dryRun) {
     process.exit(1);
   }
 }
+// So is the update key: the app pins two real keys, and TAVORA_UPDATE_KEY is one of them. A dry run only says what's missing.
+const signing = loadUpdateSigningKey(process.env.TAVORA_UPDATE_KEY?.trim(), PINNED_UPDATE_KEYS);
+if (signing.problem && !dryRun) {
+  console.error(`Not releasing: ${signing.problem}\nNothing was built or published.`);
+  process.exit(1);
+}
+// Without real pins the Release build refuses to build (update-key.mjs check), so a dry run would only wait for that.
+if (!readPinnedUpdateKeys(PINNED_UPDATE_KEYS).ok) {
+  console.error(`Dry run stopped: ${signing.problem}\nThe Release build refuses to build an app that pins no real update keys (deploy/README.md, "The update key").`);
+  process.exit(1);
+}
+if (signing.problem) console.warn(`Dry run without signing: ${signing.problem}`);
+else if (signing.which === "backup") console.warn("Signing with the BACKUP update key. Make a new backup key afterwards (deploy/README.md, \"The update key\").");
 // Ctrl+C anywhere: stop this run's Release build on GitHub (once there is one), then exit, which removes the lock.
 let activeRun = null;
 process.on("SIGINT", () => {
@@ -122,6 +143,39 @@ if (problems.length) {
 }
 console.log("Version, branch, tags and patch notes are in order.");
 
+// Installed apps check this release against the keys their own build pins: those of the last release, not this checkout.
+{
+  const previousVersion = lastReleased(git("tag", "--list", "v*").split(/\r?\n/).filter(Boolean));
+  let previousSource = null;
+  if (previousVersion) {
+    try {
+      previousSource = git("show", `v${previousVersion}:apps/desktop/src/main/update-keys.ts`);
+    } catch {
+      // That release was from before signed updates.
+    }
+  }
+  const previous = readPinsFromSource(previousSource);
+  // A release is shipped only with real pins, so a file that is there must read as two keys.
+  if (previousSource !== null && !previous) fail(`Can't read the update keys ${previousVersion} pins. Nothing was built or published.`);
+  const signingPublic = signing.problem ? null : rawUpdatePublicKey(signing.key);
+  const pins = checkPinChange(previous, PINNED_UPDATE_KEYS, signingPublic);
+  if (pins.problems.length) {
+    console.error(`\nNot releasing ${version}:`);
+    for (const problem of pins.problems) console.error(`  - ${problem}`);
+    process.exit(1);
+  }
+  if (pins.first) console.log(`No earlier release pins update keys${previousVersion ? ` (${previousVersion} is from before signed updates)` : ""}: this is the first that checks them.`);
+  else if (pins.changed) {
+    console.warn(`\nThe pinned update keys change in this release:\n  before  release ${previous.release}, backup ${previous.backup}\n  now     release ${PINNED_UPDATE_KEYS.release}, backup ${PINNED_UPDATE_KEYS.backup}`);
+    if (!dryRun) {
+      const ask = createInterface({ input: process.stdin, output: process.stdout });
+      const answer = (await ask.question("Every app that installs this release will trust only the new pair. Did you make and keep the new key yourself? Type yes: ")).trim().toLowerCase();
+      ask.close();
+      if (answer !== "yes") fail("Not releasing: the key change was not confirmed. Nothing was built or published.");
+    }
+  } else console.log(`The update keys are the ones ${previousVersion} pins, and this release is signed with one of them.`);
+}
+
 // The commit that gets built, uploaded and tagged. If main moves meanwhile (another
 // session pulls into this checkout), the tag must still name what was built.
 const built = git("rev-parse", "HEAD");
@@ -168,7 +222,7 @@ if (!ciRun) fail(`GitHub did not list the Release build "${title}" within two mi
 const runId = String(ciRun.databaseId);
 // From here on, stopping early (a failed check, Ctrl+C) also stops the run on GitHub.
 activeRun = runId;
-console.log(`https://github.com/${REPO}/actions/runs/${runId} (about ${skipE2e ? "10 minutes, without e2e" : "15 minutes"})`);
+console.log(`https://github.com/${REPO}/actions/runs/${runId} (about 25 minutes: the signed-update check takes longest)`);
 try {
   run("gh", ["run", "watch", runId, "--repo", REPO, "--exit-status", "--interval", "30"]);
 } catch {
@@ -218,8 +272,27 @@ for (const name of allFiles) {
 }
 console.log(`The files match what the Release build made from ${built.slice(0, 7)} (SHA-256 and attestation), and latest.yml points at the installer.`);
 
+// Only now, on files that passed every check above: Tavora's signature into latest.yml (src/main/update-signature.ts).
+step("Signing the update");
+const signed = { version, file: installer, sha512: downloaded.get(installer).sha512 };
+console.log(describeSigned(signed).map((line) => `  ${line}`).join("\n"));
+if (signing.problem) {
+  console.log(`\nDry run: this is what a release signs. A real release would stop before building: ${signing.problem}`);
+  console.log("Nothing was signed, published or tagged.");
+  // Only the key on this PC is missing (real pins were checked at the start).
+  process.exit(0);
+}
+try {
+  const latestPath = path.join(releaseDir, "latest.yml");
+  const { text, key } = signLatestYml({ latestYml, ...signed, privateKey: signing.key, pinned: PINNED_UPDATE_KEYS });
+  writeFileSync(latestPath, text);
+  console.log(`Signed with the ${key} key; latest.yml carries the signature, and it checks out against the app's pinned keys.`);
+} catch (error) {
+  fail(`Signing failed (${error.message}). Nothing was published or tagged.`);
+}
+
 if (dryRun) {
-  console.log("\nDry run: stopping before the upload. Nothing was published or tagged.");
+  console.log("\nDry run: signed the local copy of latest.yml, stopping before the upload. Nothing was published or tagged.");
   process.exit(0);
 }
 
@@ -269,7 +342,7 @@ try {
     `${version} is published, but tagging failed (${error.message}). Finish by hand:\n` +
       `  git tag -a v${version} ${built} -m "Tavora ${version}"   (skip if the tag exists)\n` +
       `  git push origin v${version}\n` +
-      `  gh release create v${version} --repo ${REPO} --verify-tag --title "Tavora ${version} (preview build)" --notes "Windows preview build of Tavora." ${allFiles.map((name) => `"${path.join(releaseDir, name)}"`).join(" ")}`,
+      `  gh release create v${version} --repo ${REPO} --verify-tag --title "${releaseTitle(version)}" --notes "See Settings > Patch notes in Tavora ${version}." ${allFiles.map((name) => `"${path.join(releaseDir, name)}"`).join(" ")}`,
   );
 }
 
@@ -280,7 +353,7 @@ try {
   const note = PATCH_NOTES.find((entry) => entry.version === version);
   const notesFile = path.join(tmpdir(), `tavora-release-notes-${version}.md`);
   writeFileSync(notesFile, releaseNotes(note));
-  run("gh", ["release", "create", `v${version}`, "--repo", REPO, "--verify-tag", "--title", `Tavora ${version} (preview build)`, "--notes-file", notesFile, ...allFiles.map((name) => path.join(releaseDir, name))]);
+  run("gh", ["release", "create", `v${version}`, "--repo", REPO, "--verify-tag", "--title", releaseTitle(version), "--notes-file", notesFile, ...allFiles.map((name) => path.join(releaseDir, name))]);
   rmSync(notesFile, { force: true });
 } catch (error) {
   console.error(`The update is published and tagged, but the GitHub release failed (${error.message}). Create it by hand from ${releaseDir}.`);

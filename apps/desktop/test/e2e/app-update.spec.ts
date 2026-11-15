@@ -56,6 +56,22 @@ test("the update marker shows what's new, the download's progress, and waits for
   }
 });
 
+test("an update that isn't signed by Tavora is skipped, says so, and can be tried again", async () => {
+  // TAVORA_FAKE_UPDATE_UNSIGNED makes the preview's signature check refuse the downloaded version (previewCheck).
+  const { app, page } = await launch(undefined, [], { env: { TAVORA_FAKE_UPDATE_UNSIGNED: "1" } });
+  try {
+    await checkNow(page, true);
+    const marker = page.getByTestId("rail-update");
+    await expect(marker).toHaveAttribute("data-status", "available", { timeout: 20_000 });
+    await marker.click();
+    await expect(page.getByTestId("update-popover-title")).toHaveText("Update skipped");
+    await expect(page.getByTestId("update-popover-problem")).toHaveText("Tavora couldn't confirm it's really from Tavora, so it wasn't installed. Your version keeps working.");
+    await expect(page.getByTestId("update-popover-download")).toHaveText("Try again");
+  } finally {
+    await app.close();
+  }
+});
+
 test("a download that fails can be tried again from the marker", async () => {
   const { app, page } = await launch(undefined, [], { env: { TAVORA_FAKE_UPDATE_FAIL: "1" } });
   try {

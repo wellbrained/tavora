@@ -42,6 +42,7 @@ classes where you use a control; never copy it.
 | 2 to 4 views or choices | `SegmentedControl`. An option can have an `icon` (with `iconOnly`, the icon alone: its `label` becomes the tooltip and `aria-label`), be `disabled` by itself, and carry a `tooltip`. Say why an option is off with `disabledReason`: it shows as the option's tooltip, and the option stays hoverable and focusable (the arrow keys land on it) but can't be picked | a row of buttons acting as tabs, icons teleported into the items, a wrapper `span` with a tooltip around a disabled option |
 | Tabs | `Tabs`; closable, reorderable or renamable tabs: `TabStrip` | own tab bar |
 | Text, number, code field | `Input`, `Textarea`, `CodeInput`, `Label` | own input with an icon positioned by hand |
+| A field's label, hint and error | `Field` around one control (`Input`, `Textarea`, `NumberField`, `Select`, `Combobox`, `Switch`, `Checkbox`): `label`, `hint` (or its `hint` slot) and `error` are tied to the control for screen readers, and the error is read out when it appears. `orientation="horizontal"` puts a short control beside the label and moves it under the label when the row is too narrow; a switch with its label stays a `SwitchField` | a `Label` with `for`, ids and `aria-describedby` wired by hand; an error shown only as a red border |
 | Pick one | `Select` (short list), `Combobox` (searchable), `Picker`, `RadioGroup` | native `<select>` |
 | A field where the user types their own value or picks a suggestion (a format) | `Combobox` with `free` on its `ComboboxInput`, `ignore-filter` and a `ComboboxTrigger` chevron; the list starts at the field's left edge and is as wide | an `Input` with a "···" button beside it and a menu of its own |
 | Yes/no setting | `Switch` / `SwitchField`, `Checkbox` | own switch |
@@ -54,8 +55,10 @@ classes where you use a control; never copy it.
 | Tag, count, status word | `Badge` | muted `span` |
 | A number that changes while it is on screen (a count, a total) | `CountTo` / `useCountTo` (counts to the new value; not for a number that ticks every second or one being typed) | a plain `{{ n }}` that jumps |
 | A list the user reorders by dragging | `useReorderMotion` and `liftedDragImage` from `ui/reorder`: the others slide aside, the dropped item settles; keys reorder at once | a hand-made drop line only |
+| A drag of your own with the pointer (a splitter, a crop frame, a handle on a canvas) | `bindDrag` from `@tavora/official-ui/lib/bind-drag`, made once in `setup`: a threshold before it begins, Escape and `pointercancel` put it back, the click after a drop doesn't count, it ends when the panel unmounts; you keep the value from before and put it back in `cancel` | own `pointermove`/`pointerup` listeners on `document`, a drag that keeps its result when the system cancels the pointer |
 | Dragging a thing onto a target (a card onto a slot, an item onto a folder) | `startDrag` on the source and `useDropTargets` for the targets, from `ui/drag-drop`: the drag is kept for every target to read, a target accepts or refuses, `over` says where it would land, `outside` takes a drop next to the targets; the source lifts as in a reordered list. What a drop does (place, swap, clear) and how the landing looks are yours | own drag state in a module, `dataTransfer` read on dragover, a drop that ignores what the target takes |
 | Menu | `ContextMenu`, `DropdownMenu`, or `sdk.ui.showMenu({ anchor: element })` | menu at the pointer, own popup |
+| A menu entry whose work takes a moment (a reload, a copy) | `action` on `DropdownMenuItem` / `ContextMenuItem` instead of `@select`: when it returns a Promise the menu stays open with the row busy (`aria-busy`, the slow waiting pulse), the row can't be chosen again, and the menu closes when it is done; a failure shows the kit's error toast. Not for an entry that opens a dialog or a file picker: that closes the menu first with `@select` | a "Working…" label, a spinner in the row, an own busy flag around `@select` |
 | Tooltip | `Tooltip` / `TooltipRows`, or a `title` (connectModule turns it into the kit tooltip) | own hover box |
 | An item card (a game's card, tower, item) in the shared tooltip or inline in a panel | `sdk.ui.tooltip.show` with `layout: "card"` (picture on top, title with its badges, type line, `effect` box, stats with an optional per-level column (`per`, `perHeading`) and an optional icon before a stat's label (`icon`), rows) and, inline, `ItemCard` with the same content; a game look is a skin (`sdk.ui.tooltip.defineSkin`, see [Item-card skins](#item-card-skins)) | own card markup, own hover card with game colours |
 | Say why a control is off | `disabled-reason` next to `disabled` on `Button`, `Switch` / `SwitchField`, `Checkbox`, `Input`, `Select` (or its `SelectTrigger`), `DropdownMenuItem` and `ContextMenuItem`: the control stays hoverable and focusable, shows the reason in the kit tooltip and does nothing when used. A `Button` also does this with a `title` (or `hinted`, when you show the tooltip yourself) | a wrapper `span` with a `title` around a disabled control, a `title` on a native `disabled` control (it never shows), the reason in the label ("Pin (already pinned)") |
@@ -66,10 +69,11 @@ classes where you use a control; never copy it.
 | A list, card or page that loads | `Skeleton` around the real template with placeholder data (see [Loading](#loading)) | generic grey bars, a spinner, "Loading…" |
 | A game's tall cover | `GameCover` (2:3, the game's tile as fallback, name beside it) | an own `<img>` box per module |
 | A picture that may arrive late | `FadeImage` (reserved box, fades in, keeps a fallback icon if it fails) | a bare `<img>` that pops in and shifts the layout |
-| Error or warning in place | `Notice` | red text in a `<p>` |
+| Error or warning in place | `Notice`; a field's own error is the `error` of its `Field` | red text in a `<p>` |
 | Short message | `toast()` from `ui/toast` (the `Toaster` follows the user's toast position) | own status line |
 | Work a view waits for (a confirm, an import, a load) | `useTask()` from `@tavora/official-ui/use-task`: one `state` (`idle`, `running`, `failed` with its message), always ends, drops an answer that is no longer the newest (`mode: "latest"` for loads) | `busy` and `error` refs set by hand around an `await` |
 | Delete something that can be put back | `undoable()` from `ui/toast`: delete at once, then "… deleted" with Undo (see [Deleting](#deleting)) | "Are you sure?" first, a toast with an own Undo button |
+| A list whose rows can be deleted, or go away by themselves | `useFocusRecovery(list)` from `@tavora/official-ui` (in the app `@tavora/official-ui/focus-recovery`), each row marked `data-focus-row="<id>"`: when the focused row goes, the focus moves to the same spot in the next row, else the row before, else the first control of the empty state (`data-focus-empty`) or the list. `data-focus-target` names a row's main control, for rows that differ. Undo calls `restore(id)` (see [Deleting](#deleting)). `NavList` and `DataGrid` do it themselves | focusing a neighbour by hand after a timeout, `document.querySelector` for the next row, the focus left on the page |
 | Key hint | `Kbd` | |
 | Zoomable picture, map, tree or canvas | `ZoomPane` (one control group: −, %, +, Whole map, and your own buttons in `extras`; `hundred` sets what 100 % is; `persist-key` remembers the view; a game that draws itself, canvas or SVG, uses `view-only`) and `TileMap` for tiles and pins | own wheel, drag, double-click or zoom buttons, own zoom controls per game |
 | A tooltip for a canvas node or anything without an element to hover | `ZoomTip` with `useZoomTip()`: you pass the box on the pane, the kit tooltip opens beside it | a tooltip at the pointer, own hover box |
@@ -145,7 +149,8 @@ themes; anything hard-coded breaks in one of them.
   nothing to add); their timers wait while the panel is hidden (the kit follows the page and `lifecycle`).
   Rows the user adds or removes in a vertical list use `AnimatedList`, and a page that replaces another in the same
   frame uses `usePageMotion`; don't hand-roll either. Neither moves for a key press or when a whole list is replaced.
-  Waiting is the one thing that may repeat: a skeleton's slow pulse (`--duration-pulse`), off for reduced motion.
+  Waiting is the one thing that may repeat: a skeleton's slow pulse (`--duration-pulse`), and the same pulse on a busy row of a menu
+  or Ctrl+K (`tavora-busy`), off for reduced motion.
 - **Page base**: one stylesheet per module for `html, body, #app` (no margin, full height, theme colours), imported by
   every panel; a panel's own CSS adds to it and never repeats it.
 
@@ -186,6 +191,13 @@ each pattern.
   Export, Add, Delete…) may carry `:icon`. A button that only closes (Cancel, Close, Done, OK) gets `close` and never
   an icon, even when it is the primary one: `<DialogButton close>Done</DialogButton>`.
 - **Forms**: make the `form` `class="contents"` and put the `DialogFooter` inside it, so the Save button submits.
+- **Closing**: Escape, a click outside and the X close a dialog. While work it waits for runs, pass `:busy` (`useTask`'s
+  `busy`) to `DialogContent` (or `DialogScrollContent`, or the app's `ModalDialog`): nothing closes it and the X is off. Where closing would lose something (typed text), set
+  `:dismissible="false"` and answer `@dismiss-attempt` (its `reason`: `escape`, `outside`, `close-button`), for example
+  with "Discard changes?". Don't keep a dialog open with your own `escape-key-down` or `pointer-down-outside` handler; one that
+  takes Escape for something inside the dialog first (folding an open list) may still prevent it, and the kit then
+  doesn't count it as a try. Playground: Actions >
+  Dialogs > Ask before closing.
 - **Texts**: a title of a few words, one short sentence under it, in English and German like everything else.
 
 ### Sliders
@@ -252,7 +264,7 @@ The UI Playground (Tavora features > Settings) shows one page, several pages and
 - **Deleting**<a id="deleting"></a>: what can be put back exactly as it was (an item of the module's own document: a to-do, a
   group, a saved value) is deleted at once and saved, then `undoable({ title, undo })` shows "<Thing> deleted" with Undo
   for a few seconds; Ctrl+Z outside text fields takes back the newest one (`handleUndoKey(event)` in the page's
-  keydown; it stands down while a kit dialog is open and for keys pressed inside a menu, list or popover). Each delete gets its own toast; `undo` puts back only its own thing, in its place, with its id, and
+  keydown; it stands down while a kit dialog is open and for keys pressed inside a menu, list or popover). The focus stays in the list ([`useFocusRecovery`](#2-kit-map)); its `restore(id)` in `undo` gives the thing back the focus. Each delete gets its own toast; `undo` puts back only its own thing, in its place, with its id, and
   answers `false` when it can't any more (its place is gone, something took its name): the kit then says so. Check that
   on the list as it is now, since a store change may run again on a newer one. A closed panel or app keeps the delete
   (it is saved already); end open offers in `onBeforeUnmount` with `close()`. `ConfirmDialog` stays for what can't be
@@ -279,7 +291,10 @@ The UI Playground (Tavora features > Settings) shows one page, several pages and
 - **Overlays and drop targets** inside a panel use token colours and the kit's radius like everything else.
 - **Data**: bundled with the module, loaded once and shared between panels. Modules reach the network only through the hosts the user granted (`permissions.network`, `network.fetch`), and a program on this PC, such as a game's local API, only read-only as `localhost:<port>`. A folder on this PC, such as a game's replays or saves, is read only through `permissions.folders` and `folders` once the user allowed it; for a single file the user picks, use `files.pickReadOnly`.
 - **Accessibility**: icon-only buttons have a label, everything works by keyboard, a tree or list with a role also has
-  its arrow keys, state is never shown by colour alone.
+  its arrow keys, state is never shown by colour alone. In component tests, `ariaProblems(root)` from
+  `@tavora/official-ui/testing` finds ids that `aria-labelledby`, `aria-describedby`, `aria-controls` or a label's `for`
+  point at but nothing has, and a radio group, tab list, menu or list that Tab stops on more than once;
+  `focusLostAfter(action)` finds an action that drops the focus to the page body.
 
 ### Loading
 

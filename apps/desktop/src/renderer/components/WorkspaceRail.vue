@@ -4,10 +4,11 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
 import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import type { FolderView, WorkspaceView, RootItem } from "../../shared/host-api";
 import { liftedDragImage, useReorderMotion } from "@tavora/official-ui/components/ui/reorder";
+import { bindDrag } from "@tavora/official-ui/lib/bind-drag";
 import { cn } from "@tavora/official-ui/lib/utils";
 import { act, dialog, openSettings, prompt, railToggles, state, submitAction } from "../host";
 import { t } from "../i18n";
-import { numberedWorkspaces } from "../shortcuts";
+import { keyshortcuts, numberedWorkspaces } from "../shortcuts";
 import { folderMenu, workspaceMenu } from "../rail-actions";
 import MenuArea from "./menus/MenuArea.vue";
 import ProfileMenu from "./profile/ProfileMenu.vue";
@@ -128,49 +129,28 @@ const width = computed(() => (expanded.value ? (dragWidth.value ?? library.value
 const clampWidth = (value: number) => Math.round(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, value)));
 
 // A drag saves the width when the button is let go. Escape, or a pointer the system takes away (pointercancel),
-// puts the rail back as it was; so does the handle going away mid-drag (Ctrl+\ folds the rail), which would
-// otherwise leave the Escape listener behind.
-let cancelResize: (() => void) | undefined;
+// puts the rail back as it was; so does the handle going away mid-drag (Ctrl+\ folds the rail).
+const resizing = bindDrag();
 watch(expanded, (open) => {
-  if (!open) cancelResize?.();
+  if (!open) resizing.cancel();
 });
-onBeforeUnmount(() => cancelResize?.());
 
 function startResize(event: PointerEvent) {
   if (event.button !== 0) return;
-  cancelResize?.();
-  const handle = event.currentTarget as HTMLElement;
-  const startX = event.clientX;
-  const startWidth = width.value;
-  handle.setPointerCapture(event.pointerId);
-  const move = (next: PointerEvent) => (dragWidth.value = clampWidth(startWidth + next.clientX - startX));
-  const stop = () => {
-    handle.removeEventListener("pointermove", move);
-    handle.removeEventListener("pointerup", save);
-    handle.removeEventListener("pointercancel", revert);
-    window.removeEventListener("keydown", onEscape, true);
-    if (handle.isConnected && handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
-    cancelResize = undefined;
-  };
-  const save = () => {
-    stop();
-    if (dragWidth.value !== null) void act({ type: "set-rail", width: dragWidth.value }).then(() => (dragWidth.value = null));
-  };
-  const revert = () => {
-    stop();
-    dragWidth.value = null;
-  };
-  const onEscape = (key: KeyboardEvent) => {
-    if (key.key !== "Escape") return;
-    key.preventDefault();
-    key.stopPropagation();
-    revert();
-  };
-  handle.addEventListener("pointermove", move);
-  handle.addEventListener("pointerup", save);
-  handle.addEventListener("pointercancel", revert);
-  window.addEventListener("keydown", onEscape, true);
-  cancelResize = revert;
+  resizing.start(
+    event,
+    () => {
+      const startWidth = width.value;
+      return {
+        move: (_, delta) => (dragWidth.value = clampWidth(startWidth + delta.x)),
+        drop() {
+          if (dragWidth.value !== null) void act({ type: "set-rail", width: dragWidth.value }).then(() => (dragWidth.value = null));
+        },
+        cancel: () => (dragWidth.value = null),
+      };
+    },
+    { capture: event.currentTarget as HTMLElement },
+  );
 }
 
 /** The width a new library starts with (the host's RAIL.defaultWidth); a double-click on the handle goes back to it. */
@@ -423,6 +403,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
           data-rail-item
           data-testid="rail-home"
           :aria-label="t('rail.home')"
+          :aria-keyshortcuts="keyshortcuts('home')"
           :aria-current="state!.screen === 'welcome' ? 'page' : undefined"
           @click="act({ type: 'show-welcome' })"
         >
@@ -454,6 +435,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
         data-testid="rail-toggle"
         :aria-label="expanded ? t('rail.collapse') : t('rail.expand')"
         :title="expanded ? t('rail.collapse') : t('rail.expand')"
+        :aria-keyshortcuts="keyshortcuts('toggle-rail')"
         :aria-expanded="expanded"
         @click="toggleRail"
       >
@@ -658,6 +640,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
           data-rail-item
           data-testid="rail-settings"
           :aria-label="t('rail.settings')"
+          :aria-keyshortcuts="keyshortcuts('settings')"
           aria-haspopup="dialog"
           @click="openSettings()"
         >

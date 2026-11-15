@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shortcutForKey } from "../shared/shortcut-keys";
+import { shortcutForKey } from "../shared/shortcuts";
 import { shortcutFor } from "./shortcuts";
 
 const key = (overrides: Partial<Parameters<typeof shortcutFor>[0]>) => ({

@@ -62,8 +62,8 @@ export class ModulePanelView implements PanelViewAdapter {
   capture(): Promise<string | null> {
     return stillOf(this.panel.view);
   }
-  dispose(): void {
-    this.panel.dispose();
+  dispose(now?: boolean): Promise<void> {
+    return this.panel.dispose(now);
   }
 }
 
@@ -107,7 +107,8 @@ export class BrowserPanelView implements PanelViewAdapter {
   capture(): Promise<string | null> {
     return stillOf(this.panel.view);
   }
-  dispose(): void {
+  dispose(): Promise<void> {
     this.panel.dispose();
+    return Promise.resolve();
   }
 }

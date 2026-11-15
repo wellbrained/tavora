@@ -1,0 +1,55 @@
+{
+  "version": 2,
+  "overlays": [
+    {
+      "owner": "official",
+      "moduleId": "tavora.clock-counter",
+      "gameId": "poe2",
+      "key": "deaths",
+      "scope": "game",
+      "mode": "always",
+      "opacity": 100,
+      "hideFromCapture": false,
+      "rect": {
+        "x": 0.7,
+        "y": 0.6,
+        "width": 0.25,
+        "height": 0.3
+      }
+    },
+    {
+      "owner": "official",
+      "moduleId": "tavora.clock-counter",
+      "gameId": "local-personal",
+      "key": "timer",
+      "scope": "all",
+      "mode": "toggle",
+      "opacity": 75,
+      "hideFromCapture": false,
+      "rect": {
+        "x": 0.05,
+        "y": 0.05,
+        "width": 0.2,
+        "height": 0.1
+      }
+    }
+  ],
+  "panels": [
+    {
+      "owner": "official",
+      "moduleId": "tavora.todos",
+      "gameId": "local-personal",
+      "scope": "all",
+      "instanceId": "aaaaaaaa-0000-4000-8000-000000000002",
+      "mode": "always",
+      "opacity": 100,
+      "hideFromCapture": false,
+      "rect": {
+        "x": 0.05,
+        "y": 0.05,
+        "width": 0.2,
+        "height": 0.1
+      }
+    }
+  ]
+}

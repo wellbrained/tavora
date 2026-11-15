@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "owners": {
+    "0123456789abcdef0123456789abcdef": {
+      "community.someone.tracker": {
+        "version": "1.2.0",
+        "grantedAt": "2026-11-03T12:00:00.000Z",
+        "network": [
+          "api.example.com"
+        ],
+        "connectors": [],
+        "folders": []
+      }
+    }
+  }
+}

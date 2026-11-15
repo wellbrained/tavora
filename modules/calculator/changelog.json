@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.26",
+    "date": "2026-11-14",
+    "notes": [
+      "Deleting a saved value moves the focus to the next one; Undo gives it back."
+    ]
+  },
+  {
     "version": "0.1.25",
     "date": "2026-11-05",
     "notes": [

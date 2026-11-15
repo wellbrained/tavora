@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, modulePartition, orphanedPartitions, queueLocalDataMove } from "./module-data";
+import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, modulePartition, orphanedPartitions, holdLeftovers, partitionsOf, partitionWorkspace, queueLocalDataMove, SWEEP_HOLD_FILE } from "./module-data";
 import { IconError, imageType, importIcon, MAX_ICON_BYTES } from "./icons";
 import { initialBounds } from "./window-state";
 
@@ -76,6 +76,68 @@ describe("orphanedPartitions", () => {
       ...rawPartition,
     ]);
     expect(await orphanedPartitions(await tempDir(), new Set())).toEqual([]);
+  });
+});
+
+describe("partitionsOf", () => {
+  it("finds only the partitions of the workspaces named", async () => {
+    const userData = await tempDir();
+    for (const name of ["module%3Alocal%3Alocal.example.a@poe2", "browser%40poe2", "browser%40kept", "module%3Alocal%3Alocal.example.a@kept", "browser"]) {
+      await mkdir(path.join(userData, "Partitions", name), { recursive: true });
+    }
+    expect((await partitionsOf(userData, ["poe2"])).map((dir) => path.basename(dir)).sort()).toEqual(["browser%40poe2", "module%3Alocal%3Alocal.example.a@poe2"]);
+    expect(await partitionsOf(userData, [])).toEqual([]);
+  });
+});
+
+describe("holdLeftovers", () => {
+  const set = (...ids: string[]) => new Set(ids);
+  const leftovers = (workspaces: string[], panels: string[] = []) => ({ workspaces: set(...workspaces), panels: set(...panels) });
+  const held = async (userData: string) => (await readdir(userData)).includes(SWEEP_HOLD_FILE);
+
+  it("keeps nothing when the files were read and nothing was held", async () => {
+    const userData = await tempDir();
+    expect(await holdLeftovers(userData, true, leftovers(["gone"], ["p1"]))).toEqual(leftovers([]));
+    expect(await held(userData)).toBe(false);
+  });
+
+  it("keeps what a lost library or workspace file may have listed, at later starts too, and sweeps the rest", async () => {
+    const userData = await tempDir();
+    // A fresh install: nothing left over, nothing held.
+    expect(await holdLeftovers(userData, false, leftovers([]))).toEqual(leftovers([]));
+    expect(await held(userData)).toBe(false);
+    // The library was set aside: everything left over is kept.
+    expect(await holdLeftovers(userData, false, leftovers(["old-a", "old-b"], ["p1", "p2"]))).toEqual(leftovers(["old-a", "old-b"], ["p1", "p2"]));
+    expect(await held(userData)).toBe(true);
+    // The next start reads its new library: the held ones stay kept, a workspace deleted since is swept.
+    expect(await holdLeftovers(userData, true, leftovers(["old-a", "old-b", "deleted-since"], ["p1", "p2", "p3"]))).toEqual(leftovers(["old-a", "old-b"], ["p1", "p2"]));
+    // The user brought the library back: none is left over, so the hold goes.
+    expect(await holdLeftovers(userData, true, leftovers([]))).toEqual(leftovers([]));
+    expect(await held(userData)).toBe(false);
+    expect(await holdLeftovers(userData, true, leftovers(["gone"]))).toEqual(leftovers([]));
+  });
+
+  it("sets a damaged hold file aside, keeps everything this start and clears the fresh hold later", async () => {
+    const userData = await tempDir();
+    await writeFile(path.join(userData, SWEEP_HOLD_FILE), "{not json");
+    expect(await holdLeftovers(userData, true, leftovers(["a"], ["p"]))).toEqual(leftovers(["a"], ["p"]));
+    expect((await readdir(userData)).some((name) => name.startsWith(`${SWEEP_HOLD_FILE}.corrupt-`))).toBe(true);
+    expect(JSON.parse(await readFile(path.join(userData, SWEEP_HOLD_FILE), "utf8"))).toMatchObject({ version: 1, workspaces: ["a"], panels: ["p"] });
+    expect(await holdLeftovers(userData, true, leftovers([]))).toEqual(leftovers([]));
+    expect(await held(userData)).toBe(false);
+  });
+
+  it("copies a newer Tavora's hold file aside and keeps everything this start", async () => {
+    const userData = await tempDir();
+    await writeFile(path.join(userData, SWEEP_HOLD_FILE), JSON.stringify({ version: 2, workspaces: [], panels: [] }));
+    expect(await holdLeftovers(userData, true, leftovers(["a"]))).toEqual(leftovers(["a"]));
+    expect((await readdir(userData)).some((name) => name.startsWith(`${SWEEP_HOLD_FILE}.from-version-2`))).toBe(true);
+  });
+
+  it("reads a partition's workspace", () => {
+    expect(partitionWorkspace(path.join("x", "browser%40poe2"))).toBe("poe2");
+    expect(partitionWorkspace("module%3Alocal%3Alocal.example.a@Poe2")).toBe("poe2");
+    expect(partitionWorkspace("browser")).toBeNull();
   });
 });
 

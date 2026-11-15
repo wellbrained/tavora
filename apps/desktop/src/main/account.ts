@@ -1,5 +1,4 @@
 import type { KeyObject } from "node:crypto";
-import { readFile, rm } from "node:fs/promises";
 import { apiReason, type ApiReason } from "@tavora/module-schema";
 import { linkRequest, publishSignature, publishZip, type Published } from "@tavora/pack";
 import { assertNever } from "../shared/assert-never";
@@ -8,6 +7,8 @@ import type { Language, MessageKey } from "../shared/i18n";
 import { isIdPrefix } from "../shared/id-prefix";
 import type { Encryptor } from "./discord-store";
 import { writeFileAtomic } from "./fsutil";
+import { forgetSealedFile, openSealedFile } from "./json";
+import { STORE_VERSIONS } from "./saved-versions";
 import type { DiscordLoginResult } from "./discord-login";
 import { UserError } from "./messages";
 
@@ -51,23 +52,17 @@ function savedAccount(value: unknown): SavedAccount | null {
 
 export async function loadAccount(file: string, encryptor: Encryptor): Promise<SavedAccount | null> {
   if (!encryptor.isAvailable()) return null;
-  try {
-    const saved = JSON.parse(await readFile(file, "utf8")) as { v?: unknown; data?: unknown };
-    if (saved.v !== 1 || typeof saved.data !== "string") return null;
-    return savedAccount(JSON.parse(encryptor.decrypt(Buffer.from(saved.data, "base64"))));
-  } catch {
-    // Missing, damaged, or encrypted by another user or PC: signed out.
-    return null;
-  }
+  // Missing, newer, damaged, or encrypted by another user or PC: signed out (openSealedFile keeps the file aside).
+  return openSealedFile(file, (data) => savedAccount(JSON.parse(encryptor.decrypt(Buffer.from(data, "base64")))));
 }
 
 export async function saveAccount(file: string, encryptor: Encryptor, account: SavedAccount | null): Promise<void> {
   if (!account) {
-    await rm(file, { force: true });
+    await forgetSealedFile(file);
     return;
   }
   if (!encryptor.isAvailable()) return;
-  await writeFileAtomic(file, JSON.stringify({ v: 1, data: encryptor.encrypt(JSON.stringify(account)).toString("base64") }));
+  await writeFileAtomic(file, JSON.stringify({ v: STORE_VERSIONS.sealed, data: encryptor.encrypt(JSON.stringify(account)).toString("base64") }));
 }
 
 export function deviceOs(platform: NodeJS.Platform): DeviceOs {

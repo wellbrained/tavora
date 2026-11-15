@@ -10,7 +10,7 @@
 // - Icon: the scoped `icon` slot (`{ tab }`) puts an icon before a tab's label. It stays while the tab is renamed
 //   and is not part of the rename field's text. Give it its own look (e.g. `text-primary size-3.5`) and a tooltip.
 // - A row that is too wide scrolls with the wheel and fades at the edges. The `add` slot sits after the row, always visible.
-import { nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { nextTick, ref, watch } from "vue";
 import { useResizeObserver } from "@vueuse/core";
 import { X } from "@lucide/vue";
 import { TabsRoot } from "reka-ui";
@@ -21,6 +21,7 @@ import { DEFAULT_NAME_LIMIT } from "../../name-check";
 import TabsList from "./TabsList.vue";
 import TabsTrigger from "./TabsTrigger.vue";
 import { reducedMotion, useReorderMotion } from "../reorder";
+import { bindDrag } from "../../../lib/bind-drag";
 import { checkRename, dropPlace, moveTab, neighbourAfterClose, stepTab, type StripTab } from "./tab-strip";
 
 const props = withDefaults(defineProps<{ tabs: StripTab[]; modelValue?: string; maxLength?: number; ariaLabel?: string; class?: string }>(), {
@@ -155,9 +156,8 @@ const drop = ref<{ target: string; after: boolean } | null>(null);
 /** The tab in the hand lifts and follows the pointer and the others slide aside; under reduced motion the line shows instead. */
 const reorder = useReorderMotion(scroller, { axis: "x" });
 const lifting = ref(false);
-let press: { id: string; x: number } | null = null;
-let swallowClick = false;
-const DRAG_DISTANCE = 4;
+/** A tab moves once the pointer has gone this far sideways, so a click with a shaky hand stays a click. */
+const drag = bindDrag({ threshold: 4, axis: "x" });
 
 function places() {
   return tabElements().map((el) => {
@@ -169,81 +169,45 @@ function places() {
 function onPointerDown(event: PointerEvent, id: string) {
   if (event.button !== 0 || props.tabs.length < 2 || renaming.value) return;
   if ((event.target as HTMLElement).closest("[data-tab-close]")) return;
-  press = { id, x: event.clientX };
-  document.addEventListener("pointermove", onPointerMove);
-  document.addEventListener("pointerup", onPointerUp);
-  document.addEventListener("pointercancel", onPointerCancel);
-  document.addEventListener("keydown", onDragKey, true);
+  drag.start(event, {
+    start() {
+      dragId.value = id;
+      lifting.value = !reducedMotion();
+      reorder.begin(id, { lift: true });
+    },
+    move(next, delta) {
+      reorder.follow(delta.x, 0);
+      const el = scroller.value;
+      if (el) {
+        const box = el.getBoundingClientRect();
+        if (next.clientX < box.left + 24) el.scrollLeft -= 12;
+        else if (next.clientX > box.right - 24) el.scrollLeft += 12;
+      }
+      const place = dropPlace(places(), next.clientX);
+      // No line where the drop would change nothing.
+      drop.value = place && moveTab(ids(), id, place.target, place.after).join("\n") !== ids().join("\n") ? place : null;
+      reorder.preview(drop.value ? { id: drop.value.target, after: drop.value.after } : null);
+    },
+    drop() {
+      const place = drop.value;
+      const moving = lifting.value;
+      // With a place to go, the motion carries on into the tab's new place instead of stopping.
+      endDrag(!!place);
+      if (!place) return;
+      const commit = () => emit("reorder", moveTab(ids(), id, place.target, place.after));
+      if (moving) void reorder.drop(commit);
+      else commit();
+    },
+    cancel: () => endDrag(false),
+  });
 }
 
-function onPointerMove(event: PointerEvent) {
-  if (!press) return;
-  if (!dragId.value) {
-    if (Math.abs(event.clientX - press.x) < DRAG_DISTANCE) return;
-    dragId.value = press.id;
-    lifting.value = !reducedMotion();
-    reorder.begin(press.id, { lift: true });
-  }
-  reorder.follow(event.clientX - press.x, 0);
-  const el = scroller.value;
-  if (el) {
-    const box = el.getBoundingClientRect();
-    if (event.clientX < box.left + 24) el.scrollLeft -= 12;
-    else if (event.clientX > box.right - 24) el.scrollLeft += 12;
-  }
-  const place = dropPlace(places(), event.clientX);
-  // No line where the drop would change nothing.
-  drop.value = place && moveTab(ids(), dragId.value, place.target, place.after).join("\n") !== ids().join("\n") ? place : null;
-  reorder.preview(drop.value ? { id: drop.value.target, after: drop.value.after } : null);
-}
-
-/** `settled`: the drop is about to move the tab, so the motion carries on into its new place instead of stopping. */
-function endDrag(settled = false) {
-  document.removeEventListener("pointermove", onPointerMove);
-  document.removeEventListener("pointerup", onPointerUp);
-  document.removeEventListener("pointercancel", onPointerCancel);
-  document.removeEventListener("keydown", onDragKey, true);
-  if (dragId.value) {
-    // The click that follows a drag must not count as a click on the tab.
-    swallowClick = true;
-    setTimeout(() => (swallowClick = false), 0);
-  }
+function endDrag(settled: boolean) {
   if (dragId.value && !settled) reorder.cancel();
-  press = null;
   dragId.value = null;
   drop.value = null;
-}
-
-function onPointerCancel() {
-  endDrag();
   lifting.value = false;
 }
-
-function onPointerUp() {
-  const id = dragId.value;
-  const place = drop.value;
-  const moving = lifting.value;
-  endDrag(!!(id && place));
-  lifting.value = false;
-  if (!id || !place) return;
-  const commit = () => emit("reorder", moveTab(ids(), id, place.target, place.after));
-  if (moving) void reorder.drop(commit);
-  else commit();
-}
-
-function onDragKey(event: KeyboardEvent) {
-  if (event.key !== "Escape") return;
-  event.stopPropagation();
-  onPointerCancel();
-}
-
-function onClickCapture(event: MouseEvent) {
-  if (!swallowClick) return;
-  event.stopPropagation();
-  event.preventDefault();
-}
-
-onBeforeUnmount(() => endDrag());
 </script>
 
 <template>
@@ -292,7 +256,6 @@ onBeforeUnmount(() => endDrag());
             @pointerdown="onPointerDown($event, tab.id)"
             @mousedown="onMouseDown"
             @auxclick="onAuxClick($event, tab.id)"
-            @click.capture="onClickCapture"
             @dblclick="startRename(tab.id)"
             @keydown="onKeyDown($event, tab.id)"
           >

@@ -34,26 +34,26 @@ const aim = (target: DropTarget | null, plan: DropPlan = OK): DockDragEvent<Scen
     return plan;
   },
 });
-const start: DockDragEvent<Scene> = { type: "start", dragged: DRAGGED, scene: SCENE };
+const start: DockDragEvent<Scene> = { type: "start", by: "pointer", dragged: DRAGGED, scene: SCENE };
 
 describe("a drag over the dock", () => {
   it("starts on its first drag event, lifted and aimed at no place; later drag events don't start it again", () => {
     const first = dockDragStep<Scene>({ phase: "idle" }, start);
-    expect(first).toEqual({ drag: { phase: "lifted", dragged: DRAGGED, scene: SCENE }, changed: true, drop: null });
-    const again = dockDragStep(first.drag, { type: "start", dragged: { groupId: "other", panelId: null }, scene: { id: "read again" } });
+    expect(first).toEqual({ drag: { phase: "lifted", by: "pointer", dragged: DRAGGED, scene: SCENE }, changed: true, drop: null });
+    const again = dockDragStep(first.drag, { type: "start", by: "keyboard", dragged: { groupId: "other", panelId: null }, scene: { id: "read again" } });
     expect(again).toEqual({ drag: first.drag, changed: false, drop: null });
   });
 
   it("aims at a place with its plan; the same place again is no change and isn't planned again", () => {
     planned = 0;
     const { drag, phases } = run([start, aim(INTO_G2), aim(INTO_G2), aim({ ...INTO_G2 })]);
-    expect(drag).toEqual({ phase: "aiming", dragged: DRAGGED, scene: SCENE, target: INTO_G2, plan: OK });
+    expect(drag).toEqual({ phase: "aiming", by: "pointer", dragged: DRAGGED, scene: SCENE, target: INTO_G2, plan: OK });
     expect(phases).toEqual(["lifted", "aiming", "aiming", "aiming"]);
     expect(planned).toBe(1);
     expect(dockDragStep(drag, aim(INTO_G2)).changed).toBe(false);
     // Another place is planned anew; no place (a gap, a sash, outside the dock) is lifted again.
     expect(dockDragStep(drag, aim(BESIDE_G2, SAME))).toMatchObject({ drag: { phase: "aiming", target: BESIDE_G2, plan: SAME }, changed: true });
-    expect(dockDragStep(drag, aim(null))).toEqual({ drag: { phase: "lifted", dragged: DRAGGED, scene: SCENE }, changed: true, drop: null });
+    expect(dockDragStep(drag, aim(null))).toEqual({ drag: { phase: "lifted", by: "pointer", dragged: DRAGGED, scene: SCENE }, changed: true, drop: null });
   });
 
   it("drops where it aims when the plan allows it, and ends", () => {
@@ -94,5 +94,13 @@ describe("a drag over the dock", () => {
     const ended = run([start, aim(INTO_G2), { type: "drop" }]).drag;
     expect(dockDragStep(ended, { type: "end" })).toEqual({ drag: ended, changed: false, drop: null });
     expect(dockDragStep(ended, { type: "drop" }).drop).toBeNull();
+  });
+
+  it("a keyboard move keeps what moves it through its steps: arrow keys aim, Enter drops, Escape ends", () => {
+    const byKeys: DockDragEvent<Scene> = { type: "start", by: "keyboard", dragged: DRAGGED, scene: SCENE };
+    const aimed = run([byKeys, aim(INTO_G2), aim(BESIDE_G2)]).drag;
+    expect(aimed).toMatchObject({ phase: "aiming", by: "keyboard", target: BESIDE_G2 });
+    expect(dockDragStep(aimed, { type: "drop" }).drop).toEqual({ dragged: DRAGGED, target: BESIDE_G2, plan: OK });
+    expect(dockDragStep(aimed, { type: "end" })).toEqual({ drag: { phase: "idle" }, changed: true, drop: null });
   });
 });

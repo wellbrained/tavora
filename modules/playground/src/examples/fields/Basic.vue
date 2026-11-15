@@ -1,23 +1,21 @@
 <script setup lang="ts">
+// Field wires the label, the hint and the input together: a click on the label reaches the input, and a screen reader
+// reads the hint with it.
+import { Field } from "@tavora/official-ui/components/ui/field";
 import { Input } from "@tavora/official-ui/components/ui/input";
-import { Label } from "@tavora/official-ui/components/ui/label";
-import { ref, useId } from "vue";
+import { ref } from "vue";
 
-const id = useId();
 const name = ref("Waystone");
 const text = ref("");
 </script>
 
 <template>
   <div class="flex flex-col gap-4">
-    <div class="flex flex-col gap-1.5">
-      <Label :for="`${id}-name`">Name</Label>
-      <Input :id="`${id}-name`" v-model="name" />
-      <p class="text-muted-foreground text-xs">Shown in the panel tab.</p>
-    </div>
-    <div class="flex flex-col gap-1.5">
-      <Label :for="`${id}-empty`">With a placeholder</Label>
-      <Input :id="`${id}-empty`" v-model="text" placeholder="Add a to-do" />
-    </div>
+    <Field label="Name" hint="Shown in the panel tab.">
+      <Input v-model="name" />
+    </Field>
+    <Field label="With a placeholder">
+      <Input v-model="text" placeholder="Add a to-do" />
+    </Field>
   </div>
 </template>

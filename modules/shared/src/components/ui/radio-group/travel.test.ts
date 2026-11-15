@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { createApp, defineComponent, h, ref, type App } from "vue"
 import { RadioGroup, RadioGroupItem } from "."
+import { ariaProblems, focusLostAfter } from "../../../testing"
 import { StyleTiles } from "../style-tiles"
 
 // Arrow keys travel through a group without animating (motion.css holds the motion while the group has data-travel).
@@ -86,5 +87,19 @@ describe.each(["radio", "tiles"] as const)("%s group", (kind) => {
     outside.focus()
     await wait()
     expect(group().hasAttribute("data-travel")).toBe(false)
+  })
+})
+
+describe.each(["radio", "tiles"] as const)("%s group pattern", (kind) => {
+  const NEXT = kind === "tiles" ? "ArrowRight" : "ArrowDown"
+  it("is one Tab stop before and after an arrow key, and the focus moves with the choice", async () => {
+    const { group, item } = mountGroup(kind)
+    await wait()
+    expect(ariaProblems(document.body)).toEqual([])
+    item("a").focus()
+    expect(await focusLostAfter(() => item("a").dispatchEvent(new KeyboardEvent("keydown", { key: NEXT, bubbles: true, cancelable: true })))).toEqual([])
+    await wait()
+    expect(document.activeElement).toBe(item("b"))
+    expect(ariaProblems(group())).toEqual([])
   })
 })

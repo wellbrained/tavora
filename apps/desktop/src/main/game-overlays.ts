@@ -26,7 +26,8 @@ import {
 import { MAX_CONTENT_SCALE, MIN_CONTENT_SCALE } from "../shared/overlay-content";
 import { backupsDir } from "./backup";
 import { SerialQueue, keepCopy, writeFileAtomic } from "./fsutil";
-import { readJsonOrSetAside, setAside } from "./json";
+import { readSavedFile } from "./json";
+import { SUPPORTED_VERSIONS } from "./saved-versions";
 
 export { MIN_OVERLAY_SIZE, type Rect };
 
@@ -173,9 +174,10 @@ interface Setup {
  * of the general ones; load moves them into setups (moveToSetups) after copying the file to backups/before-overlay-setups.
  * Version 4 is version 3 with the workspace names (workspace-move.ts); a file moved from version 1 or 2 says so in
  * `formerVersion`. Version 3 kept each position twice (an anchor and fractions of the window for older Tavoras); an
- * item without an anchor is not converted yet. A file of a higher version is never overwritten.
+ * item without an anchor is not converted yet. A file of a higher version is copied aside before anything is written
+ * (json.ts readSavedFile), then read as version 5.
  */
-export const FILE_VERSION = 5;
+export const FILE_VERSION = SUPPORTED_VERSIONS["game-overlays.json"];
 
 /** The folder in backups/ that keeps game-overlays.json as it was before the setups. Backups never prune it. */
 export const BEFORE_SETUPS_DIR = "before-overlay-setups";
@@ -465,15 +467,14 @@ export class GameOverlayStore {
    * before) also has no scope, so `scopeOf` tells it from the workspace's kind, and the permanent panels over the game
    * it may hold (keys behind RESERVED_KEY_PREFIX) are not kept; `migrated` says so. Positions of a file of version 2 or
    * 1 were fractions of the game window and stay so (`legacy`) until the game's real window is seen (convertLegacy). A
-   * file of a higher version (a newer Tavora wrote it) is set aside, not read.
+   * file of a higher version (a newer Tavora wrote it) is copied aside first, then read as far as this version
+   * understands it, as the current version.
    */
   static async load(userData: string, scopeOf: (workspaceId: string) => OverlayScope = () => "game"): Promise<GameOverlayStore> {
     const file = path.join(userData, GAME_OVERLAYS_FILE);
-    const read = await readJsonOrSetAside<Partial<GameOverlayFile>>(file);
-    const newer = typeof read?.version === "number" && read.version > FILE_VERSION;
-    // Written by a newer Tavora: kept for that one, and never written over.
-    if (newer) await setAside(file);
-    const raw = newer || !isObject(read) ? null : read;
+    // Written by a newer Tavora: copied aside for that one (readSavedFile), and read as the current version.
+    const read = (await readSavedFile(file, { version: FILE_VERSION })) as Partial<GameOverlayFile> | null;
+    const raw = read === null ? null : typeof read.version === "number" && read.version > FILE_VERSION ? { ...read, version: FILE_VERSION } : read;
     // A file moved to the workspace names keeps what version it was until it is written again.
     const version = raw?.version === 4 && (raw.formerVersion === 1 || raw.formerVersion === 2) ? raw.formerVersion : raw?.version;
     const old = raw !== null && raw.version !== FILE_VERSION;

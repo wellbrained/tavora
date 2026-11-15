@@ -322,19 +322,20 @@ describe("setups", () => {
     expect((await readdir(dir)).some((name) => name.startsWith(GAME_OVERLAYS_FILE) && name !== GAME_OVERLAYS_FILE)).toBe(true);
   });
 
-  it("set a file of a newer version aside, start empty, and never write over it", async () => {
+  it("copy a file of a newer version aside, read what it understands, and never write over the copy", async () => {
     const future = JSON.stringify({ version: FILE_VERSION + 1, setups: [{ id: ALL_GAMES, overlays: [{ ...subject(), anchor: DEFAULT_RECT }] }], somethingNew: true });
     await writeFile(path.join(dir, GAME_OVERLAYS_FILE), future);
     const store = await loadStore(dir);
-    expect(store.empty).toBe(true);
+    // Read as the current version: not moved to setups again, and not set aside as unreadable.
     expect([store.migrated, store.moved]).toEqual([false, false]);
-    const aside = (await readdir(dir)).filter((name) => name.startsWith(`${GAME_OVERLAYS_FILE}.corrupt-`));
-    expect(aside).toHaveLength(1);
-    expect(await readFile(path.join(dir, aside[0]!), "utf8")).toBe(future);
+    expect(store.count(ALL_GAMES)).toBe(1);
+    const copy = `${GAME_OVERLAYS_FILE}.from-version-${FILE_VERSION + 1}`;
+    expect((await readdir(dir)).filter((name) => name !== GAME_OVERLAYS_FILE)).toEqual([copy]);
+    expect(await readFile(path.join(dir, copy), "utf8")).toBe(future);
     store.add("poe2", subject("n"));
     await store.save();
     expect((await readSaved()).version).toBe(FILE_VERSION);
-    expect(await readFile(path.join(dir, aside[0]!), "utf8")).toBe(future);
+    expect(await readFile(path.join(dir, copy), "utf8")).toBe(future);
   });
 
   it("keep the grid and the window size last seen for each game", async () => {

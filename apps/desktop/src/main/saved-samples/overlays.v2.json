@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "links": [
+    {
+      "owner": "official",
+      "moduleId": "tavora.clock-counter",
+      "workspaceId": "poe2",
+      "key": "deaths",
+      "token": "0afd3377dcfeb531c32f3d13bc68569a",
+      "state": {
+        "count": 12,
+        "label": "Deaths"
+      }
+    }
+  ]
+}

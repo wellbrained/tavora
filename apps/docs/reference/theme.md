@@ -1,6 +1,6 @@
 # Theme packages (`tavora.theme.json`)
 
-**Status:** first version, 2026-10-15. Themes are local only for now: Tavora's own ship with the app, and users can add their own to their themes folder. Publishing themes comes with the catalog.
+**Status:** stable from Tavora 1.0. Themes are local: Tavora's own ship with the app, and users can add their own to their themes folder. There is no theme catalog yet.
 
 A theme recolours Tavora and every module in it. It is data only: one `tavora.theme.json` with colour tokens and a corner radius. Tavora reads nothing else from the folder, so a theme cannot run code, add CSS or reach the app. Fonts and other assets are not supported yet.
 

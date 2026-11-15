@@ -1,6 +1,6 @@
 {
   "name": "tavora",
-  "version": "0.24.60",
+  "version": "0.24.74",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.28.0",
@@ -20,6 +20,7 @@
     "release:sdk": "node scripts/release-sdk.mjs",
     "pack-module": "node --experimental-strip-types --disable-warning=ExperimentalWarning --conditions=source packages/pack/src/cli.ts",
     "tavora-pack": "node --experimental-strip-types --disable-warning=ExperimentalWarning --conditions=source packages/pack/src/cli.ts",
+    "tavora-update-key": "node apps/desktop/scripts/update-key.mjs",
     "tavora-catalog-sign": "node --experimental-strip-types --disable-warning=ExperimentalWarning --conditions=source scripts/catalog-sign.ts",
     "check:patches": "node scripts/check-patches.mjs",
     "check:modules": "node scripts/check-modules.mjs",

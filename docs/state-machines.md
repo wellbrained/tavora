@@ -10,6 +10,9 @@ an agent finds where a flow lives and what it can be in, without reading it all.
 - **Dialogs in the slot** (renderer `host.ts`): after an `await`, a dialog closes itself with `closeDialog(request)` and
   goes on to the next one with `followDialog(from, next)`, so whatever the user opened meanwhile, or a question that came
   up, stays.
+- **Closing a kit dialog** (`modules/shared/src/components/ui/dialog/dismissal.ts`): each try (Escape, a press outside,
+  the X) is `close`, `ask` (not `dismissible`: `dismiss-attempt` tells the page, which decides) or `refuse` (`busy`:
+  refused without a word, `busy` winning). `dismissVerdict` is the step, with tests.
 - **Real transitions** get a pure step function over the union, with tests (`dockDragStep` in `renderer/dock-drag.ts`).
 - **Seen from outside**: the value goes on the view's root as `data-status` (`data-gesture` for a gesture), for tests and
   tools. `ModalDialog`'s `status` prop puts it on the dialog.
@@ -20,9 +23,13 @@ Update this page in the pull request that adds, removes or changes a flow.
 
 | Flow | File | States | Seen as |
 | --- | --- | --- | --- |
-| Dialog slot and its queue | `renderer/host.ts`, `renderer/dialog-queue.ts` | one request or none; host questions wait by rank (consent 4, new panel 3, link 2, game switch 1) | the dialog's `data-testid` |
-| Dock drag | `renderer/dock-drag.ts` (`dockDragStep`) | `idle → lifted ⇄ aiming → idle` | |
+| Layers on top of the page | `modules/shared/src/lib/layers.ts` (kit) | one list, oldest first, of the kit's dialogs and dropdown menus; each `open → closing → gone`, `closing` until its content leaves the page. An open layer counts for `isModalOpen` at once (page shortcuts and Ctrl+Z stand down, asked once in renderer `heldBackByModal`), and for the host's dialog counts too, told apart by `data-testid`. The top open layer takes Escape; the top modal one on the page holds the page inert | `layers` |
+| Dialog slot and its queue | `renderer/host.ts`, `renderer/dialog-queue.ts` | one request or none; host questions wait by rank (consent 4, new panel 3, link 2, game switch 1) and for the open dialogs the layer list shows | the dialog's `data-testid` |
+| Dock drag | `renderer/dock-drag.ts` (`dockDragStep`), run by `renderer/dock-preview.ts` | `idle → lifted ⇄ aiming → idle`, `by` the pointer or the keyboard. The keyboard's: Ctrl+M on a panel's tab lifts it aimed at its own place; arrow keys (`stepToward`) and Tab step through `spots` (`renderer/dock-aim.ts`); Enter drops (on a place without room it stays and says why); Escape, the focus leaving the tab, a click, a file dragged in, or the dock changing size or layout (`dockChanged`) end it with no change | `data-dock-aiming` (and `data-dock-keyboard`) on the workspace's dock root, `data-target` on `[data-testid=dock-preview]`; the keyboard's place read out in `[data-testid=dock-move-status]` |
+| Pointer drags (TabStrip, rail width, crop frame, Overlay layout frames and box) | kit `lib/bind-drag.ts` (`bindDrag`) | `idle → pressing → dragging → idle`: let go after the threshold drops, before it is a click; Escape (not on the layout canvas), `pointercancel`, the holder losing the pointer, `cancel()` and unmounting put it back | `phase` on the binding |
 | Add a game highlight | `renderer/lib/game-picker.ts` (`keepActive`, `stepActive`), `lib/use-game-picker.ts` | one key (a cover, a row, or the typed name) or none; kept while answers come in, the first item only when that game is gone. Items shown keep their places while the same thing is typed (`keepOrder`); the typed name's line, and an Enter, wait for the built-in list's answer; a click on an item that came under a still pointer after the items changed only highlights, unless it is the highlighted one | `aria-selected` on the item, `aria-activedescendant` on the search |
+| Ctrl+K, adding a game | `components/SearchDialog.vue` (`adding`) | none, or the "Add" row whose game is being added: the box stays open, then closes once the game is open; another Add waits, also after the box was opened again, and then the game is added but not opened | `aria-busy` on the row |
+| Menu row with an `action` (kit) | `@tavora/official-ui` `lib/menu-action.ts` (`useMenuAction`), used by `DropdownMenuItem` and `ContextMenuItem` | `useTask`: `idle \| running \| failed`; running keeps the menu open and ignores the row; settled closes the menu (unless the menu closed meanwhile; a submenu closing doesn't count), failed also toasts | `aria-busy` on the row |
 | Made for a game (empty game page) | `components/workspace/MadeForGame.vue` | the list loads (`useTask` `latest`); each Add is `idle \| busy \| done` (`useActionStatus`); Ask for a module is a `useTask` | `data-status` on the Add button |
 | Work a dialog waits for | `ConfirmDialog`, `AddGameDialog` (adding the picked game or a personal workspace), `SteamImportDialog`, `PromptDialog`, `ShareIconsDialog`, `CatalogModuleDialog` (its links), `ProfileEditor`, the inbox dialogs, `LeaderboardQuestion`, the welcome's game and personal screens, `PanelContent` (install), `ConversationView` | `useTask`: `idle \| running \| failed` | `data-status` on the view's root, where it has one |
 | Loads in catalog views | `CatalogBrowse`, `CatalogReviews`, `CatalogModuleDialog`, `CatalogIcon`, `ContactDeveloperDialog` | `useTask` (`latest`): a failure says so, with Try again (the icon shows the puzzle piece) | `data-status` on the view |
@@ -40,8 +47,10 @@ Update this page in the pull request that adds, removes or changes a flow.
 | Flow | File | States | Seen as |
 | --- | --- | --- | --- |
 | Module page | `main/module-view.ts` (`PagePhase`) | `loading → settling → revealed → drawn`, or `failed \| unresponsive \| crashed \| unavailable` | the panel's `InstanceStatus` in the view state |
+| Closing a module page | `main/module-view.ts` (`end`, `dispose`) | `open → saving → closed`: `saving` hides the page and sends `lifecycle.dispose`; its port stays, answering only saves (`servedWhileClosing` in `bridge.ts`), until the page answered a ping (the preload answers once it passed the event on) and its calls and file writes have been quiet for 150 ms, at most 1 s. Nothing it does reaches the host as the panel's any more. `PanelViews` keeps such pages (`closing`) so quitting waits for them and deleting their workspace closes them at once | |
+| Panels when the window closes or Tavora quits | `main/host.ts` (`panelPages`) | `running → closing → closed`: closing the window or quitting waits for every page to save and close, those closed a moment before included (at most about 1.5 s); no page starts after `running` | |
 | Module update install | `main/catalog-updates.ts` | one install per module at a time; a second press joins the install that is going | `installProgress` |
-| App update | `main/updates.ts`, `shared/host-api.ts` (`UpdateState`) | `idle \| checking \| available \| downloading \| ready`; the manager starts every download itself (the updater's own `autoDownload` stays off), so checks run every 5 minutes and only a retry of the same failed version waits an hour; only the download's own call marks it failed | the view state's `update` |
+| App update | `main/updates.ts`, `shared/host-api.ts` (`UpdateState`), `main/update-signature.ts` | `idle \| checking \| available \| downloading \| ready`; the manager starts every download itself (the updater's own `autoDownload` stays off), so checks run every 5 minutes and only a retry of the same failed version waits an hour; only the download's own call marks it failed. A finished download stays `downloading` (100%) while its Tavora signature is checked, then is `ready` or goes back to `available` with `failed: "refused"` (a broken-off download is `failed: "download"`); a check a newer download overtook is dropped. Only `ready` installs: Restart now, or `installOnQuit` on a clean quit (the updater's own `autoInstallOnAppQuit` stays off) | the view state's `update` |
 | Official publish | `main/official-publish.ts` (`RunState`) | `idle \| building \| preview \| confirming \| uploading \| discarding` | `OfficialPublishView` |
 | Module publish review | `main/module-publish.ts` | `checking \| ready \| publishing \| published`; a newer look drops an older one | `PublishView.status` |
 | Sign-in and account steps | `main/account.ts` (`Pending`) | none, or `sign-in` (`code \| create`), `discord-create`, `change-email` (its `proof`: `code` for a second code to the current address, `discord` for a fresh Discord sign-in, `none` for a service from before), … | `AccountView.pending`; `data-status` (the proof) on `[data-testid=account-change-email-step]` |
@@ -97,7 +106,8 @@ the pull request that makes it explicit.
 - **Press windows** (`main/module-view.ts` `Press`, `browser-view.ts` `lastGesture`, tooltips) → one `GestureWindow`.
 
 - **Gestures** (`WorkspaceRail` resize, `LayoutCanvas` drag and band, `WorkspacePage` panel drag) → one `gesture` union
-  each, ended by blur too, with `data-gesture`.
+  each, ended by blur too, with `data-gesture`. The rail and the canvas run on `bindDrag`, whose `phase` is that
+  union's start; what each drag holds (`dragWidth`, `drag`, `band`) is still kept beside it.
 
 - **System info worker** (`main/system-info-thread.ts`): one timer for two meanings → `none | running | idle-stopping |
   restart-waiting`.

@@ -8,7 +8,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { X } from "@lucide/vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
-import { Dialog, DialogContent, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, type DismissAttempt } from "@tavora/official-ui/components/ui/dialog";
 import { api, panelDialog, panelDialogDrawn, panelDialogTitle } from "../host";
 import { t } from "../i18n";
 import { dialogPlace, type Room } from "../panel-dialog-place";
@@ -108,9 +108,9 @@ function close(): void {
   api.closePanelDialog();
 }
 
-/** A click beside the frame closes only a dialog that a click opened. */
-function onPointerDownOutside(event: Event): void {
-  if (panelDialog.value && !panelDialog.value.closesOnClickBeside) event.preventDefault();
+/** Escape closes it; a click beside the frame closes only a dialog that a click opened. */
+function onDismissAttempt({ reason }: DismissAttempt): void {
+  if (reason !== "outside" || panelDialog.value?.closesOnClickBeside) close();
 }
 </script>
 
@@ -125,7 +125,8 @@ function onPointerDownOutside(event: Event): void {
       :data-closes-on-click-beside="panelDialog.closesOnClickBeside ? '' : undefined"
       :show-close-button="false"
       :aria-describedby="undefined"
-      @pointer-down-outside="onPointerDownOutside"
+      :dismissible="false"
+      @dismiss-attempt="onDismissAttempt"
       @open-auto-focus.prevent
     >
       <header class="flex h-12 flex-none items-center gap-2.5 border-b pr-2 pl-4">

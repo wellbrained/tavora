@@ -43,6 +43,7 @@ function showNotice(message: string) {
   toast({ title: message, duration: TOAST_MS, testid: "undo-toast" });
 }
 const editor = ref<InstanceType<typeof NoteEditor> | null>(null);
+const list = ref<InstanceType<typeof NoteList> | null>(null);
 /** A note made with New note that has no text yet; it is dropped if left empty. */
 let freshId: string | null = null;
 
@@ -231,6 +232,7 @@ async function removeNote(entry: NoteEntry) {
   const title = entry.title === UNTITLED ? t("untitled") : entry.title;
   offerUndo(t("undo.deleted", { title }), async () => {
     await undo();
+    list.value?.restoreFocus(entry.id);
     await select(entry.id);
   });
 }
@@ -265,6 +267,7 @@ async function move(id: string, delta: -1 | 1) {
       :data-collapsed="collapsed && !narrow"
     >
       <NoteList
+        ref="list"
         v-model:query="query"
         :entries="entries"
         :order="order"

@@ -1,8 +1,10 @@
 <script setup lang="ts">
 // A vertical list of sections for a side navigation, such as the categories in Settings. Up and
 // down arrows, Home and End move between entries; Tab enters and leaves the list in one stop. Each group sits in a box
-// of its own: plain by default, `groupClass` (and a group's own `class`) can turn it into a plate.
+// of its own: plain by default, `groupClass` (and a group's own `class`) can turn it into a plate. When the focused entry
+// goes (a module removed, say), the focus moves to the next entry, else the one before (useFocusRecovery).
 import { computed, ref, type HTMLAttributes } from "vue";
+import { useFocusRecovery } from "../../../focus-recovery";
 import { cn } from "../../../lib/utils";
 import type { NavGroup } from "./types";
 
@@ -14,6 +16,7 @@ const emit = defineEmits<{
 }>();
 
 const list = ref<HTMLElement | null>(null);
+useFocusRecovery(list);
 const all = computed(() => props.groups.flatMap((group) => group.items));
 /** The entry Tab lands on: the selected one, or else the first. */
 const tabStop = computed(() => (all.value.some((item) => item.id === props.modelValue) ? props.modelValue : all.value[0]?.id));
@@ -58,6 +61,7 @@ function onKey(event: KeyboardEvent) {
         :key="item.id"
         type="button"
         data-nav-item
+        :data-focus-row="item.id"
         :tabindex="item.id === tabStop ? 0 : -1"
         :aria-current="item.id === modelValue ? 'page' : undefined"
         :title="item.title"

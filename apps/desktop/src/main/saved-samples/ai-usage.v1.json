@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "refreshMinutes": 15,
+  "style": "used",
+  "accounts": [
+    {
+      "id": "a",
+      "provider": "claude",
+      "label": "Work",
+      "directory": "%USERDATA%/.claude"
+    }
+  ],
+  "readings": {
+    "a": {
+      "fetchedAt": 1,
+      "windows": [
+        {
+          "kind": "weekly",
+          "name": null,
+          "usedPercent": 20,
+          "resetsAt": null
+        }
+      ]
+    }
+  }
+}

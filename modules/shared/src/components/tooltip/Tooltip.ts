@@ -1,10 +1,24 @@
 import { defineComponent, h, Teleport, nextTick, onMounted, onUnmounted, ref, watch, type PropType } from 'vue';
 import { pointAnchor, tooltipPlacement, type TooltipPoint, type TooltipRect, type TooltipSide } from './geometry';
+import { uiText } from '../ui/text';
 import './tooltip.css';
 
-/** Keys of a shortcut as written in `aria-keyshortcuts` ("Control+D") or plainly ("Ctrl+D"), as key caps. */
+const MAC = typeof navigator !== 'undefined' && navigator.platform.startsWith('Mac');
+const KEY_CAPS: Record<string, string> = { Escape: 'Esc', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→' };
+
+/**
+ * Keys of a shortcut as written in `aria-keyshortcuts` ("Control+D") or plainly ("Ctrl+D"), as key caps in the
+ * language shown ("Strg" in German, "Cmd" for Meta on a Mac). Of several alternatives ("Control+Y Control+Shift+Z"),
+ * the first.
+ */
 export function shortcutKeys(shortcut: string): string[] {
-  return shortcut.split('+').map(key => key.trim()).filter(Boolean).map(key => key === 'Control' ? 'Ctrl' : key);
+  // Alternatives are split where a new one starts with a modifier, so a plain "Ctrl + Mouse wheel" stays whole.
+  const first = shortcut.replace(/\s*\+\s*/g, '+').trim().split(/\s+(?=(?:Control|Ctrl|Meta|Alt|Shift)\+)/)[0] ?? '';
+  return first.split(/\+(?!$)/).filter(Boolean).map(key => {
+    if (key === 'Control' || key === 'Ctrl') return uiText.value.ctrl;
+    if (key === 'Meta') return MAC ? 'Cmd' : 'Win';
+    return KEY_CAPS[key] ?? (key.length === 1 ? key.toUpperCase() : key);
+  });
 }
 
 /** A path or address has no spaces to wrap at: let it wrap after each slash instead of inside a word. */

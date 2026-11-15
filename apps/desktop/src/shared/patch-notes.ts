@@ -28,6 +28,184 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.74",
+    date: "2026-11-15",
+    title: "Friendlier texts",
+    notes: [
+      "Error messages are shorter and friendlier.",
+      "The Delete key shown in menus follows your language.",
+    ],
+    prs: [
+      { number: 809, title: "Text and docs fixes from the final check" },
+    ],
+    tags: ["clock-counter", "games", "privacy", "website"],
+  },
+  {
+    version: "0.24.73",
+    date: "2026-11-15",
+    title: "Safer saved data",
+    notes: [
+      "If your library can't be opened, your modules' and Browser panel's saved data waits until you bring it back from a backup.",
+      "Installing two modules at once remembers who made both.",
+      "Modules can't give a document a name that would mix it up with another file.",
+    ],
+    prs: [
+      { number: 807, title: "Keep saved data safe after a lost library, parallel installs and odd document ids" },
+    ],
+    tags: ["cloud-copy", "modules", "privacy", "updates", "website", "workspace"],
+  },
+  {
+    version: "0.24.72",
+    date: "2026-11-15",
+    title: "Focus stays put after a delete",
+    notes: [
+      "Delete something in a list with the keyboard and the focus moves to the next row, not off the page.",
+      "Undo puts the focus back on what came back.",
+    ],
+    prs: [
+      { number: 805, title: "Kit: focus stays in a list after a delete (useFocusRecovery)" },
+    ],
+    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "settings", "todos", "ui-kit"],
+  },
+  {
+    version: "0.24.71",
+    date: "2026-11-15",
+    title: "Menus wait for slow actions",
+    notes: [
+      "A menu entry that takes a moment keeps the menu open and pulses until it's done, then the menu closes. If it fails, a message says so.",
+      "Settings > Modules > More > Reload and Whiteboard's Copy as picture work this way.",
+      "Ctrl+K: adding a game keeps the search open until the game is ready.",
+    ],
+    prs: [
+      { number: 803, title: "Kit menus: entries that wait for their action" },
+    ],
+    tags: ["settings", "ui-kit", "whiteboard"],
+  },
+  {
+    version: "0.24.70",
+    date: "2026-11-15",
+    title: "Steadier dialogs",
+    notes: [
+      "While a dialog is busy, its close button is greyed out, so you can see it can't close yet.",
+    ],
+    prs: [
+      { number: 804, title: "Kit dialogs: dismissible, busy and dismiss-attempt" },
+    ],
+    tags: ["cloud-copy", "publishing", "ui-kit"],
+  },
+  {
+    version: "0.24.69",
+    date: "2026-11-15",
+    title: "Shortcuts in the hints",
+    notes: [
+      "Buttons with a shortcut show its keys beside their hint: Back, Forward, New tab and Exit full screen in the Browser panel, Undo and Redo on the Overlays page, and the rail's collapse button.",
+      "Settings > Shortcuts now lists Undo and Redo for Overlays too.",
+    ],
+    prs: [
+      { number: 799, title: "Shortcuts come from one table" },
+    ],
+    tags: ["hotkeys", "onboarding", "overlays", "rail", "ui-kit", "workspace"],
+  },
+  {
+    version: "0.24.68",
+    date: "2026-11-15",
+    title: "Fields that explain themselves",
+    notes: [
+      "Screen readers read a field's name and hint with it, starting with your developer name and AI accounts in Settings.",
+    ],
+    prs: [
+      { number: 802, title: "Kit: Field (label, hint, error) and ARIA pattern checks" },
+    ],
+    tags: ["accessibility", "publishing", "settings", "ui-kit"],
+  },
+  {
+    version: "0.24.67",
+    date: "2026-11-15",
+    title: "Nothing lost when you close a panel",
+    notes: [
+      "What you typed just before closing a panel, switching workspaces or quitting Tavora is saved.",
+    ],
+    prs: [
+      { number: 801, title: "A closed panel's last typing is saved before its page goes" },
+    ],
+    tags: ["modules", "privacy", "website", "workspace"],
+  },
+  {
+    version: "0.24.66",
+    date: "2026-11-14",
+    title: "Move panels with the keyboard",
+    notes: [
+      "Focus a panel's tab and press Ctrl+M to move it.",
+      "The arrow keys pick a place and show where it lands. Enter puts it there, Esc cancels.",
+      "Screen readers read out each place as you go.",
+    ],
+    prs: [
+      { number: 800, title: "Move dock panels with the keyboard" },
+    ],
+    tags: ["hotkeys", "workspace"],
+  },
+  {
+    version: "0.24.65",
+    date: "2026-11-14",
+    title: "Steadier dragging",
+    notes: [
+      "While you drag a tab, the sidebar edge, the crop frame or an overlay, another finger or pen moving or lifting no longer drops it.",
+    ],
+    prs: [
+      { number: 798, title: "Kit: one bindDrag for pointer drags" },
+    ],
+    tags: ["pdf-viewer", "rail", "ui-kit"],
+  },
+  {
+    version: "0.24.64",
+    date: "2026-11-14",
+    title: "Your saved data stays safe",
+    notes: [
+      "If some saved data can't be opened, Tavora keeps a copy and tells you, instead of starting over on top of it.",
+    ],
+    prs: [
+      { number: 795, title: "Keep every saved file safe from older and broken reads" },
+    ],
+    tags: ["accounts", "ai-usage", "cloud-copy", "discord", "hotkeys", "modules", "overlays", "privacy", "system-monitor", "updates", "website", "workspace"],
+  },
+  {
+    version: "0.24.63",
+    date: "2026-11-14",
+    title: "Overlays stay on with the cloud copy",
+    notes: [
+      "Game overlays, hotkeys and stream overlays in OBS keep working while the cloud copy syncs.",
+    ],
+    prs: [
+      { number: 797, title: "Cloud copy saves without shutting down overlays, hotkeys and OBS" },
+    ],
+    tags: ["cloud-copy", "overlays", "privacy", "website"],
+  },
+  {
+    version: "0.24.62",
+    date: "2026-11-14",
+    title: "Updates signed by Tavora",
+    notes: [
+      "Tavora installs an update only when Tavora signed it.",
+      "An update Tavora can't confirm is skipped, and your version keeps working.",
+    ],
+    prs: [
+      { number: 793, title: "Updates install only with Tavora's own signature" },
+    ],
+    tags: ["privacy", "security", "settings", "updates", "website"],
+  },
+  {
+    version: "0.24.61",
+    date: "2026-11-14",
+    title: "Modules are ready for 1.0",
+    notes: [
+      "A module that still uses an old setting won't load until its maker updates it.",
+    ],
+    prs: [
+      { number: 791, title: "Lock the SDK and protocol for 1.0" },
+    ],
+    tags: ["catalog", "publishing", "sdk", "service", "website"],
+  },
+  {
     version: "0.24.60",
     date: "2026-11-14",
     title: "Discord is taking a break",

@@ -6,7 +6,8 @@ import { BlobStore } from "./blobs";
 import { DocumentStore } from "./documents";
 import { HostError } from "./errors";
 import { SerialQueue, writeFileAtomic } from "./fsutil";
-import { readJsonOrSetAside, serializeJson } from "./json";
+import { readSavedFile, serializeJson, unknownFields } from "./json";
+import { STORE_VERSIONS } from "./saved-versions";
 import { INSTANCE_ID } from "./ids";
 import { isWorkspaceId } from "./workspace-id";
 import { defaultFilesRoot } from "./module-files";
@@ -20,12 +21,25 @@ export function validateKey(key: unknown): asserts key is string {
 }
 
 /**
+ * The fields of a saved file other than these, as JSON members to write back as they were (`"name":value,` each), so a
+ * newer Tavora's fields survive this one's writes.
+ */
+function keptMembers(saved: unknown, known: readonly string[]): string {
+  return Object.entries(unknownFields(saved, known))
+    .map(([key, value]) => `${JSON.stringify(key)}:${JSON.stringify(value)},`)
+    .join("");
+}
+
+/**
  * Private key/value settings for one module in one workspace, or shared by all its
  * workspaces (storage.app). Values are kept serialized so the quota is measured on
- * exactly what is written to disk.
+ * exactly what is written to disk. Fields of the file other than the entries (a newer
+ * Tavora's) are kept as they were; they don't count towards the quota.
  */
 export class ModuleStore {
   private entries: Map<string, string> | undefined;
+  /** The file's fields this Tavora doesn't know, ready to write back. */
+  private kept = "";
   private bytes = 0;
   private readonly queue = new SerialQueue();
 
@@ -110,17 +124,18 @@ export class ModuleStore {
   private async load(): Promise<Map<string, string>> {
     if (this.entries) return this.entries;
     const entries = new Map<string, string>();
-    const parsed = await readJsonOrSetAside<{ entries: Record<string, JsonValue> }>(this.file);
-    if (parsed && typeof parsed.entries === "object" && parsed.entries !== null) {
+    const parsed = (await readSavedFile(this.file, { version: STORE_VERSIONS.moduleSettings })) as { entries?: Record<string, JsonValue> } | null;
+    if (parsed && typeof parsed.entries === "object" && parsed.entries !== null && !Array.isArray(parsed.entries)) {
       for (const [key, value] of Object.entries(parsed.entries)) entries.set(key, JSON.stringify(value));
     }
+    this.kept = keptMembers(parsed, ["version", "entries"]);
     this.bytes = [...entries].reduce((sum, [key, value]) => sum + entrySize(key, value), 0);
     this.entries = entries;
     return entries;
   }
 
   private persist(entries: Map<string, string>): Promise<void> {
-    const body = `{"version":1,"entries":{${[...entries]
+    const body = `{"version":${STORE_VERSIONS.moduleSettings},${this.kept}"entries":{${[...entries]
       .map(([key, value]) => `${JSON.stringify(key)}:${value}`)
       .join(",")}}}`;
     return writeFileAtomic(this.file, body);
@@ -142,9 +157,14 @@ function sameJson(a: JsonValue | null, b: JsonValue | null): boolean {
   return keys.length === Object.keys(b).length && keys.every((key) => key in b && sameJson(a[key]!, b[key]!));
 }
 
-/** UI state for one panel instance. Removed when the panel is closed. */
+/** UI state for one panel instance. Removed when the panel is closed. Fields of its file other than the value (a newer Tavora's) are kept. */
 export class PanelStateStore {
   private readonly queue = new SerialQueue();
+  /**
+   * Per panel file read this run, its fields this Tavora doesn't know, ready to write back: a newer Tavora's file is
+   * copied aside, and read, before the first write only.
+   */
+  private readonly kept = new Map<string, string>();
 
   constructor(private readonly dir: string) {}
 
@@ -155,7 +175,14 @@ export class PanelStateStore {
 
   get(instanceId: string): Promise<JsonValue | null> {
     const file = this.file(instanceId);
-    return this.queue.run(async () => (await readJsonOrSetAside<{ value: JsonValue }>(file))?.value ?? null);
+    return this.queue.run(async () => ((await this.read(file))?.value as JsonValue | undefined) ?? null);
+  }
+
+  /** The saved file of a panel: one a newer Tavora wrote is copied aside, an unreadable one set aside (readSavedFile). */
+  private async read(file: string): Promise<Record<string, unknown> | null> {
+    const saved = await readSavedFile(file, { version: STORE_VERSIONS.panelState });
+    this.kept.set(file, keptMembers(saved, ["version", "value"]));
+    return saved;
   }
 
   set(instanceId: string, value: unknown): Promise<void> {
@@ -165,12 +192,20 @@ export class PanelStateStore {
     if (Buffer.byteLength(serialized) > LIMITS.maxPanelStateBytes) {
       throw new HostError("QUOTA_EXCEEDED", `panel state is limited to ${LIMITS.maxPanelStateBytes} bytes`);
     }
-    return this.queue.run(() => writeFileAtomic(file, `{"version":1,"value":${serialized}}`));
+    return this.queue.run(async () => {
+      // Read before it is first written over, so a newer Tavora's file is copied aside first and its fields are kept.
+      if (!this.kept.has(file)) await this.read(file);
+      const kept = this.kept.get(file) ?? "";
+      await writeFileAtomic(file, `{"version":${STORE_VERSIONS.panelState},${kept}"value":${serialized}}`);
+    });
   }
 
   remove(instanceId: string): Promise<void> {
     const file = this.file(instanceId);
-    return this.queue.run(() => rm(file, { force: true }));
+    return this.queue.run(async () => {
+      await rm(file, { force: true });
+      this.kept.delete(file);
+    });
   }
 
   /** Deletes state files for panels that no longer exist in any workspace. */
@@ -184,7 +219,12 @@ export class PanelStateStore {
     await Promise.all(
       names
         .filter((name) => name.endsWith(".json") && !keep.has(name.slice(0, -".json".length)))
-        .map((name) => this.queue.run(() => rm(path.join(this.dir, name), { force: true }))),
+        .map((name) =>
+          this.queue.run(async () => {
+            await rm(path.join(this.dir, name), { force: true });
+            this.kept.delete(path.join(this.dir, name));
+          }),
+        ),
     );
   }
 }

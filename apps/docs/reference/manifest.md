@@ -1,6 +1,6 @@
 # Module manifest (`tavora.module.json`)
 
-**Status:** Milestone B, 2026-10-14. `apiVersion` `"1"`.
+**Status:** `apiVersion` `"1"`, stable from Tavora 1.0.
 
 Every module package has a `tavora.module.json` at its root. Tavora refuses to load a module whose manifest has errors, including fields it does not know: a typo should fail loudly, not be ignored.
 
@@ -27,7 +27,7 @@ The JSON Schema ([download](/schema/tavora.module.schema.json), [source](https:/
 | Field | Required | Rules |
 | --- | --- | --- |
 | `$schema` | no | Any string. Ignored by Tavora. |
-| `id` | yes | `publisher.module-name`: 2 to 5 dot-separated parts, lowercase letters, digits and `-`, starting with a letter, at most 128 characters. Data and (later) permissions are keyed on it, so never change it after release. |
+| `id` | yes | `publisher.module-name`: 2 to 5 dot-separated parts, lowercase letters, digits and `-`, starting with a letter, at most 128 characters. Data and permissions are keyed on it, so never change it after release. |
 | `name` | yes | 1 to 80 characters, not only spaces. |
 | `description` | no | 1 to 300 characters, not only spaces. |
 | `version` | yes | `major.minor.patch`, e.g. `1.0.0`. Only plain versions can be packed and published; a pre-release such as `2.0.0-beta.1` still loads from a folder, but `tavora-pack` and the catalog refuse it. |
@@ -42,7 +42,6 @@ The JSON Schema ([download](/schema/tavora.module.schema.json), [source](https:/
 | `screenshots` | no | 1 to 5 `.png` or `.webp` files inside the package, each once, shown in the catalog before users install. Each must really be that kind of picture, at most 1 MB and 4096 × 4096 pixels; the catalog refuses the upload otherwise. A wide picture (16:9) shows best. Needs Tavora 0.18.17 or newer. |
 | `games` | yes | Game ids the module is made for, e.g. `["poe2"]`; see [Game ids](#game-ids). Tavora lists the module in Add module only in workspaces of these games. An empty array means any game. |
 | `personalWorkspaces` | no | `false` keeps a module for any game out of personal workspaces, which belong to no game. Left out, a module with an empty `games` is offered there too; a module for one game never is, and `true` is refused next to a non-empty `games`. Needs Tavora 0.21.43 or newer, so set `minTavora` to a version newer than `0.21.42`; Tavora refuses the manifest otherwise. |
-| `workspaces` | no | Deprecated: the old name of `personalWorkspaces`, from before every item on the rail was called a workspace. Still read, and works on older Tavoras (0.18.1 or newer), but goes away before 1.0. Never set both. |
 | `viewport.minWidth`, `viewport.minHeight` | yes | Smallest usable panel size in CSS pixels, 1 to 10000. Tavora refuses to open a panel it cannot give this much room. |
 | `viewport.preferredWidth`, `viewport.preferredHeight` | no | Size the module looks best at, 1 to 10000. A panel shown in the game (`inGame`) starts at this size. |
 | `viewport.wide` | no | `{ "minWidth": 500, "minHeight": 300 }`: the smallest size while the panel is wider than tall, for a module with a second layout for that shape. `viewport.minWidth` and `minHeight` then apply while the panel is taller than wide or square. `wide.minWidth` must be larger than `wide.minHeight`, and `minWidth` no larger than `minHeight`. Without it, one minimum applies to every shape. See [Tall and wide](../guide/look-and-languages.md#tall-and-wide). Needs Tavora 0.21.94 or newer, so set `minTavora` to a version newer than `0.21.93` (except Tavora's own modules); Tavora refuses the manifest otherwise. |
@@ -260,6 +259,5 @@ Any other game goes by the id Tavora's game search gives it, such as `9-kings`. 
 
 ## What is not in v1 yet
 
-- Permissions other than `network`, `connectors` and `webAssembly`. `sharedData`, `files` and `clipboard` arrive with their capabilities (see [Capabilities](./protocol.md#capabilities)).
-- Author, homepage, license and screenshots. These belong to the catalog listing (Milestone E), not to what the desktop host needs to run a module.
-- Localized names.
+- Permissions other than `network`, `connectors`, `folders`, `onRequest` and `webAssembly`. `sharedData` arrives with its capability; the file and clipboard calls that exist need no permission (see [Capabilities](./protocol.md#capabilities)).
+- Author and license. These belong to the catalog listing, not to what the desktop host needs to run a module.

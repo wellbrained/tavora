@@ -10,7 +10,7 @@ Tavora is a local-first gaming companion for your second monitor. Keep notes, to
 
 *A Satisfactory workspace with sample notes and a factory checklist. The screenshots below use an isolated demo profile.*
 
-> **Windows only:** Tavora runs on Windows 10 and 11. There are no Linux or macOS builds; they may come later if people ask for them. Module APIs can still change before they are declared stable (see [Build a module](#build-a-module)).
+> **Windows only:** Tavora runs on Windows 10 and 11. There are no Linux or macOS builds; they may come later if people ask for them. Module APIs are stable from 1.0: the bridge protocol is v1, new things are only added, and anything that has to go is deprecated first and removed only in a major version (see [Build a module](#build-a-module)).
 
 ## What you can do
 
@@ -21,7 +21,7 @@ Tavora is a local-first gaming companion for your second monitor. Keep notes, to
 - **Sketch on a Whiteboard.** Multiple boards per workspace, drawing tools, pictures, and Copy as picture. Built on [Excalidraw](https://github.com/excalidraw/excalidraw).
 - **Keep guides nearby.** The built-in Browser has per-workspace tabs and sign-ins, ad blocking, and a choice to share a site's sign-in across workspaces.
 - **Add more tools.** Notes, To-Dos, a Whiteboard and a few more come with Tavora; everything else, such as AI Usage, you install from the catalog or a ZIP file. Modules ask before using capabilities such as named websites or host connectors.
-- **Make it comfortable.** Three built-in themes, light/dark modes that can follow the system, custom themes, English and German, keyboard shortcuts, and Ctrl+K search.
+- **Make it comfortable.** Nine built-in themes, light/dark modes that can follow the system, custom themes, English and German, keyboard shortcuts, and Ctrl+K search.
 
 **Discord voice is paused for now.** Discord limits voice to a few approved testers until it approves Tavora's app, so the Discord connector and module are switched off until then. Signing in to your Tavora account with Discord still works. AI Usage reads supported Claude and Codex accounts on this PC through the host; modules do not receive their credentials.
 
@@ -101,7 +101,7 @@ A module is a small web app with a `tavora.module.json` manifest and built asset
 
 Start with the [developer guide](https://docs.mytavora.app/guide/getting-started), or an example in [vanilla TypeScript](examples/vanilla-module), [React](examples/react-module) or [Vue](examples/vue-module), and one with [several panel types](examples/panels-module). The official modules use the same SDK. The UI Playground shows Tavora's shared controls and styling.
 
-The SDK and packaging tools are developed in this repository and published on npm as `@tavora/sdk`, `@tavora/module-schema`, `@tavora/pack` and `@tavora/create-module` (`npm create @tavora/module` starts a new module). Signed module ZIPs, permission prompts and publisher-bound updates are implemented; the broader outside-developer workflow is still being built. APIs are not stable before 1.0. The [manifest reference](apps/docs/reference/manifest.md), [bridge protocol](apps/docs/reference/protocol.md) and [theme format](apps/docs/reference/theme.md) describe the current contracts.
+The SDK and packaging tools are developed in this repository and published on npm as `@tavora/sdk`, `@tavora/module-schema`, `@tavora/pack` and `@tavora/create-module` (`npm create @tavora/module` starts a new module). Signed module ZIPs, permission prompts and publisher-bound updates are implemented; the broader outside-developer workflow is still being built. The APIs are stable from 1.0 (bridge protocol v1: additions only, removal only in a major version). The [manifest reference](apps/docs/reference/manifest.md), [bridge protocol](apps/docs/reference/protocol.md) and [theme format](apps/docs/reference/theme.md) describe the current contracts.
 
 ## Repository map
 
@@ -113,9 +113,9 @@ The SDK and packaging tools are developed in this repository and published on np
 | `packages/sdk` | Typed module client and wire-protocol types |
 | `packages/module-schema` | Manifest types, validation, JSON Schema and ID rules |
 | `packages/pack` | Module ZIP packing, signatures and archive validation |
-| `modules/` | Notes, To-Dos, Whiteboard, UI Playground and shared UI code |
+| `modules/` | Calculator, Clock & Counter, Notes, PDF Viewer, System Monitor, To-Dos, Whiteboard, UI Playground and shared UI code |
 | `examples/` | Vanilla, React and Vue module examples, plus a theme starter |
-| `themes/` | Tavora, Hearthwood and Nightfall theme packages |
+| `themes/` | The nine built-in theme packages |
 | `docs/screenshots` | Screenshots used in this README |
 | `brand/` | Tavora logo sources and exported brand assets |
 

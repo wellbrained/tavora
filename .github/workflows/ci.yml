@@ -54,6 +54,8 @@ jobs:
   # request that changes the app, a module or the kit, the SDK, the packer, the manifest schema, the examples, the
   # dependencies or this file. Twice a broken e2e test only showed up while a release was running (0.23.0, 0.23.9).
   # Change notes alone don't count. If GitHub can't list the files, the suite runs.
+  # It also says whether the signed-update check runs (update-check, below): the same way, for a pull request that
+  # touches the update chain (UPDATE_PATHS).
   e2e-scope:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -62,6 +64,7 @@ jobs:
       pull-requests: read
     outputs:
       run: ${{ steps.scope.outputs.run }}
+      update: ${{ steps.scope.outputs.update }}
     steps:
       - id: scope
         env:
@@ -71,19 +74,22 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           BY_HAND: ${{ inputs.e2e }}
           PATHS: ^(apps/desktop/|modules/|examples/|packages/(sdk|pack|module-schema)/|patches/|package\.json$|pnpm-lock\.yaml$|pnpm-workspace\.yaml$|\.github/workflows/ci\.yml$)
+          UPDATE_PATHS: ^(apps/desktop/src/main/(updates|update-[a-z-]+)\.ts$|apps/desktop/scripts/(update-[a-z-]+|serve-feed|start-check|windows|release|after-pack)\.(mjs|cjs|ps1)$|apps/desktop/package\.json$|patches/|pnpm-lock\.yaml$|\.github/workflows/(ci|release-build)\.yml$)
         run: |
-          if [[ "$REF" == refs/tags/* ]]; then run=true
-          elif [[ "$EVENT" == workflow_dispatch ]]; then run=$BY_HAND
+          if [[ "$REF" == refs/tags/* ]]; then run=true; update=true
+          elif [[ "$EVENT" == workflow_dispatch ]]; then run=$BY_HAND; update=$BY_HAND
           elif [[ "$EVENT" == pull_request ]]; then
             if files=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename'); then
               if grep -v '^apps/desktop/changes/' <<<"$files" | grep -qE "$PATHS"; then run=true; else run=false; fi
+              if grep -qE "$UPDATE_PATHS" <<<"$files"; then update=true; else update=false; fi
             else
-              run=true
+              run=true; update=true
             fi
-          else run=false
+          else run=false; update=false
           fi
-          echo "e2e: $run"
+          echo "e2e: $run, update-check: $update"
           echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "update=$update" >> "$GITHUB_OUTPUT"
 
   # Windows, like the users and `pnpm release`: on Ubuntu the suite needed well over an hour and 17 tests failed only
   # there. Split over 8 runners side by side, each shard takes about 5 minutes with its own install (from the pnpm
@@ -121,6 +127,32 @@ jobs:
           name: e2e-results-${{ matrix.shard }}
           path: apps/desktop/test-results
           retention-days: 7
+
+  # Signed app updates end to end (CoreHub #476): a bug in the signature check would leave every installed Tavora on
+  # its version for good. update-check.mjs pins throwaway keys, packages this version and the next for a local feed,
+  # installs the first like a user and checks that unsigned, foreign-key, changed and relabelled updates are refused
+  # while one signed by the release or the backup key is taken and installs on quit. The Release build runs it for
+  # every release; here for release tags, by hand and for pull requests that touch the update chain (e2e-scope).
+  update-check:
+    needs: e2e-scope
+    if: needs.e2e-scope.outputs.update == 'true'
+    runs-on: windows-2025
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Pin throwaway update keys
+        run: node apps/desktop/scripts/update-check.mjs prepare "${{ runner.temp }}\update-check"
+      - run: pnpm build
+      - name: Signed updates end to end
+        run: node apps/desktop/scripts/update-check.mjs run "${{ runner.temp }}\update-check"
 
   # Development and CI use Node 24, but the API service runs on Node 22 on the server, and the
   # npm packages for module developers (@tavora/pack, @tavora/create-module) promise Node 22.12+.

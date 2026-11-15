@@ -4,7 +4,7 @@ import { FOLDER_READ_PATH, READ_ONLY_FILE_PATH } from '@tavora/sdk/protocol';
 import { serveFolderFile, type FolderHost, type FolderWatch } from './folder-access';
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { app, BrowserWindow, clipboard, ClipboardItem, MessageChannelMain, session, shell, WebContentsView, type Session, type WebContents } from "electron";
+import { app, BrowserWindow, clipboard, ClipboardItem, MessageChannelMain, session, shell, WebContentsView, type IpcMainEvent, type Session, type WebContents } from "electron";
 import type { CallName, Capability, GameOverlayResult, ReadOnlyFile, SystemApps, SystemInfo, SystemTraffic, HotkeyBinding, HotkeySetResult, JsonValue, OverlayLinkResult, OverlaySource, TavoraTheme, TavoraViewport, TavoraWorkspace } from "@tavora/sdk/protocol";
 import type { ResolvedPanelType } from "@tavora/module-schema";
 import { modulePartition } from "./module-data";
@@ -201,6 +201,35 @@ interface SessionGesture {
   refuse?: () => void;
 }
 
+/** Files a session's pages are writing now (blobs.put goes through the module's address, not the bridge). */
+interface Uploads {
+  running: number;
+  /** Told whenever one starts or ends: a closing panel waits until none runs. */
+  readonly changed: Set<() => void>;
+}
+const sessionUploads = new WeakMap<Session, Uploads>();
+
+function uploadsOf(ses: Session): Uploads {
+  let uploads = sessionUploads.get(ses);
+  if (!uploads) sessionUploads.set(ses, (uploads = { running: 0, changed: new Set() }));
+  return uploads;
+}
+
+/** Answers a request to the files address, counting one that writes for as long as it runs. */
+async function countWrite(ses: Session, request: Request, serve: () => Promise<Response>): Promise<Response> {
+  if (request.method === "GET" || request.method === "HEAD") return serve();
+  const uploads = uploadsOf(ses);
+  const tell = () => [...uploads.changed].forEach((changed) => changed());
+  uploads.running++;
+  tell();
+  try {
+    return await serve();
+  } finally {
+    uploads.running--;
+    tell();
+  }
+}
+
 function gestureOf(ses: Session): SessionGesture {
   let gesture = sessionGestures.get(ses);
   if (!gesture) sessionGestures.set(ses, (gesture = { press: null }));
@@ -267,8 +296,8 @@ function moduleSession(module: InstalledModule, workspace: TavoraWorkspace, blob
     if (url.host !== module.manifest.id) return new Response("Not found", { status: 404 });
     if (url.pathname.startsWith(READ_ONLY_FILE_PATH)) return serveReadOnlyFile(request,url.pathname.slice(READ_ONLY_FILE_PATH.length),new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,workspace.id));
     if (url.pathname === FOLDER_READ_PATH) return serveFolderFile(request, files.folders);
-    if (url.pathname.startsWith(BLOB_PATH)) return serveBlobs(blobs, request, url);
-    if (url.pathname.startsWith(APP_BLOB_PATH)) return serveBlobs(appBlobs, request, url, APP_BLOB_PATH);
+    if (url.pathname.startsWith(BLOB_PATH)) return countWrite(ses, request, () => serveBlobs(blobs, request, url));
+    if (url.pathname.startsWith(APP_BLOB_PATH)) return countWrite(ses, request, () => serveBlobs(appBlobs, request, url, APP_BLOB_PATH));
     if (url.pathname === CLIPBOARD_PATH) return serveClipboard(request, { ...pressCheck(gestureOf(ses)), write: writeClipboardPicture });
     if (url.pathname === JSON_EXPORT_PATH) {
       return serveJsonExport(request, url, { ...pressCheck(gestureOf(ses)), save: (data, name) => saveJsonExport(exportsFolder(), data, name) });
@@ -335,6 +364,15 @@ export const NO_BRIDGE_MS = 400;
 /** The least time between two ports for one document: asking sooner waits, and asks made meanwhile get one port. */
 export const CONNECT_GAP_MS = 250;
 export const REVEAL_CAP_MS = 2_000;
+/**
+ * A closed panel's page may still be saving what was typed just before (lifecycle.dispose). It keeps its port, for saves
+ * only, until it has answered a ping sent after the event and its calls have been quiet for CLOSE_QUIET_MS; never
+ * longer than CLOSE_CAP_MS, so a hung page can't hold anything up.
+ */
+export const CLOSE_QUIET_MS = 150;
+export const CLOSE_CAP_MS = 1_000;
+/** Numbers the pings closing panels send, so only the answer to a panel's own ping counts. */
+let closePings = 0;
 /** Where a panel's page is, from its start to its first frame (`ModuleView.phase`), or what went wrong. */
 export type PagePhase = Exclude<InstanceStatus, "ready"> | "settling" | "revealed" | "drawn";
 /** How a panel answered panel.navigate. */
@@ -394,8 +432,15 @@ export class ModuleView {
   private measuring = false;
   /** How the page is doing; changed only by `setStatus`, read as `status`. */
   private health: InstanceStatus = "loading";
-  /** Set by dispose: a page that finishes loading after it starts no timers (they would outlive the view). */
-  private disposed = false;
+  /**
+   * Where the panel is in being closed (dispose): `open`; `saving`, its page out of sight with its port kept for saves
+   * only (`settle` looks again whether it has gone quiet); `closed`, port and page gone. A page that finishes loading
+   * after `open` starts no timers (they would outlive the view), and nothing it does reaches the host as this panel's.
+   */
+  private end: { step: "open" } | { step: "saving"; done: Promise<void>; settle: () => void; close: () => void } | { step: "closed"; done: Promise<void> } = { step: "open" };
+  private get disposed(): boolean {
+    return this.end.step !== "open";
+  }
   /** False while the page is still loading or filling itself with data; the host keeps the view hidden until then. */
   revealed = false;
   private revealTimers: ReturnType<typeof setTimeout>[] = [];
@@ -442,7 +487,7 @@ export class ModuleView {
     const sameModule = (url: string) => url.startsWith(`${origin}/`);
 
     // The page is a native view, so a click in it never reaches the dock: the host makes its group active instead.
-    contents.on("focus", () => this.options.onFocus?.());
+    contents.on("focus", () => !this.disposed && this.options.onFocus?.());
     contents.setWindowOpenHandler(() => ({ action: "deny" }));
     contents.setWebRTCIPHandlingPolicy("disable_non_proxied_udp");
     contents.on("will-navigate", (event) => {
@@ -460,6 +505,8 @@ export class ModuleView {
     // ask for a new port; the old one is closed so it cannot be reused.
     contents.on("did-start-navigation", (event) => {
       if (event.isMainFrame && !event.isSameDocument) {
+        // A closed panel's page that goes elsewhere has nothing more to save here.
+        if (this.disposed) return this.closeNow();
         this.lastConnect = 0;
         this.disconnect();
         this.setStatus("loading");
@@ -470,6 +517,7 @@ export class ModuleView {
     // error status means the entry page is missing or unreadable.
     contents.on("did-navigate", (_event, url, httpResponseCode) => {
       if (httpResponseCode < 400) return;
+      if (this.disposed) return this.closeNow();
       console.warn(`[tavora] module ${module.manifest.id} failed to load ${url}: HTTP ${httpResponseCode}`);
       this.disconnect();
       this.setStatus("failed");
@@ -477,6 +525,7 @@ export class ModuleView {
     // A user stylesheet: every rule the module writes still wins over it.
     // The theme's colours go in a second one, replaced when the theme changes.
     contents.on("dom-ready", () => {
+      if (this.disposed) return;
       // A new document starts without the style of Tavora's own that fades it over the game.
       if (this.overGame) this.overGame.css = undefined;
       if (this.overGame) void this.applyGameOpacity();
@@ -496,6 +545,7 @@ export class ModuleView {
     contents.on("did-fail-load", (_event, errorCode, description, url, isMainFrame) => {
       // -3 is ERR_ABORTED: a navigation replaced by another, not a failure.
       if (!isMainFrame || errorCode === -3) return;
+      if (this.disposed) return this.closeNow();
       console.warn(`[tavora] module ${module.manifest.id} failed to load ${url}: ${description}`);
       this.disconnect();
       this.setStatus("failed");
@@ -507,6 +557,7 @@ export class ModuleView {
       if (this.health === "unresponsive") this.setStatus("ready");
     });
     contents.on("render-process-gone", (_event, details) => {
+      if (this.disposed) return this.closeNow();
       console.warn(`[tavora] module ${module.manifest.id} renderer gone: ${details.reason}`);
       this.disconnect();
       this.setStatus("crashed");
@@ -649,11 +700,13 @@ export class ModuleView {
   private onBridgeBusy(busy: boolean, served: number): void {
     clearTimeout(this.settleTimer);
     this.settleTimer = undefined;
+    if (this.end.step === "saving") return this.end.settle();
+    if (this.disposed) return;
     if (!busy && served > 0 && !this.revealed) this.settleTimer = setTimeout(() => this.reveal(), SETTLE_MS);
   }
 
   private reveal(): void {
-    if (this.revealed) return;
+    if (this.revealed || this.disposed) return;
     this.revealed = true;
     this.clearRevealTimers();
     if (this.overGame) this.view.setVisible(true);
@@ -880,8 +933,11 @@ export class ModuleView {
       () => {
         pageImports.abort();
         if (this.bridge !== bridge) return;
-        this.options.tooltip?.close();
         this.bridge = undefined;
+        // A closed panel let go of all the rest when it was closed (a panel opened in its place may hold it now):
+        // its port going only ends the wait for its saves.
+        if (this.disposed) return this.closeNow();
+        this.options.tooltip?.close();
         this.stopSystemWatch();
         this.stopMediaWatch();
         this.stopFolderWatches();
@@ -1462,15 +1518,83 @@ export class ModuleView {
     return gone;
   }
 
-  dispose(): void {
-    if (this.disposed) return;
-    this.disposed = true;
+  /**
+   * Closes the panel's page for good (the panel is closed, its workspace left, or the window goes). The page is hidden
+   * at once and told (lifecycle.dispose); it keeps its port, for saves only, until it has answered a ping (the preload
+   * answers once the page has had the event) and its calls and file writes have been quiet for CLOSE_QUIET_MS, or
+   * CLOSE_CAP_MS is up. Then port and page close and the promise resolves.
+   * `now` closes without waiting: for a panel whose data is being deleted.
+   */
+  dispose(now = false): Promise<void> {
+    if (now && this.end.step === "saving") this.end.close();
+    if (this.end.step !== "open") return this.end.done;
     this.stopHeartbeat();
     this.stopStorageWatch();
     this.clearRevealTimers();
-    this.bridge?.emit("lifecycle.dispose", null);
-    this.disconnect();
-    if (!this.view.webContents.isDestroyed()) this.view.webContents.close();
+    const bridge = this.bridge;
+    // Electron drops a closed view's page, so it may be gone already.
+    const contents = this.view.webContents as WebContents | undefined;
+    let resolve!: () => void;
+    const done = new Promise<void>((settled) => (resolve = settled));
+    let answered = false;
+    let listening = false;
+    let quiet: ReturnType<typeof setTimeout> | undefined;
+    let cap: ReturnType<typeof setTimeout> | undefined;
+    const token = ++closePings;
+    const uploads = contents && !contents.isDestroyed() ? uploadsOf(contents.session) : undefined;
+    const onPong = (event: IpcMainEvent, answer: unknown) => {
+      if (answer !== token || event.senderFrame?.parent !== null) return;
+      answered = true;
+      settle();
+    };
+    // Quiet: the page answered the ping sent after the event, and nothing it asked or writes since is still running.
+    const settle = () => {
+      clearTimeout(quiet);
+      quiet = answered && !this.bridge?.busy && !uploads?.running ? setTimeout(close, CLOSE_QUIET_MS) : undefined;
+    };
+    const close = () => {
+      if (this.end.step !== "saving" || this.end.done !== done) return;
+      clearTimeout(quiet);
+      clearTimeout(cap);
+      this.end = { step: "closed", done };
+      uploads?.changed.delete(settle);
+      const alive = contents !== undefined && !contents.isDestroyed();
+      if (alive && listening) contents.ipc.removeListener("tavora:pong", onPong);
+      const port = this.bridge;
+      this.bridge = undefined;
+      port?.close();
+      if (alive) contents.close();
+      resolve();
+    };
+    this.end = { step: "saving", done, settle, close };
+    // Everything but the port ends now, so nothing of this page reaches a panel opened in its place.
+    this.letGo();
+    bridge?.closing();
+    bridge?.emit("lifecycle.dispose", null);
+    if (now || !bridge?.ready || !contents || contents.isDestroyed()) {
+      close();
+      return done;
+    }
+    cap = setTimeout(close, CLOSE_CAP_MS);
+    try {
+      // Out of sight at once, and at full speed while it saves (a hidden page's timers are slowed down).
+      this.setVisible(false);
+      contents.setBackgroundThrottling(false);
+      // The host finds pages by their panel, which is gone: this page's answer is heard here.
+      contents.ipc.on("tavora:pong", onPong);
+      listening = true;
+      uploads?.changed.add(settle);
+      contents.send("tavora:ping", token);
+    } catch (error) {
+      console.warn(`[tavora] module ${this.moduleId} could not wait for its page to save`, error);
+      close();
+    }
+    return done;
+  }
+
+  /** A closing panel's page has nothing more to save: its port and page close now. */
+  private closeNow(): void {
+    if (this.end.step === "saving") this.end.close();
   }
 
   /**
@@ -1497,14 +1621,22 @@ export class ModuleView {
   }
 
   private disconnect(): void {
+    this.letGo();
+    const bridge = this.bridge;
+    this.bridge = undefined;
+    bridge?.close();
+  }
+
+  /** What the page holds apart from its port: its watches, tooltip, Discord hold, waiting navigations and last press. */
+  private letGo(): void {
     clearTimeout(this.connectTimer);
     this.connectTimer = undefined;
     this.options.tooltip?.close();this.pointer=null;
     this.addPass = null;
+    // A closed panel's last click opens nothing more, here or through its session (the session shares the press).
+    if (this.disposed && this.press) this.press.used = true;
     // A page that goes away answers nothing more.
     for (const finish of [...this.navigations.values()]) finish("failed");
-    this.bridge?.close();
-    this.bridge = undefined;
     this.stopSystemWatch();
     this.stopMediaWatch();
     this.stopFolderWatches();
@@ -1512,7 +1644,8 @@ export class ModuleView {
   }
 
   private setStatus(status: InstanceStatus): void {
-    if (this.health === status) return;
+    // A closed panel's page tells the host nothing more: a panel opened in its place may have the same id.
+    if (this.disposed || this.health === status) return;
     // Only a running page is watched; it is restarted when the page loads again.
     if (status !== "ready" && status !== "unresponsive") this.stopHeartbeat();
     this.health = status;

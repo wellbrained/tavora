@@ -8,7 +8,7 @@
 //   name), it returns false and the user is told in a short toast.
 // - The delete itself is already saved when the toast shows. A reload or a closed app in the meantime keeps it deleted;
 //   nothing is left half-done.
-import { isModalOpen } from "../dialog/modal";
+import { isModalOpen } from "../../../lib/layers";
 import { uiText } from "../text";
 import { toast, type ToastHandle } from "./toast";
 

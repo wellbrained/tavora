@@ -6,11 +6,12 @@
 import path from "node:path";
 import { connectorsAtAdd, folderKey, isConnector, isModuleId, isNetworkEntry, isOwnerId, parseFolderKey, type Connector, type ModuleManifest } from "@tavora/module-schema";
 import { SerialQueue, writeFileAtomic } from "./fsutil";
-import { readJsonOrSetAside } from "./json";
+import { readSavedFile } from "./json";
+import { SUPPORTED_VERSIONS } from "./saved-versions";
 
 export const GRANTS_FILE = "grants.json";
-/** The format of grants.json; raised when an older Tavora could misread it (see saved-data.ts). */
-export const GRANTS_VERSION = 1;
+/** The format of grants.json (saved-versions.ts says when to raise it). */
+export const GRANTS_VERSION = SUPPORTED_VERSIONS[GRANTS_FILE];
 
 /** What a module may do, as far as grants decide it. */
 export interface Permissions {
@@ -111,7 +112,7 @@ export class GrantStore {
 
   static async load(userData: string, now: () => Date = () => new Date()): Promise<GrantStore> {
     const file = path.join(userData, GRANTS_FILE);
-    return new GrantStore(file, sanitizeGrants(await readJsonOrSetAside(file)), now);
+    return new GrantStore(file, sanitizeGrants(await readSavedFile(file, { version: GRANTS_VERSION })), now);
   }
 
   /** The stored grant of a module, whatever its current manifest asks for. */

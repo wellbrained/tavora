@@ -99,8 +99,7 @@ test("a hostile module cannot escape its sandbox, spoof identity or reach the ne
     ok: true,
     result: { protocol: 1, module: { id: HOSTILE }, capabilities: [] },
   });
-  expect(bridge.game).toMatchObject({ ok: true, result: { id: "poe2" } });
-  expect(bridge.gameWithSpoofedParams).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+  expect(bridge.removedGame).toMatchObject({ ok: false, error: { code: "UNKNOWN_METHOD" } });
   expect(bridge.workspace).toMatchObject({ ok: true, result: { id: "poe2", kind: "game" } });
   expect(bridge.workspaceWithSpoofedParams).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
   expect(bridge.spoofedStorageRead).toMatchObject({ ok: true, result: null });

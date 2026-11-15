@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "games": {
+    "elden-ring": {
+      "instances": [
+        {
+          "instanceId": "aaaaaaaa-0000-4000-8000-000000000001",
+          "moduleId": "tavora.notes"
+        }
+      ]
+    }
+  }
+}

@@ -37,7 +37,7 @@ function later() {
 </script>
 
 <template>
-  <ModalDialog v-if="copyQuestion" :title="title" :description="text" :icon="Cloud" testid="cloud-copy-question" @close="copyQuestion !== 'closing' && later()">
+  <ModalDialog v-if="copyQuestion" :title="title" :description="text" :icon="Cloud" testid="cloud-copy-question" :busy="copyQuestion === 'closing'" @close="later">
     <template v-if="copyQuestion === 'conflict'">
       <p class="text-muted-foreground text-sm">{{ t("cloudCopy.conflict.cloudHint") }}</p>
       <DialogFooter>

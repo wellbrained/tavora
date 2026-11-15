@@ -6,8 +6,8 @@ import { Blocks, Home, LayoutPanelLeft, PanelLeftClose, PanelLeftOpen, Plus, Sea
 import { computed, onBeforeUnmount, ref, shallowRef, watch, type Component } from "vue";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
-import { useListNav } from "@/lib/list-nav";
-import { rank, rankByName, startsOrIsWord } from "@/lib/search";
+import { useListNav } from "../lib/list-nav";
+import { rank, rankByName, startsOrIsWord } from "../lib/search";
 import { cn } from "@tavora/official-ui/lib/utils";
 import type { CatalogMatch, OnlineGame, WorkspaceView } from "../../shared/host-api";
 import { LAYOUT_TEMPLATES } from "../../shared/layout-templates";
@@ -57,6 +57,7 @@ function onFocus(event: FocusEvent) {
 
 watch([searchOpen, searchStart], ([open, start], [wasOpen]) => {
   if (open && !wasOpen) {
+    opening++;
     query.value = start;
     active.value = 0;
     resetHover();
@@ -95,10 +96,32 @@ watch(query, (text) => {
 });
 
 type NewGame = { catalogId: string } | { online: OnlineGame };
-async function addAndOpen(input: NewGame) {
+
+/** Raised each time the box opens, so a game added from an earlier opening neither opens nor closes the box opened since. */
+let opening = 0;
+/**
+ * The "Add" row whose game is being added. Adding takes a moment (online games are looked up first), so the box stays
+ * open with that row busy, and closes once the game is open. Another Add waits until it is done, even after the box
+ * was closed and opened again. Escape doesn't stop it; once the box was opened again the game is added but not opened,
+ * so it doesn't jump over what the user does there.
+ */
+const adding = shallowRef<string | null>(null);
+const addThenClose = (id: string, input: NewGame) => async () => {
+  if (adding.value) return;
+  adding.value = id;
+  const mine = opening;
+  const same = () => mine === opening;
+  try {
+    await addAndOpen(input, same);
+  } finally {
+    adding.value = null;
+    if (same()) searchOpen.value = false;
+  }
+};
+async function addAndOpen(input: NewGame, open: () => boolean) {
   try {
     const added = await act({ type: "add-workspace", ...input });
-    if (added.ok && added.id) await act({ type: "open-workspace", workspaceId: added.id });
+    if (added.ok && added.id && open()) await act({ type: "open-workspace", workspaceId: added.id });
   } catch (reason) {
     // The call itself failed (not an answer from Tavora): say so instead of nothing.
     console.error("[tavora] adding a game failed", reason);
@@ -119,7 +142,7 @@ const addItems = computed<Item[]>(() => {
       label: t("search.add", { name: row.name }),
       hint: t("search.newGame"),
       icon: Plus,
-      run: close(() => addAndOpen(row.input)),
+      run: addThenClose(`add-game-${row.id}`, row.input),
     }));
 });
 
@@ -325,7 +348,8 @@ const activeId = computed(() => {
             :key="item.id"
             role="option"
             :aria-selected="flat[active] === item"
-            :class="cn('flex h-10 cursor-pointer items-center gap-3 rounded-lg px-3', group.quiet && 'text-muted-foreground', flat[active] === item && 'bg-accent')"
+            :aria-busy="adding === item.id || undefined"
+            :class="cn('tavora-busy flex h-10 cursor-pointer items-center gap-3 rounded-lg px-3', group.quiet && 'text-muted-foreground', (flat[active] === item || adding === item.id) && 'bg-accent')"
             :data-testid="`search-${item.id}`"
             @mousemove="onHover(flat.indexOf(item), $event)"
             @click="item.run()"

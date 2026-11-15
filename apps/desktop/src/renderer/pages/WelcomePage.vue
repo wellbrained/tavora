@@ -9,7 +9,7 @@ import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import WorkspaceIcon from "../components/WorkspaceIcon.vue";
 import { act, dialog, inbox, openInbox, openSearch, openSettings, state } from "../host";
 import { formatAgo, t } from "../i18n";
-import { MOD } from "../shortcuts";
+import { keyCaps } from "../shortcuts";
 
 const library = computed(() => state.value!.library);
 const empty = computed(() => Object.keys(library.value.workspaces).length === 0);
@@ -136,7 +136,7 @@ const away = computed<AwayItem[]>(() => {
             @input="handOver"
             @keydown.enter.prevent="openSearch()"
           />
-          <span class="flex shrink-0 gap-1" aria-hidden="true"><Kbd>{{ MOD() }}</Kbd><Kbd>K</Kbd></span>
+          <span class="flex shrink-0 gap-1" aria-hidden="true"><Kbd v-for="key in keyCaps('search')" :key="key">{{ key }}</Kbd></span>
         </label>
         <ul class="mt-3 flex flex-wrap justify-center gap-2" :aria-label="t('welcome.quick')">
           <li v-for="item in quick" :key="item.id">

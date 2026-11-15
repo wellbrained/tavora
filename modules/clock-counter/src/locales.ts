@@ -156,6 +156,7 @@ export const en = {
   "edit.hotkeyNone": "No key",
   "edit.hotkeyOn": "Key set",
   "edit.delete": "Delete",
+  "edit.deleteKey": "Del",
 
   "action.start-pause": "Start/Pause",
   "action.reset": "Reset",
@@ -332,6 +333,7 @@ export const de: Record<keyof typeof en, string> = {
   "edit.hotkeyNone": "Keine Taste",
   "edit.hotkeyOn": "Taste festgelegt",
   "edit.delete": "Löschen",
+  "edit.deleteKey": "Entf",
 
   "action.start-pause": "Start/Pause",
   "action.reset": "Zurücksetzen",

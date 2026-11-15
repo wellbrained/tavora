@@ -3,6 +3,8 @@
 
 import { describe, expect, it } from "vitest";
 
+export { ariaProblems, danglingReferences, extraTabStops, focusLostAfter } from "./aria-patterns";
+
 export interface CheckCatalogsOptions {
   /** Title of the test group. Default: "locales". */
   name?: string;

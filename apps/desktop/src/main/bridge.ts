@@ -37,7 +37,6 @@ import {
   type PanelLaunch,
   type PanelOpenManyResult,
   type PanelOpenResult,
-  type TavoraGame,
   type TavoraTheme,
   type TavoraViewport,
   type TavoraWorkspace,
@@ -362,11 +361,6 @@ function pickNear(value: unknown): import('@tavora/sdk/protocol').PickNear | und
   return { file: near.file, up };
 }
 
-/** A workspace as game.getCurrent says it. */
-function legacyGame({ id, displayName, kind }: TavoraWorkspace): TavoraGame {
-  return { id, displayName, kind: kind === "personal" ? "workspace" : "game" };
-}
-
 const handlers = new Map<string, Handler>([
   ['folders.state', (s,params) => { const folder = folderParam(params); needs(s,'folders','folders.state'); return folderContext(s).state(folder); }],
   ['folders.list', (s,params) => { const folder = folderParam(params); needs(s,'folders','folders.list'); return folderContext(s).list(folder); }],
@@ -409,9 +403,6 @@ const handlers = new Map<string, Handler>([
     await s.context.readOnlyFiles.showInFolder(id); return null;
   }],
   ["workspace.getCurrent", (s, params) => (noParams(params), { ...s.context.workspace })],
-  // Deprecated: the same in the words of Tavora before 0.21.43 (a personal workspace's kind was "workspace"). Answered
-  // until the 1.0 preparation, so modules made before it keep working.
-  ["game.getCurrent", (s, params) => (noParams(params), legacyGame(s.context.workspace))],
 
   ["storage.get", (s, params) => s.context.data.settings.get(object(params).key)],
   ["storage.keys", (s, params) => (noParams(params), s.context.data.settings.keys())],
@@ -797,11 +788,18 @@ const handlers = new Map<string, Handler>([
   ["ui.tooltip.defineSkin",async(s,p)=>{const {name,skin}=checkSkinRequest(p);await s.context.tooltip.defineSkin(name,skin);return null;}],
 ]);
 
+/** What a page whose panel was closed may still call while it saves (`BridgeSession.closing`): its data, and nothing on screen. */
+export function servedWhileClosing(method: string): boolean {
+  return /^(storage|documents|blobs)\./.test(method) || method === "panel.getState" || method === "panel.setState";
+}
+
 /** Serves one module panel over one port. */
 export class BridgeSession {
   private inFlight = 0;
   private served = 0;
   private closed = false;
+  /** The panel was closed: the port stays open a moment longer, for the page's saves only. */
+  private closingDown = false;
   private handshakeDone = false;
   /** What the panel's calls hold now, this port's and those of its earlier ports still running. */
   readonly budget: BridgeBudget;
@@ -835,6 +833,16 @@ export class BridgeSession {
     if (this.closed) return;
     this.port.close();
     this.markClosed();
+  }
+
+  /** The panel was closed but its page may still save: from now on only its saves are answered, until `close`. */
+  closing(): void {
+    this.closingDown = true;
+  }
+
+  /** Requests started and not answered yet. */
+  get busy(): boolean {
+    return this.inFlight > 0;
   }
 
   private readonly onDocumentChange = (change: DocumentChange, origin: unknown) => {
@@ -902,6 +910,8 @@ export class BridgeSession {
         result = this.handshake(params);
       } else if (!this.handshakeDone) {
         throw new HostError("BAD_REQUEST", "call bridge.handshake first");
+      } else if (this.closingDown && !servedWhileClosing(method)) {
+        throw new HostError("BAD_REQUEST", `${method} is not available while the panel closes; only saves are`);
       } else if (Object.hasOwn(RESERVED_METHODS, method)) {
         const capability = RESERVED_METHODS[method]!;
         // Nothing can grant these yet; the check is here so the error shape

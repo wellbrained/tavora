@@ -284,6 +284,14 @@
     transition: none !important;
   }
 }
+/* A panel moved with the keyboard: what a key does shows at once. */
+[data-dock-keyboard] .dockview-theme-tavora .dv-groupview,
+[data-dock-keyboard] .dockview-theme-tavora .dv-tab,
+[data-dock-keyboard] .dock-fade,
+[data-dock-keyboard] .dock-fade-enter-active,
+[data-dock-keyboard] .dock-fade-leave-active {
+  transition: none !important;
+}
 
 /* A tab's close button shows on the active tab, and on the others while the pointer or the keyboard is on them. */
 .dockview-theme-tavora .dv-tab.dv-inactive-tab:not(:hover):not(:focus-within) [data-testid="close"] {

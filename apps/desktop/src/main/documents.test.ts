@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, utimes, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -22,6 +22,50 @@ describe("DocumentStore", () => {
     expect((await store.list()).map((doc) => doc.id)).toEqual(["build-b", a.id]);
     expect(await new DocumentStore(dir).get("build-b")).toMatchObject({ title: "B", data: [1, 2, 3], revision: 1 });
     expect(await store.get("missing")).toBeNull();
+  });
+
+  it("refuses ids Windows or the store keep for themselves, in any case, for new documents", async () => {
+    const store = new DocumentStore(dir);
+    for (const id of ["index", "Index", "CON", "con", "prn", "Aux", "nul", "com1", "COM9", "lpt1", "Lpt9"]) {
+      await expect(store.put({ id, title: "X", data: 1 })).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+    }
+    // Only the exact names: these are ordinary ids.
+    for (const id of ["indexes", "console", "com10", "com0", "nul-1", "my-index"]) {
+      expect(await store.put({ id, title: "X", data: 1 })).toMatchObject({ id, revision: 1 });
+    }
+    expect(await store.get("index")).toBeNull();
+    await store.delete("index");
+    expect((await store.list()).length).toBe(6);
+  });
+
+  it("refuses a new id that differs from a saved one only by case", async () => {
+    const store = new DocumentStore(dir);
+    await store.put({ id: "Notes", title: "Notes", data: 1 });
+    await expect(store.put({ id: "notes", title: "Other", data: 2 })).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+    await expect(store.put({ id: "NOTES", title: "Other", data: 2 })).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await store.put({ id: "Notes", title: "Notes", data: 3 })).toMatchObject({ revision: 2 });
+    expect(await new DocumentStore(dir).get("Notes")).toMatchObject({ data: 3 });
+  });
+
+  it("keeps documents saved before the rule readable and writable, and drops an index entry for the index itself", async () => {
+    await mkdir(dir, { recursive: true });
+    const stamp = "2026-01-01T00:00:00.000Z";
+    const summary = (id: string) => ({ id, title: id, revision: 1, updatedAt: stamp, bytes: 1 });
+    const saved = (id: string, data: number) => JSON.stringify({ version: 1, id, title: id, revision: 1, updatedAt: stamp, data });
+    // A system that tells case apart could hold both of a pair, and a device name.
+    const ids = process.platform === "win32" ? ["Plan"] : ["Plan", "plan", "con"];
+    for (const [n, id] of ids.entries()) await writeFile(path.join(dir, `${id}.json`), saved(id, n));
+    const index = path.join(dir, "index.json");
+    await writeFile(index, JSON.stringify({ version: 1, documents: Object.fromEntries([...ids, "index"].map((id) => [id, summary(id)])) }));
+    const later = new Date(Date.now() + 60_000);
+    await utimes(index, later, later);
+    const store = new DocumentStore(dir);
+    expect((await store.list()).map((doc) => doc.id).sort()).toEqual([...ids].sort());
+    for (const [n, id] of ids.entries()) {
+      expect(await store.get(id)).toMatchObject({ id, data: n });
+      expect(await store.put({ id, title: id, data: 9 })).toMatchObject({ revision: 2 });
+    }
+    expect(await store.get("index")).toBeNull();
   });
 
   it("uses revisions for optimistic concurrency; ifRevision 0 means create only", async () => {

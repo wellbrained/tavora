@@ -79,13 +79,15 @@ describe("readGrayscaleText", () => {
 });
 
 describe("keepNewerFile", () => {
-  it("copies a file written by a newer Tavora aside, once, and leaves the original", async () => {
+  it("copies a file written by a newer Tavora aside, once per content, never over a copy, and leaves the original", async () => {
     await write("library.json", '{"version":2,"games":{"future":true}}');
     const file = path.join(dir, "library.json");
     expect(await keepNewerFile(file, 1)).toBe(`${file}.from-version-2`);
+    expect(await keepNewerFile(file, 1)).toBe(`${file}.from-version-2`);
     await write("library.json", '{"version":2,"games":{"changed":true}}');
-    await keepNewerFile(file, 1);
+    expect(await keepNewerFile(file, 1)).toBe(`${file}.from-version-2.2`);
     expect(await readFile(`${file}.from-version-2`, "utf8")).toContain("future");
+    expect(await readFile(`${file}.from-version-2.2`, "utf8")).toContain("changed");
     expect(await readFile(file, "utf8")).toContain("changed");
   });
 

@@ -47,7 +47,7 @@ import { popularGames } from "./catalog";
 import { gridTemplate, layoutTemplate } from "../shared/layout-templates";
 import { parseAction, runAction, type ActionHandlers } from "./actions";
 import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
-import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, orphanedPartitions, queueLocalDataMove } from "./module-data";
+import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, holdLeftovers, orphanedPartitions, partitionsOf, partitionWorkspace, queueLocalDataMove } from "./module-data";
 import { AI_USAGE_MODULE_ID, DISCORD_MODULE_ID, movedModule, MOVED_MODULES_OWNER, moveOfficialModules } from "./moved-modules";
 import { checkZipData, readOwnerRecords } from "./installer";
 import { Installed, loadInstalledModules, type InstalledModules } from "./installed-modules";
@@ -112,7 +112,7 @@ import {
 import { MODULE_FONTS } from "./module-fonts";
 import { moduleBaseCss } from "./module-style";
 import { backupData, backupsDir } from "./backup";
-import { loadLibrary, SavedData } from "./saved-data";
+import { hasLibrary, loadLibrary, SavedData, WORKSPACE_FILE } from "./saved-data";
 import { CatalogClient, catalogView, type CatalogScope } from "./catalog-client";
 import { parseReadme, readmeAllowsLink } from "./catalog-readme";
 import { CHECK_INTERVAL_MS } from "./catalog-updates";
@@ -122,7 +122,9 @@ import { countAppUpdate } from "./usage-counts";
 import { askedName, newInstallId, sendModuleRequest } from "./module-request";
 import { askKey, type AskedGame } from "../shared/module-request";
 import { PublisherNames } from "./publisher-names";
-import { PreviewUpdater, UpdateManager, type UpdaterLike } from "./updates";
+import { PreviewUpdater, previewCheck, UpdateManager, type UpdaterLike } from "./updates";
+import { PINNED_UPDATE_KEYS } from "./update-keys";
+import { checkDownloadedUpdate } from "./update-signature";
 import { fetchHostedList, type HostedList } from "./hosted-icons";
 import { OfficialPublisher, PublishCancelled } from "./official-publish";
 import { OfficialKeyStore } from "./official-key-store";
@@ -152,7 +154,7 @@ import { readSteamLastPlayed } from "./steam-played";
 import { readIcoFromFile } from "./pe-icon";
 import { coverReader, findSteamDir, isSteamAppId, loadAppInfo, readLibraryCover, readSteamClientIcon, removeSteamIcon } from "./steam-icons";
 import { readShortcutIcons, shortcutFolders } from "./steam-shortcuts";
-import { documentsFolder, exportsFolder, ModuleView, picturesFolder, REVEAL_CAP_MS } from "./module-view";
+import { CLOSE_CAP_MS, documentsFolder, exportsFolder, ModuleView, picturesFolder, REVEAL_CAP_MS } from "./module-view";
 import { readJsonText } from "./json-file-http";
 import { kindOfName, readTableFile } from "./table-file-http";
 import { freeFileName } from "./picture-save-http";
@@ -168,7 +170,8 @@ import { DataRegistry } from "./storage";
 import type { CheckedMenu } from "./module-menu";
 import {TooltipWindow} from "./tooltip-window";
 import { ToastView } from "./toast-view";
-import { AiUsageConnector } from "./ai-usage";
+import { AI_USAGE_VERSION, AiUsageConnector } from "./ai-usage";
+import { checkSavedFile, onUnreadableFileKept, unreadableFilesKept } from "./json";
 import { ConnectionFile, ConnectionWatcher, SYSTEM_MONITOR_ID } from "./connection";
 import { connectionProbe } from "./connection-windows";
 import { SystemMonitorThread } from "./system-info-thread";
@@ -564,6 +567,11 @@ export class Host {
   private buttonsBackground?: string;
   /** True once the window has closed. */
   private windowClosed = false;
+  /**
+   * The panels' pages as the window closes or Tavora quits: `running`; `closing` while they save what was typed just
+   * before (at most CLOSE_CAP_MS); `closed`. No page starts after `running`.
+   */
+  private panelPages: { step: "running" } | { step: "closing" | "closed"; done: Promise<void> } = { step: "running" };
   /** True while the window is minimized or hidden. */
   private windowHidden = false;
   /** Tavora's window is behind another program (the game): it lost the focus. */
@@ -622,6 +630,8 @@ export class Host {
     private readonly savedData: SavedData,
   ) {
     this.installed = prepared.installed;
+    // A file of the user's set aside from now on (unreadable) reaches the host UI, which says so (keptAside).
+    onUnreadableFileKept(() => this.pushStateSoon());
     this.copySync = prepared.copySync;
     this.safetyLists = prepared.safetyLists;
     this.official = prepared.official;
@@ -818,7 +828,8 @@ export class Host {
     });
     // The cloud copy started before there was a window: from here it flushes the saved data and tells the page.
     this.copySync.attach({
-      flush: () => this.flush(),
+      // Only writes what is pending: flush() is for quitting and would close game overlays, hotkeys and the OBS server.
+      flush: () => this.saveAll(),
       onChange: (view) => {
         if (!this.window.isDestroyed()) this.window.webContents.send("host:cloud-copy", view);
         this.developerKeys.keyMaybeChanged();
@@ -839,13 +850,16 @@ export class Host {
     const copySync = Host.cloudCopy(options, encryptor, signIn, { root: () => (loaded ? (loaded.moduleFilesFolder ?? null) : savedFolder) ?? defaultFolder });
     await copySync.beforeLoad();
     const savedData = new SavedData(userData);
+    // A file saved by a newer Tavora (a cloud copy taken just now included) is copied aside before this one, or a move
+    // below, can overwrite it.
+    await savedData.keepNewerFiles();
     // Before anything reads the files (a cloud copy taken just now included): what was saved under the old names of the
     // Game → Workspace rename gets the new ones. When that fails, Tavora does not start on files it can't read.
     await moveToWorkspaces(userData, (line) => console.warn(`[tavora] ${line}`));
-    // A file saved by a newer Tavora is copied aside before this one can overwrite it.
-    await savedData.keepNewerFiles();
     const library = await savedData.loadLibrary();
     loaded = library;
+    // Missing or set aside (unreadable): workspaces it doesn't list may well be the user's, so the sweep below waits.
+    const libraryRead = await hasLibrary(userData);
     const safetyLists = new SafetyLists({
       file: path.join(userData, "catalog-lists.json"),
       baseUrl: serviceUrl(options.apiUrl),
@@ -869,6 +883,8 @@ export class Host {
     const waiting = waitingModules(moduleProblems);
     // A module that left Tavora for the catalog keeps its panels while it is not installed: they offer to install it.
     const workspaces = await savedData.loadWorkspace(Object.keys(library.workspaces), (id) => modules.has(id) || waiting.has(id) || movedModule(id) !== undefined);
+    // Missing or set aside (unreadable): panels it doesn't list may well be the user's, so the sweep below waits.
+    const workspaceRead = existsSync(path.join(userData, WORKSPACE_FILE));
     settlePanelTypes(workspaces, panelTypesOf(modules));
     const { profile, saved: profileSaved } = await savedData.loadProfile();
     const windowState = initialBounds(
@@ -928,15 +944,18 @@ export class Host {
     });
     // The id is made once and kept, so a new profile is written straight away.
     if (!profileSaved) host.saveProfile().catch(() => undefined); // logged by saveProfile
-    // Browser storage of workspaces that are gone, removed before any session opens it.
-    for (const dir of await orphanedPartitions(userData, new Set(Object.keys(library.workspaces)))) {
-      await rm(dir, { recursive: true, force: true });
-    }
+    // Browser storage of workspaces that are gone, removed before any session opens it, and the saved state of panels
+    // that are gone. What a lost library or workspace file may have listed is kept (holdLeftovers).
+    const orphaned = await orphanedPartitions(userData, new Set(Object.keys(library.workspaces)));
+    const livePanels = new Set(Object.values(workspaces.workspaces).flatMap((workspace) => workspace.instances.map((i) => i.instanceId)));
+    const stalePanels = (await readdir(path.join(userData, "panel-state")).catch(() => [] as string[])).filter((name) => name.endsWith(".json") && !livePanels.has(name.slice(0, -".json".length))).map((name) => name.slice(0, -".json".length));
+    const leftovers = { workspaces: new Set(orphaned.map((dir) => partitionWorkspace(dir)!)), panels: new Set(stalePanels) };
+    const held = await holdLeftovers(userData, libraryRead && workspaceRead, leftovers).catch(() => leftovers);
+    for (const dir of orphaned) if (!held.workspaces.has(partitionWorkspace(dir)!)) await rm(dir, { recursive: true, force: true });
+    await host.data.panelState.prune(new Set([...livePanels, ...held.panels]));
     for (const workspace of expired) await host.deleteWorkspaceData(workspace);
     // Version 0.2.0 saved Steam covers here; they were replaced by Steam's own icons.
     await rm(path.join(userData, "steam-art"), { recursive: true, force: true });
-    const livePanels = new Set(Object.values(workspaces.workspaces).flatMap((workspace) => workspace.instances.map((i) => i.instanceId)));
-    await host.data.panelState.prune(livePanels);
     if (expired.length) host.saveLibrary();
 
     host.screen = library.startup === "last-workspace" && library.lastWorkspaceId ? "workspace" : "welcome";
@@ -1022,6 +1041,9 @@ export class Host {
    * wakes up. Only an installed app does this; updates come from the feed address built into the
    * installer. pnpm dev and other unpackaged runs never look on their own: there "Check now" in
    * Settings runs a made-up update (PreviewUpdater), so the marker and its steps can be tried.
+   *
+   * A downloaded version installs only when Tavora's signature checks out against the keys pinned in
+   * update-keys.ts (update-signature.ts); a refused installer is deleted, and Tavora goes on with its version.
    */
   private async startUpdates(): Promise<void> {
     try {
@@ -1030,6 +1052,18 @@ export class Host {
         : new PreviewUpdater(app.getVersion(), { fail: process.env.TAVORA_FAKE_UPDATE_FAIL === "1" });
       this.updates = new UpdateManager({
         updater,
+        verify: app.isPackaged
+          ? (info) => checkDownloadedUpdate(info, PINNED_UPDATE_KEYS, app.getVersion())
+          : previewCheck(process.env.TAVORA_FAKE_UPDATE_UNSIGNED === "1"),
+        // The refused installer goes, and so does the blockmap electron-updater kept from it (in its pending folder and
+        // the cache folder above), so the next download doesn't plan against the refused file.
+        onRefused: (info) => {
+          if (!app.isPackaged || typeof info.downloadedFile !== "string") return;
+          const pending = path.dirname(info.downloadedFile);
+          for (const file of [info.downloadedFile, path.join(pending, "current.blockmap"), path.join(path.dirname(pending), "current.blockmap")]) {
+            void rm(file, { force: true }).catch(() => undefined);
+          }
+        },
         autoDownload: this.library.autoUpdate,
         onChange: () => this.pushState(),
         onDownloaded: (version) => {
@@ -1038,6 +1072,8 @@ export class Host {
         log: (line) => this.logUpdate(line),
       });
       if (!app.isPackaged) return;
+      // What electron-updater's own quit handler did (it is off): a checked version installs when Tavora quits.
+      app.once("quit", (_event, exitCode) => this.updates?.installOnQuit(exitCode));
       this.updates.start();
       powerMonitor.on("resume", () => void this.updates?.check());
     } catch (error) {
@@ -2071,6 +2107,12 @@ export class Host {
     this.window.on("move", () => this.saveWindowSoon());
     this.window.on("close", (event) => {
       this.saveWindow();
+      // The panels write what was typed just before first (Alt+F4 right after typing); the window closes once their pages have.
+      if (this.panelPages.step !== "closed") {
+        event.preventDefault();
+        if (this.panelPages.step === "running") void this.closePanelPages().then(() => !this.window.isDestroyed() && this.window.close());
+        return;
+      }
       // The last changes go to the cloud copy first; the window closes once they are up.
       if (this.copySync.holdClose(() => this.window.close())) event.preventDefault();
     });
@@ -2105,7 +2147,8 @@ export class Host {
       // The overlay windows (and the keys for arranging) go with the main window; they would keep Tavora running.
       this.closeOverlayWindows();
       void this.gameOverlays.shutdown().catch((error: unknown) => console.error("[tavora]", error));
-      this.panels.disposeAll();
+      void this.closePanelPages();
+      onUnreadableFileKept(null);
       this.cover.dispose();
       this.toastView.dispose();
       this.discord.dispose();
@@ -2449,7 +2492,7 @@ export class Host {
         const workspaces = action.workspaceIds.filter((id) => this.library.workspaces[id]?.trashedAt).map((id) => deleteTrashedWorkspace(this.library, id));
         this.saveLibrary();
         for (const workspace of workspaces) await this.forgetWorkspaceData(workspace);
-        await this.clearOrphanedSessions();
+        await this.clearSessionsOf(workspaces.map((workspace) => workspace.id));
       }),
       favorite: saved((action) => placeFavorite(this.library, action.workspaceId, action.index)),
       unfavorite: saved((action) => removeFavorite(this.library, action.workspaceId)),
@@ -3440,14 +3483,15 @@ export class Host {
   /** Deletes everything stored for a workspace that left the library for good. */
   private async deleteWorkspaceData(workspace: WorkspaceEntry): Promise<void> {
     await this.forgetWorkspaceData(workspace);
-    await this.clearOrphanedSessions();
+    await this.clearSessionsOf([workspace.id]);
   }
 
   /** deleteWorkspaceData without the browser sessions, so many workspaces can be deleted and the sessions cleared once. */
   private async forgetWorkspaceData(workspace: WorkspaceEntry): Promise<void> {
     const records = this.workspaces.forgetWorkspace(workspace.id);
     // A panel of this workspace that was over its game closes with it.
-    for (const record of records) this.panels.close(record.instanceId);
+    // Its data goes, so its pages don't get the moment to save that a closed panel gets.
+    for (const record of records) this.panels.close(record.instanceId, true);
     await Promise.all(records.map((record) => this.data.panelState.remove(record.instanceId)));
     this.data.forgetWorkspace(workspace.id);
     this.streaming.forgetWorkspace(workspace.id);
@@ -3459,11 +3503,10 @@ export class Host {
     if (workspace.iconFile && !iconFileShared(this.library, workspace.iconFile, workspace.id)) await removeSteamIcon(this.steamIconDir, workspace.iconFile);
   }
 
-  private async clearOrphanedSessions(): Promise<void> {
-    // Sessions may already be open in this run, so clear them; their
-    // directories are removed at the next start.
-    const keep = new Set(Object.keys(this.library.workspaces));
-    for (const dir of await orphanedPartitions(this.options.userData, keep)) {
+  private async clearSessionsOf(workspaceIds: string[]): Promise<void> {
+    // Sessions may already be open in this run, so clear them; their directories are removed at the next start. Only
+    // these workspaces': after a lost library, others not in it may be the user's (holdLeftovers).
+    for (const dir of await partitionsOf(this.options.userData, workspaceIds)) {
       const ses = session.fromPartition(`persist:${decodeURIComponent(path.basename(dir))}`);
       await ses.clearStorageData();
       await ses.clearCache();
@@ -3722,7 +3765,8 @@ export class Host {
       ...(options.aiUsageUrl ? { usageUrl: options.aiUsageUrl } : {}),
       readClaudeEmail: (directory) => readClaudeEmail(directory),
       fetch: (input, init) => fetch(input, init),
-      readText: (file) => readFile(file, "utf8").catch(() => null),
+      readText: (file) => readFile(file, "utf8").catch((error: NodeJS.ErrnoException) => (error.code === "ENOENT" ? null : Promise.reject(error))),
+      check: (file, text) => checkSavedFile(file, text, { version: AI_USAGE_VERSION }),
       isDirectory: (directory) => stat(directory).then((info) => info.isDirectory(), () => false),
       writeText: (file, text) => writeFileAtomic(file, text),
       readCodex: (directory, signal) => readCodexUsage(directory, app.getVersion(), signal),
@@ -3891,6 +3935,8 @@ export class Host {
 
   /** openedAt is when the user asked for the panel; its time to a loaded page is measured from there. */
   private createView(record: InstanceRecord, workspace: TavoraWorkspace, openedAt?: number): void {
+    // The window is closing or Tavora quits: no page starts any more.
+    if (this.panelPages.step !== "running") return;
     // Its panel is in the in-game layer and kept running there while another workspace was shown: it comes back when the layer closes.
     if (this.panels.has(record.instanceId)) return;
     if (record.moduleId === BROWSER_MODULE_ID) return this.createBrowser(record, workspace);
@@ -4901,6 +4947,7 @@ export class Host {
       moduleFiles: { folder: this.files.root(), custom: this.files.custom, available: this.files.available, moving: this.files.moving },
       snapshots: workspace.snapshots.map(({ id, name, savedAt }) => ({ id, name, savedAt })),
       notice: this.notice,
+      keptAside: unreadableFilesKept(),
       profile: {
         name: this.profile.name,
         initials: this.profile.initials,
@@ -5259,8 +5306,31 @@ export class Host {
     this.panels.applyBounds();
   }
 
-  /** Resolves once pending writes are on disk; keys go back to the system and the overlay server stops. */
+  /**
+   * Every panel's page saves what it still has and closes, once, as the window closes or Tavora quits. Resolves when
+   * they have, at most a moment after CLOSE_CAP_MS whatever a page does.
+   */
+  private closePanelPages(): Promise<void> {
+    if (this.panelPages.step !== "running") return this.panelPages.done;
+    const limit = new Promise<void>((resolve) => setTimeout(resolve, CLOSE_CAP_MS + 500).unref());
+    const done: Promise<void> = Promise.race([Promise.resolve().then(() => this.panels.disposeAll()), limit])
+      .catch((error: unknown) => console.error("[tavora] closing the panels failed", error))
+      .then(() => void (this.panelPages = { step: "closed", done }));
+    this.panelPages = { step: "closing", done };
+    return done;
+  }
+
+  /** Resolves once pending writes are on disk, with everything still running (the cloud copy calls this before each sync). */
+  async saveAll(): Promise<void> {
+    await this.gameOverlays?.save();
+    await this.streaming?.save();
+    return this.savedData.flush();
+  }
+
+  /** Quitting: resolves once pending writes are on disk; keys go back to the system and the overlay server stops. */
   async flush(): Promise<void> {
+    // What is waiting goes to disk at once (an update's installer doesn't wait long), and again once the pages have saved.
+    await Promise.all([this.closePanelPages(), this.savedData.flush()]);
     await this.gameOverlays?.shutdown();
     await this.streaming?.shutdown();
     return this.savedData.flush();

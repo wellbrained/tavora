@@ -73,6 +73,7 @@ defineExpose({ startRename });
       )
     "
     :data-testid="`note-${entry.id}`"
+    :data-focus-row="entry.id"
     :data-selected="selected"
     @contextmenu.prevent="menuOpen = true"
   >

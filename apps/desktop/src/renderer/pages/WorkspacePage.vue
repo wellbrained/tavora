@@ -52,7 +52,10 @@ function info(instanceId: string): PanelInfo | undefined {
 // ── Where panels are ───────────────────────────────────────────────────
 
 const elements = new Map<string, HTMLElement>();
-const resizes = new ResizeObserver(() => reportSoon());
+const resizes = new ResizeObserver(() => {
+  reportSoon();
+  preview.dockChanged();
+});
 let dock: DockviewApi | null = null;
 let lastReport = "";
 let lastArea = "";
@@ -355,11 +358,13 @@ function endDrag() {
 // ── The drop preview ───────────────────────────────────────────────────
 
 // While a panel is dragged over the dock, dock-preview.ts shows where it lands and does the drop itself, through
-// dockview's own API. Dockview's overlays never show: its drop events do not get past the preview.
+// dockview's own API. Dockview's overlays never show: its drop events do not get past the preview. A panel moved with the
+// keyboard (Ctrl+M on its tab) goes the same way; the module views step aside for it as for a drag.
 const preview = new DockPreview(
   () => dock,
   () => root.value,
   info,
+  () => (dragging.value = "panel"),
   endDrag,
   () => !!state.value?.devBuild,
 );
@@ -382,6 +387,7 @@ function onReady({ api }: DockviewReadyEvent) {
   dock = api;
   restore(api);
   api.onDidLayoutChange(() => {
+    preview.dockChanged();
     // Sizes changed, so what each group may be dragged to next changed too.
     updateConstraints(api);
     refreshColumns();
@@ -507,6 +513,8 @@ const emptySlot = EmptySlot as unknown as VueComponent;
         </Button>
       </div>
       <DockPreviewLayer v-if="preview.view.value" :preview="preview.view.value" />
+      <!-- A panel moved with the keyboard: where it would land, read out. -->
+      <div class="sr-only" role="status" aria-live="polite" data-testid="dock-move-status">{{ preview.said.value }}</div>
       <!-- The workspace just opened: one plain card over the dock until every panel has its data. The host's cover lies over it
            until every panel has drawn, and shows the fire when opening takes long (panel-cover.ts). -->
       <div v-if="view.opening" class="bg-background absolute inset-x-2 top-0 bottom-2 z-20 rounded-[10px] border" role="status" :aria-label="t('panel.loading', { name: workspace?.name ?? '' })" data-testid="workspace-loading"></div>

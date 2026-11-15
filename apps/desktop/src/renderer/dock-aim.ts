@@ -66,3 +66,87 @@ export function aimAt(aim: Aim, x: number, y: number): DropTarget | null {
 
 /** Whether two targets are the same aim, so nothing needs redoing. */
 export const sameTarget = (a: DropTarget | null, b: DropTarget | null): boolean => JSON.stringify(a) === JSON.stringify(b);
+
+/** A place to aim at, and a point (in the dock's coordinates) that the pointer would aim there from. */
+export interface Spot {
+  target: DropTarget;
+  x: number;
+  y: number;
+}
+
+/**
+ * Every place a drag can aim at, for the keyboard: a point for each the pointer can reach, run through `aimAt` so each is
+ * exactly what the pointer would aim at there. In reading order: the dock's top and left edge, then each group (its tab
+ * slots, top, left, middle, right, bottom), then the dock's right and bottom edge.
+ */
+export function spots(aim: Aim): Spot[] {
+  const { width, height } = aim;
+  const found: Spot[] = [];
+  const add = (x: number, y: number) => {
+    const target = aimAt(aim, x, y);
+    if (target && !found.some((spot) => sameTarget(spot.target, target))) found.push({ target, x, y });
+  };
+  const rects = Object.values(aim.rects);
+  // A dock edge beside a tab strip is that strip's: try its middle, then beside each group's content.
+  const edge = (side: Side) => {
+    const near = OUTER_ZONE / 2;
+    const across = side === "left" || side === "right";
+    const along = [across ? height / 2 : width / 2, ...rects.map((rect) => (across ? rect.y + (rect.height + TAB_HEIGHT) / 2 : rect.x + rect.width / 2))];
+    for (const at of along) {
+      const x = side === "left" ? near : side === "right" ? width - near : at;
+      const y = side === "top" ? near : side === "bottom" ? height - near : at;
+      const target = aimAt(aim, x, y);
+      if (target?.kind === "edge" && target.side === side) {
+        add(x, y);
+        return;
+      }
+    }
+  };
+  edge("top");
+  edge("left");
+  const groups = Object.entries(aim.rects).sort(([, a], [, b]) => a.y - b.y || a.x - b.x);
+  for (const [group, rect] of groups) {
+    const strip = rect.y + TAB_HEIGHT / 2;
+    const middles = (aim.slots[group] ?? []).map((slot) => slot.left + slot.width / 2);
+    // Slot i lies between the middles of the tabs before and after it.
+    for (let index = 0; index <= middles.length; index++) {
+      const before = middles[index - 1] ?? rect.x;
+      const after = middles[index] ?? Math.max(before + 2, rect.x + rect.width - 2);
+      add((before + after) / 2, strip);
+    }
+    const top = rect.y + TAB_HEIGHT;
+    const content = rect.height - TAB_HEIGHT;
+    // Inside the edge zone, and past the dock's own edge strip where the zone has room for it (a narrow group at the dock's edge).
+    const inset = (size: number) => (size * EDGE_ZONE > OUTER_ZONE ? (OUTER_ZONE + size * EDGE_ZONE) / 2 : (size * EDGE_ZONE) / 2);
+    add(rect.x + rect.width / 2, top + inset(content));
+    add(rect.x + inset(rect.width), top + content / 2);
+    add(rect.x + rect.width / 2, top + content / 2);
+    add(rect.x + rect.width - inset(rect.width), top + content / 2);
+    add(rect.x + rect.width / 2, top + content - inset(content));
+  }
+  edge("right");
+  edge("bottom");
+  return found;
+}
+
+/**
+ * The spot an arrow key goes to from `from`: the nearest one that way, a spot straight ahead before one off to the
+ * side; null when there is none.
+ */
+export function stepToward(all: readonly Spot[], from: Spot, side: Side): Spot | null {
+  let best: Spot | null = null;
+  let bestScore = Infinity;
+  for (const spot of all) {
+    const dx = spot.x - from.x;
+    const dy = spot.y - from.y;
+    const ahead = side === "left" ? -dx : side === "right" ? dx : side === "top" ? -dy : dy;
+    const aside = Math.abs(side === "left" || side === "right" ? dy : dx);
+    if (ahead < 1) continue;
+    const score = ahead + 2 * aside;
+    if (score < bestScore) {
+      best = spot;
+      bestScore = score;
+    }
+  }
+  return best;
+}

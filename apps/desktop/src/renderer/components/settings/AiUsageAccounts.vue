@@ -5,6 +5,7 @@
 import { computed, ref } from "vue";
 import { SegmentedControl } from "@tavora/official-ui/components/ui/segmented-control";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { Field } from "@tavora/official-ui/components/ui/field";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import type { AiProvider, AiUsageAccount } from "../../../shared/host-api";
 import { act, aiUsage, confirmAction, submitAction } from "../../host";
@@ -89,14 +90,12 @@ function removeAccount(account: AiUsageAccount) {
         { value: 'codex', label: t('aiUsage.provider.codex'), testid: 'ai-usage-provider-codex' },
       ]"
     />
-    <label class="flex flex-col gap-1 text-sm">
-      <span class="font-medium">{{ t("aiUsage.settings.name") }}</span>
+    <Field :label="t('aiUsage.settings.name')">
       <Input v-model="name" maxlength="60" autocomplete="off" data-testid="ai-usage-name" />
-    </label>
-    <label class="flex flex-col gap-1 text-sm">
-      <span class="font-medium">{{ t("aiUsage.settings.folder") }}</span>
+    </Field>
+    <Field :label="t('aiUsage.settings.folder')">
       <Input v-model="folder" maxlength="500" autocomplete="off" spellcheck="false" :placeholder="folderExample" data-testid="ai-usage-folder" />
-    </label>
+    </Field>
     <p class="text-muted-foreground text-xs">{{ t("aiUsage.settings.removeNote") }}</p>
     <div class="flex justify-end gap-2">
       <Button type="button" variant="secondary" @click="editing = null">{{ t("aiUsage.settings.cancel") }}</Button>

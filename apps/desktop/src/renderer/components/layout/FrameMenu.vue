@@ -116,7 +116,7 @@ const copy = (to: string, mode: "replace" | "add") => send({ type: "copy-setup",
     <ContextMenuItem variant="destructive" data-testid="layout-menu-remove" @select="row('remove').run()">
       <component :is="row('remove').icon" :stroke-width="1.5" />
       <span class="min-w-0 flex-1 truncate">{{ row("remove").label }}</span>
-      <ContextMenuShortcut>Del</ContextMenuShortcut>
+      <ContextMenuShortcut>{{ t("common.deleteKey") }}</ContextMenuShortcut>
     </ContextMenuItem>
   </ContextMenuContent>
 </template>

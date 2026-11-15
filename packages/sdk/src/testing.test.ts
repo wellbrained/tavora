@@ -386,7 +386,6 @@ describe("workspace and ui", () => {
   it("answers the workspace, the viewport, the theme and the language, and tells about changes", async () => {
     const { sdk, host } = createMemoryHost({ workspace: { id: "poe2", displayName: "Path of Exile 2", kind: "game" }, language: "de", viewport: { width: 1, height: 2 } });
     expect(await sdk.workspace.getCurrent()).toEqual({ id: "poe2", displayName: "Path of Exile 2", kind: "game" });
-    expect(await sdk.game.getCurrent()).toEqual({ id: "poe2", displayName: "Path of Exile 2", kind: "game" });
     expect(await sdk.workspace.getViewport()).toEqual({ width: 1, height: 2 });
     expect(await sdk.ui.getLanguage()).toBe("de");
     expect((await sdk.ui.getTheme()).mode).toBe("dark");
@@ -407,11 +406,6 @@ describe("workspace and ui", () => {
     expect(languages.mock.calls).toEqual([["en"]]);
     expect(await sdk.ui.getLanguage()).toBe("en");
     expect(await sdk.workspace.getViewport()).toEqual({ width: 30, height: 40 });
-  });
-
-  it("answers game.getCurrent in the old words for a personal workspace", async () => {
-    const { sdk } = createMemoryHost();
-    expect(await sdk.game.getCurrent()).toMatchObject({ kind: "workspace" });
   });
 
   describe("anchors", () => {
@@ -836,12 +830,9 @@ describe("an older Tavora", () => {
     expect(host.calls["storage.compareAndSet"]).toHaveLength(1);
   });
 
-  it("asks workspace.getCurrent by the old name, in the new words", async () => {
-    const { sdk, host } = createMemoryHost({ version: "0.21.0", workspace: { id: "notes", displayName: "Notes", kind: "personal" } });
-    expect(await sdk.workspace.getCurrent()).toEqual({ id: "notes", displayName: "Notes", kind: "personal" });
-    host.setWorkspace({ id: "poe2", displayName: "Path of Exile 2", kind: "game" });
-    expect(await sdk.workspace.getCurrent()).toEqual({ id: "poe2", displayName: "Path of Exile 2", kind: "game" });
-    expect(host.calls["game.getCurrent"]).toHaveLength(2);
+  it("throws UNKNOWN_METHOD for workspace.getCurrent on a Tavora older than 0.21.43", async () => {
+    const { sdk } = createMemoryHost({ version: "0.21.42" });
+    await expect(sdk.workspace.getCurrent()).rejects.toMatchObject({ code: "UNKNOWN_METHOD" });
   });
 
   it("is by default the newest Tavora of every call the SDK has", async () => {

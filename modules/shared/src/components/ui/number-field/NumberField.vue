@@ -5,17 +5,20 @@
 import { Minus, Plus } from "@lucide/vue"
 import { NumberFieldDecrement, NumberFieldIncrement, NumberFieldInput, NumberFieldRoot } from "reka-ui"
 import type { HTMLAttributes } from "vue"
+import { ref, useAttrs } from "vue"
 import { cn } from "../../../lib/utils"
+import { useFieldControl } from "../field/use-field-control"
 import { uiLocale } from "../text"
 
+defineOptions({ inheritAttrs: false })
 const props = withDefaults(defineProps<{
   min?: number
   max?: number
   step?: number
   /** How the number is shown and read, such as `{ style: "percent" }`. It is typed and read in Tavora's language. */
   formatOptions?: Intl.NumberFormatOptions
-  /** Names the number for screen readers ("Quantity of Meat Wrap"). */
-  label: string
+  /** Names the number for screen readers ("Quantity of Meat Wrap"). Inside a Field with a label, leave it out. */
+  label?: string
   /** The buttons have no text; modules pass translated names. */
   decreaseLabel?: string
   increaseLabel?: string
@@ -23,12 +26,25 @@ const props = withDefaults(defineProps<{
   class?: HTMLAttributes["class"]
 }>(), { step: 1, decreaseLabel: "Decrease", increaseLabel: "Increase" })
 const model = defineModel<number>({ required: true })
+const input = ref<{ $el?: HTMLElement } | null>(null)
+const field = useFieldControl({ element: () => input.value?.$el, value: () => model.value })
+// What names, describes or marks the number goes on the box you type in; everything else on the frame around it.
+const ARIA = new Set(["aria-label", "aria-labelledby", "aria-describedby", "aria-invalid"])
+const attrs = useAttrs()
+function split() {
+  const frame: Record<string, unknown> = {}
+  const input: Record<string, unknown> = {}
+  for (const [name, value] of Object.entries(attrs)) (ARIA.has(name) ? input : frame)[name] = value
+  return { frame, input: { ...input, ...field.attrs() } }
+}
 </script>
 
 <template>
   <NumberFieldRoot
     v-model="model"
+    v-bind="split().frame"
     data-slot="number-field"
+    :id="field.id()"
     :min="min"
     :max="max"
     :step="step"
@@ -48,8 +64,10 @@ const model = defineModel<number>({ required: true })
       <Minus class="size-3.5" aria-hidden="true" />
     </NumberFieldDecrement>
     <NumberFieldInput
+      ref="input"
       data-slot="number-field-input"
       :aria-label="label"
+      v-bind="split().input"
       class="h-full w-12 min-w-0 bg-transparent text-center text-sm tabular-nums outline-none disabled:cursor-not-allowed"
     />
     <NumberFieldIncrement

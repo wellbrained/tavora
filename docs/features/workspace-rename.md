@@ -9,7 +9,7 @@ Status: done. The scope below is what was changed.
 - **User text**, English and German: rail, menus, onboarding, settings, dialogs.
 - **Code**: `GameEntry`, `GameWorkspace`, `lastGameId`, `gameEndWorkspace`, and every `gameId` that means the rail item (`workspaceId`). Roughly 800 hits in 60 files; each needs a call, because `gameId` also means real games (game watcher, Steam ids, a module's `games`).
 - **Saved data**: a one-time move on start renames the keys in `library.json` (`games`, `lastGameId`, `gameEndWorkspace`) and every rail-item `gameId` in the workspace, overlay and other data files. The old files are copied to a backup first. Older Tavora versions can't read the moved data; the patch note says so. Data folder paths don't change.
-- **SDK**: `tavora.workspace.getCurrent()` and the type `TavoraWorkspace`. The host keeps answering `game.getCurrent` (deprecated) until the 1.0 preparation, then it is removed. The manifest has `personalWorkspaces`; the old `workspaces` field is read until then too. Modules in `modules/` and `wellbrained/tavora-modules` move to the new name in the same step.
+- **SDK**: `tavora.workspace.getCurrent()` and the type `TavoraWorkspace`. `game.getCurrent` and the old manifest field `workspaces` were removed for 1.0 (SDK 0.4.0, module-schema 0.2.0): the manifest has `personalWorkspaces` only, and a manifest with `workspaces` is refused. Modules in `modules/` and `wellbrained/tavora-modules` move to the new name in the same step.
 - **Docs**: `apps/docs`, the glossary, `docs/features`.
 
 ## Stays

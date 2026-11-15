@@ -7,7 +7,8 @@ import { LIMITS } from "@tavora/sdk/protocol";
 import { isHotkey } from "../shared/hotkey-keys";
 import { ALL_GAMES } from "./game-overlays";
 import { SerialQueue, writeFileAtomic } from "./fsutil";
-import { readJsonOrSetAside } from "./json";
+import { readSavedFile } from "./json";
+import { SUPPORTED_VERSIONS } from "./saved-versions";
 
 export const HOTKEYS_FILE = "hotkeys.json";
 
@@ -25,7 +26,9 @@ export interface HotkeyRecord {
   accelerator: string;
 }
 
-type HotkeyFile = { version: 2; hotkeys: HotkeyRecord[] };
+const VERSION = SUPPORTED_VERSIONS[HOTKEYS_FILE];
+
+type HotkeyFile = { version: typeof VERSION; hotkeys: HotkeyRecord[] };
 
 const FIELDS = ["owner", "moduleId", "workspaceId", "action", "target", "label"] as const;
 
@@ -44,7 +47,7 @@ export class HotkeyStore {
 
   static async load(userData: string): Promise<HotkeyStore> {
     const file = path.join(userData, HOTKEYS_FILE);
-    const raw = await readJsonOrSetAside<Partial<HotkeyFile>>(file);
+    const raw = (await readSavedFile(file, { version: VERSION })) as Partial<HotkeyFile> | null;
     const records: HotkeyRecord[] = [];
     for (const entry of Array.isArray(raw?.hotkeys) ? raw.hotkeys : []) {
       if (typeof entry !== "object" || entry === null) continue;
@@ -103,7 +106,7 @@ export class HotkeyStore {
   }
 
   private save(): Promise<void> {
-    const text = `${JSON.stringify({ version: 2, hotkeys: this.records } satisfies HotkeyFile, null, 2)}\n`;
+    const text = `${JSON.stringify({ version: VERSION, hotkeys: this.records } satisfies HotkeyFile, null, 2)}\n`;
     return this.queue.run(() => writeFileAtomic(this.file, text)).catch((error: unknown) => console.error("[tavora] saving hotkeys failed", error));
   }
 }

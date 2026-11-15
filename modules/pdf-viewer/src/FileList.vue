@@ -6,12 +6,18 @@ import { ActionRow } from "@tavora/official-ui/components/ui/action-row";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
+import { useFocusRecovery } from "@tavora/official-ui";
+import { ref } from "vue";
 import type { FileEntry } from "./files";
 import { locale, t } from "./i18n";
 
 /** `located`: the files whose original Tavora can show in its folder (linked on this PC and not known to be gone). */
 defineProps<{ files: FileEntry[]; activeId: string | null; usage: string; located: ReadonlySet<string> }>();
 const emit = defineEmits<{ open: [id: string]; rename: [id: string]; remove: [id: string]; showInFolder: [id: string] }>();
+
+// A removed file hands the focus to the next one (or the one before, or the list), not to the page.
+const root = ref<HTMLElement | null>(null);
+useFocusRecovery(root);
 
 function meta(file: FileEntry): string {
   const kind = file.kind === "pdf" ? t("list.kindPdf") : t("list.kindImage");
@@ -21,11 +27,11 @@ function meta(file: FileEntry): string {
 </script>
 
 <template>
-  <div class="flex flex-col gap-2" data-testid="file-list">
+  <div ref="root" class="flex flex-col gap-2" data-testid="file-list">
     <h2 class="px-1 text-sm font-medium">{{ t("list.title") }}</h2>
     <EmptyState v-if="!files.length" :title="t('list.emptyTitle')" :description="t('list.empty')" data-testid="file-list-empty" />
     <ul v-else class="flex max-h-72 flex-col gap-1 overflow-y-auto px-1">
-      <li v-for="file in files" :key="file.id" class="flex items-center gap-1" :data-testid="`file-${file.id}`">
+      <li v-for="file in files" :key="file.id" class="flex items-center gap-1" :data-testid="`file-${file.id}`" :data-focus-row="file.id">
         <Button
           variant="ghost"
           class="h-auto min-w-0 flex-1 justify-start gap-3 p-2 font-normal"

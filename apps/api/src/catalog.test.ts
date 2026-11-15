@@ -21,8 +21,6 @@ interface Options {
   id?: string;
   version?: string;
   games?: string[];
-  /** The old name of personalWorkspaces. */
-  workspaces?: boolean;
   leaderboards?: { id: string; name: string; kind: "streak"; daily?: boolean }[];
   personalWorkspaces?: boolean;
   key?: KeyObject | null;
@@ -38,7 +36,7 @@ interface Options {
 }
 
 /** A module zip as tavora-pack makes it: manifest, page, optional changelog, and the signature. */
-function moduleZip({ id = "wellbrained.timer", version = "1.0.0", games = [], workspaces, personalWorkspaces, key = publisher, changelog, homepage, support, translations, readme, icon, screenshots = [], extra = [], leaderboards }: Options = {}): Buffer {
+function moduleZip({ id = "wellbrained.timer", version = "1.0.0", games = [], personalWorkspaces, key = publisher, changelog, homepage, support, translations, readme, icon, screenshots = [], extra = [], leaderboards }: Options = {}): Buffer {
   const manifest = {
     id,
     name: "Timer",
@@ -47,7 +45,6 @@ function moduleZip({ id = "wellbrained.timer", version = "1.0.0", games = [], wo
     apiVersion: "1",
     entry: "dist/index.html",
     games,
-    ...(workspaces === undefined ? {} : { workspaces }),
     ...(personalWorkspaces === undefined ? {} : { minTavora: "0.21.43", personalWorkspaces }),
     ...(changelog === undefined ? {} : { changelog: "changelog.json" }),
     ...(homepage === undefined ? {} : { homepage }),
@@ -140,7 +137,6 @@ describe("adding to the catalog", () => {
         minTavora: null,
         games: [],
         personalWorkspaces: true,
-        workspaces: true,
         permissions: { network: ["api.example.com"], connectors: [], folders: [] },
         owner: added.owner,
         zip: { sha256: added.sha256, size: zip.length },
@@ -258,15 +254,13 @@ describe("adding to the catalog", () => {
     const catalog = store();
     const any = catalog.add(moduleZip({ id: "wellbrained.notes" }));
     catalog.add(moduleZip({ id: "wellbrained.map", games: ["elden-ring"] }));
-    catalog.add(moduleZip({ id: "wellbrained.overlay", workspaces: false }));
     catalog.add(moduleZip({ id: "wellbrained.radar", personalWorkspaces: false }));
     const ids = (filter: Parameters<CatalogStore["index"]>[0]) => catalog.index(filter).map((entry) => entry.id);
-    expect(ids({})).toEqual(["wellbrained.map", "wellbrained.notes", "wellbrained.overlay", "wellbrained.radar"]);
-    expect(ids({ game: "elden-ring" })).toEqual(["wellbrained.map", "wellbrained.notes", "wellbrained.overlay", "wellbrained.radar"]);
-    expect(ids({ game: "satisfactory" })).toEqual(["wellbrained.notes", "wellbrained.overlay", "wellbrained.radar"]);
+    expect(ids({})).toEqual(["wellbrained.map", "wellbrained.notes", "wellbrained.radar"]);
+    expect(ids({ game: "elden-ring" })).toEqual(["wellbrained.map", "wellbrained.notes", "wellbrained.radar"]);
+    expect(ids({ game: "satisfactory" })).toEqual(["wellbrained.notes", "wellbrained.radar"]);
     expect(ids({ personal: true })).toEqual(["wellbrained.notes"]);
-    // Tavora 0.21.42 and older read the old name.
-    expect(catalog.index({}).map((entry) => [entry.id, entry.personalWorkspaces, entry.workspaces])).toContainEqual(["wellbrained.radar", false, false]);
+    expect(catalog.index({}).map((entry) => [entry.id, entry.personalWorkspaces])).toContainEqual(["wellbrained.radar", false]);
 
     expect(catalog.setListed("wellbrained.notes", false)).toBe(true);
     expect(ids({ personal: true })).toEqual([]);

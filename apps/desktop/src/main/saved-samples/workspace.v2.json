@@ -1,0 +1,85 @@
+{
+  "version": 2,
+  "games": {
+    "elden-ring": {
+      "instances": [
+        {
+          "instanceId": "aaaaaaaa-0000-4000-8000-000000000001",
+          "moduleId": "tavora.notes"
+        }
+      ],
+      "layout": {
+        "width": 1600,
+        "height": 900,
+        "direction": "row",
+        "root": {
+          "kind": "split",
+          "size": 1600,
+          "children": [
+            {
+              "kind": "group",
+              "size": 1600,
+              "panels": [
+                "aaaaaaaa-0000-4000-8000-000000000001"
+              ],
+              "active": "aaaaaaaa-0000-4000-8000-000000000001"
+            }
+          ]
+        }
+      },
+      "snapshots": [
+        {
+          "id": "cccccccc-0000-4000-8000-000000000001",
+          "name": "Boss",
+          "savedAt": "2026-10-20T10:00:00.000Z",
+          "layout": {
+            "width": 1600,
+            "height": 900,
+            "direction": "row",
+            "root": {
+              "kind": "split",
+              "size": 1600,
+              "children": [
+                {
+                  "kind": "group",
+                  "size": 1600,
+                  "panels": [
+                    "aaaaaaaa-0000-4000-8000-000000000001"
+                  ],
+                  "active": "aaaaaaaa-0000-4000-8000-000000000001"
+                }
+              ]
+            }
+          },
+          "modules": {
+            "aaaaaaaa-0000-4000-8000-000000000001": "tavora.notes"
+          }
+        }
+      ]
+    },
+    "local-personal": {
+      "instances": [
+        {
+          "instanceId": "aaaaaaaa-0000-4000-8000-000000000003",
+          "moduleId": "tavora.whiteboard"
+        },
+        {
+          "instanceId": "aaaaaaaa-0000-4000-8000-000000000002",
+          "moduleId": "tavora.todos"
+        }
+      ],
+      "layout": null,
+      "snapshots": []
+    },
+    "local-my-mod": {
+      "instances": [],
+      "layout": null,
+      "snapshots": []
+    },
+    "satisfactory": {
+      "instances": [],
+      "layout": null,
+      "snapshots": []
+    }
+  }
+}

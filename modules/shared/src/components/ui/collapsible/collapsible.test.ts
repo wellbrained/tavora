@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest"
 import { createApp, defineComponent, h, type App } from "vue"
+import { ariaProblems, focusLostAfter } from "../../../testing"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "."
 
 // The motion lives in CSS (motion.css); these tests cover what the component hands it: nothing plays before the first
@@ -96,5 +97,20 @@ describe("CollapsibleContent", () => {
     await toggle()
     await endAnimation("something-else")
     expect(content().hasAttribute("data-shut")).toBe(false)
+  })
+})
+
+describe("CollapsibleTrigger", () => {
+  it("names only content that is there, open or closed, and keeps the focus when it toggles", async () => {
+    const section = mount({})
+    await wait()
+    expect(ariaProblems(document.body)).toEqual([])
+    const trigger = document.querySelector<HTMLElement>("[data-testid=trigger]")!
+    trigger.focus()
+    expect(await focusLostAfter(section.toggle)).toEqual([])
+    expect(trigger.getAttribute("aria-controls")).toBe(section.content().id)
+    expect(ariaProblems(document.body)).toEqual([])
+    expect(await focusLostAfter(section.toggle)).toEqual([])
+    expect(ariaProblems(document.body)).toEqual([])
   })
 })

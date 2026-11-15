@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "months": [
+    {
+      "month": "2026-10",
+      "downBytes": 52000000000,
+      "upBytes": 4100000000,
+      "countedFrom": 1759276800000
+    }
+  ]
+}

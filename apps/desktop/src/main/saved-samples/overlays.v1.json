@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "links": [
+    {
+      "token": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "owner": "official",
+      "moduleId": "tavora.clock-counter",
+      "gameId": "elden-ring",
+      "key": "deaths",
+      "state": {
+        "count": 12
+      }
+    }
+  ]
+}

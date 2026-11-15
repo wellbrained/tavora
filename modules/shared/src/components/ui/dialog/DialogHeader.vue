@@ -3,12 +3,10 @@
 // kit's header: an optional icon box, the title with an optional one-line description under it, and the close X
 // on the right, all centred against each other. Anything in the default slot goes under the description.
 import type { Component, HTMLAttributes } from "vue"
-import { X } from "@lucide/vue"
-import { DialogClose } from "reka-ui"
 import { inject, onBeforeUnmount, watchEffect } from "vue"
 import { cn } from "../../../lib/utils"
-import { uiText } from "../text"
 import { dialogChromeKey, dialogCloseClass } from "./chrome"
+import DialogCloseX from "./DialogCloseX.vue"
 import DialogDescription from "./DialogDescription.vue"
 import DialogTitle from "./DialogTitle.vue"
 
@@ -57,9 +55,6 @@ onBeforeUnmount(() => {
       <DialogDescription v-if="description">{{ description }}</DialogDescription>
       <slot />
     </div>
-    <DialogClose v-if="chrome?.showClose.value" data-slot="dialog-close" :class="dialogCloseClass">
-      <X :stroke-width="1.5" />
-      <span class="sr-only">{{ uiText.close }}</span>
-    </DialogClose>
+    <DialogCloseX v-if="chrome?.showClose.value" :class="dialogCloseClass" />
   </div>
 </template>

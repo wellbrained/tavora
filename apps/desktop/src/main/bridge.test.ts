@@ -152,14 +152,14 @@ describe("handshake", () => {
       ok: false,
       error: { code: "INCOMPATIBLE", supported: [1] },
     });
-    expect(await call(p, "game.getCurrent")).toMatchObject({ ok: false, error: { code: "BAD_REQUEST" } });
+    expect(await call(p, "workspace.getCurrent")).toMatchObject({ ok: false, error: { code: "BAD_REQUEST" } });
   });
 
   it("refuses other calls and events before the handshake", async () => {
     const p = new FakePort();
     const session = new BridgeSession(p, context);
     session.emit("workspace.resize", { width: 1, height: 1 });
-    expect(await call(p, "game.getCurrent")).toMatchObject({ ok: false, error: { code: "BAD_REQUEST" } });
+    expect(await call(p, "workspace.getCurrent")).toMatchObject({ ok: false, error: { code: "BAD_REQUEST" } });
     expect(p.sent.some((m) => "event" in (m as object))).toBe(false);
   });
 
@@ -204,12 +204,10 @@ describe("identity", () => {
     });
   });
 
-  it("still answers game.getCurrent in the words of Tavora before the workspace names", async () => {
-    expect(await call(port, "game.getCurrent")).toMatchObject({ ok: true, result: { id: "poe2", displayName: "Path of Exile 2", kind: "game" } });
-    expect(await call(port, "game.getCurrent", { gameId: "satisfactory" })).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+  it("answers a personal workspace as personal, and no longer knows game.getCurrent", async () => {
     const personal = await connected({ ...makeContext(OTHER_INSTANCE), workspace: { id: "local-notes", displayName: "Notes", kind: "personal" }, data: registry.get("local", "local.example.a", "local-notes") });
-    expect(await call(personal, "game.getCurrent")).toMatchObject({ ok: true, result: { id: "local-notes", displayName: "Notes", kind: "workspace" } });
     expect(await call(personal, "workspace.getCurrent")).toMatchObject({ ok: true, result: { id: "local-notes", displayName: "Notes", kind: "personal" } });
+    expect(await call(port, "game.getCurrent")).toMatchObject({ ok: false, error: { code: "UNKNOWN_METHOD" } });
   });
 
   it("reads and writes only the bound settings", async () => {
@@ -460,7 +458,7 @@ describe("denied and malformed calls", () => {
   });
 
   it("rejects other protocol versions and lists the supported one", async () => {
-    expect(await call(port, "game.getCurrent", undefined, 0)).toMatchObject({
+    expect(await call(port, "workspace.getCurrent", undefined, 0)).toMatchObject({
       ok: false,
       error: { code: "BAD_REQUEST", supported: [1] },
     });
@@ -468,7 +466,7 @@ describe("denied and malformed calls", () => {
 
   it("ignores messages it cannot answer", async () => {
     const before = port.sent.length;
-    for (const data of [null, "hello", 42, { v: 1, method: "game.getCurrent" }, { v: 1, id: -1 }, { v: 1, id: 1.5 }]) {
+    for (const data of [null, "hello", 42, { v: 1, method: "workspace.getCurrent" }, { v: 1, id: -1 }, { v: 1, id: 1.5 }]) {
       port.receive(data);
     }
     await flush();
@@ -477,7 +475,7 @@ describe("denied and malformed calls", () => {
 
   it("closes ports a module tries to hand to the host", () => {
     const extra = { close: vi.fn() };
-    port.receive({ v: 1, id: 99, method: "game.getCurrent" }, [extra]);
+    port.receive({ v: 1, id: 99, method: "workspace.getCurrent" }, [extra]);
     expect(extra.close).toHaveBeenCalled();
   });
 
@@ -524,7 +522,7 @@ describe("onBusy", () => {
       [false, 0],
     ]);
     events.length = 0;
-    await call(p, "game.getCurrent");
+    await call(p, "workspace.getCurrent");
     expect(events).toEqual([
       [true, 0],
       [false, 1],
@@ -1116,4 +1114,33 @@ describe("shared tooltips",()=>{
   expect(await call(p,"ui.tooltip.defineSkin",{name:"broken",skin:{font:"dist/a.woff2"}})).toMatchObject({ok:false,error:{code:"INVALID_PARAMS",message:"ui.tooltip.defineSkin: font isn't a WOFF2 font"}});
   expect(skins).toHaveLength(1);
  });
+});
+
+describe("a panel that closes", () => {
+  it("still answers its saves, and nothing else", async () => {
+    const opened: unknown[] = [];
+    const p = new FakePort();
+    const session = new BridgeSession(p, { ...makeContext(), showMenu: (menu) => (opened.push(menu), Promise.resolve(null)) });
+    expect(await call(p, "bridge.handshake", { protocol: 1, sdkVersion: "0.1.0" })).toMatchObject({ ok: true });
+    session.closing();
+    expect(await call(p, "storage.set", { key: "note", value: "last words" })).toMatchObject({ ok: true });
+    expect(await call(p, "storage.get", { key: "note" })).toMatchObject({ ok: true, result: "last words" });
+    expect(await call(p, "documents.put", { title: "Note", data: { text: "hi" } })).toMatchObject({ ok: true });
+    expect(await call(p, "panel.setState", { value: { scroll: 3 } })).toMatchObject({ ok: true });
+    expect(await call(p, "ui.showMenu", { items: [{ id: "a", label: "A" }] })).toMatchObject({ ok: false, error: { code: "BAD_REQUEST" } });
+    expect(await call(p, "panels.open", { type: "x" })).toMatchObject({ ok: false, error: { code: "BAD_REQUEST" } });
+    expect(opened).toEqual([]);
+    // Until the host closes the port.
+    session.close();
+    expect(p.closed).toBe(true);
+    expect(session.ready).toBe(false);
+  });
+
+  it("says whether requests are still running", async () => {
+    const p = new FakePort();
+    const session = new BridgeSession(p, makeContext());
+    expect(session.busy).toBe(false);
+    expect(await call(p, "bridge.handshake", { protocol: 1, sdkVersion: "0.1.0" })).toMatchObject({ ok: true });
+    expect(session.busy).toBe(false);
+  });
 });

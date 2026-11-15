@@ -1,0 +1,71 @@
+{
+  "version": 5,
+  "exclusiveHintShown": false,
+  "layout": {
+    "grid": "normal",
+    "seen": {},
+    "toolbar": {
+      "show": true,
+      "buttons": [
+        "settings",
+        "hide",
+        "reset",
+        "reset-size",
+        "remove"
+      ]
+    }
+  },
+  "setups": [
+    {
+      "id": "$everywhere",
+      "overlays": [],
+      "panels": []
+    },
+    {
+      "id": "$all",
+      "overlays": [],
+      "panels": []
+    },
+    {
+      "id": "poe2",
+      "overlays": [
+        {
+          "owner": "official",
+          "moduleId": "tavora.clock-counter",
+          "workspaceId": "poe2",
+          "key": "deaths",
+          "mode": "always",
+          "opacity": 100,
+          "hideFromCapture": false,
+          "anchor": {
+            "h": "left",
+            "v": "top",
+            "x": 0.036,
+            "y": 0.03,
+            "width": 0.356,
+            "height": 0.16
+          }
+        }
+      ],
+      "panels": [
+        {
+          "owner": "official",
+          "moduleId": "tavora.notes",
+          "workspaceId": "poe2",
+          "instanceId": "11111111-1111-4111-8111-111111111111",
+          "mode": "always",
+          "opacity": 100,
+          "hideFromCapture": false,
+          "anchor": {
+            "h": "left",
+            "v": "top",
+            "x": 0.036,
+            "y": 0.45000000000000007,
+            "width": 0.39,
+            "height": 0.4
+          }
+        }
+      ]
+    }
+  ]
+}

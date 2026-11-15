@@ -19,8 +19,9 @@ import SearchDialog from "./components/SearchDialog.vue";
 import ShareIconsDialog from "./components/ShareIconsDialog.vue";
 import SettingsDialog from "./components/settings/SettingsDialog.vue";
 import InboxDialogs from "./components/messages/InboxDialogs.vue";
-import { computed, defineAsyncComponent, onMounted } from "vue";
-import { api, dialog, pairing, publish, settingsOpen, state, trialWelcome } from "./host";
+import { computed, defineAsyncComponent, onMounted, watch } from "vue";
+import { api, dialog, pairing, publish, settingsOpen, showToast, state, trialWelcome } from "./host";
+import { t } from "./i18n";
 import { Toaster } from "@tavora/official-ui/components/ui/toast";
 import { bridgeToasts, toastsFallback } from "./toast-bridge";
 import OverlayPage from "./pages/OverlayPage.vue";
@@ -52,6 +53,15 @@ bridgeToasts(api.toasts);
 // Only if that page is down for good (main/toast-view.ts): then this page draws them, as it did before. Module panels are native
 // views above this page, so at the top, over the toolbar, is where they stay in sight; while Settings covers the panels, where the user put them.
 const fallbackPosition = computed(() => (settingsOpen.value && state.value ? state.value.library.toasts : "top-center"));
+
+// Saved data that couldn't be opened was set aside and kept (main/json.ts readSavedFile): say so each time more is.
+watch(
+  () => state.value?.keptAside ?? 0,
+  (count, before) => {
+    if (count > (before ?? 0)) showToast(t("savedData.keptAside"));
+  },
+  { immediate: true },
+);
 </script>
 
 <template>

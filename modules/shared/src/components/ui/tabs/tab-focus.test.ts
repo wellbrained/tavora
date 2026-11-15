@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { createApp, h, type App } from "vue"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "."
+import { ariaProblems } from "../../../testing"
 import { buttonVariants } from "../button"
 
 let app: App | undefined
@@ -57,5 +58,23 @@ describe("focus ring timing", () => {
     expect(classes).toContain("focus-visible:ring-ring/50")
     expect(classes).toContain("box-shadow")
     expect(classes).toContain("duration-(--duration-press)")
+  })
+})
+
+describe("tab list pattern", () => {
+  it("is one Tab stop, and each tab names a panel that is there", async () => {
+    const root = document.createElement("div")
+    document.body.append(root)
+    app = createApp({
+      render: () =>
+        h(Tabs, { defaultValue: "a" }, () => [
+          h(TabsList, () => ["a", "b", "c"].map((value) => h(TabsTrigger, { value }, () => value.toUpperCase()))),
+          ...["a", "b", "c"].map((value) => h(TabsContent, { value }, () => `Panel ${value}`)),
+        ]),
+    })
+    app.mount(root)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(root.querySelectorAll("[role=tab]")).toHaveLength(3)
+    expect(ariaProblems(root)).toEqual([])
   })
 })

@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.2.20",
+    "date": "2026-11-14",
+    "notes": [
+      "Deleting a to-do or a group moves the focus to the next one in the same place; Undo gives it back."
+    ]
+  },
+  {
     "version": "0.2.19",
     "date": "2026-11-05",
     "notes": [

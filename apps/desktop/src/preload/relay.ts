@@ -20,7 +20,8 @@ export interface RelayPort {
 /** What may wait for an answer at once, in bytes: two largest messages. */
 export const MAX_PENDING_BYTES = 2 * LIMITS.maxMessageBytes;
 
-export function relayBridge(host: RelayPort, page: RelayPort): void {
+/** `relayed` hears the name of each event the host sends, once it is passed on to the page. */
+export function relayBridge(host: RelayPort, page: RelayPort, relayed?: (event: string) => void): void {
   /** Requests passed on and not answered yet, with their sizes. */
   const pending = new Map<number, number>();
   let pendingBytes = 0;
@@ -35,6 +36,8 @@ export function relayBridge(host: RelayPort, page: RelayPort): void {
       }
     }
     page.postMessage(event.data);
+    const name = (event.data as { event?: unknown } | null)?.event;
+    if (typeof name === "string") relayed?.(name);
   });
 
   page.addEventListener("message", (event) => {

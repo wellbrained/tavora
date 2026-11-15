@@ -1,12 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isPanelTypeId } from "@tavora/module-schema";
 import { INSTANCE_ID } from "./ids";
+import { readSavedFile, unknownFields } from "./json";
 import { UserError } from "./messages";
 import { gridTemplate, type LayoutTemplate } from "../shared/layout-templates";
-import { LAYOUT_LIMITS, layoutPanels, parseLayout, pruneLayout, templateLayout, vacateLayout, type SavedLayout } from "./layout";
+import { LAYOUT_LIMITS, layoutPanels, parseSavedLayout, pruneLayout, templateLayout, vacateLayout, type SavedLayout } from "./layout";
 import { checkPanelContent, type PanelContent } from "./panel-content";
+import { SUPPORTED_VERSIONS } from "./saved-versions";
 
 export { INSTANCE_ID } from "./ids";
 
@@ -75,6 +77,12 @@ export function emptyWorkspace(): Workspace {
   return { instances: [], layout: null, snapshots: [] };
 }
 
+// The fields this Tavora knows, per record. The rest (a newer Tavora's) are kept as they were and written back.
+const STATE_FIELDS = Object.keys({ version: true, workspaces: true } satisfies Record<keyof WorkspaceState, true>);
+const WORKSPACE_FIELDS = Object.keys({ instances: true, layout: true, snapshots: true } satisfies Record<keyof Workspace, true>);
+const INSTANCE_FIELDS = Object.keys({ instanceId: true, moduleId: true, panelType: true, content: true } satisfies Record<keyof InstanceRecord, true>);
+const SNAPSHOT_FIELDS = Object.keys({ id: true, name: true, savedAt: true, layout: true, modules: true, panelTypes: true } satisfies Record<keyof Snapshot, true>);
+
 export function emptyWorkspaces(workspaceIds: readonly string[]): WorkspaceState {
   return { version: 3, workspaces: Object.fromEntries(workspaceIds.map((id) => [id, emptyWorkspace()])) };
 }
@@ -92,21 +100,24 @@ function parseSnapshot(raw: unknown, isInstalled: (moduleId: string) => boolean)
   for (const [slot, moduleId] of Object.entries(raw.modules)) {
     if (typeof moduleId === "string" && isInstalled(moduleId)) modules[slot] = moduleId;
   }
-  const layout = pruneLayout(parseLayout(raw.layout), (slot) => slot in modules);
+  const layout = pruneLayout(parseSavedLayout(raw.layout), (slot) => slot in modules);
   if (!layout) return null;
   for (const slot of Object.keys(modules)) if (!layoutPanels(layout).includes(slot)) delete modules[slot];
   const panelTypes: Record<string, string> = {};
   if (isRecord(raw.panelTypes)) {
     for (const [slot, type] of Object.entries(raw.panelTypes)) if (slot in modules && isPanelTypeId(type)) panelTypes[slot] = type;
   }
-  return { id, name, savedAt, layout, modules, ...(Object.keys(panelTypes).length ? { panelTypes } : {}) };
+  return { ...unknownFields(raw, SNAPSHOT_FIELDS), id, name, savedAt, layout, modules, ...(Object.keys(panelTypes).length ? { panelTypes } : {}) };
 }
 
 /**
  * Reads the saved workspace, keeping only workspaces in the library (Trash
- * included) and modules that are still installed. A missing or unreadable
- * file gives empty workspaces. Version 1 files (panels without a layout)
- * are read as they are; the host UI places their panels.
+ * included) and modules that are still installed. A missing file gives empty
+ * workspaces; an unreadable one is set aside first, and one a newer Tavora
+ * wrote is copied aside (json.ts readSavedFile). Version 1 files (panels
+ * without a layout) are read as they are; the host UI places their panels.
+ * Fields this Tavora doesn't know, at the top, on a workspace, a panel or a
+ * snapshot, are kept as they were and saved again (a newer Tavora's).
  */
 export async function loadWorkspace(
   file: string,
@@ -114,12 +125,8 @@ export async function loadWorkspace(
   isInstalled: (moduleId: string) => boolean,
 ): Promise<WorkspaceState> {
   const state = emptyWorkspaces(workspaceIds);
-  let saved: { workspaces?: Record<string, Partial<Record<keyof Workspace, unknown>>> };
-  try {
-    saved = JSON.parse(await readFile(file, "utf8")) as typeof saved;
-  } catch {
-    return state;
-  }
+  const saved = (await readSavedFile(file, { version: SUPPORTED_VERSIONS["workspace.json"] })) as { workspaces?: Record<string, Partial<Record<keyof Workspace, unknown>>> } | null;
+  if (!saved) return state;
   for (const workspaceId of workspaceIds) {
     const workspace = saved.workspaces?.[workspaceId];
     if (!isRecord(workspace)) continue;
@@ -131,9 +138,10 @@ export async function loadWorkspace(
           typeof record.moduleId === "string" &&
           isInstalled(record.moduleId),
       )
-      .map(({ instanceId, moduleId, panelType, content }): InstanceRecord => {
+      .map((record): InstanceRecord => {
+        const { instanceId, moduleId, panelType, content } = record;
         const checked = checkPanelContent(content);
-        return { instanceId, moduleId, ...(isPanelTypeId(panelType) ? { panelType } : {}), ...(checked ? { content: checked } : {}) };
+        return { ...unknownFields(record, INSTANCE_FIELDS), instanceId, moduleId, ...(isPanelTypeId(panelType) ? { panelType } : {}), ...(checked ? { content: checked } : {}) };
       });
     const open = new Set(instances.map((record) => record.instanceId));
     const snapshots = (Array.isArray(workspace.snapshots) ? workspace.snapshots : [])
@@ -141,12 +149,13 @@ export async function loadWorkspace(
       .filter((snapshot): snapshot is Snapshot => snapshot !== null)
       .slice(0, MAX_SNAPSHOTS);
     state.workspaces[workspaceId] = {
+      ...unknownFields(workspace, WORKSPACE_FIELDS),
       instances,
-      layout: pruneLayout(parseLayout(workspace.layout), (id) => open.has(id)),
+      layout: pruneLayout(parseSavedLayout(workspace.layout), (id) => open.has(id)),
       snapshots,
     };
   }
-  return state;
+  return { ...unknownFields(saved, STATE_FIELDS), ...state };
 }
 
 /** A module's panel types as the workspace needs them: their ids, and the one older panels become. */
