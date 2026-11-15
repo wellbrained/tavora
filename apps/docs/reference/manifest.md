@@ -259,5 +259,5 @@ Any other game goes by the id Tavora's game search gives it, such as `9-kings`. 
 
 ## What is not in v1 yet
 
-- Permissions other than `network`, `connectors`, `folders`, `onRequest` and `webAssembly`. `sharedData`, `files` and `clipboard` arrive with their capabilities (see [Capabilities](./protocol.md#capabilities)).
+- Permissions other than `network`, `connectors`, `folders`, `onRequest` and `webAssembly`. `sharedData` arrives with its capability; the file and clipboard calls that exist need no permission (see [Capabilities](./protocol.md#capabilities)).
 - Author and license. These belong to the catalog listing, not to what the desktop host needs to run a module.

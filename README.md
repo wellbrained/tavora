@@ -10,7 +10,7 @@ Tavora is a local-first gaming companion for your second monitor. Keep notes, to
 
 *A Satisfactory workspace with sample notes and a factory checklist. The screenshots below use an isolated demo profile.*
 
-> **Windows only:** Tavora runs on Windows 10 and 11. There are no Linux or macOS builds; they may come later if people ask for them. Module APIs are stable from 1.0: the bridge protocol is v1, it only gets additions, and anything is removed only in a major version (see [Build a module](#build-a-module)).
+> **Windows only:** Tavora runs on Windows 10 and 11. There are no Linux or macOS builds; they may come later if people ask for them. Module APIs are stable from 1.0: the bridge protocol is v1, new things are only added, and anything that has to go is deprecated first and removed only in a major version (see [Build a module](#build-a-module)).
 
 ## What you can do
 
