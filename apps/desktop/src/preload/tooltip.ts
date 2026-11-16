@@ -282,3 +282,5 @@ ipcRenderer.on("tooltip:skin-drop", (_event, ids: number[]) => { for (const id o
     skins.delete(id); });
 ipcRenderer.on("tooltip:render", (_event, data: Data) => render(data));
 window.addEventListener("DOMContentLoaded", () => ipcRenderer.send("tooltip:ready"));
+// The interface font comes in its own stylesheet; text measured before its files were in is measured again.
+document.fonts?.addEventListener("loadingdone", () => measure());

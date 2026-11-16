@@ -73,7 +73,7 @@ import type { Shell } from "./shell";
 
 /** The part of a game overlay's window the service drives (a test stands in for Electron). */
 export type OverlayWindow = Pick<GameOverlayWindow, "setRect" | "setShown" | "setArranging" | "setHideFromCapture" | "setOpacity" | "destroy" | "dragging"> &
-  Partial<Pick<GameOverlayWindow, "focused" | "focusPanel" | "raise" | "setZoom">>;
+  Partial<Pick<GameOverlayWindow, "focused" | "focusPanel" | "raise" | "setZoom" | "refreshFont">>;
 
 /** Which overlay or panel an item of the Overlay layout is. */
 export type LayoutItemRef = ItemRef;
@@ -297,6 +297,11 @@ type Placed<T> = { setup: string; item: T };
 export class GameOverlays {
   private layoutPort: LayoutPort | undefined;
   private readonly open = new Map<string, Open>();
+
+  /** The user picked another interface font: the frames take it. */
+  refreshFonts(): void {
+    for (const open of this.open.values()) open.window.refreshFont?.();
+  }
   private readonly toggled = new Set<string>();
   /** The windows shown and their stacking places at the last look; they are raised again when it changes. */
   private stackKey = "";

@@ -109,7 +109,7 @@ import {
   type WorkspaceIcon,
   type Library,
 } from "./library";
-import { fontCss } from "./module-fonts";
+import { fontStylesheet } from "./module-fonts";
 import { uiFont } from "./ui-fonts";
 import { moduleBaseCss } from "./module-style";
 import { backupData, backupsDir } from "./backup";
@@ -641,7 +641,7 @@ export class Host {
     this.systemInfo = prepared.systemInfo;
     this.openTimes = prepared.openTimes;
     this.emblem = prepared.emblem;
-    this.currentTheme = moduleTheme(withRadius(resolveTheme(themes, library.theme, library.followSystem ? Host.systemMode(options) : undefined).variation, library.radius), library.toasts, uiFont(undefined));
+    this.currentTheme = moduleTheme(withRadius(resolveTheme(themes, library.theme, library.followSystem ? Host.systemMode(options) : undefined).variation, library.radius), library.toasts);
     this.files = new ModuleFilesFolder({
       userData: options.userData,
       defaultFolder: options.picturesFolder ?? defaultFilesRoot(options.userData),
@@ -786,7 +786,7 @@ export class Host {
         return{root:module.root,module:view.moduleId,name:this.shown(module.manifest).name,bounds};
       }});
     this.watchShortcuts(this.window.webContents);
-    this.cover = new PanelCover({ parent: this.window.contentView, emblem: () => this.emblem, fontCss: (theme) => fontCss(theme.font) });
+    this.cover = new PanelCover({ parent: this.window.contentView, emblem: () => this.emblem, fontCss: (theme) => fontStylesheet(theme.font) });
     // Whatever is added to the window later (panels, the opening cover, the Overlay page) goes below the toasts.
     this.toastView = new ToastView({
       window: this.window,
@@ -1801,7 +1801,7 @@ export class Host {
 
   /** Shows the theme the library names, in the host window, native controls and every open module. */
   private applyTheme(): void {
-    const next = moduleTheme(withRadius(this.currentChoice().variation, this.library.radius), this.library.toasts, uiFont(undefined));
+    const next = moduleTheme(withRadius(this.currentChoice().variation, this.library.radius), this.library.toasts);
     if (JSON.stringify(next) === JSON.stringify(this.currentTheme)) {
       this.syncNativeTheme();
       return;
@@ -1812,6 +1812,9 @@ export class Host {
     this.applyTitleBarOverlay();
     this.toastView.refresh();
     for (const view of this.nativePanels()) view.applyTheme(next);
+    // Each keeps its font when it is the same (InsertedCss), so only a new font costs a swap.
+    this.gameOverlays?.refreshFonts();
+    this.previews?.refreshFonts();
   }
 
   private async reloadThemes(): Promise<void> {
@@ -3961,7 +3964,7 @@ export class Host {
       getTheme: () => this.currentTheme,
       getLanguage: () => this.language,
       baseCss: MODULE_CSS,
-      fontCss: (theme) => fontCss(theme.font),
+      fontCss: (theme) => fontStylesheet(theme.font),
       ...(this.options.moduleStorageLimit === undefined ? {} : { storageLimit: this.options.moduleStorageLimit }),
       onStorageOver: () => {
         // A page closed while it was measured needs no clearing.
@@ -4532,7 +4535,7 @@ export class Host {
       layoutRequested: request.layoutRequested,
       ended: request.ended,
       frameText: request.frameText,
-      fontCss: () => fontCss(this.currentTheme.font),
+      fontCss: () => fontStylesheet(this.currentTheme.font),
       ...(panel ? { panel } : {}),
     });
   }
@@ -5388,7 +5391,7 @@ export class Host {
           this.pushStateSoon();
         },
         overGameChanged: (changed) => this.tellOverGameChanged(changed),
-        fontCss: () => fontCss(this.currentTheme.font),
+        fontCss: () => fontStylesheet(this.currentTheme.font),
         saveLibrary: () => this.saveLibrary(),
         workspaceId: () => this.workspaceId,
         askConnector: (moduleId, connector) => this.askConnector(moduleId, connector),

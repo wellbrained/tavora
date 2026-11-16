@@ -9,6 +9,7 @@ import { GAME_OVERLAY_SCHEME } from "./assets";
 import { GAME_OVERLAY_ORIGIN, serveGameOverlay } from "./game-overlay-page";
 import type { PreviewRequest, PreviewWindow } from "./overlay-previews";
 import { lockContents, lockedSession } from "./game-overlay-window";
+import { InsertedCss } from "./inserted-css";
 
 export const PREVIEW_BACKGROUNDS = ["dark", "light", "checker"] as const;
 export type PreviewBackground = (typeof PREVIEW_BACKGROUNDS)[number];
@@ -43,10 +44,12 @@ export class OverlayPreviewWindow implements PreviewWindow {
   private readonly chrome: WebContentsView;
   private readonly page: WebContentsView;
   private destroyed = false;
+  /** The interface font in the footer, swapped when the user picks another. */
+  private readonly chromeFont = new InsertedCss(() => this.chrome.webContents);
 
   constructor(
     request: PreviewRequest,
-    options: { hidden: boolean; labels: Record<PreviewBackground, string>; /** The interface font's stylesheet for the footer. */ fontCss?: string },
+    private readonly options: { hidden: boolean; labels: Record<PreviewBackground, string>; /** The interface font's stylesheet for the footer. */ fontCss?: () => string },
   ) {
     const name = createHash("sha256").update(request.id).digest("hex").slice(0, 32);
     const pageSession = lockedSession(`overlay-preview-${name}`, (url) => url.startsWith(`${GAME_OVERLAY_ORIGIN}/`));
@@ -78,8 +81,10 @@ export class OverlayPreviewWindow implements PreviewWindow {
     this.window.contentView.addChildView(this.page);
     this.layout();
     this.window.on("resize", () => this.layout());
-    const fontCss = options.fontCss;
-    if (fontCss) this.chrome.webContents.on("did-finish-load", () => void this.chrome.webContents.insertCSS(fontCss, { cssOrigin: "user" }).catch(() => {}));
+    this.chrome.webContents.on("did-finish-load", () => {
+      this.chromeFont.forget();
+      this.refreshFont();
+    });
     void this.chrome.webContents.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(previewChromeDocument(options.labels))}`).catch(() => {});
     void this.page.webContents.loadURL(`${GAME_OVERLAY_ORIGIN}/`).catch(() => {});
     this.window.once("closed", () => {
@@ -96,6 +101,12 @@ export class OverlayPreviewWindow implements PreviewWindow {
     const above = Math.max(1, height - PREVIEW_FOOTER);
     this.chrome.setBounds({ x: 0, y: 0, width, height });
     this.page.setBounds({ x: 0, y: 0, width, height: above });
+  }
+
+  /** Puts the interface font the user has now into the footer; the same font again changes nothing. */
+  refreshFont(): void {
+    const css = this.options.fontCss?.();
+    if (css && !this.destroyed) void this.chromeFont.replace(css);
   }
 
   focus(): void {

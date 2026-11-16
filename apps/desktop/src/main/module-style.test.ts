@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { THEME } from "./games";
-import { fontCss } from "./module-fonts";
+import { fontStylesheet } from "./module-fonts";
 import { moduleBaseCss, moduleFontCss, moduleThemeCss, moduleTokens } from "./module-style";
 
 describe("module base styles", () => {
@@ -31,12 +31,12 @@ describe("module base styles", () => {
   });
 
   it("give every page Inter's files, also for a font this Tavora doesn't know, and make each stylesheet once", () => {
-    const inter = fontCss({ id: "inter", family: "x" });
+    const inter = fontStylesheet({ id: "inter", family: "x" });
     expect(inter).toContain('font-family: "Inter Variable"');
     expect(inter.match(/@font-face/g)).toHaveLength(2);
     expect(inter).toContain(':root { --tavora-font-sans: "Inter Variable", system-ui, sans-serif; }');
-    expect(fontCss({ id: "gone", family: '"Gone", serif' })).toBe(inter);
-    expect(fontCss(undefined)).toBe(inter);
+    expect(fontStylesheet({ id: "gone", family: '"Gone", serif' })).toBe(inter);
+    expect(fontStylesheet(undefined)).toBe(inter);
   });
 
   it("put every token of the theme in its own stylesheet, with the colour scheme", () => {

@@ -427,10 +427,8 @@ export class ModuleView {
   private hotkeyAt = 0;
   /** The theme's colours in the current page, replaced when the theme changes. */
   private readonly themeCss = new InsertedCss(() => this.view.webContents);
-  /** The font in the current page, replaced when the user picks another font. */
-  private readonly fontSheet = new InsertedCss(() => this.view.webContents);
-  /** The font the current page has, so a theme change that keeps it leaves its big stylesheet alone. */
-  private fontId: string | undefined;
+  /** The font in the current page, replaced only when the user picks another (InsertedCss skips the same sheet). */
+  private readonly fontCss = new InsertedCss(() => this.view.webContents);
   private heartbeat: ReturnType<typeof setInterval> | undefined;
   private lastPong = 0;
   private storageWatch: ReturnType<typeof setInterval> | undefined;
@@ -541,8 +539,7 @@ export class ModuleView {
       if (this.overGame) this.overGame.css = undefined;
       if (this.overGame) void this.applyGameOpacity();
       this.themeCss.forget();
-      this.fontSheet.forget();
-      this.fontId = undefined;
+      this.fontCss.forget();
       contents.insertCSS(options.baseCss, { cssOrigin: "user" }).catch(() => {
         // The page went away before the styles landed.
       });
@@ -1402,10 +1399,7 @@ export class ModuleView {
   /** The theme's colours, and its font when that changed. */
   private insertThemeCss(theme: TavoraTheme): void {
     void this.themeCss.replace(moduleThemeCss(theme));
-    const fontId = theme.font?.id ?? "";
-    if (fontId === this.fontId) return;
-    this.fontId = fontId;
-    void this.fontSheet.replace(this.options.fontCss(theme));
+    void this.fontCss.replace(this.options.fontCss(theme));
   }
 
   /** Tells the module it is hidden; it should pause timers and animations. */

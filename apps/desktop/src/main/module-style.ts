@@ -14,7 +14,7 @@
 // to 32px) and no font size on the root (it made every rem 14px instead of
 // 16px). Controls get their height from padding and line height, which
 // resets do clear, and the 14px text sits on body.
-import type { TavoraTheme, ThemeFont } from "@tavora/sdk/protocol";
+import { DEFAULT_THEME_FONT, type TavoraTheme, type ThemeFont } from "@tavora/sdk/protocol";
 
 /** A theme's tokens as modules see them: the colour tokens plus the radius. */
 export function moduleTokens(theme: TavoraTheme): Record<string, string> {
@@ -62,7 +62,7 @@ export function moduleFontCss(font: ThemeFont, files: ModuleFontFiles): string {
 export function moduleBaseCss(): string {
   return `
 :root {
-  --tavora-font-sans: "Inter Variable", system-ui, sans-serif;
+  --tavora-font-sans: ${DEFAULT_THEME_FONT.family};
   --tavora-font-mono: ui-monospace, monospace;
   background: var(--tavora-background);
   color: var(--tavora-foreground);

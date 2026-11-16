@@ -360,9 +360,9 @@ describe("a panel over the game", () => {
     await vi.waitFor(() => expect(state.css.filter((css) => css.startsWith("font:"))).toEqual(["font:inter", "font:allo"]));
     const inter = `key-${state.css.indexOf("font:inter") + 1}`;
     await vi.waitFor(() => expect(state.removed).toContain(inter));
-    // Three colour sheets went in, and the two older ones came out.
-    await vi.waitFor(() => expect(state.css.filter((css) => !css.startsWith("font:"))).toHaveLength(3));
-    await vi.waitFor(() => expect(state.removed).toHaveLength(3));
+    // Two colour sheets went in (the third theme had the same colours, so nothing changed), and the older one came out.
+    await vi.waitFor(() => expect(state.css.filter((css) => !css.startsWith("font:"))).toHaveLength(2));
+    await vi.waitFor(() => expect(state.removed).toHaveLength(2));
   });
 
   it("takes the style away even when it was still being inserted as the panel came back", async () => {

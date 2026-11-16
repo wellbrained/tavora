@@ -13,6 +13,8 @@ export interface PreviewWindow {
   /** Brings it forward, also from the taskbar. */
   focus(): void;
   destroy(): void;
+  /** Puts the interface font the user has now into its footer. */
+  refreshFont?(): void;
 }
 
 export interface PreviewRequest {
@@ -88,6 +90,11 @@ export class OverlayPreviews {
   }
 
   /** Closes the previews of a module that was removed. */
+  /** The user picked another interface font: the open previews take it. */
+  refreshFonts(): void {
+    for (const window of this.windows.values()) window.refreshFont?.();
+  }
+
   closeModule(moduleId: string, owner?: string): void {
     for (const [id, window] of [...this.windows]) {
       const [idOwner, idModule] = id.split("\n");

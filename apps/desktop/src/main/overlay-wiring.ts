@@ -144,7 +144,7 @@ export async function createOverlayServices(wiring: OverlayWiring): Promise<Over
       new OverlayPreviewWindow(request, {
         hidden: options.hidden,
         labels: { dark: translate(ports.language(), "preview.dark"), light: translate(ports.language(), "preview.light"), checker: translate(ports.language(), "preview.checker") },
-        ...(ports.fontCss ? { fontCss: ports.fontCss() } : {}),
+        ...(ports.fontCss ? { fontCss: ports.fontCss } : {}),
       }),
   });
   const layout = overlayLayout(wiring, gameOverlays);

@@ -6,7 +6,7 @@ import { TooltipState, tooltipBounds, type OpenTooltip } from "./tooltip-state";
 import { TOOLTIP_DOCUMENT } from "../shared/tooltip-document";
 import { SkinStore } from "./tooltip-skin";
 import { InsertedCss } from "./inserted-css";
-import { fontCss } from "./module-fonts";
+import { fontStylesheet } from "./module-fonts";
 interface Source {
     root: string;
     /** The module's id: its skins are kept by it. */
@@ -35,9 +35,8 @@ export class TooltipWindow {
     readonly skins = new SkinStore();
     /** The skins this tooltip window's page has been sent (by id); each goes over once, a card then names its id. */
     private sentSkins = new Set<number>();
-    /** The interface font in the page, swapped when the user picks another (module-fonts.ts); the id it has. */
-    private readonly fontSheet = new InsertedCss(() => this.window!.webContents);
-    private fontId: string | undefined;
+    /** The interface font in the page, swapped when the user picks another (module-fonts.ts). */
+    private readonly fontCss = new InsertedCss(() => this.window!.webContents);
     private window: BrowserWindow | undefined;
     private ready = false;
     private size = { width: 520, height: 2000 };
@@ -110,8 +109,7 @@ export class TooltipWindow {
         if (this.window && !this.window.isDestroyed())
             return this.window;
         this.sentSkins = new Set();
-        this.fontSheet.forget();
-        this.fontId = undefined;
+        this.fontCss.forget();
         const w = this.window = new BrowserWindow({ parent: this.options.parent, show: false, frame: false, transparent: true, resizable: false, movable: false, minimizable: false, maximizable: false, fullscreenable: false, skipTaskbar: true, focusable: false, hasShadow: true,
             webPreferences: { partition: "tooltip-" + randomUUID(), preload: this.options.preload, sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true, devTools: false } });
         if (this.options.hidden)
@@ -170,10 +168,7 @@ export class TooltipWindow {
             this.sentSkins.add(skin.id);
         }
         const theme = this.options.theme();
-        if ((theme.font?.id ?? "") !== this.fontId) {
-            this.fontId = theme.font?.id ?? "";
-            void this.fontSheet.replace(fontCss(theme.font));
-        }
+        void this.fontCss.replace(fontStylesheet(theme.font));
         this.window!.webContents.send("tooltip:render", { serial: open.serial, content: c, pinned: !!open.request.pinned, pinnable: open.request.pinnable !== false, source: source.name, theme, language: this.options.language(), ...(skin ? { skin: skin.id } : {}) });
     }
     private place() {
