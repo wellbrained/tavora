@@ -1,13 +1,25 @@
 // The interface fonts' files for module pages and Tavora's small windows, embedded in the main bundle (esbuild's base64
 // loader), so a page gets Tavora's font without loading anything. Only the font in use goes into a page
-// (moduleFontCss); each one's stylesheet is made once.
+// (moduleFontCss); each one's stylesheet is made once, when it is first used.
 import interLatin from "@fontsource-variable/inter/files/inter-latin-wght-normal.woff2";
 import interLatinExt from "@fontsource-variable/inter/files/inter-latin-ext-wght-normal.woff2";
+import monaLatin from "@fontsource-variable/mona-sans/files/mona-sans-latin-wght-normal.woff2";
+import monaLatinExt from "@fontsource-variable/mona-sans/files/mona-sans-latin-ext-wght-normal.woff2";
+import rubikLatin from "@fontsource-variable/rubik/files/rubik-latin-wght-normal.woff2";
+import rubikLatinExt from "@fontsource-variable/rubik/files/rubik-latin-ext-wght-normal.woff2";
+import nunitoLatin from "@fontsource-variable/nunito/files/nunito-latin-wght-normal.woff2";
+import nunitoLatinExt from "@fontsource-variable/nunito/files/nunito-latin-ext-wght-normal.woff2";
+import sairaLatin from "@fontsource-variable/saira/files/saira-latin-wght-normal.woff2";
+import sairaLatinExt from "@fontsource-variable/saira/files/saira-latin-ext-wght-normal.woff2";
+import atkinsonLatin from "@fontsource-variable/atkinson-hyperlegible-next/files/atkinson-hyperlegible-next-latin-wght-normal.woff2";
+import atkinsonLatinExt from "@fontsource-variable/atkinson-hyperlegible-next/files/atkinson-hyperlegible-next-latin-ext-wght-normal.woff2";
+import alloLatin from "../fonts/allo/allo-latin-wght-normal.woff2";
+import alloLatinExt from "../fonts/allo/allo-latin-ext-wght-normal.woff2";
 import type { ThemeFont } from "@tavora/sdk/protocol";
-import { moduleFontCss, type ModuleFontFiles } from "./module-style";
-import { uiFont } from "./ui-fonts";
+import { moduleFontCss } from "./module-style";
+import { fontFamily, uiFont, type UiFontId } from "../shared/ui-fonts";
 
-// Unicode ranges as Fontsource splits its fonts.
+// Unicode ranges as Fontsource splits its fonts (scripts/subset-allo.mjs cuts Allo the same way).
 const LATIN =
   "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD";
 const LATIN_EXT =
@@ -15,16 +27,15 @@ const LATIN_EXT =
 
 const woff2 = (base64: string) => `data:font/woff2;base64,${base64}`;
 
-/** Each font's files by id; ui-fonts.ts lists the same ids. */
-const FILES: Record<string, ModuleFontFiles> = {
-  inter: {
-    name: "Inter Variable",
-    weight: "100 900",
-    faces: [
-      { src: woff2(interLatin), range: LATIN },
-      { src: woff2(interLatinExt), range: LATIN_EXT },
-    ],
-  },
+/** Each font's two files (Latin, Latin Extended), by the id ui-fonts.ts gives it. */
+const FILES: Record<UiFontId, [string, string]> = {
+  inter: [interLatin, interLatinExt],
+  allo: [alloLatin, alloLatinExt],
+  "mona-sans": [monaLatin, monaLatinExt],
+  rubik: [rubikLatin, rubikLatinExt],
+  nunito: [nunitoLatin, nunitoLatinExt],
+  saira: [sairaLatin, sairaLatinExt],
+  atkinson: [atkinsonLatin, atkinsonLatinExt],
 };
 
 const made = new Map<string, string>();
@@ -34,7 +45,19 @@ export function fontStylesheet(font: ThemeFont | undefined): string {
   const known = uiFont(font?.id);
   let css = made.get(known.id);
   if (css === undefined) {
-    css = moduleFontCss(known, FILES[known.id] ?? FILES.inter!);
+    const [latin, latinExt] = FILES[known.id];
+    css = moduleFontCss(
+      { id: known.id, family: fontFamily(known) },
+      {
+        name: known.face,
+        weight: known.weight,
+        sizeAdjust: known.sizeAdjust,
+        faces: [
+          { src: woff2(latin), range: LATIN },
+          { src: woff2(latinExt), range: LATIN_EXT },
+        ],
+      },
+    );
     made.set(known.id, css);
   }
   return css;

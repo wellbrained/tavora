@@ -21,6 +21,7 @@ import { CONTACT_KINDS, CONVERSATION_REPORT_REASONS, MODULE_REPORT_REASONS, OUTC
 import { isLanguageSetting, type LanguageSetting } from "./i18n-core";
 import { isProfileBanner, type ProfileBanner } from "./profile-banner";
 import { GRID_LIMITS, layoutTemplate, type LayoutTemplateId } from "./layout-templates";
+import { isFontId } from "./ui-fonts";
 
 const BAD: unique symbol = Symbol("bad");
 type Bad = typeof BAD;
@@ -330,6 +331,8 @@ export function hostActionTable(c: HostChecks) {
     /** Back to the Tavora default theme, whatever is active. */
     /** The user's own corner radius in px over the theme's, or null for the theme's. */
     "set-radius": { radius: nullable(check<number>((value) => Number.isInteger(value) && (value as number) >= 4 && (value as number) <= 12)) },
+    /** The interface font (shared/ui-fonts.ts); null for Inter. */
+    "set-font": { font: nullable(check<string>(isFontId)) },
     "reset-theme": {},
     /** Looks for themes again, after the user changed their themes folder. */
     "reload-themes": {},

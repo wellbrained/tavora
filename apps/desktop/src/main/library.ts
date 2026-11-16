@@ -17,6 +17,7 @@ import { CATALOG, catalogGame } from "./catalog";
 import { DEFAULT_OVERLAY_PORT, MAX_OVERLAY_PORT, MIN_OVERLAY_PORT } from "./overlays";
 import { iconFileAllowed, isSteamAppId, needsIcon } from "./steam-icons";
 import { DEFAULT_THEME, isThemeRadius, isVariationId } from "./themes";
+import { isFontId } from "../shared/ui-fonts";
 import { isLearnableGameId, learnsGameId } from "./workspace-game";
 import { unknownFields } from "./json";
 
@@ -156,6 +157,11 @@ export interface Library {
   followSystem: boolean;
   /** The user's own corner radius in px, over the theme's (THEME_LIMITS.radius); null uses the theme's. */
   radius: number | null;
+  /**
+   * The interface font's id (shared/ui-fonts.ts); left out for Inter, so a library that never picked one is written as
+   * before. Kept even while this Tavora doesn't know it, which shows Inter.
+   */
+  font?: string;
   /** False until the first-run welcome was finished or skipped. */
   onboarded: boolean;
   /** True once the user said they want to make modules (Settings > Development, Let's go): its tools show. */
@@ -793,6 +799,9 @@ const FOLDER_FIELDS = Object.keys({ id: true, name: true, label: true, workspace
  * Tavora doesn't know, at the top, on a workspace or on a folder, are kept as
  * they were and saved again (a newer Tavora's, say from the cloud copy).
  */
+/** Library fields that are left out when they hold their default, so a library that never set them is written as before. */
+const OPTIONAL_FIELDS = ["font"] as const satisfies readonly (keyof Library)[];
+
 export function sanitizeLibrary(raw: unknown): Library {
   const library = emptyLibrary();
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return library;
@@ -940,6 +949,7 @@ export function sanitizeLibrary(raw: unknown): Library {
   if (isModuleId(theme.id) && isVariationId(theme.variation)) library.theme = { id: theme.id, variation: theme.variation };
   if (typeof saved.followSystem === "boolean") library.followSystem = saved.followSystem;
   if (isThemeRadius(saved.radius)) library.radius = saved.radius;
+  if (isFontId(saved.font)) library.font = saved.font;
   // A library saved before the welcome existed belongs to someone who is past it.
   library.onboarded = typeof saved.onboarded === "boolean" ? saved.onboarded : true;
   if (typeof saved.makesModules === "boolean") library.makesModules = saved.makesModules;
@@ -949,7 +959,8 @@ export function sanitizeLibrary(raw: unknown): Library {
   library.browser = { sharedSites: siteList(browser.sharedSites), adblockOff: siteList(browser.adblockOff) };
   if (typeof saved.lastWorkspaceId === "string" && isLive(library, saved.lastWorkspaceId)) library.lastWorkspaceId = saved.lastWorkspaceId;
   library.pc = { ...asRecord(saved.pc) };
-  return { ...unknownFields(saved, Object.keys(library)), ...library };
+  // Fields a library may leave out (font) are known too: a bad saved value is dropped, not passed through.
+  return { ...unknownFields(saved, [...Object.keys(library), ...OPTIONAL_FIELDS]), ...library };
 }
 
 /** Most sites a Browser list keeps. */

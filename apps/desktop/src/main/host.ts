@@ -110,7 +110,7 @@ import {
   type Library,
 } from "./library";
 import { fontStylesheet } from "./module-fonts";
-import { uiFont } from "./ui-fonts";
+import { themeFont } from "../shared/ui-fonts";
 import { moduleBaseCss } from "./module-style";
 import { backupData, backupsDir } from "./backup";
 import { hasLibrary, loadLibrary, SavedData, WORKSPACE_FILE } from "./saved-data";
@@ -641,7 +641,7 @@ export class Host {
     this.systemInfo = prepared.systemInfo;
     this.openTimes = prepared.openTimes;
     this.emblem = prepared.emblem;
-    this.currentTheme = moduleTheme(withRadius(resolveTheme(themes, library.theme, library.followSystem ? Host.systemMode(options) : undefined).variation, library.radius), library.toasts);
+    this.currentTheme = moduleTheme(withRadius(resolveTheme(themes, library.theme, library.followSystem ? Host.systemMode(options) : undefined).variation, library.radius), library.toasts, themeFont(library.font));
     this.files = new ModuleFilesFolder({
       userData: options.userData,
       defaultFolder: options.picturesFolder ?? defaultFilesRoot(options.userData),
@@ -1801,7 +1801,7 @@ export class Host {
 
   /** Shows the theme the library names, in the host window, native controls and every open module. */
   private applyTheme(): void {
-    const next = moduleTheme(withRadius(this.currentChoice().variation, this.library.radius), this.library.toasts);
+    const next = moduleTheme(withRadius(this.currentChoice().variation, this.library.radius), this.library.toasts, themeFont(this.library.font));
     if (JSON.stringify(next) === JSON.stringify(this.currentTheme)) {
       this.syncNativeTheme();
       return;
@@ -2682,10 +2682,16 @@ export class Host {
         this.library.radius = action.radius;
         this.applyTheme();
       }),
+      "set-font": saved((action) => {
+        if (action.font === null || action.font === "inter") delete this.library.font;
+        else this.library.font = action.font;
+        this.applyTheme();
+      }),
       "reset-theme": saved(() => {
         this.library.theme = { ...DEFAULT_THEME };
         this.library.followSystem = true;
         this.library.radius = null;
+        delete this.library.font;
         this.applyTheme();
       }),
       "reload-themes": () => this.reloadThemes(),
@@ -4990,10 +4996,10 @@ export class Host {
     return {
       themeId: theme.id,
       variationId: variation.id,
-      isDefault: theme.id === DEFAULT_THEME.id && this.library.followSystem && this.library.radius === null,
+      isDefault: theme.id === DEFAULT_THEME.id && this.library.followSystem && this.library.radius === null && this.library.font === undefined,
       followSystem: this.library.followSystem,
       radius: this.library.radius,
-      font: uiFont(this.currentTheme.font?.id),
+      font: themeFont(this.library.font),
       themes: themes.map(({ theme: item, provenance }) => ({
         id: item.id,
         name: item.name,

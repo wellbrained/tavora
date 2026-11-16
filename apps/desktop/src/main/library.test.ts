@@ -208,6 +208,14 @@ describe("adding games", () => {
     expect(sanitizeLibrary({ autoUpdate: "no" }).autoUpdate).toBe(true);
   });
 
+  it("keeps the interface font's id, also one this Tavora doesn't know, and leaves it out for Inter", () => {
+    expect(sanitizeLibrary({ font: "saira" }).font).toBe("saira");
+    // A font a newer Tavora has: kept, so it comes back there; this one shows Inter meanwhile.
+    expect(sanitizeLibrary({ font: "future-font" }).font).toBe("future-font");
+    expect(sanitizeLibrary({}).font).toBeUndefined();
+    for (const bad of ["Saira", "../x", "", 3, null]) expect(sanitizeLibrary({ font: bad }).font, String(bad)).toBeUndefined();
+  });
+
   it("marks running games by default and keeps only a real choice", () => {
     expect(emptyLibrary().gameStart).toBe("show");
     expect(sanitizeLibrary({ gameStart: "ask" }).gameStart).toBe("ask");

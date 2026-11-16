@@ -85,6 +85,7 @@ export const SETTING_SECTIONS: readonly (readonly [id: string, section: Settings
   ["startup", "general"],
   ["welcome-tour", "general"],
   ["theme", "appearance"],
+  ["font", "appearance"],
   ["appearance-mode", "appearance"],
   ["theme-variation", "appearance"],
   ["corner-radius", "appearance"],

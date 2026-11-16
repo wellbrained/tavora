@@ -2,7 +2,8 @@
 // Settings > Appearance: pick an installed theme and its variation. The theme
 // choice is a dropdown whose rows show a small preview of each theme in its own
 // colours, so a theme can be judged before it is picked; picking applies it at once, and
-// Reset always goes back to the Tavora default. Below are how text and tabs
+// Reset always goes back to the Tavora default. The font list shows each font in itself,
+// and a pick changes the font everywhere at once. Below are how text and tabs
 // look, and the user's own themes.
 import { CopyPlus, FolderOpen, RefreshCw } from "@lucide/vue";
 import { computed } from "vue";
@@ -13,6 +14,7 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { cn } from "@tavora/official-ui/lib/utils";
 import type { HostViewState, ThemeVariationView, ThemeView } from "../../../shared/host-api";
+import { fontFamily, UI_FONTS, uiFont } from "../../../shared/ui-fonts";
 import { act, state, tryToasts } from "../../host";
 import { t } from "../../i18n";
 import SettingGroup from "./SettingGroup.vue";
@@ -38,6 +40,13 @@ function pickId(id: string) {
   const variation = theme.variations.find((item) => item.id === appearance.value.variationId) ?? theme.variations[0]!;
   void act({ type: "set-theme", themeId: theme.id, variationId: variation.id });
 }
+
+// The interface font; each row of the list is written in its own font.
+const font = computed({
+  get: () => appearance.value.font.id,
+  set: (id: string) => void act({ type: "set-font", font: id === "inter" ? null : id }),
+});
+const fontInUse = computed(() => uiFont(appearance.value.font.id));
 
 const grayscaleText = computed({
   get: () => state.value!.library.grayscaleText,
@@ -161,6 +170,25 @@ const showVariation = computed(() => {
                 theme.provenance === "official" ? t("common.official") : t("common.local")
               }}</Badge>
             </span>
+          </SelectItem>
+        </SelectContent>
+      </Select>
+    </SettingRow>
+    <SettingRow :label="t('settings.font.label')" :description="t('settings.font.description')" setting="font" :highlighted="highlight === 'font'">
+      <Select v-model="font">
+        <SelectTrigger class="w-72" :aria-label="t('settings.font.label')" data-testid="font-select">
+          <span class="truncate" :style="{ fontFamily: fontFamily(fontInUse) }">{{ fontInUse.name }}</span>
+        </SelectTrigger>
+        <SelectContent data-testid="fonts">
+          <SelectItem
+            v-for="item in UI_FONTS"
+            :key="item.id"
+            :value="item.id"
+            :description="t(`settings.font.hint.${item.id}`)"
+            :style="{ fontFamily: fontFamily(item) }"
+            :data-testid="`font-${item.id}`"
+          >
+            {{ item.name }}
           </SelectItem>
         </SelectContent>
       </Select>

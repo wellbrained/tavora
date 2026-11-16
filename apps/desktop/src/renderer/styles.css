@@ -2,6 +2,8 @@
 @import "tw-animate-css";
 /* Fonts are bundled (latin and latin-extended only); Tavora never loads them from the web. */
 @import "../../../../modules/shared/src/fonts.css";
+/* The other interface fonts the user can pick (Settings > Appearance). */
+@import "./fonts.css";
 /* The curves and durations every animation uses (shared with the modules). */
 @import "../../../../modules/shared/src/motion.css";
 /* The shared controls (@tavora/official-ui) use Tailwind classes too. */

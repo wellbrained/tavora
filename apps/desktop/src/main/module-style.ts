@@ -39,10 +39,14 @@ export interface ModuleFontFace {
   range: string;
 }
 
-/** A font's files for a page, under the name its family uses (`"Inter Variable"`), with its weight range (`100 900`). */
+/**
+ * A font's files for a page, under the name its family uses (`"Inter Variable"`), with its weight range (`100 900`) and
+ * its size-adjust in percent (100 leaves it as drawn).
+ */
 export interface ModuleFontFiles {
   name: string;
   weight: string;
+  sizeAdjust?: number;
   faces: ModuleFontFace[];
 }
 
@@ -54,6 +58,7 @@ export function moduleFontCss(font: ThemeFont, files: ModuleFontFiles): string {
   const faces = files.faces.map(
     (face) =>
       `@font-face { font-family: "${files.name}"; font-style: normal; font-display: swap; font-weight: ${files.weight}; ` +
+      (files.sizeAdjust && files.sizeAdjust !== 100 ? `size-adjust: ${files.sizeAdjust}%; ` : "") +
       `src: url(${face.src}) format("woff2-variations"); unicode-range: ${face.range}; }`,
   );
   return `${faces.join("\n")}\n:root { --tavora-font-sans: ${font.family}; }\n`;
