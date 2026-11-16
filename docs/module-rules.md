@@ -103,7 +103,9 @@ themes; anything hard-coded breaks in one of them.
   sizes in between. Body text is 14, buttons and menus 13, hints 12. Weights 400, 500 and 600 only. Changing numbers
   use `tabular-nums`. Sentence case, no all caps; in a short "A & B" name both words start uppercase ("Updates & About").
 - **Font**: the theme's (`font-sans`, `font-mono`, or `var(--font-sans)`); never write out `"Inter Variable"`.
-  The one exception is an [item-card skin](#item-card-skins).
+  It is the font the user picked in Settings > Appearance and can change while the panel is open: text measured to fit a
+  box measures again on the kit's `onFontChange` (the kit's `OverlayText` does). The one exception is an
+  [item-card skin](#item-card-skins), and a font the user picks inside the module (Notes' fonts): those stay as they are.
 - **Spacing**: 4, 8, 12, 16, 24, 32 px (Tailwind 1, 2, 3, 4, 6, 8). 8 inside controls, 16 inside a panel area, 24
   between sections.
 - **Corners**: the kit's (`rounded-sm`, `rounded-md`, `rounded-lg`, from `--radius`); never a literal px radius.

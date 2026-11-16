@@ -137,6 +137,7 @@ function make() {
     networkHosts: () => new Set(),
     connectors: () => new Set(),
     getTheme: () => ({ tokens: { background: "#202020" } }),
+    fontCss: (theme: { font?: { id: string } }) => `font:${theme.font?.id ?? ""}`,
     showMenu: async () => void calls.menus++,
     onStatus: (status: string) => void calls.status.push(status),
     discord: { release: () => void calls.released++ },

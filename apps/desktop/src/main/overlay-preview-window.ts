@@ -24,10 +24,10 @@ const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (char) => `&#${cha
  */
 export function previewChromeDocument(labels: Record<PreviewBackground, string>, initial: PreviewBackground = "dark"): string {
   const buttons = PREVIEW_BACKGROUNDS.map((id) => `<button type="button" data-bg="${id}" aria-pressed="${id === initial}">${escapeHtml(labels[id])}</button>`).join("");
-  return `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'">
+  return `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; font-src data:; base-uri 'none'">
 <style>
 *{box-sizing:border-box}
-html,body{margin:0;height:100%;overflow:hidden;font:12px 'Segoe UI',sans-serif;user-select:none}
+html,body{margin:0;height:100%;overflow:hidden;font:12px var(--tavora-font-sans,'Segoe UI',sans-serif);user-select:none}
 body[data-bg=dark]{background:#1b1d22}
 body[data-bg=light]{background:#f2f3f5}
 body[data-bg=checker]{background-color:#cfd2d8;background-image:linear-gradient(45deg,#9da1a9 25%,transparent 25%,transparent 75%,#9da1a9 75%),linear-gradient(45deg,#9da1a9 25%,transparent 25%,transparent 75%,#9da1a9 75%);background-size:20px 20px;background-position:0 0,10px 10px}
@@ -46,7 +46,7 @@ export class OverlayPreviewWindow implements PreviewWindow {
 
   constructor(
     request: PreviewRequest,
-    options: { hidden: boolean; labels: Record<PreviewBackground, string> },
+    options: { hidden: boolean; labels: Record<PreviewBackground, string>; /** The interface font's stylesheet for the footer. */ fontCss?: string },
   ) {
     const name = createHash("sha256").update(request.id).digest("hex").slice(0, 32);
     const pageSession = lockedSession(`overlay-preview-${name}`, (url) => url.startsWith(`${GAME_OVERLAY_ORIGIN}/`));
@@ -78,6 +78,8 @@ export class OverlayPreviewWindow implements PreviewWindow {
     this.window.contentView.addChildView(this.page);
     this.layout();
     this.window.on("resize", () => this.layout());
+    const fontCss = options.fontCss;
+    if (fontCss) this.chrome.webContents.on("did-finish-load", () => void this.chrome.webContents.insertCSS(fontCss, { cssOrigin: "user" }).catch(() => {}));
     void this.chrome.webContents.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(previewChromeDocument(options.labels))}`).catch(() => {});
     void this.page.webContents.loadURL(`${GAME_OVERLAY_ORIGIN}/`).catch(() => {});
     this.window.once("closed", () => {

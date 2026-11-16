@@ -109,7 +109,8 @@ import {
   type WorkspaceIcon,
   type Library,
 } from "./library";
-import { MODULE_FONTS } from "./module-fonts";
+import { fontCss } from "./module-fonts";
+import { uiFont } from "./ui-fonts";
 import { moduleBaseCss } from "./module-style";
 import { backupData, backupsDir } from "./backup";
 import { hasLibrary, loadLibrary, SavedData, WORKSPACE_FILE } from "./saved-data";
@@ -349,8 +350,8 @@ export interface HostOptions {
   devServer?: string | undefined;
 }
 
-/** Built on first use; it carries the module font, so it is not small. */
-let moduleCss: string | undefined;
+/** The same for every module page; the font and the colours come in stylesheets of their own. */
+const MODULE_CSS = moduleBaseCss();
 
 /**
  * Writes `data` to the file a save dialog gave, adding `.extension` when the name lacks it. The dialog asked before
@@ -640,7 +641,7 @@ export class Host {
     this.systemInfo = prepared.systemInfo;
     this.openTimes = prepared.openTimes;
     this.emblem = prepared.emblem;
-    this.currentTheme = moduleTheme(withRadius(resolveTheme(themes, library.theme, library.followSystem ? Host.systemMode(options) : undefined).variation, library.radius), library.toasts);
+    this.currentTheme = moduleTheme(withRadius(resolveTheme(themes, library.theme, library.followSystem ? Host.systemMode(options) : undefined).variation, library.radius), library.toasts, uiFont(undefined));
     this.files = new ModuleFilesFolder({
       userData: options.userData,
       defaultFolder: options.picturesFolder ?? defaultFilesRoot(options.userData),
@@ -785,7 +786,7 @@ export class Host {
         return{root:module.root,module:view.moduleId,name:this.shown(module.manifest).name,bounds};
       }});
     this.watchShortcuts(this.window.webContents);
-    this.cover = new PanelCover({ parent: this.window.contentView, emblem: () => this.emblem });
+    this.cover = new PanelCover({ parent: this.window.contentView, emblem: () => this.emblem, fontCss: (theme) => fontCss(theme.font) });
     // Whatever is added to the window later (panels, the opening cover, the Overlay page) goes below the toasts.
     this.toastView = new ToastView({
       window: this.window,
@@ -1800,7 +1801,7 @@ export class Host {
 
   /** Shows the theme the library names, in the host window, native controls and every open module. */
   private applyTheme(): void {
-    const next = moduleTheme(withRadius(this.currentChoice().variation, this.library.radius), this.library.toasts);
+    const next = moduleTheme(withRadius(this.currentChoice().variation, this.library.radius), this.library.toasts, uiFont(undefined));
     if (JSON.stringify(next) === JSON.stringify(this.currentTheme)) {
       this.syncNativeTheme();
       return;
@@ -3959,7 +3960,8 @@ export class Host {
       devTools: this.options.devTools,
       getTheme: () => this.currentTheme,
       getLanguage: () => this.language,
-      baseCss: (moduleCss ??= moduleBaseCss(MODULE_FONTS)),
+      baseCss: MODULE_CSS,
+      fontCss: (theme) => fontCss(theme.font),
       ...(this.options.moduleStorageLimit === undefined ? {} : { storageLimit: this.options.moduleStorageLimit }),
       onStorageOver: () => {
         // A page closed while it was measured needs no clearing.
@@ -4530,6 +4532,7 @@ export class Host {
       layoutRequested: request.layoutRequested,
       ended: request.ended,
       frameText: request.frameText,
+      fontCss: () => fontCss(this.currentTheme.font),
       ...(panel ? { panel } : {}),
     });
   }
@@ -4988,6 +4991,7 @@ export class Host {
       isDefault: theme.id === DEFAULT_THEME.id && this.library.followSystem && this.library.radius === null,
       followSystem: this.library.followSystem,
       radius: this.library.radius,
+      font: uiFont(this.currentTheme.font?.id),
       themes: themes.map(({ theme: item, provenance }) => ({
         id: item.id,
         name: item.name,
@@ -5384,6 +5388,7 @@ export class Host {
           this.pushStateSoon();
         },
         overGameChanged: (changed) => this.tellOverGameChanged(changed),
+        fontCss: () => fontCss(this.currentTheme.font),
         saveLibrary: () => this.saveLibrary(),
         workspaceId: () => this.workspaceId,
         askConnector: (moduleId, connector) => this.askConnector(moduleId, connector),

@@ -47,6 +47,13 @@ describe("applyHostTheme", () => {
     expect(page.root.style.colorScheme).toBe("light");
     expect(page.classes.has("dark")).toBe(false);
     expect(page.attributes.get("data-mode")).toBe("light");
+    expect(page.props.has("--tavora-font-sans")).toBe(false);
+  });
+
+  it("sets the font as --tavora-font-sans, so the page can switch fonts while it is open", () => {
+    const page = fakeRoot();
+    applyHostTheme({ mode: "dark", font: { id: "allo", family: '"Allo Variable", system-ui, sans-serif' } } as unknown as TavoraTheme, page.root);
+    expect(page.props.get("--tavora-font-sans")).toBe('"Allo Variable", system-ui, sans-serif');
   });
 });
 

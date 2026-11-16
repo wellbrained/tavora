@@ -17,6 +17,7 @@ function show(next: ToastsPageState): void {
   const root = document.documentElement;
   for (const [name, value] of Object.entries(next.colors)) root.style.setProperty(`--${name}`, value);
   root.style.setProperty("--radius", `${next.radius}px`);
+  root.style.setProperty("--tavora-font-sans", next.font);
   root.style.setProperty("color-scheme", next.mode);
   root.classList.toggle("dark", next.mode === "dark");
   setUiLanguage(next.language);

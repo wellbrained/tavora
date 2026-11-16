@@ -13,12 +13,14 @@ export function applyTheme(appearance: AppearanceView): void {
   const variation = activeVariation(appearance);
   if (!variation) return;
   const radius = appearance.radius ?? variation.radius;
-  const key = JSON.stringify([variation, radius]);
+  const key = JSON.stringify([variation, radius, appearance.font.family]);
   if (key === applied) return;
   applied = key;
   const root = document.documentElement.style;
   for (const [name, value] of Object.entries(variation.colors)) root.setProperty(`--${name}`, value);
   root.setProperty("--radius", `${radius}px`);
+  // The font the user picked; styles.css reads it through --font-sans.
+  root.setProperty("--tavora-font-sans", appearance.font.family);
   root.setProperty("color-scheme", variation.mode);
   // shadcn-vue's dark: variants follow the theme's mode.
   document.documentElement.classList.toggle("dark", variation.mode === "dark");

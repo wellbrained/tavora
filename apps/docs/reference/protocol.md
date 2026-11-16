@@ -80,7 +80,7 @@ Methods without params must be sent with `params` left out.
 | `blobs.usage` | none | `{ bytes, count, maxBytes, maxFileBytes }` for this module and workspace |
 | `blobs.delete` | `{ id }` | `null` (also when the file did not exist); `INVALID_PARAMS` for an id the host did not make |
 | `blobs.app.list`, `blobs.app.usage`, `blobs.app.delete` | as above | the same for the module's files shared by every workspace, see [Files](#files-blobs). Tavora 0.23.101+ |
-| `ui.getTheme` | none | `{ mode, colors: { background, surface, text, textMuted, accent }, tokens, radius, toasts }`: `tokens` holds every semantic colour by its shadcn-vue name (`THEME_TOKENS`, with `toast`, `toast-foreground` and the three `primary-fill` tokens always filled in), `radius` is in CSS pixels, `toasts` is where the user wants toasts (`bottom-center`, `bottom-right` or `top-center`; older Tavora leaves it out) |
+| `ui.getTheme` | none | `{ mode, colors: { background, surface, text, textMuted, accent }, tokens, radius, toasts, font }`: `tokens` holds every semantic colour by its shadcn-vue name (`THEME_TOKENS`, with `toast`, `toast-foreground` and the three `primary-fill` tokens always filled in), `radius` is in CSS pixels, `toasts` is where the user wants toasts (`bottom-center`, `bottom-right` or `top-center`; older Tavora leaves it out), `font` is the interface font the user picked as `{ id, family }` (`family` is a CSS `font-family` value whose files the page already has; older Tavora leaves it out, which means Inter) |
 | `network.fetch` | `{ url, method?, headers?, body?, responseType? }` | `{ status, url, headers, body }`; needs the `network` capability, see [Network](#network) |
 | `network.readPage` | `{ url }` | `{ status, url, title, html }`; isolated public page capture, same `network` grant, Tavora 0.19.3+ |
 | `aiUsage.accounts` | none | `AiUsageAccountInfo[]` in the user's order; needs the `aiUsage` capability, see [Connectors](#connectors) |
@@ -521,7 +521,7 @@ Tavora inserts a stylesheet into every module page before it renders, as a
 *user* stylesheet. It sits above the browser's defaults and below everything
 the module writes, so any rule of the module's own wins. It makes a page that
 styles nothing look like part of Tavora: no page margin, the theme's
-background and text colour, Inter at 14 px, dark buttons, fields and
+background and text colour, the user's interface font at 14 px, dark buttons, fields and
 scrollbars, a gold focus ring, muted `small` and `dt` text, and headings
 sized like the host's.
 
@@ -540,7 +540,7 @@ SDK:
 | `--tavora-border`, `--tavora-input`, `--tavora-ring` | Dividers, field outlines, focus ring |
 | `--tavora-destructive`, `--tavora-success`, `--tavora-warning`, `--tavora-info` | States |
 | `--tavora-radius` | Corner radius of controls |
-| `--tavora-font-sans`, `--tavora-font-mono` | Text and code fonts |
+| `--tavora-font-sans`, `--tavora-font-mono` | Text and code fonts. `--tavora-font-sans` is the font the user picked (Inter unless they changed it) and changes with it while the page is open; its files come in a stylesheet of their own |
 
 ## Errors
 

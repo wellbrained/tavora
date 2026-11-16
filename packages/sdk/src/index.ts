@@ -174,10 +174,11 @@ export type {
   TavoraTheme,
   TavoraViewport,
   TavoraWorkspace,
+  ThemeFont,
   ThemeToken,
   ToastPosition,
 } from "./protocol.js";
-export { AUDIO_TYPES, BLOB_ID, BLOB_TYPES, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, OVERLAY_KEY, PICTURE_TYPES, PROTOCOL_VERSION, MEDIA_ACTIONS, SYSTEM_INTERVALS_MS, SYSTEM_MAX_DRIVES, SYSTEM_PING_TARGET, OPTIONAL_THEME_TOKENS, THEME_TOKENS, TOAST_POSITIONS } from "./protocol.js";
+export { AUDIO_TYPES, BLOB_ID, BLOB_TYPES, DEFAULT_THEME_FONT, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, OVERLAY_KEY, PICTURE_TYPES, PROTOCOL_VERSION, MEDIA_ACTIONS, SYSTEM_INTERVALS_MS, SYSTEM_MAX_DRIVES, SYSTEM_PING_TARGET, OPTIONAL_THEME_TOKENS, THEME_TOKENS, TOAST_POSITIONS } from "./protocol.js";
 
 /** How long a menu may stay open; the host closes it itself when its panel goes. */
 const MENU_TIMEOUT_MS = 60 * 60_000;
@@ -190,7 +191,7 @@ function localDay(at: number): string {
 }
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.4.0";
+export const SDK_VERSION = "0.4.1";
 
 /**
  * The oldest Tavora that has everything this SDK version offers, worked out from the table of calls

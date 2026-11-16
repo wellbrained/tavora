@@ -3,10 +3,10 @@
  * and a close button. Static host markup only; the preload (preload/game-overlay.ts) adds the handles and the module's
  * name through the DOM, so no text from a module is ever parsed as markup.
  */
-export const GAME_OVERLAY_FRAME_DOCUMENT = `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'">
+export const GAME_OVERLAY_FRAME_DOCUMENT = `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; font-src data:; base-uri 'none'">
 <style>
 *{box-sizing:border-box}
-html,body{margin:0;height:100%;overflow:hidden;background:transparent;font:12px 'Segoe UI',sans-serif;user-select:none}
+html,body{margin:0;height:100%;overflow:hidden;background:transparent;font:12px var(--tavora-font-sans,'Segoe UI',sans-serif);user-select:none}
 #frame{position:fixed;inset:0;border:2px dashed #7fb8ff;background:rgba(20,40,70,.28);cursor:move}
 #name{position:absolute;left:6px;top:4px;max-width:calc(100% - 44px);padding:1px 6px;border-radius:4px;background:rgba(10,20,35,.85);color:#e8f0fb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
 #close{position:absolute;right:4px;top:4px;width:22px;height:22px;padding:0;border:0;border-radius:4px;background:rgba(10,20,35,.85);color:#e8f0fb;font:16px/20px 'Segoe UI',sans-serif;cursor:pointer}

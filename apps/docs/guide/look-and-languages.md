@@ -4,7 +4,7 @@ Users pick Tavora's theme and language, and your module should follow both, so i
 
 ## The default look
 
-Before your page renders, Tavora adds a stylesheet below everything you write: no page margin, the theme's background and text colour, Inter at 14 px, buttons, fields and scrollbars in the theme, a focus ring and sized headings. A page that styles nothing already fits in. Any rule of your own wins over it.
+Before your page renders, Tavora adds a stylesheet below everything you write: no page margin, the theme's background and text colour, the user's interface font at 14 px, buttons, fields and scrollbars in the theme, a focus ring and sized headings. A page that styles nothing already fits in. Any rule of your own wins over it.
 
 ## Use the theme's colours
 
@@ -38,11 +38,11 @@ paint(await tavora.ui.getTheme());
 tavora.ui.onThemeChange(paint);
 ```
 
-`theme.tokens` has every colour by its shadcn-vue name (`background`, `primary`, `muted-foreground`, …), so a shadcn-vue or Tailwind project can set each one as `--<name>`. `theme.radius` is the corner radius in CSS pixels, and `theme.toasts` is where the user wants toasts (the shared kit's Toaster follows it by itself). How themes are made is in [Theme packages](../reference/theme.md).
+`theme.tokens` has every colour by its shadcn-vue name (`background`, `primary`, `muted-foreground`, …), so a shadcn-vue or Tailwind project can set each one as `--<name>`. `theme.radius` is the corner radius in CSS pixels, `theme.toasts` is where the user wants toasts (the shared kit's Toaster follows it by itself), and `theme.font` is the interface font the user picked (see below). How themes are made is in [Theme packages](../reference/theme.md).
 
 ## Fonts and pictures
 
-Your page can't load anything from the internet, so bundle fonts and images with your build. Inter is already there as `var(--tavora-font-sans)` (and a monospace one as `var(--tavora-font-mono)`).
+Your page can't load anything from the internet, so bundle fonts and images with your build. Tavora's own font is already there as `var(--tavora-font-sans)` (and a monospace one as `var(--tavora-font-mono)`): Inter, or the font the user picked in Settings > Appearance. It can change while your page is open, so use the variable rather than a font's name, and if you measure text (to fit it into a box, say), measure again when the theme changes. A font you bundle and set yourself stays as it is.
 
 ## Languages
 
@@ -75,7 +75,7 @@ boot.onLanguage(render);
 boot.dispose();
 ```
 
-Besides the `--<token>` variables above, it sets the summary colours as `--host-background`, `--host-surface`, `--host-text`, `--host-text-muted` and `--host-accent`, plus `--radius`, `color-scheme`, the `dark` class and `data-mode` (`"dark"` or `"light"`) on the page. `applyHostTheme(theme)` does only that, and `isGerman(language)` / `languageOf(language)` tell the language: anything but German is English.
+Besides the `--<token>` variables above, it sets the summary colours as `--host-background`, `--host-surface`, `--host-text`, `--host-text-muted` and `--host-accent`, plus `--radius`, the font as `--tavora-font-sans`, `color-scheme`, the `dark` class and `data-mode` (`"dark"` or `"light"`) on the page. `applyHostTheme(theme)` does only that, and `isGerman(language)` / `languageOf(language)` tell the language: anything but German is English.
 
 A module built on the shared kit (`@tavora/official-ui`) calls `connectModule` instead, which adds the kit's translator, toast position, tooltips and `<html lang>`:
 

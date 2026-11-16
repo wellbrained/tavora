@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.3.19",
+    "date": "2026-11-16",
+    "notes": [
+      "The board's menus and toolbars use Tavora's font."
+    ]
+  },
+  {
     "version": "0.3.18",
     "date": "2026-11-14",
     "notes": [

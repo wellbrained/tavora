@@ -48,7 +48,23 @@ export interface TavoraTheme {
   radius: number;
   /** Where the user wants toasts in a panel. Older Tavora leaves it out, which means bottom center. */
   toasts?: ToastPosition;
+  /**
+   * The interface font the user picked (Settings > Appearance). It can change while the module is open, like the colours.
+   * Older Tavora leaves it out, which means Inter.
+   */
+  font?: ThemeFont;
 }
+
+/** The interface font in a TavoraTheme. */
+export interface ThemeFont {
+  /** Which font it is, such as `"inter"`. Tavora may add fonts, so treat an id you don't know like any other. */
+  id: string;
+  /** The CSS `font-family` value to use, such as `"Inter Variable", system-ui, sans-serif`. Tavora's page already has its files. */
+  family: string;
+}
+
+/** Tavora's default interface font, and what a theme without `font` means. */
+export const DEFAULT_THEME_FONT: ThemeFont = { id: "inter", family: '"Inter Variable", system-ui, sans-serif' };
 
 /** Where toasts show in a panel (Settings > Appearance > Notifications). */
 export type ToastPosition = "bottom-center" | "bottom-right" | "top-center";

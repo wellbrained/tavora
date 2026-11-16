@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.38
+
+- New projects start on `@tavora/sdk` 0.4.1: the theme carries the font the user picked, as `--tavora-font-sans`.
+
 ## 0.1.37
 
 - New projects pack with `@tavora/pack` 0.3.4. New projects start on `@tavora/sdk` 0.4.0 and set `minTavora` to 0.21.43, the oldest Tavora that SDK supports.

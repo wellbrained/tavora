@@ -520,7 +520,7 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
           <DropdownMenuContent align="start">
             <DropdownMenuLabel>{{ t("editor.font") }}</DropdownMenuLabel>
             <DropdownMenuItem v-for="font in FONTS" :key="font.id" :data-testid="`font-${font.id}`" @select.prevent="emit('setStyle', { font: font.id })">
-              <span :style="{ fontFamily: font.stack }">{{ font.name }}</span>
+              <span :style="{ fontFamily: font.stack }">{{ font.id === "inter" ? t("font.tavora") : font.name }}</span>
               <Check v-if="look.font === font.id" class="ml-auto" :stroke-width="1.5" :aria-label="t('editor.on')" />
             </DropdownMenuItem>
             <DropdownMenuSeparator />

@@ -27,6 +27,8 @@ export interface ToastsLook {
   /** The theme's colours by name (`toast`, `toast-foreground`, `background`, …). */
   colors: Record<string, string>;
   radius: number;
+  /** The CSS font-family of the interface font the user picked. */
+  font: string;
   language: string;
 }
 

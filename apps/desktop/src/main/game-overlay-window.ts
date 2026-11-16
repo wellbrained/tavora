@@ -52,6 +52,8 @@ export interface GameOverlayWindowOptions {
   ended(): void;
   /** The name and the close button's label the frame shows. */
   frameText(): { name: string; closeLabel: string; layoutLabel: string };
+  /** The interface font's stylesheet for the frame (module-fonts.ts). */
+  fontCss?(): string;
   /** A panel to hold instead of an overlay page (lent by Panel views, which takes it back when GameOverlays returns the loan). */
   panel?: OverlayPanel;
 }
@@ -180,7 +182,11 @@ export class GameOverlayWindow {
     }
     const frame = this.frame.webContents;
     lockContents(frame);
-    frame.on("did-finish-load", () => this.sendFrameText());
+    frame.on("did-finish-load", () => {
+      this.sendFrameText();
+      const css = options.fontCss?.();
+      if (css) void frame.insertCSS(css, { cssOrigin: "user" }).catch(() => {});
+    });
     void frame.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(GAME_OVERLAY_FRAME_DOCUMENT)}`).catch(() => {});
     frame.ipc.on("game-overlay:close", () => this.arranging && options.closeRequested());
     frame.ipc.on("game-overlay:layout", () => this.arranging && options.layoutRequested());

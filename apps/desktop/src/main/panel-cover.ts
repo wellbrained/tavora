@@ -110,6 +110,8 @@ export interface CoverPageOptions {
   fireAtEpoch: number;
   /** Tavora's emblem as a data: URL, or null when it could not be read (the embers rise from nothing then). */
   emblem: string | null;
+  /** The interface font's stylesheet (module-fonts.ts): its files and --tavora-font-sans. Without it, the system font. */
+  fontCss?: string;
 }
 
 /** How far the panel's corner is rounded in the host UI (dock.css), as the loading card there. */
@@ -123,7 +125,7 @@ const cssColor = (value: string, fallback: string) => (/^[#\w\s(),.%/-]+$/.test(
  * The cover's page: the loading card of the host UI (its background and border) and the Campfire loader of
  * CampfireLoader.vue (emblem, rising embers, label), hidden until `fireAtEpoch`. With reduced motion it stays plain.
  */
-export function coverPage({ theme, label, fireAtEpoch, emblem }: CoverPageOptions): string {
+export function coverPage({ theme, label, fireAtEpoch, emblem, fontCss = "" }: CoverPageOptions): string {
   const dark = theme.mode === "dark";
   const background = cssColor(theme.tokens.background, dark ? "#000" : "#fff");
   const border = cssColor(theme.tokens.border, "transparent");
@@ -145,9 +147,10 @@ export function coverPage({ theme, label, fireAtEpoch, emblem }: CoverPageOption
     return `<i style="${style}"></i>`;
   }).join("");
   const logo = emblem ? `<img src="${escapeHtml(emblem)}" alt="" draggable="false">` : "";
-  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'"><style>
+  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; font-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'"><style>
+${fontCss}
 html,body{margin:0;height:100%;overflow:hidden;background:${background};cursor:default;user-select:none}
-body{box-sizing:border-box;border:1px solid ${border};border-radius:${COVER_RADIUS}px;font:13px system-ui,"Segoe UI",sans-serif;color:${muted}}
+body{box-sizing:border-box;border:1px solid ${border};border-radius:${COVER_RADIUS}px;font:13px var(--tavora-font-sans,system-ui,"Segoe UI",sans-serif);color:${muted}}
 .campfire{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;opacity:0;transition:opacity ${FIRE_FADE_MS}ms ease-out}
 body.fire .campfire{opacity:1}
 .fire-box{position:relative;flex:none;width:var(--cf-size);height:var(--cf-size);isolation:isolate}
@@ -178,6 +181,8 @@ export interface PanelCoverOptions {
   /** The window's content view, which the cover is put on top of. */
   parent: View;
   emblem: () => string | null;
+  /** The interface font's stylesheet for a theme (module-fonts.ts), for the label. */
+  fontCss?: (theme: TavoraTheme) => string;
   now?: () => number;
 }
 
@@ -218,7 +223,7 @@ export class PanelCover {
     this.fireAt = fireDelay(estimateMs);
     // The colour shows at once, before the page has loaded; the page only adds the fire and the card's border.
     view.setBackgroundColor(theme.tokens.background);
-    const page = coverPage({ theme, label, fireAtEpoch: this.shownAt + this.fireAt, emblem: this.options.emblem() });
+    const page = coverPage({ theme, label, fireAtEpoch: this.shownAt + this.fireAt, emblem: this.options.emblem(), fontCss: this.options.fontCss?.(theme) ?? "" });
     // Loading a new page can give the view a new surface, white over the whole workspace for a frame or two before
     // the page draws: once the cover has a page, the next one is written into it instead.
     if (this.pageLoaded) void view.webContents.executeJavaScript(`document.open();document.write(${JSON.stringify(page)});document.close();`).catch(() => undefined);

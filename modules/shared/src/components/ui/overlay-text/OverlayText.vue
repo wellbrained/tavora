@@ -3,6 +3,7 @@
 // size. Each line is a block; give its parts sizes in `em` (1em is `font-size` at 100 %). A change to the lines is
 // picked up by itself; `content-key` says whether it is the same thing (a running scroll goes on) or a new one.
 import { onBeforeUnmount, onMounted, useTemplateRef, watch } from "vue"
+import { onFontChange } from "../../../theme"
 import { mountOverlayText, type OverlayText, type OverlayTextAlign } from "./overlay-text"
 import { DEFAULT_PAUSE, type OverlayTextBox, type OverlayTextScaleBy, type OverlayTextSpeed, type OverlayTextTooLong } from "./plan"
 
@@ -30,6 +31,7 @@ const lines = useTemplateRef<HTMLElement>("lines")
 let text: OverlayText | undefined
 let resize: ResizeObserver | undefined
 let mutations: MutationObserver | undefined
+let stopFont: (() => void) | undefined
 
 const options = () => ({ box: props.box, scaleBy: props.scaleBy, tooLong: props.tooLong, speed: props.speed, pause: props.pause, softEdges: props.softEdges, align: props.align, padding: props.padding, fontSize: props.fontSize })
 
@@ -45,6 +47,8 @@ onMounted(() => {
   resize = new ResizeObserver(() => text?.fit())
   resize.observe(host.value!)
   void document.fonts?.ready.then(() => text?.fit())
+  // The user picked another font: the same box holds text of another size.
+  stopFont = onFontChange(() => text?.fit())
 })
 
 watch(options, (next) => text?.configure(next))
@@ -54,6 +58,7 @@ watch(() => props.active, (next) => text?.setActive(next))
 onBeforeUnmount(() => {
   mutations?.disconnect()
   resize?.disconnect()
+  stopFont?.()
   text?.destroy()
 })
 </script>

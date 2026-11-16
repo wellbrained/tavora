@@ -252,9 +252,12 @@ export function normalizeLink(input: string): string | null {
 
 // ── Text appearance ──────────────────────────────────────────────────
 
-/** The fonts for note text, all bundled with the module so they work offline. */
+/**
+ * The fonts for note text, all bundled with the module so they work offline. The first is Tavora's font, the one the
+ * user picked in Tavora (Inter unless they changed it); its id stays "inter", the font notes saved before it followed.
+ */
 export const FONTS = [
-  { id: "inter", name: "Inter", stack: '"Inter Variable", system-ui, sans-serif' },
+  { id: "inter", name: "Tavora", stack: "var(--font-sans)" },
   { id: "open-sans", name: "Open Sans", stack: '"Open Sans Variable", system-ui, sans-serif' },
   { id: "lora", name: "Lora", stack: '"Lora Variable", Georgia, serif' },
   { id: "merriweather", name: "Merriweather", stack: '"Merriweather Variable", Georgia, serif' },

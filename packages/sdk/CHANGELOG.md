@@ -1,3 +1,11 @@
+## 0.4.1
+
+The interface font. Tavora will let users pick the font of its interface, and it can change while a module is open, like the colours. `MIN_TAVORA` stays (Tavora 0.21.43).
+
+- `TavoraTheme` gets an optional `font: { id, family }` (type `ThemeFont`): `family` is the CSS `font-family` value of the font the user picked, whose files Tavora puts in the page. An older Tavora leaves it out, which means Inter (`DEFAULT_THEME_FONT`).
+- `applyHostTheme`, and with it `bootstrapModule`, sets it as `--tavora-font-sans`, now and on every `ui.theme` event.
+- `@tavora/sdk/testing`: `themeFromPackage` and `themeOf` include Inter as the font.
+
 ## 0.4.0
 
 **Breaking.** The last deprecated pieces go, so the protocol is ready to be locked for Tavora 1.0. `MIN_TAVORA` is now `0.21.43` (Tavora 0.21.43).

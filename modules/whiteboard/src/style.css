@@ -43,6 +43,10 @@ body {
 .excalidraw {
   --ui-pointerEvents: auto;
 }
+/* Its menus and toolbars in Tavora's font (the one the user picked); text drawn on the board keeps its own fonts. */
+.whiteboard-app .excalidraw {
+  --ui-font: var(--font-sans);
+}
 .excalidraw .sidebar-trigger,
 .excalidraw .layer-ui__library {
   display: none !important;

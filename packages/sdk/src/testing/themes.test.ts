@@ -12,13 +12,14 @@ describe("themeOf", () => {
     expect(themeOf("light")).toEqual(themeFromPackage(shipped("hearthwood"), "light"));
   });
 
-  it("gives what a panel gets: every token, the summary colours, the radius and the toast position", () => {
+  it("gives what a panel gets: every token, the summary colours, the radius, the toast position and the font", () => {
     const dark = themeOf("dark");
     expect(dark.mode).toBe("dark");
     expect(Object.keys(dark.tokens).sort()).toEqual([...THEME_TOKENS].sort());
     expect(dark.colors).toEqual({ background: "#171412", surface: "#201c19", text: "#f2ece0", textMuted: "#9a958c", accent: "#e0a243" });
     expect(dark.radius).toBe(8);
     expect(dark.toasts).toBe("bottom-center");
+    expect(dark.font).toEqual({ id: "inter", family: '"Inter Variable", system-ui, sans-serif' });
     expect(themeOf("light").mode).toBe("light");
   });
 

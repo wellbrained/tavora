@@ -661,6 +661,8 @@ export interface AppearanceView {
   followSystem: boolean;
   /** The user's own corner radius in px over the theme's, or null for the theme's. */
   radius: number | null;
+  /** The interface font in use: its id and its CSS font-family. */
+  font: { id: string; family: string };
   themes: ThemeView[];
   /** Theme folders that could not be used, and why, for theme authors. */
   problems: { folder: string; message: string; kind?: "needs-newer"; values?: { needs: string; current: string } }[];

@@ -29,6 +29,8 @@ import type { WorkspaceNames } from "./workspace-lookup";
 export interface OverlayHostPorts {
   shell: Shell;
   language(): Language;
+  /** The interface font's stylesheet for Tavora's own overlay chrome (module-fonts.ts). */
+  fontCss?(): string;
   /** Something the Settings page depends on changed. */
   changed(): void;
   /** Something the Settings page or the game watcher depends on changed (a game overlay was added, removed or toggled). */
@@ -142,6 +144,7 @@ export async function createOverlayServices(wiring: OverlayWiring): Promise<Over
       new OverlayPreviewWindow(request, {
         hidden: options.hidden,
         labels: { dark: translate(ports.language(), "preview.dark"), light: translate(ports.language(), "preview.light"), checker: translate(ports.language(), "preview.checker") },
+        ...(ports.fontCss ? { fontCss: ports.fontCss() } : {}),
       }),
   });
   const layout = overlayLayout(wiring, gameOverlays);

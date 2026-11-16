@@ -87,6 +87,7 @@ function make(extra: Record<string, unknown> = {}) {
     workspace: { id: "elden", displayName: "Elden Ring", kind: "game" },
     data: { blobs: {} },
     getTheme: () => ({ tokens: { background: "#202020" } }),
+    fontCss: (theme: { font?: { id: string } }) => `font:${theme.font?.id ?? ""}`,
     savePicture: async () => null,
     saveJson: async () => null,
     openJson: async () => null,
@@ -346,6 +347,22 @@ describe("a panel over the game", () => {
     expect(state.background).toBe("#00000000");
     view.leaveGame();
     expect(state.background).toBe("#202020");
+  });
+
+  it("swaps the font's stylesheet only when the font changes, and the colours' on every theme", async () => {
+    const view = make();
+    const state = made.views.at(-1)!;
+    const theme = (font: string, background: string) => ({ tokens: { background }, font: { id: font, family: font } }) as never;
+    view.applyTheme(theme("inter", "#101010"));
+    view.applyTheme(theme("inter", "#202020"));
+    await vi.waitFor(() => expect(state.css.filter((css) => css.startsWith("font:"))).toEqual(["font:inter"]));
+    view.applyTheme(theme("allo", "#202020"));
+    await vi.waitFor(() => expect(state.css.filter((css) => css.startsWith("font:"))).toEqual(["font:inter", "font:allo"]));
+    const inter = `key-${state.css.indexOf("font:inter") + 1}`;
+    await vi.waitFor(() => expect(state.removed).toContain(inter));
+    // Three colour sheets went in, and the two older ones came out.
+    await vi.waitFor(() => expect(state.css.filter((css) => !css.startsWith("font:"))).toHaveLength(3));
+    await vi.waitFor(() => expect(state.removed).toHaveLength(3));
   });
 
   it("takes the style away even when it was still being inserted as the panel came back", async () => {

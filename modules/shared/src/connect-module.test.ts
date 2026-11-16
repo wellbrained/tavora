@@ -6,6 +6,7 @@ vi.mock("@tavora/sdk", async (original) => ({ ...(await original<typeof import("
 vi.mock("./title-tooltips", () => ({ installTitleTooltips: vi.fn() }));
 
 import { connectModule } from "./connect-module";
+import { onFontChange } from "./theme";
 import { installTitleTooltips } from "./title-tooltips";
 import { toastPosition } from "./components/ui/toast/toast";
 import { toastsPaused } from "./components/ui/toast/visibility";
@@ -61,6 +62,32 @@ describe("connectModule({ texts })", () => {
     host.changeTheme({ mode: "light", toasts: "top-center" });
     expect(root.attributes.get("data-mode")).toBe("light");
     expect(toastPosition.value).toBe("top-center");
+  });
+
+  it("writes the font the user picked, and tells measuring components when it changes, not for any other theme change", async () => {
+    vi.useFakeTimers();
+    try {
+      const { sdk, host } = createMemoryHost({ theme: { font: { id: "inter", family: '"Inter Variable", sans-serif' } } });
+      await connectModule({ sdk });
+      // An earlier test's page had another font; this page's first theme is no change for it.
+      await vi.runAllTimersAsync();
+      const heard = vi.fn();
+      const stop = onFontChange(heard);
+      host.changeTheme({ mode: "light" });
+      await vi.runAllTimersAsync();
+      expect(heard).not.toHaveBeenCalled();
+      host.changeTheme({ font: { id: "allo", family: '"Allo Variable", sans-serif' } });
+      expect(root.style.props.get("--tavora-font-sans")).toBe('"Allo Variable", sans-serif');
+      await vi.runAllTimersAsync();
+      expect(heard).toHaveBeenCalled();
+      stop();
+      heard.mockClear();
+      host.changeTheme({ font: { id: "inter", family: '"Inter Variable", sans-serif' } });
+      await vi.runAllTimersAsync();
+      expect(heard).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("holds toast timers while the host says the panel is hidden, and lets go when disposed", async () => {

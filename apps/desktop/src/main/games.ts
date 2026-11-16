@@ -1,4 +1,4 @@
-import type { TavoraTheme } from "@tavora/sdk/protocol";
+import { DEFAULT_THEME_FONT, type TavoraTheme } from "@tavora/sdk/protocol";
 
 /**
  * The Tavora default theme (Tavora, Dark), as modules get it through
@@ -41,4 +41,5 @@ export const THEME: TavoraTheme = {
   },
   radius: 8,
   toasts: "bottom-center",
+  font: { ...DEFAULT_THEME_FONT },
 };

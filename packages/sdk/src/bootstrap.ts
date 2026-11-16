@@ -27,8 +27,8 @@ const hostVariable = (name: string) => `--host-${name.replace(/[A-Z]/g, (letter)
 
 /**
  * Writes the host theme to the page: every theme token as `--<token>`, the summary colours as `--host-<name>`
- * (`--host-background`, `--host-text`, …), `--radius`, `color-scheme`, the `dark` class and `data-mode`
- * (`"dark"` or `"light"`). A part the theme leaves out is left as it was.
+ * (`--host-background`, `--host-text`, …), `--radius`, the font as `--tavora-font-sans`, `color-scheme`, the `dark` class
+ * and `data-mode` (`"dark"` or `"light"`). A part the theme leaves out is left as it was.
  */
 export function applyHostTheme(theme: TavoraTheme, root: ThemeRoot = document.documentElement): void {
   for (const name of THEME_TOKENS) {
@@ -39,6 +39,8 @@ export function applyHostTheme(theme: TavoraTheme, root: ThemeRoot = document.do
     if (typeof value === "string" && value) root.style.setProperty(hostVariable(name), value);
   }
   if (typeof theme.radius === "number" && Number.isFinite(theme.radius)) root.style.setProperty("--radius", `${theme.radius}px`);
+  const family = theme.font?.family;
+  if (typeof family === "string" && family) root.style.setProperty("--tavora-font-sans", family);
   const mode = theme.mode === "light" ? "light" : "dark";
   root.style.colorScheme = mode;
   root.classList.toggle("dark", mode === "dark");

@@ -10,6 +10,7 @@ import type { ResolvedPanelType } from "@tavora/module-schema";
 import { modulePartition } from "./module-data";
 import { gestureCounts, type Opacity } from "./game-overlays";
 import { moduleThemeCss } from "./module-style";
+import { InsertedCss } from "./inserted-css";
 import { contentTypeFor, moduleCsp, MODULE_SCHEME, resolveAsset, withModulePolicy } from "./assets";
 import { APP_BLOB_PATH, BLOB_PATH, CLIPBOARD_PATH, PICTURES_PATH, JSON_EXPORT_PATH, JSON_SAVE_PATH, JSON_OPEN_PATH, FILE_SAVE_PATH, FILE_OPEN_PATH } from "@tavora/sdk/protocol";
 import { BridgeSession, newBridgeBudget, type BridgeContext, type PanelDialogSize } from "./bridge";
@@ -57,6 +58,8 @@ export interface ModuleViewOptions {
   getLanguage(): string;
   /** Tavora's default look for the page, below the module's own styles (module-style.ts). Colours come from the theme stylesheet. */
   baseCss: string;
+  /** The stylesheet with a theme's font: its files and --tavora-font-sans (module-fonts.ts). */
+  fontCss(theme: TavoraTheme): string;
   onStatus(status: InstanceStatus): void;
   /** The module's own browser storage grew past the limit; the host clears it (see storage-guard.ts). */
   onStorageOver(): void;
@@ -422,10 +425,12 @@ export class ModuleView {
   private readonly folderTurns = new Map<string, number>();
   /** When one of the module's hotkeys was last pressed for this panel; it allows one media.control, like a click. */
   private hotkeyAt = 0;
-  /** The inserted theme stylesheet of the current page, removed when the theme changes. */
-  private themeCssKey: string | undefined;
-  /** Theme stylesheets are swapped one at a time, so none is left behind. */
-  private themeCssQueue: Promise<void> = Promise.resolve();
+  /** The theme's colours in the current page, replaced when the theme changes. */
+  private readonly themeCss = new InsertedCss(() => this.view.webContents);
+  /** The font in the current page, replaced when the user picks another font. */
+  private readonly fontSheet = new InsertedCss(() => this.view.webContents);
+  /** The font the current page has, so a theme change that keeps it leaves its big stylesheet alone. */
+  private fontId: string | undefined;
   private heartbeat: ReturnType<typeof setInterval> | undefined;
   private lastPong = 0;
   private storageWatch: ReturnType<typeof setInterval> | undefined;
@@ -535,11 +540,13 @@ export class ModuleView {
       // A new document starts without the style of Tavora's own that fades it over the game.
       if (this.overGame) this.overGame.css = undefined;
       if (this.overGame) void this.applyGameOpacity();
-      this.themeCssQueue = this.themeCssQueue.then(() => void (this.themeCssKey = undefined));
+      this.themeCss.forget();
+      this.fontSheet.forget();
+      this.fontId = undefined;
       contents.insertCSS(options.baseCss, { cssOrigin: "user" }).catch(() => {
         // The page went away before the styles landed.
       });
-      void this.insertThemeCss(options.getTheme());
+      this.insertThemeCss(options.getTheme());
     });
     contents.on("did-finish-load", () => {
       if (this.disposed || this.health !== "loading") return;
@@ -1383,7 +1390,7 @@ export class ModuleView {
   applyTheme(theme: TavoraTheme): void {
     // A panel still waiting for its first frame stays see-through until then (awaitFrame).
     if (!this.overGame && !this.frameWaiters.size) this.view.setBackgroundColor(theme.tokens.background);
-    void this.insertThemeCss(theme);
+    this.insertThemeCss(theme);
     this.bridge?.emit("ui.theme", theme);
   }
 
@@ -1392,18 +1399,13 @@ export class ModuleView {
     this.bridge?.emit("ui.language", language);
   }
 
-  private insertThemeCss(theme: TavoraTheme): Promise<void> {
-    const contents = this.view.webContents;
-    this.themeCssQueue = this.themeCssQueue.then(async () => {
-      const previous = this.themeCssKey;
-      try {
-        this.themeCssKey = await contents.insertCSS(moduleThemeCss(theme), { cssOrigin: "user" });
-        if (previous) await contents.removeInsertedCSS(previous);
-      } catch {
-        // The page went away; the next one gets the theme on dom-ready.
-      }
-    });
-    return this.themeCssQueue;
+  /** The theme's colours, and its font when that changed. */
+  private insertThemeCss(theme: TavoraTheme): void {
+    void this.themeCss.replace(moduleThemeCss(theme));
+    const fontId = theme.font?.id ?? "";
+    if (fontId === this.fontId) return;
+    this.fontId = fontId;
+    void this.fontSheet.replace(this.options.fontCss(theme));
   }
 
   /** Tells the module it is hidden; it should pause timers and animations. */

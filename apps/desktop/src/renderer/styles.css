@@ -100,7 +100,9 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 
-  --font-sans: "Inter Variable", system-ui, sans-serif;
+  /* The font the user picked (Settings > Appearance), set at runtime as --tavora-font-sans; a var() so it switches
+     live (under @theme inline a plain name would be written into every rule). Inter until it is set. */
+  --font-sans: var(--tavora-font-sans, "Inter Variable", system-ui, sans-serif);
   --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
   /* Type scale from the style guide; nothing is smaller than 12px. */
   --text-xs: 12px;

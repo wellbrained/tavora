@@ -5,7 +5,8 @@
 // defaults (white margins, light form controls, serif text), so a module
 // that styles nothing still looks like part of Tavora, and one with its own
 // design keeps it. The colours sit in a second, small stylesheet of their
-// own, so a theme change replaces only that one.
+// own, so a theme change replaces only that one, and the font in a third,
+// replaced only when the user picks another font.
 //
 // A module's stylesheet only wins for the properties it sets, so nothing here
 // may set a property that a CSS reset such as Tailwind's leaves alone: no
@@ -13,7 +14,7 @@
 // to 32px) and no font size on the root (it made every rem 14px instead of
 // 16px). Controls get their height from padding and line height, which
 // resets do clear, and the 14px text sits on body.
-import type { TavoraTheme } from "@tavora/sdk/protocol";
+import type { TavoraTheme, ThemeFont } from "@tavora/sdk/protocol";
 
 /** A theme's tokens as modules see them: the colour tokens plus the radius. */
 export function moduleTokens(theme: TavoraTheme): Record<string, string> {
@@ -31,26 +32,35 @@ select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.o
 `;
 }
 
-export interface ModuleFonts {
-  /** Inter's Latin subset as a woff2 data URL. */
-  latin: string;
-  /** Inter's Latin Extended subset as a woff2 data URL. */
-  latinExt: string;
+/** One file of a font: a woff2 data URL and the characters it covers. */
+export interface ModuleFontFace {
+  src: string;
+  /** A CSS unicode-range. */
+  range: string;
 }
 
-// Unicode ranges as Fontsource splits Inter.
-const LATIN =
-  "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD";
-const LATIN_EXT =
-  "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF";
+/** A font's files for a page, under the name its family uses (`"Inter Variable"`), with its weight range (`100 900`). */
+export interface ModuleFontFiles {
+  name: string;
+  weight: string;
+  faces: ModuleFontFace[];
+}
 
-export function moduleBaseCss(fonts: ModuleFonts): string {
-  const face = (src: string, range: string) =>
-    `@font-face { font-family: "Inter Variable"; font-style: normal; font-display: swap; font-weight: 100 900; ` +
-    `src: url(${src}) format("woff2-variations"); unicode-range: ${range}; }`;
+/**
+ * The font the user picked, in a stylesheet of its own: its files, embedded so the page loads nothing, and
+ * `--tavora-font-sans`. It is swapped only when the font changes, as its files are far bigger than the colours.
+ */
+export function moduleFontCss(font: ThemeFont, files: ModuleFontFiles): string {
+  const faces = files.faces.map(
+    (face) =>
+      `@font-face { font-family: "${files.name}"; font-style: normal; font-display: swap; font-weight: ${files.weight}; ` +
+      `src: url(${face.src}) format("woff2-variations"); unicode-range: ${face.range}; }`,
+  );
+  return `${faces.join("\n")}\n:root { --tavora-font-sans: ${font.family}; }\n`;
+}
+
+export function moduleBaseCss(): string {
   return `
-${face(fonts.latin, LATIN)}
-${face(fonts.latinExt, LATIN_EXT)}
 :root {
   --tavora-font-sans: "Inter Variable", system-ui, sans-serif;
   --tavora-font-mono: ui-monospace, monospace;
