@@ -3,14 +3,18 @@
 import type { JsonValue } from "@tavora/sdk";
 import { depths, type TodoList } from "./todos";
 
-/** The fonts the live view offers, all bundled (fonts.css) so they work offline. The first is the default. */
+/**
+ * The fonts the live view offers, all bundled (fonts.css) so they work offline. The first is the default: Tavora's font,
+ * the one the user picked in Tavora (Inter unless they changed it; the overlay page gets it through watchOverlay). Its
+ * id stays "inter", the font saved before it followed Tavora's.
+ */
 export const LIVE_FONTS = [
-  { id: "inter", name: "Inter", stack: '"Inter Variable", system-ui, sans-serif' },
+  { id: "inter", name: "Tavora", stack: 'var(--tavora-font-sans, "Inter Variable", system-ui, sans-serif)' },
   { id: "saira", name: "Saira", stack: '"Saira Variable", system-ui, sans-serif' },
   { id: "titillium", name: "Titillium Web", stack: '"Titillium Web", system-ui, sans-serif' },
   { id: "barlow", name: "Barlow Condensed", stack: '"Barlow Condensed", system-ui, sans-serif' },
   { id: "nunito", name: "Nunito", stack: '"Nunito Variable", system-ui, sans-serif' },
-  { id: "atkinson", name: "Atkinson Hyperlegible", stack: '"Atkinson Hyperlegible", system-ui, sans-serif' },
+  { id: "atkinson", name: "Atkinson Hyperlegible Next", stack: '"Atkinson Hyperlegible Next Variable", system-ui, sans-serif' },
   { id: "cinzel", name: "Cinzel", stack: '"Cinzel Variable", Georgia, serif' },
 ] as const;
 export type LiveFont = (typeof LIVE_FONTS)[number]["id"];

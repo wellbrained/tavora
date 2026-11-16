@@ -18,3 +18,5 @@ watchOverlay((next) => {
 addEventListener("resize", draw);
 // A font that arrives after the first draw changes how much fits.
 void document.fonts.ready.then(draw);
+// Tavora's font came in, or the user picked another (watchOverlay loads it): the same space holds more or less.
+document.fonts.addEventListener("loadingdone", draw);

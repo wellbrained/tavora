@@ -23,7 +23,8 @@ body {
   padding: 8px 12px;
   overflow: hidden;
   list-style: none;
-  font-family: "Inter Variable", system-ui, sans-serif;
+  /* rules-allow: font-family an overlay page gets no theme: Tavora's font comes from watchOverlay, Inter (bundled) on an older Tavora */
+  font-family: var(--tavora-font-sans, "Inter Variable", system-ui, sans-serif);
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
 }

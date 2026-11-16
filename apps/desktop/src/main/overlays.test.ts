@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { LIMITS } from "@tavora/sdk/protocol";
+import { setOverlayFont } from "./overlay-font";
 import { OVERLAY_CSP, OverlayServer, OverlayStore, overlayUrl, OVERLAYS_FILE, type OverlayLink, type OverlaySubject } from "./overlays";
 
 let dir: string;
@@ -212,7 +213,32 @@ describe("OverlayServer", () => {
     await new Promise((resolve) => setTimeout(resolve, 100));
     store.publish(subject(), { value: 2 });
     store.remove(subject());
-    expect(await seen).toEqual([{ state: { value: 1 } }, { state: { value: 2 } }, { state: null }]);
+    expect(await seen).toEqual([
+      { state: { value: 1 }, font: "inter" },
+      { state: { value: 2 }, font: "inter" },
+      { state: null, font: "inter" },
+    ]);
+  });
+
+  it("sends the state again with the new font when the user picks another, and serves that font next to the page", async () => {
+    store.publish(subject(), { value: 1 });
+    const { token } = store.link(subject());
+    const seen = events(port, `/overlay/${token}/_state`, 2);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    try {
+      setOverlayFont({ id: "allo", family: '"Tavora Allo", system-ui, sans-serif' });
+      expect(await seen).toEqual([
+        { state: { value: 1 }, font: "inter" },
+        { state: { value: 1 }, font: "allo" },
+      ]);
+      const css = await get(port, `/overlay/${token}/_font.css`);
+      expect(css.status).toBe(200);
+      expect(css.headers["content-type"]).toContain("text/css");
+      expect(css.body).toContain('font-family: "Tavora Allo"');
+      expect(css.body).toContain(':root { --tavora-font-sans: "Tavora Allo", system-ui, sans-serif; }');
+    } finally {
+      setOverlayFont(undefined);
+    }
   });
 
   it("says when the port is in use", async () => {

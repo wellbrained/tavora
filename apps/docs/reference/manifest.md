@@ -116,7 +116,7 @@ The same page is what `overlay.showOverGame` shows over the user's game, in a wi
 "permissions": { "network": [], "connectors": ["stream-overlay"] }
 ```
 
-The page loads only its own files: bundle your fonts, and give it colours and texts in what you publish, since it gets neither the theme nor the language. Its background should stay transparent.
+The page loads only its own files: bundle your fonts, and give it colours and texts in what you publish, since it gets neither the theme nor the language. The one exception is Tavora's font: with `watchOverlay`, the page has the font the user picked as `var(--tavora-font-sans)` (give it a fallback for older Tavoras, such as `var(--tavora-font-sans, "Inter Variable", sans-serif)`), and it changes when the user picks another. Its background should stay transparent.
 
 ## Actions
 

@@ -43,7 +43,6 @@
         "color: var(--words, var(--color, #fff));": 1
       },
       "font-family": {
-        "font-family: \"Inter Variable\", system-ui, sans-serif;": 1,
         "font-family: \"JetBrains Mono Variable\", ui-monospace, Consolas, monospace;": 1,
         "font-family: \"Segoe UI\", system-ui, sans-serif;": 1
       },
@@ -65,7 +64,6 @@
         "color: var(--words, var(--color, #fff));": 1
       },
       "font-family": {
-        "font-family: \"Inter Variable\", system-ui, sans-serif;": 1,
         "font-family: \"JetBrains Mono Variable\", ui-monospace, Consolas, monospace;": 1,
         "font-family: \"Segoe UI\", system-ui, sans-serif;": 1
       },

@@ -196,6 +196,38 @@ test("an overlay page on the Overlay page cannot send anything out over WebRTC (
   }
 });
 
+test("an overlay page shows the font picked in Tavora, and changes with it while it is open", async () => {
+  const { app, page } = await inPersonalWorkspace();
+  try {
+    await click(app, "add-counter");
+    await closeSettings(page);
+    await overlayPage(app, page);
+    await expect.poll(async () => (await state(page)).sources[0]?.children?.length).toBe(1);
+    const header = (await state(page)).sources[0]!;
+    await page.getByTestId(`layout-source-${header.id}:${header.children![0]!.key}`).getByRole("button").first().click();
+    await expect.poll(async () => (await state(page)).items.length).toBe(1);
+    // The family the overlay's text is in, once a file of it is in (the page reads it from Tavora's _font.css).
+    const overlayFont = () =>
+      app.evaluate(async ({ webContents }) => {
+        const contents = webContents.getAllWebContents().find((one) => one.getURL().startsWith("tavora-overlay://"));
+        if (!contents) return "no page";
+        return contents.executeJavaScript(`(async () => {
+          const text = document.querySelector(".cc-ov");
+          if (!text) return "no text";
+          const first = getComputedStyle(text).fontFamily.split(",")[0].trim();
+          await document.fonts.load("16px " + first);
+          const name = first.replace(/["']/g, "");
+          return [...document.fonts].some((face) => face.family.replace(/["']/g, "") === name && face.status === "loaded") ? name : "loading " + name;
+        })()`);
+      });
+    await expect.poll(overlayFont, { timeout: 10_000 }).toBe("Inter Variable");
+    await page.evaluate(() => (window as unknown as Host).tavoraHost.act({ type: "set-font", font: "saira" }));
+    await expect.poll(overlayFont, { timeout: 10_000 }).toBe("Tavora Saira");
+  } finally {
+    await app.close();
+  }
+});
+
 test("counting, Start and Reset work, and Add is a menu in the page rather than one Tavora draws", async () => {
   const { app, page } = await inPersonalWorkspace();
   try {

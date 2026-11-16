@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { JsonValue } from "@tavora/sdk/protocol";
 import { GAME_OVERLAY_ORIGIN, serveGameOverlay, type GameOverlaySource } from "./game-overlay-page";
 import { OVERLAY_CSP } from "./overlays";
+import { setOverlayFont } from "./overlay-font";
 
 let dir: string;
 let root: string;
@@ -86,13 +87,27 @@ describe("serveGameOverlay", () => {
     const until = async (needle: string) => {
       while (!text.includes(needle)) text += decoder.decode((await reader.read()).value);
     };
-    await until(`data: {"state":{"value":1}}\n\n`);
+    await until(`data: {"state":{"value":1},"font":"inter"}\n\n`);
     src.publish({ value: 2 });
-    await until(`data: {"state":{"value":2}}\n\n`);
+    await until(`data: {"state":{"value":2},"font":"inter"}\n\n`);
+    // Another font: the same state again, with it.
+    setOverlayFont({ id: "saira", family: '"Tavora Saira", system-ui, sans-serif' });
+    await until(`data: {"state":{"value":2},"font":"saira"}\n\n`);
+    setOverlayFont(undefined);
+    await until(`data: {"state":{"value":2},"font":"inter"}\n\n`);
     src.publish(null);
-    await until(`data: {"state":null}\n\n`);
+    await until(`data: {"state":null,"font":"inter"}\n\n`);
     await reader.cancel();
     expect(src.watchers.size).toBe(0);
+  });
+
+  it("serves the interface font next to the page", async () => {
+    const response = await get(source().value, "/_font.css");
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/css");
+    const css = await response.text();
+    expect(css).toContain('font-family: "Inter Variable"');
+    expect(css).toContain("--tavora-font-sans");
   });
 
   it("ends the stream at once when the overlay has no link, so the page asks again", async () => {

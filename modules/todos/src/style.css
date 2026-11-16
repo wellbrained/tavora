@@ -1,8 +1,8 @@
 @import "@tavora/official-ui/theme.css";
 
-/* The font and size to-dos show in; Settings > Panel changes them on the panel. */
+/* The font and size to-dos show in; Settings > Panel changes them on the panel. Tavora's font until then. */
 :root {
-  --todo-font: "Inter Variable", system-ui, sans-serif;
+  --todo-font: var(--font-sans);
   --todo-text: 14px;
   --todo-leading: 20px;
 }

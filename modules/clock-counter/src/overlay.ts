@@ -67,3 +67,5 @@ watchOverlay((next) => {
 
 addEventListener("resize", () => view.fit());
 void document.fonts.ready.then(() => view.fit());
+// Tavora's font came in, or the user picked another (watchOverlay loads it): fit the text to its new width.
+document.fonts.addEventListener("loadingdone", () => view.fit());

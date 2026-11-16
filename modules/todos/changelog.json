@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.2.22",
+    "date": "2026-11-16",
+    "notes": [
+      "The live view's Inter is now Tavora font and follows the font you pick in Tavora, over the game and in OBS too. Atkinson Hyperlegible is now its newer Next version."
+    ]
+  },
+  {
     "version": "0.2.21",
     "date": "2026-11-16",
     "notes": [

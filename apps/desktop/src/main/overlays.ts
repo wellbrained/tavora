@@ -8,7 +8,8 @@ import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import path from "node:path";
-import { LIMITS, OVERLAY_STATE_PATH, type JsonValue } from "@tavora/sdk/protocol";
+import { LIMITS, OVERLAY_FONT_PATH, OVERLAY_STATE_PATH, type JsonValue } from "@tavora/sdk/protocol";
+import { overlayFontCss, overlayFontId, watchOverlayFont } from "./overlay-font";
 import { contentTypeFor, resolveAsset } from "./assets";
 import { HostError } from "./errors";
 import { SerialQueue, writeFileAtomic } from "./fsutil";
@@ -330,6 +331,11 @@ export class OverlayServer {
         return void response.end();
       }
       if (rest === `/${OVERLAY_STATE_PATH}`) return this.stream(request, response, found.link, found.state);
+      if (rest === `/${OVERLAY_FONT_PATH}`) {
+        const css = Buffer.from(overlayFontCss());
+        response.writeHead(200, { ...COMMON_HEADERS, "Content-Type": "text/css; charset=utf-8", "Content-Length": css.byteLength });
+        return void response.end(request.method === "HEAD" ? undefined : css);
+      }
       const file = await resolveOverlayFile(page, rest);
       if (!file) return this.plain(response, 404, "Not found");
       const body = await readFile(file);
@@ -352,13 +358,23 @@ export class OverlayServer {
     response.writeHead(200, { ...COMMON_HEADERS, "Content-Type": "text/event-stream; charset=utf-8", Connection: "keep-alive" });
     if (request.method === "HEAD") return void response.end();
     this.streams.add(response);
-    const send = (value: JsonValue | null) => response.write(`data: ${JSON.stringify({ state: value })}\n\n`);
+    // Every message carries the state (an older SDK reads only that) and the font, so the page follows a font change too.
+    let current = state;
+    const send = (value: JsonValue | null) => {
+      current = value;
+      response.write(`data: ${JSON.stringify({ state: value, font: overlayFontId() })}\n\n`);
+    };
     response.write("retry: 2000\n\n");
     send(state);
-    const stop = this.options.store.watch(link.token, (next) => {
+    const stopState = this.options.store.watch(link.token, (next) => {
       if (next === undefined) response.end();
       else send(next);
     });
+    const stopFont = watchOverlayFont(() => send(current));
+    const stop = () => {
+      stopState();
+      stopFont();
+    };
     // The module may lose its grant or go away while OBS keeps the page open.
     const ping = setInterval(() => {
       if (!this.options.page(link)) response.end();

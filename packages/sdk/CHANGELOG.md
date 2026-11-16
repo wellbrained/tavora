@@ -5,6 +5,7 @@ The interface font. Tavora will let users pick the font of its interface, and it
 - `TavoraTheme` gets an optional `font: { id, family }` (type `ThemeFont`): `family` is the CSS `font-family` value of the font the user picked, whose files Tavora puts in the page. An older Tavora leaves it out, which means Inter (`DEFAULT_THEME_FONT`).
 - `applyHostTheme`, and with it `bootstrapModule`, sets it as `--tavora-font-sans`, now and on every `ui.theme` event.
 - `@tavora/sdk/testing`: `themeFromPackage` and `themeOf` include Inter as the font.
+- Overlay pages get it too: `watchOverlay` puts `_font.css` (`OVERLAY_FONT_PATH`, the font's files and `--tavora-font-sans`) in the page and swaps it when the user picks another font. Tavora now sends the font's id with every `_state` message (`{ state, font }`); an older Tavora sends none, so give the variable a fallback.
 
 ## 0.4.0
 

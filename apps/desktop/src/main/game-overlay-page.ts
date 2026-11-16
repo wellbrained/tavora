@@ -1,9 +1,11 @@
 // What a game overlay's window loads (game-overlay-window.ts): the module's overlay page and the files next to it, and
 // the state the module published for it, from `tavora-overlay://overlay/`. It answers the same requests as a Stream
 // overlay's link does (overlays.ts), so the page, which uses `watchOverlay` from the SDK, can't tell them apart: the
-// state comes as server-sent events from `_state`. Nothing here needs the Stream overlays server, a port or a grant.
+// state comes as server-sent events from `_state`, and the interface font from `_font.css` (overlay-font.ts). Nothing here
+// needs the Stream overlays server, a port or a grant.
 import { readFile } from "node:fs/promises";
-import { OVERLAY_FRAME_PARAM, OVERLAY_STATE_PATH, type JsonValue } from "@tavora/sdk/protocol";
+import { OVERLAY_FONT_PATH, OVERLAY_FRAME_PARAM, OVERLAY_STATE_PATH, type JsonValue } from "@tavora/sdk/protocol";
+import { overlayFontCss, overlayFontId, watchOverlayFont } from "./overlay-font";
 import { GAME_OVERLAY_SCHEME, contentTypeFor } from "./assets";
 import { OVERLAY_CSP, resolveOverlayFile, type OverlayPage } from "./overlays";
 
@@ -42,6 +44,9 @@ export async function serveGameOverlay(request: Request, source: GameOverlaySour
     const page = source.page();
     if (!page) return plain(404, "Not found");
     if (url.pathname === `/${OVERLAY_STATE_PATH}`) return eventStream(request, source);
+    if (url.pathname === `/${OVERLAY_FONT_PATH}`) {
+      return new Response(request.method === "HEAD" ? null : overlayFontCss(), { headers: { ...HEADERS, "Content-Type": "text/css; charset=utf-8" } });
+    }
     const file = await resolveOverlayFile(page, url.pathname);
     if (!file) return plain(404, "Not found");
     const body = await readFile(file);
@@ -68,14 +73,21 @@ function eventStream(request: Request, source: GameOverlaySource): Response {
         stop();
         controller.close();
       };
+      // Every message carries the state (an older SDK reads only that) and the font, so the page follows a font change too.
+      let current: JsonValue | null = null;
       const send = (state: JsonValue | null) => {
-        if (!closed) controller.enqueue(text.encode(`data: ${JSON.stringify({ state })}\n\n`));
+        current = state;
+        if (!closed) controller.enqueue(text.encode(`data: ${JSON.stringify({ state, font: overlayFontId() })}\n\n`));
       };
       controller.enqueue(text.encode("retry: 2000\n\n"));
       send(source.state());
       const watching = source.watch((next) => (next === undefined ? end() : send(next)));
       if (!watching) return end();
-      stop = watching;
+      const stopFont = watchOverlayFont(() => send(current));
+      stop = () => {
+        watching();
+        stopFont();
+      };
       request.signal.addEventListener("abort", end, { once: true });
     },
     cancel() {

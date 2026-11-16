@@ -37,6 +37,7 @@ import {
   HELLO_MESSAGE,
   LIMITS,
   OVERLAY_FRAME_PARAM,
+  OVERLAY_FONT_PATH,
   OVERLAY_STATE_PATH,
   PORT_MESSAGE,
   PROTOCOL_VERSION,
@@ -178,7 +179,7 @@ export type {
   ThemeToken,
   ToastPosition,
 } from "./protocol.js";
-export { AUDIO_TYPES, BLOB_ID, BLOB_TYPES, DEFAULT_THEME_FONT, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, OVERLAY_KEY, PICTURE_TYPES, PROTOCOL_VERSION, MEDIA_ACTIONS, SYSTEM_INTERVALS_MS, SYSTEM_MAX_DRIVES, SYSTEM_PING_TARGET, OPTIONAL_THEME_TOKENS, THEME_TOKENS, TOAST_POSITIONS } from "./protocol.js";
+export { AUDIO_TYPES, BLOB_ID, BLOB_TYPES, DEFAULT_THEME_FONT, OVERLAY_FONT_PATH, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, OVERLAY_KEY, PICTURE_TYPES, PROTOCOL_VERSION, MEDIA_ACTIONS, SYSTEM_INTERVALS_MS, SYSTEM_MAX_DRIVES, SYSTEM_PING_TARGET, OPTIONAL_THEME_TOKENS, THEME_TOKENS, TOAST_POSITIONS } from "./protocol.js";
 
 /** How long a menu may stay open; the host closes it itself when its panel goes. */
 const MENU_TIMEOUT_MS = 60 * 60_000;
@@ -817,16 +818,21 @@ export function inTavoraFrame(): boolean {
  * For the manifest's `overlay` page, which runs in streaming software rather than in Tavora: calls `fn` with what the
  * module published for this overlay (overlay.publish), straight away and on every change, and with null while there is
  * nothing to show. It reconnects by itself when Tavora restarts. Returns a function that stops it.
+ *
+ * It also gives the page Tavora's interface font, the one the user picked, as `var(--tavora-font-sans)` (with its
+ * files), and swaps it when the user picks another. On a Tavora before the font setting there is none: give the
+ * variable a fallback, such as `var(--tavora-font-sans, "Inter Variable", sans-serif)`.
  */
 export function watchOverlay(fn: (state: JsonValue | null) => void): Unsubscribe {
   const source = new EventSource(new URL(OVERLAY_STATE_PATH, window.location.href));
   source.onmessage = (event: MessageEvent<string>) => {
-    let message: { state?: JsonValue | null };
+    let message: { state?: JsonValue | null; font?: unknown };
     try {
-      message = JSON.parse(event.data) as { state?: JsonValue | null };
+      message = JSON.parse(event.data) as { state?: JsonValue | null; font?: unknown };
     } catch {
       return;
     }
+    if (typeof message.font === "string") useOverlayFont(message.font);
     try {
       fn(message.state ?? null);
     } catch (error) {
@@ -834,6 +840,21 @@ export function watchOverlay(fn: (state: JsonValue | null) => void): Unsubscribe
     }
   };
   return () => source.close();
+}
+
+/** Puts `_font.css` for the font `id` in the page (watchOverlay), unless the page has it. */
+function useOverlayFont(id: string): void {
+  if (typeof document === "undefined") return;
+  const links = document.querySelectorAll<HTMLLinkElement>("link[data-tavora-font]");
+  const newest = links[links.length - 1];
+  if (newest?.dataset.tavoraFont === id) return;
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = new URL(`${OVERLAY_FONT_PATH}?font=${encodeURIComponent(id)}`, window.location.href).href;
+  link.dataset.tavoraFont = id;
+  // The older ones go once this one is in, so the text never falls back to another font in between.
+  link.onload = () => links.forEach((old) => old.remove());
+  document.head.append(link);
 }
 
 function openPort(timeoutMs: number): Promise<MessagePort> {

@@ -27,10 +27,17 @@ export const FIT_PADDING = 8;
 export type Measure = (text: string, px: number, weight: number, font: Font) => number;
 
 const FAMILY: Record<Font, string> = {
+  // Tavora's font; measuring needs its name, so tavoraFamily() reads it from the page.
   inter: '"Inter Variable", system-ui, sans-serif',
   mono: '"JetBrains Mono Variable", ui-monospace, Consolas, monospace',
   system: '"Segoe UI", system-ui, sans-serif',
 };
+
+/** The font Tavora gives the page (--tavora-font-sans), as a canvas can take it; Inter where there is none. */
+function tavoraFamily(): string {
+  const family = typeof document === "undefined" ? "" : getComputedStyle(document.documentElement).getPropertyValue("--tavora-font-sans").trim();
+  return family || FAMILY.inter;
+}
 
 /** A measure that asks the browser's canvas (the page's fonts are loaded by then); a guess where there is none. */
 export function canvasMeasure(): Measure {
@@ -42,7 +49,7 @@ export function canvasMeasure(): Measure {
   }
   return (text, px, weight, font) => {
     if (!context) return text.length * px * (font === "mono" ? 0.6 : 0.58);
-    context.font = `${weight} ${px}px ${FAMILY[font]}`;
+    context.font = `${weight} ${px}px ${font === "inter" ? tavoraFamily() : FAMILY[font]}`;
     return context.measureText(text).width;
   };
 }

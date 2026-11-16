@@ -1,6 +1,7 @@
 /* The text of one overlay: what OBS shows as a Browser Source, what Tavora's frames show, and the preview in the settings. Like
    the rest of the overlay it is drawn over game art, not in the app, so its colours are the item's own text colours with a dark
-   outline instead of theme colours. The box around the lines (size, alignment, scrolling) is the kit's OverlayText. */
+   outline instead of theme colours. The box around the lines (size, alignment, scrolling) is the kit's OverlayText.
+   Its font is Tavora's (the one the user picked, from watchOverlay), Inter on a Tavora before that setting. */
 @import "@fontsource-variable/inter/wght.css";
 @import "@fontsource-variable/jetbrains-mono/wght.css";
 
@@ -10,7 +11,8 @@
   height: 100%;
   background: transparent;
   color: var(--color, #fff);
-  font-family: "Inter Variable", system-ui, sans-serif;
+  /* rules-allow: font-family an overlay page gets no theme: Tavora's font comes from watchOverlay, Inter (bundled) on an older Tavora */
+  font-family: var(--tavora-font-sans, "Inter Variable", system-ui, sans-serif);
   font-variant-numeric: tabular-nums;
   line-height: 1.05;
   white-space: pre;

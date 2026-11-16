@@ -110,6 +110,7 @@ import {
   type Library,
 } from "./library";
 import { fontStylesheet } from "./module-fonts";
+import { setOverlayFont } from "./overlay-font";
 import { DEFAULT_FONT_ID, themeFont } from "../shared/ui-fonts";
 import { moduleBaseCss } from "./module-style";
 import { backupData, backupsDir } from "./backup";
@@ -642,6 +643,7 @@ export class Host {
     this.openTimes = prepared.openTimes;
     this.emblem = prepared.emblem;
     this.currentTheme = moduleTheme(withRadius(resolveTheme(themes, library.theme, library.followSystem ? Host.systemMode(options) : undefined).variation, library.radius), library.toasts, themeFont(library.font));
+    setOverlayFont(this.currentTheme.font);
     this.files = new ModuleFilesFolder({
       userData: options.userData,
       defaultFolder: options.picturesFolder ?? defaultFilesRoot(options.userData),
@@ -1812,7 +1814,8 @@ export class Host {
     this.applyTitleBarOverlay();
     this.toastView.refresh();
     for (const view of this.nativePanels()) view.applyTheme(next);
-    // Each keeps its font when it is the same (InsertedCss), so only a new font costs a swap.
+    // Each keeps its font when it is the same (InsertedCss), so only a new font costs a swap; overlay pages hear a new one.
+    setOverlayFont(next.font);
     this.gameOverlays?.refreshFonts();
     this.previews?.refreshFonts();
   }

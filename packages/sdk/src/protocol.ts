@@ -1293,6 +1293,13 @@ export const OVERLAY_KEY = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 export const OVERLAY_STATE_PATH = "_state";
 
 /**
+ * The interface font the user picked, as a stylesheet next to an overlay page: its files and `--tavora-font-sans`.
+ * Newer Tavoras also send the font's id with every `_state` message (`{ "state": …, "font": "allo" }`), so a page can
+ * load this again when it changes; watchOverlay does both by itself. An older Tavora has neither: use Inter then.
+ */
+export const OVERLAY_FONT_PATH = "_font.css";
+
+/**
  * Tavora's own frames for an overlay page (over the game, on the Overlay page) load it with this query parameter set to
  * 1: such a frame keeps the size a `grows` source lists, times its scale. OBS, the preview window and older Tavoras
  * don't set it. Read it with `inTavoraFrame()`.

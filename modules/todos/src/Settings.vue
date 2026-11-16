@@ -111,7 +111,7 @@ watch([() => props.state, plate], draw, { deep: true });
           <Select :model-value="panelLook.font" @update:model-value="setPanel('font', $event as PanelLook['font'])">
             <SelectTrigger class="w-full" :aria-label="t('live.font')" data-testid="panel-font"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem v-for="font in LIVE_FONTS" :key="font.id" :value="font.id" :style="{ fontFamily: font.stack }">{{ font.name }}</SelectItem>
+              <SelectItem v-for="font in LIVE_FONTS" :key="font.id" :value="font.id" :style="{ fontFamily: font.stack }">{{ font.id === "inter" ? t("live.font.tavora") : font.name }}</SelectItem>
             </SelectContent>
           </Select>
         </SettingsRow>
@@ -136,7 +136,7 @@ watch([() => props.state, plate], draw, { deep: true });
           <Select :model-value="look.font" @update:model-value="set('font', $event as LiveLook['font'])">
             <SelectTrigger class="w-full" :aria-label="t('live.font')" data-testid="live-font"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem v-for="font in LIVE_FONTS" :key="font.id" :value="font.id" :style="{ fontFamily: font.stack }">{{ font.name }}</SelectItem>
+              <SelectItem v-for="font in LIVE_FONTS" :key="font.id" :value="font.id" :style="{ fontFamily: font.stack }">{{ font.id === "inter" ? t("live.font.tavora") : font.name }}</SelectItem>
             </SelectContent>
           </Select>
         </SettingsRow>
