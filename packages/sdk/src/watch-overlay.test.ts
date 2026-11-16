@@ -44,6 +44,13 @@ describe("watchOverlay", () => {
     links()[1]!.dispatchEvent(new Event("load"));
     expect(links().map((link) => link.dataset.tavoraFont)).toEqual(["allo"]);
 
+    // One that fails to load goes, so the same font is tried again with the next message.
+    source.send({ state: { value: 3 }, font: "saira" });
+    links()[1]!.dispatchEvent(new Event("error"));
+    expect(links().map((link) => link.dataset.tavoraFont)).toEqual(["allo"]);
+    source.send({ state: { value: 3 }, font: "saira" });
+    expect(links().map((link) => link.dataset.tavoraFont)).toEqual(["allo", "saira"]);
+
     stop();
     expect(source.closed).toBe(true);
   });

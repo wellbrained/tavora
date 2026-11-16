@@ -35,6 +35,8 @@ const panelLook = defineModel<PanelLook>("panelLook", { required: true });
 
 type Page = "panel" | "text" | "background" | "content";
 const page = ref<Page>("panel");
+/** A font's name in the list: the first is Tavora's font, the rest are named after themselves. */
+const fontName = (font: (typeof LIVE_FONTS)[number]) => (font.id === "inter" ? t("live.font.tavora") : font.name);
 const groups = computed(() => [
   { items: [{ id: "panel", label: t("settings.panel"), icon: PanelsTopLeft, testid: "settings-page-panel" }] },
   {
@@ -111,7 +113,7 @@ watch([() => props.state, plate], draw, { deep: true });
           <Select :model-value="panelLook.font" @update:model-value="setPanel('font', $event as PanelLook['font'])">
             <SelectTrigger class="w-full" :aria-label="t('live.font')" data-testid="panel-font"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem v-for="font in LIVE_FONTS" :key="font.id" :value="font.id" :style="{ fontFamily: font.stack }">{{ font.id === "inter" ? t("live.font.tavora") : font.name }}</SelectItem>
+              <SelectItem v-for="font in LIVE_FONTS" :key="font.id" :value="font.id" :style="{ fontFamily: font.stack }">{{ fontName(font) }}</SelectItem>
             </SelectContent>
           </Select>
         </SettingsRow>
@@ -136,7 +138,7 @@ watch([() => props.state, plate], draw, { deep: true });
           <Select :model-value="look.font" @update:model-value="set('font', $event as LiveLook['font'])">
             <SelectTrigger class="w-full" :aria-label="t('live.font')" data-testid="live-font"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem v-for="font in LIVE_FONTS" :key="font.id" :value="font.id" :style="{ fontFamily: font.stack }">{{ font.id === "inter" ? t("live.font.tavora") : font.name }}</SelectItem>
+              <SelectItem v-for="font in LIVE_FONTS" :key="font.id" :value="font.id" :style="{ fontFamily: font.stack }">{{ fontName(font) }}</SelectItem>
             </SelectContent>
           </Select>
         </SettingsRow>

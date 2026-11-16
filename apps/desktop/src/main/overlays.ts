@@ -9,7 +9,7 @@ import { readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import path from "node:path";
 import { LIMITS, OVERLAY_FONT_PATH, OVERLAY_STATE_PATH, type JsonValue } from "@tavora/sdk/protocol";
-import { overlayFontCss, overlayFontId, watchOverlayFont } from "./overlay-font";
+import { overlayFontCss, overlayMessage, watchOverlayFont } from "./overlay-font";
 import { contentTypeFor, resolveAsset } from "./assets";
 import { HostError } from "./errors";
 import { SerialQueue, writeFileAtomic } from "./fsutil";
@@ -358,11 +358,11 @@ export class OverlayServer {
     response.writeHead(200, { ...COMMON_HEADERS, "Content-Type": "text/event-stream; charset=utf-8", Connection: "keep-alive" });
     if (request.method === "HEAD") return void response.end();
     this.streams.add(response);
-    // Every message carries the state (an older SDK reads only that) and the font, so the page follows a font change too.
     let current = state;
     const send = (value: JsonValue | null) => {
       current = value;
-      response.write(`data: ${JSON.stringify({ state: value, font: overlayFontId() })}\n\n`);
+      // Ended (the link went, the grant went, Tavora stops) but not closed yet: a write now would throw.
+      if (!response.writableEnded && !response.destroyed) response.write(overlayMessage(value));
     };
     response.write("retry: 2000\n\n");
     send(state);

@@ -19,25 +19,17 @@ export function applyKitTheme(theme: TavoraTheme, root: HTMLElement = document.d
 /**
  * Calls `fn` after the user picked another interface font, so text that was measured can measure again: once the page
  * has drawn in it, and again when its files are in. A box that keeps its size doesn't resize, so a ResizeObserver alone
- * misses it. Also when any font's files finish loading, which is how an overlay page (no theme, see watchOverlay)
- * hears of a new font. Returns a function that stops it.
+ * misses it. Returns a function that stops it.
  */
 export function onFontChange(fn: () => void): () => void {
-  if (!watchingLoads && typeof document !== "undefined" && document.fonts) {
-    watchingLoads = true;
-    document.fonts.addEventListener("loadingdone", notify);
-  }
   fontListeners.add(fn);
   return () => void fontListeners.delete(fn);
 }
 
-let watchingLoads = false;
-
-function notify(): void {
-  for (const listener of [...fontListeners]) listener();
-}
-
 function fontChanged(): void {
+  const notify = () => {
+    for (const listener of [...fontListeners]) listener();
+  };
   const later = typeof requestAnimationFrame === "function" ? requestAnimationFrame : (fn: () => void) => setTimeout(fn, 0);
   later(() => {
     notify();

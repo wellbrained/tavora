@@ -5,7 +5,7 @@
 // needs the Stream overlays server, a port or a grant.
 import { readFile } from "node:fs/promises";
 import { OVERLAY_FONT_PATH, OVERLAY_FRAME_PARAM, OVERLAY_STATE_PATH, type JsonValue } from "@tavora/sdk/protocol";
-import { overlayFontCss, overlayFontId, watchOverlayFont } from "./overlay-font";
+import { overlayFontCss, overlayMessage, watchOverlayFont } from "./overlay-font";
 import { GAME_OVERLAY_SCHEME, contentTypeFor } from "./assets";
 import { OVERLAY_CSP, resolveOverlayFile, type OverlayPage } from "./overlays";
 
@@ -73,11 +73,10 @@ function eventStream(request: Request, source: GameOverlaySource): Response {
         stop();
         controller.close();
       };
-      // Every message carries the state (an older SDK reads only that) and the font, so the page follows a font change too.
       let current: JsonValue | null = null;
       const send = (state: JsonValue | null) => {
         current = state;
-        if (!closed) controller.enqueue(text.encode(`data: ${JSON.stringify({ state, font: overlayFontId() })}\n\n`));
+        if (!closed) controller.enqueue(text.encode(overlayMessage(state)));
       };
       controller.enqueue(text.encode("retry: 2000\n\n"));
       send(source.state());

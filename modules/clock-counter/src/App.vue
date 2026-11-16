@@ -3,7 +3,7 @@
 // list; which settings are open is each panel's own. Running clocks tick here only while the panel is visible: they
 // keep their start time, so nothing is lost while it is hidden. Hotkeys arrive at the panel used last.
 import { Hash, Hourglass, Link, Plus, Timer } from "@lucide/vue";
-import { connectModule, errorMessage, useFocusRecovery } from "@tavora/official-ui";
+import { connectModule, errorMessage, onFontChange, useFocusRecovery } from "@tavora/official-ui";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
@@ -456,6 +456,9 @@ function flushSources(): void {
   });
 }
 watch([list, sdk], () => store.value && sendSources());
+// The user picked another font in Tavora: the same text is wider or narrower, so its frame over the game follows.
+const stopFontWatch = onFontChange(() => store.value && sendSources());
+onBeforeUnmount(stopFontWatch);
 
 // A running stopwatch gets wider by itself (9:59 to 10:00), with nothing in the list changing: its size is looked at every second,
 // also while the panel is hidden, since its frame over the game follows it. Only a list that changed is sent.

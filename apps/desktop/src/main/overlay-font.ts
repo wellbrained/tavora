@@ -3,7 +3,7 @@
 // (`_state`) says which font is in use, so the SDK's watchOverlay swaps the stylesheet when the user picks another one.
 // One font for the whole app: the host sets it whenever the theme changes (Host.applyTheme), and both overlay servers
 // (overlays.ts, game-overlay-page.ts) read it here.
-import { DEFAULT_THEME_FONT, type ThemeFont } from "@tavora/sdk/protocol";
+import { DEFAULT_THEME_FONT, type JsonValue, type ThemeFont } from "@tavora/sdk/protocol";
 import { fontStylesheet } from "./module-fonts";
 
 let font: ThemeFont = DEFAULT_THEME_FONT;
@@ -17,9 +17,12 @@ export function setOverlayFont(next: ThemeFont | undefined): void {
   for (const listener of [...listeners]) listener();
 }
 
-/** The id of the font in use, as the state stream sends it. */
-export function overlayFontId(): string {
-  return font.id;
+/**
+ * One `_state` message: the state, and the font's id. Every message carries the state (an older SDK reads only that, and
+ * takes a message without one as null), so a font change sends the same state again with the new id.
+ */
+export function overlayMessage(state: JsonValue | null): string {
+  return `data: ${JSON.stringify({ state, font: font.id })}\n\n`;
 }
 
 /** `_font.css`: the font's files (embedded) and --tavora-font-sans. */

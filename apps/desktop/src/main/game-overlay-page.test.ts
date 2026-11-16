@@ -91,9 +91,12 @@ describe("serveGameOverlay", () => {
     src.publish({ value: 2 });
     await until(`data: {"state":{"value":2},"font":"inter"}\n\n`);
     // Another font: the same state again, with it.
-    setOverlayFont({ id: "saira", family: '"Tavora Saira", system-ui, sans-serif' });
-    await until(`data: {"state":{"value":2},"font":"saira"}\n\n`);
-    setOverlayFont(undefined);
+    try {
+      setOverlayFont({ id: "saira", family: '"Tavora Saira", system-ui, sans-serif' });
+      await until(`data: {"state":{"value":2},"font":"saira"}\n\n`);
+    } finally {
+      setOverlayFont(undefined);
+    }
     await until(`data: {"state":{"value":2},"font":"inter"}\n\n`);
     src.publish(null);
     await until(`data: {"state":null,"font":"inter"}\n\n`);

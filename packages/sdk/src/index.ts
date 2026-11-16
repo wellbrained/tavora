@@ -832,7 +832,11 @@ export function watchOverlay(fn: (state: JsonValue | null) => void): Unsubscribe
     } catch {
       return;
     }
-    if (typeof message.font === "string") useOverlayFont(message.font);
+    try {
+      if (typeof message.font === "string") useOverlayFont(message.font);
+    } catch {
+      // The page keeps the font it has; its state still comes.
+    }
     try {
       fn(message.state ?? null);
     } catch (error) {
@@ -854,6 +858,8 @@ function useOverlayFont(id: string): void {
   link.dataset.tavoraFont = id;
   // The older ones go once this one is in, so the text never falls back to another font in between.
   link.onload = () => links.forEach((old) => old.remove());
+  // One that didn't load goes, so the next message with this font tries again.
+  link.onerror = () => link.remove();
   document.head.append(link);
 }
 

@@ -9,7 +9,8 @@ import { depths, type TodoList } from "./todos";
  * id stays "inter", the font saved before it followed Tavora's.
  */
 export const LIVE_FONTS = [
-  { id: "inter", name: "Tavora", stack: 'var(--tavora-font-sans, "Inter Variable", system-ui, sans-serif)' },
+  // rules-allow: font-family the overlay page gets no theme: Tavora's font comes from watchOverlay, Inter (bundled) on an older Tavora
+  { id: "inter", name: "", stack: 'var(--tavora-font-sans, "Inter Variable", system-ui, sans-serif)' },
   { id: "saira", name: "Saira", stack: '"Saira Variable", system-ui, sans-serif' },
   { id: "titillium", name: "Titillium Web", stack: '"Titillium Web", system-ui, sans-serif' },
   { id: "barlow", name: "Barlow Condensed", stack: '"Barlow Condensed", system-ui, sans-serif' },
