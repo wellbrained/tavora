@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.47",
+    "date": "2026-11-16",
+    "notes": [
+      "Uses the font you pick in Tavora's settings."
+    ]
+  },
+  {
     "version": "0.1.46",
     "date": "2026-11-15",
     "notes": [

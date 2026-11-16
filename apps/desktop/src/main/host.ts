@@ -4535,7 +4535,6 @@ export class Host {
       layoutRequested: request.layoutRequested,
       ended: request.ended,
       frameText: request.frameText,
-      fontCss: () => fontStylesheet(this.currentTheme.font),
       ...(panel ? { panel } : {}),
     });
   }
