@@ -17,7 +17,7 @@ import alloLatin from "../fonts/allo/allo-latin-wght-normal.woff2";
 import alloLatinExt from "../fonts/allo/allo-latin-ext-wght-normal.woff2";
 import type { ThemeFont } from "@tavora/sdk/protocol";
 import { moduleFontCss } from "./module-style";
-import { fontFamily, uiFont, type UiFontId } from "../shared/ui-fonts";
+import { themeFont, uiFont, type UiFontId } from "../shared/ui-fonts";
 
 // Unicode ranges as Fontsource splits its fonts (scripts/subset-allo.mjs cuts Allo the same way).
 const LATIN =
@@ -47,7 +47,7 @@ export function fontStylesheet(font: ThemeFont | undefined): string {
   if (css === undefined) {
     const [latin, latinExt] = FILES[known.id];
     css = moduleFontCss(
-      { id: known.id, family: fontFamily(known) },
+      themeFont(known.id),
       {
         name: known.face,
         weight: known.weight,

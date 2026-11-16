@@ -110,7 +110,7 @@ import {
   type Library,
 } from "./library";
 import { fontStylesheet } from "./module-fonts";
-import { themeFont } from "../shared/ui-fonts";
+import { DEFAULT_FONT_ID, themeFont } from "../shared/ui-fonts";
 import { moduleBaseCss } from "./module-style";
 import { backupData, backupsDir } from "./backup";
 import { hasLibrary, loadLibrary, SavedData, WORKSPACE_FILE } from "./saved-data";
@@ -2683,7 +2683,7 @@ export class Host {
         this.applyTheme();
       }),
       "set-font": saved((action) => {
-        if (action.font === null || action.font === "inter") delete this.library.font;
+        if (action.font === DEFAULT_FONT_ID) delete this.library.font;
         else this.library.font = action.font;
         this.applyTheme();
       }),
@@ -4999,7 +4999,8 @@ export class Host {
       isDefault: theme.id === DEFAULT_THEME.id && this.library.followSystem && this.library.radius === null && this.library.font === undefined,
       followSystem: this.library.followSystem,
       radius: this.library.radius,
-      font: themeFont(this.library.font),
+      // The saved id as it is: one this Tavora doesn't know shows Inter, and picking Inter still changes it.
+      font: { id: this.library.font ?? DEFAULT_FONT_ID, family: themeFont(this.library.font).family },
       themes: themes.map(({ theme: item, provenance }) => ({
         id: item.id,
         name: item.name,

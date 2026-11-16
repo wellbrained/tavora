@@ -47,6 +47,8 @@ async function issues(app: ElectronApplication, page: Page): Promise<string[]> {
 }
 
 test("every font shows at once in Tavora and its panels, fits where Inter fits, and is kept", async () => {
+  // Two launches and seven fonts, each checked on three pages.
+  test.setTimeout(180_000);
   const userData = await newUserData();
   const { app, page } = await launch(userData);
   await openWorkspace(page, "poe2");

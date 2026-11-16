@@ -28,6 +28,9 @@ export const UI_FONTS = [
 
 export type UiFontId = (typeof UI_FONTS)[number]["id"];
 
+/** Inter: what a library without a font, and a theme without one, mean. */
+export const DEFAULT_FONT_ID: UiFontId = "inter";
+
 /** A font id as it may be saved: lower-case letters, digits and hyphens. */
 export const isFontId = (value: unknown): value is string => typeof value === "string" && /^[a-z0-9-]{1,40}$/.test(value);
 

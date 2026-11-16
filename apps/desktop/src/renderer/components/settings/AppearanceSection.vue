@@ -44,7 +44,7 @@ function pickId(id: string) {
 // The interface font; each row of the list is written in its own font.
 const font = computed({
   get: () => appearance.value.font.id,
-  set: (id: string) => void act({ type: "set-font", font: id === "inter" ? null : id }),
+  set: (id: string) => void act({ type: "set-font", font: id }),
 });
 const fontInUse = computed(() => uiFont(appearance.value.font.id));
 

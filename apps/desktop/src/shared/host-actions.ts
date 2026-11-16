@@ -331,8 +331,8 @@ export function hostActionTable(c: HostChecks) {
     /** Back to the Tavora default theme, whatever is active. */
     /** The user's own corner radius in px over the theme's, or null for the theme's. */
     "set-radius": { radius: nullable(check<number>((value) => Number.isInteger(value) && (value as number) >= 4 && (value as number) <= 12)) },
-    /** The interface font (shared/ui-fonts.ts); null for Inter. */
-    "set-font": { font: nullable(check<string>(isFontId)) },
+    /** The interface font's id (shared/ui-fonts.ts). */
+    "set-font": { font: check<string>(isFontId) },
     "reset-theme": {},
     /** Looks for themes again, after the user changed their themes folder. */
     "reload-themes": {},

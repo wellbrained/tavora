@@ -213,6 +213,8 @@ describe("adding games", () => {
     // A font a newer Tavora has: kept, so it comes back there; this one shows Inter meanwhile.
     expect(sanitizeLibrary({ font: "future-font" }).font).toBe("future-font");
     expect(sanitizeLibrary({}).font).toBeUndefined();
+    // Inter is what no font means, so it is left out like the default it is.
+    expect(sanitizeLibrary({ font: "inter" }).font).toBeUndefined();
     for (const bad of ["Saira", "../x", "", 3, null]) expect(sanitizeLibrary({ font: bad }).font, String(bad)).toBeUndefined();
   });
 
