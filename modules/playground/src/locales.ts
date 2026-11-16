@@ -58,7 +58,7 @@ export const en = {
   "page.overlay-text": "Overlay text",
 
   "intro.colours": "Every colour comes from the theme, so switch the theme in Tavora and these follow.",
-  "intro.text": "Inter for the interface, JetBrains Mono for code and ids. Five sizes, three weights.",
+  "intro.text": "The font picked in Tavora for the interface (Inter unless changed), JetBrains Mono for code and ids. Five sizes, three weights.",
   "intro.spacing": "Six spacing steps, the theme's corners, and how areas get their depth.",
   "intro.motion": "Curves and times come from the kit's tokens. Press Play to see each one.",
   "intro.writing": "Short, friendly and plain. English and German follow the same rules.",
@@ -512,7 +512,7 @@ export const de: Record<TextKey, string> = {
   "page.overlay-text": "Overlay-Text",
 
   "intro.colours": "Jede Farbe kommt aus dem Theme: Wechsle das Theme in Tavora, und diese folgen.",
-  "intro.text": "Inter für die Oberfläche, JetBrains Mono für Code und IDs. Fünf Größen, drei Stärken.",
+  "intro.text": "Die in Tavora gewählte Schrift für die Oberfläche (sonst Inter), JetBrains Mono für Code und IDs. Fünf Größen, drei Stärken.",
   "intro.spacing": "Sechs Abstandsstufen, die Ecken des Themes und wie Bereiche Tiefe bekommen.",
   "intro.motion": "Kurven und Zeiten kommen aus den Tokens des Kits. Drück auf Abspielen, um jede zu sehen.",
   "intro.writing": "Kurz, freundlich und schlicht. Englisch und Deutsch folgen denselben Regeln.",

@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.48",
+    "date": "2026-11-16",
+    "notes": [
+      "The type page says the interface font is the one picked in Tavora."
+    ]
+  },
+  {
     "version": "0.1.47",
     "date": "2026-11-16",
     "notes": [
