@@ -273,8 +273,10 @@ function onSearchKey(event: KeyboardEvent) {
       </div>
 
       <div class="flex min-w-0 flex-1 flex-col">
+        <!-- It keeps the page's scrollbar room too (thin-scroll, scrollbar-gutter), so the close button ends where the page's
+             cards end. -->
         <header
-          :class="cn('flex h-16 flex-none items-center justify-between gap-4 border-b px-6 transition-colors duration-500 lg:px-10', highlight === section && 'bg-primary/10')"
+          :class="cn('thin-scroll flex h-16 flex-none items-center justify-between gap-4 overflow-hidden border-b px-6 transition-colors duration-500 [scrollbar-gutter:stable] lg:px-10', highlight === section && 'bg-primary/10')"
           :data-setting="section"
         >
           <!-- Where you are: Settings / the page, with the page a sub-page opened from in between. -->
