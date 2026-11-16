@@ -273,8 +273,8 @@ function onSearchKey(event: KeyboardEvent) {
       </div>
 
       <div class="flex min-w-0 flex-1 flex-col">
-        <!-- It keeps the page's scrollbar room too (thin-scroll, scrollbar-gutter), so the close button ends where the page's
-             cards end. -->
+        <!-- Reserves the same scrollbar room as the page below (thin-scroll, scrollbar-gutter), so the close button ends
+             where the page's cards end. -->
         <header
           :class="cn('thin-scroll flex h-16 flex-none items-center justify-between gap-4 overflow-hidden border-b px-6 transition-colors duration-500 [scrollbar-gutter:stable] lg:px-10', highlight === section && 'bg-primary/10')"
           :data-setting="section"
