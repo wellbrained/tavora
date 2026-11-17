@@ -18,7 +18,7 @@ vi.mock("electron", () => {
       },
       once() {},
       send(channel: string, ...args: unknown[]) {
-        made.log.push(`send ${channel} ${JSON.stringify(channel === "tooltip:render" ? (args[0] as { serial: number }).serial : args)}`);
+        made.log.push(`send ${channel} ${JSON.stringify(channel === "tooltip:render" ? (args[0] as { serial: number }).serial : args)}${channel === "tooltip:render" && (args[0] as { keep?: boolean }).keep ? " keep" : ""}`);
       },
       insertCSS: () => Promise.resolve("key"),
       removeInsertedCSS: () => Promise.resolve(),
@@ -81,7 +81,14 @@ function tooltipWindow() {
 const page = (channel: string, ...args: unknown[]) => made.ipc!({}, channel, ...args);
 const request = (id: string, x = 100) => ({ id, at: { x, y: 100 }, content: { title: id } }) as never;
 /** The serial of the last card the window sent its page. */
-const lastSerial = () => Number(made.log.filter((line) => line.startsWith("send tooltip:render")).at(-1)!.split(" ").at(-1));
+const lastSerial = () => Number(made.log.filter((line) => line.startsWith("send tooltip:render")).at(-1)!.split(" ")[2]);
+/** Shows a card and brings it into sight, as the page would. */
+async function shown(tooltip: InstanceType<typeof TooltipWindow>, id: string, owner = "owner") {
+  await tooltip.show(owner, request(id));
+  page("tooltip:ready");
+  page("tooltip:size", lastSerial(), 140, 260, true);
+  page("tooltip:drawn", lastSerial());
+}
 const since = (mark: number) => made.log.slice(mark);
 
 beforeEach(() => {
@@ -124,8 +131,96 @@ describe("the tooltip window coming into sight", () => {
     page("tooltip:size", lastSerial(), 180, 300, true);
     expect(since(mark)).not.toContain("hide");
     expect(since(mark)).not.toContain("opacity 0");
-    expect(since(mark).some((line) => line.startsWith("send tooltip:placed"))).toBe(false);
+    // The page keeps the card in sight until the window is placed for the next one.
+    expect(since(mark).filter((line) => line.startsWith("send tooltip:render")).every((line) => line.endsWith(" keep"))).toBe(true);
     expect(made.bounds).toMatchObject({ width: 300, height: 180 });
+  });
+
+  it("swaps in place when the module hides the card and shows the next one (pointer leaves one item, enters the next)", async () => {
+    vi.useFakeTimers();
+    try {
+      const tooltip = tooltipWindow();
+      await shown(tooltip, "one");
+      const mark = made.log.length;
+      tooltip.close("owner", "one", false, true);
+      await tooltip.show("owner", request("two", 300));
+      page("tooltip:size", lastSerial(), 180, 300, true);
+      vi.advanceTimersByTime(500);
+      expect(since(mark)).not.toContain("hide");
+      expect(since(mark)).not.toContain("opacity 0");
+      expect(made.log.filter((line) => line.startsWith("send tooltip:render")).at(-1)).toMatch(/ keep$/);
+      expect(made.bounds).toMatchObject({ width: 300, height: 180 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("hides a card the module took away once no next one came", async () => {
+    vi.useFakeTimers();
+    try {
+      const tooltip = tooltipWindow();
+      await shown(tooltip, "one");
+      tooltip.close("owner", "one", false, true);
+      expect(made.log.at(-1)).not.toBe("hide");
+      vi.advanceTimersByTime(60);
+      expect(made.log.at(-1)).toBe("hide");
+      // The next card starts unseen again.
+      const mark = made.log.length;
+      await tooltip.show("owner", request("two"));
+      expect(since(mark)).toContain("opacity 0");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("starts unseen when another panel's card follows one that is going", async () => {
+    const tooltip = tooltipWindow();
+    await shown(tooltip, "one");
+    tooltip.close("owner", "one", false, true);
+    const mark = made.log.length;
+    await tooltip.show("other", request("two"));
+    expect(since(mark)).toContain("opacity 0");
+    expect(made.log.filter((line) => line.startsWith("send tooltip:render")).at(-1)).not.toMatch(/ keep$/);
+  });
+
+  it("hides at once when Tavora closes it, and never shows a card closed while it waited to be drawn", async () => {
+    vi.useFakeTimers();
+    try {
+      const tooltip = tooltipWindow();
+      await tooltip.show("owner", request("one"));
+      page("tooltip:ready");
+      const serial = lastSerial();
+      page("tooltip:size", serial, 140, 260, true);
+      tooltip.close();
+      expect(made.log.at(-1)).toBe("hide");
+      page("tooltip:drawn", serial);
+      vi.advanceTimersByTime(500);
+      expect(made.log).not.toContain("opacity 1");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("shows only the newer card when an unseen one is replaced before it was drawn", async () => {
+    vi.useFakeTimers();
+    try {
+      const tooltip = tooltipWindow();
+      await tooltip.show("owner", request("one"));
+      page("tooltip:ready");
+      const first = lastSerial();
+      page("tooltip:size", first, 140, 260, true);
+      await tooltip.show("owner", request("two", 300));
+      const second = lastSerial();
+      page("tooltip:drawn", first);
+      vi.advanceTimersByTime(500);
+      expect(made.log).not.toContain("opacity 1");
+      page("tooltip:size", second, 180, 300, true);
+      page("tooltip:drawn", second);
+      expect(made.log.at(-1)).toBe("opacity 1");
+      expect(made.bounds).toMatchObject({ width: 300, height: 180 });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("is placed beside the new anchor before it draws, so the old card never shows at the new place", async () => {

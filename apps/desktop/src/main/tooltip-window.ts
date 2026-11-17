@@ -9,6 +9,11 @@ import { InsertedCss } from "./inserted-css";
 import { fontStylesheet } from "./module-fonts";
 /** How long a card waits for its page to say it drew at its final size before it comes into sight anyway. */
 const REVEAL_WAIT_MS = 120;
+/**
+ * How long a card a module took away stays in sight. Modules hide the card when the pointer leaves an item and show the
+ * next on the next one (or hide it to show it pinned): a card asked for meanwhile takes its place without a blink.
+ */
+const CLOSE_LINGER_MS = 50;
 interface Source {
     root: string;
     /** The module's id: its skins are kept by it. */
@@ -43,10 +48,13 @@ export class TooltipWindow {
     private ready = false;
     private size = { width: 520, height: 2000 };
     /**
-     * `hidden` (no card), `unseen` (shown see-through while the card is laid out, placed and drawn at its final size) or
-     * `seen`. The next card takes the place of one in sight without the window being hidden in between.
+     * `hidden` (no card), `unseen` (shown see-through while the card is laid out, placed and drawn at its final size),
+     * `seen`, or `closing` (a module took it away; it stays in sight for CLOSE_LINGER_MS, and a card that module asks for
+     * meanwhile is `seen` again). The next card takes the place of one in sight without the window being hidden between.
      */
-    private sight: "hidden" | "unseen" | "seen" = "hidden";
+    private sight: "hidden" | "unseen" | "seen" | "closing" = "hidden";
+    /** The panel whose card is `closing`, and the end of its stay. */
+    private closing: { owner: string; timer: ReturnType<typeof setTimeout> } | undefined;
     /** Shows the card anyway if its page never says it drew. */
     private revealTimer: ReturnType<typeof setTimeout> | undefined;
     // A pinned tooltip stays when Tavora loses focus, so a screen capture (Win+Shift+S) can still take it. It belongs to the
@@ -71,6 +79,10 @@ export class TooltipWindow {
             return false;
         if (previous && (previous.owner !== owner || previous.request.id !== request.id))
             this.options.closed(previous.owner, previous.request.id);
+        // The card its panel just took away is still in sight: this one takes its place. Another panel's starts unseen.
+        if (this.sight === "closing")
+            this.sight = this.closing?.owner === owner ? "seen" : "hidden";
+        this.endClosing();
         const w = this.ensureWindow();
         const content = await withBundleImages(source.root, request.content);
         if (this.state.current !== open)
@@ -78,6 +90,7 @@ export class TooltipWindow {
         open.request = { ...open.request, content };
         if (this.sight !== "seen") {
             // Beside the new anchor and see-through before it is shown: the page may still hold the last card's frame.
+            clearTimeout(this.revealTimer);
             this.place();
             w.setOpacity(0);
             // Unseen, it takes no clicks or keys: a pinned card becomes one you can use once it is in sight.
@@ -114,14 +127,33 @@ export class TooltipWindow {
     }
     move(owner: string, id: string, at: TooltipRequest["at"], box?: TooltipRequest["box"]) { if (this.state.move(owner, id, at, box))
         this.place(); }
-    close(owner?: string, id?: string, hoverOnly = false) {
+    /** `linger`: a module took the card away; it stays in sight a moment, in case the module shows its next one. */
+    close(owner?: string, id?: string, hoverOnly = false, linger = false) {
         const closed = this.state.close(owner, id, hoverOnly);
         if (!closed)
             return;
-        this.sight = "hidden";
         clearTimeout(this.revealTimer);
-        this.window?.hide();
+        this.endClosing();
+        const w = this.window;
+        if (linger && this.sight === "seen" && w && !w.isDestroyed()) {
+            this.sight = "closing";
+            w.setIgnoreMouseEvents(true, { forward: true });
+            w.setFocusable(false);
+            this.closing = { owner: closed.owner, timer: setTimeout(() => this.hideNow(), CLOSE_LINGER_MS) };
+        }
+        else
+            this.hideNow();
         this.options.closed(closed.owner, closed.request.id);
+    }
+    private hideNow() {
+        this.endClosing();
+        this.sight = "hidden";
+        if (this.window && !this.window.isDestroyed())
+            this.window.hide();
+    }
+    private endClosing() {
+        clearTimeout(this.closing?.timer);
+        this.closing = undefined;
     }
     ensureVisible() { const c = this.state.current; if (c && !this.options.source(c.owner))
         this.close(); }
@@ -164,20 +196,22 @@ export class TooltipWindow {
                 this.size.height = Math.max(60, Math.min(2000, Math.ceil(args[1])));
                 if (typeof args[2] === "number" && Number.isFinite(args[2]))
                     this.size.width = Math.max(120, Math.min(520, Math.ceil(args[2])));
-                // Every size places it: a card that took the place of one in sight is already drawn, so it should not wait.
                 this.place();
-                // Its final size (its pictures and letters are in): once the page has drawn it there, it comes into sight.
-                if (this.state.current === c && this.sight === "unseen" && args[3] === true) {
+                // Its final size (its pictures and letters are in): the page draws it there now (a card in sight stayed
+                // until then), and an unseen one comes into sight once it has.
+                if (args[3] === true) {
                     w.webContents.send("tooltip:placed", c.serial);
-                    clearTimeout(this.revealTimer);
-                    this.revealTimer = setTimeout(() => this.reveal(c), REVEAL_WAIT_MS);
+                    if (this.sight === "unseen") {
+                        clearTimeout(this.revealTimer);
+                        this.revealTimer = setTimeout(() => this.reveal(c), REVEAL_WAIT_MS);
+                    }
                 }
                 return;
             }
             if (channel === "tooltip:drawn")
                 this.reveal(c);
         });
-        w.webContents.once("render-process-gone", () => { this.close(); this.sight = "hidden"; this.ready = false; w.destroy(); this.window = undefined; });
+        w.webContents.once("render-process-gone", () => { this.close(); this.hideNow(); this.ready = false; w.destroy(); this.window = undefined; });
         void w.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(TOOLTIP_DOCUMENT)).catch(() => this.close());
         return w;
     }
@@ -212,7 +246,7 @@ export class TooltipWindow {
         }
         const theme = this.options.theme();
         void this.fontCss.replace(fontStylesheet(theme.font));
-        this.window!.webContents.send("tooltip:render", { serial: open.serial, content: c, pinned: !!open.request.pinned, pinnable: open.request.pinnable !== false, source: source.name, theme, language: this.options.language(), room: this.room(), ...(skin ? { skin: skin.id } : {}) });
+        this.window!.webContents.send("tooltip:render", { serial: open.serial, content: c, pinned: !!open.request.pinned, pinnable: open.request.pinnable !== false, source: source.name, theme, language: this.options.language(), room: this.room(), keep: this.sight === "seen", ...(skin ? { skin: skin.id } : {}) });
     }
     private place() {
         const c = this.state.current, w = this.window;
@@ -228,6 +262,6 @@ export class TooltipWindow {
     }
     /** The tallest the card can be in the window (tooltipBounds), so the page can tell when to make it compact. */
     private room() { return Math.max(1, this.options.parent.getContentBounds().height - 16); }
-    dispose() { clearTimeout(this.revealTimer); this.sight = "hidden"; this.state.close(); if (this.window && !this.window.isDestroyed())
+    dispose() { clearTimeout(this.revealTimer); this.endClosing(); this.sight = "hidden"; this.state.close(); if (this.window && !this.window.isDestroyed())
         this.window.destroy(); this.window = undefined; }
 }

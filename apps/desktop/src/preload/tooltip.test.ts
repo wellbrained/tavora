@@ -183,6 +183,22 @@ describe("tooltip preload sizes", () => {
         expect(sizes().filter(m => m[4] === true).map(m => m[1])).toEqual([serial]);
         expect(serial).not.toBe(first);
     });
+    it("keeps the card in sight until the window is placed for the next one, and sends only the next one's final size", async () => {
+        render(card);
+        await new Promise(resolve => setTimeout(resolve, 0));
+        ipc.sent.length = 0;
+        const el = render({ ...card, title: "Next" }, { keep: true });
+        expect(el.querySelector("h2")!.textContent).toBe("Archer Tower");
+        expect(sizes()).toEqual([]);
+        await new Promise(resolve => setTimeout(resolve, 0));
+        expect(sizes().map(m => [m[1], m[4]])).toEqual([[serial, true]]);
+        expect(el.querySelector("h2")!.textContent).toBe("Archer Tower");
+        // A late font or picture doesn't move the window while the card waits.
+        document.fonts?.dispatchEvent(new Event("loadingdone"));
+        expect(sizes()).toHaveLength(1);
+        send("tooltip:placed", serial);
+        expect(el.querySelector("h2")!.textContent).toBe("Next");
+    });
     it("says it drew once a frame is on screen after the window was placed, for the current card only", async () => {
         render(card);
         ipc.sent.length = 0;

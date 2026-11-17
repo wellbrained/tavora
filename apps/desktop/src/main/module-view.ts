@@ -93,7 +93,8 @@ export interface ModuleViewOptions {
   tooltip?: {
     show(request:TooltipRequest):Promise<boolean>;
     move(anchor:TooltipAnchor):void;
-    close(id?:string,hoverOnly?:boolean):void;
+    /** `linger`: the module took it away (or the pointer left): it stays a moment in case the next card follows. */
+    close(id?:string,hoverOnly?:boolean,linger?:boolean):void;
     defineSkin(name:string,skin:TooltipSkin):Promise<void>;
   };
   /** Why the panel's page is loading (panel.getLaunch); asked once for each page load. */
@@ -584,7 +585,7 @@ export class ModuleView {
   private press: Press | null = null;
   private pointer:{x:number;y:number;at:number}|null=null;
   notePointer(raw:unknown):void{
-    if(raw===null){this.pointer=null;this.options.tooltip?.close(undefined,true);return;}
+    if(raw===null){this.pointer=null;this.options.tooltip?.close(undefined,true,true);return;}
     if(!raw||typeof raw!=="object")return;
     const p=raw as {x:unknown;y:unknown};
     if(typeof p.x!=="number"||typeof p.y!=="number"||!Number.isFinite(p.x)||!Number.isFinite(p.y))return;
@@ -866,7 +867,7 @@ export class ModuleView {
             return this.options.tooltip?.show(request)??false;
           },
           move:anchor=>{if(this.tooltipAnchorAllowed(anchor.at)&&this.tooltipPointerMatches(anchor))this.options.tooltip?.move(anchor);},
-          close:(id,hoverOnly)=>this.options.tooltip?.close(id,hoverOnly),
+          close:(id,hoverOnly)=>this.options.tooltip?.close(id,hoverOnly,true),
           defineSkin:async(name,skin)=>{await this.options.tooltip?.defineSkin(name,skin);},
         },
         ...(this.options.folders ? { folders: this.foldersFor(() => bridge, this.options.folders) } : {}),

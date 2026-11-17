@@ -50,6 +50,7 @@ export function tooltipBounds(at: { x: number; y: number }, size: { width: numbe
             const below = b.y + b.height + 8, above = b.y - height - 8;
             if (below <= maxY) y = below;
             else if (above >= minY) y = above;
+            // Else nothing fits (a card as big as the window): it stays at `at.y - 24` and covers the element.
         }
     }
     return { x: Math.round(clamp(x, minX, maxX)), y: Math.round(clamp(y, minY, maxY)), width: Math.ceil(width), height: Math.ceil(height) };
