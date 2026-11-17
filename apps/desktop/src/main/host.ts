@@ -130,6 +130,9 @@ import { checkDownloadedUpdate } from "./update-signature";
 import { fetchHostedList, type HostedList } from "./hosted-icons";
 import { OfficialPublisher, PublishCancelled } from "./official-publish";
 import { OfficialKeyStore } from "./official-key-store";
+import { isHostSender, officialPublishAllowed } from "./host-sender";
+import { loadTrustedSavedKey } from "./official-saved-key";
+import { removeRefusedInstaller } from "./refused-update";
 import { fingerprint, loadExistingKey } from "@tavora/pack";
 import { OfficialUpdates, resolveOfficialPins } from "./official-updates";
 import { CATALOGUE_PUBLIC_KEY, SAFETY_REFRESH_MS, SafetyLists } from "./safety-lists";
@@ -1064,15 +1067,8 @@ export class Host {
         verify: app.isPackaged
           ? (info) => checkDownloadedUpdate(info, PINNED_UPDATE_KEYS, app.getVersion())
           : previewCheck(process.env.TAVORA_FAKE_UPDATE_UNSIGNED === "1"),
-        // The refused installer goes, and so does the blockmap electron-updater kept from it (in its pending folder and
-        // the cache folder above), so the next download doesn't plan against the refused file.
-        onRefused: (info) => {
-          if (!app.isPackaged || typeof info.downloadedFile !== "string") return;
-          const pending = path.dirname(info.downloadedFile);
-          for (const file of [info.downloadedFile, path.join(pending, "current.blockmap"), path.join(path.dirname(pending), "current.blockmap")]) {
-            void rm(file, { force: true }).catch(() => undefined);
-          }
-        },
+        // The refused installer goes, with its blockmaps (refused-update.ts).
+        onRefused: (info) => removeRefusedInstaller(info, app.isPackaged),
         autoDownload: this.library.autoUpdate,
         onChange: () => this.pushState(),
         onDownloaded: (version) => {
@@ -1934,7 +1930,7 @@ export class Host {
 
     // Host UI side: only the host window's main frame may call these.
     const fromHost = (event: IpcMainInvokeEvent | IpcMainEvent) =>
-      event.sender.id === this.window.webContents.id && event.senderFrame?.parent === null;
+      isHostSender(event, this.window.webContents.id);
 
     // The layer on the Overlay page's canvas reads the host's state (the theme and language), and nothing else.
     const layerPage = (event: IpcMainInvokeEvent | IpcMainEvent) => this.canvas?.kindOf(event.sender.id, event.senderFrame?.parent === null) === "layer";
@@ -2288,13 +2284,8 @@ export class Host {
 
   /** The key for Sign and upload: the saved one, or a key file picked now (null when none is picked). */
   private async officialKey(trust: OfficialUpdates, remember: boolean): Promise<KeyObject | null> {
-    let key = await this.officialKeys.load();
     // A saved key that may no longer sign (revoked, or the pins moved on) is not kept.
-    if (key && !trust.keyTrusted(fingerprint(key))) {
-      await this.officialKeys.forget();
-      key = null;
-      this.pushState();
-    }
+    let key = await loadTrustedSavedKey(this.officialKeys, (saved) => trust.keyTrusted(fingerprint(saved)), () => this.pushState());
     if (!key) {
       const picked = await dialog.showOpenDialog(this.window, { title: translate(this.language, "dialog.tavoraKey"), properties: ["openFile"] });
       const keyFile = picked.filePaths[0];
@@ -2333,7 +2324,7 @@ export class Host {
    * Null in a packaged build or while the pins are empty.
    */
   private officialPublishTrust(): OfficialUpdates | null {
-    if (app.isPackaged || !officialOn(OFFICIAL_PINS)) return null;
+    if (!officialPublishAllowed(app.isPackaged, officialOn(OFFICIAL_PINS))) return null;
     return new OfficialUpdates({ userData: this.options.userData, pins: { ...OFFICIAL_PINS }, safety: this.safetyLists });
   }
 

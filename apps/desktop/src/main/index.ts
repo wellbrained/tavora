@@ -9,7 +9,7 @@ import { parseTestHosts } from "./network";
 import { parseTestInstalled } from "./installed-list";
 import { readGrayscaleText } from "./saved-data";
 import { reportStartupFailure } from "./startup-failure";
-import { findUnsafeSwitch } from "./unsafe-switches";
+import { quitOnUnsafeSwitches } from "./unsafe-start";
 import { refuseClientCertificates } from "./client-certificates";
 
 // The last errors of this run, for Settings > Copy diagnostic info.
@@ -25,12 +25,13 @@ const userData = !app.isPackaged && process.env.TAVORA_USER_DATA
   : path.join(app.getPath("appData"), "@tavora", app.isPackaged ? "desktop" : "desktop-dev");
 
 // A packaged Tavora started with a switch that opens it up quits before any page or port exists (unsafe-switches.ts).
-const unsafe = app.isPackaged ? findUnsafeSwitch(process.argv.slice(1)) : undefined;
-if (unsafe) {
-  reportStartupFailure(userData, `Tavora was started with --${unsafe}, which would let other programs into it, so it closed. Start Tavora from its own shortcut or the Start menu.`);
-  // Nothing below may run, not even the single-instance check.
-  process.exit(1);
-}
+// Nothing below may run after it quits, not even the single-instance check.
+quitOnUnsafeSwitches({
+  packaged: app.isPackaged,
+  argv: process.argv.slice(1),
+  show: (message) => reportStartupFailure(userData, message),
+  quit: () => process.exit(1),
+});
 
 // Both schemes behave like https origins: standard URL parsing, a secure
 // context and per-origin storage. Neither may register service workers.
