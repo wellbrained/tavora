@@ -74,3 +74,95 @@ export function dialogsHolding(list: readonly Layer[], since: Map<number, number
   for (const id of since.keys()) if (!closing.has(id)) since.delete(id);
   return { count, recheckIn };
 }
+
+// ── Which panels a menu or hint asks to step aside, and which popups wait ──
+
+/** After this many frames with no popup placed (one POPUPS does not know), every panel steps aside instead. */
+export const POPUP_WAIT_FRAMES = 6;
+
+/**
+ * What the host UI has asked the host while an overlay is open. Request numbers keep counting across overlays, so an
+ * answer to an older one is never taken for a newer one.
+ */
+export interface PopupWatch {
+  /** The panels asked to step aside, each with the request that asked; "all"; or null before the first request. */
+  asked: "all" | ReadonlyMap<string, number> | null;
+  /** The last request number used. */
+  seq: number;
+  /** The newest request the host has answered. */
+  answered: number;
+  /** The request whose answer shows everything that waits (the first one, or the one for every panel); Infinity before it is sent. */
+  awaited: number;
+  /** Frames measured with no popup placed yet. */
+  quietFrames: number;
+}
+
+export const NO_WATCH: PopupWatch = { asked: null, seq: 0, answered: 0, awaited: Infinity, quietFrames: 0 };
+
+/** An overlay opens: nothing asked yet; the request numbers go on. */
+export function openWatch(watch: PopupWatch): PopupWatch {
+  return { ...watch, asked: null, awaited: Infinity, quietFrames: 0 };
+}
+
+/** What to tell the host: a request for these panels (perhaps none: a menu is open), or for every panel. */
+export interface PopupRequest {
+  seq: number;
+  only?: string[];
+}
+
+/** Every panel steps aside (a dialog, a drag, the window being resized, or a menu that was not found). */
+export function askAllStep(watch: PopupWatch): { watch: PopupWatch; request: PopupRequest } {
+  const seq = watch.seq + 1;
+  return { watch: { ...watch, asked: "all", seq, awaited: seq }, request: { seq } };
+}
+
+export interface MeasuredPopup<P> {
+  popup: P;
+  box: Box;
+  /** Measuring itself unseen (`visibility: hidden`). */
+  hidden: boolean;
+}
+
+/**
+ * One frame's look at the popups while only menus or hints are open. The first request goes once a popup is placed (or
+ * every panel is asked after POPUP_WAIT_FRAMES without one); later ones ask for panels a popup reaches that were not
+ * asked yet. Each placed popup either waits for the answer to the newest request that asked for a panel under it
+ * (`hold`), or may show (`show`).
+ */
+export function measureStep<P>(
+  watch: PopupWatch,
+  popups: readonly MeasuredPopup<P>[],
+  panels: readonly (Box & { instanceId: string })[],
+  viewport: { width: number; height: number },
+): { watch: PopupWatch; request: PopupRequest | null; hold: { popup: P; seq: number }[]; show: P[] } {
+  if (watch.asked === "all") return { watch, request: null, hold: [], show: [] };
+  const placed = popups.filter((item) => isPlaced(item.box, item.hidden, viewport)).map((item) => ({ popup: item.popup, ids: panelsUnder(item.box, panels) }));
+  if (watch.asked === null && !placed.length) {
+    const quiet = { ...watch, quietFrames: watch.quietFrames + 1 };
+    return quiet.quietFrames >= POPUP_WAIT_FRAMES ? { ...askAllStep(quiet), hold: [], show: [] } : { watch: quiet, request: null, hold: [], show: [] };
+  }
+  const asked = new Map(watch.asked ?? []);
+  const fresh = [...new Set(placed.flatMap(({ ids }) => ids.filter((id) => !asked.has(id))))];
+  let next: PopupWatch = { ...watch, asked };
+  let request: PopupRequest | null = null;
+  // The first request goes even with no panel under the popups: the host learns that a menu is open.
+  if (fresh.length || watch.asked === null) {
+    const seq = watch.seq + 1;
+    for (const id of fresh) asked.set(id, seq);
+    request = { seq, only: fresh };
+    next = { ...next, seq, awaited: watch.asked === null ? seq : watch.awaited };
+  }
+  const hold: { popup: P; seq: number }[] = [];
+  const show: P[] = [];
+  for (const { popup, ids } of placed) {
+    const wanted = Math.max(0, ...ids.map((id) => asked.get(id) ?? 0));
+    if (wanted > watch.answered) hold.push({ popup, seq: wanted });
+    else show.push(popup);
+  }
+  return { watch: next, request, hold, show };
+}
+
+/** The host answered request `seq`. `showAll`: what waited for the awaited request may show; an older answer shows nothing. */
+export function answerStep(watch: PopupWatch, seq: number): { watch: PopupWatch; showAll: boolean } {
+  return { watch: { ...watch, answered: Math.max(watch.answered, seq) }, showAll: watch.asked !== null && seq >= watch.awaited };
+}

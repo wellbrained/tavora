@@ -33,7 +33,7 @@ const dock = inject(DOCK)!;
 const id = props.params.api.id;
 const element = ref<HTMLElement | null>(null);
 const panel = computed(() => state.value?.panels.find((item) => item.instanceId === id));
-const image = computed(() => frozen.value[id]);
+const image = computed(() => frozen.value[id] ?? null);
 const module = computed(() => state.value?.modules.find((item) => item.id === panel.value?.moduleId));
 /** A running panel whose module asks for more after an update (it keeps what was granted): the bar offers a review. */
 const reviewNeeded = computed(() => module.value !== undefined && !panel.value?.question && !panel.value?.paused && needsGrant(module.value));
@@ -131,8 +131,8 @@ onBeforeUnmount(() => dock.unregister(id, element.value!));
     <!-- A new element for each picture, decoded before it is painted, so Chromium says when it is on screen (host.ts). -->
     <img
       v-else-if="image"
-      :key="image"
-      :src="image"
+      :key="image.gen"
+      :src="image.url"
       v-bind="{ elementtiming: `frozen:${id}` }"
       decoding="sync"
       alt=""

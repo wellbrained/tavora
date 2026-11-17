@@ -27,7 +27,7 @@ const hasPanels = computed(() => props.onOverlay || (state.value?.panels.length 
     <div :inert="onOverlay" :class="cn('flex items-center gap-2', onOverlay && 'opacity-50')">
       <LayoutsMenu />
       <ButtonGroup>
-        <Button class="h-9 text-sm [&_svg]:size-5" data-testid="add-module" @click="$emit('addModule')">
+        <Button class="h-9 text-sm [&_svg]:size-5" data-testid="add-module" aria-haspopup="dialog" @click="$emit('addModule')">
           <Plus /> {{ t("workspace.addModule") }}
         </Button>
         <ModulesMenu :disabled="!hasPanels" />

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clampRect, FREEZE_TIMEOUT_MS, FROZEN_GONE_MS, PREPARED_FRESH_MS, SHOW_DIALOG_CAP_MS } from "./panel-views";
+import { clampRect, FREEZE_TIMEOUT_MS, FROZEN_GONE_MS, PREPARED_FRESH_MS, SHOW_DIALOG_CAP_MS, STAND_INS_KEPT } from "./panel-views";
 import { panelViewsRig } from "./panel-views.test-helper";
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -448,12 +448,11 @@ describe("host menus and dialogs over the workspace (freeze)", () => {
     expect(rig.frozen).toEqual([{ [A]: "data:picture-2" }]);
   });
 
-  it("does not use pictures taken ahead once the panels moved, were lent, got a dialog or came and went", async () => {
+  it("does not use a picture taken ahead once its panel moved, was lent, got a dialog or went", async () => {
     const changes: [string, (rig: ReturnType<typeof panelViewsRig>) => void][] = [
       ["moved", (rig) => rig.views.place([place(A, 100)])],
       ["lent", (rig) => void rig.lend(A)],
       ["dialog", (rig) => void rig.views.openDialog(A, { width: 300, height: 200 })],
-      ["another panel opened", (rig) => rig.add(B)],
       ["closed", (rig) => rig.views.close(A)],
     ];
     for (const [what, change] of changes) {
@@ -492,7 +491,7 @@ describe("host menus and dialogs over the workspace (freeze)", () => {
     rig.lend(C);
     rig.views.place([place(A), place(B), place(C)]);
     await rig.views.freeze(true);
-    expect(rig.frozen).toEqual([{}]);
+    expect(rig.frozen).toEqual([]);
     expect(lent.image).not.toBeNull();
   });
 
@@ -504,7 +503,7 @@ describe("host menus and dialogs over the workspace (freeze)", () => {
     const freezing = rig.views.freeze(true);
     await vi.advanceTimersByTimeAsync(FREEZE_TIMEOUT_MS);
     await freezing;
-    expect(rig.frozen).toEqual([{}]);
+    expect(rig.frozen).toEqual([]);
     // Under a dialog (every panel asked) it steps aside all the same: it would draw over the dialog.
     expect(a.visible).toBe(false);
   });
@@ -715,6 +714,156 @@ describe("a panel back in its slot", () => {
     rig.views.place([]);
     await vi.advanceTimersByTimeAsync(0);
     expect(taken).toBe(1);
+  });
+});
+
+describe("pictures over a closing and opening menu", () => {
+  it("leaves a newer menu's picture alone when an older close finishes, until the panel has settled again", async () => {
+    const rig = panelViewsRig();
+    const a = rig.add(A);
+    rig.views.place([place(A)]);
+    let taken = 0;
+    a.capture = () => Promise.resolve(`data:a-${++taken}`);
+    // A hint opens over A, then closes: thaw 1 waits for A to settle.
+    await rig.views.freeze(true, [A], 1);
+    let settleFirst: () => void = () => undefined;
+    a.settled = new Promise((resolve) => (settleFirst = resolve));
+    const thawFirst = rig.views.freeze(false);
+    // It opens again at once (A gets a new picture and hides), and closes again: thaw 2 waits for A's next draw.
+    await rig.views.freeze(true, [A], 2);
+    expect(rig.frozen.at(-1)).toEqual({ [A]: "data:a-2" });
+    let settleSecond: () => void = () => undefined;
+    a.settled = new Promise((resolve) => (settleSecond = resolve));
+    const thawSecond = rig.views.freeze(false);
+    // Thaw 1 ends now: A is see-through, so its new picture must stay under it.
+    settleFirst();
+    await vi.advanceTimersByTimeAsync(FROZEN_GONE_MS);
+    await thawFirst;
+    expect(rig.frozen.at(-1)).toEqual({ [A]: "data:a-2" });
+    settleSecond();
+    await vi.advanceTimersByTimeAsync(FROZEN_GONE_MS);
+    await thawSecond;
+    expect(rig.frozen.at(-1)).toEqual({});
+  });
+
+  it("takes each panel's picture away as that panel settles, not when the slowest has", async () => {
+    const rig = panelViewsRig();
+    const a = rig.add(A);
+    const b = rig.add(B);
+    rig.views.place([place(A), place(B, 400)]);
+    b.image = "data:b";
+    await rig.views.freeze(true);
+    let settleB: () => void = () => undefined;
+    b.settled = new Promise((resolve) => (settleB = resolve));
+    const closing = rig.views.freeze(false);
+    await vi.advanceTimersByTimeAsync(FROZEN_GONE_MS);
+    expect(rig.frozen.at(-1)).toEqual({ [B]: "data:b" });
+    settleB();
+    await vi.advanceTimersByTimeAsync(FROZEN_GONE_MS);
+    await closing;
+    expect(rig.frozen.at(-1)).toEqual({});
+    expect(a.visible).toBe(true);
+  });
+
+  it("sends only what changed", async () => {
+    const rig = panelViewsRig();
+    const a = rig.add(A);
+    const b = rig.add(B);
+    b.image = "data:b";
+    rig.views.place([place(A), place(B, 400)]);
+    await rig.views.freeze(true, [A], 1);
+    await rig.views.freeze(true, [B], 2);
+    expect(rig.sent).toEqual([{ [A]: a.image }, { [B]: "data:b" }]);
+  });
+
+  it("logs how long the panels took to step aside after asking", async () => {
+    const lines: string[] = [];
+    const rig = panelViewsRig({ log: (line) => void lines.push(line) });
+    const a = rig.add(A);
+    rig.views.place([place(A)]);
+    rig.views.prepareFreeze();
+    await vi.advanceTimersByTimeAsync(0);
+    await rig.views.freeze(true, undefined, 7);
+    expect(a.visible).toBe(false);
+    expect(lines.at(-1)).toMatch(/^overlay 7: 1 panels out \d+ ms after asking \(1 pictures taken ahead, 0 new\)$/);
+  });
+});
+
+describe("pictures taken ahead", () => {
+  it("are taken only of panels a menu opened near there could reach", async () => {
+    const rig = panelViewsRig();
+    const a = rig.add(A);
+    const b = rig.add(B);
+    rig.world.size = { width: 2000, height: 800 };
+    rig.views.place([place(A), place(B, 1400)]);
+    let takenA = 0;
+    let takenB = 0;
+    a.capture = () => Promise.resolve(`data:a-${++takenA}`);
+    b.capture = () => Promise.resolve(`data:b-${++takenB}`);
+    rig.views.prepareFreeze({ x: 100, y: 10, width: 40, height: 20 });
+    expect([takenA, takenB]).toEqual([1, 0]);
+    // A press that may open a dialog: every panel.
+    rig.views.prepareFreeze();
+    expect([takenA, takenB]).toEqual([1, 1]);
+  });
+
+  it("are kept until used, each once, and a dialog that follows a menu uses the rest without a new capture", async () => {
+    let clock = 0;
+    const rig = panelViewsRig({ now: () => clock });
+    const a = rig.add(A);
+    const b = rig.add(B);
+    rig.views.place([place(A), place(B, 400)]);
+    let taken = 0;
+    a.capture = () => Promise.resolve(`data:a-${++taken}`);
+    b.capture = () => Promise.resolve(`data:b-${++taken}`);
+    rig.views.prepareFreeze();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(taken).toBe(2);
+    clock += 50;
+    // A menu over A uses A's; B's is kept.
+    await rig.views.freeze(true, [A], 1);
+    clock += 50;
+    // The menu's entry opens a dialog: B steps aside on the picture taken ahead.
+    await rig.views.freeze(true, undefined, 2);
+    expect(taken).toBe(2);
+    expect(rig.frozen.at(-1)).toEqual({ [A]: "data:a-1", [B]: "data:b-2" });
+  });
+
+  it("are not asked again for a panel asked a moment ago, nor for one that is out", async () => {
+    let clock = 0;
+    const rig = panelViewsRig({ now: () => clock });
+    const a = rig.add(A);
+    rig.views.place([place(A)]);
+    let taken = 0;
+    a.capture = () => Promise.resolve(`data:${++taken}`);
+    rig.views.prepareFreeze();
+    clock += PREPARED_FRESH_MS / 4;
+    rig.views.prepareFreeze();
+    expect(taken).toBe(1);
+    clock += PREPARED_FRESH_MS;
+    rig.views.prepareFreeze();
+    expect(taken).toBe(2);
+    await rig.views.freeze(true, [A], 1);
+    clock += PREPARED_FRESH_MS;
+    rig.views.prepareFreeze();
+    expect(taken).toBe(2);
+  });
+});
+
+describe("last pictures kept", () => {
+  it("keeps one for the last few panels that left their slot", async () => {
+    const rig = panelViewsRig();
+    const ids = Array.from({ length: STAND_INS_KEPT + 2 }, (_, n) => id(100 + n));
+    for (const [n, instanceId] of ids.entries()) {
+      const view = rig.add(instanceId);
+      view.image = `data:${n}`;
+    }
+    rig.views.place(ids.map((instanceId, n) => place(instanceId, n * 10, 0, 10, 10)));
+    for (const [n] of ids.entries()) {
+      rig.views.place(ids.slice(n + 1).map((instanceId, m) => place(instanceId, (n + 1 + m) * 10, 0, 10, 10)));
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    expect(Object.keys(rig.frozen.at(-1)!)).toEqual(ids.slice(2));
   });
 });
 
@@ -937,7 +1086,7 @@ describe("panel dialog", () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(a.inDialog).toBe(true);
     await rig.views.freeze(true);
-    expect(rig.frozen).toEqual([{}]);
+    expect(rig.frozen).toEqual([]);
   });
 
   it("does not tell the module of a dialog that closed before its picture was taken", async () => {

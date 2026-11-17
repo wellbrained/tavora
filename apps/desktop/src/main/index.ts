@@ -137,6 +137,8 @@ if (!app.requestSingleInstanceLock()) {
     }
   };
   app.on("before-quit", closeOverlays);
+  let quitting = false;
+  app.on("before-quit", () => (quitting = true));
   app.on("will-quit", closeOverlays);
   // Quitting does not wait for saves that are still running: hold it once until everything is on disk. A save that
   // hangs may delay quitting by a few seconds, never stop it.
@@ -166,6 +168,8 @@ if (!app.requestSingleInstanceLock()) {
   // The GPU process or a helper went away (logs/crashes.log). The window and its panels draw again by themselves once
   // Chromium has a new GPU process; the panels are asked to, so none stays blank.
   app.on("child-process-gone", (_event, details) => {
+    // Helpers Tavora ends itself while quitting are no trouble.
+    if (quitting && details.reason === "killed") return;
     recordCrash({ type: details.type, reason: details.reason, exitCode: details.exitCode });
     if (details.type === "GPU" && details.reason !== "clean-exit") host?.redrawAfterGpuLoss();
   });

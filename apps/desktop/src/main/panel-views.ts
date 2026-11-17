@@ -1,4 +1,4 @@
-import type { InstanceStatus, PanelPlacement } from "../shared/host-api";
+import type { InstanceStatus, PanelPicture, PanelPlacement } from "../shared/host-api";
 import { INSTANCE_ID } from "./ids";
 import { LAYOUT_LIMITS } from "./layout";
 import type { PanelLaunch } from "./panel-content";
@@ -26,6 +26,17 @@ export const FREEZE_TIMEOUT_MS = 600;
 export const FROZEN_GONE_MS = 50;
 /** How old a picture taken ahead (prepareFreeze) may be when a menu opens: an older one would show the panel back in time. */
 export const PREPARED_FRESH_MS = 200;
+/** How far from where a menu is opened (its button, a hint's element) a panel may be and still have its picture taken ahead. */
+export const PREPARE_REACH_PX = 360;
+/** How many panels keep their last picture for when they come back to their slot; the oldest goes first. */
+export const STAND_INS_KEPT = 8;
+
+type Picture = PanelPicture;
+
+/** Whether `rect` comes within `reach` of `other`. */
+function reaches(rect: PanelRect, other: PanelRect, reach: number): boolean {
+  return rect.x - reach < other.x + other.width && other.x < rect.x + rect.width + reach && rect.y - reach < other.y + other.height && other.y < rect.y + rect.height + reach;
+}
 
 function isRectLike(raw: unknown): raw is Record<keyof PanelRect, number> {
   const item = (typeof raw === "object" && raw !== null ? raw : {}) as Partial<Record<keyof PanelRect, unknown>>;
@@ -128,10 +139,11 @@ export interface PanelViewsDeps {
   /** A host menu, dialog or drag opens: tooltips and the opening cover go. */
   overlayOpening(): void;
   /**
-   * The still images to show in the panels' slots under their views: while a host menu or dialog is over them, and while a
-   * panel that comes back to its slot has not drawn yet. `awaited`: the new ones Panel views waits on (frozenOnScreen).
+   * The still images to show in the panels' slots under their views changed: while a host menu or dialog is over them,
+   * and while a panel that comes back to its slot has not drawn yet. Only changes are sent (null: none any more).
+   * `awaited`: the new ones Panel views waits on (frozenOnScreen).
    */
-  frozen(images: Record<string, string>, awaited: string[]): void;
+  frozen(changes: Record<string, Picture | null>, awaited: string[]): void;
   /** Resolves once the host UI shows the awaited images. */
   frozenOnScreen(): Promise<void>;
   /**
@@ -210,16 +222,19 @@ export class PanelViews {
   /** An overlay's steps run one after another, so each answer (overlayReady) comes after the one before. */
   private freezing: Promise<void> = Promise.resolve();
   /** Pictures standing in for panels hidden for a host menu, dialog or drag. */
-  private readonly overlayPictures = new Map<string, string>();
+  private readonly overlayPictures = new Map<string, Picture>();
   /**
    * The last picture of each panel that left its slot (another tab in front, its column collapsed, another group
    * maximized). It lies under the panel when it comes back, until the page has drawn: the slot never shows empty.
    */
-  private readonly standIns = new Map<string, string>();
+  private readonly standIns = new Map<string, Picture>();
+  private pictureGen = 0;
+  /** What the host UI has been sent: each panel's picture number. */
+  private sentPictures = new Map<string, number>();
   /** Panels shown in their slot now, to tell when one leaves it or comes back. */
   private readonly inSight = new Set<string>();
-  /** Pictures taken ahead of a menu (prepareFreeze), by panel, each with the time it was taken. */
-  private prepared: { at: number; layout: string; pictures: Map<string, Promise<{ image: string | null; at: number }>> } | null = null;
+  /** Pictures taken ahead of a menu or dialog (prepareFreeze), by panel: what they must still match, when asked, and the picture with when it was taken. */
+  private readonly prepared = new Map<string, { key: string; asked: number; taken: Promise<{ image: string | null; at: number }> }>();
   /**
    * A page dialog is open above the panel dialog (the host UI says so), so the panel's view stays out of sight. It follows
    * the host UI alone and is not reset when a dialog closes: one panel's dialog can give way to another's with a page
@@ -435,8 +450,10 @@ export class PanelViews {
     if (forget) this.bounds.delete(instanceId);
     this.inSight.delete(instanceId);
     this.out.delete(instanceId);
-    const pictured = [this.standIns.delete(instanceId), this.overlayPictures.delete(instanceId)].some(Boolean);
-    if (pictured && !this.deps.windowGone()) this.sendPictures();
+    this.prepared.delete(instanceId);
+    this.standIns.delete(instanceId);
+    this.overlayPictures.delete(instanceId);
+    this.sendPictures();
   }
 
   // ── Places ──────────────────────────────────────────────────────────
@@ -628,7 +645,8 @@ export class PanelViews {
       this.freezing = Promise.resolve();
     }
     const session = this.overlaySession;
-    const step = this.freezing.then(() => this.stepAside(session, only, seq));
+    const askedAt = this.now();
+    const step = this.freezing.then(() => this.stepAside(session, only, seq, askedAt));
     this.freezing = step.catch(() => undefined);
     return step;
   }
@@ -638,7 +656,7 @@ export class PanelViews {
     return this.out.has(instanceId) || (this.overlayOpen && this.wanted === "all" && !this.picturing.has(instanceId));
   }
 
-  private async stepAside(session: number, only: readonly string[] | undefined, seq: number): Promise<void> {
+  private async stepAside(session: number, only: readonly string[] | undefined, seq: number, askedAt: number): Promise<void> {
     if (session !== this.overlaySession || this.deps.windowGone()) return;
     if (!only) this.wanted = "all";
     else if (this.wanted !== "all") for (const instanceId of only) this.wanted.add(instanceId);
@@ -646,24 +664,22 @@ export class PanelViews {
     const targets = [...this.entries].filter(([instanceId]) => !this.lent.has(instanceId) && !this.inDialog(instanceId) && !this.out.has(instanceId) && (wanted === "all" || wanted.has(instanceId)));
     const pictured = targets.filter(([instanceId, { adapter }]) => this.canBePictured(instanceId, adapter));
     const picturedIds = new Set(pictured.map(([instanceId]) => instanceId));
-    for (const [instanceId] of pictured) this.picturing.add(instanceId);
-    const started = this.now();
-    const prepared = this.takePrepared();
+    for (const instanceId of picturedIds) this.picturing.add(instanceId);
     const images = new Map<string, string>();
+    let ahead = 0;
     await Promise.all(
       pictured.map(async ([instanceId, { adapter }]) => {
         // A panel going into its dialog has already told its module, which may have changed the page: its picture is the one taken before.
-        const image = this.dialogState?.instanceId === instanceId ? await this.dialogState.still : await this.pictureAhead(prepared?.get(instanceId), adapter);
-        if (image) images.set(instanceId, image);
+        const taken = this.dialogState?.instanceId === instanceId ? { image: await this.dialogState.still, ahead: false } : await this.pictureAhead(instanceId, adapter);
+        if (taken.ahead) ahead++;
+        if (taken.image) images.set(instanceId, taken.image);
       }),
     );
     if (session !== this.overlaySession || this.deps.windowGone()) return;
-    for (const [instanceId, image] of images) this.overlayPictures.set(instanceId, image);
+    for (const [instanceId, image] of images) this.overlayPictures.set(instanceId, this.picture(image));
     this.sendPictures([...images.keys()]);
-    const taken = this.now();
     // Hidden before their pictures are on screen, the panels' slots would show empty for a frame.
     if (images.size) await this.deps.frozenOnScreen();
-    this.deps.log?.(`overlay: ${images.size} of ${pictured.length} pictures taken in ${Math.round(taken - started)} ms`);
     if (session !== this.overlaySession || this.deps.windowGone()) return;
     for (const [instanceId, { adapter }] of targets) {
       this.picturing.delete(instanceId);
@@ -674,43 +690,33 @@ export class PanelViews {
       this.inSight.delete(instanceId);
       adapter.setVisible(false);
     }
+    this.deps.log?.(`overlay ${seq}: ${targets.length} panels out ${Math.round(this.now() - askedAt)} ms after asking (${ahead} pictures taken ahead, ${pictured.length - ahead} new)`);
     this.deps.overlayReady?.(seq);
   }
 
   /**
-   * Starts taking the panels' pictures before a menu opens (the host UI calls it on a right-click, a press on a menu
-   * button, a hover that will show a hint), so the menu finds them ready and the panels step aside at once. Nothing
-   * happens while an overlay is open or pictures were asked for a moment ago.
+   * Starts taking the panels' pictures before a menu or dialog opens (the host UI calls it on a right-click, a press on a
+   * menu button or entry, a hover that will show a hint), so it finds them ready and the panels step aside at once.
+   * `near`: only panels a menu opened there could reach (a hint, a menu button); without it every panel (a dialog may
+   * come). A panel whose picture was asked for a moment ago, or that is out already, is left alone.
    */
-  prepareFreeze(): void {
-    if (this.overlayOpen || this.deps.windowGone()) return;
+  prepareFreeze(near?: PanelRect): void {
+    if (this.deps.windowGone()) return;
     const now = this.now();
-    if (this.prepared && now - this.prepared.at < PREPARED_FRESH_MS) return;
-    const pictures = new Map<string, Promise<{ image: string | null; at: number }>>();
     for (const [instanceId, { adapter }] of this.entries) {
-      if (this.canBePictured(instanceId, adapter)) pictures.set(instanceId, this.pictureOf(adapter).then((image) => ({ image, at: this.now() })));
+      if (!this.canBePictured(instanceId, adapter) || this.out.has(instanceId) || this.picturing.has(instanceId)) continue;
+      const bounds = this.bounds.get(instanceId)!;
+      if (near && !reaches(near, bounds, PREPARE_REACH_PX)) continue;
+      const key = this.pictureKey(instanceId, adapter);
+      const before = this.prepared.get(instanceId);
+      if (before && before.key === key && now - before.asked < PREPARED_FRESH_MS / 2) continue;
+      this.prepared.set(instanceId, { key, asked: now, taken: this.pictureOf(adapter).then((image) => ({ image, at: this.now() })) });
     }
-    this.prepared = { at: now, layout: this.layoutKey(), pictures };
   }
 
-  /** The pictures taken ahead, if the panels are still where they were; a menu uses them once. */
-  private takePrepared(): Map<string, Promise<{ image: string | null; at: number }>> | undefined {
-    const prepared = this.prepared;
-    this.prepared = null;
-    // Pictures taken before the panels moved, were lent, got a dialog or came and went show the old page in the new place.
-    return prepared && prepared.layout === this.layoutKey() ? prepared.pictures : undefined;
-  }
-
-  /** Where every panel is and what state it is in, to tell whether pictures taken earlier still match. */
-  private layoutKey(): string {
-    return JSON.stringify([
-      [...this.entries.keys()],
-      [...this.bounds],
-      [...this.lent.keys()],
-      this.dialogState?.instanceId ?? null,
-      this.openingState !== null,
-      [...this.entries].map(([, { adapter }]) => `${adapter.status}${adapter.revealed}`),
-    ]);
+  /** What a picture taken ahead must still match: where the panel is and what state it is in. */
+  private pictureKey(instanceId: string, adapter: PanelViewAdapter): string {
+    return JSON.stringify([this.bounds.get(instanceId) ?? null, adapter.status, adapter.revealed, this.dialogState?.instanceId === instanceId, this.openingState !== null]);
   }
 
   /** A panel in its slot, ready and drawn: a still image can stand in for it. */
@@ -718,10 +724,18 @@ export class PanelViews {
     return !this.lent.has(instanceId) && this.bounds.has(instanceId) && adapter.status === "ready" && adapter.revealed && adapter.capturable;
   }
 
-  /** The picture taken ahead if it is fresh, or a new one at once when there is none, it came to nothing or it is too old by now. */
-  private async pictureAhead(ahead: Promise<{ image: string | null; at: number }> | undefined, adapter: PanelViewAdapter): Promise<string | null> {
-    const taken = ahead ? await ahead : null;
-    return taken?.image && this.now() - taken.at < PREPARED_FRESH_MS ? taken.image : this.pictureOf(adapter);
+  /**
+   * The picture taken ahead of the panel if it still matches and is fresh (it is used once), or a new one at once when
+   * there is none, it came to nothing or it is too old by now.
+   */
+  private async pictureAhead(instanceId: string, adapter: PanelViewAdapter): Promise<{ image: string | null; ahead: boolean }> {
+    const prepared = this.prepared.get(instanceId);
+    if (prepared && prepared.key === this.pictureKey(instanceId, adapter)) {
+      const taken = await prepared.taken;
+      if (this.prepared.get(instanceId) === prepared) this.prepared.delete(instanceId);
+      if (taken.image && this.now() - taken.at < PREPARED_FRESH_MS) return { image: taken.image, ahead: true };
+    }
+    return { image: await this.pictureOf(adapter), ahead: false };
   }
 
   /** A still image of the panel, or null when it takes longer than FREEZE_TIMEOUT_MS. */
@@ -733,7 +747,8 @@ export class PanelViews {
 
   /**
    * The overlay closed: the panels are shown again. Each stays see-through until it has drawn, and its picture stays in
-   * the host UI under it until its background is solid again, so a slow one does not show empty for a moment.
+   * the host UI under it until its background is solid again, so a slow one does not show empty for a moment. Each
+   * picture goes as its own panel settles, and only the one this close left: a menu opened since put a newer one there.
    */
   private thaw(): Promise<void> {
     this.out.clear();
@@ -741,28 +756,23 @@ export class PanelViews {
     this.wanted = new Set();
     this.applyBounds();
     this.deps.shownAgain?.(this.inSlots());
-    return Promise.all([...this.overlayPictures.keys()].map((instanceId) => this.settledThenGone(instanceId))).then((gone) => {
-      if (this.deps.windowGone()) return;
-      let changed = false;
-      for (const instanceId of gone) {
-        // A panel out again for a menu opened since keeps its new picture.
-        const picture = this.overlayPictures.get(instanceId);
-        if (picture === undefined || this.out.has(instanceId) || this.picturing.has(instanceId)) continue;
+    return Promise.all(
+      [...this.overlayPictures].map(async ([instanceId, picture]) => {
+        await this.settledThenGone(instanceId);
+        if (this.overlayPictures.get(instanceId) !== picture || this.out.has(instanceId) || this.picturing.has(instanceId) || this.deps.windowGone()) return;
         this.overlayPictures.delete(instanceId);
         // One that left its slot meanwhile (another tab in front) keeps it to lie on when it comes back.
         const adapter = this.get(instanceId);
-        if (adapter?.status === "ready" && !this.bounds.has(instanceId) && !this.lent.has(instanceId)) this.standIns.set(instanceId, picture);
-        changed = true;
-      }
-      if (changed) this.sendPictures();
-    });
+        if (adapter?.status === "ready" && !this.bounds.has(instanceId) && !this.lent.has(instanceId)) this.keepStandIn(instanceId, picture);
+        this.sendPictures();
+      }),
+    ).then(() => undefined);
   }
 
-  /** Resolves with the panel's id once it has drawn and turned solid (and FROZEN_GONE_MS more), so what lies under it may go. */
-  private async settledThenGone(instanceId: string): Promise<string> {
+  /** Resolves once the panel has drawn and turned solid (and FROZEN_GONE_MS more), so what lies under it may go. */
+  private async settledThenGone(instanceId: string): Promise<void> {
     await this.get(instanceId)?.settled;
     await new Promise((resolve) => setTimeout(resolve, FROZEN_GONE_MS));
-    return instanceId;
   }
 
   // ── Pictures under panels that come back to their slot ──────────────
@@ -778,11 +788,25 @@ export class PanelViews {
     // Placed but kept hidden (no data yet, a question): its slot shows the loader or the question, never an old picture.
     if (!shown && placed && (!adapter.revealed || this.deps.asking(instanceId))) this.dropStandIn(instanceId);
     if (!was || shown || placed || adapter.status !== "ready" || !adapter.revealed || !adapter.capturable || this.lent.has(instanceId)) return;
-    void this.pictureOf(adapter).then((image) => {
-      if (!image || this.get(instanceId) !== adapter || this.inSight.has(instanceId) || this.bounds.has(instanceId) || this.deps.windowGone()) return;
-      this.standIns.set(instanceId, image);
-      this.sendPictures();
-    });
+    // No timer: a page that gives nothing (or gives it late) just has no picture to lie on.
+    void adapter
+      .capture()
+      .catch(() => null)
+      .then((image) => {
+        if (!image || this.get(instanceId) !== adapter || this.inSight.has(instanceId) || this.bounds.has(instanceId) || this.deps.windowGone()) return;
+        this.keepStandIn(instanceId, this.picture(image));
+        this.sendPictures();
+      });
+  }
+
+  /** Keeps a panel's last picture, newest last; only the last STAND_INS_KEPT panels keep one. */
+  private keepStandIn(instanceId: string, picture: Picture): void {
+    this.standIns.delete(instanceId);
+    this.standIns.set(instanceId, picture);
+    for (const oldest of this.standIns.keys()) {
+      if (this.standIns.size <= STAND_INS_KEPT) break;
+      this.standIns.delete(oldest);
+    }
   }
 
   /** The panel is back in its slot: its last picture lies under it until it has drawn and turned solid; one that is not ready has none. */
@@ -790,24 +814,38 @@ export class PanelViews {
     const picture = this.standIns.get(instanceId);
     if (adapter.status !== "ready") return this.dropStandIn(instanceId);
     void this.settledThenGone(instanceId).then(() => {
-      if (this.standIns.get(instanceId) === picture && this.inSight.has(instanceId) && !this.deps.windowGone()) this.dropStandIn(instanceId);
+      if (this.standIns.get(instanceId) === picture && this.inSight.has(instanceId)) this.dropStandIn(instanceId);
     });
   }
 
   private dropStandIn(instanceId: string): void {
-    if (this.standIns.delete(instanceId) && !this.overlayPictures.has(instanceId) && !this.deps.windowGone()) this.sendPictures();
+    if (this.standIns.delete(instanceId)) this.sendPictures();
   }
 
   /** The theme changed: pictures taken before show the old colours, so none is kept. */
   forgetStandIns(): void {
     if (!this.standIns.size) return;
     this.standIns.clear();
-    if (!this.deps.windowGone()) this.sendPictures();
+    this.sendPictures();
   }
 
-  /** Sends every picture to show under the views: the overlay's, else a panel's last one. `awaited`: new ones to wait for. */
+  private picture(url: string): Picture {
+    return { url, gen: ++this.pictureGen };
+  }
+
+  /**
+   * Tells the host UI which pictures to show under the views changed since last time (the overlay's, else a panel's
+   * last one; null: none any more). `awaited`: new ones Panel views waits on (frozenOnScreen).
+   */
   private sendPictures(awaited: string[] = []): void {
-    this.deps.frozen({ ...Object.fromEntries(this.standIns), ...Object.fromEntries(this.overlayPictures) }, awaited);
+    if (this.deps.windowGone()) return;
+    const shown = new Map([...this.standIns, ...this.overlayPictures]);
+    const changes: Record<string, Picture | null> = {};
+    for (const [instanceId, picture] of shown) if (this.sentPictures.get(instanceId) !== picture.gen) changes[instanceId] = picture;
+    for (const instanceId of this.sentPictures.keys()) if (!shown.has(instanceId)) changes[instanceId] = null;
+    if (!Object.keys(changes).length) return;
+    this.sentPictures = new Map([...shown].map(([instanceId, picture]) => [instanceId, picture.gen]));
+    this.deps.frozen(changes, awaited);
   }
 
   private now(): number {

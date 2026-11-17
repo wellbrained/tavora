@@ -59,10 +59,10 @@ function toRgba(bgra: Uint8Array, width: number, height: number, stride: number)
         continue;
       }
       // Chromium's alpha is premultiplied; PNG's is not.
-      const straight = (c: number) => (a === 255 || a === 0 ? c : Math.min(255, Math.round((c * 255) / a)));
-      out[to * 4] = straight(source[at + 2]!);
-      out[to * 4 + 1] = straight(source[at + 1]!);
-      out[to * 4 + 2] = straight(source[at]!);
+      const scale = a === 255 || a === 0 ? 1 : 255 / a;
+      out[to * 4] = Math.min(255, Math.round(source[at + 2]! * scale));
+      out[to * 4 + 1] = Math.min(255, Math.round(source[at + 1]! * scale));
+      out[to * 4 + 2] = Math.min(255, Math.round(source[at]! * scale));
       out[to * 4 + 3] = a;
     }
   }

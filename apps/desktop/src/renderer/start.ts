@@ -5,7 +5,7 @@ import "./dock.css";
 import { createApp, nextTick, watch } from "vue";
 import { installTitleTooltips } from "@tavora/official-ui/title-tooltips";
 import App from "./App.vue";
-import { api, firstState, setHintFloating, state } from "./host";
+import { firstState, prepareFor, setHintFloating, state } from "./host";
 
 /** How long the first state may take; the main process answers at once when it is well. */
 const NO_ANSWER_MS = 15_000;
@@ -64,7 +64,10 @@ export function start(): Promise<void> {
           if (settled) return;
           settle();
           // Every title hint in the page shows as the shared kit tooltip instead of the system's small one.
-          installTitleTooltips(document, { onOpenChange: setHintFloating, onPending: () => api.prepareOverlay() });
+          // A hint is about to show where the pointer rests (or the keyboard is): only the panels near it are pictured.
+          let hovered: EventTarget | null = null;
+          document.addEventListener("pointerover", (event) => (hovered = event.target), true);
+          installTitleTooltips(document, { onOpenChange: setHintFloating, onPending: () => prepareFor(hovered instanceof Element && hovered.isConnected && hovered.matches(":hover") ? hovered : document.activeElement) });
           resolve();
         });
       },

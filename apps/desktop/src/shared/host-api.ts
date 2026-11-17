@@ -606,6 +606,12 @@ export interface SnapshotView {
 }
 
 /** Where a visible panel's content is, in window content coordinates. */
+/** A still picture of a panel shown under its view; `gen` tells it from any other, so the host UI draws each once. */
+export interface PanelPicture {
+  url: string;
+  gen: number;
+}
+
 export interface PanelBounds {
   instanceId: string;
   x: number;
@@ -1252,8 +1258,12 @@ export interface TavoraHostApi {
    * `seq` comes back with `onOverlayReady`.
    */
   setOverlay(open: boolean, only?: string[], seq?: number): void;
-  /** A menu or hint is about to open (a right-click, a press on a menu button, a hover): the host starts taking the panels' pictures now, so the menu finds them ready. */
-  prepareOverlay(): void;
+  /**
+   * A menu, hint or dialog is about to open (a right-click, a press on a menu button or entry, a hover): the host starts
+   * taking the panels' pictures now, so it finds them ready. `near`: where a menu or hint will open (its element), so only
+   * panels it could reach are pictured; left out, every panel (a dialog may come).
+   */
+  prepareOverlay(near?: { x: number; y: number; width: number; height: number }): void;
   /** The panels asked for by `setOverlay(true, …, seq)` are out of the way: only now can a menu be drawn there without a view covering part of it. */
   onOverlayReady(listener: (seq: number) => void): void;
   /** The user is dragging the window's edge (true), or stopped (false): the panels step aside meanwhile, as for a drag. */
@@ -1276,10 +1286,11 @@ export interface TavoraHostApi {
   setButtonsBackground(color: string): void;
   onState(listener: (state: HostViewState) => void): void;
   /**
-   * Still images to show in the panels' slots under their views (while a menu or dialog is open, and while a panel that
-   * came back has not drawn yet). `awaited`: the new ones the host waits on before it hides their panels.
+   * Still images to show in the panels' slots under their views changed (while a menu or dialog is open, and while a
+   * panel that came back has not drawn yet): only the changes, null for none any more. `awaited`: the new ones the host
+   * waits on before it hides their panels.
    */
-  onFrozen(listener: (images: Record<string, string>, awaited: string[]) => void): void;
+  onFrozen(listener: (changes: Record<string, PanelPicture | null>, awaited: string[]) => void): void;
   /** The awaited images from `onFrozen` are on screen: the host hides the panels only then, so their slots never show empty. */
   frozenShown(): void;
   /** Tavora-wide keyboard shortcuts, also when a module panel has focus. */

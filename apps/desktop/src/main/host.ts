@@ -459,7 +459,7 @@ export class Host {
       // The dialog has to be seen; the panels' pictures stand in for them, so the cover goes.
       this.cover.cancel();
     },
-    frozen: (images, awaited) => this.window.webContents.send("host:frozen", images, awaited),
+    frozen: (changes, awaited) => this.window.webContents.send("host:frozen", changes, awaited),
     frozenOnScreen: () => this.frozenOnScreen(),
     overlayReady: (seq) => this.window.webContents.send("host:overlay-ready", seq),
     windowGone: () => this.window.isDestroyed(),
@@ -2078,8 +2078,10 @@ export class Host {
       const ids = Array.isArray(only) && only.length <= LAYOUT_LIMITS.panels && only.every((id) => typeof id === "string" && INSTANCE_ID.test(id)) ? (only as string[]) : undefined;
       void this.panels.freeze(open, ids, typeof seq === "number" && Number.isSafeInteger(seq) ? seq : 0);
     });
-    ipcMain.on("host:overlay-prepare", (event) => {
-      if (fromHost(event)) this.panels.prepareFreeze();
+    ipcMain.on("host:overlay-prepare", (event, near: unknown) => {
+      if (!fromHost(event)) return;
+      // Where the menu or hint will open, to picture only the panels it could reach; none given (or not a place): every panel.
+      this.panels.prepareFreeze(this.windowRect(near) ?? undefined);
     });
     ipcMain.on("host:frozen-shown", (event) => {
       if (fromHost(event)) this.frozenShown?.();
@@ -2146,7 +2148,6 @@ export class Host {
     let lastCrash = 0;
     this.window.webContents.on("render-process-gone", (_event, details) => {
       if (details.reason === "clean-exit" || this.window.isDestroyed()) return;
-      console.error(`[tavora] the host page is gone: ${details.reason} (exit code ${details.exitCode})`);
       recordCrash({ type: "host page", reason: details.reason, exitCode: details.exitCode });
       const page = new URL(this.options.devServer ?? `${HOST_SCHEME}://app/index.html`);
       if (Date.now() - lastCrash < 60_000) page.searchParams.set("crashed", `${details.reason} (exit code ${details.exitCode})`);
@@ -2161,14 +2162,18 @@ export class Host {
     });
     // Dragging the window's edge: the views can't keep up with the page's layout, so the host UI has them step aside
     // meanwhile, as for a split being dragged. Windows and macOS say when it ends; the timer is for a drag they never end.
+    let resizing = false;
     let resizeEnd: ReturnType<typeof setTimeout> | undefined;
-    const resizing = (on: boolean) => {
+    const setResizing = (on: boolean) => {
       clearTimeout(resizeEnd);
-      resizeEnd = on ? setTimeout(() => resizing(false), WINDOW_RESIZE_END_MS) : undefined;
+      resizeEnd = on ? setTimeout(() => setResizing(false), WINDOW_RESIZE_END_MS) : undefined;
+      // The host UI hears only a change, not every move.
+      if (on === resizing) return;
+      resizing = on;
       if (!this.window.isDestroyed()) this.window.webContents.send("host:window-resizing", on);
     };
-    this.window.on("will-resize", () => resizing(true));
-    this.window.on("resized", () => resizeEnd !== undefined && resizing(false));
+    this.window.on("will-resize", () => setResizing(true));
+    this.window.on("resized", () => setResizing(false));
     this.window.on("minimize", hidden(true));
     this.window.on("hide", hidden(true));
     this.window.on("restore", hidden(false));

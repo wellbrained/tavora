@@ -83,9 +83,10 @@ the pull request that makes it explicit.
 - **Overlay window entries** (`main/game-overlay-service.ts` `Open`): `shown`, `arranging`, `idleSince` →
   `hidden | idle(since) | shown | arranging`; with the crash breaker (`crashes`, `stopped`) as `healthy | crashed | stopped`.
 
-- **Host overlays over panels** (renderer `host.ts` `overlayOpen`, `asked`, `panelsOut`, `heldPopups`, timers, with
-  `overlay-area.ts` deciding which panels a popup covers and how long a closing dialog holds; main `panel-views.ts`
-  `overlayOpen`, `overlaySession`, `wanted`, `out`, `picturing`, `overlayPictures`, `standIns`, `inSight`;
+- **Host overlays over panels** (renderer `host.ts` `overlayOpen`, `panelsOut`, `heldPopups`, timers, with the
+  requests in `overlay-area.ts`'s `PopupWatch` (`measureStep`, `answerStep`, `askAllStep`, tested), which also decides
+  which panels a popup covers and how long a closing dialog holds; main `panel-views.ts` `overlayOpen`,
+  `overlaySession`, `wanted`, `out`, `picturing`, `overlayPictures`, `standIns`, `inSight`, `prepared`;
   `overlay-canvas.ts`) → the overlay as `closed | partial(panels) | all`, each panel as
   `live | picturing | out | settling` (its picture stays until it has drawn and turned solid; a panel back from another
   tab goes through `settling` on its last picture too), with a step function, and `data-status` on `<html>`.

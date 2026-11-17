@@ -533,7 +533,7 @@ const emptySlot = EmptySlot as unknown as VueComponent;
         <p class="text-muted-foreground max-w-sm text-sm">{{ t("workspace.startText") }}</p>
         <!-- A game's own modules first: one click each. -->
         <MadeForGame v-if="workspace?.kind === 'game'" :workspace="workspace" class="mt-3" />
-        <Button class="mt-3 h-9 text-sm [&_svg]:size-5" data-testid="empty-add-module" @click="dialog = { kind: 'add-module' }">
+        <Button class="mt-3 h-9 text-sm [&_svg]:size-5" data-testid="empty-add-module" aria-haspopup="dialog" @click="dialog = { kind: 'add-module' }">
           <Plus /> {{ t("workspace.addModule") }}
         </Button>
         <!-- The quiet way in: the six presets. Even grids live in the Layouts menu only. -->

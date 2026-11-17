@@ -4,7 +4,7 @@ import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch, type Compo
 import { handleUndoKey, setWindowBehind, toast, undoable } from "@tavora/official-ui/components/ui/toast";
 import { layers, openDialogLayers } from "@tavora/official-ui/lib/layers";
 import { EMPTY_INBOX, type InboxView } from "../shared/conversations";
-import type { AccountView, ActionResult, ReleaseCopy, ReleaseStatus, ModuleConnector, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, HostAction, PairingView, HostShortcut, HostViewState, ModuleMenu, PanelBounds, PanelDialog, PublishView } from "../shared/host-api";
+import type { AccountView, ActionResult, ReleaseCopy, ReleaseStatus, ModuleConnector, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, HostAction, PairingView, HostShortcut, HostViewState, ModuleMenu, PanelBounds, PanelDialog, PanelPicture, PublishView } from "../shared/host-api";
 import { keyInput, shortcutForKey } from "../shared/shortcuts";
 import { noteShortcut } from "./shortcut-origin";
 import { SETTING_SECTIONS, type SettingsPlace, type SettingsSection } from "./components/settings/settings-index";
@@ -13,7 +13,7 @@ import { isLanguageReady, loadLanguage, setLanguage, t } from "./i18n";
 import { applyTheme } from "./theme";
 import { developerSetup } from "./developer-setup";
 import { createDialogQueue } from "./dialog-queue";
-import { dialogsHolding, isPlaced, panelsUnder, POPUPS } from "./overlay-area";
+import { answerStep, askAllStep, dialogsHolding, measureStep, NO_WATCH, openWatch, POPUPS, type PopupRequest, type PopupWatch } from "./overlay-area";
 import { DISCORD_VOICE_PAUSED } from "../shared/discord-voice";
 
 export const api = window.tavoraHost;
@@ -848,7 +848,7 @@ api.onPanelDialogTitle((instanceId, title) => {
  * Still images of the panels, by instance id, shown in their slots under the views: while a menu or dialog is over them,
  * and while a panel that came back to its slot has not drawn yet.
  */
-export const frozen = shallowRef<Record<string, string>>({});
+export const frozen = shallowRef<Record<string, PanelPicture>>({});
 /** The pictures the host waits on that are not painted on screen yet. */
 const unpainted = new Set<string>();
 // Chromium reports a picture (elementtiming "frozen:<instance id>", PanelContent.vue) once a frame with it is on
@@ -858,12 +858,16 @@ new PerformanceObserver((list) => {
   for (const entry of list.getEntries() as (PerformanceEntry & { identifier: string })[]) unpainted.delete(entry.identifier.replace(/^frozen:/, ""));
   if (!unpainted.size) api.frozenShown();
 }).observe({ type: "element" });
-api.onFrozen((images, awaited) => {
-  const before = frozen.value;
-  frozen.value = images;
-  // The host hides those panels once their pictures are on screen. A picture already in its slot was painted before.
-  for (const id of awaited) if (images[id] && images[id] !== before[id]) unpainted.add(id);
-  for (const id of unpainted) if (!images[id]) unpainted.delete(id);
+api.onFrozen((changes, awaited) => {
+  const next = { ...frozen.value };
+  for (const [id, picture] of Object.entries(changes)) {
+    if (picture) next[id] = picture;
+    else delete next[id];
+  }
+  frozen.value = next;
+  // The host hides those panels once their (new) pictures are on screen.
+  for (const id of awaited) if (next[id]) unpainted.add(id);
+  for (const id of unpainted) if (!next[id]) unpainted.delete(id);
   if (awaited.length && !unpainted.size) api.frozenShown();
 });
 
@@ -941,32 +945,24 @@ export const overlayPending = computed(() => overlayOpen.value && !panelsOut.val
 /** How long a popup may wait for the panels to step aside before it shows anyway. */
 const PANELS_OUT_CAP_MS = 1200;
 let panelsOutCap: ReturnType<typeof setTimeout> | undefined;
-/** Counts requests to the host; its answer (onOverlayReady) names the one it answers. */
-let overlaySeq = 0;
-/** The request whose answer shows the popups and dialogs. */
-let awaitedSeq = 0;
-/** The panels asked to step aside since the overlay opened (every one, or these with the request that asked); null until the first request. */
-let asked: "all" | Map<string, number> | null = null;
-/** The newest request the host has answered. */
-let answeredSeq = 0;
+/** What has been asked of the host for the overlay open now, and answered (overlay-area.ts). */
+let watchState: PopupWatch = NO_WATCH;
 /**
  * While only a menu or hint is open, each popup stays unseen until it has been measured and the panels under it are out
  * (styles.css: html.overlay-partial, data-panels-clear). These wait for the answer to the request that asked for theirs.
  */
 const heldPopups = new Map<HTMLElement, number>();
 let measureFrame = 0;
-let framesWithoutPopup = 0;
-/** After this many frames with no popup on the page (one this list does not know), every panel steps aside. */
-const POPUP_WAIT_FRAMES = 6;
 
-function askHost(only?: string[]): number {
-  api.setOverlay(true, only, ++overlaySeq);
-  return overlaySeq;
+/** Sends a request; the first one (or one for every panel) keeps popups and dialogs unseen until it is answered. */
+function sendRequest(request: PopupRequest | null): void {
+  if (!request) return;
+  api.setOverlay(true, request.only, request.seq);
+  if (request.seq === watchState.awaited) waitFor();
 }
 
-/** Popups and dialogs wait (the class is on) until request `seq` is answered, or PANELS_OUT_CAP_MS passed. */
-function waitFor(seq: number): void {
-  awaitedSeq = seq;
+/** Popups and dialogs wait (the class is on) until the awaited request is answered, or PANELS_OUT_CAP_MS passed. */
+function waitFor(): void {
   panelsOut.value = false;
   clearTimeout(panelsOutCap);
   panelsOutCap = setTimeout(() => (panelsOut.value = true), PANELS_OUT_CAP_MS);
@@ -992,50 +988,24 @@ function setPartial(partial: boolean): void {
 }
 
 api.onOverlayReady((seq) => {
-  answeredSeq = Math.max(answeredSeq, seq);
+  const { watch, showAll } = answerStep(watchState, seq);
+  watchState = watch;
   for (const [popup, wanted] of heldPopups) if (wanted <= seq) clearPopup(popup);
-  if (overlayOpen.value && asked !== null && seq >= awaitedSeq) panelsOut.value = true;
+  if (showAll && overlayOpen.value) panelsOut.value = true;
 });
 
-/**
- * Each frame while only a menu or hint is open: finds where its popups are and asks the panels under them to step
- * aside. A popup shows once it is placed and the panels under it are out; one that later moves over another panel goes
- * unseen again until that one is out too.
- */
+/** Each frame while only menus or hints are open: measures their popups and acts on measureStep (overlay-area.ts). */
 function measurePopups(): void {
   measureFrame = 0;
-  if (!overlayOpen.value || asked === "all" || overlayWhole.value) return;
-  const viewport = { width: innerWidth, height: innerHeight };
-  const known = asked ?? new Map<string, number>();
-  const placed: { popup: HTMLElement; ids: string[] }[] = [];
-  const fresh = new Set<string>();
-  for (const popup of document.querySelectorAll<HTMLElement>(POPUPS)) {
-    const { x, y, width, height } = popup.getBoundingClientRect();
-    // A hint measures itself unseen (its own inline style) before it is placed.
-    if (!isPlaced({ x, y, width, height }, popup.style.visibility === "hidden", viewport)) continue;
-    const ids = panelsUnder({ x, y, width, height }, placedPanels);
-    placed.push({ popup, ids });
-    for (const id of ids) if (!known.has(id)) fresh.add(id);
-  }
-  if (asked === null && !placed.length && ++framesWithoutPopup >= POPUP_WAIT_FRAMES) return askAll();
-  if (placed.length || asked !== null) {
-    // The first request goes even with no panel under the popups: the host learns that a menu is open.
-    if (fresh.size || asked === null) {
-      const first = asked === null;
-      const seq = askHost([...fresh]);
-      for (const id of fresh) known.set(id, seq);
-      asked = known;
-      // The first answer shows them all (the class is on until then).
-      if (first) waitFor(seq);
-    }
-    // After that, each popup shows once every panel under it is out: asked now, or asked a moment ago for another one.
-    for (const { popup, ids } of placed) {
-      const wanted = Math.max(0, ...ids.map((id) => known.get(id) ?? 0));
-      if (wanted > answeredSeq) {
-        if ((heldPopups.get(popup) ?? 0) < wanted) holdPopup(popup, wanted);
-      } else if (!heldPopups.has(popup) && !popup.hasAttribute("data-panels-clear")) clearPopup(popup);
-    }
-  }
+  if (!overlayOpen.value || overlayWhole.value || watchState.asked === "all") return;
+  // A hint measures itself unseen (its own inline style) before it is placed.
+  const popups = [...document.querySelectorAll<HTMLElement>(POPUPS)].map((popup) => ({ popup, box: popup.getBoundingClientRect(), hidden: popup.style.visibility === "hidden" }));
+  const { watch, request, hold, show } = measureStep(watchState, popups, placedPanels, { width: innerWidth, height: innerHeight });
+  watchState = watch;
+  sendRequest(request);
+  if (watch.asked === "all") return setPartial(false);
+  for (const { popup, seq } of hold) if ((heldPopups.get(popup) ?? 0) < seq) holdPopup(popup, seq);
+  for (const popup of show) if (!heldPopups.has(popup) && !popup.hasAttribute("data-panels-clear")) clearPopup(popup);
   measureFrame = requestAnimationFrame(measurePopups);
 }
 
@@ -1044,12 +1014,13 @@ function stopMeasuring(): void {
   measureFrame = 0;
 }
 
-/** Every panel steps aside: a dialog, a drag or the window being resized, or a menu not found. */
+/** Every panel steps aside: a dialog, a drag or the window being resized. */
 function askAll(): void {
   stopMeasuring();
-  asked = "all";
   setPartial(false);
-  waitFor(askHost());
+  const { watch, request } = askAllStep(watchState);
+  watchState = watch;
+  sendRequest(request);
 }
 
 // Closing waits one turn of the event loop. A dialog that hands over to the next one (the prompt closes, a question that
@@ -1062,7 +1033,7 @@ watch(overlayOpen, (open) => {
       overlayRelease = undefined;
       api.setOverlay(false);
       stopMeasuring();
-      asked = null;
+      watchState = { ...watchState, asked: null };
       setPartial(false);
       clearTimeout(panelsOutCap);
       panelsOut.value = false;
@@ -1075,27 +1046,36 @@ watch(overlayOpen, (open) => {
     overlayRelease = undefined;
     return;
   }
+  watchState = openWatch(watchState);
   if (overlayWhole.value) return askAll();
   // Popups stay unseen until the first request is answered; measuring waits for them to be placed. After that each new
   // one waits on its own until it is measured (setPartial).
-  framesWithoutPopup = 0;
-  waitFor(Number.MAX_SAFE_INTEGER);
+  waitFor();
   setPartial(true);
   measureFrame = requestAnimationFrame(measurePopups);
 });
 // A dialog or drag while a menu is open (a menu entry that opens a dialog): every panel steps aside now.
 watch(overlayWhole, (whole) => {
-  if (whole && overlayOpen.value && asked !== "all") askAll();
+  if (whole && overlayOpen.value && watchState.asked !== "all") askAll();
 });
 watch(overlayPending, (waiting) => document.documentElement.classList.toggle("overlay-pending", waiting), { immediate: true, flush: "sync" });
 
-// Pictures of the panels take up to half a second. Starting them when the user reaches for a menu (the press that opens
-// it, a right-click) rather than when it has opened makes the menu appear at once.
+// Pictures of the panels take a moment. Taking them when the user reaches for a menu or dialog (the press that opens it,
+// a right-click, a hint about to show) rather than once it has opened makes it appear at once. A menu or hint needs only
+// the panels near where it opens; a menu's entry or a button for a dialog may need them all.
 const OPENS_POPUP = '[aria-haspopup]:not([aria-haspopup="false"]), [data-slot$="-trigger"]';
-const onPopupTrigger = (event: Event) => event.target instanceof Element && event.target.closest(OPENS_POPUP) !== null;
-document.addEventListener("pointerdown", (event) => (event.button === 2 || (event.button === 0 && event.ctrlKey) || onPopupTrigger(event)) && api.prepareOverlay(), true);
-document.addEventListener("contextmenu", () => api.prepareOverlay(), true);
-document.addEventListener("keydown", (event) => (event.key === "ContextMenu" || (["Enter", " ", "ArrowDown"].includes(event.key) && onPopupTrigger(event))) && api.prepareOverlay(), true);
+const OPENS_DIALOG = '[aria-haspopup="dialog"], [data-slot="dialog-trigger"], [role^="menuitem"]';
+/** Has the host take the panels' pictures ahead of what `target` may open: near it, or everywhere for a dialog. */
+export function prepareFor(target: EventTarget | null): void {
+  const element = target instanceof Element ? target : null;
+  if (!element || element.closest(OPENS_DIALOG)) return api.prepareOverlay();
+  const { x, y, width, height } = (element.closest(OPENS_POPUP) ?? element).getBoundingClientRect();
+  api.prepareOverlay({ x, y, width, height });
+}
+const opensSomething = (target: EventTarget | null) => target instanceof Element && target.closest(`${OPENS_POPUP}, ${OPENS_DIALOG}`) !== null;
+document.addEventListener("pointerdown", (event) => (event.button === 2 || (event.button === 0 && event.ctrlKey) || opensSomething(event.target)) && prepareFor(event.target), true);
+document.addEventListener("contextmenu", (event) => prepareFor(event.target), true);
+document.addEventListener("keydown", (event) => (event.key === "ContextMenu" || (["Enter", " ", "ArrowDown"].includes(event.key) && opensSomething(event.target))) && prepareFor(event.target), true);
 watch(overlayOpen, (open) => document.documentElement.classList.toggle("floating-open", open), { immediate: true });
 // How panels are drawn (dock.css reads it).
 watch(
