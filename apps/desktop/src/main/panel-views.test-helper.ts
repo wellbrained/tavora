@@ -12,6 +12,7 @@ export class MemoryPanelView implements PanelViewAdapter {
   firstDrawn = true;
   capturable = true;
   drawn: Promise<void> = Promise.resolve();
+  settled: Promise<void> = Promise.resolve();
   bounds: PanelRect | null = null;
   visible = false;
   suspended = false;
@@ -70,6 +71,8 @@ export interface PanelViewsRig {
   mounted: Set<object>;
   calls: string[];
   frozen: Record<string, string>[];
+  /** The pictures each `frozen` call said it waits for. */
+  awaited: string[][];
   ended: { show: boolean; tag: string }[];
   /** Lends a panel to the in-game layer; `revoked <id>` is noted in `calls` if the panel closes meanwhile. */
   lend(instanceId: string): PanelLease;
@@ -82,6 +85,7 @@ export function panelViewsRig(overrides: Partial<PanelViewsDeps> = {}): PanelVie
   const mounted = new Set<object>();
   const calls: string[] = [];
   const frozen: Record<string, string>[] = [];
+  const awaited: string[][] = [];
   const ended: { show: boolean; tag: string }[] = [];
   const views = new PanelViews({
     mount: (adapter) => void mounted.add(adapter.view),
@@ -97,9 +101,9 @@ export function panelViewsRig(overrides: Partial<PanelViewsDeps> = {}): PanelVie
     dialogDrawn: (id) => void calls.push(`dialogDrawn ${id}`),
     openingEnded: ({ show, tag }) => void ended.push({ show, tag }),
     overlayOpening: () => void calls.push("overlayOpening"),
-    frozen: (images) => void frozen.push(images),
+    frozen: (images, waitFor) => void (frozen.push(images), awaited.push(waitFor)),
     frozenOnScreen: () => Promise.resolve(),
-    overlayReady: () => void calls.push("overlayReady"),
+    overlayReady: (seq) => void calls.push(seq ? `overlayReady ${seq}` : "overlayReady"),
     windowGone: () => world.gone,
     ...overrides,
   });
@@ -109,6 +113,7 @@ export function panelViewsRig(overrides: Partial<PanelViewsDeps> = {}): PanelVie
     mounted,
     calls,
     frozen,
+    awaited,
     ended,
     lend(instanceId) {
       const lease = views.lend(instanceId, () => void calls.push(`revoked ${instanceId}`));

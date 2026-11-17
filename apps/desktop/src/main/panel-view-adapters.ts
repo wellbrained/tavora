@@ -2,11 +2,16 @@ import type { WebContentsView } from "electron";
 import type { BrowserPanel } from "./browser-view";
 import type { InstanceStatus, ModuleView } from "./module-view";
 import type { PanelRect, PanelViewAdapter } from "./panel-views";
+import { encodePng } from "./png-encode";
 
-/** A still image of a panel's page as a data: URL, or null when there is none. */
+/** A still image of a panel's page as a lossless data: URL (it stands in for the page, so it must look the same), or null when there is none. */
 async function stillOf(view: WebContentsView): Promise<string | null> {
   const image = await view.webContents.capturePage().catch(() => null);
-  return image && !image.isEmpty() ? `data:image/jpeg;base64,${image.toJPEG(85).toString("base64")}` : null;
+  if (!image || image.isEmpty()) return null;
+  // The capture's only bitmap is its 1x one, in device pixels: the host UI shows it at that size over the pixel ratio.
+  const { width, height } = image.getSize();
+  const png = await encodePng(image.toBitmap(), width, height).catch(() => null);
+  return png ? `data:image/png;base64,${png.toString("base64")}` : null;
 }
 
 /** A module's panel as Panel views sees it. */
@@ -37,6 +42,9 @@ export class ModulePanelView implements PanelViewAdapter {
   }
   get drawn(): Promise<void> {
     return this.panel.drawn;
+  }
+  get settled(): Promise<void> {
+    return this.panel.settled;
   }
   setBounds(rect: PanelRect): void {
     this.panel.setBounds(rect);
@@ -73,6 +81,7 @@ export class BrowserPanelView implements PanelViewAdapter {
   readonly revealed = true;
   readonly firstDrawn = true;
   readonly drawn = Promise.resolve();
+  readonly settled = Promise.resolve();
 
   constructor(readonly panel: BrowserPanel) {}
 

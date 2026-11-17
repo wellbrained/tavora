@@ -95,6 +95,11 @@ export class Timings {
  * few. It survives a start that fails before any window, so a user can send it.
  */
 export function appendStartupLog(file: string, text: string, folders: { home?: string; userData?: string } = {}, now = new Date()): void {
+  appendLogLine(file, text, STARTUP_LOG_KEPT, folders, now);
+}
+
+/** Adds a line to a small log file in the data folder, keeping the newest `kept`; the user's folders are taken out. */
+export function appendLogLine(file: string, text: string, kept: number, folders: { home?: string; userData?: string } = {}, now = new Date()): void {
   let lines: string[] = [];
   try {
     lines = readFileSync(file, "utf8").split(/\r?\n/).filter(Boolean);
@@ -104,7 +109,7 @@ export function appendStartupLog(file: string, text: string, folders: { home?: s
   const line = scrub(text, folders).replace(/\s+/g, " ").trim();
   lines.push(`${now.toISOString()} ${line.length > LINE_MAX ? `${line.slice(0, LINE_MAX)}…` : line}`);
   mkdirSync(path.dirname(file), { recursive: true });
-  writeFileSync(file, `${lines.slice(-STARTUP_LOG_KEPT).join("\n")}\n`);
+  writeFileSync(file, `${lines.slice(-kept).join("\n")}\n`);
 }
 
 export const errorLog = new ErrorLog();

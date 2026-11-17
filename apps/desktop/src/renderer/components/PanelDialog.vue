@@ -9,7 +9,7 @@ import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue
 import { X } from "@lucide/vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Dialog, DialogContent, DialogTitle, type DismissAttempt } from "@tavora/official-ui/components/ui/dialog";
-import { api, panelDialog, panelDialogDrawn, panelDialogTitle } from "../host";
+import { api, overlayPending, panelDialog, panelDialogDrawn, panelDialogTitle } from "../host";
 import { t } from "../i18n";
 import { dialogPlace, type Room } from "../panel-dialog-place";
 
@@ -23,9 +23,10 @@ const SHOW_AFTER_MS = 700;
 /** False while the page has not drawn in the frame: an empty frame would show as a blank box before it. */
 const shown = ref(false);
 watch(panelDialogDrawn, (drawn) => drawn && (shown.value = true));
-// The frame is painted before the page moves into it, so the two appear in one step.
+// The frame is painted before the page moves into it, so the two appear in one step. While the other panels step aside
+// the frame is held unseen (styles.css): the page waits for it.
 watch(
-  shown,
+  () => shown.value && !overlayPending.value,
   async (now) => {
     const dialog = panelDialog.value;
     if (!now || !dialog) return;

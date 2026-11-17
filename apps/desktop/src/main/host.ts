@@ -63,6 +63,9 @@ import type { TestHosts } from "./network";
 import { holdOwnPort } from "./own-ports";
 import { shortcutFor } from "./shortcuts";
 import { importIcon, removeIcon } from "./icons";
+import { INSTANCE_ID } from "./ids";
+import { recordCrash } from "./crash-log";
+import { LAYOUT_LIMITS } from "./layout";
 import { clipInitials, clipName, type Profile, removePicture, savePicture } from "./profile";
 import {
   createFolder,
@@ -249,6 +252,8 @@ const OPENING_CAP_MS = REVEAL_CAP_MS * 4;
 const timingLog = !app.isPackaged && process.env.TAVORA_TIMINGS ? (line: string) => console.log(`[tavora] ${line}`) : null;
 /** How long to wait for the host UI to show the panels' still images before hiding the panels anyway. */
 const FROZEN_SHOWN_CAP_MS = 300;
+/** How long after the last move of the window's edge the panels come back, when the system never says the resize ended. */
+const WINDOW_RESIZE_END_MS = 1000;
 /** How long a development folder's build must be quiet before its panels reload. */
 const DEVELOPMENT_RELOAD_MS = 300;
 /** The pages Settings > Development links to. */
@@ -454,9 +459,9 @@ export class Host {
       // The dialog has to be seen; the panels' pictures stand in for them, so the cover goes.
       this.cover.cancel();
     },
-    frozen: (images) => this.window.webContents.send("host:frozen", images),
+    frozen: (images, awaited) => this.window.webContents.send("host:frozen", images, awaited),
     frozenOnScreen: () => this.frozenOnScreen(),
-    overlayReady: () => this.window.webContents.send("host:overlay-ready"),
+    overlayReady: (seq) => this.window.webContents.send("host:overlay-ready", seq),
     windowGone: () => this.window.isDestroyed(),
     shownAgain: (views) => this.logDraws(views, "dialog closed"),
     ...(timingLog ? { log: timingLog } : {}),
@@ -1818,6 +1823,7 @@ export class Host {
     this.applyTitleBarOverlay();
     this.toastView.refresh();
     for (const view of this.nativePanels()) view.applyTheme(next);
+    this.panels.forgetStandIns();
     // Each keeps its font when it is the same (InsertedCss), so only a new font costs a swap; overlay pages hear a new one.
     setOverlayFont(next.font);
     this.gameOverlays?.refreshFonts();
@@ -2066,8 +2072,11 @@ export class Host {
       // A host page that was loaded again learns here that it still has to show the toasts itself.
       if (this.toastsFallback) event.sender.send("host:toasts-fallback", true);
     });
-    ipcMain.on("host:overlay", (event, open: unknown) => {
-      if (fromHost(event) && typeof open === "boolean") void this.panels.freeze(open);
+    ipcMain.on("host:overlay", (event, open: unknown, only: unknown, seq: unknown) => {
+      if (!fromHost(event) || typeof open !== "boolean") return;
+      // Only these panels step aside (a menu or hint lies over them); none named: every panel.
+      const ids = Array.isArray(only) && only.length <= LAYOUT_LIMITS.panels && only.every((id) => typeof id === "string" && INSTANCE_ID.test(id)) ? (only as string[]) : undefined;
+      void this.panels.freeze(open, ids, typeof seq === "number" && Number.isSafeInteger(seq) ? seq : 0);
     });
     ipcMain.on("host:overlay-prepare", (event) => {
       if (fromHost(event)) this.panels.prepareFreeze();
@@ -2138,6 +2147,7 @@ export class Host {
     this.window.webContents.on("render-process-gone", (_event, details) => {
       if (details.reason === "clean-exit" || this.window.isDestroyed()) return;
       console.error(`[tavora] the host page is gone: ${details.reason} (exit code ${details.exitCode})`);
+      recordCrash({ type: "host page", reason: details.reason, exitCode: details.exitCode });
       const page = new URL(this.options.devServer ?? `${HOST_SCHEME}://app/index.html`);
       if (Date.now() - lastCrash < 60_000) page.searchParams.set("crashed", `${details.reason} (exit code ${details.exitCode})`);
       lastCrash = Date.now();
@@ -2149,6 +2159,16 @@ export class Host {
     this.window.webContents.on("did-finish-load", () => {
       if (this.windowBehind) this.window.webContents.send("host:window-behind", true);
     });
+    // Dragging the window's edge: the views can't keep up with the page's layout, so the host UI has them step aside
+    // meanwhile, as for a split being dragged. Windows and macOS say when it ends; the timer is for a drag they never end.
+    let resizeEnd: ReturnType<typeof setTimeout> | undefined;
+    const resizing = (on: boolean) => {
+      clearTimeout(resizeEnd);
+      resizeEnd = on ? setTimeout(() => resizing(false), WINDOW_RESIZE_END_MS) : undefined;
+      if (!this.window.isDestroyed()) this.window.webContents.send("host:window-resizing", on);
+    };
+    this.window.on("will-resize", () => resizing(true));
+    this.window.on("resized", () => resizeEnd !== undefined && resizing(false));
     this.window.on("minimize", hidden(true));
     this.window.on("hide", hidden(true));
     this.window.on("restore", hidden(false));
@@ -4448,6 +4468,14 @@ export class Host {
   private nativePanel(instanceId: string): ModuleView | BrowserPanel | undefined {
     const view = this.panels.get(instanceId);
     return view instanceof ModulePanelView || view instanceof BrowserPanelView ? view.panel : undefined;
+  }
+
+  /** The GPU process went and Chromium started a new one: every page is asked to draw again and the panels are placed again, so none stays blank. */
+  redrawAfterGpuLoss(): void {
+    if (this.window.isDestroyed()) return;
+    this.window.webContents.invalidate();
+    for (const panel of this.nativePanels()) if (!panel.view.webContents.isDestroyed()) panel.view.webContents.invalidate();
+    this.panels.applyBounds();
   }
 
   private nativePanels(): (ModuleView | BrowserPanel)[] {

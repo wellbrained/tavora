@@ -83,9 +83,12 @@ the pull request that makes it explicit.
 - **Overlay window entries** (`main/game-overlay-service.ts` `Open`): `shown`, `arranging`, `idleSince` →
   `hidden | idle(since) | shown | arranging`; with the crash breaker (`crashes`, `stopped`) as `healthy | crashed | stopped`.
 
-- **Host overlays over panels** (renderer `host.ts` `overlayOpen`, `panelsOut`, timers; main `panel-views.ts`
-  `overlayOpen`, `overlayChanges`; `overlay-canvas.ts`) → one freeze flow `idle | capturing | frozen | thawing` with a
-  step function, and `data-status` on `<html>`.
+- **Host overlays over panels** (renderer `host.ts` `overlayOpen`, `asked`, `panelsOut`, `heldPopups`, timers, with
+  `overlay-area.ts` deciding which panels a popup covers and how long a closing dialog holds; main `panel-views.ts`
+  `overlayOpen`, `overlaySession`, `wanted`, `out`, `picturing`, `overlayPictures`, `standIns`, `inSight`;
+  `overlay-canvas.ts`) → the overlay as `closed | partial(panels) | all`, each panel as
+  `live | picturing | out | settling` (its picture stays until it has drawn and turned solid; a panel back from another
+  tab goes through `settling` on its last picture too), with a step function, and `data-status` on `<html>`.
 
 - **Workspace opening cover** (`main/host.ts` `openings`, `panel-views.ts` `openingState`, `panel-cover.ts`) → one
   opening with its own token: `waiting-for-data | covering | idle`.

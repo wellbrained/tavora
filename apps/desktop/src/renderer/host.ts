@@ -4,7 +4,7 @@ import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch, type Compo
 import { handleUndoKey, setWindowBehind, toast, undoable } from "@tavora/official-ui/components/ui/toast";
 import { layers, openDialogLayers } from "@tavora/official-ui/lib/layers";
 import { EMPTY_INBOX, type InboxView } from "../shared/conversations";
-import type { AccountView, ActionResult, ReleaseCopy, ReleaseStatus, ModuleConnector, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, HostAction, PairingView, HostShortcut, HostViewState, ModuleMenu, PanelDialog, PublishView } from "../shared/host-api";
+import type { AccountView, ActionResult, ReleaseCopy, ReleaseStatus, ModuleConnector, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, HostAction, PairingView, HostShortcut, HostViewState, ModuleMenu, PanelBounds, PanelDialog, PublishView } from "../shared/host-api";
 import { keyInput, shortcutForKey } from "../shared/shortcuts";
 import { noteShortcut } from "./shortcut-origin";
 import { SETTING_SECTIONS, type SettingsPlace, type SettingsSection } from "./components/settings/settings-index";
@@ -13,6 +13,7 @@ import { isLanguageReady, loadLanguage, setLanguage, t } from "./i18n";
 import { applyTheme } from "./theme";
 import { developerSetup } from "./developer-setup";
 import { createDialogQueue } from "./dialog-queue";
+import { dialogsHolding, isPlaced, panelsUnder, POPUPS } from "./overlay-area";
 import { DISCORD_VOICE_PAUSED } from "../shared/discord-voice";
 
 export const api = window.tavoraHost;
@@ -843,25 +844,27 @@ api.onPanelDialogTitle((instanceId, title) => {
   if (panelDialog.value?.instanceId === instanceId) panelDialogTitle.value = title;
 });
 
-/** Still images of the panels, by instance id, while they are hidden. */
+/**
+ * Still images of the panels, by instance id, shown in their slots under the views: while a menu or dialog is over them,
+ * and while a panel that came back to its slot has not drawn yet.
+ */
 export const frozen = shallowRef<Record<string, string>>({});
-let frozenChanges = 0;
-/** The pictures not yet painted on screen, and what to do once they all are. */
-let unpainted: { ids: Set<string>; done: () => void } | null = null;
+/** The pictures the host waits on that are not painted on screen yet. */
+const unpainted = new Set<string>();
 // Chromium reports a picture (elementtiming "frozen:<instance id>", PanelContent.vue) once a frame with it is on
 // screen. Put in the page is not enough: a big image can take a few frames more, and the slot shows empty until then.
 new PerformanceObserver((list) => {
-  if (!unpainted) return;
-  for (const entry of list.getEntries() as (PerformanceEntry & { identifier: string })[]) unpainted.ids.delete(entry.identifier.replace(/^frozen:/, ""));
-  if (!unpainted.ids.size) unpainted.done();
+  if (!unpainted.size) return;
+  for (const entry of list.getEntries() as (PerformanceEntry & { identifier: string })[]) unpainted.delete(entry.identifier.replace(/^frozen:/, ""));
+  if (!unpainted.size) api.frozenShown();
 }).observe({ type: "element" });
-api.onFrozen((images) => {
-  const change = ++frozenChanges;
-  unpainted = null;
+api.onFrozen((images, awaited) => {
+  const before = frozen.value;
   frozen.value = images;
-  const ids = Object.keys(images);
-  // The host hides the panels once their pictures are on screen.
-  if (ids.length) unpainted = { ids: new Set(ids), done: () => ((unpainted = null), change === frozenChanges && api.frozenShown()) };
+  // The host hides those panels once their pictures are on screen. A picture already in its slot was painted before.
+  for (const id of awaited) if (images[id] && images[id] !== before[id]) unpainted.add(id);
+  for (const id of unpainted) if (!images[id]) unpainted.delete(id);
+  if (awaited.length && !unpainted.size) api.frozenShown();
 });
 
 /** For a menu component: reports its open state, also when it unmounts open. */
@@ -893,9 +896,27 @@ export function setHintFloating(open: boolean): void {
 /** A note about the inbox (or the developer note) waits and nothing else is open, so InboxNotes.vue shows it. */
 export const noteShown = computed(() => (inbox.value.note !== null || inbox.value.developerNote) && dialog.value === null && !settingsOpen.value && !profileOpen.value && inboxOpen.value === null);
 
-// Module panels step aside for a menu, a drag and every dialog on the page (openDialogs: the slot, Settings, the profile,
-// the inbox, search, the panel dialog, Pairing, Publish ... whatever is built on the kit's Dialog).
-export const overlayOpen = computed(() => openMenus.value > 0 || openDialogs.value > 0 || dragging.value !== null);
+// Module panels step aside for a menu, a drag and every dialog on the page (the slot, Settings, the profile, the inbox,
+// search, the panel dialog, Pairing, Publish ... whatever is built on the kit's Dialog). A dialog keeps them out until
+// its backdrop has faded, so they don't come back bright beside it (overlay-area.ts).
+const closingSince = new Map<number, number>();
+const holdingDialogs = ref(0);
+let holdCheck: ReturnType<typeof setTimeout> | undefined;
+function countHoldingDialogs(): void {
+  clearTimeout(holdCheck);
+  const { count, recheckIn } = dialogsHolding(layers.value, closingSince, performance.now());
+  holdingDialogs.value = count;
+  if (recheckIn !== null) holdCheck = setTimeout(countHoldingDialogs, recheckIn);
+}
+watch(layers, countHoldingDialogs, { immediate: true, flush: "sync" });
+
+/** The user drags the window's edge: the views can't follow the page's layout fast enough, so they step aside meanwhile. */
+const windowResizing = ref(false);
+api.onWindowResizing((resizing) => (windowResizing.value = resizing));
+
+/** Every panel steps aside for a dialog, a drag or a window being resized; for a menu or hint only those it lies over. */
+const overlayWhole = computed(() => holdingDialogs.value > 0 || dragging.value !== null || windowResizing.value);
+export const overlayOpen = computed(() => openMenus.value > 0 || overlayWhole.value);
 
 // A page dialog above the panel dialog: the panel's view is native and would draw over it, so it steps aside meanwhile.
 watch(
@@ -903,26 +924,137 @@ watch(
   (covered) => api.setDialogCovered(covered),
 );
 
-// A menu or hint opens in this page at once, but the panels (native views above it) step aside only after their pictures
-// are on screen. Until then it would show half-covered, so popups stay hidden while the class is on (styles.css).
+/** Where the panels are, as last told to the host, to find the ones under a menu. */
+let placedPanels: readonly PanelBounds[] = [];
+/** Tells the host where each visible panel's content is (WorkspacePage.vue). */
+export function reportPanelBounds(bounds: PanelBounds[]): void {
+  placedPanels = bounds;
+  api.setPanelBounds(bounds);
+}
+
+// A menu, hint or dialog opens in this page at once, but the panels (native views above it) step aside only after their
+// pictures are on screen. Until then it would show half-covered (or a dialog's backdrop dim the page beside bright
+// panels), so they stay hidden while the class is on (styles.css).
 const panelsOut = ref(false);
+/** Waiting for the panels to step aside: popups and dialogs stay unseen meanwhile. */
+export const overlayPending = computed(() => overlayOpen.value && !panelsOut.value);
 /** How long a popup may wait for the panels to step aside before it shows anyway. */
 const PANELS_OUT_CAP_MS = 1200;
 let panelsOutCap: ReturnType<typeof setTimeout> | undefined;
-api.onOverlayReady(() => {
-  if (overlayOpen.value) panelsOut.value = true;
+/** Counts requests to the host; its answer (onOverlayReady) names the one it answers. */
+let overlaySeq = 0;
+/** The request whose answer shows the popups and dialogs. */
+let awaitedSeq = 0;
+/** The panels asked to step aside since the overlay opened: every one, or these; null until the first request. */
+let asked: "all" | Set<string> | null = null;
+/**
+ * While only a menu or hint is open, each popup stays unseen until it has been measured and the panels under it are out
+ * (styles.css: html.overlay-partial, data-panels-clear). These wait for the answer to the request that asked for theirs.
+ */
+const heldPopups = new Map<HTMLElement, number>();
+let measureFrame = 0;
+let framesWithoutPopup = 0;
+/** After this many frames with no popup on the page (one this list does not know), every panel steps aside. */
+const POPUP_WAIT_FRAMES = 6;
+
+function askHost(only?: string[]): number {
+  api.setOverlay(true, only, ++overlaySeq);
+  return overlaySeq;
+}
+
+/** Popups and dialogs wait (the class is on) until request `seq` is answered, or PANELS_OUT_CAP_MS passed. */
+function waitFor(seq: number): void {
+  awaitedSeq = seq;
+  panelsOut.value = false;
+  clearTimeout(panelsOutCap);
+  panelsOutCap = setTimeout(() => (panelsOut.value = true), PANELS_OUT_CAP_MS);
+}
+
+/** Keeps a popup unseen until request `seq` is answered, or PANELS_OUT_CAP_MS passed. */
+function holdPopup(popup: HTMLElement, seq: number): void {
+  heldPopups.set(popup, seq);
+  popup.removeAttribute("data-panels-clear");
+  setTimeout(() => heldPopups.get(popup) === seq && clearPopup(popup), PANELS_OUT_CAP_MS);
+}
+
+function clearPopup(popup: HTMLElement): void {
+  heldPopups.delete(popup);
+  popup.setAttribute("data-panels-clear", "");
+}
+
+function setPartial(partial: boolean): void {
+  document.documentElement.classList.toggle("overlay-partial", partial);
+  if (partial) return;
+  heldPopups.clear();
+  for (const popup of document.querySelectorAll("[data-panels-clear]")) popup.removeAttribute("data-panels-clear");
+}
+
+api.onOverlayReady((seq) => {
+  for (const [popup, wanted] of heldPopups) if (wanted <= seq) clearPopup(popup);
+  if (overlayOpen.value && asked !== null && seq >= awaitedSeq) panelsOut.value = true;
 });
-// The panels' pictures stay after a dialog closes, under the panels, until the host says every panel has drawn again.
-// Only a change the host is told of resets this: a menu that closes and opens again within one tick sends nothing, and
-// the panels stay out of the way, so nothing would ever say they are.
+
+/**
+ * Each frame while only a menu or hint is open: finds where its popups are and asks the panels under them to step
+ * aside. A popup shows once it is placed and the panels under it are out; one that later moves over another panel goes
+ * unseen again until that one is out too.
+ */
+function measurePopups(): void {
+  measureFrame = 0;
+  if (!overlayOpen.value || asked === "all" || overlayWhole.value) return;
+  const viewport = { width: innerWidth, height: innerHeight };
+  const known = asked ?? new Set<string>();
+  const placed: HTMLElement[] = [];
+  const growing: HTMLElement[] = [];
+  const fresh = new Set<string>();
+  for (const popup of document.querySelectorAll<HTMLElement>(POPUPS)) {
+    const { x, y, width, height } = popup.getBoundingClientRect();
+    if (!isPlaced({ x, y, width, height }, getComputedStyle(popup).visibility === "hidden", viewport)) continue;
+    placed.push(popup);
+    const missing = panelsUnder({ x, y, width, height }, placedPanels).filter((id) => !known.has(id));
+    if (!missing.length) continue;
+    growing.push(popup);
+    for (const id of missing) fresh.add(id);
+  }
+  if (asked === null && !placed.length && ++framesWithoutPopup >= POPUP_WAIT_FRAMES) return askAll();
+  if (placed.length || asked !== null) {
+    // The first request goes even with no panel under the popups: the host learns that a menu is open.
+    if (fresh.size || asked === null) {
+      for (const id of fresh) known.add(id);
+      const first = asked === null;
+      asked = known;
+      const seq = askHost([...fresh]);
+      // The first answer shows them all (the class is on until then); a later one only the popups that waited for it.
+      if (first) waitFor(seq);
+      else for (const popup of growing) holdPopup(popup, seq);
+    }
+    for (const popup of placed) if (!growing.includes(popup) && !heldPopups.has(popup) && !popup.hasAttribute("data-panels-clear")) clearPopup(popup);
+  }
+  measureFrame = requestAnimationFrame(measurePopups);
+}
+
+/** Every panel steps aside: a dialog, a drag or the window being resized, or a menu not found. */
+function askAll(): void {
+  cancelAnimationFrame(measureFrame);
+  measureFrame = 0;
+  asked = "all";
+  setPartial(false);
+  waitFor(askHost());
+}
+
 // Closing waits one turn of the event loop. A dialog that hands over to the next one (the prompt closes, a question that
-// waited opens) is gone and replaced within that turn, and the panels must not show for a moment in between.
+// waited opens) is gone and replaced within that turn, and the panels must not show for a moment in between. Only a
+// change the host is told of resets this: a menu that closes and opens again within one tick sends nothing.
 let overlayRelease: ReturnType<typeof setTimeout> | undefined;
 watch(overlayOpen, (open) => {
   if (!open) {
     overlayRelease = setTimeout(() => {
       overlayRelease = undefined;
       api.setOverlay(false);
+      cancelAnimationFrame(measureFrame);
+      measureFrame = 0;
+      asked = null;
+      setPartial(false);
       clearTimeout(panelsOutCap);
       panelsOut.value = false;
     }, 0);
@@ -934,16 +1066,19 @@ watch(overlayOpen, (open) => {
     overlayRelease = undefined;
     return;
   }
-  api.setOverlay(true);
-  clearTimeout(panelsOutCap);
-  panelsOut.value = false;
-  panelsOutCap = setTimeout(() => (panelsOut.value = true), PANELS_OUT_CAP_MS);
+  if (overlayWhole.value) return askAll();
+  // Popups stay unseen until the first request is answered; measuring waits for them to be placed. After that each new
+  // one waits on its own until it is measured (setPartial).
+  framesWithoutPopup = 0;
+  waitFor(Number.MAX_SAFE_INTEGER);
+  setPartial(true);
+  measureFrame = requestAnimationFrame(measurePopups);
 });
-watch(
-  () => overlayOpen.value && !panelsOut.value,
-  (waiting) => document.documentElement.classList.toggle("overlay-pending", waiting),
-  { immediate: true, flush: "sync" },
-);
+// A dialog or drag while a menu is open (a menu entry that opens a dialog): every panel steps aside now.
+watch(overlayWhole, (whole) => {
+  if (whole && overlayOpen.value && asked !== "all") askAll();
+});
+watch(overlayPending, (waiting) => document.documentElement.classList.toggle("overlay-pending", waiting), { immediate: true, flush: "sync" });
 
 // Pictures of the panels take up to half a second. Starting them when the user reaches for a menu (the press that opens
 // it, a right-click) rather than when it has opened makes the menu appear at once.

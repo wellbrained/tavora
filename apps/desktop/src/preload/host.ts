@@ -35,10 +35,13 @@ const api: TavoraHostApi = {
   },
   setPanelBounds: (bounds) => ipcRenderer.send("host:panel-bounds", bounds),
   setWorkspaceBounds: (bounds) => ipcRenderer.send("host:workspace-bounds", bounds),
-  setOverlay: (open) => ipcRenderer.send("host:overlay", open),
+  setOverlay: (open, only, seq) => ipcRenderer.send("host:overlay", open, only, seq),
   prepareOverlay: () => ipcRenderer.send("host:overlay-prepare"),
   onOverlayReady: (listener) => {
-    ipcRenderer.on("host:overlay-ready", () => listener());
+    ipcRenderer.on("host:overlay-ready", (_event, seq: unknown) => listener(typeof seq === "number" ? seq : 0));
+  },
+  onWindowResizing: (listener) => {
+    ipcRenderer.on("host:window-resizing", (_event, resizing: unknown) => listener(resizing === true));
   },
   layout: {
     getState: () => ipcRenderer.invoke("layout:get-state"),
@@ -58,7 +61,7 @@ const api: TavoraHostApi = {
     ipcRenderer.on("host:state", (_event, state: HostViewState) => listener(state));
   },
   onFrozen: (listener) => {
-    ipcRenderer.on("host:frozen", (_event, images: Record<string, string>) => listener(images));
+    ipcRenderer.on("host:frozen", (_event, images: Record<string, string>, awaited: unknown) => listener(images, Array.isArray(awaited) ? (awaited as string[]) : []));
   },
   frozenShown: () => ipcRenderer.send("host:frozen-shown"),
   onShortcut: (listener) => {
