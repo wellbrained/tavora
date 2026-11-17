@@ -116,7 +116,10 @@ function sessionOpened(session: BoardSession) {
   board.value = session;
   boardState.value = session.state;
   library.value?.attach(session);
-  const offs = [session.onState((next) => (boardState.value = next)), session.onNotice(notify), session.onCopyShortcut(() => void copyAsPicture())];
+  const offs = [session.onState((next) => (boardState.value = next)), session.onNotice(notify), session.onCopyShortcut(() => {
+    // A picture is already being copied or saved: the shortcut is ignored until it is done.
+    if (!copying.value) void copyAsPicture();
+  })];
   stopSession = () => offs.forEach((off) => off());
 }
 
@@ -436,7 +439,7 @@ async function addPicture(event: Event) {
       <DropdownMenu>
         <DropdownMenuTrigger as-child><Button class="board-actions-menu" variant="ghost" size="icon-sm" :aria-label="t('board.actions')" :title="t('board.actions')" data-testid="board-actions"><MoreHorizontal class="size-4" /></Button></DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem data-testid="compact-copy-picture" :disabled="boardState.empty" :disabled-reason="boardState.empty ? t('board.nothingYet') : undefined" :action="copyAsPicture">{{ t("copy.button") }}</DropdownMenuItem>
+          <DropdownMenuItem data-testid="compact-copy-picture" :disabled="boardState.empty || copying" :disabled-reason="boardState.empty ? t('board.nothingYet') : undefined" :action="copyAsPicture">{{ t("copy.button") }}</DropdownMenuItem>
           <DropdownMenuItem data-testid="compact-save-picture" :disabled="boardState.empty || copying" :disabled-reason="boardState.empty ? t('board.nothingYet') : undefined" @select="saveAsPicture">{{ t("savePicture.button") }}</DropdownMenuItem>
           <DropdownMenuSeparator v-if="boardState.pictures.count > 0" />
           <DropdownMenuItem v-if="boardState.pictures.count > 0" @select="togglePictureLocks">{{ t(boardState.pictures.allLocked ? "image.unlock" : "image.lock") }}</DropdownMenuItem>

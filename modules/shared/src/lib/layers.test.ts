@@ -111,6 +111,38 @@ describe("the kit's dialogs and menus in the list", () => {
     expect(inertCount()).toBe(0)
   })
 
+  it("a dialog whose content is kept on the page (forceMount) leaves the list once closed, and gives the page back", async () => {
+    const page = document.createElement("button")
+    const root = document.createElement("div")
+    document.body.append(page, root)
+    const open = ref(false)
+    app = createApp(
+      defineComponent({
+        render: () =>
+          h(Dialog, { open: open.value, "onUpdate:open": (value: boolean) => (open.value = value) }, () =>
+            h(DialogContent, { "data-testid": "kept", forceMount: true }, () => [h(DialogTitle, () => "kept"), h(DialogDescription, () => "kept")]),
+          ),
+      }),
+    )
+    app.mount(root)
+    await tick()
+    open.value = true
+    await tick()
+    expect(inertHolder()?.element).toBe(document.querySelector('[data-testid="kept"]'))
+    expect(page.closest("[inert]")).not.toBeNull()
+    open.value = false
+    await tick()
+    // Still mounted, closed: no longer a layer, and the page is open again.
+    expect(document.querySelector('[data-testid="kept"]')).not.toBeNull()
+    expect(layers.value).toEqual([])
+    expect(inertCount()).toBe(0)
+    expect(page.closest("[inert]")).toBeNull()
+    // And it can open again.
+    open.value = true
+    await tick()
+    expect(inertHolder()).toBeDefined()
+  })
+
   it("Escape closes only the top dialog", async () => {
     const dialogs = mountDialogs()
     dialogs.first.value = true

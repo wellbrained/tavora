@@ -1,4 +1,5 @@
 import { isModalOpen } from "@tavora/official-ui/lib/layers";
+import { isMac } from "@tavora/official-ui/lib/platform";
 import { shortcutKeys } from "@tavora/official-ui/components/tooltip";
 import type { HostViewState } from "../shared/host-api";
 import { ariaKeys, SHORTCUT_GROUPS, SHORTCUTS, shownKeys, type ShortcutId, type ShortcutScope } from "../shared/shortcuts";
@@ -7,7 +8,7 @@ import { t } from "./i18n";
 // The host page's side of the shortcut table (shared/shortcuts.ts): what Settings > Shortcuts (Ctrl+/) lists, and the
 // keys a button names in `aria-keyshortcuts`, which its tooltip shows as key caps.
 
-export const MAC = navigator.platform.startsWith("Mac");
+export const MAC = isMac;
 /** The modifier key's name: Cmd on a Mac, otherwise Ctrl (Strg in German). */
 export const MOD = (): string => keyCaps("search")[0]!;
 

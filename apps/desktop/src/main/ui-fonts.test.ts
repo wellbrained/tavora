@@ -3,9 +3,12 @@ import path from "node:path";
 import { DEFAULT_THEME_FONT } from "@tavora/sdk/protocol";
 import { describe, expect, it } from "vitest";
 import { fontStylesheet } from "./module-fonts";
-import { fontFamily, isFontId, themeFont, UI_FONTS, uiFont } from "../shared/ui-fonts";
+import { FONT_RANGES, fontFamily, isFontId, themeFont, UI_FONTS, uiFont } from "../shared/ui-fonts";
 
 const appFonts = readFileSync(path.join(__dirname, "..", "renderer", "fonts.css"), "utf8");
+const kitFonts = readFileSync(path.join(__dirname, "..", "..", "..", "..", "modules", "shared", "src", "fonts.css"), "utf8");
+/** Every unicode-range a stylesheet declares. */
+const rangesIn = (css: string) => [...css.matchAll(/unicode-range:\s*([^;]+);/g)].map((match) => match[1]!.trim());
 
 describe("the interface fonts", () => {
   it("start with Inter, which is what a theme without a font means", () => {
@@ -34,6 +37,16 @@ describe("the interface fonts", () => {
         else expect(face, font.id).toContain(`size-adjust: ${font.sizeAdjust}%;`);
       }
     }
+  });
+
+  it("cut every file of every font the same way in the app page, the kit's Inter and the module pages", () => {
+    const allowed = new Set<string>(Object.values(FONT_RANGES));
+    for (const [name, css] of [["renderer/fonts.css", appFonts], ["modules/shared/src/fonts.css", kitFonts]] as const) {
+      const ranges = rangesIn(css);
+      expect(ranges.length, name).toBeGreaterThan(0);
+      for (const range of ranges) expect(allowed.has(range), `${name}: ${range}`).toBe(true);
+    }
+    for (const font of UI_FONTS) for (const range of rangesIn(fontStylesheet(themeFont(font.id)))) expect(allowed.has(range), font.id).toBe(true);
   });
 
   it("each give module pages their own files under the same name and size", () => {

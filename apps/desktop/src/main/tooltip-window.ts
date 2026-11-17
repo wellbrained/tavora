@@ -82,6 +82,10 @@ export class TooltipWindow {
         // The card its panel just took away is still in sight: this one takes its place. Another panel's starts unseen.
         if (this.sight === "closing")
             this.sight = this.closing?.owner === owner ? "seen" : "hidden";
+        // A card in sight that belongs to another panel is no card to take over: the old one would stay drawn, and take
+        // the new card's clicks. The new one starts unseen, like after a hidden window.
+        else if (this.sight === "seen" && previous && previous.owner !== owner)
+            this.sight = "hidden";
         this.endClosing();
         const w = this.ensureWindow();
         const content = await withBundleImages(source.root, request.content);

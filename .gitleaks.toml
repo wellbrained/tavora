@@ -1,13 +1,20 @@
-# Secret scan (CI's supply-chain job). Reviewed 2026-11-17: the allowed paths and values are test fixtures (fake keys,
-# sample tokens), Tavora's public publisher id, PoE2 image ids and an AI plan's tier name. A new finding fails the
-# scan; allow it here only once you checked it is not a real secret.
+# Secret scan (CI's supply-chain job). Reviewed 2026-11-17: the allowed paths and values are the test files that
+# hold fake keys or sample tokens (listed one by one, not every test file), Tavora's public publisher id, PoE2 image
+# ids and an AI plan's tier name. A new finding fails the scan; allow it here only once you checked it is not a real
+# secret.
 [extend]
 useDefault = true
 
 [[allowlists]]
 description = "Test fixtures and sample saved data"
 paths = [
-  '''\.test\.ts$''',
+  '''^apps/desktop/src/main/actions\.test\.ts$''',
+  '''^apps/desktop/src/main/folder-access\.test\.ts$''',
+  '''^apps/desktop/src/main/grants\.test\.ts$''',
+  '''^apps/desktop/src/main/host-files\.test\.ts$''',
+  '''^apps/desktop/src/main/publisher-names\.test\.ts$''',
+  '''^apps/desktop/src/main/saved-samples\.test\.ts$''',
+  '''^packages/pack/src/pack\.test\.ts$''',
   '''^apps/desktop/src/main/saved-samples/''',
   '''^modules/poe2-builds/src/item-art\.json$''',
 ]

@@ -117,7 +117,7 @@ export const de: Record<keyof typeof en, string> = {
   "card.failed": "Das Bild konnte nicht hinzugefügt werden: {error}",
   "board.actions": "Tafelaktionen",
   loading: "Whiteboard wird geladen…",
-  retry: "Nochmal versuchen",
+  retry: "Noch mal versuchen",
   "empty.hint": "Wähle oben ein Werkzeug und leg los",
   connectError: "Keine Verbindung zu Tavora. {error}",
   boardWord: "Tafel",

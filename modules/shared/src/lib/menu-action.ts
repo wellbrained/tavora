@@ -59,7 +59,19 @@ export function useMenuAction(action: () => MenuAction | undefined, root: MenuRo
     event.preventDefault()
     // Watched outside the row, so it holds after the row is gone (a submenu that closed).
     let closed = false
-    const stop = root ? watch(root.open, (open) => (closed ||= !open), { flush: "sync" }) : () => {}
+    // It ends when the menu closes (that is all it waits for) or the action settles, so an action that never settles
+    // leaves nothing behind.
+    const stop: () => void = root
+      ? watch(
+          root.open,
+          (open) => {
+            if (open) return
+            closed = true
+            stop()
+          },
+          { flush: "sync" },
+        )
+      : () => {}
     void task.run(() => Promise.resolve(result)).then(() => {
       stop()
       if (task.error.value !== null) actionFailed(task.error.value)

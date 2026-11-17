@@ -98,7 +98,35 @@ export const BUTTON_ICON_PADDING: Partial<Record<NonNullable<ButtonVariants["siz
   lg: "has-[>svg:not([data-icon=end])]:pl-4 has-[>svg:not([data-icon=end])]:pr-4.5 has-[>svg[data-icon=end]]:pl-4.5 has-[>svg[data-icon=end]]:pr-4",
 }
 
-/** True when a class list sets horizontal padding itself (`p-*`, `px-*`, `pl-*`, `pr-*`, `ps-*`, `pe-*`, with or without variants). */
+/** A class split at the colons outside brackets: its variants (`max-[400px]`, `has-[>svg:not(.a)]`, `[&:hover]`…), then the utility. */
+function variantsAndUtility(cls: string): string[] {
+  const parts: string[] = []
+  let depth = 0
+  let from = 0
+  for (let i = 0; i < cls.length; i++) {
+    const ch = cls[i]
+    if (ch === "[" || ch === "(") depth++
+    else if (ch === "]" || ch === ")") depth = Math.max(0, depth - 1)
+    else if (ch === ":" && depth === 0) {
+      parts.push(cls.slice(from, i))
+      from = i + 1
+    }
+  }
+  parts.push(cls.slice(from))
+  return parts
+}
+
+/** A variant that styles something inside the button, not the button: `*:`, `**:`, `[&_svg]:`, `[&>span]:`. */
+const forDescendants = (variant: string) => variant === "*" || variant === "**" || variant.startsWith("[&_") || variant.startsWith("[&>")
+
+/**
+ * True when a class list sets horizontal padding on the button itself (`p-*`, `px-*`, `pl-*`, `pr-*`, `ps-*`, `pe-*`),
+ * with or without variants (`md:`, `max-[400px]:`, `has-[…]:`). Padding for what is inside it (`[&_svg]:px-1`) doesn't count.
+ */
 export function setsOwnPadding(classes: string): boolean {
-  return /(?:^|\s)!?(?:[\w-]+:)*!?p[xlrse]?-/.test(classes)
+  return classes.split(/\s+/).some((cls) => {
+    const parts = variantsAndUtility(cls)
+    const utility = parts.pop()!
+    return /^!?p[xlrse]?-/.test(utility) && !parts.some(forDescendants)
+  })
 }

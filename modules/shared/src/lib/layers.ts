@@ -73,9 +73,18 @@ function openLayer(id: number, kind: LayerKind, modal: boolean, name: string | u
   stack.value = [...stack.value.filter((layer) => layer.id !== id), { id, kind, modal, name, state: "open", element }]
 }
 
-/** It stays, leaving, while its content is on the page, and goes at once when it never got there. */
+/**
+ * It stays, leaving, while its content is on the page, and goes at once when it never got there. A content that stays on
+ * the page after it closed (`forceMount`) never unmounts, so its LayerAnchor can't end the layer: it leaves once the
+ * content's own animations are over and the content is still there.
+ */
 function closeLayer(id: number): void {
   updateLayer(id, (layer) => (layer.element ? { ...layer, state: "closing" } : null))
+  const element = stack.value.find((layer) => layer.id === id && layer.state === "closing")?.element
+  if (!element) return
+  const finished = Promise.all((element.getAnimations?.() ?? []).map((animation) => animation.finished.catch(() => undefined)))
+  // A content that does unmount does so as its animations end; this comes after, so only a kept one is still here.
+  void finished.then(() => setTimeout(() => updateLayer(id, (layer) => (layer.state === "closing" && layer.element === element ? null : layer)), 0))
 }
 
 function removeLayer(id: number): void {
@@ -83,7 +92,8 @@ function removeLayer(id: number): void {
 }
 
 // Only the top modal layer holds the page inert. The next holder takes it before the last one lets go, so the page is
-// never reachable in between (inert-behind.ts counts holds).
+// never reachable in between (inert-behind.ts counts holds). The watch starts when the kit is first imported and is
+// never stopped, on purpose: it belongs to the page's one list and lives as long as the page does.
 let releaseInert: (() => void) | undefined
 watch(
   () => inertHolder(stack.value)?.element ?? null,

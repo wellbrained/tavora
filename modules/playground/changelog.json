@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.1.52",
+    "date": "2026-11-17",
+    "notes": [
+      "New examples for the picture edge and a slider read out loud.",
+      "Small fixes: German \"noch mal\" is spelled the same everywhere."
+    ]
+  },
+  {
     "version": "0.1.51",
     "date": "2026-11-17",
     "notes": [

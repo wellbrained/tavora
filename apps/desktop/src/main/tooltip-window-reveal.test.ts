@@ -183,6 +183,20 @@ describe("the tooltip window coming into sight", () => {
     expect(made.log.filter((line) => line.startsWith("send tooltip:render")).at(-1)).not.toMatch(/ keep$/);
   });
 
+  it("starts unseen when another panel's card replaces one that is still in sight", async () => {
+    const tooltip = tooltipWindow();
+    await shown(tooltip, "one");
+    const mark = made.log.length;
+    await tooltip.show("other", request("two"));
+    // Not drawn over the old card: see-through and click-through until it is drawn, and not kept over the old one.
+    expect(since(mark)).toContain("opacity 0");
+    expect(since(mark)).toContain("ignore true");
+    expect(made.log.filter((line) => line.startsWith("send tooltip:render")).at(-1)).not.toMatch(/ keep$/);
+    page("tooltip:size", lastSerial(), 140, 260, true);
+    page("tooltip:drawn", lastSerial());
+    expect(made.log.at(-1)).toBe("opacity 1");
+  });
+
   it("hides at once when Tavora closes it, and never shows a card closed while it waited to be drawn", async () => {
     vi.useFakeTimers();
     try {

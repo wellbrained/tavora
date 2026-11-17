@@ -91,6 +91,13 @@ export function catalogFullMail(to: string, usedBytes: number, catalogBytes: num
   };
 }
 
+/** A refusal because the whole catalog is full: the maintainer is told too (tellFull), which no other refusal does. */
+interface CatalogFull {
+  full: Response;
+}
+/** What a limit check says: a refusal, a full catalog, or null when there is room. */
+type LimitCheck = Response | CatalogFull | null;
+
 /** The middleware and handler for POST /v1/catalog/publish. */
 export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits = {}, now = Date.now, catalogueKey, officialPins = OFFICIAL_PINS, maintainer, mail, scanner }: PublishOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 30, windowMs: 3_600_000 });
@@ -271,7 +278,7 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     // The daily, waiting and storage limits. Checked before the scan and again right before the version is added.
     // Nothing in it is awaited, so the check after the scan and the adding of the version have nothing between them.
     let usedBytes = 0;
-    const overLimit = () => {
+    const overLimit = (): LimitCheck => {
       if (!owner && catalog.uploadsSince(key.accountId, new Date(at - 86_400_000)) >= uploadsPerDay) {
         return refuse(context, 429, "daily-limit", `An account can publish ${uploadsPerDay} versions a day. Try again tomorrow.`);
       }

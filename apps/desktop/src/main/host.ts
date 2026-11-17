@@ -3732,10 +3732,16 @@ export class Host {
     this.closeView(instanceId);
   }
 
-  /** Removes a panel's view and its UI state; module settings and documents stay. */
+  /**
+   * Removes a panel's view and its UI state; module settings and documents stay. The state goes once the page has closed:
+   * until then it may still save its last state, which would bring the file back.
+   */
   private closeView(instanceId: string): void {
     this.panels.close(instanceId);
-    void this.data.panelState.remove(instanceId).catch((error: unknown) => console.error("[tavora]", error));
+    void this.panels
+      .closed(instanceId)
+      .then(() => this.data.panelState.remove(instanceId))
+      .catch((error: unknown) => console.error("[tavora]", error));
   }
 
   // ── Browser ──────────────────────────────────────────────────────────

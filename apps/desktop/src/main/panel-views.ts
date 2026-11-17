@@ -377,6 +377,14 @@ export class PanelViews {
     if (discard) for (const page of this.closing) if (page.instanceId === instanceId) void page.adapter.dispose(true);
   }
 
+  /**
+   * Resolves once every page of this panel that went has closed: until then it may still save what was typed just before
+   * (up to CLOSE_CAP_MS), so what it saved is only safe to delete after this.
+   */
+  closed(instanceId: string): Promise<void> {
+    return Promise.all([...this.closing].filter((page) => page.instanceId === instanceId).map((page) => page.done)).then(() => undefined);
+  }
+
   /** Pages of panels that went and may still be saving (at most CLOSE_CAP_MS): quitting waits for them too. */
   private readonly closing = new Set<{ instanceId: string; adapter: PanelViewAdapter; done: Promise<void> }>();
 

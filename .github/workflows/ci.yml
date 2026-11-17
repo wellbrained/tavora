@@ -50,26 +50,28 @@ jobs:
       - run: pnpm test
       - run: pnpm build
 
-  # Known holes in what Tavora ships, and secrets in the history. The audit fails on a high or critical advisory in a
-  # production dependency; package.json's pnpm.overrides lift the ones a compatible fix exists for, and
-  # pnpm.auditConfig.ignoreGhsas lists the rest with no fix at all: picomatch, which Excalidraw's sass dependency pulls
-  # in for its file watcher; it is not in the Whiteboard's built bundle.
+  # Known holes in what Tavora ships, and secrets in the history. The audit covers the whole workspace, dev tools
+  # included, and fails on a high or critical advisory: most of what ends up in the app (electron, vue, the ad blocker,
+  # dockview, @vueuse) is listed as a devDependency because it is bundled, so `--prod` would miss it. package.json's
+  # pnpm.overrides lift the ones a compatible fix exists for, and pnpm.auditConfig.ignoreGhsas lists the rest with the
+  # reason beside it: picomatch, which Excalidraw's sass dependency pulls in for its file watcher; it is not in the
+  # Whiteboard's built bundle.
   # gitleaks scans the history of the checked-out commit only (not other branches); .gitleaks.toml allows the reviewed
   # test fixtures and public values by path or pattern, so a squash merge or another branch can't turn it red.
   supply-chain:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
       - name: Dependency audit
-        run: pnpm audit --prod --audit-level high
+        run: pnpm audit --audit-level high
       - name: Secret scan
         env:
           GITLEAKS_VERSION: 8.30.1
@@ -169,11 +171,11 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 50
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: pnpm
@@ -251,7 +253,7 @@ jobs:
         shell: pwsh
         run: Get-Content "$env:APPDATA\@tavora\desktop\logs\startup.log" -ErrorAction SilentlyContinue
       - if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: start-check-screen
           path: ${{ runner.temp }}\start-check.png

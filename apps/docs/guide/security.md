@@ -167,6 +167,7 @@ A module granted the `stream-overlay` connector can have Tavora serve its overla
 - **Only the links the user copies work.** Each overlay has a random link (128 bits), made by Tavora. Anything that asks without one gets nothing. The user can give every overlay a new link at once, and the old ones stop working.
 - **Web pages can't reach it**, not even ones that point their own name at `127.0.0.1` (DNS rebinding): Tavora answers only requests addressed to `127.0.0.1` or `localhost` at its port.
 - **The page is locked down like a panel.** Tavora serves only files from the module's package (the same path checks as G6), only for `GET`, with a policy that loads no code from anywhere else and lets the page talk only to Tavora. It has no bridge: it can only read what the module published for that overlay, at most 16 KB of plain JSON. In OBS the page runs in OBS's own browser. Tavora can't turn off WebRTC there, as it does for every overlay page it shows itself.
+- **Tavora's own font comes along.** Besides the module's files, every overlay server (the Stream overlays one and the game overlay and preview pages) serves one file of Tavora's own, `_font.css`: the interface font the user picked, embedded, so overlay pages match the app. Every `_state` message also carries that font's id, so the page can swap it when the user picks another one. Neither holds anything from a module.
 - **A link works only for its module.** It belongs to one module, under its publisher, in one workspace. When the module is removed, replaced by another publisher's module with the same id, or loses the grant, the link stops working and open overlay pages are cut off at once; OBS gets nothing more from that link.
 - **What an overlay shows goes on stream.** Whatever the module publishes for it is visible to viewers. The consent dialog says what the connector does; a module still decides what it shows.
 
@@ -466,6 +467,9 @@ Hover requires recent trusted pointer or keyboard input in a visible source pane
 reports must be near the card's anchor point, or over the anchor's box when the module sends one (at most 600 px a side,
 with the point on it). The box only widens where in its own panel a module's hover is taken: the card may then open up
 to 600 px from the pointer, still anchored inside that panel.
+The card is placed beside the module's box (or the point it gave) and is a window of its own, so it can reach outside the
+panel it belongs to, over a neighbouring panel or the edge of Tavora's window; it never leaves Tavora's content bounds.
+Where nothing fits, or the module gives no box, it may cover the item it is for.
 Hover details pass mouse input through and do not freeze the workspace. Pinning
 requires a real click or key press, once per gesture. One tooltip is shared by the
 window; ordinary hover cannot replace a pin. Only the owning panel can move or
@@ -473,6 +477,12 @@ close its current tooltip by id. Escape and the host close button always dismiss
 it. Source hide, reload, close, workspace switch, app focus loss and host dialogs clear
 it; stale asynchronous requests cannot revive a closed tooltip. Tooltips stay
 inside Tavora's content bounds and do not open remote pages.
+
+## Crash log
+
+When the GPU process, a helper or a page (Tavora's own or a module's) goes away unasked, Tavora adds one line to
+`logs/crashes.log` in its data folder (the newest 100 are kept). A line holds what went, why, its exit code and, for a
+module's page, the module's id, so it says which modules you run. It stays on this PC and is never sent anywhere.
 
 ## Isolated public page importing
 

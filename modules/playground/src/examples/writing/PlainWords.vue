@@ -17,7 +17,7 @@ const PAIRS: { good: Line; bad: Line }[] = [
     bad: { en: "Your feedback has been submitted successfully.", de: "Dein Feedback wurde erfolgreich übermittelt." },
   },
   {
-    good: { en: "Something went wrong. Try again?", de: "Das hat nicht geklappt. Nochmal versuchen?" },
+    good: { en: "Something went wrong. Try again?", de: "Das hat nicht geklappt. Noch mal versuchen?" },
     bad: { en: "An unexpected exception occurred (code 0x80070005).", de: "Eine unerwartete Ausnahme ist aufgetreten (Code 0x80070005)." },
   },
 ];

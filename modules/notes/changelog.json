@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.6.22",
+    "date": "2026-11-17",
+    "notes": [
+      "Small fixes: a dialog that stays on the page gives it back once closed."
+    ]
+  },
+  {
     "version": "0.6.21",
     "date": "2026-11-17",
     "notes": [

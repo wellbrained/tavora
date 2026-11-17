@@ -217,6 +217,23 @@ describe("visibility", () => {
     expect(b.disposedNow).toBe(true);
   });
 
+  it("says a closed panel is done only once its page has closed, so its state is removed after the last save", async () => {
+    const rig = panelViewsRig();
+    const a = rig.add(A);
+    let closePage!: () => void;
+    a.dispose = () => ((a.disposed = true), new Promise<void>((resolve) => (closePage = resolve)));
+    rig.views.close(A);
+    let done = false;
+    void rig.views.closed(A).then(() => (done = true));
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(done).toBe(false);
+    closePage();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(done).toBe(true);
+    // A panel with no page going is done at once.
+    await expect(rig.views.closed(B)).resolves.toBeUndefined();
+  });
+
   it("disposing everything resolves once every page has closed", async () => {
     const rig = panelViewsRig();
     const a = rig.add(A);

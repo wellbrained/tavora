@@ -1,9 +1,9 @@
 import { defineComponent, h, Teleport, nextTick, onMounted, onUnmounted, ref, watch, type PropType } from 'vue';
 import { pointAnchor, tooltipPlacement, type TooltipPoint, type TooltipRect, type TooltipSide } from './geometry';
 import { uiText } from '../ui/text';
+import { isMac } from '../../lib/platform';
 import './tooltip.css';
 
-const MAC = typeof navigator !== 'undefined' && navigator.platform.startsWith('Mac');
 const KEY_CAPS: Record<string, string> = { Escape: 'Esc', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→' };
 
 /**
@@ -16,7 +16,7 @@ export function shortcutKeys(shortcut: string): string[] {
   const first = shortcut.replace(/\s*\+\s*/g, '+').trim().split(/\s+(?=(?:Control|Ctrl|Meta|Alt|Shift)\+)/)[0] ?? '';
   return first.split(/\+(?!$)/).filter(Boolean).map(key => {
     if (key === 'Control' || key === 'Ctrl') return uiText.value.ctrl;
-    if (key === 'Meta') return MAC ? 'Cmd' : 'Win';
+    if (key === 'Meta') return isMac ? 'Cmd' : 'Win';
     return KEY_CAPS[key] ?? (key.length === 1 ? key.toUpperCase() : key);
   });
 }
