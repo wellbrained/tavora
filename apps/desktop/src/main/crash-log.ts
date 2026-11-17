@@ -37,10 +37,11 @@ export function crashLine(gone: GoneProcess): string {
 /** Notes a process that went away; a clean exit is no trouble and is left out. */
 export function recordCrash(gone: GoneProcess, now = new Date()): void {
   if (gone.reason === "clean-exit") return;
-  console.warn(`[tavora] ${crashLine(gone)}`);
+  const line = crashLine(gone);
+  console.warn(`[tavora] ${line}`);
   if (!file) return;
   try {
-    appendLogLine(file, crashLine(gone), CRASHES_KEPT, { home: os.homedir(), userData }, now);
+    appendLogLine(file, line, CRASHES_KEPT, { home: os.homedir(), userData }, now);
   } catch {
     // A full or read-only disk must not turn one crash into another.
   }

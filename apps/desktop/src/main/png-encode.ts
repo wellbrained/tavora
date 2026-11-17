@@ -5,6 +5,7 @@ import { crc32, deflate } from "node:zlib";
 import { promisify } from "node:util";
 
 const deflateAsync = promisify(deflate);
+const LITTLE_ENDIAN = new Uint8Array(Uint32Array.of(1).buffer)[0] === 1;
 const SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 function chunk(type: string, data: Buffer): Buffer {
@@ -23,25 +24,13 @@ function chunk(type: string, data: Buffer): Buffer {
 export async function encodePng(bgra: Uint8Array, width: number, height: number): Promise<Buffer | null> {
   if (width < 1 || height < 1 || bgra.length < width * height * 4 || bgra.length % height !== 0) return null;
   const stride = bgra.length / height;
+  const rgba = toRgba(bgra, width, height, stride);
   const row = width * 4 + 1;
   const raw = Buffer.allocUnsafe(row * height);
   for (let y = 0; y < height; y++) {
-    let out = y * row;
     // Filter type 0 (none) for every row: the fastest, and pictures of panels compress well without one.
-    raw[out++] = 0;
-    for (let at = y * stride, end = at + width * 4; at < end; at += 4, out += 4) {
-      const a = bgra[at + 3]!;
-      if (a === 255 || a === 0) {
-        raw[out] = bgra[at + 2]!;
-        raw[out + 1] = bgra[at + 1]!;
-        raw[out + 2] = bgra[at]!;
-      } else {
-        raw[out] = Math.min(255, Math.round((bgra[at + 2]! * 255) / a));
-        raw[out + 1] = Math.min(255, Math.round((bgra[at + 1]! * 255) / a));
-        raw[out + 2] = Math.min(255, Math.round((bgra[at]! * 255) / a));
-      }
-      raw[out + 3] = a;
-    }
+    raw[y * row] = 0;
+    raw.set(rgba.subarray(y * width * 4, (y + 1) * width * 4), y * row + 1);
   }
   const header = Buffer.alloc(13);
   header.writeUInt32BE(width, 0);
@@ -50,4 +39,32 @@ export async function encodePng(bgra: Uint8Array, width: number, height: number)
   header.set([8, 6, 0, 0, 0], 8);
   const data = await deflateAsync(raw, { level: 1 });
   return Buffer.concat([SIGNATURE, chunk("IHDR", header), chunk("IDAT", data), chunk("IEND", Buffer.alloc(0))]);
+}
+
+/** The pixels in RGBA order with straight alpha, rows packed. A whole pixel at a time where it can: a big panel has millions. */
+function toRgba(bgra: Uint8Array, width: number, height: number, stride: number): Uint8Array {
+  const out = new Uint8Array(width * height * 4);
+  const words = new Uint32Array(out.buffer);
+  // Aligned for a word view (a copy when it is not); a padded stride stays a whole number of pixels.
+  const source = bgra.byteOffset % 4 === 0 ? bgra : bgra.slice();
+  const fast = LITTLE_ENDIAN && stride % 4 === 0;
+  const input = fast ? new Uint32Array(source.buffer, source.byteOffset, source.length / 4) : null;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0, at = y * stride, to = y * width; x < width; x++, at += 4, to++) {
+      const a = source[at + 3]!;
+      if (input && (a === 255 || a === 0)) {
+        // B G R A in memory is 0xAARRGGBB; R G B A is 0xAABBGGRR.
+        const v = input[at / 4]!;
+        words[to] = ((v & 0xff00ff00) | ((v >>> 16) & 0xff) | ((v & 0xff) << 16)) >>> 0;
+        continue;
+      }
+      // Chromium's alpha is premultiplied; PNG's is not.
+      const straight = (c: number) => (a === 255 || a === 0 ? c : Math.min(255, Math.round((c * 255) / a)));
+      out[to * 4] = straight(source[at + 2]!);
+      out[to * 4 + 1] = straight(source[at + 1]!);
+      out[to * 4 + 2] = straight(source[at]!);
+      out[to * 4 + 3] = a;
+    }
+  }
+  return out;
 }

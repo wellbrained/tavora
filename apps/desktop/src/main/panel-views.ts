@@ -645,6 +645,7 @@ export class PanelViews {
     const wanted = this.wanted;
     const targets = [...this.entries].filter(([instanceId]) => !this.lent.has(instanceId) && !this.inDialog(instanceId) && !this.out.has(instanceId) && (wanted === "all" || wanted.has(instanceId)));
     const pictured = targets.filter(([instanceId, { adapter }]) => this.canBePictured(instanceId, adapter));
+    const picturedIds = new Set(pictured.map(([instanceId]) => instanceId));
     for (const [instanceId] of pictured) this.picturing.add(instanceId);
     const started = this.now();
     const prepared = this.takePrepared();
@@ -668,7 +669,7 @@ export class PanelViews {
       this.picturing.delete(instanceId);
       // A picture that came to nothing leaves the panel in sight under a menu, since its slot would show empty. Under a
       // dialog or drag it steps aside all the same: it would draw over them.
-      if (!images.has(instanceId) && wanted !== "all" && pictured.some(([id]) => id === instanceId)) continue;
+      if (!images.has(instanceId) && wanted !== "all" && picturedIds.has(instanceId)) continue;
       this.out.add(instanceId);
       this.inSight.delete(instanceId);
       adapter.setVisible(false);

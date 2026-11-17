@@ -1011,7 +1011,8 @@ function measurePopups(): void {
   const fresh = new Set<string>();
   for (const popup of document.querySelectorAll<HTMLElement>(POPUPS)) {
     const { x, y, width, height } = popup.getBoundingClientRect();
-    if (!isPlaced({ x, y, width, height }, getComputedStyle(popup).visibility === "hidden", viewport)) continue;
+    // A hint measures itself unseen (its own inline style) before it is placed.
+    if (!isPlaced({ x, y, width, height }, popup.style.visibility === "hidden", viewport)) continue;
     const ids = panelsUnder({ x, y, width, height }, placedPanels);
     placed.push({ popup, ids });
     for (const id of ids) if (!known.has(id)) fresh.add(id);
@@ -1038,10 +1039,14 @@ function measurePopups(): void {
   measureFrame = requestAnimationFrame(measurePopups);
 }
 
-/** Every panel steps aside: a dialog, a drag or the window being resized, or a menu not found. */
-function askAll(): void {
+function stopMeasuring(): void {
   cancelAnimationFrame(measureFrame);
   measureFrame = 0;
+}
+
+/** Every panel steps aside: a dialog, a drag or the window being resized, or a menu not found. */
+function askAll(): void {
+  stopMeasuring();
   asked = "all";
   setPartial(false);
   waitFor(askHost());
@@ -1056,8 +1061,7 @@ watch(overlayOpen, (open) => {
     overlayRelease = setTimeout(() => {
       overlayRelease = undefined;
       api.setOverlay(false);
-      cancelAnimationFrame(measureFrame);
-      measureFrame = 0;
+      stopMeasuring();
       asked = null;
       setPartial(false);
       clearTimeout(panelsOutCap);
