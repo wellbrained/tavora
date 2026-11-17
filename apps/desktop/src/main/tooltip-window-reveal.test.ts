@@ -45,8 +45,12 @@ vi.mock("electron", () => {
       made.bounds = bounds;
       made.log.push(`bounds ${bounds.width}x${bounds.height}`);
     }
-    setIgnoreMouseEvents() {}
-    setFocusable() {}
+    setIgnoreMouseEvents(ignore: boolean) {
+      made.log.push(`ignore ${ignore}`);
+    }
+    setFocusable(focusable: boolean) {
+      made.log.push(`focusable ${focusable}`);
+    }
     removeMenu() {}
     on() {}
     isFocused() {
@@ -142,6 +146,17 @@ describe("the tooltip window coming into sight", () => {
     expect(since(mark)).not.toContain("opacity 1");
     page("tooltip:drawn", lastSerial());
     expect(made.log.at(-1)).toBe("opacity 1");
+  });
+
+  it("takes clicks and keys for a pinned card only once it is in sight", async () => {
+    const tooltip = tooltipWindow();
+    await tooltip.show("owner", { ...(request("pin") as object), pinned: true } as never);
+    page("tooltip:ready");
+    expect(made.log).not.toContain("ignore false");
+    expect(made.log).not.toContain("focusable true");
+    page("tooltip:size", lastSerial(), 140, 260, true);
+    page("tooltip:drawn", lastSerial());
+    expect(made.log.slice(-3)).toEqual(["ignore false", "focusable true", "opacity 1"]);
   });
 
   it("comes into sight anyway when the page never says it drew", async () => {

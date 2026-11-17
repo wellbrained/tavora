@@ -72,8 +72,6 @@ export class TooltipWindow {
         if (previous && (previous.owner !== owner || previous.request.id !== request.id))
             this.options.closed(previous.owner, previous.request.id);
         const w = this.ensureWindow();
-        w.setIgnoreMouseEvents(!request.pinned || this.options.hidden, { forward: true });
-        w.setFocusable(!!request.pinned && !this.options.hidden);
         const content = await withBundleImages(source.root, request.content);
         if (this.state.current !== open)
             return false;
@@ -82,10 +80,15 @@ export class TooltipWindow {
             // Beside the new anchor and see-through before it is shown: the page may still hold the last card's frame.
             this.place();
             w.setOpacity(0);
+            // Unseen, it takes no clicks or keys: a pinned card becomes one you can use once it is in sight.
+            w.setIgnoreMouseEvents(true, { forward: true });
+            w.setFocusable(false);
             if (!w.isVisible())
                 w.showInactive();
             this.sight = "unseen";
         }
+        else
+            this.takeInput(open);
         if (this.ready)
             this.render(open);
         return true;
@@ -161,6 +164,7 @@ export class TooltipWindow {
                 this.size.height = Math.max(60, Math.min(2000, Math.ceil(args[1])));
                 if (typeof args[2] === "number" && Number.isFinite(args[2]))
                     this.size.width = Math.max(120, Math.min(520, Math.ceil(args[2])));
+                // Every size places it: a card that took the place of one in sight is already drawn, so it should not wait.
                 this.place();
                 // Its final size (its pictures and letters are in): once the page has drawn it there, it comes into sight.
                 if (this.state.current === c && this.sight === "unseen" && args[3] === true) {
@@ -183,7 +187,14 @@ export class TooltipWindow {
         if (this.sight !== "unseen" || this.state.current !== open || !w || w.isDestroyed())
             return;
         this.sight = "seen";
+        this.takeInput(open);
         w.setOpacity(this.options.hidden ? 0 : 1);
+    }
+    /** A pinned card takes clicks and keys (its close button, Escape); a hover card lets them through to the panel. */
+    private takeInput(open: OpenTooltip) {
+        const w = this.window!, pinned = !!open.request.pinned && !this.options.hidden;
+        w.setIgnoreMouseEvents(!pinned, { forward: true });
+        w.setFocusable(pinned);
     }
     /** Sends the page the card to lay out; the window goes to it once the page has measured it (tooltip:size). */
     private render(open: OpenTooltip) {
