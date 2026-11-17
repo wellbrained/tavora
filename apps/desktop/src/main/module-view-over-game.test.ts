@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // ModuleView needs only a little of Electron to be made: a view with a page, and a session to harden.
@@ -76,7 +78,7 @@ vi.mock("electron", () => {
   };
 });
 
-const { ModuleView, allowedHere, ADD_DIALOG_MS, CONNECT_GAP_MS } = await import("./module-view");
+const { ModuleView, allowedHere, ADD_DIALOG_MS, CONNECT_GAP_MS, GESTURE_MS } = await import("./module-view");
 const { CLIPBOARD_PATH } = await import("@tavora/sdk/protocol");
 
 function make(extra: Record<string, unknown> = {}) {
@@ -616,6 +618,171 @@ describe("asking for a port", () => {
     (view as unknown as { lastConnect: number }).lastConnect = 0;
     view.connect();
     expect((view as unknown as { bridge: { budget: object } }).bridge.budget).toBe(first);
+  });
+});
+
+// Every call that needs a click (takeGesture) or Tavora's own window (refuseOverGame), each with what it would do: a
+// refused call must do nothing. The last tests hold the tables to module-view.ts and connection.ts, so a new check
+// without a row here fails.
+describe("guarded calls", () => {
+  type Context = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  interface Row {
+    /** The call as METHOD_INFO names it. */
+    name: string;
+    /** Whether it is refused over the game too (refuseOverGame). */
+    overGame: boolean;
+    call(context: Context): Promise<unknown>;
+  }
+  /** The spies a guarded call would reach once allowed; none may be called by a refused call. */
+  const effects = () => ({
+    openPanel: vi.fn(async () => "opened"),
+    openPanels: vi.fn(async () => ({})),
+    setMaximized: vi.fn(),
+    setDialog: vi.fn(),
+    leaderboardsShow: vi.fn(async () => true),
+    leaderboardsHide: vi.fn(async () => true),
+    pickReadOnlyFile: vi.fn(async () => []),
+    showMenu: vi.fn(async () => null),
+    copyLink: vi.fn(async () => "copied"),
+    showOverGame: vi.fn(async () => true),
+    preview: vi.fn(async () => true),
+    openPage: vi.fn(),
+    setHotkey: vi.fn(async () => "set"),
+    choose: vi.fn(async () => true),
+    reveal: vi.fn(async () => ({ path: "/docs/a.txt", kind: "file" })),
+    openLink: vi.fn(),
+    tooltip: vi.fn(async () => true),
+    mediaControl: vi.fn(async () => true),
+    discordConnect: vi.fn(async () => undefined),
+    discordAllow: vi.fn(async () => undefined),
+    discordCommand: vi.fn(async () => ({})),
+    clearLog: vi.fn(),
+    setSettings: vi.fn(() => ({})),
+  });
+  const ROWS: Row[] = [
+    { name: "links.open", overGame: true, call: (c) => c.openLink("https://example.com/") },
+    { name: "panels.open", overGame: true, call: (c) => c.openPanel("map", null) },
+    { name: "panels.openMany", overGame: true, call: (c) => c.openPanels(["map"]) },
+    { name: "panel.setMaximized", overGame: true, call: (c) => c.setMaximized(true) },
+    { name: "panel.setDialog", overGame: false, call: (c) => c.setDialog(true, "medium") },
+    { name: "leaderboards.show", overGame: true, call: (c) => c.leaderboards.show() },
+    { name: "leaderboards.hide", overGame: false, call: (c) => c.leaderboards.hide() },
+    { name: "files.pickReadOnly", overGame: true, call: (c) => c.readOnlyFiles.pick([".txt"], false) },
+    { name: "files.showInFolder", overGame: true, call: (c) => c.readOnlyFiles.showInFolder("file-1") },
+    { name: "ui.showMenu", overGame: true, call: (c) => c.showMenu({ items: [] }) },
+    { name: "ui.tooltip.show", overGame: false, call: (c) => c.tooltip.show({ id: "t", at: { x: 0, y: 0 }, pinned: true }) },
+    { name: "overlay.copyLink", overGame: true, call: (c) => c.overlay.copyLink("item-1") },
+    { name: "overlay.showOverGame", overGame: true, call: (c) => c.overlay.showOverGame("item-1") },
+    { name: "overlay.preview", overGame: true, call: (c) => c.overlay.preview("item-1") },
+    { name: "overlay.openPage", overGame: true, call: (c) => c.overlay.openPage() },
+    { name: "hotkeys.set", overGame: true, call: (c) => c.hotkeys.set("start", "item-1", "Timer") },
+    { name: "folders.choose", overGame: true, call: (c) => c.folders.choose("Documents/Game") },
+    { name: "folders.showInFolder", overGame: true, call: (c) => c.folders.showInFolder("Documents/Game", "a.txt") },
+    { name: "media.control", overGame: false, call: (c) => c.media.control("session-1", "play") },
+    { name: "discord.connect", overGame: false, call: (c) => c.discord.connect() },
+    { name: "discord.allowControl", overGame: false, call: (c) => c.discord.allowControl() },
+    { name: "discord.command", overGame: false, call: (c) => c.discord.command("SELECT_VOICE_CHANNEL", { channel_id: null }) },
+    { name: "systemInfo.clearConnectionLog", overGame: false, call: (c) => c.systemInfo.clearConnectionLog() },
+    { name: "systemInfo.setConnectionSettings", overGame: false, call: (c) => c.systemInfo.setConnectionSettings({ watching: false }) },
+  ];
+
+  /** A connected System Monitor panel whose every guarded call ends in a spy of `spies`. */
+  function guarded() {
+    const spies = effects();
+    const view = make({
+      module: {
+        owner: "official",
+        root: "/nowhere",
+        provenance: "official",
+        manifest: { id: "tavora.system-monitor", entry: "dist/index.html", permissions: {}, actions: [{ id: "start", name: "Start" }] },
+      },
+      // A reload: no dialog pass for a panel just added.
+      launch: () => ({ reason: "reload" }),
+      data: { blobs: {}, documents: { on: () => undefined, off: () => undefined } },
+      networkHosts: () => new Set(),
+      connectors: () => new Set(["media", "discord", "system-info"]),
+      openPanel: spies.openPanel,
+      openPanels: spies.openPanels,
+      setMaximized: spies.setMaximized,
+      setDialog: spies.setDialog,
+      leaderboards: { status: async () => null, show: spies.leaderboardsShow, hide: spies.leaderboardsHide },
+      pickReadOnlyFile: spies.pickReadOnlyFile,
+      showMenu: spies.showMenu,
+      overlay: { copyLink: spies.copyLink, copyNeedsWindow: () => true, showOverGame: spies.showOverGame, preview: spies.preview, openPage: spies.openPage },
+      hotkeys: { list: () => [], set: spies.setHotkey, remove: () => undefined },
+      folders: { granted: () => true, state: async () => ({ found: true }), list: async () => ({ files: [], truncated: false }), read: async () => Buffer.alloc(0), watch: async () => null, choose: spies.choose, reveal: spies.reveal },
+      onOpenLink: spies.openLink,
+      tooltip: { show: spies.tooltip, move: () => undefined, close: () => undefined, defineSkin: async () => undefined },
+      media: { subscribe: () => ({ state: () => null, control: spies.mediaControl, close: () => undefined }) },
+      discord: {
+        release: () => undefined,
+        use: async () => undefined,
+        state: () => null,
+        connectNow: spies.discordConnect,
+        allowControl: spies.discordAllow,
+        command: spies.discordCommand,
+      },
+      connection: { outageLog: () => [], clearLog: spies.clearLog, getSettings: () => ({}), setSettings: spies.setSettings },
+    });
+    view.connect();
+    const context = (view as unknown as { bridge: { context: Context } }).bridge.context;
+    // media.control acts only on a session the panel watches.
+    context.media.watch(true);
+    return { view, context, spies };
+  }
+  const nothingDone = (spies: ReturnType<typeof effects>) => {
+    for (const [name, spy] of Object.entries(spies)) expect(spy, name).not.toHaveBeenCalled();
+    expect(made.shell.showItemInFolder).not.toHaveBeenCalled();
+  };
+  beforeEach(() => made.shell.showItemInFolder.mockClear());
+
+  it.each(ROWS.map((row) => [row.name, row] as const))("%s is refused without a press, and does nothing", async (_name, row) => {
+    const { context, spies } = guarded();
+    await expect(row.call(context)).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+    nothingDone(spies);
+  });
+
+  it.each(ROWS.map((row) => [row.name, row] as const))("%s is refused after a press older than the window, and does nothing", async (_name, row) => {
+    const { view, context, spies } = guarded();
+    const start = Date.now();
+    const clock = vi.spyOn(Date, "now").mockReturnValue(start);
+    try {
+      view.noteGesture();
+      clock.mockReturnValue(start + GESTURE_MS + 1);
+      await expect(row.call(context)).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+      nothingDone(spies);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it.each(ROWS.filter((row) => row.overGame).map((row) => [row.name, row] as const))("%s is refused over the game, even after a press, and does nothing", async (_name, row) => {
+    const { view, context, spies } = guarded();
+    view.enterGame(() => true);
+    view.noteGesture();
+    await expect(row.call(context)).rejects.toMatchObject({ code: "PERMISSION_DENIED", message: expect.stringContaining("over the game") });
+    nothingDone(spies);
+  });
+
+  it("a fresh press gets each call past its check, which uses the press up", async () => {
+    for (const row of ROWS) {
+      const { view, context } = guarded();
+      view.noteGesture();
+      // files.showInFolder then looks for a file this test never picked; the press is what counts here.
+      await row.call(context).catch((error: { code?: string }) => expect(error.code, row.name).not.toBe("PERMISSION_DENIED"));
+      expect((view as unknown as { press: { used: boolean } }).press.used, row.name).toBe(true);
+    }
+  });
+
+  const source = (file: string) => readFileSync(path.join(import.meta.dirname, file), "utf8");
+  it("cover every call module-view.ts checks for a press", () => {
+    const checked = [...source("module-view.ts").matchAll(/\btakeGesture\(\s*["'`]([^"'`]+)["'`]/g), ...source("connection.ts").matchAll(/\bawait gesture\(\s*["'`]([^"'`]+)["'`]/g)].map((match) => match[1]!);
+    expect([...new Set(checked)].sort()).toEqual(ROWS.map((row) => row.name).sort());
+  });
+
+  it("cover every call module-view.ts refuses over the game", () => {
+    const refused = [...source("module-view.ts").matchAll(/\brefuseOverGame\(\s*["'`]([^"'`]+)["'`]\)/g)].map((match) => match[1]!);
+    expect([...new Set(refused)].sort()).toEqual(ROWS.filter((row) => row.overGame).map((row) => row.name).sort());
   });
 });
 
