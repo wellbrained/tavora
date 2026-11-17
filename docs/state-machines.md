@@ -40,6 +40,7 @@ Update this page in the pull request that adds, removes or changes a flow.
 | Recovery key after sign-in | `renderer/host.ts` (`askForRecoveryKey`) | not asked → waits for a free slot → asked (the publishing setup asks it itself) | `[data-testid=recovery-ask]` |
 | Official publish run | `renderer/official-publish.ts` | phase from the main process (below) | |
 | Panel tab | `components/workspace/PanelTab.vue` | the panel's `InstanceStatus` | `data-status` on the tab |
+| Licences page (Settings > About) | `settings/LicencesSection.vue` | one value: `loading → ready | failed` (the notices file the build wrote, read once through `api.licences()`; null means failed); each package is open or closed | `data-status` on `[data-testid=licences-page]` |
 | Update marker, module rows | `UpdateMarker.vue`, `settings/ModuleRow.vue`, `developer/DevModuleRow.vue` | release and update status from the main process | `data-status` on the row |
 
 ## Main process

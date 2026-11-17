@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Settings > Updates & About: this version (its patch notes are a page of their own), updates, backups and the
 // diagnostic info.
-import { ScrollText } from "@lucide/vue";
+import { ExternalLink, FileText, Info, Scale, ScrollText, ShieldCheck } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Progress } from "@tavora/official-ui/components/ui/progress";
@@ -12,7 +12,14 @@ import SettingGroup from "./SettingGroup.vue";
 import SettingRow from "./SettingRow.vue";
 
 defineProps<{ highlight: string | null }>();
-const emit = defineEmits<{ patchNotes: [] }>();
+const emit = defineEmits<{ patchNotes: []; licences: [] }>();
+
+/** The legal pages on Tavora's website; each opens in the browser, in the app's language. */
+const LEGAL = [
+  { page: "privacy", icon: ShieldCheck },
+  { page: "terms", icon: FileText },
+  { page: "imprint", icon: Info },
+] as const;
 
 const library = computed(() => state.value!.library);
 const version = computed(() => state.value!.appVersion);
@@ -80,6 +87,21 @@ async function copyDiagnostics() {
   <SettingGroup :title="t('settings.heading.help')">
     <SettingRow :label="t('settings.diagnostics.label')" :description="t('settings.diagnostics.description')" :details="t('settings.diagnostics.details')" setting="diagnostics" :highlighted="highlight === 'diagnostics'">
       <Button variant="secondary" data-testid="copy-diagnostics" @click="copyDiagnostics">{{ copied ? t("settings.diagnostics.copied") : t("settings.diagnostics.copy") }}</Button>
+    </SettingRow>
+  </SettingGroup>
+  <SettingGroup :title="t('settings.heading.legal')">
+    <SettingRow
+      :label="t('settings.licences.label')"
+      :description="t('settings.licences.description')"
+      setting="licences"
+      :highlighted="highlight === 'licences'"
+      :icon="Scale"
+      opens
+      data-testid="open-licences"
+      @open="emit('licences')"
+    />
+    <SettingRow v-for="legal in LEGAL" :key="legal.page" :label="t(`settings.${legal.page}.label`)" :description="t(`settings.${legal.page}.description`)" :setting="legal.page" :highlighted="highlight === legal.page" :icon="legal.icon">
+      <Button variant="secondary" :data-testid="`legal-${legal.page}`" @click="act({ type: 'open-legal-page', page: legal.page })"><ExternalLink />{{ t("settings.legal.open") }}</Button>
     </SettingRow>
   </SettingGroup>
 </template>

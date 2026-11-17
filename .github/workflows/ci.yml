@@ -227,6 +227,14 @@ jobs:
         run: |
           pnpm --filter @tavora/desktop package --win nsis --publish never
           if (-not (Test-Path apps/desktop/release/win-unpacked/resources/media-helper/tavora-media.exe)) { throw "tavora-media.exe is missing from the package." }
+          # The third-party notices (apps/desktop/scripts/licences.mjs; the build already failed for a package without an allowed
+          # licence): the readable file next to the resources, with a few known packages in it, and the list Settings > Licences
+          # reads inside app.asar.
+          $notices = "apps/desktop/release/win-unpacked/resources/THIRD_PARTY_NOTICES.txt"
+          if (-not (Test-Path $notices)) { throw "THIRD_PARTY_NOTICES.txt is missing from the package." }
+          $text = Get-Content $notices -Raw
+          foreach ($known in "electron-updater", "koffi", "vue ", "Inter Project Authors", "serde ") { if (-not $text.Contains($known)) { throw "$known is missing from THIRD_PARTY_NOTICES.txt." } }
+          if (-not ((pnpm --filter @tavora/desktop exec asar list "$PWD/apps/desktop/release/win-unpacked/resources/app.asar") -match 'licences\.json')) { throw "out/licences/licences.json is missing from app.asar." }
           # Outside app.asar: the system-info worker and koffi with its native part run from app.asar.unpacked.
           $unpacked = "apps/desktop/release/win-unpacked/resources/app.asar.unpacked"
           foreach ($file in "out/main/system-info-worker.cjs", "node_modules/koffi/package.json", "node_modules/@koromix/koffi-win32-x64/win32_x64/koffi.node") {
@@ -243,6 +251,11 @@ jobs:
       - name: The installed Tavora's fuses are safe
         shell: pwsh
         run: node apps/desktop/scripts/check-fuses.mjs "$env:LOCALAPPDATA\Programs\Tavora\Tavora.exe"
+      - name: The installed Tavora has its notices
+        shell: pwsh
+        run: |
+          $file = "$env:LOCALAPPDATA\Programs\Tavora\resources\THIRD_PARTY_NOTICES.txt"
+          if (-not (Test-Path $file) -or (Get-Item $file).Length -lt 100000) { throw "THIRD_PARTY_NOTICES.txt is missing or empty in the installed Tavora." }
       - name: Start the installed Tavora
         shell: pwsh
         env:

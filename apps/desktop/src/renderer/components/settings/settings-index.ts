@@ -40,10 +40,13 @@ export const GROUPS = [
 export const ABOUT_SECTION = "about";
 
 /** Pages that open from a row on another page, with a way back; their parent stays lit in the menu. */
-export const SUB_PAGES = { workspaces: "games", trash: "games", "patch-notes": "about" } as const;
+export const SUB_PAGES = { workspaces: "games", trash: "games", "patch-notes": "about", licences: "about" } as const;
 
 /** The patch notes open from Updates & About or the version; the search doesn't find them. */
 export const PATCH_NOTES_SECTION = "patch-notes";
+
+/** The licences open from Updates & About; the search finds their row, not the page. */
+export const LICENCES_SECTION = "licences";
 
 /** The developer pages, as tabs under one menu entry. The first is Your modules. */
 export const DEVELOPER_TABS = ["development", "dev-folders", "dev-publishing", "dev-help"] as const;
@@ -108,6 +111,10 @@ export const SETTING_SECTIONS: readonly (readonly [id: string, section: Settings
   ["check-updates", "about"],
   ["backups", "about"],
   ["diagnostics", "about"],
+  ["licences", "about"],
+  ["privacy", "about"],
+  ["terms", "about"],
+  ["imprint", "about"],
   ["installed-modules", "modules"],
   ["own-modules", "modules"],
   ["auto-update-modules", "modules"],

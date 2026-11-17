@@ -76,6 +76,7 @@
       "!assets/filters/**",
       "package.json",
       "!out/**/*.map",
+      "!out/licences/THIRD_PARTY_NOTICES.txt",
       "!out/release-notes.md"
     ],
     "asar": true,
@@ -91,6 +92,13 @@
     "npmRebuild": false,
     "afterPack": "scripts/after-pack.cjs",
     "extraResources": [
+      {
+        "from": "out/licences",
+        "to": ".",
+        "filter": [
+          "THIRD_PARTY_NOTICES.txt"
+        ]
+      },
       {
         "from": "../../examples",
         "to": "modules",

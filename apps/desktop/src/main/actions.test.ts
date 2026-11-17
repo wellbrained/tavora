@@ -239,6 +239,8 @@ const ACCEPTED: [{ type: string; [field: string]: unknown }][] = [
   [{ type: "open-developer-link", link: "docs" }],
   [{ type: "open-developer-link", link: "discussions" }],
   [{ type: "open-developer-link", link: "issue" }],
+  [{ type: "open-legal-page", page: "privacy" }],
+  [{ type: "open-legal-page", page: "imprint" }],
   [{ type: "install-module" }],
   [{ type: "install-catalog-module", moduleId: "wellbrained.tracker" }],
   [{ type: "check-module-updates" }],

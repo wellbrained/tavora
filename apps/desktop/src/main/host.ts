@@ -32,7 +32,7 @@ import {
 import type { TavoraTheme, TavoraWorkspace } from "@tavora/sdk/protocol";
 import type { IconTone } from "../shared/icon-tone";
 import type { PanelDialogSize } from "./bridge";
-import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, InstalledGameView, ModulePageResult, OfficialPublishRun, OfficialPublishView, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, PanelDialog, PanelPlacement, ProfileRanksView, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView, UnlistedGame } from "../shared/host-api";
+import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, InstalledGameView, LegalPage, LicenceList, ModulePageResult, OfficialPublishRun, OfficialPublishView, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, PanelDialog, PanelPlacement, ProfileRanksView, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView, UnlistedGame } from "../shared/host-api";
 import { MAX_PICKER_COVERS } from "../shared/host-api";
 import { addOrRestoreWorkspace, gameCopyFinder } from "./game-copy";
 import { isForWorkspaceGame, learnGameIds, withOnlineId, workspaceGameIds, type ListedGame } from "./workspace-game";
@@ -44,6 +44,8 @@ import { UserError } from "./messages";
 import { UndoGoneError, UndoShelf } from "./undo-shelf";
 import { buildReport, errorLog, timings } from "./diagnostics";
 import { popularGames } from "./catalog";
+import { readLicences } from "./licences";
+import { legalPageUrl } from "../shared/legal-links";
 import { gridTemplate, layoutTemplate } from "../shared/layout-templates";
 import { parseAction, runAction, type ActionHandlers } from "./actions";
 import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
@@ -472,6 +474,8 @@ export class Host {
   private readonly undos = new UndoShelf();
   /** What every browser session is made safe with; built when the first Browser panel opens. */
   private browserHooks: BrowserSessionHooks | undefined;
+  /** The third-party licences, read the first time Settings asks (licences()). */
+  private licenceList: LicenceList | null | undefined;
   /** The Discord connector: Tavora's Discord sign-in and the connection to the Discord app, for modules granted it. */
   private readonly discord: DiscordConnector;
   /** The AI Usage connector: the AI accounts, read for modules granted it. */
@@ -1349,6 +1353,16 @@ export class Host {
     if (url && !this.options.hidden) void shell.openExternal(url).catch((error: unknown) => console.error("[tavora]", error));
   }
 
+  /** Opens one of Tavora's legal pages in the user's browser. The renderer names the page, never an address. */
+  private openLegalPage(page: LegalPage): void {
+    if (!this.options.hidden) void shell.openExternal(legalPageUrl(page, this.language)).catch((error: unknown) => console.error("[tavora]", error));
+  }
+
+  /** The third-party licences that ship with the app (scripts/licences.mjs writes them next to the main bundle at build time); null when missing. */
+  private licences(): LicenceList | null {
+    return (this.licenceList ??= readLicences(path.join(__dirname, "../licences/licences.json")));
+  }
+
   /** Forgets a development folder; its modules' panels close like a removed module's, and their data stays. */
   private async removeDevelopmentFolder(folder: string): Promise<void> {
     const key = (value: string) => (process.platform === "win32" ? path.resolve(value).toLowerCase() : path.resolve(value));
@@ -1998,6 +2012,7 @@ export class Host {
       fromHost(event) && Array.isArray(appids) && appids.length <= MAX_PICKER_COVERS && appids.every(isSteamAppId) ? this.pickerCovers(appids).catch(() => ({})) : {},
     );
     // The first-run welcome's tiles: popular games the user does not have yet (one in Trash comes back when added).
+    ipcMain.handle("host:licences", (event): LicenceList | null => (fromHost(event) ? this.licences() : null));
     ipcMain.handle("host:popular-games", (event) =>
       fromHost(event)
         ? popularGames()
@@ -2753,6 +2768,7 @@ export class Host {
       "official-publish-forget-key": () => this.forgetOfficialKey(),
       "open-development-project": (action) => this.openDevelopmentProject(action.project),
       "open-developer-link": (action) => this.openDeveloperLink(action.link),
+      "open-legal-page": (action) => this.openLegalPage(action.page),
       "reload-modules": async () => void (await this.reloadModules()),
       "remove-module": (action) => this.lifecycle.remove(action.moduleId),
       "grant-module": (action) => this.lifecycle.grant(action.moduleId, action.network, action.connectors, action.folders ?? []),

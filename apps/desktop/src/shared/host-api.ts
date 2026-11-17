@@ -71,6 +71,28 @@ export type IconView = { kind: "monogram"; text: string } | { kind: "image"; url
 /** Tavora's own pages for module developers that Settings > Development opens in the browser. */
 export type DeveloperLink = "docs" | "discussions" | "issue";
 
+/** Tavora's legal pages on its website; Settings > About opens them in the browser, in the app's language. */
+export type LegalPage = "privacy" | "terms" | "imprint";
+
+/** One package in Tavora's third-party notices (out/licences/licences.json, scripts/licences.mjs). */
+export interface LicenceEntry {
+  name: string;
+  version: string;
+  /** The SPDX id or expression, as the package states it. */
+  license: string;
+  group: "libraries" | "fonts" | "helper";
+  /** Indexes into LicenceList.texts. */
+  texts: number[];
+  /** Its licence file was missing, so the text is the standard one with the holder the package names. */
+  inferred?: boolean;
+}
+
+/** Everything Tavora bundles with its licence texts, for Settings > About > Licences. */
+export interface LicenceList {
+  entries: LicenceEntry[];
+  texts: string[];
+}
+
 /** Why a development project did not load, for the fix Settings suggests. */
 export type DevelopmentProblemKind = ModuleProblemKind;
 
@@ -1214,6 +1236,8 @@ export interface TavoraHostApi {
   gameCovers(appids: number[]): Promise<Record<number, string | null>>;
   /** Popular built-in games the user does not have yet, for the first-run welcome's tiles. */
   popularGames(): Promise<CatalogMatch[]>;
+  /** The third-party licences that ship with Tavora; null when the file can't be read. Never rejects. */
+  licences(): Promise<LicenceList | null>;
   /** A module's patch notes, newest first, up to the installed version; empty without any. */
   moduleNotes(moduleId: string): Promise<ModuleNote[]>;
   /** Asks the Tavora service; a newer call cancels an older one. Never rejects. */

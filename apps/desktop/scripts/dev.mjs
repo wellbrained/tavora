@@ -12,6 +12,7 @@ import electron from "electron";
 import { context } from "esbuild";
 import { build, createServer } from "vite";
 import { buildFilterEngine } from "./filters.mjs";
+import { writeLicences } from "./licences.mjs";
 import { rendererConfig, root, targets } from "./targets.mjs";
 
 // `pnpm dev --port <n>` picks the port, so a process manager can decide it.
@@ -190,6 +191,13 @@ for (const dir of moduleProjects) {
 
 // The Browser panel's ad blocker loads a compiled engine; the lists only change by hand.
 await buildFilterEngine();
+
+// Settings > About > Licences reads the notices the build writes; a dev run only warns when one package lacks a licence.
+try {
+  writeLicences();
+} catch (error) {
+  console.warn(`[dev] licences: ${error instanceof Error ? error.message : error}`);
+}
 
 const contexts = await Promise.all(targets.map((options) => context({ ...options, plugins: [reload] })));
 await Promise.all(contexts.map((ctx) => ctx.watch()));

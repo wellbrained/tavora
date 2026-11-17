@@ -50,6 +50,7 @@ import { scrollToCentered, stopScroll } from "../../lib/smooth-scroll";
 
 // The patch notes are the largest text in the app and only read here, so they load when the page opens.
 const PatchNotesSection = defineAsyncComponent(() => import("./PatchNotesSection.vue"));
+const LicencesSection = defineAsyncComponent(() => import("./LicencesSection.vue"));
 
 const section = ref<SettingsSection>("general");
 const query = ref("");
@@ -343,10 +344,11 @@ function onSearchKey(event: KeyboardEvent) {
                 <DevFoldersSection v-else-if="section === 'dev-folders'" :highlight="highlight" />
                 <DevPublishingSection v-else-if="section === 'dev-publishing'" :highlight="highlight" />
                 <DevHelpSection v-else-if="section === 'dev-help'" :highlight="highlight" />
-                <AboutSection v-else-if="section === 'about'" :highlight="highlight" @patch-notes="show('patch-notes')" />
+                <AboutSection v-else-if="section === 'about'" :highlight="highlight" @patch-notes="show('patch-notes')" @licences="show('licences')" />
                 <WorkspacesSection v-else-if="section === 'workspaces'" :highlight="highlight" />
                 <TrashSection v-else-if="section === 'trash'" :highlight="highlight" />
                 <PatchNotesSection v-else-if="section === 'patch-notes'" />
+                <LicencesSection v-else-if="section === 'licences'" />
               </div>
             </template>
           </div>

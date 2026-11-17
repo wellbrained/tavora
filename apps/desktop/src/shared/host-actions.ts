@@ -11,6 +11,7 @@ import type {
   AiProvider,
   BrowserCommand,
   DeveloperLink,
+  LegalPage,
   GameStart,
   ModuleConnector,
   OnlineGame,
@@ -129,6 +130,7 @@ export const MAX_SHARE_BATCH = 50;
 
 const BROWSER_COMMANDS = ["back", "forward", "reload", "stop", "open-external", "mute", "unmute", "exit-fullscreen"] as const satisfies readonly BrowserCommand[];
 const DEVELOPER_LINKS = ["docs", "discussions", "issue"] as const satisfies readonly DeveloperLink[];
+const LEGAL_PAGES = ["privacy", "terms", "imprint"] as const satisfies readonly LegalPage[];
 const AI_PROVIDERS = ["claude", "codex"] as const satisfies readonly AiProvider[];
 
 // ── Actions ──────────────────────────────────────────────────────────
@@ -375,6 +377,8 @@ export function hostActionTable(c: HostChecks) {
     /** Opens an example's folder in the file manager, to look at its sources. */
     "open-example-folder": { moduleId: c.moduleId },
     "open-developer-link": { link: oneOf(...DEVELOPER_LINKS) },
+    /** Opens Tavora's privacy, terms or imprint page on its website, in the app's language. */
+    "open-legal-page": { page: oneOf(...LEGAL_PAGES) },
     /** Looks for modules again, after the user changed their modules folder. */
     "reload-modules": {},
     /** Moves a module from the user's modules folder to the recycle bin, after removing its panels in every workspace; its data stays. */
