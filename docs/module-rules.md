@@ -115,6 +115,8 @@ themes; anything hard-coded breaks in one of them.
   existing kit controls for it.
 - **Depth**: areas separate by a surface step and a 1 px `border-border`. Shadows only on floating layers and on the kit's Primary and Secondary buttons (a faint
   top light, Primary also a hairline contact shadow); both come from the kit. No `z-index` of your own except inside a canvas or map.
+- **Canvas**: a canvas keeps the colours it was drawn with, so one that reads theme colours redraws when the theme
+  changes (`onTheme` from the module bootstrap, or watch `<html>` as the kit's `Sparkline` does).
 - **Focus**: the kit controls bring the focus ring. Never remove it and never draw your own.
 - **Icons**: Lucide (`@lucide/vue`), 16 px in controls, outline only. The theme sets the line weight (1.5; 2 on icons of
   12-14 px, 1 from 32 px), so don't set `stroke-width` yourself. An icon after a button's text gets `data-icon="end"`, so the
@@ -129,7 +131,8 @@ themes; anything hard-coded breaks in one of them.
 - **Motion**: durations and curves come from the kit's tokens (`modules/shared/src/motion.css`: `--ease-out-strong`,
   `--ease-in-out-strong`, `--duration-press|tooltip|menu|panel|move|reorder`), never a hand-typed `cubic-bezier` or `ease-in`.
   Animate `transform` and `opacity` only (in Tailwind v4, `translate-*` and `scale-*` set the `translate` and `scale`
-  properties, so name those in the transition), never `transition-all`, and nothing in the interface runs longer than
+  properties, so name those in the transition); a hover or state change may also fade colours (`transition-colors`,
+  as the kit's controls do). Never `transition-all`, and nothing in the interface runs longer than
   `--duration-move`. Menus, popovers and tooltips grow from their trigger (the kit does it); a pressed small button dips to
   0.97 and 1 px down on a fine pointer, a wide one (a full-width button, `Picker`, `ActionList` rows) only 1 px down: the kit's `press="dip"`, which `w-full`, `block`, `flex`, `flex-1` and `grow` buttons get on their own, so never put your own scale on a button (Primary, Secondary and Destructive also turn their shadow softly inward). Nothing a key press starts is animated (undo, nudges, hotkeys, switching by key), nor
   anything shown all day. Reduced motion keeps a short fade and drops the movement.
@@ -351,7 +354,7 @@ Before you say it is done, check each item and name in your summary any you coul
 - [ ] Empty, loading and error states exist and use the kit; what loads is a `Skeleton` over the real template, a late picture a `FadeImage`.
 - [ ] Menus and tooltips anchor to their element; no hover-only actions.
 - [ ] Where a user would wonder why a control is off, it has a `disabled-reason`; no reason squeezed into a label.
-- [ ] Motion uses the kit's tokens, animates only `transform` and `opacity`, and leaves out anything a key starts.
+- [ ] Motion uses the kit's tokens, animates only `transform` and `opacity` (colours may fade), and leaves out anything a key starts.
 - [ ] Dialogs use the header, footer and `DialogButton` as in [Dialogs](#dialogs); a close-only button has no icon.
 - [ ] Settings use `ModuleSettings`, ask for their size with `settingsDialogSize`, have no Done button, and follow the [Settings](#settings) rules for descriptions, units and room (checked in German).
 - [ ] Keyboard: Tab reaches everything, Escape closes, focus ring visible.

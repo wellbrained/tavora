@@ -6,7 +6,7 @@
 import { Tooltip, tooltipDelay } from "@tavora/official-ui/components/tooltip";
 import { onBeforeUnmount, ref, watch } from "vue";
 import { t } from "../i18n";
-import { api, useFloating } from "../host";
+import { prepareFor, useFloating } from "../host";
 
 const props = defineProps<{
   text: string;
@@ -33,7 +33,7 @@ function show(trigger: Element | null) {
   // The panels' pictures take a while: start them half way, so passing over the icons costs nothing but resting on one does not wait.
   const wait = tooltipDelay(150);
   clearTimeout(ready);
-  ready = setTimeout(() => api.prepareOverlay(), wait / 2);
+  ready = setTimeout(() => prepareFor(trigger), wait / 2);
   delay = setTimeout(() => {
     // Beside the icon, its arrow on the icon's middle.
     const { left, top, right, bottom } = trigger.getBoundingClientRect();

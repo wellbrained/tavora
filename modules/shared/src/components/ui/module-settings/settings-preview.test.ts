@@ -27,4 +27,17 @@ describe("SettingsPreview backdrop buttons", () => {
       expect(button.className).not.toContain("text-[11px]");
     }
   });
+
+  it("is one Tab stop that lands on the picked backdrop", async () => {
+    const root = document.createElement("div");
+    document.body.append(root);
+    app = createApp({ render: () => h(SettingsPreview, { label: "Preview" }) });
+    app.mount(root);
+    await new Promise((done) => setTimeout(done));
+    const buttons = [...root.querySelectorAll<HTMLElement>("[role=radio]")];
+    expect(buttons.every((button) => button.tabIndex === -1)).toBe(true);
+    root.querySelector<HTMLElement>("[role=radiogroup]")!.focus();
+    await new Promise((done) => setTimeout(done));
+    expect((document.activeElement as HTMLElement | null)?.dataset.testid).toBe("settings-backdrop-game");
+  });
 });

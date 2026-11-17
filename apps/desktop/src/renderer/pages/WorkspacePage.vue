@@ -15,7 +15,7 @@ import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from "vue";
 import type { PanelBounds, SavedLayout } from "../../shared/host-api";
 import { keepSlots } from "../../shared/panel-layout";
 import { Button } from "@tavora/official-ui/components/ui/button";
-import { act, api as host, dialog, dragging, nextPanelSlot, panelsToFront, panelToMaximize, panelToShow, state, tabStep } from "../host";
+import { act, api as host, dialog, dragging, nextPanelSlot, panelsToFront, panelToMaximize, panelToShow, reportPanelBounds, state, tabStep } from "../host";
 import { t, templateName } from "../i18n";
 import { LAYOUT_TEMPLATES } from "../../shared/layout-templates";
 import { fromDockview, groupConstraints, guardDrop, layoutAround, maximizedPanel, panelInfo, placePanel, placeTab, toDockview, type PanelInfo } from "../dock";
@@ -59,7 +59,7 @@ const resizes = new ResizeObserver(() => {
 let dock: DockviewApi | null = null;
 let lastReport = "";
 let lastArea = "";
-let reportFrame = 0;
+let reportQueued = false;
 const columns = ref<DockColumn[]>([]);
 let changingColumn = false;
 const leftColumn = computed(() => columns.value.find((column) => column.side === "left" && column.hidden));
@@ -130,11 +130,16 @@ provide(DOCK, {
   },
 });
 
-/** Tells the main process where each visible panel's content is; once per frame at most. */
+/**
+ * Tells the main process where each visible panel's content is, once the code that changed the layout has run (a
+ * microtask, not the next frame: the views would trail the page by a frame more on every resize, collapse or maximize).
+ */
 function reportSoon() {
-  if (reportFrame) return;
-  reportFrame = requestAnimationFrame(() => {
-    reportFrame = 0;
+  if (reportQueued) return;
+  reportQueued = true;
+  queueMicrotask(() => {
+    if (!reportQueued) return;
+    reportQueued = false;
     const bounds: PanelBounds[] = [];
     for (const [instanceId, element] of elements) {
       const panel = dock?.getPanel(instanceId);
@@ -148,7 +153,7 @@ function reportSoon() {
     const report = JSON.stringify(bounds);
     if (report === lastReport) return;
     lastReport = report;
-    host.setPanelBounds(bounds);
+    reportPanelBounds(bounds);
   });
 }
 
@@ -430,7 +435,7 @@ watch([root, area], (elements, previous) => {
 onBeforeUnmount(() => {
   // A change made just before a switch is still saved, into this page's own workspace.
   if (saveTimer !== undefined) saveNow();
-  cancelAnimationFrame(reportFrame);
+  reportQueued = false;
   resizes.disconnect();
   removeEventListener("dragend", endDrag, true);
   removeEventListener("drop", endDrag, true);
@@ -439,7 +444,7 @@ onBeforeUnmount(() => {
   removeEventListener("resize", reportSoon);
   preview.detach();
   endDrag();
-  host.setPanelBounds([]);
+  reportPanelBounds([]);
   host.setWorkspaceBounds(null);
 });
 
@@ -528,7 +533,7 @@ const emptySlot = EmptySlot as unknown as VueComponent;
         <p class="text-muted-foreground max-w-sm text-sm">{{ t("workspace.startText") }}</p>
         <!-- A game's own modules first: one click each. -->
         <MadeForGame v-if="workspace?.kind === 'game'" :workspace="workspace" class="mt-3" />
-        <Button class="mt-3 h-9 text-sm [&_svg]:size-5" data-testid="empty-add-module" @click="dialog = { kind: 'add-module' }">
+        <Button class="mt-3 h-9 text-sm [&_svg]:size-5" data-testid="empty-add-module" aria-haspopup="dialog" @click="dialog = { kind: 'add-module' }">
           <Plus /> {{ t("workspace.addModule") }}
         </Button>
         <!-- The quiet way in: the six presets. Even grids live in the Layouts menu only. -->

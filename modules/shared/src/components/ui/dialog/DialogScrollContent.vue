@@ -55,7 +55,7 @@ function onPointerDownOutside(event: CustomEvent<{ originalEvent: PointerEvent }
   <DialogPortal>
     <DialogOverlay
       :data-instant="instant ? '' : undefined"
-      class="tavora-dialog-overlay fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/80"
+      class="tavora-dialog-overlay fixed inset-0 z-50 grid place-items-center overflow-y-auto overscroll-contain bg-black/80"
     >
       <DialogContent
         :data-instant="instant ? '' : undefined"

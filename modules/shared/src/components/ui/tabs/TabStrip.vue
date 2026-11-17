@@ -16,6 +16,7 @@ import { X } from "@lucide/vue";
 import { TabsRoot } from "reka-ui";
 import { cn } from "../../../lib/utils";
 import { Input } from "../input";
+import { Tooltip, type TooltipRect } from "../../tooltip";
 import { uiText } from "../text";
 import { DEFAULT_NAME_LIMIT } from "../../name-check";
 import TabsList from "./TabsList.vue";
@@ -92,6 +93,9 @@ function onMouseDown(event: MouseEvent) {
 
 const renaming = ref<{ id: string; text: string } | null>(null);
 const renameProblem = ref("");
+// Where a wrong name's message points: the rename field. The strip is one line tall, so the message sits in a tooltip beside it.
+const renameAnchor = ref<TooltipRect | undefined>();
+const renameTipId = `tab-rename-${Math.random().toString(36).slice(2, 8)}`;
 
 function startRename(id: string) {
   const tab = props.tabs.find((other) => other.id === id);
@@ -119,7 +123,10 @@ function finishRename(keep: boolean, refocus: boolean) {
   const result = checkRename(props.tabs.find((tab) => tab.id === current.id)?.label ?? "", current.text, props.maxLength);
   if (result.kind === "invalid") {
     // Enter on a wrong name keeps the field open; leaving the field gives the change up.
-    if (refocus) renameProblem.value = result.problem === "empty" ? uiText.value.nameEmpty : uiText.value.nameTooLong.replace("{max}", String(props.maxLength));
+    if (refocus) {
+      renameAnchor.value = scroller.value?.querySelector("[data-tab-rename]")?.getBoundingClientRect();
+      renameProblem.value = result.problem === "empty" ? uiText.value.nameEmpty : uiText.value.nameTooLong.replace("{max}", String(props.maxLength));
+    }
     else stopRename(false);
     return;
   }
@@ -235,7 +242,7 @@ function endDrag(settled: boolean) {
               class="h-6 w-36 px-1.5 text-sm md:text-sm"
               :aria-label="uiText.renameTab"
               :aria-invalid="!!renameProblem || undefined"
-              :title="renameProblem || undefined"
+              :aria-describedby="renameProblem ? renameTipId : undefined"
               autocomplete="off"
               data-tab-rename
               data-testid="tab-rename-input"
@@ -281,6 +288,8 @@ function endDrag(settled: boolean) {
         </template>
       </TabsList>
     </div>
+    <Tooltip :open="!!renameProblem" :anchor="renameAnchor" :id="renameTipId" :title="renameProblem" tone="danger" compact data-testid="tab-rename-problem" @dismiss="renameProblem = ''" />
+    <span class="sr-only" role="alert">{{ renameProblem }}</span>
     <div v-if="$slots.add" class="relative z-10 flex flex-none items-center pl-1" data-testid="tab-strip-add">
       <slot name="add" />
     </div>

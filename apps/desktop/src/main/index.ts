@@ -3,6 +3,7 @@ import path from "node:path";
 import { app, protocol } from "electron";
 import { GAME_OVERLAY_SCHEME, HOST_SCHEME, MODULE_SCHEME } from "./assets";
 import { parseWindowStart } from "./background-window";
+import { recordCrash, useCrashLog } from "./crash-log";
 import { errorLog } from "./diagnostics";
 import { Host } from "./host";
 import { parseTestHosts } from "./network";
@@ -45,6 +46,7 @@ protocol.registerSchemesAsPrivileged([
 app.enableSandbox();
 
 app.setPath("userData", userData);
+useCrashLog(userData);
 
 // OLED panels don't use the RGB subpixel layout ClearType assumes, so small
 // text gets colour fringes there. Chromium only takes this switch before the
@@ -135,6 +137,8 @@ if (!app.requestSingleInstanceLock()) {
     }
   };
   app.on("before-quit", closeOverlays);
+  let quitting = false;
+  app.on("before-quit", () => (quitting = true));
   app.on("will-quit", closeOverlays);
   // Quitting does not wait for saves that are still running: hold it once until everything is on disk. A save that
   // hangs may delay quitting by a few seconds, never stop it.
@@ -159,6 +163,15 @@ if (!app.requestSingleInstanceLock()) {
   app.on("second-instance", () => {
     if (host?.window.isMinimized()) host.window.restore();
     host?.window.focus();
+  });
+
+  // The GPU process or a helper went away (logs/crashes.log). The window and its panels draw again by themselves once
+  // Chromium has a new GPU process; the panels are asked to, so none stays blank.
+  app.on("child-process-gone", (_event, details) => {
+    // Helpers Tavora ends itself while quitting are no trouble.
+    if (quitting && details.reason === "killed") return;
+    recordCrash({ type: details.type, reason: details.reason, exitCode: details.exitCode });
+    if (details.type === "GPU" && details.reason !== "clean-exit") host?.redrawAfterGpuLoss();
   });
 
   app.on("window-all-closed", () => {

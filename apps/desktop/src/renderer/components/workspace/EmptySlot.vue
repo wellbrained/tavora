@@ -27,6 +27,7 @@ function remove() {
       size="sm"
       class="border-primary/60 text-primary hover:bg-primary/10 hover:text-primary"
       data-testid="slot-add-module"
+      aria-haspopup="dialog"
       @click="dialog = { kind: 'add-module', slot: params.group.id }"
     >
       <Plus /> {{ t("workspace.addModule") }}

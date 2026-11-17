@@ -28,6 +28,53 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.84",
+    date: "2026-11-17",
+    title: "Panels stop flickering",
+    notes: [
+      "Hints and menus only set aside the panels they cover. The rest keep running.",
+      "Panels stay sharp and keep their colours while a menu, hint or dialog is open.",
+      "Dialogs fade in and out together with the panels behind them.",
+      "Switching tabs, opening a column or maximizing no longer shows an empty panel for a moment.",
+    ],
+    prs: [
+      { number: 819, title: "Panels stop flickering" },
+    ],
+    tags: ["modules", "rail", "workspace"],
+  },
+  {
+    version: "0.24.83",
+    date: "2026-11-17",
+    title: "Small fixes everywhere",
+    notes: [
+      "Saving a name you left empty now tells you why instead of doing nothing.",
+      "Tall dialogs scroll, so their buttons stay in reach in a small panel.",
+      "A wrong tab name says what's wrong right next to the field.",
+      "German shows numbers the German way: \"0,5\" and \"100 %\" that never breaks apart.",
+      "Scrolling a list in a menu no longer scrolls the page behind it.",
+      "Screen readers hear field buttons like \"Clear search\" in your language.",
+      "Small charts pick up the new colours when you switch the theme.",
+      "The preview backdrop switch works with the arrow keys.",
+    ],
+    prs: [
+      { number: 816, title: "Kit: fixes from the web interface guidelines check" },
+    ],
+    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
+  },
+  {
+    version: "0.24.82",
+    date: "2026-11-17",
+    title: "Tighter safety",
+    notes: [
+      "Tavora checks its app files each time it starts, so a changed copy won't run.",
+      "An OBS overlay stops at once when its module loses access or is removed.",
+    ],
+    prs: [
+      { number: 817, title: "Security: close the gaps before 1.0" },
+    ],
+    tags: ["accounts", "catalog", "cloud-copy", "modules", "overlays", "privacy", "security", "service", "website", "whiteboard"],
+  },
+  {
     version: "0.24.81",
     date: "2026-11-17",
     title: "Even icons",

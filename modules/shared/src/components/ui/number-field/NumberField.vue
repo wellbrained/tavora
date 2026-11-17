@@ -8,7 +8,7 @@ import type { HTMLAttributes } from "vue"
 import { ref, useAttrs } from "vue"
 import { cn } from "../../../lib/utils"
 import { useFieldControl } from "../field/use-field-control"
-import { uiLocale } from "../text"
+import { uiLocale, uiText } from "../text"
 
 defineOptions({ inheritAttrs: false })
 const props = withDefaults(defineProps<{
@@ -24,7 +24,7 @@ const props = withDefaults(defineProps<{
   increaseLabel?: string
   disabled?: boolean
   class?: HTMLAttributes["class"]
-}>(), { step: 1, decreaseLabel: "Decrease", increaseLabel: "Increase" })
+}>(), { step: 1 })
 const model = defineModel<number>({ required: true })
 const input = ref<{ $el?: HTMLElement } | null>(null)
 const field = useFieldControl({ element: () => input.value?.$el, value: () => model.value })
@@ -58,7 +58,7 @@ function split() {
   >
     <NumberFieldDecrement
       data-slot="number-field-decrement"
-      :aria-label="decreaseLabel"
+      :aria-label="decreaseLabel ?? uiText.decrease"
       class="text-muted-foreground hover:text-foreground flex size-8 flex-none items-center justify-center outline-none hover:bg-[color-mix(in_srgb,var(--foreground)_10%,var(--accent))] disabled:pointer-events-none disabled:opacity-50"
     >
       <Minus class="size-3.5" aria-hidden="true" />
@@ -72,7 +72,7 @@ function split() {
     />
     <NumberFieldIncrement
       data-slot="number-field-increment"
-      :aria-label="increaseLabel"
+      :aria-label="increaseLabel ?? uiText.increase"
       class="text-muted-foreground hover:text-foreground flex size-8 flex-none items-center justify-center outline-none hover:bg-[color-mix(in_srgb,var(--foreground)_10%,var(--accent))] disabled:pointer-events-none disabled:opacity-50"
     >
       <Plus class="size-3.5" aria-hidden="true" />

@@ -84,7 +84,7 @@ function mount(initial: number, props: Record<string, unknown> = {}) {
 describe("SliderField as it was", () => {
   it("shows the value and unit read-only, with no box and no Reset", () => {
     const { root, box, reset } = mount(70);
-    expect(root.querySelector("output")!.textContent).toBe("70 %");
+    expect(root.querySelector("output")!.textContent).toBe("70 %");
     expect(box()).toBeNull();
     expect(reset()).toBeNull();
     expect(root.firstElementChild!.className).not.toContain("flex-wrap");

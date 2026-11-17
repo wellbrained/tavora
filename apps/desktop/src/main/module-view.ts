@@ -32,6 +32,7 @@ import { serveJsonOpen, serveJsonSave } from "./json-file-http";
 import { serveFileOpen, serveFileSave } from "./table-file-http";
 import { saveJsonExport, serveJsonExport } from './json-export-http';
 import { DRAW_CAP_MS, ON_SCREEN_MS } from "./panel-cover";
+import { recordCrash } from "./crash-log";
 import { isPrivateUrl, isWebUrl } from "./browser-url";
 import { HostError } from "./errors";
 import { onlySystemMonitor } from "./system-apps";
@@ -568,7 +569,7 @@ export class ModuleView {
     });
     contents.on("render-process-gone", (_event, details) => {
       if (this.disposed) return this.closeNow();
-      console.warn(`[tavora] module ${module.manifest.id} renderer gone: ${details.reason}`);
+      recordCrash({ type: "module page", reason: details.reason, exitCode: details.exitCode, moduleId: module.manifest.id });
       this.disconnect();
       this.setStatus("crashed");
     });
@@ -1193,6 +1194,7 @@ export class ModuleView {
   /** Whether the panel is shown now (in its slot, or over the game). */
   private shown = false;
   private drawing: Promise<void> = Promise.resolve();
+  private solid: Promise<void> = Promise.resolve();
   private frameRequests = 0;
   private readonly frameWaiters = new Map<number, () => void>();
   /** False from a new page's start until it has drawn once; the host UI keeps the panel's loader under it until then. */
@@ -1228,6 +1230,15 @@ export class ModuleView {
   }
 
   /**
+   * Resolves once the panel has drawn since it was last shown and its background is solid again (ON_SCREEN_MS after
+   * the frame), or now while it is hidden. What the host UI shows under the view may go only then: before, the slot
+   * shows through wherever the page draws nothing.
+   */
+  get settled(): Promise<void> {
+    return this.shown ? this.solid : Promise.resolve();
+  }
+
+  /**
    * A page draws nothing while hidden, and a heavy one takes a few hundred ms for its first frame once shown. Until
    * that frame the view is see-through, so what the host UI shows in the slot stays: the panel's picture from while
    * a dialog was open, or its loader. The preload answers after the page's next frames (tavora:frame).
@@ -1238,6 +1249,8 @@ export class ModuleView {
     if (!this.overGame) this.view.setBackgroundColor("#00000000");
     const requestId = ++this.frameRequests;
     this.frameSeenAs = "not received";
+    let solid = () => {};
+    this.solid = new Promise((resolve) => (solid = resolve));
     return new Promise((resolve) => {
       const done = () => {
         clearTimeout(timer);
@@ -1247,12 +1260,13 @@ export class ModuleView {
           // Opaque at once, the panel would show its plain colour until the frame is on screen.
           setTimeout(() => {
             if (requestId === this.frameRequests && !this.frameWaiters.size && !this.overGame && !contents.isDestroyed()) this.view.setBackgroundColor(this.options.getTheme().tokens.background);
+            solid();
           }, ON_SCREEN_MS);
           if (this.shown && this.revealed && !this.firstDrawn) {
             this.firstDrawn = true;
             this.options.onDrawn?.();
           }
-        }
+        } else solid();
         resolve();
       };
       // Shows up in Settings > Diagnostic info, so a panel that keeps a workspace's cover up that long can be found.

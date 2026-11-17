@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // A tiny line chart with no axes or labels: a line and a faint area under it. Drawn on a canvas, only when the values,
-// the size or the colour change; no animation and no timers (a ResizeObserver tells it about the size).
+// the size or the colour change; no animation and no timers (a ResizeObserver tells it about the size, and a
+// MutationObserver on <html> about a theme switch, since a canvas keeps the colours it was drawn with).
 import { onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { cn } from "../../../lib/utils"
 import { sparkPoints } from "./points"
@@ -24,6 +25,12 @@ const props = withDefaults(
 const canvas = ref<HTMLCanvasElement | null>(null)
 let width = 0
 let observer: ResizeObserver | null = null
+let themeWatch: MutationObserver | null = null
+let drawnColour = ""
+
+function lineColour(element: HTMLCanvasElement): string {
+  return getComputedStyle(element).getPropertyValue(`--${props.color}`).trim() || "currentColor"
+}
 
 function draw(): void {
   const element = canvas.value
@@ -40,7 +47,8 @@ function draw(): void {
   const points = sparkPoints(props.values, width, props.height, props.min, props.max)
   if (points.length < 2) return
   context.setTransform(scale, 0, 0, scale, 0, 0)
-  const colour = getComputedStyle(element).getPropertyValue(`--${props.color}`).trim() || "currentColor"
+  const colour = lineColour(element)
+  drawnColour = colour
   context.beginPath()
   points.forEach(([x, y], index) => (index === 0 ? context.moveTo(x, y) : context.lineTo(x, y)))
   context.strokeStyle = colour
@@ -68,8 +76,16 @@ onMounted(() => {
     draw()
   })
   observer.observe(element)
+  // The theme is written to <html> (its variables, `data-mode`, the app's `dark` class): redraw when the line's colour moved.
+  themeWatch = new MutationObserver(() => {
+    if (lineColour(element) !== drawnColour) draw()
+  })
+  themeWatch.observe(document.documentElement, { attributes: true, attributeFilter: ["style", "class", "data-mode"] })
 })
-onBeforeUnmount(() => observer?.disconnect())
+onBeforeUnmount(() => {
+  observer?.disconnect()
+  themeWatch?.disconnect()
+})
 watch(() => [props.values, props.min, props.max, props.height, props.color], draw, { flush: "post" })
 </script>
 

@@ -5,16 +5,14 @@
 import { describe, expect, it, vi } from "vitest";
 import { nextTick } from "vue";
 
-const bridge = vi.hoisted(() => {
-  const setOverlay = vi.fn();
+vi.hoisted(() => {
   // Every listener is taken and never called, every other call answers nothing.
   const api = new Proxy({} as Record<string, unknown>, {
-    get: (_, key) => (key === "setOverlay" ? setOverlay : typeof key === "string" && key.startsWith("on") ? () => () => undefined : () => Promise.resolve(null)),
+    get: (_, key) => (typeof key === "string" && key.startsWith("on") ? () => () => undefined : () => Promise.resolve(null)),
   });
   (window as unknown as { tavoraHost: unknown }).tavoraHost = api;
   document.elementsFromPoint ??= () => [];
   if (!("PerformanceObserver" in globalThis)) (globalThis as Record<string, unknown>).PerformanceObserver = class { observe() {} disconnect() {} };
-  return { setOverlay };
 });
 
 const { setHintFloating, overlayOpen, dragging } = await import("./host");
@@ -29,7 +27,6 @@ describe("a hover hint and the header's drag areas", () => {
     setHintFloating(true);
     await tick();
     expect(overlayOpen.value).toBe(true);
-    expect(bridge.setOverlay).toHaveBeenLastCalledWith(true);
     expect(floating()).toBe(false);
   });
 

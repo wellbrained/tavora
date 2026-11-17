@@ -8,15 +8,16 @@ import { isComposing } from "../../../lib/keys"
 import { cn } from "../../../lib/utils"
 import { Button } from "../button"
 import { Input } from "../input"
+import { uiText } from "../text"
 import { clearsOnEscape } from "./escape"
 
 defineOptions({ inheritAttrs: false })
 const props = withDefaults(defineProps<{
-  /** The clear button has no text; modules pass a translated name. */
+  /** The clear button's name for screen readers; it says "Clear search" in the user's language by default. */
   clearLabel?: string
   disabled?: boolean
   class?: HTMLAttributes["class"]
-}>(), { clearLabel: "Clear search" })
+}>(), {})
 const model = defineModel<string>({ default: "" })
 
 const field = ref<InstanceType<typeof Input> | null>(null)
@@ -54,8 +55,8 @@ function onKeydown(event: KeyboardEvent) {
         size="icon-xs"
         variant="ghost"
         class="absolute right-2"
-        :aria-label="clearLabel"
-        :title="clearLabel"
+        :aria-label="clearLabel ?? uiText.clearSearch"
+        :title="clearLabel ?? uiText.clearSearch"
         data-slot="search-input-clear"
         @click="clear"
       >

@@ -8,6 +8,7 @@ import { onMounted, ref } from "vue"
 import { cn } from "../../../lib/utils"
 import { Button } from "../button"
 import { useFieldControl } from "../field/use-field-control"
+import { uiText } from "../text"
 import { freeKeys } from "./free-keys"
 
 defineOptions({
@@ -21,7 +22,7 @@ defineOptions({
 // Combobox). Enter then keeps what is typed and says so with `commit`; only an item reached with the arrow keys is picked.
 const props = withDefaults(
   defineProps<ComboboxInputProps & { class?: HTMLAttributes["class"], icon?: boolean, clearable?: boolean, clearLabel?: string, free?: boolean }>(),
-  { icon: true, clearable: true, clearLabel: "Clear search" },
+  { icon: true, clearable: true },
 )
 const emits = defineEmits<ComboboxInputEmits & { commit: [text: string] }>()
 
@@ -92,8 +93,8 @@ function clear() {
         size="icon-xs"
         variant="ghost"
         class="absolute top-1/2 right-1.5 -translate-y-1/2"
-        :aria-label="clearLabel"
-        :title="clearLabel"
+        :aria-label="clearLabel ?? uiText.clearSearch"
+        :title="clearLabel ?? uiText.clearSearch"
         data-slot="combobox-input-clear"
         @mousedown.prevent
         @click="clear"

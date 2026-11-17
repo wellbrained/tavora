@@ -638,8 +638,11 @@ test("ui playground: the name dialog selects its text, counts and locks while bu
   expect(await inModule(app, PLAYGROUND, `${q("name-count")}.textContent.trim()`)).toBe("8 / 30");
   await type("x".repeat(31));
   await expect.poll(() => inModule(app, PLAYGROUND, `${q("name-submit")}.disabled && !!${q("name-error")}`)).toBe(true);
+  // An empty name leaves Save on: pressing it says what's missing and keeps the dialog open.
   await type("");
-  await expect.poll(() => inModule(app, PLAYGROUND, `${q("name-submit")}.disabled`)).toBe(true);
+  await expect.poll(() => inModule(app, PLAYGROUND, `${q("name-submit")}.disabled`)).toBe(false);
+  await clickSelector(app, PLAYGROUND, `[data-testid="name-submit"]`);
+  await expect.poll(() => inModule(app, PLAYGROUND, `!!${q("name-error")} && document.activeElement === ${q("name-input")}`)).toBe(true);
   await type("Renamed");
   await expect.poll(() => inModule(app, PLAYGROUND, `${q("name-submit")}.disabled`)).toBe(false);
   await clickSelector(app, PLAYGROUND, `[data-testid="name-submit"]`);
@@ -825,6 +828,8 @@ test.describe("ui playground pages", () => {
     await typeName("   ");
     await key("Enter");
     expect(await inModule(app, PLAYGROUND, `${strip}.querySelector('[data-testid="tab-rename-input"]').getAttribute("aria-invalid")`)).toBe("true");
+    // The reason shows beside the field, in the kit's tooltip it points to.
+    await expect.poll(() => inModule(app, PLAYGROUND, `document.getElementById(${strip}.querySelector('[data-testid="tab-rename-input"]').getAttribute("aria-describedby"))?.textContent ?? ""`)).toContain("Give it a name.");
     await typeName("Rubber");
     await key("Enter");
     await expect.poll(labels).toEqual(["Copper", "Rubber"]);

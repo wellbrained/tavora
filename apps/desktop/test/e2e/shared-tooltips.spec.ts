@@ -60,7 +60,7 @@ test('shared module hints support pointer, keyboard, dynamic labels and narrow p
     await expect.poll(() => run('window.__resized')).toBe(true);
     await run('document.querySelector("#hint-target").blur();const b=[...document.querySelectorAll("#tooltips button")].find(b=>b.textContent.trim()==="Rich tooltip");b.focus();');
     await expect.poll(() => run('document.querySelector("[role=tooltip] p")?.textContent')).toContain('Readable text');
-    expect(await run('getComputedStyle(document.querySelector("[role=tooltip] h2")).fontSize')).toBe('15px');
+    expect(await run('getComputedStyle(document.querySelector("[role=tooltip] .tavora-tooltip-title")).fontSize')).toBe('15px');
     const bounds=await run<{left:number;right:number;width:number;body:string}>('(()=>{const e=document.querySelector("[role=tooltip]"),r=e.getBoundingClientRect();return{left:r.left,right:r.right,width:innerWidth,body:getComputedStyle(e.querySelector("p")).fontSize}})()');
     expect(bounds.left).toBeGreaterThanOrEqual(8);expect(bounds.right).toBeLessThanOrEqual(bounds.width-8);expect(bounds.body).toBe('13px');
     const png=await app.evaluate(async({webContents},id)=>{const wc=webContents.getAllWebContents().find(w=>w.getURL().startsWith('tavora-module://'+id+'/'))!;return(await wc.capturePage()).toPNG().toString('base64');},id);
@@ -74,17 +74,17 @@ test('the host shows its own hints and rail labels with the shared tooltip', asy
   try {
     // A rail item: the compact card replaces the system tooltip, and fits a short label.
     await page.getByTestId('rail-settings').hover();
-    await expect(tooltip.locator('h2')).toHaveText('Settings');
+    await expect(tooltip.locator('.tavora-tooltip-title')).toHaveText('Settings');
     await expect(page.getByTestId('rail-settings')).not.toHaveAttribute('title', /.+/);
-    expect(await tooltip.evaluate(e => getComputedStyle(e.querySelector('h2')!).fontSize)).toBe('13px');
+    expect(await tooltip.evaluate(e => getComputedStyle(e.querySelector('.tavora-tooltip-title')!).fontSize)).toBe('13px');
     expect((await tooltip.boundingBox())!.width).toBeLessThan(200);
     await page.mouse.move(600, 400);
     await expect(tooltip).toHaveCount(0);
 
     // A workspace label: the game's name as the heading, beside its icon.
     await page.getByTestId('rail-workspace-poe2').hover();
-    await expect(tooltip.locator('h2')).toHaveText('Path of Exile 2');
-    expect(await tooltip.evaluate(e => getComputedStyle(e.querySelector('h2')!).fontSize)).toBe('13px');
+    await expect(tooltip.locator('.tavora-tooltip-title')).toHaveText('Path of Exile 2');
+    expect(await tooltip.evaluate(e => getComputedStyle(e.querySelector('.tavora-tooltip-title')!).fontSize)).toBe('13px');
     const icon = (await page.getByTestId('rail-workspace-poe2').boundingBox())!, card = (await tooltip.boundingBox())!;
     expect(card.x).toBeGreaterThan(icon.x + icon.width - 8);
     await page.keyboard.press('Escape');

@@ -4,7 +4,7 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { ToastsEvent } from "../shared/host-toasts";
 import type { LayoutStills, LayoutView } from "../shared/layout-view";
 import type { ContactDraft, ConversationDetailResult, InboxView } from "../shared/conversations";
-import type { AccountView, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, PairingView, PublishView, HostShortcut, HostViewState, ModuleMenu, PanelDialog, TavoraHostApi } from "../shared/host-api";
+import type { AccountView, AiUsageView, CloudCopyView, DeveloperKeysView, DiscordView, PairingView, PublishView, HostShortcut, HostViewState, ModuleMenu, PanelDialog, PanelPicture, TavoraHostApi } from "../shared/host-api";
 
 const api: TavoraHostApi = {
   getState: () => ipcRenderer.invoke("host:get-state"),
@@ -35,10 +35,13 @@ const api: TavoraHostApi = {
   },
   setPanelBounds: (bounds) => ipcRenderer.send("host:panel-bounds", bounds),
   setWorkspaceBounds: (bounds) => ipcRenderer.send("host:workspace-bounds", bounds),
-  setOverlay: (open) => ipcRenderer.send("host:overlay", open),
-  prepareOverlay: () => ipcRenderer.send("host:overlay-prepare"),
+  setOverlay: (open, only, seq) => ipcRenderer.send("host:overlay", open, only, seq),
+  prepareOverlay: (near) => ipcRenderer.send("host:overlay-prepare", near),
   onOverlayReady: (listener) => {
-    ipcRenderer.on("host:overlay-ready", () => listener());
+    ipcRenderer.on("host:overlay-ready", (_event, seq: unknown) => listener(typeof seq === "number" ? seq : 0));
+  },
+  onWindowResizing: (listener) => {
+    ipcRenderer.on("host:window-resizing", (_event, resizing: unknown) => listener(resizing === true));
   },
   layout: {
     getState: () => ipcRenderer.invoke("layout:get-state"),
@@ -58,7 +61,7 @@ const api: TavoraHostApi = {
     ipcRenderer.on("host:state", (_event, state: HostViewState) => listener(state));
   },
   onFrozen: (listener) => {
-    ipcRenderer.on("host:frozen", (_event, images: Record<string, string>) => listener(images));
+    ipcRenderer.on("host:frozen", (_event, changes: Record<string, PanelPicture | null>, awaited: unknown) => listener(changes, Array.isArray(awaited) ? (awaited as string[]) : []));
   },
   frozenShown: () => ipcRenderer.send("host:frozen-shown"),
   onShortcut: (listener) => {

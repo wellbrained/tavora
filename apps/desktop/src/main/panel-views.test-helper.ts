@@ -12,6 +12,7 @@ export class MemoryPanelView implements PanelViewAdapter {
   firstDrawn = true;
   capturable = true;
   drawn: Promise<void> = Promise.resolve();
+  settled: Promise<void> = Promise.resolve();
   bounds: PanelRect | null = null;
   visible = false;
   suspended = false;
@@ -69,7 +70,12 @@ export interface PanelViewsRig {
   };
   mounted: Set<object>;
   calls: string[];
+  /** What the host UI shows under the views after each send. */
   frozen: Record<string, string>[];
+  /** What each `frozen` call changed (a picture's URL, or null for none any more). */
+  sent: Record<string, string | null>[];
+  /** The pictures each `frozen` call said it waits for. */
+  awaited: string[][];
   ended: { show: boolean; tag: string }[];
   /** Lends a panel to the in-game layer; `revoked <id>` is noted in `calls` if the panel closes meanwhile. */
   lend(instanceId: string): PanelLease;
@@ -82,6 +88,8 @@ export function panelViewsRig(overrides: Partial<PanelViewsDeps> = {}): PanelVie
   const mounted = new Set<object>();
   const calls: string[] = [];
   const frozen: Record<string, string>[] = [];
+  const awaited: string[][] = [];
+  const sent: Record<string, string | null>[] = [];
   const ended: { show: boolean; tag: string }[] = [];
   const views = new PanelViews({
     mount: (adapter) => void mounted.add(adapter.view),
@@ -97,9 +105,19 @@ export function panelViewsRig(overrides: Partial<PanelViewsDeps> = {}): PanelVie
     dialogDrawn: (id) => void calls.push(`dialogDrawn ${id}`),
     openingEnded: ({ show, tag }) => void ended.push({ show, tag }),
     overlayOpening: () => void calls.push("overlayOpening"),
-    frozen: (images) => void frozen.push(images),
+    // Panel views sends only what changed: each entry here is what the host UI shows after that send.
+    frozen: (changes, waitFor) => {
+      const shown = { ...frozen.at(-1) };
+      for (const [id, picture] of Object.entries(changes)) {
+        if (picture) shown[id] = picture.url;
+        else delete shown[id];
+      }
+      frozen.push(shown);
+      sent.push(Object.fromEntries(Object.entries(changes).map(([id, picture]) => [id, picture?.url ?? null])));
+      awaited.push(waitFor);
+    },
     frozenOnScreen: () => Promise.resolve(),
-    overlayReady: () => void calls.push("overlayReady"),
+    overlayReady: (seq) => void calls.push(seq ? `overlayReady ${seq}` : "overlayReady"),
     windowGone: () => world.gone,
     ...overrides,
   });
@@ -109,6 +127,8 @@ export function panelViewsRig(overrides: Partial<PanelViewsDeps> = {}): PanelVie
     mounted,
     calls,
     frozen,
+    sent,
+    awaited,
     ended,
     lend(instanceId) {
       const lease = views.lend(instanceId, () => void calls.push(`revoked ${instanceId}`));
