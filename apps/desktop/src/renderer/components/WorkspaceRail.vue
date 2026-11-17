@@ -439,7 +439,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
         :aria-expanded="expanded"
         @click="toggleRail"
       >
-        <component :is="expanded ? PanelLeftClose : PanelLeftOpen" class="size-[18px]" :stroke-width="1.5" />
+        <component :is="expanded ? PanelLeftClose : PanelLeftOpen" class="size-[18px]" />
       </button>
     </div>
 
@@ -595,14 +595,14 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
               @click="dialog = { kind: 'add-game' }"
             >
               <template v-if="expanded">
-                <Plus class="size-4 flex-none" :stroke-width="1.75" />
+                <Plus class="size-4 flex-none" />
                 <span class="truncate text-sm font-medium">{{ t("rail.add") }}</span>
               </template>
               <span
                 v-else
                 class="rail-icon bg-card text-primary group-hover:bg-primary-fill group-hover:text-primary-fill-foreground flex size-10 flex-none items-center justify-center rounded-[10px]"
               >
-                <Plus class="size-5" :stroke-width="1.75" />
+                <Plus class="size-5" />
               </span>
             </button>
           </RailTooltip>
@@ -620,7 +620,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
         data-testid="rail-scroll-down"
         @click="scrollMore"
       >
-        <ChevronDown class="size-5" :stroke-width="2" />
+        <ChevronDown class="size-5" />
       </button>
     </div>
     </div>
@@ -645,7 +645,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
           @click="openSettings()"
         >
           <RailFooterTile>
-            <Settings class="size-5 transition-transform duration-300 group-hover:rotate-45 motion-reduce:group-hover:rotate-0" :stroke-width="1.5" />
+            <Settings class="size-5 transition-transform duration-300 group-hover:rotate-45 motion-reduce:group-hover:rotate-0" />
           </RailFooterTile>
           <span v-if="expanded" class="text-sm font-medium">{{ t("rail.settings") }}</span>
         </button>

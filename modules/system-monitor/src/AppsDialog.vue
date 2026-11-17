@@ -117,8 +117,8 @@ const COLUMNS: { id: AppsSort; label: "apps.app" | "apps.ram" | "apps.share" | "
           >
             {{ t(column.label) }}
             <template v-if="sortBy === column.id">
-              <ArrowUp v-if="direction === 'up'" :stroke-width="1.75" />
-              <ArrowDown v-else :stroke-width="1.75" />
+              <ArrowUp v-if="direction === 'up'" />
+              <ArrowDown v-else />
             </template>
           </Button>
         </div>

@@ -1,9 +1,16 @@
 [
   {
-    "version": "0.3.21",
+    "version": "0.3.22",
     "date": "2026-11-17",
     "notes": [
       "Safety updates for parts the board is built on."
+    ]
+  },
+  {
+    "version": "0.3.21",
+    "date": "2026-11-17",
+    "notes": [
+      "Icons all have the same line weight."
     ]
   },
   {

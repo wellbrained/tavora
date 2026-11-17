@@ -49,17 +49,17 @@ const swatch = "grid size-6 flex-none cursor-pointer place-items-center rounded-
       :class="swatch"
       :style="{ background: color }"
     >
-      <Check v-if="same(color, model)" class="size-3.5" :stroke-width="2.5" :style="{ color: isLight(color) ? 'black' : 'white' }" />
+      <Check v-if="same(color, model)" class="size-3.5" :style="{ color: isLight(color) ? 'black' : 'white' }" />
     </RadioGroupItem>
     <RadioGroupItem v-if="isCustom" :value="model" :aria-label="model" :title="model" :class="swatch" :style="{ background: model }">
-      <Check class="size-3.5" :stroke-width="2.5" :style="{ color: isLight(model) ? 'black' : 'white' }" />
+      <Check class="size-3.5" :style="{ color: isLight(model) ? 'black' : 'white' }" />
     </RadioGroupItem>
     <label
       v-if="allowCustom"
       :class="cn('border-input text-muted-foreground hover:text-foreground focus-within:outline-ring relative grid size-6 flex-none cursor-pointer place-items-center rounded-full border border-dashed focus-within:outline-2 focus-within:outline-offset-2', disabled && 'pointer-events-none opacity-50')"
       :title="uiText.customColor"
     >
-      <Plus class="size-3.5" :stroke-width="2" aria-hidden="true" />
+      <Plus class="size-3.5" aria-hidden="true" />
       <input type="color" class="absolute inset-0 size-full cursor-pointer opacity-0" :aria-label="uiText.customColor" :disabled="disabled" :value="hexForInput" @input="model = ($event.target as HTMLInputElement).value" />
     </label>
   </RadioGroupRoot>

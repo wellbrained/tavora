@@ -93,7 +93,7 @@ function pick(value: unknown) {
           <span v-for="option in options" :key="option.value" class="invisible col-start-1 row-start-1 truncate" aria-hidden="true">{{ option.label }}</span>
           <span class="col-start-1 row-start-1 truncate">{{ current?.label }}</span>
         </span>
-        <ChevronsUpDown class="size-4 flex-none" :stroke-width="1.5" data-icon="end" />
+        <ChevronsUpDown class="size-4 flex-none" data-icon="end" />
       </Button>
     </PopoverTrigger>
     <PopoverPortal>
@@ -107,7 +107,7 @@ function pick(value: unknown) {
       >
         <ListboxRoot :model-value="model" highlight-on-hover @update:model-value="pick">
           <div v-if="search" class="relative w-full border-b">
-            <Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" :stroke-width="1.5" />
+            <Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
             <ListboxFilter
               v-model="query"
               auto-focus
@@ -130,7 +130,7 @@ function pick(value: unknown) {
               >
                 <slot name="option" :option="option"><span class="flex-1 truncate">{{ option.label }}</span></slot>
                 <ListboxItemIndicator>
-                  <Check class="text-primary size-4 flex-none" :stroke-width="1.5" />
+                  <Check class="text-primary size-4 flex-none" />
                 </ListboxItemIndicator>
               </ListboxItem>
             </DefineRow>

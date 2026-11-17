@@ -102,7 +102,7 @@ const startLabel = computed(() => {
     <div class="flex flex-wrap items-center gap-x-2 gap-y-1 py-1.5 pr-1.5 pl-3">
       <!-- Name and type. A small marker for linked counters ("also adds to") goes at the end of this block. -->
       <div class="flex min-w-24 flex-[1_1_6rem] items-center gap-2" data-testid="item-name">
-        <component :is="icon" class="text-muted-foreground size-4 flex-none" :stroke-width="1.5" aria-hidden="true" />
+        <component :is="icon" class="text-muted-foreground size-4 flex-none" aria-hidden="true" />
         <div class="min-w-0">
           <h2 class="truncate text-sm font-medium" :title="name">{{ name }}</h2>
           <p v-if="hasSubline" class="text-muted-foreground flex gap-2 text-xs tabular-nums" data-testid="subline">
@@ -120,42 +120,42 @@ const startLabel = computed(() => {
       <div class="flex flex-none items-center gap-1">
         <template v-if="item.kind === 'counter'">
           <Button variant="secondary" size="icon-sm" :aria-label="t('item.down')" :title="t('item.down')" :disabled="!item.negative && item.value <= 0" @click="panel.act('down', item.id)">
-            <Minus :stroke-width="1.5" />
+            <Minus />
           </Button>
           <Button variant="secondary" size="icon-sm" :aria-label="t('item.up')" :title="t('item.up')" data-testid="up" @click="panel.act('up', item.id)">
-            <Plus :stroke-width="1.5" />
+            <Plus />
           </Button>
           <Button variant="ghost" size="icon-sm" :aria-label="t('item.reset')" :title="t('item.reset')" data-testid="reset" @click="panel.act('reset', item.id)">
-            <RotateCcw :stroke-width="1.5" />
+            <RotateCcw />
           </Button>
         </template>
 
         <template v-else>
           <Button variant="secondary" size="icon-sm" :aria-label="startLabel" :title="startLabel" data-testid="start-pause" @click="panel.act('start-pause', item.id)">
-            <Pause v-if="item.since !== null && !reading?.done" :stroke-width="1.5" />
-            <Play v-else :stroke-width="1.5" />
+            <Pause v-if="item.since !== null && !reading?.done" />
+            <Play v-else />
           </Button>
           <Button v-if="item.kind === 'stopwatch' && item.laps" variant="ghost" size="icon-sm" :aria-label="t('item.lap')" :title="t('item.lap')" :disabled="item.since === null" @click="panel.act('lap', item.id)">
-            <Flag :stroke-width="1.5" />
+            <Flag />
           </Button>
           <Button variant="ghost" size="icon-sm" :aria-label="t('item.reset')" :title="t('item.reset')" data-testid="reset" @click="panel.act('reset', item.id)">
-            <RotateCcw :stroke-width="1.5" />
+            <RotateCcw />
           </Button>
         </template>
 
         <DropdownMenu v-model:open="menuOpen">
           <DropdownMenuTrigger as-child>
             <Button variant="ghost" size="icon-sm" :aria-label="t('item.more', { label: name })" :title="t('item.more', { label: name })" :data-testid="`more-${item.id}`" data-focus-target>
-              <Ellipsis :stroke-width="1.5" />
+              <Ellipsis />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" @keydown="onMenuKey">
-            <DropdownMenuItem :data-testid="`menu-settings-${item.id}`" @select="emit('toggleEdit')"><Settings :stroke-width="1.5" />{{ t("item.settings") }}</DropdownMenuItem>
-            <DropdownMenuItem :disabled="!canUp" :data-testid="`menu-up-${item.id}`" @select="panel.move(item.id, -1)"><ArrowUp :stroke-width="1.5" />{{ t("item.moveUp") }}</DropdownMenuItem>
-            <DropdownMenuItem :disabled="!canDown" :data-testid="`menu-down-${item.id}`" @select="panel.move(item.id, 1)"><ArrowDown :stroke-width="1.5" />{{ t("item.moveDown") }}</DropdownMenuItem>
+            <DropdownMenuItem :data-testid="`menu-settings-${item.id}`" @select="emit('toggleEdit')"><Settings />{{ t("item.settings") }}</DropdownMenuItem>
+            <DropdownMenuItem :disabled="!canUp" :data-testid="`menu-up-${item.id}`" @select="panel.move(item.id, -1)"><ArrowUp />{{ t("item.moveUp") }}</DropdownMenuItem>
+            <DropdownMenuItem :disabled="!canDown" :data-testid="`menu-down-${item.id}`" @select="panel.move(item.id, 1)"><ArrowDown />{{ t("item.moveDown") }}</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem variant="destructive" :data-testid="`delete-${item.id}`" @select="panel.remove(item)">
-              <Trash2 :stroke-width="1.5" />{{ t("edit.delete") }}<DropdownMenuShortcut>{{ t("edit.deleteKey") }}</DropdownMenuShortcut>
+              <Trash2 />{{ t("edit.delete") }}<DropdownMenuShortcut>{{ t("edit.deleteKey") }}</DropdownMenuShortcut>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

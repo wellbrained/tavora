@@ -62,7 +62,7 @@ const forwardedProps = useForwardProps(delegatedProps)
   >
     <span class="absolute right-2 flex size-3.5 items-center justify-center">
       <SelectItemIndicator>
-        <Check class="text-primary size-4" :stroke-width="2" />
+        <Check class="text-primary size-4" />
       </SelectItemIndicator>
     </span>
 

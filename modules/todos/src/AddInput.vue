@@ -80,7 +80,7 @@ defineExpose({ focus: () => input.value?.focus() });
     @submit.prevent="submit"
   >
     <span class="relative flex w-full items-center">
-      <Plus :class="cn('text-muted-foreground pointer-events-none absolute size-4', alignToTasks ? 'left-[50px]' : 'left-2')" :stroke-width="1.5" aria-hidden="true" />
+      <Plus :class="cn('text-muted-foreground pointer-events-none absolute size-4', alignToTasks ? 'left-[50px]' : 'left-2')" aria-hidden="true" />
       <input
         ref="input"
         v-model="value"

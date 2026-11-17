@@ -467,7 +467,7 @@ const keyOf = (item: LayoutItemView) => (item.mode === "toggle" && item.hotkey ?
             @pointerdown.stop
             @click="send({ type: 'lock', id: item.id, locked: false })"
           >
-            <Lock :stroke-width="2" />
+            <Lock />
           </Button>
           <template v-if="single === item.id && !item.locked">
             <span

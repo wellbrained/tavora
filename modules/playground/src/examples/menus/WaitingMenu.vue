@@ -22,7 +22,7 @@ async function reload() {
 <template>
   <DropdownMenu>
     <DropdownMenuTrigger as-child>
-      <Button variant="secondary"><MoreHorizontal :stroke-width="1.5" /> Board</Button>
+      <Button variant="secondary"><MoreHorizontal /> Board</Button>
     </DropdownMenuTrigger>
     <DropdownMenuContent align="start" class="w-56">
       <DropdownMenuItem :action="copy"><Copy /> Copy as picture</DropdownMenuItem>

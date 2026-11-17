@@ -149,7 +149,7 @@ watch(
       <RecoveryKeySettings v-if="keys?.recoveryKey || keys?.status === 'ask'" />
       <p v-else-if="keys?.status === 'offline'" class="text-muted-foreground text-sm">{{ t("account.developer.offline") }}</p>
       <div v-else-if="developerReady" class="flex flex-col gap-3" data-testid="developer-start-key-ready">
-        <p class="flex items-center gap-2 text-sm"><CircleCheck class="text-success size-4 flex-none" :stroke-width="1.5" /> {{ t("devStart.key.ready") }}</p>
+        <p class="flex items-center gap-2 text-sm"><CircleCheck class="text-success size-4 flex-none" /> {{ t("devStart.key.ready") }}</p>
         <div class="flex justify-end">
           <Button data-testid="developer-start-next" @click="keyReminder = false">{{ t("common.next") }}</Button>
         </div>
@@ -186,7 +186,7 @@ watch(
       <p class="text-muted-foreground text-sm">{{ t("devStart.project.text") }}</p>
       <div class="flex flex-wrap items-center gap-2">
         <code class="bg-muted rounded px-2 py-1 font-mono text-sm select-all">npm create @tavora/module</code>
-        <Button variant="ghost" size="sm" data-testid="developer-start-copy" @click="copyCommand"><Copy :stroke-width="1.5" /> {{ t("devStart.project.copy") }}</Button>
+        <Button variant="ghost" size="sm" data-testid="developer-start-copy" @click="copyCommand"><Copy /> {{ t("devStart.project.copy") }}</Button>
       </div>
       <DialogFooter>
         <DialogButton variant="secondary" :icon="FolderCode" class="mr-auto" data-testid="developer-start-folder" @click="act({ type: 'add-development-folder' })">

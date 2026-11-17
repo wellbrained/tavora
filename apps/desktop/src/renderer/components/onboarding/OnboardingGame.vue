@@ -154,7 +154,7 @@ function notNow() {
       <p class="text-muted-foreground mt-2 mb-5 [@media(max-height:640px)]:mb-3">{{ t("onboarding.game.sub") }}</p>
 
       <div class="relative w-full text-left">
-        <Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" :stroke-width="1.5" />
+        <Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
         <Input
           ref="search"
           v-model="query"
@@ -202,7 +202,7 @@ function notNow() {
         </ul>
       </div>
 
-      <Button variant="ghost" class="mt-5" data-testid="onboarding-back" @click="$emit('back')"><ArrowLeft :stroke-width="1.5" /> {{ t("common.back") }}</Button>
+      <Button variant="ghost" class="mt-5" data-testid="onboarding-back" @click="$emit('back')"><ArrowLeft /> {{ t("common.back") }}</Button>
     </template>
 
     <!-- Offer: the modules made for this game -->
@@ -235,11 +235,11 @@ function notNow() {
 
     <!-- Ready -->
     <template v-else>
-      <span class="bg-primary/15 text-primary mb-4 grid size-12 place-items-center rounded-full"><Check class="size-6" :stroke-width="2" /></span>
+      <span class="bg-primary/15 text-primary mb-4 grid size-12 place-items-center rounded-full"><Check class="size-6" /></span>
       <h1 class="text-3xl font-semibold" data-testid="onboarding-ready">{{ t("onboarding.ready.title", { game: game?.name ?? "" }) }}</h1>
       <p class="text-muted-foreground mt-2">{{ game?.moduleIds.length ? t("onboarding.ready.withModules") : t("onboarding.ready.sub") }}</p>
       <div class="mt-6 flex items-center gap-3">
-        <Button variant="ghost" data-testid="onboarding-back" @click="$emit('back')"><ArrowLeft :stroke-width="1.5" /> {{ t("common.back") }}</Button>
+        <Button variant="ghost" data-testid="onboarding-back" @click="$emit('back')"><ArrowLeft /> {{ t("common.back") }}</Button>
         <Button class="min-w-32" data-testid="onboarding-next" @click="$emit('next')">{{ t("common.next") }}</Button>
       </div>
     </template>

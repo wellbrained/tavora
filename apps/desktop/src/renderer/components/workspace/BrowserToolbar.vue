@@ -85,16 +85,16 @@ function toggleAdblock() {
 <template>
   <div class="flex h-10 flex-none items-center gap-0.5 border-b px-1.5" :data-testid="`browser-toolbar-${instanceId}`" @keydown="onKeydown">
     <Button variant="ghost" size="icon-sm" :aria-label="t('browser.back')" :title="t('browser.back')" :aria-keyshortcuts="keyshortcuts('browser.back')" :disabled="!browser.canGoBack" data-testid="browser-back" @click="command('back')">
-      <ArrowLeft :stroke-width="1.5" />
+      <ArrowLeft />
     </Button>
     <Button variant="ghost" size="icon-sm" :aria-label="t('browser.forward')" :title="t('browser.forward')" :aria-keyshortcuts="keyshortcuts('browser.forward')" :disabled="!browser.canGoForward" data-testid="browser-forward" @click="command('forward')">
-      <ArrowRight :stroke-width="1.5" />
+      <ArrowRight />
     </Button>
     <Button v-if="browser.loading" variant="ghost" size="icon-sm" :aria-label="t('browser.stop')" :title="t('browser.stop')" data-testid="browser-stop" @click="command('stop')">
-      <X :stroke-width="1.5" />
+      <X />
     </Button>
     <Button v-else variant="ghost" size="icon-sm" :aria-label="t('browser.reload')" :title="t('browser.reload')" :disabled="!browser.url" data-testid="browser-reload" @click="command('reload')">
-      <RotateCw :stroke-width="1.5" />
+      <RotateCw />
     </Button>
 
     <form class="relative mx-1 flex min-w-0 flex-1 items-center" @submit.prevent="submit">
@@ -127,7 +127,7 @@ function toggleAdblock() {
     </form>
 
     <Button v-if="browser.fullscreen" variant="ghost" size="icon-sm" :aria-label="t('browser.exitFullscreen')" :title="t('browser.exitFullscreen')" :aria-keyshortcuts="keyshortcuts('browser.leave-fullscreen')" data-testid="browser-exit-fullscreen" @click="command('exit-fullscreen')">
-      <Minimize2 :stroke-width="1.5" />
+      <Minimize2 />
     </Button>
     <Button
       v-if="browser.audible || browser.muted"
@@ -138,8 +138,8 @@ function toggleAdblock() {
       data-testid="browser-mute"
       @click="command(browser.muted ? 'unmute' : 'mute')"
     >
-      <VolumeX v-if="browser.muted" :stroke-width="1.5" />
-      <Volume2 v-else :stroke-width="1.5" />
+      <VolumeX v-if="browser.muted" />
+      <Volume2 v-else />
     </Button>
     <Button
       variant="ghost"
@@ -157,8 +157,8 @@ function toggleAdblock() {
       :data-blocked="browser.blocked"
       @click="toggleAdblock"
     >
-      <ShieldCheck v-if="browser.adblock" :stroke-width="1.5" />
-      <ShieldOff v-else :stroke-width="1.5" />
+      <ShieldCheck v-if="browser.adblock" />
+      <ShieldOff v-else />
     </Button>
     <Button
       variant="ghost"
@@ -175,13 +175,13 @@ function toggleAdblock() {
       data-testid="browser-shared"
       @click="toggleShared"
     >
-      <Users :stroke-width="1.5" />
+      <Users />
     </Button>
     <Button variant="ghost" size="icon-sm" :aria-label="t('browser.newTab')" :title="t('browser.newTab')" :aria-keyshortcuts="keyshortcuts('browser.new-tab')" data-testid="browser-new-tab" @click="newTab">
-      <Plus :stroke-width="1.5" />
+      <Plus />
     </Button>
     <Button variant="ghost" size="icon-sm" :aria-label="t('browser.external')" :title="t('browser.external')" :disabled="!browser.url" data-testid="browser-external" @click="command('open-external')">
-      <ExternalLink :stroke-width="1.5" />
+      <ExternalLink />
     </Button>
   </div>
 </template>

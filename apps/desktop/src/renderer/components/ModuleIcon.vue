@@ -26,7 +26,7 @@ const line = computed(() => LINE_ICONS[props.moduleId as keyof typeof LINE_ICONS
   <FadeImage v-if="picture" :src="picture" fit="contain" :tile="false" :class="`${size} flex-none rounded-[3px]`" alt="" aria-hidden="true" data-testid="module-icon">
     <template #fallback>
       <svg v-if="logo" class="size-full" :style="logo.color ? { color: logo.color } : undefined" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path :d="logo.path" /></svg>
-      <component :is="line" v-else class="text-muted-foreground size-full" :stroke-width="1.5" aria-hidden="true" />
+      <component :is="line" v-else class="text-muted-foreground size-full" aria-hidden="true" />
     </template>
   </FadeImage>
   <svg
@@ -40,5 +40,5 @@ const line = computed(() => LINE_ICONS[props.moduleId as keyof typeof LINE_ICONS
   >
     <path :d="logo.path" />
   </svg>
-  <component :is="line" v-else :class="`text-muted-foreground ${size} flex-none`" :stroke-width="1.5" aria-hidden="true" data-testid="module-icon" />
+  <component :is="line" v-else :class="`text-muted-foreground ${size} flex-none`" aria-hidden="true" data-testid="module-icon" />
 </template>

@@ -43,8 +43,8 @@ function meta(file: FileEntry): string {
         >
           <ActionRow :description="meta(file)">
             <template #icon>
-              <FileText v-if="file.kind === 'pdf'" :stroke-width="1.5" />
-              <ImageIcon v-else :stroke-width="1.5" />
+              <FileText v-if="file.kind === 'pdf'" />
+              <ImageIcon v-else />
             </template>
             <span class="[overflow-wrap:anywhere]" data-testid="file-name">{{ file.name }}</span>
           </ActionRow>
@@ -52,20 +52,20 @@ function meta(file: FileEntry): string {
         <DropdownMenu>
           <DropdownMenuTrigger as-child>
             <Button variant="ghost" size="icon-xs" class="flex-none" :title="t('list.more', { name: file.name })" :aria-label="t('list.more', { name: file.name })" data-testid="file-menu">
-              <Ellipsis :stroke-width="1.5" />
+              <Ellipsis />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem data-testid="file-rename" @select="emit('rename', file.id)">
-              <Pencil :stroke-width="1.5" />
+              <Pencil />
               {{ t("menu.rename") }}
             </DropdownMenuItem>
             <DropdownMenuItem v-if="located.has(file.id)" data-testid="file-show-in-folder" @select="emit('showInFolder', file.id)">
-              <FolderSearch :stroke-width="1.5" />
+              <FolderSearch />
               {{ t("menu.showInFolder") }}
             </DropdownMenuItem>
             <DropdownMenuItem variant="destructive" data-testid="file-remove" @select="emit('remove', file.id)">
-              <Trash2 :stroke-width="1.5" />
+              <Trash2 />
               {{ t("menu.remove") }}
             </DropdownMenuItem>
           </DropdownMenuContent>

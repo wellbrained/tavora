@@ -68,7 +68,6 @@ function clear() {
     <Search
       v-if="icon"
       class="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2"
-      :stroke-width="1.5"
     />
     <ComboboxInput
       data-slot="combobox-input"
@@ -99,7 +98,7 @@ function clear() {
         @mousedown.prevent
         @click="clear"
       >
-        <X :stroke-width="1.5" aria-hidden="true" />
+        <X aria-hidden="true" />
       </Button>
     </Transition>
   </div>

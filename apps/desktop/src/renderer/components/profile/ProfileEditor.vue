@@ -131,7 +131,7 @@ function numbersOf(board: ProfileRankBoard, standing: ProfileRankStanding): stri
       </SettingRow>
     </SettingGroup>
     <p class="text-muted-foreground mt-2 flex min-h-5 items-center justify-end gap-1 text-xs" role="status" data-testid="profile-status">
-      <template v-if="saved && !dirty"><Check class="size-3.5" :stroke-width="2" /> {{ t("profile.saved") }}</template>
+      <template v-if="saved && !dirty"><Check class="size-3.5" /> {{ t("profile.saved") }}</template>
     </p>
   </div>
 

@@ -24,7 +24,6 @@ const hideTip = () => (tip.value.open = false);
         <Link2
           v-if="feeds(tab.id).length"
           class="text-primary size-3.5 flex-none"
-          :stroke-width="1.5"
           tabindex="0"
           :aria-label="`Feeds ${feeds(tab.id).join(', ')}`"
           data-testid="plan-tab-feeds"

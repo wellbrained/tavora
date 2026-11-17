@@ -55,9 +55,9 @@ function cancel() {
     <template v-if="dialog.show === 'steps'">
       <ol class="flex flex-col gap-2 text-sm" :aria-label="title" data-testid="official-publish-steps">
         <li v-for="item in dialog.steps" :key="item.step" class="flex items-center gap-2" :data-step="item.step" :data-state="item.state" :aria-current="item.state === 'now' ? 'step' : undefined">
-          <Check v-if="item.state === 'done'" class="text-success size-4 flex-none" :stroke-width="1.5" aria-hidden="true" />
-          <Loader v-else-if="item.state === 'now'" class="text-primary size-4 flex-none animate-spin motion-reduce:animate-none" :stroke-width="1.5" aria-hidden="true" />
-          <Circle v-else class="text-muted-foreground size-4 flex-none" :stroke-width="1.5" aria-hidden="true" />
+          <Check v-if="item.state === 'done'" class="text-success size-4 flex-none" aria-hidden="true" />
+          <Loader v-else-if="item.state === 'now'" class="text-primary size-4 flex-none animate-spin motion-reduce:animate-none" aria-hidden="true" />
+          <Circle v-else class="text-muted-foreground size-4 flex-none" aria-hidden="true" />
           <span :class="item.state === 'todo' ? 'text-muted-foreground' : ''">{{ t(`officialPublish.step.${item.step}`) }}</span>
         </li>
       </ol>
@@ -90,7 +90,7 @@ function cancel() {
       <Collapsible v-model:open="filesOpen" data-testid="official-publish-files">
         <CollapsibleTrigger as-child>
           <Button variant="ghost" size="sm" class="w-fit px-1">
-            <ChevronRight :class="['size-4 transition-transform duration-(--duration-press) ease-(--ease-out-strong) motion-reduce:transition-none', filesOpen ? 'rotate-90' : '']" :stroke-width="1.5" aria-hidden="true" />
+            <ChevronRight :class="['size-4 transition-transform duration-(--duration-press) ease-(--ease-out-strong) motion-reduce:transition-none', filesOpen ? 'rotate-90' : '']" aria-hidden="true" />
             {{ t("officialPublish.preview.files", { count: dialog.preview.files.length, size: size(dialog.preview.size) }) }}
           </Button>
         </CollapsibleTrigger>
@@ -105,7 +105,7 @@ function cancel() {
       </Collapsible>
 
       <p v-if="key.saved" class="text-muted-foreground flex items-center gap-2 text-sm" data-testid="official-publish-saved-key">
-        <KeyRound class="size-4 flex-none" :stroke-width="1.5" aria-hidden="true" />
+        <KeyRound class="size-4 flex-none" aria-hidden="true" />
         {{ t("officialPublish.preview.savedKey") }}
       </p>
       <label v-else-if="key.canRemember" class="flex items-start gap-2 text-sm">

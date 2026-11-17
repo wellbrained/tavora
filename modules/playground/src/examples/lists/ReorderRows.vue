@@ -63,7 +63,7 @@ function onDragEnd() {
       @dragstart="onDragStart($event, row.id)"
       @dragend="onDragEnd"
     >
-      <GripVertical class="text-muted-foreground size-4 flex-none" :stroke-width="1.5" aria-hidden="true" />
+      <GripVertical class="text-muted-foreground size-4 flex-none" aria-hidden="true" />
       <div class="min-w-0">
         <p class="truncate text-sm font-medium">{{ row.title }}</p>
         <p v-if="row.note" class="text-muted-foreground text-xs">{{ row.note }}</p>

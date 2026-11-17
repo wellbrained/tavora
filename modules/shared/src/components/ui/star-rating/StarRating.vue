@@ -35,9 +35,9 @@ const fill = (star: number) => (shown.value >= star ? "full" : shown.value >= st
 <template>
   <span v-if="!editable" data-slot="star-rating" role="img" :aria-label="label" :class="cn('text-primary inline-flex items-center gap-0.5', props.class)">
     <span v-for="star in 5" :key="star" class="relative inline-flex" :data-fill="fill(star)">
-      <StarIcon :class="cn(sizes[size], 'text-muted-foreground/40')" :stroke-width="1.5" />
+      <StarIcon :class="cn(sizes[size], 'text-muted-foreground/40')" />
       <span v-if="fill(star) !== 'empty'" class="absolute inset-y-0 left-0 overflow-hidden" :class="fill(star) === 'half' ? 'w-1/2' : 'w-full'">
-        <StarIcon :class="cn(sizes[size], 'fill-current')" :stroke-width="1.5" />
+        <StarIcon :class="cn(sizes[size], 'fill-current')" />
       </span>
     </span>
   </span>
@@ -61,7 +61,7 @@ const fill = (star: number) => (shown.value >= star ? "full" : shown.value >= st
       class="focus-visible:ring-ring/50 rounded-sm p-0.5 outline-none transition-transform focus-visible:ring-3 enabled:hover:scale-110 disabled:cursor-not-allowed disabled:opacity-50"
       @mouseenter="!disabled && (hovered = star)"
     >
-      <StarIcon :class="cn(sizes[size], fill(star) === 'full' ? 'fill-current' : 'text-muted-foreground/40')" :stroke-width="1.5" />
+      <StarIcon :class="cn(sizes[size], fill(star) === 'full' ? 'fill-current' : 'text-muted-foreground/40')" />
     </RadioGroupItem>
   </RadioGroupRoot>
 </template>

@@ -113,7 +113,7 @@ async function savePicture(png: string) {
             >
               <ProfileAvatar :name="shownName" :initials="shownInitials" :picture-url="profile.pictureUrl" :size="88" />
               <span class="bg-secondary ring-background absolute right-0 bottom-0 grid size-7 place-items-center rounded-full ring-2" aria-hidden="true">
-                <Camera class="size-3.5" :stroke-width="1.75" />
+                <Camera class="size-3.5" />
               </span>
             </button>
             <button
@@ -125,7 +125,7 @@ async function savePicture(png: string) {
               :title="t('profile.removePicture')"
               @click="act({ type: 'remove-profile-picture' })"
             >
-              <X class="size-3.5" :stroke-width="2" />
+              <X class="size-3.5" />
             </button>
           </div>
           <input ref="fileInput" type="file" class="hidden" accept="image/png,image/jpeg,image/webp" data-testid="profile-file" @change="onFile" />
@@ -150,7 +150,7 @@ async function savePicture(png: string) {
           </div>
           <DialogClose as-child>
             <Button variant="ghost" size="icon" class="flex-none" data-testid="profile-close" :aria-label="t('profile.close')" :title="t('common.close')">
-              <X :stroke-width="1.5" />
+              <X />
             </Button>
           </DialogClose>
         </header>

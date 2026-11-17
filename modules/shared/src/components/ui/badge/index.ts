@@ -6,7 +6,7 @@ export { default as Badge } from "./Badge.vue"
 // Small chips use the 4 px radius from the style guide. The status variants
 // tint with Tavora's extra tokens; gold stays for the one that matters.
 export const badgeVariants = cva(
-  "inline-flex w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-sm border px-1.5 py-0.5 text-xs font-medium whitespace-nowrap [&>svg]:pointer-events-none [&>svg]:size-3",
+  "inline-flex w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-sm border px-1.5 py-0.5 text-xs font-medium whitespace-nowrap [&>svg]:pointer-events-none [&>svg]:size-3 [&>svg]:stroke-2",
   {
     variants: {
       variant: {

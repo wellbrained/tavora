@@ -496,13 +496,13 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
         :title="t('editor.allNotes')"
         @click="emit('back')"
       >
-        <PanelLeftOpen :stroke-width="1.5" />
+        <PanelLeftOpen />
       </Button>
       <div class="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden" role="toolbar" :aria-label="t('editor.formatting')">
         <DropdownMenu>
           <DropdownMenuTrigger as-child>
             <Button variant="ghost" size="icon-sm" :aria-label="t('editor.textStyle')" :title="t('editor.textStyle')">
-              <Heading :stroke-width="1.5" />
+              <Heading />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
@@ -514,20 +514,20 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
         <DropdownMenu>
           <DropdownMenuTrigger as-child>
             <Button variant="ghost" size="icon-sm" class="flex-none" data-testid="appearance" :aria-label="t('editor.appearance')" :title="t('editor.appearance')">
-              <Type :stroke-width="1.5" />
+              <Type />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
             <DropdownMenuLabel>{{ t("editor.font") }}</DropdownMenuLabel>
             <DropdownMenuItem v-for="font in FONTS" :key="font.id" :data-testid="`font-${font.id}`" @select.prevent="emit('setStyle', { font: font.id })">
               <span :style="{ fontFamily: font.stack }">{{ font.id === "inter" ? t("font.tavora") : font.name }}</span>
-              <Check v-if="look.font === font.id" class="ml-auto" :stroke-width="1.5" :aria-label="t('editor.on')" />
+              <Check v-if="look.font === font.id" class="ml-auto" :aria-label="t('editor.on')" />
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuLabel>{{ t("editor.size") }}</DropdownMenuLabel>
             <DropdownMenuItem v-for="size in SIZES" :key="size.id" :data-testid="`size-${size.id}`" @select.prevent="emit('setStyle', { size: size.id })">
               {{ t(`size.${size.id}`) }}
-              <Check v-if="look.size === size.id" class="ml-auto" :stroke-width="1.5" :aria-label="t('editor.on')" />
+              <Check v-if="look.size === size.id" class="ml-auto" :aria-label="t('editor.on')" />
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <p class="text-muted-foreground px-2 py-1.5 text-xs">{{ noteId === SCRATCHPAD_ID ? t("editor.appliesScratchpad") : t("editor.appliesNotes") }}</p>
@@ -536,7 +536,7 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
         <DropdownMenu @update:open="refreshImageUsage">
           <DropdownMenuTrigger as-child>
             <Button variant="ghost" size="icon-sm" class="flex-none" data-testid="insert-image" :aria-label="t('image.insert')" :title="t('image.insert')">
-              <ImagePlus :stroke-width="1.5" />
+              <ImagePlus />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" class="min-w-60">
@@ -548,7 +548,7 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
                 <span>{{ t(`image.${quality}`) }}</span>
                 <span class="text-muted-foreground text-xs">{{ t(`image.${quality}Hint`) }}</span>
               </span>
-              <Check v-if="store.imageQuality.value === quality" class="ml-auto" :stroke-width="1.5" :aria-label="t('editor.on')" />
+              <Check v-if="store.imageQuality.value === quality" class="ml-auto" :aria-label="t('editor.on')" />
             </DropdownMenuItem>
             <template v-if="imageUsage">
               <DropdownMenuSeparator />
@@ -570,20 +570,20 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
             @mousedown.prevent
             @click="tool.run()"
           >
-            <component :is="tool.icon" :stroke-width="1.5" />
+            <component :is="tool.icon" />
           </Button>
         </template>
         <DropdownMenu v-if="moreTools.length">
           <DropdownMenuTrigger as-child>
             <Button variant="ghost" size="icon-sm" class="flex-none" :aria-label="t('editor.moreFormatting')" :title="t('editor.moreFormatting')">
-              <Ellipsis :stroke-width="1.5" />
+              <Ellipsis />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
             <DropdownMenuItem v-for="tool in moreTools" :key="tool.label" @select="tool.run()">
-              <component :is="tool.icon" :stroke-width="1.5" />
+              <component :is="tool.icon" />
               {{ tool.label }}
-              <Check v-if="tool.active" class="ml-auto" :stroke-width="1.5" :aria-label="t('editor.on')" />
+              <Check v-if="tool.active" class="ml-auto" :aria-label="t('editor.on')" />
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -606,7 +606,7 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
           :title="t('editor.saveAsNote')"
           @click="emit('saveAsNote')"
         >
-          <FilePlus :stroke-width="1.5" />
+          <FilePlus />
         </Button>
         <Button
           variant="ghost"
@@ -618,7 +618,7 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
           :title="t('editor.clear')"
           @click="emit('clear')"
         >
-          <Eraser :stroke-width="1.5" />
+          <Eraser />
         </Button>
       </template>
       <Button
@@ -632,8 +632,8 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
         :title="entry?.pinned ? t('editor.unpin') : t('editor.pin')"
         @click="emit('togglePin')"
       >
-        <PinOff v-if="entry?.pinned" :stroke-width="1.5" />
-        <Pin v-else :stroke-width="1.5" />
+        <PinOff v-if="entry?.pinned" />
+        <Pin v-else />
       </Button>
     </header>
     <div v-if="store.deleted.value" class="bg-muted flex flex-none items-center gap-2 border-b px-3 py-1.5 text-sm" role="status" data-testid="deleted-banner">

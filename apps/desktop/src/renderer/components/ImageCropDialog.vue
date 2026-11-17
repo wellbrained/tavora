@@ -216,7 +216,7 @@ function onOpenChange(value: boolean) {
 
       <div class="flex items-center gap-3">
         <Button size="icon-sm" variant="ghost" :aria-label="t('crop.smaller')" :title="t('crop.smaller')" :disabled="share <= MIN_SHARE + 0.001" @click="resize(frame.side / 1.25)">
-          <Minus :stroke-width="1.5" />
+          <Minus />
         </Button>
         <Slider
           class="min-w-0 flex-1"
@@ -229,7 +229,7 @@ function onOpenChange(value: boolean) {
           @update:model-value="$event?.[0] !== undefined && resize($event[0] * maxSide)"
         />
         <Button size="icon-sm" variant="ghost" :aria-label="t('crop.larger')" :title="t('crop.larger')" :disabled="share >= 0.999" @click="resize(frame.side * 1.25)">
-          <Plus :stroke-width="1.5" />
+          <Plus />
         </Button>
       </div>
 

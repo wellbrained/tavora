@@ -27,7 +27,7 @@ const tip = { stopped: "overlays.button.startTip", live: "overlays.button.liveTi
     data-testid="overlay-live"
     @click="act({ type: 'set-game-overlays-hidden', hidden: !overlays.hidden })"
   >
-    <component :is="overlays.hidden ? Play : Square" class="fill-current" :stroke-width="1.5" />
+    <component :is="overlays.hidden ? Play : Square" class="fill-current" />
     {{ t(overlays.hidden ? "overlays.button.start" : "overlays.button.stop") }}
     <span v-if="look === 'ready'" class="bg-info ml-0.5 size-2 flex-none rounded-full" aria-hidden="true" />
     <span v-else-if="look === 'live'" class="bg-destructive ml-0.5 size-2 flex-none animate-pulse rounded-full motion-reduce:animate-none" aria-hidden="true" />

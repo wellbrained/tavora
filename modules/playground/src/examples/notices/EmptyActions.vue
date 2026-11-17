@@ -15,7 +15,7 @@ const START: ActionEntry[] = [
 <template>
   <div class="flex flex-col gap-2">
     <EmptyState title="No build yet" description="Start in one of these ways.">
-      <template #icon><StickyNote :stroke-width="1.5" /></template>
+      <template #icon><StickyNote /></template>
       <template #action><ActionList :entries="START" @select="started = $event" /></template>
     </EmptyState>
     <p class="text-muted-foreground text-xs" data-testid="action-list-picked">Picked: {{ started || "nothing yet" }}</p>

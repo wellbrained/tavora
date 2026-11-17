@@ -166,7 +166,7 @@ function browse() {
       </div>
 
       <p v-if="view.status === 'checking'" class="text-muted-foreground flex items-center gap-2 text-sm" role="status" data-testid="publish-checking">
-        <Loader class="size-4 animate-spin motion-reduce:animate-none" :stroke-width="1.5" aria-hidden="true" />
+        <Loader class="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
         {{ t("publish.checking") }}
       </p>
 
@@ -177,7 +177,7 @@ function browse() {
             <template v-if="size">{{ size }}</template><template v-if="size && view.builtAt"> · </template><template v-if="view.builtAt">{{ t("publish.built", { time: formatAgo(view.builtAt) }) }}</template>
           </li>
           <li v-if="view.sourceNewer" class="text-foreground flex gap-2" data-testid="publish-source-newer">
-            <TriangleAlert class="text-warning mt-0.5 size-4 flex-none" :stroke-width="1.5" /> {{ t("publish.sourceNewer") }}
+            <TriangleAlert class="text-warning mt-0.5 size-4 flex-none" /> {{ t("publish.sourceNewer") }}
           </li>
         </ul>
 
@@ -214,7 +214,7 @@ function browse() {
 
         <!-- What stops it, each with its fix. -->
         <section v-if="versionProblem" class="flex flex-col gap-3 rounded-lg border p-3" data-testid="publish-problem-version">
-          <p class="flex gap-2 text-sm"><CircleAlert class="text-warning mt-0.5 size-4 flex-none" :stroke-width="1.5" /> {{ versionProblem.listed ? t("publish.versionTaken", { version: versionProblem.listed }) : t("publish.versionPrerelease", { version: module?.version ?? "" }) }}</p>
+          <p class="flex gap-2 text-sm"><CircleAlert class="text-warning mt-0.5 size-4 flex-none" /> {{ versionProblem.listed ? t("publish.versionTaken", { version: versionProblem.listed }) : t("publish.versionPrerelease", { version: module?.version ?? "" }) }}</p>
           <RadioGroup v-model="version" class="gap-2 pl-6">
             <Label v-for="kind in ['patch', 'minor', 'major'] as const" :key="kind" class="font-normal">
               <RadioGroupItem :value="versionProblem.next[kind]" :data-testid="`publish-next-${kind}`" />
@@ -232,7 +232,7 @@ function browse() {
 
         <section v-if="prefixProblem" class="flex flex-col gap-2 rounded-lg border p-3" data-testid="publish-problem-prefix">
           <p class="flex gap-2 text-sm">
-            <CircleAlert class="text-warning mt-0.5 size-4 flex-none" :stroke-width="1.5" /> {{ t(`prefix.state.${prefixProblem.state}`, { prefix: prefixProblem.prefix }) }}
+            <CircleAlert class="text-warning mt-0.5 size-4 flex-none" /> {{ t(`prefix.state.${prefixProblem.state}`, { prefix: prefixProblem.prefix }) }}
           </p>
           <form class="flex flex-col gap-1 pl-6" @submit.prevent="pressId">
             <label class="text-muted-foreground text-sm" for="publish-new-id">{{ t("publish.prefixProblem") }}</label>
@@ -245,10 +245,10 @@ function browse() {
         </section>
 
         <p v-if="notBuilt" class="flex gap-2 rounded-lg border p-3 text-sm" data-testid="publish-problem-not-built">
-          <CircleAlert class="text-warning mt-0.5 size-4 flex-none" :stroke-width="1.5" /> {{ t("publish.notBuilt") }}
+          <CircleAlert class="text-warning mt-0.5 size-4 flex-none" /> {{ t("publish.notBuilt") }}
         </p>
         <p v-if="invalid" class="flex gap-2 rounded-lg border p-3 text-sm" data-testid="publish-problem-invalid">
-          <CircleAlert class="text-warning mt-0.5 size-4 flex-none" :stroke-width="1.5" /> {{ invalid.message }}
+          <CircleAlert class="text-warning mt-0.5 size-4 flex-none" /> {{ invalid.message }}
         </p>
 
         <div v-if="view.newPrefix && !view.problems.length" class="flex flex-wrap items-center gap-2 text-sm" data-testid="publish-new-prefix">

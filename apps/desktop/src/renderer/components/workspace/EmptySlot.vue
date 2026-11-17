@@ -29,10 +29,10 @@ function remove() {
       data-testid="slot-add-module"
       @click="dialog = { kind: 'add-module', slot: params.group.id }"
     >
-      <Plus :stroke-width="1.5" /> {{ t("workspace.addModule") }}
+      <Plus /> {{ t("workspace.addModule") }}
     </Button>
     <Button variant="danger" size="sm" data-testid="slot-remove" @click="remove">
-      <X :stroke-width="1.5" /> {{ t("workspace.removeSlot") }}
+      <X /> {{ t("workspace.removeSlot") }}
     </Button>
   </div>
 </template>

@@ -29,7 +29,7 @@ const emit = defineEmits<{ close: [] }>();
           <DialogTitle class="truncate text-lg font-semibold">{{ t("settings.modules.notesTitle", { name: module.name }) }}</DialogTitle>
           <span class="text-muted-foreground text-sm tabular-nums">{{ module.version }}</span>
         </div>
-        <Button variant="ghost" size="icon" class="flex-none" :aria-label="t('common.close')" :title="t('common.close')" @click="emit('close')"><X :stroke-width="1.5" /></Button>
+        <Button variant="ghost" size="icon" class="flex-none" :aria-label="t('common.close')" :title="t('common.close')" @click="emit('close')"><X /></Button>
       </header>
       <div class="min-h-0 flex-1 overflow-y-auto p-6">
         <ModuleNotes :module-id="module.id" :version="module.version" :unseen="module.notes.unseen" />

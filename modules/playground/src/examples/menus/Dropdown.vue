@@ -26,7 +26,7 @@ const sort = ref("recent");
   <div class="flex flex-wrap items-center gap-2">
     <DropdownMenu>
       <DropdownMenuTrigger as-child>
-        <Button variant="secondary"><MoreHorizontal :stroke-width="1.5" /> Actions</Button>
+        <Button variant="secondary"><MoreHorizontal /> Actions</Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" class="w-56">
         <DropdownMenuLabel>Note</DropdownMenuLabel>
@@ -55,7 +55,7 @@ const sort = ref("recent");
     </DropdownMenu>
     <DropdownMenu>
       <DropdownMenuTrigger as-child>
-        <Button size="icon-sm" variant="ghost" aria-label="More" title="More"><MoreHorizontal :stroke-width="1.5" /></Button>
+        <Button size="icon-sm" variant="ghost" aria-label="More" title="More"><MoreHorizontal /></Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
         <DropdownMenuItem>Open</DropdownMenuItem>

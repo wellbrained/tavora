@@ -19,7 +19,7 @@ const game = ref("satisfactory");
       <span class="text-muted-foreground text-xs">Menu</span>
       <DropdownMenu>
         <DropdownMenuTrigger as-child>
-          <Button variant="secondary" class="min-w-44 justify-between">More <ChevronDown data-icon="end" :stroke-width="1.5" /></Button>
+          <Button variant="secondary" class="min-w-44 justify-between">More <ChevronDown data-icon="end" /></Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
           <DropdownMenuItem>Rename</DropdownMenuItem>

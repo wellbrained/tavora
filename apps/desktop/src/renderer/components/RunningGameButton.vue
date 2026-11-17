@@ -118,7 +118,6 @@ watch(
               offer.kind === 'add' ? 'group-hover/run:scale-110' : 'group-hover/run:translate-x-0.5',
             )
           "
-          :stroke-width="2"
         />
       </button>
     </RailTooltip>

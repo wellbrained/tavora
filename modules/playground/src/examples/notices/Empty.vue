@@ -6,7 +6,7 @@ import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
 
 <template>
   <EmptyState title="No notes yet" description="Notes you write in this workspace show up here.">
-    <template #icon><StickyNote :stroke-width="1.5" /></template>
-    <template #action><Button><Plus :stroke-width="1.5" /> New note</Button></template>
+    <template #icon><StickyNote /></template>
+    <template #action><Button><Plus /> New note</Button></template>
   </EmptyState>
 </template>

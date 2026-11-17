@@ -19,8 +19,8 @@ onBeforeUnmount(() => clearTimeout(timer));
 
 <template>
   <div class="flex flex-wrap items-center gap-2">
-    <FadeImage :src="late" :pending="late === null" class="size-16 rounded-xl" alt="" data-testid="fade-late"><template #fallback><Puzzle class="text-muted-foreground size-6" :stroke-width="1.5" /></template></FadeImage>
-    <FadeImage src="missing.png" class="size-16 rounded-xl" alt="" data-testid="fade-failed"><template #fallback><Puzzle class="text-muted-foreground size-6" :stroke-width="1.5" /></template></FadeImage>
+    <FadeImage :src="late" :pending="late === null" class="size-16 rounded-xl" alt="" data-testid="fade-late"><template #fallback><Puzzle class="text-muted-foreground size-6" /></template></FadeImage>
+    <FadeImage src="missing.png" class="size-16 rounded-xl" alt="" data-testid="fade-failed"><template #fallback><Puzzle class="text-muted-foreground size-6" /></template></FadeImage>
     <Button size="xs" variant="secondary" @click="load">Load again</Button>
   </div>
 </template>

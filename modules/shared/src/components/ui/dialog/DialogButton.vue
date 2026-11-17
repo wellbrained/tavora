@@ -29,8 +29,8 @@ const props = defineProps<{
     :class="cn(close && '[&_svg]:hidden', props.class)"
   >
     <template v-if="!close">
-      <Loader2 v-if="loading" class="animate-spin motion-reduce:animate-none" :stroke-width="1.5" aria-hidden="true" />
-      <component :is="icon" v-else-if="icon" :stroke-width="1.5" aria-hidden="true" />
+      <Loader2 v-if="loading" class="animate-spin motion-reduce:animate-none" aria-hidden="true" />
+      <component :is="icon" v-else-if="icon" aria-hidden="true" />
     </template>
     <slot />
   </Button>

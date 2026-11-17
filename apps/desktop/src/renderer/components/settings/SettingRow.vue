@@ -44,7 +44,7 @@ const tip = useDetails();
   >
     <slot name="lead" />
     <span v-if="icon" class="bg-muted text-muted-foreground flex size-9 flex-none items-center justify-center rounded-lg border" aria-hidden="true">
-      <component :is="icon" class="size-[18px]" :stroke-width="1.75" />
+      <component :is="icon" class="size-[18px]" />
     </span>
     <div class="flex min-w-0 flex-1 basis-56 flex-col gap-0.5">
       <span class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
@@ -70,7 +70,7 @@ const tip = useDetails();
       <span v-if="details" class="sr-only">{{ details }}</span>
     </div>
     <slot />
-    <ChevronRight v-if="opens" class="text-muted-foreground size-4 flex-none" :stroke-width="1.75" aria-hidden="true" />
+    <ChevronRight v-if="opens" class="text-muted-foreground size-4 flex-none" aria-hidden="true" />
     <Tooltip v-if="details" side="right" :open="tip.open.value" :anchor="tip.anchor.value" :description="details" @dismiss="tip.hide()" />
   </component>
 </template>

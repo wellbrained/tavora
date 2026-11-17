@@ -153,14 +153,14 @@ const selected = (row: Row) => row.item !== null && (current.value?.selected.inc
             :aria-label="row.type === 'header' ? t(folded.has(row.panel) ? 'overlays.layout.expand' : 'overlays.layout.collapse', { name: row.name }) : row.add ? t('overlays.layout.addSource', { name: row.name }) : undefined"
             @click="press(row)"
           >
-            <component :is="folded.has(row.panel) ? ChevronRight : ChevronDown" v-if="row.type === 'header'" class="text-muted-foreground -ml-1 size-4 flex-none" :stroke-width="1.5" aria-hidden="true" />
-            <Link v-if="row.group" class="text-muted-foreground size-4 flex-none" :stroke-width="1.5" aria-hidden="true" />
+            <component :is="folded.has(row.panel) ? ChevronRight : ChevronDown" v-if="row.type === 'header'" class="text-muted-foreground -ml-1 size-4 flex-none" aria-hidden="true" />
+            <Link v-if="row.group" class="text-muted-foreground size-4 flex-none" aria-hidden="true" />
             <ModuleIcon v-else :module-id="row.moduleId" />
             <span class="min-w-0 flex-1">
               <span class="block truncate text-sm font-medium">{{ row.name }}</span>
               <span v-if="row.sub" class="text-muted-foreground block truncate text-xs">{{ row.sub }}</span>
             </span>
-            <Plus v-if="row.add" class="text-muted-foreground size-4 flex-none" :stroke-width="1.5" aria-hidden="true" />
+            <Plus v-if="row.add" class="text-muted-foreground size-4 flex-none" aria-hidden="true" />
           </button>
           <template v-if="row.item">
             <Button
@@ -171,7 +171,7 @@ const selected = (row: Row) => row.item !== null && (current.value?.selected.inc
               :data-testid="`layout-gear-${row.item}`"
               @click="send({ type: 'select', id: row.item }), send({ type: 'settings', id: row.item })"
             >
-              <Settings :stroke-width="1.5" />
+              <Settings />
             </Button>
             <Button
               variant="ghost"
@@ -181,8 +181,8 @@ const selected = (row: Row) => row.item !== null && (current.value?.selected.inc
               :data-testid="`layout-eye-${row.item}`"
               @click="send({ type: 'canvas-hidden', id: row.item, hidden: !row.hidden })"
             >
-              <EyeOff v-if="row.hidden" :stroke-width="1.5" />
-              <Eye v-else :stroke-width="1.5" />
+              <EyeOff v-if="row.hidden" />
+              <Eye v-else />
             </Button>
           </template>
         </li>

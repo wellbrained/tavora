@@ -275,7 +275,7 @@ function endDrag(settled: boolean) {
               @dblclick.stop
               @click.stop="close(tab.id)"
             >
-              <X class="size-3.5" :stroke-width="1.5" />
+              <X class="size-3.5" />
             </span>
           </TabsTrigger>
         </template>

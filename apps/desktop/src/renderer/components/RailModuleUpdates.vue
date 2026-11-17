@@ -25,7 +25,7 @@ const count = computed(() => state.value!.modules.filter((module) => module.upda
       @click="dialog = { kind: 'add-module', view: 'updates' }"
     >
       <RailFooterTile dot="primary">
-        <CloudDownload class="size-5" :stroke-width="1.5" />
+        <CloudDownload class="size-5" />
       </RailFooterTile>
       <span v-if="expanded" class="truncate text-sm font-medium">{{ t("workspace.updates", { count }) }}</span>
     </button>

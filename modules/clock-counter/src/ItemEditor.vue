@@ -557,7 +557,7 @@ onBeforeUnmount(saveFields);
               <SettingsRow :label="t('edit.links')" :hint="t('edit.linksHint')">
                 <DropdownMenu v-if="unlinked.length && item.links.length < MAX.links">
                   <DropdownMenuTrigger as-child>
-                    <Button variant="secondary" size="sm" data-testid="link-add"><Plus :stroke-width="1.5" /> {{ t("edit.linkAdd") }}</Button>
+                    <Button variant="secondary" size="sm" data-testid="link-add"><Plus /> {{ t("edit.linkAdd") }}</Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start">
                     <DropdownMenuLabel>{{ t("edit.linkPick") }}</DropdownMenuLabel>
@@ -575,9 +575,9 @@ onBeforeUnmount(saveFields);
                   @blur="saveLinkAmount(link.target)"
                   @keydown.enter="saveLinkAmount(link.target)"
                 />
-                <Link class="text-muted-foreground size-3.5 flex-none" :stroke-width="1.5" aria-hidden="true" />
+                <Link class="text-muted-foreground size-3.5 flex-none" aria-hidden="true" />
                 <Button variant="ghost" size="icon-sm" :aria-label="t('edit.linkRemove', { label: link.label })" :title="t('edit.linkRemove', { label: link.label })" @click="removeLink(link.target)">
-                  <X :stroke-width="1.5" />
+                  <X />
                 </Button>
               </SettingsRow>
             </template>

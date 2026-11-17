@@ -49,7 +49,7 @@ function pick(value: unknown) {
         )
       "
     >
-      <component :is="option.icon" v-if="option.icon" class="size-4" :stroke-width="1.75" aria-hidden="true" />
+      <component :is="option.icon" v-if="option.icon" class="size-4" aria-hidden="true" />
       <template v-if="!(option.icon && option.iconOnly)">{{ option.label }}</template>
     </RadioGroupItem>
   </RadioGroupRoot>

@@ -13,7 +13,7 @@ const dismissal = injectDialogDismissal()
 
 <template>
   <button type="button" data-slot="dialog-close" :disabled="dismissal.busy.value" :class="$props.class" @click="dismissal.close">
-    <slot><X :stroke-width="1.5" /></slot>
+    <slot><X /></slot>
     <span class="sr-only">{{ uiText.close }}</span>
   </button>
 </template>

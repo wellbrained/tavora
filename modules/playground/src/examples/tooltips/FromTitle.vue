@@ -7,7 +7,7 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 <template>
   <div class="flex flex-wrap items-center gap-2">
     <Button title="Readable help from the shared kit.">Hover or focus me</Button>
-    <Button size="icon" variant="secondary" aria-label="Duplicate" title="Duplicate" aria-keyshortcuts="Control+D"><Copy :stroke-width="1.5" /></Button>
+    <Button size="icon" variant="secondary" aria-label="Duplicate" title="Duplicate" aria-keyshortcuts="Control+D"><Copy /></Button>
     <span class="text-muted-foreground max-w-40 truncate rounded-md border px-2 py-1.5 text-sm" title="D:\Games\Steam\steamapps\common\Enshrouded\Saves">D:\Games\Steam\steamapps\common\Enshrouded\Saves</span>
   </div>
 </template>

@@ -110,7 +110,7 @@ const away = computed<AwayItem[]>(() => {
       <p class="text-muted-foreground mb-4">{{ t("welcome.tagline") }}</p>
       <p>{{ t("welcome.addFirst") }}</p>
       <Button data-testid="welcome-add-game" @click="dialog = { kind: 'add-game' }">
-        <Plus :stroke-width="1.5" /> {{ t("common.addGame") }}
+        <Plus /> {{ t("common.addGame") }}
       </Button>
     </section>
 
@@ -124,7 +124,7 @@ const away = computed<AwayItem[]>(() => {
 
       <div class="flex min-w-0 flex-col @min-[1048px]:col-start-1 @min-[1048px]:row-start-2">
         <label class="bg-card border-input focus-within:border-primary flex h-14 cursor-text items-center gap-3.5 rounded-xl border px-4.5 transition-colors">
-          <Search class="text-muted-foreground size-5 shrink-0" :stroke-width="1.5" />
+          <Search class="text-muted-foreground size-5 shrink-0" />
           <input
             v-model="typed"
             class="placeholder:text-muted-foreground min-w-0 flex-1 bg-transparent text-base focus-visible:outline-none"
@@ -188,7 +188,7 @@ const away = computed<AwayItem[]>(() => {
                 @click="dialog = { kind: 'add-game' }"
               >
                 <span class="border-input text-muted-foreground grid size-18 place-items-center rounded-2xl border border-dashed">
-                  <Plus class="size-6" :stroke-width="1.5" />
+                  <Plus class="size-6" />
                 </span>
                 <span class="text-muted-foreground text-sm">{{ t("common.addGame") }}</span>
               </button>

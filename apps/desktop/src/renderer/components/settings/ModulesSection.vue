@@ -164,7 +164,7 @@ function remove(module: ModuleView) {
     <ul class="flex flex-col" :aria-label="t('settings.modules.problems')" aria-live="polite" data-testid="module-problems">
       <li v-for="problem in problems" :key="problem.path" class="flex flex-wrap items-start gap-x-4 gap-y-3 border-b py-4 last:border-b-0">
         <div class="flex min-w-0 flex-1 basis-56 items-start gap-4">
-          <CircleAlert class="text-warning mt-0.5 size-4 flex-none" :stroke-width="1.5" aria-hidden="true" />
+          <CircleAlert class="text-warning mt-0.5 size-4 flex-none" aria-hidden="true" />
           <div class="flex min-w-0 flex-1 flex-col gap-2">
             <p class="text-sm leading-relaxed [overflow-wrap:anywhere]">
               <span class="font-medium">{{ problem.folder }}</span>{{ " " }}
@@ -180,7 +180,7 @@ function remove(module: ModuleView) {
           :data-testid="`open-module-problem-${problem.folder}`"
           @click="act({ type: 'open-module-problem-folder', path: problem.path })"
         >
-          <FolderOpen :stroke-width="1.5" /> {{ t("common.openFolder") }}
+          <FolderOpen /> {{ t("common.openFolder") }}
         </Button>
       </li>
     </ul>
@@ -195,13 +195,13 @@ function remove(module: ModuleView) {
     >
       <span class="flex max-w-full flex-none flex-wrap items-center justify-end gap-2">
         <Button v-if="state!.library.onlineSearch" variant="secondary" data-testid="check-module-updates" :disabled="checking" @click="checkUpdates">
-          <CloudDownload :stroke-width="1.5" /> {{ t("settings.modules.checkUpdates") }}
+          <CloudDownload /> {{ t("settings.modules.checkUpdates") }}
         </Button>
         <!-- Browsing and adding live in the module library; the rarer ways in sit behind More. -->
         <DropdownMenu>
           <DropdownMenuTrigger as-child>
             <Button variant="secondary" :aria-label="t('settings.modules.moreLabel')" data-testid="modules-more">
-              {{ t("common.more") }} <ChevronDown data-icon="end" :stroke-width="1.5" aria-hidden="true" />
+              {{ t("common.more") }} <ChevronDown data-icon="end" aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -246,7 +246,7 @@ function remove(module: ModuleView) {
             :disabled="updating !== null && updating !== module.id"
             @click="updateModule(module)"
           >
-            <CloudDownload :stroke-width="1.5" /> {{ t("settings.modules.update", { version: module.update.version }) }}
+            <CloudDownload /> {{ t("settings.modules.update", { version: module.update.version }) }}
           </ProgressButton>
           <Button
             v-if="module.notes.latest"
@@ -255,7 +255,7 @@ function remove(module: ModuleView) {
             :data-testid="`module-notes-toggle-${module.id}`"
             @click="notesOpen = module.id"
           >
-            <NotebookText :stroke-width="1.5" /> {{ t("settings.modules.notes") }}
+            <NotebookText /> {{ t("settings.modules.notes") }}
             <Badge v-if="module.notes.unseen" class="py-0 font-normal" :data-testid="`module-notes-new-${module.id}`">{{
               t("settings.modules.notesNew")
             }}</Badge>
@@ -270,7 +270,7 @@ function remove(module: ModuleView) {
                 :title="t('common.moreActions')"
                 :data-testid="`module-more-${module.id}`"
               >
-                <Ellipsis :stroke-width="1.5" />
+                <Ellipsis />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -319,10 +319,10 @@ function remove(module: ModuleView) {
       </template>
       <span class="flex max-w-full flex-none flex-wrap items-center justify-end gap-2">
         <Button variant="secondary" data-testid="change-module-files" :disabled="files.moving" @click="act({ type: 'module-files-change' })">
-          <FolderInput :stroke-width="1.5" /> {{ files.moving ? t("settings.module-files.moving") : t("settings.module-files.change") }}
+          <FolderInput /> {{ files.moving ? t("settings.module-files.moving") : t("settings.module-files.change") }}
         </Button>
         <Button variant="secondary" size="icon-sm" data-testid="open-module-files" :aria-label="t('common.openFolder')" :title="t('common.openFolder')" @click="act({ type: 'module-files-open' })">
-          <FolderOpen :stroke-width="1.5" />
+          <FolderOpen />
         </Button>
         <Button v-if="files.custom" variant="ghost" data-testid="reset-module-files" :disabled="files.moving" @click="act({ type: 'module-files-reset' })">
           {{ t("settings.module-files.default") }}
@@ -350,7 +350,7 @@ function remove(module: ModuleView) {
             </Badge>
           </span>
           <Button variant="danger" size="sm" :aria-label="t('settings.modules.deleteDataLabel', { id: entry.moduleId })" :data-testid="`delete-data-${entry.owner}-${entry.moduleId}`" @click="deleteData(entry)">
-            <Trash2 :stroke-width="1.5" /> {{ t("settings.modules.deleteData") }}
+            <Trash2 /> {{ t("settings.modules.deleteData") }}
           </Button>
         </li>
       </AnimatedList>

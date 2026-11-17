@@ -194,7 +194,7 @@ function onDialogKey(event: KeyboardEvent) {
       <DialogTitle class="sr-only">{{ mode === "game" ? t("addGame.title") : t("addPersonal.new") }}</DialogTitle>
       <DialogDescription class="sr-only">{{ mode === "game" ? t("addGame.search") : t("addPersonal.placeholder") }}</DialogDescription>
       <div class="relative flex flex-none items-center gap-3 border-b pr-3">
-        <component :is="mode === 'game' ? Search : UserRound" class="text-muted-foreground pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2" :stroke-width="1.5" />
+        <component :is="mode === 'game' ? Search : UserRound" class="text-muted-foreground pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2" />
         <input
           id="game-search"
           ref="input"
@@ -221,7 +221,7 @@ function onDialogKey(event: KeyboardEvent) {
         <Notice v-if="adder.error.value" variant="error" class="mx-4 mb-2" data-testid="add-game-error">{{ adder.error.value }}</Notice>
         <template v-if="mode === 'game'">
         <p v-if="!installedLoaded" class="text-muted-foreground flex items-center gap-2 px-5 pb-1 text-xs font-medium" role="status" data-testid="add-game-loading">
-          <Loader class="size-3.5 flex-none animate-spin motion-reduce:animate-none" :stroke-width="1.75" aria-hidden="true" />{{ t("addGame.loadingPc") }}
+          <Loader class="size-3.5 flex-none animate-spin motion-reduce:animate-none" aria-hidden="true" />{{ t("addGame.loadingPc") }}
         </p>
         <!-- While the games on this PC are found, the list drawn with made-up games; typing still searches, and its results show. -->
         <Skeleton v-if="!installedLoaded && !name" :loading="true" data-testid="add-game-skeleton">
@@ -257,12 +257,12 @@ function onDialogKey(event: KeyboardEvent) {
             @click="addPersonal"
           >
             <span class="bg-primary absolute inset-y-1.5 left-0 w-0.5 rounded-full" aria-hidden="true" />
-            <span class="bg-background text-primary flex size-7 flex-none items-center justify-center rounded-md" aria-hidden="true"><UserRound class="size-4" :stroke-width="1.75" /></span>
+            <span class="bg-background text-primary flex size-7 flex-none items-center justify-center rounded-md" aria-hidden="true"><UserRound class="size-4" /></span>
             <span class="min-w-0 flex-1">
               <span class="block truncate font-medium">{{ typedName }}</span>
               <span class="text-muted-foreground block truncate text-xs">{{ adder.busy.value ? t("addGame.adding") : t("addPersonal.new") }}</span>
             </span>
-            <Loader v-if="adder.busy.value" class="text-muted-foreground size-4 flex-none animate-spin motion-reduce:animate-none" :stroke-width="1.75" aria-hidden="true" />
+            <Loader v-if="adder.busy.value" class="text-muted-foreground size-4 flex-none animate-spin motion-reduce:animate-none" aria-hidden="true" />
             <span v-else class="text-muted-foreground flex flex-none items-center gap-1.5 text-xs" aria-hidden="true">{{ t("addGame.actionAdd") }} <Kbd class="font-sans">↵</Kbd></span>
           </button>
           <p v-else class="text-muted-foreground px-3 py-2 text-sm" data-testid="personal-type-name">{{ t("addPersonal.typeName") }}</p>

@@ -47,12 +47,12 @@ const copy = (to: string, mode: "replace" | "add") => send({ type: "copy-setup",
     @close-auto-focus="(event: Event) => (event.preventDefault(), emit('closed'))"
   >
     <ContextMenuItem v-if="shown('settings')" :disabled="row('settings').disabled" data-testid="layout-menu-settings" @select="row('settings').run()">
-      <component :is="row('settings').icon" :stroke-width="1.5" />
+      <component :is="row('settings').icon" />
       <span class="min-w-0 flex-1 truncate">{{ row("settings").label }}…</span>
     </ContextMenuItem>
     <ContextMenuSub>
       <ContextMenuSubTrigger :disabled="copyTargets.length === 0" data-testid="layout-menu-copy">
-        <Copy :stroke-width="1.5" />
+        <Copy />
         <span class="min-w-0 flex-1 truncate">{{ t("overlays.copy.button") }}</span>
       </ContextMenuSubTrigger>
       <ContextMenuSubContent class="max-h-80 max-w-72 min-w-52" data-testid="layout-menu-copy-list">
@@ -80,25 +80,25 @@ const copy = (to: string, mode: "replace" | "add") => send({ type: "copy-setup",
     <template v-for="group in ['arrange', 'align'] as const" :key="group">
       <ContextMenuSub>
         <ContextMenuSubTrigger :disabled="row(group).disabled" :data-testid="`layout-menu-${group}`">
-          <component :is="row(group).icon" :stroke-width="1.5" />
+          <component :is="row(group).icon" />
           <span class="min-w-0 flex-1 truncate">{{ row(group).label }}</span>
         </ContextMenuSubTrigger>
         <ContextMenuSubContent class="min-w-52">
           <ContextMenuItem v-for="id in row(group).children" :key="id" :disabled="row(id).disabled" :data-testid="`layout-menu-${id}`" @select="row(id).run()">
-            <component :is="row(id).icon" :stroke-width="1.5" />
+            <component :is="row(id).icon" />
             <span class="min-w-0 flex-1 truncate">{{ row(id).label }}</span>
           </ContextMenuItem>
         </ContextMenuSubContent>
       </ContextMenuSub>
     </template>
     <ContextMenuItem data-testid="layout-menu-lock" @select="row('lock').run()">
-      <component :is="row('lock').icon" :stroke-width="1.5" />
+      <component :is="row('lock').icon" />
       <span class="min-w-0 flex-1 truncate">{{ row("lock").label }}</span>
     </ContextMenuItem>
     <ContextMenuSeparator />
 
     <ContextMenuItem v-for="id in ['hide', 'reset', 'reset-size'] as const" :key="id" :disabled="row(id).disabled" :data-testid="`layout-menu-${id}`" @select="row(id).run()">
-      <component :is="row(id).icon" :stroke-width="1.5" />
+      <component :is="row(id).icon" />
       <span class="min-w-0 flex-1 truncate">{{ row(id).label }}</span>
     </ContextMenuItem>
     <ContextMenuSeparator />
@@ -108,13 +108,13 @@ const copy = (to: string, mode: "replace" | "add") => send({ type: "copy-setup",
       {{ t("overlays.layout.showToolbar") }}
     </ContextMenuCheckboxItem>
     <ContextMenuItem data-testid="layout-menu-customize" @select="emit('customize')">
-      <SlidersHorizontal :stroke-width="1.5" />
+      <SlidersHorizontal />
       <span class="min-w-0 flex-1 truncate">{{ t("overlays.layout.customizeToolbar") }}…</span>
     </ContextMenuItem>
     <ContextMenuSeparator />
 
     <ContextMenuItem variant="destructive" data-testid="layout-menu-remove" @select="row('remove').run()">
-      <component :is="row('remove').icon" :stroke-width="1.5" />
+      <component :is="row('remove').icon" />
       <span class="min-w-0 flex-1 truncate">{{ row("remove").label }}</span>
       <ContextMenuShortcut>{{ t("common.deleteKey") }}</ContextMenuShortcut>
     </ContextMenuItem>

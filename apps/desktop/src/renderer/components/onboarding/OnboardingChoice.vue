@@ -43,6 +43,6 @@ const EXAMPLES: Record<FirstChoice, string[]> = {
       </button>
     </div>
 
-    <Button variant="ghost" class="mt-5" data-testid="onboarding-back" @click="$emit('back')"><ArrowLeft :stroke-width="1.5" /> {{ t("common.back") }}</Button>
+    <Button variant="ghost" class="mt-5" data-testid="onboarding-back" @click="$emit('back')"><ArrowLeft /> {{ t("common.back") }}</Button>
   </section>
 </template>

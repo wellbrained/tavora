@@ -129,11 +129,11 @@ function onSearchKey(event: KeyboardEvent) {
   <nav v-if="collapsed && !narrow" ref="root" class="flex h-full min-w-0 flex-col items-center" :aria-label="t('list.label')" data-testid="notes-rail">
     <div class="border-primary/25 bg-primary/5 flex h-10 w-full flex-none items-center justify-center border-b">
       <Button variant="ghost" size="icon-sm" data-testid="expand-sidebar" :aria-label="t('list.expand')" :title="t('list.expand')" @click="emit('toggleCollapsed')">
-        <PanelLeftOpen :stroke-width="1.5" />
+        <PanelLeftOpen />
       </Button>
     </div>
     <Button variant="ghost" size="icon-sm" class="mt-2 flex-none" data-testid="new-note" :aria-label="t('list.new')" :title="t('list.new')" @click="emit('create')">
-      <Plus :stroke-width="1.5" />
+      <Plus />
     </Button>
     <ul role="list" class="mt-2 flex min-h-0 w-full flex-1 flex-col items-center gap-2 overflow-y-auto p-1.5">
       <li v-for="entry in railNotes" :key="entry.id">
@@ -147,13 +147,13 @@ function onSearchKey(event: KeyboardEvent) {
           :data-focus-row="entry.id"
           @click="emit('select', entry.id)"
         >
-          <NotebookPen v-if="entry.id === SCRATCHPAD_ID" class="text-primary size-4" :stroke-width="1.5" aria-hidden="true" />
+          <NotebookPen v-if="entry.id === SCRATCHPAD_ID" class="text-primary size-4" aria-hidden="true" />
           <span
             v-else
             :class="cn('flex size-6 items-center justify-center rounded-md text-xs font-semibold', entry.pinned ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground')"
             aria-hidden="true"
           >{{ initialOf(entry) ?? "·" }}</span>
-          <Pin v-if="entry.pinned" class="text-primary absolute top-0.5 right-0.5 size-2.5 fill-current" :stroke-width="1.5" aria-hidden="true" />
+          <Pin v-if="entry.pinned" class="text-primary absolute top-0.5 right-0.5 size-2.5 fill-current" aria-hidden="true" />
         </button>
       </li>
     </ul>
@@ -161,7 +161,7 @@ function onSearchKey(event: KeyboardEvent) {
   <nav v-else ref="root" class="flex h-full min-w-0 flex-col" :aria-label="t('list.label')">
     <div class="border-primary/25 bg-primary/5 flex h-10 flex-none items-center gap-1 border-b px-2">
       <label class="relative flex min-w-0 flex-1 items-center" data-focus-empty>
-        <Search class="text-muted-foreground pointer-events-none absolute left-2 size-4" :stroke-width="1.5" aria-hidden="true" />
+        <Search class="text-muted-foreground pointer-events-none absolute left-2 size-4" aria-hidden="true" />
         <input
           v-model="query"
           type="search"
@@ -179,14 +179,14 @@ function onSearchKey(event: KeyboardEvent) {
           :title="t('list.clearSearch')"
           @click="query = ''"
         >
-          <X class="size-3.5" :stroke-width="1.5" />
+          <X class="size-3.5" />
         </button>
       </label>
       <Button variant="ghost" size="icon-sm" class="flex-none" data-testid="new-note" :aria-label="t('list.new')" :title="t('list.new')" @click="emit('create')">
-        <Plus :stroke-width="1.5" />
+        <Plus />
       </Button>
       <Button v-if="!narrow" variant="ghost" size="icon-sm" class="flex-none" data-testid="collapse-sidebar" :aria-label="t('list.collapse')" :title="t('list.collapse')" @click="emit('toggleCollapsed')">
-        <PanelLeftClose :stroke-width="1.5" />
+        <PanelLeftClose />
       </Button>
     </div>
 
@@ -239,7 +239,7 @@ function onSearchKey(event: KeyboardEvent) {
         </ul>
         <div v-if="!grouped.pinned.length && !grouped.others.length" class="px-3 py-6 text-center">
           <p class="text-muted-foreground text-sm">{{ t("list.empty") }}</p>
-          <Button variant="secondary" size="sm" class="mt-3" @click="emit('create')"><Plus :stroke-width="1.5" /> {{ t("list.new") }}</Button>
+          <Button variant="secondary" size="sm" class="mt-3" @click="emit('create')"><Plus /> {{ t("list.new") }}</Button>
         </div>
       </template>
     </div>

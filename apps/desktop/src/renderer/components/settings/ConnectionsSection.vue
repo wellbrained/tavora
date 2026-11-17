@@ -84,7 +84,7 @@ function leaveBoards(module: ModuleView) {
       :highlighted="highlight === 'module-grants'"
       testid="connection-websites"
     >
-      <template #lead><span class="module-tile size-9" aria-hidden="true"><Globe class="size-4" :stroke-width="1.75" /></span></template>
+      <template #lead><span class="module-tile size-9" aria-hidden="true"><Globe class="size-4" /></span></template>
       <GrantedModules uses="network" :none="t('integrations.grants.none')" revoke-label="integrations.grants.revokeLabel" revoke-unused="integrations.grants.revokeUnused" testid="module-grant" />
     </SettingExpand>
 
@@ -97,7 +97,7 @@ function leaveBoards(module: ModuleView) {
       :highlighted="highlight === 'folder-grants'"
       testid="connection-folders"
     >
-      <template #lead><span class="module-tile size-9" aria-hidden="true"><Folder class="size-4" :stroke-width="1.75" /></span></template>
+      <template #lead><span class="module-tile size-9" aria-hidden="true"><Folder class="size-4" /></span></template>
       <GrantedModules uses="folders" :none="t('integrations.folders.none')" revoke-label="integrations.folders.revokeLabel" revoke-unused="integrations.folders.revokeUnused" testid="folder-grant">
         <template #folder="{ module, folder }">
           <Button
@@ -123,7 +123,7 @@ function leaveBoards(module: ModuleView) {
       :highlighted="highlight === 'discord-connection'"
       testid="connection-discord"
     >
-      <template #lead><span class="module-tile size-9" aria-hidden="true"><Headphones class="size-4" :stroke-width="1.75" /></span></template>
+      <template #lead><span class="module-tile size-9" aria-hidden="true"><Headphones class="size-4" /></span></template>
       <div class="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-dashed py-2">
         <span class="flex min-w-0 flex-1 basis-56 flex-col">
           <span class="font-medium">{{ t("settings.discord-connection.label") }}</span>
@@ -153,7 +153,7 @@ function leaveBoards(module: ModuleView) {
       :highlighted="highlight === 'ai-usage-accounts'"
       testid="connection-ai-usage"
     >
-      <template #lead><span class="module-tile size-9" aria-hidden="true"><Sparkles class="size-4" :stroke-width="1.75" /></span></template>
+      <template #lead><span class="module-tile size-9" aria-hidden="true"><Sparkles class="size-4" /></span></template>
       <AiUsageAccounts />
       <GrantedModules
         uses="ai-usage"
@@ -174,7 +174,7 @@ function leaveBoards(module: ModuleView) {
       :highlighted="highlight === 'system-info'"
       testid="connection-system-info"
     >
-      <template #lead><span class="module-tile size-9" aria-hidden="true"><Cpu class="size-4" :stroke-width="1.75" /></span></template>
+      <template #lead><span class="module-tile size-9" aria-hidden="true"><Cpu class="size-4" /></span></template>
       <GrantedModules
         uses="system-info"
         :none="t('integrations.systemInfo.noModules')"
@@ -193,7 +193,7 @@ function leaveBoards(module: ModuleView) {
       :highlighted="highlight === 'media'"
       testid="connection-media"
     >
-      <template #lead><span class="module-tile size-9" aria-hidden="true"><Music class="size-4" :stroke-width="1.75" /></span></template>
+      <template #lead><span class="module-tile size-9" aria-hidden="true"><Music class="size-4" /></span></template>
       <GrantedModules uses="media" :none="t('integrations.media.noModules')" revoke-label="integrations.media.revokeLabel" revoke-unused="integrations.media.revokeUnused" testid="media" />
     </SettingExpand>
 
@@ -209,7 +209,7 @@ function leaveBoards(module: ModuleView) {
       :highlighted="highlight === 'leaderboards'"
       testid="connection-leaderboards"
     >
-      <template #lead><span class="module-tile size-9" aria-hidden="true"><Trophy class="size-4" :stroke-width="1.75" /></span></template>
+      <template #lead><span class="module-tile size-9" aria-hidden="true"><Trophy class="size-4" /></span></template>
       <AnimatedList tag="ul" class="flex flex-col py-2" data-testid="leaderboards-users">
         <li v-for="module in boards" :key="module.id" class="flex items-center gap-3 border-b border-dashed py-2 last:border-b-0" :data-testid="`leaderboards-user-${module.id}`">
           <span class="module-tile size-8" aria-hidden="true">

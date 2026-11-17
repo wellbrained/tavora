@@ -573,7 +573,7 @@ onBeforeUnmount(() => {
       <DropdownMenu v-if="list.items.length">
         <DropdownMenuTrigger as-child>
           <Button variant="ghost" size="sm" :disabled="list.items.length >= MAX.items" data-testid="add">
-            <Plus :stroke-width="1.5" />
+            <Plus />
             {{ t("app.add") }}
           </Button>
         </DropdownMenuTrigger>
@@ -588,7 +588,7 @@ onBeforeUnmount(() => {
         <p class="text-muted-foreground text-sm">{{ t("app.empty") }}</p>
         <div class="flex flex-wrap justify-center gap-2">
           <Button v-for="kind in KINDS" :key="kind" variant="secondary" size="sm" :data-testid="`add-${kind}`" @click="addItem(kind)">
-            <component :is="KIND_ICONS[kind]" :stroke-width="1.5" /> {{ t(`kind.${kind}`) }}
+            <component :is="KIND_ICONS[kind]" /> {{ t(`kind.${kind}`) }}
           </Button>
         </div>
       </div>
@@ -607,7 +607,7 @@ onBeforeUnmount(() => {
         >
           <ItemCard v-if="row.type === 'item'" :item="row.item" @toggle-edit="toggleEdit(row.item.id)" />
           <section v-else class="border-border flex flex-col gap-1 rounded-lg border p-1" :class="[ROW_FADE, ACTIVE_GROUP]" :aria-label="t('app.linked')" data-testid="linked-group">
-            <Badge variant="secondary" class="gap-1 self-start" :title="t('app.linkedHint')"><Link class="size-3" :stroke-width="1.5" aria-hidden="true" />{{ t("app.linked") }}</Badge>
+            <Badge variant="secondary" class="gap-1 self-start" :title="t('app.linkedHint')"><Link class="size-3" aria-hidden="true" />{{ t("app.linked") }}</Badge>
             <ItemCard v-for="item in row.items" :key="item.id" :item="item" grouped @toggle-edit="toggleEdit(item.id)" />
           </section>
         </div>

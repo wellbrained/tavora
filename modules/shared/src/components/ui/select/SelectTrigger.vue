@@ -47,7 +47,7 @@ const soft = useSoftDisabled(
   >
     <slot />
     <SelectIcon as-child>
-      <ChevronsUpDown class="size-4 opacity-70" :stroke-width="1.5" />
+      <ChevronsUpDown class="size-4 opacity-70" />
     </SelectIcon>
   </SelectTrigger>
 </template>

@@ -28,7 +28,7 @@ function pick(id: BannerId) {
         class="focus-visible:outline-ring absolute top-2 right-2 flex items-center gap-1.5 rounded-md bg-black/45 px-2 py-1 text-xs font-medium text-white/90 backdrop-blur-sm transition-colors outline-none hover:bg-black/60 focus-visible:outline-solid focus-visible:outline-2"
         data-testid="profile-banner-change"
       >
-        <Pencil class="size-3" :stroke-width="2" aria-hidden="true" />
+        <Pencil class="size-3" aria-hidden="true" />
         {{ t("profile.banner.change") }}
       </button>
     </PopoverTrigger>
@@ -52,7 +52,7 @@ function pick(id: BannerId) {
         >
           <span :class="cn('relative block h-11 overflow-hidden rounded-md border', id === banner && 'border-primary')">
             <ProfileBanner :banner="id" :picture-url="pictureUrl" />
-            <Check v-if="id === banner" class="bg-primary-fill text-primary-fill-foreground absolute top-1 right-1 size-4 rounded-full p-0.5" :stroke-width="3" aria-hidden="true" />
+            <Check v-if="id === banner" class="bg-primary-fill text-primary-fill-foreground absolute top-1 right-1 size-4 rounded-full p-0.5 stroke-2" aria-hidden="true" />
           </span>
           <span :class="cn('truncate px-0.5 text-xs', id === banner ? 'text-foreground font-medium' : 'text-muted-foreground')">{{ t(`profile.banner.${id}` as MessageKey) }}</span>
         </button>

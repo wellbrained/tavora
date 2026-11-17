@@ -48,11 +48,11 @@ export const buttonVariants = cva(
       },
       size: {
         "default": "h-8 px-3 py-1.5",
-        "xs": "h-6 gap-1 rounded-md px-2 text-xs [&_svg:not([class*='size-'])]:size-3",
+        "xs": "h-6 gap-1 rounded-md px-2 text-xs [&_svg:not([class*='size-'])]:size-3 [&_svg:not([class*='size-'])]:stroke-2",
         "sm": "h-7 rounded-md gap-1.5 px-3",
         "lg": "h-10 rounded-md px-6",
         "icon": "size-8",
-        "icon-xs": "size-6 rounded-md [&_svg:not([class*='size-'])]:size-3.5",
+        "icon-xs": "size-6 rounded-md [&_svg:not([class*='size-'])]:size-3.5 [&_svg:not([class*='size-'])]:stroke-2",
         "icon-sm": "size-7",
         "icon-lg": "size-10",
       },

@@ -105,8 +105,8 @@ defineExpose({ startRename });
       @keydown.alt.down.prevent="emit('move', 1)"
     >
       <span class="flex w-full min-w-0 items-center gap-1.5 text-sm font-medium">
-        <NotebookPen v-if="scratchpad" class="text-muted-foreground size-3.5 flex-none" :stroke-width="1.5" aria-hidden="true" />
-        <Pin v-else-if="entry.pinned" class="text-muted-foreground size-3.5 flex-none" :stroke-width="1.5" :aria-label="t('row.pinned')" />
+        <NotebookPen v-if="scratchpad" class="text-muted-foreground size-3.5 flex-none" aria-hidden="true" />
+        <Pin v-else-if="entry.pinned" class="text-muted-foreground size-3.5 flex-none" :aria-label="t('row.pinned')" />
         <span class="truncate" data-testid="note-title">{{ title }}</span>
       </span>
       <span class="text-muted-foreground flex w-full min-w-0 gap-2 text-xs">
@@ -126,21 +126,21 @@ defineExpose({ startRename });
         :title="t('row.more')"
         data-testid="note-menu"
       >
-        <Ellipsis class="size-4" :stroke-width="1.5" />
+        <Ellipsis class="size-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem v-if="!scratchpad" data-testid="menu-rename" @select="startRenameLater">
-          <Pencil :stroke-width="1.5" />
+          <Pencil />
           {{ t("row.rename") }}
         </DropdownMenuItem>
         <DropdownMenuItem v-if="!scratchpad" data-testid="menu-pin" @select="emit('togglePin')">
-          <PinOff v-if="entry.pinned" :stroke-width="1.5" />
-          <Pin v-else :stroke-width="1.5" />
+          <PinOff v-if="entry.pinned" />
+          <Pin v-else />
           {{ entry.pinned ? t("row.unpin") : t("row.pin") }}
         </DropdownMenuItem>
         <DropdownMenuSeparator v-if="!scratchpad" />
         <DropdownMenuItem variant="destructive" data-testid="menu-delete" @select="emit('remove')">
-          <Trash2 :stroke-width="1.5" />
+          <Trash2 />
           {{ scratchpad ? t("row.clearScratchpad") : t("row.delete") }}
         </DropdownMenuItem>
       </DropdownMenuContent>

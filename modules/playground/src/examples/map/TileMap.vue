@@ -135,7 +135,7 @@ function toggleDone() {
         </Button>
       </template>
       <template #pin="{ pin }">
-        <component :is="ICONS[kindOf.get(pin.id) ?? 'tower']" class="text-foreground size-5" :stroke-width="1.5" aria-hidden="true" />
+        <component :is="ICONS[kindOf.get(pin.id) ?? 'tower']" class="text-foreground size-5" aria-hidden="true" />
       </template>
       <template v-if="showFog" #layer>
         <img :src="fog()" alt="" draggable="false" class="size-full max-w-none select-none">

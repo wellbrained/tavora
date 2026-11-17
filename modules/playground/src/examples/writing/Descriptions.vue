@@ -22,8 +22,8 @@ const PAIRS: { good: Line; bad: Line }[] = [
 <template>
   <div class="flex flex-col gap-4">
     <div class="text-muted-foreground hidden grid-cols-2 gap-6 text-xs font-medium sm:grid">
-      <span class="text-success flex items-center gap-1.5"><Check class="size-4" :stroke-width="1.5" /> {{ t("demo.do") }}</span>
-      <span class="text-destructive flex items-center gap-1.5"><X class="size-4" :stroke-width="1.5" /> {{ t("demo.dont") }}</span>
+      <span class="text-success flex items-center gap-1.5"><Check class="size-4" /> {{ t("demo.do") }}</span>
+      <span class="text-destructive flex items-center gap-1.5"><X class="size-4" /> {{ t("demo.dont") }}</span>
     </div>
     <div v-for="pair in PAIRS" :key="pair.good.en" class="grid gap-x-6 gap-y-2 sm:grid-cols-2">
       <p class="flex flex-col gap-0.5 text-sm">

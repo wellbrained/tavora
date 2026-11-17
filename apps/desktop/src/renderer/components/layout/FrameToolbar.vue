@@ -79,8 +79,8 @@ onBeforeUnmount(() => clearTimeout(delay));
             @pointerenter="show($event, action.label)"
             @pointerleave="hide"
           >
-            <component :is="action.icon" :stroke-width="1.5" />
-            <ChevronDown class="size-3" :stroke-width="1.5" />
+            <component :is="action.icon" />
+            <ChevronDown class="size-3" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent :side="side === 'top' ? 'bottom' : 'top'" align="end" class="max-h-80 min-w-52">
@@ -104,7 +104,7 @@ onBeforeUnmount(() => clearTimeout(delay));
             </template>
           </template>
           <DropdownMenuItem v-for="id in action.children" :key="id" :disabled="all[id].disabled" :data-testid="`layout-frame-${id}`" @select="all[id].run()">
-            <component :is="all[id].icon" :stroke-width="1.5" />
+            <component :is="all[id].icon" />
             {{ all[id].label }}
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -123,7 +123,7 @@ onBeforeUnmount(() => clearTimeout(delay));
         @blur="hide"
         @click="press(action)"
       >
-        <component :is="action.icon" :stroke-width="1.5" />
+        <component :is="action.icon" />
       </Button>
     </template>
     <!-- Drawn on the page, not inside the toolbar, so the layer's edge can't clip it. -->

@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.29",
+    "date": "2026-11-17",
+    "notes": [
+      "Icons all have the same line weight."
+    ]
+  },
+  {
     "version": "0.1.28",
     "date": "2026-11-17",
     "notes": [

@@ -27,7 +27,7 @@ const active = computed(() => state.value!.screen === "overlay");
       @click="act({ type: active ? 'leave-overlay-page' : 'open-overlay-page' })"
     >
       <RailFooterTile :class="active && (expanded ? 'text-primary' : 'bg-primary-fill text-primary-fill-foreground')">
-        <Layers class="size-5" :stroke-width="1.5" />
+        <Layers class="size-5" />
       </RailFooterTile>
       <span v-if="expanded" class="text-sm font-medium">{{ t("overlays.button.open") }}</span>
     </button>

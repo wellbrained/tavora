@@ -40,7 +40,7 @@ function next() {
         >
           <span :class="cn('flex items-center gap-1.5 text-sm font-medium', part !== lit && 'text-muted-foreground')">
             {{ position + 1 }} · {{ t(`onboarding.map.${part}.name`) }}
-            <Check v-if="position < index" class="text-primary size-3.5" :stroke-width="2" />
+            <Check v-if="position < index" class="text-primary size-3.5" />
           </span>
           <span v-if="part === lit" class="text-muted-foreground mt-0.5 block text-sm" data-testid="onboarding-map-text">{{ t(`onboarding.map.${part}.text`) }}</span>
         </li>

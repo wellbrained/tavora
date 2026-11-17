@@ -32,7 +32,7 @@ onBeforeUnmount(() => timers.forEach((timer) => clearInterval(timer)));
 
 <template>
   <div class="flex flex-wrap items-center gap-2">
-    <ProgressButton :status="known.status" :progress="known.progress" busy-label="Installing…" done-label="Installed" @click="installKnown"><Download :stroke-width="1.5" /> Install</ProgressButton>
+    <ProgressButton :status="known.status" :progress="known.progress" busy-label="Installing…" done-label="Installed" @click="installKnown"><Download /> Install</ProgressButton>
     <ProgressButton variant="secondary" :status="unknown" busy-label="Updating…" done-label="Updated" @click="installUnknown">Update</ProgressButton>
   </div>
 </template>

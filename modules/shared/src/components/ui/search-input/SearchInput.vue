@@ -37,7 +37,7 @@ function onKeydown(event: KeyboardEvent) {
 
 <template>
   <div data-slot="search-input" :class="cn('relative flex min-w-0 items-center', props.class)">
-    <Search class="text-muted-foreground pointer-events-none absolute left-3 size-4" :stroke-width="1.5" aria-hidden="true" />
+    <Search class="text-muted-foreground pointer-events-none absolute left-3 size-4" aria-hidden="true" />
     <Input
       ref="field"
       v-bind="$attrs"
@@ -59,7 +59,7 @@ function onKeydown(event: KeyboardEvent) {
         data-slot="search-input-clear"
         @click="clear"
       >
-        <X :stroke-width="1.5" aria-hidden="true" />
+        <X aria-hidden="true" />
       </Button>
     </Transition>
   </div>

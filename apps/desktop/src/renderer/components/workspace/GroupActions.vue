@@ -170,7 +170,7 @@ function items() {
         align="end"
         class="size-auto h-7 px-1.5 text-xs tabular-nums"
       >
-        <span class="flex items-center gap-0.5"><ChevronDown class="size-4" :stroke-width="1.5" aria-hidden="true" />{{ hidden.length }}</span>
+        <span class="flex items-center gap-0.5"><ChevronDown class="size-4" aria-hidden="true" />{{ hidden.length }}</span>
       </MenuButton>
     </template>
     <Button

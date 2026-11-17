@@ -474,7 +474,7 @@ const setPageRef = (number: number) => (element: unknown) => {
     <div v-else-if="status === 'password'" class="flex h-full items-center justify-center p-4">
       <form class="flex w-full max-w-xs flex-col gap-3" data-testid="pdf-password" @submit.prevent="answerPassword(passwordField)" @keydown.esc.prevent="answerPassword(null)">
         <div class="flex items-center gap-2">
-          <LockKeyhole class="text-muted-foreground size-4 flex-none" :stroke-width="1.5" aria-hidden="true" />
+          <LockKeyhole class="text-muted-foreground size-4 flex-none" aria-hidden="true" />
           <p class="text-sm font-medium">{{ t("pdf.password") }}</p>
         </div>
         <div class="flex flex-col gap-1.5">
@@ -506,10 +506,10 @@ const setPageRef = (number: number) => (element: unknown) => {
       <div class="bg-card flex shrink-0 flex-wrap items-center gap-1 border-b px-2 py-1" role="toolbar" :aria-label="t('pdf.toolbar')">
         <ToggleGroup :model-value="side ? [side] : []" :options="sideOptions" :label="t('pdf.pages') + ', ' + t('pdf.outline')" @update:model-value="chooseSide" />
         <Button variant="ghost" size="icon" :disabled="page <= 1" :title="t('pdf.previous')" :aria-label="t('pdf.previous')" data-testid="pdf-prev" @click="goToPage(page - 1)">
-          <ChevronUp :stroke-width="1.5" />
+          <ChevronUp />
         </Button>
         <Button variant="ghost" size="icon" :disabled="page >= count" :title="t('pdf.next')" :aria-label="t('pdf.next')" data-testid="pdf-next" @click="goToPage(page + 1)">
-          <ChevronDown :stroke-width="1.5" />
+          <ChevronDown />
         </Button>
         <form class="flex items-center gap-2" @submit.prevent="submitPage">
           <Input v-model="pageField" inputmode="numeric" class="w-14 px-1 text-center" :aria-label="t('pdf.page')" data-testid="pdf-page-input" @blur="submitPage" />
@@ -517,16 +517,16 @@ const setPageRef = (number: number) => (element: unknown) => {
         </form>
         <Separator orientation="vertical" class="data-[orientation=vertical]:h-4 mx-1" />
         <Button variant="ghost" size="icon" :title="t('pdf.zoomOut')" :aria-label="t('pdf.zoomOut')" data-testid="pdf-zoom-out" @click="setZoom(stepZoom(zoom, -1), null)">
-          <Minus :stroke-width="1.5" />
+          <Minus />
         </Button>
         <Button variant="ghost" class="text-muted-foreground w-14 px-0 tabular-nums" :title="t('pdf.zoomReset')" :aria-label="t('pdf.zoomLevel', { percent }) + ', ' + t('pdf.zoomReset')" data-testid="pdf-zoom" @click="setZoom(1, null)">{{ percent }}%</Button>
         <Button variant="ghost" size="icon" :title="t('pdf.zoomIn')" :aria-label="t('pdf.zoomIn')" data-testid="pdf-zoom-in" @click="setZoom(stepZoom(zoom, 1), null)">
-          <Plus :stroke-width="1.5" />
+          <Plus />
         </Button>
         <ToggleGroup :model-value="fit ? [fit] : []" :options="fitOptions" :label="t('pdf.fitWidth') + ', ' + t('pdf.fitPage')" @update:model-value="chooseFit" />
         <span class="flex-1" />
         <Toggle :model-value="searching" :label="t('pdf.search')" data-testid="pdf-search-toggle" @update:model-value="searching ? closeSearch() : openSearch()">
-          <Search class="size-4" :stroke-width="1.5" />
+          <Search class="size-4" />
         </Toggle>
       </div>
 
@@ -543,13 +543,13 @@ const setPageRef = (number: number) => (element: unknown) => {
         />
         <span class="text-muted-foreground min-w-16 text-sm whitespace-nowrap" role="status" data-testid="pdf-search-summary">{{ searchSummary }}</span>
         <Button variant="ghost" size="icon" :disabled="!matches.length" :title="t('pdf.searchPrevious')" :aria-label="t('pdf.searchPrevious')" data-testid="pdf-search-prev" @click="step(-1)">
-          <ChevronUp :stroke-width="1.5" />
+          <ChevronUp />
         </Button>
         <Button variant="ghost" size="icon" :disabled="!matches.length" :title="t('pdf.searchNext')" :aria-label="t('pdf.searchNext')" data-testid="pdf-search-next" @click="step(1)">
-          <ChevronDown :stroke-width="1.5" />
+          <ChevronDown />
         </Button>
         <Button variant="ghost" size="icon" :title="t('pdf.searchClose')" :aria-label="t('pdf.searchClose')" data-testid="pdf-search-close" @click="closeSearch">
-          <X :stroke-width="1.5" />
+          <X />
         </Button>
       </div>
 

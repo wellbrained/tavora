@@ -356,10 +356,10 @@ onBeforeUnmount(() => {
         data-testid="toggle-history"
         @click="choose({ history: !settings.history })"
       >
-        <History :stroke-width="1.5" />
+        <History />
       </Button>
       <Button variant="ghost" size="icon-sm" :aria-label="t('options.title')" :title="t('options.title')" data-testid="options" @click="openSettings">
-        <SettingsIcon :stroke-width="1.5" />
+        <SettingsIcon />
       </Button>
       <SettingsDialog
         v-if="settingsOpen"
@@ -410,7 +410,7 @@ onBeforeUnmount(() => {
               :disabled="!entry.text"
               @click="key('back')"
             >
-              <Delete :stroke-width="1.5" />
+              <Delete />
             </Button>
             <Button
               variant="ghost"
@@ -421,7 +421,7 @@ onBeforeUnmount(() => {
               data-testid="save-value"
               @click="valueDialog = {}"
             >
-              <BookmarkPlus :stroke-width="1.5" />
+              <BookmarkPlus />
             </Button>
             <Button
               variant="ghost"
@@ -432,8 +432,8 @@ onBeforeUnmount(() => {
               data-testid="copy"
               @click="copy"
             >
-              <Check v-if="copied" :stroke-width="1.5" />
-              <Copy v-else :stroke-width="1.5" />
+              <Check v-if="copied" />
+              <Copy v-else />
             </Button>
           </div>
         </div>
@@ -476,7 +476,7 @@ onBeforeUnmount(() => {
               data-testid="clear-history"
               @click="clearHistory"
             >
-              <Trash2 :stroke-width="1.5" />
+              <Trash2 />
             </Button>
           </div>
           <TabsContent value="history" class="flex min-h-0 flex-col" data-testid="history-list">
@@ -520,16 +520,16 @@ onBeforeUnmount(() => {
                       :title="t('values.more', { name: item.name })"
                       data-testid="value-menu"
                     >
-                      <Ellipsis :stroke-width="1.5" />
+                      <Ellipsis />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem data-testid="value-rename" @select="later(() => (valueDialog = { renaming: item.name }))">
-                      <Pencil :stroke-width="1.5" />
+                      <Pencil />
                       {{ t("values.rename") }}
                     </DropdownMenuItem>
                     <DropdownMenuItem variant="destructive" data-testid="value-delete" @select="removeValue(item.name)">
-                      <Trash2 :stroke-width="1.5" />
+                      <Trash2 />
                       {{ t("values.delete") }}
                     </DropdownMenuItem>
                   </DropdownMenuContent>

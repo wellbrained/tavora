@@ -34,7 +34,7 @@ const emit = defineEmits<{ select: [id: string] }>()
     >
       <ActionRow :description="entry.description">
         <template v-if="entry.icon || $slots.icon" #icon>
-          <slot name="icon" :entry="entry"><component :is="entry.icon" v-if="entry.icon" :stroke-width="1.6" /></slot>
+          <slot name="icon" :entry="entry"><component :is="entry.icon" v-if="entry.icon" /></slot>
         </template>
         {{ entry.label }}
       </ActionRow>

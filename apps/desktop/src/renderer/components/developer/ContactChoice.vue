@@ -91,7 +91,7 @@ const label = (option: ContactKind) => t(`contactChoice.kind.${option}` as Messa
         </SelectTrigger>
         <SelectContent align="end" class="max-w-80">
           <SelectItem v-for="option in CONTACT_KINDS" :key="option" :value="option" :description="t(`contactChoice.hint.${option}` as MessageKey)" :data-testid="`${testid}-kind-${option}`">
-            <template #thumb><component :is="ICONS[option]" :stroke-width="1.5" aria-hidden="true" /></template>
+            <template #thumb><component :is="ICONS[option]" aria-hidden="true" /></template>
             {{ label(option) }}
           </SelectItem>
         </SelectContent>
@@ -113,7 +113,7 @@ const label = (option: ContactKind) => t(`contactChoice.kind.${option}` as Messa
     </form>
     <p v-if="error" class="text-destructive text-sm" role="alert">{{ error }}</p>
     <p class="bg-background/60 text-muted-foreground flex gap-2 rounded-lg border px-3 py-2 text-sm" :data-testid="`${testid}-says`">
-      <Eye class="mt-0.5 size-4 flex-none" :stroke-width="1.5" aria-hidden="true" />
+      <Eye class="mt-0.5 size-4 flex-none" aria-hidden="true" />
       <span>{{ t(`contactChoice.says.${kind}` as MessageKey, { name }) }}</span>
     </p>
   </div>

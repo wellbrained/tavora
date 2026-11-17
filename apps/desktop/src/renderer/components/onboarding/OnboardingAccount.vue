@@ -23,7 +23,7 @@ const WITH = ["profile", "server", "rate", "messages", "ranks"] as const;
         <h2 class="mb-2 text-sm font-semibold">{{ t("onboarding.account.without") }}</h2>
         <ul class="flex flex-col gap-1.5 text-sm" data-testid="onboarding-without">
           <li v-for="item in WITHOUT" :key="item" class="flex items-start gap-2">
-            <Minus class="text-muted-foreground mt-0.5 size-4 flex-none" :stroke-width="1.5" />
+            <Minus class="text-muted-foreground mt-0.5 size-4 flex-none" />
             <span>{{ t(`onboarding.account.without.${item}`) }}</span>
           </li>
         </ul>
@@ -32,7 +32,7 @@ const WITH = ["profile", "server", "rate", "messages", "ranks"] as const;
         <h2 class="mb-2 text-sm font-semibold">{{ t("onboarding.account.with") }}</h2>
         <ul class="flex flex-col gap-1.5 text-sm" data-testid="onboarding-with">
           <li v-for="item in WITH" :key="item" class="flex items-start gap-2">
-            <Check class="text-primary mt-0.5 size-4 flex-none" :stroke-width="2" />
+            <Check class="text-primary mt-0.5 size-4 flex-none" />
             <span>{{ t(`onboarding.account.with.${item}`) }}</span>
           </li>
         </ul>
@@ -57,7 +57,7 @@ const WITH = ["profile", "server", "rate", "messages", "ranks"] as const;
 
     <!-- Stays in reach when the window is small and the page scrolls. -->
     <div class="bg-background sticky bottom-0 mt-3 flex w-full items-center justify-center gap-3 border-t py-2">
-      <Button variant="ghost" data-testid="onboarding-back" @click="$emit('back')"><ArrowLeft :stroke-width="1.5" /> {{ t("common.back") }}</Button>
+      <Button variant="ghost" data-testid="onboarding-back" @click="$emit('back')"><ArrowLeft /> {{ t("common.back") }}</Button>
       <Button variant="secondary" data-testid="onboarding-later" @click="$emit('later')">{{ t("onboarding.notNow") }}</Button>
       <Button data-testid="onboarding-sign-in" @click="$emit('signIn')">{{ t("onboarding.account.signIn") }}</Button>
     </div>

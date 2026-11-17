@@ -178,8 +178,8 @@
     },
     "modules/playground/src/examples/buttons/ToggleButtons.vue": {
       "kit-control": {
-        "<Button size=\"icon-sm\" variant=\"ghost\" aria-label=\"Bold\" title=\"Bold\" :aria-pressed=\"true\" class=\"bg-secondary\"><Bold :stroke-width=\"1.5\" /></Button>": 1,
-        "<Button size=\"icon-sm\" variant=\"ghost\" aria-label=\"Italic\" title=\"Italic\" :aria-pressed=\"false\"><Italic :stroke-width=\"1.5\" /></Button>": 1
+        "<Button size=\"icon-sm\" variant=\"ghost\" aria-label=\"Bold\" title=\"Bold\" :aria-pressed=\"true\" class=\"bg-secondary\"><Bold /></Button>": 1,
+        "<Button size=\"icon-sm\" variant=\"ghost\" aria-label=\"Italic\" title=\"Italic\" :aria-pressed=\"false\"><Italic /></Button>": 1
       }
     },
     "modules/playground/src/examples/colour-stars/CustomColour.vue": {

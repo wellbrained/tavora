@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.81",
+    date: "2026-11-17",
+    title: "Even icons",
+    notes: [
+      "Icons all have the same line weight now, small ones included.",
+    ],
+    prs: [
+      { number: 818, title: "Theme: one line weight for every icon" },
+    ],
+    tags: ["accounts", "calculator", "catalog", "clock-counter", "games", "icons", "modules", "notes", "onboarding", "overlays", "pdf-viewer", "privacy", "publishing", "rail", "settings", "system-monitor", "todos", "ui-kit", "whiteboard", "workspace"],
+  },
+  {
     version: "0.24.80",
     date: "2026-11-17",
     title: "Small touches",
