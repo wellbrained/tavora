@@ -518,7 +518,8 @@ describe("open Stream overlay pages", () => {
       expect(await get(port, `/overlay/${token}/`)).toBe(200);
       world.module = { ...MODULE, root, owner: "someone-else" };
       expect(await get(port, `/overlay/${token}/`)).toBe(404);
-      world.module = { ...MODULE, root, manifest: { ...MODULE.manifest, overlay: undefined } };
+      const { overlay: _overlay, ...withoutOverlay } = MODULE.manifest;
+      world.module = { ...MODULE, root, manifest: withoutOverlay };
       expect(await get(port, `/overlay/${token}/`)).toBe(404);
       world.module = { ...MODULE, root };
       world.granted = false;
