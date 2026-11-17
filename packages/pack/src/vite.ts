@@ -7,7 +7,7 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { noticesFor } from "./notices.js";
+import { noticesFor } from "./notices.ts";
 
 export interface ModuleConfigOptions {
   /** The module's folder, where `src/` is. Default: the folder Vite runs in. */
