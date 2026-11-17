@@ -180,7 +180,7 @@ async function openHomepage() {
                   :class="index === shown ? 'border-primary' : 'border-transparent opacity-70 hover:opacity-100'"
                   :aria-label="t('catalog.screenshot', { number: index + 1, count: shotCount })" :aria-pressed="index === shown"
                   @click="shown = index"
-                ><FadeImage :src="shot" :pending="!page" alt="" class="size-full" draggable="false" /></button>
+                ><FadeImage :src="shot" :pending="!page" alt="" class="size-full rounded-sm" draggable="false" /></button>
               </div>
             </Skeleton>
           </template>

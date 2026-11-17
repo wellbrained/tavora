@@ -3,7 +3,11 @@
     "version": "0.3.20",
     "date": "2026-11-17",
     "notes": [
+<<<<<<< HEAD
       "Safety updates for parts the board is built on."
+=======
+      "Titles break more evenly, and buttons with an icon look better balanced."
+>>>>>>> origin/main
     ]
   },
   {

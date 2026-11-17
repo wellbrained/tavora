@@ -47,10 +47,10 @@ export const buttonVariants = cva(
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
-        "default": "h-8 px-3 py-1.5 has-[>svg]:px-2.5",
-        "xs": "h-6 gap-1 rounded-md px-2 text-xs has-[>svg]:px-1.5 [&_svg:not([class*='size-'])]:size-3",
-        "sm": "h-7 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5",
-        "lg": "h-10 rounded-md px-6 has-[>svg]:px-4",
+        "default": "h-8 px-3 py-1.5",
+        "xs": "h-6 gap-1 rounded-md px-2 text-xs [&_svg:not([class*='size-'])]:size-3",
+        "sm": "h-7 rounded-md gap-1.5 px-3",
+        "lg": "h-10 rounded-md px-6",
         "icon": "size-8",
         "icon-xs": "size-6 rounded-md [&_svg:not([class*='size-'])]:size-3.5",
         "icon-sm": "size-7",
@@ -86,3 +86,19 @@ export const buttonVariants = cva(
   },
 )
 export type ButtonVariants = VariantProps<typeof buttonVariants>
+
+// A button with an icon and text has 2px less room on the icon side, so it looks balanced (on lg the sides are 16px
+// and 18px). The icon is taken to lead; one after the text says so with `data-icon="end"`. Left out when the caller
+// sets its own padding (`px-0`, `pl-2`…), so a narrow or icon-only button keeps the padding it asked for.
+// Written out in full: Tailwind only finds class names that appear in the source as plain strings.
+export const BUTTON_ICON_PADDING: Partial<Record<NonNullable<ButtonVariants["size"]>, string>> = {
+  default: "has-[>svg:not([data-icon=end])]:pl-2.5 has-[>svg[data-icon=end]]:pr-2.5",
+  xs: "has-[>svg:not([data-icon=end])]:pl-1.5 has-[>svg[data-icon=end]]:pr-1.5",
+  sm: "has-[>svg:not([data-icon=end])]:pl-2.5 has-[>svg[data-icon=end]]:pr-2.5",
+  lg: "has-[>svg:not([data-icon=end])]:pl-4 has-[>svg:not([data-icon=end])]:pr-4.5 has-[>svg[data-icon=end]]:pl-4.5 has-[>svg[data-icon=end]]:pr-4",
+}
+
+/** True when a class list sets horizontal padding itself (`p-*`, `px-*`, `pl-*`, `pr-*`, `ps-*`, `pe-*`, with or without variants). */
+export function setsOwnPadding(classes: string): boolean {
+  return /(?:^|\s)!?(?:[\w-]+:)*!?p[xlrse]?-/.test(classes)
+}

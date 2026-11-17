@@ -70,7 +70,7 @@ function finishRename(save: boolean, event?: Event) {
       <DropdownMenuTrigger as-child>
         <Button type="button" variant="outline" size="sm" class="max-w-56 min-w-0 font-medium" :title="t('board.switch')" data-testid="board-menu">
           <span class="truncate" data-testid="board-name">{{ currentName }}</span>
-          <ChevronDown :stroke-width="1.5" aria-hidden="true" />
+          <ChevronDown :stroke-width="1.5" data-icon="end" aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" class="min-w-56" @close-auto-focus="keepFocus" :aria-label="t('board.switch')" data-testid="board-list">

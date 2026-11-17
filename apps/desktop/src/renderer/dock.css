@@ -78,6 +78,9 @@
   /* Framed and Folders: how far the module sits inside its frame, and the corner radius of its top edge. */
   --panel-inset: 6px;
   --panel-body-radius: 9px;
+  /* The frame's corner follows the module's: its radius is the module's plus the inset and the frame's 1px border, so
+     the band between them keeps one width around the corner. */
+  --panel-frame-radius: calc(var(--panel-body-radius) + var(--panel-inset) + 1px);
 }
 :root.dark {
   --panel-canvas: color-mix(in srgb, var(--background) 55%, black);
@@ -126,7 +129,7 @@
 }
 :root:is([data-panel-style="framed"], [data-panel-style="folders"]) .dockview-theme-tavora .dv-groupview {
   background: var(--card);
-  border-radius: 14px;
+  border-radius: var(--panel-frame-radius);
   box-shadow: var(--panel-shadow);
 }
 :root:is([data-panel-style="framed"], [data-panel-style="folders"]) .dockview-theme-tavora .dv-groupview.dv-active-group {
@@ -162,12 +165,23 @@
 :root[data-panel-style="framed"] .dockview-theme-tavora .dv-tab.dv-active-tab {
   --tab-line: inset 0 -2px 0 color-mix(in srgb, var(--foreground) 45%, transparent);
 }
+/* No line on either side of the open tab: its underline sets it apart. */
+:root[data-panel-style="framed"] .dockview-theme-tavora .dv-tab.dv-active-tab,
+:root[data-panel-style="framed"] .dockview-theme-tavora .dv-tab.dv-active-tab + .dv-tab {
+  --tab-divider: 0 0 transparent;
+}
 :root[data-panel-style="framed"] .dockview-theme-tavora .dv-groupview.dv-active-group .dv-tab.dv-active-tab {
   --tab-line: inset 0 -2px 0 var(--primary);
 }
 
 /* Folders: the open tab has the module's background and runs into it; the others are darker tabs behind it. */
 :root[data-panel-style="folders"] .dockview-theme-tavora {
+  /* A folder tab's top corners, and the curve of its foot where it meets the module. */
+  --folder-tab-radius: 8px;
+  --folder-foot-left: radial-gradient(circle at 0 0, transparent calc(var(--folder-tab-radius) - 0.5px), var(--background) var(--folder-tab-radius))
+    left bottom / var(--folder-tab-radius) var(--folder-tab-radius) no-repeat;
+  --folder-foot-right: radial-gradient(circle at 100% 0, transparent calc(var(--folder-tab-radius) - 0.5px), var(--background) var(--folder-tab-radius))
+    right bottom / var(--folder-tab-radius) var(--folder-tab-radius) no-repeat;
   --dv-activegroup-visiblepanel-tab-background-color: var(--background);
   --dv-inactivegroup-visiblepanel-tab-background-color: var(--background);
   --dv-activegroup-hiddenpanel-tab-background-color: var(--panel-folder-back);
@@ -177,12 +191,44 @@
   padding-left: 6px;
   align-items: flex-end;
 }
+/* A folder tab fills the row but for the frame's inset above it; on its own it would be only as tall as its label. */
 :root[data-panel-style="folders"] .dockview-theme-tavora .dv-tab {
-  margin-top: 4px;
-  border-radius: 8px 8px 0 0;
+  height: calc(var(--dv-tabs-and-actions-container-height) - var(--panel-inset));
+  border-radius: var(--folder-tab-radius) var(--folder-tab-radius) 0 0;
 }
 :root[data-panel-style="folders"] .dockview-theme-tavora .dv-tab:not(.dv-active-tab) {
   margin-right: 2px;
+}
+/* The open tab bends out into the module at its foot, like a folder's tab: one pseudo-element under the tab, a radius wider
+   on each side, with a concave corner at each end. (::before, because Dockview's ::after is the focus ring.) The tab
+   after it keeps clear of the right foot, and the row leaves room for the last tab's. */
+:root[data-panel-style="folders"] .dockview-theme-tavora .dv-tabs-container {
+  padding-right: var(--folder-tab-radius);
+}
+:root[data-panel-style="folders"] .dockview-theme-tavora .dv-tab.dv-active-tab {
+  position: relative;
+}
+:root[data-panel-style="folders"] .dockview-theme-tavora .dv-tab.dv-active-tab::before {
+  content: "";
+  position: absolute;
+  top: auto;
+  bottom: 0;
+  left: calc(-1 * var(--folder-tab-radius));
+  width: calc(100% + 2 * var(--folder-tab-radius));
+  height: var(--folder-tab-radius);
+  z-index: 0;
+  pointer-events: none;
+  background: var(--folder-foot-left), var(--folder-foot-right);
+}
+:root[data-panel-style="folders"] .dockview-theme-tavora .dv-tab.dv-active-tab + .dv-tab {
+  margin-left: 6px;
+}
+/* The first tab open: its left side runs straight down into the module's edge, so neither has a corner there. */
+:root[data-panel-style="folders"] .dockview-theme-tavora .dv-tab.dv-active-tab:first-child::before {
+  background: var(--folder-foot-right);
+}
+:root[data-panel-style="folders"] .dockview-theme-tavora .dv-groupview:has(.dv-tabs-container > .dv-tab.dv-active-tab:first-child) .panel-body {
+  border-top-left-radius: 0;
 }
 
 .dockview-theme-tavora .dv-tab {
@@ -202,7 +248,9 @@
 
 /* Each group is a card: rounded, outlined and set apart from its
    neighbours by the dock's gap. The corner radius matches PANEL_RADIUS in
-   src/main/module-view.ts, which rounds the module's native view to fit. */
+   src/main/module-view.ts, which rounds the module's native view to fit (by
+   PANEL_RADIUS - 1, the --panel-body-radius of Framed and Folders, whose
+   frames round by --panel-frame-radius instead). */
 .dockview-theme-tavora .dv-groupview {
   border: 1px solid var(--border);
   border-radius: 10px;

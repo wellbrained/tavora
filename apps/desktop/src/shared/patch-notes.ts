@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.80",
+    date: "2026-11-17",
+    title: "Small touches",
+    notes: [
+      "Titles break into even lines, and descriptions no longer leave one word alone.",
+      "Buttons with an icon look better balanced, and play buttons look centred.",
+      "Pictures and covers get a faint edge, so they stand out from dark cards.",
+    ],
+    prs: [
+      { number: 815, title: "Kit: balanced titles, lighter icon side, edge around pictures" },
+    ],
+    tags: ["accounts", "calculator", "catalog", "clock-counter", "notes", "overlays", "pdf-viewer", "settings", "system-monitor", "todos", "ui-kit", "whiteboard"],
+  },
+  {
     version: "0.24.79",
     date: "2026-11-16",
     title: "Settings line up",

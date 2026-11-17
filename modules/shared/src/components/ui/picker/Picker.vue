@@ -93,7 +93,7 @@ function pick(value: unknown) {
           <span v-for="option in options" :key="option.value" class="invisible col-start-1 row-start-1 truncate" aria-hidden="true">{{ option.label }}</span>
           <span class="col-start-1 row-start-1 truncate">{{ current?.label }}</span>
         </span>
-        <ChevronsUpDown class="size-4 flex-none" :stroke-width="1.5" />
+        <ChevronsUpDown class="size-4 flex-none" :stroke-width="1.5" data-icon="end" />
       </Button>
     </PopoverTrigger>
     <PopoverPortal>

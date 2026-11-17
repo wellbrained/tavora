@@ -23,7 +23,7 @@ const props = withDefaults(
 
 <template>
   <span data-slot="game-cover" :data-busy="busy || undefined" :class="cn('relative block aspect-[2/3] w-full overflow-hidden rounded-md', props.class)" aria-hidden="true">
-    <FadeImage class="size-full" :src="src" :pending="pending" alt="" draggable="false">
+    <FadeImage class="size-full rounded-[inherit]" :src="src" :pending="pending" alt="" draggable="false">
       <template #fallback><slot name="fallback" /></template>
     </FadeImage>
     <span v-if="busy" class="bg-background/60 absolute inset-0 grid place-items-center">

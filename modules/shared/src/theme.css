@@ -9,6 +9,8 @@
 @import "./fonts.css";
 /* The curves and durations every animation uses. */
 @import "./motion.css";
+/* Balanced titles, the play triangle, the edge around pictures. */
+@import "./details.css";
 
 @custom-variant dark (&:is(.dark *));
 

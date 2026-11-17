@@ -6,6 +6,8 @@
 @import "./fonts.css";
 /* The curves and durations every animation uses (shared with the modules). */
 @import "../../../../modules/shared/src/motion.css";
+/* Balanced titles, the play triangle, the edge around pictures (shared with the modules). */
+@import "../../../../modules/shared/src/details.css";
 /* The shared controls (@tavora/official-ui) use Tailwind classes too. */
 @source "../../../../modules/shared/src/components";
 
