@@ -37,6 +37,29 @@ describe("moduleConfig", () => {
   });
 });
 
+describe("third-party notices", () => {
+  const thirdParty = (config: ReturnType<typeof moduleConfig>) =>
+    config.plugins!.find((plugin) => (plugin as { name?: string }).name === "tavora-third-party-notices") as { generateBundle(o: unknown, bundle: object): void; closeBundle(): void };
+
+  it("writes dist/THIRD_PARTY_NOTICES.txt from the packages the build bundled and the module's own third-party.json", () => {
+    writeFileSync(path.join(root, "tavora.module.json"), JSON.stringify({ name: "Demo", version: "1.2.3" }));
+    install("left-pad", { LICENSE: "Copyright (c) Someone\nMIT text" });
+    writeFileSync(path.join(root, "node_modules", "left-pad", "package.json"), JSON.stringify({ name: "left-pad", version: "1.0.0", license: "MIT" }));
+    mkdirSync(path.join(root, "third-party"));
+    writeFileSync(path.join(root, "third-party", "Fancy-OFL.txt"), "Copyright 2020 The Fancy Authors\nOFL text");
+    writeFileSync(path.join(root, "third-party.json"), JSON.stringify([{ name: "Fancy", license: "OFL-1.1", group: "fonts", files: ["third-party/Fancy-OFL.txt"] }]));
+    const plugin = thirdParty(moduleConfig({ root }));
+    plugin.generateBundle({}, { "index.js": { type: "chunk", modules: { [path.join(root, "node_modules", "left-pad", "index.js")]: {}, [path.join(root, "src", "main.ts")]: {} } }, "a.css": { type: "asset" } });
+    plugin.closeBundle();
+    const text = readFileSync(path.join(root, "dist", "THIRD_PARTY_NOTICES.txt"), "utf8");
+    expect(text).toContain("Demo 1.2.3 - third-party notices");
+    expect(text).toContain("left-pad 1.0.0 - MIT");
+    expect(text).toContain("Copyright (c) Someone");
+    expect(text).toContain("Fancy - OFL-1.1");
+    expect(text).toContain("Copyright 2020 The Fancy Authors");
+  });
+});
+
 describe("notices", () => {
   it("copies the licences after the build, from the module's folder and from the kit's", () => {
     writeFileSync(path.join(root, "LICENSE"), "mine");

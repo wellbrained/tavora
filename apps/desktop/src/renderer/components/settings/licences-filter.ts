@@ -2,7 +2,7 @@ import type { LicenceEntry, LicenceList } from "../../../shared/host-api";
 
 export type LicenceGroup = LicenceEntry["group"];
 /** The order the page lists them in. */
-export const LICENCE_GROUPS: readonly LicenceGroup[] = ["libraries", "fonts", "helper"];
+export const LICENCE_GROUPS: readonly LicenceGroup[] = ["libraries", "fonts", "data", "helper"];
 
 /** The packages whose name, version or licence has every word of the query (any case); all of them for an empty query. Grouped, in the page's order, empty groups left out. */
 export function filterLicences(list: LicenceList, query: string): { group: LicenceGroup; entries: LicenceEntry[] }[] {

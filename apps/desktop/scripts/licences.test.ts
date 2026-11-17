@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 // @ts-expect-error - plain JavaScript module run at build time
-import { ALLOWED_LICENCES, buildNotices, collectPackages, cratesFile, declaredLicence, generate, holderOf, judgeLicence, licenceFiles, lockedCrates, parseExpression, readCrates, renderNotices, repoRoot } from "./licences.mjs";
+import { ALLOWED_LICENCES, buildNotices, checkBundled, collectPackages, cratesFile, declaredLicence, generate, holderOf, judgeLicence, licenceFiles, lockedCrates, packagesInPaths, parseExpression, readCrates, renderNotices, repoRoot } from "./licences.mjs";
 
 type Pkg = { name: string; version: string; dir: string; pkg: Record<string, unknown> };
 
@@ -13,6 +13,10 @@ function fakePackage(name: string, version: string, json: Record<string, unknown
   for (const [file, text] of Object.entries(files)) writeFileSync(path.join(dir, file), text);
   return { name, version, dir, pkg: { name, version, ...json } };
 }
+
+// Walking every installed package takes a few seconds: once for the whole file.
+const real = generate();
+const realPackages = collectPackages();
 
 const MIT = "MIT License\n\nCopyright (c) 2020 Someone\n\nPermission is hereby granted";
 
@@ -112,7 +116,7 @@ describe("the notices", () => {
 });
 
 describe("what ships, from the repo as installed", () => {
-  const { notices, text, missing } = generate();
+  const { notices, text, missing } = real;
   const byName = (name: string) => notices.entries.find((entry: { name: string }) => entry.name === name);
 
   it("has no problem: every package has an allowed licence and a text", () => {
@@ -148,7 +152,7 @@ describe("what ships, from the repo as installed", () => {
   });
 
   it("walks every built-in module's dependencies", () => {
-    const { packages } = collectPackages();
+    const { packages } = realPackages;
     const from = new Set(packages.flatMap((pkg: { from: Set<string> }) => [...pkg.from]));
     for (const module of ["modules/whiteboard", "modules/notes", "modules/pdf-viewer", "apps/desktop"]) expect(from.has(module), module).toBe(true);
   });
@@ -158,12 +162,9 @@ describe("the media helper's crates", () => {
   it("are the ones in Cargo.lock, so the list can't go stale when a crate changes", () => {
     const locked = lockedCrates(readFileSync(path.join(repoRoot, "packages/media-helper/Cargo.lock"), "utf8"));
     const listed = readCrates(cratesFile).map((crate: { name: string; version: string }) => `${crate.name}@${crate.version}`);
-    // Cargo.lock also holds crates only other platforms build (filtered out of the list), never the other way round.
-    expect(locked.length).toBeGreaterThanOrEqual(listed.length);
-    expect(listed.filter((id: string) => !locked.includes(id))).toEqual([]);
-    // What Windows builds is Cargo.lock minus a short list of other platforms' crates.
-    const other = locked.filter((id: string) => !listed.includes(id));
-    expect(other.filter((id: string) => !/^(?:windows[-_]|winapi|wasi|libc|redox|cfg-if|getrandom)/.test(id))).toEqual([]);
+    // The crates Cargo.lock holds that the Windows build doesn't use are named in the file (otherPlatforms); nothing else may be missing.
+    const other: string[] = JSON.parse(readFileSync(cratesFile, "utf8")).otherPlatforms;
+    expect([...listed, ...other].sort()).toEqual(locked);
   });
 
   it("each has a licence text", () => {
@@ -188,5 +189,100 @@ describe("a NOTICE file alone", () => {
   it("is not the licence text", () => {
     const pkg = fakePackage("noticeonly", "1.0.0", { license: "Apache-2.0" }, { NOTICE: "Some notice" });
     expect(buildNotices({ packages: [pkg] }).problems.map((p: { kind: string }) => p.kind)).toEqual(["no-text"]);
+  });
+});
+
+describe("peer dependencies", () => {
+  it("are walked when they are installed, also those only named in peerDependenciesMeta (debug's supports-color)", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "licences-peers-"));
+    const write = (dir: string, json: object) => (mkdirSync(dir, { recursive: true }), writeFileSync(path.join(dir, "package.json"), JSON.stringify(json)));
+    write(path.join(root, "apps/desktop"), { name: "d", dependencies: { debug: "1" } });
+    write(path.join(root, "apps/desktop/node_modules/debug"), { name: "debug", version: "4.0.0", license: "MIT", peerDependenciesMeta: { "supports-color": { optional: true } }, peerDependencies: { other: "1" } });
+    write(path.join(root, "apps/desktop/node_modules/supports-color"), { name: "supports-color", version: "9.0.0", license: "MIT" });
+    write(path.join(root, "apps/desktop/node_modules/other"), { name: "other", version: "2.0.0", license: "MIT" });
+    mkdirSync(path.join(root, "modules"), { recursive: true });
+    expect(collectPackages(root).packages.map((p: { name: string }) => p.name)).toEqual(["debug", "other", "supports-color"]);
+  });
+
+  it("supports-color and has-flag, bundled into main through debug, are in the real notices", () => {
+    const names = real.notices.entries.map((entry: { name: string }) => entry.name);
+    expect(names).toContain("supports-color");
+    expect(names).toContain("has-flag");
+  });
+});
+
+describe("what the bundles really contain", () => {
+  const vue = realPackages.packages.find((pkg: { name: string }) => pkg.name === "vue");
+  const file = path.join(vue.dir, "dist/vue.cjs.js");
+
+  it("finds packages in file paths and module ids, through pnpm's folders and queries", () => {
+    const packages = packagesInPaths([file, `${file}?commonjs`, "\0virtual:thing", path.join(repoRoot, "apps/desktop/src/main/index.ts")]);
+    expect(packages.map((p: { name: string }) => p.name)).toEqual(["vue"]);
+  });
+
+  it("names a bundled package that the notices lack", () => {
+    expect(checkBundled([file], [])).toEqual([`vue@${vue.version}`]);
+    expect(checkBundled([file], real.notices.entries)).toEqual([]);
+  });
+});
+
+describe("fonts and data that ship without an npm package", () => {
+  const { notices, text } = real;
+  const byName = (name: string) => notices.entries.find((entry: { name: string }) => entry.name === name);
+
+  it("lists the Whiteboard's Excalidraw fonts with their licence and copyright line", () => {
+    for (const [name, license] of ([["Excalifont", "OFL-1.1"], ["Virgil", "OFL-1.1"], ["Cascadia Code", "OFL-1.1"], ["Lilita One", "OFL-1.1"], ["Nunito", "OFL-1.1"], ["Assistant", "OFL-1.1"], ["Liberation Sans", "OFL-1.1"], ["Comic Shanns", "MIT"]] as [string, string][])) {
+      const entry = byName(name);
+      expect(entry?.license, name).toBe(license);
+      expect(entry?.group, name).toBe("fonts");
+      expect(notices.texts[entry.texts[0]], name).toMatch(/Copyright/);
+    }
+    expect(text).toContain("Comic Shanns - MIT");
+  });
+
+  it("lists the filter lists as data, with their CC BY-SA 3.0 attribution", () => {
+    for (const name of ["EasyList", "EasyPrivacy"]) {
+      const entry = byName(name);
+      expect(entry?.group, name).toBe("data");
+      expect(entry?.license, name).toBe("CC-BY-SA-3.0");
+      expect(notices.texts[entry.texts[0]], name).toContain("easylist.to");
+    }
+  });
+
+  it("allows CC BY-SA for those data entries and never for code", () => {
+    const text = "Some licence text";
+    const list = [{ name: "EasyList", version: "", license: "CC-BY-SA-3.0", group: "data", texts: [text] }];
+    expect(buildNotices({ packages: [], extra: list }).problems).toEqual([]);
+    expect(buildNotices({ packages: [], extra: [{ ...list[0], name: "Other list" }] }).problems.map((p: { kind: string }) => p.kind)).toEqual(["copyleft"]);
+    expect(buildNotices({ packages: [], extra: [{ ...list[0], group: "libraries" }] }).problems.map((p: { kind: string }) => p.kind)).toEqual(["copyleft"]);
+    const pkg = fakePackage("codepkg", "1.0.0", { license: "CC-BY-SA-3.0" }, { LICENSE: text });
+    expect(buildNotices({ packages: [pkg] }).problems.map((p: { kind: string }) => p.kind)).toEqual(["copyleft"]);
+  });
+});
+
+describe("licence files in subfolders and overrides", () => {
+  it("reads the licences a package keeps one folder down (pdf.js's wasm/ and standard_fonts/)", () => {
+    const pkg = fakePackage("pdfish", "1.0.0", { license: "Apache-2.0" }, { LICENSE: "Apache" });
+    mkdirSync(path.join(pkg.dir, "wasm"));
+    writeFileSync(path.join(pkg.dir, "wasm", "LICENSE_OPENJPEG"), "OpenJPEG licence");
+    mkdirSync(path.join(pkg.dir, "node_modules"));
+    writeFileSync(path.join(pkg.dir, "node_modules", "LICENSE"), "not ours");
+    expect(licenceFiles(pkg.dir)).toEqual(["LICENSE", "wasm/LICENSE_OPENJPEG"]);
+    expect(buildNotices({ packages: [pkg] }).texts).toEqual(["Apache", "OpenJPEG licence"]);
+  });
+
+  it("uses the holder of an override, for a package or a whole scope, instead of a repository address", () => {
+    const pkg = fakePackage("@scope/thing", "1.0.0", { license: "MIT", repository: "https://github.com/o/r" });
+    const notices = buildNotices({ packages: [pkg], overrides: { "@scope/": { holder: "2022 Someone", reason: "test" } } });
+    expect(notices.problems).toEqual([]);
+    expect(notices.texts[0]).toContain("Copyright (c) 2022 Someone");
+  });
+
+  it("the real notices give Radix and Excalidraw their upstream holders", () => {
+    const { notices } = real;
+    const radix = notices.entries.find((entry: { name: string }) => entry.name === "@radix-ui/react-slot");
+    expect(notices.texts[radix.texts[0]]).toContain("Copyright (c) 2022 WorkOS");
+    const excalidraw = notices.entries.find((entry: { name: string }) => entry.name === "@excalidraw/excalidraw");
+    expect(notices.texts[excalidraw.texts[0]]).toContain("Copyright (c) 2020 Excalidraw");
   });
 });

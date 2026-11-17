@@ -1,0 +1,74 @@
+[
+  {
+    "name": "Assistant",
+    "version": "",
+    "license": "OFL-1.1",
+    "group": "fonts",
+    "files": [
+      "third-party/Assistant-OFL.txt"
+    ]
+  },
+  {
+    "name": "Cascadia Code",
+    "version": "",
+    "license": "OFL-1.1",
+    "group": "fonts",
+    "files": [
+      "third-party/Cascadia-OFL.txt"
+    ]
+  },
+  {
+    "name": "Comic Shanns",
+    "version": "",
+    "license": "MIT",
+    "group": "fonts",
+    "files": [
+      "third-party/ComicShanns-MIT.txt"
+    ]
+  },
+  {
+    "name": "Excalifont",
+    "version": "",
+    "license": "OFL-1.1",
+    "group": "fonts",
+    "files": [
+      "third-party/Excalifont-OFL.txt"
+    ]
+  },
+  {
+    "name": "Liberation Sans",
+    "version": "",
+    "license": "OFL-1.1",
+    "group": "fonts",
+    "files": [
+      "third-party/Liberation-OFL.txt"
+    ]
+  },
+  {
+    "name": "Lilita One",
+    "version": "",
+    "license": "OFL-1.1",
+    "group": "fonts",
+    "files": [
+      "third-party/Lilita-OFL.txt"
+    ]
+  },
+  {
+    "name": "Nunito",
+    "version": "",
+    "license": "OFL-1.1",
+    "group": "fonts",
+    "files": [
+      "third-party/Nunito-OFL.txt"
+    ]
+  },
+  {
+    "name": "Virgil",
+    "version": "",
+    "license": "OFL-1.1",
+    "group": "fonts",
+    "files": [
+      "third-party/Virgil-OFL.txt"
+    ]
+  }
+]

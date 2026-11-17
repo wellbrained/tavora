@@ -1,0 +1,9 @@
+EasyList
+
+Copyright The EasyList authors (https://easylist.to/).
+Licensed under the Creative Commons Attribution-ShareAlike 3.0 Unported licence (CC BY-SA 3.0):
+https://creativecommons.org/licenses/by-sa/3.0/legalcode
+(the list is dual licensed with GPLv3; Tavora uses it under CC BY-SA 3.0).
+
+Tavora's Browser panel blocks ads and trackers with this list. The list is used unchanged and compiled into
+the ad blocker's engine file when Tavora is built. Source: https://easylist.to/

@@ -80,7 +80,7 @@ export interface LicenceEntry {
   version: string;
   /** The SPDX id or expression, as the package states it. */
   license: string;
-  group: "libraries" | "fonts" | "helper";
+  group: "libraries" | "fonts" | "data" | "helper";
   /** Indexes into LicenceList.texts. */
   texts: number[];
   /** Its licence file was missing, so the text is the standard one with the holder the package names. */

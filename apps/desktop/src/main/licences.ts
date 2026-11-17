@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import type { LicenceEntry, LicenceList } from "../shared/host-api";
 
-const GROUPS = new Set(["libraries", "fonts", "helper"]);
+const GROUPS = new Set(["libraries", "fonts", "data", "helper"]);
 
 /** True for one package of the notices file; the file is ours, but a half-written one must not reach the page. */
 function isEntry(value: unknown, textCount: number): value is LicenceEntry {
