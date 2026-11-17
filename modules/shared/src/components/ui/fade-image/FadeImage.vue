@@ -45,8 +45,8 @@ function shown() {
 /** The picture is on its way (or about to be): the box is muted and empty, with no fallback yet. */
 const waiting = computed(() => props.pending || (!!props.src && !loaded.value && !failed.value));
 const showFallback = computed(() => !waiting.value && (!props.src || failed.value));
-/** The edge shows on the muted tile, or on the picture once it is there. */
-const edged = computed(() => (props.edge ?? props.fit === "cover") && (props.tile || loaded.value));
+/** The edge shows around the picture once it is there, never around an empty box or the fallback. */
+const edged = computed(() => (props.edge ?? props.fit === "cover") && loaded.value && !failed.value);
 </script>
 
 <template>

@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.22",
+    "date": "2026-11-17",
+    "notes": [
+      "Titles break more evenly, and buttons with an icon look better balanced."
+    ]
+  },
+  {
     "version": "0.1.21",
     "date": "2026-11-16",
     "notes": [

@@ -117,7 +117,8 @@ themes; anything hard-coded breaks in one of them.
   top light, Primary also a hairline contact shadow); both come from the kit. No `z-index` of your own except inside a canvas or map.
 - **Focus**: the kit controls bring the focus ring. Never remove it and never draw your own.
 - **Icons**: Lucide (`@lucide/vue`), 16 px in controls, outline only. An icon after a button's text gets `data-icon="end"`, so the
-  kit gives that side 2 px less room (an icon before the text needs nothing). A play triangle is nudged right on its own.
+  kit gives that side 2 px less room (an icon before the text needs nothing; a button with its own `px-*` keeps it). A
+  play triangle is nudged right on its own.
 - **Pictures**: a picture that fills its box gets a faint edge, so it doesn't melt into the card: `FadeImage` does it for
   `fit="cover"`, a bare `<img>` puts `tavora-picture-edge` on its rounded box. Not for icons with see-through parts.
 - **Line breaks**: headings balance their lines and paragraphs avoid a lone last word on their own (`details.css`); don't

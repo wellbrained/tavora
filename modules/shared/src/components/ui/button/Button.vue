@@ -5,7 +5,9 @@ import type { ButtonVariants } from "."
 import { Primitive } from "reka-ui"
 import { useSoftDisabled } from "../../../lib/soft-disabled"
 import { cn } from "../../../lib/utils"
-import { buttonVariants } from "."
+import { clsx } from "clsx"
+import { computed } from "vue"
+import { BUTTON_ICON_PADDING, buttonVariants, setsOwnPadding } from "."
 
 interface Props extends PrimitiveProps {
   variant?: ButtonVariants["variant"]
@@ -36,6 +38,9 @@ defineOptions({ inheritAttrs: false })
  * reader user can't reach the reason. With a hint it is `aria-disabled` instead: still hoverable and focusable, still
  * announced as off, but it takes no click, press or menu-opening key.
  */
+/** The lighter icon side, unless the caller set its own padding. */
+const iconPadding = computed(() => (setsOwnPadding(clsx(props.class)) ? undefined : BUTTON_ICON_PADDING[props.size ?? "default"]))
+
 const soft = useSoftDisabled(() => ({ disabled: props.disabled, reason: props.disabledReason, hinted: props.hinted }))
 </script>
 
@@ -47,7 +52,7 @@ const soft = useSoftDisabled(() => ({ disabled: props.disabled, reason: props.di
     :as="as"
     :as-child="asChild"
     v-bind="soft.attrs()"
-    :class="cn(buttonVariants({ variant, size, press, soft: soft.soft() }), props.class)"
+    :class="cn(buttonVariants({ variant, size, press, soft: soft.soft() }), iconPadding, props.class)"
     :disabled="soft.disabled()"
   >
     <slot />
