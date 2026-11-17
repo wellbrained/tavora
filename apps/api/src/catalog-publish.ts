@@ -6,7 +6,7 @@ import { bearerToken, fail as refuse, tooMany } from "./sign-in.ts";
 import { MAIL_RESERVED } from "./accounts.ts";
 import { CatalogError, checkCatalogZip, checkReleaseVersion, isOfficialId, type CatalogStore, type CheckedZip, type ReviewReason } from "./catalog.ts";
 import { catalogTrust, OFFICIAL_PINS, officialOn, type OfficialPins } from "./catalog-trust.ts";
-import { mailLanguage, publishedMail, type Mail, type MailLanguage, type Mailer } from "./mail.ts";
+import { mailLanguage, publishedMail, withdrawnMail, type Mail, type MailLanguage, type Mailer } from "./mail.ts";
 import { createNotifier, waitingMail, waitingNoticeMail } from "./moderation-mail.ts";
 import { reviewUpload, runChecks } from "./moderation.ts";
 import { signedStatement } from "./publishers.ts";
@@ -131,20 +131,22 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     return session ? { accountId: session.accountId, token: null } : null;
   };
 
-  // The developer hears of every publish; best effort, and never with the emails kept for sign-in codes.
-  const tellPublished = async (store: AccountStore, context: Context, accountId: string, checked: CheckedZip, token: string | null, at: number) => {
+  // The developer hears of every publish and every withdraw; best effort, and never with the emails kept for sign-in codes.
+  const tellAccount = async (store: AccountStore, context: Context, accountId: string, write: (to: string, language: MailLanguage) => Mail, at: number) => {
     const to = store.account(accountId)?.email;
     if (!mail || !to) return;
     const day = new Date(at).toISOString().slice(0, 10);
     if (mail.mailDailyLimit !== undefined && store.mailsSent(day) >= Math.max(0, mail.mailDailyLimit - MAIL_RESERVED)) return;
-    const language = mailLanguage((context.req.header("accept-language") ?? "").slice(0, 2).toLowerCase());
     try {
-      await mail.mailer.send(publishedMail(to, { id: checked.manifest.id, name: checked.manifest.name, version: checked.manifest.version }, checked.owner, token, language));
+      await mail.mailer.send(write(to, languageOf(context)));
       store.countMail(day);
     } catch {
-      // Published all the same; the email is best effort.
+      // Done all the same; the email is best effort.
     }
   };
+
+  const tellPublished = (store: AccountStore, context: Context, accountId: string, checked: CheckedZip, token: string | null, at: number) =>
+    tellAccount(store, context, accountId, (to, language) => publishedMail(to, { id: checked.manifest.id, name: checked.manifest.name, version: checked.manifest.version }, checked.owner, token, language), at);
 
   const languageOf = (context: Context): MailLanguage => mailLanguage((context.req.header("accept-language") ?? "").slice(0, 2).toLowerCase());
 
@@ -357,7 +359,7 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
   };
 
   /** Takes one of the account's waiting versions back: its row and zip go. Only the account that uploaded it can. */
-  const withdraw = (context: Context) => {
+  const withdraw = async (context: Context) => {
     const wait = limiter.check(clientKey(context.req.raw));
     if (wait > 0) return tooMany(context, wait, "Too many requests. Wait a while and try again.");
     if (!catalog || !store) return refuse(context, 503, "unavailable", "Publishing is not available right now.");
@@ -370,6 +372,8 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     const version = /^[0-9a-f]{64}$/.test(sha256) ? catalog.waitingVersion(sha256) : null;
     if (!version || version.accountId !== by.accountId) return refuse(context, 404, "not-waiting", "No version of yours with this hash is waiting for review.");
     catalog.removeWaiting(sha256);
+    // Like a publish, the account hears of it, so a withdraw with a stolen publish token doesn't go unnoticed.
+    await tellAccount(store, context, by.accountId, (to, language) => withdrawnMail(to, { id: version.id, name: version.manifest.name, version: version.version }, by.token, language), now());
     return context.json({ status: "withdrawn", id: version.id, version: version.version, sha256 });
   };
 

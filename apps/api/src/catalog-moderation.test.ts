@@ -434,6 +434,35 @@ describe("withdrawing a waiting version", () => {
     expect((await send(key, zip)).status).toBe(202);
   });
 
+  it("tells the account, saying whether it came from Tavora or which publish token", async () => {
+    const { developer, send, inbox, store, sha, app, clock } = setup({ scanner: undefined });
+    const { key, accountId, token: session } = developer("dev@example.com");
+    const first = moduleZip(key, { version: "1.0.0" });
+    const second = moduleZip(key, { version: "1.0.1" });
+    await send(key, first);
+    await send(key, second);
+    inbox.clear();
+    const withdraw = (hash: string, auth: string, language?: string) =>
+      app.request(`http://tavora.test/v1/catalog/waiting/${hash}`, { method: "DELETE", headers: { authorization: `Bearer ${auth}`, ...(language ? { "accept-language": language } : {}) } });
+
+    expect((await withdraw(sha(first), session)).status).toBe(200);
+    const fromTavora = inbox.mails()[0]!;
+    expect(fromTavora).toMatchObject({ to: "dev@example.com", subject: "Timer 1.0.0 was withdrawn" });
+    expect(fromTavora.text).toContain("(wellbrained.timer)");
+    expect(fromTavora.text).toContain("withdrawn from Tavora");
+
+    const { token } = store.createPublishToken(accountId, "GitHub Actions", clock.now)!;
+    expect((await withdraw(sha(second), token, "de-DE")).status).toBe(200);
+    const byToken = inbox.mails()[0]!;
+    expect(byToken.subject).toBe("Timer 1.0.1 wurde zurückgezogen");
+    expect(byToken.text).toContain("„GitHub Actions“");
+
+    // A refused withdraw tells no one.
+    const count = inbox.mails().length;
+    expect((await withdraw(sha(first), token)).status).toBe(404);
+    expect(inbox.mails()).toHaveLength(count);
+  });
+
   it("does not touch a listed version, and needs a sign-in", async () => {
     const { developer, send, own, catalog, sha, app } = setup();
     const { key } = developer("dev@example.com");
