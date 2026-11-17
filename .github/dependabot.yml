@@ -1,15 +1,12 @@
-# Weekly pull requests for dependencies with a security fix or a new version: the pnpm workspace (one lockfile at the
-# root) and the actions the workflows use. Minor and patch updates come grouped, so they arrive as one pull request.
+# npm: security fixes only (open-pull-requests-limit 0 turns off version updates; security updates still come), since a
+# bump in a built-in module needs its own version raised. Actions: weekly, grouped into one pull request.
 version: 2
 updates:
   - package-ecosystem: npm
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
-    groups:
-      minor-and-patch:
-        update-types: [minor, patch]
+    open-pull-requests-limit: 0
   - package-ecosystem: github-actions
     directory: /
     schedule:

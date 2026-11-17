@@ -27,7 +27,7 @@ describe("check-fuses", () => {
     expect(fuseProblems({ ...SAFE, [FuseV1Options.OnlyLoadAppFromAsar]: FuseState.DISABLE })).toEqual(["OnlyLoadAppFromAsar should be enabled, is disabled"]);
     const { [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: _gone, ...missing } = SAFE;
     expect(fuseProblems(missing)).toEqual(["EnableEmbeddedAsarIntegrityValidation should be enabled, is missing"]);
-    expect(fuseProblems({ version: "1" })).toHaveLength(6);
+    expect(fuseProblems({ version: "1" })).toHaveLength(7);
   });
 
   // Electron's own exe, where its install downloaded it (not on macOS, where the wire sits in a framework).

@@ -16,6 +16,7 @@ export const REQUIRED_FUSES = [
   ["EnableNodeOptionsEnvironmentVariable", false],
   ["EnableNodeCliInspectArguments", false],
   ["EnableCookieEncryption", true],
+  ["GrantFileProtocolExtraPrivileges", false],
   ["OnlyLoadAppFromAsar", true],
   ["EnableEmbeddedAsarIntegrityValidation", true],
 ];

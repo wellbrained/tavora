@@ -449,13 +449,13 @@ describe("withdrawing a waiting version", () => {
     const fromTavora = inbox.mails()[0]!;
     expect(fromTavora).toMatchObject({ to: "dev@example.com", subject: "Timer 1.0.0 was withdrawn" });
     expect(fromTavora.text).toContain("(wellbrained.timer)");
-    expect(fromTavora.text).toContain("withdrawn from Tavora");
+    expect(fromTavora.text).toContain("taken back in Tavora");
 
     const { token } = store.createPublishToken(accountId, "GitHub Actions", clock.now)!;
     expect((await withdraw(sha(second), token, "de-DE")).status).toBe(200);
     const byToken = inbox.mails()[0]!;
     expect(byToken.subject).toBe("Timer 1.0.1 wurde zurückgezogen");
-    expect(byToken.text).toContain("„GitHub Actions“");
+    expect(byToken.text).toContain("mit dem Veröffentlichungs-Token „GitHub Actions“ zurückgezogen.");
 
     // A refused withdraw tells no one.
     const count = inbox.mails().length;

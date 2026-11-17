@@ -1,0 +1,20 @@
+# Secret scan (CI's supply-chain job). Reviewed 2026-11-17: the allowed paths and values are test fixtures (fake keys,
+# sample tokens), Tavora's public publisher id, PoE2 image ids and an AI plan's tier name. A new finding fails the
+# scan; allow it here only once you checked it is not a real secret.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Test fixtures and sample saved data"
+paths = [
+  '''\.test\.ts$''',
+  '''^apps/desktop/src/main/saved-samples/''',
+  '''^modules/poe2-builds/src/item-art\.json$''',
+]
+
+[[allowlists]]
+description = "Public values that look like keys"
+regexes = [
+  '''64e602936197d758ddd40c90c6aa1568''',
+  '''default_claude_max_\w+''',
+]

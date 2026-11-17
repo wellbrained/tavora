@@ -54,7 +54,8 @@ jobs:
   # production dependency; package.json's pnpm.overrides lift the ones a compatible fix exists for, and
   # pnpm.auditConfig.ignoreGhsas lists the rest with no fix at all: picomatch, which Excalidraw's sass dependency pulls
   # in for its file watcher; it is not in the Whiteboard's built bundle.
-  # gitleaks scans every commit; .gitleaksignore lists the reviewed test fixtures it matches.
+  # gitleaks scans the history of the checked-out commit only (not other branches); .gitleaks.toml allows the reviewed
+  # test fixtures and public values by path or pattern, so a squash merge or another branch can't turn it red.
   supply-chain:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -77,7 +78,7 @@ jobs:
           curl -sSfL -o gitleaks.tar.gz "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
           echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum -c -
           tar -xzf gitleaks.tar.gz -C "$RUNNER_TEMP" gitleaks
-          "$RUNNER_TEMP/gitleaks" git --no-banner --redact --verbose .
+          "$RUNNER_TEMP/gitleaks" git --no-banner --redact --verbose --config .gitleaks.toml --log-opts="HEAD" .
 
   # Whether this run needs the e2e suite: always for release tags, by the checkbox when started by hand, and for a pull
   # request that changes the app, a module or the kit, the SDK, the packer, the manifest schema, the examples, the
@@ -224,6 +225,11 @@ jobs:
         run: |
           pnpm --filter @tavora/desktop package --win nsis --publish never
           if (-not (Test-Path apps/desktop/release/win-unpacked/resources/media-helper/tavora-media.exe)) { throw "tavora-media.exe is missing from the package." }
+          # Outside app.asar: the system-info worker and koffi with its native part run from app.asar.unpacked.
+          $unpacked = "apps/desktop/release/win-unpacked/resources/app.asar.unpacked"
+          foreach ($file in "out/main/system-info-worker.cjs", "node_modules/koffi/package.json", "node_modules/@koromix/koffi-win32-x64/win32_x64/koffi.node") {
+            if (-not (Test-Path "$unpacked/$file")) { throw "$file is missing from app.asar.unpacked." }
+          }
       - name: Install like a user (silent, per-user)
         shell: pwsh
         run: |
