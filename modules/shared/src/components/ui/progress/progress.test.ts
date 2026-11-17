@@ -32,7 +32,7 @@ describe("Progress", () => {
 
   it("keeps the fill and the spoken value inside the bar", async () => {
     const { bar, fill } = await mount({ modelValue: 150 })
-    expect(fill.style.transform).toBe("translateX(-0%)")
+    expect(fill.style.transform).toMatch(/^translateX\(-?0%\)$/)
     expect(bar.getAttribute("aria-valuenow")).toBe("100")
   })
 

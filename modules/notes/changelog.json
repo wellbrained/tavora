@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.6.23",
+    "date": "2026-11-17",
+    "notes": [
+      "Updated parts under the hood."
+    ]
+  },
+  {
     "version": "0.6.22",
     "date": "2026-11-17",
     "notes": [
