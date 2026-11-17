@@ -65,26 +65,26 @@ async function saveContact(contact: Contact): Promise<string | null> {
         :title="t('release.inReviewHint')"
         :data-testid="`module-pending-${id}`"
         data-status="in-review"
-        ><Hourglass class="size-4" :stroke-width="1.5" aria-hidden="true" />{{ t("release.inReview") }}</span
+        ><Hourglass class="size-4" aria-hidden="true" />{{ t("release.inReview") }}</span
       >
       <span v-else-if="waitsForPublish(entry)" class="text-warning flex flex-none items-center gap-1.5 text-sm" :data-testid="`module-pending-${id}`" :data-status="entry.status"
-        ><Upload class="size-4" :stroke-width="1.5" aria-hidden="true" />{{ entry.status === "new-version" ? t("release.newVersion") : t("release.notPublished") }}</span
+        ><Upload class="size-4" aria-hidden="true" />{{ entry.status === "new-version" ? t("release.newVersion") : t("release.notPublished") }}</span
       >
       <span v-else-if="entry.status === 'current'" class="text-muted-foreground flex flex-none items-center gap-1.5 text-sm" :data-testid="`module-published-${id}`"
-        ><CircleCheck class="size-4" :stroke-width="1.5" aria-hidden="true" />{{ t("release.published") }}</span
+        ><CircleCheck class="size-4" aria-hidden="true" />{{ t("release.published") }}</span
       >
 
       <!-- A fixed slot, so the statuses line up whether a row has Publish or not. -->
       <span v-if="accounts" class="flex w-28 flex-none justify-end">
         <Button v-if="canPublish" :variant="waitsForPublish(entry) ? 'default' : 'secondary'" :data-testid="`publish-${id}`" @click="publishModule(id)">
-          <Upload :stroke-width="1.5" /> {{ t("publish.button") }}
+          <Upload /> {{ t("publish.button") }}
         </Button>
       </span>
 
       <DropdownMenu>
         <DropdownMenuTrigger as-child>
           <Button variant="ghost" size="icon" class="flex-none" :aria-label="t('devModules.more', { name: entry.name })" :title="t('common.more')" :data-testid="`dev-module-more-${id}`">
-            <Ellipsis :stroke-width="1.5" />
+            <Ellipsis />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
@@ -104,7 +104,7 @@ async function saveContact(contact: Contact): Promise<string | null> {
         <span class="min-w-0 flex-1 truncate font-mono text-xs" :title="line.copy.project">{{ shortPath(line.copy.project) }}</span>
         <span class="text-muted-foreground flex-none text-xs tabular-nums">{{ line.copy.module.version }}</span>
         <Button variant="ghost" size="sm" class="flex-none" :data-testid="`open-copy-${line.copy.module.id}`" @click="openProject(line.copy.project)">
-          <FolderOpen :stroke-width="1.5" /> {{ t("common.openFolder") }}
+          <FolderOpen /> {{ t("common.openFolder") }}
         </Button>
       </div>
 

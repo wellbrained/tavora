@@ -439,7 +439,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
         :aria-expanded="expanded"
         @click="toggleRail"
       >
-        <component :is="expanded ? PanelLeftClose : PanelLeftOpen" class="size-[18px]" :stroke-width="1.5" />
+        <component :is="expanded ? PanelLeftClose : PanelLeftOpen" class="size-[18px]" />
       </button>
     </div>
 
@@ -645,7 +645,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
           @click="openSettings()"
         >
           <RailFooterTile>
-            <Settings class="size-5 transition-transform duration-300 group-hover:rotate-45 motion-reduce:group-hover:rotate-0" :stroke-width="1.5" />
+            <Settings class="size-5 transition-transform duration-300 group-hover:rotate-45 motion-reduce:group-hover:rotate-0" />
           </RailFooterTile>
           <span v-if="expanded" class="text-sm font-medium">{{ t("rail.settings") }}</span>
         </button>

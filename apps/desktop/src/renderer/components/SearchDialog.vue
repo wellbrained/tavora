@@ -317,7 +317,7 @@ const activeId = computed(() => {
       <DialogTitle class="sr-only">{{ t("search.title") }}</DialogTitle>
       <DialogDescription class="sr-only">{{ t("search.description") }}</DialogDescription>
       <div class="relative border-b">
-        <Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2" :stroke-width="1.5" />
+        <Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2" />
         <input
           v-model="query"
           class="placeholder:text-muted-foreground h-14 w-full bg-transparent pr-4 pl-12 text-base focus-visible:outline-none"
@@ -355,7 +355,7 @@ const activeId = computed(() => {
             @click="item.run()"
           >
             <WorkspaceIcon v-if="item.workspace" :workspace="item.workspace" :size="24" />
-            <component :is="item.icon" v-else class="text-muted-foreground size-5 flex-none" :stroke-width="1.5" />
+            <component :is="item.icon" v-else class="text-muted-foreground size-5 flex-none" />
             <span class="min-w-0 flex-1 truncate">{{ item.label }}</span>
             <span v-if="item.hint" class="text-muted-foreground flex-none text-xs">{{ item.hint }}</span>
           </div>

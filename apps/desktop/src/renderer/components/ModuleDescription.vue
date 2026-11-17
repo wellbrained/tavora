@@ -65,7 +65,7 @@ async function openLink(url: string) {
       <div class="space-y-5 text-sm leading-relaxed" data-testid="catalog-info-readme">
         <section v-for="section in sections" :key="section.id" :data-testid="`catalog-info-section-${section.id}`">
           <h4 v-if="section.id !== 'overview'" class="mb-2 flex items-center gap-2 text-base font-semibold">
-            <component :is="ICONS[section.id]" class="text-muted-foreground size-4 flex-none" :stroke-width="1.5" aria-hidden="true" />
+            <component :is="ICONS[section.id]" class="text-muted-foreground size-4 flex-none" aria-hidden="true" />
             <span>{{ t(`catalog.section.${section.id}`) }}</span>
           </h4>
           <div class="space-y-3">

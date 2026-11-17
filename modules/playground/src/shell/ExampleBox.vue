@@ -24,7 +24,7 @@ const showCode = ref(false);
         <p v-if="note" class="text-muted-foreground text-xs">{{ note }}</p>
       </div>
       <Button variant="ghost" size="xs" class="text-muted-foreground flex-none" :aria-expanded="showCode" :aria-controls="`${id}-code`" data-testid="show-code" @click="showCode = !showCode">
-        <Code :stroke-width="1.5" />
+        <Code />
         {{ showCode ? t("box.hideCode") : t("box.showCode") }}
       </Button>
     </header>

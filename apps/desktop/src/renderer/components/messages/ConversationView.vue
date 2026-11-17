@@ -168,10 +168,10 @@ async function afterChange() {
           </p>
         </div>
         <div class="flex flex-none flex-wrap gap-1">
-          <Button v-if="open && item.kind === 'developer'" size="sm" variant="ghost" data-testid="conversation-close" @click="closeOwn"><X :stroke-width="1.5" /> {{ t("inbox.close") }}</Button>
-          <Button v-if="item.kind === 'developer'" size="sm" variant="ghost" data-testid="conversation-block" :disabled="!open" @click="block"><Ban :stroke-width="1.5" /> {{ t("inbox.block") }}</Button>
-          <Button v-if="item.kind === 'developer'" size="sm" variant="ghost" data-testid="conversation-report" @click="reporting = true"><Flag :stroke-width="1.5" /> {{ t("inbox.report") }}</Button>
-          <Button size="sm" variant="ghost" data-testid="conversation-delete" @click="remove"><Trash2 :stroke-width="1.5" /> {{ t("inbox.delete") }}</Button>
+          <Button v-if="open && item.kind === 'developer'" size="sm" variant="ghost" data-testid="conversation-close" @click="closeOwn"><X /> {{ t("inbox.close") }}</Button>
+          <Button v-if="item.kind === 'developer'" size="sm" variant="ghost" data-testid="conversation-block" :disabled="!open" @click="block"><Ban /> {{ t("inbox.block") }}</Button>
+          <Button v-if="item.kind === 'developer'" size="sm" variant="ghost" data-testid="conversation-report" @click="reporting = true"><Flag /> {{ t("inbox.report") }}</Button>
+          <Button size="sm" variant="ghost" data-testid="conversation-delete" @click="remove"><Trash2 /> {{ t("inbox.delete") }}</Button>
         </div>
       </header>
 

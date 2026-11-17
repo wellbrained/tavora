@@ -87,7 +87,7 @@ onBeforeUnmount(() => dock.unregister(id, element.value!));
     role="status"
     :data-testid="`update-review-${id}`"
   >
-    <ShieldAlert :stroke-width="1.5" class="text-info size-4 flex-none" aria-hidden="true" />
+    <ShieldAlert class="text-info size-4 flex-none" aria-hidden="true" />
     <span class="min-w-0 flex-1 truncate">{{ t("grant.updateBar", { name: panel.name, version: updateWaiting.version }) }}</span>
     <Button
       size="sm"
@@ -105,7 +105,7 @@ onBeforeUnmount(() => dock.unregister(id, element.value!));
     role="status"
     :data-testid="`grant-review-${id}`"
   >
-    <ShieldAlert :stroke-width="1.5" class="text-warning size-4 flex-none" aria-hidden="true" />
+    <ShieldAlert class="text-warning size-4 flex-none" aria-hidden="true" />
     <span class="min-w-0 flex-1 truncate">{{ t("grant.reviewBar", { name: panel.name }) }}</span>
     <Button size="sm" variant="outline" class="h-7" :data-testid="`grant-review-open-${id}`" @click="dialog = { kind: 'grant', moduleId: panel.moduleId, slot: null, review: true }">
       {{ t("grant.review") }}

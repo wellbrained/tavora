@@ -17,7 +17,7 @@ const tipFor = (name: string) => ({ onPointerenter: (e: Event) => show(name, e),
 
 <template>
   <div class="flex flex-wrap items-center gap-2">
-    <Button variant="ghost" size="icon-sm" aria-label="About starting with Windows" v-bind="tipFor('help')" hinted><CircleHelp :stroke-width="1.5" /></Button>
+    <Button variant="ghost" size="icon-sm" aria-label="About starting with Windows" v-bind="tipFor('help')" hinted><CircleHelp /></Button>
     <Button variant="secondary" v-bind="tipFor('rich')" hinted>Rich tooltip</Button>
     <Button variant="outline" class="text-warning" v-bind="tipFor('warning')" hinted>92% used</Button>
   </div>

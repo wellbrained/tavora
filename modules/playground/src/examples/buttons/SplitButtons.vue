@@ -8,10 +8,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 <template>
   <div class="flex flex-wrap items-center gap-2">
     <ButtonGroup label="Add a module">
-      <Button size="sm" variant="secondary"><Plus :stroke-width="1.5" /> Add module</Button>
+      <Button size="sm" variant="secondary"><Plus /> Add module</Button>
       <DropdownMenu>
         <DropdownMenuTrigger as-child>
-          <Button size="sm" variant="secondary" class="px-1.5" aria-label="Modules in this workspace" title="Modules in this workspace"><ChevronDown :stroke-width="1.5" /></Button>
+          <Button size="sm" variant="secondary" class="px-1.5" aria-label="Modules in this workspace" title="Modules in this workspace"><ChevronDown /></Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem>Notes</DropdownMenuItem>

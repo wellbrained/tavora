@@ -350,14 +350,14 @@ async function remove() {
       <TabStrip class="min-w-0 flex-1" :tabs="tabs" :model-value="tabState.active ?? undefined" :aria-label="t('tabs.label')" @update:model-value="setActive" @close="closeOne" @reorder="reorder" @rename="rename">
         <template #add>
           <Button variant="ghost" size="icon-sm" :title="t('tabs.open')" :aria-label="t('tabs.open')" data-testid="open-file" @click="chooseFiles">
-            <FilePlus2 :stroke-width="1.5" />
+            <FilePlus2 />
           </Button>
         </template>
       </TabStrip>
       <Popover v-model:open="listOpen">
         <PopoverTrigger as-child>
           <Button variant="ghost" size="icon-sm" class="flex-none" :title="t('tabs.files')" :aria-label="t('tabs.files')" data-testid="file-list-toggle">
-            <FolderOpen :stroke-width="1.5" />
+            <FolderOpen />
           </Button>
         </PopoverTrigger>
         <PopoverContent align="end" class="w-80 max-w-[calc(100vw-1rem)]">
@@ -396,11 +396,11 @@ async function remove() {
       <ImagePane v-else-if="active" :key="active.id" :url="store.url(active.id)" :name="active.name" :view="active.view" @view="store.setView(active.id, $event)" />
       <div v-else class="flex h-full items-center justify-center p-4">
         <EmptyState :title="t('empty.title')" :description="t('empty.description')" class="w-full max-w-sm" data-testid="empty">
-          <template #icon><Upload :stroke-width="1.5" /></template>
+          <template #icon><Upload /></template>
           <template #action>
             <div class="flex flex-wrap justify-center gap-2">
-              <Button data-testid="empty-open" @click="chooseFiles"><FilePlus2 :stroke-width="1.5" />{{ t("empty.open") }}</Button>
-              <Button v-if="files.length" variant="secondary" data-testid="empty-list" @click="listOpen = true"><FolderOpen :stroke-width="1.5" />{{ t("empty.list") }}</Button>
+              <Button data-testid="empty-open" @click="chooseFiles"><FilePlus2 />{{ t("empty.open") }}</Button>
+              <Button v-if="files.length" variant="secondary" data-testid="empty-list" @click="listOpen = true"><FolderOpen />{{ t("empty.list") }}</Button>
             </div>
           </template>
         </EmptyState>

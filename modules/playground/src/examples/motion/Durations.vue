@@ -44,7 +44,7 @@ onMounted(() => {
           data-testid="demo-dot"
         />
       </div>
-      <Button variant="ghost" size="xs" @click="moved[row.token] = !moved[row.token]"><Play :stroke-width="1.5" /> {{ t("demo.motion.play") }}</Button>
+      <Button variant="ghost" size="xs" @click="moved[row.token] = !moved[row.token]"><Play /> {{ t("demo.motion.play") }}</Button>
     </div>
   </div>
 </template>

@@ -33,7 +33,7 @@ const id = useId();
       <Button disabled disabled-reason="Add a name and an icon first.">Publish</Button>
       <DropdownMenu>
         <DropdownMenuTrigger as-child>
-          <Button variant="secondary"><MoreHorizontal :stroke-width="1.5" /> Actions</Button>
+          <Button variant="secondary"><MoreHorizontal /> Actions</Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" class="w-48">
           <DropdownMenuItem>Rename</DropdownMenuItem>

@@ -5,9 +5,9 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 
 <template>
   <div class="flex flex-wrap items-center gap-2">
-    <Button><Plus :stroke-width="1.5" /> Add to-do</Button>
-    <Button variant="secondary"><Copy :stroke-width="1.5" /> Copy link</Button>
-    <Button variant="ghost" size="sm">More <ChevronRight data-icon="end" :stroke-width="1.5" /></Button>
-    <Button variant="secondary" disabled><Loader2 class="animate-spin" :stroke-width="1.5" /> Saving…</Button>
+    <Button><Plus /> Add to-do</Button>
+    <Button variant="secondary"><Copy /> Copy link</Button>
+    <Button variant="ghost" size="sm">More <ChevronRight data-icon="end" /></Button>
+    <Button variant="secondary" disabled><Loader2 class="animate-spin" /> Saving…</Button>
   </div>
 </template>

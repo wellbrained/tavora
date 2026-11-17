@@ -29,7 +29,7 @@ watch(
 <template>
   <span class="contents" data-testid="catalog-icon-box" :data-status="fetcher.state.value.status">
   <FadeImage :src="url" :pending="fetching" :edge="false" :class="[size, 'flex-none rounded-xl']" alt="" draggable="false" data-testid="catalog-icon" aria-hidden="true">
-    <template #fallback><Puzzle class="text-muted-foreground size-1/2" :stroke-width="1.5" /></template>
+    <template #fallback><Puzzle class="text-muted-foreground size-1/2" /></template>
   </FadeImage>
   </span>
 </template>

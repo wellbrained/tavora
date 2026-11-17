@@ -85,7 +85,7 @@ async function updateAll() {
     <template v-else>
       <div class="flex flex-wrap items-center gap-x-4 gap-y-2 pt-6">
         <ProgressButton :disabled="working && statusOf(ALL) === 'idle'" :status="statusOf(ALL)" :busy-label="t('addModule.updates.working')" :done-label="t('addModule.updates.done')" :failed-label="t('addModule.updates.failed')" data-testid="update-all-modules" @click="updateAll">
-          <CloudDownload :stroke-width="1.5" /> {{ t("addModule.updates.all") }}
+          <CloudDownload /> {{ t("addModule.updates.all") }}
         </ProgressButton>
         <p class="text-muted-foreground text-sm">{{ t("addModule.updates.reload") }}</p>
       </div>
@@ -112,7 +112,7 @@ async function updateAll() {
             </ProgressButton>
           </div>
           <p v-if="asksMore(module.update!)" class="text-muted-foreground flex items-center gap-2 text-sm">
-            <ShieldQuestion class="size-4 flex-none" :stroke-width="1.5" aria-hidden="true" /> {{ t("addModule.updates.askFirst") }}
+            <ShieldQuestion class="size-4 flex-none" aria-hidden="true" /> {{ t("addModule.updates.askFirst") }}
           </p>
           <div v-if="module.update!.notes.length" class="bg-muted/40 flex max-h-48 flex-col gap-3 overflow-y-auto rounded-md px-4 py-3" :data-testid="`update-notes-${module.id}`">
             <article v-for="entry in module.update!.notes" :key="entry.version">
@@ -126,7 +126,7 @@ async function updateAll() {
             </article>
           </div>
           <p v-if="errors[module.id]" class="text-destructive flex items-center gap-2 text-sm" role="alert" :data-testid="`update-error-${module.id}`">
-            <CircleAlert class="size-4 flex-none" :stroke-width="1.5" aria-hidden="true" /> {{ errors[module.id] }}
+            <CircleAlert class="size-4 flex-none" aria-hidden="true" /> {{ errors[module.id] }}
           </p>
         </li>
       </ul>

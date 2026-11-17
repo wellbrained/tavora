@@ -26,10 +26,10 @@ const examples = computed(() => state.value!.modules.filter((module) => module.o
     <ul class="flex flex-col" :aria-label="t('settings.development-examples.label')" data-testid="development-examples">
       <ModuleRow v-for="module in examples" :key="module.id" :module="module" hide-origin>
         <Button variant="ghost" :data-testid="`open-example-${module.id}`" @click="act({ type: 'open-example-folder', moduleId: module.id })">
-          <FolderOpen :stroke-width="1.5" /> {{ t("common.openFolder") }}
+          <FolderOpen /> {{ t("common.openFolder") }}
         </Button>
         <Button variant="secondary" :data-testid="`copy-example-${module.id}`" @click="dialog = { kind: 'copy-example', moduleId: module.id }">
-          <Copy :stroke-width="1.5" /> {{ t("examples.copy") }}
+          <Copy /> {{ t("examples.copy") }}
         </Button>
       </ModuleRow>
     </ul>
@@ -44,13 +44,13 @@ const examples = computed(() => state.value!.modules.filter((module) => module.o
     >
       <span class="flex flex-none flex-wrap justify-end gap-2">
         <Button variant="secondary" data-testid="developer-link-docs" @click="act({ type: 'open-developer-link', link: 'docs' })">
-          <BookOpen :stroke-width="1.5" /> {{ t("settings.devLinks.docs") }}
+          <BookOpen /> {{ t("settings.devLinks.docs") }}
         </Button>
         <Button variant="secondary" data-testid="developer-link-discussions" @click="act({ type: 'open-developer-link', link: 'discussions' })">
-          <MessageCircleQuestion :stroke-width="1.5" /> {{ t("settings.devLinks.discussions") }}
+          <MessageCircleQuestion /> {{ t("settings.devLinks.discussions") }}
         </Button>
         <Button variant="secondary" data-testid="developer-link-issue" @click="act({ type: 'open-developer-link', link: 'issue' })">
-          <Bug :stroke-width="1.5" /> {{ t("settings.devLinks.issue") }}
+          <Bug /> {{ t("settings.devLinks.issue") }}
         </Button>
       </span>
     </SettingRow>

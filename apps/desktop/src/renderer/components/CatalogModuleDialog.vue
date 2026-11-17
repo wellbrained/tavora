@@ -233,7 +233,7 @@ async function openHomepage() {
               </dl>
               <Button v-if="module.homepage" variant="link" class="mt-2 h-auto max-w-full justify-start gap-1.5 p-0" :disabled="opening" :title="module.homepage"
                 :aria-label="t('catalog.homepageLabel', { name: module.name })" data-testid="catalog-info-homepage" @click="openHomepage"
-              ><ExternalLink class="size-4 flex-none" :stroke-width="1.5" /><span class="truncate">{{ homepageText }}</span></Button>
+              ><ExternalLink class="size-4 flex-none" /><span class="truncate">{{ homepageText }}</span></Button>
             </section>
 
             <section data-testid="catalog-info-access">

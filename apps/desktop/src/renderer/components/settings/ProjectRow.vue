@@ -22,7 +22,7 @@ defineProps<{ name: string; version: string | null; status: string }>();
         <Badge variant="outline" class="text-muted-foreground py-0 font-normal">{{ t("common.local") }}</Badge>
       </span>
       <span class="flex gap-1.5 text-sm">
-        <CircleAlert class="text-warning mt-0.5 size-4 flex-none" :stroke-width="1.5" aria-hidden="true" />
+        <CircleAlert class="text-warning mt-0.5 size-4 flex-none" aria-hidden="true" />
         <span data-testid="development-project-status">{{ status }}</span>
       </span>
     </div>

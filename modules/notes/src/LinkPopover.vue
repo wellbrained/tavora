@@ -26,13 +26,13 @@ const style = computed(() => ({ left: `${Math.max(8, Math.min(props.left, window
   >
     <span class="text-muted-foreground min-w-0 flex-1 truncate" :title="href" data-testid="link-href">{{ href }}</span>
     <Button v-if="canOpen" variant="ghost" size="icon-sm" class="flex-none" data-testid="link-open" :aria-label="t('link.open')" :title="`${t('link.open')} (Ctrl+click)`" @click="emit('open')">
-      <ExternalLink :stroke-width="1.5" />
+      <ExternalLink />
     </Button>
     <Button variant="ghost" size="icon-sm" class="flex-none" data-testid="link-edit" :aria-label="t('link.edit')" :title="t('link.edit')" @click="emit('edit')">
-      <Pencil :stroke-width="1.5" />
+      <Pencil />
     </Button>
     <Button variant="ghost" size="icon-sm" class="flex-none" data-testid="link-remove" :aria-label="t('link.remove')" :title="t('link.remove')" @click="emit('remove')">
-      <Unlink :stroke-width="1.5" />
+      <Unlink />
     </Button>
   </div>
 </template>

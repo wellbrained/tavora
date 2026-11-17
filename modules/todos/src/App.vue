@@ -297,8 +297,8 @@ function dropTask() {
         data-testid="toggle-groups"
         @click="toggleAllGroups"
       >
-        <ChevronsUpDown v-if="allCollapsed" :stroke-width="1.5" />
-        <ChevronsDownUp v-else :stroke-width="1.5" />
+        <ChevronsUpDown v-if="allCollapsed" />
+        <ChevronsDownUp v-else />
       </Button>
       <!-- A switch: on keeps finished to-dos in the list. In a small panel (over the game, say) only the switch stays, so the toolbar keeps its room for the count. -->
       <label class="text-muted-foreground flex h-8 flex-none cursor-pointer items-center gap-2 rounded-md px-2 text-sm" :title="t(finished === 'stay' ? 'app.keepFinished.on' : 'app.keepFinished.off')">
@@ -306,7 +306,7 @@ function dropTask() {
         <Switch :model-value="finished === 'stay'" :aria-label="t('app.keepFinished')" data-testid="finished-mode" :data-mode="finished" @update:model-value="toggleFinished" />
       </label>
       <Button variant="ghost" size="icon-sm" :aria-label="t('settings.title')" :title="t('settings.title')" data-testid="live-settings" @click="openSettings">
-        <SettingsIcon :stroke-width="1.5" />
+        <SettingsIcon />
       </Button>
     </header>
 

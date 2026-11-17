@@ -127,7 +127,7 @@ onMounted(() => {
 <template>
   <SettingGroup v-if="!showTools">
     <div class="flex flex-wrap items-center gap-x-6 gap-y-3 py-4" data-testid="development-intro">
-      <Rocket class="text-primary size-6 flex-none" :stroke-width="1.5" aria-hidden="true" />
+      <Rocket class="text-primary size-6 flex-none" aria-hidden="true" />
       <div class="flex min-w-0 flex-1 basis-56 flex-col gap-0.5">
         <span class="font-medium">{{ t("devStart.card.title") }}</span>
         <span class="text-muted-foreground text-sm">{{ t("settings.development-intro") }}</span>
@@ -138,14 +138,14 @@ onMounted(() => {
 
   <template v-else>
     <p v-if="signedIn && recoveryKey" class="mb-6 flex flex-wrap items-center gap-x-2 text-sm" data-testid="dev-modules-recovery">
-      <KeyRound class="text-warning size-4 flex-none" :stroke-width="1.5" aria-hidden="true" />
+      <KeyRound class="text-warning size-4 flex-none" aria-hidden="true" />
       {{ t("devModules.recovery") }}
       <Button variant="link" class="h-auto p-0" @click="emit('show', 'dev-publishing')">{{ t("settings.section.dev-publishing") }}</Button>
     </p>
 
     <SettingGroup v-if="startCard">
       <div class="flex flex-wrap items-center gap-x-6 gap-y-3 py-4" data-testid="developer-start-card">
-        <Rocket class="text-primary size-6 flex-none" :stroke-width="1.5" aria-hidden="true" />
+        <Rocket class="text-primary size-6 flex-none" aria-hidden="true" />
         <div class="flex min-w-0 flex-1 basis-56 flex-col gap-0.5">
           <span class="font-medium">{{ t("devStart.card.title") }}</span>
           <span class="text-muted-foreground text-sm">{{ t("devStart.card.text") }}</span>
@@ -180,7 +180,7 @@ onMounted(() => {
     </SettingGroup>
 
     <p v-if="problems" class="text-muted-foreground mt-3 flex flex-wrap items-center gap-x-2 text-sm" data-testid="dev-modules-problems">
-      <CircleAlert class="text-warning size-4 flex-none" :stroke-width="1.5" aria-hidden="true" />
+      <CircleAlert class="text-warning size-4 flex-none" aria-hidden="true" />
       {{ t("devModules.problems") }}
       <Button variant="link" class="h-auto p-0" @click="emit('show', 'dev-folders')">{{ t("settings.section.dev-folders") }}</Button>
     </p>
@@ -188,8 +188,8 @@ onMounted(() => {
     <SettingGroup v-if="official.available" :title="t('officialPublish.title')" :description="t('officialPublish.description')">
       <template #actions>
         <Button variant="ghost" size="sm" :disabled="officialShows.refreshDisabled" data-testid="official-publish-refresh" @click="checkOfficial">
-          <Loader v-if="officialShows.checking" class="animate-spin motion-reduce:animate-none" :stroke-width="1.5" aria-hidden="true" />
-          <RefreshCw v-else :stroke-width="1.5" aria-hidden="true" />
+          <Loader v-if="officialShows.checking" class="animate-spin motion-reduce:animate-none" aria-hidden="true" />
+          <RefreshCw v-else aria-hidden="true" />
           {{ officialShows.checking ? t("officialPublish.checking") : t("officialPublish.refresh") }}
         </Button>
       </template>
@@ -213,13 +213,13 @@ onMounted(() => {
             :data-testid="`publish-official-${row.id}`"
             @click="publishOfficial(row.id)"
           >
-            <Upload :stroke-width="1.5" /> {{ t("officialPublish.button") }}
+            <Upload /> {{ t("officialPublish.button") }}
           </Button>
         </li>
       </ul>
       <p v-if="hostChanges" class="text-muted-foreground pb-4 text-xs break-words" data-testid="official-publish-host-changes">{{ hostChanges }}</p>
       <div v-if="official.key.saved" class="flex flex-wrap items-center gap-x-4 gap-y-2 border-t py-4" data-testid="official-publish-key">
-        <KeyRound class="text-muted-foreground size-4 flex-none" :stroke-width="1.5" aria-hidden="true" />
+        <KeyRound class="text-muted-foreground size-4 flex-none" aria-hidden="true" />
         <span class="min-w-0 flex-1 text-sm">{{ t("officialPublish.keySaved") }}</span>
         <Button variant="ghost" size="sm" :disabled="officialShows.forgetKeyDisabled" data-testid="official-publish-forget-key" @click="forgetKey">{{ t("officialPublish.forgetKey") }}</Button>
       </div>

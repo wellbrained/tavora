@@ -40,7 +40,7 @@ const rows = computed(() =>
       >
         <span class="text-foreground font-medium tabular-nums">{{ average }}</span>
         <StarRating :model-value="shown.average" size="sm" :label="t('catalog.rating.label', { average })" />
-        <ChevronDown class="size-3.5" :stroke-width="1.5" />
+        <ChevronDown class="size-3.5" />
         <span class="tabular-nums">(<CountTo :value="shown.count" :format="formatNumber" />)</span>
       </button>
     </DropdownMenuTrigger>

@@ -16,7 +16,7 @@ const STYLES = {
 
 <template>
   <div :role="props.variant === 'error' ? 'alert' : 'status'" data-slot="notice" :data-variant="props.variant" :class="cn('flex items-start gap-2 rounded-md p-3 text-sm', STYLES[props.variant].box, props.class)">
-    <component :is="STYLES[props.variant].icon" :class="cn('mt-0.5 size-4 flex-none', STYLES[props.variant].tint)" :stroke-width="1.5" aria-hidden="true" />
+    <component :is="STYLES[props.variant].icon" :class="cn('mt-0.5 size-4 flex-none', STYLES[props.variant].tint)" aria-hidden="true" />
     <div class="flex min-w-0 flex-1 flex-col gap-0.5">
       <p v-if="title" class="font-medium">{{ title }}</p>
       <div v-if="$slots.default"><slot /></div>

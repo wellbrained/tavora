@@ -37,7 +37,7 @@ const track = useFloating();
         :data-testid="testid"
         :aria-label="label"
       >
-        <slot><Ellipsis class="size-4" :stroke-width="1.5" /></slot>
+        <slot><Ellipsis class="size-4" /></slot>
       </button>
     </DropdownMenuTrigger>
     <DropdownMenuContent data-testid="menu" :side="side" :align="align" :class="cn('max-w-72 min-w-52', menuClass)">

@@ -150,7 +150,7 @@ function advice(kind: DevelopmentProblemKind | null, values: ModuleProblemValues
       :highlighted="highlight === 'development-folders'"
     >
       <Button variant="secondary" class="flex-none" data-testid="add-development-folder" data-focus-empty @click="addFolder">
-        <FolderCode :stroke-width="1.5" /> {{ t("settings.devFolders.add") }}
+        <FolderCode /> {{ t("settings.devFolders.add") }}
       </Button>
     </SettingRow>
     <AnimatedList :ref="setList" tag="ul" v-if="folders.length" class="flex flex-col" :aria-label="t('settings.development-folders.label')" data-testid="development-folders">
@@ -188,10 +188,10 @@ function advice(kind: DevelopmentProblemKind | null, values: ModuleProblemValues
             @keydown.up.prevent="moveTo(entry.folder, index - 1)"
             @keydown.down.prevent="moveTo(entry.folder, index + 1)"
           >
-            <GripVertical :stroke-width="1.5" />
+            <GripVertical />
           </Button>
           <CollapsibleTrigger :class="cn('min-w-0 flex-1 gap-3 py-1 font-normal', folders.length <= 1 && 'pl-3')" data-testid="development-folder-toggle">
-            <FolderCode class="text-muted-foreground size-4 flex-none" :stroke-width="1.5" />
+            <FolderCode class="text-muted-foreground size-4 flex-none" />
             <span class="min-w-0 truncate font-mono text-sm" :title="entry.folder" data-testid="development-folder-path">{{ shortPath(entry.folder) }}</span>
             <span v-if="entry.collapsed && entry.projects.length" class="text-muted-foreground flex-none text-xs" data-testid="development-folder-count">{{
               t("settings.devFolders.count", { count: entry.projects.length })
@@ -199,7 +199,6 @@ function advice(kind: DevelopmentProblemKind | null, values: ModuleProblemValues
             <CircleAlert
               v-if="entry.collapsed && entry.problem"
               class="text-warning size-4 flex-none"
-              :stroke-width="1.5"
               :aria-label="advice(entry.kind, entry.values, entry.folder)"
               :title="advice(entry.kind, entry.values, entry.folder)"
             />
@@ -212,12 +211,12 @@ function advice(kind: DevelopmentProblemKind | null, values: ModuleProblemValues
             data-focus-target
             @click="removeFolder(entry.folder)"
           >
-            <Trash2 :stroke-width="1.5" /> {{ t("settings.devFolders.remove") }}
+            <Trash2 /> {{ t("settings.devFolders.remove") }}
           </Button>
         </div>
         <CollapsibleContent class="flex flex-col gap-2 pt-2 pb-3">
           <p v-if="entry.problem" class="text-muted-foreground flex gap-2 pl-7 text-sm" data-testid="development-folder-status">
-            <CircleAlert class="text-warning mt-0.5 size-4 flex-none" :stroke-width="1.5" /> {{ advice(entry.kind, entry.values, entry.folder) }}
+            <CircleAlert class="text-warning mt-0.5 size-4 flex-none" /> {{ advice(entry.kind, entry.values, entry.folder) }}
           </p>
           <p v-else-if="!entry.projects.length" class="text-muted-foreground pl-7 text-sm" data-testid="development-folder-status">{{ t("settings.devFolders.empty") }}</p>
           <ul v-else class="flex flex-col pl-7">
@@ -231,12 +230,12 @@ function advice(kind: DevelopmentProblemKind | null, values: ModuleProblemValues
                   :data-testid="`open-project-${project.moduleId}`"
                   @click="openProject(project.project)"
                 >
-                  <FolderOpen :stroke-width="1.5" />
+                  <FolderOpen />
                 </Button>
               </ModuleRow>
               <ProjectRow v-else :name="project.name ?? baseName(project.project)" :version="project.version" :status="advice(project.kind, project.values, project.project)">
                 <Button variant="ghost" size="icon" :aria-label="t('common.openFolder')" :title="t('common.openFolder')" data-testid="open-project" @click="openProject(project.project)">
-                  <FolderOpen :stroke-width="1.5" />
+                  <FolderOpen />
                 </Button>
               </ProjectRow>
             </template>

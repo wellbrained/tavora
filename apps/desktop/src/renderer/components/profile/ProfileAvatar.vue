@@ -32,6 +32,6 @@ const initials = computed(() => props.initials.trim() || autoInitials(props.name
     <span v-else-if="initials" class="text-primary font-semibold" :style="{ fontSize: `${Math.max(12, Math.round(size * 0.38))}px` }">
       {{ initials }}
     </span>
-    <User v-else class="text-muted-foreground" :style="{ width: `${size * 0.5}px`, height: `${size * 0.5}px` }" :stroke-width="1.5" />
+    <User v-else class="text-muted-foreground" :style="{ width: `${size * 0.5}px`, height: `${size * 0.5}px` }" />
   </span>
 </template>

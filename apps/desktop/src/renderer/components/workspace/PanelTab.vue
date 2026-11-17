@@ -77,7 +77,7 @@ function items() {
           :title="t('panel.reload')"
           @click.stop="act({ type: 'reload-panel', instanceId: id })"
         >
-          <RotateCw :stroke-width="1.5" />
+          <RotateCw />
         </Button>
         <Button
           v-if="status === 'unresponsive'"
@@ -88,7 +88,7 @@ function items() {
           :title="t('panel.stop')"
           @click.stop="act({ type: 'stop-panel', instanceId: id })"
         >
-          <Square :stroke-width="1.5" />
+          <Square />
         </Button>
         <Button
           variant="ghost"
@@ -98,7 +98,7 @@ function items() {
           :title="t('panel.close')"
           @click.stop="act({ type: 'close-panel', instanceId: id })"
         >
-          <X :stroke-width="1.5" />
+          <X />
         </Button>
       </span>
     </div>

@@ -25,13 +25,13 @@ function replaceAll() {
 <template>
   <div class="flex flex-col gap-2">
     <div class="flex flex-wrap items-center gap-2">
-      <Button variant="secondary" data-testid="animated-list-add" @click="add"><Plus :stroke-width="1.5" /> Add a row</Button>
+      <Button variant="secondary" data-testid="animated-list-add" @click="add"><Plus /> Add a row</Button>
       <Button variant="ghost" data-testid="animated-list-replace" @click="replaceAll">Replace the whole list</Button>
     </div>
     <AnimatedList tag="ul" aria-label="Rows added and removed" class="flex flex-col" data-testid="animated-list">
       <li v-for="row in rows" :key="row.id" class="flex min-h-10 items-center gap-2 border-b py-1 last:border-b-0">
         <span class="min-w-0 flex-1 truncate text-sm">{{ row.title }}</span>
-        <Button size="icon-xs" variant="ghost" :aria-label="`Remove ${row.title}`" @click="remove(row.id)"><X :stroke-width="1.5" /></Button>
+        <Button size="icon-xs" variant="ghost" :aria-label="`Remove ${row.title}`" @click="remove(row.id)"><X /></Button>
       </li>
     </AnimatedList>
   </div>

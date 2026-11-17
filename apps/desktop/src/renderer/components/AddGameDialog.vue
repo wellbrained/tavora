@@ -194,7 +194,7 @@ function onDialogKey(event: KeyboardEvent) {
       <DialogTitle class="sr-only">{{ mode === "game" ? t("addGame.title") : t("addPersonal.new") }}</DialogTitle>
       <DialogDescription class="sr-only">{{ mode === "game" ? t("addGame.search") : t("addPersonal.placeholder") }}</DialogDescription>
       <div class="relative flex flex-none items-center gap-3 border-b pr-3">
-        <component :is="mode === 'game' ? Search : UserRound" class="text-muted-foreground pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2" :stroke-width="1.5" />
+        <component :is="mode === 'game' ? Search : UserRound" class="text-muted-foreground pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2" />
         <input
           id="game-search"
           ref="input"

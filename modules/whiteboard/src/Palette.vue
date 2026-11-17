@@ -108,14 +108,14 @@ function putBack(event: MouseEvent) {
           data-testid="palette-toggle"
           @click="fold"
         >
-          <component :is="place.collapsed ? ChevronRight : ChevronDown" :stroke-width="1.5" />
+          <component :is="place.collapsed ? ChevronRight : ChevronDown" />
         </Button>
       </div>
     </Teleport>
     <Teleport :to="parts.more">
       <Button type="button" variant="ghost" size="xs" class="w-full justify-between rounded-none" :aria-expanded="place.more" data-testid="palette-more" @click="toggleMore">
         <span>{{ t(place.more ? "palette.less" : "palette.more") }}</span>
-        <component :is="place.more ? ChevronDown : ChevronRight" :stroke-width="1.5" aria-hidden="true" />
+        <component :is="place.more ? ChevronDown : ChevronRight" aria-hidden="true" />
       </Button>
     </Teleport>
   </template>

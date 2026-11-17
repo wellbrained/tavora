@@ -34,7 +34,7 @@ function remove(name: string) {
     <AnimatedList tag="ul" aria-label="Resources" class="flex flex-col">
       <li v-for="name in items" :key="name" class="flex min-h-10 items-center gap-2 border-b py-1 last:border-b-0" :data-focus-row="name">
         <Button variant="ghost" size="sm" class="min-w-0 flex-1 justify-start">{{ name }}</Button>
-        <Button size="icon-xs" variant="ghost" :aria-label="`Delete ${name}`" :title="`Delete ${name}`" @click="remove(name)"><Trash2 :stroke-width="1.5" /></Button>
+        <Button size="icon-xs" variant="ghost" :aria-label="`Delete ${name}`" :title="`Delete ${name}`" @click="remove(name)"><Trash2 /></Button>
       </li>
     </AnimatedList>
     <div v-if="!items.length" class="flex flex-col items-start gap-2 py-2" data-focus-empty>

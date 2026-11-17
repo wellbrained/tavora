@@ -523,7 +523,7 @@ const emptySlot = EmptySlot as unknown as VueComponent;
         class="bg-background absolute inset-x-2 top-0 bottom-2 z-10 flex flex-col items-center justify-center gap-2 rounded-[10px] border border-dashed text-center"
         data-testid="empty-workspace"
       >
-        <LayoutGrid class="text-muted-foreground mb-2 size-12" :stroke-width="1" />
+        <LayoutGrid class="text-muted-foreground mb-2 size-12" />
         <p class="text-lg font-semibold">{{ t("workspace.startTitle") }}</p>
         <p class="text-muted-foreground max-w-sm text-sm">{{ t("workspace.startText") }}</p>
         <!-- A game's own modules first: one click each. -->

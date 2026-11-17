@@ -225,7 +225,7 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
     >
       <aside class="thin-scroll module-menu bg-background flex shrink-0 flex-col gap-3 border-b px-4 pb-4 sm:w-56 sm:overflow-y-auto sm:border-r sm:border-b-0 lg:w-64">
         <form class="relative flex h-16 flex-none items-center" @submit.prevent="submit">
-          <Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" :stroke-width="1.5" aria-hidden="true" />
+          <Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" aria-hidden="true" />
           <label class="sr-only" for="module-search">{{ t("addModule.search") }}</label>
           <!-- Opens focused, so typing searches; the focus ring shows only once the search is used, as in Settings. -->
           <Input
@@ -311,7 +311,7 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
             }}</span>
           </div>
           <DialogClose as-child>
-            <Button variant="ghost" size="icon" class="flex-none" :aria-label="t('common.close')" :title="t('common.close')"><X :stroke-width="1.5" /></Button>
+            <Button variant="ghost" size="icon" class="flex-none" :aria-label="t('common.close')" :title="t('common.close')"><X /></Button>
           </DialogClose>
         </header>
 

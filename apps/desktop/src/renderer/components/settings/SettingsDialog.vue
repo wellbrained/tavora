@@ -223,7 +223,7 @@ function onSearchKey(event: KeyboardEvent) {
     >
       <div class="thin-scroll settings-menu bg-background flex w-60 flex-none flex-col gap-3 overflow-y-auto border-r px-4 pb-4 lg:w-72">
         <div class="relative flex h-16 flex-none items-center">
-          <Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" :stroke-width="1.5" aria-hidden="true" />
+          <Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" aria-hidden="true" />
           <Input
             v-model="query"
             type="text"
@@ -293,7 +293,7 @@ function onSearchKey(event: KeyboardEvent) {
           </div>
           <DialogClose as-child>
             <Button variant="ghost" size="icon" class="flex-none" data-testid="settings-close" :aria-label="t('settings.close')" :title="t('common.close')">
-              <X :stroke-width="1.5" />
+              <X />
             </Button>
           </DialogClose>
         </header>
@@ -354,7 +354,7 @@ function onSearchKey(event: KeyboardEvent) {
 
         <!-- Settings that apply on start share one bar, so several changes need one restart. -->
         <div v-if="state!.restartPending" class="bg-card flex flex-none flex-wrap items-center gap-x-4 gap-y-2 border-t px-6 py-3 lg:px-10" role="status" data-testid="restart-bar">
-          <RotateCw class="text-primary size-4 flex-none" :stroke-width="1.5" />
+          <RotateCw class="text-primary size-4 flex-none" />
           <span class="flex-1">{{ t("settings.restart.message") }}</span>
           <Button data-testid="restart-now" @click="act({ type: 'restart' })">{{ t("common.restartNow") }}</Button>
         </div>

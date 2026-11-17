@@ -38,7 +38,7 @@ function copy(mode: "replace" | "add") {
   <DropdownMenu>
     <DropdownMenuTrigger as-child>
       <Button variant="secondary" size="sm" :disabled="hint !== null" :disabled-reason="hint ?? undefined" data-testid="layout-copy">
-        <Copy :stroke-width="1.5" />{{ t("overlays.copy.button") }}
+        <Copy />{{ t("overlays.copy.button") }}
       </Button>
     </DropdownMenuTrigger>
     <DropdownMenuContent side="bottom" align="start" class="max-h-80 max-w-72 min-w-52" data-testid="layout-copy-menu">

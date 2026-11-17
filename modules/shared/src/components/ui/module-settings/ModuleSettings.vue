@@ -65,7 +65,7 @@ function resetPage() {
           {{ uiText.resetPage }}
         </Button>
         <p class="ml-auto" role="status" data-testid="settings-saved">
-          <span v-if="justSaved" class="text-foreground flex items-center gap-1.5"><Check class="text-success size-3.5" :stroke-width="2.25" aria-hidden="true" />{{ uiText.saved }}</span>
+          <span v-if="justSaved" class="text-foreground flex items-center gap-1.5"><Check class="text-success size-3.5" aria-hidden="true" />{{ uiText.saved }}</span>
           <span v-else>{{ uiText.autosave }}</span>
         </p>
       </footer>

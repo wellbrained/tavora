@@ -26,7 +26,7 @@ const selected = ref("b");
       <span class="min-w-0 flex-1 truncate">{{ row.title }}</span>
       <span class="text-muted-foreground text-xs">{{ row.meta }}</span>
       <Button size="icon-xs" variant="ghost" class="opacity-0 group-hover:opacity-100 focus-visible:opacity-100" aria-label="More" title="More" @click.stop>
-        <MoreHorizontal :stroke-width="1.5" />
+        <MoreHorizontal />
       </Button>
     </li>
   </ul>

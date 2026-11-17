@@ -14,7 +14,7 @@ const forwarded = useForwardProps(props)
 <template>
   <ComboboxTrigger data-slot="combobox-trigger" v-bind="forwarded" as-child>
     <Button type="button" size="icon-xs" variant="ghost" class="text-muted-foreground absolute top-1/2 right-1.5 -translate-y-1/2" :aria-label="label ?? uiText.showList" :title="label ?? uiText.showList" @mousedown.prevent>
-      <ChevronDown :stroke-width="1.5" aria-hidden="true" />
+      <ChevronDown aria-hidden="true" />
     </Button>
   </ComboboxTrigger>
 </template>

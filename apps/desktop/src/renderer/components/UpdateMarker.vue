@@ -87,8 +87,8 @@ const more = computed(() => !allNotes.value && (found.value?.notes.length ?? 0) 
           :aria-label="label"
         >
           <RailFooterTile class="update-arrive" :progress="progress">
-            <RefreshCw v-if="found.status === 'ready'" class="size-5" :stroke-width="1.5" />
-            <ArrowDownToLine v-else class="size-5" :stroke-width="1.5" />
+            <RefreshCw v-if="found.status === 'ready'" class="size-5" />
+            <ArrowDownToLine v-else class="size-5" />
           </RailFooterTile>
           <span v-if="expanded" class="truncate text-sm font-medium">{{ label }}</span>
         </button>

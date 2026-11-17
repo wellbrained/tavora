@@ -70,7 +70,7 @@ function finishRename(save: boolean, event?: Event) {
       <DropdownMenuTrigger as-child>
         <Button type="button" variant="outline" size="sm" class="max-w-56 min-w-0 font-medium" :title="t('board.switch')" data-testid="board-menu">
           <span class="truncate" data-testid="board-name">{{ currentName }}</span>
-          <ChevronDown :stroke-width="1.5" data-icon="end" aria-hidden="true" />
+          <ChevronDown data-icon="end" aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" class="min-w-56" @close-auto-focus="keepFocus" :aria-label="t('board.switch')" data-testid="board-list">
@@ -81,7 +81,7 @@ function finishRename(save: boolean, event?: Event) {
         </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
         <DropdownMenuSub>
-          <DropdownMenuSubTrigger :disabled="creating" data-testid="board-new"><Plus :stroke-width="1.5" />{{ t("board.new") }}</DropdownMenuSubTrigger>
+          <DropdownMenuSubTrigger :disabled="creating" data-testid="board-new"><Plus />{{ t("board.new") }}</DropdownMenuSubTrigger>
           <DropdownMenuSubContent>
             <DropdownMenuItem data-testid="board-new-blank" @select="emit('create', 'blank')">{{ t("starter.blank") }}</DropdownMenuItem>
             <DropdownMenuItem data-testid="board-new-idea" @select="emit('create', 'idea')">{{ t("starter.idea") }}</DropdownMenuItem>
@@ -90,16 +90,16 @@ function finishRename(save: boolean, event?: Event) {
         </DropdownMenuSub>
         <DropdownMenuCheckboxItem :model-value="grid" :disabled="!ready" data-testid="board-grid" @update:model-value="emit('grid', $event === true)">{{ t("board.grid") }}</DropdownMenuCheckboxItem>
         <DropdownMenuItem data-testid="board-rename" @select="startRename">
-          <Pencil :stroke-width="1.5" />
+          <Pencil />
           {{ t("board.rename") }}
         </DropdownMenuItem>
         <!-- Clearing shows Undo afterwards (and Ctrl+Z works), so it needs no question first. -->
         <DropdownMenuItem :disabled="!canClear" :disabled-reason="t('board.nothingYet')" :title="t('clear.hint')" data-testid="clear-board" @select="emit('clear')">
-          <Eraser :stroke-width="1.5" />
+          <Eraser />
           {{ t("clear.button") }}
         </DropdownMenuItem>
         <DropdownMenuItem variant="destructive" data-testid="board-delete" @select="emit('delete')">
-          <Trash2 :stroke-width="1.5" />
+          <Trash2 />
           {{ t("board.delete") }}
         </DropdownMenuItem>
       </DropdownMenuContent>

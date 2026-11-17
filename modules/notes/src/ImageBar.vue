@@ -49,10 +49,10 @@ const style = computed(() => ({ left: `${Math.max(8, Math.min(props.left, window
     </Button>
     <span class="bg-border mx-1 h-4 w-px flex-none" aria-hidden="true" />
     <Button variant="ghost" size="icon-sm" class="flex-none" data-testid="image-open" :aria-label="t('image.openLarger')" :title="t('image.openLarger')" @click="emit('open')">
-      <Maximize2 :stroke-width="1.5" />
+      <Maximize2 />
     </Button>
     <Button variant="ghost" size="icon-sm" class="flex-none" data-testid="image-remove" :aria-label="t('image.remove')" :title="t('image.remove')" @click="emit('remove')">
-      <Trash2 :stroke-width="1.5" />
+      <Trash2 />
     </Button>
   </div>
 </template>

@@ -170,7 +170,7 @@ async function allow() {
     </div>
     <p v-if="update" class="text-sm" data-testid="grant-update-intro">{{ t("grant.updateIntro", { name: module.name, installed: module.version, version: update.version }) }}</p>
     <section v-if="connectors.includes('ai-usage')" class="flex flex-col gap-2" :aria-label="t('grant.aiUsage')" data-testid="grant-ai-usage">
-      <h3 class="flex items-center gap-2 font-medium"><Gauge :stroke-width="1.5" class="size-4" /> {{ t("grant.aiUsage") }}</h3>
+      <h3 class="flex items-center gap-2 font-medium"><Gauge class="size-4" /> {{ t("grant.aiUsage") }}</h3>
       <ul v-if="aiAccounts.length" class="bg-muted flex flex-col gap-1 rounded-md px-3 py-2 text-sm" data-testid="grant-ai-accounts">
         <li v-for="account in aiAccounts" :key="account.id" class="truncate">
           {{ account.label }} <span class="text-muted-foreground">· {{ t(`aiUsage.provider.${account.provider}`) }}</span>
@@ -183,19 +183,19 @@ async function allow() {
       </p>
     </section>
     <section v-if="connectors.includes('system-info')" class="flex flex-col gap-2" :aria-label="t('grant.systemInfo')" data-testid="grant-system-info">
-      <h3 class="flex items-center gap-2 font-medium"><Cpu :stroke-width="1.5" class="size-4" /> {{ t("grant.systemInfo") }}</h3>
+      <h3 class="flex items-center gap-2 font-medium"><Cpu class="size-4" /> {{ t("grant.systemInfo") }}</h3>
       <p class="text-muted-foreground text-sm">{{ t("grant.systemInfoNote") }}</p>
     </section>
     <section v-if="connectors.includes('media')" class="flex flex-col gap-2" :aria-label="t('grant.media')" data-testid="grant-media">
-      <h3 class="flex items-center gap-2 font-medium"><Music :stroke-width="1.5" class="size-4" /> {{ t("grant.media") }}</h3>
+      <h3 class="flex items-center gap-2 font-medium"><Music class="size-4" /> {{ t("grant.media") }}</h3>
       <p class="text-muted-foreground text-sm">{{ t("grant.mediaNote") }}</p>
     </section>
     <section v-if="connectors.includes('leaderboards')" class="flex flex-col gap-2" :aria-label="t('grant.leaderboards')" data-testid="grant-leaderboards">
-      <h3 class="flex items-center gap-2 font-medium"><Trophy :stroke-width="1.5" class="size-4" /> {{ t("grant.leaderboards") }}</h3>
+      <h3 class="flex items-center gap-2 font-medium"><Trophy class="size-4" /> {{ t("grant.leaderboards") }}</h3>
       <p class="text-muted-foreground text-sm">{{ t("grant.leaderboardsNote") }}</p>
     </section>
     <section v-if="connectors.includes('discord')" class="flex flex-col gap-2" :aria-label="t('grant.discord')" data-testid="grant-discord">
-      <h3 class="flex items-center gap-2 font-medium"><Headphones :stroke-width="1.5" class="size-4" /> {{ t("grant.discord") }}</h3>
+      <h3 class="flex items-center gap-2 font-medium"><Headphones class="size-4" /> {{ t("grant.discord") }}</h3>
       <ul class="bg-muted flex list-disc flex-col gap-1 rounded-md py-2 pr-3 pl-7 text-sm" data-testid="grant-discord-can">
         <li>{{ t("grant.discordRead") }}</li>
         <li>{{ t("grant.discordJoin") }}</li>
@@ -207,25 +207,25 @@ async function allow() {
       </p>
     </section>
     <section v-if="connectors.includes('stream-overlay')" class="flex flex-col gap-2" :aria-label="t('grant.overlay')" data-testid="grant-overlay">
-      <h3 class="flex items-center gap-2 font-medium"><Radio :stroke-width="1.5" class="size-4" /> {{ t("grant.overlay") }}</h3>
+      <h3 class="flex items-center gap-2 font-medium"><Radio class="size-4" /> {{ t("grant.overlay") }}</h3>
       <p class="text-muted-foreground text-sm">{{ t("grant.overlayNote") }}</p>
     </section>
     <section v-if="sites.length" class="flex flex-col gap-2" :aria-label="t('grant.network')">
-      <h3 class="flex items-center gap-2 font-medium"><Globe :stroke-width="1.5" class="size-4" /> {{ t("grant.network") }}</h3>
+      <h3 class="flex items-center gap-2 font-medium"><Globe class="size-4" /> {{ t("grant.network") }}</h3>
       <ul class="bg-muted flex flex-col gap-1 rounded-md px-3 py-2 text-sm" data-testid="grant-hosts">
         <li v-for="host in sites" :key="host" class="font-mono break-all">{{ host }}</li>
       </ul>
       <p class="text-muted-foreground text-sm">{{ t("grant.networkNote") }}</p>
     </section>
     <section v-if="programs.length" class="flex flex-col gap-2" :aria-label="t('grant.programs')">
-      <h3 class="flex items-center gap-2 font-medium"><Monitor :stroke-width="1.5" class="size-4" /> {{ t("grant.programs") }}</h3>
+      <h3 class="flex items-center gap-2 font-medium"><Monitor class="size-4" /> {{ t("grant.programs") }}</h3>
       <ul class="bg-muted flex flex-col gap-1 rounded-md px-3 py-2 text-sm" data-testid="grant-programs">
         <li v-for="port in programs" :key="port">{{ t("grant.programPort", { port }) }}</li>
       </ul>
       <p class="text-muted-foreground text-sm">{{ t("grant.programsNote") }}</p>
     </section>
     <section v-if="folders.length" class="flex flex-col gap-2" :aria-label="t('grant.folders')">
-      <h3 class="flex items-center gap-2 font-medium"><Folder :stroke-width="1.5" class="size-4" /> {{ t("grant.folders") }}</h3>
+      <h3 class="flex items-center gap-2 font-medium"><Folder class="size-4" /> {{ t("grant.folders") }}</h3>
       <ul class="bg-muted flex flex-col gap-2 rounded-md px-3 py-2 text-sm" data-testid="grant-folders">
         <li v-for="folder in folders" :key="folder.key" class="flex flex-col gap-0.5">
           <span class="font-mono break-all">{{ folderLabel(folder) }}</span>

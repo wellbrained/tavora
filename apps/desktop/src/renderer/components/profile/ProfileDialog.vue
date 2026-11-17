@@ -150,7 +150,7 @@ async function savePicture(png: string) {
           </div>
           <DialogClose as-child>
             <Button variant="ghost" size="icon" class="flex-none" data-testid="profile-close" :aria-label="t('profile.close')" :title="t('common.close')">
-              <X :stroke-width="1.5" />
+              <X />
             </Button>
           </DialogClose>
         </header>

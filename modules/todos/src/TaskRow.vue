@@ -273,7 +273,7 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
         @dragstart="emit('dragstart', $event)"
         @dragend="emit('dragend')"
       >
-        <GripVertical class="size-3.5" :stroke-width="1.5" />
+        <GripVertical class="size-3.5" />
       </span>
       <span v-if="!compact" class="flex h-8 w-4 flex-none items-center justify-center">
         <button
@@ -285,7 +285,7 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
           data-testid="task-fold"
           @click="panel.toggleFolded(task.id)"
         >
-          <ChevronRight :class="cn('size-3.5 transition-transform', !folded && 'rotate-90')" :stroke-width="1.5" />
+          <ChevronRight :class="cn('size-3.5 transition-transform', !folded && 'rotate-90')" />
         </button>
       </span>
       <span class="flex h-8 flex-none items-center px-0.5">
@@ -365,7 +365,7 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
       </Popover>
 
       <span v-if="task.pinned && !compact" class="flex h-8 flex-none items-center">
-        <Pin class="text-primary size-3.5" :stroke-width="1.5" :aria-label="t('task.pinned')" />
+        <Pin class="text-primary size-3.5" :aria-label="t('task.pinned')" />
       </span>
       <!-- Deleting in one click, shown on hover; the toast can put it back. -->
       <span class="flex h-8 flex-none items-center">
@@ -377,7 +377,7 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
           data-testid="task-delete"
           @click="remove"
         >
-          <Trash2 class="size-4" :stroke-width="1.5" />
+          <Trash2 class="size-4" />
         </button>
       </span>
       <span class="flex h-8 flex-none items-center">
@@ -393,40 +393,40 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
             :title="t('more')"
             data-testid="task-menu"
           >
-            <Ellipsis class="size-4" :stroke-width="1.5" />
+            <Ellipsis class="size-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" @close-auto-focus="onMenuClosed">
             <DropdownMenuItem data-testid="menu-description" @select="later(() => setDescribing(true))">
-              <AlignLeft :stroke-width="1.5" />
+              <AlignLeft />
               {{ task.details ? t("task.editDescription") : t("task.addDescription") }}
             </DropdownMenuItem>
             <DropdownMenuItem data-testid="menu-pin" @select="setPinned(!task.pinned)">
-              <PinOff v-if="task.pinned" :stroke-width="1.5" />
-              <Pin v-else :stroke-width="1.5" />
+              <PinOff v-if="task.pinned" />
+              <Pin v-else />
               {{ task.pinned ? t("task.unpin") : t("task.pin") }}
             </DropdownMenuItem>
             <template v-if="!compact">
               <DropdownMenuItem data-testid="menu-add-below" @select="later(() => addBelow(depth))">
-                <ListPlus :stroke-width="1.5" /> {{ t("task.addBelow") }}
+                <ListPlus /> {{ t("task.addBelow") }}
               </DropdownMenuItem>
               <DropdownMenuItem :disabled="depth >= MAX_DEPTH" :disabled-reason="t('task.addSub.off', { count: MAX_DEPTH })" data-testid="menu-add-sub" @select="later(() => addBelow(depth + 1))">
-                <CornerDownRight :stroke-width="1.5" /> {{ t("task.addSub") }}
+                <CornerDownRight /> {{ t("task.addSub") }}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem :disabled="!canIndent(group, index)" :disabled-reason="t('task.indent.off')" data-testid="menu-indent" @select="change((data) => indentTask(data, task.id))">
-                <IndentIncrease :stroke-width="1.5" /> {{ t("task.indent") }}
+                <IndentIncrease /> {{ t("task.indent") }}
               </DropdownMenuItem>
               <DropdownMenuItem :disabled="!task.parentId" :disabled-reason="t('task.outdent.off')" data-testid="menu-outdent" @select="change((data) => outdentTask(data, task.id))">
-                <IndentDecrease :stroke-width="1.5" /> {{ t("task.outdent") }}
+                <IndentDecrease /> {{ t("task.outdent") }}
               </DropdownMenuItem>
               <DropdownMenuItem :disabled="!canShift(group, index, -1)" @select="change((data) => shiftTask(data, task.id, -1))">
-                <ArrowUp :stroke-width="1.5" /> {{ t("task.moveUp") }}
+                <ArrowUp /> {{ t("task.moveUp") }}
               </DropdownMenuItem>
               <DropdownMenuItem :disabled="!canShift(group, index, 1)" @select="change((data) => shiftTask(data, task.id, 1))">
-                <ArrowDown :stroke-width="1.5" /> {{ t("task.moveDown") }}
+                <ArrowDown /> {{ t("task.moveDown") }}
               </DropdownMenuItem>
               <DropdownMenuSub v-if="otherGroups.length">
-                <DropdownMenuSubTrigger><FolderInput :stroke-width="1.5" /> {{ t("task.moveToGroup") }}</DropdownMenuSubTrigger>
+                <DropdownMenuSubTrigger><FolderInput /> {{ t("task.moveToGroup") }}</DropdownMenuSubTrigger>
                 <DropdownMenuSubContent>
                   <DropdownMenuItem v-for="target in otherGroups" :key="target.id" @select="change((data) => moveTask(data, task.id, target.id, null))">
                     {{ target.name }}
@@ -436,7 +436,7 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
             </template>
             <DropdownMenuSeparator />
             <DropdownMenuItem variant="destructive" data-testid="menu-delete" @select="remove">
-              <Trash2 :stroke-width="1.5" /> {{ t("task.delete") }}
+              <Trash2 /> {{ t("task.delete") }}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

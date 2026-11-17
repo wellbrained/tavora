@@ -50,7 +50,7 @@ const drops = useDropTargets<Carried, (typeof SLOTS)[number]>("playground-item",
         :data-testid="`drop-item-${name}`"
         @dragstart="startDrag($event, 'playground-item', { item: name })"
       >
-        <component :is="id.icon" class="size-5" :stroke-width="1.5" aria-hidden="true" />
+        <component :is="id.icon" class="size-5" aria-hidden="true" />
       </div>
     </div>
     <div class="flex gap-2">
@@ -63,7 +63,7 @@ const drops = useDropTargets<Carried, (typeof SLOTS)[number]>("playground-item",
         :data-testid="`drop-slot-${key}`"
         @dragstart="startDrag($event, 'playground-item', { item: slots[Number(key)]!, from: Number(key) })"
       >
-        <component :is="ITEMS[slots[Number(key)]!].icon" v-if="slots[Number(key)]" class="size-6" :stroke-width="1.5" aria-hidden="true" />
+        <component :is="ITEMS[slots[Number(key)]!].icon" v-if="slots[Number(key)]" class="size-6" aria-hidden="true" />
         <span v-else-if="key === '2'" class="text-muted-foreground text-xs">Gem</span>
       </div>
     </div>

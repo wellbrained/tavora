@@ -48,7 +48,7 @@ onBeforeUnmount(() => {
       class="bg-foreground/9 text-foreground flex size-[42px] shrink-0 items-center justify-center rounded-[calc(var(--radius)+2px)]"
       aria-hidden="true"
     >
-      <component :is="icon" class="size-[19px]" :stroke-width="1.5" />
+      <component :is="icon" class="size-[19px]" />
     </span>
     <div class="flex min-w-0 flex-1 flex-col gap-1">
       <DialogTitle class="leading-snug">{{ title }}</DialogTitle>

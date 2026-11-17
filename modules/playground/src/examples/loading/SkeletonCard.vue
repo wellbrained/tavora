@@ -28,7 +28,7 @@ onBeforeUnmount(() => clearTimeout(timer));
     </div>
     <Skeleton :loading="loading" class="flex max-w-sm flex-col gap-3 rounded-xl border p-4" data-testid="skeleton-card">
       <div class="flex min-w-0 gap-3">
-        <span class="bg-muted/60 grid size-12 flex-none place-items-center rounded-xl"><Puzzle class="text-muted-foreground size-6" :stroke-width="1.5" /></span>
+        <span class="bg-muted/60 grid size-12 flex-none place-items-center rounded-xl"><Puzzle class="text-muted-foreground size-6" /></span>
         <div class="min-w-0">
           <p class="truncate font-medium">{{ card.name }}</p>
           <p class="text-muted-foreground truncate text-xs">{{ card.by }}</p>

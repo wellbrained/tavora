@@ -36,7 +36,7 @@ const reset = () => send({ type: "toolbar", buttons: [...DEFAULT_BUTTONS] });
       <li v-for="id in TOOLBAR_ACTIONS" :key="id">
         <label class="hover:bg-accent flex cursor-default items-center gap-2 rounded-md px-1.5 py-1 text-sm">
           <Checkbox :model-value="buttons.includes(id)" :data-testid="`layout-customize-${id}`" @update:model-value="toggle(id)" />
-          <component :is="actions[id].icon" class="text-muted-foreground size-4 shrink-0" :stroke-width="1.5" />
+          <component :is="actions[id].icon" class="text-muted-foreground size-4 shrink-0" />
           <span class="min-w-0 flex-1 truncate">{{ labelOf(id) }}</span>
           <span v-if="isGroupAction(id)" class="text-muted-foreground flex-none text-xs">▾</span>
         </label>

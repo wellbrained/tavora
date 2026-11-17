@@ -77,7 +77,7 @@ async function create() {
     <p v-if="error" class="text-destructive mt-2 text-sm" role="alert" data-testid="onboarding-error">{{ error }}</p>
 
     <div class="mt-6 flex items-center gap-3 [@media(max-height:640px)]:mt-3">
-      <Button variant="ghost" data-testid="onboarding-back" @click="$emit('back')"><ArrowLeft :stroke-width="1.5" /> {{ t("common.back") }}</Button>
+      <Button variant="ghost" data-testid="onboarding-back" @click="$emit('back')"><ArrowLeft /> {{ t("common.back") }}</Button>
       <Button class="min-w-32" :disabled="busy" data-testid="onboarding-next" @click="create">{{ t("common.next") }}</Button>
     </div>
   </section>

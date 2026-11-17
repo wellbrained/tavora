@@ -183,7 +183,7 @@ async function share() {
     </div>
     <DialogFooter>
       <span v-if="progress" class="text-muted-foreground mr-auto flex items-center gap-2 text-sm tabular-nums" role="status" data-testid="share-icons-progress">
-        <Loader class="size-4 animate-spin motion-reduce:animate-none" :stroke-width="1.5" aria-hidden="true" />
+        <Loader class="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
         {{ t("shareIcons.progress", progress) }}
       </span>
       <DialogButton type="button" close :disabled="busy" @click="dialog = null">{{ empty ? t("common.close") : t("common.cancel") }}</DialogButton>

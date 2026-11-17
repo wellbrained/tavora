@@ -84,7 +84,7 @@ function reset() {
         <!-- A row that deletes something sits last, with a red name and a destructive button. -->
         <SettingsSection v-if="page === 'player'">
           <SettingsRow label="Delete this player" hint="You can undo it for a few seconds." danger>
-            <Button variant="destructive" size="sm"><Trash2 :stroke-width="1.5" />Delete</Button>
+            <Button variant="destructive" size="sm"><Trash2 />Delete</Button>
           </SettingsRow>
         </SettingsSection>
       </SettingsPage>

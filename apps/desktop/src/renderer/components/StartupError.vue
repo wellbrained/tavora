@@ -48,10 +48,10 @@ function copy(): void {
 
       <div class="mt-6 flex gap-2">
         <Button data-testid="startup-error-reload" @click="reload">
-          <RotateCw :stroke-width="1.5" /> {{ t("startupError.retry") }}
+          <RotateCw /> {{ t("startupError.retry") }}
         </Button>
         <Button variant="outline" data-testid="startup-error-copy" @click="copy">
-          <component :is="copied ? Check : Copy" :stroke-width="1.5" /> {{ copied ? t("startupError.copied") : t("startupError.copy") }}
+          <component :is="copied ? Check : Copy" /> {{ copied ? t("startupError.copied") : t("startupError.copy") }}
         </Button>
       </div>
     </main>

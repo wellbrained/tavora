@@ -31,7 +31,7 @@ onBeforeUnmount(() => removeEventListener("keydown", onKey, true));
       <DialogDescription class="sr-only">{{ t("image.lightboxHint") }}</DialogDescription>
       <img :src="src" alt="" class="max-h-full max-w-full cursor-zoom-out object-contain" draggable="false" />
       <Button variant="secondary" size="icon-sm" class="absolute top-3 right-3" :aria-label="t('image.close')" :title="t('image.close')" @click.stop="emit('close')">
-        <X :stroke-width="1.5" />
+        <X />
       </Button>
     </DialogContent>
   </Dialog>

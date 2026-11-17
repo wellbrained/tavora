@@ -139,7 +139,7 @@ function settings() {
     </EmptyState>
     <template v-else>
       <div class="flex flex-wrap items-center gap-3 pt-6 pb-3">
-        <p class="text-muted-foreground flex min-w-0 flex-1 items-center gap-2 text-sm"><ShieldCheck class="size-4 flex-none" :stroke-width="1.5" /> {{ t("catalog.hint") }}</p>
+        <p class="text-muted-foreground flex min-w-0 flex-1 items-center gap-2 text-sm"><ShieldCheck class="size-4 flex-none" /> {{ t("catalog.hint") }}</p>
         <Select v-model="sort">
           <SelectTrigger size="sm" class="w-44" :aria-label="t('catalog.sort.label')" data-testid="catalog-sort">
             <span class="truncate">{{ t("catalog.sort.current", { by: t(`catalog.sort.${sort}`) }) }}</span>

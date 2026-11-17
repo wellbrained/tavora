@@ -308,7 +308,7 @@ function dropMark(position: number): "before" | "after" | null {
         data-testid="group-collapse"
         @click="emit('toggleCollapsed')"
       >
-        <ChevronRight :class="cn('size-4 transition-transform', !collapsed && 'rotate-90')" :stroke-width="1.5" />
+        <ChevronRight :class="cn('size-4 transition-transform', !collapsed && 'rotate-90')" />
       </button>
       <input
         v-if="renaming"
@@ -353,7 +353,7 @@ function dropMark(position: number): "before" | "after" | null {
         data-focus-target
         @click="onMenuButton"
       >
-        <Ellipsis class="size-4" :stroke-width="1.5" />
+        <Ellipsis class="size-4" />
       </button>
     </header>
 
