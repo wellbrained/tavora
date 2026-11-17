@@ -7,7 +7,14 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { noticesFor } from "@tavora/pack/notices";
+import { fileURLToPath } from "node:url";
+
+/**
+ * notices.ts, loaded when a build ends: next to this file as .ts when it runs from source (pnpm dev, a module's
+ * typecheck through `paths`) and as .js from the built package. A static import would need one of the two names.
+ */
+const loadNotices = (): Promise<typeof import("./notices.js")> =>
+  import(new URL(`./notices${path.extname(fileURLToPath(import.meta.url))}`, import.meta.url).href) as Promise<typeof import("./notices.js")>;
 
 export interface ModuleConfigOptions {
   /** The module's folder, where `src/` is. Default: the folder Vite runs in. */
@@ -89,7 +96,8 @@ function thirdPartyNoticesPlugin(root: string) {
     generateBundle(_options: unknown, bundle: Record<string, { type: string; modules?: Record<string, unknown> }>) {
       for (const file of Object.values(bundle)) if (file.type === "chunk") for (const id of Object.keys(file.modules ?? {})) ids.add(id);
     },
-    closeBundle() {
+    async closeBundle() {
+      const { noticesFor } = await loadNotices();
       const read = (file: string): Record<string, unknown> | null => (existsSync(file) ? (JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>) : null);
       const info = read(path.join(root, "tavora.module.json")) ?? read(path.join(root, "package.json")) ?? {};
       const { notices, text } = noticesFor(root, ids, { name: String(info.name ?? "This module"), version: String(info.version ?? "") });

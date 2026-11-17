@@ -35,11 +35,6 @@
       "types": "./dist/vite.d.ts",
       "default": "./dist/vite.js"
     },
-    "./notices": {
-      "source": "./src/notices.ts",
-      "types": "./dist/notices.d.ts",
-      "default": "./dist/notices.js"
-    },
     "./tsconfig.module.json": "./tsconfig.module.json",
     "./package.json": "./package.json"
   },
