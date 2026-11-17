@@ -743,8 +743,16 @@ export class PanelViews {
     return Promise.all([...this.overlayPictures.keys()].map((instanceId) => this.settledThenGone(instanceId))).then((gone) => {
       if (this.deps.windowGone()) return;
       let changed = false;
-      // A panel out again for a menu opened since keeps its new picture.
-      for (const instanceId of gone) if (instanceId && !this.out.has(instanceId) && !this.picturing.has(instanceId)) changed = this.overlayPictures.delete(instanceId) || changed;
+      for (const instanceId of gone) {
+        // A panel out again for a menu opened since keeps its new picture.
+        const picture = this.overlayPictures.get(instanceId);
+        if (picture === undefined || this.out.has(instanceId) || this.picturing.has(instanceId)) continue;
+        this.overlayPictures.delete(instanceId);
+        // One that left its slot meanwhile (another tab in front) keeps it to lie on when it comes back.
+        const adapter = this.get(instanceId);
+        if (adapter?.status === "ready" && !this.bounds.has(instanceId) && !this.lent.has(instanceId)) this.standIns.set(instanceId, picture);
+        changed = true;
+      }
       if (changed) this.sendPictures();
     });
   }
@@ -767,7 +775,7 @@ export class PanelViews {
     if (shown) this.inSight.add(instanceId);
     else this.inSight.delete(instanceId);
     // Placed but kept hidden (no data yet, a question): its slot shows the loader or the question, never an old picture.
-    if (!shown && placed) this.dropStandIn(instanceId);
+    if (!shown && placed && (!adapter.revealed || this.deps.asking(instanceId))) this.dropStandIn(instanceId);
     if (!was || shown || placed || adapter.status !== "ready" || !adapter.revealed || !adapter.capturable || this.lent.has(instanceId)) return;
     void this.pictureOf(adapter).then((image) => {
       if (!image || this.get(instanceId) !== adapter || this.inSight.has(instanceId) || this.bounds.has(instanceId) || this.deps.windowGone()) return;

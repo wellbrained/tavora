@@ -945,8 +945,10 @@ let panelsOutCap: ReturnType<typeof setTimeout> | undefined;
 let overlaySeq = 0;
 /** The request whose answer shows the popups and dialogs. */
 let awaitedSeq = 0;
-/** The panels asked to step aside since the overlay opened: every one, or these; null until the first request. */
-let asked: "all" | Set<string> | null = null;
+/** The panels asked to step aside since the overlay opened (every one, or these with the request that asked); null until the first request. */
+let asked: "all" | Map<string, number> | null = null;
+/** The newest request the host has answered. */
+let answeredSeq = 0;
 /**
  * While only a menu or hint is open, each popup stays unseen until it has been measured and the panels under it are out
  * (styles.css: html.overlay-partial, data-panels-clear). These wait for the answer to the request that asked for theirs.
@@ -990,6 +992,7 @@ function setPartial(partial: boolean): void {
 }
 
 api.onOverlayReady((seq) => {
+  answeredSeq = Math.max(answeredSeq, seq);
   for (const [popup, wanted] of heldPopups) if (wanted <= seq) clearPopup(popup);
   if (overlayOpen.value && asked !== null && seq >= awaitedSeq) panelsOut.value = true;
 });
@@ -1003,32 +1006,34 @@ function measurePopups(): void {
   measureFrame = 0;
   if (!overlayOpen.value || asked === "all" || overlayWhole.value) return;
   const viewport = { width: innerWidth, height: innerHeight };
-  const known = asked ?? new Set<string>();
-  const placed: HTMLElement[] = [];
-  const growing: HTMLElement[] = [];
+  const known = asked ?? new Map<string, number>();
+  const placed: { popup: HTMLElement; ids: string[] }[] = [];
   const fresh = new Set<string>();
   for (const popup of document.querySelectorAll<HTMLElement>(POPUPS)) {
     const { x, y, width, height } = popup.getBoundingClientRect();
     if (!isPlaced({ x, y, width, height }, getComputedStyle(popup).visibility === "hidden", viewport)) continue;
-    placed.push(popup);
-    const missing = panelsUnder({ x, y, width, height }, placedPanels).filter((id) => !known.has(id));
-    if (!missing.length) continue;
-    growing.push(popup);
-    for (const id of missing) fresh.add(id);
+    const ids = panelsUnder({ x, y, width, height }, placedPanels);
+    placed.push({ popup, ids });
+    for (const id of ids) if (!known.has(id)) fresh.add(id);
   }
   if (asked === null && !placed.length && ++framesWithoutPopup >= POPUP_WAIT_FRAMES) return askAll();
   if (placed.length || asked !== null) {
     // The first request goes even with no panel under the popups: the host learns that a menu is open.
     if (fresh.size || asked === null) {
-      for (const id of fresh) known.add(id);
       const first = asked === null;
-      asked = known;
       const seq = askHost([...fresh]);
-      // The first answer shows them all (the class is on until then); a later one only the popups that waited for it.
+      for (const id of fresh) known.set(id, seq);
+      asked = known;
+      // The first answer shows them all (the class is on until then).
       if (first) waitFor(seq);
-      else for (const popup of growing) holdPopup(popup, seq);
     }
-    for (const popup of placed) if (!growing.includes(popup) && !heldPopups.has(popup) && !popup.hasAttribute("data-panels-clear")) clearPopup(popup);
+    // After that, each popup shows once every panel under it is out: asked now, or asked a moment ago for another one.
+    for (const { popup, ids } of placed) {
+      const wanted = Math.max(0, ...ids.map((id) => known.get(id) ?? 0));
+      if (wanted > answeredSeq) {
+        if ((heldPopups.get(popup) ?? 0) < wanted) holdPopup(popup, wanted);
+      } else if (!heldPopups.has(popup) && !popup.hasAttribute("data-panels-clear")) clearPopup(popup);
+    }
   }
   measureFrame = requestAnimationFrame(measurePopups);
 }

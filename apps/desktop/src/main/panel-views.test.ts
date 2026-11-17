@@ -686,6 +686,21 @@ describe("a panel back in its slot", () => {
     expect(closed.rig.frozen.at(-1)).toEqual({});
   });
 
+  it("keeps the menu's picture of a panel that left its slot meanwhile, to lie on when it comes back", async () => {
+    const rig = panelViewsRig();
+    const a = rig.add(A);
+    rig.views.place([place(A)]);
+    await rig.views.freeze(true, [A], 1);
+    rig.views.place([]);
+    const closing = rig.views.freeze(false);
+    await vi.advanceTimersByTimeAsync(FROZEN_GONE_MS);
+    await closing;
+    expect(rig.frozen.at(-1)).toEqual({ [A]: a.image });
+    rig.views.place([place(A)]);
+    await vi.advanceTimersByTimeAsync(FROZEN_GONE_MS);
+    expect(rig.frozen.at(-1)).toEqual({});
+  });
+
   it("takes no picture of a panel hidden for a menu or one that never showed", async () => {
     const rig = panelViewsRig();
     const a = rig.add(A);
