@@ -52,7 +52,8 @@ jobs:
 
   # Known holes in what Tavora ships, and secrets in the history. The audit fails on a high or critical advisory in a
   # production dependency; package.json's pnpm.overrides lift the ones a compatible fix exists for, and
-  # pnpm.auditConfig.ignoreGhsas lists the rest with no fix at all (picomatch, only in the build's file watcher).
+  # pnpm.auditConfig.ignoreGhsas lists the rest with no fix at all: picomatch, which Excalidraw's sass dependency pulls
+  # in for its file watcher; it is not in the Whiteboard's built bundle.
   # gitleaks scans every commit; .gitleaksignore lists the reviewed test fixtures it matches.
   supply-chain:
     runs-on: ubuntu-24.04

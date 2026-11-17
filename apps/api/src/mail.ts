@@ -159,7 +159,7 @@ export function publishedMail(to: string, module: { id: string; name: string; ve
         text:
           `${module.name} ${module.version} (${module.id}) ist jetzt in Tavoras Modulkatalog, signiert mit deinem Herausgeberschlüssel ${key}` +
           (token === null ? ", hochgeladen aus Tavora.\n\n" : `, hochgeladen mit dem Veröffentlichungs-Token „${token}“.\n\n`) +
-          "Wenn du das nicht warst, schreib uns sofort an tavora.app@gmail.com und entferne deine Tokens in Tavora: Einstellungen > Konto > Modul-Entwickler.\n\nTavora\n",
+          "Wenn du das nicht warst, schreib uns sofort an tavora.app@gmail.com und entferne deine Tokens in Tavora: Einstellungen > Entwicklung > Veröffentlichen.\n\nTavora\n",
       }
     : {
         to,
@@ -167,7 +167,7 @@ export function publishedMail(to: string, module: { id: string; name: string; ve
         text:
           `${module.name} ${module.version} (${module.id}) is now in Tavora's module catalog, signed with your publisher key ${key}` +
           (token === null ? ", uploaded from Tavora.\n\n" : `, uploaded with the publish token "${token}".\n\n`) +
-          "If this wasn't you, write to tavora.app@gmail.com right away, and remove your tokens in Tavora: Settings > Account > Module developer.\n\nTavora\n",
+          "If this wasn't you, write to tavora.app@gmail.com right away, and remove your tokens in Tavora: Settings > Developer > Publishing.\n\nTavora\n",
       };
 }
 
@@ -180,7 +180,7 @@ export function withdrawnMail(to: string, module: { id: string; name: string; ve
         text:
           `${module.name} ${module.version} (${module.id}) wartet nicht mehr auf die Prüfung: Die Version wurde zurückgezogen` +
           (token === null ? ", aus Tavora.\n\n" : `, mit dem Veröffentlichungs-Token „${token}“.\n\n`) +
-          "Wenn du das nicht warst, schreib uns sofort an tavora.app@gmail.com und entferne deine Tokens in Tavora: Einstellungen > Konto > Modul-Entwickler.\n\nTavora\n",
+          "Wenn du das nicht warst, schreib uns sofort an tavora.app@gmail.com und entferne deine Tokens in Tavora: Einstellungen > Entwicklung > Veröffentlichen.\n\nTavora\n",
       }
     : {
         to,
@@ -188,7 +188,7 @@ export function withdrawnMail(to: string, module: { id: string; name: string; ve
         text:
           `${module.name} ${module.version} (${module.id}) is no longer waiting for review: it was withdrawn` +
           (token === null ? " from Tavora.\n\n" : ` with the publish token "${token}".\n\n`) +
-          "If this wasn't you, write to tavora.app@gmail.com right away, and remove your tokens in Tavora: Settings > Account > Module developer.\n\nTavora\n",
+          "If this wasn't you, write to tavora.app@gmail.com right away, and remove your tokens in Tavora: Settings > Developer > Publishing.\n\nTavora\n",
       };
 }
 

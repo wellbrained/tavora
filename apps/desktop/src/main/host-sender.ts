@@ -12,7 +12,7 @@ export function isHostSender(event: SenderEvent, hostContentsId: number): boolea
   return event.sender.id === hostContentsId && event.senderFrame?.parent === null;
 }
 
-/** Pulls the packaged-build gate out of the publish flow so it can be tested alone. */
+/** Whether this Tavora may publish built-in modules: only a development build, and only with Tavora's keys pinned. */
 export function officialPublishAllowed(packaged: boolean, pinsOn: boolean): boolean {
   return !packaged && pinsOn;
 }

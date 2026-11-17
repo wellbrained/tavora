@@ -81,7 +81,8 @@
     "asar": true,
     "asarUnpack": [
       "out/main/system-info-worker.cjs",
-      "node_modules/koffi/**"
+      "node_modules/koffi/**",
+      "node_modules/@koromix/**"
     ],
     "electronLanguages": [
       "en-US",

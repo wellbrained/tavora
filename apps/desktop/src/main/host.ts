@@ -1107,6 +1107,8 @@ export class Host {
     const { modules } = this.installed;
     this.moduleData = await listModuleData(this.options.userData, this.files.root());
     this.dropPanelsOfMissingModules();
+    // A module removed, blocked, replaced by another publisher's or updated without the connector ends its open OBS pages now.
+    this.streaming?.recheckStreams();
     this.noteModuleVersions();
     this.workspaces.settlePanelTypes(panelTypesOf(modules));
     this.syncPanelTypes();
@@ -5019,8 +5021,6 @@ export class Host {
     this.statePush = undefined;
     // Hotkeys follow the workspace shown now and its panels, which most changes that push the state can move.
     this.streaming?.sync();
-    // A module replaced by another publisher's, or updated without the connector, ends its open OBS pages here.
-    this.streaming?.recheckStreams();
     this.syncConnection();
     if (!this.window.isDestroyed()) this.window.webContents.send("host:state", this.viewState());
     if (this.canvas) {

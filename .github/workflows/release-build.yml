@@ -173,6 +173,10 @@ jobs:
         run: |
           $p = Start-Process "apps/desktop/release/Tavora-Setup-$env:VERSION.exe" -ArgumentList '/S' -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "The installer exited with $($p.ExitCode)." }
+      # The fuses of the exe users get (scripts/check-fuses.mjs), as in Checks' packaged-start.
+      - name: The installed Tavora's fuses are safe
+        shell: pwsh
+        run: node apps/desktop/scripts/check-fuses.mjs "$env:LOCALAPPDATA\Programs\Tavora\Tavora.exe"
       - name: Start the installed Tavora
         shell: pwsh
         env:
