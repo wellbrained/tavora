@@ -75,6 +75,7 @@ defineExpose({ insert, focus: () => field.value?.$el.focus() });
       v-model="text"
       :class="cn('relative', $attrs.class as string | undefined)"
       :maxlength="maxlength"
+      spellcheck="false"
       :placeholder="placeholder"
       :aria-invalid="invalid || undefined"
       @input="follow"

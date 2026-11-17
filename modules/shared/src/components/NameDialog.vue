@@ -4,7 +4,8 @@
 // Without `open` the dialog is open as long as it is rendered (`v-if`); with `v-model:open` the caller controls it.
 // `value` may change while the dialog is open (a name filled in from a picked file): the field follows it until
 // the user types; after that their text wins and later changes are ignored (until the dialog opens again).
-// `ready` (default true) turns Save off while the caller is not done, e.g. before a file is picked.
+// `ready` (default true) turns Save off while the caller is not done, e.g. before a file is picked. An empty name
+// leaves Save on: pressing it shows "Give it a name." (a name over the limit says so as you type and turns Save off).
 import { computed, ref, watch } from "vue";
 import type { Component } from "vue";
 import { Input } from "./ui/input";
@@ -51,7 +52,11 @@ function focusName(event: Event) {
 function submit() {
   if (props.busy || !props.ready) return;
   touched.value = true;
-  if (problem.value) return;
+  if (problem.value) {
+    // Save stays on for an empty name, so a try says what's missing and goes back to the field.
+    form.value?.querySelector("input")?.focus();
+    return;
+  }
   emit("submit", text.value.trim());
 }
 
@@ -96,7 +101,7 @@ function cancel() {
         </div>
         <DialogFooter>
           <DialogButton type="button" close :disabled="busy" data-testid="name-cancel" @click="cancel">{{ props.cancel ?? uiText.cancel }}</DialogButton>
-          <DialogButton type="submit" :icon="confirmIcon" :loading="busy" :disabled="busy || !ready || !!problem" :aria-busy="busy || undefined" data-testid="name-submit">
+          <DialogButton type="submit" :icon="confirmIcon" :loading="busy" :disabled="busy || !ready || problem === 'tooLong'" :aria-busy="busy || undefined" data-testid="name-submit">
             {{ confirm }}
           </DialogButton>
         </DialogFooter>

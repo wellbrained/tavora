@@ -7,7 +7,7 @@
 // - `editable` turns the value into a small box you can type in. The number is clamped to min and max and moved onto
 //   the step when you leave the box or press Enter; Escape puts the old number back. The unit stays beside it.
 // - `resetValue` adds a "Reset" button before the slider that shows while the value differs from it. Its room is kept
-//   while it is hidden, so nothing jumps. Pass `resetLabel` in the user's language.
+//   while it is hidden, so nothing jumps. `resetLabel` replaces its text.
 // With either on, the row never squeezes: the slider keeps a least width and the box (or the value) drops under it
 // when the row is too narrow.
 import { computed, nextTick, ref, useTemplateRef, watch, type HTMLAttributes } from "vue";
@@ -15,7 +15,8 @@ import { cn } from "../../../lib/utils";
 import { Button } from "../button";
 import { Input } from "../input";
 import Slider from "./Slider.vue";
-import { commitTyped } from "./slider-field";
+import { uiLocale, uiText } from "../text";
+import { commitTyped, decimalCount } from "./slider-field";
 
 const props = withDefaults(
   defineProps<{
@@ -34,7 +35,7 @@ const props = withDefaults(
     disabled?: boolean;
     class?: HTMLAttributes["class"];
   }>(),
-  { step: 1, unit: "", resetLabel: "Reset" },
+  { step: 1, unit: "" },
 );
 const model = defineModel<number>({ required: true });
 const values = computed({
@@ -47,15 +48,20 @@ const root = useTemplateRef<HTMLElement>("root");
 const roomy = computed(() => props.editable || props.resetValue !== undefined);
 const showReset = computed(() => props.resetValue !== undefined && model.value !== props.resetValue);
 
-const draft = ref(String(model.value));
-watch(model, (value) => (draft.value = String(value)));
-const changed = () => draft.value !== String(model.value);
+// The number as the user writes it: "0,5" in German. The box reads both marks back (parseTyped).
+const shown = (value: number) =>
+  new Intl.NumberFormat(uiLocale.value, { maximumFractionDigits: Math.min(20, Math.max(decimalCount(props.step), decimalCount(value))), useGrouping: false }).format(value);
+const valueText = computed(() => (props.unit ? `${shown(model.value)} ${props.unit}` : shown(model.value)));
+
+const draft = ref(shown(model.value));
+watch([model, uiLocale], () => (draft.value = shown(model.value)));
+const changed = () => draft.value !== shown(model.value);
 
 function commit() {
   const next = commitTyped(draft.value, props.min, props.max, props.step);
   if (next !== null) model.value = next;
   // Also when nothing changed (72 snapped back to 70): the box shows the number the field really has.
-  draft.value = String(model.value);
+  draft.value = shown(model.value);
 }
 
 function onKeydown(event: KeyboardEvent) {
@@ -66,7 +72,7 @@ function onKeydown(event: KeyboardEvent) {
     // Only takes the key while there is something to put back; otherwise Escape still closes what is around the field.
     event.preventDefault();
     event.stopPropagation();
-    draft.value = String(model.value);
+    draft.value = shown(model.value);
   }
 }
 
@@ -94,9 +100,9 @@ function reset() {
       data-slot="slider-reset"
       @click="reset"
     >
-      {{ resetLabel }}
+      {{ resetLabel ?? uiText.reset }}
     </Button>
-    <Slider v-model="values" :min="min" :max="max" :step="step" :disabled="disabled" :aria-label="label" :class="roomy ? 'min-w-24 grow basis-24' : 'min-w-0 flex-1'" />
+    <Slider v-model="values" :min="min" :max="max" :step="step" :disabled="disabled" :aria-label="label" :value-text="valueText" :class="roomy ? 'min-w-24 grow basis-24' : 'min-w-0 flex-1'" />
     <span v-if="editable" class="flex flex-none items-center gap-1">
       <Input
         :model-value="draft"
@@ -113,6 +119,6 @@ function reset() {
       />
       <span v-if="unit" class="text-muted-foreground text-sm whitespace-nowrap" data-slot="slider-unit">{{ unit }}</span>
     </span>
-    <output v-else class="text-muted-foreground w-11 flex-none text-right text-sm whitespace-nowrap tabular-nums" data-slot="slider-value">{{ model }}{{ unit && ` ${unit}` }}</output>
+    <output v-else class="text-muted-foreground w-11 flex-none text-right text-sm whitespace-nowrap tabular-nums" data-slot="slider-value">{{ valueText }}</output>
   </div>
 </template>

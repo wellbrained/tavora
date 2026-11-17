@@ -558,7 +558,7 @@ defineExpose({ fit, actualSize, zoomIn, zoomOut, moveOrigin, setView, showArea, 
         <Minus />
       </Button>
       <Button variant="ghost" size="sm" class="text-muted-foreground min-w-12 px-1.5 tabular-nums" :title="uiText.zoomReset" :aria-label="uiText.zoomPercent.replace('{percent}', String(percent))" data-testid="zoom-percent" @click="actualSize">
-        {{ percent }}%
+        {{ uiText.percent.replace('{percent}', String(percent)) }}
       </Button>
       <Button variant="ghost" size="icon-sm" :title="uiText.zoomIn" :aria-label="uiText.zoomIn" data-testid="zoom-in" @click="zoomIn">
         <Plus />

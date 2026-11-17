@@ -5,10 +5,11 @@ import { reactiveOmit } from "@vueuse/core"
 import { SliderRange, SliderRoot, SliderThumb, SliderTrack, useForwardPropsEmits } from "reka-ui"
 import { cn } from "../../../lib/utils"
 
-const props = defineProps<SliderRootProps & { class?: HTMLAttributes["class"] }>()
+// `valueText` is what a screen reader says for the value ("70 %"), when the bare number isn't enough.
+const props = defineProps<SliderRootProps & { class?: HTMLAttributes["class"], valueText?: string }>()
 const emits = defineEmits<SliderRootEmits>()
 
-const delegatedProps = reactiveOmit(props, "class")
+const delegatedProps = reactiveOmit(props, "class", "valueText")
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
 </script>
@@ -37,6 +38,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
       v-for="(_, key) in modelValue"
       :key="key"
       data-slot="slider-thumb"
+      :aria-valuetext="valueText"
       class="border-primary bg-background dark:bg-foreground block size-4 shrink-0 rounded-full border-2 transition-colors outline-none hover:border-[var(--primary-hover)] focus-visible:ring-ring/50 focus-visible:ring-3 disabled:pointer-events-none disabled:opacity-50"
     />
   </SliderRoot>

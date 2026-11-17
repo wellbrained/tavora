@@ -1,8 +1,10 @@
 <script setup lang="ts">
 // How the page's settings look, over a backdrop the user can switch: a game-like scene, light or
 // dark. Overlay pages start on the game scene, panel pages on dark; the choice is remembered.
+// The switch is a radio group (one Tab stop, arrow keys move), styled to sit on the scene.
 import { useLocalStorage } from "@vueuse/core";
 import { computed } from "vue";
+import { RadioGroupItem, RadioGroupRoot } from "reka-ui";
 import { cn } from "../../../lib/utils";
 import { uiText } from "../text";
 
@@ -25,19 +27,16 @@ const scenes: Record<Backdrop, string> = {
 <template>
   <div :class="cn('relative mt-4 flex h-36 items-center justify-center overflow-hidden rounded-lg border p-3', scenes[backdrop])" data-slot="settings-preview" :data-backdrop="backdrop">
     <div role="img" :aria-label="label" class="contents"><slot /></div>
-    <div role="radiogroup" :aria-label="uiText.backdrop" class="absolute top-2 right-2 flex gap-0.5 rounded-lg bg-black/60 p-0.5">
-      <button
+    <RadioGroupRoot v-model="backdrop" orientation="horizontal" :aria-label="uiText.backdrop" class="absolute top-2 right-2 flex gap-0.5 rounded-lg bg-black/60 p-0.5">
+      <RadioGroupItem
         v-for="option in options"
         :key="option.value"
-        type="button"
-        role="radio"
-        :aria-checked="backdrop === option.value"
+        :value="option.value"
         :data-testid="`settings-backdrop-${option.value}`"
-        :class="cn('h-6 rounded-md px-2 text-xs text-white/75 outline-none hover:text-white focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-white', backdrop === option.value && 'bg-white/15 text-white')"
-        @click="backdrop = option.value"
+        class="h-6 rounded-md px-2 text-xs text-white/75 outline-none hover:text-white focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-white data-[state=checked]:bg-white/15 data-[state=checked]:text-white"
       >
         {{ option.label }}
-      </button>
-    </div>
+      </RadioGroupItem>
+    </RadioGroupRoot>
   </div>
 </template>

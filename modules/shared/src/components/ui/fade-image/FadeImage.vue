@@ -8,7 +8,8 @@
 // so an icon in a menu or a list does not flash a muted box and fade again each time it is shown again.
 // A picture that fills its box (`fit="cover"`) gets a faint edge, so a dark one does not melt into a dark card; `:edge`
 // turns it on or off by hand (off for a picture that already sits in a frame).
-// Attributes other than `class` (alt, data-testid, draggable…) go to the <img>; `class` is the box.
+// Attributes other than `class` (alt, data-testid, draggable…) go to the <img>; `class` is the box. Without an `alt` the
+// picture counts as decoration (`alt=""`), so a screen reader skips it instead of reading its address.
 import { computed, onMounted, ref, useAttrs, watch } from "vue";
 import type { ClassValue } from "clsx";
 import { cn } from "../../../lib/utils";
@@ -56,6 +57,7 @@ const edged = computed(() => (props.edge ?? props.fit === "cover") && loaded.val
       ref="image"
       :key="src"
       :src="src"
+      alt=""
       v-bind="imgAttrs"
       :class="cn('absolute inset-0 size-full opacity-0 transition-opacity duration-[var(--duration-panel)] ease-[var(--ease-out-strong)]', fit === 'cover' ? 'object-cover' : 'object-contain', loaded && 'opacity-100')"
       @load="shown"

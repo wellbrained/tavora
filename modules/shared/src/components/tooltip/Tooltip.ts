@@ -114,7 +114,7 @@ export default defineComponent({
     });
     function head() {
       const keys = props.shortcut ? h('span', { class: 'tavora-tooltip-keys' }, shortcutKeys(props.shortcut).map(key => h('kbd', key))) : null;
-      if (props.title) return [h('div', { class: 'tavora-tooltip-head' }, [h('h2', props.title), keys]), props.description ? h('p', wrappable(props.description)) : null];
+      if (props.title) return [h('div', { class: 'tavora-tooltip-head' }, [h('div', { class: 'tavora-tooltip-title' }, props.title), keys]), props.description ? h('p', wrappable(props.description)) : null];
       // A one-line hint is its own label: the text takes the title's place beside the keys.
       if (keys && props.description) return [h('div', { class: 'tavora-tooltip-head' }, [h('p', wrappable(props.description)), keys])];
       return [props.description ? h('p', wrappable(props.description)) : null];

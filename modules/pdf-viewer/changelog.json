@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.23",
+    "date": "2026-11-17",
+    "notes": [
+      "Small fixes: clearer messages, German numbers written the German way and better screen reader labels."
+    ]
+  },
+  {
     "version": "0.1.22",
     "date": "2026-11-17",
     "notes": [

@@ -1,10 +1,10 @@
 .tavora-tooltip{--tavora-tooltip-surface:color-mix(in srgb,var(--foreground,#f2ece0) 6%,var(--popover,#201c19));--tavora-tooltip-line:color-mix(in srgb,var(--foreground,#f2ece0) 9%,transparent);position:fixed;z-index:1000;pointer-events:none;box-sizing:border-box;padding:10px 12px;border:1px solid var(--tavora-tooltip-line);border-radius:8px;background:var(--tavora-tooltip-surface);color:var(--popover-foreground,var(--foreground,#f2ece0));box-shadow:inset 0 1px 0 #ffffff0a,0 8px 24px #000a,0 2px 6px #0006;font-family:var(--tavora-font-sans,system-ui,sans-serif);font-size:13px;line-height:1.4;overflow-wrap:anywhere}
-.tavora-tooltip h2{font-size:15px;font-weight:600;line-height:1.35;margin:0}
+.tavora-tooltip .tavora-tooltip-title{font-size:15px;font-weight:600;line-height:1.35;margin:0}
 .tavora-tooltip p{font-size:13px;line-height:1.45;margin:3px 0 0;color:color-mix(in srgb,var(--foreground,#f2ece0) 72%,var(--popover,#201c19))}
 .tavora-tooltip p:first-child,.tavora-tooltip-head p{margin-top:0}
 .tavora-tooltip-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .tavora-tooltip-head+p{margin-top:3px}
-.tavora-tooltip[data-tone=warning] h2{color:var(--warning,#e3c75f)}.tavora-tooltip[data-tone=danger] h2{color:var(--destructive,#e5675a)}
+.tavora-tooltip[data-tone=warning] .tavora-tooltip-title{color:var(--warning,#e3c75f)}.tavora-tooltip[data-tone=danger] .tavora-tooltip-title{color:var(--destructive,#e5675a)}
 
 /* The arrow: a square turned on its corner, half hidden behind the card's edge that faces the anchor. */
 .tavora-tooltip-arrow{position:absolute;width:8px;height:8px;background:var(--tavora-tooltip-surface);border:1px solid var(--tavora-tooltip-line);transform:rotate(45deg)}
@@ -27,7 +27,7 @@
 
 /* A one-line label: tighter, the text as bright as a title. */
 .tavora-tooltip.compact{padding:6px 10px;border-radius:7px;font-size:13px}
-.tavora-tooltip.compact h2{font-size:13px;line-height:1.3}
+.tavora-tooltip.compact .tavora-tooltip-title{font-size:13px;line-height:1.3}
 .tavora-tooltip.compact p{font-size:13px;margin-top:2px}
 .tavora-tooltip.compact p:first-child,.tavora-tooltip.compact .tavora-tooltip-head p{color:inherit;margin-top:0}
 .tavora-tooltip.compact li{font-size:12px}

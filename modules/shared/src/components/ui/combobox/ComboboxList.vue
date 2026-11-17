@@ -29,7 +29,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
       data-slot="combobox-list"
       v-bind="{ ...$attrs, ...forwarded }"
       :class="cn(
-        'bg-popover text-popover-foreground tavora-popup relative z-50 max-h-[min(18rem,var(--reka-combobox-content-available-height))] w-(--reka-combobox-trigger-width) min-w-[8rem] overflow-x-hidden overflow-y-auto rounded-md border shadow-md',
+        'bg-popover text-popover-foreground tavora-popup relative z-50 max-h-[min(18rem,var(--reka-combobox-content-available-height))] w-(--reka-combobox-trigger-width) min-w-[8rem] overflow-x-hidden overflow-y-auto overscroll-contain rounded-md border shadow-md',
         position === 'popper'
           && 'data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1',
         props.class,

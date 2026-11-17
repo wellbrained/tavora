@@ -15,6 +15,7 @@ const model = defineModel<string>({ default: "" })
     :class="cn('w-40 tracking-widest tabular-nums', props.class)"
     inputmode="numeric"
     autocomplete="one-time-code"
+    spellcheck="false"
     :maxlength="props.length + 1"
   />
 </template>
