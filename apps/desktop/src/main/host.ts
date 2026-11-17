@@ -149,6 +149,7 @@ import { OverlayPreviews } from "./overlay-previews";
 import { GameWatcher, unlistedToOffer } from "./game-watch";
 import { moveToWorkspaces } from "./workspace-move";
 import { Streaming } from "./streaming";
+import { unpackedPath } from "./unpacked";
 import { findInstalledGames, type InstalledGame } from "./launcher-games";
 import { GamesSeen } from "./games-seen";
 import { gameKey, pickGames, withInstallDates } from "./installed-list";
@@ -684,7 +685,11 @@ export class Host {
       firstKey: (key) => this.safetyLists.firstKey(key),
       official: this.official,
       panels: { reload: (moduleId) => this.reloadModuleViews(moduleId), close: (moduleId) => this.removeModulePanels(moduleId) },
-      grantsChanged: () => this.syncConnection(),
+      grantsChanged: () => {
+        this.syncConnection();
+        // An OBS page of a module that just lost the stream-overlay connector stops now, not at its next ping.
+        this.streaming?.recheckStreams();
+      },
       installProgress: (moduleId, percent) => {
         if (!this.window.isDestroyed()) this.window.webContents.send("host:install-progress", { moduleId, percent });
       },
@@ -910,7 +915,8 @@ export class Host {
     const connectionFile = new ConnectionFile(path.join(userData, "connection.json"));
     const connection = new ConnectionWatcher({ probe: connectionProbe(), store: connectionFile, initial: await connectionFile.load(), log: (message, error) => console.warn(`[tavora] ${message}`, error) });
     const systemInfo = new SystemMonitorThread({
-      start: () => new Worker(path.join(__dirname, "system-info-worker.cjs")),
+      // Unpacked next to app.asar in the packaged app, like koffi which it loads (package.json's asarUnpack).
+      start: () => new Worker(unpackedPath(path.join(__dirname, "system-info-worker.cjs"))),
       connection,
       trafficStore: new TrafficFile(path.join(userData, "traffic.json")),
       // Electron's CPU figure is already a share of the whole PC; its memory is in kilobytes.
@@ -5022,6 +5028,8 @@ export class Host {
     this.statePush = undefined;
     // Hotkeys follow the workspace shown now and its panels, which most changes that push the state can move.
     this.streaming?.sync();
+    // A module replaced by another publisher's, or updated without the connector, ends its open OBS pages here.
+    this.streaming?.recheckStreams();
     this.syncConnection();
     if (!this.window.isDestroyed()) this.window.webContents.send("host:state", this.viewState());
     if (this.canvas) {

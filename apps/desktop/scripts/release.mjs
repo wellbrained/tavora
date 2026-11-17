@@ -28,19 +28,15 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { createInterface } from "node:readline/promises";
 import { AFTER_RELEASE, CHECKLIST, asksHandChecks, checkCi, checkDownload, checkInstalled, checkRelease, failedJobsHint, findDispatchedRun, lastReleased, readCiHashes, releaseFiles, releaseNotes, releaseRunTitle, releaseTitle } from "./release-guards.mjs";
 import { hello, publish } from "../../../scripts/deploy-client.mjs";
+import { installedVersion } from "./installed-version.mjs";
 import { lockPath, takeLock } from "./release-lock.mjs";
 import { checkPinChange, describeSigned, loadUpdateSigningKey, readPinsFromSource, signLatestYml } from "./update-feed.mjs";
 import { PINNED_UPDATE_KEYS } from "../src/main/update-keys.ts";
 import { rawUpdatePublicKey, readPinnedUpdateKeys } from "../src/main/update-signature.ts";
 
-/** The version of the Tavora installed for this user (asar is off, so its package.json is a plain file), or null. */
+/** The version of the Tavora installed for this user, or null. */
 function readInstalledVersion() {
-  try {
-    const file = path.join(process.env.LOCALAPPDATA ?? "", "Programs", "Tavora", "resources", "app", "package.json");
-    return JSON.parse(readFileSync(file, "utf8")).version ?? null;
-  } catch {
-    return null;
-  }
+  return installedVersion(path.join(process.env.LOCALAPPDATA ?? "", "Programs", "Tavora"));
 }
 
 const desktop = path.dirname(path.dirname(fileURLToPath(import.meta.url)));

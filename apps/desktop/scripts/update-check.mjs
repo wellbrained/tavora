@@ -20,6 +20,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSyn
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { makeUpdateKey, signUpdate } from "../src/main/update-signature.ts";
+import { installedVersion as readInstalledVersion } from "./installed-version.mjs";
 import { checkStart, visibleWindows } from "./start-check.mjs";
 import { addSignatureToLatestYml } from "./update-feed.mjs";
 
@@ -118,11 +119,7 @@ function packageVersion(version, out) {
 }
 
 function installedVersion() {
-  try {
-    return JSON.parse(readFileSync(path.join(installed, "resources", "app", "package.json"), "utf8")).version;
-  } catch {
-    return null;
-  }
+  return readInstalledVersion(installed);
 }
 
 /** Whether a process with this image name runs. */

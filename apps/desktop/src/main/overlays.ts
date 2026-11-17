@@ -253,7 +253,8 @@ export function overlayUrl(port: number, token: string): string {
 export class OverlayServer {
   private server: Server | null = null;
   private listening: number | null = null;
-  private readonly streams = new Set<ServerResponse>();
+  /** Each open live stream and the link it is for. */
+  private readonly streams = new Map<ServerResponse, OverlayLink>();
   status: OverlayServerStatus = "off";
 
   constructor(private readonly options: OverlayServerOptions) {}
@@ -309,9 +310,18 @@ export class OverlayServer {
     this.server = null;
     this.listening = null;
     this.status = "off";
-    for (const stream of this.streams) stream.end();
+    for (const stream of this.streams.keys()) stream.end();
     this.streams.clear();
     if (server) await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+
+  /**
+   * Ends at once every open stream whose link may no longer be served (its module lost the connector, was removed or
+   * now comes from another publisher). The host calls it whenever grants or installed modules change; the ping below
+   * only catches what slipped past.
+   */
+  recheck(): void {
+    for (const [stream, link] of this.streams) if (!this.options.page(link)) stream.end();
   }
 
   private async handle(request: IncomingMessage, response: ServerResponse, port: number): Promise<void> {
@@ -357,7 +367,7 @@ export class OverlayServer {
     if (this.streams.size >= MAX_STREAMS) return this.plain(response, 503, "Too many overlays");
     response.writeHead(200, { ...COMMON_HEADERS, "Content-Type": "text/event-stream; charset=utf-8", Connection: "keep-alive" });
     if (request.method === "HEAD") return void response.end();
-    this.streams.add(response);
+    this.streams.set(response, link);
     let current = state;
     const send = (value: JsonValue | null) => {
       current = value;

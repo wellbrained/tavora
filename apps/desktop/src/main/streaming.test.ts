@@ -1,4 +1,5 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { request, type IncomingMessage } from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -43,12 +44,12 @@ async function setup({ held = [] as string[] } = {}) {
   };
   const heard: HotkeyBinding[] = [];
   const panel: HotkeyListener = { moduleId: MODULE.manifest.id, usedAt: 1, hotkeyPressed: (binding) => heard.push(binding) };
-  const world = { workspaceId: "poe2" as string | null, panels: [panel], clipboard: "", opened: [] as string[], settings: { streamOverlays: false, overlayPort: 47820 }, granted: true, asked: 0, answer: true };
+  const world = { workspaceId: "poe2" as string | null, panels: [panel], clipboard: "", opened: [] as string[], settings: { streamOverlays: false, overlayPort: 47820 }, granted: true, asked: 0, answer: true, module: MODULE as GrantedModule | undefined };
   const streaming = await Streaming.create({
     userData: dir,
     settings: () => world.settings,
     saveSettings: (next) => Object.assign(world.settings, next),
-    installed: { shown: (id) => (id === MODULE.manifest.id ? MODULE : undefined), get: (id) => (id === MODULE.manifest.id ? MODULE : undefined) },
+    installed: { shown: (id) => (id === world.module?.manifest.id ? world.module : undefined), get: (id) => (id === world.module?.manifest.id ? world.module : undefined) },
     grants: { allowed: () => ({ network: [], connectors: world.granted ? ["stream-overlay"] : [], folders: [] }) },
     askConnector: async () => {
       world.asked++;
@@ -229,15 +230,20 @@ describe("publishing without the connector", () => {
     overlay.remove("item-1");
   });
 
-  it("keeps state for a key that has a game overlay, or a link already", async () => {
+  it("keeps state for a key that has a game overlay", async () => {
     const { streaming, overlay, world } = await setup();
     world.granted = false;
     streaming.useOverlayKeys({ showing: () => false, wants: () => false, has: (subject) => subject.key === "item-2", pressed: () => {}, general: () => false });
     overlay.publish("item-2", { value: 2 });
     expect(stored(streaming, "item-2")?.state).toEqual({ value: 2 });
-    streaming.overlayStore.link({ owner: "official", moduleId: MODULE.manifest.id, workspaceId: "poe2", key: "item-3" });
+  });
+
+  it("stores nothing new for an OBS link made before the connector was taken back", async () => {
+    const { streaming, overlay, world } = await setup();
+    overlay.publish("item-3", { value: 1 });
+    world.granted = false;
     overlay.publish("item-3", { value: 3 });
-    expect(stored(streaming, "item-3")?.state).toEqual({ value: 3 });
+    expect(stored(streaming, "item-3")?.state).toEqual({ value: 1 });
   });
 
   it("removes what was published for a game overlay, with or without the connector", async () => {
@@ -404,6 +410,126 @@ describe("keys of game overlays", () => {
     streaming.sync();
     expect(registered.has("F7")).toBe(true);
     expect(heard).toEqual(["$layer:layer"]);
+  });
+});
+
+describe("open Stream overlay pages", () => {
+  let root: string;
+
+  beforeEach(async () => {
+    root = path.join(dir, "module");
+    await mkdir(path.join(root, "dist"), { recursive: true });
+    await writeFile(path.join(root, "dist", "overlay.html"), "<!doctype html><p>overlay</p>");
+  });
+
+  /** Streaming with the overlay server running and a link copied for item-1; the module is served from `root`. */
+  async function running() {
+    const parts = await setup();
+    parts.world.module = { ...MODULE, root };
+    let port = 49000 + Math.floor(Math.random() * 500);
+    for (parts.world.settings.overlayPort = port; (await parts.streaming.setOverlays(true), parts.streaming.view().overlays.status) !== "running"; ) await parts.streaming.setPort(++port);
+    expect(await parts.overlay.copyLink("item-1")).toBe("copied");
+    const token = /\/overlay\/([0-9a-f]{32})\//.exec(parts.world.clipboard)![1]!;
+    return { ...parts, port, token };
+  }
+
+  function get(port: number, pathname: string): Promise<number> {
+    return new Promise((resolve, reject) => {
+      const req = request({ host: "127.0.0.1", port, path: pathname, headers: { host: `127.0.0.1:${port}` } }, (res) => {
+        res.resume();
+        resolve(res.statusCode ?? 0);
+      });
+      req.on("error", reject);
+      req.end();
+    });
+  }
+
+  /** Opens the live stream and waits for its first event; `ended` settles when the server closes it. */
+  function open(port: number, token: string): Promise<{ ended: Promise<void> }> {
+    return new Promise((resolve, reject) => {
+      const req = request({ host: "127.0.0.1", port, path: `/overlay/${token}/_state`, headers: { host: `127.0.0.1:${port}` } }, (res: IncomingMessage) => {
+        const ended = new Promise<void>((done) => res.on("end", () => done()));
+        res.setEncoding("utf8");
+        res.once("data", () => resolve({ ended }));
+      });
+      req.on("error", reject);
+      req.end();
+    });
+  }
+
+  /** Well under the 15 s ping that used to be the only thing ending a stream. */
+  const ended = (stream: { ended: Promise<void> }) =>
+    Promise.race([stream.ended, new Promise<never>((_, reject) => setTimeout(() => reject(new Error("the stream stayed open")), 1_000))]);
+
+  it("end at once when the module loses the connector, and the link is gone for a new page", async () => {
+    const { streaming, port, token, world } = await running();
+    try {
+      const stream = await open(port, token);
+      world.granted = false;
+      streaming.recheckStreams();
+      await ended(stream);
+      expect(await get(port, `/overlay/${token}/_state`)).toBe(404);
+      expect(await get(port, `/overlay/${token}/`)).toBe(404);
+    } finally {
+      await streaming.shutdown();
+    }
+  });
+
+  it("end at once when the module is removed", async () => {
+    const { streaming, port, token, world } = await running();
+    try {
+      const stream = await open(port, token);
+      world.module = undefined;
+      streaming.recheckStreams();
+      await ended(stream);
+      expect(await get(port, `/overlay/${token}/_state`)).toBe(404);
+    } finally {
+      await streaming.shutdown();
+    }
+  });
+
+  it("end at once when another publisher's module takes its place", async () => {
+    const { streaming, port, token, world } = await running();
+    try {
+      const stream = await open(port, token);
+      world.module = { ...MODULE, root, owner: "someone-else" };
+      streaming.recheckStreams();
+      await ended(stream);
+      expect(await get(port, `/overlay/${token}/_state`)).toBe(404);
+    } finally {
+      await streaming.shutdown();
+    }
+  });
+
+  it("stay open while the module may still serve them", async () => {
+    const { streaming, port, token } = await running();
+    try {
+      const stream = await open(port, token);
+      streaming.recheckStreams();
+      await expect(ended(stream)).rejects.toThrow("stayed open");
+    } finally {
+      await streaming.shutdown();
+    }
+  });
+
+  it("are served only to the owner, with the connector, while the module has an overlay page", async () => {
+    const { streaming, port, token, world } = await running();
+    try {
+      expect(await get(port, `/overlay/${token}/`)).toBe(200);
+      world.module = { ...MODULE, root, owner: "someone-else" };
+      expect(await get(port, `/overlay/${token}/`)).toBe(404);
+      world.module = { ...MODULE, root, manifest: { ...MODULE.manifest, overlay: undefined } };
+      expect(await get(port, `/overlay/${token}/`)).toBe(404);
+      world.module = { ...MODULE, root };
+      world.granted = false;
+      expect(await get(port, `/overlay/${token}/`)).toBe(404);
+      expect(streaming.view().links).toEqual([]);
+      world.granted = true;
+      expect(await get(port, `/overlay/${token}/`)).toBe(200);
+      expect(streaming.view().links).toHaveLength(1);
+    } finally {
+      await streaming.shutdown();
+    }
   });
 });
 

@@ -122,6 +122,11 @@ export class Streaming {
     return { root: module.root, entry: module.manifest.overlay };
   }
 
+  /** Ends open Stream overlay pages of modules that may no longer serve one; called when grants or modules change. */
+  recheckStreams(): void {
+    this.server.recheck();
+  }
+
   /** Lets game overlays have keys (game-overlay-service.ts); made after Streaming, which it needs. */
   useOverlayKeys(keys: OverlayKeys): void {
     this.overlayKeys = keys;
@@ -145,10 +150,10 @@ export class Streaming {
     };
     return {
       publish: (key: string, state: JsonValue) => {
-        // Without the connector nothing reads a link, so state is kept only for a key that a game overlay shows or that
-        // has a link already (a link made before the grant was taken back). Otherwise a module could fill the disk.
+        // Without the connector nothing reads a link, so state is kept only for a key that a game overlay shows.
+        // Otherwise a module could fill the disk, or keep feeding a link it lost the right to.
         const own = subject(key);
-        if (this.overlayGranted(module.manifest.id) || this.overlays.peek(own) || this.overlayKeys?.has(own)) this.overlays.publish(own, state);
+        if (this.overlayGranted(module.manifest.id) || this.overlayKeys?.has(own)) this.overlays.publish(own, state);
       },
       remove: (key: string) => this.overlays.remove(subject(key)),
       copyLink: async (key: string): Promise<OverlayLinkResult> => {

@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.3.20",
+    "date": "2026-11-17",
+    "notes": [
+      "Safety updates for parts the board is built on."
+    ]
+  },
+  {
     "version": "0.3.19",
     "date": "2026-11-16",
     "notes": [

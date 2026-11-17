@@ -50,6 +50,34 @@ jobs:
       - run: pnpm test
       - run: pnpm build
 
+  # Known holes in what Tavora ships, and secrets in the history. The audit fails on a high or critical advisory in a
+  # production dependency; package.json's pnpm.overrides lift the ones a compatible fix exists for, and
+  # pnpm.auditConfig.ignoreGhsas lists the rest with no fix at all (picomatch, only in the build's file watcher).
+  # gitleaks scans every commit; .gitleaksignore lists the reviewed test fixtures it matches.
+  supply-chain:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Dependency audit
+        run: pnpm audit --prod --audit-level high
+      - name: Secret scan
+        env:
+          GITLEAKS_VERSION: 8.30.1
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          curl -sSfL -o gitleaks.tar.gz "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf gitleaks.tar.gz -C "$RUNNER_TEMP" gitleaks
+          "$RUNNER_TEMP/gitleaks" git --no-banner --redact --verbose .
+
   # Whether this run needs the e2e suite: always for release tags, by the checkbox when started by hand, and for a pull
   # request that changes the app, a module or the kit, the SDK, the packer, the manifest schema, the examples, the
   # dependencies or this file. Twice a broken e2e test only showed up while a release was running (0.23.0, 0.23.9).
@@ -201,6 +229,11 @@ jobs:
           $setup = Get-ChildItem apps/desktop/release -Filter 'Tavora-Setup-*.exe' | Select-Object -First 1
           $p = Start-Process $setup.FullName -ArgumentList '/S' -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "The installer exited with $($p.ExitCode)." }
+      # The fuses of the exe users get: no running as plain Node, cookies encrypted, the app only from an app.asar
+      # that matches its hash (scripts/check-fuses.mjs).
+      - name: The installed Tavora's fuses are safe
+        shell: pwsh
+        run: node apps/desktop/scripts/check-fuses.mjs "$env:LOCALAPPDATA\Programs\Tavora\Tavora.exe"
       - name: Start the installed Tavora
         shell: pwsh
         env:

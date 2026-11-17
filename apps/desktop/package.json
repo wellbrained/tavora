@@ -33,6 +33,8 @@
     "@tavora/sdk": "workspace:*",
     "@types/node": "^22.20.5",
     "@vitejs/plugin-vue": "6.0.10",
+    "@electron/asar": "3.4.1",
+    "@electron/fuses": "1.8.0",
     "@vueuse/core": "15.0.0",
     "dockview-vue": "8.8.3",
     "electron": "44.7.2",
@@ -57,7 +59,9 @@
       "enableNodeOptionsEnvironmentVariable": false,
       "enableNodeCliInspectArguments": false,
       "enableCookieEncryption": true,
-      "grantFileProtocolExtraPrivileges": false
+      "grantFileProtocolExtraPrivileges": false,
+      "onlyLoadAppFromAsar": true,
+      "enableEmbeddedAsarIntegrityValidation": true
     },
     "extraMetadata": {
       "name": "Tavora"
@@ -74,7 +78,11 @@
       "!out/**/*.map",
       "!out/release-notes.md"
     ],
-    "asar": false,
+    "asar": true,
+    "asarUnpack": [
+      "out/main/system-info-worker.cjs",
+      "node_modules/koffi/**"
+    ],
     "electronLanguages": [
       "en-US",
       "de"
