@@ -45,9 +45,6 @@ export const SUB_PAGES = { workspaces: "games", trash: "games", "patch-notes": "
 /** The patch notes open from Updates & About or the version; the search doesn't find them. */
 export const PATCH_NOTES_SECTION = "patch-notes";
 
-/** The licences open from Updates & About; the search finds their row, not the page. */
-export const LICENCES_SECTION = "licences";
-
 /** The developer pages, as tabs under one menu entry. The first is Your modules. */
 export const DEVELOPER_TABS = ["development", "dev-folders", "dev-publishing", "dev-help"] as const;
 

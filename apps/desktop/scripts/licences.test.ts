@@ -183,3 +183,10 @@ describe("collectPackages", () => {
     expect(missing).toContain("gone (needed by apps/desktop)");
   });
 });
+
+describe("a NOTICE file alone", () => {
+  it("is not the licence text", () => {
+    const pkg = fakePackage("noticeonly", "1.0.0", { license: "Apache-2.0" }, { NOTICE: "Some notice" });
+    expect(buildNotices({ packages: [pkg] }).problems.map((p: { kind: string }) => p.kind)).toEqual(["no-text"]);
+  });
+});

@@ -2011,8 +2011,8 @@ export class Host {
     ipcMain.handle("host:game-covers", async (event, appids: unknown): Promise<Record<number, string | null>> =>
       fromHost(event) && Array.isArray(appids) && appids.length <= MAX_PICKER_COVERS && appids.every(isSteamAppId) ? this.pickerCovers(appids).catch(() => ({})) : {},
     );
-    // The first-run welcome's tiles: popular games the user does not have yet (one in Trash comes back when added).
     ipcMain.handle("host:licences", (event): LicenceList | null => (fromHost(event) ? this.licences() : null));
+    // The first-run welcome's tiles: popular games the user does not have yet (one in Trash comes back when added).
     ipcMain.handle("host:popular-games", (event) =>
       fromHost(event)
         ? popularGames()

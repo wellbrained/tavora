@@ -155,7 +155,7 @@ export function declaredLicence(pkg) {
 
 // -- Finding the packages -----------------------------------------------------------------------------------------
 
-const LICENCE_FILE = /^(?:licen[cs]e|copying|unlicense|notice)(?:[-_. ].*)?$/i;
+const LICENCE_FILE = /^(?:licen[cs]es?|copying|unlicense|notice)(?:[-_. ].*)?$/i;
 const IGNORED_FILE = /\.(?:js|mjs|cjs|ts|json|map|d\.ts|css|html)$/i;
 
 /** The licence and notice files in a package folder, by name. Text only: a LICENSE.js or LICENSE.json is code. */
@@ -268,22 +268,25 @@ export function buildNotices({ packages, extra = [], overrides = OVERRIDES, allo
     else if (verdict.status === "copyleft") problems.push({ package: id, kind: "copyleft", message: `copyleft licence ${license}` });
     else if (verdict.status === "unknown") problems.push({ package: id, kind: "unknown-licence", message: `licence "${license}" is not on the allowlist` });
     const indexes = [];
+    let hasLicenceFile = false;
     for (const file of licenceFiles(pkg.dir)) {
       const index = intern(readFile(path.join(pkg.dir, file)));
       if (index !== null && !indexes.includes(index)) indexes.push(index);
+      // A NOTICE file alone isn't the licence.
+      if (index !== null && !/^notice/i.test(file)) hasLicenceFile = true;
     }
     if (override?.text) {
       const index = intern(readFile(path.join(desktopRoot, "licences", override.text)));
       if (index !== null && !indexes.includes(index)) indexes.push(index);
     }
     let inferred = false;
-    if (!indexes.length && verdict?.status === "allowed") {
+    if (!hasLicenceFile && !override?.text && verdict?.status === "allowed") {
       // Some packages declare MIT or ISC but ship no LICENSE file: the standard text, with the holder the package names.
       const template = standardText(verdict.ids, holderOf(pkg.pkg));
       const index = template ? intern(template) : null;
       if (index !== null) (indexes.push(index), (inferred = true));
     }
-    if (!indexes.length) problems.push({ package: id, kind: "no-text", message: "has no licence text" });
+    if (!hasLicenceFile && !inferred && !override?.text) problems.push({ package: id, kind: "no-text", message: "has no licence text" });
     entries.push({ name: pkg.name, version: pkg.version, license: license ?? "UNKNOWN", group: isFont(pkg.name, license) ? "fonts" : "libraries", source: "npm", texts: indexes, ...(inferred ? { inferred: true } : {}) });
   }
   for (const item of extra) {
