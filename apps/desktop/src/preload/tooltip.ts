@@ -19,7 +19,11 @@ interface Data {
     language: string;
     /** The id of a skin the host sent before ("tooltip:skin"). */
     skin?: number;
+    /** The tallest the card can be in the window; the window may be smaller while the last card is still in sight. */
+    room?: number;
 }
+/** How long a new card waits for its pictures and letters before its size counts as final anyway. */
+const SETTLE_MS = 150;
 /** The skins the host sent this page, by id; it drops them when the module's skin is replaced or gone. */
 const skins = new Map<number, Skin>();
 let current: Data | undefined;
@@ -129,7 +133,7 @@ function render(data: Data) {
         const footer = node("div", undefined, "footer");
         footer.append(...footerTexts(data.source, data, de).map(t => node("span", t)));
         card.append(footer);
-        measure();
+        settle(data.serial);
         return;
     }
     const layout = node("div", undefined, "");
@@ -169,7 +173,19 @@ function render(data: Data) {
     const footer = node("div", undefined, "footer");
     footer.append(...footerTexts(data.source, data, de).map(t => node("span", t)));
     card.append(footer);
+    settle(data.serial);
+}
+/**
+ * Measures the card now, and again as final once its pictures are decoded and its letters loaded (or after SETTLE_MS):
+ * the window only comes into sight at the final size, so the card shows once instead of growing a moment later.
+ */
+function settle(serial: number) {
     measure();
+    const card = document.getElementById("card")!;
+    const pictures = Array.from(card.querySelectorAll("img"), image => typeof image.decode === "function" ? image.decode().catch(() => { }) : undefined);
+    const waited = Promise.all([...pictures, document.fonts?.ready]);
+    void Promise.race([waited, new Promise(resolve => setTimeout(resolve, SETTLE_MS))]).then(() => { if (current?.serial === serial)
+        sendSize(true); });
 }
 /** The item card: the picture large on top, the name bar, type line, badges, effect box, then the rows. */
 function renderCard(card: HTMLElement, c: TooltipContent, de: boolean) {
@@ -274,13 +290,18 @@ function appendRows(details: HTMLElement, c: TooltipContent) {
         details.append(section);
     }
 }
-function measure() { if (!current)
-    return; const card = document.getElementById("card")!; if (card.scrollHeight > innerHeight && innerHeight > 100)
-    document.body.classList.add("compact"); ipcRenderer.send("tooltip:size", current.serial, card.scrollHeight, Math.ceil(card.getBoundingClientRect().width)); }
+/** Tells the host the card's size; also an image's onload and a font's load call it, with an argument that isn't this flag. */
+function measure() { sendSize(false); }
+function sendSize(final: boolean) { if (!current)
+    return; const card = document.getElementById("card")!, room = current.room ?? innerHeight; if (card.scrollHeight > room && room > 100)
+    document.body.classList.add("compact"); ipcRenderer.send("tooltip:size", current.serial, card.scrollHeight, Math.ceil(card.getBoundingClientRect().width), final); }
 ipcRenderer.on("tooltip:skin", (_event, id: number, skin: Skin) => { skins.set(id, skin); });
 ipcRenderer.on("tooltip:skin-drop", (_event, ids: number[]) => { for (const id of ids)
     skins.delete(id); });
 ipcRenderer.on("tooltip:render", (_event, data: Data) => render(data));
+// The window is at the card's final size: once a frame of it is drawn there, the host shows it.
+ipcRenderer.on("tooltip:placed", (_event, serial: number) => requestAnimationFrame(() => requestAnimationFrame(() => { if (current?.serial === serial)
+    ipcRenderer.send("tooltip:drawn", serial); })));
 window.addEventListener("DOMContentLoaded", () => ipcRenderer.send("tooltip:ready"));
 // The interface font comes in its own stylesheet; text measured before its files were in is measured again.
 document.fonts?.addEventListener("loadingdone", () => measure());

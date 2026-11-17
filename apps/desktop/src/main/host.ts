@@ -4008,7 +4008,7 @@ export class Host {
         const picked = await dialog.showOpenDialog(this.window, {...(defaultPath?{defaultPath}:{}),title:this.language.startsWith('de')?'Datei mit '+this.shown(module.manifest).name+' verknüpfen':'Link a file to '+this.shown(module.manifest).name,buttonLabel:this.language.startsWith('de')?'Datei verknüpfen':'Link file',properties:multiple?['openFile','multiSelections']:['openFile'],filters:[{name:this.language.startsWith('de')?'Datei auswählen':'Choose a file',extensions}]});
         return picked.canceled ? [] : multiple ? picked.filePaths : picked.filePaths.slice(0,1);
       },
-      tooltip:{show:request=>this.tooltips.show(record.instanceId,request),move:anchor=>this.tooltips.move(record.instanceId,anchor.id,anchor.at),close:(id,hoverOnly)=>this.tooltips.close(record.instanceId,id,hoverOnly),defineSkin:(name,skin)=>this.tooltips.defineSkin(record.moduleId,module.root,name,skin)},
+      tooltip:{show:request=>this.tooltips.show(record.instanceId,request),move:anchor=>this.tooltips.move(record.instanceId,anchor.id,anchor.at,anchor.box),close:(id,hoverOnly)=>this.tooltips.close(record.instanceId,id,hoverOnly),defineSkin:(name,skin)=>this.tooltips.defineSkin(record.moduleId,module.root,name,skin)},
       launch: () => this.launchOf(record),
       mayWelcome: () => this.panels.takeWelcome(record.instanceId),
       setContent: (content) => this.setPanelContent(record, content),

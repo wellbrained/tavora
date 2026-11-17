@@ -876,14 +876,15 @@ export function useFloating(): (open: boolean) => void {
   return set;
 }
 
-let hintOpen = false;
+/** A hover hint floats (it counts as one of openMenus). */
+const hintOpen = ref(false);
 let hintRelease: ReturnType<typeof setTimeout> | undefined;
 /** For the page's hover hints, which float like a menu. Closing waits a moment, so moving from one hint to the next does not show and hide the panels each time. */
 export function setHintFloating(open: boolean): void {
   clearTimeout(hintRelease);
   const set = (value: boolean) => {
-    if (value === hintOpen) return;
-    hintOpen = value;
+    if (value === hintOpen.value) return;
+    hintOpen.value = value;
     openMenus.value += value ? 1 : -1;
   };
   if (open) set(true);
@@ -952,7 +953,11 @@ const onPopupTrigger = (event: Event) => event.target instanceof Element && even
 document.addEventListener("pointerdown", (event) => (event.button === 2 || (event.button === 0 && event.ctrlKey) || onPopupTrigger(event)) && api.prepareOverlay(), true);
 document.addEventListener("contextmenu", () => api.prepareOverlay(), true);
 document.addEventListener("keydown", (event) => (event.key === "ContextMenu" || (["Enter", " ", "ArrowDown"].includes(event.key) && onPopupTrigger(event))) && api.prepareOverlay(), true);
-watch(overlayOpen, (open) => document.documentElement.classList.toggle("floating-open", open), { immediate: true });
+// While a menu, dialog or drag is open, the header's drag areas let clicks through, so a click there closes it (styles.css).
+// Not for a hint alone: it closes by itself, and a drag area that changes under a resting pointer makes Windows tell the
+// page the pointer left and came back, so a hint on the header would close and open again.
+const clickAwayOpen = computed(() => openMenus.value > (hintOpen.value ? 1 : 0) || openDialogs.value > 0 || dragging.value !== null);
+watch(clickAwayOpen, (open) => document.documentElement.classList.toggle("floating-open", open), { immediate: true });
 // How panels are drawn (dock.css reads it).
 watch(
   () => state.value?.library.panelStyle ?? "framed",

@@ -26,6 +26,11 @@ vi.mock("electron", () => {
       return Promise.resolve();
     }
     hide() {}
+    showInactive() {}
+    isVisible() {
+      return false;
+    }
+    setBounds() {}
     setIgnoreMouseEvents() {}
     setFocusable() {}
     setOpacity() {}
@@ -41,7 +46,7 @@ vi.mock("electron", () => {
 const { TooltipWindow } = await import("./tooltip-window");
 
 async function open() {
-  const parent = { on() {}, once() {} };
+  const parent = { on() {}, once() {}, getContentBounds: () => ({ x: 0, y: 0, width: 1200, height: 800 }) };
   const tooltip = new TooltipWindow({
     parent: parent as never,
     preload: "preload.js",

@@ -162,3 +162,33 @@ describe("tooltip preload", () => {
         expect(plain.querySelector("section li .text")!.textContent).toBe("Adds 1 to 2");
     });
 });
+
+// The window comes into sight once, at the card's final size: the page says which size is final, and when it drew there.
+describe("tooltip preload sizes", () => {
+    const sizes = () => ipc.sent.filter(m => m[0] === "tooltip:size");
+    it("measures at once, then again as final once its pictures and letters are in", async () => {
+        ipc.sent.length = 0;
+        render(card);
+        expect(sizes().map(m => m[4])).toEqual([false]);
+        await new Promise(resolve => setTimeout(resolve, 0));
+        expect(sizes().map(m => m[4])).toEqual([false, true]);
+        expect(sizes().every(m => m[1] === serial)).toBe(true);
+    });
+    it("sends no final size for a card already replaced by the next", async () => {
+        ipc.sent.length = 0;
+        render(card);
+        const first = serial;
+        render({ ...card, title: "Next" });
+        await new Promise(resolve => setTimeout(resolve, 0));
+        expect(sizes().filter(m => m[4] === true).map(m => m[1])).toEqual([serial]);
+        expect(serial).not.toBe(first);
+    });
+    it("says it drew once a frame is on screen after the window was placed, for the current card only", async () => {
+        render(card);
+        ipc.sent.length = 0;
+        send("tooltip:placed", serial - 1);
+        send("tooltip:placed", serial);
+        await new Promise(resolve => setTimeout(resolve, 100));
+        expect(ipc.sent.filter(m => m[0] === "tooltip:drawn")).toEqual([["tooltip:drawn", serial]]);
+    });
+});

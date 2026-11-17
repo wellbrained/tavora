@@ -17,7 +17,7 @@ export const BOX_MARGIN = 8;
 export const BOX_MAX = 600;
 
 /** A box the pointer rule can use: a real size, at most BOX_MAX a side, and `at` on it (1 px for rounding). */
-function usableBox(anchor: Pick<TooltipAnchor, "at" | "box">): TooltipAnchor["box"] | null {
+export function usableBox(anchor: Pick<TooltipAnchor, "at" | "box">): TooltipAnchor["box"] | null {
   const b = anchor.box, at = anchor.at;
   if (!b || !(b.width > 0 && b.height > 0 && b.width <= BOX_MAX && b.height <= BOX_MAX)) return null;
   const on = at.x >= b.x - 1 && at.x <= b.x + b.width + 1 && at.y >= b.y - 1 && at.y <= b.y + b.height + 1;
