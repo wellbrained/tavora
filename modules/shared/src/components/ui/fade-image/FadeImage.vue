@@ -6,6 +6,8 @@
 // so an icon with see-through parts shows what is behind it.
 // A picture fades in only the first time it loads here: one that has been shown before (the same address) is there at once,
 // so an icon in a menu or a list does not flash a muted box and fade again each time it is shown again.
+// A picture that fills its box (`fit="cover"`) gets a faint edge, so a dark one does not melt into a dark card; `:edge`
+// turns it on or off by hand (off for a picture that already sits in a frame).
 // Attributes other than `class` (alt, data-testid, draggable…) go to the <img>; `class` is the box.
 import { computed, onMounted, ref, useAttrs, watch } from "vue";
 import type { ClassValue } from "clsx";
@@ -13,7 +15,7 @@ import { cn } from "../../../lib/utils";
 import { markSeen, wasSeen } from "./seen";
 
 defineOptions({ inheritAttrs: false });
-const props = withDefaults(defineProps<{ src?: string | null; fit?: "cover" | "contain"; pending?: boolean; tile?: boolean }>(), { src: null, fit: "cover", pending: false, tile: true });
+const props = withDefaults(defineProps<{ src?: string | null; fit?: "cover" | "contain"; pending?: boolean; tile?: boolean; edge?: boolean }>(), { src: null, fit: "cover", pending: false, tile: true, edge: undefined });
 
 const attrs = useAttrs();
 const imgAttrs = computed(() => {
@@ -43,10 +45,12 @@ function shown() {
 /** The picture is on its way (or about to be): the box is muted and empty, with no fallback yet. */
 const waiting = computed(() => props.pending || (!!props.src && !loaded.value && !failed.value));
 const showFallback = computed(() => !waiting.value && (!props.src || failed.value));
+/** The edge shows on the muted tile, or on the picture once it is there. */
+const edged = computed(() => (props.edge ?? props.fit === "cover") && (props.tile || loaded.value));
 </script>
 
 <template>
-  <span :class="cn('relative block overflow-hidden', (tile || !loaded) && 'bg-muted/60', $attrs.class as ClassValue)" data-slot="fade-image">
+  <span :class="cn('relative block overflow-hidden', (tile || !loaded) && 'bg-muted/60', edged && 'tavora-picture-edge', $attrs.class as ClassValue)" data-slot="fade-image">
     <img
       v-if="src && !failed"
       ref="image"

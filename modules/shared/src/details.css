@@ -1,0 +1,41 @@
+/* Small details for the app and every module, so the kit and hand-made markup look the same.
+   Imported by theme.css (the modules) and by the host's styles.css (the app). */
+
+/* Titles break into lines of about the same length; descriptions don't leave one word alone on the last line.
+   Only the line breaks change, never the size: a title that fits on one line stays as it is. The longhand keeps
+   `truncate` and `whitespace-nowrap` working. */
+@layer base {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    text-wrap-style: balance;
+  }
+  p {
+    text-wrap-style: pretty;
+  }
+
+  /* A play triangle is centred by its box, so it looks too far left. Nudge it right by about the gap, at any size. */
+  svg.lucide-play {
+    translate: 5.5% 0;
+  }
+}
+
+/* A faint edge around a picture, so a dark picture does not melt into a dark card (a light one into a light card).
+   Put the class on the rounded box that holds the picture; the edge follows its corners. Only for pictures that fill
+   their box (covers, photos, avatars), never for icons with see-through parts. FadeImage does it with `edge`. */
+@layer components {
+  .tavora-picture-edge {
+    position: relative;
+  }
+  .tavora-picture-edge::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 10%, transparent);
+    pointer-events: none;
+  }
+}

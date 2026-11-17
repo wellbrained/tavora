@@ -46,11 +46,13 @@ export const buttonVariants = cva(
           "hover:bg-[color-mix(in_srgb,var(--foreground)_10%,var(--accent))] hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
       },
+      // A button with an icon has 2px less room on the icon side, so it looks balanced. The icon is taken to lead;
+      // one after the text says so with `data-icon="end"`.
       size: {
-        "default": "h-8 px-3 py-1.5 has-[>svg]:px-2.5",
-        "xs": "h-6 gap-1 rounded-md px-2 text-xs has-[>svg]:px-1.5 [&_svg:not([class*='size-'])]:size-3",
-        "sm": "h-7 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5",
-        "lg": "h-10 rounded-md px-6 has-[>svg]:px-4",
+        "default": "h-8 px-3 py-1.5 has-[>svg:not([data-icon=end])]:pl-2.5 has-[>svg[data-icon=end]]:pr-2.5",
+        "xs": "h-6 gap-1 rounded-md px-2 text-xs has-[>svg:not([data-icon=end])]:pl-1.5 has-[>svg[data-icon=end]]:pr-1.5 [&_svg:not([class*='size-'])]:size-3",
+        "sm": "h-7 rounded-md gap-1.5 px-3 has-[>svg:not([data-icon=end])]:pl-2.5 has-[>svg[data-icon=end]]:pr-2.5",
+        "lg": "h-10 rounded-md px-6 has-[>svg:not([data-icon=end])]:pl-4 has-[>svg:not([data-icon=end])]:pr-4.5 has-[>svg[data-icon=end]]:pl-4.5 has-[>svg[data-icon=end]]:pr-4",
         "icon": "size-8",
         "icon-xs": "size-6 rounded-md [&_svg:not([class*='size-'])]:size-3.5",
         "icon-sm": "size-7",

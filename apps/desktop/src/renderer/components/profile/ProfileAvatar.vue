@@ -23,7 +23,7 @@ const initials = computed(() => props.initials.trim() || autoInitials(props.name
 
 <template>
   <span
-    :class="!square && 'bg-muted rounded-full'"
+    :class="[!square && 'bg-muted rounded-full', pictureUrl && 'tavora-picture-edge']"
     class="inline-flex flex-none items-center justify-center overflow-hidden shadow-[inset_0_0_0_1px_rgb(255_255_255/0.06)]"
     :style="{ width: `${size}px`, height: `${size}px`, borderRadius: square ? `${radius}px` : undefined }"
     aria-hidden="true"

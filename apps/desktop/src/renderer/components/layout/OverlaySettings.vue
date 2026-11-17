@@ -116,7 +116,7 @@ const opacity = computed({
           <DropdownMenuTrigger as-child>
             <Button variant="secondary" size="sm" class="w-full justify-between" :data-testid="`layout-move-${item.id}`">
               {{ t("overlays.layout.moveTo") }}
-              <ChevronDown :stroke-width="1.5" />
+              <ChevronDown data-icon="end" :stroke-width="1.5" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" class="min-w-48">

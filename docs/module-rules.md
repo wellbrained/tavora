@@ -116,7 +116,12 @@ themes; anything hard-coded breaks in one of them.
 - **Depth**: areas separate by a surface step and a 1 px `border-border`. Shadows only on floating layers and on the kit's Primary and Secondary buttons (a faint
   top light, Primary also a hairline contact shadow); both come from the kit. No `z-index` of your own except inside a canvas or map.
 - **Focus**: the kit controls bring the focus ring. Never remove it and never draw your own.
-- **Icons**: Lucide (`@lucide/vue`), 16 px in controls, outline only.
+- **Icons**: Lucide (`@lucide/vue`), 16 px in controls, outline only. An icon after a button's text gets `data-icon="end"`, so the
+  kit gives that side 2 px less room (an icon before the text needs nothing). A play triangle is nudged right on its own.
+- **Pictures**: a picture that fills its box gets a faint edge, so it doesn't melt into the card: `FadeImage` does it for
+  `fit="cover"`, a bare `<img>` puts `tavora-picture-edge` on its rounded box. Not for icons with see-through parts.
+- **Line breaks**: headings balance their lines and paragraphs avoid a lone last word on their own (`details.css`); don't
+  add `<br>` or `&nbsp;` to fix a break.
 - **Dropdown arrows**: a control where you pick a value shown in the field (`Select`, `Picker`) has the up/down arrow (`ChevronsUpDown`); the kit adds it. A button that opens a menu of actions has the single down arrow (`ChevronDown`). Never put a down arrow on a picker.
 - **Dropdown lists**: a list opened from a field or a text button starts at its left edge, opens to the right (the kit flips it when there is no room) and is at least as wide as the field. A field whose choices are known is as wide as its longest choice and keeps that width whatever is picked (the kit's `Picker` does this); size a `Select` the same way.
 - **Motion**: durations and curves come from the kit's tokens (`modules/shared/src/motion.css`: `--ease-out-strong`,

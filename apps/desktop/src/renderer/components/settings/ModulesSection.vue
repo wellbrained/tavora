@@ -201,7 +201,7 @@ function remove(module: ModuleView) {
         <DropdownMenu>
           <DropdownMenuTrigger as-child>
             <Button variant="secondary" :aria-label="t('settings.modules.moreLabel')" data-testid="modules-more">
-              {{ t("common.more") }} <ChevronDown :stroke-width="1.5" aria-hidden="true" />
+              {{ t("common.more") }} <ChevronDown data-icon="end" :stroke-width="1.5" aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
