@@ -3,7 +3,7 @@
     "version": "0.3.24",
     "date": "2026-11-17",
     "notes": [
-      "Copy as picture waits while a picture is being saved, in the menu and with Shift+Alt+C, instead of doing nothing.",
+      "Copy as picture is off while a picture is being saved, in the menu and with Shift+Alt+C, instead of doing nothing.",
       "Small fixes: a dialog that stays on the page gives it back once closed, and German \"noch mal\" is spelled the same everywhere."
     ]
   },

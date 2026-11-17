@@ -54,7 +54,7 @@ jobs:
   # included, and fails on a high or critical advisory: most of what ends up in the app (electron, vue, the ad blocker,
   # dockview, @vueuse) is listed as a devDependency because it is bundled, so `--prod` would miss it. package.json's
   # pnpm.overrides lift the ones a compatible fix exists for, and pnpm.auditConfig.ignoreGhsas lists the rest with the
-  # reason beside it: picomatch, which Excalidraw's sass dependency pulls in for its file watcher; it is not in the
+  # reason beside it: picomatch (GHSA-fc5q-39xc-vjpf), which Excalidraw's sass dependency pulls in for its file watcher; it is not in the
   # Whiteboard's built bundle.
   # gitleaks scans the history of the checked-out commit only (not other branches); .gitleaks.toml allows the reviewed
   # test fixtures and public values by path or pattern, so a squash merge or another branch can't turn it red.

@@ -382,7 +382,7 @@ export class PanelViews {
    * (up to CLOSE_CAP_MS), so what it saved is only safe to delete after this.
    */
   closed(instanceId: string): Promise<void> {
-    return Promise.all([...this.closing].filter((page) => page.instanceId === instanceId).map((page) => page.done)).then(() => undefined);
+    return Promise.allSettled([...this.closing].filter((page) => page.instanceId === instanceId).map((page) => page.done)).then(() => undefined);
   }
 
   /** Pages of panels that went and may still be saving (at most CLOSE_CAP_MS): quitting waits for them too. */

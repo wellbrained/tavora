@@ -12,7 +12,7 @@
 // and gone once its content is unmounted. Escape belongs to the top layer: Reka already hands it only to its highest one,
 // and a page's own keys ask `isModalOpen` before they act. Popovers, selects and context menus are not listed: they
 // don't wait on the user, and a key pressed inside one belongs to it.
-import { defineComponent, getCurrentInstance, inject, onMounted, onScopeDispose, onUnmounted, provide, shallowRef, watch, type InjectionKey, type Ref } from "vue"
+import { defineComponent, getCurrentInstance, inject, nextTick, onMounted, onScopeDispose, onUnmounted, provide, shallowRef, watch, type InjectionKey, type Ref } from "vue"
 import { inertBehind } from "./inert-behind"
 
 export type LayerKind = "dialog" | "menu"
@@ -78,13 +78,18 @@ function openLayer(id: number, kind: LayerKind, modal: boolean, name: string | u
  * the page after it closed (`forceMount`) never unmounts, so its LayerAnchor can't end the layer: it leaves once the
  * content's own animations are over and the content is still there.
  */
+const ANIMATION_START_MS = 50
 function closeLayer(id: number): void {
   updateLayer(id, (layer) => (layer.element ? { ...layer, state: "closing" } : null))
   const element = stack.value.find((layer) => layer.id === id && layer.state === "closing")?.element
   if (!element) return
-  const finished = Promise.all((element.getAnimations?.() ?? []).map((animation) => animation.finished.catch(() => undefined)))
-  // A content that does unmount does so as its animations end; this comes after, so only a kept one is still here.
-  void finished.then(() => setTimeout(() => updateLayer(id, (layer) => (layer.state === "closing" && layer.element === element ? null : layer)), 0))
+  // The exit animation starts a moment after the content is told to close (the next render and style pass), so the
+  // animations are read after that, not now.
+  void nextTick()
+    .then(() => new Promise((resolve) => setTimeout(resolve, ANIMATION_START_MS)))
+    .then(() => Promise.all((element.getAnimations?.() ?? []).map((animation) => animation.finished.catch(() => undefined))))
+    // A content that does unmount does so as its animations end; this comes after, so only a kept one is still here.
+    .then(() => setTimeout(() => updateLayer(id, (layer) => (layer.state === "closing" && layer.element === element ? null : layer)), 0))
 }
 
 function removeLayer(id: number): void {

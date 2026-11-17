@@ -132,6 +132,7 @@ describe("the kit's dialogs and menus in the list", () => {
     expect(page.closest("[inert]")).not.toBeNull()
     open.value = false
     await tick()
+    await new Promise((resolve) => setTimeout(resolve, 150))
     // Still mounted, closed: no longer a layer, and the page is open again.
     expect(document.querySelector('[data-testid="kept"]')).not.toBeNull()
     expect(layers.value).toEqual([])
