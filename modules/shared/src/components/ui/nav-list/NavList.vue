@@ -47,13 +47,13 @@ function onKey(event: KeyboardEvent) {
       <div v-if="group.heading && group.divider" :class="cn('flex items-center gap-2 px-3 pb-1', index > 0 ? 'pt-6' : 'pt-1', props.headingClass)" data-slot="nav-divider">
         <span class="bg-border h-px flex-1" aria-hidden="true" />
         <h3 class="text-muted-foreground flex items-center gap-1.5 text-xs font-semibold tracking-wider uppercase">
-          <component :is="group.icon" v-if="group.icon" class="size-3.5 flex-none" :stroke-width="2" aria-hidden="true" />
+          <component :is="group.icon" v-if="group.icon" class="size-3.5 flex-none" aria-hidden="true" />
           {{ group.heading }}
         </h3>
         <span class="bg-border h-px flex-1" aria-hidden="true" />
       </div>
       <h3 v-else-if="group.heading" :class="cn('text-muted-foreground flex items-center gap-1.5 px-3 pb-1 text-xs font-semibold tracking-wider uppercase', index > 0 && 'pt-4', props.headingClass)">
-        <component :is="group.icon" v-if="group.icon" class="size-3.5 flex-none" :stroke-width="2" aria-hidden="true" />
+        <component :is="group.icon" v-if="group.icon" class="size-3.5 flex-none" aria-hidden="true" />
         {{ group.heading }}
       </h3>
       <button
@@ -75,7 +75,7 @@ function onKey(event: KeyboardEvent) {
         "
         @click="pick(item.id)"
       >
-        <component :is="item.icon" v-if="item.icon" :class="cn('size-4 flex-none transition-colors duration-(--duration-press) ease-(--ease-out-strong)', item.id === modelValue ? 'text-primary' : 'group-hover:text-primary/80', props.iconClass)" :stroke-width="1.75" aria-hidden="true" />
+        <component :is="item.icon" v-if="item.icon" :class="cn('size-4 flex-none transition-colors duration-(--duration-press) ease-(--ease-out-strong)', item.id === modelValue ? 'text-primary' : 'group-hover:text-primary/80', props.iconClass)" aria-hidden="true" />
         <span class="min-w-0 flex-1 truncate">{{ item.label }}</span>
         <span
           v-if="item.status"

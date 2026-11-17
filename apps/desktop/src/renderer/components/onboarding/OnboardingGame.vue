@@ -235,7 +235,7 @@ function notNow() {
 
     <!-- Ready -->
     <template v-else>
-      <span class="bg-primary/15 text-primary mb-4 grid size-12 place-items-center rounded-full"><Check class="size-6" :stroke-width="2" /></span>
+      <span class="bg-primary/15 text-primary mb-4 grid size-12 place-items-center rounded-full"><Check class="size-6" /></span>
       <h1 class="text-3xl font-semibold" data-testid="onboarding-ready">{{ t("onboarding.ready.title", { game: game?.name ?? "" }) }}</h1>
       <p class="text-muted-foreground mt-2">{{ game?.moduleIds.length ? t("onboarding.ready.withModules") : t("onboarding.ready.sub") }}</p>
       <div class="mt-6 flex items-center gap-3">

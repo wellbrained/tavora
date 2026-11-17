@@ -21,7 +21,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
     </ButtonGroup>
     <ButtonGroup label="Add all">
       <Button size="sm" variant="outline">Add all</Button>
-      <Button size="sm" variant="outline" class="px-2" aria-label="Show panels" title="Show panels"><ChevronDown :stroke-width="1.75" /></Button>
+      <Button size="sm" variant="outline" class="px-2" aria-label="Show panels" title="Show panels"><ChevronDown /></Button>
     </ButtonGroup>
   </div>
 </template>

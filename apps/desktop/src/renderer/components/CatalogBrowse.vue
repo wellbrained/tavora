@@ -178,7 +178,7 @@ function settings() {
             <div class="flex items-center gap-2">
               <span class="text-muted-foreground flex min-w-0 flex-1 items-center gap-1.5 text-xs">
                 <span :class="cn('flex min-w-0 items-center gap-1', module.fits && 'text-primary')" :title="whereFits(module) ?? undefined" :data-testid="`catalog-fits-${module.id}`">
-                  <component :is="module.fits ? CircleCheck : Gamepad2" class="size-3.5 flex-none" :stroke-width="1.75" />
+                  <component :is="module.fits ? CircleCheck : Gamepad2" class="size-3.5 flex-none" />
                   <span class="truncate">{{ fitLabel(module) }}</span>
                 </span>
                 <template v-if="module.installs >= MIN_INSTALLS_SHOWN">

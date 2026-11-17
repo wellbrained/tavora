@@ -21,6 +21,16 @@
   svg.lucide-play {
     translate: 5.5% 0;
   }
+
+  /* One line weight for every icon, about 1px on screen: 16px and up draw at 1.5, small ones (12-14px) at 2, or their
+     lines would look thinner than the rest. This wins over a `stroke-width` set on the icon; a class (`stroke-2`) still
+     wins over it. The kit's xs buttons and badges make their icons small, so they set 2 too. */
+  svg.lucide {
+    stroke-width: 1.5;
+  }
+  svg.lucide:is(.size-2, .size-2\.5, .size-3, .size-3\.5) {
+    stroke-width: 2;
+  }
 }
 
 /* A faint edge around a picture, so a dark picture does not melt into a dark card (a light one into a light card).

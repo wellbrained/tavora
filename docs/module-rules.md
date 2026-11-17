@@ -116,7 +116,8 @@ themes; anything hard-coded breaks in one of them.
 - **Depth**: areas separate by a surface step and a 1 px `border-border`. Shadows only on floating layers and on the kit's Primary and Secondary buttons (a faint
   top light, Primary also a hairline contact shadow); both come from the kit. No `z-index` of your own except inside a canvas or map.
 - **Focus**: the kit controls bring the focus ring. Never remove it and never draw your own.
-- **Icons**: Lucide (`@lucide/vue`), 16 px in controls, outline only. An icon after a button's text gets `data-icon="end"`, so the
+- **Icons**: Lucide (`@lucide/vue`), 16 px in controls, outline only. The theme sets the line weight (1.5, and 2 on icons of
+  12-14 px), so don't set `stroke-width` yourself. An icon after a button's text gets `data-icon="end"`, so the
   kit gives that side 2 px less room (an icon before the text needs nothing; a button with its own `px-*` keeps it). A
   play triangle is nudged right on its own.
 - **Pictures**: a picture that fills its box gets a faint edge, so it doesn't melt into the card: `FadeImage` does it for

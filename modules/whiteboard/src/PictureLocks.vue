@@ -35,7 +35,7 @@ const emit = defineEmits<{ toggle: [id: string, locked: boolean] }>();
       @pointerdown.stop
       @click="emit('toggle', spot.id, !spot.locked)"
     >
-      <component :is="spot.locked ? Lock : LockOpen" :stroke-width="2" />
+      <component :is="spot.locked ? Lock : LockOpen" />
     </Button>
   </div>
 </template>

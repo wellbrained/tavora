@@ -151,8 +151,8 @@ const BIG = "text-[1.625rem] leading-none font-semibold tabular-nums";
             <span :class="LABEL">{{ t("speed.title") }}</span>
           </header>
           <div class="flex items-baseline justify-center gap-4 whitespace-nowrap">
-            <span :class="cn(BIG, 'text-[1.375rem]')" data-testid="speed-down"><ArrowDown class="text-muted-foreground mr-0.5 inline size-4 align-[-0.1em]" :stroke-width="1.75" aria-hidden="true" />{{ speed.down }}</span>
-            <span :class="cn(BIG, 'text-[1.375rem]')" data-testid="speed-up"><ArrowUp class="text-muted-foreground mr-0.5 inline size-4 align-[-0.1em]" :stroke-width="1.75" aria-hidden="true" />{{ speed.up }}</span>
+            <span :class="cn(BIG, 'text-[1.375rem]')" data-testid="speed-down"><ArrowDown class="text-muted-foreground mr-0.5 inline size-4 align-[-0.1em]" aria-hidden="true" />{{ speed.down }}</span>
+            <span :class="cn(BIG, 'text-[1.375rem]')" data-testid="speed-up"><ArrowUp class="text-muted-foreground mr-0.5 inline size-4 align-[-0.1em]" aria-hidden="true" />{{ speed.up }}</span>
           </div>
           <p class="text-muted-foreground text-center text-xs">{{ t("speed.unit") }}</p>
         </section>

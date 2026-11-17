@@ -32,7 +32,7 @@ const WITH = ["profile", "server", "rate", "messages", "ranks"] as const;
         <h2 class="mb-2 text-sm font-semibold">{{ t("onboarding.account.with") }}</h2>
         <ul class="flex flex-col gap-1.5 text-sm" data-testid="onboarding-with">
           <li v-for="item in WITH" :key="item" class="flex items-start gap-2">
-            <Check class="text-primary mt-0.5 size-4 flex-none" :stroke-width="2" />
+            <Check class="text-primary mt-0.5 size-4 flex-none" />
             <span>{{ t(`onboarding.account.with.${item}`) }}</span>
           </li>
         </ul>

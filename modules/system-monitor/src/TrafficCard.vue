@@ -52,8 +52,8 @@ const BIG = "text-[1.375rem] leading-none font-semibold tabular-nums";
         <span class="text-muted-foreground truncate text-xs">{{ cell.label }}</span>
         <span :class="cn(BIG, 'whitespace-nowrap')" data-testid="traffic-total">{{ cell.total }}</span>
         <span v-if="cell.down" class="text-muted-foreground truncate text-xs whitespace-nowrap tabular-nums">
-          <ArrowDown class="inline size-3 align-[-0.1em]" :stroke-width="1.75" aria-hidden="true" />{{ cell.down }}
-          <ArrowUp class="ml-1 inline size-3 align-[-0.1em]" :stroke-width="1.75" aria-hidden="true" />{{ cell.up }}
+          <ArrowDown class="inline size-3 align-[-0.1em]" aria-hidden="true" />{{ cell.down }}
+          <ArrowUp class="ml-1 inline size-3 align-[-0.1em]" aria-hidden="true" />{{ cell.up }}
         </span>
         <span v-if="cell.note" class="text-muted-foreground truncate text-xs" data-testid="traffic-note">{{ cell.note }}</span>
       </div>

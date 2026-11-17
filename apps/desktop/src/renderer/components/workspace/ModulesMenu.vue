@@ -24,7 +24,7 @@ const track = useFloating();
         :aria-label="t('workspace.modulesHere')"
         :title="t('workspace.modulesHere')"
       >
-        <ChevronDown :stroke-width="2" absolute-stroke-width />
+        <ChevronDown />
       </Button>
     </DropdownMenuTrigger>
     <DropdownMenuContent data-testid="menu" side="bottom" align="end" class="max-w-72 min-w-56">

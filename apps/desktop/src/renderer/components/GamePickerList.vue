@@ -175,7 +175,7 @@ function option(key: string) {
             <span v-else class="text-primary block truncate">{{ t("addGame.custom", { name: custom ?? "" }) }}</span>
             <span v-if="secondOf(line)" class="text-muted-foreground block truncate text-xs">{{ secondOf(line) }}</span>
           </span>
-          <Loader v-if="adding === line.key" class="text-muted-foreground size-4 flex-none animate-spin motion-reduce:animate-none" :stroke-width="1.75" aria-hidden="true" />
+          <Loader v-if="adding === line.key" class="text-muted-foreground size-4 flex-none animate-spin motion-reduce:animate-none" aria-hidden="true" />
           <span v-else-if="line.key === active" class="text-muted-foreground flex flex-none items-center gap-1.5 text-xs" aria-hidden="true" data-testid="row-action"
             >{{ line.row?.workspaceId ? t("addGame.actionOpen") : t("addGame.actionAdd") }} <Kbd class="font-sans">↵</Kbd></span
           >

@@ -99,7 +99,7 @@ const bothSections = computed(() => sections.value.system && sections.value.conn
       <span v-if="openError" class="text-destructive min-w-0 flex-1 truncate text-xs" role="alert" :title="openError" data-testid="settings-error">{{ t("settings.openError", { error: openError }) }}</span>
       <span v-else class="text-muted-foreground min-w-0 flex-1 truncate text-xs tabular-nums" data-testid="tavora-use">{{ tavora }}</span>
       <Button variant="ghost" size="icon-xs" :title="t('settings.title')" :aria-label="t('settings.title')" data-testid="settings" @click="openSettings">
-        <SettingsIcon :stroke-width="1.75" />
+        <SettingsIcon />
       </Button>
     </footer>
 

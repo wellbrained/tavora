@@ -171,7 +171,7 @@ const LABEL = "text-muted-foreground flex-none text-[0.6875rem] font-medium trac
     >
       <template #action>
         <Button variant="ghost" size="icon-xs" class="-my-1.5 -mr-1 self-center" :title="t('apps.show')" :aria-label="t('apps.show')" data-testid="show-apps" @click="emit('showApps')">
-          <List :stroke-width="1.75" />
+          <List />
         </Button>
       </template>
     </MetricCard>

@@ -61,7 +61,7 @@ function resetPage() {
       <div ref="holder" class="flex min-h-0 flex-1 flex-col"><slot /></div>
       <footer class="text-muted-foreground flex h-12 flex-none items-center gap-2 border-t pr-6 pl-4 text-xs">
         <Button v-if="reset && (resettable?.(page) ?? true)" variant="ghost" size="sm" class="text-muted-foreground" data-testid="settings-reset" @click="resetPage">
-          <RotateCcw :stroke-width="1.75" />
+          <RotateCcw />
           {{ uiText.resetPage }}
         </Button>
         <p class="ml-auto" role="status" data-testid="settings-saved">

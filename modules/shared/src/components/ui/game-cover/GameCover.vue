@@ -27,7 +27,7 @@ const props = withDefaults(
       <template #fallback><slot name="fallback" /></template>
     </FadeImage>
     <span v-if="busy" class="bg-background/60 absolute inset-0 grid place-items-center">
-      <Loader class="size-6 animate-spin motion-reduce:animate-none" :stroke-width="1.75" />
+      <Loader class="size-6 animate-spin motion-reduce:animate-none" />
     </span>
   </span>
 </template>

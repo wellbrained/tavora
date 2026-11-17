@@ -263,7 +263,7 @@ function onSearchKey(event: KeyboardEvent) {
           data-testid="settings-nav-about"
           @click="show('about')"
         >
-          <Info class="size-4 flex-none" :stroke-width="2" aria-hidden="true" />
+          <Info class="size-4 flex-none" aria-hidden="true" />
           <!-- The name and the smaller version share one baseline, so they read as one line. -->
           <span class="flex min-w-0 flex-1 items-baseline gap-3">
             <span class="min-w-0 flex-1 truncate">{{ t("settings.section.about") }}</span>

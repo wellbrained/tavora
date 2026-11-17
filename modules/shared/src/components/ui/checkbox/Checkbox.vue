@@ -46,9 +46,9 @@ useAriaDisabled(() => box.value, soft.soft)
   >
     <CheckboxIndicator force-mount data-slot="checkbox-indicator" class="tavora-check-mark grid place-content-center text-current">
       <slot v-bind="slotProps">
-        <Minus v-if="slotProps.state === 'indeterminate'" class="size-3.5" :stroke-width="2.5" />
+        <Minus v-if="slotProps.state === 'indeterminate'" class="size-3.5" />
         <!-- Lucide's Check, with its path measured as 1 so the tick can draw itself -->
-        <svg v-else class="tavora-tick size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <svg v-else class="tavora-tick size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M20 6 9 17l-5-5" pathLength="1" />
         </svg>
       </slot>

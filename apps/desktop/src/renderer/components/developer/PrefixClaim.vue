@@ -59,7 +59,7 @@ async function press() {
         data-testid="prefix-input"
       />
       <span v-if="state === 'held'" class="text-success flex items-center gap-1.5 px-1 text-sm font-medium" role="status" data-testid="prefix-held">
-        <CircleCheck class="size-4 flex-none" :stroke-width="2" /> {{ t("prefix.held") }}
+        <CircleCheck class="size-4 flex-none" /> {{ t("prefix.held") }}
       </span>
       <Button v-else type="submit" :variant="state === 'free' ? 'default' : 'secondary'" :disabled="busy || !typed" data-testid="prefix-button">
         {{ state === "free" ? t("prefix.claim") : state === null ? t("prefix.check") : t("prefix.checkAgain") }}

@@ -87,8 +87,8 @@ const overlay = "absolute inset-0 inline-flex items-center justify-center gap-[i
         <span v-if="status === 'busy'" :class="overlay" aria-hidden="true">{{ percent === null ? busyLabel : percentLabel }}</span>
       </span>
       <span :class="[cell, sizer]" :data-label="doneLabel">
-        <Check class="invisible" :stroke-width="2" aria-hidden="true" />
-        <span v-if="status === 'done'" :class="overlay" aria-hidden="true"><Check class="tavora-progress-pop" :stroke-width="2" /> {{ doneLabel }}</span>
+        <Check class="invisible" aria-hidden="true" />
+        <span v-if="status === 'done'" :class="overlay" aria-hidden="true"><Check class="tavora-progress-pop" /> {{ doneLabel }}</span>
       </span>
     </span>
   </Button>

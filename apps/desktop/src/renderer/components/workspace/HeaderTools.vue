@@ -28,7 +28,7 @@ const hasPanels = computed(() => props.onOverlay || (state.value?.panels.length 
       <LayoutsMenu />
       <ButtonGroup>
         <Button class="h-9 text-sm [&_svg]:size-5" data-testid="add-module" @click="$emit('addModule')">
-          <Plus :stroke-width="2" absolute-stroke-width /> {{ t("workspace.addModule") }}
+          <Plus /> {{ t("workspace.addModule") }}
         </Button>
         <ModulesMenu :disabled="!hasPanels" />
       </ButtonGroup>

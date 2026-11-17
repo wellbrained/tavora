@@ -37,7 +37,7 @@ onBeforeUnmount(() => clearTimeout(timer));
     <div class="flex items-center gap-2 py-1.5 pr-2 pl-4">
       <span class="text-muted-foreground min-w-0 flex-1 truncate font-mono text-xs">{{ file }}</span>
       <Button variant="ghost" size="xs" data-testid="copy-code" @click="copy">
-        <Check v-if="copied" class="text-success" :stroke-width="1.75" />
+        <Check v-if="copied" class="text-success" />
         <Copy v-else :stroke-width="1.5" />
         {{ t("box.copy") }}
       </Button>

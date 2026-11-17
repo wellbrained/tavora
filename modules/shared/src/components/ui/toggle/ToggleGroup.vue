@@ -28,7 +28,7 @@ const model = defineModel<T[]>({ required: true });
       :data-testid="option.testid"
       :class="cn(toggleClass, 'rounded-none not-first:-ml-px first:rounded-l-md last:rounded-r-md focus-visible:z-20 data-[state=on]:z-10')"
     >
-      <component :is="option.icon" v-if="option.icon" class="size-4" :stroke-width="1.75" aria-hidden="true" />
+      <component :is="option.icon" v-if="option.icon" class="size-4" aria-hidden="true" />
       <span v-else aria-hidden="true">{{ option.text ?? option.label }}</span>
     </ToggleGroupItem>
   </ToggleGroupRoot>

@@ -278,7 +278,7 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
                   )
                 "
               >
-                <component :is="icon" class="size-3.5" :stroke-width="1.75" />
+                <component :is="icon" class="size-3.5" />
               </span>
             </span>
             <span class="flex min-w-0 flex-1 flex-col">
@@ -294,7 +294,7 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
           data-testid="manage-modules"
           @click="manage"
         >
-          <Settings2 class="size-4 flex-none" :stroke-width="1.75" aria-hidden="true" />
+          <Settings2 class="size-4 flex-none" aria-hidden="true" />
           <span class="min-w-0 flex-1 truncate">{{ t("addModule.manage") }}</span>
         </button>
       </aside>
@@ -401,7 +401,7 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
                         :aria-controls="`panel-menu-${module.id}`"
                         :data-testid="`panel-menu-toggle-${module.id}`"
                         @click="toggle(module.id)"
-                        ><ChevronDown :class="cn('size-4 transition-transform motion-reduce:transition-none', expanded === module.id && 'rotate-180')" :stroke-width="1.75"
+                        ><ChevronDown :class="cn('size-4 transition-transform motion-reduce:transition-none', expanded === module.id && 'rotate-180')"
                       /></Button>
                     </ButtonGroup>
                   </template>

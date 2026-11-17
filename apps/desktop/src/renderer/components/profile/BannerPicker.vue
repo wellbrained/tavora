@@ -28,7 +28,7 @@ function pick(id: BannerId) {
         class="focus-visible:outline-ring absolute top-2 right-2 flex items-center gap-1.5 rounded-md bg-black/45 px-2 py-1 text-xs font-medium text-white/90 backdrop-blur-sm transition-colors outline-none hover:bg-black/60 focus-visible:outline-solid focus-visible:outline-2"
         data-testid="profile-banner-change"
       >
-        <Pencil class="size-3" :stroke-width="2" aria-hidden="true" />
+        <Pencil class="size-3" aria-hidden="true" />
         {{ t("profile.banner.change") }}
       </button>
     </PopoverTrigger>
