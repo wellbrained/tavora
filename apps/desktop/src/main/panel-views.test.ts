@@ -234,6 +234,21 @@ describe("visibility", () => {
     await expect(rig.views.closed(B)).resolves.toBeUndefined();
   });
 
+  it("closing for good forgets what the panel saved only after its page closed", async () => {
+    const rig = panelViewsRig();
+    const a = rig.add(A);
+    let closePage!: () => void;
+    a.dispose = () => ((a.disposed = true), new Promise<void>((resolve) => (closePage = resolve)));
+    const forgotten: string[] = [];
+    void rig.views.closeForGood(A, async () => void forgotten.push(A));
+    expect(a.disposed).toBe(true);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(forgotten).toEqual([]);
+    closePage();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(forgotten).toEqual([A]);
+  });
+
   it("disposing everything resolves once every page has closed", async () => {
     const rig = panelViewsRig();
     const a = rig.add(A);

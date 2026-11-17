@@ -116,8 +116,8 @@ function variantsAndUtility(cls: string): string[] {
   return parts
 }
 
-/** A variant that styles something inside the button, not the button: `*:`, `**:`, `[&_svg]:`, `[&>span]:`. */
-const forDescendants = (variant: string) => variant === "*" || variant === "**" || variant.startsWith("[&_") || variant.startsWith("[&>")
+/** A variant that styles something inside the button or a part of it, not the button's own box: `*:`, `**:`, `[&_svg]:`, `[&>span]:`, `before:`, `after:`. */
+const forDescendants = (variant: string) => variant === "*" || variant === "**" || variant === "before" || variant === "after" || variant.startsWith("[&_") || variant.startsWith("[&>")
 
 /**
  * True when a class list sets horizontal padding on the button itself (`p-*`, `px-*`, `pl-*`, `pr-*`, `ps-*`, `pe-*`),

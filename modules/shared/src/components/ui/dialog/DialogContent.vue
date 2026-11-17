@@ -40,7 +40,7 @@ const instant = provideDialogInstant(() => props.instant)
 const root = injectDialogRootContext()
 // On top of the page while open: page keys such as Ctrl+Z stand down and the page around it is inert (layers.ts).
 const attrs = useAttrs()
-const layer = useLayer("dialog", root.open, { name: () => attrs["data-testid"] as string | undefined })
+const layer = useLayer("dialog", root.open, { name: () => attrs["data-testid"] as string | undefined, kept: () => !!props.forceMount })
 
 // A DialogHeader with a title draws the close X itself (centred against the title); without one the X sits in the corner.
 const headerClose = ref(false)

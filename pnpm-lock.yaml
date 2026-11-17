@@ -13,7 +13,7 @@ overrides:
   undici@>=7.0.0 <7.30.1: 7.30.2
   undici@>=6.0.0 <6.29.1: 6.29.1
   markdown-it@>=14.1.0 <14.3.3: 14.3.3
-  vite@<=6.4.3: 6.4.4
+  vitepress>vite: 6.4.4
 
 patchedDependencies:
   '@excalidraw/excalidraw@0.18.1':
@@ -2409,7 +2409,7 @@ packages:
   '@tailwindcss/vite@4.3.4':
     resolution: {integrity: sha512-wGukGWb8SVuN7+FJvSS7M5eSJWDIWwVSvUvj1q41eTIhGPsS2DAgFWjA7YURJNwjHSgty59Hz8iMUiyO+YMHBQ==}
     peerDependencies:
-      vite: 6.4.4
+      vite: ^5.2.0 || ^6 || ^7 || ^8
 
   '@tanstack/virtual-core@3.19.4':
     resolution: {integrity: sha512-ygZ3O99Il18dl0gG0q7sH78iSkb96F07G+xK9V83eCgV8NQbcNd7R+cgcJJMFO7llBoebd0A82sCCstQq2Vp6Q==}
@@ -2757,21 +2757,21 @@ packages:
     resolution: {integrity: sha512-7Yx/SXSOcQq5HiiV3orevHUFn+pmMB4cgbEkDYgnkUWb0WfeQ/wa2yFv6D5ICiCQOVpjA7vYDXrC7AGO8yjDHA==}
     engines: {node: ^18.0.0 || >=20.0.0}
     peerDependencies:
-      vite: 6.4.4
+      vite: ^5.0.0 || ^6.0.0
       vue: ^3.2.25
 
   '@vitejs/plugin-vue@6.0.10':
     resolution: {integrity: sha512-b80aUQh3n+qEzzZm5oQp3rT2QImeCx58K6eFl/RkJ3d65KW0kTuv5lNsLRVAjbW9YRUpo/wzmvzMgV34bTAItA==}
     engines: {node: ^20.19.0 || >=22.12.0}
     peerDependencies:
-      vite: 6.4.4
+      vite: ^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0
       vue: ^3.2.25 || ^3.6.0-rc.10
 
   '@vitest/mocker@5.1.0':
     resolution: {integrity: sha512-5umB9/jlWcqVS6fsrFmv5Gdnpu6wAUio/lEOwAmvB7v+lFo/IW2B9FhAD0p19GCULTgMzLCdUmuCDCnAzWgppQ==}
     peerDependencies:
       msw: ^2.4.9 || ^3.0.0
-      vite: 6.4.4
+      vite: ^6.0.0 || ^7.0.0 || ^8.0.0
     peerDependenciesMeta:
       msw:
         optional: true
@@ -5052,7 +5052,7 @@ packages:
       '@vitest/ui': 5.1.0
       happy-dom: '*'
       jsdom: '*'
-      vite: 6.4.4
+      vite: ^6.4.0 || ^7.0.0 || ^8.0.0
     peerDependenciesMeta:
       '@edge-runtime/vm':
         optional: true

@@ -35,7 +35,7 @@ const delegatedProps = reactiveOmit(props, "class", "instant", "dismissible", "b
 const instant = provideDialogInstant(() => props.instant)
 // On top of the page while open: page keys such as Ctrl+Z stand down and the page around it is inert (layers.ts).
 const attrs = useAttrs()
-const layer = useLayer("dialog", injectDialogRootContext().open, { name: () => attrs["data-testid"] as string | undefined })
+const layer = useLayer("dialog", injectDialogRootContext().open, { name: () => attrs["data-testid"] as string | undefined, kept: () => !!props.forceMount })
 
 // Reka's own events go on to Reka; `dismiss-attempt` is the kit's and stays here.
 const forwardedAll = useForwardPropsEmits(delegatedProps, emits)

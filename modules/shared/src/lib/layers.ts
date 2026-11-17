@@ -73,22 +73,30 @@ function openLayer(id: number, kind: LayerKind, modal: boolean, name: string | u
   stack.value = [...stack.value.filter((layer) => layer.id !== id), { id, kind, modal, name, state: "open", element }]
 }
 
+/** How long after a close a kept content gets to start its exit animation, and the longest it may take to end. */
+const ANIMATION_START_MS = 50
+const ANIMATION_MAX_MS = 1000
+
 /**
  * It stays, leaving, while its content is on the page, and goes at once when it never got there. A content that stays on
- * the page after it closed (`forceMount`) never unmounts, so its LayerAnchor can't end the layer: it leaves once the
- * content's own animations are over and the content is still there.
+ * the page after it closed (`kept`: `forceMount`) never unmounts, so its LayerAnchor can't end the layer: it leaves once
+ * the content's own animations are over (at most ANIMATION_MAX_MS, so an endless one can't hold the page) and the
+ * content is still there. Any other content ends its layer itself, as it unmounts.
  */
-const ANIMATION_START_MS = 50
-function closeLayer(id: number): void {
+function closeLayer(id: number, kept: boolean): void {
   updateLayer(id, (layer) => (layer.element ? { ...layer, state: "closing" } : null))
   const element = stack.value.find((layer) => layer.id === id && layer.state === "closing")?.element
-  if (!element) return
+  if (!element || !kept) return
   // The exit animation starts a moment after the content is told to close (the next render and style pass), so the
   // animations are read after that, not now.
   void nextTick()
     .then(() => new Promise((resolve) => setTimeout(resolve, ANIMATION_START_MS)))
-    .then(() => Promise.all((element.getAnimations?.() ?? []).map((animation) => animation.finished.catch(() => undefined))))
-    // A content that does unmount does so as its animations end; this comes after, so only a kept one is still here.
+    .then(() =>
+      Promise.race([
+        Promise.all((element.getAnimations?.() ?? []).map((animation) => animation.finished.catch(() => undefined))),
+        new Promise((resolve) => setTimeout(resolve, ANIMATION_MAX_MS)),
+      ]),
+    )
     .then(() => setTimeout(() => updateLayer(id, (layer) => (layer.state === "closing" && layer.element === element ? null : layer)), 0))
 }
 
@@ -121,11 +129,11 @@ export interface LayerHandle {
  * For the content of a dialog or menu: lists it as a layer for as long as `open` is true (sync, so it counts before it is
  * drawn), as leaving after that until its `LayerAnchor` leaves the page. Put a `LayerAnchor` inside the content.
  */
-export function useLayer(kind: LayerKind, isOpen: Readonly<Ref<boolean>>, options: { modal?: () => boolean; name?: () => string | undefined } = {}): LayerHandle {
+export function useLayer(kind: LayerKind, isOpen: Readonly<Ref<boolean>>, options: { modal?: () => boolean; name?: () => string | undefined; kept?: () => boolean } = {}): LayerHandle {
   const id = nextId++
   const modal = options.modal ?? (() => true)
   provide(layerKey, id)
-  watch(isOpen, (value) => (value ? openLayer(id, kind, modal(), options.name?.()) : closeLayer(id)), { flush: "sync", immediate: true })
+  watch(isOpen, (value) => (value ? openLayer(id, kind, modal(), options.name?.()) : closeLayer(id, options.kept?.() ?? false)), { flush: "sync", immediate: true })
   watch(modal, (value) => updateLayer(id, (layer) => ({ ...layer, modal: value })), { flush: "sync" })
   onScopeDispose(() => removeLayer(id))
   return { isTop: () => topLayer()?.id === id }

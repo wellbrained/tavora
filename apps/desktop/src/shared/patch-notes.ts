@@ -28,6 +28,21 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.85",
+    date: "2026-11-17",
+    title: "Calmer tooltips",
+    notes: [
+      "Item cards show once, at their full size, instead of blinking or growing a moment later.",
+      "Moving from one item to the next swaps the card without it vanishing in between.",
+      "A card near the edge opens beside its item, and stays off it wherever there is room.",
+      "A hint on the header no longer closes and opens again.",
+    ],
+    prs: [
+      { number: 821, title: "Tooltips show once: no blink between cards, never over their anchor" },
+    ],
+    tags: ["modules"],
+  },
+  {
     version: "0.24.84",
     date: "2026-11-17",
     title: "Panels stop flickering",

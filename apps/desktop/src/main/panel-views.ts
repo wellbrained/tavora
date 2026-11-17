@@ -378,6 +378,15 @@ export class PanelViews {
   }
 
   /**
+   * The panel is closed for good: its view goes now, and `forget` (deleting what it saved) runs only after its page has
+   * closed, so the page's last save can't bring the saved file back.
+   */
+  closeForGood(instanceId: string, forget: () => Promise<void>): Promise<void> {
+    this.close(instanceId);
+    return this.closed(instanceId).then(forget);
+  }
+
+  /**
    * Resolves once every page of this panel that went has closed: until then it may still save what was typed just before
    * (up to CLOSE_CAP_MS), so what it saved is only safe to delete after this.
    */

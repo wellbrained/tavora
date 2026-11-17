@@ -3737,10 +3737,8 @@ export class Host {
    * until then it may still save its last state, which would bring the file back.
    */
   private closeView(instanceId: string): void {
-    this.panels.close(instanceId);
     void this.panels
-      .closed(instanceId)
-      .then(() => this.data.panelState.remove(instanceId))
+      .closeForGood(instanceId, () => this.data.panelState.remove(instanceId))
       .catch((error: unknown) => console.error("[tavora]", error));
   }
 
