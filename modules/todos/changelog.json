@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.2.32",
+    "date": "2026-11-18",
+    "notes": [
+      "Over the game the list is just for ticking, renaming and adding: the row menu is gone there, so nothing gets cut off."
+    ]
+  },
+  {
     "version": "0.2.31",
     "date": "2026-11-18",
     "notes": [

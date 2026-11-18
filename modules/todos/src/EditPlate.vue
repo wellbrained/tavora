@@ -2,11 +2,9 @@
 // The list over the game while the in-game layer is open. The overlay page shows the live view read-only while the
 // layer is closed; when it opens, Tavora lends this panel to the layer in the same spot, and the panel draws the very
 // same plate (plate.ts, plate.css: same rows, look and box), now editable: the box ticks a to-do, a double-click on
-// the title renames it, ⋯ has the row's menu, and the last line adds a to-do. Groups, Keep finished and the settings
+// the title renames it, and the last line adds a to-do. Groups, Keep finished and the settings
 // stay in the full panel in Tavora. Rows that don't fit scroll inside the plate instead of being cut.
-import { Ellipsis } from "@lucide/vue";
 import { useFocusRecovery } from "@tavora/official-ui";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Textarea } from "@tavora/official-ui/components/ui/textarea";
 import { computed, inject, nextTick, onBeforeUnmount, provide, ref } from "vue";
 import AddInput from "./AddInput.vue";
@@ -14,10 +12,9 @@ import { t } from "./i18n";
 import { buildPlateRows, type LiveLook, type PlateGroupRow, type PlateTaskRow } from "./live";
 import { PANEL, ROW_FOCUS } from "./panel";
 import { plateStyle } from "./plate";
-import { afterMenu, rowChange, rowMenu, taskActions, type RowAction } from "./row";
-import RowMenuItems from "./RowMenuItems.vue";
+import { taskActions } from "./row";
 import type { TodoStore } from "./store";
-import { addTask, findTask, insertTask, MAX, type Group, type Task, type TodoList } from "./todos";
+import { addTask, findTask, MAX, type Group, type Task, type TodoList } from "./todos";
 
 const props = defineProps<{ store: TodoStore; list: TodoList; collapsed: readonly string[]; look: LiveLook }>();
 const panel = inject(PANEL)!;
@@ -27,7 +24,6 @@ const plateEl = ref<HTMLElement | null>(null);
 const rowFocus = useFocusRecovery(plateEl);
 provide(ROW_FOCUS, rowFocus);
 const actions = taskActions(props.store, panel, rowFocus);
-const menuFocus = afterMenu();
 
 /** How opaque the plate is at least while it can be edited, in percent: the controls on it have to read. */
 const EDIT_BACKGROUND = 50;
@@ -35,10 +31,12 @@ const style = computed(() => plateStyle({ ...props.look, background: Math.max(pr
 
 type Entry =
   | { kind: "group"; key: string; row: PlateGroupRow }
-  | { kind: "task"; key: string; row: PlateTaskRow; task: Task; group: Group; index: number }
-  | { kind: "draft"; key: string; depth: number };
+  | { kind: "task"; key: string; row: PlateTaskRow; task: Task; group: Group; index: number };
 
-/** The live view's rows, all of them, with the to-do each shows; a new to-do being typed sits among them. */
+/**
+ * The live view's rows, all of them, with the to-do each shows. Over the game you tick, rename and add; moving, pinning,
+ * sub-to-dos and deleting stay in the panel in Tavora (a menu here would be cut off by the plate's small window).
+ */
 const entries = computed<Entry[]>(() => {
   const rows = buildPlateRows(props.list, props.collapsed, props.look, { objectives: t("app.objectives") }, panel.lingering.value);
   const shown: Entry[] = [];
@@ -49,26 +47,8 @@ const entries = computed<Entry[]>(() => {
       if (found) shown.push({ kind: "task", key: `task:${row.taskId}`, row, ...found });
     }
   }
-  const draft = panel.draft.value;
-  if (draft) shown.splice(draftAt(shown, draft.groupId, draft.afterId), 0, { kind: "draft", key: "draft", depth: draft.level });
   return shown;
 });
-
-/** Where a new to-do typed after `afterId` shows: after that row and the rows under it, else at the end of its group. */
-function draftAt(shown: Entry[], groupId: string, afterId: string): number {
-  /** The depth of a row of the group's own part (not an objective), or null for any other entry. */
-  const depthIn = (entry: Entry | undefined) => (entry?.kind === "task" && entry.group.id === groupId && !entry.row.pinned ? entry.row.depth : null);
-  const at = shown.findIndex((entry) => depthIn(entry) !== null && entry.kind === "task" && entry.task.id === afterId);
-  if (at === -1) {
-    let end = shown.length;
-    while (end > 0 && depthIn(shown[end - 1]) === null) end--;
-    return end === 0 ? shown.length : end;
-  }
-  const depth = depthIn(shown[at])!;
-  let end = at + 1;
-  while ((depthIn(shown[end]) ?? -1) > depth) end++;
-  return end;
-}
 
 const indent = (depth: number) => (depth ? { paddingLeft: `${depth * 1.2}em` } : undefined);
 
@@ -124,33 +104,7 @@ function onTitleKey(event: KeyboardEvent, task: Task) {
   }
 }
 
-// ── The row's menu and new to-dos ────────────────────────────────────
-
-function choose(entry: Extract<Entry, { kind: "task" }>, action: RowAction) {
-  const { task } = entry;
-  if (action === "rename") return menuFocus.later(() => void startRename(task));
-  if (action === "add-below" || action === "add-sub") {
-    const level = entry.row.depth + (action === "add-sub" ? 1 : 0);
-    return menuFocus.later(() => {
-      panel.editing.value = null;
-      panel.draft.value = { groupId: entry.group.id, afterId: task.id, level };
-    });
-  }
-  if (action === "delete") return actions.remove(task);
-  const run = rowChange(action, task);
-  if (run) actions.change(run);
-}
-
-function addDraft(text: string) {
-  const open = panel.draft.value;
-  if (!open) return;
-  const id = crypto.randomUUID();
-  const createdAt = new Date().toISOString();
-  const { groupId, afterId, level } = open;
-  actions.change((data) => insertTask(data, groupId, afterId, level, { id, title: text, createdAt }));
-  // The next one follows the new one, at the same level.
-  panel.draft.value = { groupId, afterId: id, level };
-}
+// ── New to-dos ───────────────────────────────────────────────────────
 
 /** The last line adds to the first group the plate shows (or the first group, or a new one when there is none). */
 function add(text: string) {
@@ -168,17 +122,6 @@ function add(text: string) {
   <ul ref="plateEl" :class="['live-plate', 'editing', style.classes]" :style="style.style" role="list" :aria-label="t('app.overGame')" data-testid="edit-plate">
     <template v-for="(entry, at) in entries" :key="entry.key">
       <li v-if="entry.kind === 'group'" :class="['head', at === 0 && 'first']">{{ entry.row.text }}</li>
-      <li v-else-if="entry.kind === 'draft'" class="add" :style="indent(entry.depth)">
-        <AddInput
-          draft
-          class="add-line"
-          :placeholder="entry.depth ? t('group.addSub') : t('app.addTodo')"
-          :maxlength="MAX.title"
-          data-testid="plate-draft"
-          @add="addDraft"
-          @close="panel.draft.value = null"
-        />
-      </li>
       <li v-else :class="['task', entry.row.done && 'done']" :style="indent(entry.row.depth)" :data-focus-row="entry.task.id" :data-testid="`plate-task-${entry.task.id}`">
         <!-- rules-allow: kit-control the live view's own box (or pin), drawn as on the overlay page, so nothing changes when the layer opens -->
         <button
@@ -204,22 +147,6 @@ function add(text: string) {
         />
         <span v-else class="text" data-testid="plate-title" @dblclick="startRename(entry.task)">{{ entry.row.text }}</span>
         <span v-if="entry.row.progress" class="progress">{{ entry.row.progress }}</span>
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            class="row-menu bg-popover text-popover-foreground flex items-center justify-center rounded-md border"
-            :aria-label="t('moreFor', { name: entry.task.title })"
-            :title="t('more')"
-            data-testid="plate-task-menu"
-          >
-            <Ellipsis class="size-[0.9em]" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" @close-auto-focus="menuFocus.closed">
-            <RowMenuItems
-              :entries="rowMenu({ task: entry.task, group: entry.group, groups: list.groups, index: entry.index, depth: entry.row.depth, compact: entry.row.pinned, rename: true, describe: false })"
-              @choose="(action) => choose(entry, action)"
-            />
-          </DropdownMenuContent>
-        </DropdownMenu>
       </li>
     </template>
     <li class="add">

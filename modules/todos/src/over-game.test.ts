@@ -148,14 +148,15 @@ describe("over the game", () => {
     expect(stored(host).groups[0]!.tasks[1]!.title).toBe("Light the 松明");
   });
 
-  it("gives every control a name and a ⋯ menu on each row", async () => {
+  it("gives every control a name, and has no row menu (that stays in the panel in Tavora)", async () => {
     await mount({ overGame: true });
-    const menus = [...document.querySelectorAll<HTMLElement>("[data-testid=plate-task-menu]")];
-    expect(menus.map((menu) => menu.getAttribute("aria-label"))).toEqual(["More for Find the crypt", "More for Light the torch"]);
+    expect($("[data-testid=plate-task-menu]")).toBeNull();
+    const boxes = [...document.querySelectorAll<HTMLElement>("[data-testid=plate-done]")];
+    expect(boxes.map((box) => box.getAttribute("aria-label"))).toEqual(["Mark “Find the crypt” as done", "Mark “Light the torch” as done"]);
     expect(($("[data-testid=plate-add] input") as HTMLInputElement).getAttribute("aria-label")).toBe("Add a to-do");
   });
 
-  it("offers no Undo over the game: no toast pops up there, a delete just deletes, and Ctrl+Z does nothing", async () => {
+  it("offers no Undo over the game: no toast pops up there, and Ctrl+Z does nothing", async () => {
     const host = await mount({ overGame: true });
     const toasts = () => document.querySelectorAll("[data-testid=undo-toast]").length;
     expect($("[data-slot=toaster-host]")).toBeNull();
@@ -164,17 +165,8 @@ describe("over the game", () => {
     await settle();
     expect(stored(host).groups[0]!.tasks[0]!.done).toBe(true);
 
-    // Delete from the row's ⋯ menu.
-    const trigger = $("[data-testid=plate-task-t2] [data-testid=plate-task-menu]")!;
-    trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
-    await settle();
-    $("[data-testid=menu-delete]")!.click();
-    await settle();
-    expect(stored(host).groups[0]!.tasks.map((item) => item.id)).toEqual(["t1"]);
-
     document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true, cancelable: true }));
     await settle();
-    expect(stored(host).groups[0]!.tasks.map((item) => item.id)).toEqual(["t1"]);
     expect(stored(host).groups[0]!.tasks[0]!.done).toBe(true);
     expect(toasts()).toBe(0);
 
