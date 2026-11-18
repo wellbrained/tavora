@@ -15,7 +15,7 @@ import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from "vue";
 import type { PanelBounds, SavedLayout } from "../../shared/host-api";
 import { keepSlots } from "../../shared/panel-layout";
 import { Button } from "@tavora/official-ui/components/ui/button";
-import { act, api as host, dialog, dragging, nextPanelSlot, panelsToFront, panelToMaximize, panelToShow, reportPanelBounds, state, tabStep } from "../host";
+import { act, api as host, dialog, dragging, nextPanelSlot, panelsToFront, panelToMaximize, panelToShow, reportPanelBounds, saveBeforeQuit, state, tabStep } from "../host";
 import { t, templateName } from "../i18n";
 import { LAYOUT_TEMPLATES } from "../../shared/layout-templates";
 import { fromDockview, groupConstraints, guardDrop, layoutAround, maximizedPanel, panelInfo, placePanel, placeTab, toDockview, type PanelInfo } from "../dock";
@@ -284,11 +284,15 @@ function updateConstraints(api: DockviewApi) {
 /** The workspace this page shows: a save that lands after a switch still goes to it, not to the one open by then. */
 const pageWorkspaceId = view.value.currentWorkspaceId;
 
-function saveNow() {
+function saveNow(): Promise<unknown> {
   clearTimeout(saveTimer);
   saveTimer = undefined;
-  if (dock && pageWorkspaceId) void act({ type: "save-layout", workspaceId: pageWorkspaceId, layout: fromDockview(dock.toJSON(), maximizedNow(dock)) }, { quiet: true });
+  if (!dock || !pageWorkspaceId) return Promise.resolve();
+  return act({ type: "save-layout", workspaceId: pageWorkspaceId, layout: fromDockview(dock.toJSON(), maximizedNow(dock)) }, { quiet: true });
 }
+
+// A change made just before the window closes or Tavora quits (a dev restart) is still saved: the host waits for it.
+const stopSavingBeforeQuit = saveBeforeQuit(() => (saveTimer !== undefined ? saveNow() : Promise.resolve()));
 
 function saveSoon() {
   clearTimeout(saveTimer);
@@ -434,7 +438,8 @@ watch([root, area], (elements, previous) => {
 
 onBeforeUnmount(() => {
   // A change made just before a switch is still saved, into this page's own workspace.
-  if (saveTimer !== undefined) saveNow();
+  if (saveTimer !== undefined) void saveNow();
+  stopSavingBeforeQuit();
   reportQueued = false;
   resizes.disconnect();
   removeEventListener("dragend", endDrag, true);

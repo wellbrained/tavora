@@ -644,6 +644,19 @@ function runShortcut(shortcut: HostShortcut): void {
 // The window went behind the game: toasts wait there, since nobody sees them count down.
 api.onWindowBehind(setWindowBehind);
 
+/** What pages still have to save as the window closes or Tavora quits (the workspace's layout); each resolves once sent. */
+const unsaved = new Set<() => Promise<unknown>>();
+
+/** Has `save` run as the window closes or Tavora quits, until the returned function is called. */
+export function saveBeforeQuit(save: () => Promise<unknown>): () => void {
+  unsaved.add(save);
+  return () => unsaved.delete(save);
+}
+
+api.onSaveNow(async () => {
+  await Promise.all([...unsaved].map((save) => save()));
+});
+
 api.onShortcut((shortcut) => {
   noteShortcut(shortcut);
   runShortcut(shortcut);

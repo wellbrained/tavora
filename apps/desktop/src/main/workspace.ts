@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, rename, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { isPanelTypeId } from "@tavora/module-schema";
+import { writeFileAtomic } from "./fsutil";
 import { INSTANCE_ID } from "./ids";
 import { readSavedFile, unknownFields } from "./json";
 import { UserError } from "./messages";
@@ -196,11 +195,9 @@ export function settlePanelTypes(state: WorkspaceState, typesOf: (moduleId: stri
   }
 }
 
+/** Writes the workspace file whole or not at all (fsutil.ts writeFileAtomic), like the other data files. */
 export async function saveWorkspace(file: string, state: WorkspaceState): Promise<void> {
-  await mkdir(path.dirname(file), { recursive: true });
-  const temp = `${file}.tmp`;
-  await writeFile(temp, JSON.stringify(state, null, 2), "utf8");
-  await rename(temp, file);
+  await writeFileAtomic(file, JSON.stringify(state, null, 2));
 }
 
 /**

@@ -44,6 +44,13 @@ const api: TavoraHostApi = {
   onWindowResizing: (listener) => {
     ipcRenderer.on("host:window-resizing", (_event, resizing: unknown) => listener(resizing === true));
   },
+  onSaveNow: (listener) => {
+    ipcRenderer.on("host:save-now", (_event, seq: unknown) => {
+      void listener()
+        .catch(() => undefined)
+        .then(() => ipcRenderer.send("host:saved", seq));
+    });
+  },
   layout: {
     getState: () => ipcRenderer.invoke("layout:get-state"),
     onState: (listener) => {

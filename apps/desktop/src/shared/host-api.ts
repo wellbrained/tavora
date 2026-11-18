@@ -1292,6 +1292,8 @@ export interface TavoraHostApi {
   onOverlayReady(listener: (seq: number) => void): void;
   /** The user is dragging the window's edge (true), or stopped (false): the panels step aside meanwhile, as for a drag. */
   onWindowResizing(listener: (resizing: boolean) => void): void;
+  /** The window is closing or Tavora quits: the page sends what it has not saved yet, and the host waits until it has. */
+  onSaveNow(listener: () => Promise<void>): void;
   /** The Overlay layout window's side (main/overlay-layout.ts): its pages get the view and answer with messages. */
   layout: {
     getState(): Promise<LayoutView | null>;

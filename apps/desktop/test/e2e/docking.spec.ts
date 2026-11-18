@@ -131,6 +131,24 @@ test("a module added goes in as a tab where you work, nothing else moves, and th
   await again.app.close();
 });
 
+test("a tab picked right before quitting is still the one picked after a restart", async () => {
+  const { app, page, userData } = await launch();
+  await layOutColumns(page, 1);
+  await openModule(page, VANILLA);
+  await openModule(page, VANILLA);
+  await expect(panels(page, VANILLA)).toHaveCount(2);
+  // The newest panel is the picked tab, and that is saved.
+  await expectLayoutSaved(userData, (nodes) => groupsIn(nodes).some((group) => group.panels.length === 2 && group.active === group.panels[1]));
+  // Pick the first tab and quit at once, before the layout's own short wait to save is over.
+  await panels(page, VANILLA).nth(0).click();
+  await app.close();
+  await expectLayoutSaved(userData, (nodes) => groupsIn(nodes).some((group) => group.panels.length === 2 && group.active === group.panels[0]));
+  const again = await launch(userData);
+  await expect(panels(again.page, VANILLA)).toHaveCount(2);
+  await expectModuleText(again.app, VANILLA, "lifecycle", "active", 0);
+  await again.app.close();
+});
+
 test("panels are moved, split and maximized from their menu, and the layout is kept", async () => {
   const { app, page, userData } = await launch();
   await openModule(page, VANILLA);

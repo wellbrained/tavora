@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildFolderName, describeModules, developmentProjects, discoverModules, projectEntry, type ModuleProblem, waitingModules } from "./registry";
+import { buildFolderName, describeModules, developmentProjects, discoverModules, projectEntry, panelsWait, type ModuleProblem, waitingModules } from "./registry";
 
 async function makeModule(root: string, folder: string, id: string, name = id, permissions: Record<string, unknown> = { network: [] }): Promise<string> {
   const dir = path.join(root, folder);
@@ -219,6 +219,36 @@ describe("development folders", () => {
         ["example.own", "example.own"],
       ]),
     );
+  });
+
+  it("keep every panel waiting while a development folder or a manifest can't be read, since its module may be any of them", async () => {
+    const projects = await mkdtemp(path.join(tmpdir(), "tavora-projects-"));
+    const fine = await makeModule(projects, "fine", "example.fine");
+    const clean: ModuleProblem[] = [];
+    await discoverModules({ development: [fine] }, clean);
+    // Nothing is unsure: a module that is not there is gone, and its panels go.
+    expect(panelsWait(clean)("local.gone")).toBe(false);
+    expect(panelsWait(clean)("example.fine")).toBe(false);
+
+    // The folder is not there right now (a drive not connected, a checkout being switched).
+    const missing: ModuleProblem[] = [];
+    await discoverModules({ development: [path.join(projects, "gone")] }, missing);
+    expect(panelsWait(missing)("local.gone")).toBe(true);
+
+    // A manifest half written while Tavora starts, so it can't say which module it is.
+    const half = await makeModule(projects, "half", "local.half");
+    await writeFile(path.join(half, "tavora.module.json"), '{ "id": "local.ha');
+    const unreadable: ModuleProblem[] = [];
+    await discoverModules({ development: [half] }, unreadable);
+    expect(panelsWait(unreadable)("local.half")).toBe(true);
+
+    // A module that names itself but can't load still waits, as before.
+    const unbuilt = await makeModule(projects, "unbuilt", "example.unbuilt");
+    await rm(path.join(unbuilt, "index.html"));
+    const named: ModuleProblem[] = [];
+    await discoverModules({ development: [unbuilt] }, named);
+    expect(panelsWait(named)("example.unbuilt")).toBe(true);
+    expect(panelsWait(named)("local.gone")).toBe(false);
   });
 
   it("find the folder a project builds into, even before its manifest is valid", async () => {

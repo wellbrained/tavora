@@ -215,7 +215,8 @@ function kill(child) {
 /** Asks Tavora to quit, saving its state; ends it for good if it does not. */
 function quit(child) {
   if (child.exitCode !== null || child.signalCode !== null) return;
-  const timer = setTimeout(() => kill(child), 3000);
+  // Above the 5 s Tavora gives itself to save on quit (main/index.ts), so a slow quit still saves the last changes.
+  const timer = setTimeout(() => kill(child), 10_000);
   child.once("exit", () => clearTimeout(timer));
   if (child.connected) child.send("quit");
   else child.kill();

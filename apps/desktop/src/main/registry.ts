@@ -95,6 +95,21 @@ export function waitingModules(problems: readonly ModuleProblem[]): Map<string, 
   return waiting;
 }
 
+/** Problems that hide which modules a folder holds: the folder is not there, or a manifest can't say its id. */
+const UNSURE: ReadonlySet<ModuleProblem["kind"]> = new Set(["missing", "no-module", "unreadable", "invalid"]);
+
+/**
+ * Which panels keep waiting for their module instead of being forgotten: those of a module that can't load right now
+ * (waitingModules), and every one while a development folder can't be found or a manifest can't be read. Then
+ * Tavora can't tell a module that is gone from one it just can't see (a drive not connected, a manifest half
+ * written while Tavora starts), and forgetting would drop the panels from every workspace for good.
+ */
+export function panelsWait(problems: readonly ModuleProblem[]): (moduleId: string) => boolean {
+  const waiting = waitingModules(problems);
+  const unsure = problems.some((problem) => !problem.about?.id && UNSURE.has(problem.kind));
+  return (moduleId) => unsure || waiting.has(moduleId);
+}
+
 export interface ModuleSources {
   /** Modules that ship with Tavora. Searched first, so they win over a local copy. */
   official?: string[];

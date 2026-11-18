@@ -176,7 +176,7 @@ import { supportTarget } from "./module-support";
 import { defaultFilesRoot } from "./module-files";
 import { ModuleFilesFolder } from "./module-files-folder";
 import { BrowserPanel, browserPartition, browserSession, browserUserAgent, type BrowserKind, type BrowserSessionHooks } from "./browser-view";
-import { BROWSER_MODULE_ID, developmentProjects, isExampleModule, buildFolderName, MANIFEST, mayHoldProject, projectEntry, waitingModules, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
+import { BROWSER_MODULE_ID, developmentProjects, isExampleModule, buildFolderName, MANIFEST, mayHoldProject, panelsWait, projectEntry, waitingModules, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
 import { DataRegistry } from "./storage";
 import type { CheckedMenu } from "./module-menu";
 import {TooltipWindow} from "./tooltip-window";
@@ -254,6 +254,8 @@ const OPENING_CAP_MS = REVEAL_CAP_MS * 4;
 const timingLog = !app.isPackaged && process.env.TAVORA_TIMINGS ? (line: string) => console.log(`[tavora] ${line}`) : null;
 /** How long to wait for the host UI to show the panels' still images before hiding the panels anyway. */
 const FROZEN_SHOWN_CAP_MS = 300;
+/** How long closing or quitting waits for the host page to send what it has not saved yet (Host.pageSaved). */
+const PAGE_SAVE_CAP_MS = 1000;
 /** How long after the last move of the window's edge the panels come back, when the system never says the resize ended. */
 const WINDOW_RESIZE_END_MS = 1000;
 /** How long a development folder's build must be quiet before its panels reload. */
@@ -586,6 +588,9 @@ export class Host {
    * The panels' pages as the window closes or Tavora quits: `running`; `closing` while they save what was typed just
    * before (at most CLOSE_CAP_MS); `closed`. No page starts after `running`.
    */
+  /** Saves the host page was asked for and has not answered yet, by number (pageSaved). */
+  private readonly pageSaves = new Map<number, () => void>();
+  private pageSaveSeq = 0;
   private panelPages: { step: "running" } | { step: "closing" | "closed"; done: Promise<void> } = { step: "running" };
   /** True while the window is minimized or hidden. */
   private windowHidden = false;
@@ -900,9 +905,9 @@ export class Host {
       console.error("[tavora] moving the data of Discord and AI Usage failed", error),
     );
     const expired = purgeExpired(library, new Date());
-    const waiting = waitingModules(moduleProblems);
+    const waits = panelsWait(moduleProblems);
     // A module that left Tavora for the catalog keeps its panels while it is not installed: they offer to install it.
-    const workspaces = await savedData.loadWorkspace(Object.keys(library.workspaces), (id) => modules.has(id) || waiting.has(id) || movedModule(id) !== undefined);
+    const workspaces = await savedData.loadWorkspace(Object.keys(library.workspaces), (id) => modules.has(id) || waits(id) || movedModule(id) !== undefined);
     // Missing or set aside (unreadable): panels it doesn't list may well be the user's, so the sweep below waits.
     const workspaceRead = existsSync(path.join(userData, WORKSPACE_FILE));
     settlePanelTypes(workspaces, panelTypesOf(modules));
@@ -1463,11 +1468,11 @@ export class Host {
   /**
    * Closes and forgets every panel whose module is not installed any more, in every workspace. Module data stays. A module
    * that is there but cannot load right now (being rebuilt, not built, needing a newer Tavora) keeps its panels; they
-   * start again once it loads (syncPanelTypes).
+   * start again once it loads (syncPanelTypes). While a development folder or a manifest can't be read, none go (panelsWait).
    */
   private dropPanelsOfMissingModules(): void {
-    const waiting = waitingModules(this.moduleProblems);
-    for (const instanceId of this.workspaces.dropMissingModules((moduleId) => this.modules.has(moduleId) || waiting.has(moduleId) || movedModule(moduleId) !== undefined)) this.closeView(instanceId);
+    const waits = panelsWait(this.moduleProblems);
+    for (const instanceId of this.workspaces.dropMissingModules((moduleId) => this.modules.has(moduleId) || waits(moduleId) || movedModule(moduleId) !== undefined)) this.closeView(instanceId);
   }
 
   // ── Pictures of modules ──────────────────────────────────────────────
@@ -1974,6 +1979,11 @@ export class Host {
         this.pushState();
       }
     });
+    // The host page has saved what it still held (pageSaved).
+    ipcMain.on("host:saved", (event, seq: unknown) => {
+      if (!fromHost(event) || typeof seq !== "number") return;
+      this.pageSaves.get(seq)?.();
+    });
     // The Overlay page's two pieces: the page in the main window and the layer on the canvas.
     const layoutSender = (event: IpcMainInvokeEvent | IpcMainEvent) => (this.screen === "overlay" ? this.canvas?.kindOf(event.sender.id, event.senderFrame?.parent === null) : null) ?? null;
     ipcMain.handle("layout:get-state", (event) => (layoutSender(event) ? this.layout.view() : null));
@@ -2147,7 +2157,7 @@ export class Host {
       // The panels write what was typed just before first (Alt+F4 right after typing); the window closes once their pages have.
       if (this.panelPages.step !== "closed") {
         event.preventDefault();
-        if (this.panelPages.step === "running") void this.closePanelPages().then(() => !this.window.isDestroyed() && this.window.close());
+        if (this.panelPages.step === "running") void Promise.all([this.pageSaved(), this.closePanelPages()]).then(() => !this.window.isDestroyed() && this.window.close());
         return;
       }
       // The last changes go to the cloud copy first; the window closes once they are up.
@@ -5375,6 +5385,26 @@ export class Host {
   }
 
   /**
+   * The host page sends what it has not saved yet (the dock waits a moment after each change before it saves the
+   * layout), as the window closes or Tavora quits. Resolves once it has, or after PAGE_SAVE_CAP_MS when it doesn't
+   * answer.
+   */
+  private pageSaved(): Promise<void> {
+    if (this.window.isDestroyed() || this.window.webContents.isDestroyed()) return Promise.resolve();
+    const seq = ++this.pageSaveSeq;
+    return new Promise<void>((resolve) => {
+      const done = () => {
+        clearTimeout(timer);
+        this.pageSaves.delete(seq);
+        resolve();
+      };
+      const timer = setTimeout(done, PAGE_SAVE_CAP_MS);
+      this.pageSaves.set(seq, done);
+      this.window.webContents.send("host:save-now", seq);
+    });
+  }
+
+  /**
    * Every panel's page saves what it still has and closes, once, as the window closes or Tavora quits. Resolves when
    * they have, at most a moment after CLOSE_CAP_MS whatever a page does.
    */
@@ -5398,7 +5428,7 @@ export class Host {
   /** Quitting: resolves once pending writes are on disk; keys go back to the system and the overlay server stops. */
   async flush(): Promise<void> {
     // What is waiting goes to disk at once (an update's installer doesn't wait long), and again once the pages have saved.
-    await Promise.all([this.closePanelPages(), this.savedData.flush()]);
+    await Promise.all([this.pageSaved(), this.closePanelPages(), this.savedData.flush()]);
     await this.gameOverlays?.shutdown();
     await this.streaming?.shutdown();
     return this.savedData.flush();
