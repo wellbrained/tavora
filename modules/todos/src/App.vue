@@ -53,10 +53,17 @@ const look = shallowRef<LiveLook>({ ...LIVE_DEFAULTS });
 const panelLook = shallowRef<PanelLook>({ ...PANEL_LOOK_DEFAULTS });
 /** When the settings last saved something, for the settings' "Saved". */
 const savedAt = ref<number>();
-/** The panel is shown big as a dialog, with its settings. */
-const dialogOpen = ref(false);
-/** The panel is over the game (the in-game layer is open): it shows the live view's plate to edit in place (EditPlate). */
-const overGame = ref(false);
+/**
+ * Where the panel is shown: in its slot, big as a dialog with its settings, or over the game (the in-game layer is open),
+ * where it shows the live view's plate to edit in place (EditPlate). Opening a dialog over the game closes the layer.
+ */
+type Place = "slot" | "dialog" | "game";
+const place = ref<Place>("slot");
+/** Tavora says the panel came to `to` (true) or left it (false). */
+function moved(to: Exclude<Place, "slot">, there: boolean) {
+  if (there) place.value = to;
+  else if (place.value === to) place.value = "slot";
+}
 const editing = ref<string | null>(null);
 const draft = ref<Draft | null>(null);
 /** The to-dos settle into their new places when one is dropped (they nest and cross groups, so they don't slide aside while it is held). */
@@ -139,7 +146,7 @@ function onKey(event: KeyboardEvent) {
   if (handleUndoKey(event)) return;
   // Esc in an open list (a Select, say) closes only that.
   const inPopup = (event.target as Element | null)?.closest?.("[role=listbox], [role=menu], [role=dialog]");
-  if (event.key === "Escape" && dialogOpen.value && !event.defaultPrevented && !inPopup) void sdk.value?.panel.closeDialog();
+  if (event.key === "Escape" && place.value === "dialog" && !event.defaultPrevented && !inPopup) void sdk.value?.panel.closeDialog();
 }
 
 // ── Live view: what Tavora shows over the game while this panel is closed ──
@@ -152,11 +159,14 @@ watch([liveState, sdk], () => {
 });
 
 // Over the game the page is see-through around the plate, and an editor or new to-do left open doesn't come along.
-watch(overGame, (over) => {
+watch(
+  () => place.value === "game",
+  (over) => {
   editing.value = null;
   draft.value = null;
   document.documentElement.classList.toggle("over-game", over);
-});
+  },
+);
 
 /** The toolbar toggle: pressed keeps finished to-dos in the list, released lets them vanish. */
 function toggleFinished() {
@@ -199,20 +209,20 @@ onMounted(async () => {
     folded.value = ids(state?.folded);
     look.value = parseLook(state?.live ?? { background: state?.liveBackground, padding: state?.livePadding });
     panelLook.value = parsePanelLook(state?.panel);
-    cleanup.push(connected.panel.onDialogChange((open) => (dialogOpen.value = open)));
+    cleanup.push(connected.panel.onDialogChange((open) => moved("dialog", open)));
     // A page that (re)loads while over the game asks; a change while it runs comes as an event and wins over a late
     // answer. An older Tavora has neither and keeps the full panel there.
     let heardOverGame = false;
     cleanup.push(
       connected.panel.onOverGameChange((over) => {
         heardOverGame = true;
-        overGame.value = over;
+        moved("game", over);
       }),
     );
     if (connected.supports("panel.isOverGame"))
       void connected.panel
         .isOverGame()
-        .then((over) => !heardOverGame && (overGame.value = over))
+        .then((over) => !heardOverGame && moved("game", over))
         .catch(() => {});
     addEventListener("keydown", onKey);
     cleanup.push(() => removeEventListener("keydown", onKey));
@@ -298,8 +308,8 @@ function dropTask() {
   <p v-if="!store" class="text-muted-foreground p-4 text-sm" data-testid="status">
     {{ error ? t("connectError", { error }) : t("loading") }}
   </p>
-  <Settings v-else-if="dialogOpen" :look="look" :panel-look="panelLook" :state="liveState" :saved-at="savedAt" @update:look="setLook" @update:panel-look="setPanelLook" />
-  <EditPlate v-else-if="overGame" :store="store" :list="list" :collapsed="collapsed" :look="look" />
+  <Settings v-else-if="place === 'dialog'" :look="look" :panel-look="panelLook" :state="liveState" :saved-at="savedAt" @update:look="setLook" @update:panel-look="setPanelLook" />
+  <EditPlate v-else-if="place === 'game'" :store="store" :list="list" :collapsed="collapsed" :look="look" />
   <div v-else class="@container relative flex h-full min-h-0 flex-col" :style="panelStyle" data-testid="todos-app">
     <header
       class="border-primary/25 bg-primary/5 flex h-10 flex-none items-center gap-1 border-b px-2"
