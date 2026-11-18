@@ -8,7 +8,7 @@ import { Ellipsis } from "@lucide/vue";
 import { useFocusRecovery } from "@tavora/official-ui";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Textarea } from "@tavora/official-ui/components/ui/textarea";
-import { computed, inject, nextTick, provide, ref } from "vue";
+import { computed, inject, nextTick, onBeforeUnmount, provide, ref } from "vue";
 import AddInput from "./AddInput.vue";
 import { t } from "./i18n";
 import { buildPlateRows, type LiveLook, type PlateGroupRow, type PlateTaskRow } from "./live";
@@ -104,7 +104,17 @@ async function finishRename(task: Task, keep: boolean, refocus = false) {
   inRow(task.id, "[data-focus-target]")?.focus();
 }
 
+// The layer closes while a title is being typed: it is kept, as a click elsewhere would.
+onBeforeUnmount(() => {
+  const key = panel.editing.value;
+  if (!key?.startsWith("plate:")) return;
+  const found = findTask(props.list, key.slice("plate:".length));
+  if (found) void finishRename(found.task, true);
+});
+
 function onTitleKey(event: KeyboardEvent, task: Task) {
+  // Enter that picks a word while typing Japanese, Chinese or Korean isn't the end of the title.
+  if (event.isComposing) return;
   if (event.key === "Escape") {
     event.preventDefault();
     void finishRename(task, false, true);

@@ -158,12 +158,15 @@ watch([liveState, sdk], () => {
   if (sdk.value && store.value) sendLive(liveState.value);
 });
 
-// Over the game the page is see-through around the plate, and an editor or new to-do left open doesn't come along.
+// Over the game the page is see-through around the plate, and an editor or new to-do left open in the panel doesn't
+// come along. The plate keeps a title being typed when the layer closes (EditPlate).
 watch(
   () => place.value === "game",
   (over) => {
-  editing.value = null;
-  draft.value = null;
+  if (over) {
+    editing.value = null;
+    draft.value = null;
+  }
   document.documentElement.classList.toggle("over-game", over);
   },
 );

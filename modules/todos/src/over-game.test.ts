@@ -128,6 +128,26 @@ describe("over the game", () => {
     expect(stored(host).groups[0]!.tasks.map((item) => item.title)).toEqual(["Find the crypt", "Light both torches", "Tame a wolf"]);
   });
 
+  it("keeps a title being typed when the layer closes, and waits for the end of IME input", async () => {
+    const host = await mount({ overGame: true });
+    const row = $("[data-testid=plate-task-t2]")!;
+    row.querySelector<HTMLElement>("[data-testid=plate-title]")!.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    await settle();
+    const input = row.querySelector<HTMLTextAreaElement>("[data-testid=plate-title-input]")!;
+    input.value = "Light the 松明";
+    input.dispatchEvent(new Event("input"));
+    await nextTick();
+    // Enter that picks a word while composing doesn't save.
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", isComposing: true, bubbles: true }));
+    await settle();
+    expect(row.querySelector("[data-testid=plate-title-input]")).not.toBeNull();
+    expect(stored(host).groups[0]!.tasks[1]!.title).toBe("Light the torch");
+
+    host.setPanelOverGame(false);
+    await settle();
+    expect(stored(host).groups[0]!.tasks[1]!.title).toBe("Light the 松明");
+  });
+
   it("gives every control a name and a ⋯ menu on each row", async () => {
     await mount({ overGame: true });
     const menus = [...document.querySelectorAll<HTMLElement>("[data-testid=plate-task-menu]")];
