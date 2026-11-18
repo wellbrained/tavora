@@ -545,6 +545,47 @@ describe("a panel shown again", () => {
     }
   });
 
+  it("over the game, asks for a frame after telling the page it is there, and answers once that frame is drawn or the cap ran out", async () => {
+    vi.useFakeTimers();
+    try {
+      const view = make({ launch: () => ({ reason: "restore" }), data: { blobs: {}, documents: { on: () => undefined, off: () => undefined } } });
+      view.connect();
+      const bridge = (view as unknown as { bridge: { emit(event: string, data: unknown): void } }).bridge;
+      const order: string[] = [];
+      vi.spyOn(bridge, "emit").mockImplementation((event) => void order.push(event));
+      view.setVisible(true);
+      made.sent.length = 0;
+      view.enterGame(() => true);
+      expect(order).toContain("panel.overGame");
+      expect(frameRequest()).toBeUndefined();
+      const done = vi.fn();
+      void view.nextFrame().then(done);
+      const requestId = frameRequest();
+      expect(made.sent.filter(([channel]) => channel === "tavora:frame")).toHaveLength(1);
+      // A frame asked for before (when it was shown in its workspace) is not this one.
+      view.framed((requestId as number) - 1);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(done).not.toHaveBeenCalled();
+      view.framed(requestId);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(done).toHaveBeenCalled();
+      // A page that never answers still shows after the cap.
+      const late = vi.fn();
+      void view.nextFrame().then(late);
+      await vi.advanceTimersByTimeAsync(2_999);
+      expect(late).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(late).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("answers a frame request at once while hidden", async () => {
+    const view = make();
+    await expect(view.nextFrame()).resolves.toBeUndefined();
+  });
+
   it("stays clear over the game", () => {
     const view = make();
     const state = made.views.at(-1)!;

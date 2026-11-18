@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.2.31",
+    "date": "2026-11-18",
+    "notes": [
+      "Over the game, ⋯ no longer covers a to-do's count, and no Undo pops up in the middle of your game."
+    ]
+  },
+  {
     "version": "0.2.30",
     "date": "2026-11-18",
     "notes": [

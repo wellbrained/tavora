@@ -155,6 +155,44 @@ describe("over the game", () => {
     expect(($("[data-testid=plate-add] input") as HTMLInputElement).getAttribute("aria-label")).toBe("Add a to-do");
   });
 
+  it("offers no Undo over the game: no toast pops up there, a delete just deletes, and Ctrl+Z does nothing", async () => {
+    const host = await mount({ overGame: true });
+    const toasts = () => document.querySelectorAll("[data-testid=undo-toast]").length;
+    expect($("[data-slot=toaster-host]")).toBeNull();
+
+    $("[data-testid=plate-task-t1] [data-testid=plate-done]")!.click();
+    await settle();
+    expect(stored(host).groups[0]!.tasks[0]!.done).toBe(true);
+
+    // Delete from the row's ⋯ menu.
+    const trigger = $("[data-testid=plate-task-t2] [data-testid=plate-task-menu]")!;
+    trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    await settle();
+    $("[data-testid=menu-delete]")!.click();
+    await settle();
+    expect(stored(host).groups[0]!.tasks.map((item) => item.id)).toEqual(["t1"]);
+
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true, cancelable: true }));
+    await settle();
+    expect(stored(host).groups[0]!.tasks.map((item) => item.id)).toEqual(["t1"]);
+    expect(stored(host).groups[0]!.tasks[0]!.done).toBe(true);
+    expect(toasts()).toBe(0);
+
+    // Back in the workspace, nothing from the game is waiting to be undone, and Undo works there as before.
+    host.setPanelOverGame(false);
+    await settle();
+    expect($("[data-slot=toaster-host]")).not.toBeNull();
+    expect(toasts()).toBe(0);
+    $("[data-testid=task-t1] [data-testid=task-done]")!.click();
+    await settle();
+    expect(stored(host).groups[0]!.tasks[0]!.done).toBe(false);
+    expect(toasts()).toBe(0);
+    // Ticking in the workspace offers Undo.
+    $("[data-testid=task-t1] [data-testid=task-done]")!.click();
+    await settle();
+    expect(toasts()).toBe(1);
+  });
+
   it("shows finished to-dos on the plate exactly when the panel keeps them", async () => {
     const done = { version: 2, groups: [{ id: "g", name: "Main", color: "", tasks: [task("t1", "Find the crypt", { done: true, doneAt: AT }), task("t2", "Light the torch")] }] };
     const kept = await mount({ overGame: true });

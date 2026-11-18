@@ -189,6 +189,14 @@
   opacity: 1;
 }
 
+/* A row with a count ("1/3") ends with it: ⋯ takes its place while it shows, and the count makes room without anything
+   moving. ⋯ is a line high, so it sits centred on the row's first line, where the count was. */
+.live-plate.editing .task:hover .progress,
+.live-plate.editing .task:focus-within .progress,
+.live-plate.editing .task:has(.row-menu[data-state="open"]) .progress {
+  visibility: hidden;
+}
+
 /* Adding: a quiet line in the plate's font, its text where the titles start. */
 .live-plate .add-line {
   flex: 1 1 auto;

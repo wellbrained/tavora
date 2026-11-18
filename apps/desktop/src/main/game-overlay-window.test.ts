@@ -65,7 +65,10 @@ vi.mock("electron", () => {
     setIgnoreMouseEvents(ignore: boolean) {
       this.ignoring = ignore;
     }
-    setOpacity() {}
+    opacity = 1;
+    setOpacity(opacity: number) {
+      this.opacity = opacity;
+    }
     isDestroyed() {
       return this.gone;
     }
@@ -136,10 +139,14 @@ type RawWindow = {
   children: unknown[];
   ignoring: boolean;
   focusable: boolean;
+  opacity: number;
+  visible: boolean;
 };
 
-function make(game: Rect | null = null, options: { overlay?: boolean } = {}) {
+function make(game: Rect | null = null, options: { overlay?: boolean; hidden?: boolean } = {}) {
   const calls: string[] = [];
+  /** Answers the frame requests, oldest first (the page has drawn). */
+  const frames: (() => void)[] = [];
   const state = { bounds: null as Rect | null, layerOpen: (() => false) as () => boolean, focused: false };
   const panel = {
     view: {
@@ -160,10 +167,14 @@ function make(game: Rect | null = null, options: { overlay?: boolean } = {}) {
     setGameZoom: (factor: number) => calls.push(`zoom ${factor}`),
     suspend: () => calls.push("suspend"),
     resume: () => calls.push("resume"),
+    nextFrame: () => {
+      calls.push("frame");
+      return new Promise<void>((resolve) => frames.push(resolve));
+    },
   };
   const window = new GameOverlayWindow({
     preload: "x",
-    hidden: true,
+    hidden: options.hidden ?? true,
     source: {} as never,
     id: "panel",
     gameBounds: () => game,
@@ -178,7 +189,7 @@ function make(game: Rect | null = null, options: { overlay?: boolean } = {}) {
   const raw = world.windows.at(-1) as RawWindow;
   // The frame is Tavora's own view in the window; a panel's view is the other one.
   const frame = raw.children.find((child) => child !== panel.view) as { visible: boolean; webContents: unknown };
-  return { window, raw, calls, panel, state, frame };
+  return { window, raw, calls, panel, state, frame, frames };
 }
 
 describe("a game overlay window holding a panel", () => {
@@ -289,6 +300,45 @@ describe("a game overlay window holding a panel", () => {
     expect(raw.log.filter((step) => ["bounds", "show", "focus"].includes(step))).toEqual(["bounds", "show", "focus"]);
     // setMode itself never takes the keyboard.
     expect(raw.log.filter((step) => step === "focus")).toHaveLength(1);
+  });
+});
+
+describe("a game overlay window showing its panel", () => {
+  it("stays see-through until the page has drawn after being shown, so the panel's look from its workspace never flashes", async () => {
+    const { window, raw, calls, frames } = make(null, { hidden: false });
+    window.setShown(true);
+    expect(raw.visible).toBe(true);
+    expect(raw.opacity).toBe(0);
+    // The page is told it is over the game first (when lent), woken, and only then asked for a frame.
+    expect(calls.filter((call) => ["enter", "resume", "frame"].includes(call))).toEqual(["enter", "resume", "frame"]);
+    await Promise.resolve();
+    expect(raw.opacity).toBe(0);
+    frames.shift()!();
+    await vi.waitFor(() => expect(raw.opacity).toBe(1));
+  });
+
+  it("waits again each time it is shown, and an old frame never shows a newer showing early", async () => {
+    const { window, raw, frames } = make(null, { hidden: false });
+    window.setShown(true);
+    window.setShown(false);
+    window.setShown(true);
+    expect(raw.opacity).toBe(0);
+    frames.shift()!();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(raw.opacity).toBe(0);
+    frames.shift()!();
+    await vi.waitFor(() => expect(raw.opacity).toBe(1));
+  });
+
+  it("stays invisible in test runs once drawn", async () => {
+    const { window, raw, frames } = make();
+    raw.opacity = 0;
+    window.setShown(true);
+    frames.shift()!();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(raw.opacity).toBe(0);
   });
 });
 

@@ -32,6 +32,8 @@ export interface OverlayPanel {
   setGameZoom(factor: number): void;
   suspend(): void;
   resume(): void;
+  /** Asks the page for a frame; resolves once it has drawn one, or after a cap when it never does. */
+  nextFrame(): Promise<void>;
 }
 
 export interface GameOverlayWindowOptions {
@@ -253,16 +255,29 @@ export class GameOverlayWindow {
     return !this.isDestroyed && this.window.isFocused();
   }
 
+  /** Counts the times a panel's window was shown, so an old wait for a frame doesn't make a newer showing visible. */
+  private showings = 0;
+
   setShown(shown: boolean): void {
     if (this.isDestroyed || this.window.isVisible() === shown) return;
+    const panel = this.options.panel;
+    const showing = ++this.showings;
     if (shown) {
+      // A panel's page draws its look over the game only once it is shown here: until then the window would show the
+      // panel's last frame from its workspace. See-through until the page has drawn again (or the cap ran out).
+      if (panel) this.window.setOpacity(0);
       this.window.showInactive();
       // The system may have put it under the game's window; ask again each time it comes back.
       this.window.setAlwaysOnTop(true, "screen-saver");
-      this.options.panel?.resume();
+      if (panel) {
+        panel.resume();
+        void panel.nextFrame().then(() => {
+          if (showing === this.showings && !this.isDestroyed && !this.options.hidden) this.window.setOpacity(1);
+        });
+      }
     } else {
       this.window.hide();
-      this.options.panel?.suspend();
+      panel?.suspend();
     }
   }
 

@@ -104,10 +104,12 @@ const objectives = computed(() =>
 // ── Undo ─────────────────────────────────────────────────────────────
 
 // Each change that can be put back (a to-do deleted or finished, a group deleted) gets its own toast with Undo, for
-// a few seconds (undoable in the kit). Ctrl+Z takes back the newest one.
+// a few seconds (undoable in the kit). Ctrl+Z takes back the newest one. Over the game there are none: a toast would
+// pop up in the middle of the game, so a change made there just stays.
 const offers = new Set<Undoable>();
 
 function offerUndo(message: string, run: () => UndoAnswer) {
+  if (place.value === "game") return;
   const offer = undoable({ title: message, undo: run, onFinal: () => offers.delete(offer) });
   offers.add(offer);
 }
@@ -146,7 +148,7 @@ function openSettings() {
 
 function onKey(event: KeyboardEvent) {
   // Outside text fields; what is being typed keeps its own Ctrl+Z.
-  if (handleUndoKey(event)) return;
+  if (place.value !== "game" && handleUndoKey(event)) return;
   // Esc in an open list (a Select, say) closes only that.
   const inPopup = (event.target as Element | null)?.closest?.("[role=listbox], [role=menu], [role=dialog]");
   if (event.key === "Escape" && place.value === "dialog" && !event.defaultPrevented && !inPopup) void sdk.value?.panel.closeDialog();
@@ -409,6 +411,6 @@ function dropTask() {
       />
     </div>
   </div>
-  <!-- Outside the views, so Undo toasts show in the settings too. -->
-  <Toaster />
+  <!-- Outside the views, so Undo toasts show in the settings too; never over the game. -->
+  <Toaster v-if="place !== 'game'" />
 </template>

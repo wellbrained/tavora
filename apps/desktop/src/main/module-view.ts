@@ -1226,6 +1226,17 @@ export class ModuleView {
     else for (const done of [...this.frameWaiters.values()]) done();
   }
 
+  /**
+   * Asks the page for a frame now and resolves once it has drawn one (at most DRAW_CAP_MS later), or now while it is
+   * hidden. Over the game, the window it was lent to stays see-through until then, so it never shows the panel's last
+   * frame from its workspace: the page draws its look over the game only after it heard panel.overGame.
+   */
+  nextFrame(): Promise<void> {
+    if (!this.shown) return Promise.resolve();
+    this.drawing = this.awaitFrame();
+    return this.drawing;
+  }
+
   /** Resolves once the panel has drawn since it was last shown (at most DRAW_CAP_MS later), or now while it is hidden. */
   get drawn(): Promise<void> {
     return this.shown ? this.drawing : Promise.resolve();
