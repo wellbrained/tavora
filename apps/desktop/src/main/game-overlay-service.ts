@@ -78,7 +78,7 @@ import type { Shell } from "./shell";
 
 /** The part of a game overlay's window the service drives (a test stands in for Electron). */
 export type OverlayWindow = Pick<GameOverlayWindow, "setRect" | "setShown" | "setMode" | "setHideFromCapture" | "setOpacity" | "destroy" | "dragging"> &
-  Partial<Pick<GameOverlayWindow, "focused" | "focusPanel" | "raise" | "setZoom" | "refreshFont" | "placed">>;
+  Partial<Pick<GameOverlayWindow, "focused" | "focusPanel" | "raise" | "setZoom" | "refreshFont" | "placed" | "setVeiled">>;
 
 /** Which overlay or panel an item of the Overlay layout is. */
 export type LayoutItemRef = ItemRef;
@@ -296,6 +296,8 @@ interface Open {
   zoom: number;
   /** Since when the window is hidden because its setup is not on screen; null while it is. */
   idleSince: number | null;
+  /** A live view kept on screen but see-through while the layer is open (its panel is there instead). */
+  veiled?: boolean;
   instanceId?: string;
   /** The panel's view, lent by Panel views while its window holds it. */
   loan?: PanelLoan | undefined;
@@ -1117,7 +1119,8 @@ export class GameOverlays {
       }
     }
     // Live views: a panel on screen shows its module's overlay page read-only in its own spot while the layer is closed.
-    // With the layer open the full panel is there instead, so the view goes quiet (and comes back in the new spot).
+    // With the layer open the full panel is there instead: a view on screen stays, see-through (veiled), so its page keeps
+    // drawing what the panel changes and is current when the layer closes (a hidden one came back with a stale frame).
     const everyPanel = new Map(this.store.panels().map((panel) => [panel.instanceId, panel]));
     for (const [instanceId, panel] of everyPanel) {
       const id = liveWindowId(instanceId);
@@ -1132,10 +1135,12 @@ export class GameOverlays {
         this.liveStateOf(panel) !== undefined &&
         !this.stopped.has(id) &&
         area !== null &&
-        !layerOpen &&
         overlayVisible({ enabled: active, gameInFront: placed !== undefined, mode: settings.mode, toggledOn: this.toggled.has(id), layerOpen: false });
       let entry = this.open.get(id);
-      if (!visible) {
+      // With the layer open only a view already on screen stays (veiled); none is made or shown for it.
+      const veiled = layerOpen && visible && entry?.shown === true;
+      if (!visible || (layerOpen && !veiled)) {
+        if (entry?.veiled) entry.window.setVeiled?.((entry.veiled = false));
         if (entry?.shown) {
           entry.window.setShown(false);
           entry.shown = false;
@@ -1153,6 +1158,7 @@ export class GameOverlays {
       if (entry.hideFromCapture !== settings.hideFromCapture) entry.window.setHideFromCapture((entry.hideFromCapture = settings.hideFromCapture));
       entry.window.setRect(placeItem(settings, area!));
       this.zoomTo(entry, area!);
+      if ((entry.veiled ?? false) !== veiled) entry.window.setVeiled?.((entry.veiled = veiled));
       if (!entry.shown) {
         entry.window.setShown((entry.shown = true));
         entry.shownOrder = ++this.shownCount;

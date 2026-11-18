@@ -286,6 +286,16 @@ export class GameOverlayWindow {
     }
   }
 
+  /**
+   * See-through while still shown (a live view while the layer is open, where its panel is instead). Unlike hiding, the
+   * page goes on drawing, so it is up to date the moment it shows again: a hidden window came back with its last picture
+   * from before (the to-do not ticked yet) for a frame, then faded in, when the layer closed.
+   */
+  setVeiled(veiled: boolean): void {
+    if (this.isDestroyed || this.options.panel) return;
+    this.window.setOpacity(veiled || this.options.hidden ? 0 : 1);
+  }
+
   /** Puts the window above the other windows of its level (the veil is shown first, and everything above it is raised after). */
   raise(): void {
     if (!this.isDestroyed) this.window.moveTop();

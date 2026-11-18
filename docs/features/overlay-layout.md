@@ -46,6 +46,8 @@ An empty setup shows "Add something from the list on the right" in the canvas, n
 
 ## Panels in the in-game layer
 
+While the layer is open, a panel's live view on screen stays shown but see-through (`setVeiled`), instead of being hidden: its page keeps drawing what the panel changes, so it is current the moment the layer closes. A hidden window came back for a frame with its last picture from before (a to-do not ticked yet), then faded in.
+
 A panel shows over the game only while the layer is open, in the same place as its live view. A panel learns that it is over the game with `panel.isOverGame` / `panel.onOverGameChange` (To-Dos uses it to show its live view, editable, instead of the full panel).
 
 The layer has two modes (decided with the owner on 2026-11-18, mockup "B"), one value in `GameOverlays.layer.mode`, in memory only:

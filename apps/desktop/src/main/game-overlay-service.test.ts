@@ -83,6 +83,11 @@ class FakeWindow implements OverlayWindow {
     this.log.push("focus");
     stacking.push("focus");
   }
+  veiled = false;
+  setVeiled(veiled: boolean) {
+    this.veiled = veiled;
+    this.log.push(veiled ? "veil" : "unveil");
+  }
   setHideFromCapture(show: boolean) {
     this.hideFromCapture = show;
   }
@@ -1659,19 +1664,36 @@ describe("a panel's live view", () => {
     expect(window!.shown).toBe(true);
   });
 
-  it("gives way to the full panel while the layer is open, and returns in the new spot", async () => {
+  it("gives way to the full panel while the layer is open, drawing on see-through, and returns current in the new spot", async () => {
     const { service, world, key } = await setup();
     add(service);
     await feed(service, "x");
     const [view] = liveWindows(world);
+    const before = view!.log.length;
     service.pressed(layerKey(key));
-    expect(view!.shown).toBe(false);
+    // Not hidden: a hidden window came back with its last picture for a frame. See-through, so the panel is what shows.
+    expect(view!).toMatchObject({ shown: true, veiled: true });
     expect(panelWindows(world)).toHaveLength(1);
+    // What the panel changes meanwhile reaches the page while it is veiled.
+    await feed(service, "ticked");
+    expect(view!.request.state()).toBe("ticked");
     panelWindows(world)[0]!.request.moved({ x: 960, y: 540, width: 480, height: 270 });
     world.registered.get("Escape")!();
     expect(liveWindows(world)).toEqual([view]);
-    expect(view!.shown).toBe(true);
+    expect(view!).toMatchObject({ shown: true, veiled: false });
+    // It was never hidden and shown again, so nothing from before can flash.
+    expect(view!.log.slice(before).filter((step) => step === "hide" || step === "show")).toEqual([]);
     expect(view!.rect).toEqual({ x: 960, y: 540, width: 480, height: 270 });
+  });
+
+  it("isn't made or shown for the layer when it wasn't on screen before it opened", async () => {
+    const { service, world, key } = await setup();
+    add(service);
+    service.pressed(layerKey(key));
+    await feed(service, "x");
+    expect(liveWindows(world).filter((window) => window.shown)).toHaveLength(0);
+    world.registered.get("Escape")!();
+    expect(liveWindows(world)).toMatchObject([{ shown: true, veiled: false }]);
   });
 
   it("is click-through and read-only: it is never arranged and has no frame actions", async () => {
