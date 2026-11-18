@@ -14,7 +14,7 @@ import { PANEL, ROW_FOCUS } from "./panel";
 import { plateStyle } from "./plate";
 import { taskActions } from "./row";
 import type { TodoStore } from "./store";
-import { addTask, findTask, MAX, type Group, type Task, type TodoList } from "./todos";
+import { addTask, findTask, MAX, type Task, type TodoList } from "./todos";
 
 const props = defineProps<{ store: TodoStore; list: TodoList; collapsed: readonly string[]; look: LiveLook }>();
 const panel = inject(PANEL)!;
@@ -31,7 +31,7 @@ const style = computed(() => plateStyle({ ...props.look, background: Math.max(pr
 
 type Entry =
   | { kind: "group"; key: string; row: PlateGroupRow }
-  | { kind: "task"; key: string; row: PlateTaskRow; task: Task; group: Group; index: number };
+  | { kind: "task"; key: string; row: PlateTaskRow; task: Task };
 
 /**
  * The live view's rows, all of them, with the to-do each shows. Over the game you tick, rename and add; moving, pinning,
@@ -44,7 +44,7 @@ const entries = computed<Entry[]>(() => {
     if (row.kind === "group") shown.push({ kind: "group", key: `group:${row.groupId ?? ""}`, row });
     else {
       const found = findTask(props.list, row.taskId);
-      if (found) shown.push({ kind: "task", key: `task:${row.taskId}`, row, ...found });
+      if (found) shown.push({ kind: "task", key: `task:${row.taskId}`, row, task: found.task });
     }
   }
   return shown;
@@ -66,7 +66,6 @@ function inRow(taskId: string, selector: string): HTMLElement | null {
 
 async function startRename(task: Task) {
   title.value = task.title;
-  panel.draft.value = null;
   panel.editing.value = editKey(task.id);
   await nextTick();
   const input = inRow(task.id, "textarea") as HTMLTextAreaElement | null;

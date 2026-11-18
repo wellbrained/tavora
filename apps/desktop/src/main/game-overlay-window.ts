@@ -221,12 +221,12 @@ export class GameOverlayWindow {
     return this.destroyed || this.window.isDestroyed();
   }
 
-  /** The user is dragging or resizing it now. */
   /** Where the item is (its place, not the window with the frame's room); null until placed. */
   get placed(): Rect | null {
     return this.place;
   }
 
+  /** The user is dragging or resizing it now. */
   get dragging(): boolean {
     return this.drag !== null;
   }
@@ -262,6 +262,14 @@ export class GameOverlayWindow {
 
   /** Counts the times a panel's window was shown, so an old wait for a frame doesn't make a newer showing visible. */
   private showings = 0;
+  /** A panel's window shown but not drawn yet (see-through): it lets clicks through until then, so none lands on nothing. */
+  private revealing = false;
+
+  /** Whether the window takes the mouse: in Arrange, and a panel in Use, unless it is still waiting to be drawn. */
+  private applyMouse(): void {
+    const panel = this.options.panel;
+    this.window.setIgnoreMouseEvents(this.revealing || this.mode === "off" || (!panel && this.mode === "use"));
+  }
 
   setShown(shown: boolean): void {
     if (this.isDestroyed || this.window.isVisible() === shown) return;
@@ -270,19 +278,30 @@ export class GameOverlayWindow {
     if (shown) {
       // A panel's page draws its look over the game only once it is shown here: until then the window would show the
       // panel's last frame from its workspace. See-through until the page has drawn again (or the cap ran out).
-      if (panel) this.window.setOpacity(0);
+      if (panel) {
+        this.window.setOpacity(0);
+        this.revealing = true;
+        this.applyMouse();
+      }
       this.window.showInactive();
       // The system may have put it under the game's window; ask again each time it comes back.
       this.window.setAlwaysOnTop(true, "screen-saver");
       if (panel) {
         panel.resume();
         void panel.nextFrame().then(() => {
-          if (showing === this.showings && !this.isDestroyed && !this.options.hidden) this.window.setOpacity(1);
+          if (showing !== this.showings || this.isDestroyed) return;
+          this.revealing = false;
+          this.applyMouse();
+          if (!this.options.hidden) this.window.setOpacity(1);
         });
       }
     } else {
       this.window.hide();
       panel?.suspend();
+      if (this.revealing) {
+        this.revealing = false;
+        this.applyMouse();
+      }
     }
   }
 
@@ -324,7 +343,7 @@ export class GameOverlayWindow {
     this.mode = mode;
     this.drag = null;
     const panel = this.options.panel;
-    this.window.setIgnoreMouseEvents(mode === "off" || (!panel && mode === "use"));
+    this.applyMouse();
     this.frame.setVisible(mode === "arrange");
     if (mode === "arrange") this.sendFrameText();
     if (!panel) return;

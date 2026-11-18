@@ -348,6 +348,8 @@ export class GameOverlays {
   private veil: VeilWindow | null = null;
   /** The card at the top of the open layer. */
   private card: LayerCard | null = null;
+  /** The places the layer card keeps off, as last seen while nothing was dragged. */
+  private cardItems: Rect[] = [];
   /** When the card's page crashed lately: after MAX_CRASHES within CRASH_SPAN_MS no new card is made until that passes. */
   private cardCrashes: number[] = [];
   private escape = false;
@@ -1039,7 +1041,12 @@ export class GameOverlays {
         this.card = this.options.platform.openCard({ setMode: (mode) => this.setLayerMode(mode), close: () => this.closeLayer(true), ended: () => this.cardCrashed() });
         cardNew = true;
       }
-      const items = [...this.open.values()].flatMap((entry) => (entry.shown && entry.window.placed ? [entry.window.placed] : []));
+      // What the card keeps off: the items you see (not the live views veiled behind their panels). It stays put while
+      // one is dragged, so it doesn't jump around under the pointer.
+      if (![...this.open.values()].some((entry) => entry.window.dragging)) {
+        this.cardItems = [...this.open.values()].flatMap((entry) => (entry.shown && !entry.veiled && entry.kind !== "live" && entry.window.placed ? [entry.window.placed] : []));
+      }
+      const items = this.cardItems;
       this.card.show(veilArea, layerCardContent(this.options.language(), this.layer.mode, this.options.streaming.keyOf(layerBinding())?.accelerator ?? null), items);
     } else if (!veilArea || !this.layer) this.dropCard();
     // Every overlay any setup has, once: shown from the setup on screen that has it, or hidden.

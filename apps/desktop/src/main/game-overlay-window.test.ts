@@ -318,6 +318,19 @@ describe("a game overlay window showing its panel", () => {
     await vi.waitFor(() => expect(raw.opacity).toBe(1));
   });
 
+  it("lets clicks through while it is still see-through, and takes them once drawn", async () => {
+    const { window, raw, frames } = make(null, { hidden: false });
+    window.setMode("use");
+    window.setShown(true);
+    // Invisible, so a click there must reach what is below instead of landing on nothing.
+    expect(raw.ignoring).toBe(true);
+    window.setMode("arrange");
+    expect(raw.ignoring).toBe(true);
+    frames.shift()!();
+    await vi.waitFor(() => expect(raw.opacity).toBe(1));
+    expect(raw.ignoring).toBe(false);
+  });
+
   it("waits again each time it is shown, and an old frame never shows a newer showing early", async () => {
     const { window, raw, frames } = make(null, { hidden: false });
     window.setShown(true);

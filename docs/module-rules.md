@@ -294,7 +294,7 @@ The UI Playground (Tavora features > Settings) shows one page, several pages and
   belongs to Tavora.
 - **Menus and tooltips** open next to their element with a small gap, never at the pointer (see `CLAUDE.md`).
 - **A switched-off control says why**: where a user would wonder why something is off, give it a `disabled-reason` (a short, friendly sentence: "Sign in first.", "Already pinned.") and keep the label short. The control stays hoverable and focusable, the reason opens in the kit tooltip beside it (a menu row's opens to its side, so it covers no other row) and is the control's description for a screen reader. A menu row with a reason can be reached with ↑ / ↓ but not chosen; one without a reason is skipped as before. A control that is off for an obvious reason (an empty list's Select all, a first row's Move up) needs none. Not a `title` on a native `disabled` control, which never shows.
-- **Actions are visible**: nothing is hover-only or right-click-only. A row's actions sit behind a visible ⋯ button too.
+- **Actions are visible**: nothing is hover-only or right-click-only. A row's actions sit behind a visible ⋯ button too. One exception: a panel's list over the game (in the in-game layer) keeps only what you do there quickly (tick, rename, add) and leaves the rest to the panel in Tavora, as To-Dos does; a menu there would be cut off by the small window.
 - **States**: every view has its empty, loading and error state from the kit (table above). Long work shows progress.
   Content that loads shows [a skeleton](#loading), not a text.
 - **Size**: `viewport.minWidth` / `minHeight` in the manifest are the real minimum, and the panel works at exactly that

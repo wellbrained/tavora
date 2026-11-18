@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.2.33",
+    "date": "2026-11-18",
+    "notes": [
+      "Tidier code behind the list over the game; nothing changes for you."
+    ]
+  },
+  {
     "version": "0.2.32",
     "date": "2026-11-18",
     "notes": [
