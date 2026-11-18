@@ -1981,6 +1981,7 @@ export class Host {
     });
     // The host page has saved what it still held (pageSaved).
     ipcMain.on("host:saved", (event, seq: unknown) => {
+      console.log("[DEBUG-qs] saved", seq, fromHost(event));
       if (!fromHost(event) || typeof seq !== "number") return;
       this.pageSaves.get(seq)?.();
     });
@@ -2850,7 +2851,7 @@ export class Host {
       "stop-panel": (action) => this.nativePanel(action.instanceId)?.stop(),
       "show-panel-in-game": (action) => this.showPanelInGame(action.instanceId),
       "stop-panel-in-game": (action) => this.gameOverlays.stopPanel(action.instanceId, action.setup),
-      "save-layout": (action) => this.workspaces.saveLayout(action.workspaceId ?? this.currentWorkspaceId(), action.layout),
+      "save-layout": (action) => (console.log("[DEBUG-qs] save-layout", JSON.stringify(action.layout).slice(0, 300)), this.workspaces.saveLayout(action.workspaceId ?? this.currentWorkspaceId(), action.layout)),
       "apply-layout-template": (action) => this.workspaces.applyTemplate(this.currentWorkspaceId(), layoutTemplate(action.templateId)),
       "apply-layout-grid": (action) => this.workspaces.applyTemplate(this.currentWorkspaceId(), gridTemplate(action.columns, action.rows)),
       "save-snapshot": (action) => this.workspaces.saveSnapshot(this.currentWorkspaceId(), action.name),
@@ -5398,7 +5399,8 @@ export class Host {
         this.pageSaves.delete(seq);
         resolve();
       };
-      const timer = setTimeout(done, PAGE_SAVE_CAP_MS);
+      const timer = setTimeout(() => { console.log("[DEBUG-qs] timeout", seq); done(); }, PAGE_SAVE_CAP_MS);
+      console.log("[DEBUG-qs] ask", seq);
       this.pageSaves.set(seq, done);
       this.window.webContents.send("host:save-now", seq);
     });

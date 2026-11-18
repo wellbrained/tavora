@@ -141,9 +141,13 @@ test("a tab picked right before quitting is still the one picked after a restart
   await expectLayoutSaved(userData, (nodes) => groupsIn(nodes).some((group) => group.panels.length === 2 && group.active === group.panels[1]));
   // Pick the first tab and quit, with the page's timers stopped: the layout's own short wait to save never ends, so
   // only the save the host asks for on quit can keep the tab.
+  app.process().stdout?.on("data", (data: Buffer) => String(data).split(/\r?\n/).filter((line) => line.includes("DEBUG-qs")).forEach((line) => console.log(line)));
+  page.on("console", (message) => message.text().includes("DEBUG-qs") && console.log("page:", message.text()));
   await page.clock.install();
   await page.clock.pauseAt(Date.now() + 60_000);
   await panels(page, VANILLA).nth(0).click();
+  console.log("[DEBUG-qs] clicked");
+  await expectModuleText(app, VANILLA, "lifecycle", "active", 0).catch(() => console.log("[DEBUG-qs] tab not active"));
   await app.close();
   await expectLayoutSaved(userData, (nodes) => groupsIn(nodes).some((group) => group.panels.length === 2 && group.active === group.panels[0]));
   const again = await launch(userData);
