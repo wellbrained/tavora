@@ -584,13 +584,13 @@ export class Host {
   private buttonsBackground?: string;
   /** True once the window has closed. */
   private windowClosed = false;
+  /** Saves the host page was asked for and has not answered yet, by number (pageSaved). */
+  private readonly pageSaves = new Map<number, () => void>();
+  private pageSaveSeq = 0;
   /**
    * The panels' pages as the window closes or Tavora quits: `running`; `closing` while they save what was typed just
    * before (at most CLOSE_CAP_MS); `closed`. No page starts after `running`.
    */
-  /** Saves the host page was asked for and has not answered yet, by number (pageSaved). */
-  private readonly pageSaves = new Map<number, () => void>();
-  private pageSaveSeq = 0;
   private panelPages: { step: "running" } | { step: "closing" | "closed"; done: Promise<void> } = { step: "running" };
   /** True while the window is minimized or hidden. */
   private windowHidden = false;

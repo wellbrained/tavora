@@ -139,7 +139,10 @@ test("a tab picked right before quitting is still the one picked after a restart
   await expect(panels(page, VANILLA)).toHaveCount(2);
   // The newest panel is the picked tab, and that is saved.
   await expectLayoutSaved(userData, (nodes) => groupsIn(nodes).some((group) => group.panels.length === 2 && group.active === group.panels[1]));
-  // Pick the first tab and quit at once, before the layout's own short wait to save is over.
+  // Pick the first tab and quit, with the page's timers stopped: the layout's own short wait to save never ends, so
+  // only the save the host asks for on quit can keep the tab.
+  await page.clock.install();
+  await page.clock.pauseAt(Date.now() + 60_000);
   await panels(page, VANILLA).nth(0).click();
   await app.close();
   await expectLayoutSaved(userData, (nodes) => groupsIn(nodes).some((group) => group.panels.length === 2 && group.active === group.panels[0]));

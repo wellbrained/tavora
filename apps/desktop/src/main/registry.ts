@@ -95,14 +95,16 @@ export function waitingModules(problems: readonly ModuleProblem[]): Map<string, 
   return waiting;
 }
 
-/** Problems that hide which modules a folder holds: the folder is not there, or a manifest can't say its id. */
-const UNSURE: ReadonlySet<ModuleProblem["kind"]> = new Set(["missing", "no-module", "unreadable", "invalid"]);
+/** Problems that hide which modules a folder holds: the folder is not there, or a manifest can't be read. */
+const UNSURE: ReadonlySet<ModuleProblem["kind"]> = new Set(["missing", "unreadable"]);
 
 /**
  * Which panels keep waiting for their module instead of being forgotten: those of a module that can't load right now
  * (waitingModules), and every one while a development folder can't be found or a manifest can't be read. Then
  * Tavora can't tell a module that is gone from one it just can't see (a drive not connected, a manifest half
- * written while Tavora starts), and forgetting would drop the panels from every workspace for good.
+ * written while Tavora starts), and forgetting would drop the panels from every workspace for good. The price: while a
+ * listed development folder stays missing, panels of a module removed by hand stay as unavailable slots (Settings
+ * shows the missing folder); uninstalling closes a module's panels itself.
  */
 export function panelsWait(problems: readonly ModuleProblem[]): (moduleId: string) => boolean {
   const waiting = waitingModules(problems);
@@ -330,8 +332,11 @@ async function loadModule(
 function aboutOf(raw: unknown): ModuleProblem["about"] {
   if (typeof raw !== "object" || raw === null) return undefined;
   const { name, version, id } = raw as { name?: unknown; version?: unknown; id?: unknown };
-  if (typeof name !== "string" || !name.trim()) return undefined;
-  return { name: name.trim().slice(0, 80), version: typeof version === "string" ? version.slice(0, 40) : null, ...(typeof id === "string" && id.length <= 200 ? { id } : {}) };
+  const named = typeof id === "string" && id.length > 0 && id.length <= 200 ? id : undefined;
+  // Without a name, its id names it, so its panels still wait for it.
+  const shown = typeof name === "string" && name.trim() ? name.trim() : named;
+  if (!shown) return undefined;
+  return { name: shown.slice(0, 80), version: typeof version === "string" ? version.slice(0, 40) : null, ...(named ? { id: named } : {}) };
 }
 
 export interface ModuleInfo {
