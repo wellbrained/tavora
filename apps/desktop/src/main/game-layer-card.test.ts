@@ -14,9 +14,10 @@ vi.mock("electron", () => {
     ignoring: { ignore: boolean; forward: boolean } | null = null;
     gone = false;
     raised = 0;
+    contentsHandlers = new Map<string, (...args: unknown[]) => void>();
     webContents = {
       setWindowOpenHandler: () => undefined,
-      on: () => undefined,
+      on: (name: string, fn: (...args: unknown[]) => void) => void this.contentsHandlers.set(name, fn),
       loadURL: async () => undefined,
       isDestroyed: () => this.gone,
       close: () => undefined,
@@ -82,6 +83,7 @@ type Raw = {
   visible: boolean;
   ignoring: { ignore: boolean; forward: boolean } | null;
   raised: number;
+  contentsHandlers: Map<string, (...args: unknown[]) => void>;
   emit(name: string, ...args: unknown[]): void;
 };
 
@@ -99,6 +101,7 @@ function make() {
     language: () => "de",
     setMode: (mode) => void asked.push(mode),
     close: () => void asked.push("close"),
+    ended: () => void asked.push("ended"),
   });
   const raw = world.windows.at(-1) as Raw;
   const send = (channel: string, ...args: unknown[]) => raw.ipc.get(channel)!(TOP, ...args);
@@ -148,6 +151,17 @@ describe("the layer card's window", () => {
     raw.ipc.get("layer-card:mode")!(INNER, "use");
     raw.ipc.get("layer-card:close")!(INNER);
     expect(asked).toEqual(["arrange", "close"]);
+  });
+
+  it("hides and tells the service when its page crashed, so a new card is made", () => {
+    const { card, raw, asked, send } = make();
+    send("layer-card:ready");
+    card.show(AREA, layerCardContent("en", "use", null));
+    send("layer-card:extent", { width: 320, height: 40 });
+    expect(raw.visible).toBe(true);
+    raw.contentsHandlers.get("render-process-gone")!({}, { reason: "crashed" });
+    expect(raw.visible).toBe(false);
+    expect(asked).toEqual(["ended"]);
   });
 
   it("can't be closed by the user, only by the layer", () => {

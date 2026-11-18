@@ -205,6 +205,8 @@ export interface OverlayWindowRequest {
   /** The user pressed the frame's Overlay layout button. */
   layoutRequested(): void;
   ended(): void;
+  /** The window got the keyboard (a panel): the layer's card goes on top again. */
+  activated?(): void;
   frameText(): { name: string; closeLabel: string; layoutLabel: string };
 }
 
@@ -344,6 +346,8 @@ export class GameOverlays {
   private veil: VeilWindow | null = null;
   /** The card at the top of the open layer. */
   private card: LayerCard | null = null;
+  /** When the card's page crashed lately: after MAX_CRASHES within CRASH_SPAN_MS no new card is made until that passes. */
+  private cardCrashes: number[] = [];
   private escape = false;
   /** Stopped: nothing shows until the user starts the overlays with the header button, and again after Tavora starts. */
   private suspended = true;
@@ -1028,13 +1032,13 @@ export class GameOverlays {
     }
     // The card at the top of the layer's area, above everything the layer shows.
     let cardNew = false;
-    if (veilArea && this.layer) {
+    if (veilArea && this.layer && (this.card || this.cardMayStart(now))) {
       if (!this.card) {
-        this.card = this.options.platform.openCard({ setMode: (mode) => this.setLayerMode(mode), close: () => this.closeLayer(true) });
+        this.card = this.options.platform.openCard({ setMode: (mode) => this.setLayerMode(mode), close: () => this.closeLayer(true), ended: () => this.cardCrashed() });
         cardNew = true;
       }
       this.card.show(veilArea, layerCardContent(this.options.language(), this.layer.mode, this.options.streaming.keyOf(layerBinding())?.accelerator ?? null));
-    } else this.dropCard();
+    } else if (!veilArea || !this.layer) this.dropCard();
     // Every overlay any setup has, once: shown from the setup on screen that has it, or hidden.
     const every = new Map(this.store.all().map((overlay) => [overlayId(overlay), overlay]));
     for (const [id, overlay] of every) {
@@ -1102,10 +1106,11 @@ export class GameOverlays {
           entry.shownOrder = ++this.shownCount;
           shownNow = true;
         }
-        // A panel takes input in Use; in Arrange its frame covers it. A panel that just came up in Use may get the keyboard.
+        // A panel takes input in Use; in Arrange its frame covers it. One that comes up in Use, or is back from Arrange, may
+        // get the keyboard, so the user can tick or type right away.
         const mode: WindowMode = arranging ? "arrange" : "use";
         if (entry.mode !== mode) {
-          if (mode === "use" && entry.mode === "off") started.push(entry);
+          if (mode === "use") started.push(entry);
           entry.window.setMode((entry.mode = mode));
         }
       }
@@ -1168,14 +1173,16 @@ export class GameOverlays {
     const restack = veilNew || stackKey !== this.stackKey;
     if (restack) for (const one of stack) one.entry.window.raise?.();
     this.stackKey = stackKey;
-    // The card stays on top of everything the layer shows.
-    if (restack || cardNew || shownNow) this.card?.raise();
     // One window takes the keyboard, the panel used last; not each in turn.
+    let focused = false;
     if (started.length > 0) {
       const used = (entry: Open) => this.options.panels?.info(entry.instanceId!)?.usedAt ?? 0;
       const newest = started.filter((entry) => entry.window.focusPanel).sort((a, b) => used(b) - used(a) || b.shownOrder - a.shownOrder)[0];
       newest?.window.focusPanel?.();
+      focused = newest !== undefined;
     }
+    // The card stays on top of everything the layer shows; a window given the keyboard comes to the top of its level, so after that.
+    if (restack || cardNew || shownNow || focused) this.card?.raise();
     // A panel that is gone (its window couldn't be made) is in no setup any more either.
     if (gone.length > 0) this.forgetPanels((panel) => gone.some((item) => item.instanceId === panel.instanceId));
     this.keysFollow();
@@ -1219,6 +1226,8 @@ export class GameOverlays {
       closeRequested,
       layoutRequested: () => this.layoutPort?.open(this.open.get(id)?.setup ?? null),
       ended: () => this.crashed(id),
+      // A panel clicked or given the keyboard comes above the card where they overlap: the card goes on top again.
+      activated: () => this.card?.raise(),
       frameText: () => ({ ...frameText(), layoutLabel: translate(this.options.language(), "overlays.layoutLabel") }),
     };
   }
@@ -1373,6 +1382,19 @@ export class GameOverlays {
   private dropCard(): void {
     this.card?.destroy();
     this.card = null;
+  }
+
+  /** The card's page crashed: it goes now, and a new one is made on the next look, unless that keeps happening. */
+  private cardCrashed(): void {
+    this.dropCard();
+    const now = Date.now();
+    this.cardCrashes = [...this.cardCrashes.filter((at) => now - at < CRASH_SPAN_MS), now];
+  }
+
+  /** Whether a card may be made: not after MAX_CRASHES within CRASH_SPAN_MS (the layer's key and Esc still close it). */
+  private cardMayStart(now: number): boolean {
+    this.cardCrashes = this.cardCrashes.filter((at) => now - at < CRASH_SPAN_MS);
+    return this.cardCrashes.length < MAX_CRASHES;
   }
 
   /**

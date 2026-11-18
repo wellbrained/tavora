@@ -1965,7 +1965,6 @@ export const de: Record<keyof typeof en, string> = {
   "overlays.bringBackFirst": "Schließ die Spielebene, um das zu tun.",
   "overlays.layerAction": "Öffnen oder schließen",
   "overlays.layerLabel": "Tavora im Spiel",
-  "overlays.card.label": "Tavora im Spiel",
   "overlays.card.title": "Overlay",
   "overlays.card.mode": "Benutzen oder anordnen",
   "overlays.card.use": "Benutzen",

@@ -1963,7 +1963,6 @@ export const en = {
   "overlays.bringBackFirst": "Close the game layer to do this.",
   "overlays.layerAction": "Open or close",
   "overlays.layerLabel": "Tavora over game",
-  "overlays.card.label": "Tavora over game",
   "overlays.card.title": "Overlay",
   "overlays.card.mode": "Use or arrange",
   "overlays.card.use": "Use",

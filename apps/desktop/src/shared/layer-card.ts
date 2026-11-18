@@ -67,7 +67,7 @@ export function layerCardContent(language: Language, mode: LayerMode, accelerato
   return {
     mode,
     texts: {
-      label: t("overlays.card.label"),
+      label: t("overlays.layerLabel"),
       title: t("overlays.card.title"),
       mode: t("overlays.card.mode"),
       use: t("overlays.card.use"),

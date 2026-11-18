@@ -30,6 +30,8 @@ export interface LayerCard {
 export interface LayerCardRequest {
   setMode(mode: LayerMode): void;
   close(): void;
+  /** The card's page is gone (it crashed): the service drops the card and makes a new one. */
+  ended(): void;
 }
 
 export interface GameLayerCardOptions extends LayerCardRequest {
@@ -89,10 +91,12 @@ export class GameLayerCard implements LayerCard {
     const contents = window.webContents;
     contents.setWindowOpenHandler(() => ({ action: "deny" }));
     contents.on("will-navigate", (event) => event.preventDefault());
-    // A page that died leaves no window in the way; the layer's key and Esc still close the layer.
+    // A page that died leaves no window in the way, and the service makes a new card; the layer's key and Esc still close the layer.
     contents.on("render-process-gone", () => {
       this.ready = false;
-      if (!this.destroyed && !window.isDestroyed()) window.hide();
+      if (this.destroyed || window.isDestroyed()) return;
+      window.hide();
+      options.ended();
     });
     contents.ipc.on("layer-card:ready", (event) => {
       if (!this.fromPage(event)) return;

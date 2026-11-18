@@ -52,6 +52,8 @@ export interface GameOverlayWindowOptions {
   layoutRequested(): void;
   /** The window or its page is gone (the page crashed). */
   ended(): void;
+  /** The window got the keyboard (a panel clicked or given the keyboard): it may have come above the layer's card. */
+  activated?: (() => void) | undefined;
   /** The name and the close button's label the frame shows. */
   frameText(): { name: string; closeLabel: string; layoutLabel: string };
   /** The interface font's stylesheet for the frame (module-fonts.ts). */
@@ -160,6 +162,7 @@ export class GameOverlayWindow {
       if (options.panel && !this.destroyed && !this.quitting) event.preventDefault();
     });
     app.on("before-quit", this.onQuit);
+    window.on("focus", () => this.options.activated?.());
     window.once("closed", () => {
       app.removeListener("before-quit", this.onQuit);
       const unexpected = !this.destroyed;

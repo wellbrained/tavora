@@ -171,6 +171,7 @@ function make(game: Rect | null = null, options: { overlay?: boolean } = {}) {
     closeRequested: () => calls.push("closeRequested"),
     layoutRequested: () => calls.push("layoutRequested"),
     ended: () => calls.push("ended"),
+    activated: () => calls.push("activated"),
     frameText: () => ({ name: "To-Dos", closeLabel: "Bring back", layoutLabel: "Layout" }),
     ...(options.overlay ? {} : { panel: panel as never }),
   });
@@ -213,6 +214,12 @@ describe("a game overlay window holding a panel", () => {
     const before = calls.length;
     window.destroy();
     expect(calls).toHaveLength(before);
+  });
+
+  it("says when its window gets the keyboard, so the layer's card can go above it again", () => {
+    const { raw, calls } = make();
+    raw.emit("focus");
+    expect(calls).toContain("activated");
   });
 
   it("scales the panel's content with the game window, through the panel and not the page's shared zoom", () => {

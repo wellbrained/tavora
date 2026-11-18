@@ -40,6 +40,9 @@ const PANEL = "0a1b2c3d-0000-4000-8000-000000000001";
 const TODOS: StreamingModule = { owner: "official", root: "/nowhere", manifest: { id: "tavora.todos", name: "To-Dos", permissions: { network: [] } } };
 const SCREEN: Rect = { x: 0, y: 0, width: 1920, height: 1080 };
 
+/** What was raised or given the keyboard, across every fake window and card, in order (cleared by each setup). */
+const stacking: string[] = [];
+
 class FakeWindow implements OverlayWindow {
   rect: Rect | null = null;
   shown = false;
@@ -78,6 +81,7 @@ class FakeWindow implements OverlayWindow {
   focusPanel() {
     this.focusedPanel++;
     this.log.push("focus");
+    stacking.push("focus");
   }
   setHideFromCapture(show: boolean) {
     this.hideFromCapture = show;
@@ -143,6 +147,7 @@ class FakeCard implements LayerCard {
   }
   raise() {
     this.raised++;
+    stacking.push("card");
   }
   refresh() {
     this.refreshed++;
@@ -169,6 +174,7 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
     await writeFile(path.join(dir, "game-overlays.json"), JSON.stringify(file));
     await moveToWorkspaces(dir);
   }
+  stacking.length = 0;
   const world = {
     enabled,
     /** One of Tavora's own windows has the keyboard. */
@@ -684,14 +690,48 @@ describe("the in-game layer", () => {
     expect(overlay.mode).toBe("arrange");
     expect(world.cards[0]!.content?.mode).toBe("arrange");
     expect(live()).toEqual(before);
+    // In Arrange no panel gets the keyboard.
+    expect(panel.focusedPanel).toBe(1);
 
     world.cards[0]!.request.setMode("use");
     expect(panel.mode).toBe("use");
     expect(overlay.mode).toBe("off");
-    // The card has the keyboard after a click on it; the panel doesn't take it back.
-    expect(panel.focusedPanel).toBe(1);
+    // Back in Use the panel used last gets the keyboard again, to tick or type right away; the card stays above it.
+    expect(panel.focusedPanel).toBe(2);
+    expect(stacking.lastIndexOf("card")).toBeGreaterThan(stacking.lastIndexOf("focus"));
     expect(world.cards).toHaveLength(1);
     expect(world.veils).toHaveLength(1);
+  });
+
+  it("keeps the card above a panel that gets the keyboard, on open and when the panel is clicked", async () => {
+    const { service, world, live, key } = await setup();
+    service.showPanel({ owner: "official", moduleId: TODOS.manifest.id, workspaceId: "elden", instanceId: PANEL }, { width: 360, height: 200 });
+    service.pressed(layerKey(key));
+    const panel = live().find((window) => window.panel !== undefined)!;
+    expect(panel.focusedPanel).toBe(1);
+    expect(stacking.lastIndexOf("card")).toBeGreaterThan(stacking.lastIndexOf("focus"));
+    // A click on the panel activates its window, which lifts it to the top of its level: the card goes above it again.
+    const raised = world.cards[0]!.raised;
+    panel.request.activated?.();
+    expect(world.cards[0]!.raised).toBe(raised + 1);
+  });
+
+  it("makes a new card after the card's page crashed, until that keeps happening", async () => {
+    const { service, world, key } = await setup();
+    show(service);
+    service.pressed(layerKey(key));
+    for (let crash = 1; crash <= 3; crash++) {
+      world.cards.at(-1)!.request.ended();
+      expect(world.cards.at(-1)!.destroyed).toBe(true);
+      service.tick();
+      expect(world.cards).toHaveLength(crash < 3 ? crash + 1 : 3);
+    }
+    // The third crash in a short while: no new card, but the layer stays and its key and Esc still close it.
+    service.tick();
+    expect(world.cards).toHaveLength(3);
+    expect(service.layerOpen).toBe(true);
+    world.registered.get("Escape")!();
+    expect(service.layerOpen).toBe(false);
   });
 
   it("starts in Use again after it closed in Arrange, and ignores a mode while it is closed", async () => {

@@ -180,6 +180,7 @@ function overlayWindow(options: OverlayWiringOptions, fontCss: (() => string) | 
     closeRequested: request.closeRequested,
     layoutRequested: request.layoutRequested,
     ended: request.ended,
+    activated: request.activated,
     frameText: request.frameText,
     // The frame is Tavora's own chrome, in the font the user picked.
     ...(fontCss ? { fontCss } : {}),
