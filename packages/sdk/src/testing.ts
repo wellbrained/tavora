@@ -170,11 +170,18 @@ export interface MemoryHost {
   click<T>(fn: () => T | Promise<T>): Promise<T>;
   /** The user maximized or restored the panel. */
   setMaximized(maximized: boolean): void;
+  /**
+   * The user opened the in-game layer and the panel went over the game (true), or it came back to its slot (false):
+   * `panel.isOverGame` answers it and `panel.onOverGameChange` fires, on a host new enough to have them.
+   */
+  setPanelOverGame(over: boolean): void;
   /** The user closed (or opened) the panel's dialog. */
   setDialog(open: boolean): void;
   readonly state: JsonValue | null;
   readonly content: PanelContent | null;
   readonly maximized: boolean;
+  /** Whether the panel is over the game now (`setPanelOverGame`). */
+  readonly panelOverGame: boolean;
   readonly dialog: { open: boolean; width: number; height: number };
   /** The title the panel set for its dialog (`panel.setDialogTitle`), or null for the module's name. Null while no dialog is open. */
   readonly dialogTitle: string | null;
@@ -358,6 +365,7 @@ interface Panel {
   state: string | null;
   content: PanelContent | null;
   maximized: boolean;
+  overGame: boolean;
   dialog: { open: boolean; width: number; height: number };
   dialogTitle: string | null;
   live: JsonValue | null;
@@ -567,6 +575,7 @@ const handlers: Handlers = {
   },
   "panel.navigated": () => null,
   "panel.isMaximized": (panel) => panel.maximized,
+  "panel.isOverGame": (panel) => panel.overGame,
   "panel.setMaximized": (panel, { maximized }) => {
     if (typeof maximized !== "boolean") fail("INVALID_PARAMS", "params.maximized must be a boolean");
     setMaximized(panel, maximized);
@@ -764,6 +773,13 @@ function setMaximized(panel: Panel, maximized: boolean): void {
   if (panel.maximized === maximized) return;
   panel.maximized = maximized;
   deliver(panel, "panel.maximized", { maximized });
+}
+
+/** As in Tavora: only a host that has `panel.isOverGame` tells the panel it went over the game. */
+function setPanelOverGame(panel: Panel, over: boolean): void {
+  if (panel.overGame === over) return;
+  panel.overGame = over;
+  if (supportsCall(panel.shared.version, "panel.isOverGame")) deliver(panel, "panel.overGame", { over });
 }
 
 /** Asks a panel to switch to other content, as the host does with `panel.navigate`. */
@@ -975,6 +991,7 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
     state,
     content: null,
     maximized: false,
+    overGame: false,
     dialog: { open: false, width: DIALOG.width, height: DIALOG.height },
     dialogTitle: null,
     live: null,
@@ -1049,6 +1066,8 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
       isMaximized: () => call("panel.isMaximized"),
       setMaximized: async (maximized) => void (await call("panel.setMaximized", { maximized })),
       onMaximizedChange: (fn) => on("panel.maximized", ({ maximized }) => fn(maximized)),
+      isOverGame: () => call("panel.isOverGame"),
+      onOverGameChange: (fn) => on("panel.overGame", ({ over }) => fn(over)),
       openDialog: async (size) => void (await call("panel.setDialog", { open: true, ...size })),
       closeDialog: async () => void (await call("panel.setDialog", { open: false })),
       setDialogTitle: async (title) => void (await call("panel.setDialogTitle", { title })),
@@ -1249,6 +1268,7 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
       return fn();
     },
     setMaximized: (maximized) => setMaximized(panel, maximized),
+    setPanelOverGame: (over) => setPanelOverGame(panel, over),
     setDialog: (open) => {
       if (panel.dialog.open === open) return;
       panel.dialog = { ...panel.dialog, open };
@@ -1263,6 +1283,9 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
     },
     get maximized() {
       return panel.maximized;
+    },
+    get panelOverGame() {
+      return panel.overGame;
     },
     get dialog() {
       return { ...panel.dialog };

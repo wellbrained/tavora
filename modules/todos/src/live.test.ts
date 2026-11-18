@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { buildLiveState, LIVE_DEFAULTS, LIVE_MAX, PANEL_LOOK_DEFAULTS, parseLook, parsePanelLook, shorten, throttle, type LiveLook } from "./live";
+import { buildLiveState, buildPlateRows, LIVE_DEFAULTS, LIVE_MAX, PANEL_LOOK_DEFAULTS, parseLook, parsePanelLook, shorten, throttle, type LiveLook } from "./live";
 import type { Group, Task, TodoList } from "./todos";
 
 const task = (id: string, extra: Partial<Task> = {}): Task => ({
@@ -121,6 +121,51 @@ describe("buildLiveState", () => {
     expect(state.rows.at(-1)!.kind).toBe("task");
     expect(state.rows).toHaveLength(LIVE_MAX.rows - 1);
     expect(state.more).toBe(2);
+  });
+});
+
+describe("buildPlateRows", () => {
+  const rows = (data: TodoList, collapsed: string[] = [], look: LiveLook = LIVE_DEFAULTS, keep?: ReadonlySet<string>) => buildPlateRows(data, collapsed, look, TEXTS, keep);
+
+  it("carries the to-do and group of each row, and null for the objectives' heading", () => {
+    const data = list(group("a", [task("a1"), task("s", { parentId: "a1" }), task("a2", { pinned: true })]), group("b", [task("b1")]));
+    expect(rows(data)).toEqual([
+      { kind: "group", text: "Objectives", groupId: null },
+      { kind: "task", text: "a2", pinned: true, done: false, progress: null, depth: 0, taskId: "a2", groupId: "a" },
+      { kind: "group", text: "a", groupId: "a" },
+      { kind: "task", text: "a1", pinned: false, done: false, progress: "0/1", depth: 0, taskId: "a1", groupId: "a" },
+      { kind: "task", text: "s", pinned: false, done: false, progress: null, depth: 1, taskId: "s", groupId: "a" },
+      { kind: "group", text: "b", groupId: "b" },
+      { kind: "task", text: "b1", pinned: false, done: false, progress: null, depth: 0, taskId: "b1", groupId: "b" },
+    ]);
+  });
+
+  it("is not capped, and the live state is its first rows without the ids", () => {
+    const tasks = Array.from({ length: LIVE_MAX.rows + 7 }, (_, i) => task(`t${i}`, { pinned: i === 3 }));
+    const data = list(group("a", tasks), group("b", [task("p"), task("q", { parentId: "p", done: true })]));
+    for (const look of [LIVE_DEFAULTS, NO_HEADERS, { ...LIVE_DEFAULTS, headers: "line" as const, showFinished: true }]) {
+      const all = rows(data, ["b"], look);
+      expect(all.filter((row) => row.kind === "task")).toHaveLength(LIVE_MAX.rows + 7);
+      const state = build(data, ["b"], look);
+      const stripped = all.slice(0, state.rows.length).map((row) => {
+        const { taskId: _task, groupId: _group, ...rest } = row as typeof row & { taskId?: string };
+        return rest;
+      });
+      expect(state.rows).toEqual(stripped);
+      for (const row of state.rows) expect(Object.keys(row)).not.toContain("taskId");
+      for (const row of state.rows) expect(Object.keys(row)).not.toContain("groupId");
+    }
+  });
+
+  it("keeps a to-do finished a moment ago, and what sits under it, until it may vanish", () => {
+    const data = list(group("a", [task("p", { done: true }), task("s", { parentId: "p", done: true }), task("q"), task("o", { done: true, pinned: true })]));
+    expect(rows(data, [], NO_HEADERS).map((row) => row.text)).toEqual(["q"]);
+    expect(rows(data, [], NO_HEADERS, new Set(["p", "o"])).map((row) => [row.text, row.kind === "task" && row.done])).toEqual([
+      ["o", true],
+      ["p", true],
+      ["s", true],
+      ["q", false],
+    ]);
   });
 });
 

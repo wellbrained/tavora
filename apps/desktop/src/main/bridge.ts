@@ -140,6 +140,8 @@ export interface BridgeContext {
   navigated(requestId: number, handled: boolean, ok: boolean): void;
   /** Whether the panel fills the workspace now (Maximize). */
   isMaximized(): boolean;
+  /** Whether the panel is over the game now: lent to the in-game layer while the user holds it open. */
+  isOverGame(): boolean;
   /** panel.setMaximized: true throws PERMISSION_DENIED unless the panel just got a click or key press. */
   setMaximized(maximized: boolean): Promise<void>;
   /** panel.setDialog: opening throws PERMISSION_DENIED unless the panel just got a click or key press. */
@@ -685,6 +687,7 @@ const handlers = new Map<string, Handler>([
   ],
 
   ["panel.isMaximized", (s, params) => (noParams(params), s.context.isMaximized())],
+  ["panel.isOverGame", (s, params) => (noParams(params), s.context.isOverGame())],
   [
     "panel.setMaximized",
     async (s, params) => {

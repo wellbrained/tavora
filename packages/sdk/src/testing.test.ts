@@ -285,6 +285,30 @@ describe("panel", () => {
     expect(await failure(sdk.panel.openDialog({ width: 10 }))).toMatchObject({ code: "INVALID_PARAMS" });
   });
 
+  it("says whether the panel is over the game, and tells listeners when it goes over or comes back", async () => {
+    const { sdk, host } = createMemoryHost();
+    const over = vi.fn();
+    sdk.panel.onOverGameChange(over);
+    expect(sdk.supports("panel.isOverGame")).toBe(true);
+    expect(await sdk.panel.isOverGame()).toBe(false);
+    host.setPanelOverGame(true);
+    host.setPanelOverGame(true);
+    expect(await sdk.panel.isOverGame()).toBe(true);
+    expect(host.panelOverGame).toBe(true);
+    host.setPanelOverGame(false);
+    expect(over.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it("has no over-the-game signal on a Tavora older than PANEL_OVER_GAME_TAVORA", async () => {
+    const { sdk, host } = createMemoryHost({ version: "0.24.89" });
+    const over = vi.fn();
+    sdk.panel.onOverGameChange(over);
+    expect(sdk.supports("panel.isOverGame")).toBe(false);
+    expect(await failure(sdk.panel.isOverGame())).toMatchObject({ code: "UNKNOWN_METHOD" });
+    host.setPanelOverGame(true);
+    expect(over).not.toHaveBeenCalled();
+  });
+
   it("keeps the dialog's title only while the dialog is open", async () => {
     const { sdk, host } = createMemoryHost();
     expect(sdk.supports("panel.setDialogTitle")).toBe(true);

@@ -95,3 +95,9 @@
   background: color-mix(in oklab, var(--tint) 24%, var(--card));
 }
 
+
+/* Over the game the page is see-through around the plate the panel draws there (EditPlate.vue). */
+html.over-game,
+html.over-game body {
+  background: transparent;
+}

@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.2.29",
+    "date": "2026-11-18",
+    "notes": [
+      "Over the game, the list keeps its look when you open the layer: tick, rename and add to-dos right there."
+    ]
+  },
+  {
     "version": "0.2.28",
     "date": "2026-11-18",
     "notes": [

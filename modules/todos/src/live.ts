@@ -170,39 +170,69 @@ export function shorten(text: string): string {
   return chars.length > LIVE_MAX.text ? `${chars.slice(0, LIVE_MAX.text - 1).join("").trimEnd()}…` : line;
 }
 
+/** A to-do row of the plate with the to-do it shows, for the list the user edits over the game. */
+export interface PlateTaskRow extends LiveTaskRow {
+  taskId: string;
+  groupId: string;
+}
+
+/** A heading of the plate with its group; null for the current objectives. */
+export interface PlateGroupRow extends LiveGroupRow {
+  groupId: string | null;
+}
+
+export type PlateRow = PlateTaskRow | PlateGroupRow;
+
 /**
- * The live state for a panel: to-dos of the groups this panel shows (not folded away), pinned first, then in list
- * order with sub-to-dos indented under their parent. Pinned ones count wherever they are, as in the panel's
+ * Every row the plate shows for a panel: to-dos of the groups this panel shows (not folded away), pinned first, then
+ * in list order with sub-to-dos indented under their parent. Pinned ones count wherever they are, as in the panel's
  * objectives, and are not repeated below. Finished to-dos, and everything under them, are left out unless the look
- * shows them; a to-do with sub-to-dos shows how many are done. With headers, each part starts with its name.
+ * shows them or they are in `keep` (finished a moment ago); a to-do with sub-to-dos shows how many are done. With
+ * headers, each part starts with its name. Not capped: the live state takes the first rows of it.
  */
-export function buildLiveState(list: TodoList, collapsed: readonly string[], look: LiveLook, texts: LiveTexts): LiveState {
+export function buildPlateRows(list: TodoList, collapsed: readonly string[], look: LiveLook, texts: Pick<LiveTexts, "objectives">, keep: ReadonlySet<string> = new Set()): PlateRow[] {
   const headers = look.headers !== "none";
-  const pinned: LiveRow[] = [];
-  const rest: LiveRow[] = [];
+  const pinned: PlateRow[] = [];
+  const rest: PlateRow[] = [];
   for (const group of list.groups) {
     const shown = !collapsed.includes(group.id);
     const depth = depths(group.tasks);
-    const rows: LiveRow[] = [];
-    // Tasks under a hidden one are hidden with it (tasks come parent first).
+    const rows: PlateRow[] = [];
+    // Tasks under a hidden one are hidden with it, and kept with a kept one (tasks come parent first).
     const hidden = new Set<string>();
+    const kept = new Set<string>();
     for (const task of group.tasks) {
-      const gone = (task.done && !look.showFinished) || (task.parentId !== null && hidden.has(task.parentId));
+      if (keep.has(task.id) || (task.parentId !== null && kept.has(task.parentId))) kept.add(task.id);
+      const gone = (task.done && !look.showFinished && !kept.has(task.id)) || (task.parentId !== null && hidden.has(task.parentId));
       if (gone) hidden.add(task.id);
       if (gone || (!task.pinned && !shown)) continue;
       const text = shorten(task.title);
       if (!text) continue;
       const steps = group.tasks.filter((other) => other.parentId === task.id);
       const progress = steps.length ? `${steps.filter((step) => step.done).length}/${steps.length}` : null;
-      const row = { kind: "task", text, pinned: task.pinned, done: task.done, progress } as const;
+      const row = { kind: "task", text, pinned: task.pinned, done: task.done, progress, taskId: task.id, groupId: group.id } as const;
       if (task.pinned) pinned.push({ ...row, depth: 0 });
       else rows.push({ ...row, depth: depth.get(task.id) ?? 0 });
     }
-    if (rows.length && headers) rest.push({ kind: "group", text: shorten(group.name) });
+    if (rows.length && headers) rest.push({ kind: "group", text: shorten(group.name), groupId: group.id });
     rest.push(...rows);
   }
-  if (pinned.length && headers) pinned.unshift({ kind: "group", text: shorten(texts.objectives) });
-  const all = [...pinned, ...rest];
+  if (pinned.length && headers) pinned.unshift({ kind: "group", text: shorten(texts.objectives), groupId: null });
+  return [...pinned, ...rest];
+}
+
+/** A plate row as the live state carries it: without ids, so the state keeps the shape older overlay pages read. */
+function liveRow(row: PlateRow): LiveRow {
+  if (row.kind === "group") return { kind: "group", text: row.text };
+  return { kind: "task", text: row.text, pinned: row.pinned, done: row.done, progress: row.progress, depth: row.depth };
+}
+
+/**
+ * The live state for a panel: the plate's rows (`buildPlateRows`) without their ids, at most `LIVE_MAX.rows` of them,
+ * and how many to-dos did not fit.
+ */
+export function buildLiveState(list: TodoList, collapsed: readonly string[], look: LiveLook, texts: LiveTexts): LiveState {
+  const all = buildPlateRows(list, collapsed, look, texts).map(liveRow);
   const rows = all.slice(0, LIVE_MAX.rows);
   // A heading with nothing after it is left out; "+N more" counts to-dos only.
   if (rows.at(-1)?.kind === "group") rows.pop();

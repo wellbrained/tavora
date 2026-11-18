@@ -176,6 +176,26 @@ describe("one press", () => {
   });
 });
 
+describe("panel.overGame", () => {
+  const bridged = { launch: () => ({ reason: "add" }), data: { blobs: {}, documents: { on: () => undefined, off: () => undefined } } };
+
+  it("tells the page once when it goes over the game and once when it comes back, and answers panel.isOverGame the same", () => {
+    const view = make(bridged);
+    view.connect();
+    const bridge = (view as unknown as { bridge: { emit(event: string, data: unknown): void; context: { isOverGame(): boolean } } }).bridge;
+    const emit = vi.spyOn(bridge, "emit");
+    const told = () => emit.mock.calls.filter(([event]) => event === "panel.overGame").map(([, data]) => data);
+    expect(bridge.context.isOverGame()).toBe(false);
+    view.enterGame(() => true);
+    view.enterGame(() => true);
+    expect(bridge.context.isOverGame()).toBe(true);
+    view.leaveGame();
+    view.leaveGame();
+    expect(bridge.context.isOverGame()).toBe(false);
+    expect(told()).toEqual([{ over: true }, { over: false }]);
+  });
+});
+
 describe("panels.openMany", () => {
   /** Enough for a page to connect: its launch and documents that can be watched. */
   const bridged = { launch: () => ({ reason: "add" }), data: { blobs: {}, documents: { on: () => undefined, off: () => undefined } } };

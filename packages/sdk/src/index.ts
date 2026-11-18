@@ -192,7 +192,7 @@ function localDay(at: number): string {
 }
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.4.1";
+export const SDK_VERSION = "0.4.2";
 
 /**
  * The oldest Tavora that has everything this SDK version offers, worked out from the table of calls
@@ -318,6 +318,15 @@ export interface TavoraSDK {
     setMaximized(maximized: boolean): Promise<void>;
     /** Fires when this panel starts or stops filling the workspace, whoever did it. Needs Tavora 0.20.20 or newer. */
     onMaximizedChange(fn: (maximized: boolean) => void): Unsubscribe;
+    /**
+     * Whether this panel is over the game now: Tavora lends it to the in-game layer while the user holds the layer open,
+     * in its spot there and see-through, so a panel can show a lighter look of itself there. Ask it when the page starts
+     * (a page that loads while over the game hears no change) and follow `onOverGameChange`. Needs Tavora 0.24.90 or
+     * newer (`PANEL_OVER_GAME_TAVORA` in `@tavora/sdk/protocol`): check `sdk.supports("panel.isOverGame")`; an older one throws UNKNOWN_METHOD.
+     */
+    isOverGame(): Promise<boolean>;
+    /** Fires when this panel goes over the game or comes back to its slot. An older Tavora (see `isOverGame`) never fires it. */
+    onOverGameChange(fn: (over: boolean) => void): Unsubscribe;
     /**
      * Shows this panel big in a dialog centred over the workspace, above the other panels (the rail and header stay in
      * sight, dimmed), with the module's name and a close button: for settings or details that don't fit a small panel. It
@@ -1072,6 +1081,8 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
         await call("panel.setMaximized", { maximized });
       },
       onMaximizedChange: (fn) => on("panel.maximized", ({ maximized }) => fn(maximized)),
+      isOverGame: () => call("panel.isOverGame"),
+      onOverGameChange: (fn) => on("panel.overGame", ({ over }) => fn(over)),
       openDialog: async (size) => {
         await call("panel.setDialog", { open: true, ...size });
       },

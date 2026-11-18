@@ -892,6 +892,11 @@ export interface Methods {
    */
   "panel.setMaximized": { params: { maximized: boolean }; result: null };
   /**
+   * Whether this panel is over the game now: Tavora lends it to the in-game layer while the user holds the layer open, in
+   * its spot there and see-through. `PANEL_OVER_GAME_TAVORA` and newer.
+   */
+  "panel.isOverGame": { params: undefined; result: boolean };
+  /**
    * Shows the panel big in a dialog centred over the workspace (open: true), with the module's name and a close button
    * over the dimmed app, or puts it back in its slot (false). `width` and `height` (240 to 2000, default 560 x 640) are
    * the page's size in it; Tavora makes it fit the workspace. Opening only right after a click or key press in the panel,
@@ -1131,6 +1136,8 @@ export interface Events {
   "panel.maximized": { maximized: boolean };
   /** The panel's dialog opened or closed (panel.setDialog, or the user closed it). Tavora 0.21.95 and newer. */
   "panel.dialog": { open: boolean };
+  /** The panel went over the game (the user opened the in-game layer) or came back to its slot. `PANEL_OVER_GAME_TAVORA` and newer. */
+  "panel.overGame": { over: boolean };
   /** The user pressed a hotkey set for this module (hotkeys.set). Sent to one panel of the module in the workspace shown now, the one used last. */
   "hotkeys.pressed": HotkeyBinding;
   /**
@@ -1538,6 +1545,12 @@ export const ITEM_CARD_ICON_TAVORA = "0.24.48";
  * the whole tooltip.
  */
 export const TOOLTIP_ANCHOR_BOX_TAVORA = "0.24.58";
+/**
+ * The first Tavora that tells a panel whether it is over the game (`panel.isOverGame` and the `panel.overGame` event):
+ * the one place that number is written. Set it to the version the pull request merges as, right before merging, then
+ * run `pnpm --filter @tavora/docs protocol`. Too low, and a module asks an older Tavora, which answers UNKNOWN_METHOD.
+ */
+export const PANEL_OVER_GAME_TAVORA = "0.24.90";
 
 export const METHOD_INFO: Readonly<Record<CallName, MethodInfo>> = {
   "bridge.handshake": call("0.1.0"),
@@ -1563,6 +1576,7 @@ export const METHOD_INFO: Readonly<Record<CallName, MethodInfo>> = {
   "panel.navigated": call("0.17.18"),
   "panel.isMaximized": call("0.20.20"),
   "panel.setMaximized": call("0.20.20", null, flag("maximized", "making it fill the workspace")),
+  "panel.isOverGame": later(PANEL_OVER_GAME_TAVORA),
   "panel.setDialog": later("0.21.95", null, flag("open", "opening")),
   "panel.setDialogTitle": later("0.23.71"),
   "panel.setLive": call("0.21.11"),

@@ -795,6 +795,7 @@ export class ModuleView {
           if (this.bridge === bridge) this.navigated(requestId, handled, ok);
         },
         isMaximized: () => this.maximized,
+        isOverGame: () => this.overGame !== null,
         setMaximized: async (maximized) => {
           // Covering the other panels takes a click, so a page cannot take over the workspace on its own.
           if (maximized) {
@@ -1317,10 +1318,13 @@ export class ModuleView {
   }
 
   enterGame(arranging: () => boolean): void {
+    const was = this.overGame !== null;
     this.overGame = { arranging, opacity: 100, zoom: 1, css: undefined };
     // Without a colour of its own, so the opacity the user chose lets the game show through.
     this.view.setBackgroundColor("#00000000");
     this.refreshBehind();
+    // The page may draw a lighter look of itself there (panel.isOverGame asks the same).
+    if (!was) this.bridge?.emit("panel.overGame", { over: true });
   }
 
   leaveGame(): void {
@@ -1328,6 +1332,7 @@ export class ModuleView {
     if (!away) return;
     this.overGame = null;
     this.refreshBehind();
+    this.bridge?.emit("panel.overGame", { over: false });
     this.view.setBackgroundColor(this.options.getTheme().tokens.background);
     // After any style being set or removed, so the style it inserts last isn't left behind.
     this.gameOpacityQueue = this.gameOpacityQueue.then(async () => {

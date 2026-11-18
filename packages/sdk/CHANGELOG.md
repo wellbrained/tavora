@@ -1,3 +1,11 @@
+## 0.4.2
+
+Panels learn when they are over the game. It comes with the next Tavora (`PANEL_OVER_GAME_TAVORA` in `protocol.ts`; the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.21.43).
+
+- `tavora.panel.isOverGame()` says whether the panel is over the game now: Tavora lends it to the in-game layer while the user holds the layer open, in its spot there and see-through. `tavora.panel.onOverGameChange(fn)` fires when it goes over or comes back (the `panel.overGame` event, `{ over }`). Ask `isOverGame` when the page starts: a page that loads while over the game hears no change.
+- An older Tavora answers `isOverGame` with `UNKNOWN_METHOD` and never fires the event. `sdk.supports("panel.isOverGame")` tells which case you are in.
+- `@tavora/sdk/testing`: `host.setPanelOverGame(over)` lends the panel or brings it back, and `host.panelOverGame` reads it.
+
 ## 0.4.1
 
 The interface font. Tavora will let users pick the font of its interface, and it can change while a module is open, like the colours. `MIN_TAVORA` stays (Tavora 0.21.43).

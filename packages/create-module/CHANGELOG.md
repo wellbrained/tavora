@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.39
+
+- New projects start on `@tavora/sdk` 0.4.2: a panel can tell when it is over the game (`panel.isOverGame`, `panel.onOverGameChange`).
+
 ## 0.1.38
 
 - New projects start on `@tavora/sdk` 0.4.1: the theme carries the font the user picked, as `--tavora-font-sans`.

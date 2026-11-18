@@ -124,3 +124,95 @@
 .live-plate.lines .head.first {
   display: none;
 }
+
+/* Over the game with the layer open, the panel draws this same plate and the user edits it (EditPlate.vue). Only
+   controls are added: rows, sizes and spacing stay as above, so nothing moves when the layer opens. A list too long for
+   the frame scrolls instead of being cut. */
+.live-plate.editing {
+  overflow-y: auto;
+}
+
+.live-plate.editing .task {
+  position: relative;
+}
+
+/* The box (or the pin) ticks the to-do: a button in the mark's place, with the mark inside as it is drawn above. */
+.live-plate .tick {
+  display: flex;
+  flex: none;
+  align-self: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-shadow: inherit;
+  cursor: pointer;
+}
+
+.live-plate .tick.pinned {
+  align-self: baseline;
+}
+
+/* Renaming: the editor takes the title's place in the same font and size. */
+.live-plate .title-input {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-shadow: inherit;
+  resize: none;
+  overflow: hidden;
+  user-select: text;
+}
+
+/* ⋯ shows on the row under the pointer or with the focus, over the row's end, so the row keeps the live view's layout. */
+.live-plate .row-menu {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 1.35em;
+  height: 1.35em;
+  padding: 0;
+  font-size: inherit;
+  opacity: 0;
+}
+
+.live-plate .task:hover .row-menu,
+.live-plate .task:focus-within .row-menu,
+.live-plate .row-menu[data-state="open"] {
+  opacity: 1;
+}
+
+/* Adding: a quiet line in the plate's font, its text where the titles start. */
+.live-plate .add-line {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.live-plate .add-line input {
+  height: auto;
+  padding: 0 0 0 calc(1.4em - 1px);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-shadow: inherit;
+  user-select: text;
+}
+
+.live-plate .add-line input::placeholder,
+.live-plate .add-line svg {
+  color: inherit;
+  opacity: 0.6;
+}
+
+.live-plate .add-line svg {
+  left: 0.05em;
+  width: 0.8em;
+  height: 0.8em;
+}

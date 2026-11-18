@@ -50,6 +50,7 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
     openPanels: (types) => Promise.resolve(Object.fromEntries(types.map((type) => [type, "opened" as const]))),
     navigated: () => {},
     isMaximized: () => false,
+    isOverGame: () => false,
     setMaximized: () => Promise.resolve(),
     setDialog: () => Promise.resolve(),
     setDialogTitle: () => {},
@@ -284,6 +285,15 @@ describe("panel content", () => {
       expect(await call(p, "panel.setMaximized", params)).toMatchObject({ error: { code: "INVALID_PARAMS" } });
     }
     expect(asked).toEqual([true, false]);
+  });
+
+  it("says whether the panel is over the game, and takes no params for it", async () => {
+    let over = false;
+    const p = await connected({ ...makeContext(), isOverGame: () => over });
+    expect(await call(p, "panel.isOverGame")).toMatchObject({ ok: true, result: false });
+    over = true;
+    expect(await call(p, "panel.isOverGame")).toMatchObject({ ok: true, result: true });
+    expect(await call(p, "panel.isOverGame", { over: true })).toMatchObject({ error: { code: "INVALID_PARAMS" } });
   });
 
   it("passes on a checked title for the dialog's frame, trimmed, and null for the module's name", async () => {

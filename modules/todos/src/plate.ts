@@ -41,16 +41,29 @@ function hexToRgb(hex: string): string {
   return `${value >> 16} ${(value >> 8) & 255} ${value & 255}`;
 }
 
+/**
+ * The plate's look as CSS variables and properties, and the classes it turns on. The overlay page sets them on its
+ * plate; the list the user edits over the game (EditPlate.vue) binds the same, so both draw alike.
+ */
+export function plateStyle(look: LiveLook): { style: Record<string, string>; classes: Record<"bold" | "outline" | "lines", boolean> } {
+  return {
+    style: {
+      // rules-allow: color the plate's colour is the one the user picked for the live view, not the theme's
+      "--plate": `rgb(${hexToRgb(look.backgroundColor)} / ${look.background / 100})`,
+      "--padding": `${look.padding}px`,
+      "--text": look.color,
+      "font-family": fontStack(look.font),
+      "font-size": `${LIVE_SIZES[look.size]}px`,
+    },
+    classes: { bold: look.bold, outline: look.outline, lines: look.headers === "line" },
+  };
+}
+
 /** Sets the plate's look as CSS variables and classes. */
 function style(plate: HTMLElement, look: LiveLook): void {
-  plate.style.setProperty("--plate", `rgb(${hexToRgb(look.backgroundColor)} / ${look.background / 100})`);
-  plate.style.setProperty("--padding", `${look.padding}px`);
-  plate.style.setProperty("--text", look.color);
-  plate.style.fontFamily = fontStack(look.font);
-  plate.style.fontSize = `${LIVE_SIZES[look.size]}px`;
-  plate.classList.toggle("bold", look.bold);
-  plate.classList.toggle("outline", look.outline);
-  plate.classList.toggle("lines", look.headers === "line");
+  const { style, classes } = plateStyle(look);
+  for (const [name, value] of Object.entries(style)) plate.style.setProperty(name, value);
+  for (const [name, on] of Object.entries(classes)) plate.classList.toggle(name, on);
 }
 
 function line(row: LiveRow, first: boolean): HTMLLIElement {

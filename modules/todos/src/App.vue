@@ -13,6 +13,7 @@ import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
 import type { MenuOptions, TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch, type ComponentPublicInstance } from "vue";
 import AddInput from "./AddInput.vue";
+import EditPlate from "./EditPlate.vue";
 import GroupSection, { type DropTarget } from "./GroupSection.vue";
 import { plural, setLanguage, t } from "./i18n";
 import { de, en } from "./locales";
@@ -54,6 +55,8 @@ const panelLook = shallowRef<PanelLook>({ ...PANEL_LOOK_DEFAULTS });
 const savedAt = ref<number>();
 /** The panel is shown big as a dialog, with its settings. */
 const dialogOpen = ref(false);
+/** The panel is over the game (the in-game layer is open): it shows the live view's plate to edit in place (EditPlate). */
+const overGame = ref(false);
 const editing = ref<string | null>(null);
 const draft = ref<Draft | null>(null);
 /** The to-dos settle into their new places when one is dropped (they nest and cross groups, so they don't slide aside while it is held). */
@@ -148,6 +151,13 @@ watch([liveState, sdk], () => {
   if (sdk.value && store.value) sendLive(liveState.value);
 });
 
+// Over the game the page is see-through around the plate, and an editor or new to-do left open doesn't come along.
+watch(overGame, (over) => {
+  editing.value = null;
+  draft.value = null;
+  document.documentElement.classList.toggle("over-game", over);
+});
+
 /** The toolbar toggle: pressed keeps finished to-dos in the list, released lets them vanish. */
 function toggleFinished() {
   const mode: FinishedMode = finished.value === "stay" ? "vanish" : "stay";
@@ -190,6 +200,20 @@ onMounted(async () => {
     look.value = parseLook(state?.live ?? { background: state?.liveBackground, padding: state?.livePadding });
     panelLook.value = parsePanelLook(state?.panel);
     cleanup.push(connected.panel.onDialogChange((open) => (dialogOpen.value = open)));
+    // A page that (re)loads while over the game asks; a change while it runs comes as an event and wins over a late
+    // answer. An older Tavora has neither and keeps the full panel there.
+    let heardOverGame = false;
+    cleanup.push(
+      connected.panel.onOverGameChange((over) => {
+        heardOverGame = true;
+        overGame.value = over;
+      }),
+    );
+    if (connected.supports("panel.isOverGame"))
+      void connected.panel
+        .isOverGame()
+        .then((over) => !heardOverGame && (overGame.value = over))
+        .catch(() => {});
     addEventListener("keydown", onKey);
     cleanup.push(() => removeEventListener("keydown", onKey));
     cleanup.push(() => void todos.dispose());
@@ -275,6 +299,7 @@ function dropTask() {
     {{ error ? t("connectError", { error }) : t("loading") }}
   </p>
   <Settings v-else-if="dialogOpen" :look="look" :panel-look="panelLook" :state="liveState" :saved-at="savedAt" @update:look="setLook" @update:panel-look="setPanelLook" />
+  <EditPlate v-else-if="overGame" :store="store" :list="list" :collapsed="collapsed" :look="look" />
   <div v-else class="@container relative flex h-full min-h-0 flex-col" :style="panelStyle" data-testid="todos-app">
     <header
       class="border-primary/25 bg-primary/5 flex h-10 flex-none items-center gap-1 border-b px-2"

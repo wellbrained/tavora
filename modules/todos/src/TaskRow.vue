@@ -8,43 +8,17 @@
 //
 // Every control sits in a box as tall as one title line (32 px), so all of
 // them share the first line's centre.
-import { AlignLeft, ArrowDown, ArrowUp, ChevronRight, CornerDownRight, Ellipsis, FolderInput, GripVertical, IndentDecrease, IndentIncrease, ListPlus, Pin, PinOff, Trash2 } from "@lucide/vue";
+import { ChevronRight, Ellipsis, GripVertical, Pin, Trash2 } from "@lucide/vue";
 import { cn } from "@tavora/official-ui";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from "@tavora/official-ui/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Popover, PopoverAnchor, PopoverContent } from "@tavora/official-ui/components/ui/popover";
 import { computed, inject, nextTick, ref } from "vue";
 import { t } from "./i18n";
 import { PANEL, ROW_FOCUS } from "./panel";
+import { afterMenu, rowChange, rowMenu, taskActions, type RowAction } from "./row";
+import RowMenuItems from "./RowMenuItems.vue";
 import type { TodoStore } from "./store";
-import {
-  canIndent,
-  canShift,
-  deleteTask,
-  doneState,
-  indentTask,
-  MAX,
-  MAX_DEPTH,
-  moveTask,
-  outdentTask,
-  removedBlock,
-  restoreBlock,
-  canRestoreBlock,
-  restoreDone,
-  setDone,
-  shiftTask,
-  updateTask,
-  type Group,
-  type Task,
-} from "./todos";
+import { canIndent, indentTask, MAX, outdentTask, updateTask, type Group, type Task } from "./todos";
 
 const props = defineProps<{
   store: TodoStore;
@@ -78,44 +52,13 @@ const editKey = computed(() => (props.compact ? `objective:${props.task.id}` : p
 const editing = computed(() => panel.editing.value === editKey.value);
 const folded = computed(() => panel.folded.value.includes(props.task.id));
 const hasMeta = computed(() => props.compact || props.children.total > 0 || props.task.details !== "");
-const now = () => new Date().toISOString();
-
-// A change may run again on a newer list when another panel saved first, so
-// every value it uses is read now, never inside it.
-const change = (fn: Parameters<TodoStore["apply"]>[0]) => void props.store.apply(fn);
+// Finishing, deleting and renaming work the same over the game (row.ts). A change may run again on a newer list when
+// another panel saved first, so every value it uses is read now, never inside it.
+const actions = taskActions(props.store, panel, rowFocus);
+const change = actions.change;
 const checked = (event: Event) => (event.target as HTMLInputElement).checked;
-
-function setTaskDone(done: boolean) {
-  const at = now();
-  const before = doneState(props.store.list.value, id.value);
-  const taskId = id.value;
-  if (done) panel.linger(taskId, props.task.pinned);
-  change((data) => setDone(data, taskId, done, at));
-  if (done)
-    panel.offerUndo(t("app.undoFinished", { title: props.task.title }), () => {
-      change((data) => restoreDone(data, before));
-      rowFocus?.restore(taskId);
-    });
-}
-
-function remove() {
-  const removed = removedBlock(props.store.list.value, id.value);
-  const taskId = id.value;
-  change((data) => deleteTask(data, taskId));
-  if (!removed) return;
-  const store = props.store;
-  panel.offerUndo(t("app.undoDeleted", { title: props.task.title }), () => {
-    // Checked on the list as it is now (its group may be gone since); the change may run again on a newer one.
-    if (!canRestoreBlock(store.list.value, removed)) return false;
-    store.apply((data) => void restoreBlock(data, removed));
-    rowFocus?.restore(taskId);
-  });
-}
-
-function setPinned(pinned: boolean) {
-  const taskId = id.value;
-  change((data) => updateTask(data, taskId, { pinned }));
-}
+const setTaskDone = (done: boolean) => actions.setDone(props.task, done);
+const remove = () => actions.remove(props.task);
 
 // ── Editing the title in place ───────────────────────────────────────
 
@@ -130,10 +73,7 @@ async function startEdit() {
 }
 
 function save() {
-  const taskId = id.value;
-  // A title is one line; pasted line breaks become spaces.
-  const next = title.value.replace(/\s*\n\s*/g, " ");
-  if (next.trim() && next.trim() !== props.task.title) change((data) => updateTask(data, taskId, { title: next }));
+  actions.rename(props.task, title.value);
 }
 
 function close(keep: boolean) {
@@ -193,8 +133,7 @@ const description = ref("");
 const descriptionInput = ref<HTMLTextAreaElement | null>(null);
 let cancelled = false;
 /** A menu item that needs the focus (the description, a new to-do) runs once the menu has closed and let go of it. */
-let afterMenu: (() => void) | null = null;
-const later = (run: () => void) => (afterMenu = run);
+const menuFocus = afterMenu();
 
 function setDescribing(open: boolean) {
   if (open) {
@@ -210,14 +149,6 @@ function setDescribing(open: boolean) {
 
 function cancelDescription() {
   cancelled = true;
-}
-
-function onMenuClosed(event: Event) {
-  const run = afterMenu;
-  if (!run) return;
-  afterMenu = null;
-  event.preventDefault();
-  run();
 }
 
 function focusDescription(event: Event) {
@@ -241,7 +172,17 @@ function onContextMenu(event: MouseEvent) {
   menuOpen.value = true;
 }
 
-const otherGroups = computed(() => props.groups.filter((group) => group.id !== props.group.id));
+/** The ⋯ menu (row.ts), built when it opens. */
+const menuEntries = () => rowMenu({ task: props.task, group: props.group, groups: props.groups, index: props.index, depth: props.depth, compact: props.compact });
+
+function choose(action: RowAction) {
+  if (action === "describe") return menuFocus.later(() => setDescribing(true));
+  if (action === "add-below") return menuFocus.later(() => addBelow(props.depth));
+  if (action === "add-sub") return menuFocus.later(() => addBelow(props.depth + 1));
+  if (action === "delete") return remove();
+  const run = rowChange(action, props.task);
+  if (run) change(run);
+}
 </script>
 
 <template>
@@ -395,49 +336,8 @@ const otherGroups = computed(() => props.groups.filter((group) => group.id !== p
           >
             <Ellipsis class="size-4" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" @close-auto-focus="onMenuClosed">
-            <DropdownMenuItem data-testid="menu-description" @select="later(() => setDescribing(true))">
-              <AlignLeft />
-              {{ task.details ? t("task.editDescription") : t("task.addDescription") }}
-            </DropdownMenuItem>
-            <DropdownMenuItem data-testid="menu-pin" @select="setPinned(!task.pinned)">
-              <PinOff v-if="task.pinned" />
-              <Pin v-else />
-              {{ task.pinned ? t("task.unpin") : t("task.pin") }}
-            </DropdownMenuItem>
-            <template v-if="!compact">
-              <DropdownMenuItem data-testid="menu-add-below" @select="later(() => addBelow(depth))">
-                <ListPlus /> {{ t("task.addBelow") }}
-              </DropdownMenuItem>
-              <DropdownMenuItem :disabled="depth >= MAX_DEPTH" :disabled-reason="t('task.addSub.off', { count: MAX_DEPTH })" data-testid="menu-add-sub" @select="later(() => addBelow(depth + 1))">
-                <CornerDownRight /> {{ t("task.addSub") }}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem :disabled="!canIndent(group, index)" :disabled-reason="t('task.indent.off')" data-testid="menu-indent" @select="change((data) => indentTask(data, task.id))">
-                <IndentIncrease /> {{ t("task.indent") }}
-              </DropdownMenuItem>
-              <DropdownMenuItem :disabled="!task.parentId" :disabled-reason="t('task.outdent.off')" data-testid="menu-outdent" @select="change((data) => outdentTask(data, task.id))">
-                <IndentDecrease /> {{ t("task.outdent") }}
-              </DropdownMenuItem>
-              <DropdownMenuItem :disabled="!canShift(group, index, -1)" @select="change((data) => shiftTask(data, task.id, -1))">
-                <ArrowUp /> {{ t("task.moveUp") }}
-              </DropdownMenuItem>
-              <DropdownMenuItem :disabled="!canShift(group, index, 1)" @select="change((data) => shiftTask(data, task.id, 1))">
-                <ArrowDown /> {{ t("task.moveDown") }}
-              </DropdownMenuItem>
-              <DropdownMenuSub v-if="otherGroups.length">
-                <DropdownMenuSubTrigger><FolderInput /> {{ t("task.moveToGroup") }}</DropdownMenuSubTrigger>
-                <DropdownMenuSubContent>
-                  <DropdownMenuItem v-for="target in otherGroups" :key="target.id" @select="change((data) => moveTask(data, task.id, target.id, null))">
-                    {{ target.name }}
-                  </DropdownMenuItem>
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-            </template>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive" data-testid="menu-delete" @select="remove">
-              <Trash2 /> {{ t("task.delete") }}
-            </DropdownMenuItem>
+          <DropdownMenuContent align="end" @close-auto-focus="menuFocus.closed">
+            <RowMenuItems :entries="menuEntries()" @choose="choose" />
           </DropdownMenuContent>
         </DropdownMenu>
       </span>
