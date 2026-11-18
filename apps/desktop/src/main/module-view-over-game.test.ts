@@ -398,6 +398,21 @@ describe("a panel over the game", () => {
     await vi.waitFor(() => expect(state.removed).toEqual(["key-1"]));
   });
 
+  it("never keeps the game's zoom in the workspace, even when it was lent again before it came back", async () => {
+    const view = make();
+    const state = made.views.at(-1)!;
+    view.enterGame(() => true);
+    view.setGameZoom(1.33);
+    await vi.waitFor(() => expect(state.css.filter((css) => css.includes("zoom:1.33"))).toHaveLength(1));
+    // Lent again without coming back first: the zoom it had goes, and the new stay sets its own.
+    view.enterGame(() => true);
+    view.setGameZoom(1.33);
+    await vi.waitFor(() => expect(state.removed).toContain("key-1"));
+    view.leaveGame();
+    // Every style that went in came out again.
+    await vi.waitFor(() => expect(state.removed).toEqual(state.css.map((_, index) => `key-${index + 1}`)));
+  });
+
   it("refuses calls that need Tavora's window while over the game, and tells the user once per press", () => {
     const told = vi.fn();
     const view = make({ onNeedsTavora: told });
