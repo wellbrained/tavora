@@ -292,7 +292,7 @@ function saveNow(): Promise<unknown> {
 }
 
 // A change made just before the window closes or Tavora quits (a dev restart) is still saved: the host waits for it.
-const stopSavingBeforeQuit = saveBeforeQuit(() => (console.log("[DEBUG-qs] page asked", saveTimer !== undefined), saveTimer !== undefined ? saveNow() : Promise.resolve()));
+const stopSavingBeforeQuit = saveBeforeQuit(() => (saveTimer !== undefined ? saveNow() : Promise.resolve()));
 
 function saveSoon() {
   clearTimeout(saveTimer);
