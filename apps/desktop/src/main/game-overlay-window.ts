@@ -222,6 +222,11 @@ export class GameOverlayWindow {
   }
 
   /** The user is dragging or resizing it now. */
+  /** Where the item is (its place, not the window with the frame's room); null until placed. */
+  get placed(): Rect | null {
+    return this.place;
+  }
+
   get dragging(): boolean {
     return this.drag !== null;
   }
@@ -315,7 +320,9 @@ export class GameOverlayWindow {
     if (!panel) return;
     // Keys the panel had go to the frame, which does nothing with them; the window keeps the keyboard, so the layer stays.
     if (mode === "arrange" && !panel.view.webContents.isDestroyed() && panel.view.webContents.isFocused()) this.frame.webContents.focus();
-    this.window.setFocusable(mode === "use");
+    // Focusable in Arrange too: on Windows a focused window made unfocusable gives the keyboard to another program,
+    // which reads as leaving the game and ends the layer. The frame on top keeps clicks and keys off the panel.
+    this.window.setFocusable(mode !== "off");
     // The window grows by the frame's room, or gives it back.
     if (this.place) this.setRect(this.place);
     this.placePanel();

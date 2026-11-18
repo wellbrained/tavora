@@ -78,7 +78,7 @@ import type { Shell } from "./shell";
 
 /** The part of a game overlay's window the service drives (a test stands in for Electron). */
 export type OverlayWindow = Pick<GameOverlayWindow, "setRect" | "setShown" | "setMode" | "setHideFromCapture" | "setOpacity" | "destroy" | "dragging"> &
-  Partial<Pick<GameOverlayWindow, "focused" | "focusPanel" | "raise" | "setZoom" | "refreshFont">>;
+  Partial<Pick<GameOverlayWindow, "focused" | "focusPanel" | "raise" | "setZoom" | "refreshFont" | "placed">>;
 
 /** Which overlay or panel an item of the Overlay layout is. */
 export type LayoutItemRef = ItemRef;
@@ -1037,7 +1037,8 @@ export class GameOverlays {
         this.card = this.options.platform.openCard({ setMode: (mode) => this.setLayerMode(mode), close: () => this.closeLayer(true), ended: () => this.cardCrashed() });
         cardNew = true;
       }
-      this.card.show(veilArea, layerCardContent(this.options.language(), this.layer.mode, this.options.streaming.keyOf(layerBinding())?.accelerator ?? null));
+      const items = [...this.open.values()].flatMap((entry) => (entry.shown && entry.window.placed ? [entry.window.placed] : []));
+      this.card.show(veilArea, layerCardContent(this.options.language(), this.layer.mode, this.options.streaming.keyOf(layerBinding())?.accelerator ?? null), items);
     } else if (!veilArea || !this.layer) this.dropCard();
     // Every overlay any setup has, once: shown from the setup on screen that has it, or hidden.
     const every = new Map(this.store.all().map((overlay) => [overlayId(overlay), overlay]));

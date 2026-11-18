@@ -93,9 +93,28 @@ interface Rect {
   height: number;
 }
 
-/** The card's window for a card of `extent` (the card's own box) at the top centre of `area`, kept inside it. */
-export function cardWindowRect(area: Rect, extent: { width: number; height: number }): Rect {
+const overlaps = (a: Rect, b: Rect) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+
+/**
+ * The card's window for a card of `extent` (the card's own box) in `area`, kept inside it: at the top centre, unless the
+ * card would cover one of the items on screen (`items`, their places); then the nearest free spot along the top, else at
+ * the bottom centre, else the top centre after all.
+ */
+export function cardWindowRect(area: Rect, extent: { width: number; height: number }, items: readonly Rect[] = []): Rect {
   const width = Math.min(area.width, Math.ceil(extent.width) + 2 * CARD_ROOM.side);
   const height = Math.min(Math.max(0, area.height - CARD_TOP_GAP), Math.ceil(extent.height) + CARD_ROOM.top + CARD_ROOM.below);
-  return { x: area.x + Math.round((area.width - width) / 2), y: area.y + CARD_TOP_GAP, width, height };
+  const centre = area.x + Math.round((area.width - width) / 2);
+  const top = area.y + CARD_TOP_GAP;
+  const window = (x: number, y: number) => ({ x, y, width, height });
+  // Only the card itself counts, not the room kept around it.
+  const card = (rect: Rect) => ({ x: rect.x + CARD_ROOM.side, y: rect.y + CARD_ROOM.top, width: Math.ceil(extent.width), height: Math.ceil(extent.height) });
+  const free = (rect: Rect) => !items.some((item) => overlaps(card(rect), item));
+  const candidates = [window(centre, top)];
+  const step = Math.max(40, Math.round(width / 2));
+  for (let offset = step; offset <= area.width; offset += step) {
+    for (const x of [centre + offset, centre - offset]) if (x >= area.x && x + width <= area.x + area.width) candidates.push(window(x, top));
+  }
+  const bottom = area.y + area.height - CARD_TOP_GAP - Math.ceil(extent.height) - CARD_ROOM.top - CARD_ROOM.below;
+  if (bottom > top) candidates.push(window(centre, bottom));
+  return candidates.find(free) ?? candidates[0]!;
 }

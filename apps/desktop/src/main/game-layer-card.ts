@@ -16,7 +16,7 @@ import type { Rect } from "./game-overlays";
 /** What the service asks of the card (a test stands in for Electron). */
 export interface LayerCard {
   /** Puts the card over `area` (screen coordinates, in DIPs) with this content; it shows once the page has measured it. */
-  show(area: Rect, content: LayerCardContent): void;
+  show(area: Rect, content: LayerCardContent, items?: readonly Rect[]): void;
   /** Above the layer's other windows. */
   raise(): void;
   /** Whether the card has the keyboard (the user clicked or tabbed into it). */
@@ -52,6 +52,8 @@ export class GameLayerCard implements LayerCard {
   private quitting = false;
   private ready = false;
   private area: Rect | null = null;
+  /** Where the items on screen are, so the card doesn't cover one. */
+  private items: readonly Rect[] = [];
   private content: LayerCardContent | null = null;
   private extent: { width: number; height: number } | null = null;
   private readonly onQuit = () => {
@@ -127,8 +129,9 @@ export class GameLayerCard implements LayerCard {
     return !this.destroyed && !this.window.isDestroyed() && this.window.isFocused();
   }
 
-  show(area: Rect, content: LayerCardContent): void {
+  show(area: Rect, content: LayerCardContent, items: readonly Rect[] = []): void {
     this.area = area;
+    this.items = items;
     const changed = JSON.stringify(content) !== JSON.stringify(this.content);
     this.content = content;
     if (changed) this.send();
@@ -147,7 +150,7 @@ export class GameLayerCard implements LayerCard {
   private place(): void {
     const window = this.window;
     if (this.destroyed || window.isDestroyed() || !this.area || !this.extent) return;
-    const rect = cardWindowRect(this.area, this.extent);
+    const rect = cardWindowRect(this.area, this.extent, this.items);
     const now = window.getBounds();
     if (now.x !== rect.x || now.y !== rect.y || now.width !== rect.width || now.height !== rect.height) window.setBounds(rect);
     if (!window.isVisible()) {

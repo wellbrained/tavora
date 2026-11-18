@@ -50,3 +50,20 @@ describe("cardWindowRect", () => {
     expect(rect.y + rect.height).toBeLessThanOrEqual(60);
   });
 });
+
+describe("where the card goes", () => {
+  const area = { x: 0, y: 0, width: 2560, height: 1440 };
+  const extent = { width: 300, height: 40 };
+  it("sits at the top centre when nothing is there", () => {
+    const rect = cardWindowRect(area, extent, [{ x: 0, y: 0, width: 600, height: 400 }]);
+    expect(rect.x + rect.width / 2).toBeCloseTo(1280, -1);
+  });
+  it("moves along the top off an item at the top centre, and to the bottom when the top is full", () => {
+    const middle = { x: 1000, y: 0, width: 560, height: 300 };
+    const moved = cardWindowRect(area, extent, [middle]);
+    expect(moved.y).toBeLessThan(100);
+    expect(moved.x + 24 >= middle.x + middle.width || moved.x + 24 + extent.width <= middle.x).toBe(true);
+    const bottom = cardWindowRect(area, extent, [{ x: 0, y: 0, width: 2560, height: 300 }]);
+    expect(bottom.y).toBeGreaterThan(1000);
+  });
+});

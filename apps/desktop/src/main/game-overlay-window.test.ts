@@ -283,9 +283,10 @@ describe("a game overlay window holding a panel", () => {
     expect(raw.children.indexOf(panel.view)).toBeLessThan(raw.children.indexOf(frame));
     expect(frame.visible).toBe(true);
     expect(raw.ignoring).toBe(false);
-    // The keys go to the frame, and the panel can't take them back.
+    // The keys go to the frame, and the panel can't take them back. The window stays focusable: on Windows taking that
+    // away from the focused window hands the keyboard to another program, which ended the layer.
     expect(world.focusedContents).toBe(frame.webContents);
-    expect(raw.focusable).toBe(false);
+    expect(raw.focusable).toBe(true);
     state.focused = false;
     window.focusPanel();
     expect(state.focused).toBe(false);
