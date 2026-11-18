@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.54",
+    "date": "2026-11-18",
+    "notes": [
+      "Pickers, selects and menus show your choice with a soft highlight instead of a tick."
+    ]
+  },
+  {
     "version": "0.1.53",
     "date": "2026-11-17",
     "notes": [
