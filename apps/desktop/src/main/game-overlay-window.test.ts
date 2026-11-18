@@ -64,11 +64,13 @@ vi.mock("electron", () => {
     hide() {
       this.visible = false;
     }
-    setBounds() {
+    bounds = { x: 0, y: 0, width: 0, height: 0 };
+    setBounds(rect: { x: number; y: number; width: number; height: number }) {
+      this.bounds = rect;
       this.log.push("bounds");
     }
     getBounds() {
-      return { x: 0, y: 0, width: 0, height: 0 };
+      return this.bounds;
     }
     getContentBounds() {
       return { x: 0, y: 0, width: 400, height: 300 };
@@ -106,7 +108,7 @@ vi.mock("electron", () => {
 
 const { GameOverlayWindow } = await import("./game-overlay-window");
 
-function make() {
+function make(game: { x: number; y: number; width: number; height: number } | null = null) {
   const calls: string[] = [];
   const panel = {
     view: { webContents: { focus: () => undefined } },
@@ -124,7 +126,7 @@ function make() {
     hidden: true,
     source: {} as never,
     id: "panel",
-    gameBounds: () => null,
+    gameBounds: () => game,
     moved: () => undefined,
     closeRequested: () => calls.push("closeRequested"),
     layoutRequested: () => calls.push("layoutRequested"),
@@ -132,7 +134,7 @@ function make() {
     frameText: () => ({ name: "To-Dos", closeLabel: "Bring back", layoutLabel: "Layout" }),
     panel: panel as never,
   });
-  const raw = world.windows.at(-1) as { emit(name: string, ...args: unknown[]): void; log: string[] };
+  const raw = world.windows.at(-1) as { emit(name: string, ...args: unknown[]): void; log: string[]; bounds: { x: number; y: number; width: number; height: number } };
   return { window, raw, calls };
 }
 
@@ -175,6 +177,17 @@ describe("a game overlay window holding a panel", () => {
     const { window, calls } = make();
     window.setZoom(1.5);
     expect(calls).toContain("zoom 1.5");
+  });
+
+  it("grows around the panel's place while arranging, so the panel itself doesn't move", () => {
+    const { window, raw } = make({ x: 0, y: 0, width: 2560, height: 1440 });
+    const place = { x: 100, y: 100, width: 400, height: 300 };
+    window.setRect(place);
+    expect(raw.bounds).toEqual(place);
+    window.setArranging(true);
+    expect(raw.bounds).toEqual({ x: 92, y: 70, width: 416, height: 338 });
+    window.setArranging(false);
+    expect(raw.bounds).toEqual(place);
   });
 
   it("is placed and shown on top before the panel takes the keyboard", () => {

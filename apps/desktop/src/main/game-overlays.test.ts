@@ -24,6 +24,7 @@ import {
   looksExclusive,
   overlayVisible,
   panelBounds,
+  panelWindowRect,
   placeItem,
   scopeForKind,
   setupsOnScreen,
@@ -795,6 +796,24 @@ describe("panels in the game", () => {
     const { top, side } = PANEL_ARRANGE_INSET;
     expect(panelBounds({ width: 300, height: 200 }, true)).toEqual({ x: side, y: top, width: 300 - 2 * side, height: 200 - top - side });
     expect(panelBounds({ width: 4, height: 4 }, true)).toMatchObject({ width: 1, height: 1 });
+  });
+
+  it("keep their place when the layer opens: the window grows by the frame's room where the area leaves it", () => {
+    const { top, side } = PANEL_ARRANGE_INSET;
+    const game = { x: 0, y: 0, width: 2560, height: 1440 };
+    const item = { x: 100, y: 100, width: 400, height: 300 };
+    expect(panelWindowRect(item, game, false)).toEqual(item);
+    expect(panelWindowRect(item, null, true)).toEqual(item);
+    const window = panelWindowRect(item, game, true);
+    expect(window).toEqual({ x: 100 - side, y: 100 - top, width: 400 + 2 * side, height: 300 + top + side });
+    // The panel inside the frame lands exactly on its place.
+    const inner = panelBounds(window, true);
+    expect({ x: window.x + inner.x, y: window.y + inner.y, width: inner.width, height: inner.height }).toEqual(item);
+    // At the area's edge there's no room outside, so the frame takes it inside, as before.
+    const corner = { x: 0, y: 10, width: 400, height: 300 };
+    expect(panelWindowRect(corner, game, true)).toEqual({ x: 0, y: 0, width: 400 + side, height: 300 + 10 + side });
+    const full = { x: 0, y: 0, width: 2560, height: 1440 };
+    expect(panelWindowRect(full, game, true)).toEqual(full);
   });
 });
 

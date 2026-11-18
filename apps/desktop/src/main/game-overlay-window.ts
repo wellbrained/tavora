@@ -12,7 +12,7 @@
 import { BrowserWindow, WebContentsView, app, screen, session, type Session, type WebContents } from "electron";
 import { createHash } from "node:crypto";
 import { GAME_OVERLAY_SCHEME } from "./assets";
-import { dragRect, panelBounds, type Opacity, type Rect } from "./game-overlays";
+import { dragRect, panelBounds, panelWindowRect, type Opacity, type Rect } from "./game-overlays";
 import { GAME_OVERLAY_FRAME_URL, GAME_OVERLAY_ORIGIN, serveGameOverlay, type GameOverlaySource } from "./game-overlay-page";
 import { GAME_OVERLAY_FRAME_DOCUMENT } from "../shared/game-overlay-frame";
 import { InsertedCss } from "./inserted-css";
@@ -101,6 +101,8 @@ export class GameOverlayWindow {
   private zoom = 1;
   private arranging = false;
   private drag: { rect: Rect; cursor: { x: number; y: number }; edges: Edges | null } | null = null;
+  /** The item's place as last given (setRect); a panel's window may be bigger, with the arrange frame around it. */
+  private place: Rect | null = null;
   private destroyed = false;
   /** Tavora is quitting: the window may close then (an app quit closes every window and must not be held up). */
   private quitting = false;
@@ -223,9 +225,11 @@ export class GameOverlayWindow {
     this.frame.webContents.send("game-overlay:frame", name, closeLabel, layoutLabel);
   }
 
-  /** Puts the window at `rect` (screen coordinates, in DIPs). */
-  setRect(rect: Rect): void {
+  /** Puts the item at `rect` (screen coordinates, in DIPs); a panel's window takes the arrange frame's room around it. */
+  setRect(place: Rect): void {
     if (this.isDestroyed) return;
+    this.place = place;
+    const rect = this.options.panel ? panelWindowRect(place, this.options.gameBounds(), this.arranging) : place;
     const now = this.window.getBounds();
     if (now.x === rect.x && now.y === rect.y && now.width === rect.width && now.height === rect.height) return;
     this.window.setBounds(rect);
@@ -282,6 +286,8 @@ export class GameOverlayWindow {
     if (!panel) return;
     // A panel takes the keyboard as well while arranging, so its text fields can be typed in.
     this.window.setFocusable(arranging);
+    // The window grows by the frame's room, or gives it back.
+    if (this.place) this.setRect(this.place);
     this.placePanel();
   }
 
@@ -321,7 +327,7 @@ export class GameOverlayWindow {
   private onDrag(phase: unknown, edge: unknown): void {
     if (this.isDestroyed || !this.arranging) return;
     if (phase === "start") {
-      this.drag = { rect: this.window.getBounds(), cursor: screen.getCursorScreenPoint(), edges: edgesOf(edge) };
+      this.drag = { rect: this.place ?? this.window.getBounds(), cursor: screen.getCursorScreenPoint(), edges: edgesOf(edge) };
       return;
     }
     const drag = this.drag;

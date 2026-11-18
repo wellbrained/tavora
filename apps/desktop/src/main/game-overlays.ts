@@ -267,6 +267,22 @@ export function dragRect(rect: Rect, game: Rect, edges: { left?: boolean; right?
 /** How much room the arrange frame takes around a panel in the layer: a bar on top (name, close) and edges to grab. */
 export const PANEL_ARRANGE_INSET = { top: 30, side: 8 } as const;
 
+/**
+ * The window of a panel at `item` (its place, screen coordinates). While arranging, the window grows outward by the arrange
+ * frame's room, as far as `game` (the area it lives in) leaves room, so the panel itself stays on its place and doesn't
+ * jump when the layer opens; at an edge of the area the frame takes its room inside instead (panelBounds).
+ */
+export function panelWindowRect(item: Rect, game: Rect | null, arranging: boolean): Rect {
+  if (!arranging || !game) return item;
+  const { top, side } = PANEL_ARRANGE_INSET;
+  const room = (space: number, want: number) => Math.max(0, Math.min(want, space));
+  const left = room(item.x - game.x, side);
+  const right = room(game.x + game.width - (item.x + item.width), side);
+  const up = room(item.y - game.y, top);
+  const down = room(game.y + game.height - (item.y + item.height), side);
+  return { x: item.x - left, y: item.y - up, width: item.width + left + right, height: item.height + up + down };
+}
+
 /** Where a panel sits in its overlay window: all of it, or inside the arrange frame. */
 export function panelBounds(size: { width: number; height: number }, arranging: boolean): Rect {
   if (!arranging) return { x: 0, y: 0, width: size.width, height: size.height };
