@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import type { SelectItemProps } from "reka-ui"
 import type { HTMLAttributes } from "vue"
-import { Check } from "@lucide/vue"
 import { reactiveOmit } from "@vueuse/core"
-import { SelectItem, SelectItemIndicator, SelectItemText, useForwardProps } from "reka-ui"
+import { SelectItem, SelectItemText, useForwardProps } from "reka-ui"
 import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { cn } from "../../../lib/utils"
+import { choiceFocused, choiceRow } from "../choice-row"
 import { choiceLabelsKey, EMPTY_CHOICE, emptyChoicesKey } from "./empty"
 
 // `description` is a short line under the name, so each choice says what it does; it shows only in the open list.
@@ -55,17 +55,13 @@ const forwardedProps = useForwardProps(delegatedProps)
     v-bind="forwardedProps"
     :value="isEmpty ? EMPTY_CHOICE : value"
     :class="cn(
-      'focus:bg-accent focus:text-accent-foreground [&_svg:not([class*=\'text-\'])]:text-muted-foreground relative flex w-full cursor-default items-center gap-2 rounded-sm py-1.5 pr-8 pl-2 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*=\'size-\'])]:size-4',
+      'focus:bg-accent focus:text-accent-foreground [&_svg:not([class*=\'text-\'])]:text-muted-foreground relative flex w-full cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*=\'size-\'])]:size-4',
+      choiceRow,
+      choiceFocused,
       description && 'items-start py-2 [&_svg]:mt-0.5',
       props.class,
     )"
   >
-    <span class="absolute right-2 flex size-3.5 items-center justify-center">
-      <SelectItemIndicator>
-        <Check class="text-primary size-4" />
-      </SelectItemIndicator>
-    </span>
-
     <!-- An optional small picture before the name, such as how a style looks; only the name shows in the closed select. -->
     <slot name="thumb" />
     <span v-if="description" class="flex min-w-0 flex-col gap-0.5">

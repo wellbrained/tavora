@@ -43,7 +43,7 @@ classes where you use a control; never copy it.
 | Tabs | `Tabs`; closable, reorderable or renamable tabs: `TabStrip` | own tab bar |
 | Text, number, code field | `Input`, `Textarea`, `CodeInput`, `Label` | own input with an icon positioned by hand |
 | A field's label, hint and error | `Field` around one control (`Input`, `Textarea`, `NumberField`, `Select`, `Combobox`, `Switch`, `Checkbox`): `label`, `hint` (or its `hint` slot) and `error` are tied to the control for screen readers, and the error is read out when it appears. `orientation="horizontal"` puts a short control beside the label and moves it under the label when the row is too narrow; a switch with its label stays a `SwitchField` | a `Label` with `for`, ids and `aria-describedby` wired by hand; an error shown only as a red border |
-| Pick one | `Select` (short list), `Combobox` (searchable), `Picker`, `RadioGroup` | native `<select>` |
+| Pick one | `Select` (short list), `Combobox` (searchable), `Picker`, `RadioGroup`. In a list (and in a menu's `DropdownMenuRadioItem` / `ContextMenuRadioItem`) the kit marks the chosen row with a soft primary fill, a thin edge and bold text | native `<select>`, an own tick, dot or colour on the chosen row |
 | A field where the user types their own value or picks a suggestion (a format) | `Combobox` with `free` on its `ComboboxInput`, `ignore-filter` and a `ComboboxTrigger` chevron; the list starts at the field's left edge and is as wide | an `Input` with a "···" button beside it and a menu of its own |
 | Yes/no setting | `Switch` / `SwitchField`, `Checkbox` | own switch |
 | Amount on a range | `Slider` / `SliderField`; `editable` makes its value a box to type in, `resetValue` adds a Reset button (see [Sliders](#sliders)) | |

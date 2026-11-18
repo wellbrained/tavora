@@ -7,13 +7,14 @@
 // `options`), `option` (a row, e.g. with badges at its end), `group` (a heading, e.g. with an icon) and `filters` (above
 // the list, under the search: toggles that narrow `options`). Use `filters` with `search` (the field keeps the focus)
 // and with `current` (a filter may hide the picked option, and the button still shows it).
-import { Check, ChevronsUpDown, Search } from "@lucide/vue"
+import { ChevronsUpDown, Search } from "@lucide/vue"
 import type { HTMLAttributes } from "vue"
 import { createReusableTemplate } from "@vueuse/core"
 import { computed, ref, watch } from "vue"
-import { ListboxContent, ListboxFilter, ListboxGroup, ListboxGroupLabel, ListboxItem, ListboxItemIndicator, ListboxRoot, PopoverContent, PopoverPortal, PopoverRoot, PopoverTrigger } from "reka-ui"
+import { ListboxContent, ListboxFilter, ListboxGroup, ListboxGroupLabel, ListboxItem, ListboxRoot, PopoverContent, PopoverPortal, PopoverRoot, PopoverTrigger } from "reka-ui"
 import { cn } from "../../../lib/utils"
 import { Button } from "../button"
+import { choiceHighlighted, choiceRow } from "../choice-row"
 import type { PickerOption } from "./types"
 
 defineOptions({ inheritAttrs: false })
@@ -42,6 +43,7 @@ const open = defineModel<boolean>("open", { default: false })
 
 /** One row of the list, the same with a group around it or without. */
 const [DefineRow, Row] = createReusableTemplate<{ option: PickerOption<T> }>()
+const rowClass = cn("data-[highlighted]:bg-accent flex h-9 w-full cursor-default items-center gap-2 rounded-md px-3 text-left text-sm outline-none select-none", choiceRow, choiceHighlighted)
 const query = ref("")
 const current = computed(() => props.options.find((option) => option.value === model.value) ?? (slots.current || slots.filters ? undefined : props.options[0]))
 const shown = computed(() => {
@@ -124,13 +126,10 @@ function pick(value: unknown) {
             <DefineRow v-slot="{ option }">
               <ListboxItem
                 :value="option.value"
-                class="data-[highlighted]:bg-accent data-[state=checked]:font-medium flex h-9 w-full cursor-default items-center gap-2 rounded-md px-3 text-left text-sm outline-none select-none"
+                :class="rowClass"
                 :data-testid="part(`option-${option.value}`)"
               >
                 <slot name="option" :option="option"><span class="flex-1 truncate">{{ option.label }}</span></slot>
-                <ListboxItemIndicator>
-                  <Check class="text-primary size-4 flex-none" />
-                </ListboxItemIndicator>
               </ListboxItem>
             </DefineRow>
             <!-- Options without a group sit right in the list, as in a Picker without groups. -->
