@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import type { TavoraSDK } from "@tavora/sdk";
+import type { JsonValue, TavoraSDK } from "@tavora/sdk";
 import { createMemoryHost, type MemoryHost } from "@tavora/sdk/testing";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp, nextTick, type App as VueApp } from "vue";
@@ -43,8 +43,8 @@ const settle = async () => {
   }
 };
 
-async function mount(options: { version?: string; overGame?: boolean } = {}) {
-  const { sdk, host } = createMemoryHost(options.version ? { version: options.version } : {});
+async function mount(options: { version?: string; overGame?: boolean; state?: JsonValue } = {}) {
+  const { sdk, host } = createMemoryHost({ ...(options.version ? { version: options.version } : {}), ...(options.state !== undefined ? { state: options.state } : {}) });
   host.documents.put({ id: LIST_ID, title: LIST_TITLE, data: LIST });
   if (options.overGame) host.setPanelOverGame(true);
   current.sdk = sdk;
@@ -105,7 +105,7 @@ describe("over the game", () => {
     box.click();
     await settle();
     expect(stored(host).groups[0]!.tasks[0]!.done).toBe(true);
-    // It stays a moment, ticked, before it vanishes (finished to-dos are hidden in the live view's look).
+    // It stays, ticked (Keep finished to-dos is on in a new panel).
     expect(row("t1").classList.contains("done")).toBe(true);
 
     row("t2").querySelector<HTMLElement>("[data-testid=plate-title]")!.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
@@ -153,5 +153,56 @@ describe("over the game", () => {
     const menus = [...document.querySelectorAll<HTMLElement>("[data-testid=plate-task-menu]")];
     expect(menus.map((menu) => menu.getAttribute("aria-label"))).toEqual(["More for Find the crypt", "More for Light the torch"]);
     expect(($("[data-testid=plate-add] input") as HTMLInputElement).getAttribute("aria-label")).toBe("Add a to-do");
+  });
+
+  it("shows finished to-dos on the plate exactly when the panel keeps them", async () => {
+    const done = { version: 2, groups: [{ id: "g", name: "Main", color: "", tasks: [task("t1", "Find the crypt", { done: true, doneAt: AT }), task("t2", "Light the torch")] }] };
+    const kept = await mount({ overGame: true });
+    kept.documents.put({ id: LIST_ID, title: LIST_TITLE, data: done });
+    await settle();
+    expect(plateTexts()).toEqual(["Find the crypt", "Light the torch"]);
+    app?.unmount();
+    document.body.innerHTML = "";
+
+    // A panel saved with the switch off, and an overlay look that showed them (kept on its own before): the switch wins.
+    const vanish = await mount({ overGame: true, state: { finished: "vanish", collapsed: [], folded: [], live: { showFinished: true } } });
+    vanish.documents.put({ id: LIST_ID, title: LIST_TITLE, data: done });
+    await settle();
+    expect(plateTexts()).toEqual(["Light the torch"]);
+  });
+});
+
+describe("Keep finished to-dos", () => {
+  const saved = async () => (await (current.sdk as TavoraSDK).panel.getState<{ finished: string; live: { showFinished: boolean } }>())!;
+
+  it("is one switch for the panel and the overlay, and is still written with the look for the version before", async () => {
+    await mount();
+    const toggle = () => $("[data-testid=finished-mode]")!;
+    expect(toggle().dataset.mode).toBe("stay");
+    toggle().click();
+    await settle();
+    expect(toggle().dataset.mode).toBe("vanish");
+    expect(await saved()).toMatchObject({ finished: "vanish", live: { showFinished: false } });
+    toggle().click();
+    await settle();
+    expect(await saved()).toMatchObject({ finished: "stay", live: { showFinished: true } });
+  });
+
+  it("is the same choice as Finished to-dos on the settings' Content page", async () => {
+    // The settings draw their preview once the fonts are in; jsdom has none to wait for.
+    if (!("fonts" in document)) Object.defineProperty(document, "fonts", { value: { ready: Promise.resolve() }, configurable: true });
+    const host = await mount();
+    host.setDialog(true);
+    await settle();
+    $("[data-testid=settings-page-content]")!.click();
+    await settle();
+    const show = $("[data-testid=live-finished-show]")!;
+    expect(show.getAttribute("data-state")).toBe("checked");
+    $("[data-testid=live-finished-hide]")!.click();
+    await settle();
+    expect(await saved()).toMatchObject({ finished: "vanish", live: { showFinished: false } });
+    host.setDialog(false);
+    await settle();
+    expect($("[data-testid=finished-mode]")!.dataset.mode).toBe("vanish");
   });
 });

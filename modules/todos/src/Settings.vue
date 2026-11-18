@@ -63,7 +63,9 @@ function reset(id: string): () => void {
     return () => (panelLook.value = before);
   }
   const before = look.value;
-  const defaults = Object.fromEntries(PAGE_KEYS[id as Exclude<Page, "panel">].map((key) => [key, LIVE_DEFAULTS[key]])) as Partial<LiveLook>;
+  // Finished to-dos is the panel's Keep finished to-dos, which a new panel has on.
+  const fresh: LiveLook = { ...LIVE_DEFAULTS, showFinished: true };
+  const defaults = Object.fromEntries(PAGE_KEYS[id as Exclude<Page, "panel">].map((key) => [key, fresh[key]])) as Partial<LiveLook>;
   look.value = { ...look.value, ...defaults } as LiveLook;
   return () => (look.value = before);
 }

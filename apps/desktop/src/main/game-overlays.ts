@@ -264,13 +264,20 @@ export function dragRect(rect: Rect, game: Rect, edges: { left?: boolean; right?
 
 // ── Panels in the game ─────────────────────────────────────────────────
 
+/**
+ * What a window over the game does in the in-game layer: `off` (the layer is closed, or an overlay in Use: click-through,
+ * no frame), `use` (a panel takes clicks and keys, no frame) or `arrange` (the frame, to move, resize and close).
+ */
+export type WindowMode = "off" | "use" | "arrange";
+
 /** How much room the arrange frame takes around a panel in the layer: a bar on top (name, close) and edges to grab. */
 export const PANEL_ARRANGE_INSET = { top: 30, side: 8 } as const;
 
 /**
- * The window of a panel at `item` (its place, screen coordinates). While arranging, the window grows outward by the arrange
- * frame's room, as far as `game` (the area it lives in) leaves room, so the panel itself stays on its place and doesn't
- * jump when the layer opens; at an edge of the area the frame takes its room inside instead (panelBounds).
+ * The window of a panel at `item` (its place, screen coordinates). In Use it is exactly the place. While arranging, the
+ * window grows outward by the arrange frame's room, as far as `game` (the area it lives in) leaves room, so the panel
+ * itself stays on its place and doesn't jump when Arrange starts; at an edge of the area the frame takes its room inside
+ * instead (panelBounds).
  */
 export function panelWindowRect(item: Rect, game: Rect | null, arranging: boolean): Rect {
   if (!arranging || !game) return item;
@@ -283,7 +290,7 @@ export function panelWindowRect(item: Rect, game: Rect | null, arranging: boolea
   return { x: item.x - left, y: item.y - up, width: item.width + left + right, height: item.height + up + down };
 }
 
-/** Where a panel sits in its overlay window: all of it, or inside the arrange frame. */
+/** Where a panel sits in its overlay window: all of it (in Use), or inside the arrange frame. */
 export function panelBounds(size: { width: number; height: number }, arranging: boolean): Rect {
   if (!arranging) return { x: 0, y: 0, width: size.width, height: size.height };
   const { top, side } = PANEL_ARRANGE_INSET;
@@ -292,7 +299,8 @@ export function panelBounds(size: { width: number; height: number }, arranging: 
 
 /**
  * Whether a click or key press in a panel counts as the user's (links.open, pictures.save and the like need one).
- * A panel in the game takes input only while the layer is open, so nothing else is the user's.
+ * A panel in the game takes input only while the layer is open (in Use; in Arrange its frame covers it), so nothing
+ * else is the user's.
  */
 export const gestureCounts = (overGame: boolean, layerOpen: boolean) => !overGame || layerOpen;
 
@@ -316,7 +324,7 @@ export interface VisibilityInput {
   mode: OverlayMode;
   /** The overlay's key switched it on (toggle mode). */
   toggledOn: boolean;
-  /** The in-game layer is open: every item on screen shows, each with its frame, so each can be placed. */
+  /** The in-game layer is open (in Use or Arrange): every item on screen shows, so each can be used or placed. */
   layerOpen: boolean;
 }
 

@@ -606,7 +606,7 @@ export class ModuleView {
     // A closed panel's last click opens nothing more (see letGo).
     if (this.disposed) return;
     // Over the game the window takes input only while the layer is open; any report at another time is not the user's.
-    if (!gestureCounts(this.overGame !== null, this.overGame?.arranging() ?? false)) return;
+    if (!gestureCounts(this.overGame !== null, this.overGame?.layerOpen() ?? false)) return;
     this.press = { at: Date.now(), used: false };
     this.usedAt = this.press.at;
     const page = this.contents();
@@ -1309,9 +1309,9 @@ export class ModuleView {
   /**
    * The panel is over its game, in a window of Tavora's own (game-overlay-window.ts). It is this same view and page,
    * with the same bridge; only the look changes (see through, as the user set it) and clicks and keys count as the
-   * user's while `arranging()` is true.
+   * user's while `layerOpen()` is true (the layer is open, in Use or Arrange).
    */
-  private overGame: { arranging(): boolean; opacity: Opacity; zoom: number } | null = null;
+  private overGame: { layerOpen(): boolean; opacity: Opacity; zoom: number } | null = null;
   /**
    * The style of Tavora's own on the page while over the game (opacity, zoom). Kept here, not with one stay over the game,
    * so it is always taken off again: a style left behind kept the panel zoomed in its workspace.
@@ -1322,9 +1322,9 @@ export class ModuleView {
     return this.overGame !== null;
   }
 
-  enterGame(arranging: () => boolean): void {
+  enterGame(layerOpen: () => boolean): void {
     const was = this.overGame !== null;
-    this.overGame = { arranging, opacity: 100, zoom: 1 };
+    this.overGame = { layerOpen, opacity: 100, zoom: 1 };
     // A stay that never ended (the panel lent again) leaves no style of its own behind.
     if (was) void this.applyGameOpacity();
     // Without a colour of its own, so the opacity the user chose lets the game show through.

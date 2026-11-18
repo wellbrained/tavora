@@ -5446,6 +5446,7 @@ export class Host {
           },
         },
         language: () => this.language,
+        theme: () => this.currentTheme,
         changed: () => this.pushStateSoon(),
         overlaysChanged: () => {
           this.syncGameWatcher();

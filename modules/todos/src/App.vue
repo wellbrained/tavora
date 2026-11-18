@@ -17,7 +17,7 @@ import EditPlate from "./EditPlate.vue";
 import GroupSection, { type DropTarget } from "./GroupSection.vue";
 import { plural, setLanguage, t } from "./i18n";
 import { de, en } from "./locales";
-import { buildLiveState, fontStack, LIVE_DEFAULTS, PANEL_LOOK_DEFAULTS, PANEL_SIZES, parseLook, parsePanelLook, throttle, type LiveLook, type LiveState, type PanelLook } from "./live";
+import { buildLiveState, fontStack, LIVE_DEFAULTS, PANEL_LOOK_DEFAULTS, PANEL_SIZES, parseLook, parsePanelLook, throttle, withFinished, type LiveLook, type LiveState, type PanelLook } from "./live";
 import { LINGER_MS, PANEL, ROW_FOCUS, type Draft, type FinishedMode } from "./panel";
 import Settings from "./Settings.vue";
 import { createTodoStore, type TodoStore } from "./store";
@@ -30,7 +30,7 @@ interface PanelState {
   finished: FinishedMode;
   collapsed: string[];
   folded: string[];
-  /** How the live view looks. */
+  /** How the live view looks. Its `showFinished` mirrors `finished`, so a version before reads the same choice. */
   live: LiveLook;
   /** How this panel shows to-dos. */
   panel: PanelLook;
@@ -49,7 +49,8 @@ const error = ref<string | null>(null);
 const finished = ref<FinishedMode>("stay");
 const collapsed = ref<string[]>([]);
 const folded = ref<string[]>([]);
-const look = shallowRef<LiveLook>({ ...LIVE_DEFAULTS });
+/** The live view's look; its `showFinished` always says what `finished` does (withFinished). */
+const look = shallowRef<LiveLook>(withFinished({ ...LIVE_DEFAULTS }, "stay"));
 const panelLook = shallowRef<PanelLook>({ ...PANEL_LOOK_DEFAULTS });
 /** When the settings last saved something, for the settings' "Saved". */
 const savedAt = ref<number>();
@@ -119,6 +120,8 @@ function savePanel() {
 }
 
 function setLook(next: LiveLook) {
+  // The Content page's Finished to-dos row is the toolbar's Keep finished to-dos: both write the same choice.
+  finished.value = next.showFinished ? "stay" : "vanish";
   look.value = next;
   savePanel();
   savedAt.value = Date.now();
@@ -171,10 +174,11 @@ watch(
   },
 );
 
-/** The toolbar toggle: pressed keeps finished to-dos in the list, released lets them vanish. */
+/** The toolbar toggle: pressed keeps finished to-dos in the list and over the game, released lets them vanish. */
 function toggleFinished() {
   const mode: FinishedMode = finished.value === "stay" ? "vanish" : "stay";
   finished.value = mode;
+  look.value = withFinished(look.value, mode);
   savePanel();
 }
 
@@ -210,7 +214,8 @@ onMounted(async () => {
     finished.value = state?.finished === "vanish" || (state?.finished === undefined && state?.hideDone === true) ? "vanish" : "stay";
     collapsed.value = ids(state?.collapsed);
     folded.value = ids(state?.folded);
-    look.value = parseLook(state?.live ?? { background: state?.liveBackground, padding: state?.livePadding });
+    // The look's own showFinished (kept on its own before) gives way to the panel's switch.
+    look.value = withFinished(parseLook(state?.live ?? { background: state?.liveBackground, padding: state?.livePadding }), finished.value);
     panelLook.value = parsePanelLook(state?.panel);
     cleanup.push(connected.panel.onDialogChange((open) => moved("dialog", open)));
     // A page that (re)loads while over the game asks; a change while it runs comes as an event and wins over a late

@@ -9,7 +9,9 @@ import type { Foreground, ForegroundProbe } from "./foreground";
 import { GameOverlays, isOverlayAction, layerBinding, toggleBinding, type OverlayWindow, type OverlayWindowRequest, type PanelLoan } from "./game-overlay-service";
 import type { OverlayPanel } from "./game-overlay-window";
 import type { VeilWindow } from "./game-veil-window";
-import { GameOverlayStore, OVERLAY_LAYER_ACTION, OVERLAY_TOGGLE_ACTION, type OverlayScope, type Rect } from "./game-overlays";
+import type { LayerCard, LayerCardRequest } from "./game-layer-card";
+import { GameOverlayStore, OVERLAY_LAYER_ACTION, OVERLAY_TOGGLE_ACTION, type OverlayScope, type Rect, type WindowMode } from "./game-overlays";
+import type { LayerCardContent } from "../shared/layer-card";
 import type { HotkeyRecord, ShortcutRegistry } from "./hotkeys";
 import { OverlayStore } from "./overlays";
 import type { StreamingModule } from "./streaming";
@@ -41,7 +43,8 @@ const SCREEN: Rect = { x: 0, y: 0, width: 1920, height: 1080 };
 class FakeWindow implements OverlayWindow {
   rect: Rect | null = null;
   shown = false;
-  arranging = false;
+  /** What the window does in the layer: `off`, `use` (a panel takes input) or `arrange` (its frame). */
+  mode: WindowMode = "off";
   hideFromCapture = false;
   opacity = 100;
   dragging = false;
@@ -64,9 +67,13 @@ class FakeWindow implements OverlayWindow {
     this.shown = shown;
     this.log.push(shown ? "show" : "hide");
   }
-  setArranging(arranging: boolean) {
-    this.arranging = arranging;
-    this.log.push(arranging ? "arrange" : "stop");
+  /** Whether it shows its frame, to move and resize it (Arrange). */
+  get arranging() {
+    return this.mode === "arrange";
+  }
+  setMode(mode: WindowMode) {
+    this.mode = mode;
+    this.log.push(mode === "arrange" ? "arrange" : mode === "use" ? "use" : "stop");
   }
   focusPanel() {
     this.focusedPanel++;
@@ -122,6 +129,29 @@ class FakePanelViews {
   }
 }
 
+class FakeCard implements LayerCard {
+  area: Rect | null = null;
+  content: LayerCardContent | null = null;
+  destroyed = false;
+  focused = false;
+  raised = 0;
+  refreshed = 0;
+  constructor(readonly request: LayerCardRequest) {}
+  show(area: Rect, content: LayerCardContent) {
+    this.area = area;
+    this.content = content;
+  }
+  raise() {
+    this.raised++;
+  }
+  refresh() {
+    this.refreshed++;
+  }
+  destroy() {
+    this.destroyed = true;
+  }
+}
+
 class FakeVeil implements VeilWindow {
   rect: Rect | null = null;
   destroyed = false;
@@ -162,6 +192,9 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
     registered: new Map<string, () => void>(),
     windows: [] as FakeWindow[],
     veils: [] as FakeVeil[],
+    cards: [] as FakeCard[],
+    /** The layer key's accelerator, as Settings > Overlays has it. */
+    layerAccelerator: null as string | null,
     /** Which library entries are games; the rest are workspaces such as Personal. */
     kinds: new Map<string, OverlayScope>([["personal", "all"]]),
     panelUsed: new Map<string, number>(),
@@ -206,7 +239,7 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
         world.movedKeys.push({ from: matches.at(-1), to });
         for (const record of matches) world.removedKeys.push(record);
       },
-      keyOf: () => null,
+      keyOf: (binding) => (binding.action === OVERLAY_LAYER_ACTION && world.layerAccelerator ? { accelerator: world.layerAccelerator, taken: false } : null),
       keyRecord: (binding) => keys.find((record) => record.owner === binding.owner && record.moduleId === binding.moduleId && record.workspaceId === binding.workspaceId && record.action === binding.action && record.target === binding.target) ?? null,
       restoreKey: (record) => void world.restoredKeys.push(record),
     },
@@ -240,6 +273,11 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
         const veil = new FakeVeil();
         world.veils.push(veil);
         return veil;
+      },
+      openCard: (request) => {
+        const card = new FakeCard(request);
+        world.cards.push(card);
+        return card;
       },
       shortcuts,
     },
@@ -581,7 +619,7 @@ describe("modes and settings", () => {
 const layerKey = (key: (binding: ReturnType<typeof layerBinding>) => HotkeyRecord) => key(layerBinding());
 
 describe("the in-game layer", () => {
-  it("makes every overlay of the game visible with its frame, behind a veil, and back again with the key or Esc", async () => {
+  it("makes every overlay of the game visible behind a veil, with its frame in Arrange, and back again with the key or Esc", async () => {
     const { service, world, live, key } = await setup();
     show(service);
     show(service, CLOCK, "elden", "item-2");
@@ -593,6 +631,10 @@ describe("the in-game layer", () => {
 
     service.pressed(layer);
     expect(service.layerOpen).toBe(true);
+    // Use first: every overlay shows, click-through and without its frame.
+    expect(service.layerMode).toBe("use");
+    expect(live().map((window) => [window.shown, window.mode])).toEqual([[true, "off"], [true, "off"]]);
+    service.setLayerMode("arrange");
     expect(live().map((window) => [window.shown, window.arranging])).toEqual([[true, true], [true, true]]);
     expect(world.veils).toHaveLength(1);
     expect(world.veils[0]).toMatchObject({ rect: SCREEN, destroyed: false });
@@ -610,6 +652,110 @@ describe("the in-game layer", () => {
     expect(world.veils).toHaveLength(2);
     expect(world.veils[1]!.destroyed).toBe(true);
     expect(world.focused).toBe(2);
+  });
+
+  it("opens in Use: panels at their place taking input, overlays click-through, no frames", async () => {
+    const { service, live, key } = await setup();
+    show(service);
+    service.showPanel({ owner: "official", moduleId: TODOS.manifest.id, workspaceId: "elden", instanceId: PANEL }, { width: 360, height: 200 });
+    service.pressed(layerKey(key));
+    const panel = live().find((window) => window.panel !== undefined)!;
+    const overlay = live().find((window) => window.panel === undefined)!;
+    expect(service.layerMode).toBe("use");
+    expect(panel).toMatchObject({ shown: true, mode: "use", rect: { width: 360, height: 200 } });
+    expect(panel.focusedPanel).toBe(1);
+    expect(overlay).toMatchObject({ shown: true, mode: "off" });
+    // No frame anywhere: nothing arranges.
+    expect(live().some((window) => window.arranging)).toBe(false);
+  });
+
+  it("switches to Arrange and back live, keeps the windows, and gives the keyboard to nobody on the way", async () => {
+    const { service, world, live, key } = await setup();
+    show(service);
+    service.showPanel({ owner: "official", moduleId: TODOS.manifest.id, workspaceId: "elden", instanceId: PANEL }, { width: 360, height: 200 });
+    service.pressed(layerKey(key));
+    const before = live();
+    const panel = before.find((window) => window.panel !== undefined)!;
+    const overlay = before.find((window) => window.panel === undefined)!;
+
+    world.cards[0]!.request.setMode("arrange");
+    expect(service.layerMode).toBe("arrange");
+    expect(panel.mode).toBe("arrange");
+    expect(overlay.mode).toBe("arrange");
+    expect(world.cards[0]!.content?.mode).toBe("arrange");
+    expect(live()).toEqual(before);
+
+    world.cards[0]!.request.setMode("use");
+    expect(panel.mode).toBe("use");
+    expect(overlay.mode).toBe("off");
+    // The card has the keyboard after a click on it; the panel doesn't take it back.
+    expect(panel.focusedPanel).toBe(1);
+    expect(world.cards).toHaveLength(1);
+    expect(world.veils).toHaveLength(1);
+  });
+
+  it("starts in Use again after it closed in Arrange, and ignores a mode while it is closed", async () => {
+    const { service, world, live, key } = await setup();
+    show(service);
+    const layer = layerKey(key);
+    service.pressed(layer);
+    service.setLayerMode("arrange");
+    world.registered.get("Escape")!();
+    expect(service.layerMode).toBeNull();
+    expect(world.cards[0]!.destroyed).toBe(true);
+    service.setLayerMode("arrange");
+    expect(service.layerMode).toBeNull();
+    expect(live()[0]!.mode).toBe("off");
+
+    service.pressed(layer);
+    expect(service.layerMode).toBe("use");
+    expect(live()[0]!.mode).toBe("off");
+    expect(world.cards).toHaveLength(2);
+    expect(world.cards[1]!.content?.mode).toBe("use");
+  });
+
+  it("puts the card over the layer's area, on top, with the layer key, and Close ends the layer like the key", async () => {
+    const { service, world, live, key } = await setup();
+    world.layerAccelerator = "Ctrl+Shift+T";
+    show(service);
+    service.pressed(layerKey(key));
+    const card = world.cards[0]!;
+    expect(card.area).toEqual(SCREEN);
+    expect(card.content).toMatchObject({ mode: "use", keys: ["Ctrl", "Shift", "T"], texts: { title: "Overlay", use: "Use", arrange: "Arrange", close: "Close" } });
+    // Raised after the overlays that came up with the layer.
+    expect(card.raised).toBeGreaterThan(0);
+    // It follows the game's window.
+    world.foreground = { program: GAME_EXE, bounds: { x: 100, y: 50, width: 1280, height: 720 }, notification: 0 };
+    service.tick();
+    expect(card.area).toEqual({ x: 100, y: 50, width: 1280, height: 720 });
+    // The theme or font changed.
+    service.refreshFonts();
+    expect(card.refreshed).toBe(1);
+
+    card.request.close();
+    expect(service.layerOpen).toBe(false);
+    expect(card.destroyed).toBe(true);
+    expect(world.registered.has("Escape")).toBe(false);
+    // The game gets the keyboard back, as with Esc.
+    expect(world.focused).toBe(1);
+    expect(live()[0]!.mode).toBe("off");
+  });
+
+  it("keeps the layer open while its card has the keyboard", async () => {
+    const { service, world, key } = await setup();
+    show(service);
+    world.foreground = { program: GAME_EXE, handle: "0x10", bounds: { ...SCREEN }, notification: 0 };
+    service.tick();
+    service.pressed(layerKey(key));
+    world.cards[0]!.focused = true;
+    world.foreground = { program: "C:\\Program Files\\Tavora\\Tavora.exe", bounds: { ...SCREEN }, notification: 0, own: true, handle: "0x10" };
+    world.tavora = true;
+    service.tick();
+    expect(service.layerOpen).toBe(true);
+    world.cards[0]!.focused = false;
+    service.tick();
+    expect(service.layerOpen).toBe(false);
+    expect(world.cards[0]!.destroyed).toBe(true);
   });
 
   it("puts the veil under everything else: overlays shown before it are raised after it", async () => {
@@ -1114,7 +1260,7 @@ describe("a panel in the game", () => {
 
     service.pressed(layerKey(key));
     const [window] = panelWindows(world);
-    expect(window).toMatchObject({ shown: true, arranging: true, destroyed: false });
+    expect(window).toMatchObject({ shown: true, mode: "use", destroyed: false });
     expect(world.views.isLent(PANEL)).toBe(true);
     expect(window!.focusedPanel).toBe(1);
 
@@ -1233,7 +1379,7 @@ describe("a panel in the game", () => {
     expect(panel!.log.indexOf("raise")).toBeGreaterThan(-1);
   });
 
-  it("gives the keyboard to the panel used last, only once; a panel is placed and shown before it arranges and takes the keyboard", async () => {
+  it("gives the keyboard to the panel used last, only once; a panel is placed and shown before it takes input and the keyboard", async () => {
     const { service, world, key } = await setup();
     world.panelNames.set(SECOND, "Notes");
     add(service);
@@ -1244,7 +1390,7 @@ describe("a panel in the game", () => {
     const [first, second] = panelWindows(world);
     expect(first!.focusedPanel).toBe(1);
     expect(second!.focusedPanel).toBe(0);
-    expect(first!.log.filter((step, at) => first!.log.indexOf(step) === at)).toEqual(["rect", "show", "arrange", "raise", "focus"]);
+    expect(first!.log.filter((step, at) => first!.log.indexOf(step) === at)).toEqual(["rect", "show", "use", "raise", "focus"]);
   });
 
   it("is kept where the user put it, relative to the game, and closing its frame stops showing it in game", async () => {
@@ -1951,9 +2097,10 @@ describe("setups on screen", () => {
     service.pressed(layer);
     expect(service.layerOpen).toBe(true);
     expect(world.veils[0]).toMatchObject({ rect: SCREEN, destroyed: false });
-    expect(live().find((window) => window.panel === undefined)).toMatchObject({ shown: true, arranging: true });
+    expect(live().find((window) => window.panel === undefined)).toMatchObject({ shown: true, mode: "off" });
     expect(panelWindows(world)).toHaveLength(1);
-    expect(panelWindows(world)[0]).toMatchObject({ shown: true, arranging: true, rect: { x: 54, y: 54 } });
+    expect(panelWindows(world)[0]).toMatchObject({ shown: true, mode: "use", rect: { x: 54, y: 54 } });
+    expect(world.cards[0]!.area).toEqual(SCREEN);
     // A panel that took the keyboard keeps the layer open.
     panelWindows(world)[0]!.focused = true;
     world.foreground = { program: TAVORA, bounds: { ...SCREEN }, notification: 0, own: true, handle: "0x1" };

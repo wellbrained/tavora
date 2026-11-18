@@ -7,9 +7,11 @@
 //
 // Two kinds of items. Overlays are a module's overlay page, always there (or with a key of their own), click-through.
 // Panels are whole panels the user chose to show; they appear only while the user holds the layer open with the one
-// global key: a veil over the game window (over the screen, with no game in front), every panel on screen on top of it
-// taking input, and every overlay with its frame to move, resize or close. Closing the layer puts everything back:
-// panels return to their workspace slots, overlays are click-through again, and the game gets the keyboard back.
+// global key: a veil over the game window (over the screen, with no game in front), every panel on screen on top of it,
+// and Tavora's card at the top (game-layer-card.ts). The layer opens in Use: panels take clicks and keys, nothing has a
+// frame, overlays stay click-through. In Arrange (the card's other choice) every item has its frame to move, resize or
+// close it, and no item's content takes input. Closing the layer puts everything back: panels return to their
+// workspace slots, overlays are click-through again, and the game gets the keyboard back.
 //
 // Tavora only reads which window is in front (foreground.ts) and draws its own windows above it.
 import { isVoicePaused } from "../shared/discord-voice";
@@ -23,6 +25,8 @@ import type { ToolbarSetting } from "../shared/layout-toolbar";
 import { HostError } from "./errors";
 import type { Foreground, ForegroundProbe } from "./foreground";
 import type { GameOverlayWindow, OverlayPanel } from "./game-overlay-window";
+import type { LayerCard, LayerCardRequest } from "./game-layer-card";
+import { layerCardContent, type LayerMode } from "../shared/layer-card";
 import {
   ALL_GAMES,
   EVERYWHERE,
@@ -59,6 +63,7 @@ import {
   type OverlayScope,
   type Rect,
   type SeenSize,
+  type WindowMode,
 } from "./game-overlays";
 import type { GameOverlaySource } from "./game-overlay-page";
 import type { VeilWindow } from "./game-veil-window";
@@ -72,7 +77,7 @@ import type { OverlayLayout } from "./overlay-layout";
 import type { Shell } from "./shell";
 
 /** The part of a game overlay's window the service drives (a test stands in for Electron). */
-export type OverlayWindow = Pick<GameOverlayWindow, "setRect" | "setShown" | "setArranging" | "setHideFromCapture" | "setOpacity" | "destroy" | "dragging"> &
+export type OverlayWindow = Pick<GameOverlayWindow, "setRect" | "setShown" | "setMode" | "setHideFromCapture" | "setOpacity" | "destroy" | "dragging"> &
   Partial<Pick<GameOverlayWindow, "focused" | "focusPanel" | "raise" | "setZoom" | "refreshFont">>;
 
 /** Which overlay or panel an item of the Overlay layout is. */
@@ -219,6 +224,8 @@ export interface OverlayPlatform {
   openWindow(request: OverlayWindowRequest, panel?: OverlayPanel): OverlayWindow;
   /** The veil over the game window (or the screen) while the layer is open. */
   openVeil(): VeilWindow;
+  /** Tavora's card at the top of the open layer: Use | Arrange and Close. */
+  openCard(request: LayerCardRequest): LayerCard;
   shortcuts: ShortcutRegistry;
 }
 
@@ -278,7 +285,8 @@ interface Open {
   setup: string;
   opacity: Opacity;
   hideFromCapture: boolean;
-  arranging: boolean;
+  /** What the window does in the layer now (`off` while it is closed). */
+  mode: WindowMode;
   shown: boolean;
   /** When the window was shown last, to tell which of several panel windows is the newest. */
   shownOrder: number;
@@ -298,9 +306,10 @@ export class GameOverlays {
   private layoutPort: LayoutPort | undefined;
   private readonly open = new Map<string, Open>();
 
-  /** The user picked another interface font: the frames take it. */
+  /** The user picked another interface font or theme: the frames and the layer's card take it. */
   refreshFonts(): void {
     for (const open of this.open.values()) open.window.refreshFont?.();
+    this.card?.refresh();
   }
   private readonly toggled = new Set<string>();
   /** The windows shown and their stacking places at the last look; they are raised again when it changes. */
@@ -317,8 +326,11 @@ export class GameOverlays {
   private away: { gameId: string; bounds: Rect } | null = null;
   /** One of Tavora's own windows (not an overlay's) is in front: Everywhere hides. */
   private tavoraFront = false;
-  /** The in-game layer while it is open: over the game in front, or over the screen (`game` null) with no game in front. */
-  private layer: { game: string | null } | null = null;
+  /**
+   * The in-game layer while it is open: over the game in front, or over the screen (`game` null) with no game in front,
+   * in Use or Arrange. It always opens in Use; the mode is kept in memory only.
+   */
+  private layer: { game: string | null; mode: LayerMode } | null = null;
   /** The window handle of the game window in front (when known), and of whatever window is in front. */
   private frontWindow: string | null = null;
   private foregroundWindow: string | null = null;
@@ -330,6 +342,8 @@ export class GameOverlays {
   private layerWindow: string | null = null;
   private notification: number | null = null;
   private veil: VeilWindow | null = null;
+  /** The card at the top of the open layer. */
+  private card: LayerCard | null = null;
   private escape = false;
   /** Stopped: nothing shows until the user starts the overlays with the header button, and again after Tavora starts. */
   private suspended = true;
@@ -834,8 +848,21 @@ export class GameOverlays {
     return this.layer !== null;
   }
 
+  /** What the open layer is for (Use or Arrange), or null while it is closed. */
+  get layerMode(): LayerMode | null {
+    return this.layer?.mode ?? null;
+  }
+
+  /** Use or Arrange, from the layer's card. Nothing while the layer is closed. */
+  setLayerMode(mode: LayerMode): void {
+    if (this.layer === null || this.layer.mode === mode) return;
+    this.layer.mode = mode;
+    this.tick();
+  }
+
   private openLayer(gameId: string | null): void {
-    this.layer = { game: gameId };
+    // Always in Use: the user opens it to work in a panel; Arrange is one click away on the card.
+    this.layer = { game: gameId, mode: "use" };
     // The layer belongs to this window: another window of the program (a restart), or another app, is not the one it opened over.
     this.layerWindow = gameId !== null ? this.frontWindow : this.foregroundWindow;
     // Esc ends it too; the key is the game's again afterwards.
@@ -877,9 +904,9 @@ export class GameOverlays {
     return this.look();
   }
 
-  /** Whether one of the service's own windows has the keyboard (a panel in the layer). */
+  /** Whether one of the service's own windows has the keyboard (a panel in the layer, or the layer's card). */
   private ownWindowFocused(): boolean {
-    return [...this.open.values()].some((entry) => entry.window.focused);
+    return (this.card?.focused ?? false) || [...this.open.values()].some((entry) => entry.window.focused);
   }
 
   private look(): void {
@@ -980,6 +1007,9 @@ export class GameOverlays {
     const front = this.front;
     // Over a game, the layer needs its window; over the screen, nothing but itself.
     const layerOpen = this.layer !== null && this.layer.game === front && (front === null || this.game !== null);
+    const arranging = layerOpen && this.layer?.mode === "arrange";
+    /** Whether a window came up in this look: it is drawn above the card, which goes on top again. */
+    let shownNow = false;
     const setups = this.onScreen();
     const overlays = this.placedOverlays(setups);
     const panels = this.placedPanels(setups);
@@ -996,6 +1026,15 @@ export class GameOverlays {
       this.veil.destroy();
       this.veil = null;
     }
+    // The card at the top of the layer's area, above everything the layer shows.
+    let cardNew = false;
+    if (veilArea && this.layer) {
+      if (!this.card) {
+        this.card = this.options.platform.openCard({ setMode: (mode) => this.setLayerMode(mode), close: () => this.closeLayer(true) });
+        cardNew = true;
+      }
+      this.card.show(veilArea, layerCardContent(this.options.language(), this.layer.mode, this.options.streaming.keyOf(layerBinding())?.accelerator ?? null));
+    } else this.dropCard();
     // Every overlay any setup has, once: shown from the setup on screen that has it, or hidden.
     const every = new Map(this.store.all().map((overlay) => [overlayId(overlay), overlay]));
     for (const [id, overlay] of every) {
@@ -1009,8 +1048,7 @@ export class GameOverlays {
       let entry = this.open.get(id);
       if (!visible) {
         if (entry?.shown) {
-          entry.window.setArranging(false);
-          entry.arranging = false;
+          entry.window.setMode((entry.mode = "off"));
           entry.window.setShown(false);
           entry.shown = false;
         }
@@ -1032,9 +1070,12 @@ export class GameOverlays {
       if (!entry.shown) {
         entry.window.setShown((entry.shown = true));
         entry.shownOrder = ++this.shownCount;
+        shownNow = true;
       }
       // After the window has its place and is shown (on top), never before: a window that takes the mouse while still unplaced would flash in the wrong spot.
-      if (entry.arranging !== layerOpen) entry.window.setArranging((entry.arranging = layerOpen));
+      // An overlay has its frame only in Arrange; in Use it stays click-through.
+      const mode: WindowMode = arranging ? "arrange" : "off";
+      if (entry.mode !== mode) entry.window.setMode((entry.mode = mode));
     }
     // Panels are over the game (or the screen) only while the layer is open.
     const gone: InGamePanel[] = [];
@@ -1059,10 +1100,13 @@ export class GameOverlays {
         if (!entry.shown) {
           entry.window.setShown((entry.shown = true));
           entry.shownOrder = ++this.shownCount;
+          shownNow = true;
         }
-        if (!entry.arranging) {
-          entry.window.setArranging((entry.arranging = true));
-          started.push(entry);
+        // A panel takes input in Use; in Arrange its frame covers it. A panel that just came up in Use may get the keyboard.
+        const mode: WindowMode = arranging ? "arrange" : "use";
+        if (entry.mode !== mode) {
+          if (mode === "use" && entry.mode === "off") started.push(entry);
+          entry.window.setMode((entry.mode = mode));
         }
       }
     }
@@ -1121,8 +1165,11 @@ export class GameOverlays {
       .sort((x, y) => x.z - y.z || Number(x.entry.kind !== "overlay") - Number(y.entry.kind !== "overlay") || x.entry.shownOrder - y.entry.shownOrder);
     // Only an arranged order counts: windows coming and going don't raise the others.
     const stackKey = stack.filter((one) => one.z !== Number.MAX_SAFE_INTEGER).map((one) => `${one.id}:${one.z}`).join("|");
-    if (veilNew || stackKey !== this.stackKey) for (const one of stack) one.entry.window.raise?.();
+    const restack = veilNew || stackKey !== this.stackKey;
+    if (restack) for (const one of stack) one.entry.window.raise?.();
     this.stackKey = stackKey;
+    // The card stays on top of everything the layer shows.
+    if (restack || cardNew || shownNow) this.card?.raise();
     // One window takes the keyboard, the panel used last; not each in turn.
     if (started.length > 0) {
       const used = (entry: Open) => this.options.panels?.info(entry.instanceId!)?.usedAt ?? 0;
@@ -1195,7 +1242,7 @@ export class GameOverlays {
       ended: () => this.crashed(id),
       frameText: () => ({ name: this.options.panels?.info(instanceId)?.name ?? panel.moduleId, closeLabel: translate(this.options.language(), "overlays.stopShowingLabel"), layoutLabel: "" }),
     });
-    const entry: Open = { kind: "live", window, setup, opacity: 100, hideFromCapture: false, arranging: false, shown: false, shownOrder: 0, zoom: 1, idleSince: null, instanceId };
+    const entry: Open = { kind: "live", window, setup, opacity: 100, hideFromCapture: false, mode: "off", shown: false, shownOrder: 0, zoom: 1, idleSince: null, instanceId };
     this.open.set(id, entry);
     return entry;
   }
@@ -1233,7 +1280,7 @@ export class GameOverlays {
     );
     const window = this.options.platform.openWindow(request);
     // A new window is fully opaque, click-through and visible to capture; apply sets the rest.
-    const entry: Open = { kind: "overlay", window, setup, opacity: 100, hideFromCapture: false, arranging: false, shown: false, shownOrder: 0, zoom: 1, idleSince: null };
+    const entry: Open = { kind: "overlay", window, setup, opacity: 100, hideFromCapture: false, mode: "off", shown: false, shownOrder: 0, zoom: 1, idleSince: null };
     this.open.set(id, entry);
     return entry;
   }
@@ -1256,7 +1303,7 @@ export class GameOverlays {
       loan.return();
       throw error;
     }
-    const entry: Open = { kind: "panel", window, loan, setup, opacity: 100, hideFromCapture: false, arranging: false, shown: false, shownOrder: 0, zoom: 1, idleSince: null, instanceId: panel.instanceId };
+    const entry: Open = { kind: "panel", window, loan, setup, opacity: 100, hideFromCapture: false, mode: "off", shown: false, shownOrder: 0, zoom: 1, idleSince: null, instanceId: panel.instanceId };
     this.open.set(id, entry);
     return entry;
   }
@@ -1320,6 +1367,12 @@ export class GameOverlays {
     this.escape = false;
     this.veil?.destroy();
     this.veil = null;
+    this.dropCard();
+  }
+
+  private dropCard(): void {
+    this.card?.destroy();
+    this.card = null;
   }
 
   /**

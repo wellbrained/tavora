@@ -63,6 +63,7 @@ Update this page in the pull request that adds, removes or changes a flow.
 | Developer keys | `main/developer-keys.ts` (`DeveloperKeys`) | `loading \| ready \| none \| ask \| signed-out \| offline`; the newest read wins | `DeveloperKeysView.status` |
 | Connection tracker | `main/connection.ts` | online, or an outage of a kind (`ConnectionTracker.feed`) | Settings > Connections |
 | Questions to the host UI | `main/pending-questions.ts` | asked → answered or cancelled, once | |
+| In-game layer's mode | `main/game-overlay-service.ts` (`layer.mode`, `setLayerMode`), each window's `WindowMode` in `main/game-overlay-window.ts`, the card `main/game-layer-card.ts` with `renderer/components/LayerCard.vue` | closed → `use` ⇄ `arrange` → closed: it always opens in `use` (in memory only, so the next open is `use` again); the card's Use \| Arrange switches it live; Close, the key and Esc close it from either. A window is `off \| use \| arrange`: an overlay is `off` in Use (click-through, no frame) and `arrange` in Arrange; a panel is `use` (takes mouse and keys) or `arrange` (the frame over it takes them) | `data-status` on `[data-testid=layer-card]` |
 | Module tooltip window | `main/tooltip-window.ts` (`sight`), page `preload/tooltip.ts` | `hidden → unseen → seen → closing → hidden`: `unseen` shows the window see-through, placed beside the anchor, while the page lays the card out; its final size (pictures decoded, letters loaded, at most 150 ms) places it, and once the page drew a frame there (`tooltip:placed` → `tooltip:drawn`, at most 120 ms) it is `seen`. The next card of the same panel replaces one in sight without going back to `unseen` (another panel's card starts `unseen`, so the old one is never left drawn to take its clicks): the page keeps the old card drawn (`keep`) until the window is placed for the new one. A module taking its card away (or the pointer leaving its panel) makes it `closing` for 50 ms, and a card the same panel asks for meanwhile is `seen` again; Tavora's own closes (Escape, the window moving, a panel going) hide it at once | |
 
 ## SDK
@@ -79,11 +80,12 @@ Update this page in the pull request that adds, removes or changes a flow.
 Flows that still keep their state in several fields, most used first, with the plan for each. Take one off the list in
 the pull request that makes it explicit.
 
-- **In-game layer** (`main/game-overlay-service.ts`): `layer`, `escape`, `veil`, `front`, `away`, `suspended`, … →
-  a `layerStep(state, look)` over `suspended | watching | game-in-front | open`, tested like `dockDragStep`.
+- **In-game layer** (`main/game-overlay-service.ts`): `layer` (with its mode, see above), `escape`, `veil`, `card`,
+  `front`, `away`, `suspended`, … → a `layerStep(state, look)` over `suspended | watching | game-in-front | open(mode)`,
+  tested like `dockDragStep`.
 
-- **Overlay window entries** (`main/game-overlay-service.ts` `Open`): `shown`, `arranging`, `idleSince` →
-  `hidden | idle(since) | shown | arranging`; with the crash breaker (`crashes`, `stopped`) as `healthy | crashed | stopped`.
+- **Overlay window entries** (`main/game-overlay-service.ts` `Open`): `shown`, `mode`, `idleSince` →
+  `hidden | idle(since) | shown(mode)`; with the crash breaker (`crashes`, `stopped`) as `healthy | crashed | stopped`.
 
 - **Host overlays over panels** (renderer `host.ts` `overlayOpen`, `panelsOut`, `heldPopups`, timers, with the
   requests in `overlay-area.ts`'s `PopupWatch` (`measureStep`, `answerStep`, `askAllStep`, tested), which also decides

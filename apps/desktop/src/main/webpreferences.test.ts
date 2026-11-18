@@ -118,6 +118,7 @@ const all = sites();
 /** Where each kind of window or view is made, and how often. A new place has to be added here, and its settings pass below. */
 const EXPECTED = [
   "WebContentsView browser-view.ts:1",
+  "BrowserWindow game-layer-card.ts:1",
   "BrowserWindow game-overlay-window.ts:1",
   "WebContentsView game-overlay-window.ts:1",
   "BrowserWindow game-veil-window.ts:1",

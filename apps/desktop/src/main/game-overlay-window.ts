@@ -2,17 +2,18 @@
 // keyboard or the mouse (clicks go through to the game), loading the module's overlay page from game-overlay-page.ts.
 // Nothing is injected into the game or drawn by it. The page has no bridge and no preload, its session can reach only
 // its own address, and the window is visible to screen capture unless the user turned "Hide from capture" on (some anti-cheats flag windows hidden from capture over a game). While
-// the user arranges overlays a second view of Tavora's own, with an outline, edges and a close button, sits on top
+// the in-game layer is in Arrange a second view of Tavora's own, with an outline, edges and a close button, sits on top
 // and the window takes the mouse, but still never the keyboard.
 //
 // The same window also holds a whole panel the user shows in their game (`panel`), while the in-game layer is open.
 // It is the panel's own view, moved here from the workspace and moved back when the window goes; nothing about the
-// panel changes. While the layer is open that window takes the mouse and the keyboard too, and the frame sits around
-// the panel instead of over it.
+// panel changes. In Use the window is exactly the panel's place and takes the mouse and the keyboard, with no frame. In
+// Arrange it grows by the frame's room around the panel, and the frame lies over the panel too: a drag never reaches
+// the panel's content, the keys stay with the frame, and the panel shows dimmed under it.
 import { BrowserWindow, WebContentsView, app, screen, session, type Session, type WebContents } from "electron";
 import { createHash } from "node:crypto";
 import { GAME_OVERLAY_SCHEME } from "./assets";
-import { dragRect, panelBounds, panelWindowRect, type Opacity, type Rect } from "./game-overlays";
+import { dragRect, panelBounds, panelWindowRect, type Opacity, type Rect, type WindowMode } from "./game-overlays";
 import { GAME_OVERLAY_FRAME_URL, GAME_OVERLAY_ORIGIN, serveGameOverlay, type GameOverlaySource } from "./game-overlay-page";
 import { GAME_OVERLAY_FRAME_DOCUMENT } from "../shared/game-overlay-frame";
 import { InsertedCss } from "./inserted-css";
@@ -20,8 +21,8 @@ import { InsertedCss } from "./inserted-css";
 /** What the window needs of a panel it holds (implemented by ModuleView). */
 export interface OverlayPanel {
   readonly view: WebContentsView;
-  /** The panel is over the game now; its clicks and keys count as the user's only while `arranging()` says so. */
-  enterGame(arranging: () => boolean): void;
+  /** The panel is over the game now; its clicks and keys count as the user's only while `layerOpen()` says so. */
+  enterGame(layerOpen: () => boolean): void;
   /** The panel is in its workspace slot again. */
   leaveGame(): void;
   setBounds(rect: Rect): void;
@@ -99,7 +100,8 @@ export class GameOverlayWindow {
   private opacityCss: string | undefined;
   private opacity: Opacity = 100;
   private zoom = 1;
-  private arranging = false;
+  /** `off`: click-through, no frame. `use`: a panel takes input, no frame. `arrange`: the frame, to move and resize. */
+  private mode: WindowMode = "off";
   private drag: { rect: Rect; cursor: { x: number; y: number }; edges: Edges | null } | null = null;
   /** The item's place as last given (setRect); a panel's window may be bigger, with the arrange frame around it. */
   private place: Rect | null = null;
@@ -152,7 +154,7 @@ export class GameOverlayWindow {
       if (!this.options.panel && !contents.isDestroyed() && contents.getZoomFactor() !== this.zoom) contents.setZoomFactor(this.zoom);
     });
     contents.once("render-process-gone", () => this.end());
-    // A window holding a panel is never closed by the user (Alt+F4 while arranging): that would strand the panel.
+    // A window holding a panel is never closed by the user (Alt+F4 while it has the keyboard): that would strand the panel.
     // Closing the layer (or Stop showing in game) is how it leaves. Tavora's own destroy() does not go through this.
     window.on("close", (event) => {
       if (options.panel && !this.destroyed && !this.quitting) event.preventDefault();
@@ -178,14 +180,14 @@ export class GameOverlayWindow {
     });
     this.frame.setBackgroundColor("#00000000");
     this.frame.setVisible(false);
-    window.contentView.addChildView(this.frame);
-    // The panel goes above the frame, so the frame shows around it and never covers it.
+    // The frame goes above the panel: hidden in Use, and in Arrange it covers the panel, so a drag never ticks a box.
     if (options.panel) {
       options.panel.setVisible(true);
       window.contentView.addChildView(options.panel.view);
-      options.panel.enterGame(() => this.arranging);
+      options.panel.enterGame(() => this.mode !== "off");
       options.panel.suspend();
     }
+    window.contentView.addChildView(this.frame);
     const frame = this.frame.webContents;
     lockContents(frame);
     frame.on("did-finish-load", () => {
@@ -194,8 +196,8 @@ export class GameOverlayWindow {
       this.refreshFont();
     });
     void frame.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(GAME_OVERLAY_FRAME_DOCUMENT)}`).catch(() => {});
-    frame.ipc.on("game-overlay:close", () => this.arranging && options.closeRequested());
-    frame.ipc.on("game-overlay:layout", () => this.arranging && options.layoutRequested());
+    frame.ipc.on("game-overlay:close", () => this.mode === "arrange" && options.closeRequested());
+    frame.ipc.on("game-overlay:layout", () => this.mode === "arrange" && options.layoutRequested());
     frame.ipc.on("game-overlay:drag", (_event, phase: unknown, edge: unknown) => this.onDrag(phase, edge));
   }
 
@@ -225,11 +227,11 @@ export class GameOverlayWindow {
     this.frame.webContents.send("game-overlay:frame", name, closeLabel, layoutLabel);
   }
 
-  /** Puts the item at `rect` (screen coordinates, in DIPs); a panel's window takes the arrange frame's room around it. */
+  /** Puts the item at `rect` (screen coordinates, in DIPs); in Arrange a panel's window takes the frame's room around it. */
   setRect(place: Rect): void {
     if (this.isDestroyed) return;
     this.place = place;
-    const rect = this.options.panel ? panelWindowRect(place, this.options.gameBounds(), this.arranging) : place;
+    const rect = this.options.panel ? panelWindowRect(place, this.options.gameBounds(), this.mode === "arrange") : place;
     const now = this.window.getBounds();
     if (now.x === rect.x && now.y === rect.y && now.width === rect.width && now.height === rect.height) return;
     this.window.setBounds(rect);
@@ -240,10 +242,10 @@ export class GameOverlayWindow {
   private placePanel(): void {
     if (!this.options.panel) return;
     const { width, height } = this.window.getContentBounds();
-    this.options.panel.setBounds(panelBounds({ width, height }, this.arranging));
+    this.options.panel.setBounds(panelBounds({ width, height }, this.mode === "arrange"));
   }
 
-  /** Whether this window has the keyboard (only a panel's window ever takes it, while arranging). */
+  /** Whether this window has the keyboard (only a panel's window ever takes it, while the layer is open). */
   get focused(): boolean {
     return !this.isDestroyed && this.window.isFocused();
   }
@@ -266,26 +268,36 @@ export class GameOverlayWindow {
     if (!this.isDestroyed) this.window.moveTop();
   }
 
-  /** Gives the keyboard to the panel (the service does so for one panel window only). */
+  /** Gives the keyboard to the panel (the service does so for one panel window only), in Use. */
   focusPanel(): void {
     const panel = this.options.panel;
-    if (!panel || this.isDestroyed || !this.arranging) return;
+    if (!panel || this.isDestroyed || this.mode !== "use") return;
     this.window.focus();
     panel.view.webContents.focus();
   }
 
-  /** Whether the window takes the mouse and shows the frame, for arranging. The keyboard is given with focusPanel. */
-  setArranging(arranging: boolean): void {
-    if (this.isDestroyed || this.arranging === arranging) return;
-    this.arranging = arranging;
+  /** The window's part in the layer (see `mode`). */
+  get layerMode(): WindowMode {
+    return this.mode;
+  }
+
+  /**
+   * What the window does in the layer. An overlay takes the mouse and shows its frame only in `arrange`. A panel takes the
+   * mouse in `use` and `arrange`, and the keyboard only in `use`, so its text fields can be typed in; in `arrange` the
+   * frame covers it. The keyboard is given with focusPanel.
+   */
+  setMode(mode: WindowMode): void {
+    if (this.isDestroyed || this.mode === mode) return;
+    this.mode = mode;
     this.drag = null;
-    this.window.setIgnoreMouseEvents(!arranging);
-    this.frame.setVisible(arranging);
-    if (arranging) this.sendFrameText();
     const panel = this.options.panel;
+    this.window.setIgnoreMouseEvents(mode === "off" || (!panel && mode === "use"));
+    this.frame.setVisible(mode === "arrange");
+    if (mode === "arrange") this.sendFrameText();
     if (!panel) return;
-    // A panel takes the keyboard as well while arranging, so its text fields can be typed in.
-    this.window.setFocusable(arranging);
+    // Keys the panel had go to the frame, which does nothing with them; the window keeps the keyboard, so the layer stays.
+    if (mode === "arrange" && !panel.view.webContents.isDestroyed() && panel.view.webContents.isFocused()) this.frame.webContents.focus();
+    this.window.setFocusable(mode === "use");
     // The window grows by the frame's room, or gives it back.
     if (this.place) this.setRect(this.place);
     this.placePanel();
@@ -325,7 +337,7 @@ export class GameOverlayWindow {
   }
 
   private onDrag(phase: unknown, edge: unknown): void {
-    if (this.isDestroyed || !this.arranging) return;
+    if (this.isDestroyed || this.mode !== "arrange") return;
     if (phase === "start") {
       this.drag = { rect: this.place ?? this.window.getBounds(), cursor: screen.getCursorScreenPoint(), edges: edgesOf(edge) };
       return;

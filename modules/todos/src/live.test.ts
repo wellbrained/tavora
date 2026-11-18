@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { buildLiveState, buildPlateRows, LIVE_DEFAULTS, LIVE_MAX, PANEL_LOOK_DEFAULTS, parseLook, parsePanelLook, shorten, throttle, type LiveLook } from "./live";
+import { buildLiveState, buildPlateRows, LIVE_DEFAULTS, LIVE_MAX, PANEL_LOOK_DEFAULTS, parseLook, parsePanelLook, shorten, throttle, withFinished, type LiveLook } from "./live";
 import type { Group, Task, TodoList } from "./todos";
 
 const task = (id: string, extra: Partial<Task> = {}): Task => ({
@@ -232,5 +232,25 @@ describe("parsePanelLook", () => {
   it("falls back for panels saved before, or with unknown values", () => {
     expect(parsePanelLook(undefined)).toEqual(PANEL_LOOK_DEFAULTS);
     expect(parsePanelLook({ font: "comic", size: "huge" })).toEqual(PANEL_LOOK_DEFAULTS);
+  });
+});
+
+describe("withFinished", () => {
+  const data = list(group("a", [task("x", { done: true }), task("y")]));
+  const rows = (todos: TodoList, collapsed: string[], look: LiveLook) => buildPlateRows(todos, collapsed, look, TEXTS);
+
+  it("makes the live view and the plate show finished to-dos exactly when the panel keeps them", () => {
+    for (const look of [NO_HEADERS, { ...NO_HEADERS, showFinished: true }]) {
+      expect(build(data, [], withFinished(look, "stay")).rows.map((r) => r.text)).toEqual(["x", "y"]);
+      expect(rows(data, [], withFinished(look, "stay")).map((r) => r.text)).toEqual(["x", "y"]);
+      expect(build(data, [], withFinished(look, "vanish")).rows.map((r) => r.text)).toEqual(["y"]);
+      expect(rows(data, [], withFinished(look, "vanish")).map((r) => r.text)).toEqual(["y"]);
+    }
+  });
+
+  it("keeps the rest of the look, and the same look when nothing changes", () => {
+    const look = { ...NO_HEADERS, color: "#facc15", showFinished: true };
+    expect(withFinished(look, "stay")).toBe(look);
+    expect(withFinished(look, "vanish")).toEqual({ ...look, showFinished: false });
   });
 });

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 // The window needs a little of Electron: a window with handlers, views, and a session to lock.
-const world = vi.hoisted(() => ({ windows: [] as unknown[], quit: [] as (() => void)[] }));
+const world = vi.hoisted(() => ({ windows: [] as unknown[], quit: [] as (() => void)[], focusedContents: null as unknown }));
 
 vi.mock("electron", () => {
   const ses = {
@@ -23,7 +23,9 @@ vi.mock("electron", () => {
     isDestroyed: () => false,
     close: () => undefined,
     send: () => undefined,
-    focus: () => undefined,
+    focus() {
+      world.focusedContents = this;
+    },
     ipc: { on: () => undefined },
   });
   class BrowserWindow {
@@ -32,7 +34,18 @@ vi.mock("electron", () => {
     gone = false;
     visible = false;
     webContents = contents();
-    contentView = { addChildView: () => undefined, removeChildView: () => undefined };
+    /** The views in the window, bottom first. */
+    children: unknown[] = [];
+    contentView = {
+      addChildView: (view: unknown) => {
+        this.children = [...this.children.filter((child) => child !== view), view];
+      },
+      removeChildView: (view: unknown) => {
+        this.children = this.children.filter((child) => child !== view);
+      },
+    };
+    ignoring = true;
+    focusable = false;
     constructor() {
       world.windows.push(this);
     }
@@ -49,7 +62,9 @@ vi.mock("electron", () => {
     setAlwaysOnTop() {
       this.log.push("top");
     }
-    setIgnoreMouseEvents() {}
+    setIgnoreMouseEvents(ignore: boolean) {
+      this.ignoring = ignore;
+    }
     setOpacity() {}
     isDestroyed() {
       return this.gone;
@@ -75,7 +90,9 @@ vi.mock("electron", () => {
     getContentBounds() {
       return { x: 0, y: 0, width: 400, height: 300 };
     }
-    setFocusable() {}
+    setFocusable(focusable: boolean) {
+      this.focusable = focusable;
+    }
     focus() {
       this.log.push("focus");
     }
@@ -90,8 +107,11 @@ vi.mock("electron", () => {
   }
   class WebContentsView {
     webContents = contents();
+    visible = true;
     setBackgroundColor() {}
-    setVisible() {}
+    setVisible(visible: boolean) {
+      this.visible = visible;
+    }
     setBounds() {}
   }
   return {
@@ -108,13 +128,33 @@ vi.mock("electron", () => {
 
 const { GameOverlayWindow } = await import("./game-overlay-window");
 
-function make(game: { x: number; y: number; width: number; height: number } | null = null) {
+type Rect = { x: number; y: number; width: number; height: number };
+type RawWindow = {
+  emit(name: string, ...args: unknown[]): void;
+  log: string[];
+  bounds: Rect;
+  children: unknown[];
+  ignoring: boolean;
+  focusable: boolean;
+};
+
+function make(game: Rect | null = null, options: { overlay?: boolean } = {}) {
   const calls: string[] = [];
+  const state = { bounds: null as Rect | null, layerOpen: (() => false) as () => boolean, focused: false };
   const panel = {
-    view: { webContents: { focus: () => undefined } },
-    enterGame: () => calls.push("enter"),
+    view: {
+      webContents: {
+        focus: () => (state.focused = true),
+        isFocused: () => state.focused,
+        isDestroyed: () => false,
+      },
+    },
+    enterGame: (layerOpen: () => boolean) => {
+      state.layerOpen = layerOpen;
+      calls.push("enter");
+    },
     leaveGame: () => calls.push("leave"),
-    setBounds: () => undefined,
+    setBounds: (rect: Rect) => void (state.bounds = rect),
     setVisible: () => undefined,
     setGameOpacity: () => undefined,
     setGameZoom: (factor: number) => calls.push(`zoom ${factor}`),
@@ -132,14 +172,16 @@ function make(game: { x: number; y: number; width: number; height: number } | nu
     layoutRequested: () => calls.push("layoutRequested"),
     ended: () => calls.push("ended"),
     frameText: () => ({ name: "To-Dos", closeLabel: "Bring back", layoutLabel: "Layout" }),
-    panel: panel as never,
+    ...(options.overlay ? {} : { panel: panel as never }),
   });
-  const raw = world.windows.at(-1) as { emit(name: string, ...args: unknown[]): void; log: string[]; bounds: { x: number; y: number; width: number; height: number } };
-  return { window, raw, calls };
+  const raw = world.windows.at(-1) as RawWindow;
+  // The frame is Tavora's own view in the window; a panel's view is the other one.
+  const frame = raw.children.find((child) => child !== panel.view) as { visible: boolean; webContents: unknown };
+  return { window, raw, calls, panel, state, frame };
 }
 
 describe("a game overlay window holding a panel", () => {
-  it("refuses to be closed (Alt+F4 while arranging), so the panel is not stranded", () => {
+  it("refuses to be closed (Alt+F4 while it has the keyboard), so the panel is not stranded", () => {
     const { raw, calls } = make();
     const event = { preventDefault: vi.fn() };
     raw.emit("close", event);
@@ -179,25 +221,83 @@ describe("a game overlay window holding a panel", () => {
     expect(calls).toContain("zoom 1.5");
   });
 
-  it("grows around the panel's place while arranging, so the panel itself doesn't move", () => {
+  it("grows around the panel's place in Arrange, so the panel itself doesn't move", () => {
     const { window, raw } = make({ x: 0, y: 0, width: 2560, height: 1440 });
     const place = { x: 100, y: 100, width: 400, height: 300 };
     window.setRect(place);
     expect(raw.bounds).toEqual(place);
-    window.setArranging(true);
+    window.setMode("arrange");
     expect(raw.bounds).toEqual({ x: 92, y: 70, width: 416, height: 338 });
-    window.setArranging(false);
+    window.setMode("use");
     expect(raw.bounds).toEqual(place);
+  });
+
+  it("in Use, is exactly the panel's place with no frame, and the panel takes the mouse, the keyboard and the whole window", () => {
+    const { window, raw, state, frame } = make({ x: 0, y: 0, width: 2560, height: 1440 });
+    const place = { x: 100, y: 100, width: 400, height: 300 };
+    window.setRect(place);
+    window.setMode("use");
+    expect(window.layerMode).toBe("use");
+    expect(raw.bounds).toEqual(place);
+    expect(state.bounds).toEqual({ x: 0, y: 0, width: 400, height: 300 });
+    expect(raw.ignoring).toBe(false);
+    expect(raw.focusable).toBe(true);
+    expect(frame.visible).toBe(false);
+    // Its clicks count as the user's while the layer is open, in Use and in Arrange; not before.
+    expect(state.layerOpen()).toBe(true);
+    window.setMode("arrange");
+    expect(state.layerOpen()).toBe(true);
+    window.setMode("off");
+    expect(state.layerOpen()).toBe(false);
+  });
+
+  it("in Arrange, grows by the frame, which lies over the panel and takes the mouse and the keys, so a drag never reaches the panel", () => {
+    const { window, raw, state, frame, panel } = make({ x: 0, y: 0, width: 2560, height: 1440 });
+    window.setRect({ x: 100, y: 100, width: 400, height: 300 });
+    window.setMode("use");
+    window.focusPanel();
+    expect(state.focused).toBe(true);
+    window.setMode("arrange");
+    expect(raw.bounds).toEqual({ x: 92, y: 70, width: 416, height: 338 });
+    // The panel sits inside the frame, and the frame is the top view, shown.
+    expect(state.bounds).toMatchObject({ x: 8, y: 30 });
+    expect(raw.children.at(-1)).toBe(frame);
+    expect(raw.children.indexOf(panel.view)).toBeLessThan(raw.children.indexOf(frame));
+    expect(frame.visible).toBe(true);
+    expect(raw.ignoring).toBe(false);
+    // The keys go to the frame, and the panel can't take them back.
+    expect(world.focusedContents).toBe(frame.webContents);
+    expect(raw.focusable).toBe(false);
+    state.focused = false;
+    window.focusPanel();
+    expect(state.focused).toBe(false);
   });
 
   it("is placed and shown on top before the panel takes the keyboard", () => {
     const { window, raw } = make();
     window.setRect({ x: 1, y: 2, width: 300, height: 200 });
     window.setShown(true);
-    window.setArranging(true);
+    window.setMode("use");
     window.focusPanel();
     expect(raw.log.filter((step) => ["bounds", "show", "focus"].includes(step))).toEqual(["bounds", "show", "focus"]);
-    // setArranging itself no longer takes the keyboard.
+    // setMode itself never takes the keyboard.
     expect(raw.log.filter((step) => step === "focus")).toHaveLength(1);
+  });
+});
+
+describe("a game overlay window holding an overlay page", () => {
+  it("stays click-through without a frame in Use, and shows its frame and takes the mouse only in Arrange", () => {
+    const { window, raw, frame } = make(null, { overlay: true });
+    window.setMode("use");
+    expect(raw.ignoring).toBe(true);
+    expect(frame.visible).toBe(false);
+    window.setMode("arrange");
+    expect(raw.ignoring).toBe(false);
+    expect(frame.visible).toBe(true);
+    // Never the keyboard.
+    expect(raw.focusable).toBe(false);
+    window.setMode("off");
+    expect(raw.ignoring).toBe(true);
+    expect(frame.visible).toBe(false);
   });
 });

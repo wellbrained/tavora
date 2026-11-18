@@ -7,6 +7,8 @@ import path from "node:path";
 import { isVoicePaused } from "../shared/discord-voice";
 import { translate, type Language } from "../shared/i18n";
 import { HOST_SCHEME } from "./assets";
+import type { TavoraTheme } from "@tavora/sdk/protocol";
+import { GameLayerCard } from "./game-layer-card";
 import { GameOverlayWindow, type OverlayPanel } from "./game-overlay-window";
 import { GameOverlays, type OverlayWindowRequest, type PanelInfo, type PanelLoan } from "./game-overlay-service";
 import { GameVeilWindow } from "./game-veil-window";
@@ -29,6 +31,8 @@ import type { WorkspaceNames } from "./workspace-lookup";
 export interface OverlayHostPorts {
   shell: Shell;
   language(): Language;
+  /** The theme Tavora's own UI is drawn in now (the in-game layer's card). */
+  theme(): TavoraTheme;
   /** The interface font's stylesheet for Tavora's own overlay chrome (module-fonts.ts). */
   fontCss?(): string;
   /** Something the Settings page depends on changed. */
@@ -128,6 +132,17 @@ export async function createOverlayServices(wiring: OverlayWiring): Promise<Over
       tavoraInFront: () => BrowserWindow.getFocusedWindow() !== null,
       openWindow: (request, panel) => overlayWindow(options, ports.fontCss, request, panel),
       openVeil: () => new GameVeilWindow({ hidden: options.hidden }),
+      // The card is a page of the host UI (layer-card.html), with a preload of its own.
+      openCard: (request) =>
+        new GameLayerCard({
+          ...request,
+          preload: path.join(path.dirname(options.hostPreload), "layer-card.cjs"),
+          address: options.devServer ? new URL("layer-card.html", options.devServer).href : `${HOST_SCHEME}://app/layer-card.html`,
+          hidden: options.hidden,
+          devTools: options.devTools,
+          theme: ports.theme,
+          language: ports.language,
+        }),
       shortcuts: globalShortcut,
     },
     panels: ports.panelsInGame,

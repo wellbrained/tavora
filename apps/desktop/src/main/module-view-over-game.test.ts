@@ -335,7 +335,7 @@ describe("links.open", () => {
 });
 
 describe("a panel over the game", () => {
-  it("counts a click or key press only while arranging, and always in the workspace", () => {
+  it("counts a click or key press only while the layer is open (Use or Arrange), and always in the workspace", () => {
     const view = make();
     const taken = () => {
       view.usedAt = 0;
@@ -344,13 +344,13 @@ describe("a panel over the game", () => {
     };
     expect(taken()).toBe(true);
 
-    let arranging = false;
-    view.enterGame(() => arranging);
+    let layerOpen = false;
+    view.enterGame(() => layerOpen);
     expect(view.isOverGame).toBe(true);
     expect(taken()).toBe(false);
-    arranging = true;
+    layerOpen = true;
     expect(taken()).toBe(true);
-    arranging = false;
+    layerOpen = false;
     expect(taken()).toBe(false);
 
     view.leaveGame();

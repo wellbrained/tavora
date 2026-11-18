@@ -42,7 +42,10 @@ export interface LiveLook {
   /** A dark outline around the text, so it stays readable on bright scenes. */
   outline: boolean;
   headers: LiveHeaders;
-  /** Finished to-dos stay in the list, ticked and struck through. */
+  /**
+   * Finished to-dos stay in the list, ticked and struck through. It is the panel's Keep finished to-dos (`withFinished`):
+   * still written with the look, so a version before that kept it on its own reads the same choice.
+   */
   showFinished: boolean;
   /** Plate color, #rrggbb. */
   backgroundColor: string;
@@ -133,6 +136,15 @@ export function parseLook(raw: { [key: string]: unknown } | null | undefined): L
     background: clamp(raw?.background, LIVE_RANGE.background, d.background),
     padding: clamp(raw?.padding, LIVE_RANGE.padding, d.padding),
   };
+}
+
+/**
+ * One switch for the panel and its live view: the look shows finished to-dos exactly when the panel keeps them
+ * (`finished` "stay"), wherever the switch was flipped (the toolbar, or the Content page of the settings).
+ */
+export function withFinished(look: LiveLook, finished: "stay" | "vanish"): LiveLook {
+  const showFinished = finished === "stay";
+  return look.showFinished === showFinished ? look : { ...look, showFinished };
 }
 
 /** How the panel itself shows to-dos: font and text size; stored per panel. */

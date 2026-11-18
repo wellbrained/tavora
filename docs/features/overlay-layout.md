@@ -46,7 +46,16 @@ An empty setup shows "Add something from the list on the right" in the canvas, n
 
 ## Panels in the in-game layer
 
-A panel shows over the game only while the layer is open, in the same place as its live view. So that it doesn't move when the layer opens, its window grows outward by the arrange frame's room (the bar on top, the edges at the sides: `panelWindowRect` in `game-overlays.ts`). The frame takes its room inside the panel's place only where the game's edge leaves none outside. A drag moves and saves the panel's place, not the window's. A panel learns that it is over the game with `panel.isOverGame` / `panel.onOverGameChange` (To-Dos uses it to show its live view, editable, instead of the full panel).
+A panel shows over the game only while the layer is open, in the same place as its live view. A panel learns that it is over the game with `panel.isOverGame` / `panel.onOverGameChange` (To-Dos uses it to show its live view, editable, instead of the full panel).
+
+The layer has two modes (decided with the owner on 2026-11-18, mockup "B"), one value in `GameOverlays.layer.mode`, in memory only:
+
+- **Use**, always when the layer opens: no frame, border, name tag, ✕ or ⊞ on any item. A panel's window is exactly its place and takes the mouse and the keyboard (the panel used last gets the keyboard); overlays stay click-through. The veil stays.
+- **Arrange**: every item has its frame to move, resize and close it, and Settings (⊞), as before. A panel's window grows outward by the frame's room (the bar on top, the edges at the sides: `panelWindowRect` in `game-overlays.ts`), so the panel doesn't move; the frame takes its room inside the panel's place only where the game's edge leaves none outside. The frame view lies over the panel too: its tint dims the panel, it takes every click (a drag never ticks a box), and the keys a panel had move to the frame; the window can't take the keyboard. A drag moves and saves the panel's place, not the window's.
+
+A panel's clicks count as the user's while the layer is open, in either mode (`gestureCounts`; in Arrange none reach it). Calls that need Tavora's window are refused over the game as before.
+
+**The layer card** (`main/game-layer-card.ts`) sits at the top centre of the layer's area (the game window, or the screen for Everywhere): Tavora's mark and "Overlay", the kit's `SegmentedControl` Use | Arrange, a `Separator`, and a ghost `Button` ✕ with the layer key as `Kbd` caps; each has a short kit tooltip below it. It is a page of the host UI (`layer-card.html`, `renderer/components/LayerCard.vue`, built with the app's Vue and `@tavora/official-ui`), in a frameless window of its own above the veil and the items, in the theme's card colours, border, radius and interface font (the main process sends them, as for the toast page). Its preload (`preload/layer-card.ts`) has six calls: ready, state, extent, hover, mode, close. The window is the card plus room for its shadow and tooltips; it lets clicks through except while the pointer is over the card. It has no bridge and shows nothing a module gave; like the veil it is visible to capture. It takes the keyboard when clicked (Tab, the arrow keys on the segmented control), and while it has it the layer stays open. Close and Esc end the layer like its key; the next open starts in Use.
 
 ## Keys, the item toolbar and Settings
 
@@ -62,6 +71,7 @@ The list keeps its order whatever is added, removed or searched: workspaces, the
 
 ## Checks
 
-- Unit coverage: `game-overlays.test.ts`, `game-overlay-service.test.ts`, `overlay-layout.test.ts`, `layout-history.test.ts`, `layout-math.test.ts` and `layout-view.test.ts`.
+- Unit coverage: `game-overlays.test.ts`, `game-overlay-service.test.ts`, `game-overlay-window.test.ts`, `game-layer-card.test.ts`, `shared/layer-card.test.ts`, `overlay-layout.test.ts`, `layout-history.test.ts`, `layout-math.test.ts` and `layout-view.test.ts`.
+- The in-game layer itself (Use, Arrange, the card) needs a real game window; hidden Electron tests can't open it.
 - Electron coverage: `pnpm --filter @tavora/desktop exec playwright test overlay-layout.spec.ts` exercises the move from a version-4 file, Del, the item toolbar, Settings over the page, per-setup places and opacity, opacity stills, mouse dragging/resizing, reset buttons, selecting several (Ctrl+click, a box), Del of several and undo, the Sources list, Add overlay / Delete overlay (rail and page, with Undo), Copy to… and Back; `overlay-button.spec.ts` the header button.
 - Real-game screenshot capture still needs a live-game check; hidden Electron tests cannot verify it.

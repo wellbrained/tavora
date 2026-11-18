@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.2.30",
+    "date": "2026-11-18",
+    "notes": [
+      "Keep finished to-dos now also decides what the overlay shows, so ticked to-dos stay over the game while it is on."
+    ]
+  },
+  {
     "version": "0.2.29",
     "date": "2026-11-18",
     "notes": [

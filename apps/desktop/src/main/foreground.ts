@@ -19,7 +19,7 @@ export interface Foreground {
   notification: number | null;
   /** The game window's handle as a text, to tell one window of a program from the next (the layer keeps the window it opened over). */
   handle?: string;
-  /** The window belongs to Tavora itself (a panel over the game that took the keyboard while arranging). */
+  /** The window belongs to Tavora itself (a panel over the game, or the layer's card, that took the keyboard). */
   own?: boolean;
 }
 
