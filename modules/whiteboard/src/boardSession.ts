@@ -87,6 +87,8 @@ export function createBoardSession(options: SessionOptions): BoardSession {
   let disposed = false;
   let fitted = false;
   let summary = "";
+  /** The board's stored pictures being read back; a picture of the board waits for them, so none is left out. */
+  let picturesLoading: Promise<unknown> = Promise.resolve();
 
   let state: BoardState = { ...initialBoardState(data), ...saver.state };
   const stateListeners = new Set<(state: BoardState) => void>();
@@ -155,6 +157,7 @@ export function createBoardSession(options: SessionOptions): BoardSession {
 
   /** The whole board, cropped to what is on it, as a PNG that looks as the board does in the panel. */
   async function pictureOf(instance: ExcalidrawImperativeAPI): Promise<Blob> {
+    await picturesLoading.catch(() => undefined);
     const appState = instance.getAppState();
     const elements = elementsToCopy(instance.getSceneElements());
     if (elements.length === 0) throw new Error("the board is empty");
@@ -205,7 +208,7 @@ export function createBoardSession(options: SessionOptions): BoardSession {
     api = instance;
     set({ ready: true });
     const needed = pictureFileIds(data.elements as unknown as ExcalidrawElement[]);
-    void pictures.load(needed).then((loaded) => {
+    picturesLoading = pictures.load(needed).then((loaded) => {
       if (loaded.length > 0) instance.addFiles(loaded);
       set({ picturesLoaded: loaded.length });
     });

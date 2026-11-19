@@ -285,7 +285,8 @@ function pictureAction(run: (session: BoardSession) => Promise<void>, failed: (r
 
 /** What went wrong with a picture, in words for the user. */
 function pictureProblem(reason: unknown, fallback: "copy.failed" | "savePicture.failed"): string {
-  const code = reason instanceof TavoraError ? reason.code : undefined;
+  // The clipboard's limits: Save as image has its own, which its message already words.
+  const code = fallback === "copy.failed" && reason instanceof TavoraError ? reason.code : undefined;
   if (code === "PERMISSION_DENIED") return t("copy.slow");
   if (code === "QUOTA_EXCEEDED") return t("copy.tooBig");
   return t(fallback, { error: reason instanceof Error ? reason.message : String(reason) });
