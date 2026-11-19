@@ -74,7 +74,7 @@ describe("Copy and Save as image", () => {
     const copied = session.copyAsPicture();
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(exportToBlob).not.toHaveBeenCalled();
-    answer(new Response(new Blob(["png"], { type: "image/png" })));
+    answer(new Response("png", { headers: { "content-type": "image/png" } }));
     await copied;
     expect(api.addFiles).toHaveBeenCalledTimes(1);
     expect(api.addFiles.mock.invocationCallOrder[0]!).toBeLessThan(exportToBlob.mock.invocationCallOrder[0]!);
