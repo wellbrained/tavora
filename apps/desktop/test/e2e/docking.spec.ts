@@ -1,6 +1,6 @@
 // Docking: splits and tabs, the layout saved per game, and named layouts.
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { expectModuleText, inModule, launch, layOutColumns, openModule, panels, RAIL_WIDTH, REACT, NOTES, setContentSize, TODOS, typeInModule, VANILLA, VUE, waitForShown, answerPrompt, layoutMenu, expectLayoutSaved, groupsIn, hostToast } from "./harness";
+import { expectModuleText, inModule, launch, layOutColumns, openModule, panels, RAIL_WIDTH, REACT, NOTES, setContentSize, TODOS, typeInModule, VANILLA, VUE, waitForShown, answerPrompt, layoutMenu, expectLayoutSaved, groupsIn, hostToast, openWorkspace } from "./harness";
 
 const groups = (page: Page) => page.locator(".dv-groupview");
 
@@ -151,6 +151,35 @@ test("a tab picked right before quitting is still the one picked after a restart
   await expect(panels(again.page, VANILLA)).toHaveCount(2);
   await expectModuleText(again.app, VANILLA, "lifecycle", "active", 0);
   await again.app.close();
+});
+
+test("a tab picked with the pointer is still the one picked after going to another workspace and back", async () => {
+  const { app, page, userData } = await launch();
+  await layOutColumns(page, 2);
+  await openModule(page, VANILLA);
+  await openModule(page, REACT);
+  // Vue goes in as a second tab next to React, the panel worked in last.
+  await openModule(page, VUE);
+  await expect(groups(page)).toHaveCount(2);
+  const activeTab = (moduleId: string) => page.locator(`.dv-tab.dv-active-tab [data-panel-tab][data-module-id="${moduleId}"]`);
+  await expect(activeTab(VUE)).toBeVisible();
+  // Work in the other column, then pick React's tab with the pointer, as a player does.
+  await panels(page, VANILLA).click();
+  await panels(page, REACT).click();
+  await expect(activeTab(REACT)).toBeVisible();
+  const reactPicked = (nodes: Parameters<typeof groupsIn>[0]) => groupsIn(nodes).some((group) => group.panels.length === 2 && group.active === group.panels[0]);
+  await expectLayoutSaved(userData, reactPicked);
+  await expectModuleText(app, REACT, "lifecycle", "active");
+
+  await openWorkspace(page, "satisfactory");
+  await openWorkspace(page, "poe2");
+  await expect(panels(page, REACT)).toBeVisible();
+  await expect(activeTab(REACT)).toBeVisible();
+  await expectModuleText(app, REACT, "lifecycle", "active");
+  // Still saved that way a moment after coming back.
+  await page.waitForTimeout(1000);
+  await expectLayoutSaved(userData, reactPicked);
+  await app.close();
 });
 
 test("panels are moved, split and maximized from their menu, and the layout is kept", async () => {
