@@ -285,10 +285,11 @@ function pictureAction(run: (session: BoardSession) => Promise<void>, failed: (r
 
 /** What went wrong with a picture, in words for the user. */
 function pictureProblem(reason: unknown, fallback: "copy.failed" | "savePicture.failed"): string {
-  // The clipboard's limits: Save as image has its own, which its message already words.
-  const code = fallback === "copy.failed" && reason instanceof TavoraError ? reason.code : undefined;
+  const code = reason instanceof TavoraError ? reason.code : undefined;
+  // Both only work right after the click; making the picture took longer than that.
   if (code === "PERMISSION_DENIED") return t("copy.slow");
-  if (code === "QUOTA_EXCEEDED") return t("copy.tooBig");
+  // Only the clipboard's size limit; Save's means something else.
+  if (code === "QUOTA_EXCEEDED" && fallback === "copy.failed") return t("copy.tooBig");
   return t(fallback, { error: reason instanceof Error ? reason.message : String(reason) });
 }
 
