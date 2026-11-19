@@ -205,6 +205,41 @@ test("a tab picked right before going to another workspace is still the one pick
   await app.close();
 });
 
+test("a page behind another tab that takes the focus by itself stays behind", async () => {
+  const { app, page, userData } = await launch();
+  await layOutColumns(page, 2);
+  await openModule(page, VANILLA);
+  await openModule(page, REACT);
+  await openModule(page, VUE);
+  await expect(groups(page)).toHaveCount(2);
+  const activeTab = (moduleId: string) => page.locator(`.dv-tab.dv-active-tab [data-panel-tab][data-module-id="${moduleId}"]`);
+  await panels(page, REACT).click();
+  await expect(activeTab(REACT)).toBeVisible();
+  const reactPicked = (nodes: Parameters<typeof groupsIn>[0]) => groupsIn(nodes).some((group) => group.panels.length === 2 && group.active === group.panels[0]);
+  await expectLayoutSaved(userData, reactPicked);
+
+  // Vue's page, behind React's tab, takes the keyboard on its own, as a page that focuses a field or a map as it loads
+  // does. Only a click shows a panel; this one is not in sight, so nobody clicked it.
+  const focusOnItsOwn = () =>
+    app.evaluate(({ webContents }, id) => {
+      const contents = webContents.getAllWebContents().find((item) => item.getURL().startsWith(`tavora-module://${id}/`))!;
+      contents.focus();
+    }, VUE);
+  await focusOnItsOwn();
+  await page.waitForTimeout(500);
+  await expect(activeTab(REACT)).toBeVisible();
+
+  // The same as the workspace opens again.
+  await openWorkspace(page, "satisfactory");
+  await openWorkspace(page, "poe2");
+  await expect(panels(page, REACT)).toBeVisible();
+  await focusOnItsOwn();
+  await page.waitForTimeout(1000);
+  await expect(activeTab(REACT)).toBeVisible();
+  await expectLayoutSaved(userData, reactPicked);
+  await app.close();
+});
+
 test("panels are moved, split and maximized from their menu, and the layout is kept", async () => {
   const { app, page, userData } = await launch();
   await openModule(page, VANILLA);
