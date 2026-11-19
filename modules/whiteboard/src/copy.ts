@@ -1,11 +1,8 @@
 // Copy as picture: which elements go into the picture, and how sharp it can be within what the host's clipboard takes.
 
-/** The parts of an element that decide whether it is copied. */
+/** The part of an element that decides whether it is copied. */
 interface Copyable {
-  id: string;
   isDeleted: boolean;
-  containerId?: string | null;
-  frameId?: string | null;
 }
 
 /** The host takes a PNG of at most 16384 px a side; kept well under that and under 20 MB so a copy is quick. */
@@ -17,16 +14,11 @@ export const SHARP_SCALE = 2;
 export const COPY_PADDING = 16;
 
 /**
- * What is copied: the selected elements with the text inside them and what lies in a selected frame, or the whole board
- * when nothing is selected. Deleted elements never.
+ * What is copied: the whole board, whatever is selected, so locked pictures (which can't be selected) are never left
+ * out. Deleted elements never.
  */
-export function elementsToCopy<T extends Copyable>(elements: readonly T[], selectedIds: Readonly<Record<string, boolean>>): T[] {
-  const live = elements.filter((element) => !element.isDeleted);
-  const selected = new Set(live.filter((element) => selectedIds[element.id]).map((element) => element.id));
-  if (selected.size === 0) return live;
-  return live.filter(
-    (element) => selected.has(element.id) || (element.containerId != null && selected.has(element.containerId)) || (element.frameId != null && selected.has(element.frameId)),
-  );
+export function elementsToCopy<T extends Copyable>(elements: readonly T[]): T[] {
+  return elements.filter((element) => !element.isDeleted);
 }
 
 /** The scale for a drawing of this size (in board units): sharp, unless that would be too big for the clipboard. */

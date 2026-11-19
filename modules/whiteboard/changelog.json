@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.3.28",
+    "date": "2026-11-19",
+    "notes": [
+      "Copy as image and Save as image always take the whole board, so your pictures are never left out."
+    ]
+  },
+  {
     "version": "0.3.27",
     "date": "2026-11-18",
     "notes": [

@@ -1,27 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { copyScale, elementsToCopy, MAX_PIXELS, MAX_SIDE, SHARP_SCALE, pictureName } from "./copy";
 
-const element = (id: string, extra: { isDeleted?: boolean; containerId?: string; frameId?: string } = {}) => ({ id, isDeleted: false, ...extra });
-
 describe("elementsToCopy", () => {
-  const board = [element("box"), element("label", { containerId: "box" }), element("frame"), element("inFrame", { frameId: "frame" }), element("loose"), element("gone", { isDeleted: true })];
-  const ids = (list: { id: string }[]) => list.map((item) => item.id);
-
-  it("copies the whole board, without deleted elements, when nothing is selected", () => {
-    expect(ids(elementsToCopy(board, {}))).toEqual(["box", "label", "frame", "inFrame", "loose"]);
-  });
-
-  it("copies a selected shape with the text inside it", () => {
-    expect(ids(elementsToCopy(board, { box: true }))).toEqual(["box", "label"]);
-  });
-
-  it("copies a selected frame with what lies in it", () => {
-    expect(ids(elementsToCopy(board, { frame: true }))).toEqual(["frame", "inFrame"]);
-  });
-
-  it("ignores selected ids that are deleted or not on the board", () => {
-    expect(ids(elementsToCopy(board, { gone: true, elsewhere: true }))).toEqual(["box", "label", "frame", "inFrame", "loose"]);
-    expect(ids(elementsToCopy(board, { gone: true, loose: true }))).toEqual(["loose"]);
+  it("copies the whole board, without deleted elements", () => {
+    const board = [{ id: "picture", isDeleted: false }, { id: "box", isDeleted: false }, { id: "gone", isDeleted: true }];
+    expect(elementsToCopy(board).map((element) => element.id)).toEqual(["picture", "box"]);
   });
 });
 

@@ -33,10 +33,10 @@ export interface Controls {
   setPicturesLocked(locked: boolean): void;
   /** Locks or frees one picture. */
   setPictureLocked(id: string, locked: boolean): void;
-  /** Puts the selection, or the whole board when nothing is selected, on the clipboard as a PNG. Call it from a click or key press. */
-  copyAsPicture(): Promise<"selection" | "board">;
+  /** Puts the whole board (whatever is selected) on the clipboard as a PNG. Call it from a click or key press. */
+  copyAsPicture(): Promise<void>;
   /** Saves the same picture through Tavora's save dialog, named after `name`; null when the user closed it. Call it from a click or key press. */
-  saveAsPicture(name: string): Promise<{ what: "selection" | "board"; fileName: string } | null>;
+  saveAsPicture(name: string): Promise<{ fileName: string } | null>;
   /** Takes everything off the board, as one step that Undo brings back; returns how to put it all back. */
   clear(): () => void;
 }
@@ -153,13 +153,13 @@ export function createBoardSession(options: SessionOptions): BoardSession {
     set({ empty: !elements.some((element) => !element.isDeleted) });
   }
 
-  /** The selection, or the whole board when nothing is selected, as a PNG that looks as the board does in the panel. */
-  async function pictureOf(instance: ExcalidrawImperativeAPI): Promise<{ png: Blob; what: "selection" | "board" }> {
+  /** The whole board, cropped to what is on it, as a PNG that looks as the board does in the panel. */
+  async function pictureOf(instance: ExcalidrawImperativeAPI): Promise<Blob> {
     const appState = instance.getAppState();
-    const elements = elementsToCopy(instance.getSceneElements(), appState.selectedElementIds);
+    const elements = elementsToCopy(instance.getSceneElements());
     if (elements.length === 0) throw new Error("the board is empty");
     // As the board looks in the panel: its background, and dark when the panel is dark.
-    const png = await exportToBlob({
+    return exportToBlob({
       elements,
       files: instance.getFiles(),
       appState: { exportBackground: true, viewBackgroundColor: appState.viewBackgroundColor, exportWithDarkMode: options.isDark() },
@@ -170,7 +170,6 @@ export function createBoardSession(options: SessionOptions): BoardSession {
         return { width: Math.round(width * scale), height: Math.round(height * scale), scale };
       },
     });
-    return { png, what: elements.length < instance.getSceneElements().length ? "selection" : "board" };
   }
 
   function setLocked(instance: ExcalidrawImperativeAPI, locked: boolean, only?: string) {
@@ -272,15 +271,12 @@ export function createBoardSession(options: SessionOptions): BoardSession {
     },
     async copyAsPicture() {
       if (!api) throw new Error("the board is not ready");
-      const picture = await pictureOf(api);
-      await sdk.clipboard.writeImage(picture.png);
-      return picture.what;
+      await sdk.clipboard.writeImage(await pictureOf(api));
     },
     async saveAsPicture(name) {
       if (!api) throw new Error("the board is not ready");
-      const picture = await pictureOf(api);
-      const saved = await sdk.pictures.save(picture.png, name);
-      return saved && { what: picture.what, fileName: saved.fileName };
+      const saved = await sdk.pictures.save(await pictureOf(api), name);
+      return saved && { fileName: saved.fileName };
     },
     clear() {
       const instance = api;

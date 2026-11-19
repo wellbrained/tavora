@@ -295,8 +295,8 @@ function pictureProblem(reason: unknown, fallback: "copy.failed" | "savePicture.
 function copyAsPicture() {
   return pictureAction(
     async (session) => {
-      const copied = await session.copyAsPicture();
-      notify(t(copied === "selection" ? "copy.selection" : "copy.board"));
+      await session.copyAsPicture();
+      notify(t("copy.board"));
     },
     (reason) => pictureProblem(reason, "copy.failed"),
   );
@@ -307,7 +307,7 @@ function saveAsPicture() {
   return pictureAction(
     async (session) => {
       const saved = await session.saveAsPicture(pictureName(name.value || t("boardWord")));
-      if (saved) notify(t(saved.what === "selection" ? "savePicture.selection" : "savePicture.board", { name: saved.fileName }));
+      if (saved) notify(t("savePicture.board", { name: saved.fileName }));
     },
     (reason) => pictureProblem(reason, "savePicture.failed"),
   );
