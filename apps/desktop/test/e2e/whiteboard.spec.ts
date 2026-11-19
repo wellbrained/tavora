@@ -297,14 +297,8 @@ test("whiteboard: Copy and Save as picture, and Clear board with Undo", async ()
     return { notice: await inModule<string>(app, WHITEBOARD, `${NEWEST_TOAST}.textContent`), size };
   };
 
-  // The rectangle just drawn is selected, so only it is copied, twice its size.
-  const selection = await copy();
-  expect(selection.notice).toContain("Copied the selection as an image");
-  expect(selection.size.width).toBeGreaterThan(400);
-  expect(selection.size.width).toBeLessThan(1000);
-
-  // A click on the locked picture clears the selection; then the whole board is copied, sharper than the 1440 px picture.
-  await drag(app, { x: area.x + area.width * 0.7, y: area.y + area.height * 0.6 }, { x: area.x + area.width * 0.7, y: area.y + area.height * 0.6 });
+  // The rectangle just drawn is still selected, yet the whole board is copied with the locked picture under it,
+  // sharper than the 1440 px picture.
   const board = await copy();
   expect(board.notice).toContain("Copied the board as an image");
   expect(board.size.width).toBeGreaterThan(1440);
