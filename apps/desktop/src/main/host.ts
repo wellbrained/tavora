@@ -4044,6 +4044,10 @@ export class Host {
         const placement = this.panels.placement(record.instanceId);
         const anchor = placement && !this.moduleView(record.instanceId)?.revealed ? this.moduleView(placement.anchor) : undefined;
         if (anchor && !anchor.view.webContents.isDestroyed()) return anchor.view.webContents.focus();
+        // Only a panel in sight can be clicked into. A page behind another tab (or still loading as its workspace
+        // opens) that focuses a field or a map by itself stays where it is, or it would push the tab the user picked
+        // back and the layout would save that.
+        if (!this.panels.isPlaced(record.instanceId)) return;
         this.window.webContents.send("host:shortcut", `panel:${record.instanceId}`);
       },
       onOpenLink: (url) => this.openLinkFromModule(url, workspace.id),
