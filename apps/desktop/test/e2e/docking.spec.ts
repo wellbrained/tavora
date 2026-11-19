@@ -182,6 +182,29 @@ test("a tab picked with the pointer is still the one picked after going to anoth
   await app.close();
 });
 
+test("a tab picked right before going to another workspace is still the one picked on coming back", async () => {
+  const { app, page, userData } = await launch();
+  await layOutColumns(page, 2);
+  await openModule(page, VANILLA);
+  await openModule(page, REACT);
+  await openModule(page, VUE);
+  await expect(groups(page)).toHaveCount(2);
+  const activeTab = (moduleId: string) => page.locator(`.dv-tab.dv-active-tab [data-panel-tab][data-module-id="${moduleId}"]`);
+  await expect(activeTab(VUE)).toBeVisible();
+  await panels(page, VANILLA).click();
+  // Vue's tab is the one saved before the quick switch below.
+  await expectLayoutSaved(userData, (nodes) => groupsIn(nodes).some((group) => group.panels.length === 2 && group.active === group.panels[1]));
+  // Pick React's tab and go to another workspace at once, before the layout's own short wait to save is over.
+  await panels(page, REACT).click();
+  await openWorkspace(page, "satisfactory");
+  await openWorkspace(page, "poe2");
+  await expect(panels(page, REACT)).toBeVisible();
+  await expect(activeTab(REACT)).toBeVisible();
+  await page.waitForTimeout(1000);
+  await expectLayoutSaved(userData, (nodes) => groupsIn(nodes).some((group) => group.panels.length === 2 && group.active === group.panels[0]));
+  await app.close();
+});
+
 test("panels are moved, split and maximized from their menu, and the layout is kept", async () => {
   const { app, page, userData } = await launch();
   await openModule(page, VANILLA);
