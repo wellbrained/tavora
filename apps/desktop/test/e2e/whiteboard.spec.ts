@@ -237,6 +237,56 @@ test("whiteboard: a pasted picture can be dragged into place, is then locked, ke
   await app.close();
 });
 
+test("whiteboard: after a restart the board opens just as it was left, pictures and drawings in place", async () => {
+  const { app, page, userData } = await launch();
+  let closed = false;
+  try {
+    await openModule(page, WHITEBOARD);
+    await expect.poll(() => inModule(app, WHITEBOARD, `${q("board-name")}?.textContent ?? ""`).catch(() => ""), { timeout: 20_000 }).toBe("Board 1");
+    const area = await drawingArea(app);
+    await movePointer(app, { x: area.x + area.width / 2, y: area.y + area.height / 2 });
+    await inModule(
+      app,
+      WHITEBOARD,
+      `(async () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 1440;
+        canvas.height = 900;
+        canvas.getContext("2d").fillRect(0, 0, 1440, 900);
+        const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+        const data = new DataTransfer();
+        data.items.add(new File([blob], "shot.png", { type: "image/png" }));
+        document.querySelector(".excalidraw").focus();
+        document.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+      })()`,
+    );
+    await expect.poll(() => inModule(app, WHITEBOARD, `${q("picture-lock")}?.dataset.locked ?? ""`), { timeout: 15_000 }).toBe("false");
+    // A rectangle off to the top-left, so the drawing's middle is not the board's.
+    await inModule(app, WHITEBOARD, `document.querySelector('[data-testid="toolbar-rectangle"]').click()`);
+    await drag(app, { x: area.x + 60, y: area.y + 60 }, { x: area.x + 260, y: area.y + 200 });
+    await expect.poll(() => inModule(app, WHITEBOARD, `${q("save-state")}.dataset.state`), { timeout: 15_000 }).toBe("saved");
+    // Where the picture is on screen: its lock sits on its corner.
+    const corner = `(() => { const r = document.querySelector('[data-testid="picture-lock-one"]')?.getBoundingClientRect(); return r ? Math.round(r.x) + "," + Math.round(r.y) : ""; })()`;
+    await expect.poll(() => inModule(app, WHITEBOARD, corner)).not.toBe("");
+    const before = await inModule<string>(app, WHITEBOARD, corner);
+    // The view is kept a moment after it is shown.
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    await app.close();
+    closed = true;
+
+    const again = await launch(userData);
+    try {
+      await expect.poll(() => inModule(again.app, WHITEBOARD, `${q("board")}?.dataset.pictures ?? ""`).catch(() => ""), { timeout: 20_000 }).toBe("1");
+      await drawingArea(again.app);
+      await expect.poll(() => inModule(again.app, WHITEBOARD, corner)).toBe(before);
+    } finally {
+      await again.app.close();
+    }
+  } finally {
+    if (!closed) await app.close();
+  }
+});
+
 /** A real click on an element of the module's page, so the host counts it as the user's. */
 const click = (app: ElectronApplication, testId: string) => realClick(app, WHITEBOARD, `[data-testid="${testId}"]`);
 

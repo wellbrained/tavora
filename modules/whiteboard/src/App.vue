@@ -75,6 +75,8 @@ const connectorOpen = ref(false);
 let connectorChoice: ConnectorKind | null = null;
 
 let views: Record<string, View> = {};
+/** Whether the panel's state has been read; until then there is nothing of it to save. */
+let stateRead = false;
 let viewTimer: ReturnType<typeof setTimeout> | undefined;
 let stopSession: (() => void) | undefined;
 const cleanup: (() => void)[] = [];
@@ -93,6 +95,8 @@ function offerUndo(message: string, run: () => Promise<void>) {
 }
 
 function saveSelection() {
+  // Not before the panel's state is read: a panel hidden while it opens would write over its views with nothing.
+  if (!stateRead) return;
   void sdk.value?.panel.setState({ selected: shown.value?.id ?? null, views, palette: palette.value } as unknown as never).catch(() => undefined);
 }
 
@@ -206,6 +210,7 @@ onMounted(async () => {
     toolbar.value = toolbarPlace(await connected.storage.app.get("toolbar").catch(() => null));
 
     const state = await connected.panel.getState<PanelState>();
+    stateRead = true;
     views = state?.views && typeof state.views === "object" ? state.views : {};
     palette.value = palettePlace(state?.palette);
 

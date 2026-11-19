@@ -8,6 +8,9 @@ export interface View {
   scrollX: number;
   scrollY: number;
   zoom: number;
+  /** The board's size on screen when the view was kept, so it opens with the same middle in a panel of another size. Missing in views kept before 0.3.29. */
+  width?: number;
+  height?: number;
 }
 
 export type SaveState = "idle" | "saving" | "saved" | "error";

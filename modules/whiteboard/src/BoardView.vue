@@ -58,7 +58,8 @@ const initialData: RootProps["initialData"] = {
     gridModeEnabled: data.grid,
     ...(start ? { scrollX: start.scrollX, scrollY: start.scrollY, zoom: { value: start.zoom as never } } : {}),
   },
-  scrollToContent: !start && data.elements.length > 0,
+  // The session does it once the board has its size: Excalidraw would do it at none, off to the top-left.
+  scrollToContent: false,
 };
 
 function render() {
@@ -81,7 +82,7 @@ function render() {
 }
 
 onMounted(() => {
-  const opened = createBoardSession({ sdk: props.sdk, document: props.document, isDark: () => props.mode === "dark", fitOnOpen: props.fitOnOpen });
+  const opened = createBoardSession({ sdk: props.sdk, document: props.document, isDark: () => props.mode === "dark", fitOnOpen: props.fitOnOpen, centerOnOpen: !start && data.elements.length > 0, view: start });
   session = opened;
   state.value = opened.state;
   let saved = opened.state.save;

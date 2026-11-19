@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.3.29",
+    "date": "2026-11-19",
+    "notes": [
+      "After a restart, a board opens just as you left it instead of pushed to the top-left.",
+      "Where the style palette sits is kept after a restart too."
+    ]
+  },
+  {
     "version": "0.3.28",
     "date": "2026-11-19",
     "notes": [
