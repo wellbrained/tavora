@@ -222,7 +222,9 @@ test("a page behind another tab that takes the focus by itself stays behind", as
   // does. Only a click shows a panel; this one is not in sight, so nobody clicked it.
   const focusOnItsOwn = () =>
     app.evaluate(({ webContents }, id) => {
-      const contents = webContents.getAllWebContents().find((item) => item.getURL().startsWith(`tavora-module://${id}/`))!;
+      // The newest page: one from before a workspace switch may still be closing.
+      const pages = webContents.getAllWebContents().filter((item) => !item.isDestroyed() && item.getURL().startsWith(`tavora-module://${id}/`));
+      const contents = pages[pages.length - 1]!;
       contents.focus();
     }, VUE);
   await focusOnItsOwn();
