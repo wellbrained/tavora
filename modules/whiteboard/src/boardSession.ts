@@ -21,7 +21,7 @@ import { createLockWatcher, lockSpots, type LockSpot } from "./locks";
 import { createPlacing } from "./placing";
 import { createPictures, pictureFileIds } from "./pictures";
 import type { View } from "./boardState";
-import { keepMiddle, type Size } from "./view";
+import { keepMiddle, viewOf, type Size } from "./view";
 import { readBoardPicture } from "./readPicture";
 
 export type { BoardState, Pictures, SaveState, View } from "./boardState";
@@ -49,10 +49,11 @@ export interface SessionOptions {
   document: DocumentHandle<BoardData>;
   /** Whether the panel is dark, for the pictures the board makes. */
   isDark(): boolean;
-  /** Fit newly created starter content once; saved views retain their own pan and zoom. */
-  fitOnOpen?: boolean;
-  /** Puts what is on the board in the middle once, at the zoom it has: a board opened without a view of its own. */
-  centerOnOpen?: boolean;
+  /**
+   * What the board does once it has its size on screen: fit newly created starter content, or put a board without a
+   * view of its own in the middle at the zoom it has. Saved views keep their own pan and zoom.
+   */
+  open?: "fit" | "center";
   /** The view the board opens with, if any. */
   view?: View;
 }
@@ -93,11 +94,10 @@ export function createBoardSession(options: SessionOptions): BoardSession {
   let disposed = false;
   let fitted = false;
   let summary = "";
-  /**
-   * The board's size on screen, as last seen. Excalidraw keeps the top-left corner when it changes (the panel opens
-   * small and grows to its place in the layout, say), which pushes the drawing up and left; the middle is kept instead.
-   */
+  /** The board's size on screen, as last seen; at first the size its view was kept at, if that is known. */
   let size: Size | null = options.view?.width && options.view?.height ? { width: options.view.width, height: options.view.height } : null;
+  /** Until the board first has a size: a view kept at another size then opens with the same middle. */
+  let opening = true;
   /** The board's stored pictures being read back; a picture of the board waits for them, so none is left out. */
   let picturesLoading: Promise<unknown> = Promise.resolve();
 
@@ -137,19 +137,20 @@ export function createBoardSession(options: SessionOptions): BoardSession {
     const next = keepMiddle(size, appState);
     if (next) {
       size = next.size;
-      if (next.scroll && api) api.updateScene({ appState: next.scroll, captureUpdate: CaptureUpdateAction.NEVER });
+      const scroll = opening ? next.scroll : undefined;
+      if (scroll) api?.updateScene({ appState: scroll, captureUpdate: CaptureUpdateAction.NEVER });
       // Kept with its size even when the user never scrolled, so the board opens again just as it was left.
-      const scroll = next.scroll ?? { scrollX: appState.scrollX, scrollY: appState.scrollY };
-      set({ view: { ...scroll, zoom: appState.zoom.value, ...size } });
+      set({ view: viewOf({ ...appState, ...scroll }) });
     }
+    if (appState.width > 0 && appState.height > 0) opening = false;
     saver.change({ elements, background: appState.viewBackgroundColor, grid: appState.gridModeEnabled, files });
     set({ grid: appState.gridModeEnabled });
     // Once the board has its size on screen (it opens at none, which would put the middle at its top-left corner).
-    if ((options.fitOnOpen || options.centerOnOpen) && !fitted && size && api && elements.some((element) => !element.isDeleted)) {
+    if (options.open && !fitted && size && api && elements.some((element) => !element.isDeleted)) {
       fitted = true;
       requestAnimationFrame(() => {
         if (disposed) return;
-        api?.scrollToContent(api.getSceneElements(), options.fitOnOpen ? { fitToViewport: true, viewportZoomFactor: 0.75, maxZoom: 1, animate: false } : { animate: false });
+        api?.scrollToContent(api.getSceneElements(), options.open === "fit" ? { fitToViewport: true, viewportZoomFactor: 0.75, maxZoom: 1, animate: false } : { animate: false });
       });
     }
 
@@ -331,10 +332,7 @@ export function createBoardSession(options: SessionOptions): BoardSession {
     },
     change,
     ready,
-    scroll: (scrollX, scrollY, zoom) => {
-      const shown = api?.getAppState();
-      set({ view: { scrollX, scrollY, zoom: zoom.value, ...(shown && shown.width > 0 && shown.height > 0 ? { width: shown.width, height: shown.height } : {}) } });
-    },
+    scroll: (scrollX, scrollY, zoom) => set({ view: viewOf({ scrollX, scrollY, zoom, width: api?.getAppState().width ?? 0, height: api?.getAppState().height ?? 0 }) }),
     recheckLocks: () => locks.recheck(),
     flush: () => saver.flush(),
     discard: () => saver.discard(),

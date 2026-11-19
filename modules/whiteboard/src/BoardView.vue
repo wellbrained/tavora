@@ -82,7 +82,7 @@ function render() {
 }
 
 onMounted(() => {
-  const opened = createBoardSession({ sdk: props.sdk, document: props.document, isDark: () => props.mode === "dark", fitOnOpen: props.fitOnOpen, centerOnOpen: !start && data.elements.length > 0, view: start });
+  const opened = createBoardSession({ sdk: props.sdk, document: props.document, isDark: () => props.mode === "dark", open: props.fitOnOpen ? "fit" : !start && data.elements.length > 0 ? "center" : undefined, view: start });
   session = opened;
   state.value = opened.state;
   let saved = opened.state.save;

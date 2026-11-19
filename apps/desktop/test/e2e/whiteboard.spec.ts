@@ -269,8 +269,13 @@ test("whiteboard: after a restart the board opens just as it was left, pictures 
     const corner = `(() => { const r = document.querySelector('[data-testid="picture-lock-one"]')?.getBoundingClientRect(); return r ? Math.round(r.x) + "," + Math.round(r.y) : ""; })()`;
     await expect.poll(() => inModule(app, WHITEBOARD, corner)).not.toBe("");
     const before = await inModule<string>(app, WHITEBOARD, corner);
-    // The view is kept a moment after it is shown.
-    await new Promise((resolve) => setTimeout(resolve, 800));
+    // The view is kept with the board's size, even though it was never scrolled.
+    const kept = async () => {
+      const folder = path.join(userData, "panel-state");
+      const files = await readdir(folder).catch(() => [] as string[]);
+      return (await Promise.all(files.map((file) => readFile(path.join(folder, file), "utf8")))).some((text) => /"scrollX":[^}]*"width":\d/.test(text));
+    };
+    await expect.poll(kept, { timeout: 10_000 }).toBe(true);
     await app.close();
     closed = true;
 
