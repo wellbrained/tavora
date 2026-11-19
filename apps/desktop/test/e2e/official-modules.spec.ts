@@ -231,7 +231,9 @@ test("notes: two panels show the same notes and follow each other's changes", as
   await typeInModule(app, NOTES, "Made in the second panel", 1);
   await expect.poll(() => noteTitles(app, 0)).toEqual(["Scratchpad", "Made in the second panel"]);
 
-  // Deleting asks first, then removes the note everywhere.
+  // Deleting asks first, then removes the note everywhere. The first panel is the tab behind: pick it, as the user does,
+  // so its page runs (a page behind another tab is paused, and its menu would never finish opening).
+  await panels(page, NOTES).first().click();
   await pickFromMenu(app, NOTES, `${noteRow("Made in the second panel")}.querySelector('[data-testid="note-menu"]')`, "menu-delete", 0);
   // Deleting needs no confirmation; an Undo notice shows instead.
   await expect.poll(() => inModule(app, NOTES, `!!${q("undo-toast")}`, 0)).toBe(true);
