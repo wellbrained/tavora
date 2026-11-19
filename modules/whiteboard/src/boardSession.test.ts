@@ -74,7 +74,8 @@ describe("Copy and Save as image", () => {
     const copied = session.copyAsPicture();
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(exportToBlob).not.toHaveBeenCalled();
-    answer(new Response("png", { headers: { "content-type": "image/png" } }));
+    // A stub, not a Response: under jsdom, Node 22 gives a Blob that jsdom's FileReader can't read.
+    answer({ ok: true, blob: async () => new Blob(["png"], { type: "image/png" }) } as Response);
     await copied;
     expect(api.addFiles).toHaveBeenCalledTimes(1);
     expect(api.addFiles.mock.invocationCallOrder[0]!).toBeLessThan(exportToBlob.mock.invocationCallOrder[0]!);
