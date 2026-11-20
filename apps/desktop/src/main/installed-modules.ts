@@ -1,10 +1,14 @@
 import { readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { SIGNATURE_FILE, signedHash } from "@tavora/pack";
+import { FolderChecks } from "./module-folder-check";
 import type { OfficialUpdates } from "./official-updates";
 import { applyOwners, readOwnerRecords, type OwnerRecords } from "./installer";
 import { BROWSER_MODULE_ID, browserModule, describeModules, discoverModules, type InstalledModule, type ModuleInfo, type ModuleProblem, type ModuleSources } from "./registry";
 import { stopBlocked, type SafetyCheck } from "./safety-lists";
+
+/** The signature checks of installed folders, by their stamp (module-folder-check.ts): a cache. */
+export const MODULE_CHECKS_FILE = "module-checks.json";
 
 export interface InstalledModulesOptions {
   userData: string;
@@ -20,7 +24,7 @@ export interface InstalledModulesOptions {
 export interface InstalledModules {
   /** Every module that loads, the Browser included. */
   modules: Map<string, InstalledModule>;
-  /** Modules taken out because their zip is blocked; the installer still counts them as installed. */
+  /** Modules taken out because their zip is blocked or their folder changed; the installer still counts them as installed. */
   blocked: Map<string, InstalledModule>;
   /** Ids of the modules (loaded or blocked) the catalog installed and keeps up to date. */
   catalog: Set<string>;
@@ -47,20 +51,54 @@ export async function loadInstalledModules(options: InstalledModulesOptions): Pr
   }
   const userRoot = await realpath(options.userModules).catch(() => path.resolve(options.userModules));
   const records = await readOwnerRecords(options.userData);
-  applyOwners(modules, userRoot, records);
+  // Each folder's files are checked against the owner's signature; unchanged folders by their stamp alone.
+  const checks = new FolderChecks(path.join(options.userData, MODULE_CHECKS_FILE));
+  const started = Date.now();
+  const changed = await applyOwners(modules, userRoot, records, checks);
+  if (checks.hashed > 0 || changed.length > 0) console.log(`[tavora] checked installed module folders: ${checks.hashed} of ${checks.looked} read and hashed, ${changed.length} changed, ${Date.now() - started} ms`);
+  await checks.save();
+  const stopped = stopChanged(modules, changed, records, problems);
   await addSignedHashes(modules, userRoot, records);
-  const blocked = stopBlocked(modules, userRoot, records, options.safety, problems);
+  const blocked = new Map([...stopped, ...stopBlocked(modules, userRoot, records, options.safety, problems)]);
   const catalog = new Set(
     [...blocked.values(), ...modules.values()]
       .filter((module) => {
         const record = records[path.basename(module.root)];
-        return module.provenance === "local" && path.dirname(module.root) === userRoot && record?.catalog === true && record.id === module.manifest.id;
+        // Only a folder that got its recorded owner: one changed by hand is not the catalog's to update.
+        return module.provenance === "local" && path.dirname(module.root) === userRoot && record?.catalog === true && record.id === module.manifest.id && module.owner === record.owner;
       })
       .map((module) => module.manifest.id),
   );
   modules.set(BROWSER_MODULE_ID, browserModule(options.tavoraVersion));
   const info = await describeModules(options.userModules, modules);
   return { modules, blocked, catalog, info, problems };
+}
+
+/**
+ * Stops installed folders whose files are not what their publisher signed. They don't load at all, rather than as an
+ * unsigned folder: as one they would start over without their data and write new data apart from it, which a repair
+ * would leave behind. They keep the recorded owner, so the installer and the catalog take a zip from that publisher as
+ * their repair (at any version, installer.ts), and Settings > Modules says what happened. Their panels wait.
+ */
+function stopChanged(modules: Map<string, InstalledModule>, ids: readonly string[], records: OwnerRecords, problems: ModuleProblem[]): Map<string, InstalledModule> {
+  const stopped = new Map<string, InstalledModule>();
+  for (const id of ids) {
+    const module = modules.get(id);
+    const record = module && records[path.basename(module.root)];
+    if (!module || !record) continue;
+    modules.delete(id);
+    stopped.set(id, { ...module, owner: record.owner, changed: true });
+    console.warn(`[tavora] ${path.basename(module.root)}: its files are not what its publisher signed, so it is stopped`);
+    problems.push({
+      folder: path.basename(module.root),
+      path: module.root,
+      kind: "changed",
+      values: { name: module.manifest.name },
+      about: { name: module.manifest.name, version: module.manifest.version, id },
+      message: `${module.manifest.name} changed since it was installed: its files are not what its publisher signed. Reinstall it to use it again; its data stays.`,
+    });
+  }
+  return stopped;
 }
 
 /** A signature file bigger than this is not read for its hash: a zip holds at most a few thousand files. */

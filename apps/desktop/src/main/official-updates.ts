@@ -4,13 +4,13 @@
 // is blocked or revoked, and it is newer than the shipped copy. Anything else falls back to the shipped
 // copy, which always stays in the app. With the pins empty (how they ship until Tavora turns this on)
 // none of this runs and nothing is read or written.
-import { lstat, readdir, readFile, rm } from "node:fs/promises";
+import { readdir, rm } from "node:fs/promises";
 import path from "node:path";
-import { isModuleId, isOfficialSigner, OFFICIAL_PINS, officialOn, validateManifest, type OfficialPins } from "@tavora/module-schema";
-import { MANIFEST_FILE, signedHash, verifyFiles, ZIP_LIMITS, type ZipFile } from "@tavora/pack";
+import { isModuleId, isOfficialSigner, OFFICIAL_PINS, officialOn, type OfficialPins } from "@tavora/module-schema";
 import { compareModuleVersions } from "../shared/module-version";
 import { writeFileAtomic } from "./fsutil";
 import { readSavedFile } from "./json";
+import { FolderChecks, type Verified } from "./module-folder-check";
 import { SUPPORTED_VERSIONS } from "./saved-versions";
 import type { SafetyCheck } from "./safety-lists";
 
@@ -65,53 +65,6 @@ export async function readOfficialRecords(userData: string): Promise<OfficialRec
   return records;
 }
 
-/** What the folder holds: its files (when read) and a stamp that changes when any of them does. */
-interface FolderRead {
-  files: ZipFile[];
-  stamp: string;
-}
-
-/**
- * Walks a downloaded copy's folder. Null when it holds a link or odd file (never part of a signed package) or more than a
- * module may. With `read` off no file is opened: only the stamp is made, to see whether the folder changed since it was checked.
- */
-async function readFolder(root: string, read: boolean): Promise<FolderRead | null> {
-  const files: ZipFile[] = [];
-  const stamp: string[] = [];
-  let total = 0;
-  const walk = async (dir: string, prefix: string): Promise<boolean> => {
-    for (const entry of await readdir(dir, { withFileTypes: true })) {
-      const full = path.join(dir, entry.name);
-      const info = await lstat(full);
-      const name = `${prefix}${entry.name}`;
-      if (info.isDirectory()) {
-        if (!(await walk(full, `${name}/`))) return false;
-        continue;
-      }
-      if (!info.isFile()) return false;
-      total += info.size;
-      if (stamp.length >= ZIP_LIMITS.maxFiles || total > ZIP_LIMITS.maxUnpackedBytes) return false;
-      stamp.push(`${name}\0${info.size}\0${info.mtimeMs}`);
-      if (read) files.push({ name, data: await readFile(full) });
-    }
-    return true;
-  };
-  try {
-    return (await walk(root, "")) ? { files, stamp: stamp.sort().join("\n") } : null;
-  } catch {
-    return null;
-  }
-}
-
-/** What the signature check found in a folder. */
-interface Verified {
-  signer: string;
-  id: string;
-  version: string;
-  /** The hash of what the signature covers (signedHash). */
-  signedSha256: string;
-}
-
 export type OfficialSafety = Pick<SafetyCheck, "blocked" | "revoked"> & {
   /** The first key and account of a key's chain of successions (SafetyLists.firstKeyChain). */
   firstKeyChain(fingerprint: string): { key: string; account: string | null };
@@ -126,7 +79,7 @@ export interface OfficialUpdatesOptions {
 export class OfficialUpdates {
   private records: OfficialRecords = {};
   /** Folders checked before, by what they held: a folder that did not change is not read and hashed again. */
-  private readonly checked = new Map<string, { stamp: string; verified: Verified | null }>();
+  private readonly checks = new FolderChecks();
   /** Ids being installed right now: cleanup leaves their folder alone until the record is saved. */
   private readonly installing = new Set<string>();
   /** Saves run one after another, so two at once cannot drop a record and its high-water mark. */
@@ -218,19 +171,8 @@ export class OfficialUpdates {
   }
 
   /** Reads and checks a folder's files, unless it looks as it did when it was last checked. */
-  private async verify(dir: string): Promise<Verified | null> {
-    const seen = await readFolder(dir, false);
-    if (seen === null) {
-      this.checked.delete(dir);
-      return null;
-    }
-    const cached = this.checked.get(dir);
-    if (cached?.stamp === seen.stamp) return cached.verified;
-    const read = await readFolder(dir, true);
-    // What was read is what is checked; a folder that changed between the two is checked again next time.
-    const verified = read ? verifyFolder(read.files) : null;
-    if (read) this.checked.set(dir, { stamp: read.stamp, verified });
-    return verified;
+  private verify(dir: string): Promise<Verified | null> {
+    return this.checks.check(dir);
   }
 
   /**
@@ -256,26 +198,8 @@ export class OfficialUpdates {
         !this.signerTrusted(record.signer, record.sha256);
       if (!useless) continue;
       await rm(path.join(this.dir, entry.name), { recursive: true, force: true }).catch(() => undefined);
-      this.checked.delete(path.join(this.dir, entry.name));
       removed.push(entry.name);
     }
     return removed;
   }
-}
-
-/** The signer, id and version of a folder whose files are exactly what its signature covers; null otherwise. */
-function verifyFolder(files: readonly ZipFile[]): Verified | null {
-  const verified = verifyFiles(files);
-  if (!verified.ok || !verified.signed) return null;
-  const manifest = files.find((file) => file.name === MANIFEST_FILE);
-  if (!manifest) return null;
-  let raw: unknown;
-  try {
-    raw = JSON.parse(manifest.data.toString("utf8"));
-  } catch {
-    return null;
-  }
-  const result = validateManifest(raw);
-  const signedSha256 = signedHash(files);
-  return result.ok && signedSha256 ? { signer: verified.owner, id: result.manifest.id, version: result.manifest.version, signedSha256 } : null;
 }

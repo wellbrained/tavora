@@ -146,7 +146,7 @@ watch(
       <!-- Saving the name made the key: its recovery key is shown once. Or another PC made the account's
            key, and its recovery key opens the vault here first. -->
       <p class="text-muted-foreground text-sm">{{ keys?.recoveryKey ? t("devStart.recovery.text") : t("devStart.key.text") }}</p>
-      <RecoveryKeySettings v-if="keys?.recoveryKey || keys?.status === 'ask'" />
+      <RecoveryKeySettings v-if="keys?.recoveryKey || keys?.status === 'ask' || keys?.vault" />
       <p v-else-if="keys?.status === 'offline'" class="text-muted-foreground text-sm">{{ t("account.developer.offline") }}</p>
       <div v-else-if="developerReady" class="flex flex-col gap-3" data-testid="developer-start-key-ready">
         <p class="flex items-center gap-2 text-sm"><CircleCheck class="text-success size-4 flex-none" /> {{ t("devStart.key.ready") }}</p>

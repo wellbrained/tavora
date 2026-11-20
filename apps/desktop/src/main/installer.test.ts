@@ -1,10 +1,11 @@
 import { generateKeyPairSync } from "node:crypto";
-import { mkdir, mkdtemp, readdir, readFile, realpath, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { fingerprint, readZip, signedHash, signFiles, writeZip, type ZipFile } from "@tavora/pack";
+import { fingerprint, readZip, SIGNATURE_FILE, signedHash, signFiles, writeZip, type ZipFile } from "@tavora/pack";
 import { describe, expect, it } from "vitest";
 import { applyOwners, compareModuleVersions, forgetOwner, installZip, readOwnerRecords } from "./installer";
+import { FolderChecks } from "./module-folder-check";
 import type { InstalledModule } from "./registry";
 
 /** The Tavora version the installer runs as in these tests. */
@@ -183,17 +184,91 @@ describe("compareModuleVersions", () => {
 describe("applyOwners", () => {
   it("gives a module in the user's folder its recorded owner, and nothing else", async () => {
     const { userData, userModules } = await setup();
-    const owner = "0123456789abcdef0123456789abcdef";
+    const key = generateKeyPairSync("ed25519").privateKey;
+    const owner = fingerprint(key);
+    for (const id of ["wellbrained.tracker", "wellbrained.other"]) {
+      const files = packageFiles(id);
+      await installZip(await zipFile(userData, [...files, signFiles(files, key)]), { userData, userModules, tavoraVersion: TAVORA, modules: new Map() });
+    }
+    const records = await readOwnerRecords(userData);
+    records["wellbrained.other"] = { ...records["wellbrained.other"]!, id: "wellbrained.renamed" };
+    records["wellbrained.dev"] = { id: "wellbrained.dev", owner };
     const modules = new Map([
       ["wellbrained.tracker", loaded("wellbrained.tracker", path.join(userModules, "wellbrained.tracker"), "local")],
       ["wellbrained.other", loaded("wellbrained.other", path.join(userModules, "wellbrained.other"), "local")],
       ["wellbrained.dev", loaded("wellbrained.dev", "/dev/wellbrained.dev", "local")],
     ]);
-    applyOwners(modules, userModules, { "wellbrained.tracker": { id: "wellbrained.tracker", owner }, "wellbrained.other": { id: "wellbrained.renamed", owner }, "wellbrained.dev": { id: "wellbrained.dev", owner } });
+    await applyOwners(modules, userModules, records);
     expect([...modules.values()].map((module) => module.owner)).toEqual([owner, "local", "local"]);
 
     await installZip(await zipFile(userData, packageFiles("wellbrained.x")), { userData, userModules, tavoraVersion: TAVORA, modules: new Map() });
     await forgetOwner(userData, "wellbrained.x");
+    for (const id of ["wellbrained.tracker", "wellbrained.other"]) await forgetOwner(userData, id);
     expect(await readOwnerRecords(userData)).toEqual({});
+  });
+
+  it("gives a folder whose files are not what the owner signed no owner: changed, unsigned or signed by another key", async () => {
+    const { userData, userModules } = await setup();
+    const key = generateKeyPairSync("ed25519").privateKey;
+    const id = "wellbrained.tracker";
+    const files = packageFiles(id);
+    await installZip(await zipFile(userData, [...files, signFiles(files, key)]), { userData, userModules, tavoraVersion: TAVORA, modules: new Map() });
+    const records = await readOwnerRecords(userData);
+    const folder = path.join(userModules, id);
+    const ownerNow = async () => {
+      const modules = new Map([[id, loaded(id, folder, "local")]]);
+      const changed = await applyOwners(modules, userModules, records);
+      // A folder that fails the check is named, for the caller to stop.
+      expect(changed).toEqual(modules.get(id)!.owner === "local" ? [id] : []);
+      return modules.get(id)!.owner;
+    };
+    expect(await ownerNow()).toBe(fingerprint(key));
+
+    // A file changed by hand.
+    await writeFile(path.join(folder, "dist", "index.html"), "<p>changed</p>");
+    expect(await ownerNow()).toBe("local");
+    // Unsigned: the same files without the signature.
+    await writeFile(path.join(folder, "dist", "index.html"), "<p>hi</p>");
+    expect(await ownerNow()).toBe(fingerprint(key));
+    await rm(path.join(folder, SIGNATURE_FILE));
+    expect(await ownerNow()).toBe("local");
+    // Signed by another publisher's key.
+    const other = signFiles(files, generateKeyPairSync("ed25519").privateKey);
+    await writeFile(path.join(folder, SIGNATURE_FILE), other.data);
+    expect(await ownerNow()).toBe("local");
+    // The same key, other files than were installed (another signed zip of the same module, put there by hand).
+    const another = packageFiles(id, "1.0.1", "<p>other</p>");
+    for (const file of [...another, signFiles(another, key)]) await writeFile(path.join(folder, ...file.name.split("/")), file.data);
+    expect(await ownerNow()).toBe("local");
+  });
+
+  it("hashes a folder again only when its files changed, across starts", async () => {
+    const { userData, userModules } = await setup();
+    const key = generateKeyPairSync("ed25519").privateKey;
+    const id = "wellbrained.tracker";
+    const files = packageFiles(id);
+    await installZip(await zipFile(userData, [...files, signFiles(files, key)]), { userData, userModules, tavoraVersion: TAVORA, modules: new Map() });
+    const folder = path.join(userModules, id);
+    const cache = path.join(userData, "module-checks.json");
+    const first = new FolderChecks(cache);
+    expect(await first.check(folder)).toMatchObject({ id, signer: fingerprint(key) });
+    await first.save();
+
+    // The next start takes the check kept for an unchanged folder: planted here, it is what comes back.
+    const kept = JSON.parse(await readFile(cache, "utf8")) as { folders: Record<string, { verified: { signer: string } }> };
+    kept.folders[folder]!.verified.signer = "f".repeat(32);
+    await writeFile(cache, JSON.stringify(kept));
+    expect(await new FolderChecks(cache).check(folder)).toMatchObject({ signer: "f".repeat(32) });
+    // A changed file (same size) changes the stamp: the files are checked again.
+    await writeFile(path.join(folder, "dist", "index.html"), "<p>ho</p>");
+    const again = new FolderChecks(cache);
+    expect(await again.check(folder)).toBeNull();
+    await again.save();
+    // A folder gone is dropped from the file at the next save.
+    await rm(folder, { recursive: true });
+    const last = new FolderChecks(cache);
+    expect(await last.check(folder)).toBeNull();
+    await last.save();
+    expect(JSON.parse(await readFile(cache, "utf8"))).toEqual({ folders: {} });
   });
 });

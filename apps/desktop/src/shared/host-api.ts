@@ -355,6 +355,12 @@ export interface DeveloperKeysView {
   hasKey: boolean;
   /** The account's recovery key, while the user looks at it (made just now, or asked to see). */
   recoveryKey: string | null;
+  /**
+   * What is wrong with the account's key vault on Tavora's service, which keeps the publisher keys: "unopened" when
+   * this PC's recovery key doesn't open it (the new key is typed in), "gone" when it is no longer there and this PC has
+   * nothing to put back (the user may start it again empty). Meanwhile this PC uses the keys it read last. Null: fine.
+   */
+  vault: "unopened" | "gone" | null;
 }
 
 /**
@@ -580,7 +586,8 @@ export interface AiUsageView {
 }
 
 /** Toolbar buttons of a Browser panel. */
-export type BrowserCommand = "back" | "forward" | "reload" | "stop" | "open-external" | "mute" | "unmute" | "exit-fullscreen";
+/** `open-asked` and `stay` answer the panel's question about a page's move to the other session (error `otherSession`). */
+export type BrowserCommand = "back" | "forward" | "reload" | "stop" | "open-external" | "mute" | "unmute" | "exit-fullscreen" | "open-asked" | "stay";
 
 /**
  * A docking layout: a tree of splits whose leaves are tab groups of panels.
@@ -1063,7 +1070,8 @@ export interface CatalogMatch {
 
 /** Why a Browser panel's page is not shown: `detail` is what the engine said, for the "unknown" kind. */
 export interface BrowserError {
-  kind: "cert" | "notFound" | "offline" | "noAnswer" | "badAddress" | "unknown" | "crashed";
+  /** `otherSession`: the page wants to take the panel to a site of the other session by itself; the user opens it. */
+  kind: "cert" | "notFound" | "offline" | "noAnswer" | "badAddress" | "unknown" | "crashed" | "otherSession";
   detail: string;
 }
 

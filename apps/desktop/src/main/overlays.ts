@@ -4,11 +4,17 @@
 // module in one workspace and carries a random token, which is the only thing that makes it reachable: the server
 // listens on 127.0.0.1, refuses any other Host header (so a web page can't reach it through DNS rebinding), and serves
 // a link only while its module is installed under the same owner with the `stream-overlay` connector granted.
-import { randomBytes } from "node:crypto";
+//
+// In OBS Tavora can't stop a page from navigating away (there is no will-navigate there), so the link serves a frame
+// page of Tavora's own (overlayFrame), and the module's page runs inside it: in a sandboxed iframe that may not
+// navigate the top page, open windows or send forms, under a policy that lets the iframe show nothing but that page's
+// own origin. The module's page gets an origin of its own per link, `<token>.localhost` (Chromium resolves any
+// `*.localhost` name to this PC), so it is not the frame page's origin and can't reach into it to lift the sandbox.
+import { createHash, randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import path from "node:path";
-import { LIMITS, OVERLAY_FONT_PATH, OVERLAY_STATE_PATH, type JsonValue } from "@tavora/sdk/protocol";
+import { LIMITS, OVERLAY_COLOR_SCHEME_MESSAGE, OVERLAY_CSS_MESSAGE, OVERLAY_FONT_PATH, OVERLAY_STATE_PATH, type JsonValue } from "@tavora/sdk/protocol";
 import { overlayFontCss, overlayMessage, watchOverlayFont } from "./overlay-font";
 import { contentTypeFor, resolveAsset } from "./assets";
 import { HostError } from "./errors";
@@ -222,18 +228,36 @@ export interface OverlayServerOptions {
   page(link: OverlayLink): OverlayPage | null;
 }
 
-/** Strict: the page loads only its own files and talks only to this server. */
-export const OVERLAY_CSP = [
+/**
+ * Strict: the page loads only its own files and talks only to the server it came from. No workers: a service worker
+ * could answer the page's own address later with a document of its own.
+ */
+const PAGE_POLICY = [
   "default-src 'none'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data:",
   "font-src 'self' data:",
   "connect-src 'self'",
+  "worker-src 'none'",
   "base-uri 'none'",
   "form-action 'none'",
-  "frame-ancestors 'none'",
-].join("; ");
+];
+
+/** The policy of an overlay page in Tavora's own windows (game-overlay-page.ts), which nothing may frame. */
+export const OVERLAY_CSP = [...PAGE_POLICY, "frame-ancestors 'none'"].join("; ");
+
+/**
+ * The policy the frame page requires of every document in its frame (the iframe's `csp`, CSP Embedded Enforcement):
+ * Chromium shows a document there only if its own policy is at least this strict, so nothing the page could get
+ * served another way (a cached or synthesized response) runs without it.
+ */
+export const OVERLAY_REQUIRED_CSP = PAGE_POLICY.join("; ");
+
+/** The policy of a module's overlay page in OBS: the same, shown only inside the link's frame page. */
+export function streamOverlayCsp(port: number): string {
+  return [...PAGE_POLICY, `frame-ancestors http://127.0.0.1:${port} http://localhost:${port}`].join("; ");
+}
 
 const COMMON_HEADERS = {
   "X-Content-Type-Options": "nosniff",
@@ -244,10 +268,70 @@ const COMMON_HEADERS = {
 
 export type OverlayServerStatus = "off" | "running" | "in-use" | "failed";
 
-/** The address OBS is given for a link. */
+/** The address OBS is given for a link: the frame page around the module's page. */
 export function overlayUrl(port: number, token: string): string {
   return `http://127.0.0.1:${port}/overlay/${token}/`;
 }
+
+/** Where the module's own page of a link is served: an origin of its own, which only that link's frame page shows. */
+export function overlayPageOrigin(port: number, token: string): string {
+  return `http://${token}.localhost:${port}`;
+}
+
+const FRAME_STYLE = "html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}iframe{display:block;width:100%;height:100%;border:0}";
+/**
+ * The frame page's one script. It gives the frame its address, with the link's `#…` (which never reaches the
+ * server). It takes on the colour scheme the page reports (OVERLAY_COLOR_SCHEME_MESSAGE, sent by watchOverlay):
+ * Chromium paints an opaque backdrop behind a frame whose scheme differs from its page's, and an overlay must stay
+ * see-through. And it passes on the Custom CSS OBS puts into the frame page (a `<style>` OBS adds once the page has
+ * loaded) to the page, only to the page's origin (OVERLAY_CSS_MESSAGE), as OBS used to give it to the page itself.
+ * It reads nothing else from the page and gives it nothing else.
+ */
+const FRAME_SCRIPT =
+  `(function(){var f=document.getElementById("page"),src=f.getAttribute("data-src"),origin=new URL(src).origin,sent=null;` +
+  `function css(){var t=[];document.querySelectorAll("style:not(#frame)").forEach(function(s){t.push(s.textContent||"")});return t.join("\\n")}` +
+  `function send(){var c=css();if(c===sent||!f.contentWindow)return;sent=c;f.contentWindow.postMessage({type:${JSON.stringify(OVERLAY_CSS_MESSAGE)},css:c},origin)}` +
+  `addEventListener("message",function(e){var d=e.data;if(e.source!==f.contentWindow||!d||d.type!==${JSON.stringify(OVERLAY_COLOR_SCHEME_MESSAGE)})return;` +
+  `if(typeof d.colorScheme==="string"&&/^[a-z ]{1,32}$/.test(d.colorScheme))f.style.colorScheme=d.colorScheme;sent=null;send()});` +
+  `new MutationObserver(send).observe(document.documentElement,{childList:true,subtree:true,characterData:true});` +
+  `f.src=src+location.hash})();`;
+const hashOf = (text: string) => `'sha256-${createHash("sha256").update(text).digest("base64")}'`;
+/**
+ * What the iframe allows the page: its scripts, and its own origin, so its files, `_state` and `_font.css` load as they
+ * always did (an opaque origin would make each of them a cross-origin request and take its storage away). That origin
+ * is not the frame page's, so it can't reach into it. Nothing else: no navigating the top page, no new windows, no
+ * forms, no dialogs, no downloads.
+ */
+export const OVERLAY_SANDBOX = "allow-scripts allow-same-origin";
+
+const escapeAttribute = (text: string) => text.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/**
+ * The frame page OBS loads for a link: no content of its own, only the module's page, filling it. `search` (the link's
+ * query, usually none) goes on to the page. Its policy lets it run its one script and show only the page's origin,
+ * so the page can't take the frame to any other address either. Inline styles are allowed only so OBS's Custom CSS
+ * gets in (and on to the page); the frame page has nothing a style could reveal.
+ */
+export function overlayFrame(port: number, token: string, search = ""): { html: string; csp: string } {
+  const src = `${overlayPageOrigin(port, token)}/${search}`;
+  const html =
+    `<!doctype html><html><head><meta charset="utf-8"><title>Tavora overlay</title><style id="frame">${FRAME_STYLE}</style></head>` +
+    `<body><iframe id="page" data-src="${escapeAttribute(src)}" sandbox="${OVERLAY_SANDBOX}" csp="${escapeAttribute(OVERLAY_REQUIRED_CSP)}" allow="autoplay" scrolling="no"></iframe>` +
+    `<script>${FRAME_SCRIPT}</script></body></html>`;
+  const csp = [
+    "default-src 'none'",
+    `script-src ${hashOf(FRAME_SCRIPT)}`,
+    "style-src 'unsafe-inline'",
+    `frame-src ${overlayPageOrigin(port, token)}`,
+    "base-uri 'none'",
+    "form-action 'none'",
+    "frame-ancestors 'none'",
+  ].join("; ");
+  return { html, csp };
+}
+
+/** The Host of a module's page, `<token>.localhost:<port>`. */
+const PAGE_HOST = /^([0-9a-f]{32})\.localhost:(\d+)$/;
 
 /** The HTTP server behind Stream overlays; runs only while the user has them on. */
 export class OverlayServer {
@@ -326,36 +410,60 @@ export class OverlayServer {
 
   private async handle(request: IncomingMessage, response: ServerResponse, port: number): Promise<void> {
     try {
-      // Only addresses of this PC as typed into OBS; a page on the web that resolves its own name to 127.0.0.1 sends its own.
-      const host = request.headers.host;
-      if (host !== `127.0.0.1:${port}` && host !== `localhost:${port}`) return this.plain(response, 421, "Misdirected request");
+      // Only addresses of this PC as typed into OBS, or a link's own page; a page on the web that resolves its own name to
+      // 127.0.0.1 sends its own.
+      const host = request.headers.host?.toLowerCase();
+      const pageHost = host ? PAGE_HOST.exec(host) : null;
+      const frameHost = host === `127.0.0.1:${port}` || host === `localhost:${port}`;
+      if (!frameHost && pageHost?.[2] !== String(port)) return this.plain(response, 421, "Misdirected request");
       if (request.method !== "GET" && request.method !== "HEAD") return this.plain(response, 405, "Method not allowed");
       const url = new URL(request.url ?? "/", `http://127.0.0.1:${port}`);
+      if (pageHost) return await this.page(request, response, port, pageHost[1]!, url.pathname);
+      // Nothing of a module runs on this origin any more. A service worker a page registered here under an older Tavora
+      // could still answer the link itself; whatever reaches Tavora (its update check, a legacy stream) clears it.
+      response.setHeader("Clear-Site-Data", '"storage"');
       const match = /^\/overlay\/([0-9a-f]{32})(\/.*)?$/.exec(url.pathname);
       const found = match ? this.options.store.find(match[1]!) : null;
-      const page = found ? this.options.page(found.link) : null;
-      if (!match || !found || !page) return this.plain(response, 404, "Not found");
+      if (!match || !found || !this.options.page(found.link)) return this.plain(response, 404, "Not found");
       const rest = match[2];
       if (rest === undefined) {
         response.writeHead(308, { ...COMMON_HEADERS, Location: `/overlay/${match[1]}/` });
         return void response.end();
       }
-      if (rest === `/${OVERLAY_STATE_PATH}`) return this.stream(request, response, found.link, found.state);
-      if (rest === `/${OVERLAY_FONT_PATH}`) {
-        const css = Buffer.from(overlayFontCss());
-        response.writeHead(200, { ...COMMON_HEADERS, "Content-Type": "text/css; charset=utf-8", "Content-Length": css.byteLength });
-        return void response.end(request.method === "HEAD" ? undefined : css);
+      if (rest === "/") {
+        const frame = overlayFrame(port, found.link.token, url.search);
+        return this.send(request, response, "text/html; charset=utf-8", Buffer.from(frame.html), frame.csp);
       }
-      const file = await resolveOverlayFile(page, rest);
-      if (!file) return this.plain(response, 404, "Not found");
-      const body = await readFile(file);
-      response.writeHead(200, { ...COMMON_HEADERS, "Content-Type": contentTypeFor(file), "Content-Security-Policy": OVERLAY_CSP, "Content-Length": body.byteLength });
-      response.end(request.method === "HEAD" ? undefined : body);
+      // A page an older Tavora served here, still open in OBS until it reloads, keeps getting its state and font.
+      if (rest === `/${OVERLAY_STATE_PATH}`) return this.stream(request, response, found.link, found.state);
+      if (rest === `/${OVERLAY_FONT_PATH}`) return this.send(request, response, "text/css; charset=utf-8", Buffer.from(overlayFontCss()));
+      return this.plain(response, 404, "Not found");
     } catch (error) {
       console.error("[tavora] overlay request failed", error);
       if (!response.headersSent) this.plain(response, 500, "Something went wrong");
       else response.end();
     }
+  }
+
+  /** A request on a link's own origin: the module's page and its files, its state and Tavora's font. */
+  private async page(request: IncomingMessage, response: ServerResponse, port: number, token: string, pathname: string): Promise<void> {
+    const found = this.options.store.find(token);
+    const page = found ? this.options.page(found.link) : null;
+    // Never as a page of its own, only inside the link's frame page (the sandbox there is what keeps it in), and never as
+    // a worker's script: a service worker could answer the page's address with a document of its own later.
+    const dest = request.headers["sec-fetch-dest"];
+    const refused = dest === "document" || dest === "serviceworker" || dest === "sharedworker" || dest === "worker" || request.headers["service-worker"] !== undefined;
+    if (!found || !page || refused) return this.plain(response, 404, "Not found");
+    if (pathname === `/${OVERLAY_STATE_PATH}`) return this.stream(request, response, found.link, found.state);
+    if (pathname === `/${OVERLAY_FONT_PATH}`) return this.send(request, response, "text/css; charset=utf-8", Buffer.from(overlayFontCss()));
+    const file = await resolveOverlayFile(page, pathname);
+    if (!file) return this.plain(response, 404, "Not found");
+    this.send(request, response, contentTypeFor(file), await readFile(file), streamOverlayCsp(port));
+  }
+
+  private send(request: IncomingMessage, response: ServerResponse, type: string, body: Buffer, csp?: string): void {
+    response.writeHead(200, { ...COMMON_HEADERS, "Content-Type": type, ...(csp ? { "Content-Security-Policy": csp } : {}), "Content-Length": body.byteLength });
+    response.end(request.method === "HEAD" ? undefined : body);
   }
 
   private plain(response: ServerResponse, status: number, text: string): void {

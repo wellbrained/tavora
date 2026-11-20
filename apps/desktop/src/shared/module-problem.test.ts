@@ -36,7 +36,7 @@ describe("problemText", () => {
   });
 
   it("has every text in both languages", () => {
-    const kinds: ModuleProblemKind[] = ["not-built", "no-module", "missing", "unreadable", "invalid", "needs-newer", "icon-missing", "reserved-id", "webassembly", "duplicate-id", "blocked"];
+    const kinds: ModuleProblemKind[] = ["not-built", "no-module", "missing", "unreadable", "invalid", "needs-newer", "icon-missing", "reserved-id", "webassembly", "duplicate-id", "blocked", "changed"];
     for (const kind of kinds) for (const where of ["modules", "development"] as const) {
       expect(say("en", kind, {}, where)).not.toMatch(/moduleProblem\./);
       expect(say("de", kind, {}, where)).not.toMatch(/moduleProblem\./);

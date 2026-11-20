@@ -56,12 +56,12 @@ Update this page in the pull request that adds, removes or changes a flow.
 | Official publish | `main/official-publish.ts` (`RunState`) | `idle \| building \| preview \| confirming \| uploading \| discarding` | `OfficialPublishView` |
 | Module publish review | `main/module-publish.ts` | `checking \| ready \| publishing \| published`; a newer look drops an older one | `PublishView.status` |
 | Sign-in and account steps | `main/account.ts` (`Pending`) | none, or `sign-in` (`code \| create`), `discord-create`, `change-email` (its `proof`: `code` for a second code to the current address, `discord` for a fresh Discord sign-in, `none` for a service from before), … | `AccountView.pending`; `data-status` (the proof) on `[data-testid=account-change-email-step]` |
-| Pairing a new PC | `main/pairing.ts` (`Asking.step`) | `waiting → code → confirmed`, or `declined \| expired \| failed`; on the old PC, an answer that did not get through asks again | `PairingView.asking.step` |
+| Pairing a new PC | `main/pairing.ts` (`Asking.step`) | `waiting → code → confirmed`, or `declined \| expired \| failed`; on the old PC, an answer that did not get through asks again. A PC whose key no longer opens the account's vault asks like a new one and never answers | `PairingView.asking.step` |
 | Discord connector | `main/discord.ts`, `shared/host-api.ts` (`DiscordStatus`) | `off \| signed-out \| connecting \| not-running \| approving \| connected \| error`; a generation drops old attempts. While Discord voice is paused (`shared/discord-voice.ts`) it stays `off` | `DiscordView.status` |
 | Media connector | `main/media.ts` | `starting \| ready \| failed \| unavailable` | the SDK's `MediaState.state` |
 | Stream overlay server | `main/overlays.ts` (`OverlayServerStatus`) | `off \| running \| in-use \| failed`; starts and stops run in turn | Settings > Streaming |
 | Cloud copy | `main/cloud-copy-sync.ts` (`CopySync`) | on or off, with the questions it waits on (`askKey`, `conflict`, `restartToTake`) and closing as `open → holding → released`; work started before it was turned off writes nothing (a turn raised by `forget`) | `CloudCopyView` |
-| Developer keys | `main/developer-keys.ts` (`DeveloperKeys`) | `loading \| ready \| none \| ask \| signed-out \| offline`; the newest read wins | `DeveloperKeysView.status` |
+| Developer keys | `main/developer-keys.ts` (`DeveloperKeys`) | `loading \| ready \| none \| ask \| signed-out \| offline`; the newest read wins. Apart from it, the account's vault on the service (`main/account-key.ts`, `trouble`): fine, `unopened` (this PC's key doesn't open it: the new key is typed in, the keys read last stay in use) or `gone` (nothing to put back: Start empty, after a confirm) | `DeveloperKeysView.status`, `.vault` |
 | Connection tracker | `main/connection.ts` | online, or an outage of a kind (`ConnectionTracker.feed`) | Settings > Connections |
 | Questions to the host UI | `main/pending-questions.ts` | asked → answered or cancelled, once | |
 | In-game layer's mode | `main/game-overlay-service.ts` (`layer.mode`, `setLayerMode`), each window's `WindowMode` in `main/game-overlay-window.ts`, the card `main/game-layer-card.ts` with `renderer/components/LayerCard.vue` | closed → `use` ⇄ `arrange` → closed: it always opens in `use` (in memory only, so the next open is `use` again); the card's Use \| Arrange switches it live; Close, the key and Esc close it from either. A window is `off \| use \| arrange`: an overlay is `off` in Use (click-through, no frame) and `arrange` in Arrange; a panel is `use` (takes mouse and keys) or `arrange` (the frame over it takes them). A panel's window is see-through each time it is shown until the page has drawn a frame asked for after it heard `panel.overGame` (`ModuleView.nextFrame`, at most `DRAW_CAP_MS`), so its workspace look never flashes | `data-status` on `[data-testid=layer-card]` |
@@ -108,7 +108,10 @@ the pull request that makes it explicit.
 - **Panel dialog** (`components/PanelDialog.vue`, `main/panel-views.ts` `dialogState`) → `closed | placing | drawn | shown`.
 
 - **Browser panel** (`main/browser-view.ts`: `status`, `error`, `committedUrl`, `requestedUrl`) →
-  `blank | loading | page | failed | crashed`.
+  `blank | loading | page | failed | crashed`. `failed` also holds a page's own move to a site of the other session
+  (`otherSession`) until the user opens it or stays (`openAsked`, `stay`). How the navigation under way started is already one union
+  (`navigationStart`: `user | page`, with `crossSessionStep` as its step and tests); `ownNavigation` marks Tavora's own
+  load until Chromium reports it.
 
 - **Window visibility** (`main/host.ts`: `windowHidden`, `windowBehind`, `windowClosed`) → `front | behind | hidden | closed`.
 

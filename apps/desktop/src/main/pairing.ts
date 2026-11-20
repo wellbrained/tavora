@@ -128,6 +128,14 @@ export class Pairing {
     return this.options.copySync.accountKey;
   }
 
+  /**
+   * This PC has the account's key: one that opens the account's vault as this PC last saw it. A key kept after another
+   * PC started over (its vault no longer opens) is not: this PC may ask for the new one, and never hands out its own.
+   */
+  private get hasKey(): boolean {
+    return this.accountKey.get() !== null && this.accountKey.trouble !== "unopened";
+  }
+
   /** Tavora's service, while signed in. */
   private service(): PairingTransport | null {
     return this.options.account.token() ? this.servicePairing : null;
@@ -206,7 +214,7 @@ export class Pairing {
     const asking = this.asking;
     if (!asking || asking.step !== "code" || !asking.oldKey) throw new UserError("pairing.error.gone");
     // The recovery key was typed in meanwhile.
-    if (this.accountKey.get()) return this.cancel();
+    if (this.hasKey) return this.cancel();
     asking.step = "confirmed";
     if (asking.sealed) return this.finish(asking, asking.sealed);
     // Not sent yet: the old PC's user still has to click Add.
@@ -237,7 +245,7 @@ export class Pairing {
     const asking = this.asking;
     if (!asking) return;
     // The recovery key was typed in meanwhile.
-    if (this.accountKey.get()) return this.cancel();
+    if (this.hasKey) return this.cancel();
     // A key that came before the codes were checked waits here, unread again (the service hands it over only
     // once), until the press, the recovery key typed in, or the request running out.
     if (asking.sealed) {
@@ -328,7 +336,7 @@ export class Pairing {
 
   /** One look for a PC that asks. Public for tests. */
   async lookForRequests(): Promise<void> {
-    if (this.looking || this.asking || !this.accountKey.get()) return;
+    if (this.looking || this.asking || !this.hasKey) return;
     this.looking = true;
     try {
       // While answering one request, only its way is looked at.
@@ -399,8 +407,14 @@ export class Pairing {
     this.answering = null;
     this.refused.add(id);
     this.changed();
-    const key = this.accountKey.get();
+    const key = this.hasKey ? this.accountKey.get() : null;
     try {
+      // Signed in, the key goes out only when it still opens the account's vault (another PC may have started over since).
+      if (allow && key && this.accountKey.signedIn && !(await this.accountKey.fits())) {
+        await answering.transport.end(id, true).catch(() => undefined);
+        this.changed();
+        throw new UserError("pairing.error.oldKey");
+      }
       if (allow && key) await answering.transport.sendKey(id, b64(sealForPc(answering.key, answering.reveal, key)));
       else await answering.transport.end(id, true);
     } catch (error) {

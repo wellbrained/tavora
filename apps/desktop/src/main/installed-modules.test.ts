@@ -1,11 +1,11 @@
 import { createHash, generateKeyPairSync, type KeyObject } from "node:crypto";
-import { mkdir, mkdtemp, realpath, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { catalogPublicKey, signCatalogList, signFiles, writeZip, type ZipFile } from "@tavora/pack";
+import { catalogPublicKey, fingerprint, signCatalogList, signFiles, writeZip, type ZipFile } from "@tavora/pack";
 import { describe, expect, it } from "vitest";
 import { installZip } from "./installer";
-import { Installed, loadInstalledModules, type InstalledModules } from "./installed-modules";
+import { Installed, loadInstalledModules, MODULE_CHECKS_FILE, type InstalledModules } from "./installed-modules";
 import type { InstalledModule } from "./registry";
 import { BROWSER_MODULE_ID } from "./registry";
 import { SafetyLists } from "./safety-lists";
@@ -52,6 +52,40 @@ describe("loadInstalledModules", () => {
     expect(loaded.modules.has("wellbrained.notes")).toBe(true);
     expect(loaded.modules.has(BROWSER_MODULE_ID)).toBe(true);
     expect(loaded.info.get("wellbrained.tracker")?.origin.kind).toBe("own");
+  });
+
+  it("stops a module whose files were changed by hand, says so, and takes its publisher's zip (same version too) as the repair", async () => {
+    const { userData, userModules, safety } = await setup();
+    const publisher = generateKeyPairSync("ed25519").privateKey;
+    const bytes = zip(publisher, "wellbrained.tracker");
+    await install(userData, userModules, safety, bytes, true);
+    const before = await loadInstalledModules({ userData, userModules, sources: { local: [userModules] }, tavoraVersion: TAVORA, safety });
+    expect(before.modules.get("wellbrained.tracker")?.owner).toBe(fingerprint(publisher));
+    // The check is kept for the next start.
+    expect(Object.keys(JSON.parse(await readFile(path.join(userData, MODULE_CHECKS_FILE), "utf8")).folders)).toHaveLength(1);
+
+    await writeFile(path.join(userModules, "wellbrained.tracker", "dist", "index.html"), "<p>someone else's</p>");
+    const loaded = await loadInstalledModules({ userData, userModules, sources: { local: [userModules] }, tavoraVersion: TAVORA, safety });
+    // Not loaded at all (not as an unsigned folder either), so nothing writes data apart from the publisher's.
+    expect(loaded.modules.has("wellbrained.tracker")).toBe(false);
+    expect(loaded.blocked.get("wellbrained.tracker")).toMatchObject({ owner: fingerprint(publisher), changed: true });
+    // Still the catalog's, so the catalog can repair it, and Settings > Modules says what happened; its panels wait.
+    expect([...loaded.catalog]).toEqual(["wellbrained.tracker"]);
+    expect(loaded.problems).toEqual([expect.objectContaining({ kind: "changed", values: { name: "wellbrained.tracker" }, about: { name: "wellbrained.tracker", version: "1.0.0", id: "wellbrained.tracker" } })]);
+
+    // The publisher's zip, the same version, puts it right.
+    const file = path.join(userData, "repair.zip");
+    await writeFile(file, bytes);
+    const repaired = await installZip(file, { userData, userModules, tavoraVersion: TAVORA, modules: new Map([...loaded.blocked, ...loaded.modules]), safety });
+    expect(repaired).toMatchObject({ owner: fingerprint(publisher), updated: true });
+    const again = await loadInstalledModules({ userData, userModules, sources: { local: [userModules] }, tavoraVersion: TAVORA, safety });
+    expect(again.modules.get("wellbrained.tracker")?.owner).toBe(fingerprint(publisher));
+    expect(again.problems).toEqual([]);
+    // Another publisher's zip is no repair.
+    await writeFile(path.join(userModules, "wellbrained.tracker", "dist", "index.html"), "<p>changed again</p>");
+    const stopped = await loadInstalledModules({ userData, userModules, sources: { local: [userModules] }, tavoraVersion: TAVORA, safety });
+    await writeFile(file, zip(generateKeyPairSync("ed25519").privateKey, "wellbrained.tracker"));
+    await expect(installZip(file, { userData, userModules, tavoraVersion: TAVORA, modules: new Map([...stopped.blocked, ...stopped.modules]), safety })).rejects.toMatchObject({ key: "error.installOtherPublisher" });
   });
 
   it("still counts a blocked catalog module as one from the catalog", async () => {

@@ -28,6 +28,36 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.105",
+    date: "2026-11-20",
+    title: "Overlays stay in OBS",
+    notes: [
+      "Your OBS overlay links keep working. An overlay can't leave its page in OBS any more, so it can't take anything off your PC that way.",
+      "An overlay starts with fresh saved data once. If one looks stuck after the update, press Refresh on its Browser Source in OBS.",
+      "When a Browser page wants to take you to a site you sign in to for all workspaces, or away from one, without a click, it asks first. Press Open to go there, or stay on the page.",
+    ],
+    prs: [
+      { number: 845, title: "Security: OBS overlays in a sandboxed frame, Browser session switch only after a click" },
+    ],
+    tags: ["browser", "overlays", "privacy", "publishing", "sdk", "security", "website", "workspace"],
+  },
+  {
+    version: "0.24.104",
+    date: "2026-11-20",
+    title: "Your keys and saves stay yours",
+    notes: [
+      "Older modules that saved files straight into Downloads now ask where to save, like every other save.",
+      "An installed module whose files were changed by hand stops until you reinstall it. Settings > Modules tells you, and its data stays.",
+      "If Tavora's service sends account keys your recovery key can't open, this PC keeps the ones it has. Recovery key in your account tells you what's up.",
+      "Your saved keys are never swapped for an empty set unless you say so.",
+      "The cloud copy asks you first before taking an old copy that's handed out as a new one. While another of your PCs still runs an older Tavora, this PC asks you which copy to keep when that PC saved last.",
+    ],
+    prs: [
+      { number: 844, title: "Security: exportJson asks where to save, folders checked at load, key vault never dropped, sealed copies" },
+    ],
+    tags: ["accounts", "cloud-copy", "modules", "privacy", "publishing", "sdk", "settings", "updates", "website"],
+  },
+  {
     version: "0.24.103",
     date: "2026-11-20",
     title: "Safer panels",

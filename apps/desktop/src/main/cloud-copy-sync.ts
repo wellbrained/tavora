@@ -55,6 +55,8 @@ interface Staged {
   version: number;
   pictures: boolean;
   files: Record<string, Omit<SyncedFile, "mtimeMs">>;
+  /** Its manifest sealed its version (an older staged.json has none: not sealed). */
+  sealed?: boolean;
   /** The user chose it (restore, or keeping the copy's side): taken even though this PC changed. */
   take: boolean;
 }
@@ -159,6 +161,7 @@ export class CopySync {
       file: path.join(options.userData, "account-key.json"),
       legacyFile: path.join(options.userData, "cloud-copy-key.json"),
       cacheFile: path.join(options.userData, "account-vault.bin"),
+      seenFile: path.join(options.userData, "account-vault-seen"),
       encryptor: options.encryptor,
       ...service,
     });
@@ -395,12 +398,13 @@ export class CopySync {
     await rm(this.stagingDir, { recursive: true, force: true });
     let copy: Awaited<ReturnType<CloudCopy["download"]>>;
     try {
-      copy = await this.cloud.download(this.key!, this.roots(), this.stagedData, since);
+      copy = await this.cloud.download(this.key!, this.roots(), this.stagedData, since, this.state.sealed === true);
     } catch (error) {
-      // Another PC started over with a new key: this one's key and copy are forgotten, and turning on asks for the new key.
+      // The account's vault doesn't open with this PC's key either (another PC started over with a new key, or the
+      // service sent something else): the copy goes off here, and turning it on asks for the new key. The key and the
+      // vault this PC last read stay until a key that opens the account's is typed in (account-key.ts).
       if (error instanceof CopyError && error.reason === "damaged" && !this.keyHere && !(await this.accountKeys.fits())) {
         await this.forget("new-key");
-        await this.accountKeys.forget();
         throw new KeyChanged();
       }
       throw error;
@@ -445,7 +449,10 @@ export class CopySync {
     const ownSettings = await readJson(library);
     const keepIn = await this.backupFolder("this-pc");
     const roots = this.roots();
+    const sealedSeen = this.state.sealed === true;
     this.state = await swapInCopy(this.stagedData, roots, keepIn, staged);
+    // Once seen, a sealed copy stays seen, also after taking an older Tavora's copy.
+    if (sealedSeen) this.state = { ...this.state, sealed: true };
     await rm(this.stagingDir, { recursive: true, force: true });
     await keepPcSettings(library, ownSettings, this.state);
     await saveCopyState(this.stateFile, this.state);
@@ -477,7 +484,8 @@ export class CopySync {
       return;
     }
     // A key from before the account kept a vault gets one, so other PCs ask for it instead of making their own.
-    // A key the account no longer has (another PC started over) stops the copy here before anything goes up.
+    // A key that doesn't open the account's vault (another PC started over) stops the copy here before anything goes
+    // up; the key stays (account-key.ts).
     void this.accountKeys
       .setUp()
       .then(async (setUp) => {
@@ -967,7 +975,7 @@ async function keepPcSettings(file: string, own: Record<string, unknown> | null,
   if (synced) state.files[LIBRARY_FILE] = { ...synced, size: info.size, mtimeMs: info.mtimeMs };
 }
 
-/** The copy was sealed with a key the account no longer has: another PC started over. */
+/** The copy was sealed with a key that doesn't open the account's vault: another PC started over, or the service changed it. */
 class KeyChanged extends Error {}
 
 /**

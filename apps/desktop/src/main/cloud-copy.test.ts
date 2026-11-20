@@ -175,9 +175,26 @@ describe("the cloud copy", () => {
     // The real newer copy still comes down to a PC that has the first.
     expect(await client().download(key, b.roots, path.join(b.root, "staging"), first.state.version)).toMatchObject({ version: second.state.version });
 
-    // A copy saved by an older Tavora has no base and stays readable.
+    // A copy saved by an older Tavora has no base and stays readable, for a PC that never saw a sealed one.
     const legacy = seal(keys, Buffer.from(JSON.stringify({ v: 1, pictures: true, files: [] })));
-    expect(await replaying(legacy, 5).download(key, b.roots, path.join(b.root, "staging"), second.state.version)).toMatchObject({ version: 5, files: {} });
+    const taken = await replaying(legacy, 5).download(key, b.roots, path.join(b.root, "staging"), second.state.version);
+    expect(taken).toMatchObject({ version: 5, files: {} });
+    expect(taken?.sealed).toBeUndefined();
+    // Once this PC has seen a sealed one, a list without a sealed version is an old one served again: older, at any version.
+    for (const version of [9, 1000]) {
+      await expect(replaying(legacy, version).download(key, b.roots, path.join(b.root, "staging"), second.state.version, true)).rejects.toMatchObject({ reason: "older" });
+    }
+    // The user's own choices (no version to compare with) still take it.
+    expect(await replaying(legacy, 9).download(key, b.roots, path.join(b.root, "staging"), 0, true)).toMatchObject({ version: 9 });
+    // A sealed copy says so, and so does the state it becomes.
+    const real = await client().download(key, b.roots, path.join(b.root, "staging"), first.state.version, true);
+    expect(real).toMatchObject({ version: second.state.version, sealed: true });
+    expect(second.state.sealed).toBe(true);
+    const swapped = await swapInCopy(path.join(b.root, "staging"), b.roots, path.join(b.root, "kept"), real!);
+    expect(swapped.sealed).toBe(true);
+    const file = path.join(b.root, "cloud-copy.json");
+    await saveCopyState(file, swapped);
+    expect(await loadCopyState(file)).toEqual(swapped);
   });
 
   it("cannot be opened with another recovery key", async () => {

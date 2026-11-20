@@ -38,6 +38,11 @@ export interface InstalledModule {
   developmentFolder?: string;
   /** The module's project folder: the development folder itself, or a folder directly inside it. */
   developmentProject?: string;
+  /**
+   * An installed folder whose files are no longer what its recorded publisher signed (installer.ts applyOwners): it
+   * does not load, its manifest (version, permissions) is not trusted, and a zip from that publisher repairs it.
+   */
+  changed?: true;
 }
 
 export const MANIFEST = "tavora.module.json";

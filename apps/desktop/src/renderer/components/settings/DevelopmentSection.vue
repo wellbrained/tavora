@@ -45,7 +45,7 @@ try {
 const accounts = computed(() => account.value?.enabled === true);
 const signedIn = computed(() => accounts.value && Boolean(account.value?.account));
 /** The account's recovery key is on screen (made with a key here) or needed on this PC. */
-const recoveryKey = computed(() => Boolean(developerKeys.value?.recoveryKey) || developerKeys.value?.status === "ask");
+const recoveryKey = computed(() => Boolean(developerKeys.value?.recoveryKey) || developerKeys.value?.status === "ask" || Boolean(developerKeys.value?.vault));
 /** A developer on a new PC needs only the recovery key here, so the card asking "Want to make modules?" stays away. */
 const startCard = computed(() => accounts.value && developerState.value === "missing" && !(account.value?.developer && recoveryKey.value));
 const showTools = computed(() => makesModules.value || carriedOver.value || props.highlight === "module-contact");

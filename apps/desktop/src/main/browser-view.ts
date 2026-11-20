@@ -1,7 +1,7 @@
 // The Browser panel's page (the Browser security notes). Unlike a module view
 // it has no preload, no bridge and no IPC: the toolbar is drawn by the host
 // UI, and the page is only ever told where to go by the main process.
-import { session, WebContentsView, type Session, type WebContents } from "electron";
+import { session, WebContentsView, type Referrer, type Session, type WebContents } from "electron";
 import type { PanelCorners } from "./panel-corners";
 import type { BrowserError, BrowserState, InstanceStatus } from "../shared/host-api";
 import { judgedTopUrl, judgeRequest, type AdBlocker } from "./browser-filter";
@@ -17,8 +17,41 @@ export function browserPartition(kind: BrowserKind, workspaceId: string): string
   return kind === "shared" ? "persist:browser" : `persist:browser@${workspaceId}`;
 }
 
-/** How long after a click or key press a page may open a link in a new window. */
+/** How long after a click or key press a page may open a link in a new window, or take the panel to the other session. */
 const GESTURE_MS = 1_000;
+
+/**
+ * How a main-frame navigation started: by the user (the address bar, Back, Try again, a tab Tavora opened for a click)
+ * or by the page, and then whether right after a click or key press in it. `referrer` is what its first request sent.
+ */
+export type NavigationStart = { by: "user"; referrer?: Referrer | undefined } | { by: "page"; gesture: boolean; referrer?: Referrer | undefined };
+
+/**
+ * What happens to a navigation that has to move to the other session (a site signed in for all workspaces, or away from
+ * one). Tavora can carry it there only by loading the address itself, and Chromium treats that like a typed address:
+ * SameSite=Strict cookies go along and `Sec-Fetch-Site` says `none`. So that happens only when the user started the
+ * navigation, or the page did right after a click or key press in it; it keeps the referrer the page would have sent.
+ * Otherwise the panel asks: it shows where the page wants to go, and the user's press opens it there.
+ */
+export function crossSessionStep(start: NavigationStart): { action: "reissue"; referrer: Referrer | undefined } | { action: "ask" } {
+  if (start.by === "page" && !start.gesture) return { action: "ask" };
+  return { action: "reissue", referrer: start.referrer };
+}
+
+/**
+ * The referrer a page's own navigation sends, as far as Tavora can tell from outside the page: its origin only (the
+ * default for a link to another site, which every session switch is), and nothing from a page that isn't on the web
+ * or from https to http. The page's own referrer policy is not readable from here.
+ */
+export function pageReferrer(pageUrl: string | null): Referrer | undefined {
+  const url = pageUrl && isWebUrl(pageUrl) ? parseUrl(pageUrl) : null;
+  return url ? { url: `${url.origin}/`, policy: "strict-origin" } : undefined;
+}
+
+/** Whether two addresses are the same once Chromium has written them its way (a slash after the host, lower-case names). */
+function sameAddress(a: string, b: string): boolean {
+  return a === b || (parseUrl(a)?.href ?? a) === (parseUrl(b)?.href ?? b);
+}
 
 /** Permissions a page may have: copy buttons, and fullscreen that stays inside the panel. */
 const ALLOWED_PERMISSIONS = new Set(["clipboard-sanitized-write", "fullscreen"]);
@@ -108,8 +141,11 @@ export interface BrowserPanelOptions {
   swap(previous: WebContentsView | null, next: WebContentsView): void;
   /** Ctrl+L in the page: the toolbar's address bar takes the focus. */
   onFocusAddress(): void;
-  /** A new Browser tab beside this one: a link the user opened in a new tab (in the background when asked), or an empty one (Ctrl+T). */
-  onOpenTab(url: string | null, background: boolean): void;
+  /**
+   * A new Browser tab beside this one: a link the user opened in a new tab (in the background when asked), with the
+   * referrer the page gave it, or an empty one (Ctrl+T).
+   */
+  onOpenTab(url: string | null, background: boolean, referrer?: Referrer): void;
   /** Ctrl+W in the page closes this tab. */
   onCloseTab(): void;
   /** The page went somewhere new; the address is kept so the panel reopens there. */
@@ -142,6 +178,10 @@ export class BrowserPanel {
   private fullscreen = false;
   private downloadsRefused = 0;
   private lastGesture = 0;
+  /** The navigation Tavora itself just started in the page (load, Back, Forward, Reload), until Chromium reports it. */
+  private ownNavigation: { url: string; referrer: Referrer | undefined } | null = null;
+  /** How the navigation under way started; its redirects follow the same rule (crossSessionStep). */
+  private navigationStart: NavigationStart = { by: "user" };
   /** Redirects that moved the page to the other session since a page last committed: two sites can't bounce it forever. */
   private redirectSwitches = 0;
   private changeTimer: ReturnType<typeof setTimeout> | undefined;
@@ -160,10 +200,10 @@ export class BrowserPanel {
     return this.committedUrl === null && this.requestedUrl === null;
   }
 
-  /** Opens the address the panel showed last time, unless the user already went somewhere. */
-  restore(url: unknown): void {
+  /** Opens the address the panel showed last time, or a link opened in a new tab, unless the user already went somewhere. */
+  restore(url: unknown, referrer?: Referrer): void {
     if (typeof url !== "string" || !isWebUrl(url) || this.committedUrl !== null || this.requestedUrl !== null) return;
-    this.open(url, this.kindFor(url));
+    this.open(url, this.kindFor(url), referrer);
   }
 
   get instanceId(): string {
@@ -211,26 +251,31 @@ export class BrowserPanel {
     // A page may open a link in a "new window" only right after the user
     // clicked or typed; it then opens as a new Browser tab instead.
     contents.on("input-event", (_event, input) => {
-      if (input.type === "mouseDown" || input.type === "keyDown" || input.type === "gestureTap") this.lastGesture = Date.now();
+      // Windows reports a key press as rawKeyDown.
+      if (input.type === "mouseDown" || input.type === "rawKeyDown" || input.type === "keyDown" || input.type === "gestureTap") this.lastGesture = Date.now();
     });
     // A link the user opened in a new tab or window (target=_blank,
     // Ctrl+click, middle click) becomes a new Browser tab beside this one.
     // Without a click or key press just before, nothing opens, and one click
     // opens one tab, so a page cannot open a pile of them from a single click.
-    contents.setWindowOpenHandler(({ url, disposition }) => {
+    contents.setWindowOpenHandler(({ url, disposition, referrer }) => {
       if (Date.now() - this.lastGesture < GESTURE_MS && this.mayFollow(url)) {
         this.lastGesture = 0;
-        setImmediate(() => current() && this.options.onOpenTab(url, disposition === "background-tab"));
+        // The referrer as Chromium worked it out for the page; it applies the page's policy again when the tab loads.
+        const sent = referrer.url && isWebUrl(referrer.url) && referrer.policy !== "no-referrer" ? referrer : undefined;
+        setImmediate(() => current() && this.options.onOpenTab(url, disposition === "background-tab", sent));
       }
       return { action: "deny" };
     });
+    // The page goes somewhere by itself (a link, a script, a form): it stays in this session, unless the address is a
+    // site of the other one, see crossSessionStep.
     contents.on("will-navigate", (event) => {
       if (!this.mayFollow(event.url)) return event.preventDefault();
       const kind = this.kindFor(event.url);
-      if (kind !== this.kind) {
-        event.preventDefault();
-        this.open(event.url, kind);
-      }
+      if (kind === this.kind) return;
+      event.preventDefault();
+      if (!current()) return;
+      this.crossSession(event.url, kind, { by: "page", gesture: this.pageGesture(event.url), referrer: pageReferrer(this.committedUrl) });
     });
     contents.on("will-frame-navigate", (event) => {
       if (event.isMainFrame) return;
@@ -238,8 +283,18 @@ export class BrowserPanel {
       if (!url || !["http:", "https:", "about:", "data:", "blob:"].includes(url.protocol)) event.preventDefault();
     });
     contents.on("did-start-navigation", (event) => {
-      if (!current() || !event.isMainFrame || event.isSameDocument) return;
+      if (!current() || !event.isMainFrame) return;
+      // Tavora's own navigation is the next one of the main frame Chromium reports (also one within the page, such as
+      // Back to a pushState entry), started by no frame, to the address Tavora asked for. Anything else is the page's
+      // (a link, a script, its history), and a click just before it is used up by it.
+      const own = this.ownNavigation;
+      this.ownNavigation = null;
+      if (event.isSameDocument) return;
       this.hopUrl = event.url;
+      this.navigationStart =
+        own && !event.initiator && sameAddress(own.url, event.url)
+          ? { by: "user", referrer: own.referrer }
+          : { by: "page", gesture: this.takeGesture(), referrer: pageReferrer(this.committedUrl) };
       // Counted from here: the new page's first requests can be blocked before did-navigate arrives.
       this.blocked = 0;
     });
@@ -247,13 +302,14 @@ export class BrowserPanel {
       if (!event.isMainFrame) return;
       const from = this.hopUrl ?? this.committedUrl ?? "";
       if (!isWebUrl(event.url) || (isPrivateUrl(event.url) && !isPrivateUrl(from))) return event.preventDefault();
-      // A redirect to a site of the other session goes there, as a link does (will-navigate): only shared sites sit in the shared session.
+      // A redirect to a site of the other session goes there as the navigation it belongs to would (will-navigate): only
+      // shared sites sit in the shared session.
       const kind = this.kindFor(event.url);
       if (kind !== this.kind) {
         event.preventDefault();
         if (!current()) return;
         if (++this.redirectSwitches > MAX_REDIRECT_SWITCHES) return this.failed(event.url, { kind: "unknown", detail: "ERR_TOO_MANY_REDIRECTS" });
-        this.open(event.url, kind);
+        this.crossSession(event.url, kind, this.navigationStart);
         return;
       }
       if (current()) this.hopUrl = event.url;
@@ -339,6 +395,55 @@ export class BrowserPanel {
     return this.options.isSharedSite(url) ? "shared" : "workspace";
   }
 
+  /**
+   * The click a page's own navigation to `url` came with. Electron reports the navigation (did-start-navigation, which
+   * takes the click) before will-navigate asks about it, so a click already taken for this very navigation counts; it
+   * is used up here. Otherwise the click is taken now.
+   */
+  private pageGesture(url: string): boolean {
+    const start = this.navigationStart;
+    if (start.by !== "page" || this.hopUrl !== url) return this.takeGesture();
+    this.navigationStart = { ...start, gesture: false };
+    return start.gesture;
+  }
+
+  /** Whether the user clicked or pressed a key in the page just now; a click is used up by what it lets the page do. */
+  private takeGesture(): boolean {
+    const gesture = Date.now() - this.lastGesture < GESTURE_MS;
+    this.lastGesture = 0;
+    return gesture;
+  }
+
+  /** A navigation that must move to the other session: carried there, or shown so the user can open it (crossSessionStep). */
+  private crossSession(url: string, kind: BrowserKind, start: NavigationStart): void {
+    const step = crossSessionStep(start);
+    if (step.action === "reissue") return this.open(url, kind, step.referrer);
+    // One question at a time: what Open opens is the address the panel shows.
+    if (this.asking) return;
+    this.failed(url, { kind: "otherSession", detail: "" });
+  }
+
+  /** Whether the panel asks the user about a page's move to the other session (crossSessionStep). */
+  private get asking(): boolean {
+    return this.error?.kind === "otherSession";
+  }
+
+  /** Open, while the panel asks: the address shown, in the session it belongs in, as the user's own navigation. */
+  openAsked(): void {
+    const url = this.requestedUrl;
+    if (!this.asking || !url) return;
+    this.open(url, this.kindFor(url));
+  }
+
+  /** Stay on this page, while the panel asks: the page shows again, where it was. */
+  stay(): void {
+    if (!this.asking) return;
+    this.error = null;
+    this.requestedUrl = null;
+    this.applyVisibility();
+    this.changed();
+  }
+
   /** Whether the page may take the panel to an address: web only, and not from a public page to a local one. */
   private mayFollow(url: string): boolean {
     return isWebUrl(url) && !(isPrivateUrl(url) && !isPrivateUrl(this.committedUrl ?? ""));
@@ -352,7 +457,7 @@ export class BrowserPanel {
   }
 
   /** Loads an address, first moving to the other session's view when the site needs it. */
-  private open(url: string, kind: BrowserKind): void {
+  private open(url: string, kind: BrowserKind, referrer?: Referrer): void {
     if (kind !== this.kind) {
       const previous = this.view;
       this.kind = kind;
@@ -363,14 +468,15 @@ export class BrowserPanel {
       if (this.bounds) this.view.setBounds(this.bounds);
       if (!previous.webContents.isDestroyed()) previous.webContents.close();
     }
-    this.load(url);
+    this.load(url, referrer);
   }
 
-  private load(url: string): void {
+  private load(url: string, referrer?: Referrer): void {
     this.error = null;
     this.requestedUrl = url;
     this.setStatus("ready");
-    void this.view.webContents.loadURL(url).catch(() => {
+    this.ownNavigation = { url, referrer };
+    void this.view.webContents.loadURL(url, referrer ? { httpReferrer: referrer } : undefined).catch(() => {
       // Failures surface through did-fail-load.
     });
     this.applyVisibility();
@@ -387,13 +493,25 @@ export class BrowserPanel {
   }
 
   back(): void {
-    const history = this.view.webContents.navigationHistory;
-    if (history.canGoBack()) history.goBack();
+    this.goTo(-1);
   }
 
   forward(): void {
+    this.goTo(1);
+  }
+
+  /** Back or Forward, pressed by the user. */
+  private goTo(step: -1 | 1): void {
     const history = this.view.webContents.navigationHistory;
-    if (history.canGoForward()) history.goForward();
+    if (!(step < 0 ? history.canGoBack() : history.canGoForward())) return;
+    this.expectOwn(history.getEntryAtIndex(history.getActiveIndex() + step)?.url);
+    if (step < 0) history.goBack();
+    else history.goForward();
+  }
+
+  /** Tavora is about to take the page to `url` itself; Chromium reports it as a navigation like any other. */
+  private expectOwn(url: string | undefined): void {
+    this.ownNavigation = url ? { url, referrer: undefined } : null;
   }
 
   /** Stops loading the page. */
@@ -495,12 +613,16 @@ export class BrowserPanel {
   resume(): void {}
 
   reload(): void {
+    // Reload while the panel asks reloads the page shown before, never the address it asks about.
+    if (this.asking) this.stay();
     if (this.status === "crashed" || this.error) {
       const url = this.requestedUrl ?? this.committedUrl;
       this.setStatus("ready");
-      if (url) this.load(url);
+      // In the session the site belongs in.
+      if (url) this.open(url, this.kindFor(url));
       return;
     }
+    this.expectOwn(this.view.webContents.getURL());
     this.view.webContents.reload();
   }
 

@@ -2,9 +2,13 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.42
+
+- New projects start on `@tavora/sdk` 0.4.4: the theme carries the design style the user picked (`theme.style`).
+
 ## 0.1.41
 
-- New projects start on `@tavora/sdk` 0.4.3: the theme carries the design style the user picked (`theme.style`).
+- New projects start on `@tavora/sdk` 0.4.3: an overlay page with a dark colour scheme stays see-through in OBS, and gets the Browser Source's Custom CSS.
 
 ## 0.1.40
 

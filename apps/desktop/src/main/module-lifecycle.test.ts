@@ -7,9 +7,10 @@ import { fingerprint, signFiles, writeZip, type ZipFile } from "@tavora/pack";
 import { describe, expect, it } from "vitest";
 import type { CatalogEntry } from "./catalog-client";
 import { GrantStore } from "./grants";
-import { applyOwners, readOwnerRecords } from "./installer";
+import { loadInstalledModules } from "./installed-modules";
+import { readOwnerRecords } from "./installer";
 import { ModuleLifecycle } from "./module-lifecycle";
-import { discoverModules, type InstalledModule } from "./registry";
+import { BROWSER_MODULE_ID, type InstalledModule } from "./registry";
 
 const TAVORA = "0.19.0";
 const ID = "wellbrained.tracker";
@@ -63,6 +64,7 @@ async function setup() {
   const grants = await GrantStore.load(userData);
   const steps: string[] = [];
   let modules = new Map<string, InstalledModule>();
+  let blocked = new Map<string, InstalledModule>();
   let catalogIds = new Set<string>();
   const catalog = { index: [] as CatalogEntry[], zips: new Map<string, Buffer>() };
   const counted: string[] = [];
@@ -77,7 +79,7 @@ async function setup() {
     userData,
     tavoraVersion: TAVORA,
     modules: () => modules,
-    blocked: () => new Map(),
+    blocked: () => blocked,
     catalogIds: () => catalogIds,
     removable: (moduleId) => modules.get(moduleId)?.provenance === "local",
     installRules: async () => ({ userModules }),
@@ -119,10 +121,12 @@ async function setup() {
     },
     reload: async () => {
       steps.push("look for modules");
-      const records = await readOwnerRecords(userData);
-      modules = await discoverModules({ local: [userModules], tavoraVersion: TAVORA });
-      applyOwners(modules, userModules, records);
-      catalogIds = new Set([...modules.keys()].filter((id) => records[id]?.catalog && records[id]?.id === id));
+      // The host's own look (installed-modules.ts), without the Browser.
+      const loaded = await loadInstalledModules({ userData, userModules, sources: { local: [userModules] }, tavoraVersion: TAVORA, safety: { blocked: () => null } });
+      loaded.modules.delete(BROWSER_MODULE_ID);
+      modules = loaded.modules;
+      blocked = loaded.blocked;
+      catalogIds = loaded.catalog;
       const moved = new Set(state.movedByReload);
       for (const id of moved) steps.push(`reload panels ${id}`);
       state.movedByReload.clear();
@@ -135,7 +139,7 @@ async function setup() {
     await writeFile(file, zip);
     return file;
   };
-  return { progress, counted, userData, userModules, grants, steps, lifecycle, publish, state, zipFile, modules: () => modules };
+  return { progress, counted, userData, userModules, grants, steps, lifecycle, publish, state, zipFile, modules: () => modules, blocked: () => blocked };
 }
 
 describe("ModuleLifecycle", () => {
@@ -353,6 +357,24 @@ describe("ModuleLifecycle", () => {
     const { updated } = await lifecycle.updates.check();
     expect(updated.map((item) => item.manifest.version)).toEqual(["1.1.0"]);
     expect(modules().get(ID)?.manifest.version).toBe("1.1.0");
+  });
+
+  it("repairs a catalog module whose folder was changed by hand with the catalog's version, the same one too", async () => {
+    const { lifecycle, publish, modules, blocked, userModules } = await setup();
+    const key = generateKeyPairSync("ed25519").privateKey;
+    const owner = fingerprint(key);
+    const zip = zipOf("1.0.0", key);
+    publish(listing("1.0.0", zip, owner), zip);
+    await lifecycle.installFromCatalog(ID);
+    await writeFile(path.join(userModules, ID, "dist", "index.html"), "<p>someone else's</p>");
+    await (lifecycle as unknown as { options: { reload(): Promise<unknown> } }).options.reload();
+    expect(modules().has(ID)).toBe(false);
+    expect(blocked().get(ID)?.changed).toBe(true);
+
+    const { updated } = await lifecycle.updates.check();
+    expect(updated.map((item) => item.manifest.version)).toEqual(["1.0.0"]);
+    expect(modules().get(ID)?.owner).toBe(owner);
+    expect(blocked().size).toBe(0);
   });
 
   it("tells the catalog an install and an update apart, and a zip picked by hand counts as neither", async () => {

@@ -26,6 +26,7 @@ import {
   type IpcMainEvent,
   type IpcMainInvokeEvent,
   type OpenDialogOptions,
+  type Referrer,
   type WebContents,
   type WebContentsView,
 } from "electron";
@@ -3088,6 +3089,7 @@ export class Host {
       "developer-recovery-key": (action) => this.developerKeys.enterKey(action.key),
       "developer-recovery-key-saved": () => this.developerKeys.keySaved(),
       "developer-show-recovery-key": () => this.developerKeys.showKey(),
+      "developer-vault-rebuild": () => this.developerKeys.rebuildVault(),
       "developer-copy-recovery-key": () => {
         const key = this.developerKeys.view().recoveryKey;
         if (key) clipboard.writeText(key);
@@ -3715,11 +3717,11 @@ export class Host {
   }
 
   /** A new Browser tab in the same dock group as the one it was opened from; an empty one gets the address bar's focus. */
-  private openBrowserTab(fromInstanceId: string, url: string | null, background: boolean): void {
+  private openBrowserTab(fromInstanceId: string, url: string | null, background: boolean, referrer?: Referrer): void {
     this.browser(fromInstanceId);
     const id = this.openModule(BROWSER_MODULE_ID, { openedFrom: { instanceId: fromInstanceId, background } });
     if (!id) return;
-    if (url) this.browser(id).restore(url);
+    if (url) this.browser(id).restore(url, referrer);
     else setTimeout(() => this.window.webContents.send("host:shortcut", `address:${id}`), 100);
   }
 
@@ -3880,6 +3882,10 @@ export class Host {
         return panel.setMuted(command === "mute");
       case "exit-fullscreen":
         return panel.exitFullscreen();
+      case "open-asked":
+        return panel.openAsked();
+      case "stay":
+        return panel.stay();
       case "open-external": {
         // Only the page's own http or https address, and only on the user's click.
         const url = panel.externalUrl;
@@ -4481,9 +4487,9 @@ export class Host {
         if (this.panels.get(instanceId) !== adapter) return;
         void this.data.panelState.set(instanceId, { url }).catch((error: unknown) => console.error("[tavora]", error));
       },
-      onOpenTab: (url, background) => {
+      onOpenTab: (url, background, referrer) => {
         try {
-          this.openBrowserTab(instanceId, url, background);
+          this.openBrowserTab(instanceId, url, background, referrer);
         } catch (error) {
           // The workspace is full; the user is told the same as for Add module.
           if (error instanceof WorkspaceError) this.notice = error.message;

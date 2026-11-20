@@ -1,10 +1,18 @@
-## 0.4.3
+## 0.4.4
 
 Design styles. Tavora will let users pick a design style besides the theme: how surfaces, tabs, buttons, inputs, lists and labels are drawn, and a few sizes. It comes with the next Tavora (`STYLE_TAVORA` in `protocol.ts`; the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.21.43).
 
 - `TavoraTheme` gets an optional `style: { id, name, looks, values }` (type `TavoraStyle`). `looks` names one look per part (`STYLE_LOOKS`, `StylePart`, `StyleLooks`), `values` the sizes (`StyleValues`: `borderWidth`, `depth`, `textSize`, `controlHeight`, `spacing`, `glassOpacity`, kept in `STYLE_RANGES`). The style's corner and font arrive in `radius` and `font` as before. An older Tavora leaves `style` out, which means Classic (`CLASSIC_STYLE`).
 - `applyHostTheme`, and with it `bootstrapModule`, writes it to the page: `data-style`, `data-look-<part>` and the variables of `STYLE_VARIABLES` (`--style-border-width`, `--style-depth`, `--style-text`, `--style-control-height`, `--style-space`, `--style-glass-opacity`). A theme without a style takes them away again. `styleMarks(style)` gives the same as a list, for a page that writes them itself. `ThemeRoot` gets optional `removeAttribute` and `style.removeProperty` for that.
 - `@tavora/sdk/testing`: the memory host sends Classic with the theme, `themeFromPackage` and `themeOf` include it, `host.changeTheme({ style })` sends another one and `{ style: undefined }` none; a host older than `STYLE_TAVORA` never sends one.
+
+## 0.4.3
+
+Stream overlays in OBS. The next Tavora shows an overlay page in OBS inside a frame of its own, so the page can't navigate away. `MIN_TAVORA` stays (Tavora 0.21.43).
+
+- `watchOverlay` tells that frame the page's `color-scheme` (the `OVERLAY_COLOR_SCHEME_MESSAGE` message in `protocol.ts`), at once and whenever it changes, so a page with a dark one stays see-through in OBS.
+- It also puts the Browser Source's Custom CSS into the page: OBS adds it to the frame, which passes it on (`OVERLAY_CSS_MESSAGE`, at most `MAX_OVERLAY_CSS` characters).
+- In Tavora's own windows, and with an older Tavora, nothing changes.
 
 ## 0.4.2
 

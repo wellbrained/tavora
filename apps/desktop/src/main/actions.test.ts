@@ -295,6 +295,7 @@ const ACCEPTED: [{ type: string; [field: string]: unknown }][] = [
   [{ type: "developer-recovery-key-saved" }],
   [{ type: "developer-show-recovery-key" }],
   [{ type: "developer-copy-recovery-key" }],
+  [{ type: "developer-vault-rebuild" }],
   [{ type: "account-prefix-check", prefix: "wellbrained" }],
   [{ type: "account-prefix-claim", prefix: "wellbrained" }],
   [{ type: "publish-review", moduleId: "wellbrained.tracker" }],

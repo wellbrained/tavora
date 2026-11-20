@@ -16,7 +16,7 @@ defineProps<{ highlight: string | null }>();
 /** Publishing needs the account; in builds without accounts there is none of it. */
 const accounts = computed(() => account.value?.enabled === true);
 /** The account's recovery key is on screen (made with a key here) or needed on this PC: it comes first. */
-const recoveryKey = computed(() => Boolean(developerKeys.value?.recoveryKey) || developerKeys.value?.status === "ask");
+const recoveryKey = computed(() => Boolean(developerKeys.value?.recoveryKey) || developerKeys.value?.status === "ask" || Boolean(developerKeys.value?.vault));
 
 onMounted(() => {
   // The developer side and the contact default as the service has them now; quietly, offline is fine.

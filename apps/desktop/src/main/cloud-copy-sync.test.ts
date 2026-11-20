@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CloudCopyView } from "../shared/host-api";
 
 import { CloudCopy, ServiceStorage } from "./cloud-copy";
+import { copyKeys, parseRecoveryKey, seal } from "./copy-crypto";
 import { FOLDER_NAME } from "./copy-folder";
 import { cleanUp, pc, service } from "./cloud-copy.test-helper";
 import { CLOSE_QUIET_MS, CopySync, questionsView, type Question } from "./cloud-copy-sync";
@@ -169,6 +170,42 @@ describe("the cloud copy, as Tavora runs it", () => {
     await atB.sync.keep("pc");
     expect(await read(b.userData, "workspace.json")).toBe("w2");
     expect(cloud.routes).toContain("PUT /v1/account/copy");
+  });
+
+  it("asks instead of taking a copy without a sealed version once this PC saw sealed ones, and takes it as before otherwise", async () => {
+    const cloud = await service();
+    const a = await pc({ "library.json": "a1" });
+    const { key } = await startCopy(cloud, a);
+    // An old Tavora's list (no sealed version) with nothing in it, served as version 9.
+    const legacy = seal(copyKeys(parseRecoveryKey(key)!), Buffer.from(JSON.stringify({ v: 1, pictures: true, files: [] })));
+    const manifest = "http://tavora.test/v1/account/copy/manifest";
+    const replay = (async (url: string, init?: RequestInit) => {
+      const answer = await cloud.fetch(url, init);
+      if ((init?.method ?? "GET") !== "GET") return answer;
+      if (url === manifest) return new Response(new Uint8Array(legacy), { headers: { "x-copy-version": "9" } });
+      if (url.endsWith("/copy")) {
+        const body = (await answer.json()) as { copy: Record<string, unknown> };
+        return Response.json({ copy: { ...body.copy, version: 9 } });
+      }
+      return answer;
+    }) as typeof fetch;
+    const state = path.join(a.userData, "cloud-copy.json");
+    expect(JSON.parse(await read(a.userData, "cloud-copy.json"))).toMatchObject({ sealed: true });
+
+    const atA = tavora({ ...cloud, fetch: replay }, a);
+    await atA.sync.beforeLoad();
+    expect(await read(a.userData, "library.json")).toBe("a1");
+    expect(atA.sync.view()).toMatchObject({ conflict: true, restartToTake: false });
+    expect(atA.events.restarts).toBe(0);
+
+    // A PC that never saw a sealed copy (its state is from an older Tavora) takes it, as before.
+    const saved = JSON.parse(await read(a.userData, "cloud-copy.json")) as Record<string, unknown>;
+    delete saved.sealed;
+    await writeFile(state, JSON.stringify(saved));
+    const before = tavora({ ...cloud, fetch: replay }, a);
+    await before.sync.beforeLoad();
+    expect(before.sync.view().conflict).toBe(false);
+    expect(JSON.parse(await read(a.userData, "cloud-copy.json"))).toMatchObject({ version: 9 });
   });
 
   it("asks a PC that missed a delete, and keeping its side sends it up although it didn't change", async () => {
