@@ -373,7 +373,7 @@ export class PanelViews {
    * still saving from an earlier close.
    */
   close(instanceId: string, discard = false): void {
-    this.remove(instanceId, true, discard);
+    this.remove(instanceId, "forget", discard);
     if (discard) for (const page of this.closing) if (page.instanceId === instanceId) void page.adapter.dispose(true);
   }
 
@@ -415,14 +415,23 @@ export class PanelViews {
 
   /** Only the view goes (its workspace is left, or the overlays let it go); it comes back with its workspace. */
   release(instanceId: string): void {
-    this.remove(instanceId, false);
+    this.remove(instanceId, "release");
+  }
+
+  /**
+   * The panel starts anew from another copy of its module (its id now loads for another owner): its view goes, and
+   * what its page ran ends as on a close (questions, live state, a lend to the in-game layer), but it keeps its place,
+   * where it was opened from and whether it runs for the overlays, so the view made next shows where it was.
+   */
+  restart(instanceId: string): void {
+    this.remove(instanceId, "restart");
   }
 
   /** A workspace is left or Home shown: every view goes except those running in the in-game layer or kept for the overlays. */
   closeAll(): void {
     this.closeDialog();
     this.endOpening(false);
-    for (const instanceId of this.entries.keys()) if (!this.lent.has(instanceId) && !this.keep.has(instanceId)) this.remove(instanceId, false);
+    for (const instanceId of this.entries.keys()) if (!this.lent.has(instanceId) && !this.keep.has(instanceId)) this.remove(instanceId, "release");
     this.bounds.clear();
   }
 
@@ -437,12 +446,17 @@ export class PanelViews {
     return Promise.all([...this.closing].map((page) => page.done)).then(() => undefined);
   }
 
-  private remove(instanceId: string, forget: boolean, discard = false): void {
-    this.deps.releasing(instanceId, forget);
+  /** `forget`: closed for good; `release`: only the view goes; `restart`: the page ends for good, the place stays. */
+  private remove(instanceId: string, how: "forget" | "release" | "restart", discard = false): void {
+    const forget = how === "forget";
+    const ends = how !== "release";
+    this.deps.releasing(instanceId, ends);
     if (forget) {
       this.keep.delete(instanceId);
       this.opened.delete(instanceId);
       this.placements.delete(instanceId);
+    }
+    if (ends) {
       this.waiting.delete(instanceId);
       this.launches.delete(instanceId);
       this.noWelcome.delete(instanceId);
@@ -460,7 +474,7 @@ export class PanelViews {
       this.byContents.delete(adapter.webContentsId);
       if (this.dialogState?.instanceId === instanceId) this.closeDialog();
       // A panel in the layer is let go of by its window first (the window never closes the page, this does).
-      if (forget) {
+      if (ends) {
         const revoked = this.lent.get(instanceId);
         this.lent.delete(instanceId);
         revoked?.();
@@ -596,7 +610,7 @@ export class PanelViews {
     // Not here any more: the panel itself is closing, or Tavora is.
     if (!adapter || this.deps.windowGone()) return;
     // The slot it comes back to is not on screen: the panel closes like any panel of a workspace that is left, and opens again with its workspace.
-    if (!this.deps.shownHere(instanceId)) return this.remove(instanceId, false);
+    if (!this.deps.shownHere(instanceId)) return this.remove(instanceId, "release");
     this.deps.mount(adapter);
     adapter.setVisible(false);
     this.layOut(instanceId, adapter);

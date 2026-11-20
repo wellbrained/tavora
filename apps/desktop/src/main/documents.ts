@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
+import { isWindowsDeviceName } from "@tavora/module-schema";
 import {
   DOCUMENT_ID,
   LIMITS,
@@ -219,16 +220,17 @@ function validateId(id: unknown): string {
 
 /**
  * Ids a new document can't have, in any case: `index` is the store's own file, and Windows keeps the device names
- * (`con`, `nul`, `com1`, …) for itself, so `con.json` is no file. A document saved under one elsewhere stays readable.
+ * (`con`, `nul`, `com1`, …; module-schema's one rule for them) for itself, so `con.json` is no file. A document saved
+ * under one elsewhere stays readable.
  */
-const RESERVED_ID = /^(?:index|con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+const reservedId = (id: string): boolean => id.toLowerCase() === "index" || isWindowsDeviceName(id);
 
 /**
  * Refuses an id a new document can't have: a reserved one, or one that differs from a saved document's id only by
  * case, as Windows doesn't tell `Notes.json` from `notes.json` and one would write over the other.
  */
 function checkNewId(id: string, index: Map<string, DocumentSummary>): void {
-  if (RESERVED_ID.test(id)) throw new HostError("INVALID_PARAMS", `"${id}" can't be a document id: Windows or Tavora keeps that name for itself`);
+  if (reservedId(id)) throw new HostError("INVALID_PARAMS", `"${id}" can't be a document id: Windows or Tavora keeps that name for itself`);
   const lower = id.toLowerCase();
   const other = [...index.keys()].find((saved) => saved.toLowerCase() === lower);
   if (other !== undefined) throw new HostError("INVALID_PARAMS", `document id "${id}" differs from "${other}" only by case`);

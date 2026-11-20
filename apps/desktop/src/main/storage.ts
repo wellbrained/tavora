@@ -157,9 +157,21 @@ function sameJson(a: JsonValue | null, b: JsonValue | null): boolean {
   return keys.length === Object.keys(b).length && keys.every((key) => key in b && sameJson(a[key]!, b[key]!));
 }
 
-/** UI state for one panel instance. Removed when the panel is closed. Fields of its file other than the value (a newer Tavora's) are kept. */
+/** What a panel page reads and writes of its own state (panel.getState / panel.setState), as the owner it runs as. */
+export interface PanelStateAccess {
+  get(instanceId: string): Promise<JsonValue | null>;
+  set(instanceId: string, value: unknown): Promise<void>;
+}
+
+/**
+ * UI state for one panel instance. Removed when the panel is closed. Fields of its file other than the value (a newer
+ * Tavora's) are kept. A module panel's state is kept with the owner (publisher) that wrote it: when the panel's module
+ * id comes to load for another owner (a development folder over a catalog copy), that owner never reads it (handOver).
+ */
 export class PanelStateStore {
   private readonly queue = new SerialQueue();
+  /** Panels handed over to another owner this run: writes of any other owner (the old page still saving) are dropped. */
+  private readonly owners = new Map<string, string>();
   /**
    * Per panel file read this run, its fields this Tavora doesn't know, ready to write back: a newer Tavora's file is
    * copied aside, and read, before the first write only.
@@ -173,20 +185,43 @@ export class PanelStateStore {
     return path.join(this.dir, `${instanceId}.json`);
   }
 
-  get(instanceId: string): Promise<JsonValue | null> {
+  /** The panel's state; with `owner` (a module panel), null when another owner wrote it. */
+  get(instanceId: string, owner?: string): Promise<JsonValue | null> {
     const file = this.file(instanceId);
-    return this.queue.run(async () => ((await this.read(file))?.value as JsonValue | undefined) ?? null);
+    return this.queue.run(async () => {
+      const saved = await this.read(file);
+      if (owner !== undefined && typeof saved?.owner === "string" && saved.owner !== owner) return null;
+      return (saved?.value as JsonValue | undefined) ?? null;
+    });
+  }
+
+  /**
+   * The panel now runs as `to` (its module id loads for another owner): what `from` left stays `from`'s, so `to` reads
+   * nothing of it, and what `from`'s closing page still writes is dropped. Queued after `from`'s writes so far.
+   */
+  handOver(instanceId: string, from: string, to: string): Promise<void> {
+    const file = this.file(instanceId);
+    this.owners.set(instanceId, to);
+    return this.queue.run(async () => {
+      const saved = await this.read(file);
+      // A file from before owners were noted: it is `from`'s.
+      if (!saved || typeof saved.owner === "string" || saved.value === undefined) return;
+      await writeFileAtomic(file, `{"version":${STORE_VERSIONS.panelState},"owner":${JSON.stringify(from)},${this.kept.get(file) ?? ""}"value":${JSON.stringify(saved.value)}}`);
+    });
   }
 
   /** The saved file of a panel: one a newer Tavora wrote is copied aside, an unreadable one set aside (readSavedFile). */
   private async read(file: string): Promise<Record<string, unknown> | null> {
     const saved = await readSavedFile(file, { version: STORE_VERSIONS.panelState });
-    this.kept.set(file, keptMembers(saved, ["version", "value"]));
+    this.kept.set(file, keptMembers(saved, ["version", "owner", "value"]));
     return saved;
   }
 
-  set(instanceId: string, value: unknown): Promise<void> {
+  /** With `owner` (a module panel), the state is noted as that owner's; dropped when the panel was handed to another. */
+  set(instanceId: string, value: unknown, owner?: string): Promise<void> {
     const file = this.file(instanceId);
+    const handed = this.owners.get(instanceId);
+    if (owner !== undefined && handed !== undefined && handed !== owner) return Promise.resolve();
     if (value === null) return this.remove(instanceId);
     const serialized = serializeJson(value, "value");
     if (Buffer.byteLength(serialized) > LIMITS.maxPanelStateBytes) {
@@ -196,7 +231,8 @@ export class PanelStateStore {
       // Read before it is first written over, so a newer Tavora's file is copied aside first and its fields are kept.
       if (!this.kept.has(file)) await this.read(file);
       const kept = this.kept.get(file) ?? "";
-      await writeFileAtomic(file, `{"version":${STORE_VERSIONS.panelState},${kept}"value":${serialized}}`);
+      const stamp = owner === undefined ? "" : `"owner":${JSON.stringify(owner)},`;
+      await writeFileAtomic(file, `{"version":${STORE_VERSIONS.panelState},${stamp}${kept}"value":${serialized}}`);
     });
   }
 

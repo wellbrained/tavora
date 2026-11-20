@@ -53,7 +53,7 @@ import type {TooltipRequest,TooltipAnchor,TooltipSkin} from "@tavora/sdk/protoco
 import { checkPanelContent } from "./panel-content";
 import { parseConnectionSettings, parseWatch, type ConnectionSettingsChange, type WatchRequest } from "./system-info-parse";
 import { parseControlParams, parseWatchParams } from "./media-parse";
-import type { ModuleData, ModuleStore, PanelStateStore } from "./storage";
+import type { ModuleData, ModuleStore, PanelStateAccess } from "./storage";
 import type { BlobStore } from "./blobs";
 
 /** The parts of Electron's MessagePortMain the bridge uses. */
@@ -209,7 +209,7 @@ export interface BridgeContext {
     top(params: unknown): Promise<LeaderboardTop>;
     mine(params: unknown): Promise<LeaderboardMine>;
   };
-  panelState: PanelStateStore;
+  panelState: PanelStateAccess;
   /** What the user has granted this module right now; asked on every gated call, so a revoke takes effect at once. */
   capabilities(): ReadonlySet<Capability>;
   getViewport(): TavoraViewport;

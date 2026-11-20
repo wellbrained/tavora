@@ -1225,6 +1225,35 @@ describe("cleanup", () => {
     expect(rig.calls).not.toContain(`revoked ${A}`);
   });
 
+  it("restarting ends what the page ran but keeps the place, so the view made next shows where the panel was", () => {
+    const { rig, a } = everything();
+    rig.views.restart(A);
+    expect(a.disposed).toBe(true);
+    expect(rig.views.has(A)).toBe(false);
+    // Ends like a close: its questions and live state go, and its waiting, launch and welcome.
+    expect(rig.calls).toContain(`releasing ${A} true`);
+    expect(rig.views.isAwaiting(A)).toBe(false);
+    expect(rig.views.takeLaunch(A)).toBeUndefined();
+    expect(rig.views.takeWelcome(A)).toBe(true);
+    // Keeps its place: no new bounds come from the host UI, as nothing changed there.
+    expect(rig.views.isPlaced(A)).toBe(true);
+    expect(rig.views.openedFrom(A)).toEqual({ instanceId: C, background: true });
+    expect(rig.views.isKept(A)).toBe(true);
+    const next = rig.add(A);
+    rig.views.applyBounds();
+    expect(next.bounds).toMatchObject({ width: 400, height: 300 });
+    expect(next.visible).toBe(true);
+    expect(next.suspended).toBe(false);
+  });
+
+  it("restarting a panel lent to the in-game layer takes it back from there", () => {
+    const rig = panelViewsRig();
+    rig.add(A);
+    rig.lend(A);
+    rig.views.restart(A);
+    expect(rig.calls).toContain(`revoked ${A}`);
+  });
+
   it("releasing a view drops an Add its page never asked for, so a view made later starts as a restore", () => {
     const { rig, b } = everything();
     rig.views.release(A);

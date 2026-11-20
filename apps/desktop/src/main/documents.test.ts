@@ -26,11 +26,11 @@ describe("DocumentStore", () => {
 
   it("refuses ids Windows or the store keep for themselves, in any case, for new documents", async () => {
     const store = new DocumentStore(dir);
-    for (const id of ["index", "Index", "CON", "con", "prn", "Aux", "nul", "com1", "COM9", "lpt1", "Lpt9"]) {
+    for (const id of ["index", "Index", "CON", "con", "prn", "Aux", "nul", "com0", "com1", "COM9", "lpt1", "Lpt9"]) {
       await expect(store.put({ id, title: "X", data: 1 })).rejects.toMatchObject({ code: "INVALID_PARAMS" });
     }
     // Only the exact names: these are ordinary ids.
-    for (const id of ["indexes", "console", "com10", "com0", "nul-1", "my-index"]) {
+    for (const id of ["indexes", "console", "com10", "nul-1", "my-index", "conin"]) {
       expect(await store.put({ id, title: "X", data: 1 })).toMatchObject({ id, revision: 1 });
     }
     expect(await store.get("index")).toBeNull();

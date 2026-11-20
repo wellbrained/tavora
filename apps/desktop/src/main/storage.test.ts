@@ -113,6 +113,8 @@ describe("ModuleStore.keys", () => {
 });
 
 describe("PanelStateStore", () => {
+  /** A module panel's reads and writes as `owner`, as its page makes them. */
+  const asOwner = (store: PanelStateStore, owner: string) => ({ get: (id: string) => store.get(id, owner), set: (id: string, value: unknown) => store.set(id, value, owner) });
   const A = "123e4567-e89b-42d3-a456-426614174000";
   const B = "123e4567-e89b-42d3-a456-426614174001";
 
@@ -129,6 +131,45 @@ describe("PanelStateStore", () => {
     await store.prune(new Set([B]));
     expect(await store.get(A)).toBeNull();
     expect(await store.get(B)).toEqual({ tab: 2 });
+  });
+
+  it("keeps a module panel's state from an owner that didn't write it", async () => {
+    const store = new PanelStateStore(path.join(dir, "panel-state"));
+    await asOwner(store, "k1").set(A, { secret: 1 });
+    expect(await asOwner(store, "k1").get(A)).toEqual({ secret: 1 });
+    expect(await asOwner(store, "local").get(A)).toBeNull();
+    // Read again by a new run, the owner is still known.
+    expect(await asOwner(new PanelStateStore(path.join(dir, "panel-state")), "local").get(A)).toBeNull();
+  });
+
+  it("hands a panel to another owner: a file from before owners were noted stays the old owner's, and its closing page's writes are dropped", async () => {
+    const folder = path.join(dir, "panel-state");
+    await new PanelStateStore(folder).set(A, { tab: 1 });
+    const store = new PanelStateStore(folder);
+    // Before any hand-over, a file without an owner is read as before.
+    expect(await asOwner(store, "k1").get(A)).toEqual({ tab: 1 });
+    await store.handOver(A, "k1", "local");
+    expect(await asOwner(store, "local").get(A)).toBeNull();
+    expect(await asOwner(store, "k1").get(A)).toEqual({ tab: 1 });
+    // The old page, still saving, writes and clears: neither lands.
+    await asOwner(store, "k1").set(A, { tab: 2 });
+    await asOwner(store, "k1").set(A, null);
+    expect(await asOwner(store, "k1").get(A)).toEqual({ tab: 1 });
+    // The new owner's page writes its own.
+    await asOwner(store, "local").set(A, { mine: true });
+    expect(await asOwner(store, "local").get(A)).toEqual({ mine: true });
+    await asOwner(store, "k1").set(A, { tab: 3 });
+    expect(await asOwner(store, "local").get(A)).toEqual({ mine: true });
+    expect(await asOwner(store, "k1").get(A)).toBeNull();
+  });
+
+  it("keeps the owner noted when a newer Tavora's fields are kept, and writes it once", async () => {
+    const folder = path.join(dir, "panel-state");
+    const store = new PanelStateStore(folder);
+    await asOwner(store, "k1").set(A, { tab: 1 });
+    await asOwner(store, "k1").set(A, { tab: 2 });
+    const saved = JSON.parse(await readFile(path.join(folder, `${A}.json`), "utf8")) as Record<string, unknown>;
+    expect(saved).toEqual({ version: 1, owner: "k1", value: { tab: 2 } });
   });
 
   it("limits size and rejects ids that are not panel ids", async () => {

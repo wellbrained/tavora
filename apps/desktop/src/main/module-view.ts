@@ -501,14 +501,21 @@ export class ModuleView {
     contents.on("focus", () => !this.disposed && this.options.onFocus?.());
     contents.setWindowOpenHandler(() => ({ action: "deny" }));
     contents.setWebRTCIPHandlingPolicy("disable_non_proxied_udp");
+    // A blocked main-frame navigation starts no page: Electron asks these after did-start-navigation counted it.
+    const block = (event: { preventDefault(): void }, mainFrame: boolean) => {
+      event.preventDefault();
+      if (!mainFrame || !this.pendingDocument) return;
+      this.pendingDocument = false;
+      this.documents--;
+    };
     contents.on("will-navigate", (event) => {
-      if (!sameModule(event.url)) event.preventDefault();
+      if (!sameModule(event.url)) block(event, true);
     });
     contents.on("will-frame-navigate", (event) => {
-      if (!sameModule(event.url)) event.preventDefault();
+      if (!sameModule(event.url)) block(event, event.isMainFrame);
     });
     contents.on("will-redirect", (event) => {
-      if (!sameModule(event.url)) event.preventDefault();
+      if (!sameModule(event.url)) block(event, event.isMainFrame);
     });
     contents.on("will-attach-webview", (event) => event.preventDefault());
 
@@ -519,6 +526,7 @@ export class ModuleView {
         // A closed panel's page that goes elsewhere has nothing more to save here.
         if (this.disposed) return this.closeNow();
         this.documents++;
+        this.pendingDocument = true;
         this.lastConnect = 0;
         this.disconnect();
         this.setStatus("loading");
@@ -528,6 +536,8 @@ export class ModuleView {
     // The module's own files are served by the protocol handler, so an
     // error status means the entry page is missing or unreadable.
     contents.on("did-navigate", (_event, url, httpResponseCode) => {
+      // The page counted at its start is there now: nothing can take it back.
+      this.pendingDocument = false;
       if (httpResponseCode < 400) return;
       if (this.disposed) return this.closeNow();
       console.warn(`[tavora] module ${module.manifest.id} failed to load ${url}: HTTP ${httpResponseCode}`);
@@ -670,8 +680,13 @@ export class ModuleView {
 
   /** When this view's first page started loading: the pass of a panel just added counts from here. */
   private readonly firstPageAt = Date.now();
-  /** Main-frame documents this view has started (did-start-navigation, the first load too). */
+  /**
+   * Main-frame pages this view has started (did-start-navigation, the first load too), less those blocked before they
+   * came (will-navigate and the others, which Electron asks after did-start-navigation).
+   */
   private documents = 0;
+  /** The page counted last has not come yet (did-navigate), so a block can still take it back. */
+  private pendingDocument = false;
   /** Until when this page may open its dialog once without a click (a panel just added), or null. */
   private addPass: { until: number } | null = null;
 
@@ -756,6 +771,10 @@ export class ModuleView {
     return this.options.module.owner;
   }
 
+  get workspaceId(): string {
+    return this.options.workspace.id;
+  }
+
   /**
    * Called when the module's main frame asks for a bridge port. A document gets at most one every CONNECT_GAP_MS: one
    * that asks sooner gets its port when the time is up, and asks made meanwhile share it, so asking in a loop can't keep
@@ -818,7 +837,8 @@ export class ModuleView {
         setLive: (state) => this.options.setLive(state),
         workspace,
         data,
-        panelState,
+        // Its state is kept as the owner it runs as: another owner's copy of the module under its id never reads it.
+        panelState: { get: (id) => panelState.get(id, module.owner), set: (id, value) => panelState.set(id, value, module.owner) },
         appSettings: this.options.appSettings,
         appBlobs: this.options.appBlobs,
         aiUsage: this.options.aiUsage,

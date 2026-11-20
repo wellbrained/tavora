@@ -1123,15 +1123,25 @@ export class Host {
     this.moduleData = await listModuleData(this.options.userData, this.files.root());
     this.dropPanelsOfMissingModules();
     // A module id now loaded for another owner (a development folder over an installed copy, or back): its open panels
-    // stop, so no page runs as one owner with another's grants or data. They start again as the new owner's below
+    // end, so no page runs as one owner with another's grants. What the old page left in the panel stays its owner's:
+    // its panel state is kept apart (the new owner reads none of it, and the closing page's last writes are dropped),
+    // and the content its tab named goes. The panels keep their place and start again as the new owner's below
     // (syncPanelTypes, syncOverlayPanels), or ask first when that copy still misses access.
     const restarted = new Set<string>();
+    let contentDropped = false;
     for (const view of viewsOfAnotherOwner(this.moduleViews(), modules)) {
       restarted.add(view.moduleId);
       this.tooltips?.forgetModule(view.moduleId);
-      this.panels.close(view.instanceId);
+      void this.data.panelState.handOver(view.instanceId, view.owner, modules.get(view.moduleId)!.owner).catch((error: unknown) => console.error("[tavora]", error));
+      const record = this.records(view.workspaceId).find((item) => item.instanceId === view.instanceId);
+      if (record?.content) {
+        delete record.content;
+        contentDropped = true;
+      }
+      this.panels.restart(view.instanceId);
       if (this.needsAnswer(view.moduleId)) this.panels.setAwaiting(view.instanceId);
     }
+    if (contentDropped) this.workspaces.saveSoon();
     // A module removed, blocked, replaced by another publisher's or updated without the connector ends its open OBS pages now.
     this.streaming?.recheckStreams();
     this.noteModuleVersions();
@@ -1139,8 +1149,12 @@ export class Host {
     this.syncPanelTypes();
     if (restarted.size > 0) this.syncOverlayPanels();
     const moved = new Set([...modules].filter(([id, module]) => roots.has(id) && roots.get(id) !== module.root).map(([id]) => id));
-    // Panels started anew just now load the new copy already.
+    // Panels started anew just now load the new copy already; panels that waited for the old copy's question start
+    // now if the new copy asks nothing.
+    for (const id of restarted) this.startWaitingPanels(id);
     for (const id of moved) if (!restarted.has(id)) this.reloadModuleViews(id);
+    // Their places didn't change, so the host UI sends none: the new views go where the old ones were.
+    if (restarted.size > 0) this.panels.applyBounds();
     await this.watchDevelopmentFolders();
     void this.refreshPublisherNames();
     return moved;
@@ -1510,7 +1524,11 @@ export class Host {
     this.tooltips?.forgetModule(moduleId);
     const current = this.modules.get(moduleId);
     for (const view of this.moduleViews()) if (view.moduleId === moduleId) view.reload(current);
-    // Panels that asked before they could run start now, in the workspace shown (the others start when it opens).
+    this.startWaitingPanels(moduleId);
+  }
+
+  /** Panels of a module that asked before they could run start now, in the workspace shown (the others start when it opens). */
+  private startWaitingPanels(moduleId: string): void {
     const workspace = this.workspace;
     if (!workspace) return;
     if (this.needsAnswer(moduleId)) return;
