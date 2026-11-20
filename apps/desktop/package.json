@@ -129,6 +129,13 @@
         ]
       },
       {
+        "from": "../../styles",
+        "to": "official-styles",
+        "filter": [
+          "*/tavora.style.json"
+        ]
+      },
+      {
         "from": "../../packages/media-helper/bin",
         "to": "media-helper",
         "filter": [

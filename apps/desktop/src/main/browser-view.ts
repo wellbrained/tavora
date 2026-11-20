@@ -2,6 +2,7 @@
 // it has no preload, no bridge and no IPC: the toolbar is drawn by the host
 // UI, and the page is only ever told where to go by the main process.
 import { session, WebContentsView, type Session, type WebContents } from "electron";
+import type { PanelCorners } from "./panel-corners";
 import type { BrowserError, BrowserState, InstanceStatus } from "../shared/host-api";
 import { judgedTopUrl, judgeRequest, type AdBlocker } from "./browser-filter";
 import { addressToUrl, displayHost, isPrivateUrl, isWebUrl, parseUrl, siteOfUrl } from "./browser-url";
@@ -97,6 +98,8 @@ export interface BrowserPanelOptions {
   instanceId: string;
   devTools: boolean;
   background(): string;
+  /** The page's corner radius in px now (panel-corners.ts `page`); left out, Classic's. */
+  cornerRadius?(): number;
   sessionFor(kind: BrowserKind): Session;
   /** Whether a page address belongs to a site the user signs in to for all workspaces. */
   isSharedSite(url: string): boolean;
@@ -117,7 +120,7 @@ export interface BrowserPanelOptions {
 /** How often redirects may move one navigation between the shared and the workspace session (Chromium allows 20 redirects in one). */
 const MAX_REDIRECT_SWITCHES = 5;
 
-/** Corner radius of a panel card in the host UI (dock.css), in px; the page sits below the toolbar. */
+/** The page's corner when the host gives none: Classic's (panel-corners.ts); the page sits below the toolbar. */
 const PAGE_RADIUS = 9;
 
 /** One Browser panel. Its page view is replaced when it moves between a workspace's and the shared session. */
@@ -195,7 +198,7 @@ export class BrowserPanel {
       },
     });
     view.setBackgroundColor(this.options.background());
-    view.setBorderRadius(PAGE_RADIUS);
+    view.setBorderRadius(this.options.cornerRadius?.() ?? PAGE_RADIUS);
     view.setVisible(false);
     this.watch(view.webContents);
     return view;
@@ -479,6 +482,11 @@ export class BrowserPanel {
 
   applyTheme(_theme?: unknown): void {
     this.view.setBackgroundColor(this.options.background());
+  }
+
+  /** Rounds the page to the panel cards' corners of the style now (panel-corners.ts). A new page view asks cornerRadius. */
+  setCorners(corners: PanelCorners): void {
+    this.view.setBorderRadius(corners.page);
   }
 
   /** A hidden page keeps running, like a background tab; Chromium throttles its timers. */

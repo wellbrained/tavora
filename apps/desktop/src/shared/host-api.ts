@@ -679,6 +679,26 @@ export interface ThemeView {
   variations: ThemeVariationView[];
 }
 
+/** A design style Tavora has (main/styles.ts), for Settings > Appearance. */
+export interface StyleView {
+  id: string;
+  name: string;
+  description: string | null;
+  author: string | null;
+  /** Official styles ship with Tavora. Nothing else exists yet. */
+  provenance: "official" | "local";
+  /** The style's corner radius in px; Classic shows the theme variation's instead. */
+  radius: number;
+  /** The style's font id (shared/ui-fonts.ts). */
+  font: string;
+  /** Theme ids to show first with this style. */
+  themes: string[];
+  /** One look per part (the SDK's StyleLooks; the host page doesn't load the SDK's types). */
+  looks: Record<string, string>;
+  /** The sizes (the SDK's StyleValues). */
+  values: Record<string, number>;
+}
+
 export interface AppearanceView {
   /** The theme and variation in use; the default when the picked one is not installed. */
   themeId: string;
@@ -687,10 +707,24 @@ export interface AppearanceView {
   isDefault: boolean;
   /** The Dark or Light version follows the system's setting, and changes with it. */
   followSystem: boolean;
-  /** The user's own corner radius in px over the theme's, or null for the theme's. */
+  /** The user's own corner radius in px over the style's (0 to 16), or null for the style's ("Style default"). */
   radius: number | null;
-  /** The interface font in use: its id and its CSS font-family. */
+  /** The corner radius in use: `radius`, else the style's (in Classic the theme variation's). */
+  resolvedRadius: number;
+  /** The interface font in use, the user's or the style's: its id and its CSS font-family. */
   font: { id: string; family: string };
+  /** The user's own font id over the style's, or null for the style's ("Style default"). */
+  fontOverride: string | null;
+  /** The design style in use; Classic when the picked one is not installed. */
+  styleId: string;
+  styles: StyleView[];
+  /**
+   * What the style in use puts on <html> (the SDK's styleMarks): data-style, data-look-<part> and the --style-*
+   * variables; null for what goes away.
+   */
+  styleMarks: { attributes: [name: string, value: string | null][]; properties: [name: string, value: string | null][] };
+  /** Style folders that could not be used, and why. */
+  styleProblems: { folder: string; message: string }[];
   themes: ThemeView[];
   /** Theme folders that could not be used, and why, for theme authors. */
   problems: { folder: string; message: string; kind?: "needs-newer"; values?: { needs: string; current: string } }[];

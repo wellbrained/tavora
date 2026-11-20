@@ -1,0 +1,28 @@
+{
+  "id": "tavora.classic",
+  "name": "Classic",
+  "description": "Tavora's own look.",
+  "author": "Tavora",
+  "version": "1.0.0",
+  "looks": {
+    "surface": "flat",
+    "tabs": "pill",
+    "content": "plain",
+    "buttons": "soft",
+    "inputs": "soft",
+    "lists": "fill",
+    "labels": "normal",
+    "status": "none"
+  },
+  "values": {
+    "borderWidth": 1,
+    "depth": 1,
+    "textSize": 13,
+    "controlHeight": 32,
+    "spacing": 1,
+    "glassOpacity": 0.8
+  },
+  "radius": 8,
+  "font": "inter",
+  "themes": ["tavora.default"]
+}

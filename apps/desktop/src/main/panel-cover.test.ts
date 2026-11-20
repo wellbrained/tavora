@@ -3,11 +3,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const made = vi.hoisted(() => ({ views: [] as { background: string; visible: boolean; url: string; added: number; loads: number; written: string[]; listeners: Map<string, () => void> }[] }));
+const made = vi.hoisted(() => ({ views: [] as { background: string; radius: number; visible: boolean; url: string; added: number; loads: number; written: string[]; listeners: Map<string, () => void> }[] }));
 
 vi.mock("electron", () => {
   class WebContentsView {
-    state = { background: "", visible: true, url: "", added: 0, loads: 0, written: [] as string[], listeners: new Map<string, () => void>() };
+    state = { background: "", radius: -1, visible: true, url: "", added: 0, loads: 0, written: [] as string[], listeners: new Map<string, () => void>() };
     webContents = {
       setWindowOpenHandler: () => undefined,
       on: (event: string, listener: () => void) => void this.state.listeners.set(event, listener),
@@ -22,7 +22,9 @@ vi.mock("electron", () => {
     setBackgroundColor(color: string) {
       this.state.background = color;
     }
-    setBorderRadius() {}
+    setBorderRadius(radius: number) {
+      this.state.radius = radius;
+    }
     setVisible(visible: boolean) {
       this.state.visible = visible;
     }
@@ -145,6 +147,23 @@ describe("the cover", () => {
     cover.finish();
     expect(state().visible).toBe(false);
     expect(cover.covering).toBe(false);
+  });
+
+  it("rounds like a card in the style now: Classic's 10 px, else what the host says at each start", () => {
+    const { cover, state } = setup();
+    cover.setBounds({ x: 0, y: 0, width: 100, height: 100 });
+    cover.start(theme("dark", "#000"), "Loading", undefined);
+    expect(state().radius).toBe(10);
+    expect(decodeURIComponent(state().url)).toContain("border-radius:10px");
+    let radius = 5;
+    const styled = new PanelCover({ parent: { addChildView: vi.fn() } as never, emblem: () => null, radius: () => radius });
+    styled.setBounds({ x: 0, y: 0, width: 100, height: 100 });
+    styled.start(theme("dark", "#000"), "Loading", undefined);
+    expect(made.views.at(-1)!.radius).toBe(5);
+    expect(decodeURIComponent(made.views.at(-1)!.url)).toContain("border-radius:5px");
+    radius = 0;
+    styled.start(theme("dark", "#000"), "Loading", undefined);
+    expect(made.views.at(-1)!.radius).toBe(0);
   });
 
   it("waits for the workspace's place before it shows", () => {

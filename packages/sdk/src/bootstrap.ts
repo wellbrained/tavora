@@ -3,13 +3,17 @@
 // Framework-free client code (no Vue, no kit): every module, in any framework, starts the same way. The kit's
 // `connectModule` builds on this and adds its own parts (translator, toasts, tooltips). See ADR-0002.
 
-import { connect, THEME_TOKENS, type TavoraSDK, type TavoraTheme } from "./index.js";
+import { connect, styleMarks, THEME_TOKENS, type TavoraSDK, type TavoraTheme } from "./index.js";
 
-/** The few parts of an element the theme is written to; `document.documentElement` fits. */
+/**
+ * The few parts of an element the theme is written to; `document.documentElement` fits. Without `removeAttribute` and
+ * `style.removeProperty`, a style from before stays when a theme without one comes.
+ */
 export interface ThemeRoot {
-  style: { setProperty(name: string, value: string): void; colorScheme: string };
+  style: { setProperty(name: string, value: string): void; removeProperty?(name: string): unknown; colorScheme: string };
   classList: { toggle(name: string, force?: boolean): unknown };
   setAttribute(name: string, value: string): void;
+  removeAttribute?(name: string): void;
 }
 
 /** Anything but German is English, as in the host. */
@@ -26,9 +30,29 @@ export function languageOf(language: string): "en" | "de" {
 const hostVariable = (name: string) => `--host-${name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`;
 
 /**
+ * Writes the design style (`styleMarks`): `data-style="<id>"`, `data-look-<part>="<look>"` for every part, and each
+ * value as its CSS variable (`STYLE_VARIABLES`: `--style-border-width`, `--style-text`, …). Without a style (an older
+ * Tavora) it takes away what an earlier theme wrote, so the kit's own defaults (Classic) show.
+ */
+function applyStyle(theme: TavoraTheme, root: ThemeRoot): void {
+  const { attributes, properties } = styleMarks(theme.style);
+  for (const [name, value] of attributes) {
+    if (value !== null) root.setAttribute(name, value);
+    else root.removeAttribute?.(name);
+  }
+  for (const [name, value] of properties) {
+    if (value !== null) root.style.setProperty(name, value);
+    else root.style.removeProperty?.(name);
+  }
+}
+
+/**
  * Writes the host theme to the page: every theme token as `--<token>`, the summary colours as `--host-<name>`
  * (`--host-background`, `--host-text`, …), `--radius`, the font as `--tavora-font-sans`, `color-scheme`, the `dark` class
- * and `data-mode` (`"dark"` or `"light"`). A part the theme leaves out is left as it was.
+ * and `data-mode` (`"dark"` or `"light"`). A part the theme leaves out is left as it was, except the style: see below.
+ *
+ * The design style (`theme.style`) goes on as `data-style`, `data-look-<part>` and the `--style-*` variables
+ * (`STYLE_VARIABLES`). A theme without one (an older Tavora) takes them away, so the kit's defaults (Classic) show.
  */
 export function applyHostTheme(theme: TavoraTheme, root: ThemeRoot = document.documentElement): void {
   for (const name of THEME_TOKENS) {
@@ -45,6 +69,7 @@ export function applyHostTheme(theme: TavoraTheme, root: ThemeRoot = document.do
   root.style.colorScheme = mode;
   root.classList.toggle("dark", mode === "dark");
   root.setAttribute("data-mode", mode);
+  applyStyle(theme, root);
 }
 
 /** `connecting` is what a page shows before `bootstrapModule` settles; the promise itself only gives `ready` or `failed`. */
