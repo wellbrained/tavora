@@ -92,6 +92,9 @@ if (!mailer && brevoKey) {
   console.log(`[tavora-api] Accounts are on: email through Brevo from ${from}, at most ${mailDailyLimit} a day.`);
 }
 if (!mailer) console.log("[tavora-api] No way to send email: accounts are off.");
+// Without the proxy's address every request is one client ("shared"), so one busy requester uses up everyone's per-client
+// and per-network limits for codes and new accounts.
+if (mailer && !testInbox && !behindProxy) console.warn("[tavora-api] TRUST_PROXY is not set: every request counts as the same client, so the account limits per client and network are shared by everyone.");
 // New accounts a day, by email and Discord together (accounts.ts ACCOUNTS_PER_DAY when unset or not a whole number above 0).
 const accountLimit = Number(process.env.ACCOUNT_DAILY_LIMIT);
 const accountDailyLimit = Number.isInteger(accountLimit) && accountLimit > 0 ? accountLimit : undefined;

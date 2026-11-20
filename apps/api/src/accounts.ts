@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { accountLifecycle, type AccountLifecycle } from "./account-lifecycle.ts";
@@ -35,6 +36,14 @@ export interface AccountOptions {
   accountDailyLimit?: number;
   /** New accounts per network a day: 20 by default. */
   accountNetworkRateLimiter?: RateLimiter;
+  /** Codes for changing the address per account, a day: 3 by default. */
+  changeEmailRateLimiter?: RateLimiter;
+  /** Sign-in codes one address may draw a day from the emails kept for accounts (MAIL_FOR_ACCOUNTS_SHARE): 3 by default. */
+  accountShareRateLimiter?: RateLimiter;
+  /** Waits this long (ms); a test passes its own so nothing really waits. */
+  pause?: (ms: number) => Promise<void>;
+  /** A number from 0 up to 1 for the jitter of a pause (Math.random by default). */
+  random?: () => number;
   /** Code checks per client: 20 in 15 minutes by default. */
   verifyRateLimiter?: RateLimiter;
   now?: () => number;
@@ -72,8 +81,15 @@ export const MAIL_RESERVED = 20;
 export const MAIL_FOR_ACCOUNTS_SHARE = 1 / 3;
 /** New accounts a day by default, by email and Discord together. */
 export const ACCOUNTS_PER_DAY = 500;
+/**
+ * An answer that sends no mail waits about as long as one that does, so the time doesn't tell which addresses have an
+ * account: the running average of recent sends (starting here), give or take a quarter, within these bounds.
+ */
+export const SEND_PAUSE = { startMs: 500, minMs: 50, maxMs: 3000 } as const;
 const DAY_MS = 24 * 60 * 60_000;
 const utcDay = (at: number) => new Date(at).toISOString().slice(0, 10);
+/** An address as a limiter key: a hash, so memory holds no address. */
+const addressLimitKey = (email: string) => createHash("sha256").update(`share:${email}`).digest("hex");
 const nextUtcDay = (at: number) => {
   const date = new Date(at);
   return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + 1);
@@ -152,6 +168,10 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   const codeNetworkLimiter = options.codeNetworkRateLimiter ?? createRateLimiter({ limit: 40, windowMs: DAY_MS });
   const accountDailyLimit = options.accountDailyLimit ?? ACCOUNTS_PER_DAY;
   const accountNetworkLimiter = options.accountNetworkRateLimiter ?? createRateLimiter({ limit: 20, windowMs: DAY_MS });
+  const changeEmailLimiter = options.changeEmailRateLimiter ?? createRateLimiter({ limit: 3, windowMs: DAY_MS });
+  const accountShareLimiter = options.accountShareRateLimiter ?? createRateLimiter({ limit: 3, windowMs: DAY_MS });
+  const pause = options.pause ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  const random = options.random ?? Math.random;
   const app = new Hono<Env>();
   const lifecycle =
     options.lifecycle ??
@@ -176,24 +196,39 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   const stranger = (context: Context): CodeAsker => ({ from: networkOf(clientKey(context.req.raw)) });
   const OWNER: CodeAsker = { owner: true };
 
-  /**
-   * Room for one more new account, by email or Discord: the day's total and this network's share, which this counts,
-   * so it is asked only right before an account is made. An answer to send instead, or null.
-   */
-  const noRoomForAccount = (context: Context): Response | null => {
+  const dayStart = (at: number) => nextUtcDay(at) - DAY_MS;
+
+  /** No room for another new account today, by email or Discord together: the answer to send, or null. Counts nothing. */
+  const accountsFull = (context: Context): Response | null => {
     const at = now();
-    const dayStart = nextUtcDay(at) - DAY_MS;
-    if (store.accountsCreatedSince(dayStart) >= accountDailyLimit) {
-      // Apps that don't know this case show "Accounts aren't working right now" for `unavailable`.
-      return context.json({ error: "Tavora can't take more new accounts today. Try again tomorrow.", reason: "unavailable", retryAt: new Date(nextUtcDay(at)).toISOString() }, 503);
-    }
-    const wait = accountNetworkLimiter.check(networkOf(clientKey(context.req.raw)), at);
+    if (store.accountsCreatedSince(dayStart(at)) < accountDailyLimit) return null;
+    // Apps that don't know this case show "Accounts aren't working right now" for `unavailable`.
+    return context.json({ error: "Tavora can't take more new accounts today. Try again tomorrow.", reason: "unavailable", retryAt: new Date(nextUtcDay(at)).toISOString() }, 503);
+  };
+  /** This network's share of the day's new accounts: counts one, so it is asked only right before an account is made. */
+  const networkAccountsFull = (context: Context): Response | null => {
+    const wait = accountNetworkLimiter.check(networkOf(clientKey(context.req.raw)), now());
     return wait > 0 ? tooMany(context, wait, "Too many new accounts from here today. Try again later.") : null;
   };
 
+  /** The day's emails for new addresses ran out: the log hears it once a day, and Tavora Admin shows it for the day. */
+  const newAddressesFull = () => {
+    const at = now();
+    if (store.markNewAddressMailFull(utcDay(at), at)) {
+      console.warn("[tavora-api] Today's sign-in emails for new addresses are used up; the rest is kept for existing accounts. Raise MAIL_DAILY_LIMIT if this keeps happening.");
+    }
+  };
+
+  /** How long a mail takes to send lately (ms), so an answer without one can wait as long. */
+  let sendMs: number = SEND_PAUSE.startMs;
+  /** Waits about as long as a send, for an answer that sends nothing (SEND_PAUSE). */
+  const likeASend = () => pause(Math.round(Math.min(SEND_PAUSE.maxMs, Math.max(SEND_PAUSE.minMs, sendMs * (0.75 + random() * 0.5)))));
+
   const send = async (context: Context, mail: Mail) => {
     try {
+      const started = now();
       await mailer.send(mail);
+      sendMs = sendMs * 0.8 + Math.min(SEND_PAUSE.maxMs, Math.max(0, now() - started)) * 0.2;
       store.countMail(utcDay(now()));
       return null;
     } catch (error) {
@@ -240,17 +275,27 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const email = normalizeEmail(input.email);
     if (!email) return context.json({ error: "Send { email, language }.", reason: "bad-email" }, 400);
     if (usedUp("sign-in")) return usedUpAnswer(context);
-    const known = store.accountByEmail(email) !== null;
-    if (!known && usedUp("new")) {
-      // The rest of the day's sign-in emails are kept for existing accounts. A new address hears the same as one with
-      // an account (and its limits count the same), so the answer never tells which addresses have one; no mail goes out.
-      const refused = store.countCodeRequest(email, now(), stranger(context));
-      return refused > 0 ? tooMany(context, refused) : context.json({ status: "sent" }, 202);
+    const at = now();
+    const account = store.accountByEmail(email);
+    // Once new addresses' share is used up, the rest of the sign-in emails is kept for accounts made before today,
+    // and one address draws at most 3 codes from it, so accounts made for it can't spend it either.
+    const quiet = usedUp("new");
+    if (quiet) newAddressesFull();
+    const mails = !quiet || (account !== null && Date.parse(account.createdAt) < dayStart(at) && accountShareLimiter.check(addressLimitKey(email), at) === 0);
+    if (!mails) {
+      // Answered the same as a code that went out, after about as long, and counted against the same limits, so neither
+      // the answer nor its time tells which addresses have an account; no mail goes out.
+      const refused = store.countCodeRequest(email, at, stranger(context));
+      if (refused > 0) return tooMany(context, refused);
+      await likeASend();
+      return context.json({ status: "sent" }, 202);
     }
-    const request = store.requestCode(email, "sign-in", null, now(), stranger(context));
+    const request = store.requestCode(email, "sign-in", null, at, stranger(context));
     if (!request.ok) return tooMany(context, request.retryAfter);
     // The mail differs for a new address, but only its owner reads it; the answer is the same.
-    return (await send(context, codeMail(known ? "sign-in" : "create", email, request.code, mailLanguage(input.language)))) ?? context.json({ status: "sent" }, 202);
+    const failed = await send(context, codeMail(account ? "sign-in" : "create", email, request.code, mailLanguage(input.language)));
+    // While some addresses get no mail, a failed one is answered like those.
+    return failed && !quiet ? failed : context.json({ status: "sent" }, 202);
   });
 
   app.post("/verify", async (context) => {
@@ -271,7 +316,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     if (existing && store.isSuspended(existing.id)) return suspended(context);
     let account = existing;
     if (!account) {
-      const full = noRoomForAccount(context);
+      const full = accountsFull(context) ?? networkAccountsFull(context);
       if (full) return full;
       // Right a moment ago, so this spends it.
       if (!store.checkCode(email, "sign-in", null, input.code, at, true)) return wrongCode(context);
@@ -283,6 +328,8 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
         if (!account) throw new Error("account could not be created");
       }
     }
+    // From here on this network counts as the owner's for the address's code limits (account-store.ts CODES_PER_WINDOW).
+    store.rememberNetwork(email, networkOf(clientKey(context.req.raw)), at);
     const { token, session } = store.createSession(account.id, deviceOs(input.os), at, deviceName(input.name));
     return context.json({ status: existing ? "signed-in" : "created", token, device: session.id, account: accountAnswer(account) });
   });
@@ -300,7 +347,11 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     if (!email) return context.json({ error: "Send { email, language }.", reason: "bad-email" }, 400);
     if (usedUp("important")) return usedUpAnswer(context);
     const account = store.accountByEmail(email);
-    if (!account || !store.isSuspended(account.id)) return context.json({ status: "sent" }, 202);
+    if (!account || !store.isSuspended(account.id)) {
+      // As long as a send would take, so the time doesn't tell either.
+      await likeASend();
+      return context.json({ status: "sent" }, 202);
+    }
     const request = store.requestCode(email, "delete", account.id, now(), stranger(context));
     if (!request.ok) return tooMany(context, request.retryAfter);
     return (await send(context, codeMail("delete", email, request.code, mailLanguage(input.language)))) ?? context.json({ status: "sent" }, 202);
@@ -490,7 +541,8 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   // the change every other sign-in ends and the codes still waiting for the old address go (account-store.ts).
   // A Tavora from before this sends no `confirmCurrent` and is told to update, in words it shows as they are.
   signedIn.post("/email/code", async (context) => {
-    const wait = codeLimiter.check(clientKey(context.req.raw));
+    const client = clientKey(context.req.raw);
+    const wait = codeLimiter.check(client);
     if (wait > 0) return tooMany(context, wait);
     const input = await body(context);
     const email = normalizeEmail(input.email);
@@ -501,7 +553,13 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     if (email === account.email) return context.json({ error: "That is the address the account has.", reason: "same-email" }, 400);
     // A Discord-only account proves itself with Discord at the end: the code would be no use without it.
     if (!account.email && !options.discord) return discordUnavailable(context);
-    if (usedUp("important", account.email ? 2 : 1)) return usedUpAnswer(context);
+    // A code to another address each time would dodge every address's own limit, and Discord-only accounts cost no
+    // mail to make: the same day's shares as sign-in codes (per client and network), and 3 changes a day per account.
+    const dayWait = Math.max(codeDayLimiter.check(client), codeNetworkLimiter.check(networkOf(client)), changeEmailLimiter.check(account.id));
+    if (dayWait > 0) return tooMany(context, dayWait);
+    // The new address has no account (that is only said once the codes were right), so its code comes out of new
+    // addresses' share of the day's emails, never out of what is kept for accounts' sign-ins, confirmations and deletes.
+    if (usedUp("new", account.email ? 2 : 1)) return usedUpAnswer(context);
     // Both addresses or neither: the limits are checked before either code is made. The new address isn't the
     // account's yet, so its codes count as a stranger's; the current one's are the owner's own.
     const at = now();
@@ -551,6 +609,8 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     }
     // The old address hears about it as well.
     if (account.email) await send(context, emailChangedMail(account.email, email, language));
+    // The new address just proved itself from this network.
+    store.rememberNetwork(email, networkOf(clientKey(context.req.raw)), now());
     return context.json({ account: accountAnswer({ ...account, email }) });
   });
 
@@ -645,14 +705,21 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     if (wait > 0) return tooMany(context, wait);
     const input = await body(context);
     if (typeof input.ticket !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(input.ticket)) return context.json({ error: "Send { ticket, os }.", reason: "bad-request" }, 400);
-    // Asked before the ticket is spent, so the user can try again with it while it holds.
-    const full = noRoomForAccount(context);
+    // The day's total first, then the ticket, and this network's share only for a ticket that holds and a login that
+    // has no account yet; the ticket is spent only once all of that passed, so the user can try again with it.
+    const full = accountsFull(context);
     if (full) return full;
     const at = now();
-    const who = store.takeDiscord(input.ticket, at);
-    if (!who) return context.json({ error: "That Discord sign-in has expired. Sign in with Discord again.", reason: "discord-expired" }, 400);
+    const held = store.peekDiscord(input.ticket, at);
+    if (!held) return context.json({ error: "That Discord sign-in has expired. Sign in with Discord again.", reason: "discord-expired" }, 400);
     // Made a moment ago by another sign-in with the same Discord login: sign in to that one.
-    const account = store.accountByDiscord(who.id) ?? store.createAccount({ discord: who }, at);
+    const existing = store.accountByDiscord(held.id);
+    if (!existing) {
+      const share = networkAccountsFull(context);
+      if (share) return share;
+    }
+    const who = store.takeDiscord(input.ticket, at) ?? held;
+    const account = existing ?? store.createAccount({ discord: who }, at);
     if (store.isSuspended(account.id)) return suspended(context);
     const { token, session } = store.createSession(account.id, deviceOs(input.os), at, deviceName(input.name));
     return context.json({ status: "created", token, device: session.id, account: accountAnswer(account) });

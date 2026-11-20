@@ -14,17 +14,27 @@ export const CODE_TTL_MS = 10 * 60_000;
 /** Wrong tries that spend a code. */
 export const CODE_MAX_TRIES = 5;
 /**
- * Codes one address can be sent. The account's own sign-in asking for a code to its own address (to change it, delete
- * the account, connect or remove Discord) gets 3 every 15 minutes and 10 a day. Anyone else (a sign-in code, a code to
- * a new address, a suspended account's delete code) is counted per network they ask from: 3 every 15 minutes and 5 a
- * day each, and 20 a day from everyone together. So a stranger can't use up what the owner needs to sign in from their
- * own network, and the mailbox still gets at most 20 such mails a day.
+ * Codes one address can be sent, in three groups that never use up each other's room:
+ * - the account's own sign-in asking for its own address (changing it, deleting the account, connecting or removing
+ *   Discord): 3 every 15 minutes and 10 a day;
+ * - a sign-in code asked from a network the address signed in from in the last 30 days (KNOWN_NETWORK_MS): 3 every
+ *   15 minutes and 5 a day per network;
+ * - anyone else (a sign-in code from a new network, a code to a new address, a suspended account's delete code): 3
+ *   every 15 minutes and 5 a day per network, and 10 a day from all of them together.
+ * Strangers on other networks can only use up the last group: the owner still signs in from a network they used
+ * before and still changes or deletes from inside the account, and strangers can mail the address at most 10 times a
+ * day. An owner on a network they never signed in from shares that group with strangers.
  */
 export const CODES_PER_WINDOW = 3;
 export const CODE_WINDOW_MS = 15 * 60_000;
 export const CODES_PER_DAY = 10;
 export const CODES_PER_ASKER_DAY = 5;
-export const CODES_FROM_OTHERS_PER_DAY = 20;
+export const CODES_FROM_OTHERS_PER_DAY = 10;
+/** How long a network an address signed in from counts as the owner's. */
+export const KNOWN_NETWORK_MS = 30 * 24 * 60 * 60_000;
+/** code_requests.owner: which group of an address's limits a request counts in. */
+const ASKED_BY = { stranger: 0, owner: 1, known: 2 } as const;
+type AskedBy = (typeof ASKED_BY)[keyof typeof ASKED_BY];
 /** Networks and addresses whose requests are kept in memory at once; past this the oldest go first. */
 const MAX_ASKERS = 100_000;
 const DAY_MS = 24 * 60 * 60_000;
@@ -259,6 +269,8 @@ export class AccountStore {
         expires_at integer not null, tries integer not null default 0, primary key (address, purpose)
       );
       create table if not exists code_requests (address text not null, at integer not null, owner integer not null default 0);
+      -- Networks an address signed in from lately: only a hash of both, and when it stops counting (KNOWN_NETWORK_MS).
+      create table if not exists known_networks (hash text primary key, expires_at integer not null);
       create index if not exists code_requests_address on code_requests (address, at);
       create table if not exists sessions (
         id text primary key, token_hash text not null unique,
@@ -266,7 +278,7 @@ export class AccountStore {
         os text not null, name text, created_at integer not null, last_used_at integer not null
       );
       create index if not exists sessions_account on sessions (account_id);
-      create table if not exists mail_days (day text primary key, sent integer not null);
+      create table if not exists mail_days (day text primary key, sent integer not null, new_full_at integer);
       create table if not exists profiles (
         account_id text primary key references accounts (id) on delete cascade,
         name text not null, initials text not null, picture blob, updated_at integer not null
@@ -331,6 +343,9 @@ export class AccountStore {
     // Code requests by the account's own sign-in are counted apart from everyone else's; older ones count as anyone's.
     const requestColumns = (this.db.prepare("pragma table_info(code_requests)").all() as unknown as { name: string }[]).map((column) => column.name);
     if (!requestColumns.includes("owner")) this.db.exec("alter table code_requests add column owner integer not null default 0");
+    // When the day's emails for new addresses ran out came later too.
+    const mailColumns = (this.db.prepare("pragma table_info(mail_days)").all() as unknown as { name: string }[]).map((column) => column.name);
+    if (!mailColumns.includes("new_full_at")) this.db.exec("alter table mail_days add column new_full_at integer");
     const columns = (this.db.prepare("pragma table_info(accounts)").all() as unknown as { name: string }[]).map((column) => column.name);
     if (columns.includes("discord_id")) return;
     const before = (this.db.prepare("select count(*) as n from accounts").get() as { n: number }).n;
@@ -442,6 +457,14 @@ export class AccountStore {
     const ticket = randomBytes(32).toString("base64url");
     this.db.prepare("insert into discord_tickets (ticket_hash, discord_id, discord_name, expires_at) values (?, ?, ?, ?)").run(sha256(`ticket:${ticket}`), discord.id, discord.name, now + DISCORD_TICKET_TTL_MS);
     return ticket;
+  }
+
+  /** The Discord login a ticket holds, without using it up; null when unknown or expired. */
+  peekDiscord(ticket: string, now: number): DiscordLogin | null {
+    const row = this.db.prepare("select discord_id, discord_name, expires_at from discord_tickets where ticket_hash = ?").get(sha256(`ticket:${ticket}`)) as
+      | { discord_id: string; discord_name: string; expires_at: number }
+      | undefined;
+    return row && row.expires_at > now ? { id: row.discord_id, name: row.discord_name } : null;
   }
 
   /** The Discord login a ticket holds, used up by taking it; null when unknown or expired. */
@@ -955,6 +978,17 @@ export class AccountStore {
     return (this.db.prepare("select sent from mail_days where day = ?").get(day) as { sent: number } | undefined)?.sent ?? 0;
   }
 
+  /** Marks the day on which the emails for new addresses ran out; true only the first time that day. */
+  markNewAddressMailFull(day: string, now: number): boolean {
+    this.db.prepare("insert into mail_days (day, sent) values (?, 0) on conflict (day) do nothing").run(day);
+    return this.db.prepare("update mail_days set new_full_at = ? where day = ? and new_full_at is null").run(now, day).changes > 0;
+  }
+
+  /** When the emails for new addresses ran out on a day (ms), or null. */
+  newAddressMailFullAt(day: string): number | null {
+    return (this.db.prepare("select new_full_at from mail_days where day = ?").get(day) as { new_full_at: number | null } | undefined)?.new_full_at ?? null;
+  }
+
   countMail(day: string): void {
     this.db.prepare("insert into mail_days (day, sent) values (?, 1) on conflict (day) do update set sent = sent + 1").run(day);
     this.db.prepare("delete from mail_days where day < ?").run(new Date(Date.parse(`${day}T00:00:00Z`) - 7 * DAY_MS).toISOString().slice(0, 10));
@@ -1061,15 +1095,30 @@ export class AccountStore {
    * limits below it). A step that mails two addresses asks first, so it sends both or neither.
    */
   codeWait(email: string, now: number, asker: CodeAsker): number {
-    const owner = "owner" in asker;
+    const group = this.askedBy(email, now, asker);
     const recent = (
-      this.db.prepare("select at from code_requests where address = ? and owner = ? and at > ? order by at").all(addressKey(email), owner ? 1 : 0, now - DAY_MS) as unknown as {
+      this.db.prepare("select at from code_requests where address = ? and owner = ? and at > ? order by at").all(addressKey(email), group, now - DAY_MS) as unknown as {
         at: number;
       }[]
     ).map((row) => row.at);
-    if (owner) return limitWait(recent, now, [CODES_PER_WINDOW, CODE_WINDOW_MS], [CODES_PER_DAY, DAY_MS]);
-    const mine = (this.askers.get(askerKey(asker.from, email)) ?? []).filter((at) => at > now - DAY_MS);
-    return Math.max(limitWait(recent, now, [CODES_FROM_OTHERS_PER_DAY, DAY_MS]), limitWait(mine, now, [CODES_PER_WINDOW, CODE_WINDOW_MS], [CODES_PER_ASKER_DAY, DAY_MS]));
+    if (group === ASKED_BY.owner) return limitWait(recent, now, [CODES_PER_WINDOW, CODE_WINDOW_MS], [CODES_PER_DAY, DAY_MS]);
+    const mine = "from" in asker ? (this.askers.get(askerKey(asker.from, email)) ?? []).filter((at) => at > now - DAY_MS) : [];
+    const network = limitWait(mine, now, [CODES_PER_WINDOW, CODE_WINDOW_MS], [CODES_PER_ASKER_DAY, DAY_MS]);
+    return group === ASKED_BY.known ? network : Math.max(network, limitWait(recent, now, [CODES_FROM_OTHERS_PER_DAY, DAY_MS]));
+  }
+
+  /** Which group of an address's limits a request counts in (see CODES_PER_WINDOW). */
+  private askedBy(email: string, now: number, asker: CodeAsker): AskedBy {
+    if ("owner" in asker) return ASKED_BY.owner;
+    const row = this.db.prepare("select expires_at from known_networks where hash = ?").get(knownKey(asker.from, email)) as { expires_at: number } | undefined;
+    return row && row.expires_at > now ? ASKED_BY.known : ASKED_BY.stranger;
+  }
+
+  /** Remembers that the address signed in from this network, for KNOWN_NETWORK_MS from now (only a hash of both is kept). */
+  rememberNetwork(email: string, from: string, now: number): void {
+    this.db
+      .prepare("insert into known_networks (hash, expires_at) values (?, ?) on conflict (hash) do update set expires_at = excluded.expires_at")
+      .run(knownKey(from, email), now + KNOWN_NETWORK_MS);
   }
 
   /**
@@ -1080,7 +1129,7 @@ export class AccountStore {
     this.sweep(now);
     const wait = this.codeWait(email, now, asker);
     if (wait > 0) return wait;
-    this.db.prepare("insert into code_requests (address, at, owner) values (?, ?, ?)").run(addressKey(email), now, "owner" in asker ? 1 : 0);
+    this.db.prepare("insert into code_requests (address, at, owner) values (?, ?, ?)").run(addressKey(email), now, this.askedBy(email, now, asker));
     if ("from" in asker) {
       const key = askerKey(asker.from, email);
       const times = this.askers.get(key);
@@ -1195,6 +1244,7 @@ export class AccountStore {
     }
     this.db.prepare("delete from codes where expires_at <= ?").run(now);
     this.db.prepare("delete from code_requests where at <= ?").run(now - DAY_MS);
+    this.db.prepare("delete from known_networks where expires_at <= ?").run(now);
     this.db.prepare("delete from discord_tickets where expires_at <= ?").run(now);
     this.db.prepare("delete from sessions where last_used_at <= ?").run(now - SESSION_IDLE_MS);
     this.db.prepare("delete from link_codes where expires_at <= ?").run(now);
@@ -1224,3 +1274,5 @@ function limitWait(times: number[], now: number, ...limits: [count: number, wind
 
 /** One network asking for codes to one address, as a hash, so memory holds no address. */
 const askerKey = (from: string, email: string) => sha256(`asker:${from}:${email}`);
+/** A network an address signed in from, as known_networks keeps it. */
+const knownKey = (from: string, email: string) => sha256(`known:${from}:${email}`);

@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
-import { AccountStore } from "./account-store.ts";
+import { AccountStore, KNOWN_NETWORK_MS } from "./account-store.ts";
 
 /** The accounts file as it was before Discord logins (0.16.x): every account had to have an email. */
 function oldDatabase(): string {
@@ -66,6 +66,26 @@ describe("the accounts file from before Discord logins", () => {
     expect(store.codeWait("me@example.com", now, { owner: true })).toBe(0);
     expect(store.requestCode("me@example.com", "delete", "acc1", now, { owner: true }).ok).toBe(true);
     store.close();
+  });
+
+  it("remembers a network an address signed in from for 30 days, as a hash, across restarts", () => {
+    const file = oldDatabase();
+    const now = 1760000000000;
+    const store = new AccountStore(file);
+    store.rememberNetwork("me@example.com", "192.0.2.0/24", now);
+    // Strangers use up their 10 a day.
+    for (let i = 0; i < 10; i++) expect(store.countCodeRequest("me@example.com", now + i, { from: `net${i}` })).toBe(0);
+    store.close();
+    const reopened = new AccountStore(file);
+    expect(reopened.codeWait("me@example.com", now + 20, { from: "elsewhere" })).toBeGreaterThan(0);
+    expect(reopened.codeWait("me@example.com", now + 20, { from: "192.0.2.0/24" })).toBe(0);
+    const db = (reopened as unknown as { db: DatabaseSync }).db;
+    expect(JSON.stringify(db.prepare("select * from known_networks").all())).not.toMatch(/192\.0\.2|example/);
+    // After 30 days it is a stranger's network again (and the day's requests are long gone).
+    expect(reopened.codeWait("me@example.com", now + KNOWN_NETWORK_MS + 1, { from: "192.0.2.0/24" })).toBe(0);
+    for (let i = 0; i < 10; i++) reopened.countCodeRequest("me@example.com", now + KNOWN_NETWORK_MS + 2 + i, { from: `later${i}` });
+    expect(reopened.codeWait("me@example.com", now + KNOWN_NETWORK_MS + 20, { from: "192.0.2.0/24" })).toBeGreaterThan(0);
+    reopened.close();
   });
 
   it("still refuses an account with no way to sign in", () => {

@@ -73,6 +73,8 @@ export function registerPanelRoutes(app: Hono, options: PanelOptions): void {
     { id: "leaderboards", label: "Modules waiting for leaderboard approval", count: options.leaderboardsWaiting?.() ?? 0, section: "leaderboards", tab: "modules" },
     { id: "blocks", label: "Blocks to sign", count: options.blocksToSign?.() ?? 0, section: "modules" },
     { id: "catalog-full", label: "The module catalog is full", count: catalog?.fullSince() ? 1 : 0, section: "status" },
+    // New addresses got no sign-in email for the rest of today (accounts.ts MAIL_FOR_ACCOUNTS_SHARE): time to raise MAIL_DAILY_LIMIT?
+    { id: "sign-in-mail", label: "Sign-in emails for new addresses ran out today", count: accounts?.newAddressMailFullAt(day(now())) ? 1 : 0, section: "status" },
   ];
 
   app.get("/api/summary", (context) => {
@@ -126,9 +128,10 @@ export function registerPanelRoutes(app: Hono, options: PanelOptions): void {
       ),
     ]);
     const today = day(now());
+    const newFull = accounts?.newAddressMailFullAt(today) ?? null;
     return context.json({
       api: { ok: true, ...options.dataset() },
-      mail: accounts ? { day: today, sent: accounts.mailsSent(today), limit: options.mailDailyLimit ?? null } : null,
+      mail: accounts ? { day: today, sent: accounts.mailsSent(today), limit: options.mailDailyLimit ?? null, newAddressesFullAt: newFull === null ? null : new Date(newFull).toISOString() } : null,
       backup: { at: lastBackup(options.stateDir) },
       catalog: { storedBytes: catalog?.storedBytes() ?? 0, limitBytes: PUBLISH_LIMITS.catalogBytes, fullSince: catalog?.fullSince() ?? null },
       sites,
