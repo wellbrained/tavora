@@ -1,11 +1,11 @@
 import { randomBytes } from "node:crypto";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { AccountStore } from "./account-store.ts";
 import { createApp } from "./app.ts";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { COPY_LIMIT, copyLimitsFromEnv, CopyStore, FREE_FLOOR, MAX_PART_BYTES, readParts, readSwap, STORED_LIMIT, TOTAL_LIMIT, writeParts, type CopyStoreOptions } from "./cloud-copy.ts";
+import { COPY_LIMIT, copyLimitsFromEnv, CopyStore, FREE_FLOOR, MAX_PART_BYTES, readParts, readSwap, STORED_LIMIT, TOTAL_LIMIT, UNUSED_PART_MS, writeParts, type CopyStoreOptions } from "./cloud-copy.ts";
 import { buildDataset, writeDatabase } from "./dataset.ts";
 import { createTestInbox } from "./mail.ts";
 import { createRateLimiter } from "./rate-limit.ts";
@@ -185,21 +185,148 @@ describe("the cloud copy", () => {
     expect(copies.stored("c")).toBe(0);
     // Parts it has already cost nothing, so they always go through.
     expect(copies.addParts("a", [a[0]!])).toBe("ok");
-    // A version that keeps one part drops the other, and deleting a copy frees all of it.
-    expect(copies.swap("a", 0, new Uint8Array([1]), [a[0]!.id], 1)).toMatchObject({ ok: true });
-    expect(copies.storedTotal()).toBe(600);
+    // A version that keeps one part drops the other (its manifest counts too), and deleting a copy frees all of it.
+    expect(copies.swap("a", 0, new Uint8Array(10), [a[0]!.id], 1)).toMatchObject({ ok: true });
+    expect(copies.storedTotal()).toBe(610);
+    expect(copies.swap("a", 1, new Uint8Array(4), [a[0]!.id], 2)).toMatchObject({ ok: true });
+    expect(copies.storedTotal()).toBe(604);
     copies.remove("b");
-    expect(copies.storedTotal()).toBe(300);
+    expect(copies.storedTotal()).toBe(304);
     expect(copies.addParts("c", [part(200)])).toBe("ok");
-    expect(copies.storedTotal()).toBe(500);
+    expect(copies.storedTotal()).toBe(504);
+    copies.remove("a");
+    expect(copies.storedTotal()).toBe(200);
   });
 
-  it("counts what is stored already when it starts", () => {
+  it("counts what is stored already when it starts, manifests too", () => {
     const file = path.join(mkdtempSync(path.join(tmpdir(), "tavora-copies-")), "copies.sqlite");
     const first = new CopyStore(file);
-    first.addParts("a", [part(400), part(100)]);
+    const kept = part(400);
+    first.addParts("a", [kept, part(100)]);
+    first.swap("a", 0, new Uint8Array(50), [kept.id], 1);
+    expect(new CopyStore(file).storedTotal()).toBe(450);
     expect(new CopyStore(file, { totalLimit: 600 }).addParts("b", [part(200)])).toBe("no-room");
-    expect(new CopyStore(file).storedTotal()).toBe(500);
+  });
+
+  it("needs room for a bigger manifest as for parts", async () => {
+    const copies = new CopyStore(":memory:", { totalLimit: 1000 });
+    const a = part(500);
+    copies.addParts("a", [a]);
+    expect(copies.swap("a", 0, new Uint8Array(400), [a.id], 1)).toMatchObject({ ok: true });
+    copies.addParts("b", [part(90)]);
+    // 990 stored: a bigger manifest has no room, the same size or smaller always has.
+    expect(copies.swap("a", 1, new Uint8Array(420), [a.id], 2)).toEqual({ ok: false, reason: "unavailable" });
+    expect(copies.info("a")?.version).toBe(1);
+    expect(copies.swap("a", 1, new Uint8Array(400), [a.id], 3)).toMatchObject({ ok: true, version: 2 });
+    expect(copies.swap("a", 2, new Uint8Array(10), [a.id], 4)).toMatchObject({ ok: true, version: 3 });
+    expect(copies.storedTotal()).toBe(600);
+    // The free-space floor holds for a manifest too.
+    let free = 10_000;
+    const tight = new CopyStore(":memory:", { freeBytes: () => free, freeFloor: 9_000 });
+    expect(tight.swap("x", 0, new Uint8Array(500), [], 1)).toMatchObject({ ok: true });
+    free = 9_200;
+    expect(tight.swap("x", 1, new Uint8Array(800), [], 2)).toEqual({ ok: false, reason: "unavailable" });
+    // Over the routes: 503, which the app takes as "try again later".
+    const { copy, signIn, copies: routed } = setup({ totalLimit: 1000 });
+    const token = await signIn("me@example.com");
+    const b = part(100);
+    expect((await copy("POST", "/parts", token, writeParts([b]))).status).toBe(200);
+    routed.addParts("someone-else", [part(880)]);
+    const refused = await copy("PUT", "", token, swapBody(0, [b.id], new Uint8Array(50)));
+    expect(refused.status).toBe(503);
+    expect(await refused.json()).toMatchObject({ reason: "unavailable" });
+  });
+
+  it("drops parts no saved version uses once they are a day old, and keeps the total right", () => {
+    const copies = new CopyStore(":memory:");
+    const day = UNUSED_PART_MS;
+    const used = part(100);
+    const unusedOld = part(200);
+    copies.addParts("a", [used, unusedOld], 1000);
+    copies.swap("a", 0, new Uint8Array(5), [used.id], 2000);
+    // After the save: one part that never got saved, and one still fresh.
+    const late = part(300);
+    copies.addParts("a", [late], 3000);
+    const fresh = part(50);
+    copies.addParts("a", [fresh], 3000 + day);
+    // An account that uploaded and never saved.
+    copies.addParts("b", [part(400)], 1000);
+    expect(copies.storedTotal()).toBe(100 + 5 + 300 + 50 + 400);
+    expect(copies.sweep(3000 + day + 1)).toEqual({ parts: 2, bytes: 700 });
+    expect(copies.parts("a", [used.id, late.id, fresh.id]).map((p) => p.data.length)).toEqual([100, 50]);
+    expect(copies.stored("b")).toBe(0);
+    expect(copies.storedTotal()).toBe(155);
+    // The running total matches what is there.
+    const db = (copies as unknown as { db: { prepare(sql: string): { get(): unknown } } }).db;
+    expect(db.prepare("select (select sum(size) from parts) + (select sum(length(manifest)) from copies) as total").get()).toEqual({ total: 155 });
+    // A saved version keeps what it uses, however old.
+    expect(copies.sweep(10 * day)).toEqual({ parts: 1, bytes: 50 });
+    expect(copies.parts("a", [used.id])).toHaveLength(1);
+    expect(copies.storedTotal()).toBe(105);
+  });
+
+  it("counts parts from before their time as old: kept with a copy until its next save, dropped without one", () => {
+    const copies = new CopyStore(":memory:");
+    const db = (copies as unknown as { db: { exec(sql: string): void } }).db;
+    const used = part(100);
+    copies.addParts("a", [used], 1000);
+    copies.swap("a", 0, new Uint8Array(5), [used.id], 2000);
+    copies.addParts("a", [part(30)], 3000);
+    copies.addParts("b", [part(40)], 3000);
+    db.exec("update parts set created_at = null");
+    expect(copies.sweep(3000 + UNUSED_PART_MS + 1)).toEqual({ parts: 1, bytes: 40 });
+    expect(copies.stored("a")).toBe(130);
+  });
+
+  it("never drops a part a version uses, even when the clock went back before saving it", () => {
+    const copies = new CopyStore(":memory:");
+    const used = part(100);
+    copies.addParts("a", [used], 50_000);
+    copies.swap("a", 0, new Uint8Array(5), [used.id], 10_000);
+    expect(copies.info("a")?.updatedAt).toBe(50_000);
+    expect(copies.sweep(50_000 + 2 * UNUSED_PART_MS)).toEqual({ parts: 0, bytes: 0 });
+  });
+
+  it("sweeps for room before it refuses, at most once a minute", () => {
+    const copies = new CopyStore(":memory:", { totalLimit: 1000 });
+    copies.addParts("idle", [part(900)], 0);
+    // A day later the idle upload goes to make room.
+    expect(copies.addParts("a", [part(200)], UNUSED_PART_MS + 1)).toBe("ok");
+    expect(copies.stored("idle")).toBe(0);
+    copies.addParts("b", [part(700)], UNUSED_PART_MS + 2);
+    copies.sweep(UNUSED_PART_MS + 3);
+    // Full of fresh parts: refused, and the next try within the minute doesn't sweep again.
+    const sweep = vi.spyOn(copies, "sweep");
+    expect(copies.addParts("c", [part(200)], UNUSED_PART_MS + 10)).toBe("no-room");
+    expect(sweep).not.toHaveBeenCalled();
+    expect(copies.addParts("c", [part(200)], UNUSED_PART_MS + 120_000)).toBe("no-room");
+    expect(sweep).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves the total as it was when a save or a delete fails part way", () => {
+    const copies = new CopyStore(":memory:");
+    const a = part(100);
+    const b = part(200);
+    copies.addParts("acc", [a, b], 1);
+    copies.swap("acc", 0, new Uint8Array(5), [a.id, b.id], 2);
+    const before = copies.storedTotal();
+    const db = (copies as unknown as { db: { prepare(sql: string): unknown } }).db;
+    const prepare = db.prepare.bind(db);
+    const failOn = (text: string) =>
+      vi.spyOn(db, "prepare").mockImplementation((sql: string) => {
+        if (sql.startsWith(text)) throw new Error("disk went away");
+        return prepare(sql);
+      });
+    const spy = failOn("delete from parts where account_id = ? and id = ?");
+    expect(() => copies.swap("acc", 1, new Uint8Array(50), [a.id], 3)).toThrow("disk went away");
+    spy.mockRestore();
+    expect(copies.storedTotal()).toBe(before);
+    expect(copies.info("acc")).toMatchObject({ version: 1 });
+    const again = failOn("delete from copies where account_id = ?");
+    expect(() => copies.remove("acc")).toThrow("disk went away");
+    again.mockRestore();
+    expect(copies.storedTotal()).toBe(before);
+    expect(copies.stored("acc")).toBe(300);
   });
 
   it("leaves free space on the disk", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clientOf, createRateLimiter } from "./rate-limit.ts";
+import { clientOf, createRateLimiter, networkOf } from "./rate-limit.ts";
 
 describe("clientOf", () => {
   it("keeps an IPv4 address and counts IPv6 by its /64", () => {
@@ -21,6 +21,16 @@ describe("clientOf", () => {
     expect(clientOf(undefined)).toBeNull();
     expect(clientOf("")).toBeNull();
     expect(clientOf("not-an-ip")).toBeNull();
+  });
+});
+
+describe("networkOf", () => {
+  it("widens a client to its IPv4 /24 or IPv6 /48, and leaves other keys alone", () => {
+    expect(networkOf("203.0.113.77")).toBe("203.0.113.0/24");
+    expect(networkOf(clientOf("2001:db8:1:2:3:4:5:6")!)).toBe("2001:db8:1::/48");
+    expect(networkOf(clientOf("2001:db8:1:ffff::1")!)).toBe(networkOf(clientOf("2001:db8:1:2::1")!));
+    expect(networkOf("shared")).toBe("shared");
+    expect(networkOf("local")).toBe("local");
   });
 });
 

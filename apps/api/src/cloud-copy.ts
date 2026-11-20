@@ -23,6 +23,10 @@ export const STORED_LIMIT = 2 * COPY_LIMIT;
 export const TOTAL_LIMIT = 20 * 1024 * 1024 * 1024;
 /** Free space on the disk that new parts never take (COPY_FREE_FLOOR_GB): the accounts and the other stores share that disk. */
 export const FREE_FLOOR = 2 * 1024 * 1024 * 1024;
+/** Parts no saved version uses are dropped once they are this old (sweep()): an upload that never got saved. */
+export const UNUSED_PART_MS = 24 * 60 * 60 * 1000;
+/** A copy without room sweeps at most this often before it refuses, so a full service doesn't sweep on every upload. */
+const SWEEP_GAP_MS = 60_000;
 /** One part: 4 MB of the user's data plus its encryption. */
 export const MAX_PART_BYTES = 4 * 1024 * 1024 + 1024;
 /** One upload or one download: about 8 MB of parts. */
@@ -47,7 +51,8 @@ export type SwapResult =
   | { ok: true; version: number; size: number }
   | { ok: false; reason: "copy-changed"; version: number }
   | { ok: false; reason: "missing-parts"; missing: number }
-  | { ok: false; reason: "copy-full"; size: number };
+  | { ok: false; reason: "copy-full"; size: number }
+  | { ok: false; reason: "unavailable" };
 
 export interface CopyStoreOptions {
   /** Bytes of parts all accounts may store together; TOTAL_LIMIT by default. */
@@ -96,9 +101,10 @@ export class CopyStore {
   private readonly totalLimit: number;
   private readonly freeBytes: (() => number | null) | undefined;
   private readonly freeFloor: number;
-  /** Bytes of parts of every account, counted once at the start and kept up to date by every change. */
+  /** Bytes of parts and manifests of every account, counted once at the start and kept up to date by every change. */
   private total: number;
   private warned = false;
+  private lastSweep = Number.NEGATIVE_INFINITY;
 
   constructor(path: string, { totalLimit = TOTAL_LIMIT, freeBytes, freeFloor = FREE_FLOOR }: CopyStoreOptions = {}) {
     this.totalLimit = totalLimit;
@@ -116,14 +122,80 @@ export class CopyStore {
         account_id text not null, id blob not null, data blob not null, size integer not null, primary key (account_id, id)
       ) without rowid;
     `);
-    // The sizes on their own, so adding them up never reads the parts' bytes.
-    this.db.exec("create index if not exists parts_size on parts (account_id, size)");
-    this.total = (this.db.prepare("select coalesce(sum(size), 0) as total from parts").get() as { total: number }).total;
+    // When a part was stored, so one no saved version uses can go after a while (sweep()); null for parts from before it.
+    const columns = (this.db.prepare("pragma table_info(parts)").all() as unknown as { name: string }[]).map((column) => column.name);
+    if (!columns.includes("created_at")) this.db.exec("alter table parts add column created_at integer");
+    // The sizes and times on their own, so adding them up and finding unused parts never reads the parts' bytes. Building it
+    // reads copies.sqlite once, at the first start with it.
+    this.db.exec("drop index if exists parts_size");
+    this.db.exec("create index if not exists parts_meta on parts (account_id, created_at, size)");
+    const parts = (this.db.prepare("select coalesce(sum(size), 0) as total from parts").get() as { total: number }).total;
+    const manifests = (this.db.prepare("select coalesce(sum(length(manifest)), 0) as total from copies").get() as { total: number }).total;
+    this.total = parts + manifests;
   }
 
-  /** Bytes of parts of every account. */
+  /** Bytes of parts and manifests of every account. */
   storedTotal(): number {
     return this.total;
+  }
+
+  /** The accounts storing the most parts, used by a version or not, most first. */
+  biggest(limit: number): { accountId: string; stored: number }[] {
+    return (this.db.prepare("select account_id as accountId, sum(size) as stored from parts group by account_id order by stored desc, account_id limit ?").all(limit) as unknown as {
+      accountId: string;
+      stored: number;
+    }[]).map((row) => ({ ...row }));
+  }
+
+  /** Whether `adding` more bytes stay within the total and leave the disk's free space. */
+  private fits(adding: number): boolean {
+    if (adding <= 0) return true;
+    const free = this.freeBytes?.() ?? null;
+    return this.total + adding <= this.totalLimit && (free === null || free - adding >= this.freeFloor);
+  }
+
+  /** Room for `adding` more bytes: when there is none, unused parts are swept first (at most once a minute), then it checks again. */
+  private room(adding: number, now: number): boolean {
+    if (!this.fits(adding) && now - this.lastSweep >= SWEEP_GAP_MS) this.sweep(now);
+    if (this.fits(adding)) {
+      this.warned = false;
+      return true;
+    }
+    if (!this.warned) console.warn("[tavora-api] The cloud copies have no room: new parts and versions are refused until there is some.");
+    this.warned = true;
+    return false;
+  }
+
+  /**
+   * Drops the parts no saved version uses that are older than UNUSED_PART_MS: those of an account without a copy, and those
+   * stored after its copy was last saved (a save drops every part it doesn't use, so what came after it is unused). Parts
+   * from before created_at count as old; with a copy they stay until its next save, as they did. Answers what went.
+   */
+  sweep(now: number = Date.now()): { parts: number; bytes: number } {
+    this.lastSweep = now;
+    const unused = this.db
+      .prepare(
+        `select p.account_id as accountId, p.id as id, p.size as size from parts p left join copies c on c.account_id = p.account_id
+         where coalesce(p.created_at, 0) < ? and (c.account_id is null or (p.created_at is not null and p.created_at > c.updated_at))`,
+      )
+      .all(now - UNUSED_PART_MS) as unknown as { accountId: string; id: Uint8Array; size: number }[];
+    if (unused.length === 0) return { parts: 0, bytes: 0 };
+    let bytes = 0;
+    const drop = this.db.prepare("delete from parts where account_id = ? and id = ?");
+    this.db.exec("begin");
+    try {
+      for (const part of unused) {
+        drop.run(part.accountId, part.id);
+        bytes += part.size;
+      }
+      this.db.exec("commit");
+    } catch (error) {
+      this.db.exec("rollback");
+      throw error;
+    }
+    this.total -= bytes;
+    this.db.exec("pragma incremental_vacuum");
+    return { parts: unused.length, bytes };
   }
 
   info(accountId: string): CopyInfo | null {
@@ -145,29 +217,31 @@ export class CopyStore {
    * Stores the parts the account does not have yet. Nothing is stored when they would pass STORED_LIMIT (`copy-full`), the
    * total of every account, or eat into the free space the disk keeps (`no-room`).
    */
-  addParts(accountId: string, parts: { id: Uint8Array; data: Uint8Array }[]): AddPartsResult {
+  addParts(accountId: string, parts: { id: Uint8Array; data: Uint8Array }[], now: number = Date.now()): AddPartsResult {
     const has = this.db.prepare("select 1 from parts where account_id = ? and id = ?");
-    const seen = new Set<string>();
-    const fresh = parts.filter((part) => {
-      const key = Buffer.from(part.id).toString("hex");
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return !has.get(accountId, part.id);
-    });
-    const adding = fresh.reduce((total, part) => total + part.data.length, 0);
-    if (adding === 0) return "ok";
+    const freshOf = () => {
+      const seen = new Set<string>();
+      return parts.filter((part) => {
+        const key = Buffer.from(part.id).toString("hex");
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return !has.get(accountId, part.id);
+      });
+    };
+    const bytesOf = (list: { data: Uint8Array }[]) => list.reduce((total, part) => total + part.data.length, 0);
+    let fresh = freshOf();
+    if (bytesOf(fresh) === 0) return "ok";
+    if (this.stored(accountId) + bytesOf(fresh) > STORED_LIMIT) return "copy-full";
+    if (!this.room(bytesOf(fresh), now)) return "no-room";
+    // A sweep for room may have dropped old unused parts of this account too: those are stored again.
+    fresh = freshOf();
+    const adding = bytesOf(fresh);
     if (this.stored(accountId) + adding > STORED_LIMIT) return "copy-full";
-    const free = this.freeBytes?.() ?? null;
-    if (this.total + adding > this.totalLimit || (free !== null && free - adding < this.freeFloor)) {
-      if (!this.warned) console.warn("[tavora-api] The cloud copies have no room: new parts are refused until there is some.");
-      this.warned = true;
-      return "no-room";
-    }
-    this.warned = false;
-    const insert = this.db.prepare("insert into parts (account_id, id, data, size) values (?, ?, ?, ?)");
+    if (!this.fits(adding)) return "no-room";
+    const insert = this.db.prepare("insert into parts (account_id, id, data, size, created_at) values (?, ?, ?, ?, ?)");
     this.db.exec("begin");
     try {
-      for (const part of fresh) insert.run(accountId, part.id, part.data, part.data.length);
+      for (const part of fresh) insert.run(accountId, part.id, part.data, part.data.length, now);
       this.db.exec("commit");
     } catch (error) {
       this.db.exec("rollback");
@@ -194,20 +268,29 @@ export class CopyStore {
 
   /**
    * Makes `manifest` with `parts` the account's copy, if the PC started from the current version
-   * (0 when there is none). Parts no longer used are dropped.
+   * (0 when there is none). Parts no longer used are dropped. A manifest bigger than the one it replaces needs room like parts do.
    */
   swap(accountId: string, base: number, manifest: Uint8Array, parts: Uint8Array[], now: number): SwapResult {
     const current = this.info(accountId);
     if ((current?.version ?? 0) !== base) return { ok: false, reason: "copy-changed", version: current?.version ?? 0 };
-    const sizeOf = this.db.prepare("select size from parts where account_id = ? and id = ?");
+    const previous = (this.db.prepare("select length(manifest) as bytes from copies where account_id = ?").get(accountId) as { bytes: number } | undefined)?.bytes ?? 0;
+    // Before the parts are looked up: a sweep for room may drop old unused ones, which then count as missing.
+    if (!this.room(manifest.length - previous, now)) return { ok: false, reason: "unavailable" };
+    const sizeOf = this.db.prepare("select size, created_at from parts where account_id = ? and id = ?");
     const keep = new Map<string, Uint8Array>();
     for (const id of parts) keep.set(Buffer.from(id).toString("hex"), id);
     let size = manifest.length;
     let missing = 0;
+    // Saved no earlier than its newest part, so sweep() never takes a part this version uses for one stored after it.
+    let savedAt = now;
     for (const id of keep.values()) {
-      const row = sizeOf.get(accountId, id) as { size: number } | undefined;
-      if (row) size += row.size;
-      else missing++;
+      const row = sizeOf.get(accountId, id) as { size: number; created_at: number | null } | undefined;
+      if (!row) {
+        missing++;
+        continue;
+      }
+      size += row.size;
+      if (row.created_at !== null) savedAt = Math.max(savedAt, row.created_at);
     }
     if (missing > 0) return { ok: false, reason: "missing-parts", missing };
     if (size > COPY_LIMIT) return { ok: false, reason: "copy-full", size };
@@ -218,7 +301,7 @@ export class CopyStore {
     try {
       this.db
         .prepare("insert into copies (account_id, version, manifest, size, updated_at) values (?, ?, ?, ?, ?) on conflict (account_id) do update set version = excluded.version, manifest = excluded.manifest, size = excluded.size, updated_at = excluded.updated_at")
-        .run(accountId, version, manifest, size, now);
+        .run(accountId, version, manifest, size, savedAt);
       const stored = this.db.prepare("select id, size from parts where account_id = ?").all(accountId) as { id: Uint8Array; size: number }[];
       const drop = this.db.prepare("delete from parts where account_id = ? and id = ?");
       for (const part of stored) {
@@ -231,7 +314,7 @@ export class CopyStore {
       this.db.exec("rollback");
       throw error;
     }
-    this.total -= dropped;
+    this.total += manifest.length - previous - dropped;
     this.db.exec("pragma incremental_vacuum");
     return { ok: true, version, size };
   }
@@ -246,7 +329,7 @@ export class CopyStore {
     let freed = 0;
     this.db.exec("begin");
     try {
-      freed = this.stored(accountId);
+      freed = this.stored(accountId) + ((this.db.prepare("select length(manifest) as bytes from copies where account_id = ?").get(accountId) as { bytes: number } | undefined)?.bytes ?? 0);
       const version = Math.max(this.info(accountId)?.version ?? 0, this.retired(accountId));
       if (forever || version === 0) this.db.prepare("delete from retired where account_id = ?").run(accountId);
       else this.db.prepare("insert into retired (account_id, version) values (?, ?) on conflict (account_id) do update set version = excluded.version").run(accountId, version);
@@ -360,7 +443,7 @@ export function copyRoutes({ copies, accounts, clientKey, rateLimiter, now = Dat
     const parts = readParts(await bytes(context));
     if (!parts) return bad(context, "Send parts: a 32-byte id, a 4-byte length and the bytes, one after another.");
     const account = context.get("account");
-    const added = copies.addParts(account.id, parts);
+    const added = copies.addParts(account.id, parts, now());
     if (added === "copy-full") return context.json({ error: "The cloud copy is full.", reason: "copy-full", limit: COPY_LIMIT }, 413);
     // The service's own room, not this account's: the app keeps its data and tries again later, as for any 503.
     if (added === "no-room") return context.json({ error: "The cloud copy has no room right now. Try again later.", reason: "unavailable" }, 503);
@@ -384,6 +467,7 @@ export function copyRoutes({ copies, accounts, clientKey, rateLimiter, now = Dat
     if (result.ok) return context.json({ version: result.version, size: result.size });
     if (result.reason === "copy-changed") return context.json({ error: "The cloud copy changed on another PC.", reason: result.reason, version: result.version }, 409);
     if (result.reason === "missing-parts") return context.json({ error: "Some parts are missing; upload them again.", reason: result.reason, missing: result.missing }, 409);
+    if (result.reason === "unavailable") return context.json({ error: "The cloud copy has no room right now. Try again later.", reason: result.reason }, 503);
     return context.json({ error: "The cloud copy is full.", reason: result.reason, size: result.size, limit: COPY_LIMIT }, 413);
   });
 

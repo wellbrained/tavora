@@ -50,6 +50,17 @@ export function clientOf(address: string | undefined): string | null {
   return `${expandIpv6(text).slice(0, 4).join(":")}::/64`;
 }
 
+/**
+ * A wider network for a client key from clientOf: an IPv4 address's /24 and an IPv6 /64's /48, for limits one person never
+ * reaches but one network handing out many addresses would. Any other key (a test's, "shared") stays as it is.
+ */
+export function networkOf(client: string): string {
+  const v4 = /^(\d+\.\d+\.\d+)\.\d+$/.exec(client);
+  if (v4) return `${v4[1]}.0/24`;
+  const v6 = /^([0-9a-f]+:[0-9a-f]+:[0-9a-f]+):[0-9a-f]+::\/64$/.exec(client);
+  return v6 ? `${v6[1]}::/48` : client;
+}
+
 /** The eight groups of an IPv6 address, without leading zeros. */
 function expandIpv6(address: string): string[] {
   let text = address.toLowerCase();

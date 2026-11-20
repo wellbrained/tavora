@@ -100,6 +100,15 @@ export function accountsAdminRoutes({ accounts, catalog, reviews, copies, mailer
     return context.json({ total, counts, accounts: rows.map(rowAnswer) });
   });
 
+  // The accounts storing the most cloud-copy parts (?limit=1-100, 20 by default), and the bytes of every account together.
+  app.get("/copies", (context) => {
+    if (!copies) return context.json({ error: "Cloud copies are off." }, 503);
+    const limit = Number(context.req.query("limit") ?? 20);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) return context.json({ error: "Send ?limit= 1 to 100." }, 400);
+    const holders = copies.biggest(limit).map(({ accountId, stored }) => ({ id: accountId, email: accounts.account(accountId)?.email ?? null, stored, copySize: copies.info(accountId)?.size ?? null }));
+    return context.json({ total: copies.storedTotal(), accounts: holders });
+  });
+
   // Everything the service keeps about one account.
   app.get("/:id", (context) => {
     const id = context.req.param("id");
@@ -138,6 +147,8 @@ export function accountsAdminRoutes({ accounts, catalog, reviews, copies, mailer
       }),
       reviews: reviews ? reviews.countByAccount(id) : { written: 0, hidden: 0 },
       cloudCopy: copy ? { size: copy.size, updatedAt: iso(copy.updatedAt) } : null,
+      // Bytes of parts it stores, used by its copy or not (an upload not saved yet), even without a copy.
+      copyStored: copies?.stored(id) ?? 0,
       vault: vault ? { updatedAt: iso(vault.updatedAt) } : null,
       ban: ban ? { reason: ban.reason, note: ban.note, bannedAt: iso(ban.bannedAt), modules: ban.modules.length } : null,
       suspension: suspension ? { reason: suspension.reason, note: suspension.note, suspendedAt: iso(suspension.suspendedAt) } : null,

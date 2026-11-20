@@ -16,11 +16,11 @@ import { vaultRoutes } from "./vault.ts";
 import { catalogFilter, isOfficialId, isSignedList, type CatalogEntry, type CatalogStore } from "./catalog.ts";
 import { isBot, parseVisit, referrerDomain, SITE_CLICKS, SITE_ORIGIN, UNKNOWN_COUNTRY } from "./site-visits.ts";
 import { isAppVersion, type StatsStore } from "./stats.ts";
-import { parseRequest, type ModuleRequestStore } from "./module-requests.ts";
+import { gameKey, gameListKnows, parseRequest, type ModuleRequestStore } from "./module-requests.ts";
 import { catalogTrust, OFFICIAL_PINS, type OfficialPins } from "./catalog-trust.ts";
 import { publisherRoutes } from "./publishers.ts";
 import { ICON_NOTICE, isIconId, NO_ICONS, type IconStore } from "./icons.ts";
-import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
+import { createRateLimiter, networkOf, type RateLimiter } from "./rate-limit.ts";
 import { fail, signedInAs, signedOut, tooMany } from "./sign-in.ts";
 import { MAX_UPLOAD_BODY, type Submissions } from "./submissions.ts";
 import { DEFAULT_LIMIT, MAX_LIMIT, MAX_QUERY_LENGTH, searchGames } from "./search.ts";
@@ -84,7 +84,7 @@ export interface AppOptions {
   moduleRequests?: ModuleRequestStore;
   /** Module request votes per client. */
   moduleRequestRateLimiter?: RateLimiter;
-  /** Games not on the list yet that one client may add: 10 a day by default. */
+  /** Games not on the list yet that one network (an IPv4 /24, an IPv6 /48) may add: 20 a day by default. */
   newGameRateLimiter?: RateLimiter;
 }
 
@@ -102,8 +102,11 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
   const siteLimiter = siteRateLimiter ?? createRateLimiter({ limit: 30, windowMs: 60_000 });
   // A person asks for a handful of games at most; the vote of one install and game counts once anyway.
   const requestLimiter = moduleRequestRateLimiter ?? createRateLimiter({ limit: 20, windowMs: 3_600_000 });
-  // New games fill the list, so one client adds only a few a day; votes for games already on it don't count here.
-  const newGameLimiter = newGameRateLimiter ?? createRateLimiter({ limit: 10, windowMs: 86_400_000 });
+  // New games fill the list, so one network adds only a few a day, counted by its /24 or /48 because one connection can get
+  // many /64s; votes for games already on it don't count here.
+  const newGameLimiter = newGameRateLimiter ?? createRateLimiter({ limit: 20, windowMs: 86_400_000 });
+  // Whether Tavora's game list knows a requested game's id: only those are safe from being pushed off a full list.
+  const gameKnown = gameListKnows(db);
   const app = new Hono();
 
   // Steam appid -> canonical id, loaded the first time an import asks.
@@ -459,10 +462,11 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     const request = parseRequest(body);
     if (!request) return fail(context, 400, "bad-request", "Send { game: { name }, voter }.");
     if (!moduleRequests.has(request.game)) {
-      const newWait = newGameLimiter.check(client);
+      const newWait = newGameLimiter.check(networkOf(client));
       if (newWait > 0) return tooMany(context, newWait);
     }
-    moduleRequests.vote(request);
+    // A full list where nothing may make room for this game (only known games with more votes).
+    if (!moduleRequests.vote(request, Date.now(), { known: gameKnown(gameKey(request.game)) })) return fail(context, 503, "unavailable", "Asking for modules is not available right now.");
     return context.body(null, 204);
   });
 

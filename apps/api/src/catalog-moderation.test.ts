@@ -2,7 +2,7 @@ import { createHash, createPublicKey, generateKeyPairSync, randomBytes, type Key
 import { existsSync, mkdtempSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { publishSignature, signFiles, writeZip, type ZipFile } from "@tavora/pack";
+import { catalogPublicKey, nextCatalogList, publishSignature, signCatalogList, signFiles, writeZip, type ZipFile } from "@tavora/pack";
 import { describe, expect, it } from "vitest";
 import { AccountStore } from "./account-store.ts";
 import { createAdminApp } from "./admin-app.ts";
@@ -535,6 +535,27 @@ describe("approving", () => {
     expect(await listed()).toEqual({ fingerprint: waiting.owner, refused: "key-not-linked" });
     expect(await (await post("/approve", { sha256: waiting.sha256 })).json()).toMatchObject({ reason: "key-not-linked" });
     expect(catalog.waitingVersions()).toHaveLength(1);
+  });
+
+  it("refuses a version whose key is in the signed revocations list, and only by Tavora's catalogue key", async () => {
+    const { developer, send, catalog, store, clock, inbox } = setup({ scanner: undefined });
+    const catalogue = generateKeyPairSync("ed25519").privateKey;
+    const admin = moderationRoutes({ catalog, accounts: store, mailer: inbox, now: () => clock.now, catalogueKey: catalogPublicKey(catalogue) });
+    const approve = (sha256: string) => admin.request("http://admin.test/approve", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sha256 }) });
+    const { key } = developer("dev@example.com");
+    await send(key, moduleZip(key));
+    const waiting = catalog.waitingVersions()[0]!;
+    const revoked = [{ fingerprint: waiting.owner, revoked: "2026-10-26T11:00:00Z", allow: [] }];
+    // A list signed by any other key counts for nothing.
+    catalog.setList("revocations", Buffer.from(signCatalogList(nextCatalogList("revocations", revoked, null, new Date(clock.now)), generateKeyPairSync("ed25519").privateKey)));
+    const page = async () => ((await (await admin.request("http://admin.test/waiting")).json()) as { waiting: { signer: { refused: string | null } }[] }).waiting[0]!.signer.refused;
+    expect(await page()).toBeNull();
+    catalog.setList("revocations", Buffer.from(signCatalogList(nextCatalogList("revocations", revoked, null, new Date(clock.now)), catalogue)));
+    expect(await page()).toBe("key-revoked");
+    const refused = await approve(waiting.sha256);
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toMatchObject({ reason: "key-revoked" });
+    expect(catalog.index()).toEqual([]);
   });
 
   it("counts an approved version as listed when it was approved, so a leak report before that doesn't allow it", async () => {

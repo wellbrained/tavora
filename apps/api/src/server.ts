@@ -17,7 +17,7 @@ import { normalize } from "./ids.ts";
 import { loadIconStore } from "./icons.ts";
 import { createBrevoMailer, createTestInbox, createTestInboxApp, type Mailer } from "./mail.ts";
 import { clientOf } from "./rate-limit.ts";
-import { ModuleRequestStore } from "./module-requests.ts";
+import { gameListKnows, ModuleRequestStore } from "./module-requests.ts";
 import { StatsStore } from "./stats.ts";
 import { ReviewStore } from "./reviews.ts";
 import { ConversationStore } from "./conversations.ts";
@@ -96,6 +96,15 @@ const accountStore = mailer ? new AccountStore(path.join(stateDir, "accounts.sql
 // The cloud copies: their own file, which the daily backup leaves out (decided 2026-10-19; the PCs upload again).
 // All accounts' copies together stay under a total and leave free space on the state disk (COPY_TOTAL_LIMIT_GB, COPY_FREE_FLOOR_GB).
 const copies = accountStore ? new CopyStore(path.join(stateDir, "copies.sqlite"), copyLimitsFromEnv(process.env, stateDir)) : undefined;
+if (copies) {
+  // Parts uploaded but never saved in a version go after a day; once an hour is plenty.
+  const sweepCopies = () => {
+    const { parts, bytes } = copies.sweep(Date.now());
+    if (parts > 0) console.log(`[tavora-api] Dropped ${parts} unused cloud-copy parts (${Math.round(bytes / 1024 / 1024)} MB).`);
+  };
+  sweepCopies();
+  setInterval(sweepCopies, 60 * 60_000).unref();
+}
 // The module catalog, read-only here: modules are added by hand with catalog.mjs (scripts/catalog.ts).
 const catalog = new CatalogStore(path.join(stateDir, "catalog"));
 // The signed hash of each version from before it was kept (S7), so a block can name it too. Only rows still without one
@@ -126,6 +135,8 @@ console.log(`[tavora-api] ${catalog.index().length} modules in the catalog.`);
 const stats = new StatsStore(path.join(stateDir, "stats.sqlite"));
 // Votes for a module for a game (module-requests.ts): their own file, in the daily backup.
 const moduleRequests = new ModuleRequestStore(path.join(stateDir, "module-requests.sqlite"));
+// Which requested games the game list knows; the list may be newer than the votes, and rows from before this have none.
+moduleRequests.refreshKnown(gameListKnows(db));
 const activity = new ActivityLog(path.join(stateDir, "activity.sqlite"));
 const snapshotAccounts = () => {
   if (accountStore && !stats.hasSnapshot()) stats.snapshotAccounts(accountStore.activity(Date.now()));

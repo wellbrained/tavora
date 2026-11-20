@@ -237,6 +237,27 @@ describe("one account's details", () => {
     expect((await get(`/api/accounts/${mara.account.id}`)).body).toMatchObject({ reviews: { written: 1, hidden: 0 }, developer: null, profile: { name: "Mara", hasPicture: false } });
   });
 
+  it("shows the cloud-copy parts each account stores, and who stores the most", async () => {
+    const { get, developer, copies, user } = setup();
+    const mara = user("mara@example.com");
+    const part = (size: number) => ({ id: new Uint8Array(32).fill(size % 251), data: new Uint8Array(size) });
+    copies.addParts(developer.id, [part(300)]);
+    copies.addParts(mara.account.id, [part(100), part(150)]);
+    copies.swap(mara.account.id, 0, new Uint8Array(10), [part(100).id], Date.now());
+    expect((await get(`/api/accounts/${developer.id}`)).body).toMatchObject({ cloudCopy: null, copyStored: 300 });
+    expect((await get(`/api/accounts/${mara.account.id}`)).body).toMatchObject({ copyStored: 100 });
+    const { status, body } = await get("/api/accounts/copies?limit=5");
+    expect(status).toBe(200);
+    expect(body).toEqual({
+      total: 410,
+      accounts: [
+        { id: developer.id, email: "dev@example.com", stored: 300, copySize: null },
+        { id: mara.account.id, email: "mara@example.com", stored: 100, copySize: 110 },
+      ],
+    });
+    expect((await get("/api/accounts/copies?limit=0")).status).toBe(400);
+  });
+
   it("serves the picture as a PNG, 404 without one, and 404 for an unknown or odd id", async () => {
     const { adminCall, developer, user, get } = setup();
     const mara = user("mara@example.com");
