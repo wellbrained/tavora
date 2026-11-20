@@ -76,10 +76,7 @@
     inset 0 1px 0 color-mix(in srgb, white 60%, transparent),
     0 16px 40px -14px color-mix(in srgb, black 35%, transparent);
 }
-:root[data-look-surface="glass"] [data-slot="item-card"] {
-  background: color-mix(in srgb, var(--card) calc(var(--style-glass-opacity, 0.8) * 100%), transparent);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, white 50%, transparent), 0 0 0 0.5px color-mix(in srgb, black 8%, transparent);
-}
+/* Cards inside a panel stay solid in glass: a module can't see behind its own view (ADR 0004). */
 
 /* Hairline: no depth at all, a thin line around each surface. */
 :root[data-look-surface="hairline"] :is(

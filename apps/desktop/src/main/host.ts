@@ -5196,7 +5196,8 @@ export class Host {
         looks: { ...item.looks },
         values: { ...item.values },
       })),
-      styleMarks: styleMarks(tavoraStyle(style)),
+      // The style as the theme sends it: with glass opacity raised where a theme needs it for contrast.
+      styleMarks: styleMarks(this.currentTheme.style ?? tavoraStyle(style)),
       styleProblems: [...this.styleProblems.map((problem) => ({ ...problem })), ...this.styleHints.map((hint) => ({ ...hint }))],
       themes: themes.map(({ theme: item, provenance }) => ({
         id: item.id,

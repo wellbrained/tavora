@@ -476,7 +476,7 @@ export const de: Record<TextKey, string> = {
   "app.showDisabled": "Deaktiviert zeigen",
   "app.showDisabledHint": "Schaltet alle Bedienelemente auf dieser Seite aus, um zu sehen, wie sie dann aussehen.",
   "app.style": "Stil",
-  "app.theme": "Theme",
+  "app.theme": "Design",
   "app.likeTavora": "Wie Tavora",
   "app.previewHint": "Nur dieses Panel ändert sich, Tavora behält Stil und Theme.",
   "app.comingTitle": "Kommt bald",
