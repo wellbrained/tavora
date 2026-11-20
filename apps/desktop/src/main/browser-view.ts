@@ -272,7 +272,7 @@ export class BrowserPanel {
       if (kind === this.kind) return;
       event.preventDefault();
       if (!current()) return;
-      this.crossSession(event.url, kind, { by: "page", gesture: this.takeGesture(), referrer: pageReferrer(this.committedUrl) });
+      this.crossSession(event.url, kind, { by: "page", gesture: this.pageGesture(event.url), referrer: pageReferrer(this.committedUrl) });
     });
     contents.on("will-frame-navigate", (event) => {
       if (event.isMainFrame) return;
@@ -390,6 +390,18 @@ export class BrowserPanel {
 
   private kindFor(url: string): BrowserKind {
     return this.options.isSharedSite(url) ? "shared" : "workspace";
+  }
+
+  /**
+   * The click a page's own navigation to `url` came with. Electron reports the navigation (did-start-navigation, which
+   * takes the click) before will-navigate asks about it, so a click already taken for this very navigation counts; it
+   * is used up here. Otherwise the click is taken now.
+   */
+  private pageGesture(url: string): boolean {
+    const start = this.navigationStart;
+    if (start.by !== "page" || this.hopUrl !== url) return this.takeGesture();
+    this.navigationStart = { ...start, gesture: false };
+    return start.gesture;
   }
 
   /** Whether the user clicked or pressed a key in the page just now; a click is used up by what it lets the page do. */

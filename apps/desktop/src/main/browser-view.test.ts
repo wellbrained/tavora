@@ -242,6 +242,27 @@ describe("a Browser panel's page going to a site of the other session", () => {
     expect(browser.state.error).toBeNull();
   });
 
+  it("counts the click when Electron reports the navigation before asking about it, as it does", () => {
+    // did-start-navigation comes first and takes the click; will-navigate for the same navigation still has it.
+    const clicked = navigating();
+    clicked.commit("https://page.example/a");
+    clicked.click();
+    clicked.start(SHARED, { initiator: {} });
+    expect(clicked.willNavigate(SHARED)).toBe(true);
+    expect(clicked.sessions).toEqual(["workspace", "shared"]);
+    expect(world.loads).toEqual([
+      { contents: clicked.browser.view.webContents.id, url: SHARED, options: { httpReferrer: { url: "https://page.example/", policy: "strict-origin" } } },
+    ]);
+
+    // Without a click, the same order asks.
+    const script = navigating();
+    script.commit(PUBLIC);
+    script.start(SHARED, { initiator: {} });
+    expect(script.willNavigate(SHARED)).toBe(true);
+    expect(world.loads).toEqual([]);
+    expect(script.browser.state.error).toEqual({ kind: "otherSession", detail: "" });
+  });
+
   it("uses a click up once", () => {
     const { browser, commit, willNavigate, click } = navigating();
     commit(PUBLIC);
