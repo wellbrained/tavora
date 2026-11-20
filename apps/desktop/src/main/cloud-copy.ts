@@ -83,6 +83,12 @@ export interface CopyState {
    * succeeds, also when no file changed here. An older Tavora ignores it.
    */
   kept?: boolean;
+  /**
+   * This PC has seen a copy whose manifest seals its version (`version` or `base`): one uploaded from here or taken. From
+   * then on, a manifest without either is an old one served again, not a copy of an older Tavora, and the check at
+   * start treats it as older. An older Tavora ignores it (and drops it when it saves; then the check is as before).
+   */
+  sealed?: boolean;
 }
 
 export const EMPTY_STATE: CopyState = { version: 0, pictures: true, files: {} };
@@ -446,7 +452,7 @@ export class CloudCopy {
       const sealed = seal(keys, Buffer.from(JSON.stringify(manifest)));
       const ids = [...new Set(manifest.files.flatMap((file) => file.parts))];
       const answer = await this.storage.swap(state.version, version, ids, sealed);
-      if (answer.status === "saved") return { status: "uploaded", state: { version: answer.version, pictures, files }, pictures, size: answer.size };
+      if (answer.status === "saved") return { status: "uploaded", state: { version: answer.version, pictures, files, sealed: true }, pictures, size: answer.size };
       if (answer.status === "conflict") return { status: "conflict", version: answer.version };
       if (answer.status === "too-big") return { status: "too-big", size: answer.size ?? total };
       return "missing-parts";
@@ -464,9 +470,10 @@ export class CloudCopy {
    * Downloads the copy into `staging` (emptied first), checking every part and file against the key and the
    * manifest, and returns its version and the files as they will be synced once swapped in. Nothing outside
    * `staging` is touched; null when there is no copy. `synced` is the version this PC last synced: a copy the
-   * service saved on top of an older one is refused ("older").
+   * service saved on top of an older one is refused ("older"), and so is one without a sealed version once this PC has
+   * seen a sealed one (`sealedSeen`): a list from before Tavora sealed it can only be an old one served again.
    */
-  async download(copyKey: Uint8Array, roots: CopyRoot[], staging: string, synced = 0): Promise<{ version: number; pictures: boolean; files: Record<string, Omit<SyncedFile, "mtimeMs">> } | null> {
+  async download(copyKey: Uint8Array, roots: CopyRoot[], staging: string, synced = 0, sealedSeen = false): Promise<DownloadedCopy | null> {
     const keys = copyKeys(copyKey);
     const current = await this.storage.manifest();
     if (!current) return null;
@@ -484,6 +491,8 @@ export class CloudCopy {
     // Saved on top of an older version than this PC has: an old copy served as a new one, or a copy made anew after a
     // delete. The two look the same, so the caller asks instead of taking it. Not "damaged", which can mean a new key.
     if (manifest.base !== undefined && manifest.base < synced) throw new CopyError("older", "the copy was saved on top of an older version than this PC has");
+    const sealed = manifest.version !== undefined || manifest.base !== undefined;
+    if (!sealed && sealedSeen && synced > 0) throw new CopyError("older", "the copy's list has no sealed version, though this PC has seen one that has");
     const files = manifest.files.filter(
       (file) =>
         safeCopyPath(file?.path, roots) &&
@@ -531,8 +540,17 @@ export class CloudCopy {
       await writeFile(target, content);
       result[file.path] = { size: file.size, sha256: file.sha256, parts: file.parts };
     }
-    return { version, pictures: manifest.pictures !== false, files: result };
+    return { version, pictures: manifest.pictures !== false, files: result, ...(sealed ? { sealed: true } : {}) };
   }
+}
+
+/** A copy downloaded into the staging folder: its version, and its files as they will be synced once swapped in. */
+export interface DownloadedCopy {
+  version: number;
+  pictures: boolean;
+  files: Record<string, Omit<SyncedFile, "mtimeMs">>;
+  /** Its manifest sealed its version. */
+  sealed?: boolean;
 }
 
 /** Moves a file or folder, also from one drive to another (the module files folder may be elsewhere). */
@@ -553,7 +571,7 @@ async function move(from: string, to: string): Promise<void> {
  * pictures where they are. Only runs while nothing reads the data (before the workspaces load).
  * Returns the state to keep: the copy's files with their dates on this PC.
  */
-export async function swapInCopy(staging: string, roots: CopyRoot[], keepIn: string, copy: { version: number; pictures: boolean; files: Record<string, Omit<SyncedFile, "mtimeMs">> }): Promise<CopyState> {
+export async function swapInCopy(staging: string, roots: CopyRoot[], keepIn: string, copy: DownloadedCopy): Promise<CopyState> {
   const taking = roots.filter((root) => copy.pictures || !root.picture);
   await mkdir(keepIn, { recursive: true });
   for (const root of taking) {
@@ -573,7 +591,7 @@ export async function swapInCopy(staging: string, roots: CopyRoot[], keepIn: str
     const synced = copy.files[found.path];
     if (synced) files[found.path] = { ...synced, mtimeMs: found.mtimeMs };
   }
-  return { version: copy.version, pictures: copy.pictures, files };
+  return { version: copy.version, pictures: copy.pictures, files, ...(copy.sealed ? { sealed: true } : {}) };
 }
 
 // What this PC keeps about the copy: the state in cloud-copy.json (paths, sizes, hashes and part ids,
@@ -588,12 +606,12 @@ export async function loadCopyState(file: string): Promise<CopyState> {
   try {
     const saved = await readSavedFile(file, { version: STORE_VERSIONS.cloudCopy, versionKey: "v", notice: false, leaveInPlace: true });
     if (saved?.v !== STORE_VERSIONS.cloudCopy || typeof saved.version !== "number" || typeof saved.files !== "object" || saved.files === null) return EMPTY_STATE;
-    return { version: saved.version, pictures: saved.pictures !== false, files: saved.files as Record<string, SyncedFile>, ...(saved.kept === true ? { kept: true } : {}) };
+    return { version: saved.version, pictures: saved.pictures !== false, files: saved.files as Record<string, SyncedFile>, ...(saved.kept === true ? { kept: true } : {}), ...(saved.sealed === true ? { sealed: true } : {}) };
   } catch {
     return EMPTY_STATE;
   }
 }
 
 export async function saveCopyState(file: string, state: CopyState): Promise<void> {
-  await writeFileAtomic(file, JSON.stringify({ v: STORE_VERSIONS.cloudCopy, version: state.version, pictures: state.pictures, files: state.files, ...(state.kept ? { kept: true } : {}) }));
+  await writeFileAtomic(file, JSON.stringify({ v: STORE_VERSIONS.cloudCopy, version: state.version, pictures: state.pictures, files: state.files, ...(state.kept ? { kept: true } : {}), ...(state.sealed ? { sealed: true } : {}) }));
 }

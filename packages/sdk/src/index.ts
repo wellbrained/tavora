@@ -467,8 +467,10 @@ export interface TavoraSDK {
     /** Revokes a remembered file reference; never deletes the user's file. */
     forget(id: string): Promise<void>;
     /**
-     * Saves JSON (up to 8 MiB) in Downloads/Tavora after a click or key press, without asking. Never replaces a file. Tavora 0.19.17+.
-     * @deprecated Use {@link files.saveJson}, which shows Tavora's save dialog. Kept for modules made for older Tavora versions.
+     * Saves JSON (up to 8 MiB) after a click or key press. Tavora 0.19.17+. Newer Tavora shows the same save dialog as
+     * saveJson and refuses with PERMISSION_DENIED when the user closes it; Tavora before that saved in Downloads/Tavora
+     * without asking.
+     * @deprecated Use {@link files.saveJson}, which answers null when the dialog is closed. Kept for modules made for older Tavora versions.
      */
     exportJson(value: JsonValue, name?: string): Promise<{ fileName: string }>;
     /**

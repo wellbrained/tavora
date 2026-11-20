@@ -41,11 +41,13 @@ export class DeveloperKeys {
   constructor(private readonly options: DeveloperKeysOptions) {}
 
   view(): DeveloperKeysView {
+    this.shownVault = this.options.accountKey.trouble;
     return {
       status: this.status,
       keys: this.keys.map((kept) => ({ fingerprint: kept.fingerprint })),
       hasKey: this.options.accountKey.get() !== null,
       recoveryKey: this.recoveryKey,
+      vault: this.options.accountKey.trouble,
     };
   }
 
@@ -171,19 +173,30 @@ export class DeveloperKeys {
     await this.refresh();
   }
 
+  /** The user's OK, when the account's vault is gone and this PC has nothing to put back: it starts again empty. */
+  async rebuildVault(): Promise<void> {
+    await guard(() => this.options.accountKey.rebuild());
+    await this.refresh();
+  }
+
   showKey(): void {
     this.recoveryKey = this.options.accountKey.recoveryKey();
     this.changed();
   }
 
-  /** The cloud copy may have made, taken or forgotten the account's key: read again when it did. */
+  /** The cloud copy may have made, taken or forgotten the account's key, or found its vault in trouble: read again or tell. */
   keyMaybeChanged(): void {
     const hasKey = this.options.accountKey.get() !== null;
-    if (hasKey === this.hadKey) return;
+    if (hasKey === this.hadKey) {
+      if (this.options.accountKey.trouble !== this.shownVault) this.changed();
+      return;
+    }
     this.hadKey = hasKey;
     void this.refresh();
   }
   private hadKey = false;
+  /** The vault's trouble as last shown. */
+  private shownVault: DeveloperKeysView["vault"] = null;
 
   keySaved(): void {
     this.recoveryKey = null;
@@ -233,6 +246,8 @@ async function guard<T>(run: () => Promise<T>): Promise<T> {
     if (error.reason === "signed-out") throw new UserError("account.error.signedOut");
     if (error.reason === "unreachable") throw new UserError("account.error.unreachable");
     if (error.reason === "unavailable") throw new UserError("account.error.unavailable");
+    // The account's vault doesn't open with this PC's key, or is gone: Settings says which (DeveloperKeysView.vault).
+    if (error.reason === "damaged") throw new UserError("account.error.vaultTrouble");
     throw new UserError("error.generic");
   }
 }

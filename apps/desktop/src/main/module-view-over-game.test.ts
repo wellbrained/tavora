@@ -79,7 +79,7 @@ vi.mock("electron", () => {
 });
 
 const { ModuleView, allowedHere, ADD_DIALOG_MS, CONNECT_GAP_MS, GESTURE_MS } = await import("./module-view");
-const { CLIPBOARD_PATH } = await import("@tavora/sdk/protocol");
+const { CLIPBOARD_PATH, JSON_EXPORT_PATH } = await import("@tavora/sdk/protocol");
 
 function make(extra: Record<string, unknown> = {}) {
   const options = {
@@ -173,6 +173,30 @@ describe("one press", () => {
     expect((await copy()).status).not.toBe(403);
     await expect(take(view)).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
     expect((await copy()).status).toBe(403);
+  });
+});
+
+describe("files.exportJson", () => {
+  const exportJson = () => made.serve!(new Request(`tavora-module://tavora.todos${JSON_EXPORT_PATH}?name=Plan`, { method: "POST", body: "{}" }));
+
+  // The session's addresses are set up by the first view of a session (the save dialogs of make(): closed at once).
+  it("saves through Tavora's save dialog, as files.saveJson does: closing it refuses", async () => {
+    const view = make();
+    view.noteGesture();
+    const reply = await exportJson();
+    expect(reply.status).toBe(403);
+    expect((await reply.json()).error).toMatchObject({ code: "PERMISSION_DENIED", message: "the save dialog was closed" });
+  });
+
+  it("is not for a panel over the game, and opens no dialog there", async () => {
+    const told = vi.fn();
+    const view = make({ onNeedsTavora: told });
+    view.enterGame(() => true);
+    view.noteGesture();
+    const reply = await exportJson();
+    expect(reply.status).toBe(403);
+    expect((await reply.json()).error.message).not.toBe("the save dialog was closed");
+    expect(told).toHaveBeenCalledTimes(1);
   });
 });
 

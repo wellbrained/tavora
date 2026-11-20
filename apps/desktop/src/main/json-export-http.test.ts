@@ -1,20 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { mkdtemp, readFile, readdir } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import {
-  serveJsonExport,
-  saveJsonExport,
-  MAX_JSON_EXPORT_BYTES,
-  ExportQuota,
-  type JsonExportDeps,
-} from "./json-export-http";
-const url = new URL(
-  "tavora-module://local.enshrouded/_exports/json/?name=..%2F..%2Fbuild.exe",
-);
-function deps() {
+import { serveJsonExport } from "./json-export-http";
+import { MAX_JSON_EXPORT_BYTES, type JsonSaveDeps } from "./json-file-http";
+import { cleanPictureName } from "./picture-save-http";
+
+const url = new URL("tavora-module://local.enshrouded/_exports/json/?name=..%2F..%2Fbuild.exe");
+
+/** A press that allows one call, and a save dialog that answers `answer` (null: the user closed it). */
+function deps(answer: (name: string) => string | null = (name) => `${name}.json`) {
   let available = true;
-  const saved: Buffer[] = [];
+  const saved: { data: Buffer; name: string }[] = [];
   return {
     saved,
     value: {
@@ -23,82 +17,61 @@ function deps() {
         available = false;
       },
       save: async (data, name) => {
-        saved.push(data);
-        return name + ".json";
+        saved.push({ data, name });
+        return answer(name);
       },
-    } satisfies JsonExportDeps,
+    } satisfies JsonSaveDeps,
   };
 }
-const post = (body: BodyInit) => new Request(url, { method: "POST", body });
-describe("bounded JSON export", () => {
-  it("consumes a trusted gesture once, sanitizes paths and formats only JSON", async () => {
+const post = (body: BodyInit, address = url) => new Request(address, { method: "POST", body });
+
+describe("files.exportJson", () => {
+  it("saves through the save dialog after one press, with a safe name filled in", async () => {
     const { value, saved } = deps();
-    const reply = await serveJsonExport(post('{"skills":["2"]}'), url, value);
+    const reply = await serveJsonExport(post('{"skills":["2"]}'), url, value, cleanPictureName);
     expect(reply.status).toBe(200);
     expect((await reply.json()).fileName).not.toMatch(/[\\/]/);
-    expect(JSON.parse(saved[0]!.toString())).toEqual({ skills: ["2"] });
-    expect((await serveJsonExport(post("{}"), url, value)).status).toBe(403);
+    expect(saved[0]!.name).not.toMatch(/[\\/]/);
+    expect(saved[0]!.data.toString()).toBe('{\n  "skills": [\n    "2"\n  ]\n}\n');
+    // One press saves one file.
+    expect((await serveJsonExport(post("{}"), url, value, cleanPictureName)).status).toBe(403);
+    expect(saved).toHaveLength(1);
   });
+
+  it("suggests Build when the module names nothing", async () => {
+    const { value, saved } = deps();
+    const address = new URL("tavora-module://local.enshrouded/_exports/json/");
+    expect((await serveJsonExport(post("{}", address), address, value, cleanPictureName)).status).toBe(200);
+    expect(saved[0]!.name).toBe("Build");
+  });
+
+  it("refuses with PERMISSION_DENIED when the user closes the dialog, as the SDK promises a file name", async () => {
+    const { value } = deps(() => null);
+    const reply = await serveJsonExport(post("{}"), url, value, cleanPictureName);
+    expect(reply.status).toBe(403);
+    expect((await reply.json()).error.code).toBe("PERMISSION_DENIED");
+  });
+
+  it("opens no dialog without a press", async () => {
+    const { value, saved } = deps();
+    const refused = { ...value, allowed: () => false };
+    expect((await serveJsonExport(post("{}"), url, refused, cleanPictureName)).status).toBe(403);
+    expect(saved).toHaveLength(0);
+  });
+
   it("saves a guide build bigger than the old 1 MiB limit", async () => {
     const { value, saved } = deps();
     const build = { guideExport: "x".repeat(3 * 1024 * 1024) };
-    const reply = await serveJsonExport(post(JSON.stringify(build)), url, value);
-    expect(reply.status).toBe(200);
-    expect(JSON.parse(saved[0]!.toString())).toEqual(build);
+    expect((await serveJsonExport(post(JSON.stringify(build)), url, value, cleanPictureName)).status).toBe(200);
+    expect(JSON.parse(saved[0]!.data.toString())).toEqual(build);
   });
+
   it("rejects invalid UTF-8, malformed or oversized JSON and non-POST methods", async () => {
-    for (const data of [
-      "not JSON",
-      new Uint8Array([255, 254]),
-      " ".repeat(MAX_JSON_EXPORT_BYTES + 1),
-    ]) {
+    for (const data of ["not JSON", new Uint8Array([255, 254]), " ".repeat(MAX_JSON_EXPORT_BYTES + 1)]) {
       const d = deps();
-      expect(
-        (await serveJsonExport(post(data), url, d.value)).status,
-      ).toBeGreaterThanOrEqual(400);
+      expect((await serveJsonExport(post(data), url, d.value, cleanPictureName)).status).toBeGreaterThanOrEqual(400);
       expect(d.saved).toHaveLength(0);
     }
-    expect(
-      (await serveJsonExport(new Request(url), url, deps().value)).status,
-    ).toBe(405);
-  });
-  it("writes inside the fixed folder and preserves existing files, even with concurrent names", async () => {
-    const folder = await mkdtemp(path.join(tmpdir(), "tavora-json-"));
-    const names = await Promise.all([
-      saveJsonExport(folder, Buffer.from("1"), "Build"),
-      saveJsonExport(folder, Buffer.from("2"), "Build"),
-    ]);
-    expect(new Set(names).size).toBe(2);
-    expect(await readdir(folder)).toHaveLength(2);
-    expect(
-      (
-        await Promise.all(
-          names.map((name) => readFile(path.join(folder, name), "utf8")),
-        )
-      ).sort(),
-    ).toEqual(["1", "2"]);
-    const name = await saveJsonExport(
-      folder,
-      Buffer.from("{}"),
-      "../../CON.exe",
-    );
-    expect(name).not.toMatch(/[\\/]/);
-  });
-  it("limits how much one module exports in a while, and gives back a failed write", async () => {
-    let now = 0;
-    const quota = new ExportQuota({ files: 2, bytes: 1024, windowMs: 1000 }, () => now);
-    const other = new URL("tavora-module://local.other/_exports/json/?name=Build");
-    const press = () => deps().value;
-    const failing = { ...press(), save: async () => { throw new Error("disk full"); } };
-    expect((await serveJsonExport(post("{}"), url, failing, quota)).status).toBe(500);
-    expect((await serveJsonExport(post("{}"), url, press(), quota)).status).toBe(200);
-    expect((await serveJsonExport(post("{}"), url, press(), quota)).status).toBe(200);
-    const refused = await serveJsonExport(post("{}"), url, press(), quota);
-    expect(refused.status).toBe(413);
-    expect((await refused.json()).error.code).toBe("QUOTA_EXCEEDED");
-    expect((await serveJsonExport(new Request(other, { method: "POST", body: "{}" }), other, press(), quota)).status).toBe(200);
-    now = 1001;
-    expect((await serveJsonExport(post("{}"), url, press(), quota)).status).toBe(200);
-    expect((await serveJsonExport(post(JSON.stringify("x".repeat(1100))), url, press(), quota)).status).toBe(413);
+    expect((await serveJsonExport(new Request(url), url, deps().value, cleanPictureName)).status).toBe(405);
   });
 });

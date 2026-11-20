@@ -3035,6 +3035,7 @@ export class Host {
       "developer-recovery-key": (action) => this.developerKeys.enterKey(action.key),
       "developer-recovery-key-saved": () => this.developerKeys.keySaved(),
       "developer-show-recovery-key": () => this.developerKeys.showKey(),
+      "developer-vault-rebuild": () => this.developerKeys.rebuildVault(),
       "developer-copy-recovery-key": () => {
         const key = this.developerKeys.view().recoveryKey;
         if (key) clipboard.writeText(key);

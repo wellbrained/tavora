@@ -1432,7 +1432,7 @@ export const JSON_SAVE_PATH = "/_files/json/save/";
  */
 export const JSON_OPEN_PATH = "/_files/json/open/";
 
-/** POST a bounded JSON document after a gesture; saves a new .json in Downloads/Tavora. */
+/** POST a bounded JSON document after a gesture; saves it through the same save dialog as JSON_SAVE_PATH (older Tavora: a new .json in Downloads/Tavora). */
 export const JSON_EXPORT_PATH = "/_exports/json/";
 
 /** The kinds of file `files.save` and `files.open` handle: a CSV text file or an Excel workbook, nothing else. */

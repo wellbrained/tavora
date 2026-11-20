@@ -570,6 +570,8 @@ export function hostActionTable(c: HostChecks) {
     "developer-recovery-key-saved": {},
     "developer-show-recovery-key": {},
     "developer-copy-recovery-key": {},
+    /** The account's key vault is gone and this PC has nothing to put back: the user's OK to start it again empty. */
+    "developer-vault-rebuild": {},
     /** Asks the catalog about an id prefix, or claims it for the account (the account view's prefixCheck says what it said). */
     "account-prefix-check": { prefix: filled(126) },
     "account-prefix-claim": { prefix: filled(126) },

@@ -14,6 +14,7 @@ import { readSavedFile } from "./json";
 import { SUPPORTED_VERSIONS } from "./saved-versions";
 import { UserError } from "./messages";
 import { MOVED_MODULES } from "./moved-modules";
+import { FolderChecks } from "./module-folder-check";
 import type { OfficialUpdates } from "./official-updates";
 import { OFFICIAL_PREFIX, type InstalledModule } from "./registry";
 import type { SafetyCheck } from "./safety-lists";
@@ -70,15 +71,27 @@ function changeOwnerRecords(userData: string, change: (records: OwnerRecords) =>
 }
 
 /**
- * Gives modules in the user's modules folder the owner the installer
- * recorded for them. A folder put there by hand, or one whose module id no
- * longer matches the record, stays `local`.
+ * Gives modules in the user's modules folder the owner the installer recorded for them, when the folder's files are
+ * still exactly what that owner's key signed (security audit 2026-11-20). A folder put there by hand, one whose
+ * module id no longer matches the record, or one whose files were changed, replaced or signed by another key stays
+ * `local`, like any unsigned folder: it never gets the recorded owner's data or grants. `checks` keeps what it found
+ * by each folder's stamp, so an unchanged folder is not hashed again. A record from before `signedSha256` gets it
+ * here, in memory, from the files that were checked.
  */
-export function applyOwners(modules: Map<string, InstalledModule>, userModulesRoot: string, records: OwnerRecords): void {
+export async function applyOwners(modules: Map<string, InstalledModule>, userModulesRoot: string, records: OwnerRecords, checks: FolderChecks = new FolderChecks()): Promise<void> {
   for (const [id, module] of modules) {
     if (module.provenance !== "local" || path.dirname(module.root) !== userModulesRoot) continue;
     const record = records[path.basename(module.root)];
-    if (record?.id === id) module.owner = record.owner;
+    if (record?.id !== id) continue;
+    const verified = await checks.check(module.root);
+    // The installer records the first key of the account as the owner, and the key that signed as `signer` when they differ.
+    const signedBy = record.signer ?? record.owner;
+    if (!verified || verified.id !== id || verified.signer !== signedBy || (record.signedSha256 !== undefined && record.signedSha256 !== verified.signedSha256)) {
+      console.warn(`[tavora] ${path.basename(module.root)}: its files are not what its publisher signed, so it loads as an unsigned folder`);
+      continue;
+    }
+    module.owner = record.owner;
+    record.signedSha256 ??= verified.signedSha256;
   }
 }
 

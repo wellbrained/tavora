@@ -355,6 +355,12 @@ export interface DeveloperKeysView {
   hasKey: boolean;
   /** The account's recovery key, while the user looks at it (made just now, or asked to see). */
   recoveryKey: string | null;
+  /**
+   * What is wrong with the account's key vault on Tavora's service, which keeps the publisher keys: "unopened" when
+   * this PC's recovery key doesn't open it (the new key is typed in), "gone" when it is no longer there and this PC has
+   * nothing to put back (the user may start it again empty). Meanwhile this PC uses the keys it read last. Null: fine.
+   */
+  vault: "unopened" | "gone" | null;
 }
 
 /**

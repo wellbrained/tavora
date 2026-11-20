@@ -121,7 +121,7 @@ async function setup() {
       steps.push("look for modules");
       const records = await readOwnerRecords(userData);
       modules = await discoverModules({ local: [userModules], tavoraVersion: TAVORA });
-      applyOwners(modules, userModules, records);
+      await applyOwners(modules, userModules, records);
       catalogIds = new Set([...modules.keys()].filter((id) => records[id]?.catalog && records[id]?.id === id));
       const moved = new Set(state.movedByReload);
       for (const id of moved) steps.push(`reload panels ${id}`);

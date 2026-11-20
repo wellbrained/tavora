@@ -11,13 +11,15 @@ const encryptor = { isAvailable: () => true, encrypt: (text: string) => Buffer.f
 
 type Service = Awaited<ReturnType<typeof service>>;
 
-/** The account's key on one PC of the test account. */
-async function onPc(cloud: Service, { keyStore = true, fetch = cloud.fetch }: { keyStore?: boolean; fetch?: typeof globalThis.fetch } = {}) {
-  const { userData } = await pc({ "library.json": "{}" });
+/** The account's key on one PC of the test account (`userData`: the same PC again, as at the next start). */
+async function onPc(cloud: Service, { keyStore = true, fetch = cloud.fetch, userData: folder, kept = false }: { keyStore?: boolean; fetch?: typeof globalThis.fetch; userData?: string; kept?: boolean } = {}) {
+  const userData = folder ?? (await pc({ "library.json": "{}" })).userData;
   const file = path.join(userData, "account-key.json");
   const key = new AccountKey({
     file,
     legacyFile: path.join(userData, "cloud-copy-key.json"),
+    // `kept`: the vault as last read and whether one was seen are kept on this PC, as the app does.
+    ...(kept ? { cacheFile: path.join(userData, "account-vault.bin"), seenFile: path.join(userData, "account-vault-seen") } : {}),
     encryptor: keyStore ? encryptor : { ...encryptor, isAvailable: () => false },
     baseUrl: "http://tavora.test/v1/account",
     fetch,
@@ -27,6 +29,26 @@ async function onPc(cloud: Service, { keyStore = true, fetch = cloud.fetch }: { 
 }
 
 const vault = (cloud: Service) => cloud.fetch("http://tavora.test/v1/account/vault", { headers: { authorization: `Bearer ${cloud.token}` } });
+
+/**
+ * The service as a broken-into one serves it: `mode` "garbage" answers the vault with bytes no key opens, "gone"
+ * answers that there is none; "real" passes everything through. Writes to the vault are counted.
+ */
+function tampered(cloud: Service) {
+  const state = { mode: "real" as "real" | "garbage" | "gone", puts: 0 };
+  const fetch = (async (url: string, init?: RequestInit) => {
+    const vaultUrl = new URL(url).pathname.endsWith("/vault");
+    if (vaultUrl && init?.method === "PUT") state.puts++;
+    if (vaultUrl && (init?.method ?? "GET") === "GET" && state.mode === "garbage") return new Response(new Uint8Array(200).fill(7), { headers: { "x-vault-version": "9" } });
+    if (vaultUrl && (init?.method ?? "GET") === "GET" && state.mode === "gone") return new Response(null, { status: 404 });
+    if (vaultUrl && init?.method === "PUT" && state.mode !== "real") {
+      // The service has none (or claims so): a put from version 0 is taken.
+      return new Response(null, { status: 204, headers: { "x-vault-version": "1" } });
+    }
+    return cloud.fetch(url, init);
+  }) as typeof globalThis.fetch;
+  return { state, fetch };
+}
 
 describe("the account's key", () => {
   it("made while signing out is not kept on this PC", async () => {
@@ -92,10 +114,13 @@ describe("the account's key", () => {
     await b.key.startOver();
     expect(b.key.get()?.equals(old)).toBe(false);
     expect(await a.key.setUp()).toEqual({ status: "ask" });
-    expect(a.key.get()).toBeNull();
+    // A keeps its key until one that opens the account's vault is typed in.
+    expect(a.key.get()?.equals(old)).toBe(true);
+    expect(a.key.trouble).toBe("unopened");
     await expect(a.key.enter(recoveryKey(old))).rejects.toMatchObject({ key: "cloudCopy.error.wrongKey" });
     await a.key.enter(b.key.recoveryKey()!);
     expect(a.key.get()?.equals(b.key.get()!)).toBe(true);
+    expect(a.key.trouble).toBeNull();
   });
 
   it("gives a key from before the vault one, and moves it from the cloud copy's old file", async () => {
@@ -115,6 +140,79 @@ describe("the account's key", () => {
     expect(a.key.canKeep).toBe(false);
     await expect(a.key.setUp()).rejects.toMatchObject({ key: "cloudCopy.error.cantKeep" });
     expect(await a.key.load()).toBeNull();
+  });
+
+  it("keeps its key and the vault it last read when the service sends a vault the key doesn't open, and puts that one back when it goes", async () => {
+    const cloud = await service();
+    const a = await onPc(cloud, { kept: true });
+    await a.key.setUp();
+    const root = a.key.get()!;
+    const publisherKeys = ["-----BEGIN PRIVATE KEY-----\nkept\n-----END PRIVATE KEY-----\n"];
+    await a.key.change((content) => ({ ...content, publisherKeys }));
+
+    const service2 = tampered(cloud);
+    service2.state.mode = "garbage";
+    const again = await onPc(cloud, { kept: true, userData: a.userData, fetch: service2.fetch });
+    await again.key.load();
+    // Asked for the key, but nothing is forgotten: the key, and the vault it last read, which still serves.
+    expect(await again.key.setUp()).toEqual({ status: "ask" });
+    expect(again.key.get()?.equals(root)).toBe(true);
+    expect(again.key.trouble).toBe("unopened");
+    expect(await again.key.fits()).toBe(false);
+    expect(again.key.get()?.equals(root)).toBe(true);
+    expect((await again.key.content()).publisherKeys).toEqual(publisherKeys);
+    await expect(again.key.change((content) => content)).rejects.toMatchObject({ reason: "damaged" });
+    // The garbage was not kept as the last read.
+    expect(JSON.parse(openVault(root, await readFile(path.join(a.userData, "account-vault.bin"))).toString("utf8"))).toMatchObject({ publisherKeys });
+
+    // The service drops the vault: what this PC last read goes back, not an empty one.
+    service2.state.mode = "real";
+    await cloud.fetch("http://tavora.test/v1/account/vault", { method: "DELETE", headers: { authorization: `Bearer ${cloud.token}` } });
+    expect(await again.key.setUp()).toEqual({ status: "ready", created: false });
+    expect(again.key.trouble).toBeNull();
+    expect(JSON.parse(openVault(root, new Uint8Array(await (await vault(cloud)).arrayBuffer())).toString("utf8"))).toMatchObject({ publisherKeys });
+  });
+
+  it("never makes a vault it saw again empty without the user", async () => {
+    const cloud = await service();
+    const a = await onPc(cloud, { kept: true });
+    await a.key.setUp();
+    const root = a.key.get()!;
+    // A new PC sees the account's vault and asks for the key.
+    const service2 = tampered(cloud);
+    const b = await onPc(cloud, { kept: true, fetch: service2.fetch });
+    expect(await b.key.setUp()).toEqual({ status: "ask" });
+
+    // Then the service says there is none, also at B's next start: B still asks, and the key typed in makes nothing.
+    service2.state.mode = "gone";
+    const restarted = await onPc(cloud, { kept: true, userData: b.userData, fetch: service2.fetch });
+    expect(await restarted.key.exists()).toBe(true);
+    expect(await restarted.key.setUp()).toEqual({ status: "ask" });
+    await restarted.key.enter(recoveryKey(root));
+    expect(restarted.key.get()?.equals(root)).toBe(true);
+    expect(service2.state.puts).toBe(0);
+    expect(restarted.key.trouble).toBe("gone");
+    // Neither the next start nor a change puts an empty vault there.
+    expect(await restarted.key.setUp()).toEqual({ status: "ready", created: false });
+    await expect(restarted.key.change((content) => ({ ...content, publisherKeys: ["x"] }))).rejects.toMatchObject({ reason: "damaged" });
+    expect(await restarted.key.content()).toEqual({ v: 1 });
+    expect(service2.state.puts).toBe(0);
+    expect(restarted.key.trouble).toBe("gone");
+    // Only when the user says so.
+    await restarted.key.rebuild();
+    expect(service2.state.puts).toBe(1);
+    expect(restarted.key.trouble).toBeNull();
+  });
+
+  it("makes the first vault without asking when the account never had one", async () => {
+    const cloud = await service();
+    const service2 = tampered(cloud);
+    service2.state.mode = "gone";
+    const a = await onPc(cloud, { kept: true, fetch: service2.fetch });
+    expect(await a.key.exists()).toBe(false);
+    expect(await a.key.setUp()).toEqual({ status: "ready", created: true });
+    expect(service2.state.puts).toBe(1);
+    expect(a.key.trouble).toBeNull();
   });
 
   it("never opens a sealed copy part as a vault", () => {

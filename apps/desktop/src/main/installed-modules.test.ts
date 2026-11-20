@@ -1,11 +1,11 @@
 import { createHash, generateKeyPairSync, type KeyObject } from "node:crypto";
-import { mkdir, mkdtemp, realpath, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { catalogPublicKey, signCatalogList, signFiles, writeZip, type ZipFile } from "@tavora/pack";
+import { catalogPublicKey, fingerprint, signCatalogList, signFiles, writeZip, type ZipFile } from "@tavora/pack";
 import { describe, expect, it } from "vitest";
 import { installZip } from "./installer";
-import { Installed, loadInstalledModules, type InstalledModules } from "./installed-modules";
+import { Installed, loadInstalledModules, MODULE_CHECKS_FILE, type InstalledModules } from "./installed-modules";
 import type { InstalledModule } from "./registry";
 import { BROWSER_MODULE_ID } from "./registry";
 import { SafetyLists } from "./safety-lists";
@@ -52,6 +52,21 @@ describe("loadInstalledModules", () => {
     expect(loaded.modules.has("wellbrained.notes")).toBe(true);
     expect(loaded.modules.has(BROWSER_MODULE_ID)).toBe(true);
     expect(loaded.info.get("wellbrained.tracker")?.origin.kind).toBe("own");
+  });
+
+  it("loads a catalog module whose files were replaced by hand as an unsigned folder, not the catalog's", async () => {
+    const { userData, userModules, safety } = await setup();
+    const publisher = generateKeyPairSync("ed25519").privateKey;
+    await install(userData, userModules, safety, zip(publisher, "wellbrained.tracker"), true);
+    const before = await loadInstalledModules({ userData, userModules, sources: { local: [userModules] }, tavoraVersion: TAVORA, safety });
+    expect(before.modules.get("wellbrained.tracker")?.owner).toBe(fingerprint(publisher));
+    // The check is kept for the next start.
+    expect(Object.keys(JSON.parse(await readFile(path.join(userData, MODULE_CHECKS_FILE), "utf8")).folders)).toHaveLength(1);
+
+    await writeFile(path.join(userModules, "wellbrained.tracker", "dist", "index.html"), "<p>someone else's</p>");
+    const loaded = await loadInstalledModules({ userData, userModules, sources: { local: [userModules] }, tavoraVersion: TAVORA, safety });
+    expect(loaded.modules.get("wellbrained.tracker")?.owner).toBe("local");
+    expect([...loaded.catalog]).toEqual([]);
   });
 
   it("still counts a blocked catalog module as one from the catalog", async () => {

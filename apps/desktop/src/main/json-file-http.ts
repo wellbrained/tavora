@@ -1,5 +1,5 @@
-// The module addresses for saving and opening a JSON file through Tavora's own dialogs (see json-export-http.ts for
-// the older export that writes into Downloads without asking):
+// The module addresses for saving and opening a JSON file through Tavora's own dialogs (json-export-http.ts answers
+// the older files.exportJson with the same save):
 //   POST /_files/json/save?name=…  with the JSON as the body    -> { fileName } or { fileName: null }
 //   POST /_files/json/open                                      -> { fileName, value } or null
 // Both work only right after the user clicked or pressed a key in the module (one per click). The user picks
@@ -10,7 +10,9 @@
 import { open } from "node:fs/promises";
 import { json, readBody, STATUS } from "./clipboard-http";
 import { HostError } from "./errors";
-import { MAX_JSON_EXPORT_BYTES } from "./json-export-http";
+
+// Room for a guide build with its original source text (the largest seen is about 2.3 MiB).
+export const MAX_JSON_EXPORT_BYTES = 8 * 1024 * 1024;
 
 export interface JsonSaveDeps {
   allowed(): boolean;

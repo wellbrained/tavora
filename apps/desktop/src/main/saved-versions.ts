@@ -71,5 +71,6 @@ export const STORE_VERSIONS = {
 // fast layouts open here), games-seen.json (when games were seen running), inbox.json (which notes were shown),
 // publisher-names.json and catalog-lists.json (downloaded), the documents' index.json (rebuilt), picker.json (a hint),
 // the cloud copy's staged.json (one take at a time), pairing's steps (one pairing at a time), the vault cache (a copy of
-// the account's), official-publisher-key.bin (development builds; the key file stays with its developer), and pictures
-// and icons (not JSON).
+// the account's) and account-vault-seen (a mark that the account's vault was seen), module-checks.json (the installed
+// folders' signature checks, made again when missing), official-publisher-key.bin (development builds; the key file
+// stays with its developer), and pictures and icons (not JSON).

@@ -1,10 +1,14 @@
 import { readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { SIGNATURE_FILE, signedHash } from "@tavora/pack";
+import { FolderChecks } from "./module-folder-check";
 import type { OfficialUpdates } from "./official-updates";
 import { applyOwners, readOwnerRecords, type OwnerRecords } from "./installer";
 import { BROWSER_MODULE_ID, browserModule, describeModules, discoverModules, type InstalledModule, type ModuleInfo, type ModuleProblem, type ModuleSources } from "./registry";
 import { stopBlocked, type SafetyCheck } from "./safety-lists";
+
+/** The signature checks of installed folders, by their stamp (module-folder-check.ts): a cache. */
+export const MODULE_CHECKS_FILE = "module-checks.json";
 
 export interface InstalledModulesOptions {
   userData: string;
@@ -47,14 +51,18 @@ export async function loadInstalledModules(options: InstalledModulesOptions): Pr
   }
   const userRoot = await realpath(options.userModules).catch(() => path.resolve(options.userModules));
   const records = await readOwnerRecords(options.userData);
-  applyOwners(modules, userRoot, records);
+  // Each folder's files are checked against the owner's signature; unchanged folders by their stamp alone.
+  const checks = new FolderChecks(path.join(options.userData, MODULE_CHECKS_FILE));
+  await applyOwners(modules, userRoot, records, checks);
+  await checks.save();
   await addSignedHashes(modules, userRoot, records);
   const blocked = stopBlocked(modules, userRoot, records, options.safety, problems);
   const catalog = new Set(
     [...blocked.values(), ...modules.values()]
       .filter((module) => {
         const record = records[path.basename(module.root)];
-        return module.provenance === "local" && path.dirname(module.root) === userRoot && record?.catalog === true && record.id === module.manifest.id;
+        // Only a folder that got its recorded owner: one changed by hand is not the catalog's to update.
+        return module.provenance === "local" && path.dirname(module.root) === userRoot && record?.catalog === true && record.id === module.manifest.id && module.owner === record.owner;
       })
       .map((module) => module.manifest.id),
   );

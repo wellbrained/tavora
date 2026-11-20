@@ -30,7 +30,7 @@ import { serveClipboard } from "./clipboard-http";
 import { cleanPictureName, servePictureSave } from "./picture-save-http";
 import { serveJsonOpen, serveJsonSave } from "./json-file-http";
 import { serveFileOpen, serveFileSave } from "./table-file-http";
-import { saveJsonExport, serveJsonExport } from './json-export-http';
+import { serveJsonExport } from './json-export-http';
 import { DRAW_CAP_MS, ON_SCREEN_MS } from "./panel-cover";
 import { recordCrash } from "./crash-log";
 import { isPrivateUrl, isWebUrl } from "./browser-url";
@@ -272,7 +272,7 @@ export function documentsFolder(): string {
   return path.join(documents, "Tavora");
 }
 
-/** Where downloadJson exports land: a Tavora folder in the user's Downloads (tests point it elsewhere, unpackaged only). */
+/** Where files.exportJson saved before it asked: a Tavora folder in the user's Downloads, still one of Tavora's own folders (tests point it elsewhere, unpackaged only). */
 export function exportsFolder(): string {
   return !app.isPackaged && process.env.TAVORA_EXPORTS_DIR ? path.resolve(process.env.TAVORA_EXPORTS_DIR) : path.join(app.getPath("downloads"), "Tavora");
 }
@@ -305,7 +305,9 @@ function moduleSession(module: InstalledModule, workspace: TavoraWorkspace, blob
     if (url.pathname.startsWith(APP_BLOB_PATH)) return countWrite(ses, request, () => serveBlobs(appBlobs, request, url, APP_BLOB_PATH));
     if (url.pathname === CLIPBOARD_PATH) return serveClipboard(request, { ...pressCheck(gestureOf(ses)), write: writeClipboardPicture });
     if (url.pathname === JSON_EXPORT_PATH) {
-      return serveJsonExport(request, url, { ...pressCheck(gestureOf(ses)), save: (data, name) => saveJsonExport(exportsFolder(), data, name) });
+      // The older files.exportJson saves through the same dialog as files.saveJson (it used to write into Downloads unasked).
+      const gesture = gestureOf(ses);
+      return serveJsonExport(request, url, { ...pressCheck(gesture, allowedHere(gesture)), save: files.saveJson }, cleanPictureName);
     }
     if (url.pathname === PICTURES_PATH) {
       const gesture = gestureOf(ses);
