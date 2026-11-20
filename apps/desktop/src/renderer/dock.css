@@ -487,6 +487,12 @@
   box-shadow: inset 0 1px 0 color-mix(in srgb, white 8%, transparent), 0 1px 3px color-mix(in srgb, black 35%, transparent);
 }
 
+/* Keycap, underline and block draw no line between tabs, also in the Framed layout (whose own divider rule is more
+   specific than a look's). */
+:root[data-look-tabs]:is([data-look-tabs="keycap"], [data-look-tabs="underline"], [data-look-tabs="block"]) .dockview-theme-tavora .dv-tab + .dv-tab {
+  --tab-divider: 0 0 transparent;
+}
+
 /* Underline: words; a line under the open tab, in the accent colour in the panel you work in. No dividers. */
 :root[data-look-tabs="underline"] .dockview-theme-tavora .dv-tab {
   --tab-divider: 0 0 transparent;
