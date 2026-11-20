@@ -384,14 +384,15 @@
   box-shadow: inset -1px 0 0 color-mix(in srgb, white 40%, transparent);
 }
 
-/* Glass: a soft colour field from the theme's own colours behind everything; the rail and the panel frames are glass
+/* Glass: a soft colour field from the theme's own colours behind everything (kept out of the top right, where Windows
+   draws its title buttons on one solid colour); the rail and the panel frames are glass
    over it. Panel content stays solid (a module cannot see behind its own view). */
 :root[data-look-surface="glass"] {
   --style-field:
-    radial-gradient(45% 55% at 10% 12%, color-mix(in srgb, var(--primary) 50%, transparent), transparent 72%),
-    radial-gradient(45% 55% at 90% 8%, color-mix(in srgb, var(--info) 48%, transparent), transparent 72%),
-    radial-gradient(50% 50% at 72% 96%, color-mix(in srgb, var(--success) 42%, transparent), transparent 72%),
-    radial-gradient(40% 45% at 24% 92%, color-mix(in srgb, var(--warning) 40%, transparent), transparent 72%),
+    radial-gradient(45% 55% at 8% 18%, color-mix(in srgb, var(--primary) 50%, transparent), transparent 72%),
+    radial-gradient(45% 55% at 94% 72%, color-mix(in srgb, var(--info) 48%, transparent), transparent 72%),
+    radial-gradient(50% 50% at 62% 104%, color-mix(in srgb, var(--success) 42%, transparent), transparent 72%),
+    radial-gradient(40% 45% at 22% 94%, color-mix(in srgb, var(--warning) 40%, transparent), transparent 72%),
     var(--background);
   --glass-edge: color-mix(in srgb, white 55%, transparent);
   --glass-light: color-mix(in srgb, white 70%, transparent);
@@ -456,23 +457,39 @@
   box-shadow: 0 1px 0 color-mix(in srgb, black 30%, transparent);
 }
 
-/* Pill (outside Classic, whose tabs stay as they are): round tabs; the open one is a light capsule. */
+/* Pill (outside Classic, whose tabs stay as they are): the tab row is one soft groove, like a segmented control; the
+   open tab of the panel you work in is a raised light capsule in it, the open tab of other panels only a soft step. */
 :root[data-look-tabs="pill"][data-style]:not([data-style="tavora.classic"]) .dockview-theme-tavora .dv-tabs-container {
   align-items: center;
+  align-self: center;
   gap: 2px;
+  height: calc(var(--dv-tabs-and-actions-container-height) - 8px);
+  padding: 2px;
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  box-shadow: inset 0 1px 2px color-mix(in srgb, black 12%, transparent);
 }
 :root[data-look-tabs="pill"][data-style]:not([data-style="tavora.classic"]) .dockview-theme-tavora .dv-tab {
-  height: calc(var(--dv-tabs-and-actions-container-height) - 12px);
-  border-radius: 999px;
+  height: 100%;
+  border-radius: var(--radius-md);
+  color: var(--muted-foreground);
   --tab-divider: 0 0 transparent;
   --tab-line: 0 0 transparent;
 }
+:root[data-look-tabs="pill"][data-style]:not([data-style="tavora.classic"]) .dockview-theme-tavora .dv-tab:hover {
+  color: var(--foreground);
+}
 :root[data-look-tabs="pill"][data-style]:not([data-style="tavora.classic"]) .dockview-theme-tavora .dv-tab.dv-active-tab {
-  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+  background: color-mix(in srgb, var(--foreground) 9%, transparent);
+  color: color-mix(in srgb, var(--foreground) 80%, transparent);
 }
 :root[data-look-tabs="pill"][data-style]:not([data-style="tavora.classic"]) .dockview-theme-tavora .dv-groupview.dv-active-group .dv-tab.dv-active-tab {
-  background: color-mix(in srgb, var(--background) 85%, transparent);
-  box-shadow: inset 0 1px 0 var(--glass-light, color-mix(in srgb, white 50%, transparent)), 0 1px 3px color-mix(in srgb, black 12%, transparent);
+  background: var(--card);
+  color: var(--foreground);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 22%, transparent), 0 1px 3px color-mix(in srgb, black 25%, transparent);
+}
+:root.dark[data-look-tabs="pill"][data-style]:not([data-style="tavora.classic"]) .dockview-theme-tavora .dv-groupview.dv-active-group .dv-tab.dv-active-tab {
+  background: color-mix(in srgb, var(--foreground) 20%, var(--card));
 }
 
 /* Underline: words; a line under the open tab, in the accent colour in the panel you work in. No dividers. */
