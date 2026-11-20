@@ -4,7 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { CLASSIC_STYLE, STYLE_LOOKS } from "@tavora/sdk/protocol";
 import { THEME } from "./games";
-import { appearanceThemes, discoverStyles, FALLBACK_STYLE, resolveStyle, STYLE_MANIFEST, tavoraStyle, validateStyle, type StylePackage } from "./styles";
+import { appearanceThemes, discoverStyles, FALLBACK_STYLE, resolveStyle, starterStyle, STYLE_MANIFEST, STYLE_README, styleManifest, tavoraStyle, validateStyle, type StylePackage } from "./styles";
 import { discoverThemes, glassOpacity, glassProblems, insetPanelTheme, mixed, moduleTheme, type ThemePackage, type ThemeVariation } from "./themes";
 import { CLASSIC_STYLE_ID, isStyleRadius, resolveFontId, resolveRadius } from "../shared/styles";
 import { UI_FONTS } from "../shared/ui-fonts";
@@ -345,5 +345,46 @@ describe("glass and every theme", () => {
     // A style without glass sends its value as it is: nothing is drawn see-through.
     const flat = appearanceThemes({ theme: garnet, variation: dark }, style({ values: { ...CLASSIC_STYLE.values, glassOpacity: 0.6 } }), { radius: null, toasts: "bottom-center" }).host.style!;
     expect(flat.values.glassOpacity).toBe(0.6);
+  });
+});
+
+describe("a starter for the user's own style", () => {
+  it("copies the style in use under a local id and a name of its own, and passes validation", async () => {
+    const { styles } = await discoverStyles({ official: [officialDir] });
+    const hardware = styles.get("tavora.hardware")!.style;
+    const copy = starterStyle(hardware, 1);
+    expect([copy.id, copy.name, copy.author]).toEqual(["local.my-hardware", "My Hardware", "You"]);
+    expect({ looks: copy.looks, values: copy.values, radius: copy.radius, font: copy.font, themes: copy.themes }).toEqual({
+      looks: hardware.looks,
+      values: hardware.values,
+      radius: hardware.radius,
+      font: hardware.font,
+      themes: hardware.themes,
+    });
+    const written = validateStyle(JSON.parse(styleManifest(copy)));
+    expect(written.ok && written.style).toEqual(copy);
+    expect(written.ok && written.hints).toEqual([]);
+    expect([starterStyle(hardware, 2).id, starterStyle(hardware, 2).name]).toEqual(["local.my-hardware-2", "My Hardware 2"]);
+    // A copy of a copy doesn't stack "my-".
+    expect(starterStyle(copy, 1).id).toBe("local.my-hardware");
+    expect(starterStyle(FALLBACK_STYLE, 1).id).toBe("local.my-classic");
+  });
+
+  it("keeps a long name within the limit, number included", () => {
+    const long = style({ id: "community.long", name: "A".repeat(40) });
+    const copy = starterStyle(long, 12);
+    expect(copy.name.length).toBeLessThanOrEqual(40);
+    expect(copy.name.endsWith(" 12")).toBe(true);
+    expect(validateStyle(JSON.parse(styleManifest(copy))).ok).toBe(true);
+  });
+
+  it("loads from the user's styles folder as a local style", async () => {
+    const local = await mkdtemp(path.join(tmpdir(), "tavora-own-styles-"));
+    const copy = starterStyle(FALLBACK_STYLE, 1);
+    await styleFolder(local, "my-classic", styleManifest(copy));
+    await writeFile(path.join(local, "my-classic", "README.txt"), STYLE_README);
+    const { styles, problems } = await discoverStyles({ official: [officialDir], local: [local] });
+    expect(problems).toEqual([]);
+    expect(styles.get("local.my-classic")).toEqual({ style: copy, provenance: "local" });
   });
 });

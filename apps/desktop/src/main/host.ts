@@ -226,7 +226,7 @@ import {
   type ThemeHint,
   type ThemeProblem,
 } from "./themes";
-import { appearanceThemes, discoverStyles, resolveStyle, tavoraStyle, type InstalledStyle, type StyleHint, type StyleProblem } from "./styles";
+import { appearanceThemes, discoverStyles, resolveStyle, starterStyle, STYLE_MANIFEST, STYLE_README, styleManifest, tavoraStyle, type InstalledStyle, type StyleHint, type StyleProblem } from "./styles";
 import { panelCorners, type PanelCorners } from "./panel-corners";
 import { CLASSIC_STYLE_ID, resolveFontId, resolveRadius } from "../shared/styles";
 import { copyExample, slugOf } from "./example-copy";
@@ -1843,9 +1843,9 @@ export class Host {
     return { official: options.officialThemeDirs, local: [path.join(options.userData, "themes"), ...(options.themeDirs ?? [])] };
   }
 
-  /** Only Tavora's own styles for now; the user's own would come in `local`, like themes. */
+  /** Tavora's own styles, then the user's own from the styles folder of their data folder, like themes. */
   private static styleSources(options: HostOptions) {
-    return { official: options.officialStyleDirs ?? [] };
+    return { official: options.officialStyleDirs ?? [], local: [path.join(options.userData, "styles")] };
   }
 
   /** The window buttons, in the theme's colours; under a dialog backdrop dimmed like the page around them. */
@@ -1949,6 +1949,32 @@ export class Host {
     // Test runs keep the window hidden and open no file manager.
     if (!this.options.hidden) void shell.openPath(folder(suffix));
     return theme.id;
+  }
+
+  /** Writes a copy of the style in use into the styles folder, loads it and shows the folder. Answers with its id. */
+  private async createStarterStyle(): Promise<string> {
+    const root = path.join(this.options.userData, "styles");
+    await mkdir(root, { recursive: true });
+    const base = this.currentStyle();
+    let suffix = 1;
+    const folder = (n: number) => path.join(root, starterStyle(base, n).id.replace(/^local\./, ""));
+    const taken = (n: number) => this.styles.has(starterStyle(base, n).id) || existsSync(folder(n));
+    while (taken(suffix)) suffix++;
+    const style = starterStyle(base, suffix);
+    await mkdir(folder(suffix));
+    await writeFileAtomic(path.join(folder(suffix), STYLE_MANIFEST), styleManifest(style));
+    await writeFileAtomic(path.join(folder(suffix), "README.txt"), STYLE_README);
+    await this.reloadThemes();
+    // Test runs keep the window hidden and open no file manager.
+    if (!this.options.hidden) void shell.openPath(folder(suffix));
+    return style.id;
+  }
+
+  private async openStylesFolder(): Promise<void> {
+    const dir = path.join(this.options.userData, "styles");
+    await mkdir(dir, { recursive: true });
+    const error = await shell.openPath(dir);
+    if (error) throw new LibraryError("error.openStylesFolder", { problem: error });
   }
 
   private async openThemesFolder(): Promise<void> {
@@ -2839,6 +2865,10 @@ export class Host {
       "reload-themes": () => this.reloadThemes(),
       "open-themes-folder": () => this.openThemesFolder(),
       "create-starter-theme": () => this.createStarterTheme(),
+      // Themes and styles load together, so one Reload finds both.
+      "reload-styles": () => this.reloadThemes(),
+      "open-styles-folder": () => this.openStylesFolder(),
+      "create-starter-style": () => this.createStarterStyle(),
 
       // Profile
       "save-profile": async (action) => {
@@ -5198,7 +5228,8 @@ export class Host {
       })),
       // The style as the theme sends it: with glass opacity raised where a theme needs it for contrast.
       styleMarks: styleMarks(this.currentTheme.style ?? tavoraStyle(style)),
-      styleProblems: [...this.styleProblems.map((problem) => ({ ...problem })), ...this.styleHints.map((hint) => ({ ...hint }))],
+      styleProblems: this.styleProblems.map((problem) => ({ ...problem })),
+      styleHints: this.styleHints.map((hint) => ({ ...hint })),
       themes: themes.map(({ theme: item, provenance }) => ({
         id: item.id,
         name: item.name,

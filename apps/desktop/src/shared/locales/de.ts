@@ -2455,4 +2455,16 @@ export const de: Record<keyof typeof en, string> = {
   "profile.banner.mountains": "Berge",
   "profile.banner.map": "Abenteuerkarte",
   "profile.banner.picture": "Dein Bild",
+  // Eigene Stile (Einstellungen > Aussehen > Eigene Stile), wie eigene Designs.
+  "settings.heading.ownStyles": "Eigene Stile",
+  "settings.own-styles.label": "Eigenen Stil machen",
+  "settings.own-styles.search": "Kopier deinen Stil, pass tavora.style.json an und klick auf Neu laden.",
+  "settings.own-styles.keywords": "eigener stil, stil erstellen, neuer stil, aussehen, vorlage, ordner, tavora.style.json, neu laden, entwickler, custom style, make a style, create style, new style, design, look, starter, template, folder, reload, developer",
+  "settings.own-styles.description": "Kopier deinen Stil und ändere, wie alles aussieht.",
+  "settings.own-styles.details": "Neuer Stil legt eine Kopie deines Stils in deinen Stile-Ordner. Ändere tavora.style.json und klick dann auf Neu laden.",
+  "settings.appearance.newStyle": "Neuer Stil",
+  "settings.appearance.styleProblems": "Stile, die nicht verwendet werden konnten",
+  "settings.appearance.styleHints": "Tipps für Stil-Macher",
+  "settings.appearance.styleHint": "geht, aber {message}.",
+  "error.openStylesFolder": "Der Stile-Ordner konnte nicht geöffnet werden: {problem}",
 };

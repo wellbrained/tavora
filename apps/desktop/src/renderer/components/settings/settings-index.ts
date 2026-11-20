@@ -96,6 +96,7 @@ export const SETTING_SECTIONS: readonly (readonly [id: string, section: Settings
   ["toasts", "appearance"],
   ["grayscale-text", "appearance"],
   ["own-themes", "appearance"],
+  ["own-styles", "appearance"],
   ["reset-theme", "appearance"],
   ["game-start", "games"],
   ["game-end", "games"],

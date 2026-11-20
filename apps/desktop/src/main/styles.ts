@@ -224,6 +224,58 @@ export async function discoverStyles({ official = [], local = [] }: StyleSources
   return { styles, problems, hints };
 }
 
+// ── A starter for the user's own style ─────────────────────────────────
+
+export const STYLE_README = `Your own Tavora style
+=====================
+
+This folder is a style. Tavora reads only tavora.style.json in it.
+A style is data: it picks how each part looks and sets a few sizes.
+Colours come from your theme, so any theme works with it.
+
+1. Change "looks" (one look per part) and "values" in tavora.style.json.
+   Numbers outside their range are kept in it.
+2. In Tavora, open Settings > Appearance and press Reload.
+3. Pick your style. If something is wrong, Appearance says what.
+
+Give it your own "id" and "name" before you share it. Ids starting with
+"tavora." are reserved. The full format is at
+https://docs.mytavora.app/reference/style
+`;
+
+/** The id a style's copy gets: `local.my-<name>`, with `-2`, `-3`… after it when that one is taken. */
+function starterId(base: StylePackage, suffix: number): string {
+  const word = (base.id.split(".").at(-1) ?? "style").replace(/[^a-z0-9-]/g, "").replace(/^(my-)+|^-+/g, "").slice(0, 40) || "style";
+  return `local.my-${word}${suffix > 1 ? `-${suffix}` : ""}`;
+}
+
+/**
+ * A style to copy and change: `base` (the style in use) under a new id and name ("My Hardware", "My Hardware 2"), with
+ * its looks, values, radius, font and themes. Built from a checked style, so it always passes validation.
+ */
+export function starterStyle(base: StylePackage, suffix: number): StylePackage {
+  const tag = suffix > 1 ? ` ${suffix}` : "";
+  const name = `My ${base.name}`.slice(0, STYLE_LIMITS.name - tag.length).trimEnd() + tag;
+  return {
+    id: starterId(base, suffix),
+    name,
+    description: `A copy of ${base.name} to make your own.`.slice(0, STYLE_LIMITS.description),
+    author: "You",
+    version: "1.0.0",
+    looks: { ...base.looks },
+    values: { ...base.values },
+    radius: base.radius,
+    font: base.font,
+    themes: [...base.themes],
+  };
+}
+
+/** The manifest as written to disk, in the order the reference lists the fields. */
+export function styleManifest(style: StylePackage): string {
+  const { id, name, description, author, version, looks, values, radius, font, themes } = style;
+  return `${JSON.stringify({ id, name, ...(description ? { description } : {}), ...(author ? { author } : {}), version, looks, values, radius, font, ...(themes.length ? { themes } : {}) }, null, 2)}\n`;
+}
+
 /** The style a saved id names; Classic when it is not installed (kept in the library, so it comes back with the style). */
 export function resolveStyle(styles: ReadonlyMap<string, InstalledStyle>, id: string | null | undefined): StylePackage {
   return (id ? styles.get(id)?.style : undefined) ?? styles.get(CLASSIC_STYLE_ID)?.style ?? FALLBACK_STYLE;

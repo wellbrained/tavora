@@ -2453,4 +2453,16 @@ export const en = {
   "profile.banner.mountains": "Mountains",
   "profile.banner.map": "Adventure map",
   "profile.banner.picture": "Your picture",
+  // Own styles (Settings > Appearance > Your styles), like own themes.
+  "settings.heading.ownStyles": "Your styles",
+  "settings.own-styles.label": "Make your own style",
+  "settings.own-styles.search": "Copy the style you use, tweak tavora.style.json, then hit Reload.",
+  "settings.own-styles.keywords": "custom style, make a style, create style, new style, design, look, starter, template, folder, tavora.style.json, reload, developer",
+  "settings.own-styles.description": "Copy your style and change how things look.",
+  "settings.own-styles.details": "New style puts a copy of the style you use in your styles folder. Change tavora.style.json, then hit Reload.",
+  "settings.appearance.newStyle": "New style",
+  "settings.appearance.styleProblems": "Styles that could not be used",
+  "settings.appearance.styleHints": "Tips for style makers",
+  "settings.appearance.styleHint": "works, but {message}.",
+  "error.openStylesFolder": "Couldn't open the styles folder: {problem}",
 } as const;

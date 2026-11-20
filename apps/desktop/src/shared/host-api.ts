@@ -730,8 +730,10 @@ export interface AppearanceView {
    * variables; null for what goes away.
    */
   styleMarks: { attributes: [name: string, value: string | null][]; properties: [name: string, value: string | null][] };
-  /** Style folders that could not be used, and why. */
+  /** Style folders that could not be used, and why, for style authors. */
   styleProblems: { folder: string; message: string }[];
+  /** Styles that work, with a number Tavora kept in its range (soft notes, not errors). */
+  styleHints: { folder: string; message: string }[];
   themes: ThemeView[];
   /** Theme folders that could not be used, and why, for theme authors. */
   problems: { folder: string; message: string; kind?: "needs-newer"; values?: { needs: string; current: string } }[];

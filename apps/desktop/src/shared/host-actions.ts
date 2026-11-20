@@ -345,6 +345,12 @@ export function hostActionTable(c: HostChecks) {
     "open-themes-folder": {},
     /** Copies the Tavora theme into the themes folder as a new theme to change; answers with its id. */
     "create-starter-theme": {},
+    /** Looks for styles again (and themes: they load together), after the user changed their styles folder. */
+    "reload-styles": {},
+    /** Opens the user's styles folder in the file manager, creating it first. */
+    "open-styles-folder": {},
+    /** Writes a copy of the style in use into the styles folder, loads it and shows the folder. */
+    "create-starter-style": {},
 
     // Profile
     // Code units, so emoji still fit; both are clipped by character when stored.

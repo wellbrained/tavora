@@ -51,6 +51,7 @@ const themeGroups = computed(() => {
 const active = computed(() => appearance.value.themes.find((theme) => theme.id === appearance.value.themeId));
 /** Official and Local tags only when the list has both; on every card they would say nothing. */
 const mixedThemes = computed(() => new Set(appearance.value.themes.map((theme) => theme.provenance)).size > 1);
+const mixedStyles = computed(() => new Set(appearance.value.styles.map((style) => style.provenance)).size > 1);
 
 /** The variation a card previews: the one with the active variation's id (so Light shows Light), otherwise the theme's first. */
 function previewOf(theme: ThemeView): ThemeVariationView {
@@ -189,6 +190,9 @@ const showVariation = computed(() => {
               {{ styleText(item, "name") }}
               <Badge v-if="item.id === appearance.styleId" class="bg-primary/15 text-primary flex-none border-transparent py-0 text-[10px] font-semibold" data-testid="style-in-use">{{
                 t("settings.theme.inUse")
+              }}</Badge>
+              <Badge v-if="mixedStyles" variant="outline" :class="cn('flex-none py-0 font-normal', item.provenance === 'official' ? 'border-primary/40 text-primary' : 'text-muted-foreground')">{{
+                item.provenance === "official" ? t("common.official") : t("common.local")
               }}</Badge>
             </span>
           </SelectItem>
@@ -369,6 +373,44 @@ const showVariation = computed(() => {
         <Button variant="secondary" size="icon-sm" data-testid="reload-themes" :aria-label="t('common.reload')" :title="t('common.reload')" @click="act({ type: 'reload-themes' })"><RefreshCw /></Button>
       </span>
     </SettingRow>
+  </SettingGroup>
+
+  <!-- The user's own styles, the same way as their own themes: copy the style in use, change the file, Reload. -->
+  <SettingGroup :title="t('settings.heading.ownStyles')">
+    <SettingRow
+      :label="t('settings.own-styles.label')"
+      :description="t('settings.own-styles.description')"
+      :details="t('settings.own-styles.details')"
+      setting="own-styles"
+      :highlighted="highlight === 'own-styles'"
+    >
+      <template #below>
+        <ul v-if="appearance.styleProblems.length" class="mt-2 flex flex-col gap-1.5" :aria-label="t('settings.appearance.styleProblems')" data-testid="style-problems">
+          <li v-for="problem in appearance.styleProblems" :key="problem.folder" class="text-sm">
+            <span class="text-destructive font-medium">{{ problem.folder }}</span>{{ " " }}
+            <span class="text-muted-foreground">{{ t("settings.appearance.problem", { message: problem.message }) }}</span>
+          </li>
+        </ul>
+        <ul v-if="appearance.styleHints.length" class="mt-2 flex flex-col gap-1.5" :aria-label="t('settings.appearance.styleHints')" data-testid="style-hints">
+          <li v-for="(hint, index) in appearance.styleHints" :key="`${hint.folder}-${index}`" class="text-sm">
+            <span class="font-medium">{{ hint.folder }}</span>{{ " " }}
+            <span class="text-muted-foreground">{{ t("settings.appearance.styleHint", { message: hint.message }) }}</span>
+          </li>
+        </ul>
+      </template>
+      <span class="flex flex-none flex-wrap items-center justify-end gap-2">
+        <Button variant="secondary" data-testid="create-starter-style" @click="act({ type: 'create-starter-style' })">
+          <CopyPlus /> {{ t("settings.appearance.newStyle") }}
+        </Button>
+        <Button variant="secondary" size="icon-sm" data-testid="open-styles-folder" :aria-label="t('common.openFolder')" :title="t('common.openFolder')" @click="act({ type: 'open-styles-folder' })">
+          <FolderOpen />
+        </Button>
+        <Button variant="secondary" size="icon-sm" data-testid="reload-styles" :aria-label="t('common.reload')" :title="t('common.reload')" @click="act({ type: 'reload-styles' })"><RefreshCw /></Button>
+      </span>
+    </SettingRow>
+  </SettingGroup>
+
+  <SettingGroup>
     <SettingRow
       :label="t('settings.reset-theme.label')"
       :description="t('settings.reset-theme.description')"
