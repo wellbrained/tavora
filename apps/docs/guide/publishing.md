@@ -193,7 +193,7 @@ Tavora can hand your modules to a new key, but only if the old key was linked to
 Ask in the app: Settings > Developer > Publishing > Publisher keys and CI (press **Show**), then **Lost it?** next to the key.
 
 - **I lost it:** your modules move to your newest key that Tavora keeps and that is linked to your account. If there is none, Tavora makes one and links it. Keys Tavora keeps are lost only with your recovery key.
-- **It was leaked:** the same, and Tavora also revokes the old key. From the moment you ask, the catalog takes nothing new signed by it. Once revoked, it can't publish or install anything new. Modules users already have keep running, and so do the zips Tavora lists as published before the revocation.
+- **It was leaked:** the same, and Tavora also revokes the old key. From the moment you ask, the catalog takes nothing new signed by it, not even a version still waiting for review. Once revoked, it can't publish or install anything new. Modules users already have keep running, and so do the zips Tavora lists as published before the revocation.
 
 Your account's email address gets a note that you asked. The key shows **Waiting for Tavora** until a person at Tavora has checked the request and signed it, then **Done**. Both keys stay linked while it waits. If something can't be done in the app, write to [tavora.app@gmail.com](mailto:tavora.app@gmail.com).
 

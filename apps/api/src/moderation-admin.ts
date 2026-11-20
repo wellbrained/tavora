@@ -4,6 +4,7 @@ import { accountLifecycle, type AccountLifecycle } from "./account-lifecycle.ts"
 import type { AccountStore } from "./account-store.ts";
 import { CatalogError, checkCatalogZip, isOfficialId, type CatalogStore, type ReviewReason, type WaitingVersion } from "./catalog.ts";
 import { PUBLISH_LIMITS } from "./catalog-publish.ts";
+import { catalogTrust, keyRefusal, type CatalogTrust, type KeyRefusal } from "./catalog-trust.ts";
 import { mailLanguage, publishedMail, type Mailer } from "./mail.ts";
 import { bannedMail, createNotifier, declinedMail, DECLINE_REASONS, isDeclineReason, type Notifier } from "./moderation-mail.ts";
 import { runChecks } from "./moderation.ts";
@@ -30,7 +31,16 @@ export interface ModerationAdminOptions {
   ownerEmail?: string | undefined;
   /** What banning reaches (account-lifecycle.ts). Absent: built from the catalog and accounts. */
   lifecycle?: AccountLifecycle | undefined;
+  /** The catalogue public key the signed lists are checked against (CATALOGUE_PUBLIC_KEY outside tests). */
+  catalogueKey?: string | undefined;
 }
+
+/** Why Approve refuses a version because of its key (keyRefusal), for the maintainer. */
+const KEY_REFUSED: Record<KeyRefusal, string> = {
+  "key-not-linked": "Its publisher key isn't linked to the developer's account any more. Decline the version.",
+  "key-revoked": "Its publisher key was revoked. Decline the version.",
+  "key-leaked": "The developer reported its publisher key as leaked. Decline the version.",
+};
 
 const MAX_NOTE = 500;
 const MAX_FILE_BYTES = 1024 * 1024;
@@ -39,7 +49,7 @@ const MAX_README = 20_000;
 const LIVE_CHECK = "live_check";
 
 /** What the review page shows of one waiting version. */
-function describe(waiting: WaitingVersion, catalog: CatalogStore, accounts: AccountStore) {
+function describe(waiting: WaitingVersion, catalog: CatalogStore, accounts: AccountStore, trust: CatalogTrust) {
   const { manifest } = waiting;
   let files: { name: string; size: number }[] = [];
   const bytes = catalog.zipBytes(waiting.sha256);
@@ -61,6 +71,8 @@ function describe(waiting: WaitingVersion, catalog: CatalogStore, accounts: Acco
     queuedAt: waiting.queuedAt,
     previousVersion: catalog.previousListed(waiting.id)?.version ?? null,
     reasons: waiting.review.reasons,
+    // The key that signed it, and why Approve would refuse it (unlinked, revoked or reported as leaked); null when it wouldn't.
+    signer: { fingerprint: waiting.owner, refused: keyRefusal(accounts, trust, waiting.owner, waiting.sha256, waiting.accountId) },
     developer: {
       accountId: id,
       name: id ? (accounts.developer(id)?.name ?? null) : null,
@@ -91,8 +103,10 @@ function describe(waiting: WaitingVersion, catalog: CatalogStore, accounts: Acco
   };
 }
 
-export function moderationRoutes({ catalog, accounts, scanner, mailer, mailDailyLimit, ownerEmail, now = Date.now, keepVersions = PUBLISH_LIMITS.keepVersions, lifecycle: given }: ModerationAdminOptions) {
+export function moderationRoutes({ catalog, accounts, scanner, mailer, mailDailyLimit, ownerEmail, now = Date.now, keepVersions = PUBLISH_LIMITS.keepVersions, lifecycle: given, catalogueKey }: ModerationAdminOptions) {
   const app = new Hono();
+  // Read on every use, so a list signed since counts at once.
+  const trust = () => catalogTrust(catalog, catalogueKey);
   const lifecycle = given ?? accountLifecycle({ accounts, catalog, copies: undefined, reviews: undefined, conversations: undefined, leaderboards: undefined, icons: undefined });
   const notifier: Notifier = mailer ? createNotifier({ store: accounts, mailer, mailDailyLimit, now }) : { send: async () => false };
   let running = false;
@@ -113,7 +127,10 @@ export function moderationRoutes({ catalog, accounts, scanner, mailer, mailDaily
   };
   const reasonList = DECLINE_REASONS.join(", ");
 
-  app.get("/waiting", (context) => context.json({ waiting: catalog.waitingVersions().map((waiting) => describe(waiting, catalog, accounts)), reasons: DECLINE_REASONS }));
+  app.get("/waiting", (context) => {
+    const lists = trust();
+    return context.json({ waiting: catalog.waitingVersions().map((waiting) => describe(waiting, catalog, accounts, lists)), reasons: DECLINE_REASONS });
+  });
 
   // A text file of a waiting zip, to read its code.
   app.get("/waiting/:sha256/file", (context) => {
@@ -145,6 +162,10 @@ export function moderationRoutes({ catalog, accounts, scanner, mailer, mailDaily
     if (!waiting) return context.json({ error: "Nothing with this hash is waiting." }, 404);
     if (waiting.accountId && accounts.isBanned(waiting.accountId)) return context.json({ error: "This developer is banned. Unban them first, or decline the version." }, 409);
     if (waiting.accountId && accounts.isSuspended(waiting.accountId)) return context.json({ error: "This developer is suspended. Unsuspend them first, or decline the version." }, 409);
+    // The key's state as an upload checks it: a key unlinked, revoked or reported as leaked since the upload lists nothing new.
+    // Nothing is awaited from here to approve(), so the state can't change in between.
+    const keyState = keyRefusal(accounts, trust(), waiting.owner, sha256, waiting.accountId);
+    if (keyState) return context.json({ error: KEY_REFUSED[keyState], reason: keyState }, 409);
     const approved = catalog.approve(sha256, new Date(now()));
     if (!approved) return context.json({ error: "Its zip is gone, so it can't be listed. Decline it." }, 409);
     catalog.prune(waiting.id, keepVersions, new Date(now()));

@@ -513,6 +513,43 @@ describe("approving", () => {
     expect(catalog.index()).toEqual([]);
   });
 
+  it("refuses a version whose key was reported as leaked or unlinked since the upload, and the review page shows why", async () => {
+    const { developer, send, post, get, catalog, store, clock } = setup({ scanner: undefined });
+    const { key, accountId } = developer("dev@example.com");
+    await send(key, moduleZip(key));
+    const waiting = catalog.waitingVersions()[0]!;
+    const listed = async () => ((await (await get("/waiting")).json()) as { waiting: { signer: { fingerprint: string; refused: string | null } }[] }).waiting[0]!.signer;
+    expect(await listed()).toEqual({ fingerprint: waiting.owner, refused: null });
+    // The developer reports the key as leaked, moving to a new one.
+    const next = generateKeyPairSync("ed25519").privateKey;
+    store.linkKey(accountId, keyFingerprint(rawKey(next)), rawKey(next).toString("base64"), clock.now);
+    expect(store.requestReplacement(accountId, waiting.owner, keyFingerprint(rawKey(next)), true, clock.now)).toBe("ok");
+    expect(await listed()).toEqual({ fingerprint: waiting.owner, refused: "key-leaked" });
+    const refused = await post("/approve", { sha256: waiting.sha256 });
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toMatchObject({ reason: "key-leaked" });
+    expect(catalog.index()).toEqual([]);
+    // Turned down by the maintainer: the key is fine again, until it is unlinked.
+    store.declineKeyRequest(waiting.owner, clock.now);
+    store.unlinkKey(accountId, waiting.owner);
+    expect(await listed()).toEqual({ fingerprint: waiting.owner, refused: "key-not-linked" });
+    expect(await (await post("/approve", { sha256: waiting.sha256 })).json()).toMatchObject({ reason: "key-not-linked" });
+    expect(catalog.waitingVersions()).toHaveLength(1);
+  });
+
+  it("counts an approved version as listed when it was approved, so a leak report before that doesn't allow it", async () => {
+    const { developer, send, post, catalog, clock } = setup({ scanner: undefined });
+    const { key } = developer("dev@example.com");
+    const uploaded = clock.now;
+    await send(key, moduleZip(key));
+    const { sha256, owner } = catalog.waitingVersions()[0]!;
+    clock.now = uploaded + 86_400_000;
+    expect((await post("/approve", { sha256 })).status).toBe(200);
+    // Uploaded before the moment, listed after it: not in the allow list. Listed before it: in.
+    expect(catalog.signedBy(owner, new Date(uploaded + 3_600_000))).toEqual([]);
+    expect(catalog.signedBy(owner, new Date(clock.now + 1))).toEqual([sha256]);
+  });
+
   it("does not approve a version whose zip is gone", async () => {
     const { developer, send, post, catalog, zipFile } = setup({ scanner: undefined });
     const { key } = developer("dev@example.com");

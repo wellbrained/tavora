@@ -272,6 +272,24 @@ describe("adding to the catalog", () => {
     expect(catalog.setListed("wellbrained.nothing", false)).toBe(false);
   });
 
+  it("counts a listed version from before listed_at as listed at its upload", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "tavora-catalog-"));
+    const first = new CatalogStore(dir);
+    const added = first.add(moduleZip(), new Date("2026-10-18T10:00:00Z"));
+    const fingerprint = added.owner;
+    // A catalog from before the column: the row has none.
+    const raw = (first as unknown as { db: { exec(sql: string): void } }).db;
+    raw.exec("update versions set listed_at = null");
+    expect(first.signedBy(fingerprint, new Date("2026-10-19T00:00:00Z"))).toEqual([added.sha256]);
+    first.close();
+    // The next start fills it from the upload time.
+    const again = new CatalogStore(dir);
+    const row = (again as unknown as { db: { prepare(sql: string): { get(): unknown } } }).db.prepare("select listed_at from versions").get();
+    expect(row).toEqual({ listed_at: "2026-10-18T10:00:00.000Z" });
+    expect(again.signedBy(fingerprint, new Date("2026-10-18T09:00:00Z"))).toEqual([]);
+    again.close();
+  });
+
   it("never hands out a stored zip whose bytes no longer match its name", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "tavora-catalog-"));
     const catalog = new CatalogStore(dir);

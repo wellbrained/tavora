@@ -5,7 +5,7 @@ import type { AccountStore } from "./account-store.ts";
 import { bearerToken, fail as refuse, tooMany } from "./sign-in.ts";
 import { MAIL_RESERVED } from "./accounts.ts";
 import { CatalogError, checkCatalogZip, checkReleaseVersion, isOfficialId, type CatalogStore, type CheckedZip, type ReviewReason } from "./catalog.ts";
-import { catalogTrust, OFFICIAL_PINS, officialOn, type OfficialPins } from "./catalog-trust.ts";
+import { catalogTrust, keyRefusal, OFFICIAL_PINS, officialOn, type OfficialPins } from "./catalog-trust.ts";
 import { mailLanguage, publishedMail, withdrawnMail, type Mail, type MailLanguage, type Mailer } from "./mail.ts";
 import { createNotifier, waitingMail, waitingNoticeMail } from "./moderation-mail.ts";
 import { reviewUpload, runChecks } from "./moderation.ts";
@@ -225,11 +225,13 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     const trust = catalogTrust(catalog, catalogueKey);
     // The key's own state. Checked before the scan and again right after it, like bans: a key may be unlinked, revoked
     // or reported as leaked while the scan runs, and that's when an upload signed with it matters most.
+    // The same check runs again when a waiting version is approved (moderation-admin.ts).
     const keyRefused = () => {
-      if (store.publisherKey(checked.owner)?.accountId !== key.accountId) return refuse(context, 403, "key-not-linked", "This publisher key is not linked to a Tavora account.");
-      if (trust.revoked(checked.owner, checked.sha256)) return refuse(context, 403, "key-revoked", "This publisher key was revoked and publishes nothing new. Link a new key to your account.");
+      const state = keyRefusal(store, trust, checked.owner, checked.sha256, key.accountId);
+      if (state === "key-not-linked") return refuse(context, 403, "key-not-linked", "This publisher key is not linked to a Tavora account.");
+      if (state === "key-revoked") return refuse(context, 403, "key-revoked", "This publisher key was revoked and publishes nothing new. Link a new key to your account.");
       // Reported as leaked in the app: nothing new from it while the revocation waits to be signed.
-      if (store.isLeakedKey(checked.owner)) return refuse(context, 403, "key-leaked", "You reported this publisher key as leaked, so it publishes nothing new. Publish with your new key.");
+      if (state === "key-leaked") return refuse(context, 403, "key-leaked", "You reported this publisher key as leaked, so it publishes nothing new. Publish with your new key.");
       return null;
     };
     const keyNow = keyRefused();

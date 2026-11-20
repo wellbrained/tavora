@@ -1,5 +1,6 @@
 import { firstKeyOf, isOfficialSigner, officialOn, OFFICIAL_PINS, type OfficialPins } from "@tavora/module-schema";
 import { readCatalogList, type CatalogListKind, type CatalogListOf } from "@tavora/pack";
+import type { AccountStore } from "./account-store.ts";
 import type { CatalogStore } from "./catalog.ts";
 
 /**
@@ -46,4 +47,22 @@ export function catalogTrust(catalog: CatalogStore, publicKey: string = CATALOGU
     firstKey: (fingerprint) => firstKeyOf(list("successions")?.successions ?? [], fingerprint),
   };
   return trust;
+}
+
+/** Why a publisher key may not bring a zip into the catalog now: unlinked from the account, revoked, or reported as leaked. */
+export type KeyRefusal = "key-not-linked" | "key-revoked" | "key-leaked";
+
+/**
+ * The key's own state, the same for an upload and for Approve on the review page: the key must still be linked to the
+ * account the zip came from (any account for a version without one), not revoked for this zip, and not reported as leaked
+ * while that revocation waits to be signed. Null when the key may.
+ */
+export function keyRefusal(store: AccountStore, trust: CatalogTrust, fingerprint: string, sha256: string, accountId: string | null): KeyRefusal | null {
+  const linked = store.publisherKey(fingerprint);
+  // A leaked key whose account unlinked it or was deleted says so, rather than asking to link it (which is refused).
+  if (!linked) return store.isLeakedKey(fingerprint) ? "key-leaked" : "key-not-linked";
+  if (accountId !== null && linked.accountId !== accountId) return "key-not-linked";
+  if (trust.revoked(fingerprint, sha256)) return "key-revoked";
+  if (store.isLeakedKey(fingerprint)) return "key-leaked";
+  return null;
 }

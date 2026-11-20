@@ -142,7 +142,7 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
   // Every change the maintainer makes is written down: the route, what it touched, the reason and note typed for it.
   if (activity) {
     const log = activity;
-    const FIELDS = ["id", "accountId", "sha256", "version", "listed", "hidden", "replaceable", "block"] as const;
+    const FIELDS = ["id", "accountId", "sha256", "version", "listed", "hidden", "replaceable", "block", "key"] as const;
     app.use("/api/*", async (context, next) => {
       if (context.req.method !== "POST") return next();
       let body: Record<string, unknown> = {};
@@ -517,8 +517,15 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
     if (!moduleRequests) return context.json({ error: "Module requests are off." }, 503);
     return context.json({ requests: moduleRequests.ranked() });
   });
+  // Takes one game and its votes off that list, by its `key` from the list above.
+  app.post("/api/module-requests/remove", async (context) => {
+    if (!moduleRequests) return context.json({ error: "Module requests are off." }, 503);
+    const { key } = await json(context.req.raw);
+    if (typeof key !== "string") return context.json({ error: "Send { key }." }, 400);
+    return moduleRequests.remove(key) ? context.json({ ok: true }) : context.json({ error: "No such game." }, 404);
+  });
   // Approval: versions waiting for review, Approve, Decline, Ban, and the one-time check of what is live (moderation-admin.ts).
-  if (catalog && accounts) app.route("/api/moderation", moderationRoutes({ catalog, accounts, ...moderation, ownerEmail, lifecycle }));
+  if (catalog && accounts) app.route("/api/moderation", moderationRoutes({ catalog, accounts, ...moderation, ownerEmail, lifecycle, catalogueKey }));
 
   // Messages (conversations-admin.ts): Tavora's own conversations and the reported ones, and the editable texts.
   if (conversations && accounts) {

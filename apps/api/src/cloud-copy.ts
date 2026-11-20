@@ -1,5 +1,6 @@
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import { statfsSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import type { AccountStore } from "./account-store.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
@@ -18,6 +19,10 @@ import { requireSignIn, tooMany, type SignedInEnv } from "./sign-in.ts";
 export const COPY_LIMIT = 100 * 1024 * 1024;
 /** Parts stored while a new version is uploaded, before the old one's are dropped. */
 export const STORED_LIMIT = 2 * COPY_LIMIT;
+/** Parts of every account together (COPY_TOTAL_LIMIT_GB), so many accounts can't fill the server's disk. */
+export const TOTAL_LIMIT = 20 * 1024 * 1024 * 1024;
+/** Free space on the disk that new parts never take (COPY_FREE_FLOOR_GB): the accounts and the other stores share that disk. */
+export const FREE_FLOOR = 2 * 1024 * 1024 * 1024;
 /** One part: 4 MB of the user's data plus its encryption. */
 export const MAX_PART_BYTES = 4 * 1024 * 1024 + 1024;
 /** One upload or one download: about 8 MB of parts. */
@@ -44,10 +49,61 @@ export type SwapResult =
   | { ok: false; reason: "missing-parts"; missing: number }
   | { ok: false; reason: "copy-full"; size: number };
 
+export interface CopyStoreOptions {
+  /** Bytes of parts all accounts may store together; TOTAL_LIMIT by default. */
+  totalLimit?: number;
+  /** Free bytes on the disk the copies are on; null when it can't be read. Absent: not checked. */
+  freeBytes?: () => number | null;
+  /** Free bytes new parts leave on that disk; FREE_FLOOR by default. */
+  freeFloor?: number;
+}
+
+const GIB = 1024 * 1024 * 1024;
+
+/**
+ * The limits from the environment: COPY_TOTAL_LIMIT_GB (20 by default) and COPY_FREE_FLOOR_GB (2 by default, 0 turns the
+ * free-space check off), in GiB, fractions allowed; a value that is not a number of 0 or more keeps the default. The free space
+ * is read from the disk that holds `dir`.
+ */
+export function copyLimitsFromEnv(env: Record<string, string | undefined>, dir: string, warn: (message: string) => void = console.warn): Required<CopyStoreOptions> {
+  const gib = (name: string, fallback: number) => {
+    const text = env[name]?.trim();
+    if (!text) return fallback;
+    const value = Number(text);
+    if (Number.isFinite(value) && value >= 0) return Math.floor(value * GIB);
+    warn(`[tavora-api] ${name} is not a number of GiB; using ${fallback / GIB}.`);
+    return fallback;
+  };
+  return {
+    totalLimit: gib("COPY_TOTAL_LIMIT_GB", TOTAL_LIMIT),
+    freeFloor: gib("COPY_FREE_FLOOR_GB", FREE_FLOOR),
+    freeBytes: () => {
+      try {
+        const disk = statfsSync(dir);
+        return disk.bavail * disk.bsize;
+      } catch {
+        return null;
+      }
+    },
+  };
+}
+
+/** Why parts were not stored: this account's copy is full, or the copies of all accounts have no room. */
+export type AddPartsResult = "ok" | "copy-full" | "no-room";
+
 export class CopyStore {
   private readonly db: DatabaseSync;
+  private readonly totalLimit: number;
+  private readonly freeBytes: (() => number | null) | undefined;
+  private readonly freeFloor: number;
+  /** Bytes of parts of every account, counted once at the start and kept up to date by every change. */
+  private total: number;
+  private warned = false;
 
-  constructor(path: string) {
+  constructor(path: string, { totalLimit = TOTAL_LIMIT, freeBytes, freeFloor = FREE_FLOOR }: CopyStoreOptions = {}) {
+    this.totalLimit = totalLimit;
+    this.freeBytes = freeBytes;
+    this.freeFloor = freeFloor;
     this.db = new DatabaseSync(path);
     // Freed pages go back to the disk after a version or a copy is dropped (set before the first table).
     this.db.exec("pragma auto_vacuum = incremental");
@@ -60,6 +116,14 @@ export class CopyStore {
         account_id text not null, id blob not null, data blob not null, size integer not null, primary key (account_id, id)
       ) without rowid;
     `);
+    // The sizes on their own, so adding them up never reads the parts' bytes.
+    this.db.exec("create index if not exists parts_size on parts (account_id, size)");
+    this.total = (this.db.prepare("select coalesce(sum(size), 0) as total from parts").get() as { total: number }).total;
+  }
+
+  /** Bytes of parts of every account. */
+  storedTotal(): number {
+    return this.total;
   }
 
   info(accountId: string): CopyInfo | null {
@@ -77,8 +141,11 @@ export class CopyStore {
     return (this.db.prepare("select coalesce(sum(size), 0) as total from parts where account_id = ?").get(accountId) as { total: number }).total;
   }
 
-  /** Stores the parts the account does not have yet; false when they would pass STORED_LIMIT (nothing is stored then). */
-  addParts(accountId: string, parts: { id: Uint8Array; data: Uint8Array }[]): boolean {
+  /**
+   * Stores the parts the account does not have yet. Nothing is stored when they would pass STORED_LIMIT (`copy-full`), the
+   * total of every account, or eat into the free space the disk keeps (`no-room`).
+   */
+  addParts(accountId: string, parts: { id: Uint8Array; data: Uint8Array }[]): AddPartsResult {
     const has = this.db.prepare("select 1 from parts where account_id = ? and id = ?");
     const seen = new Set<string>();
     const fresh = parts.filter((part) => {
@@ -88,7 +155,15 @@ export class CopyStore {
       return !has.get(accountId, part.id);
     });
     const adding = fresh.reduce((total, part) => total + part.data.length, 0);
-    if (this.stored(accountId) + adding > STORED_LIMIT) return false;
+    if (adding === 0) return "ok";
+    if (this.stored(accountId) + adding > STORED_LIMIT) return "copy-full";
+    const free = this.freeBytes?.() ?? null;
+    if (this.total + adding > this.totalLimit || (free !== null && free - adding < this.freeFloor)) {
+      if (!this.warned) console.warn("[tavora-api] The cloud copies have no room: new parts are refused until there is some.");
+      this.warned = true;
+      return "no-room";
+    }
+    this.warned = false;
     const insert = this.db.prepare("insert into parts (account_id, id, data, size) values (?, ?, ?, ?)");
     this.db.exec("begin");
     try {
@@ -98,7 +173,8 @@ export class CopyStore {
       this.db.exec("rollback");
       throw error;
     }
-    return true;
+    this.total += adding;
+    return "ok";
   }
 
   /** The asked parts the account has, in the order asked, until about `maxBytes` (always at least one). */
@@ -137,19 +213,25 @@ export class CopyStore {
     if (size > COPY_LIMIT) return { ok: false, reason: "copy-full", size };
     // After a delete, numbers go on from the deleted copy's, so a PC that still knows that one never takes a new copy for it.
     const version = Math.max(base, this.retired(accountId)) + 1;
+    let dropped = 0;
     this.db.exec("begin");
     try {
       this.db
         .prepare("insert into copies (account_id, version, manifest, size, updated_at) values (?, ?, ?, ?, ?) on conflict (account_id) do update set version = excluded.version, manifest = excluded.manifest, size = excluded.size, updated_at = excluded.updated_at")
         .run(accountId, version, manifest, size, now);
-      const stored = this.db.prepare("select id from parts where account_id = ?").all(accountId) as { id: Uint8Array }[];
+      const stored = this.db.prepare("select id, size from parts where account_id = ?").all(accountId) as { id: Uint8Array; size: number }[];
       const drop = this.db.prepare("delete from parts where account_id = ? and id = ?");
-      for (const { id } of stored) if (!keep.has(Buffer.from(id).toString("hex"))) drop.run(accountId, id);
+      for (const part of stored) {
+        if (keep.has(Buffer.from(part.id).toString("hex"))) continue;
+        drop.run(accountId, part.id);
+        dropped += part.size;
+      }
       this.db.exec("commit");
     } catch (error) {
       this.db.exec("rollback");
       throw error;
     }
+    this.total -= dropped;
     this.db.exec("pragma incremental_vacuum");
     return { ok: true, version, size };
   }
@@ -161,8 +243,10 @@ export class CopyStore {
 
   /** Removes the account's copy and every part it stored; with the copy button or with the account (`forever`: its version number goes too). */
   remove(accountId: string, forever = false): void {
+    let freed = 0;
     this.db.exec("begin");
     try {
+      freed = this.stored(accountId);
       const version = Math.max(this.info(accountId)?.version ?? 0, this.retired(accountId));
       if (forever || version === 0) this.db.prepare("delete from retired where account_id = ?").run(accountId);
       else this.db.prepare("insert into retired (account_id, version) values (?, ?) on conflict (account_id) do update set version = excluded.version").run(accountId, version);
@@ -173,6 +257,7 @@ export class CopyStore {
       this.db.exec("rollback");
       throw error;
     }
+    this.total -= freed;
     this.db.exec("pragma incremental_vacuum");
   }
 }
@@ -275,7 +360,10 @@ export function copyRoutes({ copies, accounts, clientKey, rateLimiter, now = Dat
     const parts = readParts(await bytes(context));
     if (!parts) return bad(context, "Send parts: a 32-byte id, a 4-byte length and the bytes, one after another.");
     const account = context.get("account");
-    if (!copies.addParts(account.id, parts)) return context.json({ error: "The cloud copy is full.", reason: "copy-full", limit: COPY_LIMIT }, 413);
+    const added = copies.addParts(account.id, parts);
+    if (added === "copy-full") return context.json({ error: "The cloud copy is full.", reason: "copy-full", limit: COPY_LIMIT }, 413);
+    // The service's own room, not this account's: the app keeps its data and tries again later, as for any 503.
+    if (added === "no-room") return context.json({ error: "The cloud copy has no room right now. Try again later.", reason: "unavailable" }, 503);
     return context.json({ stored: parts.length });
   });
 

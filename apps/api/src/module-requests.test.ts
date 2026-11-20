@@ -52,26 +52,67 @@ describe("the votes", () => {
   it("count once per install and game, and rank the games", () => {
     const store = new ModuleRequestStore(":memory:");
     const now = Date.parse("2026-11-01T10:00:00Z");
-    expect(store.vote({ game: { ...valheim, gameId: null }, voter: voter(1) }, now)).toBe(true);
-    // The same install again: nothing changes, still a success.
-    expect(store.vote({ game: { ...valheim, gameId: null }, voter: voter(1) }, now + 1000)).toBe(true);
-    expect(store.vote({ game: { name: "VALHEIM", steamAppId: 892970, gameId: "valheim" }, voter: voter(2) }, now + 2000)).toBe(true);
+    store.vote({ game: { ...valheim, gameId: null }, voter: voter(1) }, now);
+    // The same install again: nothing changes.
+    store.vote({ game: { ...valheim, gameId: null }, voter: voter(1) }, now + 1000);
+    store.vote({ game: { name: "VALHEIM", steamAppId: 892970, gameId: "valheim" }, voter: voter(2) }, now + 2000);
     store.vote({ game: { name: "Siedler 3", steamAppId: null, gameId: null }, voter: voter(1) }, now + 3000);
     expect(store.ranked()).toEqual([
-      { name: "Valheim", steamAppId: 892970, gameId: "valheim", votes: 2, firstAt: "2026-11-01T10:00:00.000Z", lastAt: "2026-11-01T10:00:02.000Z" },
-      { name: "Siedler 3", steamAppId: null, gameId: null, votes: 1, firstAt: "2026-11-01T10:00:03.000Z", lastAt: "2026-11-01T10:00:03.000Z" },
+      { key: "steam:892970", name: "Valheim", steamAppId: 892970, gameId: "valheim", votes: 2, firstAt: "2026-11-01T10:00:00.000Z", lastAt: "2026-11-01T10:00:02.000Z" },
+      { key: "name:siedler3", name: "Siedler 3", steamAppId: null, gameId: null, votes: 1, firstAt: "2026-11-01T10:00:03.000Z", lastAt: "2026-11-01T10:00:03.000Z" },
     ]);
   });
 
-  it("puts the latest vote first among equal counts, and stops taking new games when the list is full", () => {
+  it("puts the latest vote first among equal counts", () => {
     const store = new ModuleRequestStore(":memory:");
     store.vote({ game: { name: "Old", steamAppId: null, gameId: null }, voter: voter(1) }, 1000);
     store.vote({ game: { name: "New", steamAppId: null, gameId: null }, voter: voter(1) }, 2000);
     expect(store.ranked().map((game) => game.name)).toEqual(["New", "Old"]);
-    for (let i = 0; i < MAX_GAMES - 2; i++) store.vote({ game: { name: `Game ${i}`, steamAppId: null, gameId: null }, voter: voter(1) });
-    expect(store.vote({ game: { name: "One too many", steamAppId: null, gameId: null }, voter: voter(1) })).toBe(false);
-    expect(store.vote({ game: { name: "Old", steamAppId: null, gameId: null }, voter: voter(2) })).toBe(true);
-    expect(store.ranked(3)).toHaveLength(3);
+    expect(store.ranked(1)).toHaveLength(1);
+  });
+
+  it("on a full list, lets a new game take the place of the one with the fewest votes and the oldest last vote", () => {
+    const store = new ModuleRequestStore(":memory:");
+    const game = (name: string) => ({ name, steamAppId: null, gameId: null });
+    const names = () => store.ranked().map((entry) => entry.name).sort();
+    store.vote({ game: game("Popular"), voter: voter(1) }, 1000);
+    store.vote({ game: game("Popular"), voter: voter(2) }, 1000);
+    store.vote({ game: game("Stale"), voter: voter(1) }, 2000);
+    store.vote({ game: game("Fresh"), voter: voter(1) }, 3000);
+    expect(store.has(game("Stale"))).toBe(true);
+    // Full at three: the single vote cast longest ago goes, with its votes, so a new vote for it counts as a first one.
+    store.vote({ game: game("Real"), voter: voter(1) }, 4000, 3);
+    expect(names()).toEqual(["Fresh", "Popular", "Real"]);
+    expect(store.has(game("Stale"))).toBe(false);
+    const db = (store as unknown as { db: { prepare(sql: string): { get(...values: unknown[]): unknown } } }).db;
+    expect(db.prepare("select count(*) as n from votes where key = ?").get("name:stale")).toEqual({ n: 0 });
+    // A vote for a game on the list takes nobody's place.
+    store.vote({ game: game("Fresh"), voter: voter(2) }, 5000, 3);
+    expect(names()).toEqual(["Fresh", "Popular", "Real"]);
+    // Next out: Real (one vote, at 4000) before Fresh and Popular (two votes each).
+    store.vote({ game: game("Another"), voter: voter(1) }, 6000, 3);
+    expect(names()).toEqual(["Another", "Fresh", "Popular"]);
+  });
+
+  it("never refuses a new game at the real limit", () => {
+    const store = new ModuleRequestStore(":memory:");
+    for (let i = 0; i < MAX_GAMES; i++) store.vote({ game: { name: `Made up ${i}`, steamAppId: null, gameId: null }, voter: voter(1) }, 1000 + i);
+    store.vote({ game: { ...valheim, gameId: null }, voter: voter(2) }, 1_000_000);
+    expect(store.has({ ...valheim, gameId: null })).toBe(true);
+    expect(store.has({ name: "Made up 0", steamAppId: null, gameId: null })).toBe(false);
+    const db = (store as unknown as { db: { prepare(sql: string): { get(): unknown } } }).db;
+    expect(db.prepare("select count(*) as n from games").get()).toEqual({ n: MAX_GAMES });
+  });
+
+  it("removes one game and its votes", () => {
+    const store = new ModuleRequestStore(":memory:");
+    store.vote({ game: { ...valheim, gameId: null }, voter: voter(1) });
+    expect(store.remove("steam:892970")).toBe(true);
+    expect(store.remove("steam:892970")).toBe(false);
+    expect(store.ranked()).toEqual([]);
+    // Its voters can ask again.
+    store.vote({ game: { ...valheim, gameId: null }, voter: voter(1) });
+    expect(store.ranked().map((game) => game.votes)).toEqual([1]);
   });
 
   it("keeps nothing but the game and a code", () => {
@@ -111,6 +152,19 @@ describe("asking through the service", () => {
     expect(limited.headers.get("retry-after")).not.toBeNull();
     expect((await send(createApp({ db }), { game: valheim, voter: voter(1) })).status).toBe(503);
   });
+
+  it("limits how many new games one client adds, but not its votes for games on the list", async () => {
+    const moduleRequests = new ModuleRequestStore(":memory:");
+    const app = createApp({ db, moduleRequests, moduleRequestRateLimiter: createRateLimiter({ limit: 1000, windowMs: 60_000 }), newGameRateLimiter: createRateLimiter({ limit: 2, windowMs: 86_400_000 }) });
+    expect((await send(app, { game: { name: "One" }, voter: voter(1) })).status).toBe(204);
+    expect((await send(app, { game: { name: "Two" }, voter: voter(1) })).status).toBe(204);
+    expect((await send(app, { game: { name: "Three" }, voter: voter(1) })).status).toBe(429);
+    expect((await send(app, { game: { name: "One" }, voter: voter(2) })).status).toBe(204);
+    expect(moduleRequests.ranked().map((game) => [game.name, game.votes])).toEqual([
+      ["One", 2],
+      ["Two", 1],
+    ]);
+  });
 });
 
 describe("the admin list", () => {
@@ -130,5 +184,25 @@ describe("the admin list", () => {
     expect(body.requests).toHaveLength(1);
     expect(body.requests[0]).toMatchObject({ name: "Valheim", steamAppId: 892970, gameId: null, votes: 2 });
     expect((await createAdminApp({ token, submissions, state, store }).request("http://admin.test/api/module-requests", { headers: { "X-Admin-Token": token } })).status).toBe(503);
+  });
+
+  it("removes one game with the token", async () => {
+    const state = new IconState(":memory:");
+    const store = createHostedStore({ list: () => [], file: () => null }, state);
+    const submissions = createSubmissions({ state, store, gameName: () => null, gamesNamed: () => [] });
+    const moduleRequests = new ModuleRequestStore(":memory:");
+    moduleRequests.vote({ game: { ...valheim, gameId: null }, voter: voter(1) });
+    moduleRequests.vote({ game: { name: "Siedler 3", steamAppId: null, gameId: null }, voter: voter(1) });
+    const token = "t0ken-".repeat(5);
+    const remove = (app: ReturnType<typeof createAdminApp>, body: unknown, sent: string | null = token) =>
+      app.request("http://admin.test/api/module-requests/remove", { method: "POST", headers: { "content-type": "application/json", ...(sent === null ? {} : { "X-Admin-Token": sent }) }, body: JSON.stringify(body) });
+    const admin = createAdminApp({ token, submissions, state, store, moduleRequests });
+    expect((await remove(admin, { key: "steam:892970" }, null)).status).toBe(401);
+    expect((await remove(admin, { key: "steam:892970" }, "wrong")).status).toBe(401);
+    expect((await remove(admin, {})).status).toBe(400);
+    expect((await remove(admin, { key: "steam:1" })).status).toBe(404);
+    expect((await remove(admin, { key: "steam:892970" })).status).toBe(200);
+    expect(moduleRequests.ranked().map((game) => game.name)).toEqual(["Siedler 3"]);
+    expect((await remove(createAdminApp({ token, submissions, state, store }), { key: "name:siedler3" })).status).toBe(503);
   });
 });

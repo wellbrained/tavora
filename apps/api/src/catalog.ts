@@ -450,6 +450,11 @@ export class CatalogStore {
     // can't change, so a block can name it as well as the zip's own hash (S7). Filled at upload; versions from before it
     // get it from backfillSignedHashes(), and stay null when their zip is gone.
     if (!columns.includes("signed_sha256")) this.db.exec("alter table versions add column signed_sha256 text");
+    // When a version was listed: at upload, or when a person approved it. The revocation of a leaked key allows what was
+    // listed before the report, so a version that waited until after it is not allowed. Listed rows without one (from before
+    // it, or listed by an older service) count from their upload, as they always did; filled at every start.
+    if (!columns.includes("listed_at")) this.db.exec("alter table versions add column listed_at text");
+    this.db.exec("update versions set listed_at = published_at where status = 'listed' and listed_at is null");
     this.db.exec("create index if not exists versions_signed_sha256 on versions (signed_sha256)");
     this.db.exec(`
       create table if not exists trusted_accounts (account_id text primary key, since text not null);
@@ -506,7 +511,7 @@ export class CatalogStore {
     try {
       if (!module) this.db.prepare("insert into modules (id, owner, created_at) values (?, ?, ?)").run(manifest.id, stored, at);
       this.db
-        .prepare("insert into versions (module_id, version, sha256, size, manifest, notes, published_at, account_id, signer, screenshots, icon, readme, status, review, file_hashes, signed_sha256) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .prepare("insert into versions (module_id, version, sha256, size, manifest, notes, published_at, account_id, signer, screenshots, icon, readme, status, review, file_hashes, signed_sha256, listed_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
         .run(
           manifest.id,
           manifest.version,
@@ -524,6 +529,7 @@ export class CatalogStore {
           review ? JSON.stringify(review) : null,
           JSON.stringify(copyHashes(checked.files)),
           signedHash(checked.files),
+          waits ? null : at,
         );
       this.db.exec("commit");
     } catch (error) {
@@ -578,11 +584,11 @@ export class CatalogStore {
     return old.length;
   }
 
-  /** The zips (SHA-256) a key signed that the catalog took before a moment, oldest first. */
+  /** The zips (SHA-256) a key signed that the catalog listed before a moment, oldest first. A version approved later is not one. */
   signedBy(fingerprint: string, before: Date): string[] {
     return (
       this.db
-        .prepare("select v.sha256 from versions v join modules m on m.id = v.module_id where coalesce(v.signer, m.owner) = ? and v.published_at < ? and v.status = 'listed' order by v.seq")
+        .prepare("select v.sha256 from versions v join modules m on m.id = v.module_id where coalesce(v.signer, m.owner) = ? and coalesce(v.listed_at, v.published_at) < ? and v.status = 'listed' order by v.seq")
         .all(fingerprint, before.toISOString()) as unknown as { sha256: string }[]
     ).map((row) => row.sha256);
   }
@@ -655,7 +661,7 @@ export class CatalogStore {
     if (!waiting || this.zipBytes(sha256) === null) return null;
     this.db.exec("begin");
     try {
-      this.db.prepare("update versions set status = 'listed' where sha256 = ? and status = 'waiting'").run(sha256);
+      this.db.prepare("update versions set status = 'listed', listed_at = ? where sha256 = ? and status = 'waiting'").run(now.toISOString(), sha256);
       if (waiting.accountId) this.trustAccount(waiting.accountId, now);
       this.db.exec("commit");
     } catch (error) {

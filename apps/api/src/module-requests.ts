@@ -12,7 +12,10 @@ import { isGameId } from "@tavora/module-schema";
 
 /** Longest name kept; the app's search field stops at 80 too. */
 export const MAX_GAME_NAME = 80;
-/** Most different games kept, so made-up names cannot grow the file. */
+/**
+ * Most different games kept, so made-up names cannot grow the file. When it is full, a new game takes the place of the
+ * one with the fewest votes whose last vote is the oldest, so made-up names can't keep real games out for good.
+ */
 export const MAX_GAMES = 5000;
 /** Most games the admin list returns. */
 export const MAX_LISTED = 500;
@@ -25,6 +28,8 @@ export interface RequestedGame {
 }
 
 export interface ModuleRequest extends RequestedGame {
+  /** Which game it is (gameKey), for removing it in the admin. */
+  key: string;
   votes: number;
   firstAt: string;
   lastAt: string;
@@ -75,16 +80,26 @@ export class ModuleRequestStore {
     `);
   }
 
+  /** Whether a game has a vote already. */
+  has(game: RequestedGame): boolean {
+    return this.db.prepare("select 1 from games where key = ?").get(gameKey(game)) !== undefined;
+  }
+
   /**
-   * Counts one vote. A second vote from the same install for the same game changes nothing and is still a success.
-   * False only when the list is full of other games.
+   * Counts one vote. A second vote from the same install for the same game changes nothing. A new game on a full list
+   * takes the place of the game with the fewest votes, the one whose last vote is the oldest first.
    */
-  vote({ game, voter }: ParsedRequest, now: number = Date.now()): boolean {
+  vote({ game, voter }: ParsedRequest, now: number = Date.now(), maxGames: number = MAX_GAMES): void {
     const key = gameKey(game);
-    const known = this.db.prepare("select 1 from games where key = ?").get(key);
-    if (!known && (this.db.prepare("select count(*) as n from games").get() as { n: number }).n >= MAX_GAMES) return false;
     this.db.exec("begin immediate");
     try {
+      if (!this.db.prepare("select 1 from games where key = ?").get(key)) {
+        const count = (this.db.prepare("select count(*) as n from games").get() as { n: number }).n;
+        if (count >= maxGames) {
+          const out = this.db.prepare("select key from games order by votes, last_at, key limit ?").all(count - maxGames + 1) as unknown as { key: string }[];
+          for (const row of out) this.removeKey(row.key);
+        }
+      }
       const added = this.db.prepare("insert or ignore into votes (key, voter) values (?, ?)").run(key, voter);
       if (Number(added.changes) > 0) {
         // The first vote's spelling stays; later ones only fill in an id it lacked.
@@ -101,14 +116,31 @@ export class ModuleRequestStore {
       this.db.exec("rollback");
       throw error;
     }
-    return true;
+  }
+
+  /** Takes a game and its votes off the list (the admin's Remove); false when there is no such game. */
+  remove(key: string): boolean {
+    this.db.exec("begin immediate");
+    try {
+      const removed = this.removeKey(key);
+      this.db.exec("commit");
+      return removed;
+    } catch (error) {
+      this.db.exec("rollback");
+      throw error;
+    }
+  }
+
+  private removeKey(key: string): boolean {
+    this.db.prepare("delete from votes where key = ?").run(key);
+    return Number(this.db.prepare("delete from games where key = ?").run(key).changes) > 0;
   }
 
   /** The games asked for, most votes first, then the latest vote. */
   ranked(limit: number = MAX_LISTED): ModuleRequest[] {
     const rows = this.db
-      .prepare("select name, steam_appid as steamAppId, game_id as gameId, votes, first_at as firstAt, last_at as lastAt from games order by votes desc, last_at desc, key limit ?")
-      .all(Math.min(limit, MAX_LISTED)) as unknown as { name: string; steamAppId: number | null; gameId: string | null; votes: number; firstAt: number; lastAt: number }[];
+      .prepare("select key, name, steam_appid as steamAppId, game_id as gameId, votes, first_at as firstAt, last_at as lastAt from games order by votes desc, last_at desc, key limit ?")
+      .all(Math.min(limit, MAX_LISTED)) as unknown as { key: string; name: string; steamAppId: number | null; gameId: string | null; votes: number; firstAt: number; lastAt: number }[];
     return rows.map((row) => ({ ...row, firstAt: new Date(row.firstAt).toISOString(), lastAt: new Date(row.lastAt).toISOString() }));
   }
 }

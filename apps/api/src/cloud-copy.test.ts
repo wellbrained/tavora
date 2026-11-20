@@ -2,7 +2,10 @@ import { randomBytes } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { AccountStore } from "./account-store.ts";
 import { createApp } from "./app.ts";
-import { COPY_LIMIT, CopyStore, MAX_PART_BYTES, readParts, readSwap, STORED_LIMIT, writeParts } from "./cloud-copy.ts";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { COPY_LIMIT, copyLimitsFromEnv, CopyStore, FREE_FLOOR, MAX_PART_BYTES, readParts, readSwap, STORED_LIMIT, TOTAL_LIMIT, writeParts, type CopyStoreOptions } from "./cloud-copy.ts";
 import { buildDataset, writeDatabase } from "./dataset.ts";
 import { createTestInbox } from "./mail.ts";
 import { createRateLimiter } from "./rate-limit.ts";
@@ -10,9 +13,9 @@ import { createRateLimiter } from "./rate-limit.ts";
 const db = writeDatabase(":memory:", buildDataset({ builtIns: [{ id: "elden-ring", name: "Elden Ring" }], wikidata: [], steam: [] }));
 const roomy = () => createRateLimiter({ limit: 1000, windowMs: 60_000 });
 
-function setup() {
+function setup(options: CopyStoreOptions = {}) {
   const store = new AccountStore(":memory:");
-  const copies = new CopyStore(":memory:");
+  const copies = new CopyStore(":memory:", options);
   const inbox = createTestInbox();
   const clock = { now: Date.parse("2026-10-19T12:00:00Z") };
   const app = createApp({ db, rateLimiter: roomy(), accounts: { store, mailer: inbox, codeRateLimiter: roomy(), verifyRateLimiter: roomy(), now: () => clock.now, copies } });
@@ -159,7 +162,7 @@ describe("the cloud copy", () => {
     const copies = new CopyStore(":memory:");
     const big = (n: number) => ({ id: new Uint8Array(randomBytes(32)), data: new Uint8Array(n) });
     const parts = Array.from({ length: 26 }, () => big(4 * 1024 * 1024));
-    expect(copies.addParts("acc", parts)).toBe(true);
+    expect(copies.addParts("acc", parts)).toBe("ok");
     const result = copies.swap("acc", 0, new Uint8Array([1]), parts.map((p) => p.id), 1);
     expect(result).toMatchObject({ ok: false, reason: "copy-full" });
     const fits = parts.slice(0, 24);
@@ -167,8 +170,63 @@ describe("the cloud copy", () => {
     expect(copies.stored("acc")).toBe(24 * 4 * 1024 * 1024);
     // Uploading the next version while the old one is still there: up to STORED_LIMIT, then refused.
     const room = Math.floor((STORED_LIMIT - copies.stored("acc")) / (4 * 1024 * 1024));
-    expect(copies.addParts("acc", Array.from({ length: room }, () => big(4 * 1024 * 1024)))).toBe(true);
-    expect(copies.addParts("acc", [big(4 * 1024 * 1024)])).toBe(false);
+    expect(copies.addParts("acc", Array.from({ length: room }, () => big(4 * 1024 * 1024)))).toBe("ok");
+    expect(copies.addParts("acc", [big(4 * 1024 * 1024)])).toBe("copy-full");
+  });
+
+  it("keeps the copies of every account within a total, counted through every change", () => {
+    const copies = new CopyStore(":memory:", { totalLimit: 1000 });
+    const a = [part(300), part(300)];
+    expect(copies.addParts("a", a)).toBe("ok");
+    expect(copies.addParts("b", [part(300)])).toBe("ok");
+    expect(copies.storedTotal()).toBe(900);
+    // Another account, well inside its own limit, finds no room left; nothing of it is stored.
+    expect(copies.addParts("c", [part(200)])).toBe("no-room");
+    expect(copies.stored("c")).toBe(0);
+    // Parts it has already cost nothing, so they always go through.
+    expect(copies.addParts("a", [a[0]!])).toBe("ok");
+    // A version that keeps one part drops the other, and deleting a copy frees all of it.
+    expect(copies.swap("a", 0, new Uint8Array([1]), [a[0]!.id], 1)).toMatchObject({ ok: true });
+    expect(copies.storedTotal()).toBe(600);
+    copies.remove("b");
+    expect(copies.storedTotal()).toBe(300);
+    expect(copies.addParts("c", [part(200)])).toBe("ok");
+    expect(copies.storedTotal()).toBe(500);
+  });
+
+  it("counts what is stored already when it starts", () => {
+    const file = path.join(mkdtempSync(path.join(tmpdir(), "tavora-copies-")), "copies.sqlite");
+    const first = new CopyStore(file);
+    first.addParts("a", [part(400), part(100)]);
+    expect(new CopyStore(file, { totalLimit: 600 }).addParts("b", [part(200)])).toBe("no-room");
+    expect(new CopyStore(file).storedTotal()).toBe(500);
+  });
+
+  it("leaves free space on the disk", () => {
+    let free = 10_000;
+    const copies = new CopyStore(":memory:", { freeBytes: () => free, freeFloor: 9_000 });
+    expect(copies.addParts("a", [part(1000)])).toBe("ok");
+    free = 9_500;
+    expect(copies.addParts("a", [part(1000)])).toBe("no-room");
+    // A disk it can't read doesn't stop uploads.
+    const unknown = new CopyStore(":memory:", { freeBytes: () => null, freeFloor: 9_000 });
+    expect(unknown.addParts("a", [part(1000)])).toBe("ok");
+  });
+
+  it("reads its limits from the environment, in GiB", () => {
+    const warnings: string[] = [];
+    const warn = (message: string) => warnings.push(message);
+    const dir = mkdtempSync(path.join(tmpdir(), "tavora-copies-"));
+    expect(copyLimitsFromEnv({}, dir, warn)).toMatchObject({ totalLimit: TOTAL_LIMIT, freeFloor: FREE_FLOOR });
+    expect(TOTAL_LIMIT).toBe(20 * 1024 ** 3);
+    expect(copyLimitsFromEnv({ COPY_TOTAL_LIMIT_GB: "50", COPY_FREE_FLOOR_GB: "0.5" }, dir, warn)).toMatchObject({ totalLimit: 50 * 1024 ** 3, freeFloor: 512 * 1024 ** 2 });
+    expect(copyLimitsFromEnv({ COPY_FREE_FLOOR_GB: "0" }, dir, warn).freeFloor).toBe(0);
+    expect(warnings).toEqual([]);
+    expect(copyLimitsFromEnv({ COPY_TOTAL_LIMIT_GB: "lots", COPY_FREE_FLOOR_GB: "-1" }, dir, warn)).toMatchObject({ totalLimit: TOTAL_LIMIT, freeFloor: FREE_FLOOR });
+    expect(warnings).toHaveLength(2);
+    // The real disk's free space, and null for a folder that isn't there.
+    expect(copyLimitsFromEnv({}, dir, warn).freeBytes()).toBeGreaterThan(0);
+    expect(copyLimitsFromEnv({}, path.join(dir, "missing"), warn).freeBytes()).toBeNull();
   });
 
   it("answers the full error over the routes", async () => {
@@ -179,6 +237,15 @@ describe("the cloud copy", () => {
     const full = await copy("POST", "/parts", token, writeParts([part()]));
     expect(full.status).toBe(413);
     expect(await full.json()).toMatchObject({ reason: "copy-full" });
+  });
+
+  it("answers 503 over the routes when the copies of all accounts have no room", async () => {
+    const { copy, signIn, copies } = setup({ totalLimit: 1000 });
+    copies.addParts("someone-else", [part(950)]);
+    const token = await signIn("me@example.com");
+    const full = await copy("POST", "/parts", token, writeParts([part()]));
+    expect(full.status).toBe(503);
+    expect(await full.json()).toMatchObject({ reason: "unavailable" });
   });
 
   it("gives back parts up to about 8 MB per answer, at least one", () => {

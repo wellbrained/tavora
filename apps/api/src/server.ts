@@ -4,7 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import { serve } from "@hono/node-server";
 import { AccountStore } from "./account-store.ts";
 import { CatalogStore, REMOVED_ZIP } from "./catalog.ts";
-import { CopyStore } from "./cloud-copy.ts";
+import { copyLimitsFromEnv, CopyStore } from "./cloud-copy.ts";
 import { createAdminApp } from "./admin-app.ts";
 import { ActivityLog } from "./activity-log.ts";
 import { createDiscordClient } from "./discord.ts";
@@ -94,7 +94,8 @@ if (!mailer && brevoKey) {
 if (!mailer) console.log("[tavora-api] No way to send email: accounts are off.");
 const accountStore = mailer ? new AccountStore(path.join(stateDir, "accounts.sqlite")) : undefined;
 // The cloud copies: their own file, which the daily backup leaves out (decided 2026-10-19; the PCs upload again).
-const copies = accountStore ? new CopyStore(path.join(stateDir, "copies.sqlite")) : undefined;
+// All accounts' copies together stay under a total and leave free space on the state disk (COPY_TOTAL_LIMIT_GB, COPY_FREE_FLOOR_GB).
+const copies = accountStore ? new CopyStore(path.join(stateDir, "copies.sqlite"), copyLimitsFromEnv(process.env, stateDir)) : undefined;
 // The module catalog, read-only here: modules are added by hand with catalog.mjs (scripts/catalog.ts).
 const catalog = new CatalogStore(path.join(stateDir, "catalog"));
 // The signed hash of each version from before it was kept (S7), so a block can name it too. Only rows still without one
