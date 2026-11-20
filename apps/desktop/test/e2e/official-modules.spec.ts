@@ -830,7 +830,7 @@ test.describe("ui playground pages", () => {
     await typeName("   ");
     await key("Enter");
     expect(await inModule(app, PLAYGROUND, `${strip}.querySelector('[data-testid="tab-rename-input"]').getAttribute("aria-invalid")`)).toBe("true");
-    // The reason shows beside the field, in the kit's tooltip it points to.
+    // The reason shows beside the field in the kit's tooltip, and the field points to its alert line.
     await expect.poll(() => inModule(app, PLAYGROUND, `document.getElementById(${strip}.querySelector('[data-testid="tab-rename-input"]').getAttribute("aria-describedby"))?.textContent ?? ""`)).toContain("Give it a name.");
     await typeName("Rubber");
     await key("Enter");

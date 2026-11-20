@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.27",
+    "date": "2026-11-20",
+    "notes": [
+      "Renaming a tab with an empty name keeps telling you why, even after the tabs move."
+    ]
+  },
+  {
     "version": "0.1.26",
     "date": "2026-11-18",
     "notes": [
