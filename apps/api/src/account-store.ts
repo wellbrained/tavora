@@ -13,10 +13,20 @@ import { DatabaseSync } from "node:sqlite";
 export const CODE_TTL_MS = 10 * 60_000;
 /** Wrong tries that spend a code. */
 export const CODE_MAX_TRIES = 5;
-/** Codes one address can be sent: 3 every 15 minutes, 10 a day. */
+/**
+ * Codes one address can be sent. The account's own sign-in asking for a code to its own address (to change it, delete
+ * the account, connect or remove Discord) gets 3 every 15 minutes and 10 a day. Anyone else (a sign-in code, a code to
+ * a new address, a suspended account's delete code) is counted per network they ask from: 3 every 15 minutes and 5 a
+ * day each, and 20 a day from everyone together. So a stranger can't use up what the owner needs to sign in from their
+ * own network, and the mailbox still gets at most 20 such mails a day.
+ */
 export const CODES_PER_WINDOW = 3;
 export const CODE_WINDOW_MS = 15 * 60_000;
 export const CODES_PER_DAY = 10;
+export const CODES_PER_ASKER_DAY = 5;
+export const CODES_FROM_OTHERS_PER_DAY = 20;
+/** Networks and addresses whose requests are kept in memory at once; past this the oldest go first. */
+const MAX_ASKERS = 100_000;
 const DAY_MS = 24 * 60 * 60_000;
 /** A sign-in unused for a year ends. */
 export const SESSION_IDLE_MS = 365 * DAY_MS;
@@ -85,6 +95,12 @@ export interface Session {
 }
 
 export type CodeRequest = { ok: true; code: string } | { ok: false; retryAfter: number };
+
+/**
+ * Who asks for a code to an address: the account's own sign-in for the account's own address (`owner`), or anyone
+ * else, by the network they ask from (rate-limit.ts networkOf). The network is only held in memory, never written.
+ */
+export type CodeAsker = { owner: true } | { from: string };
 
 /** A developer name can change once in this long, and a name given up stays blocked for others as long. */
 export const NAME_HOLD_MS = 30 * 24 * 60 * 60_000;
@@ -223,6 +239,12 @@ export interface AccountCounts {
 
 export class AccountStore {
   private readonly db: DatabaseSync;
+  /**
+   * When codes went to an address at someone else's request, per network and address (a hash of both), for the last
+   * day. Only in memory, like the rate limits: nothing about where a request came from is written down.
+   */
+  private readonly askers = new Map<string, number[]>();
+  private askersSweptAt = 0;
 
   constructor(path: string) {
     this.db = new DatabaseSync(path);
@@ -236,7 +258,7 @@ export class AccountStore {
         address text not null, purpose text not null, account_id text, code_hash text not null,
         expires_at integer not null, tries integer not null default 0, primary key (address, purpose)
       );
-      create table if not exists code_requests (address text not null, at integer not null);
+      create table if not exists code_requests (address text not null, at integer not null, owner integer not null default 0);
       create index if not exists code_requests_address on code_requests (address, at);
       create table if not exists sessions (
         id text primary key, token_hash text not null unique,
@@ -306,6 +328,9 @@ export class AccountStore {
     // Device names came later; older sign-ins have none.
     const sessionColumns = (this.db.prepare("pragma table_info(sessions)").all() as unknown as { name: string }[]).map((column) => column.name);
     if (!sessionColumns.includes("name")) this.db.exec("alter table sessions add column name text");
+    // Code requests by the account's own sign-in are counted apart from everyone else's; older ones count as anyone's.
+    const requestColumns = (this.db.prepare("pragma table_info(code_requests)").all() as unknown as { name: string }[]).map((column) => column.name);
+    if (!requestColumns.includes("owner")) this.db.exec("alter table code_requests add column owner integer not null default 0");
     const columns = (this.db.prepare("pragma table_info(accounts)").all() as unknown as { name: string }[]).map((column) => column.name);
     if (columns.includes("discord_id")) return;
     const before = (this.db.prepare("select count(*) as n from accounts").get() as { n: number }).n;
@@ -351,6 +376,11 @@ export class AccountStore {
 
   account(id: string): Account | null {
     return toAccount(this.db.prepare(`select ${ACCOUNT_COLUMNS} from accounts where id = ?`).get(id));
+  }
+
+  /** How many accounts were made from `since` on (ms) that still exist. */
+  accountsCreatedSince(since: number): number {
+    return (this.db.prepare("select count(*) as n from accounts where created_at >= ?").get(since) as { n: number }).n;
   }
 
   /** A new account with an email address, a Discord login or both (at least one). */
@@ -1026,27 +1056,51 @@ export class AccountStore {
 
   // ── Codes ──────────────────────────────────────────────────────────────
 
-  /** Seconds until the address may be sent another code; 0 when it may now. A step that mails two addresses asks first, so it sends both or neither. */
-  codeWait(email: string, now: number): number {
-    const recent = this.db.prepare("select at from code_requests where address = ? and at > ? order by at").all(addressKey(email), now - DAY_MS) as unknown as { at: number }[];
-    if (recent.length >= CODES_PER_DAY) return secondsUntil(recent[recent.length - CODES_PER_DAY]!.at + DAY_MS, now);
-    const inWindow = recent.filter((row) => row.at > now - CODE_WINDOW_MS);
-    if (inWindow.length >= CODES_PER_WINDOW) return secondsUntil(inWindow[inWindow.length - CODES_PER_WINDOW]!.at + CODE_WINDOW_MS, now);
+  /**
+   * Seconds until `asker` may have another code sent to the address; 0 when it may now (CODES_PER_WINDOW and the
+   * limits below it). A step that mails two addresses asks first, so it sends both or neither.
+   */
+  codeWait(email: string, now: number, asker: CodeAsker): number {
+    const owner = "owner" in asker;
+    const recent = (
+      this.db.prepare("select at from code_requests where address = ? and owner = ? and at > ? order by at").all(addressKey(email), owner ? 1 : 0, now - DAY_MS) as unknown as {
+        at: number;
+      }[]
+    ).map((row) => row.at);
+    if (owner) return limitWait(recent, now, [CODES_PER_WINDOW, CODE_WINDOW_MS], [CODES_PER_DAY, DAY_MS]);
+    const mine = (this.askers.get(askerKey(asker.from, email)) ?? []).filter((at) => at > now - DAY_MS);
+    return Math.max(limitWait(recent, now, [CODES_FROM_OTHERS_PER_DAY, DAY_MS]), limitWait(mine, now, [CODES_PER_WINDOW, CODE_WINDOW_MS], [CODES_PER_ASKER_DAY, DAY_MS]));
+  }
+
+  /**
+   * Counts a request for a code to an address against its limits without making one: 0, or the seconds to wait. For
+   * a request that is answered as if a code went out but sends none, so the limits behave the same either way.
+   */
+  countCodeRequest(email: string, now: number, asker: CodeAsker): number {
+    this.sweep(now);
+    const wait = this.codeWait(email, now, asker);
+    if (wait > 0) return wait;
+    this.db.prepare("insert into code_requests (address, at, owner) values (?, ?, ?)").run(addressKey(email), now, "owner" in asker ? 1 : 0);
+    if ("from" in asker) {
+      const key = askerKey(asker.from, email);
+      const times = this.askers.get(key);
+      // Full: forget the oldest, which a Map keeps first. The address's own limit (in the database) still holds.
+      if (!times && this.askers.size >= MAX_ASKERS) this.askers.delete(this.askers.keys().next().value!);
+      this.askers.set(key, [...(times ?? []).filter((at) => at > now - DAY_MS), now]);
+    }
     return 0;
   }
 
   /**
-   * Makes a new code for an address, replacing one still waiting for the same
-   * purpose, unless the address was sent too many lately. The limits count every
-   * purpose together, so nobody can flood an inbox by switching between them.
+   * Makes a new code for an address, replacing one still waiting for the same purpose, unless the address was sent
+   * too many lately (codeWait). The limits count the purposes together (the owner's own apart from everyone else's),
+   * so nobody can flood an inbox by switching between them.
    */
-  requestCode(email: string, purpose: CodePurpose, accountId: string | null, now: number, bind?: string): CodeRequest {
-    this.sweep(now);
+  requestCode(email: string, purpose: CodePurpose, accountId: string | null, now: number, asker: CodeAsker, bind?: string): CodeRequest {
     const address = addressKey(email);
-    const wait = this.codeWait(email, now);
+    const wait = this.countCodeRequest(email, now, asker);
     if (wait > 0) return { ok: false, retryAfter: wait };
     const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
-    this.db.prepare("insert into code_requests (address, at) values (?, ?)").run(address, now);
     this.db
       .prepare("insert or replace into codes (address, purpose, account_id, code_hash, expires_at, tries) values (?, ?, ?, ?, ?, 0)")
       .run(address, purpose, accountId, codeHash(address, purpose, bound(code, bind)), now + CODE_TTL_MS);
@@ -1134,6 +1188,11 @@ export class AccountStore {
   // ── Housekeeping ───────────────────────────────────────────────────────
 
   private sweep(now: number): void {
+    // Once an hour is enough for the requests kept in memory: what is older than a day no longer counts anyway.
+    if (now - this.askersSweptAt > 60 * 60_000) {
+      this.askersSweptAt = now;
+      for (const [key, times] of this.askers) if (times[times.length - 1]! <= now - DAY_MS) this.askers.delete(key);
+    }
     this.db.prepare("delete from codes where expires_at <= ?").run(now);
     this.db.prepare("delete from code_requests where at <= ?").run(now - DAY_MS);
     this.db.prepare("delete from discord_tickets where expires_at <= ?").run(now);
@@ -1152,3 +1211,16 @@ function toAccount(row: unknown): Account | null {
 }
 
 const secondsUntil = (at: number, now: number) => Math.max(1, Math.ceil((at - now) / 1000));
+
+/** Seconds until one more fits every [count, window] limit over `times` (oldest first); 0 when it fits now. */
+function limitWait(times: number[], now: number, ...limits: [count: number, windowMs: number][]): number {
+  let wait = 0;
+  for (const [count, windowMs] of limits) {
+    const inWindow = times.filter((at) => at > now - windowMs);
+    if (inWindow.length >= count) wait = Math.max(wait, secondsUntil(inWindow[inWindow.length - count]! + windowMs, now));
+  }
+  return wait;
+}
+
+/** One network asking for codes to one address, as a hash, so memory holds no address. */
+const askerKey = (from: string, email: string) => sha256(`asker:${from}:${email}`);

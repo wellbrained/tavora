@@ -1,7 +1,7 @@
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { accountLifecycle, type AccountLifecycle } from "./account-lifecycle.ts";
-import { cleanDeveloperName, DEVICE_OS, MAX_PREFIXES, NAME_HOLD_MS, normalizeEmail, type Account, type AccountStore, type DeviceOs, type StoredProfile } from "./account-store.ts";
+import { cleanDeveloperName, DEVICE_OS, MAX_PREFIXES, NAME_HOLD_MS, normalizeEmail, type Account, type AccountStore, type CodeAsker, type DeviceOs, type StoredProfile } from "./account-store.ts";
 import type { CatalogStore } from "./catalog.ts";
 import { OFFICIAL_PINS, type CatalogTrust, type OfficialPins } from "./catalog-trust.ts";
 import type { CopyStore } from "./cloud-copy.ts";
@@ -9,7 +9,7 @@ import { DiscordError, isDiscordCode, isPkceVerifier, type DiscordClient, type D
 import { keyRequestStatus } from "./key-requests.ts";
 import { codeMail, confirmEmailChangeMail, emailChangedMail, keyRequestMail, MailLimitError, mailLanguage, type Mail, type Mailer } from "./mail.ts";
 import { inspectPng } from "./png.ts";
-import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
+import { createRateLimiter, networkOf, type RateLimiter } from "./rate-limit.ts";
 import { requireSignIn, tooMany, type SignedInEnv } from "./sign-in.ts";
 import type { ReviewStore } from "./reviews.ts";
 import type { ConversationStore } from "./conversations.ts";
@@ -27,6 +27,14 @@ export interface AccountOptions {
   mailer: Mailer;
   /** Requests for a code per client: 10 an hour by default. */
   codeRateLimiter?: RateLimiter;
+  /** Signed-out requests for a code per client, a day: 20 by default, so nobody spends the day's emails alone. */
+  codeDayRateLimiter?: RateLimiter;
+  /** The same per network (an IPv4 /24, an IPv6 /48): 40 a day by default. */
+  codeNetworkRateLimiter?: RateLimiter;
+  /** New accounts a day (UTC), by email and Discord together: 500 by default. */
+  accountDailyLimit?: number;
+  /** New accounts per network a day: 20 by default. */
+  accountNetworkRateLimiter?: RateLimiter;
   /** Code checks per client: 20 in 15 minutes by default. */
   verifyRateLimiter?: RateLimiter;
   now?: () => number;
@@ -56,6 +64,15 @@ export interface AccountOptions {
 
 /** Of the day's emails, the last ones are kept for changing the address and deleting the account. */
 export const MAIL_RESERVED = 20;
+/**
+ * Of the emails left for sign-in codes, this share (rounded down) only goes to addresses that already have an account:
+ * a flood of codes to made-up addresses can't stop existing users signing in. At Brevo's 300: 20 reserved, 93 for
+ * accounts, so new addresses get codes until 187 went out.
+ */
+export const MAIL_FOR_ACCOUNTS_SHARE = 1 / 3;
+/** New accounts a day by default, by email and Discord together. */
+export const ACCOUNTS_PER_DAY = 500;
+const DAY_MS = 24 * 60 * 60_000;
 const utcDay = (at: number) => new Date(at).toISOString().slice(0, 10);
 const nextUtcDay = (at: number) => {
   const date = new Date(at);
@@ -129,6 +146,12 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   const codeLimiter = options.codeRateLimiter ?? createRateLimiter({ limit: 10, windowMs: 3_600_000 });
   const verifyLimiter = options.verifyRateLimiter ?? createRateLimiter({ limit: 20, windowMs: 15 * 60_000 });
   const prefixLimiter = options.prefixRateLimiter ?? createRateLimiter({ limit: 30, windowMs: 3_600_000 });
+  // A day's share of sign-in codes: 20 per client and 40 per network (two clients' worth, so one office or household
+  // isn't stopped by one busy PC), far above what one person needs and far below the day's emails.
+  const codeDayLimiter = options.codeDayRateLimiter ?? createRateLimiter({ limit: 20, windowMs: DAY_MS });
+  const codeNetworkLimiter = options.codeNetworkRateLimiter ?? createRateLimiter({ limit: 40, windowMs: DAY_MS });
+  const accountDailyLimit = options.accountDailyLimit ?? ACCOUNTS_PER_DAY;
+  const accountNetworkLimiter = options.accountNetworkRateLimiter ?? createRateLimiter({ limit: 20, windowMs: DAY_MS });
   const app = new Hono<Env>();
   const lifecycle =
     options.lifecycle ??
@@ -136,11 +159,37 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   /** Everything on the server goes at once (account-lifecycle.ts). */
   const deleteAccount = (id: string) => lifecycle.delete(id, now());
 
-  /** The day's emails can't take `count` more (for sign-ins already when only the reserved ones are left). */
-  const usedUp = (important: boolean, count = 1) =>
-    options.mailDailyLimit !== undefined && store.mailsSent(utcDay(now())) + count > (important ? options.mailDailyLimit : Math.max(0, options.mailDailyLimit - MAIL_RESERVED));
+  /**
+   * The day's emails can't take `count` more: `important` ones (changing the address, deleting) may use all of them,
+   * sign-in codes all but the reserved ones, and codes to `new` addresses also leave the share kept for accounts.
+   */
+  const usedUp = (kind: "important" | "sign-in" | "new", count = 1) => {
+    if (options.mailDailyLimit === undefined) return false;
+    const signIn = Math.max(0, options.mailDailyLimit - MAIL_RESERVED);
+    const room = kind === "important" ? options.mailDailyLimit : kind === "sign-in" ? signIn : signIn - Math.floor(signIn * MAIL_FOR_ACCOUNTS_SHARE);
+    return store.mailsSent(utcDay(now())) + count > room;
+  };
   const usedUpAnswer = (context: Context) =>
     context.json({ error: "Today's emails are used up. Try again tomorrow.", reason: "daily-limit", retryAt: new Date(nextUtcDay(now())).toISOString() }, 503);
+
+  /** Who asks for a code to an address that isn't their own account's: their network, held in memory only. */
+  const stranger = (context: Context): CodeAsker => ({ from: networkOf(clientKey(context.req.raw)) });
+  const OWNER: CodeAsker = { owner: true };
+
+  /**
+   * Room for one more new account, by email or Discord: the day's total and this network's share, which this counts,
+   * so it is asked only right before an account is made. An answer to send instead, or null.
+   */
+  const noRoomForAccount = (context: Context): Response | null => {
+    const at = now();
+    const dayStart = nextUtcDay(at) - DAY_MS;
+    if (store.accountsCreatedSince(dayStart) >= accountDailyLimit) {
+      // Apps that don't know this case show "Accounts aren't working right now" for `unavailable`.
+      return context.json({ error: "Tavora can't take more new accounts today. Try again tomorrow.", reason: "unavailable", retryAt: new Date(nextUtcDay(at)).toISOString() }, 503);
+    }
+    const wait = accountNetworkLimiter.check(networkOf(clientKey(context.req.raw)), at);
+    return wait > 0 ? tooMany(context, wait, "Too many new accounts from here today. Try again later.") : null;
+  };
 
   const send = async (context: Context, mail: Mail) => {
     try {
@@ -181,17 +230,27 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   // ── Signed out: a code, then sign in or create ───────────────────────
 
   app.post("/code", async (context) => {
-    const wait = codeLimiter.check(clientKey(context.req.raw));
+    const client = clientKey(context.req.raw);
+    const wait = codeLimiter.check(client);
     if (wait > 0) return tooMany(context, wait);
+    // A day's share per client and per network, so no one requester spends the day's emails.
+    const dayWait = Math.max(codeDayLimiter.check(client), codeNetworkLimiter.check(networkOf(client)));
+    if (dayWait > 0) return tooMany(context, dayWait);
     const input = await body(context);
     const email = normalizeEmail(input.email);
     if (!email) return context.json({ error: "Send { email, language }.", reason: "bad-email" }, 400);
-    if (usedUp(false)) return usedUpAnswer(context);
-    const request = store.requestCode(email, "sign-in", null, now());
+    if (usedUp("sign-in")) return usedUpAnswer(context);
+    const known = store.accountByEmail(email) !== null;
+    if (!known && usedUp("new")) {
+      // The rest of the day's sign-in emails are kept for existing accounts. A new address hears the same as one with
+      // an account (and its limits count the same), so the answer never tells which addresses have one; no mail goes out.
+      const refused = store.countCodeRequest(email, now(), stranger(context));
+      return refused > 0 ? tooMany(context, refused) : context.json({ status: "sent" }, 202);
+    }
+    const request = store.requestCode(email, "sign-in", null, now(), stranger(context));
     if (!request.ok) return tooMany(context, request.retryAfter);
     // The mail differs for a new address, but only its owner reads it; the answer is the same.
-    const kind = store.accountByEmail(email) ? "sign-in" : "create";
-    return (await send(context, codeMail(kind, email, request.code, mailLanguage(input.language)))) ?? context.json({ status: "sent" }, 202);
+    return (await send(context, codeMail(known ? "sign-in" : "create", email, request.code, mailLanguage(input.language)))) ?? context.json({ status: "sent" }, 202);
   });
 
   app.post("/verify", async (context) => {
@@ -205,13 +264,17 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const at = now();
     const existing = store.accountByEmail(email);
     const create = input.create === true;
-    // A new address keeps its code until the user said yes to an account.
-    if (!store.checkCode(email, "sign-in", null, input.code, at, Boolean(existing) || create)) return wrongCode(context);
+    // A new address keeps its code until the user said yes to an account and there is room for it today.
+    if (!store.checkCode(email, "sign-in", null, input.code, at, Boolean(existing))) return wrongCode(context);
     if (!existing && !create) return context.json({ status: "no-account" });
     // Said only after the code was right, so the answer never tells whether an address has an account.
     if (existing && store.isSuspended(existing.id)) return suspended(context);
     let account = existing;
     if (!account) {
+      const full = noRoomForAccount(context);
+      if (full) return full;
+      // Right a moment ago, so this spends it.
+      if (!store.checkCode(email, "sign-in", null, input.code, at, true)) return wrongCode(context);
       try {
         account = store.createAccount({ email }, at);
       } catch {
@@ -235,10 +298,10 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const input = await body(context);
     const email = normalizeEmail(input.email);
     if (!email) return context.json({ error: "Send { email, language }.", reason: "bad-email" }, 400);
-    if (usedUp(true)) return usedUpAnswer(context);
+    if (usedUp("important")) return usedUpAnswer(context);
     const account = store.accountByEmail(email);
     if (!account || !store.isSuspended(account.id)) return context.json({ status: "sent" }, 202);
-    const request = store.requestCode(email, "delete", account.id, now());
+    const request = store.requestCode(email, "delete", account.id, now(), stranger(context));
     if (!request.ok) return tooMany(context, request.retryAfter);
     return (await send(context, codeMail("delete", email, request.code, mailLanguage(input.language)))) ?? context.json({ status: "sent" }, 202);
   });
@@ -392,7 +455,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const after = store.keyRequest(old);
     const isNew = !before || before.declinedAt !== null || before.leaked !== after?.leaked;
     // Best effort: the request stands even when the day's emails are used up.
-    if (isNew && account.email && !usedUp(false)) await send(context, keyRequestMail(account.email, old, input.leaked, mailLanguage(input.language)));
+    if (isNew && account.email && !usedUp("sign-in")) await send(context, keyRequestMail(account.email, old, input.leaked, mailLanguage(input.language)));
     return context.json(developerAnswer(account.id));
   });
 
@@ -438,19 +501,20 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     if (email === account.email) return context.json({ error: "That is the address the account has.", reason: "same-email" }, 400);
     // A Discord-only account proves itself with Discord at the end: the code would be no use without it.
     if (!account.email && !options.discord) return discordUnavailable(context);
-    if (usedUp(true, account.email ? 2 : 1)) return usedUpAnswer(context);
-    // Both addresses or neither: the limits are checked before either code is made.
+    if (usedUp("important", account.email ? 2 : 1)) return usedUpAnswer(context);
+    // Both addresses or neither: the limits are checked before either code is made. The new address isn't the
+    // account's yet, so its codes count as a stranger's; the current one's are the owner's own.
     const at = now();
-    const waitFor = Math.max(store.codeWait(email, at), account.email ? store.codeWait(account.email, at) : 0);
+    const waitFor = Math.max(store.codeWait(email, at, stranger(context)), account.email ? store.codeWait(account.email, at, OWNER) : 0);
     if (waitFor > 0) return tooMany(context, waitFor);
     if (account.email) {
       // The current address's code holds only for this new address.
-      const current = store.requestCode(account.email, "confirm-email-change", account.id, at, email);
+      const current = store.requestCode(account.email, "confirm-email-change", account.id, at, OWNER, email);
       if (!current.ok) return tooMany(context, current.retryAfter);
       const failed = await send(context, confirmEmailChangeMail(account.email, email, current.code, language));
       if (failed) return failed;
     }
-    const request = store.requestCode(email, "change-email", account.id, at);
+    const request = store.requestCode(email, "change-email", account.id, at, stranger(context));
     if (!request.ok) return tooMany(context, request.retryAfter);
     return (await send(context, codeMail("change-email", email, request.code, language))) ?? context.json({ status: "sent", current: account.email ? "email" : "discord" }, 202);
   });
@@ -499,8 +563,8 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const account = context.get("account");
     if (!account.email) return context.json({ error: "This account has no email address.", reason: "no-email" }, 409);
     if (!account.discord) return lastMethod(context);
-    if (usedUp(true)) return usedUpAnswer(context);
-    const request = store.requestCode(account.email, "remove-email", account.id, now());
+    if (usedUp("important")) return usedUpAnswer(context);
+    const request = store.requestCode(account.email, "remove-email", account.id, now(), OWNER);
     if (!request.ok) return tooMany(context, request.retryAfter);
     return (await send(context, codeMail("remove-email", account.email, request.code, mailLanguage(input.language)))) ?? context.json({ status: "sent" }, 202);
   });
@@ -525,8 +589,8 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const account = context.get("account");
     // A Discord-only account confirms with a fresh Discord sign-in instead (/delete/discord).
     if (!account.email) return context.json({ error: "This account has no email address; confirm with Discord.", reason: "no-email" }, 409);
-    if (usedUp(true)) return usedUpAnswer(context);
-    const request = store.requestCode(account.email, "delete", account.id, now());
+    if (usedUp("important")) return usedUpAnswer(context);
+    const request = store.requestCode(account.email, "delete", account.id, now(), OWNER);
     if (!request.ok) return tooMany(context, request.retryAfter);
     return (await send(context, codeMail("delete", account.email, request.code, mailLanguage(input.language)))) ?? context.json({ status: "sent" }, 202);
   });
@@ -581,6 +645,9 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     if (wait > 0) return tooMany(context, wait);
     const input = await body(context);
     if (typeof input.ticket !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(input.ticket)) return context.json({ error: "Send { ticket, os }.", reason: "bad-request" }, 400);
+    // Asked before the ticket is spent, so the user can try again with it while it holds.
+    const full = noRoomForAccount(context);
+    if (full) return full;
     const at = now();
     const who = store.takeDiscord(input.ticket, at);
     if (!who) return context.json({ error: "That Discord sign-in has expired. Sign in with Discord again.", reason: "discord-expired" }, 400);
@@ -602,8 +669,8 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const account = context.get("account");
     if (account.discord) return discordConnected(context);
     if (!account.email) return noEmail(context);
-    if (usedUp(true)) return usedUpAnswer(context);
-    const request = store.requestCode(account.email, "connect-discord", account.id, now());
+    if (usedUp("important")) return usedUpAnswer(context);
+    const request = store.requestCode(account.email, "connect-discord", account.id, now(), OWNER);
     if (!request.ok) return tooMany(context, request.retryAfter);
     return (await send(context, codeMail("connect-discord", account.email, request.code, mailLanguage(input.language)))) ?? context.json({ status: "sent" }, 202);
   });
@@ -639,8 +706,8 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const account = context.get("account");
     if (!account.discord) return noDiscord(context);
     if (!account.email) return lastMethod(context);
-    if (usedUp(true)) return usedUpAnswer(context);
-    const request = store.requestCode(account.email, "remove-discord", account.id, now());
+    if (usedUp("important")) return usedUpAnswer(context);
+    const request = store.requestCode(account.email, "remove-discord", account.id, now(), OWNER);
     if (!request.ok) return tooMany(context, request.retryAfter);
     return (await send(context, codeMail("remove-discord", account.email, request.code, mailLanguage(input.language)))) ?? context.json({ status: "sent" }, 202);
   });

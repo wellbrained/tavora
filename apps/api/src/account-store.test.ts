@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdtempSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -49,6 +50,22 @@ describe("the accounts file from before Discord logins", () => {
     expect(again.accountByEmail("you@example.com")?.id).toBe("acc2");
     expect(again.accountByDiscord("123456789012345678")?.discord).toEqual({ id: "123456789012345678", name: "alex" });
     again.close();
+  });
+
+  it("counts code requests from before owners were told apart as anyone's", () => {
+    const file = oldDatabase();
+    const db = new DatabaseSync(file);
+    const now = 1760000000000;
+    // 20 requests for one address in the last hour, as an older service wrote them (by the hash of the address).
+    const address = createHash("sha256").update("address:me@example.com").digest("hex");
+    db.exec("create table code_requests (address text not null, at integer not null)");
+    for (let i = 0; i < 20; i++) db.prepare("insert into code_requests (address, at) values (?, ?)").run(address, now - 60 * 60_000 + i);
+    db.close();
+    const store = new AccountStore(file);
+    expect(store.codeWait("me@example.com", now, { from: "another" })).toBeGreaterThan(0);
+    expect(store.codeWait("me@example.com", now, { owner: true })).toBe(0);
+    expect(store.requestCode("me@example.com", "delete", "acc1", now, { owner: true }).ok).toBe(true);
+    store.close();
   });
 
   it("still refuses an account with no way to sign in", () => {

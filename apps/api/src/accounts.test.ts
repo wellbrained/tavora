@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AccountStore, CODE_TTL_MS, normalizeEmail, SESSION_IDLE_MS } from "./account-store.ts";
+import type { AccountOptions } from "./accounts.ts";
 import { createApp } from "./app.ts";
 import { buildDataset, writeDatabase } from "./dataset.ts";
 import { BREVO_URL, createBrevoMailer, createTestInbox, createTestInboxApp, MailLimitError, maskEmail, type Mailer } from "./mail.ts";
@@ -10,19 +11,30 @@ import { createRateLimiter } from "./rate-limit.ts";
 const db = writeDatabase(":memory:", buildDataset({ builtIns: [{ id: "elden-ring", name: "Elden Ring" }], wikidata: [], steam: [] }));
 const roomy = () => createRateLimiter({ limit: 1000, windowMs: 60_000 });
 
-function setup(options: { mailer?: Mailer; mailDailyLimit?: number; discord?: DiscordClient } = {}) {
+/** `accounts` replaces any of the account options; a request's client is its `x-client` header ("local" without one). */
+function setup(options: { mailer?: Mailer; mailDailyLimit?: number; discord?: DiscordClient; accounts?: Partial<AccountOptions> } = {}) {
   const store = new AccountStore(":memory:");
   const inbox = createTestInbox();
   const clock = { now: Date.parse("2026-10-16T12:00:00Z") };
   const app = createApp({
     db,
     rateLimiter: roomy(),
-    accounts: { store, mailer: options.mailer ?? inbox, codeRateLimiter: roomy(), verifyRateLimiter: roomy(), now: () => clock.now, ...(options.mailDailyLimit === undefined ? {} : { mailDailyLimit: options.mailDailyLimit }), ...(options.discord ? { discord: options.discord } : {}) },
+    clientKey: (request) => request.headers.get("x-client") ?? "local",
+    accounts: {
+      store,
+      mailer: options.mailer ?? inbox,
+      codeRateLimiter: roomy(),
+      verifyRateLimiter: roomy(),
+      now: () => clock.now,
+      ...(options.mailDailyLimit === undefined ? {} : { mailDailyLimit: options.mailDailyLimit }),
+      ...(options.discord ? { discord: options.discord } : {}),
+      ...options.accounts,
+    },
   });
-  const call = (method: string, path: string, body?: unknown, token?: string) =>
+  const call = (method: string, path: string, body?: unknown, token?: string, client?: string) =>
     app.request(`http://tavora.test/v1/account${path}`, {
       method,
-      headers: { ...(body === undefined ? {} : { "content-type": "application/json" }), ...(token ? { authorization: `Bearer ${token}` } : {}) },
+      headers: { ...(body === undefined ? {} : { "content-type": "application/json" }), ...(token ? { authorization: `Bearer ${token}` } : {}), ...(client ? { "x-client": client } : {}) },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
   const lastCode = () => /\n {4}(\d{6})\n/.exec(inbox.mails()[0]?.text ?? "")?.[1] ?? "";
@@ -105,20 +117,62 @@ describe("signing in with a code", () => {
     expect((await call("POST", "/verify", { email: "me@example.com", code: lastCode(), create: true })).status).toBe(200);
   });
 
-  it("sends one address at most 3 codes in 15 minutes and 10 a day", async () => {
-    const { call, clock } = setup();
+  it("sends one address at most 3 codes in 15 minutes and 5 a day per network, and 20 a day from everyone", async () => {
+    const { call, clock, inbox } = setup();
     for (let i = 0; i < 3; i++) expect((await call("POST", "/code", { email: "me@example.com" })).status).toBe(202);
     const refused = await call("POST", "/code", { email: "me@example.com" });
     expect(refused.status).toBe(429);
     expect(Number(refused.headers.get("retry-after"))).toBe(900);
     expect((await call("POST", "/code", { email: "other@example.com" })).status).toBe(202);
-    for (let i = 0; i < 2; i++) {
-      clock.now += 15 * 60_000;
-      for (let j = 0; j < 3; j++) expect((await call("POST", "/code", { email: "me@example.com" })).status).toBe(202);
+    clock.now += 15 * 60_000;
+    for (let i = 0; i < 2; i++) expect((await call("POST", "/code", { email: "me@example.com" })).status).toBe(202);
+    clock.now += 15 * 60_000;
+    expect((await call("POST", "/code", { email: "me@example.com" })).status).toBe(429);
+    // Another network has its own share, and everyone together gets 20 a day to one address.
+    inbox.clear();
+    for (let network = 1; network <= 4; network++) {
+      for (let i = 0; i < 3; i++) {
+        clock.now += 15 * 60_000;
+        expect((await call("POST", "/code", { email: "me@example.com" }, undefined, `203.0.${network}.7`)).status).toBe(202);
+      }
     }
     clock.now += 15 * 60_000;
-    expect((await call("POST", "/code", { email: "me@example.com" })).status).toBe(202);
-    expect((await call("POST", "/code", { email: "me@example.com" })).status).toBe(429);
+    expect((await call("POST", "/code", { email: "me@example.com" }, undefined, "203.0.9.7")).status).toBe(202);
+    expect((await call("POST", "/code", { email: "me@example.com" }, undefined, "203.0.10.7")).status).toBe(202);
+    expect((await call("POST", "/code", { email: "me@example.com" }, undefined, "203.0.11.7")).status).toBe(202);
+    // 5 + 12 + 3 = 20.
+    expect((await call("POST", "/code", { email: "me@example.com" }, undefined, "203.0.12.7")).status).toBe(429);
+    expect(inbox.mails().filter((mail) => mail.to === "me@example.com")).toHaveLength(15);
+  });
+
+  it("keeps a stranger's code requests from locking the owner out (sign-in, change of address, delete)", async () => {
+    const { call, clock, inbox, signIn, lastCode } = setup();
+    const token = await signIn("owner@example.com");
+    clock.now += 15 * 60_000;
+    // A stranger asks for the owner's address 10 times over the day: after 5 their network is refused.
+    const answers: number[] = [];
+    for (let i = 0; i < 10; i++) {
+      answers.push((await call("POST", "/code", { email: "owner@example.com" }, undefined, "198.51.100.66")).status);
+      clock.now += 16 * 60_000;
+    }
+    expect(answers).toEqual([202, 202, 202, 202, 202, 429, 429, 429, 429, 429]);
+    // The owner, from their own network, still gets a code and signs in.
+    inbox.clear();
+    expect((await call("POST", "/code", { email: "owner@example.com" }, undefined, "192.0.2.10")).status).toBe(202);
+    expect(await (await call("POST", "/verify", { email: "owner@example.com", code: lastCode() }, undefined, "192.0.2.10")).json()).toMatchObject({ status: "signed-in" });
+    // Strangers on three more networks fill the 20 a day the address gets at others' requests (the owner's sign-ins count too) ...
+    for (let network = 1; network <= 3; network++) {
+      for (let i = 0; i < 5; i++) {
+        clock.now += 5 * 60_000;
+        await call("POST", "/code", { email: "owner@example.com" }, undefined, `2001:db8:${network}:1::/64`);
+      }
+    }
+    expect((await call("POST", "/code", { email: "owner@example.com" }, undefined, "192.0.2.10")).status).toBe(429);
+    // ... but what the owner asks for from inside the account is counted apart: changing the address and deleting still work.
+    inbox.clear();
+    expect((await call("POST", "/email/code", { email: "new-owner@example.com", confirmCurrent: true }, token)).status).toBe(202);
+    expect(inbox.mails().map((mail) => mail.to).sort()).toEqual(["new-owner@example.com", "owner@example.com"]);
+    expect((await call("POST", "/delete/code", {}, token)).status).toBe(202);
   });
 
   it("refuses what is not an address or not JSON, and says when mail fails", async () => {
@@ -399,19 +453,60 @@ describe("profile", () => {
 });
 
 describe("the day's emails", () => {
-  it("stops sign-ins when only the reserved emails are left, and keeps those for changes and deletes", async () => {
-    const { call, signIn, inbox, clock } = setup({ mailDailyLimit: 23 });
+  it("keeps a share of the sign-in emails for accounts, stops sign-ins when only the reserved ones are left, and keeps those for changes and deletes", async () => {
+    // 26 a day: 20 reserved, 6 for sign-in codes, of which 2 only for addresses with an account.
+    const { call, signIn, inbox, clock } = setup({ mailDailyLimit: 26 });
     const token = await signIn("me@example.com");
-    for (let i = 0; i < 2; i++) expect((await call("POST", "/code", { email: `p${i}@example.com` })).status).toBe(202);
-    // 3 sent: 23 - 20 reserved = 3 for sign-ins.
-    const refused = await call("POST", "/code", { email: "late@example.com" });
-    expect(refused.status).toBe(503);
-    expect(await refused.json()).toMatchObject({ reason: "daily-limit", retryAt: "2026-10-17T00:00:00.000Z" });
+    for (let i = 0; i < 3; i++) expect((await call("POST", "/code", { email: `p${i}@example.com` })).status).toBe(202);
+    // 4 sent: a new address hears the same as one with an account, but no mail goes out.
+    const quiet = await call("POST", "/code", { email: "late@example.com" });
+    expect([quiet.status, await quiet.json()]).toEqual([202, { status: "sent" }]);
     expect(inbox.mails().some((mail) => mail.to === "late@example.com")).toBe(false);
+    for (let i = 0; i < 2; i++) expect((await call("POST", "/code", { email: "me@example.com" })).status).toBe(202);
+    expect(inbox.mails().filter((mail) => mail.to === "me@example.com")).toHaveLength(3);
+    // 6 sent: nothing left for sign-ins, for anyone.
+    for (const email of ["me@example.com", "late@example.com"]) {
+      const refused = await call("POST", "/code", { email });
+      expect(refused.status).toBe(503);
+      expect(await refused.json()).toMatchObject({ reason: "daily-limit", retryAt: "2026-10-17T00:00:00.000Z" });
+    }
     expect((await call("POST", "/delete/code", {}, token)).status).toBe(202);
     // The next day (UTC) starts again.
     clock.now = Date.parse("2026-10-17T00:00:01Z");
     expect((await call("POST", "/code", { email: "late@example.com" })).status).toBe(202);
+    expect(inbox.mails()[0]?.to).toBe("late@example.com");
+  });
+
+  it("keeps sign-in codes for an existing account when 28 clients ask 10 times each for made-up addresses (audit)", async () => {
+    // As the audit tried it (28 IPv6 /64s of one /48), and worse: 28 /64s in 28 different /48s.
+    for (const [oneNetwork, layout] of [
+      [true, (n: number) => `2001:db8:1:${n}::/64`],
+      [false, (n: number) => `2001:db8:${n}:1::/64`],
+    ] as const) {
+      const { call, signIn, inbox, store, clock } = setup({ mailDailyLimit: 300, accounts: { codeRateLimiter: createRateLimiter({ limit: 10, windowMs: 3_600_000 }) } });
+      await signIn("victim@example.com");
+      const day = new Date(clock.now).toISOString().slice(0, 10);
+      const answers = new Map<number, number>();
+      for (let n = 1; n <= 28; n++) {
+        for (let i = 0; i < 10; i++) {
+          const status = (await call("POST", "/code", { email: `a${n}-${i}@attacker.example` }, undefined, layout(n))).status;
+          answers.set(status, (answers.get(status) ?? 0) + 1);
+        }
+        clock.now += 10_000;
+      }
+      if (oneNetwork) {
+        // One network: 40 a day between all its clients.
+        expect(Object.fromEntries(answers)).toEqual({ 202: 40, 429: 240 });
+        expect(store.mailsSent(day)).toBe(41);
+      } else {
+        // Every request answered alike, but new addresses stop getting mail once 187 went out (300 - 20 - 93).
+        expect(Object.fromEntries(answers)).toEqual({ 202: 280 });
+        expect(store.mailsSent(day)).toBe(187);
+      }
+      inbox.clear();
+      expect((await call("POST", "/code", { email: "victim@example.com" }, undefined, "192.0.2.44")).status).toBe(202);
+      expect(inbox.mails()[0]?.to).toBe("victim@example.com");
+    }
   });
 
   it("says the same when the provider refuses because its allowance is used up", async () => {
@@ -480,6 +575,44 @@ describe("Discord login", () => {
     const again = (await (await call("POST", "/discord/sign-in", { code: "codewellbrainedrenamed", verifier: VERIFIER })).json()) as Record<string, unknown>;
     expect(again).toMatchObject({ status: "signed-in", account: { discord: { name: "wellbrained2" } } });
     expect(JSON.stringify(again)).not.toContain(ALEX.id);
+  });
+
+  it("caps new accounts a day by email and Discord together, keeping the code and the ticket for when there is room", async () => {
+    const { call, signIn, lastCode, clock, store } = setup({ discord: pretend({ codewellbrained: ALEX, codeother000: OTHER }), accounts: { accountDailyLimit: 2 } });
+    clock.now = Date.parse("2026-10-16T23:55:00Z");
+    await signIn("one@example.com");
+    const alex = (await (await call("POST", "/discord/sign-in", { code: "codewellbrained", verifier: VERIFIER })).json()) as { ticket: string };
+    expect(await (await call("POST", "/discord/create", { ticket: alex.ticket })).json()).toMatchObject({ status: "created" });
+    // Two made today: a third is refused, by email (only once its code was right) and by Discord.
+    await call("POST", "/code", { email: "three@example.com" });
+    const code = lastCode();
+    expect(await (await call("POST", "/verify", { email: "three@example.com", code: code === "000000" ? "000001" : "000000", create: true })).json()).toMatchObject({ reason: "wrong-code" });
+    const full = await call("POST", "/verify", { email: "three@example.com", code, create: true });
+    expect([full.status, await full.json()]).toEqual([503, { error: "Tavora can't take more new accounts today. Try again tomorrow.", reason: "unavailable", retryAt: "2026-10-17T00:00:00.000Z" }]);
+    const second = (await (await call("POST", "/discord/sign-in", { code: "codeother000", verifier: VERIFIER })).json()) as { ticket: string };
+    expect(await (await call("POST", "/discord/create", { ticket: second.ticket })).json()).toMatchObject({ reason: "unavailable" });
+    expect(store.accountByEmail("three@example.com")).toBeNull();
+    expect(store.accountByDiscord(OTHER.id)).toBeNull();
+    // Existing accounts still sign in.
+    await call("POST", "/code", { email: "one@example.com" });
+    expect(await (await call("POST", "/verify", { email: "one@example.com", code: lastCode() })).json()).toMatchObject({ status: "signed-in" });
+    // A new day (UTC): the same code and ticket make the accounts.
+    clock.now = Date.parse("2026-10-17T00:01:00Z");
+    expect(await (await call("POST", "/verify", { email: "three@example.com", code, create: true })).json()).toMatchObject({ status: "created" });
+    expect(await (await call("POST", "/discord/create", { ticket: second.ticket })).json()).toMatchObject({ status: "created" });
+  });
+
+  it("gives each network a share of the day's new accounts", async () => {
+    const { call, lastCode, store } = setup({ accounts: { accountNetworkRateLimiter: createRateLimiter({ limit: 1, windowMs: 24 * 60 * 60_000 }) } });
+    const create = async (email: string, client: string) => {
+      await call("POST", "/code", { email }, undefined, client);
+      return call("POST", "/verify", { email, code: lastCode(), create: true }, undefined, client);
+    };
+    expect((await create("a@example.com", "198.51.100.1")).status).toBe(200);
+    const refused = await create("b@example.com", "198.51.100.2");
+    expect([refused.status, ((await refused.json()) as { reason: string }).reason]).toEqual([429, "too-many"]);
+    expect(store.accountByEmail("b@example.com")).toBeNull();
+    expect((await create("c@example.com", "203.0.113.5")).status).toBe(200);
   });
 
   it("lets a held Discord login expire after 10 minutes", async () => {

@@ -92,6 +92,9 @@ if (!mailer && brevoKey) {
   console.log(`[tavora-api] Accounts are on: email through Brevo from ${from}, at most ${mailDailyLimit} a day.`);
 }
 if (!mailer) console.log("[tavora-api] No way to send email: accounts are off.");
+// New accounts a day, by email and Discord together (accounts.ts ACCOUNTS_PER_DAY when unset or not a whole number above 0).
+const accountLimit = Number(process.env.ACCOUNT_DAILY_LIMIT);
+const accountDailyLimit = Number.isInteger(accountLimit) && accountLimit > 0 ? accountLimit : undefined;
 const accountStore = mailer ? new AccountStore(path.join(stateDir, "accounts.sqlite")) : undefined;
 // The cloud copies: their own file, which the daily backup leaves out (decided 2026-10-19; the PCs upload again).
 // All accounts' copies together stay under a total and leave free space on the state disk (COPY_TOTAL_LIMIT_GB, COPY_FREE_FLOOR_GB).
@@ -186,6 +189,7 @@ const app = createApp({
           ...(leaderboards ? { leaderboards } : {}),
           ...(lifecycle ? { lifecycle } : {}),
           ...(mailDailyLimit === undefined ? {} : { mailDailyLimit }),
+          ...(accountDailyLimit === undefined ? {} : { accountDailyLimit }),
           // Discord login: Tavora's public Discord app, no secret; DISCORD_API only for a pretend Discord in tests.
           discord: createDiscordClient(process.env.DISCORD_API ? { api: process.env.DISCORD_API } : {}),
         },
