@@ -112,9 +112,11 @@ export interface CoverPageOptions {
   emblem: string | null;
   /** The interface font's stylesheet (module-fonts.ts): its files and --tavora-font-sans. Without it, the system font. */
   fontCss?: string;
+  /** The card's corner radius in px (panel-corners.ts `cover`). Default: COVER_RADIUS. */
+  radius?: number;
 }
 
-/** How far the panel's corner is rounded in the host UI (dock.css), as the loading card there. */
+/** How far the panel's corner is rounded in the host UI (dock.css), as the loading card there: Classic's (panel-corners.ts `cover`). */
 export const COVER_RADIUS = 10;
 
 const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -125,7 +127,7 @@ const cssColor = (value: string, fallback: string) => (/^[#\w\s(),.%/-]+$/.test(
  * The cover's page: the loading card of the host UI (its background and border) and the Campfire loader of
  * CampfireLoader.vue (emblem, rising embers, label), hidden until `fireAtEpoch`. With reduced motion it stays plain.
  */
-export function coverPage({ theme, label, fireAtEpoch, emblem, fontCss = "" }: CoverPageOptions): string {
+export function coverPage({ theme, label, fireAtEpoch, emblem, fontCss = "", radius = COVER_RADIUS }: CoverPageOptions): string {
   const dark = theme.mode === "dark";
   const background = cssColor(theme.tokens.background, dark ? "#000" : "#fff");
   const border = cssColor(theme.tokens.border, "transparent");
@@ -150,7 +152,7 @@ export function coverPage({ theme, label, fireAtEpoch, emblem, fontCss = "" }: C
   return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; font-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'"><style>
 ${fontCss}
 html,body{margin:0;height:100%;overflow:hidden;background:${background};cursor:default;user-select:none}
-body{box-sizing:border-box;border:1px solid ${border};border-radius:${COVER_RADIUS}px;font:13px var(--tavora-font-sans,system-ui,"Segoe UI",sans-serif);color:${muted}}
+body{box-sizing:border-box;border:1px solid ${border};border-radius:${Number.isFinite(radius) ? Math.max(0, radius) : COVER_RADIUS}px;font:13px var(--tavora-font-sans,system-ui,"Segoe UI",sans-serif);color:${muted}}
 .campfire{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;opacity:0;transition:opacity ${FIRE_FADE_MS}ms ease-out}
 body.fire .campfire{opacity:1}
 .fire-box{position:relative;flex:none;width:var(--cf-size);height:var(--cf-size);isolation:isolate}
@@ -183,6 +185,8 @@ export interface PanelCoverOptions {
   emblem: () => string | null;
   /** The interface font's stylesheet for a theme (module-fonts.ts), for the label. */
   fontCss?: (theme: TavoraTheme) => string;
+  /** The corner radius in px now, a card's outside in the style (panel-corners.ts `cover`); left out, COVER_RADIUS. */
+  radius?: () => number;
   now?: () => number;
 }
 
@@ -223,7 +227,10 @@ export class PanelCover {
     this.fireAt = fireDelay(estimateMs);
     // The colour shows at once, before the page has loaded; the page only adds the fire and the card's border.
     view.setBackgroundColor(theme.tokens.background);
-    const page = coverPage({ theme, label, fireAtEpoch: this.shownAt + this.fireAt, emblem: this.options.emblem(), fontCss: this.options.fontCss?.(theme) ?? "" });
+    const radius = this.options.radius?.() ?? COVER_RADIUS;
+    // The style may have changed since the last cover: the view and the card's border round alike.
+    view.setBorderRadius(radius);
+    const page = coverPage({ theme, label, fireAtEpoch: this.shownAt + this.fireAt, emblem: this.options.emblem(), fontCss: this.options.fontCss?.(theme) ?? "", radius });
     // Loading a new page can give the view a new surface, white over the whole workspace for a frame or two before
     // the page draws: once the cover has a page, the next one is written into it instead.
     if (this.pageLoaded) void view.webContents.executeJavaScript(`document.open();document.write(${JSON.stringify(page)});document.close();`).catch(() => undefined);

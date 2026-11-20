@@ -10,6 +10,7 @@ import type { ResolvedPanelType } from "@tavora/module-schema";
 import { modulePartition } from "./module-data";
 import { gestureCounts, type Opacity } from "./game-overlays";
 import { moduleThemeCss } from "./module-style";
+import type { PanelCorners } from "./panel-corners";
 import { InsertedCss } from "./inserted-css";
 import { contentTypeFor, moduleCsp, MODULE_SCHEME, resolveAsset, withModulePolicy } from "./assets";
 import { APP_BLOB_PATH, BLOB_PATH, CLIPBOARD_PATH, PICTURES_PATH, JSON_EXPORT_PATH, JSON_SAVE_PATH, JSON_OPEN_PATH, FILE_SAVE_PATH, FILE_OPEN_PATH } from "@tavora/sdk/protocol";
@@ -56,6 +57,8 @@ export interface ModuleViewOptions {
   preload: string;
   devTools: boolean;
   getTheme(): TavoraTheme;
+  /** The view's corner radius in px now (panel-corners.ts `module`); left out, Classic's. */
+  cornerRadius?(): number;
   getLanguage(): string;
   /** Tavora's default look for the page, below the module's own styles (module-style.ts). Colours come from the theme stylesheet. */
   baseCss: string;
@@ -396,8 +399,8 @@ const GESTURE_LATE_MS = 250;
  */
 export const ADD_DIALOG_MS = 10_000;
 
-/** Corner radius of a panel card in the host UI (dock.css), in px. */
-const PANEL_RADIUS = 10;
+/** The corner of a module's view when the host gives none: Classic's (panel-corners.ts). */
+const PANEL_VIEW_RADIUS = 9;
 
 /** One panel instance of a module, bound to one workspace. */
 export class ModuleView {
@@ -490,8 +493,8 @@ export class ModuleView {
 
     // No white flash before the page has painted.
     this.view.setBackgroundColor(options.getTheme().tokens.background);
-    // Panels are rounded cards in the host UI; the view follows their corners.
-    this.view.setBorderRadius(PANEL_RADIUS - 1);
+    // Panels are rounded cards in the host UI; the view follows their corners (panel-corners.ts).
+    this.view.setBorderRadius(options.cornerRadius?.() ?? PANEL_VIEW_RADIUS);
 
     const contents = this.view.webContents;
     const origin = moduleOrigin(module.manifest.id);
@@ -1453,6 +1456,11 @@ export class ModuleView {
     if (!this.overGame && !this.frameWaiters.size) this.view.setBackgroundColor(theme.tokens.background);
     this.insertThemeCss(theme);
     this.bridge?.emit("ui.theme", theme);
+  }
+
+  /** Rounds the view to the panel cards' corners of the style now (panel-corners.ts). */
+  setCorners(corners: PanelCorners): void {
+    this.view.setBorderRadius(corners.module);
   }
 
   /** Tells the module the user changed the language, so it can word itself anew through ui.onLanguageChange. */
