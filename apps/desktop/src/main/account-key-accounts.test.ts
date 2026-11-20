@@ -277,41 +277,42 @@ describe("which account a sign-in is for", () => {
   });
 });
 
+/** Tavora with its cloud copy, as the host runs it, and the publisher keys over the same account key. */
+async function copyPc(cloud: Service, fetch: typeof globalThis.fetch, signed: { now: Signed | null }, userData?: string) {
+  const at = userData ? { userData, moduleFiles: path.join(userData, "..", "Pictures") } : await pc({ "library.json": "a1" });
+  const sync = new CopySync({
+    userData: at.userData,
+    enabled: true,
+    files: { root: () => at.moduleFiles },
+    account: { token: () => signed.now?.token ?? null, id: () => signed.now?.id ?? null },
+    serviceUrl: "http://tavora.test/v1/account",
+    fetch,
+    encryptor,
+    restart: () => undefined,
+  });
+  sync.attach({ flush: async () => undefined, onChange: () => undefined });
+  const keys = new DeveloperKeys({
+    accountKey: sync.accountKey,
+    account: { signedIn: () => signed.now !== null, link: async () => undefined, publish: async () => Promise.reject(new Error("not here")) },
+    onChange: () => undefined,
+  });
+  /** The account changes as the host tells it. */
+  const changed = async () => {
+    keys.accountChanged(signed.now?.id ?? null);
+    sync.accountChanged(signed.now?.id ?? null);
+    await keys.refresh();
+  };
+  await sync.beforeLoad();
+  await changed();
+  return { sync, keys, changed, userData: at.userData };
+}
+
 describe("the cloud copy and each account's key", () => {
-  /** Tavora with its cloud copy, as the host runs it, and the publisher keys over the same account key. */
-  async function tavora(cloud: Service, fetch: typeof globalThis.fetch, signed: { now: Signed | null }, userData?: string) {
-    const at = userData ? { userData, moduleFiles: path.join(userData, "..", "Pictures") } : await pc({ "library.json": "a1" });
-    const sync = new CopySync({
-      userData: at.userData,
-      enabled: true,
-      files: { root: () => at.moduleFiles },
-      account: { token: () => signed.now?.token ?? null, id: () => signed.now?.id ?? null },
-      serviceUrl: "http://tavora.test/v1/account",
-      fetch,
-      encryptor,
-      restart: () => undefined,
-    });
-    sync.attach({ flush: async () => undefined, onChange: () => undefined });
-    const keys = new DeveloperKeys({
-      accountKey: sync.accountKey,
-      account: { signedIn: () => signed.now !== null, link: async () => undefined, publish: async () => Promise.reject(new Error("not here")) },
-      onChange: () => undefined,
-    });
-    /** The account changes as the host tells it. */
-    const changed = async () => {
-      keys.accountChanged(signed.now?.id ?? null);
-      sync.accountChanged(signed.now?.id ?? null);
-      await keys.refresh();
-    };
-    await sync.beforeLoad();
-    await changed();
-    return { sync, keys, changed, userData: at.userData };
-  }
 
   it("another account signing in and out after a 401 leaves the first one's key: it is ready again when that one signs in", async () => {
     const { cloud, a, b, fetch } = await twoAccounts();
     const signed: { now: Signed | null } = { now: a };
-    const here = await tavora(cloud, fetch, signed);
+    const here = await copyPc(cloud, fetch, signed);
     await here.sync.turnOn();
     expect(here.sync.view().on).toBe(true);
     const fpr = await here.keys.create();
@@ -334,7 +335,7 @@ describe("the cloud copy and each account's key", () => {
     await here.changed();
     expect(here.keys.view()).toMatchObject({ status: "ready", keys: [{ fingerprint: fpr }] });
     expect(here.sync.view().on).toBe(true);
-    const restarted = await tavora(cloud, fetch, signed, here.userData);
+    const restarted = await copyPc(cloud, fetch, signed, here.userData);
     expect(restarted.sync.view().on).toBe(true);
     expect(restarted.keys.view()).toMatchObject({ status: "ready", keys: [{ fingerprint: fpr }] });
   });
@@ -342,7 +343,7 @@ describe("the cloud copy and each account's key", () => {
   it("a folder's copy stays with its account's key: off while another account is signed in, on again for it", async () => {
     const { cloud, a, b, fetch } = await twoAccounts();
     const signed: { now: Signed | null } = { now: a };
-    const here = await tavora(cloud, fetch, signed);
+    const here = await copyPc(cloud, fetch, signed);
     const folder = await mkdtemp(path.join(os.tmpdir(), "tavora-folder-copy-"));
     try {
       await here.sync.turnOn(folder);
@@ -379,7 +380,7 @@ describe("the cloud copy and each account's key", () => {
   it("another account turning a copy on takes the copy's key; the first one's waits in its own files", async () => {
     const { cloud, a, b, fetch } = await twoAccounts();
     const signed: { now: Signed | null } = { now: a };
-    const here = await tavora(cloud, fetch, signed);
+    const here = await copyPc(cloud, fetch, signed);
     await here.sync.turnOn();
     const rootA = here.sync.accountKey.copyKey()!;
     signed.now = b;
@@ -399,7 +400,7 @@ describe("the cloud copy and each account's key", () => {
   it("signed out after a 401, Show key shows nothing of a copy on the service; one shown goes when the account changes", async () => {
     const { cloud, a, b, fetch } = await twoAccounts();
     const signed: { now: Signed | null } = { now: a };
-    const here = await tavora(cloud, fetch, signed);
+    const here = await copyPc(cloud, fetch, signed);
     await here.sync.turnOn();
     here.sync.keySaved();
     here.sync.showKey();
@@ -456,5 +457,205 @@ describe("an unproven key", () => {
     const later = await onPc(cloud, offlineFetch, signed, { userData: after.userData });
     await later.accountKey.load();
     expect((await later.accountKey.content()).publisherKeys).toHaveLength(1);
+  });
+});
+
+describe("keys of no account, and keys moved aside", () => {
+  /** A vault for `who` sealed under `root`, made on another PC. */
+  async function vaultOn(cloud: Service, who: Signed, root: Buffer, content: object = { v: 1 }) {
+    const sealed = sealVault(root, Buffer.from(JSON.stringify(content)));
+    const body = Buffer.alloc(4 + sealed.length);
+    sealed.copy(body, 4);
+    const made = await cloud.fetch("http://tavora.test/v1/account/vault", { method: "PUT", headers: { authorization: `Bearer ${who.token}`, "content-type": "application/octet-stream" }, body: Uint8Array.from(body) });
+    expect(made.ok).toBe(true);
+  }
+  const keyFile = async (file: string) => JSON.parse(await readFile(file, "utf8")) as Record<string, unknown>;
+
+  it("signed out after a 401, a folder copy turned on gets a new key: the account's is never shown, and its vault moves with it", async () => {
+    const { cloud, a, fetch } = await twoAccounts();
+    const signed: { now: Signed | null } = { now: a };
+    const here = await copyPc(cloud, fetch, signed);
+    await here.sync.turnOn();
+    await here.keys.create();
+    const rootA = here.sync.accountKey.copyKey()!;
+    here.sync.keySaved();
+
+    signed.now = null;
+    await here.changed();
+    // A's service copy is still on, signed out: nothing of A's key is shown or handed out.
+    expect(here.sync.shareableKey()).toBeNull();
+    here.sync.showKey();
+    expect(here.sync.view().recoveryKey).toBeNull();
+    // Nor can it be moved into a folder.
+    const folder = await mkdtemp(path.join(os.tmpdir(), "tavora-moved-"));
+    try {
+      await expect(here.sync.move(folder)).rejects.toMatchObject({ key: "cloudCopy.error.signed-out" });
+      await here.sync.turnOff();
+      await here.sync.turnOn(folder);
+      expect(here.sync.view()).toMatchObject({ on: true, folder });
+      const shown = here.sync.view().recoveryKey;
+      expect(shown).toMatch(/^[0-9A-Z]{4}-/);
+      expect(shown).not.toBe(recoveryKey(rootA));
+      expect(here.sync.accountKey.copyKey()?.equals(rootA)).toBe(false);
+      // A's key and the vault it last read wait in A's own files; the copy's vault file isn't A's.
+      expect(await keyFile(path.join(here.userData, "account-key.account-a.json"))).toMatchObject({ account: "account-a" });
+      expect(openVault(rootA, await readFile(path.join(here.userData, "account-vault.account-a.bin"))).length).toBeGreaterThan(0);
+      const copyVault = await readFile(path.join(here.userData, "account-vault.bin")).catch(() => null);
+      if (copyVault) expect(() => openVault(rootA, copyVault)).toThrow();
+      signed.now = a;
+      await here.changed();
+      expect(here.keys.view()).toMatchObject({ status: "ready" });
+      expect(here.sync.accountKey.get()?.equals(rootA)).toBe(true);
+    } finally {
+      await rm(folder, { recursive: true, force: true });
+    }
+  });
+
+  it("a folder copy's key of no account doesn't hide an account's own key, and an account's Start over never writes over it", async () => {
+    const { cloud, a, fetch } = await twoAccounts();
+    const rootA = newCopyKey();
+    await vaultOn(cloud, a, rootA);
+    const signed: { now: Signed | null } = { now: null };
+    const here = await onPc(cloud, fetch, signed);
+    expect(await here.accountKey.setUpHere(false)).toEqual({ status: "ready", created: true });
+    const folderKey = await readFile(here.file, "utf8");
+    // A signs in: its vault doesn't open with the folder's key, so A is asked for its own, and the folder's stays of no account.
+    signed.now = a;
+    await here.changed();
+    expect(here.keys.view()).toMatchObject({ status: "ask" });
+    expect(await keyFile(here.file)).toMatchObject({ account: null });
+    await here.accountKey.startOver();
+    expect(await readFile(here.file, "utf8")).toBe(folderKey);
+    expect(await keyFile(path.join(here.userData, "account-key.account-a.json"))).toMatchObject({ account: "account-a" });
+    expect(here.accountKey.get()?.equals(rootA)).toBe(false);
+    expect(here.accountKey.get()).not.toBeNull();
+  });
+
+  it("an account with its own key signing in after a folder copy made signed out keeps both", async () => {
+    const { cloud, a, fetch } = await twoAccounts();
+    const rootA = newCopyKey();
+    await vaultOn(cloud, a, rootA);
+    const signed: { now: Signed | null } = { now: null };
+    const here = await onPc(cloud, fetch, signed);
+    await here.accountKey.setUpHere(false);
+    const folderRoot = here.accountKey.copyKey()!;
+    const folderKey = await readFile(here.file, "utf8");
+    signed.now = a;
+    await here.keys.enterKey(recoveryKey(rootA));
+    expect(await readFile(here.file, "utf8")).toBe(folderKey);
+    expect(here.accountKey.get()?.equals(rootA)).toBe(true);
+    expect(here.keys.view()).toMatchObject({ status: "ready" });
+    signed.now = null;
+    expect(here.accountKey.copyKey()?.equals(folderRoot)).toBe(true);
+  });
+
+  it("keeps the keys of other accounts used last, never one whose vault as last read holds publisher keys, and says what went", async () => {
+    const { cloud, a, b, fetch } = await twoAccounts();
+    const c: Signed = { token: await cloud.newAccount("third@example.com"), id: "account-c" };
+    const d: Signed = { token: await cloud.newAccount("fourth@example.com"), id: "account-d" };
+    const lines: string[] = [];
+    const signed: { now: Signed | null } = { now: a };
+    const { userData } = await pc({ "library.json": "{}" });
+    const accountKey = new AccountKey({
+      file: path.join(userData, "account-key.json"),
+      cacheFile: path.join(userData, "account-vault.bin"),
+      seenFile: path.join(userData, "account-vault-seen"),
+      encryptor,
+      baseUrl: "http://tavora.test/v1/account",
+      fetch,
+      token: () => signed.now?.token ?? null,
+      account: () => signed.now?.id ?? null,
+      putBackAfterMs: 0,
+      maxOtherKeys: 1,
+      log: (line) => void lines.push(line),
+    });
+    await accountKey.setUp();
+    signed.now = b;
+    await accountKey.setUp();
+    // C's key needs room: B's holds no publisher keys, and goes (said in the log).
+    signed.now = c;
+    await accountKey.setUp();
+    await accountKey.change((content) => ({ ...content, publisherKeys: [pem()] }));
+    expect(lines.some((line) => line.includes("account-key.account-b.json"))).toBe(true);
+    signed.now = b;
+    expect(accountKey.get()).toBeNull();
+    // D's needs room too, but C's vault as last read holds a publisher key: both stay.
+    signed.now = d;
+    await accountKey.setUp();
+    signed.now = c;
+    expect(accountKey.get()).not.toBeNull();
+    signed.now = d;
+    expect(accountKey.get()).not.toBeNull();
+    expect(lines.some((line) => line.includes("none can go"))).toBe(true);
+    // A's, the copy's key, is never one of them.
+    signed.now = a;
+    expect(accountKey.get()).not.toBeNull();
+  });
+
+  it("never writes over a key file it can't open in this run: another account's key goes to its own files", async () => {
+    const { cloud, b, fetch } = await twoAccounts();
+    const signed: { now: Signed | null } = { now: b };
+    const { userData } = await pc({ "library.json": "{}" });
+    const file = path.join(userData, "account-key.json");
+    // Sealed by a key store this run can't use: it reads, but doesn't open as a key.
+    const blocked = JSON.stringify({ v: 1, data: Buffer.from("sealed:not a key").toString("base64"), account: "account-a" });
+    await writeFile(file, blocked);
+    const here = await onPc(cloud, fetch, signed, { userData });
+    await here.accountKey.load();
+    expect(await here.accountKey.setUp()).toEqual({ status: "ready", created: true });
+    expect(await readFile(file, "utf8")).toBe(blocked);
+    expect(await keyFile(path.join(userData, "account-key.account-b.json"))).toMatchObject({ account: "account-b" });
+    // Taken for the cloud copy: the file it can't open moves aside as it was, read again at the next start.
+    await here.accountKey.useForCopy();
+    expect(await readFile(path.join(userData, "account-key.unopened.json"), "utf8")).toBe(blocked);
+    expect(await keyFile(file)).toMatchObject({ account: "account-b" });
+  });
+
+  describe("an unproven key", () => {
+    async function legacy() {
+      const set = await twoAccounts();
+      const signed: { now: Signed | null } = { now: set.a };
+      const before = await onPc(set.cloud, set.fetch, signed);
+      await before.changed();
+      const fpr = await before.keys.create();
+      const root = before.accountKey.get()!;
+      const file = await keyFile(before.file);
+      delete file.account;
+      await writeFile(before.file, JSON.stringify(file));
+      await writeFile(before.seenFile, "1");
+      signed.now = null;
+      const after = await onPc(set.cloud, set.fetch, signed, { userData: before.userData });
+      await after.accountKey.load();
+      return { ...set, signed, after, fpr, root };
+    }
+
+    it("its old seen mark doesn't count for a new account without a vault: that one has none, it isn't asked", async () => {
+      const { b, signed, after } = await legacy();
+      signed.now = b;
+      await after.changed();
+      expect(after.keys.view()).toMatchObject({ status: "none", keys: [] });
+    });
+
+    it("typed in by its account, it goes on with the vault it last read, also when the account's vault is gone", async () => {
+      const { cloud, a, signed, after, fpr, root } = await legacy();
+      await cloud.fetch("http://tavora.test/v1/account/vault", { method: "DELETE", headers: { authorization: `Bearer ${a.token}` } });
+      signed.now = a;
+      await after.changed();
+      expect(after.keys.view().keys).toEqual([]);
+      await after.keys.enterKey(recoveryKey(root));
+      expect(after.keys.view()).toMatchObject({ status: "ready", keys: [{ fingerprint: fpr }] });
+    });
+
+    it("moved aside, never replaces another one moved aside before", async () => {
+      const { signed, after, root } = await legacy();
+      const earlier = await readFile(after.file, "utf8");
+      await writeFile(path.join(after.userData, "account-key.unproven.json"), earlier);
+      const restarted = await onPc((await twoAccounts()).cloud, (async () => Promise.reject(new TypeError("offline"))) as unknown as typeof globalThis.fetch, signed, { userData: after.userData });
+      await restarted.accountKey.load();
+      await restarted.accountKey.startOverHere();
+      expect(await readFile(path.join(after.userData, "account-key.unproven.json"), "utf8")).toBe(earlier);
+      expect(await keyFile(path.join(after.userData, "account-key.unproven-2.json"))).toMatchObject({ account: null, unproven: true });
+      expect(restarted.accountKey.copyKey()?.equals(root)).toBe(false);
+    });
   });
 });

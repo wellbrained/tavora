@@ -60,7 +60,7 @@ export interface PairingTransport {
 
 export interface PairingOptions {
   /** The cloud copy: its account key is what is sent and received, and its folder (when it has one) is a way to ask. */
-  copySync: Pick<CopySync, "accountKey" | "place" | "keyArrived">;
+  copySync: Pick<CopySync, "accountKey" | "place" | "keyArrived" | "shareableKey">;
   /** The account: signed in, the messages go through Tavora's service. */
   account: { token(): string | null };
   /** The account service, ending in /v1/account. */
@@ -136,10 +136,9 @@ export class Pairing {
     return this.key() !== null && this.accountKey.trouble !== "unopened";
   }
 
-  /** The key this PC hands out: the account's signed in; signed out, the cloud copy's in its folder. */
+  /** The key this PC hands out: the account's signed in; signed out, the cloud copy's while it is on in its folder. */
   private key(): Buffer | null {
-    if (this.accountKey.signedIn) return this.accountKey.get();
-    return this.options.copySync.place !== null ? this.accountKey.copyKey() : null;
+    return this.options.copySync.shareableKey();
   }
 
   /** Tavora's service, while signed in. */

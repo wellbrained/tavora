@@ -18,7 +18,7 @@ async function onPc(fetch: typeof globalThis.fetch, token: string | null, transp
   const views: PairingView[] = [];
   let focused = 0;
   const pairing = new Pairing({
-    copySync: { accountKey, place: transport ? "a folder" : null, keyArrived: async () => undefined },
+    copySync: { accountKey, place: transport ? "a folder" : null, keyArrived: async () => undefined, shareableKey: () => (accountKey.signedIn ? accountKey.get() : accountKey.copyKey()) },
     account: { token: () => token },
     serviceUrl: "http://tavora.test/v1/account",
     fetch,

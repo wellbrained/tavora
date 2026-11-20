@@ -172,6 +172,7 @@ export class CopySync {
       encryptor: options.encryptor,
       ...service,
       account: () => options.account.id(),
+      ...(options.log ? { log: options.log } : {}),
     });
     this.cloud = new CloudCopy(this.service);
   }
@@ -226,10 +227,21 @@ export class CopySync {
     return this.accountKeys.copyKey();
   }
 
-  /** The recovery key to show: signed out, the copy's only for a copy in a folder (else only a key of no account). */
+  /**
+   * The key this PC may show or hand to another PC: signed in, the account's own; signed out, a key of no account, or an
+   * account's only while a copy in a folder is on with it (never one that merely waits for its account, also not while
+   * a copy is still being turned on).
+   */
+  shareableKey(): Buffer | null {
+    if (this.accountKeys.signedIn) return this.accountKeys.get();
+    const key = this.accountKeys.copyKey();
+    if (!key) return null;
+    return this.accountKeys.copyIsOf(null) || (this.copyOn && this.folder !== null) ? key : null;
+  }
+
+  /** The recovery key to show (shareableKey). */
   private keyToShow(): string | null {
-    if (this.accountKeys.signedIn || this.folder === null) return this.accountKeys.recoveryKey();
-    const key = this.key;
+    const key = this.shareableKey();
     return key ? recoveryKey(key) : null;
   }
 
@@ -736,6 +748,8 @@ export class CopySync {
   async move(folder: string | null): Promise<void> {
     if (!this.on || folder === this.folder) return;
     if (this.waiting) throw new UserError("cloudCopy.error.conflict");
+    // A copy on the service is its account's: signed out, it can't go into a folder (sealed with that account's key).
+    if (this.folder === null && !this.accountKeys.signedIn) throw CopySync.userError("signed-out");
     const from = this.cloud;
     const problem = this.problem;
     const turn = this.turn;
