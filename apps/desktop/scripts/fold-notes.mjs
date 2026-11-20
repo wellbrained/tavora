@@ -90,7 +90,7 @@ function catalogText(text, entries, catalogVersion) {
 }
 
 export const CATALOG_CHECKLIST = [
-  `Every entry before the release was dropped; the entry keeps only its own notes. They are the release's text in latest.yml and on GitHub, so keep them to a few friendly lines.`,
+  `Every entry before the release was dropped; the entry keeps only its own notes. They are the release's text in latest.yml, on GitHub and in the Discord #announcements post, so keep them to a few friendly lines, what players notice first.`,
   "Settings > Patch notes shows the catalog from src/shared/release-catalog.ts in this entry's place: check that it still matches what the app has.",
 ];
 
@@ -99,6 +99,7 @@ export const WORDING_CHECKLIST = [
   "Merge notes about the same thing into one line; the first word of a module's notes is its name (\"PDF Viewer: ...\").",
   "Drop notes that a later one replaces or undoes, and notes about something users can't see yet.",
   "Keep the most important things first; short, friendly, for users (CLAUDE.md > Writing).",
+  "These notes are also the release post in the Discord #announcements, read by players who may not know Tavora yet: lead with what they notice while playing; put things only module makers or security-minded readers need last, in as few lines as possible.",
   "Leave prs and tags as they are: every pull request and tag of the folded entries stays.",
 ];
 
