@@ -99,5 +99,5 @@ function block(event: Event) {
     </span>
     <span class="line-clamp-2 w-full text-center leading-tight tabular-nums">{{ shownLabel }}</span>
   </Button>
-  <span v-if="busyLabel || doneLabel" role="status" class="sr-only">{{ said }}</span>
+  <span role="status" class="sr-only">{{ said }}</span>
 </template>

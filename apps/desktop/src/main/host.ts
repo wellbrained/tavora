@@ -2040,8 +2040,12 @@ export class Host {
     ipcMain.handle("host:browse-catalog", async (event, target?: unknown): Promise<CatalogListResult> => {
       if (!fromHost(event)) return { status: "unreachable" };
       if (!this.library.onlineSearch) return { status: "off" };
-      // A workspace it can't find is "can't tell", never an empty list: the empty page would read that as "no modules for this game".
-      if (!this.catalogScopeOf(target)) return { status: "unavailable" };
+      if (!this.catalogScopeOf(target)) {
+        // A named workspace it can't find is "can't tell", never an empty list: the empty page would read that as "no modules
+        // for this game". With no workspace open at all, there is simply nothing that fits.
+        const named = typeof target === "object" && target !== null && "workspaceId" in target;
+        return named ? { status: "unavailable" } : { status: "ok", modules: [] };
+      }
       // Asked again once the listing was read: a game added by name may just have learned its game's id from it.
       return this.catalog.list(() => this.catalogScopeOf(target) ?? { games: [] }, this.language);
     });

@@ -34,9 +34,9 @@ watch(
   () => [props.workspace.id, isGame.value] as const,
   async ([workspaceId, game]) => {
     made.value = null;
-    if (!game) return;
-    const listed = await loader.run(() => api.browseCatalog({ workspaceId }));
-    if (listed?.status === "ok") made.value = madeForWorkspace(listed.modules);
+    // Always one run, so moving on (to a personal workspace, too) drops an answer still on its way.
+    const listed = await loader.run(async () => (game ? api.browseCatalog({ workspaceId }) : null));
+    if (listed?.status === "ok" && props.workspace.id === workspaceId) made.value = madeForWorkspace(listed.modules);
   },
   { immediate: true },
 );
@@ -98,7 +98,7 @@ async function ask() {
     <div class="flex max-w-124 flex-wrap justify-center gap-2">
       <!-- While the catalog is asked: one made-up tile where the game's own will be. -->
       <Skeleton v-if="loader.busy.value" :loading="true" data-testid="made-for-loading">
-        <ActionTile label="A module" featured tabindex="-1"><template #icon><span class="bg-muted block size-9 rounded-md" /></template></ActionTile>
+        <ActionTile label="A module" featured><template #icon><span class="bg-muted block size-9 rounded-md" /></template></ActionTile>
       </Skeleton>
       <ActionTile
         v-for="module in gameShown"

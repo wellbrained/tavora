@@ -442,6 +442,21 @@ describe("StartModules", () => {
     expect(tiles()).toEqual([...general.map((id) => `start-add-${id}`), "empty-add-module"]);
   });
 
+  it("drops a game's late answer once the page shows a personal workspace", async () => {
+    withModules(general);
+    const answer = deferred<unknown>();
+    host.api.browseCatalog.mockReturnValue(answer.promise);
+    const shown = ref<WorkspaceView>(workspace);
+    mount(StartModules, () => ({ workspace: shown.value }));
+    await nextTick();
+    shown.value = { ...workspace, id: "home", kind: "personal" } as WorkspaceView;
+    await settle();
+    answer.resolve(listed(["tavora.map"]));
+    await settle();
+    expect($("made-for-add-tavora.map")).toBeNull();
+    expect($("made-for-loading")).toBeNull();
+  });
+
   it("asks no catalog in a personal workspace", async () => {
     withModules(general);
     mount(StartModules, () => ({ workspace: { ...workspace, id: "home", kind: "personal" } }));
