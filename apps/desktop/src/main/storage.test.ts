@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -190,12 +190,27 @@ describe("PanelStateStore", () => {
       await asOwner(store, "k1").set(id, { k: 1 });
       await asOwner(store, "local").set(id, { local: 1 });
     }
-    expect((await readdir(folder)).length).toBe(4);
+    const aside = path.join(folder, "aside");
+    expect((await readdir(folder)).filter((name) => name.endsWith(".json")).length).toBe(2);
+    expect((await readdir(aside)).length).toBe(2);
     await store.prune(new Set([B]));
-    expect((await readdir(folder)).filter((name) => name.startsWith(A))).toEqual([]);
+    expect([...(await readdir(folder)), ...(await readdir(aside))].filter((name) => name.startsWith(A))).toEqual([]);
     expect(await asOwner(store, "k1").get(B)).toEqual({ k: 1 });
     await store.remove(B);
-    expect(await readdir(folder)).toEqual([]);
+    expect(await readdir(folder)).toEqual(["aside"]);
+    expect(await readdir(aside)).toEqual([]);
+  });
+
+  it("keeps the state set aside where an older Tavora's cleanup doesn't reach it, and names the owner a file was saved for", async () => {
+    const folder = path.join(dir, "panel-state");
+    const store = new PanelStateStore(folder);
+    await asOwner(store, "k1").set(A, { k: 1 });
+    expect(await new PanelStateStore(folder).ownerOf(A)).toBe("k1");
+    expect(await new PanelStateStore(folder).ownerOf(B)).toBeNull();
+    await asOwner(store, "local").set(A, { local: 1 });
+    // The previous version's prune: every *.json in panel-state/ whose name isn't a panel of a workspace.
+    for (const name of await readdir(folder)) if (name.endsWith(".json") && name.slice(0, -".json".length) !== A) await rm(path.join(folder, name));
+    expect(await asOwner(new PanelStateStore(folder), "k1").get(A)).toEqual({ k: 1 });
   });
 
   it("keeps the owner noted when a newer Tavora's fields are kept, and writes it once", async () => {

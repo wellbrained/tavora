@@ -211,14 +211,16 @@ export function settlePanelTypes(state: WorkspaceState, typesOf: (moduleId: stri
 }
 
 /**
- * Notes the owner a panel runs as on every panel from before owners were noted, whose module is loaded (`ownerOf`): what
- * it left counts as that owner's. True when one was noted.
+ * Notes an owner on every panel from before owners were noted: the one its panel state names (`stampOf`, what its page
+ * saved last), else the owner its module is loaded for now (`ownerOf`), as what it left counts as that owner's. A panel
+ * whose state names another owner than its module's now starts without what that owner left (host.ts settleOwner).
+ * True when one was noted.
  */
-export function noteOwners(state: WorkspaceState, ownerOf: (moduleId: string) => string | undefined): boolean {
+export function noteOwners(state: WorkspaceState, ownerOf: (moduleId: string) => string | undefined, stampOf?: (instanceId: string) => string | undefined): boolean {
   let noted = false;
   for (const workspace of Object.values(state.workspaces)) {
     for (const record of workspace.instances) {
-      const owner = record.owner === undefined ? ownerOf(record.moduleId) : undefined;
+      const owner = record.owner === undefined ? (stampOf?.(record.instanceId) ?? ownerOf(record.moduleId)) : undefined;
       if (owner === undefined) continue;
       record.owner = owner;
       noted = true;

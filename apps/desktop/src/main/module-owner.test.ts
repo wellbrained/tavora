@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -94,6 +94,27 @@ describe("a panel that starts after its module id changed hands", () => {
     const back = new PanelStateStore(path.join(dir, "panel-state"));
     expect(await back.get(CLOSED, "k1")).toEqual({ k: "canary" });
     expect(await back.get(LEGACY, "k1")).toEqual({ k: "legacy" });
+  });
+
+  it("from before owners were noted, with a panel state another owner saved: it starts without what that owner left", async () => {
+    const { dir, file } = await saved();
+    // The record names no owner (an older Tavora wrote it); its panel state says k1 saved it; x is local's now.
+    const raw = JSON.parse(await readFile(file, "utf8")) as { workspaces: Record<string, { instances: Record<string, unknown>[] }> };
+    for (const workspace of Object.values(raw.workspaces)) for (const record of workspace.instances) delete record.owner;
+    await writeFile(file, JSON.stringify(raw));
+    const state = await loadWorkspace(file, ["a", "b"], () => true);
+    const panelState = new PanelStateStore(path.join(dir, "panel-state"));
+    const stamps = new Map<string, string>();
+    for (const id of [OPEN, CLOSED, LEGACY]) {
+      const stamp = await panelState.ownerOf(id);
+      if (stamp) stamps.set(id, stamp);
+    }
+    noteOwners(state, () => "local", (instanceId) => stamps.get(instanceId));
+    const [closed, legacy] = state.workspaces.b!.instances;
+    expect(closed!.owner).toBe("k1");
+    expect(await start(closed!, "local", panelState)).toEqual({ content: null, state: null });
+    // Nothing says whose the other one's content is: it counts as the owner's now (as before owners were noted).
+    expect(legacy!.owner).toBe("local");
   });
 
   it("in a workspace not shown when the id changed hands: it starts without them when that workspace opens", async () => {

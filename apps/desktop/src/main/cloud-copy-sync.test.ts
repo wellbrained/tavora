@@ -445,7 +445,7 @@ describe("the cloud copy, as Tavora runs it", () => {
     await sync.turnOn();
     expect(sync.view()).toMatchObject({ on: true, askKey: false, recoveryKey: null });
 
-    await sync.signedOut();
+    await sync.signedOut("me");
     expect(sync.view().on).toBe(false);
     await sync.turnOn();
     expect(sync.view()).toMatchObject({ on: false, askKey: true });
@@ -460,7 +460,7 @@ describe("the cloud copy, as Tavora runs it", () => {
     expect(sync.view()).toMatchObject({ on: true, folder });
     await expect(stat(path.join(a.userData, "account-vault.bin"))).resolves.toBeTruthy();
 
-    await sync.signedOut();
+    await sync.signedOut("me");
     expect(sync.view()).toMatchObject({ on: true, folder });
     await expect(stat(path.join(a.userData, "account-key.json"))).resolves.toBeTruthy();
     await expect(stat(path.join(a.userData, "account-vault.bin"))).rejects.toThrow();
@@ -508,7 +508,7 @@ describe("the cloud copy, as Tavora runs it", () => {
     const signedOut = tavora(cloud, a, { signedIn: false });
     await signedOut.sync.beforeLoad();
     expect(signedOut.sync.view()).toMatchObject({ on: true, problem: "signed-out" });
-    await signedOut.sync.signedOut();
+    await signedOut.sync.signedOut("me");
     expect(signedOut.sync.view().on).toBe(false);
   });
 
@@ -704,7 +704,7 @@ describe("what the copy is doing, and closing while it uploads", () => {
     const release = holdNet((route) => route.endsWith("/copy/manifest"));
     const entering = sync.enterKey(key);
     await until(() => net.waiting > 0);
-    await sync.signedOut();
+    await sync.signedOut("me");
     release();
     await entering;
     expect(sync.view()).toMatchObject({ on: false, conflict: false });
@@ -722,7 +722,7 @@ describe("what the copy is doing, and closing while it uploads", () => {
     const release = holdNet((route) => route === "PUT /v1/account/vault");
     const starting = sync.startOver().catch(() => undefined);
     await until(() => net.waiting > 0);
-    await sync.signedOut();
+    await sync.signedOut("me");
     release();
     await starting;
     expect(sync.view()).toMatchObject({ on: false, recoveryKey: null });
@@ -790,7 +790,7 @@ describe("what the copy is doing, and closing while it uploads", () => {
     const release = hold();
     const move = sync.move(folder);
     await until(() => sync.view().busy === "uploading");
-    await sync.signedOut();
+    await sync.signedOut("me");
     release();
     await move;
     expect(sync.view().on).toBe(false);
@@ -866,7 +866,7 @@ describe("what the copy is doing, and closing while it uploads", () => {
     expect(sync.holdClose(() => void closed++)).toBe(true);
     await until(() => sync.view().busy === "uploading");
     // Signed out on another device: the copy on the service is off here.
-    await sync.signedOut();
+    await sync.signedOut("me");
     expect(sync.holdClose(() => void closed++)).toBe(false);
     release();
     await until(() => sync.view().busy === null);

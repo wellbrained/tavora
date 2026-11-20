@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readdir, rename, rm } from "node:fs/promises";
+import { mkdir, readdir, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import { isModuleId, isOwnerId } from "@tavora/module-schema";
 import { LIMITS, type JsonValue } from "@tavora/sdk/protocol";
@@ -169,7 +169,8 @@ export interface PanelStateAccess {
  * Tavora's) are kept. A module panel's state is kept with the owner (publisher) that wrote it: when the panel's module
  * id comes to load for another owner (a development folder over a catalog copy, also while the panel was closed or
  * Tavora was), that owner never reads it (handOver), and its writes never replace it: the first one moves the other
- * owner's file aside (`<instanceId>.<owner tag>.json`), where that owner finds it again when the id comes back to it.
+ * owner's file aside (`aside/<instanceId>.<owner tag>.json`, a folder older Tavoras' cleanup doesn't look into), where
+ * that owner finds it again when the id comes back to it.
  */
 export class PanelStateStore {
   private readonly queue = new SerialQueue();
@@ -193,7 +194,23 @@ export class PanelStateStore {
   /** Where `owner`'s state of the panel waits while another owner's page runs in it. */
   private asideFile(instanceId: string, owner: string): string {
     if (!INSTANCE_ID.test(instanceId)) throw new Error("invalid instance id");
-    return path.join(this.dir, `${instanceId}.${ownerTag(owner)}.json`);
+    return path.join(this.asideDir, `${instanceId}.${ownerTag(owner)}.json`);
+  }
+
+  private get asideDir(): string {
+    return path.join(this.dir, ASIDE_FOLDER);
+  }
+
+  /**
+   * The owner noted in a panel's state file, read at start before any page runs (a panel record from before owners
+   * were noted takes it: workspace.ts noteOwners). Null when there is none.
+   */
+  async ownerOf(instanceId: string): Promise<string | null> {
+    const file = this.file(instanceId);
+    return this.queue.run(async () => {
+      if (!this.stamps.has(file)) await this.read(file).catch(() => null);
+      return this.stamps.get(file) ?? null;
+    });
   }
 
   /** The panel's state; with `owner` (a module panel), only what that owner wrote (a file from before owners were noted counts). */
@@ -237,6 +254,7 @@ export class PanelStateStore {
     if (!this.stamps.has(file)) await this.read(file);
     const other = this.stamps.get(file);
     if (typeof other !== "string" || other === owner) return;
+    await mkdir(this.asideDir, { recursive: true });
     await rename(file, this.asideFile(instanceId, other)).catch((error: NodeJS.ErrnoException) => {
       if (error.code !== "ENOENT") throw error;
     });
@@ -288,8 +306,8 @@ export class PanelStateStore {
       await rm(file, { force: true });
       this.kept.delete(file);
       this.stamps.delete(file);
-      const names = await readdir(this.dir).catch(() => [] as string[]);
-      for (const name of names) if (panelOfFile(name) === instanceId && name !== `${instanceId}.json`) await rm(path.join(this.dir, name), { force: true });
+      const names = await readdir(this.asideDir).catch(() => [] as string[]);
+      for (const name of names) if (panelOfFile(name) === instanceId) await rm(path.join(this.asideDir, name), { force: true });
     });
   }
 
@@ -312,15 +330,20 @@ export class PanelStateStore {
           }),
         ),
     );
+    const aside = await readdir(this.asideDir).catch(() => [] as string[]);
+    await Promise.all(aside.filter((name) => !keep.has(panelOfFile(name))).map((name) => this.queue.run(() => rm(path.join(this.asideDir, name), { force: true }))));
   }
 }
+
+/** The folder in panel-state/ that holds the state other owners left (PanelStateStore). */
+const ASIDE_FOLDER = "aside";
 
 /** A short name for an owner, safe in a file name. */
 function ownerTag(owner: string): string {
   return createHash("sha256").update(owner).digest("hex").slice(0, 16);
 }
 
-/** The panel a state file is of: `<instanceId>.json`, or `<instanceId>.<owner tag>.json` for one kept aside. */
+/** The panel a state file is of: `<instanceId>.json`, or `aside/<instanceId>.<owner tag>.json`. */
 function panelOfFile(name: string): string {
   return /^(.+?)(\.[0-9a-f]{16})?\.json$/.exec(name)?.[1] ?? name;
 }

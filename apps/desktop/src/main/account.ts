@@ -320,6 +320,11 @@ export class AccountClient {
     return { status: response.status, body: typeof answer === "object" && answer !== null && !Array.isArray(answer) ? (answer as Record<string, unknown>) : {} };
   }
 
+  /** The account signed in (sign-in.ts accountIdOf), or null when signed out. */
+  accountId(): string | null {
+    return this.options.enabled ? this.options.signIn.id() : null;
+  }
+
   /** The sign-in token, for another call to the service that needs a signed-in user (sharing icons); null when signed out. */
   token(): string | null {
     return this.options.enabled ? (this.saved?.token ?? null) : null;

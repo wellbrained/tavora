@@ -133,7 +133,13 @@ export class Pairing {
    * PC started over (its vault no longer opens) is not: this PC may ask for the new one, and never hands out its own.
    */
   private get hasKey(): boolean {
-    return this.accountKey.get() !== null && this.accountKey.trouble !== "unopened";
+    return this.key() !== null && this.accountKey.trouble !== "unopened";
+  }
+
+  /** The key this PC hands out: the account's signed in; signed out, the cloud copy's in its folder. */
+  private key(): Buffer | null {
+    if (this.accountKey.signedIn) return this.accountKey.get();
+    return this.options.copySync.place !== null ? this.accountKey.copyKey() : null;
   }
 
   /** Tavora's service, while signed in. */
@@ -407,7 +413,7 @@ export class Pairing {
     this.answering = null;
     this.refused.add(id);
     this.changed();
-    const key = this.hasKey ? this.accountKey.get() : null;
+    const key = this.hasKey ? this.key() : null;
     try {
       // Signed in, the key goes out only when it still opens the account's vault (another PC may have started over since).
       if (allow && key && this.accountKey.signedIn && !(await this.accountKey.fits())) {

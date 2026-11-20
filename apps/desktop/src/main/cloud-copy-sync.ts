@@ -20,6 +20,7 @@ import {
 } from "./cloud-copy";
 import { AccountKey } from "./account-key";
 import type { Encryptor } from "./discord-store";
+import { recoveryKey } from "./copy-crypto";
 import { checkFolder, FolderStorage } from "./copy-folder";
 import { writeFileAtomic } from "./fsutil";
 import { readSavedFile } from "./json";
@@ -138,6 +139,8 @@ export class CopySync {
   private activity: CloudCopyActivity = { phase: "idle" };
   private copy: CloudCopyView["copy"] = null;
   private shownKey: string | null = null;
+  /** The account signed in as last told (accountChanged); undefined before the first. */
+  private account: string | null | undefined = undefined;
   /** The questions syncing waits on. They can be open together (a key asked for while a conflict stands), so it is a set. */
   private questions: ReadonlySet<Question> = new Set();
   private closing: Closing = { phase: "open" };
@@ -218,8 +221,26 @@ export class CopySync {
     this.options.log?.(line);
   }
 
+  /** The key the copy is sealed with: off while another account than the copy's is signed in (account-key.ts). */
   private get key(): Buffer | null {
-    return this.accountKeys.get();
+    return this.accountKeys.copyKey();
+  }
+
+  /** The recovery key to show: signed out, the copy's only for a copy in a folder (else only a key of no account). */
+  private keyToShow(): string | null {
+    if (this.accountKeys.signedIn || this.folder === null) return this.accountKeys.recoveryKey();
+    const key = this.key;
+    return key ? recoveryKey(key) : null;
+  }
+
+  /** Signed in as another account, or signed out: a recovery key shown for the one before goes. */
+  accountChanged(account: string | null): void {
+    if (account === this.account) return;
+    const first = this.account === undefined;
+    this.account = account;
+    if (first || this.shownKey === null) return;
+    this.shownKey = null;
+    this.changed();
   }
 
   /** The folder the copy is kept in (or is being turned on in), or null for the service. */
@@ -567,7 +588,11 @@ export class CopySync {
     const setUp = await this.exclusive("checking", async () => {
       if (folder !== null) await checkFolder(folder);
       // Signed out, a folder's copy keeps its key here; signed in, the key is the account's.
-      return this.keyHere ? this.accountKeys.setUpHere((await this.cloud.remote()) !== null) : this.accountKeys.setUp();
+      if (this.keyHere) return this.accountKeys.setUpHere((await this.cloud.remote()) !== null);
+      const setUp = await this.accountKeys.setUp();
+      // The account's key seals the copy from now on (a key of another account's copy waits for it).
+      if (setUp.status === "ready") await this.accountKeys.useForCopy();
+      return setUp;
     }).catch((error: unknown) => {
       this.use(null);
       if (error instanceof UserError) throw error;
@@ -579,7 +604,7 @@ export class CopySync {
       this.changed();
       return;
     }
-    if (setUp.created) this.shownKey = this.accountKeys.recoveryKey();
+    if (setUp.created) this.shownKey = this.keyToShow();
     await this.startCopy(turn);
   }
 
@@ -603,12 +628,13 @@ export class CopySync {
   private async goOnWithKey(here: boolean, turn: number): Promise<void> {
     this.clear("askKey");
     try {
+      if (!here) await this.accountKeys.useForCopy();
       await this.startCopy(turn);
     } catch (error) {
       if (turn !== this.turn) return;
       // Signed out, the folder's copy is the only check: a key that doesn't open it is not kept.
       if (here && error instanceof UserError && error.key === "cloudCopy.error.wrongKey") {
-        await this.accountKeys.forget();
+        await this.accountKeys.forget(null);
         this.ask("askKey");
         this.changed();
       }
@@ -625,7 +651,11 @@ export class CopySync {
     const turn = this.turn;
     const base = await this.exclusive("checking", async () => {
       const remote = await this.cloud.remote();
-      await (this.keyHere ? this.accountKeys.startOverHere() : this.accountKeys.startOver());
+      if (this.keyHere) await this.accountKeys.startOverHere();
+      else {
+        await this.accountKeys.startOver();
+        await this.accountKeys.useForCopy();
+      }
       return remote?.version ?? 0;
     }).catch((error: unknown) => {
       if (error instanceof UserError) throw error;
@@ -638,7 +668,7 @@ export class CopySync {
     const mine = this.turn;
     this.use(folder);
     if (!(await this.keepPlace(mine, folder))) return;
-    this.shownKey = this.accountKeys.recoveryKey();
+    this.shownKey = this.keyToShow();
     this.copyOn = true;
     // Nothing of the old copy is reused: every file goes up again under the new key.
     this.state = { ...EMPTY_STATE, version: base };
@@ -689,7 +719,7 @@ export class CopySync {
   }
 
   showKey(): void {
-    this.shownKey = this.accountKeys.recoveryKey();
+    this.shownKey = this.keyToShow();
     this.changed();
   }
 
@@ -829,14 +859,21 @@ export class CopySync {
   }
 
   /**
-   * Signed out: the copy on the service and the key belong to the account, so both are gone from this PC
-   * until signed in again. A copy in a folder stays on.
+   * `account` signed out (read before the sign-in was forgotten): the copy on the service and the key belong to the
+   * account, so both are gone from this PC until signed in again. A copy in a folder stays on. A copy sealed with
+   * another account's key (one that signed out by itself earlier) is that account's: it stays as it is, with its key.
    */
-  async signedOut(): Promise<void> {
+  async signedOut(account: string | null): Promise<void> {
+    this.shownKey = null;
+    if (!this.accountKeys.copyIsOf(account)) {
+      await this.accountKeys.forget(account);
+      this.changed();
+      return;
+    }
     // A copy in the user's own folder needs no account: it stays on, with its key (still the account's). The account's
     // vault as last read, with its publisher keys, goes.
     if (this.folder !== null && (this.copyOn || this.asked("askKey"))) {
-      await this.accountKeys.forgetVault();
+      await this.accountKeys.forgetVault(account);
       this.changed();
       return;
     }
@@ -848,7 +885,7 @@ export class CopySync {
       this.copy = null;
       this.shownKey = null;
     }
-    await this.accountKeys.forget();
+    await this.accountKeys.forget(account);
     this.changed();
   }
 

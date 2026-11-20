@@ -224,7 +224,7 @@ describe("the cloud copy in a folder, as Tavora runs it", () => {
     await atA.sync.turnOn(onedrive);
     const key = atA.sync.view().recoveryKey!;
     expect(atA.sync.view()).toMatchObject({ on: true, folder: onedrive, limit: null, problem: null, copy: { size: expect.any(Number) } });
-    await atA.sync.signedOut();
+    await atA.sync.signedOut(null);
     expect(atA.sync.view().on).toBe(true);
 
     // After a restart it still knows the folder.

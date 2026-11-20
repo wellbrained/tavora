@@ -145,6 +145,12 @@ describe("loadWorkspace", () => {
     expect(noteOwners(state, (moduleId) => (moduleId === "m.a" ? "local" : undefined))).toBe(true);
     expect(state.workspaces.poe2!.instances.map((record) => record.owner)).toEqual(["k1", "local", undefined]);
     expect(noteOwners(state, (moduleId) => (moduleId === "m.a" ? "local" : undefined))).toBe(false);
+    // A panel whose state names its owner takes that one.
+    delete state.workspaces.poe2!.instances[1]!.owner;
+    expect(noteOwners(state, () => "local", (instanceId) => (instanceId === B ? "k2" : undefined))).toBe(true);
+    expect(state.workspaces.poe2!.instances.map((record) => record.owner)).toEqual(["k1", "k2", "local"]);
+    state.workspaces.poe2!.instances[1]!.owner = "local";
+    delete state.workspaces.poe2!.instances[2]!.owner;
     await saveWorkspace(file, state);
     expect((await loadWorkspace(file, ["poe2"], () => true)).workspaces.poe2!.instances[1]).toEqual({ instanceId: B, moduleId: "m.a", owner: "local" });
   });
