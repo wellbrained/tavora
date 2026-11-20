@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// Settings > Appearance: pick an installed theme and its variation. The theme
+// Settings > Appearance: pick a style (how Tavora is built: shapes, depth, fonts), then an installed theme and its
+// variation (the colours). The theme
 // choice is a dropdown whose rows show a small preview of each theme in its own
 // colours, so a theme can be judged before it is picked; picking applies it at once, and
 // Reset always goes back to the Tavora default. The font list shows each font in itself,
@@ -9,21 +10,44 @@ import { CopyPlus, FolderOpen, RefreshCw } from "@lucide/vue";
 import { computed } from "vue";
 import { SegmentedControl } from "@tavora/official-ui/components/ui/segmented-control";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger } from "@tavora/official-ui/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger } from "@tavora/official-ui/components/ui/select";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { cn } from "@tavora/official-ui/lib/utils";
-import type { HostViewState, ThemeVariationView, ThemeView } from "../../../shared/host-api";
+import type { HostViewState, StyleView, ThemeVariationView, ThemeView } from "../../../shared/host-api";
 import { fontFamily, UI_FONTS, uiFont } from "../../../shared/ui-fonts";
 import { act, state, tryToasts } from "../../host";
 import { t } from "../../i18n";
 import SettingGroup from "./SettingGroup.vue";
 import SettingRow from "./SettingRow.vue";
+import StylePreview from "./StylePreview.vue";
 import ThemePreview from "./ThemePreview.vue";
 
 defineProps<{ highlight: string | null }>();
 
 const appearance = computed(() => state.value!.appearance);
+
+/** The style everything else on this page builds on. Classic is Tavora's own look, the only one with panel styles. */
+const CLASSIC = "tavora.classic";
+const activeStyle = computed(() => appearance.value.styles.find((style) => style.id === appearance.value.styleId));
+const classic = computed(() => appearance.value.styleId === CLASSIC);
+function pickStyle(id: string) {
+  if (id !== appearance.value.styleId) void act({ type: "set-style", styleId: id });
+}
+/** Tavora's own styles have their name and line in both languages; another style shows what its file says. */
+function styleText(style: StyleView, part: "name" | "description"): string {
+  const key = `settings.style.${style.id.replace("tavora.", "")}.${part}`;
+  return style.provenance === "official" && ["tavora.classic", "tavora.hardware", "tavora.glass"].includes(style.id)
+    ? t(key as Parameters<typeof t>[0])
+    : (part === "name" ? style.name : (style.description ?? ""));
+}
+/** The style's own themes first (under its name), then all the others. */
+const themeGroups = computed(() => {
+  const own = new Set(activeStyle.value?.themes ?? []);
+  const first = appearance.value.themes.filter((theme) => own.has(theme.id));
+  const rest = appearance.value.themes.filter((theme) => !own.has(theme.id));
+  return first.length ? [{ label: activeStyle.value ? t("settings.theme.forStyle", { style: styleText(activeStyle.value, "name") }) : "", themes: first }, { label: t("settings.theme.allThemes"), themes: rest }] : [{ label: "", themes: rest }];
+});
 const active = computed(() => appearance.value.themes.find((theme) => theme.id === appearance.value.themeId));
 /** Official and Local tags only when the list has both; on every card they would say nothing. */
 const mixedThemes = computed(() => new Set(appearance.value.themes.map((theme) => theme.provenance)).size > 1);
@@ -41,12 +65,13 @@ function pickId(id: string) {
   void act({ type: "set-theme", themeId: theme.id, variationId: variation.id });
 }
 
-// The interface font; each row of the list is written in its own font.
+// The interface font; each row of the list is written in its own font. "style" keeps the style's font.
 const font = computed({
-  get: () => appearance.value.font.id,
-  set: (id: string) => void act({ type: "set-font", font: id }),
+  get: () => appearance.value.fontOverride ?? "style",
+  set: (id: string) => void act({ type: "set-font", font: id === "style" ? null : id }),
 });
 const fontInUse = computed(() => uiFont(appearance.value.font.id));
+const styleFont = computed(() => uiFont(activeStyle.value?.font));
 
 const grayscaleText = computed({
   get: () => state.value!.library.grayscaleText,
@@ -114,15 +139,21 @@ const variation = computed({
   set: (variationId: string) => void act({ type: "set-theme", themeId: appearance.value.themeId, variationId, fixed: true }),
 });
 const variationOptions = computed(() => (active.value?.variations ?? []).map((item) => ({ value: item.id, label: item.name, testid: `variation-${item.id}` })));
-// The user's own corner radius over the theme's; "theme" keeps the theme's own.
+// The user's own corner radius over the style's (in Classic the theme's); "style" keeps that one.
 const radius = computed({
-  get: () => (appearance.value.radius === null ? "theme" : String(appearance.value.radius)),
-  set: (value: string) => void act({ type: "set-radius", radius: value === "theme" ? null : Number(value) }),
+  get: () => (appearance.value.radius === null ? "style" : String(appearance.value.radius)),
+  set: (value: string) => void act({ type: "set-radius", radius: value === "style" ? null : Number(value) }),
 });
-const radiusOptions = computed(() => [
-  { value: "theme", label: t("settings.corner-radius.theme"), testid: "radius-theme" },
-  ...[4, 6, 8, 10, 12].map((px) => ({ value: String(px), label: `${px}`, testid: `radius-${px}` })),
-]);
+/** A saved radius between the steps (6 or 10 from before) stays picked, as its own step. */
+const radiusOptions = computed(() => {
+  const steps = [0, 4, 8, 12, 16];
+  const own = appearance.value.radius;
+  if (own !== null && !steps.includes(own)) steps.push(own);
+  return [
+    { value: "style", label: t("settings.corner-radius.style"), testid: "radius-style" },
+    ...steps.sort((a, b) => a - b).map((px) => ({ value: String(px), label: `${px}`, testid: `radius-${px}` })),
+  ];
+});
 
 const showVariation = computed(() => {
   const all = active.value?.variations ?? [];
@@ -132,6 +163,38 @@ const showVariation = computed(() => {
 
 <template>
   <SettingGroup>
+    <SettingRow :label="t('settings.style.label')" :description="t('settings.style.description')" setting="style" :highlighted="highlight === 'style'">
+      <!-- Like the theme: closed it shows the style in use, open it lists every style with a picture drawn from its looks. -->
+      <Select :model-value="appearance.styleId" @update:model-value="(id) => pickStyle(String(id))">
+        <SelectTrigger class="h-auto! w-72 py-1.5 pl-1.5 text-left" :aria-label="t('settings.style.label')" data-testid="style-select">
+          <span class="flex min-w-0 items-center gap-2.5">
+            <StylePreview v-if="activeStyle" :style="activeStyle" size="sm" />
+            <span class="flex min-w-0 flex-col">
+              <span class="truncate font-medium">{{ activeStyle ? styleText(activeStyle, "name") : "" }}</span>
+              <span v-if="activeStyle" class="text-muted-foreground truncate text-xs">{{ styleText(activeStyle, "description") }}</span>
+            </span>
+          </span>
+        </SelectTrigger>
+        <SelectContent class="w-[26rem]" data-testid="styles">
+          <SelectItem
+            v-for="item in appearance.styles"
+            :key="item.id"
+            :value="item.id"
+            :description="styleText(item, 'description') || undefined"
+            class="items-center! gap-3 pr-2 [&>span:first-child]:hidden"
+            :data-testid="`style-${item.id}`"
+          >
+            <template #thumb><StylePreview :style="item" size="md" /></template>
+            <span class="flex items-center gap-2">
+              {{ styleText(item, "name") }}
+              <Badge v-if="item.id === appearance.styleId" class="bg-primary/15 text-primary flex-none border-transparent py-0 text-[10px] font-semibold" data-testid="style-in-use">{{
+                t("settings.theme.inUse")
+              }}</Badge>
+            </span>
+          </SelectItem>
+        </SelectContent>
+      </Select>
+    </SettingRow>
     <SettingRow
       :label="t('settings.theme.label')"
       :description="t('settings.theme.description')"
@@ -151,8 +214,10 @@ const showVariation = computed(() => {
         </SelectTrigger>
         <!-- The kit's list hides its scrollbar; this list is long, so it shows one. -->
         <SelectContent class="theme-list max-h-[min(70vh,36rem)] w-[26rem]" data-testid="themes">
+          <SelectGroup v-for="group in themeGroups" :key="group.label">
+          <SelectLabel v-if="group.label" :data-testid="`theme-group-${group.label}`">{{ group.label }}</SelectLabel>
           <SelectItem
-            v-for="theme in appearance.themes"
+            v-for="theme in group.themes"
             :key="theme.id"
             :value="theme.id"
             :description="theme.description ?? undefined"
@@ -171,15 +236,22 @@ const showVariation = computed(() => {
               }}</Badge>
             </span>
           </SelectItem>
+          </SelectGroup>
         </SelectContent>
       </Select>
     </SettingRow>
     <SettingRow :label="t('settings.font.label')" :description="t('settings.font.description')" setting="font" :highlighted="highlight === 'font'">
       <Select v-model="font">
         <SelectTrigger class="w-72" :aria-label="t('settings.font.label')" data-testid="font-select">
-          <span class="truncate" :style="{ fontFamily: fontFamily(fontInUse) }">{{ fontInUse.name }}</span>
+          <span class="truncate" :style="{ fontFamily: fontFamily(fontInUse) }">
+            <template v-if="appearance.fontOverride === null">{{ t("settings.font.fromStyle") }} <span class="text-muted-foreground">({{ fontInUse.name }})</span></template>
+            <template v-else>{{ fontInUse.name }}</template>
+          </span>
         </SelectTrigger>
         <SelectContent data-testid="fonts">
+          <SelectItem value="style" :description="styleFont.name" :style="{ fontFamily: fontFamily(styleFont) }" data-testid="font-style">
+            {{ t("settings.font.fromStyle") }}
+          </SelectItem>
           <SelectItem
             v-for="item in UI_FONTS"
             :key="item.id"
@@ -222,7 +294,9 @@ const showVariation = computed(() => {
   </SettingGroup>
 
   <SettingGroup :title="t('settings.heading.display')">
+    <!-- Panel styles belong to Classic; every other style brings its own panels. -->
     <SettingRow
+      v-if="classic"
       :label="t('settings.panel-style.label')"
       :description="t('settings.panel-style.description')"
       setting="panel-style"

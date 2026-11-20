@@ -1,26 +1,9 @@
 // Previews the kit in another style and theme inside the Playground only: Tavora's own settings don't change.
-// Reads the built-in style and theme files at build time and writes them on this page the way the host would send them.
-import type { TavoraTheme } from "@tavora/sdk";
+// Reads the built-in style and theme files at build time and writes them on this page the way the host sends them
+// (the SDK's applyHostTheme puts the style's data-look-* attributes and --style-* values on <html>).
+import { CLASSIC_STYLE, styleMarks, type TavoraStyle, type TavoraTheme } from "@tavora/sdk";
 import { applyHostTheme } from "@tavora/sdk/bootstrap";
 import { applyKitTheme } from "@tavora/official-ui";
-
-// The SDK's style types (feat/style-core) replace these once that half is merged.
-type StylePart = "surface" | "tabs" | "content" | "buttons" | "inputs" | "lists" | "labels" | "status";
-type StyleLooks = Record<StylePart, string>;
-interface StyleValues {
-  borderWidth: number;
-  depth: number;
-  textSize: number;
-  controlHeight: number;
-  spacing: number;
-  glassOpacity: number;
-}
-interface TavoraStyle {
-  id: string;
-  name: string;
-  looks: StyleLooks;
-  values: StyleValues;
-}
 
 interface StyleFile extends TavoraStyle {
   radius: number;
@@ -40,48 +23,19 @@ interface ThemeFile {
   variations: ThemeVariationFile[];
 }
 
-/** Classic as the contract writes it; used when the built-in file isn't there yet. */
-const CLASSIC: StyleFile = {
-  id: "tavora.classic",
-  name: "Classic",
-  looks: { surface: "flat", tabs: "pill", content: "plain", buttons: "soft", inputs: "soft", lists: "fill", labels: "normal", status: "none" },
-  values: { borderWidth: 1, depth: 1, textSize: 13, controlHeight: 32, spacing: 1, glassOpacity: 0.8 },
-  radius: 8,
-  font: "inter",
-};
+const CLASSIC: StyleFile = { ...CLASSIC_STYLE, radius: 8, font: "inter" };
 
 const styleFiles = Object.values(import.meta.glob<StyleFile>("../../../../styles/*/tavora.style.json", { eager: true, import: "default" }));
 const themeFiles = Object.values(import.meta.glob<ThemeFile>("../../../../themes/*/tavora.theme.json", { eager: true, import: "default" }));
 
-export const STYLES: StyleFile[] = [CLASSIC, ...styleFiles.filter((style) => style.id !== CLASSIC.id)];
+export const STYLES: StyleFile[] = [styleFiles.find((style) => style.id === CLASSIC.id) ?? CLASSIC, ...styleFiles.filter((style) => style.id !== CLASSIC.id)];
 export const THEMES = themeFiles.flatMap((theme) => theme.variations.map((variation) => ({ id: `${theme.id}/${variation.id}`, theme, variation })));
 
+/** The page's fonts (the kit bundles Inter and JetBrains Mono); a style's font outside them shows in Inter here. */
 const FONTS: Record<string, string> = {
   inter: '"Inter Variable", system-ui, sans-serif',
   "jetbrains-mono": '"JetBrains Mono Variable", ui-monospace, monospace',
 };
-const PARTS = ["surface", "tabs", "content", "buttons", "inputs", "lists", "labels", "status"] as const satisfies readonly (keyof StyleLooks)[];
-const VALUES: [keyof StyleValues, string, string][] = [
-  ["borderWidth", "--style-border-width", "px"],
-  ["depth", "--style-depth", ""],
-  ["textSize", "--style-text", "px"],
-  ["controlHeight", "--style-control-height", "px"],
-  ["spacing", "--style-space", ""],
-  ["glassOpacity", "--style-glass-opacity", ""],
-];
-
-/** Writes a style the way the host's theme does: data-style, data-look-*, the --style-* values. */
-function writeStyle(style: TavoraStyle | undefined, root: HTMLElement): void {
-  if (!style) {
-    root.removeAttribute("data-style");
-    for (const part of PARTS) root.removeAttribute(`data-look-${part}`);
-    for (const [, name] of VALUES) root.style.removeProperty(name);
-    return;
-  }
-  root.setAttribute("data-style", style.id);
-  for (const part of PARTS) root.setAttribute(`data-look-${part}`, style.looks[part]);
-  for (const [key, name, unit] of VALUES) root.style.setProperty(name, `${style.values[key]}${unit}`);
-}
 
 /**
  * Shows the kit in `styleId` ("" = Tavora's) with the theme variation `themeId` (an id from THEMES; "" = Tavora's).
@@ -89,8 +43,8 @@ function writeStyle(style: TavoraStyle | undefined, root: HTMLElement): void {
  */
 export function previewStyle(styleId: string, themeId: string, host: TavoraTheme | null, root: HTMLElement = document.documentElement): void {
   if (!styleId && !themeId) return endPreview(host, root);
-  const hostStyle = (host as (TavoraTheme & { style?: StyleFile }) | null)?.style;
-  const style = STYLES.find((item) => item.id === styleId) ?? hostStyle ?? CLASSIC;
+  const fromHost: StyleFile | undefined = host?.style ? { ...host.style, radius: host.radius ?? 8, font: host.font?.id ?? "inter" } : undefined;
+  const style: StyleFile = STYLES.find((item) => item.id === styleId) ?? fromHost ?? CLASSIC;
   const picked = THEMES.find((item) => item.id === themeId);
   const tokens: Record<string, string> | undefined = picked ? { ...picked.variation.colors } : host?.tokens ? { ...host.tokens } : undefined;
   if (tokens) {
@@ -100,30 +54,29 @@ export function previewStyle(styleId: string, themeId: string, host: TavoraTheme
     tokens.toast ??= tokens.foreground ?? "";
     tokens["toast-foreground"] ??= tokens.background ?? "";
   }
-  const classic = style.id === CLASSIC.id;
   const variationRadius = picked ? (picked.variation.radius ?? 8) : (host?.radius ?? 8);
   const theme = {
     mode: picked?.variation.mode ?? host?.mode ?? "dark",
     colors: tokens ? { background: tokens.background, surface: tokens.card, text: tokens.foreground, textMuted: tokens["muted-foreground"], accent: tokens.primary } : undefined,
     tokens,
-    radius: classic ? variationRadius : (style.radius ?? variationRadius),
-    font: { id: style.font ?? "inter", family: FONTS[style.font ?? "inter"] ?? FONTS.inter },
-    style,
+    radius: style.id === CLASSIC.id ? variationRadius : style.radius,
+    font: { id: style.font, family: FONTS[style.font] ?? FONTS.inter },
+    style: { id: style.id, name: style.name, looks: style.looks, values: style.values },
   } as unknown as TavoraTheme;
   applyHostTheme(theme, root);
   applyKitTheme(theme, root);
-  writeStyle(style, root);
 }
 
 /** Back to what Tavora sends (or the page's defaults outside Tavora). */
-export function endPreview(hostTheme: TavoraTheme | null, root: HTMLElement = document.documentElement): void {
-  writeStyle(undefined, root);
-  if (hostTheme) {
-    applyHostTheme(hostTheme, root);
-    applyKitTheme(hostTheme, root);
-    writeStyle((hostTheme as TavoraTheme & { style?: TavoraStyle }).style, root);
+export function endPreview(host: TavoraTheme | null, root: HTMLElement = document.documentElement): void {
+  if (host) {
+    applyHostTheme(host, root);
+    applyKitTheme(host, root);
     return;
   }
+  // Outside Tavora: nothing but the stylesheet's defaults.
+  const { attributes } = styleMarks(undefined);
+  for (const [name] of attributes) root.removeAttribute(name);
   root.removeAttribute("style");
   root.classList.remove("dark");
   root.removeAttribute("data-mode");

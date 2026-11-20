@@ -102,7 +102,7 @@ describe("Select shows a long value", () => {
     expect(text.className).toContain("break-words")
     expect(text.className).toContain("min-w-0")
     const trigger = root.querySelector("[data-slot=select-trigger]")!
-    expect(trigger.className).toContain("data-[size=default]:min-h-8")
+    expect(trigger.className).toContain("data-[size=default]:min-h-[var(--style-control-height,32px)]")
     expect(trigger.className).not.toMatch(/data-\[size=default\]:h-8/)
     expect(trigger.className).not.toContain("line-clamp-1")
   })

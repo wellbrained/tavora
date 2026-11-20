@@ -20,6 +20,7 @@ const emit = defineEmits<{ select: []; togglePin: []; remove: []; rename: [title
 const menuOpen = ref(false);
 const scratchpad = computed(() => props.entry.id === SCRATCHPAD_ID);
 const preview = computed(() => previewFor(props.entry));
+const previewText = computed(() => preview.value || (scratchpad.value ? t("row.previewScratchpad") : t("row.previewNone")));
 const when = computed(() =>
   relativeTime(props.entry.updatedAt, Date.now(), {
     justNow: t("time.justNow"),
@@ -107,11 +108,12 @@ defineExpose({ startRename });
       <span class="flex w-full min-w-0 items-center gap-1.5 text-sm font-medium">
         <NotebookPen v-if="scratchpad" class="text-muted-foreground size-3.5 flex-none" aria-hidden="true" />
         <Pin v-else-if="entry.pinned" class="text-muted-foreground size-3.5 flex-none" :aria-label="t('row.pinned')" />
-        <span class="truncate" data-testid="note-title">{{ title }}</span>
+        <!-- A wider font or a narrow panel can shorten either line; the title shows it in full. -->
+        <span class="truncate" :title="title" data-testid="note-title">{{ title }}</span>
       </span>
       <span class="text-muted-foreground flex w-full min-w-0 gap-2 text-xs">
         <span v-if="when" class="flex-none tabular-nums">{{ when }}</span>
-        <span class="truncate">{{ preview || (scratchpad ? t("row.previewScratchpad") : t("row.previewNone")) }}</span>
+        <span class="truncate" :title="previewText">{{ previewText }}</span>
       </span>
     </button>
     <DropdownMenu v-model:open="menuOpen">

@@ -3,7 +3,8 @@
     "version": "0.6.25",
     "date": "2026-11-20",
     "notes": [
-      "Follows the style you pick in Settings > Appearance."
+      "Follows the style you pick in Settings > Appearance.",
+      "A note's title or first line that doesn't fit shows in full when you point at it."
     ]
   },
   {

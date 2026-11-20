@@ -33,39 +33,8 @@
   --style-sink: inset 0 1px calc(var(--style-depth, 1) * 2px) color-mix(in srgb, black calc(var(--style-depth, 1) * 9%), transparent);
 }
 
-/* Control heights follow --style-control-height; small and large sizes keep their steps from it. */
-:root[data-style]:not([data-style="tavora.classic"]) {
-  & :is(.tavora-button[data-size="default"], [data-slot="input"], [data-slot="search-input"] input, [data-slot="select-trigger"][data-size="default"]) {
-    height: var(--style-control-height, 32px);
-    min-height: var(--style-control-height, 32px);
-  }
-  & :is(.tavora-button[data-size="sm"], [data-slot="select-trigger"][data-size="sm"]) {
-    height: calc(var(--style-control-height, 32px) - 4px);
-    min-height: calc(var(--style-control-height, 32px) - 4px);
-  }
-  & .tavora-button[data-size="xs"] {
-    height: calc(var(--style-control-height, 32px) - 8px);
-  }
-  & .tavora-button[data-size="lg"] {
-    height: calc(var(--style-control-height, 32px) + 8px);
-  }
-  & .tavora-button[data-size="icon"] {
-    width: var(--style-control-height, 32px);
-    height: var(--style-control-height, 32px);
-  }
-  & .tavora-button[data-size="icon-sm"] {
-    width: calc(var(--style-control-height, 32px) - 4px);
-    height: calc(var(--style-control-height, 32px) - 4px);
-  }
-  & .tavora-button[data-size="icon-xs"] {
-    width: calc(var(--style-control-height, 32px) - 8px);
-    height: calc(var(--style-control-height, 32px) - 8px);
-  }
-  & .tavora-button[data-size="icon-lg"] {
-    width: calc(var(--style-control-height, 32px) + 8px);
-    height: calc(var(--style-control-height, 32px) + 8px);
-  }
-}
+/* Control heights: the kit's Button, Input and Select take --style-control-height in their own classes, so a
+   caller's own height still wins. */
 
 /* ---------- Surfaces: dialogs, menus, popovers, toasts, cards ---------- */
 
