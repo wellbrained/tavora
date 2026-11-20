@@ -1,8 +1,9 @@
 // Design styles (docs/features/style-system.md): picking a style changes Tavora and its open panels at once, without a
 // restart. The host page and every module page get data-style, a data-look per part and the --style-* sizes; the
 // style's corner reaches modules as --radius; an inset style gives module panels the theme's dark colours over a light
-// variation while Browser pages keep the host's; the pick is kept, and Reset goes back to Classic.
-import { readFile } from "node:fs/promises";
+// variation while Browser pages keep the host's; the pick is kept, and Reset goes back to Classic. The user's own
+// styles load from their styles folder: New style copies the one in use, a broken file says why, Reload finds changes.
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test, type ElectronApplication, type Page } from "@playwright/test";
 import { inModule, launch, newUserData, NOTES, openModule, openWorkspace } from "./harness";
@@ -67,4 +68,66 @@ test("a style reaches Tavora and its panels at once, inset panels get dark colou
   await again.app.close();
   const reset = JSON.parse(await readFile(path.join(userData, "library.json"), "utf8")) as Record<string, unknown>;
   expect("styleId" in reset).toBe(false);
+});
+
+test("New style copies the style in use into the styles folder, and it can be picked", async () => {
+  const userData = await newUserData();
+  const { app, page } = await launch(userData);
+  await openAppearance(page);
+  await page.getByTestId("style-select").click();
+  await page.getByTestId("style-tavora.hardware").click();
+  await expect.poll(() => onHost(page, STYLE)).toBe("tavora.hardware");
+
+  await page.getByTestId("create-starter-style").click();
+  const manifest = JSON.parse(await readFile(path.join(userData, "styles", "my-hardware", "tavora.style.json"), "utf8")) as { id: string; name: string; looks: Record<string, string> };
+  expect([manifest.id, manifest.name, manifest.looks.tabs]).toEqual(["local.my-hardware", "My Hardware", "keycap"]);
+  await page.getByTestId("style-select").click();
+  await expect(page.getByTestId("style-local.my-hardware")).toContainText("My Hardware");
+  await expect(page.getByTestId("style-local.my-hardware")).toContainText("Local");
+  await page.getByTestId("style-local.my-hardware").click();
+  await expect.poll(() => onHost(page, STYLE)).toBe("local.my-hardware");
+  expect(await onHost(page, LOOK("tabs"))).toBe("keycap");
+
+  // A second copy gets a number of its own.
+  await page.getByTestId("create-starter-style").click();
+  await page.getByTestId("style-select").click();
+  await expect(page.getByTestId("style-local.my-hardware-2")).toContainText("My Hardware 2");
+  await page.keyboard.press("Escape");
+  await app.close();
+});
+
+test("the user's own styles load on Reload, broken ones say why, and numbers out of range are kept in it", async () => {
+  const userData = await newUserData();
+  const { app, page } = await launch(userData);
+  const looks = { surface: "hairline", tabs: "underline", content: "plain", buttons: "capsule", inputs: "capsule", lists: "bar", labels: "caps", status: "none" };
+  const values = { borderWidth: 1, depth: 0, textSize: 14, controlHeight: 36, spacing: 1.1, glassOpacity: 0.8 };
+  const write = async (folder: string, style: unknown) => {
+    await mkdir(path.join(userData, "styles", folder), { recursive: true });
+    await writeFile(path.join(userData, "styles", folder, "tavora.style.json"), JSON.stringify(style));
+  };
+  await write("airy", { id: "community.airy", name: "Airy", version: "1.0.0", looks, values: { ...values, textSize: 20 }, radius: 6, font: "nunito" });
+  await write("knobs", { id: "community.knobs", name: "Knobs", version: "1.0.0", looks: { ...looks, buttons: "knob" }, values, radius: 6, font: "inter" });
+  await write("fake", { id: "tavora.fake", name: "Fake", version: "1.0.0", looks, values, radius: 6, font: "inter" });
+
+  await openAppearance(page);
+  await page.getByTestId("style-select").click();
+  await expect(page.getByTestId("style-tavora.classic")).toBeVisible();
+  await expect(page.getByTestId("style-community.airy")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+
+  await page.getByTestId("reload-styles").click();
+  await expect(page.getByTestId("style-problems")).toContainText("knobs");
+  await expect(page.getByTestId("style-problems")).toContainText("looks.buttons must be one of");
+  await expect(page.getByTestId("style-problems")).toContainText("fake");
+  await expect(page.getByTestId("style-problems")).toContainText('reserved for Tavora\'s own styles');
+  await expect(page.getByTestId("style-hints")).toContainText("airy");
+  await expect(page.getByTestId("style-hints")).toContainText("values.textSize 20 is outside 12 to 15, so 15 is used");
+
+  await page.getByTestId("style-select").click();
+  await page.getByTestId("style-community.airy").click();
+  await expect.poll(() => onHost(page, STYLE)).toBe("community.airy");
+  expect(await onHost(page, LOOK("lists"))).toBe("bar");
+  expect(await onHost(page, VAR("--style-text"))).toBe("15px");
+  expect(await onHost(page, VAR("--radius"))).toBe("6px");
+  await app.close();
 });
