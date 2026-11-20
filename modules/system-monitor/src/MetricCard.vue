@@ -42,7 +42,7 @@ withDefaults(defineProps<{
       <span class="text-[2.125rem] leading-none font-semibold tabular-nums tavora-numerals">{{ usage }}<span v-if="usage" class="text-muted-foreground ml-0.5 text-base font-normal">%</span></span>
       <template v-if="hasTemperature">
       <span v-if="temperature" :class="cn('text-[2.125rem] leading-none font-semibold tabular-nums tavora-numerals', temperatureClass)" data-testid="temperature">{{ temperature }}<span class="text-muted-foreground ml-0.5 text-base font-normal">°C</span></span>
-      <span v-else class="text-muted-foreground text-[2.125rem] leading-none font-semibold tabular-nums" :title="temperatureHint" :tabindex="temperatureHint ? 0 : undefined" data-testid="temperature-none">–<span class="ml-0.5 text-base font-normal">°C</span></span>
+      <span v-else class="text-muted-foreground text-[2.125rem] leading-none font-semibold tabular-nums tavora-numerals" :title="temperatureHint" :tabindex="temperatureHint ? 0 : undefined" data-testid="temperature-none">–<span class="ml-0.5 text-base font-normal">°C</span></span>
       </template>
     </div>
     <UsageGraph :values="values" :label="graphLabel" />

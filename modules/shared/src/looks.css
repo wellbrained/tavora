@@ -36,6 +36,13 @@
 /* Control heights: the kit's Button, Input and Select take --style-control-height in their own classes, so a
    caller's own height still wins. */
 
+/* Keyboard focus: several looks replace a control's box-shadow, which is where the kit draws its focus ring, so in
+   every style but Classic a focused button or field gets an outline instead. */
+:root[data-style]:not([data-style="tavora.classic"]) :is(.tavora-button, [data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"], [data-slot="combobox-anchor"], [data-slot="tabs-trigger"]):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
 /* ---------- Surfaces: dialogs, menus, popovers, toasts, cards ---------- */
 
 /* Raised: a solid body with a top light and a cast shadow, like a device's casing. */
@@ -202,11 +209,13 @@
     border-color: transparent;
     box-shadow: none;
     /* A field with a problem keeps its red edge; focus keeps the ring. */
-    &[aria-invalid="true"] {
-      border-color: var(--destructive);
-    }
     &:focus-visible {
       border-color: var(--ring);
+    }
+    /* After focus: a field with a problem stays red while you type in it. */
+    &[aria-invalid="true"],
+    &:has([aria-invalid="true"]) {
+      border-color: var(--destructive);
     }
   }
   & [data-slot="checkbox"] {
@@ -386,12 +395,14 @@
     border-radius: 0;
     background: transparent;
     box-shadow: none;
-    &[aria-invalid="true"] {
-      border-color: var(--destructive);
-    }
     &:focus-visible,
     &:focus-within {
       border-color: var(--primary);
+    }
+    /* After focus: a field with a problem stays red while you type in it (a number field marks its inner input). */
+    &[aria-invalid="true"],
+    &:has([aria-invalid="true"]) {
+      border-color: var(--destructive);
     }
   }
   & [data-slot="checkbox"] {
