@@ -203,7 +203,7 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     const key = store.publisherKey(checked.owner);
     if (!key) {
       // A leaked key whose account unlinked it or was deleted says so, rather than asking to link it (which is refused).
-      if (store.isLeakedKey(checked.owner)) return refuse(context, 403, "key-leaked", "This publisher key was reported as leaked, so it publishes nothing new.");
+      if (store.isLeakedKey(checked.owner)) return refuse(context, 403, "key-leaked", "This publisher key was reported as leaked, so it can't publish. Use a new key.");
       return refuse(context, 403, "key-not-linked", "This publisher key is not linked to a Tavora account.");
     }
     if (!signedStatement(Buffer.from(key.publicKey, "base64"), `${PUBLISH_STATEMENT}\n${checked.sha256}`, signature)) {

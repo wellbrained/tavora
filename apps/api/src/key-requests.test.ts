@@ -1,4 +1,4 @@
-import { createPublicKey, generateKeyPairSync, type KeyObject } from "node:crypto";
+import { createPublicKey, generateKeyPairSync, randomBytes, sign, type KeyObject } from "node:crypto";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -12,7 +12,7 @@ import { buildDataset, writeDatabase } from "./dataset.ts";
 import { createHostedStore } from "./hosted-store.ts";
 import { IconState } from "./icon-state.ts";
 import { createTestInbox } from "./mail.ts";
-import { keyFingerprint } from "./publishers.ts";
+import { keyFingerprint, LINK_STATEMENT } from "./publishers.ts";
 import { createRateLimiter } from "./rate-limit.ts";
 import { createSubmissions } from "./submissions.ts";
 
@@ -152,6 +152,14 @@ describe("asking to replace a lost key", () => {
 });
 
 describe("a key reported as leaked", () => {
+  /** Links `key` to the signed-in account through the link route, as Tavora and `tavora-pack link` do. */
+  const linkThroughRoute = async (request: ReturnType<typeof setup>["request"], token: string, key: KeyObject) => {
+    await request("PUT", "/v1/account/developer", { name: `dev ${randomBytes(3).toString("hex")}` }, token);
+    const { code } = (await (await request("POST", "/v1/account/keys/code", {}, token)).json()) as { code: string };
+    const signature = sign(null, Buffer.from(`${LINK_STATEMENT}\n${code}`, "utf8"), key).toString("base64");
+    return request("POST", "/v1/publishers/link", { code, publicKey: rawKey(key).toString("base64"), signature });
+  };
+
   it("stays leaked when its account is deleted: its revocation still gets signed and no other account links it", async () => {
     const { request, adminCall, store, developer, catalog, clock } = setup();
     const dev = await developer("dev@example.com");
@@ -159,45 +167,74 @@ describe("a key reported as leaked", () => {
     await request("POST", `/v1/account/keys/${dev.old}/replace`, { new: dev.new, leaked: true }, dev.token);
     store.deleteAccount(dev.accountId);
     expect(store.allKeyRequests()).toEqual([]);
-    expect(store.isLeakedKey(dev.old)).toBe(true);
+    expect(store.leakedKeys()).toEqual([{ fingerprint: dev.old, requestedAt: clock.now }]);
     const revocations = (await (await adminCall("/api/keys/revocations.json")).json()) as Revocation[];
     expect(revocations).toEqual([{ fingerprint: dev.old, revoked: "2026-10-20T12:00:00Z", allow: [catalog.index()[0]!.zip.sha256] }]);
+    // The review page still lists it, with nothing about the account.
+    const listed = (await (await adminCall("/api/keys")).json()) as { requests: Record<string, unknown>[] };
+    expect(listed.requests).toEqual([
+      { old: dev.old, new: null, account: null, email: null, developer: null, leaked: true, requestedAt: "2026-10-20T12:00:00.000Z", newLinkedAt: null, status: "waiting" },
+    ]);
     const other = await developer("other@example.com");
-    expect(store.linkKey(other.accountId, dev.old, rawKey(dev.lost).toString("base64"), clock.now)).toBe("taken");
+    expect(store.linkKey(other.accountId, dev.old, rawKey(dev.lost).toString("base64"), clock.now)).toBe("leaked");
+    const answer = await linkThroughRoute(request, other.token, dev.lost);
+    expect(answer.status).toBe(409);
+    expect(await answer.json()).toMatchObject({ reason: "key-taken", error: expect.stringContaining("leaked") });
     expect(store.accountOfKey(dev.old)).toBeNull();
   });
 
   it("stays leaked when its account unlinks it once the request is done, also after a list that drops it", async () => {
-    const { request, adminCall, store, developer, sign, clock } = setup();
+    const { request, adminCall, store, developer, sign: signList, clock } = setup();
     const dev = await developer("dev@example.com");
     const other = await developer("other@example.com");
     await request("POST", `/v1/account/keys/${dev.old}/replace`, { new: dev.new, leaked: true }, dev.token);
     // Taken while it is linked, and while the report waits.
     expect(store.linkKey(other.accountId, dev.old, rawKey(dev.lost).toString("base64"), clock.now)).toBe("taken");
-    sign("successions", [{ old: dev.old, new: dev.new, account: dev.accountId }]);
-    sign("revocations", [{ fingerprint: dev.old, revoked: "2026-10-20T12:00:00Z", allow: [] }]);
+    signList("successions", [{ old: dev.old, new: dev.new, account: dev.accountId }]);
+    signList("revocations", [{ fingerprint: dev.old, revoked: "2026-10-20T12:00:00Z", allow: [] }]);
     expect((await request("DELETE", `/v1/account/keys/${dev.old}`, undefined, dev.token)).status).toBe(200);
-    expect(store.leakedKeys()).toEqual([{ fingerprint: dev.old, new: dev.new, accountId: dev.accountId, requestedAt: clock.now }]);
-    expect(store.linkKey(other.accountId, dev.old, rawKey(dev.lost).toString("base64"), clock.now)).toBe("taken");
+    expect(store.leakedKeys()).toEqual([{ fingerprint: dev.old, requestedAt: clock.now }]);
+    expect(store.linkKey(other.accountId, dev.old, rawKey(dev.lost).toString("base64"), clock.now)).toBe("leaked");
     // Its own account can't link it back either.
-    expect(store.linkKey(dev.accountId, dev.old, rawKey(dev.lost).toString("base64"), clock.now)).toBe("taken");
+    expect(store.linkKey(dev.accountId, dev.old, rawKey(dev.lost).toString("base64"), clock.now)).toBe("leaked");
+    // Signed, so it can't be turned down: that would free a key the lists still revoke.
+    expect((await adminCall("/api/keys/decline", { old: dev.old })).status).toBe(409);
     store.deleteAccount(dev.accountId);
+    expect((await adminCall("/api/keys/decline", { old: dev.old })).status).toBe(409);
     // A served list without it: the next one to sign has it again.
-    sign("revocations", []);
+    signList("revocations", []);
     expect(await (await adminCall("/api/keys/revocations.json")).json()).toEqual([{ fingerprint: dev.old, revoked: "2026-10-20T12:00:00Z", allow: [] }]);
-    expect(store.linkKey(other.accountId, dev.old, rawKey(dev.lost).toString("base64"), clock.now)).toBe("taken");
+    expect(store.linkKey(other.accountId, dev.old, rawKey(dev.lost).toString("base64"), clock.now)).toBe("leaked");
   });
 
-  it("is free again once the maintainer turns the report down", async () => {
-    const { request, store, developer, sign } = setup();
+  it("can't be linked while the signed lists revoke it, even without a report the service still knows of", async () => {
+    const { request, store, developer, sign: signList } = setup();
+    const dev = await developer("dev@example.com");
+    const other = await developer("other@example.com");
+    // Reported, signed and deleted before the service kept leaked keys: nothing about it is left in accounts.sqlite.
+    signList("revocations", [{ fingerprint: dev.old, revoked: "2026-10-20T12:00:00Z", allow: [] }]);
+    store.unlinkKey(dev.accountId, dev.old);
+    expect(store.isLeakedKey(dev.old)).toBe(false);
+    const answer = await linkThroughRoute(request, other.token, dev.lost);
+    expect(answer.status).toBe(409);
+    expect(((await answer.json()) as { reason: string }).reason).toBe("key-taken");
+    expect(store.accountOfKey(dev.old)).toBeNull();
+    // A key the lists don't revoke still links.
+    const fresh = generateKeyPairSync("ed25519").privateKey;
+    expect((await linkThroughRoute(request, other.token, fresh)).status).toBe(200);
+  });
+
+  it("is free again once the maintainer turns down a report that isn't signed yet, also after the account is deleted", async () => {
+    const { request, adminCall, store, developer, clock } = setup();
     const dev = await developer("dev@example.com");
     await request("POST", `/v1/account/keys/${dev.old}/replace`, { new: dev.new, leaked: true }, dev.token);
-    sign("successions", [{ old: dev.old, new: dev.new, account: dev.accountId }]);
-    sign("revocations", [{ fingerprint: dev.old, revoked: "2026-10-20T12:00:00Z", allow: [] }]);
-    expect((await request("DELETE", `/v1/account/keys/${dev.old}`, undefined, dev.token)).status).toBe(200);
-    expect(store.declineKeyRequest(dev.old, Date.now())).toBe(true);
+    store.deleteAccount(dev.accountId);
+    expect((await adminCall("/api/keys/decline", { old: dev.old })).status).toBe(200);
+    expect((await adminCall("/api/keys/decline", { old: dev.old })).status).toBe(404);
     expect(store.isLeakedKey(dev.old)).toBe(false);
     expect(store.leakedKeys()).toEqual([]);
+    const other = await developer("other@example.com");
+    expect(store.linkKey(other.accountId, dev.old, rawKey(dev.lost).toString("base64"), clock.now)).toBe("ok");
   });
 });
 

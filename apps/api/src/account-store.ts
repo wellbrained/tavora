@@ -285,8 +285,8 @@ export class AccountStore {
       );
       create table if not exists banned_keys (fingerprint text primary key, account_id text not null);
       -- Keys reported as leaked whose request went with the key's link or the account (key_requests rows go with the account).
-      -- No foreign key: the key stays leaked, its revocation still gets signed, and no other account can link it.
-      create table if not exists leaked_keys (fingerprint text primary key, new text not null, account_id text not null, requested_at integer not null);
+      -- No foreign key and nothing about the account: the key stays leaked, its revocation still gets signed, and no account can link it.
+      create table if not exists leaked_keys (fingerprint text primary key, requested_at integer not null);
       -- Suspended accounts (decided 2026-10-26): reversible. last_active_at keeps when the account was last used, because its sessions are deleted.
       create table if not exists suspensions (
         account_id text primary key references accounts (id) on delete cascade,
@@ -515,14 +515,17 @@ export class AccountStore {
     return row && row.expires_at > now ? row.account_id : null;
   }
 
-  /** Links a publisher key (its public half only) to an account. A key belongs to one account; linking it again is fine. */
-  linkKey(accountId: string, fingerprint: string, publicKey: string, now: number): "ok" | "taken" | "too-many" {
+  /**
+   * Links a publisher key (its public half only) to an account. A key belongs to one account; linking it again is fine.
+   * "leaked": reported as leaked, so no account links it (the caller also refuses a key the signed lists revoke).
+   */
+  linkKey(accountId: string, fingerprint: string, publicKey: string, now: number): "ok" | "taken" | "leaked" | "too-many" {
     const owner = this.db.prepare("select account_id from publisher_keys where fingerprint = ?").get(fingerprint) as { account_id: string } | undefined;
     if (owner) return owner.account_id === accountId ? "ok" : "taken";
     // A key of a banned developer is never linked again, not even after the account is deleted.
     if (this.isBannedKey(fingerprint)) return "taken";
     // Nor is a key reported as leaked, by any account, deleted or not: whoever has it now isn't its developer.
-    if (this.isLeakedKey(fingerprint)) return "taken";
+    if (this.isLeakedKey(fingerprint)) return "leaked";
     if (this.keys(accountId).length >= MAX_KEYS) return "too-many";
     this.db.prepare("insert into publisher_keys (fingerprint, account_id, public_key, linked_at) values (?, ?, ?, ?)").run(fingerprint, accountId, publicKey, now);
     return "ok";
@@ -731,7 +734,7 @@ export class AccountStore {
   /** Copies the leaked reports (not turned down) among the key requests `where` picks into leaked_keys, where they outlive the account. */
   private keepLeaked(where: string, ...values: string[]): void {
     this.db
-      .prepare(`insert into leaked_keys (fingerprint, new, account_id, requested_at) select old, new, account_id, requested_at from key_requests where ${where} and leaked = 1 and declined_at is null on conflict (fingerprint) do nothing`)
+      .prepare(`insert into leaked_keys (fingerprint, requested_at) select old, requested_at from key_requests where ${where} and leaked = 1 and declined_at is null on conflict (fingerprint) do nothing`)
       .run(...values);
   }
 
@@ -744,10 +747,11 @@ export class AccountStore {
   }
 
   /** Keys reported as leaked whose request went with the key's link or its account, oldest first: their revocations still get signed. */
-  leakedKeys(): { fingerprint: string; new: string; accountId: string; requestedAt: number }[] {
-    return (
-      this.db.prepare("select fingerprint, new, account_id, requested_at from leaked_keys order by requested_at, rowid").all() as unknown as { fingerprint: string; new: string; account_id: string; requested_at: number }[]
-    ).map((row) => ({ fingerprint: row.fingerprint, new: row.new, accountId: row.account_id, requestedAt: row.requested_at }));
+  leakedKeys(): { fingerprint: string; requestedAt: number }[] {
+    return (this.db.prepare("select fingerprint, requested_at from leaked_keys order by requested_at, rowid").all() as unknown as { fingerprint: string; requested_at: number }[]).map((row) => ({
+      fingerprint: row.fingerprint,
+      requestedAt: row.requested_at,
+    }));
   }
 
   // ── Replacing a lost key ───────────────────────────────────────────────
@@ -822,11 +826,14 @@ export class AccountStore {
     return (this.db.prepare("select * from key_requests order by requested_at, rowid").all() as unknown as KeyRequestRow[]).map(keyRequestOf);
   }
 
-  /** The maintainer turns a request down; false when there is no open request for the key. A leaked report of it ends with it. */
+  /**
+   * The maintainer turns a request down, or a leaked report whose request went with its account; false when there is
+   * neither for the key. The caller checks first that it isn't signed yet (admin-app.ts).
+   */
   declineKeyRequest(old: string, now: number): boolean {
     const declined = Number(this.db.prepare("update key_requests set declined_at = ? where old = ? and declined_at is null").run(now, old).changes) > 0;
-    if (declined) this.db.prepare("delete from leaked_keys where fingerprint = ?").run(old);
-    return declined;
+    const forgotten = Number(this.db.prepare("delete from leaked_keys where fingerprint = ?").run(old).changes) > 0;
+    return declined || forgotten;
   }
 
   /** When a key was linked to an account, in ms, or null. */

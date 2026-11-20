@@ -22,6 +22,11 @@ export function keyRequestStatus(request: KeyRequest, trust: CatalogTrust | null
   return succeeded && revoked ? "done" : "waiting";
 }
 
+/** Whether the served, validly signed revocation list revokes this key. */
+export function signedRevoked(fingerprint: string, trust: CatalogTrust | null): boolean {
+  return trust?.signed("revocations")?.revoked.some((entry) => entry.fingerprint === fingerprint) ?? false;
+}
+
 /** A moment as the signed lists write it: whole seconds, UTC. */
 const listDate = (ms: number) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z");
 

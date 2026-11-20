@@ -80,14 +80,17 @@ export async function keepNewerFile(file: string, supportedVersion: number): Pro
 
 /**
  * Reads and writes the data files in `userData`. Writes run one after another in the order they were
- * asked for, each with a copy of the data as it was then; a failed write is logged and the next one runs.
- * A file waits for at most one write: a newer save while one is still waiting gives that write the newer
- * data instead of queueing another, so a fast caller can't grow the queue.
+ * asked for, each with the data as it was then; a failed write is logged and the next one runs.
+ * A file waits for at most one write: a newer save while one still waits takes its place, at the end of
+ * the line, so a fast caller can't grow the queue and the order stays that of the newest saves.
+ * Profile saves are the exception: each is written, as its caller learns whether it landed.
  */
 export class SavedData {
   private saving: Promise<void> = Promise.resolve();
-  /** The newest data per file whose write is queued but hasn't started. */
-  private readonly waiting = new Map<string, () => Promise<void>>();
+  /** Writes that haven't started, in the order they run, by file (or by profile save). */
+  private readonly waiting = new Map<string, { write: () => Promise<void>; what: string }>();
+  private draining = false;
+  private profileSaves = 0;
 
   constructor(private readonly userData: string) {}
 
@@ -136,14 +139,18 @@ export class SavedData {
   /** Queues the write like the others, and also tells the caller whether it landed. */
   saveProfile(profile: Profile): Promise<void> {
     const body = JSON.stringify(profile, null, 2);
-    const write = this.saving.then(() => writeFileAtomic(this.file(PROFILE_FILE), body));
-    this.saving = write.catch((error: unknown) => console.error("[tavora] could not save profile", error));
-    return write;
+    return new Promise((resolve, reject) => {
+      const write = () => writeFileAtomic(this.file(PROFILE_FILE), body).then(resolve, (error: unknown) => {
+        reject(error);
+        throw error;
+      });
+      this.enqueue(write, "profile", `profile:${++this.profileSaves}`);
+    });
   }
 
+  /** Writes this workspace state as it is when the write runs: the caller hands over a copy it won't change (Workspaces.save makes one). */
   saveWorkspace(workspace: WorkspaceState): void {
-    const snapshot = structuredClone(workspace);
-    this.enqueue(() => saveWorkspace(this.file(WORKSPACE_FILE), snapshot), "workspace");
+    this.enqueue(() => saveWorkspace(this.file(WORKSPACE_FILE), workspace), "workspace");
   }
 
   saveWindow(state: WindowState): void {
@@ -160,16 +167,27 @@ export class SavedData {
     return path.join(this.userData, name);
   }
 
-  private enqueue(write: () => Promise<void>, what: string): void {
-    const queued = this.waiting.has(what);
-    this.waiting.set(what, write);
-    if (queued) return;
-    this.saving = this.saving
-      .then(() => {
-        const newest = this.waiting.get(what);
-        this.waiting.delete(what);
-        return newest?.();
-      })
-      .catch((error: unknown) => console.error(`[tavora] could not save ${what}`, error));
+  private enqueue(write: () => Promise<void>, what: string, slot = what): void {
+    // A write still waiting for this file is replaced, and the new one goes to the end of the line.
+    this.waiting.delete(slot);
+    this.waiting.set(slot, { write, what });
+    if (this.draining) return;
+    this.draining = true;
+    this.saving = this.drain();
+  }
+
+  /** Runs the waiting writes one after another until none is left, including those that come in meanwhile. */
+  private async drain(): Promise<void> {
+    // Saves asked for in this same moment come in first, so a burst of them is one write per file.
+    await Promise.resolve();
+    try {
+      for (let next = this.waiting.entries().next(); !next.done; next = this.waiting.entries().next()) {
+        const [slot, { write, what }] = next.value;
+        this.waiting.delete(slot);
+        await write().catch((error: unknown) => console.error(`[tavora] could not save ${what}`, error));
+      }
+    } finally {
+      this.draining = false;
+    }
   }
 }

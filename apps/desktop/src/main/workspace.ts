@@ -239,6 +239,9 @@ export function planSnapshot(
   return { instances, layout, close: unused };
 }
 
+/** How long saveSoon holds a change back. */
+export const SAVE_SOON_MS = 250;
+
 export interface WorkspacesOptions {
   /** Writes the workspace; called after every change with a copy the caller may keep. */
   save(state: WorkspaceState): void;
@@ -254,6 +257,7 @@ export interface WorkspacesOptions {
  */
 export class Workspaces {
   private layoutEpoch = 0;
+  private saveTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly newId: () => string;
   private readonly now: () => Date;
 
@@ -288,7 +292,22 @@ export class Workspaces {
 
   /** Saves a change the host made to a panel's record (its content or type). */
   save(): void {
+    clearTimeout(this.saveTimer);
+    this.saveTimer = undefined;
     this.options.save(structuredClone(this.state));
+  }
+
+  /**
+   * Saves a change that may come in a burst, such as a page that keeps changing what its panel shows: at most once
+   * every SAVE_SOON_MS, however often it is called.
+   */
+  saveSoon(): void {
+    this.saveTimer ??= setTimeout(() => this.save(), SAVE_SOON_MS);
+  }
+
+  /** Saves now what saveSoon still holds back, before the saved data is flushed. */
+  flush(): void {
+    if (this.saveTimer !== undefined) this.save();
   }
 
   /** The host UI is to take the saved layout again, as when a workspace opens. */

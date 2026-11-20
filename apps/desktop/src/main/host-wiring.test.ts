@@ -21,6 +21,15 @@ describe("host.ts", () => {
     expect(body(/private async reloadModules\(\)/)).toContain("this.streaming?.recheckStreams()");
   });
 
+  it("saves and pushes once per burst of panel.setContent, and writes a held-back save before flushing", () => {
+    const setContent = body(/private setPanelContent\(/);
+    expect(setContent).toContain("this.workspaces.saveSoon();");
+    expect(setContent).toContain("this.pushStateSoon();");
+    expect(setContent).not.toMatch(/this\.workspaces\.save\(\)|this\.pushState\(\)/);
+    expect(body(/async saveAll\(\)/)).toContain("this.workspaces.flush();");
+    expect(body(/async flush\(\): Promise<void> \{/)).toContain("this.workspaces.flush();");
+  });
+
   it("deletes a refused update's installer", () => {
     expect(host).toMatch(/onRefused: \(info\) => removeRefusedInstaller\(info, app\.isPackaged\)/);
   });

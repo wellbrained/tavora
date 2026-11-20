@@ -1,7 +1,7 @@
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { gridTemplate } from "../shared/layout-templates";
 import { LAYOUT_LIMITS, layoutPanels, type SavedLayout } from "./layout";
 import {
@@ -11,6 +11,7 @@ import {
   loadWorkspace,
   MAX_SNAPSHOTS,
   planSnapshot,
+  SAVE_SOON_MS,
   saveWorkspace,
   settlePanelTypes,
   WorkspaceError,
@@ -245,6 +246,33 @@ describe("Workspaces", () => {
     expect(saved).toHaveLength(1);
     expect(saved[0]).toEqual(state);
     expect(saved[0]).not.toBe(state);
+  });
+
+  it("saves a burst of saveSoon calls once, and flush or a plain save writes what it holds back", () => {
+    vi.useFakeTimers();
+    try {
+      const { state, saved, workspaces } = setup();
+      for (let call = 0; call < 1000; call++) {
+        state.workspaces.poe2!.instances[0]!.content = { id: "a", title: call % 2 ? "two" : "one" };
+        workspaces.saveSoon();
+      }
+      expect(saved).toHaveLength(0);
+      vi.advanceTimersByTime(SAVE_SOON_MS);
+      expect(saved).toHaveLength(1);
+      expect(saved[0]!.workspaces.poe2!.instances[0]!.content?.title).toBe("two");
+      workspaces.saveSoon();
+      workspaces.flush();
+      expect(saved).toHaveLength(2);
+      workspaces.flush();
+      vi.advanceTimersByTime(SAVE_SOON_MS);
+      expect(saved).toHaveLength(2);
+      workspaces.saveSoon();
+      workspaces.saveLayout("poe2", twoColumns(B, A));
+      vi.advanceTimersByTime(SAVE_SOON_MS);
+      expect(saved).toHaveLength(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("keeps only open panels in a saved layout, without bumping the epoch", () => {

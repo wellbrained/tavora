@@ -551,7 +551,7 @@ ${"A".repeat(64)}
     expect(store.requestReplacement(accountId, old, keyFingerprint(rawKey(next)), true, clock.now)).toBe("ok");
     store.deleteAccount(accountId);
     const other = developer("other@example.com");
-    expect(store.linkKey(other.accountId, old, rawKey(key).toString("base64"), clock.now)).toBe("taken");
+    expect(store.linkKey(other.accountId, old, rawKey(key).toString("base64"), clock.now)).toBe("leaked");
     const answer = await send(key, moduleZip(key, "other.timer"), other.token);
     expect(answer.status).toBe(403);
     expect(await reason(answer)).toBe("key-leaked");

@@ -2,7 +2,8 @@ import { createHash, createPublicKey, verify } from "node:crypto";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { LINK_CODE, type AccountStore } from "./account-store.ts";
-import { OFFICIAL_PINS, type OfficialPins } from "./catalog-trust.ts";
+import { OFFICIAL_PINS, type CatalogTrust, type OfficialPins } from "./catalog-trust.ts";
+import { signedRevoked } from "./key-requests.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 import { tooMany } from "./sign-in.ts";
 
@@ -53,6 +54,8 @@ export interface PublisherOptions {
   now?: () => number;
   /** Tavora's pinned publisher key and account (OFFICIAL_PINS by default): the key links to that account only. */
   officialPins?: OfficialPins;
+  /** The signed lists as served (catalog-trust.ts): a key they revoke is never linked again. */
+  trust?: CatalogTrust;
 }
 
 export function publisherRoutes(options: PublisherOptions, limiter: RateLimiter, clientKey: (request: Request) => string) {
@@ -99,7 +102,10 @@ export function publisherRoutes(options: PublisherOptions, limiter: RateLimiter,
     const fingerprint = keyFingerprint(raw);
     // Tavora's publisher key belongs to Tavora's account alone; anyone else gets the answer for a key that is taken.
     if (pins.key !== "" && fingerprint === pins.key && accountId !== pins.account) return context.json({ error: "This key is linked to another Tavora account.", reason: "key-taken" }, 409);
-    const result = store.linkKey(accountId, fingerprint, raw.toString("base64"), now());
+    // A leaked or revoked key is never linked again, by any account: whoever has it now isn't its developer. Old apps
+    // know only key-taken, so it answers with that code and says why in `error`.
+    const result = signedRevoked(fingerprint, options.trust ?? null) ? "leaked" : store.linkKey(accountId, fingerprint, raw.toString("base64"), now());
+    if (result === "leaked") return context.json({ error: "This key was reported as leaked or revoked, so it can't be linked. Use a new key.", reason: "key-taken" }, 409);
     if (result === "taken") return context.json({ error: "This key is linked to another Tavora account.", reason: "key-taken" }, 409);
     if (result === "too-many") return context.json({ error: "This account has as many keys as it can link. Unlink one in Tavora first.", reason: "too-many-keys" }, 409);
     return context.json({ status: "linked", fingerprint, name: store.developer(accountId)?.name ?? null });

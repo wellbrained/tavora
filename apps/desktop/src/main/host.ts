@@ -4279,8 +4279,8 @@ export class Host {
     if (content?.id === record.content?.id && content?.title === record.content?.title) return;
     if (content) record.content = content;
     else delete record.content;
-    this.workspaces.save();
-    // A page may call this as fast as it likes; the host UI takes one push per burst.
+    // A page may call this as fast as it likes: the workspace is saved and the host UI told once per burst.
+    this.workspaces.saveSoon();
     this.pushStateSoon();
   }
 
@@ -5431,6 +5431,7 @@ export class Host {
 
   /** Resolves once pending writes are on disk, with everything still running (the cloud copy calls this before each sync). */
   async saveAll(): Promise<void> {
+    this.workspaces.flush();
     await this.gameOverlays?.save();
     await this.streaming?.save();
     return this.savedData.flush();
@@ -5439,6 +5440,7 @@ export class Host {
   /** Quitting: resolves once pending writes are on disk; keys go back to the system and the overlay server stops. */
   async flush(): Promise<void> {
     // What is waiting goes to disk at once (an update's installer doesn't wait long), and again once the pages have saved.
+    this.workspaces.flush();
     await Promise.all([this.pageSaved(), this.closePanelPages(), this.savedData.flush()]);
     await this.gameOverlays?.shutdown();
     await this.streaming?.shutdown();

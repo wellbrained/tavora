@@ -425,7 +425,7 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
   if (accounts) app.route("/v1/account", accountRoutes({ ...(catalog ? { trust: catalogTrust(catalog, catalogueKey), catalog } : {}), officialPins, ...accounts }, limiter, (request) => (clientKey ? clientKey(request) : "local")));
   else app.all("/v1/account/*", (context) => context.json({ error: "Accounts are not available right now.", reason: "unavailable" }, 503));
   // Publisher keys belong to accounts, so they come and go with them.
-  if (accounts) app.route("/v1/publishers", publisherRoutes({ store: accounts.store, officialPins, ...(accounts.verifyRateLimiter ? { linkRateLimiter: accounts.verifyRateLimiter } : {}), ...(accounts.now ? { now: accounts.now } : {}) }, limiter, (request) => (clientKey ? clientKey(request) : "local")));
+  if (accounts) app.route("/v1/publishers", publisherRoutes({ store: accounts.store, officialPins, ...(catalog ? { trust: catalogTrust(catalog, catalogueKey) } : {}), ...(accounts.verifyRateLimiter ? { linkRateLimiter: accounts.verifyRateLimiter } : {}), ...(accounts.now ? { now: accounts.now } : {}) }, limiter, (request) => (clientKey ? clientKey(request) : "local")));
   else app.all("/v1/publishers/*", (context) => context.json({ error: "Publishers are not available right now.", reason: "unavailable" }, 503));
 
   // Sent once by the app when a new Tavora version finished downloading: only the version.

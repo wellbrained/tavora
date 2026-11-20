@@ -9,7 +9,7 @@ import { createProbes, type Probes } from "./admin-probes.ts";
 import { blockRoutes, zipsToSign } from "./block-admin.ts";
 import type { CatalogStore } from "./catalog.ts";
 import { catalogTrust } from "./catalog-trust.ts";
-import { keyRequestStatus, revocationEntries, successionEntries } from "./key-requests.ts";
+import { keyRequestStatus, revocationEntries, signedRevoked, successionEntries } from "./key-requests.ts";
 import type { IconState } from "./icon-state.ts";
 import { isIconId, type IconStore } from "./icons.ts";
 import { accountsAdminRoutes } from "./accounts-admin.ts";
@@ -431,7 +431,8 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
   const trust = () => (catalog ? catalogTrust(catalog, catalogueKey) : null);
   app.get("/api/keys", (context) => {
     const lists = trust();
-    const requests = (accounts?.allKeyRequests() ?? []).map((request) => {
+    type Row = { old: string; new: string | null; account: string | null; email: string | null; developer: string | null; leaked: boolean; requestedAt: string; newLinkedAt: string | null; status: string };
+    const requests = (accounts?.allKeyRequests() ?? []).map((request): Row => {
       const linkedAt = accounts?.keyLinkedAt(request.new) ?? null;
       return {
         old: request.old,
@@ -445,6 +446,23 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
         status: keyRequestStatus(request, lists),
       };
     });
+    // Keys reported as leaked whose request went with the account: only the key and when it was reported are kept.
+    const asked = new Set(requests.map((request) => request.old));
+    for (const leaked of accounts?.leakedKeys() ?? []) {
+      if (asked.has(leaked.fingerprint)) continue;
+      requests.push({
+        old: leaked.fingerprint,
+        new: null,
+        account: null,
+        email: null,
+        developer: null,
+        leaked: true,
+        requestedAt: new Date(leaked.requestedAt).toISOString(),
+        newLinkedAt: null,
+        status: signedRevoked(leaked.fingerprint, lists) ? "done" : "waiting",
+      });
+    }
+    requests.sort((a, b) => a.requestedAt.localeCompare(b.requestedAt));
     return context.json({ requests });
   });
 
@@ -459,6 +477,9 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
   app.post("/api/keys/decline", async (context) => {
     const { old } = await json(context.req.raw);
     if (typeof old !== "string") return context.json({ error: "Send { old }." }, 400);
+    // A signed one stays: turning it down would free a key the signed lists still revoke. Sign lists without it instead.
+    const request = accounts?.keyRequest(old) ?? null;
+    if (request ? keyRequestStatus(request, trust()) === "done" : signedRevoked(old, trust())) return context.json({ error: "This one is signed already." }, 409);
     return accounts?.declineKeyRequest(old, Date.now()) ? context.json({ ok: true }) : context.json({ error: "No open request for this key." }, 404);
   });
 

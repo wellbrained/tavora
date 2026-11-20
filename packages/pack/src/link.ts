@@ -32,7 +32,7 @@ export function linkRequest(key: KeyObject, code: string): { code: string; publi
 const MESSAGES: Partial<Record<ApiReason, string>> = {
   "wrong-code": "That code is wrong or has expired. Get a new one in Tavora: Settings > Publishing > Publisher keys and CI > Get a link code.",
   "bad-signature": "The service could not check the key's signature.",
-  "key-taken": "This key is already linked to another Tavora account.",
+  "key-taken": "This key is already linked to another Tavora account, or can't be linked any more (reported as leaked or revoked).",
   "too-many-keys": "Your account has as many keys as it can link. Unlink one in Tavora first.",
   "too-many": "Too many tries. Wait a few minutes and try again.",
   unavailable: "Linking keys is not available right now.",
