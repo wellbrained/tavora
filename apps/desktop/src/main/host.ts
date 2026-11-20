@@ -2040,7 +2040,8 @@ export class Host {
     ipcMain.handle("host:browse-catalog", async (event, target?: unknown): Promise<CatalogListResult> => {
       if (!fromHost(event)) return { status: "unreachable" };
       if (!this.library.onlineSearch) return { status: "off" };
-      if (!this.catalogScopeOf(target)) return { status: "ok", modules: [] };
+      // A workspace it can't find is "can't tell", never an empty list: the empty page would read that as "no modules for this game".
+      if (!this.catalogScopeOf(target)) return { status: "unavailable" };
       // Asked again once the listing was read: a game added by name may just have learned its game's id from it.
       return this.catalog.list(() => this.catalogScopeOf(target) ?? { games: [] }, this.language);
     });

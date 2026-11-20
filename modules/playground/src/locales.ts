@@ -198,6 +198,9 @@ export const en = {
   "ex.buttons.SplitButtons.note": "An action with its ▾ menu.",
   "ex.buttons.WideButtons": "Wide buttons",
   "ex.buttons.WideButtons.note": "Wide ones only dip 1px when pressed.",
+  "ex.buttons.ActionTiles": "Action tiles",
+  "ex.buttons.ActionTiles.note": "One click adds it. The one made for here gets the accent edge. Press one.",
+  "ex.buttons.ActionTiles.rule": "A row of things to add, each with a picture, is ActionTiles, not a card grid of your own.",
 
   "ex.menus.DescribedMenu": "Dropdown menu with a line under each entry",
   "ex.menus.DescribedMenu.note": "Icons go on every entry or on none.",
@@ -656,6 +659,9 @@ export const de: Record<TextKey, string> = {
   "ex.buttons.SplitButtons.note": "Eine Aktion mit ihrem ▾-Menü.",
   "ex.buttons.WideButtons": "Breite Buttons",
   "ex.buttons.WideButtons.note": "Breite gehen beim Drücken nur 1 px runter.",
+  "ex.buttons.ActionTiles": "Aktions-Kacheln",
+  "ex.buttons.ActionTiles.note": "Ein Klick fügt es hinzu. Was hierher passt, hat den Akzentrand. Drück eine.",
+  "ex.buttons.ActionTiles.rule": "Eine Reihe zum Hinzufügen, jede mit Bild, sind ActionTiles, kein eigenes Kartenraster.",
 
   "ex.menus.DescribedMenu": "Menü mit einer Zeile unter jedem Eintrag",
   "ex.menus.DescribedMenu.note": "Icons an jedem Eintrag oder an keinem.",

@@ -9,6 +9,7 @@ import type { PickerLine, PickerRow } from "../lib/game-picker";
 
 const host = vi.hoisted(() => ({
   act: vi.fn(),
+  addModule: vi.fn(),
   api: {
     browseCatalog: vi.fn(),
     catalogForGames: vi.fn(),
@@ -41,10 +42,14 @@ vi.mock("./CatalogIcon.vue", async () => {
   const { defineComponent, h } = await import("vue");
   return { default: defineComponent({ setup: () => () => h("span") }) };
 });
+vi.mock("./ModuleIcon.vue", async () => {
+  const { defineComponent, h } = await import("vue");
+  return { default: defineComponent({ setup: () => () => h("span") }) };
+});
 
 import AddGameDialog from "./AddGameDialog.vue";
 import GamePickerList from "./GamePickerList.vue";
-import MadeForGame from "./workspace/MadeForGame.vue";
+import StartModules from "./workspace/StartModules.vue";
 import OnboardingGame from "./onboarding/OnboardingGame.vue";
 import { resetInstalledGames } from "../lib/installed-games";
 import { useCoverArt } from "../lib/use-game-picker";
@@ -63,7 +68,7 @@ function deferred<T>() {
 let app: App | undefined;
 let root: HTMLElement;
 beforeEach(() => {
-  for (const fn of [host.act, host.closeDialog, host.openPanels, ...Object.values(host.api)]) fn.mockReset();
+  for (const fn of [host.act, host.addModule, host.closeDialog, host.openPanels, ...Object.values(host.api)]) fn.mockReset();
   host.api.catalogForGames.mockResolvedValue({ status: "ok", modules: [] });
   host.api.searchCatalog.mockResolvedValue([]);
   host.api.searchOnline.mockResolvedValue({ status: "ok", games: [] });
@@ -358,28 +363,56 @@ describe("useCoverArt", () => {
   });
 });
 
-describe("MadeForGame", () => {
+describe("StartModules", () => {
   const workspace = { id: "elden-ring", kind: "game", name: "Elden Ring", steamAppId: 1245620 } as WorkspaceView;
   const listed = (ids: string[]) => ({ status: "ok", modules: ids.map((id) => ({ id, name: id, gameIds: ["elden-ring"], fits: true, official: true, icon: false })) });
+  const general = ["tavora.browser", "tavora.notes", "tavora.todos"];
+  const withModules = (ids: string[]) => (state().value = { ...state().value, modules: ids.map((id) => ({ id, name: id, available: true })) });
+  const tiles = () => [...root.querySelectorAll("[data-slot=action-tile]")].map((tile) => tile.getAttribute("data-testid"));
 
-  it("holds its place while the catalog is asked, then lists the modules not added yet", async () => {
+  it("holds the game's place while the catalog is asked, then puts its modules before Tavora's", async () => {
+    withModules(general);
     const answer = deferred<unknown>();
     host.api.browseCatalog.mockReturnValue(answer.promise);
-    mount(MadeForGame, () => ({ workspace }));
+    mount(StartModules, () => ({ workspace }));
     await nextTick();
     expect($("made-for-loading")).not.toBeNull();
     answer.resolve(listed(["tavora.map", "tavora.boss"]));
     await settle();
     expect($("made-for-loading")).toBeNull();
-    expect($("made-for-tavora.map")).not.toBeNull();
-    expect($("made-for-tavora.boss")).not.toBeNull();
+    expect(tiles()).toEqual(["made-for-add-tavora.boss", "made-for-add-tavora.map", ...general.map((id) => `start-add-${id}`), "empty-add-module"]);
+    expect($("empty-add-module")!.textContent).toContain("All modules");
+  });
+
+  it("shows nine at most; the tenth says how many more the game has and opens the catalog", async () => {
+    withModules(general);
+    host.api.browseCatalog.mockResolvedValue(listed(["a", "b", "c", "d", "e", "f", "g", "h"]));
+    mount(StartModules, () => ({ workspace }));
+    await settle();
+    expect(tiles()).toHaveLength(10);
+    expect(tiles().filter((id) => id!.startsWith("made-for-add-"))).toHaveLength(6);
+    expect($("empty-add-module")!.textContent).toContain("+2 more for Elden Ring");
+    $("empty-add-module")!.click();
+    const { dialog } = await import("../host");
+    expect(dialog.value).toEqual({ kind: "add-module", view: "catalog" });
+  });
+
+  it("opens a game module that is installed already, without installing it", async () => {
+    withModules([...general, "tavora.map"]);
+    host.api.browseCatalog.mockResolvedValue(listed(["tavora.map"]));
+    mount(StartModules, () => ({ workspace }));
+    await settle();
+    $("made-for-add-tavora.map")!.click();
+    await settle();
+    expect(host.addModule).toHaveBeenCalledWith("tavora.map");
+    expect(host.act).not.toHaveBeenCalled();
   });
 
   it("says why the other Add waits, and shows a failed one's error", async () => {
     host.api.browseCatalog.mockResolvedValue(listed(["tavora.map", "tavora.boss"]));
     const install = deferred<unknown>();
     host.act.mockReturnValue(install.promise);
-    mount(MadeForGame, () => ({ workspace }));
+    mount(StartModules, () => ({ workspace }));
     await settle();
     $("made-for-add-tavora.map")!.click();
     await nextTick();
@@ -391,10 +424,29 @@ describe("MadeForGame", () => {
     expect($("made-for-error-tavora.map")!.textContent).toContain("Couldn't reach the catalog.");
   });
 
-  it("offers Ask for a module when the catalog has none for the game", async () => {
+  it("offers Ask for a module only when the catalog surely has none for the game", async () => {
+    withModules(general);
     host.api.browseCatalog.mockResolvedValue(listed([]));
-    mount(MadeForGame, () => ({ workspace }));
+    mount(StartModules, () => ({ workspace }));
     await settle();
-    expect($("ask-module")!.textContent).toContain("Elden Ring");
+    expect($("ask-module")!.textContent).toContain("Ask for a module for Elden Ring");
+    expect(tiles()).toEqual([...general.map((id) => `start-add-${id}`), "empty-add-module"]);
+  });
+
+  it("asks nothing and offers only Tavora's modules when the catalog can't say", async () => {
+    withModules(general);
+    host.api.browseCatalog.mockResolvedValue({ status: "unavailable" });
+    mount(StartModules, () => ({ workspace }));
+    await settle();
+    expect($("ask-module")).toBeNull();
+    expect(tiles()).toEqual([...general.map((id) => `start-add-${id}`), "empty-add-module"]);
+  });
+
+  it("asks no catalog in a personal workspace", async () => {
+    withModules(general);
+    mount(StartModules, () => ({ workspace: { ...workspace, id: "home", kind: "personal" } }));
+    await settle();
+    expect(host.api.browseCatalog).not.toHaveBeenCalled();
+    expect($("start-add-tavora.notes")).not.toBeNull();
   });
 });

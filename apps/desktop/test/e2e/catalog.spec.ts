@@ -382,11 +382,11 @@ test("a game without modules can ask for one from its empty page, with one anony
     await expect(page.getByTestId("add-game-dialog").getByTestId("ask-module")).toHaveCount(0);
     await page.getByTestId("cover-valheim").click();
     await expect(page.getByTestId("rail-workspace-valheim")).toHaveAttribute("aria-current", "page");
-    // Its empty page says there are no modules for it yet and offers Ask for a module.
+    // Its empty page offers no module for it, only Tavora's own, and Ask for a module.
     await emptyTheWorkspace(page);
-    await expect(page.getByTestId("no-modules-yet")).toContainText("No modules for Valheim yet.");
+    await expect(page.getByTestId("start-modules").locator('[data-testid^="made-for-add-"]')).toHaveCount(0);
     const ask = page.getByTestId("ask-module");
-    await expect(ask).toHaveText("Ask for a Valheim module");
+    await expect(ask).toHaveText("Ask for a module for Valheim");
     // The address does not exist yet (404): it says so and stays clickable.
     await ask.click();
     await expect(page.getByTestId("ask-module-error")).toHaveText("Couldn't send. Try again later.");
@@ -424,7 +424,8 @@ test("with online features off, an empty game page offers no modules and asks fo
     await expect(page.getByTestId("rail-workspace-valheim")).toHaveAttribute("aria-current", "page");
     await emptyTheWorkspace(page);
     await expect(page.getByTestId("empty-add-module")).toBeVisible();
-    await expect(page.getByTestId("made-for-game")).toHaveCount(0);
+    await expect(page.getByTestId("start-add-tavora.notes")).toBeVisible();
+    await expect(page.getByTestId("ask-module")).toHaveCount(0);
     expect(moduleRequests.bodies).toHaveLength(0);
   } finally {
     await app.close();
@@ -464,10 +465,9 @@ test("the Add a game picker badges games that have modules, and the empty game p
     await expect(page.getByTestId("rail-workspace-factorio")).toHaveAttribute("aria-current", "page");
     await expect(panels(page, "wellbrained.sat-map")).toHaveCount(0);
 
-    // Its empty page lists the modules made for it; Add installs one and opens its panel.
+    // Its empty page offers the modules made for it first; a tile installs one and opens its panel.
     await emptyTheWorkspace(page);
-    await expect(page.getByTestId("made-for-game")).toContainText("Made for Factorio");
-    await expect(page.getByTestId("made-for-wellbrained.sat-map")).toContainText("Map and Pings");
+    await expect(page.getByTestId("made-for-add-wellbrained.sat-map")).toContainText("Map and Pings");
     await page.getByTestId("made-for-add-wellbrained.sat-calc").click();
     await expectModuleText(app, "wellbrained.sat-calc", "version", "1.0.0");
     await expect(panels(page, "wellbrained.sat-map")).toHaveCount(0);

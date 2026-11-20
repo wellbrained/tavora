@@ -22,7 +22,7 @@ export const PAGES = [
   { id: "motion", group: "foundations", keywords: "animation duration ease curve spring transition timing reduced press play", examples: ["Curves", "Durations", "Rules", "ReducedMotion"] },
   { id: "writing", group: "foundations", keywords: "texts words copy tone german english translation you du plain short friendly", examples: ["FewWords", "Descriptions", "PlainWords", "YouDu", "Names"] },
   // Actions
-  { id: "buttons", group: "actions", keywords: "primary secondary ghost outline destructive danger remove link icon loading progress install split group menu toggle", examples: ["Variants", "Sizes", "WithIcons", "ProgressButtons", "IconOnly", "ToggleButtons", "SplitButtons", "WideButtons"] },
+  { id: "buttons", group: "actions", keywords: "primary secondary ghost outline destructive danger remove link icon loading progress install split group menu toggle tile tiles add card square", examples: ["Variants", "Sizes", "WithIcons", "ProgressButtons", "ActionTiles", "IconOnly", "ToggleButtons", "SplitButtons", "WideButtons"] },
   { id: "menus", group: "actions", keywords: "dropdown menu context right-click submenu actions icon description row async wait busy pending promise", examples: ["DescribedMenu", "Dropdown", "RightClick", "WaitingMenu"] },
   { id: "tooltips", group: "actions", keywords: "tooltip hover help readable keyboard shortcut arrow values rows divider disabled reason why off switched switch checkbox input select menu item card skin frame game effect stat icon", examples: ["FromTitle", "OnDisabled", "Rich", "Values", "ItemCards", "DisabledReasons"] },
   { id: "popovers", group: "actions", keywords: "popover floating panel form anchor close", examples: ["WithField"] },

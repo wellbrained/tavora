@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.55",
+    "date": "2026-11-20",
+    "notes": [
+      "New example: action tiles, a row of things to add with one click."
+    ]
+  },
+  {
     "version": "0.1.54",
     "date": "2026-11-18",
     "notes": [
