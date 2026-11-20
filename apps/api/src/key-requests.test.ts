@@ -91,6 +91,21 @@ describe("asking to replace a lost key", () => {
     expect(((await (await request("GET", "/v1/account/developer", undefined, dev.token)).json()) as Answer).requests).toHaveLength(1);
   });
 
+  it("tells the address at most 5 times a day, from the account's own share of emails, and keeps every request (audit)", async () => {
+    const { request, inbox, developer, store, clock } = setup();
+    const dev = await developer("dev@example.com");
+    // Seven more keys of the account, each asked to be replaced: a new request and a notice each.
+    const olds = Array.from({ length: 7 }, () => generateKeyPairSync("ed25519").privateKey);
+    for (const key of olds) store.linkKey(dev.accountId, fingerprintOf(key), rawKey(key).toString("base64"), clock.now);
+    for (const old of [dev.old, ...olds.map(fingerprintOf)]) {
+      expect((await request("POST", `/v1/account/keys/${old}/replace`, { new: dev.new, leaked: false }, dev.token)).status).toBe(200);
+    }
+    expect(((await (await request("GET", "/v1/account/developer", undefined, dev.token)).json()) as Answer).requests).toHaveLength(8);
+    expect(inbox.mails()).toHaveLength(5);
+    // The owner's codes share those 5: none is left today.
+    expect((await request("POST", "/v1/account/delete/code", {}, dev.token)).status).toBe(429);
+  });
+
   it("needs both keys linked to this account, and one open request per key", async () => {
     const { request, store, developer } = setup();
     const dev = await developer("dev@example.com");

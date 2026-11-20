@@ -61,7 +61,7 @@ Update this page in the pull request that adds, removes or changes a flow.
 | Media connector | `main/media.ts` | `starting \| ready \| failed \| unavailable` | the SDK's `MediaState.state` |
 | Stream overlay server | `main/overlays.ts` (`OverlayServerStatus`) | `off \| running \| in-use \| failed`; starts and stops run in turn | Settings > Streaming |
 | Cloud copy | `main/cloud-copy-sync.ts` (`CopySync`) | on or off, with the questions it waits on (`askKey`, `conflict`, `restartToTake`) and closing as `open → holding → released`; work started before it was turned off writes nothing (a turn raised by `forget`) | `CloudCopyView` |
-| Developer keys | `main/developer-keys.ts` (`DeveloperKeys`) | `loading \| ready \| none \| ask \| signed-out \| offline`; the newest read wins. Apart from it, the account's vault on the service (`main/account-key.ts`, `trouble`): fine, `unopened` (this PC's key doesn't open it: the new key is typed in, the keys read last stay in use) or `gone` (nothing to put back: Start empty, after a confirm) | `DeveloperKeysView.status`, `.vault` |
+| Developer keys | `main/developer-keys.ts` (`DeveloperKeys`) | `loading \| ready \| none \| ask \| signed-out \| offline`; the newest read wins, and another account (or none) signed in goes back to `loading` (`signed-out`) at once, dropping the keys read for the one before. Apart from it, the account's vault on the service (`main/account-key.ts`, `trouble`): fine, `unopened` (this PC's key doesn't open it: the new key is typed in, the keys read last stay in use) or `gone` (nothing to put back: Start empty, after a confirm) | `DeveloperKeysView.status`, `.vault` |
 | Connection tracker | `main/connection.ts` | online, or an outage of a kind (`ConnectionTracker.feed`) | Settings > Connections |
 | Questions to the host UI | `main/pending-questions.ts` | asked → answered or cancelled, once | |
 | In-game layer's mode | `main/game-overlay-service.ts` (`layer.mode`, `setLayerMode`), each window's `WindowMode` in `main/game-overlay-window.ts`, the card `main/game-layer-card.ts` with `renderer/components/LayerCard.vue` | closed → `use` ⇄ `arrange` → closed: it always opens in `use` (in memory only, so the next open is `use` again); the card's Use \| Arrange switches it live; Close, the key and Esc close it from either. A window is `off \| use \| arrange`: an overlay is `off` in Use (click-through, no frame) and `arrange` in Arrange; a panel is `use` (takes mouse and keys) or `arrange` (the frame over it takes them). A panel's window is see-through each time it is shown until the page has drawn a frame asked for after it heard `panel.overGame` (`ModuleView.nextFrame`, at most `DRAW_CAP_MS`), so its workspace look never flashes | `data-status` on `[data-testid=layer-card]` |
@@ -109,9 +109,11 @@ the pull request that makes it explicit.
 
 - **Browser panel** (`main/browser-view.ts`: `status`, `error`, `committedUrl`, `requestedUrl`) →
   `blank | loading | page | failed | crashed`. `failed` also holds a page's own move to a site of the other session
-  (`otherSession`) until the user opens it or stays (`openAsked`, `stay`). How the navigation under way started is already one union
-  (`navigationStart`: `user | page`, with `crossSessionStep` as its step and tests); `ownNavigation` marks Tavora's own
-  load until Chromium reports it.
+  (`otherSession`) until the user opens it or stays (`openAsked`, `stay`); while it asks, redirects to the other session
+  don't count, and other failures and the page's own commits don't replace it. How the navigation under way started is already one union
+  (`navigationStart`: `user | page | restored`, with `crossSessionStep` as its step and tests; `restored` is the saved
+  address `reopen` loads, Reload, Back, Forward and Try again, whose redirects to the other session ask); `ownNavigation` marks Tavora's own
+  load, with its start, until Chromium reports it.
 
 - **Window visibility** (`main/host.ts`: `windowHidden`, `windowBehind`, `windowClosed`) → `front | behind | hidden | closed`.
 

@@ -54,7 +54,7 @@ import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData
 import { AI_USAGE_MODULE_ID, DISCORD_MODULE_ID, movedModule, MOVED_MODULES_OWNER, moveOfficialModules } from "./moved-modules";
 import { checkZipData, readOwnerRecords } from "./installer";
 import { Installed, loadInstalledModules, type InstalledModules } from "./installed-modules";
-import { sameOwner, viewsOfAnotherOwner } from "./module-owner";
+import { sameOwner, settlePanelOwner, viewsOfAnotherOwner } from "./module-owner";
 import { PendingQuestions } from "./pending-questions";
 import { createOverlayServices } from "./overlay-wiring";
 import { readModulePage } from "./module-page";
@@ -179,7 +179,7 @@ import { defaultFilesRoot } from "./module-files";
 import { ModuleFilesFolder } from "./module-files-folder";
 import { BrowserPanel, browserPartition, browserSession, browserUserAgent, type BrowserKind, type BrowserSessionHooks } from "./browser-view";
 import { BROWSER_MODULE_ID, developmentProjects, isExampleModule, buildFolderName, MANIFEST, mayHoldProject, panelsWait, projectEntry, waitingModules, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
-import { DataRegistry } from "./storage";
+import { DataRegistry, PanelStateStore } from "./storage";
 import type { CheckedMenu } from "./module-menu";
 import {TooltipWindow} from "./tooltip-window";
 import { ToastView } from "./toast-view";
@@ -234,6 +234,7 @@ import { writeFileAtomic } from "./fsutil";
 import {
   emptyWorkspace,
   Workspaces,
+  noteOwners,
   settlePanelTypes,
   WorkspaceError,
   type InstanceRecord,
@@ -753,7 +754,10 @@ export class Host {
         this.inboxSignedIn = view.account !== null;
         this.inbox.accountChanged(view.account !== null);
       }
-      this.developerKeys?.accountChanged(view.account !== null);
+      // Which account, not only whether one: what was read for one is never shown to another.
+      const accountId = view.account !== null ? prepared.signIn.id() : null;
+      this.developerKeys?.accountChanged(accountId);
+      this.copySync.accountChanged(accountId);
     });
     this.inbox = new Inbox({
       baseUrl: serviceUrl(options.apiUrl),
@@ -930,6 +934,17 @@ export class Host {
     // Missing or set aside (unreadable): panels it doesn't list may well be the user's, so the sweep below waits.
     const workspaceRead = existsSync(path.join(userData, WORKSPACE_FILE));
     settlePanelTypes(workspaces, panelTypesOf(modules));
+    // Panels from before their owner was noted: the owner their panel state names, else their module's now (settleOwner).
+    const stamps = new Map<string, string>();
+    const panelStates = new PanelStateStore(path.join(userData, "panel-state"));
+    for (const workspace of Object.values(workspaces.workspaces)) {
+      for (const record of workspace.instances) {
+        if (record.owner !== undefined) continue;
+        const stamp = await panelStates.ownerOf(record.instanceId).catch(() => null);
+        if (stamp) stamps.set(record.instanceId, stamp);
+      }
+    }
+    const ownersNoted = noteOwners(workspaces, (moduleId) => modules.get(moduleId)?.owner, (instanceId) => stamps.get(instanceId));
     const { profile, saved: profileSaved } = await savedData.loadProfile();
     const windowState = initialBounds(
       await savedData.loadWindow(),
@@ -967,6 +982,7 @@ export class Host {
     const emblem = await Host.readEmblem(options);
 
     const host = new Host(options, { encryptor, signIn, copySync, installed, safetyLists, official, grants, connection, systemInfo, openTimes, emblem, styles }, library, workspaces, profile, windowState, themes, themeProblems, themeHints, savedData);
+    if (ownersNoted) host.workspaces.saveSoon();
     host.openedAtStart = openedTimes(library);
     // Before any module opens, so none sees the pictures half moved.
     await host.files.moveFromOldDefault((line) => console.warn(`[tavora] ${line}`));
@@ -1150,16 +1166,21 @@ export class Host {
     for (const view of viewsOfAnotherOwner(this.moduleViews(), modules)) {
       restarted.add(view.moduleId);
       this.tooltips?.forgetModule(view.moduleId);
-      void this.data.panelState.handOver(view.instanceId, view.owner, modules.get(view.moduleId)!.owner).catch((error: unknown) => console.error("[tavora]", error));
+      const owner = modules.get(view.moduleId)!.owner;
+      void this.data.panelState.handOver(view.instanceId, view.owner, owner).catch((error: unknown) => console.error("[tavora]", error));
       const record = this.records(view.workspaceId).find((item) => item.instanceId === view.instanceId);
-      if (record?.content) {
+      if (record) {
         delete record.content;
+        record.owner = owner;
         contentDropped = true;
       }
       this.panels.restart(view.instanceId);
       if (this.needsAnswer(view.moduleId)) this.panels.setAwaiting(view.instanceId);
     }
     if (contentDropped) this.workspaces.saveSoon();
+    // Panels that are not open (another workspace, or waiting) are handed over when they start (settleOwner); those
+    // of a module that wasn't loaded before get its owner now.
+    this.workspaces.noteOwners((moduleId) => modules.get(moduleId)?.owner);
     // A module removed, blocked, replaced by another publisher's or updated without the connector ends its open OBS pages now.
     this.streaming?.recheckStreams();
     this.noteModuleVersions();
@@ -3017,8 +3038,10 @@ export class Host {
       "account-cancel": () => this.account.cancel(),
       "account-refresh": () => this.account.refresh(),
       "account-sign-out": async () => {
+        // Which account signed out, read before its sign-in goes: only its key goes with it.
+        const who = this.account.accountId();
         await this.account.signOut();
-        return this.copySync.signedOut();
+        return this.copySync.signedOut(who);
       },
       "account-sign-out-device": (action) => this.account.signOutDevice(action.deviceId),
       "account-rename-device": (action) => this.account.renameDevice(action.deviceId, action.name),
@@ -3026,8 +3049,9 @@ export class Host {
       "account-change-email": (action) => this.account.changeEmail(action.code, action.currentCode),
       "account-delete-code": () => this.account.sendDeleteCode(),
       "account-delete": async (action) => {
+        const who = this.account.accountId();
         await this.account.deleteAccount(action.code);
-        return this.copySync.signedOut();
+        return this.copySync.signedOut(who);
       },
       "account-discord-sign-in": () => this.account.discordSignIn(),
       "account-discord-connect-code": () => this.account.sendConnectDiscordCode(),
@@ -3037,8 +3061,9 @@ export class Host {
       "account-email-remove-code": () => this.account.sendRemoveEmailCode(),
       "account-email-remove": (action) => this.account.removeEmail(action.code),
       "account-delete-discord": async () => {
+        const who = this.account.accountId();
         await this.account.deleteWithDiscord();
-        if (!this.account.view().account) await this.copySync.signedOut();
+        if (!this.account.view().account) await this.copySync.signedOut(who);
       },
       "account-profile-choice": (action) => this.account.chooseProfile(action.keep),
 
@@ -4139,6 +4164,7 @@ export class Host {
     if (panelType === undefined) return;
     let measured = openedAt === undefined;
     const module = this.modules.get(record.moduleId)!;
+    this.settleOwner(record, module.owner);
     const view = new ModuleView({
       instanceId: record.instanceId,
       module,
@@ -4249,6 +4275,18 @@ export class Host {
         this.window.contentView.addChildView(view.view);
       },
     }));
+  }
+
+  /**
+   * A panel whose module id loads for another owner than the one its page last ran as (changed while the panel was
+   * closed, in a workspace not shown, or while Tavora was closed): what that owner left stays its own, as reloadModules
+   * does for open panels. The content its tab named goes, and its panel state is kept apart (a file from before owners
+   * were noted counts as the old owner's).
+   */
+  private settleOwner(record: InstanceRecord, owner: string): void {
+    const { changed, from } = settlePanelOwner(record, owner);
+    if (from !== null) void this.data.panelState.handOver(record.instanceId, from, owner).catch((error: unknown) => console.error("[tavora]", error));
+    if (changed) this.workspaces.saveSoon();
   }
 
   /**
@@ -4541,7 +4579,7 @@ export class Host {
     this.panels.open(record, () => ({ adapter, start: () => panel.attach() }));
     // The page the panel showed last time opens again.
     void this.data.panelState.get(instanceId).then(
-      (saved) => this.panels.get(instanceId) === adapter && panel.restore((saved as { url?: unknown } | null)?.url),
+      (saved) => this.panels.get(instanceId) === adapter && panel.reopen((saved as { url?: unknown } | null)?.url),
       () => undefined,
     );
   }

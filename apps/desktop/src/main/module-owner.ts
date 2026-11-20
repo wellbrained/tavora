@@ -23,3 +23,17 @@ export function viewsOfAnotherOwner<V extends { moduleId: string; owner: string 
     return found !== undefined && found.owner !== view.owner;
   });
 }
+
+/**
+ * A panel starting as `owner`'s (host.ts settleOwner): when its record names another owner, whose page ran in it last
+ * (the id changed hands while the panel was closed, in a workspace not shown, or while Tavora was closed), the content
+ * that owner's page named goes, and the answer says whose panel state to keep apart. A record from before owners were
+ * noted takes `owner`. Answers whether the record changed, and the owner the panel is taken from, if any.
+ */
+export function settlePanelOwner(record: { owner?: string; content?: unknown }, owner: string): { changed: boolean; from: string | null } {
+  if (record.owner === owner) return { changed: false, from: null };
+  const from = record.owner ?? null;
+  if (from !== null) delete record.content;
+  record.owner = owner;
+  return { changed: true, from };
+}

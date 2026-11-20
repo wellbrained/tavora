@@ -24,6 +24,7 @@ async function onPc(cloud: Service, { keyStore = true, fetch = cloud.fetch, user
     baseUrl: "http://tavora.test/v1/account",
     fetch,
     token: () => cloud.token,
+    account: () => "me",
     putBackAfterMs,
   });
   return { key, file, userData };

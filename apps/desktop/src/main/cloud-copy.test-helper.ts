@@ -59,7 +59,14 @@ export async function service() {
     const again = /\n {4}(\d{6})\n/.exec(inbox.mails().at(-1)?.text ?? "")?.[1] ?? "";
     return ((await (await json("/verify", { email: "me@example.com", code: again, os: "windows", name })).json()) as { token: string }).token;
   };
+  /** Another account, made now: its sign-in token. */
+  const newAccount = async (email: string) => {
+    inbox.clear();
+    await json("/code", { email });
+    const sent = /\n {4}(\d{6})\n/.exec(inbox.mails().at(-1)?.text ?? "")?.[1] ?? "";
+    return ((await (await json("/verify", { email, code: sent, create: true })).json()) as { token: string }).token;
+  };
   const client = () => new CloudCopy(new ServiceStorage({ baseUrl: "http://tavora.test/v1/account", fetch: fetchImpl, token: () => token }));
-  return { client, routes, fetch: fetchImpl, token, signIn };
+  return { client, routes, fetch: fetchImpl, token, signIn, newAccount };
 }
 

@@ -86,6 +86,8 @@ export interface AppOptions {
   moduleRequestRateLimiter?: RateLimiter;
   /** Games not on the list yet that one network (an IPv4 /24, an IPv6 /48) may add: 20 a day by default. */
   newGameRateLimiter?: RateLimiter;
+  /** Votes for games already on the list that one network may give: 50 a day by default. */
+  voteNetworkRateLimiter?: RateLimiter;
 }
 
 /** Why an icon offer was refused, by its status. */
@@ -94,7 +96,7 @@ const SUBMIT_REASONS = { 400: "bad-request", 409: "has-icon", 413: "too-big", 42
 /** A Steam import refusal: the English message and its reason code. */
 const steamFail = (context: Context, status: ContentfulStatusCode, reason: string, error: string) => context.json({ error, reason }, status);
 
-export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter, accounts, catalog, publishRateLimiter, publishLimits, scanner, catalogueKey, officialPins = OFFICIAL_PINS, reportRateLimiter, maintainerEmail, reviewRateLimiter, conversationRateLimiter, leaderboardRateLimiter, stats, countryOf, siteRateLimiter, moduleRequests, moduleRequestRateLimiter, newGameRateLimiter }: AppOptions) {
+export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter, accounts, catalog, publishRateLimiter, publishLimits, scanner, catalogueKey, officialPins = OFFICIAL_PINS, reportRateLimiter, maintainerEmail, reviewRateLimiter, conversationRateLimiter, leaderboardRateLimiter, stats, countryOf, siteRateLimiter, moduleRequests, moduleRequestRateLimiter, newGameRateLimiter, voteNetworkRateLimiter }: AppOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 60, windowMs: 60_000 });
   // Enough for a whole Steam library in one sitting; the review queue's own cap (MAX_PENDING) still stops a flood.
   const submitLimiter = submitRateLimiter ?? createRateLimiter({ limit: 100, windowMs: 3_600_000 });
@@ -105,6 +107,9 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
   // New games fill the list, so one network adds only a few a day, counted by its /24 or /48 because one connection can get
   // many /64s; votes for games already on it don't count here.
   const newGameLimiter = newGameRateLimiter ?? createRateLimiter({ limit: 20, windowMs: 86_400_000 });
+  // Votes for games already on it count once per network anyway (module-requests.ts); this keeps one network from writing
+  // a vote for every game on the list each day.
+  const voteNetworkLimiter = voteNetworkRateLimiter ?? createRateLimiter({ limit: 50, windowMs: 86_400_000 });
   // Whether Tavora's game list knows a requested game's id: only those are safe from being pushed off a full list.
   const gameKnown = gameListKnows(db);
   const app = new Hono();
@@ -461,12 +466,11 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     }
     const request = parseRequest(body);
     if (!request) return fail(context, 400, "bad-request", "Send { game: { name }, voter }.");
-    if (!moduleRequests.has(request.game)) {
-      const newWait = newGameLimiter.check(networkOf(client));
-      if (newWait > 0) return tooMany(context, newWait);
-    }
-    // A full list where nothing may make room for this game (only known games with more votes).
-    if (!moduleRequests.vote(request, Date.now(), { known: gameKnown(gameKey(request.game)) })) return fail(context, 503, "unavailable", "Asking for modules is not available right now.");
+    const network = networkOf(client);
+    const networkWait = (moduleRequests.has(request.game) ? voteNetworkLimiter : newGameLimiter).check(network);
+    if (networkWait > 0) return tooMany(context, networkWait);
+    // A full list where nothing may make room for this game (only known games that people still ask for).
+    if (!moduleRequests.vote(request, Date.now(), { known: gameKnown(gameKey(request.game)), network })) return fail(context, 503, "unavailable", "Asking for modules is not available right now.");
     return context.body(null, 204);
   });
 

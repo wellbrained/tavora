@@ -1,4 +1,5 @@
-import { readdir, rm } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, readdir, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import { isModuleId, isOwnerId } from "@tavora/module-schema";
 import { LIMITS, type JsonValue } from "@tavora/sdk/protocol";
@@ -166,7 +167,10 @@ export interface PanelStateAccess {
 /**
  * UI state for one panel instance. Removed when the panel is closed. Fields of its file other than the value (a newer
  * Tavora's) are kept. A module panel's state is kept with the owner (publisher) that wrote it: when the panel's module
- * id comes to load for another owner (a development folder over a catalog copy), that owner never reads it (handOver).
+ * id comes to load for another owner (a development folder over a catalog copy, also while the panel was closed or
+ * Tavora was), that owner never reads it (handOver), and its writes never replace it: the first one moves the other
+ * owner's file aside (`aside/<instanceId>.<owner tag>.json`, a folder older Tavoras' cleanup doesn't look into), where
+ * that owner finds it again when the id comes back to it.
  */
 export class PanelStateStore {
   private readonly queue = new SerialQueue();
@@ -177,6 +181,8 @@ export class PanelStateStore {
    * copied aside, and read, before the first write only.
    */
   private readonly kept = new Map<string, string>();
+  /** Per panel file read or written this run, the owner noted in it (null: none). */
+  private readonly stamps = new Map<string, string | null>();
 
   constructor(private readonly dir: string) {}
 
@@ -185,13 +191,37 @@ export class PanelStateStore {
     return path.join(this.dir, `${instanceId}.json`);
   }
 
-  /** The panel's state; with `owner` (a module panel), null when another owner wrote it. */
+  /** Where `owner`'s state of the panel waits while another owner's page runs in it. */
+  private asideFile(instanceId: string, owner: string): string {
+    if (!INSTANCE_ID.test(instanceId)) throw new Error("invalid instance id");
+    return path.join(this.asideDir, `${instanceId}.${ownerTag(owner)}.json`);
+  }
+
+  private get asideDir(): string {
+    return path.join(this.dir, ASIDE_FOLDER);
+  }
+
+  /**
+   * The owner noted in a panel's state file, read at start before any page runs (a panel record from before owners
+   * were noted takes it: workspace.ts noteOwners). Null when there is none.
+   */
+  async ownerOf(instanceId: string): Promise<string | null> {
+    const file = this.file(instanceId);
+    return this.queue.run(async () => {
+      if (!this.stamps.has(file)) await this.read(file).catch(() => null);
+      return this.stamps.get(file) ?? null;
+    });
+  }
+
+  /** The panel's state; with `owner` (a module panel), only what that owner wrote (a file from before owners were noted counts). */
   get(instanceId: string, owner?: string): Promise<JsonValue | null> {
     const file = this.file(instanceId);
     return this.queue.run(async () => {
       const saved = await this.read(file);
-      if (owner !== undefined && typeof saved?.owner === "string" && saved.owner !== owner) return null;
-      return (saved?.value as JsonValue | undefined) ?? null;
+      if (owner === undefined || typeof saved?.owner !== "string" || saved.owner === owner) return (saved?.value as JsonValue | undefined) ?? null;
+      // Another owner's page ran in the panel last: this owner's own state, if it left any, waits aside.
+      const aside = await readSavedFile(this.asideFile(instanceId, owner), { version: STORE_VERSIONS.panelState }).catch(() => null);
+      return aside?.owner === owner ? ((aside.value as JsonValue | undefined) ?? null) : null;
     });
   }
 
@@ -207,6 +237,7 @@ export class PanelStateStore {
       // A file from before owners were noted: it is `from`'s.
       if (!saved || typeof saved.owner === "string" || saved.value === undefined) return;
       await writeFileAtomic(file, `{"version":${STORE_VERSIONS.panelState},"owner":${JSON.stringify(from)},${this.kept.get(file) ?? ""}"value":${JSON.stringify(saved.value)}}`);
+      this.stamps.set(file, from);
     });
   }
 
@@ -214,7 +245,21 @@ export class PanelStateStore {
   private async read(file: string): Promise<Record<string, unknown> | null> {
     const saved = await readSavedFile(file, { version: STORE_VERSIONS.panelState });
     this.kept.set(file, keptMembers(saved, ["version", "owner", "value"]));
+    this.stamps.set(file, typeof saved?.owner === "string" ? saved.owner : null);
     return saved;
+  }
+
+  /** Before `owner` writes: a file another owner noted as its own moves aside, kept for that owner. */
+  private async moveAsideFor(instanceId: string, file: string, owner: string): Promise<void> {
+    if (!this.stamps.has(file)) await this.read(file);
+    const other = this.stamps.get(file);
+    if (typeof other !== "string" || other === owner) return;
+    await mkdir(this.asideDir, { recursive: true });
+    await rename(file, this.asideFile(instanceId, other)).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== "ENOENT") throw error;
+    });
+    this.kept.set(file, "");
+    this.stamps.set(file, null);
   }
 
   /** With `owner` (a module panel), the state is noted as that owner's; dropped when the panel was handed to another. */
@@ -222,7 +267,7 @@ export class PanelStateStore {
     const file = this.file(instanceId);
     const handed = this.owners.get(instanceId);
     if (owner !== undefined && handed !== undefined && handed !== owner) return Promise.resolve();
-    if (value === null) return this.remove(instanceId);
+    if (value === null) return owner === undefined ? this.remove(instanceId) : this.clear(instanceId, owner);
     const serialized = serializeJson(value, "value");
     if (Buffer.byteLength(serialized) > LIMITS.maxPanelStateBytes) {
       throw new HostError("QUOTA_EXCEEDED", `panel state is limited to ${LIMITS.maxPanelStateBytes} bytes`);
@@ -230,17 +275,39 @@ export class PanelStateStore {
     return this.queue.run(async () => {
       // Read before it is first written over, so a newer Tavora's file is copied aside first and its fields are kept.
       if (!this.kept.has(file)) await this.read(file);
+      if (owner !== undefined) await this.moveAsideFor(instanceId, file, owner);
       const kept = this.kept.get(file) ?? "";
       const stamp = owner === undefined ? "" : `"owner":${JSON.stringify(owner)},`;
       await writeFileAtomic(file, `{"version":${STORE_VERSIONS.panelState},${stamp}${kept}"value":${serialized}}`);
+      this.stamps.set(file, owner ?? null);
     });
   }
 
+  /** A module panel's page cleared its state: only `owner`'s goes; another owner's file stays as it is. */
+  private clear(instanceId: string, owner: string): Promise<void> {
+    const file = this.file(instanceId);
+    const aside = this.asideFile(instanceId, owner);
+    return this.queue.run(async () => {
+      if (!this.stamps.has(file)) await this.read(file);
+      const other = this.stamps.get(file);
+      if (typeof other !== "string" || other === owner) {
+        await rm(file, { force: true });
+        this.kept.delete(file);
+        this.stamps.delete(file);
+      }
+      await rm(aside, { force: true });
+    });
+  }
+
+  /** The panel closed for good: its state goes, every owner's. */
   remove(instanceId: string): Promise<void> {
     const file = this.file(instanceId);
     return this.queue.run(async () => {
       await rm(file, { force: true });
       this.kept.delete(file);
+      this.stamps.delete(file);
+      const names = await readdir(this.asideDir).catch(() => [] as string[]);
+      for (const name of names) if (panelOfFile(name) === instanceId) await rm(path.join(this.asideDir, name), { force: true });
     });
   }
 
@@ -254,15 +321,31 @@ export class PanelStateStore {
     }
     await Promise.all(
       names
-        .filter((name) => name.endsWith(".json") && !keep.has(name.slice(0, -".json".length)))
+        .filter((name) => name.endsWith(".json") && !keep.has(panelOfFile(name)))
         .map((name) =>
           this.queue.run(async () => {
             await rm(path.join(this.dir, name), { force: true });
             this.kept.delete(path.join(this.dir, name));
+            this.stamps.delete(path.join(this.dir, name));
           }),
         ),
     );
+    const aside = await readdir(this.asideDir).catch(() => [] as string[]);
+    await Promise.all(aside.filter((name) => !keep.has(panelOfFile(name))).map((name) => this.queue.run(() => rm(path.join(this.asideDir, name), { force: true }))));
   }
+}
+
+/** The folder in panel-state/ that holds the state other owners left (PanelStateStore). */
+const ASIDE_FOLDER = "aside";
+
+/** A short name for an owner, safe in a file name. */
+function ownerTag(owner: string): string {
+  return createHash("sha256").update(owner).digest("hex").slice(0, 16);
+}
+
+/** The panel a state file is of: `<instanceId>.json`, or `aside/<instanceId>.<owner tag>.json`. */
+function panelOfFile(name: string): string {
+  return /^(.+?)(\.[0-9a-f]{16})?\.json$/.exec(name)?.[1] ?? name;
 }
 
 export interface ModuleData {

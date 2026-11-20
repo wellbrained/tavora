@@ -51,12 +51,24 @@ export class DeveloperKeys {
     };
   }
 
-  private signedIn: boolean | null = null;
+  /** The account signed in (sign-in.ts accountIdOf), null when signed out; undefined before the first change. */
+  private account: string | null | undefined = undefined;
 
-  /** Signed in or out: the keys are read again. */
-  accountChanged(signedIn: boolean): void {
-    if (signedIn === this.signedIn) return;
-    this.signedIn = signedIn;
+  /**
+   * Signed in, out, or as another account: what was read for the account before is dropped at once (never shown, used or
+   * exported for another one), and the keys are read again.
+   */
+  accountChanged(account: string | null): void {
+    if (account === this.account) return;
+    const first = this.account === undefined;
+    this.account = account;
+    if (!first) {
+      // Newer than any read still going.
+      this.turn++;
+      this.set(account === null ? "signed-out" : "loading", []);
+      this.recoveryKey = null;
+      this.changed();
+    }
     void this.refresh();
   }
 
@@ -88,7 +100,8 @@ export class DeveloperKeys {
   private async read(): Promise<[DeveloperKeysView["status"], Kept[]]> {
     const accountKey = this.options.accountKey;
     if (!this.options.account.signedIn()) return ["signed-out", []];
-    if (!accountKey.get()) return [(await accountKey.exists()) ? "ask" : "none", []];
+    // Only a key of the account signed in: another account's, kept here for it, counts as none.
+    if (!(await accountKey.forAccount())) return [(await accountKey.exists()) ? "ask" : "none", []];
     return ["ready", parseKeys((await accountKey.content()).publisherKeys ?? [])];
   }
 
@@ -206,8 +219,8 @@ export class DeveloperKeys {
   /** The account has no key yet: it is made here, and its recovery key shown once. */
   private async ensureAccountKey(): Promise<void> {
     const accountKey = this.options.accountKey;
-    if (accountKey.get()) return;
     if (!this.options.account.signedIn()) throw new UserError("account.error.signedOut");
+    if (await guard(() => accountKey.forAccount())) return;
     if (!accountKey.canKeep) throw new UserError("cloudCopy.error.cantKeep");
     const setUp = await guard(() => accountKey.setUp());
     if (setUp.status === "ask") {

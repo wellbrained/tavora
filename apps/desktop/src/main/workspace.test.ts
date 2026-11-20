@@ -10,6 +10,7 @@ import {
   Workspaces,
   loadWorkspace,
   MAX_SNAPSHOTS,
+  noteOwners,
   planSnapshot,
   SAVE_SOON_MS,
   saveWorkspace,
@@ -117,6 +118,41 @@ describe("loadWorkspace", () => {
     );
     const poe2 = (await loadWorkspace(file, ["poe2"], () => true)).workspaces.poe2!;
     expect(poe2.instances).toEqual([{ instanceId: A, moduleId: "m.a", content }, { instanceId: B, moduleId: "m.a" }]);
+  });
+
+  it("keeps the owner a panel ran as, and notes it on panels from before it was noted", async () => {
+    const file = await tempFile();
+    await writeFile(
+      file,
+      JSON.stringify({
+        version: 3,
+        workspaces: {
+          poe2: {
+            instances: [
+              { instanceId: A, moduleId: "m.a", owner: "k1" },
+              { instanceId: B, moduleId: "m.a", owner: 7 },
+              { instanceId: C, moduleId: "m.waiting" },
+            ],
+            layout: null,
+            snapshots: [],
+          },
+        },
+      }),
+    );
+    const state = await loadWorkspace(file, ["poe2"], () => true);
+    expect(state.workspaces.poe2!.instances).toEqual([{ instanceId: A, moduleId: "m.a", owner: "k1" }, { instanceId: B, moduleId: "m.a" }, { instanceId: C, moduleId: "m.waiting" }]);
+    // Noted only where the module is loaded; an owner noted before stays (it is handed over when the panel starts).
+    expect(noteOwners(state, (moduleId) => (moduleId === "m.a" ? "local" : undefined))).toBe(true);
+    expect(state.workspaces.poe2!.instances.map((record) => record.owner)).toEqual(["k1", "local", undefined]);
+    expect(noteOwners(state, (moduleId) => (moduleId === "m.a" ? "local" : undefined))).toBe(false);
+    // A panel whose state names its owner takes that one.
+    delete state.workspaces.poe2!.instances[1]!.owner;
+    expect(noteOwners(state, () => "local", (instanceId) => (instanceId === B ? "k2" : undefined))).toBe(true);
+    expect(state.workspaces.poe2!.instances.map((record) => record.owner)).toEqual(["k1", "k2", "local"]);
+    state.workspaces.poe2!.instances[1]!.owner = "local";
+    delete state.workspaces.poe2!.instances[2]!.owner;
+    await saveWorkspace(file, state);
+    expect((await loadWorkspace(file, ["poe2"], () => true)).workspaces.poe2!.instances[1]).toEqual({ instanceId: B, moduleId: "m.a", owner: "local" });
   });
 
   it("ignores an unreadable file", async () => {

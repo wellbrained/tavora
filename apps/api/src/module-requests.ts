@@ -1,4 +1,5 @@
-import { mkdirSync } from "node:fs";
+import { createHmac, randomBytes } from "node:crypto";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { isGameId } from "@tavora/module-schema";
@@ -15,9 +16,12 @@ export const MAX_GAME_NAME = 80;
 /**
  * Most different games kept, so made-up names cannot grow the file. When it is full, a new game takes the place of one
  * Tavora's game list doesn't know (fewest votes, oldest last vote first), so made-up names and ids can't keep real games out
- * for good, and can't push a known game out either (see vote()).
+ * for good, and can't push a known game out either; a known newcomer may also take the place of a known game with a single
+ * vote or none for KNOWN_KEEP_MS (see vote()).
  */
 export const MAX_GAMES = 5000;
+/** A known game with no vote for this long may give its place on a full list to another known game. */
+export const KNOWN_KEEP_MS = 90 * 24 * 60 * 60_000;
 /** Most games the admin list returns. */
 export const MAX_LISTED = 500;
 
@@ -63,6 +67,38 @@ export function parseRequest(body: unknown): ParsedRequest | null {
   return { game: { name: clean, steamAppId: (steamAppId as number | null | undefined) ?? null, gameId: (gameId as string | null | undefined) ?? null }, voter };
 }
 
+/**
+ * A vote's network (an IPv4 /24, an IPv6 /48) for one game, so votes are counted once per network: 4 hex digits of a hash
+ * of both under a secret only the server has (voteSalt), enough to tell a game's networks apart (two of them rarely share
+ * one, and then count once). Without the secret nobody can work out a network from it; with it, 4 digits still match
+ * many networks and don't link one network's votes across games.
+ */
+const networkMark = (salt: string, key: string, network: string) => createHmac("sha256", salt).update(`vote-network:${key}:${network}`).digest("hex").slice(0, 4);
+
+/** A secret: at least 32 characters. */
+const SALT = /^\S{32,}$/;
+
+/**
+ * The secret for vote networks: MODULE_REQUEST_SALT when it is set (at least 32 characters), else the one in `file`, made
+ * (64 hex digits, readable by the service only) the first time. Kept out of the daily backup, so a copy of the votes alone
+ * tells no network; if it is lost, a new one is made and each network may count once more per game.
+ */
+export function voteSalt(env: Record<string, string | undefined>, file: string, warn: (message: string) => void = console.warn): string {
+  const set = env.MODULE_REQUEST_SALT?.trim();
+  if (set && SALT.test(set)) return set;
+  if (set) warn("[tavora-api] MODULE_REQUEST_SALT is shorter than 32 characters; using the one in the state folder.");
+  try {
+    const kept = readFileSync(file, "utf8").trim();
+    if (SALT.test(kept)) return kept;
+  } catch {
+    // None yet.
+  }
+  const made = randomBytes(32).toString("hex");
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, `${made}\n`, { mode: 0o600 });
+  return made;
+}
+
 /** Which votes count as the same game: the Steam id, else Tavora's id, else the name in lower case letters and digits. */
 export function gameKey(game: RequestedGame): string {
   if (game.steamAppId !== null) return `steam:${game.steamAppId}`;
@@ -90,8 +126,11 @@ export function gameListKnows(dataset: DatabaseSync): (key: string) => boolean {
 
 export class ModuleRequestStore {
   private readonly db: DatabaseSync;
+  private readonly salt: string;
 
-  constructor(file: string) {
+  /** `salt`: the secret for vote networks (voteSalt); a new random one when absent, as for a test. */
+  constructor(file: string, { salt = randomBytes(32).toString("hex") }: { salt?: string } = {}) {
+    this.salt = salt;
     if (file !== ":memory:") mkdirSync(path.dirname(file), { recursive: true });
     this.db = new DatabaseSync(file);
     this.db.exec(`
@@ -102,6 +141,10 @@ export class ModuleRequestStore {
     // Whether Tavora's game list knows the id the game is counted by (1), or not (0 or null: a made-up id or only a name).
     const columns = (this.db.prepare("pragma table_info(games)").all() as unknown as { name: string }[]).map((column) => column.name);
     if (!columns.includes("known")) this.db.exec("alter table games add column known integer");
+    // Which network a vote came from, for one game only (networkMark): null for votes from before it, each counted on its own.
+    const voteColumns = (this.db.prepare("pragma table_info(votes)").all() as unknown as { name: string }[]).map((column) => column.name);
+    if (!voteColumns.includes("network")) this.db.exec("alter table votes add column network text");
+    this.db.exec("create index if not exists votes_network on votes (key, network)");
   }
 
   /** Whether a game has a vote already. */
@@ -124,13 +167,21 @@ export class ModuleRequestStore {
   }
 
   /**
-   * Counts one vote. A second vote from the same install for the same game changes nothing. A new game on a full list takes
-   * the place of another, never of a known game (`known`: Tavora's game list has its id) with more votes than its one:
-   * first games the list doesn't know, the fewest votes and then the oldest last vote first; then, only for a known newcomer,
-   * a known game with a single vote. False when nothing may make room (nothing is stored then).
+   * Counts one vote: once per network (`network`, an IPv4 /24 or IPv6 /48) and game, so one network can't pad a game's
+   * votes with made-up voter codes; a later vote from the same install, or from the same network, changes nothing. Without
+   * `network` (a test, or a vote from before), each voter counts. A new game on a full list takes the place of another,
+   * never of a known game (`known`: Tavora's game list has its id) that still has people asking: first games the list
+   * doesn't know, the fewest votes and then the oldest last vote first; then, only for a known newcomer, a known game with
+   * a single vote or with no vote for KNOWN_KEEP_MS, in the same order. False when nothing may make room (nothing is
+   * stored then).
    */
-  vote({ game, voter }: ParsedRequest, now: number = Date.now(), { known = false, maxGames = MAX_GAMES }: { known?: boolean; maxGames?: number } = {}): boolean {
+  vote(
+    { game, voter }: ParsedRequest,
+    now: number = Date.now(),
+    { known = false, maxGames = MAX_GAMES, network }: { known?: boolean; maxGames?: number; network?: string } = {},
+  ): boolean {
     const key = gameKey(game);
+    const mark = network === undefined ? null : networkMark(this.salt, key, network);
     this.db.exec("begin immediate");
     try {
       if (!this.db.prepare("select 1 from games where key = ?").get(key)) {
@@ -139,7 +190,8 @@ export class ModuleRequestStore {
           const need = count - maxGames + 1;
           const out = this.db.prepare("select key from games where coalesce(known, 0) = 0 order by votes, last_at, key limit ?").all(need) as unknown as { key: string }[];
           if (known && out.length < need) {
-            out.push(...(this.db.prepare("select key from games where known = 1 and votes <= 1 order by votes, last_at, key limit ?").all(need - out.length) as unknown as { key: string }[]));
+            const stale = this.db.prepare("select key from games where known = 1 and (votes <= 1 or last_at < ?) order by votes, last_at, key limit ?");
+            out.push(...(stale.all(now - KNOWN_KEEP_MS, need - out.length) as unknown as { key: string }[]));
           }
           if (out.length < need) {
             this.db.exec("rollback");
@@ -147,8 +199,12 @@ export class ModuleRequestStore {
           }
           for (const row of out) this.removeKey(row.key);
         }
+      } else if (mark !== null && this.db.prepare("select 1 from votes where key = ? and network = ?").get(key, mark)) {
+        // This network asked for the game already.
+        this.db.exec("commit");
+        return true;
       }
-      const added = this.db.prepare("insert or ignore into votes (key, voter) values (?, ?)").run(key, voter);
+      const added = this.db.prepare("insert or ignore into votes (key, voter, network) values (?, ?, ?)").run(key, voter, mark);
       if (Number(added.changes) > 0) {
         // The first vote's spelling stays; later ones only fill in an id it lacked.
         this.db

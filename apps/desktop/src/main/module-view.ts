@@ -567,7 +567,6 @@ export class ModuleView {
       if (this.disposed || this.health !== "loading") return;
       this.setStatus("ready");
       this.startHeartbeat();
-      this.startStorageWatch();
       this.later(NO_BRIDGE_MS, () => this.bridge === undefined && this.reveal());
     });
     contents.on("did-fail-load", (_event, errorCode, description, url, isMainFrame) => {
@@ -592,6 +591,9 @@ export class ModuleView {
     });
 
     this.hideUntilSettled();
+    // From the start, not from the first finished load: a page that keeps its load from finishing (or its worker) can
+    // write to its storage all the same. It runs until the panel closes, across reloads and crashes.
+    this.startStorageWatch();
     void contents.loadURL(`${origin}/${options.panelType?.entry ?? module.manifest.entry}`).catch(() => {
       // Load failures surface through did-fail-load / render-process-gone.
     });

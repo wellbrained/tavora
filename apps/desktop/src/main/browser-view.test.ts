@@ -190,6 +190,10 @@ describe("a navigation that has to move to the other session", () => {
     expect(crossSessionStep({ by: "page", gesture: false, referrer })).toEqual({ action: "ask" });
   });
 
+  it("is left to the user when Tavora reopened an address by itself, which the page may have chosen", () => {
+    expect(crossSessionStep({ by: "restored" })).toEqual({ action: "ask" });
+  });
+
   it("sends the page's origin as the referrer, and nothing for a page off the web", () => {
     expect(pageReferrer("https://page.example/path/to?q=secret#x")).toEqual({ url: "https://page.example/", policy: "strict-origin" });
     expect(pageReferrer("http://page.example:8080/a")).toEqual({ url: "http://page.example:8080/", policy: "strict-origin" });
@@ -384,6 +388,129 @@ describe("a Browser panel's page going to a site of the other session", () => {
     typed.redirect(SHARED);
     expect(typed.sessions).toEqual(["workspace", "shared"]);
     expect(world.loads).toEqual([{ contents: typed.browser.view.webContents.id, url: SHARED, options: undefined }]);
+  });
+
+  it("asks when the address the panel showed last time redirects there, as no click chose it now", () => {
+    // A page can put its own address there (it went there, or pushState), and have its server redirect it later.
+    const { browser, start, redirect, sessions } = navigating();
+    browser.reopen("https://bounce.example/x");
+    expect(world.loads).toEqual([{ contents: browser.view.webContents.id, url: "https://bounce.example/x", options: undefined }]);
+    start("https://bounce.example/x");
+    world.loads.length = 0;
+    redirect(SHARED);
+    expect(world.loads).toEqual([]);
+    expect(sessions).toEqual(["workspace"]);
+    expect(browser.state.error).toEqual({ kind: "otherSession", detail: "" });
+    expect(browser.state.url).toBe(SHARED);
+
+    // Open is the user's press: it opens there.
+    browser.openAsked();
+    expect(sessions).toEqual(["workspace", "shared"]);
+    expect(world.loads).toEqual([{ contents: browser.view.webContents.id, url: SHARED, options: undefined }]);
+  });
+
+  it("reopens a page of a shared site in the shared session, where it was shown", () => {
+    const { browser, sessions } = navigating();
+    browser.reopen(SHARED);
+    expect(sessions).toEqual(["workspace", "shared"]);
+    expect(world.loads).toEqual([{ contents: browser.view.webContents.id, url: SHARED, options: undefined }]);
+    expect(browser.state.error).toBeNull();
+  });
+
+  it("still carries a link the user opened in a new tab through a redirect there", () => {
+    const { browser, start, redirect, sessions } = navigating();
+    browser.restore("https://short.example/x", { url: "https://page.example/", policy: "strict-origin" });
+    start("https://short.example/x");
+    world.loads.length = 0;
+    redirect(SHARED);
+    expect(sessions).toEqual(["workspace", "shared"]);
+    expect(world.loads).toEqual([
+      { contents: browser.view.webContents.id, url: SHARED, options: { httpReferrer: { url: "https://page.example/", policy: "strict-origin" } } },
+    ]);
+  });
+
+  it("keeps asking while the page behind the question bounces past the redirect limit or fails", () => {
+    const { browser, commit, willNavigate, start, redirect, fail } = navigating();
+    commit(PUBLIC);
+    willNavigate(SHARED);
+    expect(browser.state.error).toEqual({ kind: "otherSession", detail: "" });
+    for (let n = 0; n < 10; n++) {
+      start(`https://bounce.example/${n}`);
+      redirect("https://shared.example/elsewhere");
+    }
+    fail("https://unknown.example/");
+    expect(browser.state.error).toEqual({ kind: "otherSession", detail: "" });
+    expect(browser.state.url).toBe(SHARED);
+    expect(world.loads).toEqual([]);
+    browser.openAsked();
+    expect(world.loads.map((load) => load.url)).toEqual([SHARED]);
+  });
+
+  it("asks again on Try again when the address that failed redirects there, as the page may have chosen it", () => {
+    const { browser, contents, commit, start, redirect, fail, sessions } = navigating();
+    commit(PUBLIC);
+    start("https://bounce.example/x");
+    fail("https://bounce.example/x");
+    expect(browser.state.error).toEqual({ kind: "notFound", detail: "" });
+    browser.reload();
+    expect(world.loads).toEqual([{ contents: browser.view.webContents.id, url: "https://bounce.example/x", options: undefined }]);
+    start("https://bounce.example/x");
+    world.loads.length = 0;
+    redirect(SHARED);
+    expect(world.loads).toEqual([]);
+    expect(sessions).toEqual(["workspace"]);
+    expect(browser.state.error).toEqual({ kind: "otherSession", detail: "" });
+    expect((contents as unknown as { reloads: number }).reloads).toBe(0);
+  });
+
+  it("asks on Try again before it opens an address of the other session", () => {
+    const { browser, commit, fail, sessions } = navigating();
+    commit(PUBLIC);
+    // What failed is an address of the shared site (a page's bounce between the sessions that went on too long).
+    fail(SHARED);
+    browser.reload();
+    expect(world.loads).toEqual([]);
+    expect(sessions).toEqual(["workspace"]);
+    expect(browser.state.error).toEqual({ kind: "otherSession", detail: "" });
+    expect(browser.state.url).toBe(SHARED);
+  });
+
+  it("asks when Back, Forward or Reload goes to an address of the page's history that redirects there", () => {
+    // Back to an entry the page made itself.
+    const back = navigating();
+    back.commit(PUBLIC);
+    (back.contents as unknown as { back: string }).back = "https://bounce.example/b";
+    back.browser.back();
+    back.start("https://bounce.example/b");
+    back.redirect(SHARED);
+    expect(world.loads).toEqual([]);
+    expect(back.sessions).toEqual(["workspace"]);
+    expect(back.browser.state.error).toEqual({ kind: "otherSession", detail: "" });
+
+    // Reload of the page it went to by itself.
+    const reload = navigating();
+    reload.commit("https://bounce.example/r");
+    (reload.contents as unknown as { getURL: () => string }).getURL = () => "https://bounce.example/r";
+    reload.browser.reload();
+    reload.start("https://bounce.example/r");
+    reload.redirect(SHARED);
+    expect(world.loads).toEqual([]);
+    expect(reload.sessions).toEqual(["workspace"]);
+    expect(reload.browser.state.error).toEqual({ kind: "otherSession", detail: "" });
+  });
+
+  it("keeps asking when the page behind the question goes elsewhere in its own session, and Stay then shows it there", () => {
+    const { browser, commit, willNavigate, start } = navigating();
+    commit(PUBLIC);
+    willNavigate(SHARED);
+    start("https://other.example/");
+    commit("https://other.example/");
+    expect(browser.state.error).toEqual({ kind: "otherSession", detail: "" });
+    expect(browser.state.url).toBe(SHARED);
+    expect(browser.capturable).toBe(false);
+    browser.stay();
+    expect(browser.state.error).toBeNull();
+    expect(browser.state.url).toBe("https://other.example/");
   });
 
   it("hands a new tab the referrer Chromium worked out for the page", async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clientOf, createRateLimiter, networkOf } from "./rate-limit.ts";
+import { checkAll, clientOf, createRateLimiter, networkOf } from "./rate-limit.ts";
 
 describe("clientOf", () => {
   it("keeps an IPv4 address and counts IPv6 by its /64", () => {
@@ -35,6 +35,20 @@ describe("networkOf", () => {
 });
 
 describe("createRateLimiter", () => {
+  it("peeks without counting, and checks several limits all or none", () => {
+    const one = createRateLimiter({ limit: 1, windowMs: 1000 });
+    const two = createRateLimiter({ limit: 2, windowMs: 1000 });
+    expect(one.peek("a", 0)).toBe(0);
+    expect(one.peek("a", 0)).toBe(0);
+    expect(checkAll([[one, "a"], [two, "a"]], 0)).toBe(0);
+    expect(one.peek("a", 0)).toBe(1);
+    // One refuses: the other counts nothing.
+    expect(checkAll([[one, "a"], [two, "a"]], 0)).toBe(1);
+    expect(checkAll([[two, "a"]], 0)).toBe(0);
+    expect(two.peek("a", 0)).toBe(1);
+    expect(one.peek("a", 1000)).toBe(0);
+  });
+
   it("never keeps more clients than its cap", () => {
     const limiter = createRateLimiter({ limit: 1, windowMs: 60_000, maxClients: 3 });
     for (const key of ["a", "b", "c", "d", "e"]) expect(limiter.check(key, 1000)).toBe(0);

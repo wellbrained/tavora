@@ -21,20 +21,29 @@ export function browserPartition(kind: BrowserKind, workspaceId: string): string
 const GESTURE_MS = 1_000;
 
 /**
- * How a main-frame navigation started: by the user (the address bar, Back, Try again, a tab Tavora opened for a click)
- * or by the page, and then whether right after a click or key press in it. `referrer` is what its first request sent.
+ * How a main-frame navigation started: by the user (the address bar, a tab Tavora opened for a click, Open while the
+ * panel asks), by the page, and then whether right after a click or key press in it, or by Tavora going again to an
+ * address the page may have chosen itself (`restored`: the address the panel showed last time, Reload, Back, Forward,
+ * Try again). `referrer` is what its first request sent.
  */
-export type NavigationStart = { by: "user"; referrer?: Referrer | undefined } | { by: "page"; gesture: boolean; referrer?: Referrer | undefined };
+export type NavigationStart =
+  | { by: "user"; referrer?: Referrer | undefined }
+  | { by: "page"; gesture: boolean; referrer?: Referrer | undefined }
+  | { by: "restored" };
+
+/** Tavora reopens an address no click of the user's chose now: it is loaded, but its redirects to the other session ask. */
+const RESTORED: NavigationStart = { by: "restored" };
 
 /**
  * What happens to a navigation that has to move to the other session (a site signed in for all workspaces, or away from
  * one). Tavora can carry it there only by loading the address itself, and Chromium treats that like a typed address:
  * SameSite=Strict cookies go along and `Sec-Fetch-Site` says `none`. So that happens only when the user started the
  * navigation, or the page did right after a click or key press in it; it keeps the referrer the page would have sent.
- * Otherwise the panel asks: it shows where the page wants to go, and the user's press opens it there.
+ * Otherwise the panel asks: it shows where the page wants to go, and the user's press opens it there. So does a redirect
+ * of an address Tavora reopened by itself (`restored`): the page may have put it there to be loaded later.
  */
 export function crossSessionStep(start: NavigationStart): { action: "reissue"; referrer: Referrer | undefined } | { action: "ask" } {
-  if (start.by === "page" && !start.gesture) return { action: "ask" };
+  if (start.by === "restored" || (start.by === "page" && !start.gesture)) return { action: "ask" };
   return { action: "reissue", referrer: start.referrer };
 }
 
@@ -178,11 +187,14 @@ export class BrowserPanel {
   private fullscreen = false;
   private downloadsRefused = 0;
   private lastGesture = 0;
-  /** The navigation Tavora itself just started in the page (load, Back, Forward, Reload), until Chromium reports it. */
-  private ownNavigation: { url: string; referrer: Referrer | undefined } | null = null;
+  /** The navigation Tavora itself just started in the page (load, Back, Forward, Reload), and how, until Chromium reports it. */
+  private ownNavigation: { url: string; start: NavigationStart } | null = null;
   /** How the navigation under way started; its redirects follow the same rule (crossSessionStep). */
   private navigationStart: NavigationStart = { by: "user" };
-  /** Redirects that moved the page to the other session since a page last committed: two sites can't bounce it forever. */
+  /**
+   * Redirects that moved the page to the other session since a page last committed or the user went somewhere: two sites
+   * can't bounce it forever. Nothing counts while the panel asks, so the page can't turn the question into an error.
+   */
   private redirectSwitches = 0;
   private changeTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -200,10 +212,24 @@ export class BrowserPanel {
     return this.committedUrl === null && this.requestedUrl === null;
   }
 
-  /** Opens the address the panel showed last time, or a link opened in a new tab, unless the user already went somewhere. */
+  /**
+   * Opens a link the user opened in a new tab, or had a module or Tavora open, as the user's own navigation, unless the
+   * user already went somewhere.
+   */
   restore(url: unknown, referrer?: Referrer): void {
-    if (typeof url !== "string" || !isWebUrl(url) || this.committedUrl !== null || this.requestedUrl !== null) return;
-    this.open(url, this.kindFor(url), referrer);
+    if (typeof url !== "string" || !isWebUrl(url) || !this.blank) return;
+    this.open(url, this.kindFor(url), { by: "user", referrer });
+  }
+
+  /**
+   * Opens the address the panel showed last time, unless the user already went somewhere. No click chose it now, and the
+   * page may have put it there itself, so it is `restored`: it opens in the session its site belongs in, as it was
+   * shown, but a redirect from it to the other session asks first (crossSessionStep).
+   */
+  reopen(url: unknown): void {
+    if (typeof url !== "string" || !isWebUrl(url) || !this.blank) return;
+    this.redirectSwitches = 0;
+    this.open(url, this.kindFor(url), RESTORED);
   }
 
   get instanceId(): string {
@@ -293,7 +319,7 @@ export class BrowserPanel {
       this.hopUrl = event.url;
       this.navigationStart =
         own && !event.initiator && sameAddress(own.url, event.url)
-          ? { by: "user", referrer: own.referrer }
+          ? own.start
           : { by: "page", gesture: this.takeGesture(), referrer: pageReferrer(this.committedUrl) };
       // Counted from here: the new page's first requests can be blocked before did-navigate arrives.
       this.blocked = 0;
@@ -307,7 +333,8 @@ export class BrowserPanel {
       const kind = this.kindFor(event.url);
       if (kind !== this.kind) {
         event.preventDefault();
-        if (!current()) return;
+        // While the panel asks, the page behind it gets nowhere in the other session, and nothing it does there counts.
+        if (!current() || this.asking) return;
         if (++this.redirectSwitches > MAX_REDIRECT_SWITCHES) return this.failed(event.url, { kind: "unknown", detail: "ERR_TOO_MANY_REDIRECTS" });
         this.crossSession(event.url, kind, this.navigationStart);
         return;
@@ -319,8 +346,11 @@ export class BrowserPanel {
       this.redirectSwitches = 0;
       this.committedUrl = url;
       this.hopUrl = null;
-      this.error = null;
-      this.requestedUrl = null;
+      // A page the page behind the question goes to in its own session doesn't end the question: Stay shows it.
+      if (!this.asking) {
+        this.error = null;
+        this.requestedUrl = null;
+      }
       this.applyVisibility();
       if (isWebUrl(url)) this.options.onAddress(url);
       this.changed();
@@ -340,8 +370,9 @@ export class BrowserPanel {
       if (!current() || !isMainFrame) return;
       // Only the navigation under way ends here: one that replaced it may have started already.
       if (url === this.hopUrl) this.hopUrl = null;
-      // -3 is ERR_ABORTED: a navigation replaced by another, or one we refused.
-      if (errorCode === -3) return;
+      // -3 is ERR_ABORTED: a navigation replaced by another, or one we refused. While the panel asks, a failure of the
+      // page's other navigations doesn't replace the question with an error to try again.
+      if (errorCode === -3 || this.asking) return;
       this.failed(url, loadError(errorCode, description));
     });
     for (const name of ["did-start-loading", "did-stop-loading", "page-title-updated", "audio-state-changed"] as const) {
@@ -417,7 +448,7 @@ export class BrowserPanel {
   /** A navigation that must move to the other session: carried there, or shown so the user can open it (crossSessionStep). */
   private crossSession(url: string, kind: BrowserKind, start: NavigationStart): void {
     const step = crossSessionStep(start);
-    if (step.action === "reissue") return this.open(url, kind, step.referrer);
+    if (step.action === "reissue") return this.open(url, kind, { by: "user", referrer: step.referrer });
     // One question at a time: what Open opens is the address the panel shows.
     if (this.asking) return;
     this.failed(url, { kind: "otherSession", detail: "" });
@@ -432,6 +463,7 @@ export class BrowserPanel {
   openAsked(): void {
     const url = this.requestedUrl;
     if (!this.asking || !url) return;
+    this.redirectSwitches = 0;
     this.open(url, this.kindFor(url));
   }
 
@@ -456,8 +488,8 @@ export class BrowserPanel {
     if (url) this.open(url, this.kindFor(url));
   }
 
-  /** Loads an address, first moving to the other session's view when the site needs it. */
-  private open(url: string, kind: BrowserKind, referrer?: Referrer): void {
+  /** Loads an address, first moving to the other session's view when the site needs it; `start` says who chose it. */
+  private open(url: string, kind: BrowserKind, start: NavigationStart = { by: "user" }): void {
     if (kind !== this.kind) {
       const previous = this.view;
       this.kind = kind;
@@ -468,14 +500,15 @@ export class BrowserPanel {
       if (this.bounds) this.view.setBounds(this.bounds);
       if (!previous.webContents.isDestroyed()) previous.webContents.close();
     }
-    this.load(url, referrer);
+    this.load(url, start);
   }
 
-  private load(url: string, referrer?: Referrer): void {
+  private load(url: string, start: NavigationStart): void {
+    const referrer = start.by === "restored" ? undefined : start.referrer;
     this.error = null;
     this.requestedUrl = url;
     this.setStatus("ready");
-    this.ownNavigation = { url, referrer };
+    this.ownNavigation = { url, start };
     void this.view.webContents.loadURL(url, referrer ? { httpReferrer: referrer } : undefined).catch(() => {
       // Failures surface through did-fail-load.
     });
@@ -500,18 +533,23 @@ export class BrowserPanel {
     this.goTo(1);
   }
 
-  /** Back or Forward, pressed by the user. */
+  /** Back or Forward, pressed by the user, to an address the page may have chosen (`restored`). */
   private goTo(step: -1 | 1): void {
     const history = this.view.webContents.navigationHistory;
     if (!(step < 0 ? history.canGoBack() : history.canGoForward())) return;
+    // Like Reload: from the page shown before the question, never the address it asks about.
+    if (this.asking) this.stay();
     this.expectOwn(history.getEntryAtIndex(history.getActiveIndex() + step)?.url);
     if (step < 0) history.goBack();
     else history.goForward();
   }
 
-  /** Tavora is about to take the page to `url` itself; Chromium reports it as a navigation like any other. */
+  /**
+   * Tavora is about to take the page again to `url`, an address of its history (Back, Forward, Reload) that the page may
+   * have chosen itself, so it is `restored`. Chromium reports it as a navigation like any other.
+   */
   private expectOwn(url: string | undefined): void {
-    this.ownNavigation = url ? { url, referrer: undefined } : null;
+    this.ownNavigation = url ? { url, start: RESTORED } : null;
   }
 
   /** Stops loading the page. */
@@ -618,8 +656,14 @@ export class BrowserPanel {
     if (this.status === "crashed" || this.error) {
       const url = this.requestedUrl ?? this.committedUrl;
       this.setStatus("ready");
-      // In the session the site belongs in.
-      if (url) this.open(url, this.kindFor(url));
+      if (!url) return;
+      // Try again: the address may be one the page went to by itself (it failed, or bounced between the sessions too
+      // often), so it is `restored`. It loads again in this session; an address of the other session, or a redirect
+      // there, asks first.
+      this.redirectSwitches = 0;
+      const kind = this.kindFor(url);
+      if (kind === this.kind) this.open(url, kind, RESTORED);
+      else this.crossSession(url, kind, RESTORED);
       return;
     }
     this.expectOwn(this.view.webContents.getURL());
