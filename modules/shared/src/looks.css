@@ -22,6 +22,10 @@
   --style-text-xl-lh: calc(var(--style-text-xl) + 6px);
   --style-text-3xl: calc(var(--style-text, 13px) + 15px);
   --style-text-3xl-lh: calc(var(--style-text-3xl) + 6px);
+  /* Corner steps from the style's own radius: 0 stays square on every step, small radii never go negative. */
+  --style-radius-sm: max(0px, calc(var(--radius) * 0.5));
+  --style-radius-md: max(0px, calc(var(--radius) * 0.75));
+  --style-radius-xl: calc(var(--radius) * 1.5);
   /* Tailwind's spacing unit: paddings, gaps and fixed sizes grow or shrink with the style. */
   --spacing: calc(0.25rem * var(--style-space, 1));
   /* Depth 0 (flat) … 3 (strong): a top light and a cast shadow every raised look shares. */
@@ -161,7 +165,7 @@
 }
 
 /* Capsule: fully round, light and slightly see-through. */
-:root[data-look-buttons="capsule"] .tavora-button {
+:root[data-look-buttons="capsule"] .tavora-button:not([data-slot="action-tile"]) {
   border-radius: 999px;
   &:is([data-variant="secondary"], [data-variant="outline"]) {
     background: color-mix(in srgb, var(--card) 72%, transparent);
@@ -177,7 +181,7 @@
 
 /* Inset: fields sit sunk into the surface, with small corners. */
 :root[data-look-inputs="inset"] {
-  & :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"], [data-slot="combobox-anchor"], [data-slot="number-field"]) {
+  & :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"], [data-slot="combobox-anchor"], [data-slot="combobox-input"], [data-slot="slider-input"], [data-slot="number-field"]) {
     border-radius: var(--radius-sm);
     border-width: var(--style-border-width, 1px);
     background: color-mix(in srgb, black 5%, var(--background));
@@ -199,13 +203,13 @@
 
 /* Capsule: round fields, round checkboxes. */
 :root[data-look-inputs="capsule"] {
-  & :is([data-slot="input"], [data-slot="select-trigger"], [data-slot="combobox-anchor"], [data-slot="number-field"]) {
+  & :is([data-slot="input"], [data-slot="select-trigger"], [data-slot="combobox-anchor"], [data-slot="combobox-input"], [data-slot="slider-input"], [data-slot="number-field"]) {
     border-radius: 999px;
   }
   & [data-slot="textarea"] {
     border-radius: calc(var(--radius) + 4px);
   }
-  & :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"], [data-slot="combobox-anchor"], [data-slot="number-field"]) {
+  & :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"], [data-slot="combobox-anchor"], [data-slot="combobox-input"], [data-slot="slider-input"], [data-slot="number-field"]) {
     background: color-mix(in srgb, var(--foreground) 5%, var(--background));
     border-color: transparent;
     box-shadow: none;
@@ -288,6 +292,7 @@
 
 /* ---------- Labels: small headings, menu labels, tabs, button text ---------- */
 
+/* A button that shows a picked value (a Picker) keeps the value as written: only real labels change case. */
 :root:is([data-look-labels="caps"], [data-look-labels="caps-mono"]) :is(
     [data-slot="label"],
     [data-slot="dropdown-menu-label"],
@@ -295,9 +300,11 @@
     [data-slot="select-label"],
     [data-slot="combobox-label"],
     [data-slot="tabs-trigger"],
+    [data-slot="segmented-item"],
+    [data-slot="nav-group"] > h3,
     [data-slot="badge"],
     [data-slot="kbd"],
-    .tavora-button:not([data-variant="link"])
+    .tavora-button:not([data-variant="link"], [aria-haspopup="listbox"], [role="combobox"])
   ) {
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -310,9 +317,11 @@
     [data-slot="select-label"],
     [data-slot="combobox-label"],
     [data-slot="tabs-trigger"],
+    [data-slot="segmented-item"],
+    [data-slot="nav-group"] > h3,
     [data-slot="badge"],
     [data-slot="kbd"],
-    .tavora-button:not([data-variant="link"])
+    .tavora-button:not([data-variant="link"], [aria-haspopup="listbox"], [role="combobox"])
   ) {
   font-family: var(--font-mono);
   letter-spacing: 0.06em;
@@ -326,12 +335,12 @@
      specific than the tab looks below, so their padding doesn't take the room away). */
   &[data-look-tabs] [data-slot="tabs-trigger"] {
     position: relative;
-    padding-left: 16px;
+    padding-left: 18px;
   }
   & [data-slot="tabs-trigger"][data-state="active"]::before {
     content: "";
     position: absolute;
-    left: 6px;
+    left: 5px;
     top: 50%;
     width: 5px;
     height: 5px;
@@ -340,7 +349,8 @@
     background: var(--primary);
     box-shadow: 0 0 6px var(--primary);
   }
-  & .tavora-button[data-variant="default"]:not([data-size^="icon"]):not([data-slot="button-group"] > :not(:first-child))::before {
+  & .tavora-button[data-variant="default"]:not([data-size^="icon"], :disabled, [aria-disabled="true"]):not([data-slot="button-group"] > :not(:first-child))::before {
+    margin-right: 2px;
     content: "";
     flex: none;
     width: 6px;
@@ -408,7 +418,7 @@
 
 /* Inputs, underline: a line under each field, nothing around it (Rabbit). Checkboxes stay boxes. */
 :root[data-look-inputs="underline"] {
-  & :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"], [data-slot="combobox-anchor"], [data-slot="number-field"]) {
+  & :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"], [data-slot="combobox-anchor"], [data-slot="combobox-input"], [data-slot="slider-input"], [data-slot="number-field"]) {
     border-width: 0 0 var(--style-border-width, 1px);
     border-radius: 0;
     background: transparent;
@@ -436,8 +446,10 @@
     [data-slot="select-label"],
     [data-slot="combobox-label"],
     [data-slot="tabs-trigger"],
+    [data-slot="segmented-item"],
+    [data-slot="nav-group"] > h3,
     [data-slot="badge"],
-    .tavora-button:not([data-variant="link"])
+    .tavora-button:not([data-variant="link"], [aria-haspopup="listbox"], [role="combobox"])
   ) {
   text-transform: lowercase;
 }
@@ -494,7 +506,7 @@
     border-radius: 999px;
   }
   & [data-slot="segmented-pill"] {
-    background: color-mix(in srgb, var(--foreground) 14%, var(--background));
+    background: var(--card);
     border-color: transparent;
     border-radius: 999px;
     box-shadow: inset 0 1px 0 color-mix(in srgb, white 18%, transparent), 0 1px 3px color-mix(in srgb, black 18%, transparent);
@@ -540,13 +552,13 @@
 /* ---------- Toggles (Bold, Italic…) follow the style's tabs ---------- */
 
 /* Keycap and block: a pressed toggle is a solid key in the text colour. */
-:root:is([data-look-tabs="keycap"], [data-look-tabs="block"]) :is([data-slot="toggle"], [data-slot="toggle-group"] > *)[data-state="on"] {
+:root:is([data-look-tabs="keycap"], [data-look-tabs="block"]) :is([data-slot="toggle"][data-state="on"], [data-slot="toggle-group"] > [data-state="on"], .tavora-button[aria-pressed="true"]) {
   background: var(--foreground);
   border-color: var(--foreground);
   color: var(--background);
 }
 /* Underline: a pressed toggle gets the accent line under it, no fill. */
-:root[data-look-tabs="underline"] :is([data-slot="toggle"], [data-slot="toggle-group"] > *)[data-state="on"] {
+:root[data-look-tabs="underline"] :is([data-slot="toggle"][data-state="on"], [data-slot="toggle-group"] > [data-state="on"], .tavora-button[aria-pressed="true"]) {
   background: transparent;
   color: var(--foreground);
   box-shadow: inset 0 -2px 0 var(--primary);
@@ -578,7 +590,7 @@
 /* ---------- The chosen row of a pick-one list (Select, Picker, Combobox, menu radio items) ---------- */
 
 /* Inverted lists: chosen is a soft step in the text colour, bold; highlighted it turns fully inverted (above). */
-:root[data-look-lists="inverted"] [data-state="checked"]:is([data-slot$="-item"], [data-slot$="-radio-item"]) {
+:root[data-look-lists="inverted"] [data-state="checked"]:is([data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-checkbox-item"], [data-slot="context-menu-radio-item"], [data-slot="context-menu-checkbox-item"], [data-slot="select-item"], [data-slot="combobox-item"], [role="option"]) {
   background: color-mix(in srgb, var(--foreground) 14%, transparent);
   box-shadow: none;
   &:is([data-highlighted], :focus) {
@@ -587,10 +599,142 @@
   }
 }
 /* Bar lists: chosen gets the accent line at its start, no fill. */
-:root[data-look-lists="bar"] [data-state="checked"]:is([data-slot$="-item"], [data-slot$="-radio-item"]) {
+:root[data-look-lists="bar"] [data-state="checked"]:is([data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-checkbox-item"], [data-slot="context-menu-radio-item"], [data-slot="context-menu-checkbox-item"], [data-slot="select-item"], [data-slot="combobox-item"], [role="option"]) {
   background: transparent;
   box-shadow: inset 2px 0 0 var(--primary);
   &:is([data-highlighted], :focus) {
     background: color-mix(in srgb, var(--foreground) 6%, transparent);
   }
+}
+
+/* ---------- Pickers look like the style's fields (they pick a value, like a Select) ---------- */
+
+:root[data-look-inputs="inset"] .tavora-button[aria-haspopup="listbox"] {
+  border-radius: var(--radius-sm);
+  border: var(--style-border-width, 1px) solid var(--border);
+  background: color-mix(in srgb, black 5%, var(--background));
+  box-shadow: var(--style-sink);
+}
+:root[data-look-inputs="capsule"] .tavora-button[aria-haspopup="listbox"] {
+  border-radius: calc(var(--style-control-height, 32px) / 2);
+  border-color: transparent;
+  background: color-mix(in srgb, var(--foreground) 5%, var(--background));
+  box-shadow: none;
+}
+:root[data-look-inputs="underline"] .tavora-button[aria-haspopup="listbox"] {
+  border-width: 0 0 var(--style-border-width, 1px);
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--foreground) 30%, transparent);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Capsule fields that wrap onto two lines (a long Select) keep corners of a one-line capsule, not a lozenge. */
+:root[data-look-inputs="capsule"] :is([data-slot="input"], [data-slot="select-trigger"], [data-slot="combobox-anchor"], [data-slot="combobox-input"], [data-slot="slider-input"], [data-slot="number-field"]) {
+  border-radius: calc(var(--style-control-height, 32px) / 2);
+}
+
+/* ---------- Sliders follow the style's corners (round only in capsule styles) ---------- */
+
+:root[data-style]:not([data-style="tavora.classic"]):not([data-look-inputs="capsule"]) {
+  & :is([data-slot="slider-track"], [data-slot="slider-range"]) {
+    border-radius: min(var(--radius), 2px);
+  }
+  & [data-slot="slider-thumb"] {
+    border-radius: var(--radius-sm);
+  }
+}
+:root[data-look-inputs="inset"] [data-slot="slider-track"] {
+  box-shadow: var(--style-sink);
+}
+
+/* ---------- Notices: a plain panel in the style's surface, the coloured icon and text keep their meaning ---------- */
+
+:root:is([data-look-surface="raised"], [data-look-surface="hairline"], [data-look-surface="dotted"]) [data-slot="notice"] {
+  background: var(--card);
+  border: var(--style-border-width, 1px) solid var(--border);
+}
+:root[data-look-surface="raised"] [data-slot="notice"] {
+  box-shadow: var(--style-bevel), var(--style-cast);
+}
+
+/* ---------- Red buttons follow the button look too ---------- */
+
+:root[data-look-buttons="keycap"] .tavora-button {
+  &[data-variant="destructive"] {
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, white 18%, transparent),
+      0 2px 0 color-mix(in srgb, black 45%, transparent);
+  }
+  &[data-variant="danger"] {
+    background: linear-gradient(color-mix(in srgb, white 7%, var(--secondary)), var(--secondary));
+    border: var(--style-border-width, 1px) solid color-mix(in srgb, var(--destructive) 35%, var(--border));
+    box-shadow: var(--style-bevel), 0 1px 0 color-mix(in srgb, black 16%, transparent);
+  }
+}
+:root[data-look-buttons="line"] .tavora-button[data-variant="danger"] {
+  background: transparent;
+  border: var(--style-border-width, 1px) solid color-mix(in srgb, var(--destructive) 60%, transparent);
+}
+
+/* Capsule styles: an action tile (a picture and a name) is a rounded square, never a circle. */
+:root[data-look-buttons="capsule"] [data-slot="action-tile"] {
+  border-radius: var(--radius-xl);
+}
+
+/* ---------- Underline inputs (Rabbit): switches are lines too, square and without glow ---------- */
+
+:root[data-look-inputs="underline"] {
+  & [data-slot="switch"],
+  & [data-slot="switch-thumb"] {
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
+:root[data-look-inputs="underline"][data-look-status="led"] [data-slot="switch"][data-state="checked"] [data-slot="switch-thumb"] {
+  box-shadow: none;
+}
+
+/* ---------- Liquid Glass details ---------- */
+
+/* Toggles are capsules; pressed is a light capsule like the segmented control's pick. */
+:root[data-look-tabs="pill"][data-style]:not([data-style="tavora.classic"]) {
+  & :is([data-slot="toggle"], [data-slot="toggle-group"]) {
+    border-radius: 999px;
+  }
+  & [data-slot="toggle-group"] > * {
+    border-radius: 0;
+    &:first-child { border-radius: 999px 0 0 999px; }
+    &:last-child { border-radius: 0 999px 999px 0; }
+  }
+  & :is([data-slot="toggle"][data-state="on"], [data-slot="toggle-group"] > [data-state="on"], .tavora-button[aria-pressed="true"]) {
+    background: var(--card);
+    color: var(--foreground);
+    border-color: transparent;
+    box-shadow: inset 0 1px 0 color-mix(in srgb, white 18%, transparent), 0 1px 3px color-mix(in srgb, black 18%, transparent);
+  }
+}
+/* Glass lists: the chosen row is a soft rounded fill, no hard ring. */
+:root[data-look-surface="glass"] [data-state="checked"]:is([data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-checkbox-item"], [data-slot="context-menu-radio-item"], [data-slot="context-menu-checkbox-item"], [data-slot="select-item"], [data-slot="combobox-item"], [role="option"]) {
+  box-shadow: none;
+  border-radius: var(--radius-md);
+}
+/* Dialogs sit over a dark scrim: they need more body than a menu to stay bright and readable. */
+:root[data-look-surface="glass"] [data-slot="dialog-content"] {
+  background: color-mix(in srgb, var(--popover) 94%, transparent);
+}
+/* In dark, glass edges are a faint hairline, not a bright outline. */
+:root.dark[data-look-surface="glass"] :is(
+    [data-slot="dialog-content"],
+    [data-slot="popover-content"],
+    [data-slot="dropdown-menu-content"],
+    [data-slot="dropdown-menu-sub-content"],
+    [data-slot="context-menu-content"],
+    [data-slot="context-menu-sub-content"],
+    [data-slot="select-content"],
+    [data-slot="toast"]
+  ) {
+  border-color: color-mix(in srgb, white 12%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 10%, transparent), 0 16px 40px -14px color-mix(in srgb, black 60%, transparent);
 }
