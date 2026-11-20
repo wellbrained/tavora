@@ -559,18 +559,7 @@
 }
 
 /* Labels, lower: tab names in lowercase (Rabbit). */
-:root[data-look-labels="lower"] .dockview-theme-tavora .dv-tab,
-:root[data-look-labels="lower"] .workspace-title {
+:root[data-look-labels="lower"] .dockview-theme-tavora .dv-tab {
   text-transform: lowercase;
 }
 
-/* The workspace's name in the top bar follows the big-number look: dot matrix (Nothing) or thin (Rabbit). */
-:root[data-look-numbers="dot"] .workspace-title {
-  font-family: "Doto Variable", var(--font-mono);
-  font-weight: 800;
-  letter-spacing: 0.06em;
-}
-:root[data-look-numbers="thin"] .workspace-title {
-  font-weight: 300;
-  letter-spacing: -0.01em;
-}

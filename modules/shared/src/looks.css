@@ -428,7 +428,7 @@
 
 /* Dot: a dot-matrix face, like a phone's glyph display (Nothing). */
 :root[data-look-numbers="dot"] .tavora-numerals {
-  font-family: "Doto Variable", var(--font-mono);
+  font-family: "Tavora Doto Digits", var(--font-mono);
   font-weight: 800;
   letter-spacing: 0.04em;
 }
