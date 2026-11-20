@@ -1,0 +1,28 @@
+{
+  "id": "tavora.hardware",
+  "name": "Hardware",
+  "description": "Machined keys, glowing lights and content on inset screens.",
+  "author": "Tavora",
+  "version": "1.0.0",
+  "looks": {
+    "surface": "raised",
+    "tabs": "keycap",
+    "content": "inset",
+    "buttons": "keycap",
+    "inputs": "inset",
+    "lists": "inverted",
+    "labels": "caps-mono",
+    "status": "led"
+  },
+  "values": {
+    "borderWidth": 1,
+    "depth": 2,
+    "textSize": 13,
+    "controlHeight": 30,
+    "spacing": 1,
+    "glassOpacity": 0.8
+  },
+  "radius": 4,
+  "font": "jetbrains-mono",
+  "themes": ["tavora.hardware"]
+}

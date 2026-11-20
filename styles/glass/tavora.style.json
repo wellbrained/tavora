@@ -1,0 +1,28 @@
+{
+  "id": "tavora.glass",
+  "name": "Liquid Glass",
+  "description": "Glass frames over a soft colour field, round controls.",
+  "author": "Tavora",
+  "version": "1.0.0",
+  "looks": {
+    "surface": "glass",
+    "tabs": "pill",
+    "content": "plain",
+    "buttons": "capsule",
+    "inputs": "capsule",
+    "lists": "fill",
+    "labels": "normal",
+    "status": "none"
+  },
+  "values": {
+    "borderWidth": 1,
+    "depth": 1,
+    "textSize": 13,
+    "controlHeight": 32,
+    "spacing": 1,
+    "glassOpacity": 0.72
+  },
+  "radius": 10,
+  "font": "inter",
+  "themes": ["tavora.glass"]
+}

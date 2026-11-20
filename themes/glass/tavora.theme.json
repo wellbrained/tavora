@@ -1,0 +1,71 @@
+{
+  "id": "tavora.glass",
+  "name": "Glass",
+  "description": "Clear and bright, with a calm blue.",
+  "author": "Tavora",
+  "version": "1.0.0",
+  "variations": [
+    {
+      "id": "dark",
+      "name": "Dark",
+      "mode": "dark",
+      "radius": 10,
+      "colors": {
+        "background": "#14161c",
+        "foreground": "#eceef3",
+        "card": "#1d2028",
+        "card-foreground": "#eceef3",
+        "popover": "#20232b",
+        "popover-foreground": "#eceef3",
+        "primary": "#5aa5ff",
+        "primary-hover": "#7ab6ff",
+        "primary-foreground": "#0b1220",
+        "secondary": "#272b34",
+        "secondary-foreground": "#eceef3",
+        "muted": "#23262e",
+        "muted-foreground": "#9ca2ae",
+        "accent": "#272b34",
+        "accent-foreground": "#eceef3",
+        "destructive": "#ff6b61",
+        "border": "#2d313b",
+        "input": "#6c7282",
+        "ring": "#5aa5ff",
+        "rail": "#101217",
+        "success": "#4cc36a",
+        "warning": "#ffb340",
+        "info": "#64b5ff"
+      }
+    },
+    {
+      "id": "light",
+      "name": "Light",
+      "mode": "light",
+      "radius": 10,
+      "colors": {
+        "background": "#eef0f6",
+        "foreground": "#1a1c22",
+        "card": "#ffffff",
+        "card-foreground": "#1a1c22",
+        "popover": "#fbfbfd",
+        "popover-foreground": "#1a1c22",
+        "primary": "#0a66d1",
+        "primary-hover": "#0957b5",
+        "primary-foreground": "#ffffff",
+        "secondary": "#e8eaf0",
+        "secondary-foreground": "#1a1c22",
+        "muted": "#eceef3",
+        "muted-foreground": "#565b68",
+        "accent": "#e5e8ef",
+        "accent-foreground": "#1a1c22",
+        "destructive": "#c62f28",
+        "border": "#d9dce4",
+        "input": "#7d8290",
+        "ring": "#0a66d1",
+        "rail": "#e6e9f0",
+        "success": "#1f7a37",
+        "warning": "#8a5300",
+        "info": "#0a5fbf"
+      }
+    }
+  ]
+}

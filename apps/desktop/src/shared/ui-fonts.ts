@@ -34,6 +34,8 @@ export const UI_FONTS = [
   { id: "nunito", name: "Nunito", face: "Tavora Nunito", sizeAdjust: 112.8, weight: "200 1000" },
   { id: "saira", name: "Saira", face: "Tavora Saira", sizeAdjust: 107, weight: "100 900" },
   { id: "atkinson", name: "Atkinson Hyperlegible Next", face: "Tavora Atkinson Hyperlegible Next", sizeAdjust: 110.1, weight: "200 800" },
+  // Already bundled as the kit's mono font; the Hardware style uses it for everything.
+  { id: "jetbrains-mono", name: "JetBrains Mono", face: "JetBrains Mono Variable", sizeAdjust: 100, weight: "100 800" },
 ] as const satisfies readonly UiFont[];
 
 export type UiFontId = (typeof UI_FONTS)[number]["id"];

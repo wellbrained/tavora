@@ -47,12 +47,12 @@ const soft = useSoftDisabled(() => ({ disabled: props.disabled, reason: props.di
 <template>
   <Primitive
     data-slot="button"
-    :data-variant="variant"
-    :data-size="size"
+    :data-variant="variant ?? 'default'"
+    :data-size="size ?? 'default'"
     :as="as"
     :as-child="asChild"
     v-bind="soft.attrs()"
-    :class="cn(buttonVariants({ variant, size, press, soft: soft.soft() }), iconPadding, props.class)"
+    :class="cn('tavora-button', buttonVariants({ variant, size, press, soft: soft.soft() }), iconPadding, props.class)"
     :disabled="soft.disabled()"
   >
     <slot />
