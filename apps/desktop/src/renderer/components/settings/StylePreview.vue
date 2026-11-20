@@ -14,7 +14,8 @@ const button = computed(() => (looks.value.buttons === "capsule" ? "999px" : loo
 </script>
 
 <template>
-  <span
+  <!-- A div, not a span: the Style list hides a row's first span (where the tick would be). -->
+  <div
     :class="['style-preview relative block flex-none overflow-hidden rounded-[5px] border', size === 'md' ? 'h-10 w-[60px]' : 'h-8 w-12']"
     :data-surface="looks.surface"
     aria-hidden="true"
@@ -29,7 +30,7 @@ const button = computed(() => (looks.value.buttons === "capsule" ? "999px" : loo
       <span class="key bg-primary-fill absolute bottom-[3px] left-[4px] block h-[4px] w-[11px]" :style="{ borderRadius: button }" />
       <span v-if="looks.status === 'led'" class="bg-primary absolute top-[5px] right-[5px] z-10 block size-[3px] rounded-full shadow-[0_0_3px_var(--primary)]" />
     </span>
-  </span>
+  </div>
 </template>
 
 <style scoped>
