@@ -3,7 +3,7 @@
 // Framework-free client code (no Vue, no kit): every module, in any framework, starts the same way. The kit's
 // `connectModule` builds on this and adds its own parts (translator, toasts, tooltips). See ADR-0002.
 
-import { connect, STYLE_PARTS, STYLE_VARIABLES, THEME_TOKENS, type StyleValues, type TavoraSDK, type TavoraTheme } from "./index.js";
+import { connect, styleMarks, THEME_TOKENS, type TavoraSDK, type TavoraTheme } from "./index.js";
 
 /**
  * The few parts of an element the theme is written to; `document.documentElement` fits. Without `removeAttribute` and
@@ -29,26 +29,19 @@ export function languageOf(language: string): "en" | "de" {
 /** `--host-*` variable name for a `theme.colors` key: `textMuted` becomes `--host-text-muted`. */
 const hostVariable = (name: string) => `--host-${name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`;
 
-/** A look or style id as it may go into an attribute: lower-case letters, digits, dots and hyphens. */
-const STYLE_WORD = /^[a-z0-9][a-z0-9.-]{0,63}$/;
-
 /**
- * Writes the design style: `data-style="<id>"`, `data-look-<part>="<look>"` for every part, and each value as its CSS
- * variable (`STYLE_VARIABLES`: `--style-border-width`, `--style-text`, …). Without a style (an older Tavora) it takes
- * away what an earlier theme wrote, so the kit's own defaults (Classic) show; so does a part or value that is missing.
+ * Writes the design style (`styleMarks`): `data-style="<id>"`, `data-look-<part>="<look>"` for every part, and each
+ * value as its CSS variable (`STYLE_VARIABLES`: `--style-border-width`, `--style-text`, …). Without a style (an older
+ * Tavora) it takes away what an earlier theme wrote, so the kit's own defaults (Classic) show.
  */
 function applyStyle(theme: TavoraTheme, root: ThemeRoot): void {
-  const style = theme.style;
-  const word = (value: unknown) => (typeof value === "string" && STYLE_WORD.test(value) ? value : undefined);
-  const attribute = (name: string, value: string | undefined) => {
-    if (value !== undefined) root.setAttribute(name, value);
+  const { attributes, properties } = styleMarks(theme.style);
+  for (const [name, value] of attributes) {
+    if (value !== null) root.setAttribute(name, value);
     else root.removeAttribute?.(name);
-  };
-  attribute("data-style", word(style?.id));
-  for (const part of STYLE_PARTS) attribute(`data-look-${part}`, word(style?.looks?.[part]));
-  for (const [key, { name, unit }] of Object.entries(STYLE_VARIABLES) as [keyof StyleValues, { name: string; unit: string }][]) {
-    const value = style?.values?.[key];
-    if (typeof value === "number" && Number.isFinite(value)) root.style.setProperty(name, `${value}${unit}`);
+  }
+  for (const [name, value] of properties) {
+    if (value !== null) root.style.setProperty(name, value);
     else root.style.removeProperty?.(name);
   }
 }

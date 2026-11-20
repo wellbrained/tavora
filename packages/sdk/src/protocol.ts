@@ -137,6 +137,25 @@ export interface TavoraStyle {
   values: StyleValues;
 }
 
+/** A look or style id as it may go into an attribute: lower-case letters, digits, dots and hyphens. */
+const STYLE_WORD = /^[a-z0-9][a-z0-9.-]{0,63}$/;
+
+/**
+ * What a style puts on a page's root element, `null` for what goes away: `data-style`, `data-look-<part>` for every part
+ * and the `--style-*` variables (`STYLE_VARIABLES`). Without a style everything goes, so CSS defaults (Classic) show; so
+ * does a look or value that can't be used. `applyHostTheme` writes it; Tavora's own page uses the same.
+ */
+export function styleMarks(style: TavoraStyle | undefined): { attributes: [name: string, value: string | null][]; properties: [name: string, value: string | null][] } {
+  const word = (value: unknown) => (typeof value === "string" && STYLE_WORD.test(value) ? value : null);
+  const attributes: [string, string | null][] = [["data-style", word(style?.id)]];
+  for (const part of STYLE_PARTS) attributes.push([`data-look-${part}`, word(style?.looks?.[part])]);
+  const properties = (Object.entries(STYLE_VARIABLES) as [keyof StyleValues, { name: string; unit: string }][]).map(([key, { name, unit }]): [string, string | null] => {
+    const value = style?.values?.[key];
+    return [name, typeof value === "number" && Number.isFinite(value) ? `${value}${unit}` : null];
+  });
+  return { attributes, properties };
+}
+
 /** Tavora's look before styles came, and what a theme without `style` means. */
 export const CLASSIC_STYLE: TavoraStyle = {
   id: "tavora.classic",
