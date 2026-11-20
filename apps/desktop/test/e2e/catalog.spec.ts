@@ -402,8 +402,10 @@ test("a game without modules can ask for one from its empty page, with one anony
     const body = moduleRequests.bodies[1] as { game: unknown; voter: string };
     expect(body.game).toEqual({ name: "Valheim", steamAppId: 892970, gameId: "valheim" });
     expect(body.voter).toMatch(/^[0-9a-f]{64}$/);
-    const saved = JSON.parse(await readFile(path.join(userData, "library.json"), "utf8")) as { installId: string; askedModules: string[] };
-    expect(saved.askedModules).toEqual(["steam:892970"]);
+    // Saving is queued behind other writes, so wait for it to land.
+    const readSaved = async () => JSON.parse(await readFile(path.join(userData, "library.json"), "utf8")) as { installId: string; askedModules: string[] };
+    await expect.poll(async () => (await readSaved()).askedModules).toEqual(["steam:892970"]);
+    const saved = await readSaved();
     expect(saved.installId).toMatch(/^[0-9a-f]{64}$/);
     expect(saved.installId).not.toBe(body.voter);
   } finally {
