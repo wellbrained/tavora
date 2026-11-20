@@ -246,7 +246,7 @@ export class AccountKey {
     // A vault this PC saw before and that is gone now: the account has a key, so it is asked for, not made anew.
     if (vault || (await this.seen(who))) return { status: "ask" };
     const made = newCopyKey();
-    const place = this.placeFor(who);
+    const place = await this.freePlace(who);
     // Another PC may have made one at the same moment: then its key is asked for.
     if (!(await this.putVault(who, 0, made, EMPTY_VAULT, place.cacheFile))) return { status: "ask" };
     await this.write(place, made, who, false, generation, who);
@@ -296,7 +296,7 @@ export class AccountKey {
     const same = [this.main, ...this.others.values()].find((item): item is Slot => item !== null && item.owner === null && item.key.equals(key));
     if (same?.unproven) await this.adoptUnproven(same, who, generation);
     else if (same) await this.write(same, key, who, false, generation, who);
-    else await this.write(this.placeFor(who), key, who, false, generation, who);
+    else await this.write(await this.freePlace(who, key), key, who, false, generation, who);
     if (vault) {
       await this.keepFor(who, key, vault.data);
       this.note(who, null);
@@ -339,15 +339,16 @@ export class AccountKey {
     // The publisher keys move over: from the vault when the old key opens it, else from what this PC last read.
     const content = (old && oldKey && openContent(oldKey, old.data)) || (oldKey && (await this.cached(who, oldKey))) || EMPTY_VAULT;
     const key = newCopyKey();
+    const place = await this.freePlace(who);
     for (let attempt = 0; ; attempt++) {
       await this.request(who, "DELETE");
-      if (await this.putVault(who, 0, key, content, this.placeFor(who).cacheFile)) break;
+      if (await this.putVault(who, 0, key, content, place.cacheFile)) break;
       // Another PC came first. One that put back the old vault (it saw it missing) is undone and tried again; a vault
       // under any other key is another PC's new key, which stays.
       const now = await this.vault(who).catch(() => null);
       if (attempt >= 2 || !now || !oldKey || !opens(oldKey, now.data)) throw new CopyError("failed", "another PC made a key at the same moment");
     }
-    await this.write(this.placeFor(who), key, who, false, generation, who);
+    await this.write(place, key, who, false, generation, who);
     this.note(who, null);
   }
 
@@ -423,6 +424,7 @@ export class AccountKey {
     if (!slot || slot === this.main) return;
     if (this.mainBlocked) await this.moveBlockedAside();
     if (this.main) await this.moveAside(this.main);
+    await this.setAside({ keyFile: this.options.file, cacheFile: this.options.cacheFile });
     await rename(slot.keyFile, this.options.file);
     if (slot.cacheFile && this.options.cacheFile) {
       await rename(slot.cacheFile, this.options.cacheFile).catch(async () => {
@@ -521,9 +523,16 @@ export class AccountKey {
     return null;
   }
 
-  /** Where a key of `who`'s that isn't kept yet goes: the copy's files when they hold none, else `who`'s own. */
-  private placeFor(who: string): Files {
-    return this.ownSlot(who) ?? (this.main || this.mainBlocked ? this.filesOf(this.tagOf(who)) : { keyFile: this.options.file, cacheFile: this.options.cacheFile });
+  /**
+   * Where a key of `who`'s goes: where it is kept; else the copy's files when they hold none, else `who`'s own. Files a
+   * new place still holds (ones this run couldn't open: a newer Tavora's, or sealed by another user) move aside first.
+   */
+  private async freePlace(who: string, key?: Buffer): Promise<Files> {
+    const own = this.ownSlot(who);
+    if (own) return own;
+    const place = this.main || this.mainBlocked ? this.filesOf(this.tagOf(who)) : { keyFile: this.options.file, cacheFile: this.options.cacheFile };
+    await this.setAside(place, key);
+    return place;
   }
 
   /** The keys whose account isn't known. */
@@ -559,6 +568,7 @@ export class AccountKey {
     if (slot === this.main) adopted = await this.write(slot, slot.key, who, false, generation, who);
     else {
       const files = this.filesOf(this.tagOf(who));
+      await this.setAside(files);
       adopted = await this.write(files, slot.key, who, false, generation, who);
       if (slot.cacheFile && files.cacheFile) await rename(slot.cacheFile, files.cacheFile).catch(() => undefined);
       await forgetSealedFile(slot.keyFile);
@@ -692,6 +702,8 @@ export class AccountKey {
     const tag = main.owner !== null ? this.tagOf(main.owner) : await this.freeTag(UNPROVEN_TAG);
     const files = this.filesOf(tag);
     await this.pruneOthers(tag);
+    // Never onto a file that is there (one this run couldn't open): it moves aside first.
+    await this.setAside(files);
     await rename(main.keyFile, files.keyFile);
     if (main.cacheFile && files.cacheFile) {
       await rename(main.cacheFile, files.cacheFile).catch(async (error: NodeJS.ErrnoException) => {
@@ -706,18 +718,33 @@ export class AccountKey {
 
   /** account-key.json can't be opened in this run: it moves aside as it is (read again at the next start), never written over. */
   private async moveBlockedAside(): Promise<void> {
-    const files = this.filesOf(await this.freeTag(UNOPENED_TAG));
-    await rename(this.options.file, files.keyFile);
-    if (this.options.cacheFile && files.cacheFile) await rename(this.options.cacheFile, files.cacheFile).catch(() => undefined);
+    await this.setAside({ keyFile: this.options.file, cacheFile: this.options.cacheFile });
     this.mainBlocked = false;
-    this.log(`account key: ${path.basename(this.options.file)} couldn't be opened; kept as ${path.basename(files.keyFile)}`);
+  }
+
+  /**
+   * Files at a place no kept key has (a key file this run couldn't open, a vault as last read without its key, unless
+   * `keeps` opens it) move aside together, as they are, to a free account-key.unopened*.json and account-vault.unopened*.bin: read again at the
+   * next start, never written over.
+   */
+  private async setAside(place: Files, keeps?: Buffer): Promise<void> {
+    const key = await exists(place.keyFile);
+    // A vault as last read that opens with the key going there is that key's: it stays.
+    const sealed = place.cacheFile ? await readFile(place.cacheFile).catch(() => null) : null;
+    const cache = sealed !== null && !(keeps && opens(keeps, sealed));
+    if (!key && !cache) return;
+    const to = this.filesOf(await this.freeTag(UNOPENED_TAG));
+    if (key) await rename(place.keyFile, to.keyFile);
+    if (cache && to.cacheFile) await rename(place.cacheFile!, to.cacheFile);
+    this.log(`account key: ${path.basename(key ? place.keyFile : place.cacheFile!)} couldn't be opened; kept as ${path.basename(key ? to.keyFile : to.cacheFile!)}`);
   }
 
   /** `base`, or `base-2`, `base-3`, … : the first tag no key file has. */
   private async freeTag(base: string): Promise<string> {
     for (let number = 1; ; number++) {
       const tag = number === 1 ? base : `${base}-${number}`;
-      if (!this.others.has(tag) && !(await exists(this.filesOf(tag).keyFile))) return tag;
+      const files = this.filesOf(tag);
+      if (!this.others.has(tag) && !(await exists(files.keyFile)) && !(files.cacheFile && (await exists(files.cacheFile)))) return tag;
     }
   }
 

@@ -659,3 +659,57 @@ describe("keys of no account, and keys moved aside", () => {
     });
   });
 });
+
+describe("an account's key file this run can't open", () => {
+  const unopenable = {
+    "sealed by another user": JSON.stringify({ v: 1, data: Buffer.from("sealed:not a key").toString("base64"), account: "account-b" }),
+    "from a newer Tavora": JSON.stringify({ v: 99, data: "whatever it holds now", account: "account-b" }),
+  };
+
+  for (const [kind, text] of Object.entries(unopenable)) {
+    it(`${kind}: Start over keeps it and the vault saved with it, moved aside as they are`, async () => {
+      const { cloud, a, b, fetch } = await twoAccounts();
+      const signed: { now: Signed | null } = { now: a };
+      const first = await onPc(cloud, fetch, signed);
+      await first.accountKey.setUp();
+      // B's own key file and the vault it last read, as this run finds them.
+      const keyB = path.join(first.userData, "account-key.account-b.json");
+      const vaultB = path.join(first.userData, "account-vault.account-b.bin");
+      const savedVault = Buffer.from("a sealed vault with publisher keys");
+      await writeFile(keyB, text);
+      await writeFile(vaultB, savedVault);
+      signed.now = b;
+      const here = await onPc(cloud, fetch, signed, { userData: first.userData });
+      await here.accountKey.load();
+      expect(here.accountKey.get()).toBeNull();
+      await here.accountKey.startOver();
+      expect(await keyFile(keyB)).toMatchObject({ account: "account-b" });
+      expect(await readFile(keyB, "utf8")).not.toBe(text);
+      expect(await readFile(path.join(first.userData, "account-key.unopened.json"), "utf8")).toBe(text);
+      expect(await readFile(path.join(first.userData, "account-vault.unopened.bin"))).toEqual(savedVault);
+    });
+  }
+
+  it("a key moving aside never lands on one: the copy's key of A moves past A's file this run can't open", async () => {
+    const { cloud, a, b, fetch } = await twoAccounts();
+    const signed: { now: Signed | null } = { now: a };
+    const first = await onPc(cloud, fetch, signed);
+    await first.accountKey.setUp();
+    const keyA = path.join(first.userData, "account-key.account-a.json");
+    await writeFile(keyA, unopenable["from a newer Tavora"]);
+    signed.now = b;
+    const here = await onPc(cloud, fetch, signed, { userData: first.userData });
+    await here.accountKey.load();
+    await here.accountKey.setUp();
+    // B takes the copy's key: A's moves to A's own files, and the file there first moves aside.
+    await here.accountKey.useForCopy();
+    expect(await keyFile(keyA)).toMatchObject({ account: "account-a", data: expect.any(String) });
+    expect(await readFile(path.join(first.userData, "account-key.unopened.json"), "utf8")).toBe(unopenable["from a newer Tavora"]);
+    signed.now = a;
+    const restarted = await onPc(cloud, fetch, signed, { userData: first.userData });
+    await restarted.accountKey.load();
+    expect(await restarted.accountKey.setUp()).toEqual({ status: "ready", created: false });
+  });
+});
+
+const keyFile = async (file: string) => JSON.parse(await readFile(file, "utf8")) as Record<string, unknown>;
