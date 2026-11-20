@@ -93,6 +93,8 @@ function onMouseDown(event: MouseEvent) {
 
 const renaming = ref<{ id: string; text: string } | null>(null);
 const renameProblem = ref("");
+// The message's card closes on a scroll or resize (it would no longer sit by the field); the field stays marked until the name changes.
+const renameTip = ref(false);
 // Where a wrong name's message points: the rename field. The strip is one line tall, so the message sits in a tooltip beside it.
 const renameAnchor = ref<TooltipRect | undefined>();
 const renameTipId = `tab-rename-${Math.random().toString(36).slice(2, 8)}`;
@@ -125,6 +127,7 @@ function finishRename(keep: boolean, refocus: boolean) {
     // Enter on a wrong name keeps the field open; leaving the field gives the change up.
     if (refocus) {
       renameAnchor.value = scroller.value?.querySelector("[data-tab-rename]")?.getBoundingClientRect();
+      renameTip.value = true;
       renameProblem.value = result.problem === "empty" ? uiText.value.nameEmpty : uiText.value.nameTooLong.replace("{max}", String(props.maxLength));
     }
     else stopRename(false);
@@ -288,8 +291,8 @@ function endDrag(settled: boolean) {
         </template>
       </TabsList>
     </div>
-    <Tooltip :open="!!renameProblem" :anchor="renameAnchor" :id="renameTipId" :title="renameProblem" tone="danger" compact data-testid="tab-rename-problem" @dismiss="renameProblem = ''" />
-    <span class="sr-only" role="alert">{{ renameProblem }}</span>
+    <Tooltip :open="renameTip && !!renameProblem" :anchor="renameAnchor" :title="renameProblem" tone="danger" compact @dismiss="renameTip = false" />
+    <span :id="renameTipId" class="sr-only" role="alert">{{ renameProblem }}</span>
     <div v-if="$slots.add" class="relative z-10 flex flex-none items-center pl-1" data-testid="tab-strip-add">
       <slot name="add" />
     </div>

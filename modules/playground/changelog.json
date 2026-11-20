@@ -1,10 +1,17 @@
 [
   {
-    "version": "0.1.56",
+    "version": "0.1.57",
     "date": "2026-11-20",
     "notes": [
       "Style and Theme pickers show every control in Hardware, Liquid Glass and the other styles.",
       "New example: big numbers, drawn by the style."
+    ]
+  },
+  {
+    "version": "0.1.56",
+    "date": "2026-11-20",
+    "notes": [
+      "Renaming a tab with an empty name keeps telling you why, even after the tabs move."
     ]
   },
   {

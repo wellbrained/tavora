@@ -28,628 +28,100 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.106",
+    date: "2026-11-20",
+    title: "Tab names say what's wrong",
+    notes: [
+      "Renaming a tab with an empty name keeps telling you why, even when the tabs move or scroll.",
+    ],
+    prs: [
+      { number: 848, title: "Kit TabStrip: a scroll hides the rename message's card, not the error" },
+    ],
+    tags: ["pdf-viewer", "ui-kit"],
+  },
+  {
     version: "0.24.105",
     date: "2026-11-20",
-    title: "Overlays stay in OBS",
+    title: "Your overlay, your way",
     notes: [
-      "Your OBS overlay links keep working. An overlay can't leave its page in OBS any more, so it can't take anything off your PC that way.",
-      "An overlay starts with fresh saved data once. If one looks stuck after the update, press Refresh on its Browser Source in OBS.",
-      "When a Browser page wants to take you to a site you sign in to for all workspaces, or away from one, without a click, it asks first. Press Open to go there, or stay on the page.",
+      "Your overlay key now opens everything ready to use: click and type in your panels, with no frames in the way. To move or resize, pick Arrange in the small card at the top; Use takes you back.",
+      "Over the game the overlay no longer flashes, jumps or closes by itself, panels keep their size and place, and the card moves aside so it never covers them.",
+      "To-Dos over the game: tick, rename and add to-dos right there, and find more under ⋯ on a row. Keep finished to-dos also decides what the overlay shows.",
+      "Settings > Appearance > Font: pick Inter, Allo, Mona Sans, Rubik, Nunito, Saira or Atkinson Hyperlegible Next. It changes at once, in Tavora, your panels and your overlays in game and in OBS.",
+      "An empty workspace shows modules to add with one click: the game's own first, then Browser, Notes and To-Dos. Layouts sit below.",
+      "Tavora keeps more of what you did: the tab you picked, a panel you just moved, what you typed right before closing, and panels of a module that isn't connected yet.",
+      "Whiteboard: a board opens after a restart just as you left it, and Copy and Save as image take the whole board.",
+      "Panels no longer flicker or go blank when you switch tabs, open a column, maximize, or open a menu or dialog.",
+      "Item cards and hints show once, at full size, beside their item instead of over it.",
+      "In lists where you pick one thing, your choice has a soft highlight and an edge instead of a small tick.",
+      "Icons, titles, buttons and pictures look more even and balanced.",
+      "Keyboard: focus a panel's tab and press Ctrl+M to move it with the arrow keys. After a delete the focus moves to the next row, and Undo puts it back.",
+      "Buttons with a shortcut show its keys in their hint, and Settings > Shortcuts lists Undo and Redo for Overlays.",
+      "Screen readers hear field names, hints and buttons in your language, and each place while you move a panel.",
+      "German shows numbers the German way: \"0,5\" and \"100 %\".",
+      "Menu entries that take a moment pulse until they're done, and a busy dialog greys out its close button.",
+      "Error messages are shorter and friendlier.",
+      "Your OBS overlay links keep working, and an overlay can't leave its page in OBS any more. An overlay starts with fresh saved data once: if one looks stuck after the update, press Refresh on its Browser Source.",
+      "When a Browser page wants to take you to a site you sign in to for all workspaces, or away from one, without a click, it asks first.",
+      "Discord voice is paused for now: Discord only lets a few testers use it until it approves Tavora. Your Discord panels stay and say so, and signing in with Discord still works.",
+      "Settings > Updates & About has a new Legal group: Licences, Privacy, Terms and Imprint.",
+      "Tavora installs only updates it signed, and checks its own files at every start. An update it can't confirm is skipped and your version keeps working.",
+      "If some saved data can't be opened, Tavora keeps a copy and tells you instead of starting over. Your saved account keys are never swapped for an empty set unless you say so.",
+      "The cloud copy asks first before taking an old copy handed out as a new one, and while another PC still runs an older Tavora it asks which copy to keep.",
+      "Safer modules: a module that keeps changing its tab text or overfilling its storage can't slow Tavora down, a panel's welcome opens only right after you add it, and an installed module whose files changed stops until you reinstall it (its data stays).",
+      "For module makers: older modules that saved files straight into Downloads now ask where to save, file names Windows keeps for itself (like NUL.txt) are refused, a project folder that takes over an installed module restarts its panels, and a module that still uses an old setting won't load until it's updated.",
+      "Tavora and its modules run on newer versions of the parts they're built from, with many small fixes.",
     ],
     prs: [
       { number: 845, title: "Security: OBS overlays in a sandboxed frame, Browser session switch only after a click" },
-    ],
-    tags: ["browser", "overlays", "privacy", "publishing", "sdk", "security", "website", "workspace"],
-  },
-  {
-    version: "0.24.104",
-    date: "2026-11-20",
-    title: "Your keys and saves stay yours",
-    notes: [
-      "Older modules that saved files straight into Downloads now ask where to save, like every other save.",
-      "An installed module whose files were changed by hand stops until you reinstall it. Settings > Modules tells you, and its data stays.",
-      "If Tavora's service sends account keys your recovery key can't open, this PC keeps the ones it has. Recovery key in your account tells you what's up.",
-      "Your saved keys are never swapped for an empty set unless you say so.",
-      "The cloud copy asks you first before taking an old copy that's handed out as a new one. While another of your PCs still runs an older Tavora, this PC asks you which copy to keep when that PC saved last.",
-    ],
-    prs: [
       { number: 844, title: "Security: exportJson asks where to save, folders checked at load, key vault never dropped, sealed copies" },
-    ],
-    tags: ["accounts", "cloud-copy", "modules", "privacy", "publishing", "sdk", "settings", "updates", "website"],
-  },
-  {
-    version: "0.24.103",
-    date: "2026-11-20",
-    title: "Safer panels",
-    notes: [
-      "A panel that keeps overfilling its storage now stays stopped until you reload it, open its workspace again or restart Tavora.",
-      "A panel's welcome opens by itself only right after you add it, never on a later load.",
-      "When a project folder takes over an installed module, its open panels start again from the project.",
-      "Files and pictures a module saves can't get a name Windows keeps for itself, like NUL.txt.",
-    ],
-    prs: [
       { number: 842, title: "Security: owner-bound grants, first-page welcome pass, purge loop stop, device names" },
-    ],
-    tags: ["modules", "privacy", "publishing", "security", "website", "workspace"],
-  },
-  {
-    version: "0.24.102",
-    date: "2026-11-20",
-    title: "Steadier saving",
-    notes: [
-      "A module that keeps changing its tab text can't slow Tavora down or hold up your saves any more.",
-    ],
-    prs: [
       { number: 840, title: "Security: coalesce panel saves, keep leaked keys leaked, show the signer's diff" },
-    ],
-    tags: ["accounts", "catalog", "privacy", "publishing", "security", "service", "website", "workspace"],
-  },
-  {
-    version: "0.24.101",
-    date: "2026-11-20",
-    title: "A fresh start for empty workspaces",
-    notes: [
-      "An empty workspace shows modules to add with one click: the game's own first, then Browser, Notes and To-Dos.",
-      "A game with more modules than fit shows how many more there are. One click opens them in the library.",
-      "A game's modules you already have show up there too, and open with one click.",
-      "Layouts get their own spot below, so starting with a layout is just as easy.",
-    ],
-    prs: [
       { number: 838, title: "Empty workspace: one-click module tiles, layouts below" },
-    ],
-    tags: ["privacy", "ui-kit", "website", "workspace"],
-  },
-  {
-    version: "0.24.100",
-    date: "2026-11-19",
-    title: "The tab you picked stays picked",
-    notes: [
-      "Coming back to a workspace shows the tab you picked last, even when another panel's page grabs the keyboard as it loads.",
-    ],
-    prs: [
       { number: 837, title: "Keep a picked tab when a back tab's page takes the focus" },
-    ],
-  },
-  {
-    version: "0.24.99",
-    date: "2026-11-19",
-    title: "Boards open where you left them",
-    notes: [
-      "After a restart, a whiteboard opens just as you left it instead of pushed to the top-left.",
-      "Where you moved the style palette is kept after a restart too.",
-    ],
-    prs: [
       { number: 836, title: "Whiteboard: a board opens after a restart just as it was left" },
-    ],
-    tags: ["whiteboard"],
-  },
-  {
-    version: "0.24.98",
-    date: "2026-11-19",
-    title: "Whole board as an image",
-    notes: [
-      "Copy as image and Save as image on a whiteboard always take the whole board, pictures included.",
-    ],
-    prs: [
       { number: 835, title: "Whiteboard: Copy and Save as image take the whole board" },
-    ],
-    tags: ["whiteboard"],
-  },
-  {
-    version: "0.24.97",
-    date: "2026-11-19",
-    title: "Your layout stays put",
-    notes: [
-      "A tab you pick or a panel you move just before closing Tavora is now kept.",
-      "Panels of a module Tavora can't find right now (a folder not connected yet) now wait for it instead of disappearing.",
-    ],
-    prs: [
-      { number: 826, title: "Keep the layout on quit and panels whose module Tavora can't see" },
-    ],
-    tags: ["workspace"],
-  },
-  {
-    version: "0.24.96",
-    date: "2026-11-18",
-    title: "Steadier overlay layer",
-    notes: [
-      "The overlay card no longer jumps around while you drag something in Arrange.",
-      "A panel that is just opening over the game no longer catches a click.",
-    ],
-    prs: [
       { number: 833, title: "Overlay: batch-review fixes for the quick layer PRs (#829-#832)" },
-    ],
-    tags: ["overlays", "todos"],
-  },
-  {
-    version: "0.24.95",
-    date: "2026-11-18",
-    title: "No flicker when the layer closes",
-    notes: [
-      "Closing the overlay layer no longer flashes your list as it was before your changes.",
-    ],
-    prs: [
       { number: 832, title: "Overlay: live views stay current while the layer is open" },
-    ],
-    tags: ["overlays"],
-  },
-  {
-    version: "0.24.94",
-    date: "2026-11-18",
-    title: "Simpler list over the game",
-    notes: [
-      "Over the game you tick, rename and add to-dos. Everything else stays in the To-Dos panel in Tavora, so no menu gets cut off.",
-    ],
-    prs: [
       { number: 831, title: "To-Dos: no row menu over the game" },
-    ],
-    tags: ["todos"],
-  },
-  {
-    version: "0.24.93",
-    date: "2026-11-18",
-    title: "Arrange stays open",
-    notes: [
-      "Arrange no longer closes the overlay right after you click it.",
-      "The overlay card moves aside so it never covers your panels.",
-    ],
-    prs: [
       { number: 830, title: "Overlay: Arrange no longer ends the layer; the card keeps off the items" },
-    ],
-    tags: ["overlays"],
-  },
-  {
-    version: "0.24.92",
-    date: "2026-11-18",
-    title: "Smoother over the game",
-    notes: [
-      "Opening the layer no longer flashes the full panel first.",
-      "In To-Dos, ⋯ no longer covers a to-do's count.",
-      "No Undo pops up in the middle of your game.",
-    ],
-    prs: [
       { number: 829, title: "Overlay: no flash of the full panel, ⋯ off the count, no Undo over the game" },
-    ],
-    tags: ["modules", "overlays", "todos"],
-  },
-  {
-    version: "0.24.91",
-    date: "2026-11-18",
-    title: "Overlays ready to use",
-    notes: [
-      "Your overlay key now opens everything ready to use: click and type in your panels, with no frames in the way.",
-      "Want to move or resize something? Pick Arrange in the small card at the top. Use takes you back.",
-      "In To-Dos, Keep finished to-dos now also decides what the overlay shows, so ticked to-dos stay there while it's on.",
-    ],
-    prs: [
       { number: 828, title: "Overlay: layer opens ready to use, Arrange from a Tavora card" },
-    ],
-    tags: ["modules", "overlays", "privacy", "todos", "website"],
-  },
-  {
-    version: "0.24.90",
-    date: "2026-11-18",
-    title: "To-dos right over your game",
-    notes: [
-      "Your To-Dos list over the game stays just as it is when you open the layer.",
-      "Tick, rename and add to-dos right there, and find more under ⋯ on a row.",
-      "Panels over the game no longer move or shrink when you open the layer.",
-      "A panel no longer stays zoomed in after it was over the game.",
-    ],
-    prs: [
       { number: 827, title: "To-Dos: edit the live view in place over the game" },
-    ],
-    tags: ["modules", "overlays", "publishing", "sdk", "todos", "website"],
-  },
-  {
-    version: "0.24.89",
-    date: "2026-11-18",
-    title: "Easier to see what you picked",
-    notes: [
-      "In lists and menus where you pick one thing, your choice now has a soft highlight and an edge instead of a small tick.",
-      "It no longer looks like the row under your mouse.",
-    ],
-    prs: [
+      { number: 826, title: "Keep the layout on quit and panels whose module Tavora can't see" },
       { number: 825, title: "Kit: one chosen-row look for pick-one lists" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.24.88",
-    date: "2026-11-17",
-    title: "Licences and legal pages",
-    notes: [
-      "Settings > Updates & About has a new Legal group: Licences, Privacy, Terms and Imprint.",
-      "Licences lists everything Tavora is built from, with its licence. Search it by name or licence.",
-    ],
-    prs: [
       { number: 824, title: "Ship third-party licence notices and show them in Settings" },
-    ],
-    tags: ["media", "publishing", "settings", "whiteboard"],
-  },
-  {
-    version: "0.24.87",
-    date: "2026-11-17",
-    title: "Updated parts under the hood",
-    notes: [
-      "Tavora and its modules run on newer versions of the parts they're built from.",
-    ],
-    prs: [
       { number: 823, title: "Update dependencies before 1.0" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "publishing", "sdk", "system-monitor", "todos", "ui-kit", "website", "whiteboard"],
-  },
-  {
-    version: "0.24.86",
-    date: "2026-11-17",
-    title: "Fixes from the pre-1.0 review",
-    notes: [
-      "Copy as picture is off while a picture is saving in the Whiteboard, instead of doing nothing.",
-      "A panel you close for good no longer leaves its saved view behind.",
-      "A card from another panel never stays drawn over the next one.",
-      "Small fixes to German texts (\"noch mal\") and Tavora's safety checks.",
-    ],
-    prs: [
       { number: 822, title: "Review fixes before 1.0" },
-    ],
-    tags: ["calculator", "catalog", "clock-counter", "hotkeys", "modules", "notes", "pdf-viewer", "privacy", "service", "system-monitor", "todos", "ui-kit", "website", "whiteboard", "workspace"],
-  },
-  {
-    version: "0.24.85",
-    date: "2026-11-17",
-    title: "Calmer tooltips",
-    notes: [
-      "Item cards show once, at their full size, instead of blinking or growing a moment later.",
-      "Moving from one item to the next swaps the card without it vanishing in between.",
-      "A card near the edge opens beside its item, and stays off it wherever there is room.",
-      "A hint on the header no longer closes and opens again.",
-    ],
-    prs: [
       { number: 821, title: "Tooltips show once: no blink between cards, never over their anchor" },
-    ],
-    tags: ["modules"],
-  },
-  {
-    version: "0.24.84",
-    date: "2026-11-17",
-    title: "Panels stop flickering",
-    notes: [
-      "Hints and menus only set aside the panels they cover. The rest keep running.",
-      "Panels stay sharp and keep their colours while a menu, hint or dialog is open.",
-      "Dialogs fade in and out together with the panels behind them.",
-      "Switching tabs, opening a column or maximizing no longer shows an empty panel for a moment.",
-    ],
-    prs: [
       { number: 819, title: "Panels stop flickering" },
-    ],
-    tags: ["modules", "rail", "workspace"],
-  },
-  {
-    version: "0.24.83",
-    date: "2026-11-17",
-    title: "Small fixes everywhere",
-    notes: [
-      "Saving a name you left empty now tells you why instead of doing nothing.",
-      "Tall dialogs scroll, so their buttons stay in reach in a small panel.",
-      "A wrong tab name says what's wrong right next to the field.",
-      "German shows numbers the German way: \"0,5\" and \"100 %\" that never breaks apart.",
-      "Scrolling a list in a menu no longer scrolls the page behind it.",
-      "Screen readers hear field buttons like \"Clear search\" in your language.",
-      "Small charts pick up the new colours when you switch the theme.",
-      "The preview backdrop switch works with the arrow keys.",
-    ],
-    prs: [
-      { number: 816, title: "Kit: fixes from the web interface guidelines check" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.24.82",
-    date: "2026-11-17",
-    title: "Tighter safety",
-    notes: [
-      "Tavora checks its main app files each time it starts, so a changed copy of them won't run.",
-      "An OBS overlay stops at once when its module loses access or is removed.",
-    ],
-    prs: [
-      { number: 817, title: "Security: close the gaps before 1.0" },
-    ],
-    tags: ["accounts", "catalog", "cloud-copy", "modules", "overlays", "privacy", "security", "service", "website", "whiteboard"],
-  },
-  {
-    version: "0.24.81",
-    date: "2026-11-17",
-    title: "Even icons",
-    notes: [
-      "Icons all have the same line weight now, small ones included.",
-    ],
-    prs: [
       { number: 818, title: "Theme: one line weight for every icon" },
-    ],
-    tags: ["accounts", "calculator", "catalog", "clock-counter", "games", "icons", "modules", "notes", "onboarding", "overlays", "pdf-viewer", "privacy", "publishing", "rail", "settings", "system-monitor", "todos", "ui-kit", "whiteboard", "workspace"],
-  },
-  {
-    version: "0.24.80",
-    date: "2026-11-17",
-    title: "Small touches",
-    notes: [
-      "Titles break into even lines, and descriptions no longer leave one word alone.",
-      "Buttons with an icon look better balanced, and play buttons look centred.",
-      "Pictures and covers get a faint edge, so they stand out from dark cards.",
-    ],
-    prs: [
+      { number: 817, title: "Security: close the gaps before 1.0" },
+      { number: 816, title: "Kit: fixes from the web interface guidelines check" },
       { number: 815, title: "Kit: balanced titles, lighter icon side, edge around pictures" },
-    ],
-    tags: ["accounts", "calculator", "catalog", "clock-counter", "notes", "overlays", "pdf-viewer", "settings", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.24.79",
-    date: "2026-11-16",
-    title: "Settings line up",
-    notes: [
-      "The close button in Settings sits in line with the page below it.",
-    ],
-    prs: [
       { number: 814, title: "Settings: the close button lines up with the page" },
-    ],
-    tags: ["settings"],
-  },
-  {
-    version: "0.24.78",
-    date: "2026-11-16",
-    title: "Your font over the game too",
-    notes: [
-      "Overlays over the game and in OBS use the font you pick in Settings > Appearance.",
-      "In To-Dos and Clock & Counter, the Tavora font follows it too.",
-    ],
-    prs: [
       { number: 813, title: "Overlay pages follow the interface font, in game and in OBS" },
-    ],
-    tags: ["clock-counter", "fonts", "overlays", "sdk", "theme", "todos", "ui-kit", "website"],
-  },
-  {
-    version: "0.24.77",
-    date: "2026-11-16",
-    title: "Pick your font",
-    notes: [
-      "Settings > Appearance > Font: Inter, Allo, Mona Sans, Rubik, Nunito, Saira or Atkinson Hyperlegible Next.",
-      "It changes at once, in Tavora and in your panels. Panels with a font of their own keep it.",
-      "Every font is sized to match, so text stays as easy to read.",
-    ],
-    prs: [
       { number: 812, title: "Pick the interface font in Settings > Appearance" },
-    ],
-    tags: ["fonts", "games", "modules", "settings", "theme"],
-  },
-  {
-    version: "0.24.76",
-    date: "2026-11-16",
-    title: "One font everywhere",
-    notes: [
-      "Tooltips, the loading screen and the frames around game overlays now use Tavora's font, like the rest of the app.",
-      "The whiteboard's menus and toolbars do too.",
-      "In Notes, the Inter font is now called Tavora font.",
-    ],
-    prs: [
       { number: 811, title: "Make the interface font a live theme value everywhere" },
-    ],
-    tags: ["calculator", "clock-counter", "fonts", "games", "modules", "notes", "overlays", "pdf-viewer", "publishing", "sdk", "system-monitor", "theme", "todos", "ui-kit", "website", "whiteboard", "workspace"],
-  },
-  {
-    version: "0.24.75",
-    date: "2026-11-15",
-    title: "Steadier closing",
-    notes: [
-      "Closing a panel, or the whole window, while a page is still going away no longer causes errors.",
-    ],
-    prs: [
       { number: 810, title: "Guard module view dispose; recheck bans and limits after publish scan" },
-    ],
-    tags: ["catalog", "modules", "service"],
-  },
-  {
-    version: "0.24.74",
-    date: "2026-11-15",
-    title: "Friendlier texts",
-    notes: [
-      "Error messages are shorter and friendlier.",
-      "The Delete key shown in menus follows your language.",
-    ],
-    prs: [
       { number: 809, title: "Text and docs fixes from the final check" },
-    ],
-    tags: ["clock-counter", "games", "privacy", "website"],
-  },
-  {
-    version: "0.24.73",
-    date: "2026-11-15",
-    title: "Safer saved data",
-    notes: [
-      "If your library can't be opened, your modules' and Browser panel's saved data waits until you bring it back from a backup. In-game overlay placements aren't held this way.",
-      "Installing two modules at once remembers who made both.",
-      "Modules can't give a document a name that would mix it up with another file.",
-    ],
-    prs: [
       { number: 807, title: "Keep saved data safe after a lost library, parallel installs and odd document ids" },
-    ],
-    tags: ["cloud-copy", "modules", "privacy", "updates", "website", "workspace"],
-  },
-  {
-    version: "0.24.72",
-    date: "2026-11-15",
-    title: "Focus stays put after a delete",
-    notes: [
-      "Delete something in a list with the keyboard and the focus moves to the next row, not off the page.",
-      "Undo puts the focus back on what came back.",
-    ],
-    prs: [
       { number: 805, title: "Kit: focus stays in a list after a delete (useFocusRecovery)" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "settings", "todos", "ui-kit"],
-  },
-  {
-    version: "0.24.71",
-    date: "2026-11-15",
-    title: "Menus wait for slow actions",
-    notes: [
-      "A menu entry that takes a moment keeps the menu open and pulses until it's done, then the menu closes. If it fails, a message says so.",
-      "Settings > Modules > More > Reload and Whiteboard's Copy as picture work this way.",
-      "Ctrl+K: adding a game keeps the search open until the game is ready.",
-    ],
-    prs: [
-      { number: 803, title: "Kit menus: entries that wait for their action" },
-    ],
-    tags: ["settings", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.24.70",
-    date: "2026-11-15",
-    title: "Steadier dialogs",
-    notes: [
-      "While a dialog is busy, its close button is greyed out, so you can see it can't close yet.",
-    ],
-    prs: [
       { number: 804, title: "Kit dialogs: dismissible, busy and dismiss-attempt" },
-    ],
-    tags: ["cloud-copy", "publishing", "ui-kit"],
-  },
-  {
-    version: "0.24.69",
-    date: "2026-11-15",
-    title: "Shortcuts in the hints",
-    notes: [
-      "Buttons with a shortcut show its keys beside their hint: Back, Forward, New tab and Exit full screen in the Browser panel, Undo and Redo on the Overlays page, and the rail's collapse button.",
-      "Settings > Shortcuts now lists Undo and Redo for Overlays too.",
-    ],
-    prs: [
-      { number: 799, title: "Shortcuts come from one table" },
-    ],
-    tags: ["hotkeys", "onboarding", "overlays", "rail", "ui-kit", "workspace"],
-  },
-  {
-    version: "0.24.68",
-    date: "2026-11-15",
-    title: "Fields that explain themselves",
-    notes: [
-      "Screen readers read a field's name and hint with it, starting with your developer name and AI accounts in Settings.",
-    ],
-    prs: [
+      { number: 803, title: "Kit menus: entries that wait for their action" },
       { number: 802, title: "Kit: Field (label, hint, error) and ARIA pattern checks" },
-    ],
-    tags: ["accessibility", "publishing", "settings", "ui-kit"],
-  },
-  {
-    version: "0.24.67",
-    date: "2026-11-15",
-    title: "Nothing lost when you close a panel",
-    notes: [
-      "What you typed just before closing a panel, switching workspaces or quitting Tavora is saved.",
-    ],
-    prs: [
       { number: 801, title: "A closed panel's last typing is saved before its page goes" },
-    ],
-    tags: ["modules", "privacy", "website", "workspace"],
-  },
-  {
-    version: "0.24.66",
-    date: "2026-11-14",
-    title: "Move panels with the keyboard",
-    notes: [
-      "Focus a panel's tab and press Ctrl+M to move it.",
-      "The arrow keys pick a place and show where it lands. Enter puts it there, Esc cancels.",
-      "Screen readers read out each place as you go.",
-    ],
-    prs: [
       { number: 800, title: "Move dock panels with the keyboard" },
-    ],
-    tags: ["hotkeys", "workspace"],
-  },
-  {
-    version: "0.24.65",
-    date: "2026-11-14",
-    title: "Steadier dragging",
-    notes: [
-      "While you drag a tab, the sidebar edge, the crop frame or an overlay, another finger or pen moving or lifting no longer drops it.",
-    ],
-    prs: [
+      { number: 799, title: "Shortcuts come from one table" },
       { number: 798, title: "Kit: one bindDrag for pointer drags" },
-    ],
-    tags: ["pdf-viewer", "rail", "ui-kit"],
-  },
-  {
-    version: "0.24.64",
-    date: "2026-11-14",
-    title: "Your saved data stays safe",
-    notes: [
-      "If some saved data can't be opened, Tavora keeps a copy and tells you, instead of starting over on top of it.",
-    ],
-    prs: [
-      { number: 795, title: "Keep every saved file safe from older and broken reads" },
-    ],
-    tags: ["accounts", "ai-usage", "cloud-copy", "discord", "hotkeys", "modules", "overlays", "privacy", "system-monitor", "updates", "website", "workspace"],
-  },
-  {
-    version: "0.24.63",
-    date: "2026-11-14",
-    title: "Overlays stay on with the cloud copy",
-    notes: [
-      "Game overlays, hotkeys and stream overlays in OBS keep working while the cloud copy syncs.",
-    ],
-    prs: [
       { number: 797, title: "Cloud copy saves without shutting down overlays, hotkeys and OBS" },
-    ],
-    tags: ["cloud-copy", "overlays", "privacy", "website"],
-  },
-  {
-    version: "0.24.62",
-    date: "2026-11-14",
-    title: "Updates signed by Tavora",
-    notes: [
-      "Tavora installs an update only when Tavora signed it.",
-      "An update Tavora can't confirm is skipped, and your version keeps working.",
-    ],
-    prs: [
+      { number: 795, title: "Keep every saved file safe from older and broken reads" },
       { number: 793, title: "Updates install only with Tavora's own signature" },
-    ],
-    tags: ["privacy", "security", "settings", "updates", "website"],
-  },
-  {
-    version: "0.24.61",
-    date: "2026-11-14",
-    title: "Modules are ready for 1.0",
-    notes: [
-      "A module that still uses an old setting won't load until its maker updates it.",
-    ],
-    prs: [
       { number: 791, title: "Lock the SDK and protocol for 1.0" },
-    ],
-    tags: ["catalog", "publishing", "sdk", "service", "website"],
-  },
-  {
-    version: "0.24.60",
-    date: "2026-11-14",
-    title: "Discord is taking a break",
-    notes: [
-      "Discord voice is paused for now: Discord only lets a few testers use it until it approves Tavora.",
-      "Your Discord panels stay where they are and say so; you can close them any time.",
-      "Signing in with Discord still works.",
-    ],
-    prs: [
       { number: 789, title: "Pause the Discord voice connection" },
-    ],
-    tags: ["discord", "modules", "overlays", "privacy", "website", "workspace"],
-  },
-  {
-    version: "0.24.59",
-    date: "2026-11-14",
-    title: "No crash when a panel closes while it loads",
-    notes: [
-      "Tavora no longer crashes when you close a panel, or its module updates, while the panel is still loading.",
-    ],
-    prs: [
       { number: 786, title: "A panel closed while its page loads starts no timers" },
     ],
-    tags: ["modules"],
+    tags: ["accessibility", "accounts", "ai-usage", "browser", "calculator", "catalog", "clock-counter", "cloud-copy", "discord", "fonts", "games", "hotkeys", "icons", "media", "modules", "notes", "onboarding", "overlays", "pdf-viewer", "privacy", "publishing", "rail", "sdk", "security", "service", "settings", "system-monitor", "theme", "todos", "ui-kit", "updates", "website", "whiteboard", "workspace"],
   },
   {
     version: "0.24.58",
