@@ -310,9 +310,10 @@
 
 /* ---------- Status light: a small glowing dot on what is on or open ---------- */
 
+/* In a button group (a split button) only the first button lights: the rest are parts of the same control. */
 :root[data-look-status="led"] {
   & [data-slot="tabs-trigger"][data-state="active"]::before,
-  & .tavora-button[data-variant="default"]:not([data-size^="icon"])::before {
+  & .tavora-button[data-variant="default"]:not([data-size^="icon"]):not([data-slot="button-group"] > :not(:first-child))::before {
     content: "";
     flex: none;
     width: 6px;

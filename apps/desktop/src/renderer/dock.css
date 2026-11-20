@@ -497,18 +497,23 @@
   letter-spacing: 0.06em;
 }
 
-/* Status light: the open tab of the panel you work in has a glowing dot. */
+/* Status light: the open tab of the panel you work in has a glowing dot. The tab is a block, not a flex row, so the dot
+   sits on top of it (absolute) in room the tab makes on its left; in the flow it pushed the label below the tab. */
+:root[data-look-status="led"] .dockview-theme-tavora .dv-groupview.dv-active-group .dv-tab.dv-active-tab {
+  padding-left: 8px;
+}
 :root[data-look-status="led"] .dockview-theme-tavora .dv-groupview.dv-active-group .dv-tab.dv-active-tab::before {
   content: "";
-  flex: none;
-  align-self: center;
+  position: absolute;
+  left: 7px;
+  top: 50%;
   width: 5px;
   height: 5px;
-  margin-left: 9px;
-  margin-right: -3px;
+  margin-top: -2.5px;
   border-radius: 50%;
   background: var(--primary);
   box-shadow: 0 0 6px var(--primary);
+  pointer-events: none;
 }
 
 /* Content. Inset: the module is a screen set into the panel, with a dark bezel around it (its colours come in dark).
