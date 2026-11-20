@@ -53,7 +53,97 @@ export interface TavoraTheme {
    * Older Tavora leaves it out, which means Inter.
    */
   font?: ThemeFont;
+  /**
+   * The design style the user picked (Settings > Appearance): one look per part of the kit and a few sizes. Colours stay
+   * in the theme, and `radius` and `font` above already hold the style's corner and font (or the user's own). It can
+   * change while the module is open, like the colours. Older Tavora (before `STYLE_TAVORA`) leaves it out, which means
+   * Classic (`CLASSIC_STYLE`). `applyHostTheme` writes it to the page.
+   */
+  style?: TavoraStyle;
 }
+
+/**
+ * The parts of the kit a style draws, and the looks each can take. A style picks one look per part. Tavora may add looks
+ * and parts: treat one you don't know like the first of its list.
+ */
+export const STYLE_LOOKS = {
+  /** App background, rail, top bar and panel; menus, popovers and dialogs follow it. */
+  surface: ["flat", "raised", "glass", "hairline"],
+  /** The tab strip of a panel. */
+  tabs: ["pill", "keycap", "underline"],
+  /** A panel's content area: as it is, or set in like a screen. */
+  content: ["plain", "inset"],
+  buttons: ["soft", "keycap", "capsule"],
+  /** Inputs, checkboxes and switches. */
+  inputs: ["soft", "inset", "capsule"],
+  /** Lists and the selected row. */
+  lists: ["fill", "inverted", "bar"],
+  /** Labels and small headings: as they are, small caps, or small caps in the mono font. */
+  labels: ["normal", "caps", "caps-mono"],
+  /** A status light next to things that run. */
+  status: ["none", "led"],
+} as const;
+
+/** A part of the kit a style picks a look for. */
+export type StylePart = keyof typeof STYLE_LOOKS;
+/** The parts in their fixed order. */
+export const STYLE_PARTS = Object.keys(STYLE_LOOKS) as StylePart[];
+/** One look per part. */
+export type StyleLooks = { [P in StylePart]: (typeof STYLE_LOOKS)[P][number] };
+
+/** The sizes a style sets. Tavora keeps each in its range (`STYLE_RANGES`). */
+export interface StyleValues {
+  /** Border width in px, 0–2. */
+  borderWidth: number;
+  /** Depth from 0 (none) to 3 (strong); the kit turns it into shadows for each look. */
+  depth: number;
+  /** The size of control and interface text in px, 12–15 (13 in Classic); the kit scales its type from it. */
+  textSize: number;
+  /** Control height in px, 28–40. */
+  controlHeight: number;
+  /** A factor on spacing, 0.85–1.2. */
+  spacing: number;
+  /** How opaque glass surfaces are, 0.55–0.95; only the glass look uses it. */
+  glassOpacity: number;
+}
+
+/** The range each style value is kept in. */
+export const STYLE_RANGES = {
+  borderWidth: { min: 0, max: 2 },
+  depth: { min: 0, max: 3 },
+  textSize: { min: 12, max: 15 },
+  controlHeight: { min: 28, max: 40 },
+  spacing: { min: 0.85, max: 1.2 },
+  glassOpacity: { min: 0.55, max: 0.95 },
+} as const satisfies Record<keyof StyleValues, { min: number; max: number }>;
+
+/** The CSS variable `applyHostTheme` writes each style value to, and its unit. */
+export const STYLE_VARIABLES = {
+  borderWidth: { name: "--style-border-width", unit: "px" },
+  depth: { name: "--style-depth", unit: "" },
+  textSize: { name: "--style-text", unit: "px" },
+  controlHeight: { name: "--style-control-height", unit: "px" },
+  spacing: { name: "--style-space", unit: "" },
+  glassOpacity: { name: "--style-glass-opacity", unit: "" },
+} as const satisfies Record<keyof StyleValues, { name: `--style-${string}`; unit: "" | "px" }>;
+
+/** A design style as a panel gets it in `TavoraTheme.style`. */
+export interface TavoraStyle {
+  /** Such as `"tavora.classic"`. Tavora may add styles, so treat an id you don't know like any other. */
+  id: string;
+  /** Its name, the same in every language. */
+  name: string;
+  looks: StyleLooks;
+  values: StyleValues;
+}
+
+/** Tavora's look before styles came, and what a theme without `style` means. */
+export const CLASSIC_STYLE: TavoraStyle = {
+  id: "tavora.classic",
+  name: "Classic",
+  looks: { surface: "flat", tabs: "pill", content: "plain", buttons: "soft", inputs: "soft", lists: "fill", labels: "normal", status: "none" },
+  values: { borderWidth: 1, depth: 1, textSize: 13, controlHeight: 32, spacing: 1, glassOpacity: 0.8 },
+};
 
 /** The interface font in a TavoraTheme. */
 export interface ThemeFont {
@@ -1551,6 +1641,12 @@ export const TOOLTIP_ANCHOR_BOX_TAVORA = "0.24.58";
  * run `pnpm --filter @tavora/docs protocol`. Too low, and a module asks an older Tavora, which answers UNKNOWN_METHOD.
  */
 export const PANEL_OVER_GAME_TAVORA = "0.24.90";
+/**
+ * The first Tavora that sends the design style with the theme (`TavoraTheme.style`): the one place that number is
+ * written. Set it to the version the pull request merges as, right before merging, then run
+ * `pnpm --filter @tavora/docs protocol`. An older Tavora leaves `style` out, which means Classic.
+ */
+export const STYLE_TAVORA = "0.24.104";
 
 export const METHOD_INFO: Readonly<Record<CallName, MethodInfo>> = {
   "bridge.handshake": call("0.1.0"),

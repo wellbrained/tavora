@@ -1,7 +1,7 @@
 // Themes for tests: Tavora's own looks as a panel gets them, and any `tavora.theme.json` turned into the theme Tavora sends.
 // The two built-in looks are copied here from the themes Tavora ships (`themes/` in the Tavora repo), so the SDK needs no
 // path into that repo; a test in the repo checks the copies still match.
-import { DEFAULT_THEME_FONT, OPTIONAL_THEME_TOKENS, THEME_TOKENS, type TavoraTheme, type ThemeToken } from "../protocol.js";
+import { CLASSIC_STYLE, DEFAULT_THEME_FONT, OPTIONAL_THEME_TOKENS, THEME_TOKENS, type TavoraTheme, type ThemeToken } from "../protocol.js";
 
 /** One variation of a `tavora.theme.json`, as far as a panel's theme needs it. @since 0.3.14 */
 export interface ThemeVariationJson {
@@ -120,6 +120,7 @@ export function themeFromPackage(pkg: ThemePackageJson, variation?: string): Tav
     radius: chosen.radius ?? DEFAULT_RADIUS,
     toasts: "bottom-center",
     font: { ...DEFAULT_THEME_FONT },
+    style: structuredClone(CLASSIC_STYLE),
   };
 }
 

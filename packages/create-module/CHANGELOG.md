@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.41
+
+- New projects start on `@tavora/sdk` 0.4.3: the theme carries the design style the user picked (`theme.style`).
+
 ## 0.1.40
 
 - New projects start on `@tavora/pack` 0.3.5: zip entries named like a Windows device (`NUL.txt`, `COM¹`, `CONIN$`) are refused.

@@ -10,7 +10,9 @@ import {
   BLOB_PATH,
   BLOB_TYPES,
   DOCUMENT_ID,
+  CLASSIC_STYLE,
   FIELD_SINCE,
+  STYLE_TAVORA,
   HOST_FEATURES,
   LIMITS,
   METHOD_INFO,
@@ -43,6 +45,7 @@ import {
   type PanelOpenManyResult,
   type PanelOpenResult,
   type TavoraDocument,
+  type TavoraStyle,
   type TavoraTheme,
   type TavoraViewport,
   type TavoraWorkspace,
@@ -149,8 +152,12 @@ export interface MemoryHost {
   unanswer(method: CallName): void;
   /** Raises an event in this panel. */
   emit<E extends EventName>(event: E, data: Events[E]): void;
-  /** The user switched theme; every panel of the shared state hears it. Missing parts stay as they were. */
-  changeTheme(theme: Partial<TavoraTheme>): void;
+  /**
+   * The user switched theme; every panel of the shared state hears it. Missing parts stay as they were. `style` sends a
+   * design style (the default is `CLASSIC_STYLE`); `style: undefined` takes it away, as an older Tavora sends the theme.
+   * A host older than `STYLE_TAVORA` never sends one.
+   */
+  changeTheme(theme: Partial<Omit<TavoraTheme, "style">> & { style?: TavoraStyle | undefined }): void;
   setLanguage(language: string): void;
   resize(viewport: TavoraViewport): void;
   /** Another panel asked this one to show `content` (panels.open): runs the `panel.onNavigate` handler. */
@@ -221,7 +228,7 @@ export interface MemoryHost {
 }
 
 /** Newest Tavora the SDK knows, and the default version of a memory host: the newest `since` of every call it has. */
-export const LATEST_TAVORA: string = [...Object.values(METHOD_INFO).map((info) => info.since), ...Object.values(FIELD_SINCE), ...Object.values(HOST_FEATURES)].reduce((a, b) =>
+export const LATEST_TAVORA: string = [...Object.values(METHOD_INFO).map((info) => info.since), ...Object.values(FIELD_SINCE), ...Object.values(HOST_FEATURES), STYLE_TAVORA].reduce((a, b) =>
   versionAtLeast(a, b) ? a : b,
 );
 /** How long a click or key press lets a call through, as in Tavora (module-view.ts). */
@@ -318,7 +325,14 @@ function defaultTheme(): TavoraTheme {
   const colors = { background: "#101114", surface: "#1b1d22", text: "#f2f3f5", textMuted: "#9a9ea8", accent: "#6d8cff" };
   const tokens = Object.fromEntries(THEME_TOKENS.map((token) => [token, colors.accent])) as TavoraTheme["tokens"];
   Object.assign(tokens, { background: colors.background, foreground: colors.text, card: colors.surface });
-  return { mode: "dark", colors, tokens, radius: 8 };
+  return { mode: "dark", colors, tokens, radius: 8, style: structuredClone(CLASSIC_STYLE) };
+}
+
+/** The theme as a panel gets it: a Tavora older than STYLE_TAVORA sends no style. */
+function themeFor(shared: Shared): TavoraTheme {
+  const theme = structuredClone(shared.theme);
+  if (theme.style === undefined || !versionAtLeast(shared.version, STYLE_TAVORA)) delete theme.style;
+  return theme;
 }
 
 interface StoredDocument extends DocumentSummary {
@@ -636,7 +650,7 @@ const handlers: Handlers = {
     return result;
   },
 
-  "ui.getTheme": ({ shared }) => structuredClone(shared.theme),
+  "ui.getTheme": ({ shared }) => themeFor(shared),
   "ui.getLanguage": ({ shared }) => shared.language,
 
   "blobs.put": ({ shared }, { file }) => putBlob(shared, shared.blobs, file, "workspace"),
@@ -1243,8 +1257,9 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
     unanswer: (method) => void panel.scripts.delete(method),
     emit: (event, data) => deliver(panel, event, data),
     changeTheme: (theme) => {
-      shared.theme = { ...shared.theme, ...theme };
-      everyPanel((other) => deliver(other, "ui.theme", structuredClone(shared.theme)));
+      shared.theme = { ...shared.theme, ...theme } as TavoraTheme;
+      if (shared.theme.style === undefined) delete shared.theme.style;
+      everyPanel((other) => deliver(other, "ui.theme", themeFor(shared)));
     },
     setLanguage: (language) => {
       shared.language = language;

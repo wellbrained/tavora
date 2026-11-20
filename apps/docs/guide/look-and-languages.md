@@ -38,7 +38,11 @@ paint(await tavora.ui.getTheme());
 tavora.ui.onThemeChange(paint);
 ```
 
-`theme.tokens` has every colour by its shadcn-vue name (`background`, `primary`, `muted-foreground`, …), so a shadcn-vue or Tailwind project can set each one as `--<name>`. `theme.radius` is the corner radius in CSS pixels, `theme.toasts` is where the user wants toasts (the shared kit's Toaster follows it by itself), and `theme.font` is the interface font the user picked (see below). How themes are made is in [Theme packages](../reference/theme.md).
+`theme.tokens` has every colour by its shadcn-vue name (`background`, `primary`, `muted-foreground`, …), so a shadcn-vue or Tailwind project can set each one as `--<name>`. `theme.radius` is the corner radius in CSS pixels, `theme.toasts` is where the user wants toasts (the shared kit's Toaster follows it by itself), `theme.font` is the interface font the user picked (see below), and `theme.style` is the design style the user picked (see below). How themes are made is in [Theme packages](../reference/theme.md).
+
+### Design styles
+
+Besides colours, the user picks a design style in Settings > Appearance: how surfaces, tabs, buttons, inputs, lists and labels are drawn, plus a few sizes. `theme.style` carries it as `{ id, name, looks, values }`: `looks` names one look for each part (`STYLE_LOOKS`, such as `buttons: "keycap"`), `values` the sizes (`borderWidth`, `depth`, `textSize`, `controlHeight`, `spacing`, `glassOpacity`, each in the range `STYLE_RANGES` gives). The style's corner and font are already in `theme.radius` and `theme.font`. A style never changes colours or layout. Tavora older than `STYLE_TAVORA` leaves `style` out, which means Classic (`CLASSIC_STYLE`), the look Tavora always had. The shared kit's controls follow the style by themselves; with your own controls you may follow it, or keep the Classic look.
 
 ## Fonts and pictures
 
@@ -75,7 +79,7 @@ boot.onLanguage(render);
 boot.dispose();
 ```
 
-Besides the `--<token>` variables above, it sets the summary colours as `--host-background`, `--host-surface`, `--host-text`, `--host-text-muted` and `--host-accent`, plus `--radius`, the font as `--tavora-font-sans`, `color-scheme`, the `dark` class and `data-mode` (`"dark"` or `"light"`) on the page. `applyHostTheme(theme)` does only that, and `isGerman(language)` / `languageOf(language)` tell the language: anything but German is English.
+Besides the `--<token>` variables above, it sets the summary colours as `--host-background`, `--host-surface`, `--host-text`, `--host-text-muted` and `--host-accent`, plus `--radius`, the font as `--tavora-font-sans`, `color-scheme`, the `dark` class and `data-mode` (`"dark"` or `"light"`) on the page. With a design style it also sets `data-style="<id>"`, `data-look-<part>="<look>"` for every part (`data-look-buttons="keycap"`) and the sizes as `--style-border-width`, `--style-depth`, `--style-text`, `--style-control-height`, `--style-space` and `--style-glass-opacity` (`STYLE_VARIABLES`); a theme without a style takes them away again. `applyHostTheme(theme)` does only that, and `isGerman(language)` / `languageOf(language)` tell the language: anything but German is English.
 
 A module built on the shared kit (`@tavora/official-ui`) calls `connectModule` instead, which adds the kit's translator, toast position, tooltips and `<html lang>`:
 
