@@ -35,7 +35,10 @@ vi.mock("electron", () => {
         return this.destroyed;
       },
       isFocused: () => false,
-      send: () => undefined,
+      sent: [] as unknown[][],
+      send(this: { sent: unknown[][] }, ...args: unknown[]) {
+        this.sent.push(args);
+      },
       close() {
         this.destroyed = true;
       },
@@ -68,6 +71,8 @@ let fallback: boolean[];
 let errors: { mock: { calls: unknown[][] }; mockRestore(): void; (...args: unknown[]): void } & ReturnType<typeof vi.fn>;
 let views: InstanceType<typeof ToastView>[];
 
+let theme: Record<string, unknown> = {};
+
 function create() {
   const window = {
     contentView: { addChildView: () => undefined, removeChildView: () => undefined },
@@ -82,7 +87,7 @@ function create() {
     preload: "toasts.cjs",
     address: "tavora://app/toasts.html",
     devTools: false,
-    theme: () => ({ toasts: "bottom-center", mode: "dark", tokens: {}, radius: 8 }) as never,
+    theme: () => ({ toasts: "bottom-center", mode: "dark", tokens: {}, radius: 8, ...theme }) as never,
     language: () => "en",
     event: (event) => events.push(event),
     fallback: (on) => fallback.push(on),
@@ -101,6 +106,7 @@ beforeEach(() => {
   made.mode = "ok";
   made.deferred = [];
   events = [];
+  theme = {};
   fallback = [];
   views = [];
   errors = vi.spyOn(console, "error").mockImplementation(() => undefined) as never;
@@ -120,6 +126,29 @@ describe("a toast page that works", () => {
     expect(events).toEqual([]);
     expect(errors).not.toHaveBeenCalled();
     expect(fallback).toEqual([]);
+  });
+});
+
+describe("the toast page's look", () => {
+  const lastState = () => (page() as unknown as { sent: unknown[][] }).sent.filter(([channel]) => channel === "toasts:state").at(-1)![1] as { styleMarks?: { attributes: [string, string | null][]; properties: [string, string | null][] } };
+
+  it("carries the design style's marks, so toasts match the panels in every style", () => {
+    theme = { style: { id: "tavora.glass", name: "Liquid Glass", looks: { surface: "glass", tabs: "pill", content: "plain", buttons: "capsule", inputs: "capsule", lists: "fill", labels: "normal", status: "none" }, values: { borderWidth: 1, depth: 1, textSize: 13, controlHeight: 32, spacing: 1, glassOpacity: 0.72 } } };
+    const view = create();
+    pageSays("toasts:ready");
+    view.sync(items({ id: 1 }));
+    const marks = lastState().styleMarks!;
+    expect(Object.fromEntries(marks.attributes)).toMatchObject({ "data-style": "tavora.glass", "data-look-surface": "glass", "data-look-buttons": "capsule" });
+    expect(Object.fromEntries(marks.properties)).toMatchObject({ "--style-glass-opacity": "0.72", "--style-control-height": "32px" });
+  });
+
+  it("takes the marks away for a theme without a style", () => {
+    const view = create();
+    pageSays("toasts:ready");
+    view.sync(items({ id: 1 }));
+    const marks = lastState().styleMarks!;
+    expect(marks.attributes.every(([, value]) => value === null)).toBe(true);
+    expect(marks.properties.every(([, value]) => value === null)).toBe(true);
   });
 });
 

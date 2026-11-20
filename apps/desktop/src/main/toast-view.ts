@@ -7,7 +7,7 @@
 //   - It has a preload of its own with five calls (preload/toasts.ts); it cannot reach the host's actions, a module or a
 //     network, and it is served by Tavora's own address like the host page.
 import { ipcMain, WebContentsView, type BrowserWindow, type IpcMainEvent } from "electron";
-import { DEFAULT_THEME_FONT, type TavoraTheme } from "@tavora/sdk/protocol";
+import { DEFAULT_THEME_FONT, styleMarks, type TavoraTheme } from "@tavora/sdk/protocol";
 import { cleanExtent, cleanToasts, hostToastDuration, isToastPosition, toastRoom, type HostToast, type ToastsEvent, type ToastsPageState } from "../shared/host-toasts";
 import { keepOnTop, ToastLayout } from "./toast-layout";
 
@@ -281,6 +281,7 @@ export class ToastView {
       radius: theme.radius,
       font: theme.font?.family ?? DEFAULT_THEME_FONT.family,
       language: this.options.language(),
+      styleMarks: styleMarks(theme.style),
       room: toastRoom(width),
       paused: this.hidden || this.behind,
     };

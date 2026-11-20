@@ -30,6 +30,11 @@ export interface ToastsLook {
   /** The CSS font-family of the interface font the user picked. */
   font: string;
   language: string;
+  /**
+   * What the design style puts on the page's root (the SDK's styleMarks: data-style, data-look-*, --style-*), null for
+   * what goes away, so the toasts look like the panels' in every style. Left out, the kit's defaults (Classic).
+   */
+  styleMarks?: { attributes: [name: string, value: string | null][]; properties: [name: string, value: string | null][] };
 }
 
 export interface ToastsPageState extends ToastsLook {

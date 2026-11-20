@@ -20,6 +20,15 @@ function show(next: ToastsPageState): void {
   root.style.setProperty("--tavora-font-sans", next.font);
   root.style.setProperty("color-scheme", next.mode);
   root.classList.toggle("dark", next.mode === "dark");
+  // The design style, as on the host page and in panels (data-style, data-look-*, --style-*).
+  for (const [name, value] of next.styleMarks?.attributes ?? []) {
+    if (value === null) document.documentElement.removeAttribute(name);
+    else document.documentElement.setAttribute(name, value);
+  }
+  for (const [name, value] of next.styleMarks?.properties ?? []) {
+    if (value === null) root.style.removeProperty(name);
+    else root.style.setProperty(name, value);
+  }
   setUiLanguage(next.language);
   mirrorToasts(next.items, presses);
   state.value = next;
