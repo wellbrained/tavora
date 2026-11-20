@@ -492,6 +492,10 @@
 :root[data-look-tabs]:is([data-look-tabs="keycap"], [data-look-tabs="underline"], [data-look-tabs="block"]) .dockview-theme-tavora .dv-tab + .dv-tab {
   --tab-divider: 0 0 transparent;
 }
+/* Keycap and block mark the open tab with their fill, never the Framed layout's underline. */
+:root[data-look-tabs]:is([data-look-tabs="keycap"], [data-look-tabs="block"]) .dockview-theme-tavora .dv-groupview .dv-tab.dv-active-tab {
+  --tab-line: 0 0 transparent;
+}
 
 /* Underline: words; a line under the open tab, in the accent colour in the panel you work in. No dividers. */
 :root[data-look-tabs="underline"] .dockview-theme-tavora .dv-tab {

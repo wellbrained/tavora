@@ -517,11 +517,12 @@
   & [data-slot="segmented-pill"] {
     background: var(--card);
     border-color: transparent;
-    border-radius: var(--radius-lg);
+    /* Inside the control's 2px padding and 1px border: a smaller corner, so the gap around it stays even. */
+    border-radius: max(0px, calc(var(--radius-lg) - 3px));
     box-shadow: inset 0 1px 0 color-mix(in srgb, white 18%, transparent), 0 1px 3px color-mix(in srgb, black 18%, transparent);
   }
   & [data-slot="segmented-item"] {
-    border-radius: var(--radius-lg);
+    border-radius: max(0px, calc(var(--radius-lg) - 3px));
   }
   & [data-slot="segmented-item"][data-state="checked"] {
     color: var(--foreground);
@@ -639,11 +640,6 @@
   box-shadow: none;
 }
 
-/* Capsule fields that wrap onto two lines (a long Select) keep corners of a one-line capsule, not a lozenge. */
-:root[data-look-inputs="capsule"] :is([data-slot="input"], [data-slot="select-trigger"], [data-slot="combobox-anchor"], [data-slot="combobox-input"], [data-slot="slider-input"], [data-slot="number-field"]) {
-  border-radius: var(--radius-lg);
-}
-
 /* ---------- Sliders follow the style's corners (round only in capsule styles) ---------- */
 
 :root[data-style]:not([data-style="tavora.classic"]):not([data-look-inputs="capsule"]) {
@@ -746,4 +742,18 @@
   ) {
   border-color: color-mix(in srgb, white 12%, transparent);
   box-shadow: inset 0 1px 0 color-mix(in srgb, white 10%, transparent), 0 16px 40px -14px color-mix(in srgb, black 60%, transparent);
+}
+
+/* ---------- Split buttons stay one control in every look ---------- */
+
+/* A look's own button corners would round the inner edges too; joined parts keep them straight. */
+:root[data-style]:not([data-style="tavora.classic"]) [data-slot="button-group"] > .tavora-button {
+  &:not(:first-child) {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+  }
+  &:not(:last-child) {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+  }
 }
