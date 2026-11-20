@@ -23,6 +23,7 @@ import { isLanguageSetting, type LanguageSetting } from "./i18n-core";
 import { isProfileBanner, type ProfileBanner } from "./profile-banner";
 import { GRID_LIMITS, layoutTemplate, type LayoutTemplateId } from "./layout-templates";
 import { isFontId } from "./ui-fonts";
+import { isStyleRadius } from "./styles";
 
 const BAD: unique symbol = Symbol("bad");
 type Bad = typeof BAD;
@@ -331,10 +332,12 @@ export function hostActionTable(c: HostChecks) {
     /** Follow the system's light or dark setting, or stay in one mode. */
     "set-appearance-mode": { mode: oneOf("system", "dark", "light") },
     /** Back to the Tavora default theme, whatever is active. */
-    /** The user's own corner radius in px over the theme's, or null for the theme's. */
-    "set-radius": { radius: nullable(check<number>((value) => Number.isInteger(value) && (value as number) >= 4 && (value as number) <= 12)) },
-    /** The interface font's id (shared/ui-fonts.ts). */
-    "set-font": { font: check<string>(isFontId) },
+    /** The user's own corner radius in px over the style's (0 to 16), or null for the style's ("Style default"). */
+    "set-radius": { radius: nullable(check<number>(isStyleRadius)) },
+    /** The interface font's id (shared/ui-fonts.ts) over the style's, or null for the style's ("Style default"). */
+    "set-font": { font: nullable(check<string>(isFontId)) },
+    /** The design style's id (main/styles.ts). */
+    "set-style": { styleId: c.moduleId },
     "reset-theme": {},
     /** Looks for themes again, after the user changed their themes folder. */
     "reload-themes": {},

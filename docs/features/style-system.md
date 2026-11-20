@@ -64,17 +64,20 @@ export interface TavoraStyle { id: string; name: string; looks: StyleLooks; valu
 **Style file** `styles/<name>/tavora.style.json`: `{ id, name, description?, author?, version, looks, values, radius, font, themes? }`. `radius` (0–16) and `font` (a bundled `ThemeFont` id) are the style's defaults; `themes` lists theme ids shown first for this style. Validated like theme manifests: unknown keys, unknown parts or looks are errors; numbers outside the ranges are clamped (with a hint). Built-in ids: `tavora.classic`, `tavora.hardware`, `tavora.glass`.
 
 **Resolving** (host main): the user's font and radius settings get a "style default" value (`null`). Final radius = user override ?? (style is Classic ? theme variation radius : style radius). Final font = user override ?? style font (Classic's font is Inter, so today's default stays). These land in the existing `TavoraTheme.radius` / `font`, so modules on an older kit still get the right corners and font. The saved settings must stay readable by the previous app version (add fields, don't rename).
+- Saved (`library.json`, `main/library.ts`): `styleId` (left out for Classic, kept while not installed), `radius` (0–16, `null` = style default; a Tavora before styles reads 4–12 and uses the theme's for any other), `font` (left out = style default; `"inter"` is now kept as the user's own pick). Actions: `set-style { styleId }`, `set-radius { radius: 0–16 | null }`, `set-font { font: id | null }`; `reset-theme` also goes back to Classic.
+- The host page gets, in `AppearanceView` (`shared/host-api.ts`): `styleId` (in use), `styles: StyleView[]` (`{ id, name, description, author, provenance, radius, font, themes, looks, values }`, Classic first), `radius` (override or `null`), `resolvedRadius`, `font` (in use, `{ id, family }`), `fontOverride` (id or `null`), `styleMarks` (what goes on `<html>`) and `styleProblems`.
 
 **Applying** (SDK `bootstrap.ts` `applyHostTheme()` for modules, `renderer/theme.ts` `applyTheme()` for the host page), on `document.documentElement`:
 - `data-style="<id>"` and `data-look-<part>="<look>"` for all eight parts
 - CSS variables (prefixed so they never collide with Tailwind's own `--text-*`, `--spacing`, …): `--style-border-width: <n>px`, `--style-depth: <n>`, `--style-text: <n>px`, `--style-control-height: <n>px`, `--style-space: <factor>`, `--style-glass-opacity: <n>`
-- With no `style` (older host), set nothing: the kit's CSS defaults are Classic.
+- With no `style` (older host), set nothing: the kit's CSS defaults are Classic. A theme without `style` after one with it removes them again.
+- One list for both: the SDK's `styleMarks(style)` (`protocol.ts`); main sends it to the host page as `AppearanceView.styleMarks`. The first host with `style` is `STYLE_TAVORA` (0.24.104 for now; re-check at merge).
 
 **Classic values** (`styles/classic`): looks `surface flat, tabs pill, content plain, buttons soft, inputs soft, lists fill, labels normal, status none`; values `borderWidth 1, depth 1, textSize 13, controlHeight 32, spacing 1, glassOpacity 0.8`; radius 8; font `inter`. The kit half may correct these numbers so Classic stays pixel-identical; it says so in its commit.
 
 **Inset content** (`looks.content = "inset"`): module panels (not web pages) get the colour tokens of the theme's dark variation when the active variation is light and the theme has a dark one (same contrast level preferred), so their content reads as a screen set into the light frame. The host draws the inset frame around the module view (dock CSS, kit half). `TavoraTheme.mode` then says `dark` for that module. With no dark variation, nothing changes.
 
-**Native panel corners**: `module-view.ts` `PANEL_RADIUS` and `browser-view.ts` `PAGE_RADIUS` come from one function of (style, panel style, radius). In Classic it returns today's values (10 / 9, and the Framed/Folders inset values); in other styles it follows the resolved radius (0 allowed).
+**Native panel corners**: `main/panel-corners.ts` `panelCorners(style, panelStyle, radius)` gives `{ module, page, cover }` for module views, Browser pages and the loading cover. In Classic it returns today's values for every panel style (module 9, page 9, cover 10); in other styles the dock always draws Framed's frame with the body at `--radius`, so all three are the resolved radius (0 allowed) and the saved panel style is ignored. The host re-applies it when the theme, style, radius or panel style changes.
 
 ## Facts found (2026-11-20)
 

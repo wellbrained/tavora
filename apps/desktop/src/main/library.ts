@@ -16,8 +16,9 @@ import { UserError } from "./messages";
 import { CATALOG, catalogGame } from "./catalog";
 import { DEFAULT_OVERLAY_PORT, MAX_OVERLAY_PORT, MIN_OVERLAY_PORT } from "./overlays";
 import { iconFileAllowed, isSteamAppId, needsIcon } from "./steam-icons";
-import { DEFAULT_THEME, isThemeRadius, isVariationId } from "./themes";
-import { DEFAULT_FONT_ID, isFontId } from "../shared/ui-fonts";
+import { DEFAULT_THEME, isVariationId } from "./themes";
+import { CLASSIC_STYLE_ID, isStyleRadius } from "../shared/styles";
+import { isFontId } from "../shared/ui-fonts";
 import { isLearnableGameId, learnsGameId } from "./workspace-game";
 import { unknownFields } from "./json";
 
@@ -155,13 +156,22 @@ export interface Library {
   theme: { id: string; variation: string };
   /** Show the variation that matches the system's light or dark setting, and change with it. */
   followSystem: boolean;
-  /** The user's own corner radius in px, over the theme's (THEME_LIMITS.radius); null uses the theme's. */
+  /**
+   * The user's own corner radius in px (STYLE_RADIUS, 0 to 16); null uses the style's ("Style default"), which in Classic
+   * is the theme's. A Tavora from before styles reads only 4 to 12 and uses the theme's for any other.
+   */
   radius: number | null;
   /**
-   * The interface font's id (shared/ui-fonts.ts); left out for Inter, so a library that never picked one is written as
-   * before. Kept even while this Tavora doesn't know it, which shows Inter.
+   * The interface font's id (shared/ui-fonts.ts) the user picked over the style's; left out for "Style default", so a
+   * library that never picked one is written as before (Classic's font is Inter). Kept even while this Tavora doesn't
+   * know it, which shows Inter.
    */
   font?: string;
+  /**
+   * The design style's id (styles.ts); left out for Classic, so a library that never picked one is written as before. Kept
+   * even while that style is not installed, which shows Classic.
+   */
+  styleId?: string;
   /** False until the first-run welcome was finished or skipped. */
   onboarded: boolean;
   /** True once the user said they want to make modules (Settings > Development, Let's go): its tools show. */
@@ -794,7 +804,7 @@ const WORKSPACE_ENTRY_FIELDS = Object.keys({
 const FOLDER_FIELDS = Object.keys({ id: true, name: true, label: true, workspaces: true } satisfies Record<keyof Folder, true>);
 
 /** Library fields that are left out when they hold their default, so a library that never set them is written as before. */
-const OPTIONAL_FIELDS = ["font"] as const satisfies readonly (keyof Library)[];
+const OPTIONAL_FIELDS = ["font", "styleId"] as const satisfies readonly (keyof Library)[];
 
 /**
  * Turns whatever was saved into a consistent library: broken entries are
@@ -949,8 +959,10 @@ export function sanitizeLibrary(raw: unknown): Library {
   const theme = asRecord(saved.theme);
   if (isModuleId(theme.id) && isVariationId(theme.variation)) library.theme = { id: theme.id, variation: theme.variation };
   if (typeof saved.followSystem === "boolean") library.followSystem = saved.followSystem;
-  if (isThemeRadius(saved.radius)) library.radius = saved.radius;
-  if (isFontId(saved.font) && saved.font !== DEFAULT_FONT_ID) library.font = saved.font;
+  if (isStyleRadius(saved.radius)) library.radius = saved.radius;
+  // Inter too: in a style with another font, Inter is the user's own pick. A library from before styles never saved it.
+  if (isFontId(saved.font)) library.font = saved.font;
+  if (isModuleId(saved.styleId) && saved.styleId !== CLASSIC_STYLE_ID) library.styleId = saved.styleId;
   // A library saved before the welcome existed belongs to someone who is past it.
   library.onboarded = typeof saved.onboarded === "boolean" ? saved.onboarded : true;
   if (typeof saved.makesModules === "boolean") library.makesModules = saved.makesModules;
