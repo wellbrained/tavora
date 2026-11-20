@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -8,7 +8,7 @@ import { createApp } from "./app.ts";
 import { buildDataset, writeDatabase } from "./dataset.ts";
 import { createHostedStore } from "./hosted-store.ts";
 import { IconState } from "./icon-state.ts";
-import { gameKey, gameListKnows, KNOWN_KEEP_MS, MAX_GAMES, ModuleRequestStore, parseRequest } from "./module-requests.ts";
+import { gameKey, gameListKnows, KNOWN_KEEP_MS, MAX_GAMES, ModuleRequestStore, parseRequest, voteSalt } from "./module-requests.ts";
 import { createRateLimiter } from "./rate-limit.ts";
 import { createSubmissions } from "./submissions.ts";
 
@@ -185,6 +185,30 @@ describe("the votes", () => {
       ["Valheim", 4],
       ["Siedler 3", 1],
     ]);
+  });
+
+  it("marks a vote's network under the server's secret, made once and kept apart from the votes", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "tavora-salt-"));
+    const file = path.join(dir, "state", "module-requests.salt");
+    const warnings: string[] = [];
+    const made = voteSalt({}, file, (message) => warnings.push(message));
+    expect(made).toMatch(/^[0-9a-f]{64}$/);
+    expect(readFileSync(file, "utf8").trim()).toBe(made);
+    if (process.platform !== "win32") expect(statSync(file).mode & 0o777).toBe(0o600);
+    // The same one at the next start; the environment's wins, unless it is too short.
+    expect(voteSalt({}, file)).toBe(made);
+    expect(voteSalt({ MODULE_REQUEST_SALT: "s".repeat(40) }, file)).toBe("s".repeat(40));
+    expect(voteSalt({ MODULE_REQUEST_SALT: "short" }, file, (message) => warnings.push(message))).toBe(made);
+    expect(warnings).toHaveLength(1);
+    // Another secret gives another mark for the same network and game.
+    const markOf = (salt: string) => {
+      const store = new ModuleRequestStore(":memory:", { salt });
+      store.vote({ game: { ...valheim, gameId: null }, voter: voter(1) }, 1000, { network: "203.0.113.0/24" });
+      const db = (store as unknown as { db: { prepare(sql: string): { get(): { network: string } } } }).db;
+      return db.prepare("select network from votes").get().network;
+    };
+    expect(markOf(made)).toBe(markOf(made));
+    expect(new Set(["a", "b", "c", "d", "e", "f"].map((letter) => markOf(letter.repeat(32)))).size).toBeGreaterThan(1);
   });
 
   it("opens a list from before networks were kept, and the service before it still opens the new one", () => {

@@ -6,6 +6,19 @@ import { isIP } from "node:net";
 export interface RateLimiter {
   /** Seconds to wait when over the limit, or 0 when the request may go on. */
   check(key: string, now?: number): number;
+  /** What check() would answer now, without counting anything. */
+  peek(key: string, now?: number): number;
+}
+
+/**
+ * Several limits for one request, all or none: 0 and each one counted when every limit lets it through, or the longest
+ * wait, counting nothing, so a refusal by one doesn't use up the others.
+ */
+export function checkAll(limits: [RateLimiter, string][], now?: number): number {
+  const wait = Math.max(0, ...limits.map(([limiter, key]) => limiter.peek(key, now)));
+  if (wait > 0) return wait;
+  for (const [limiter, key] of limits) limiter.check(key, now);
+  return 0;
 }
 
 /** Clients counted at once; past this the oldest go first, so a flood of new keys cannot fill the memory. */
@@ -31,6 +44,11 @@ export function createRateLimiter(options: { limit: number; windowMs: number; ma
       }
       entry.count += 1;
       return entry.count > options.limit ? Math.max(1, Math.ceil((entry.resetAt - now) / 1000)) : 0;
+    },
+    peek(key, now = Date.now()) {
+      const entry = hits.get(key);
+      if (!entry || entry.resetAt <= now) return 0;
+      return entry.count + 1 > options.limit ? Math.max(1, Math.ceil((entry.resetAt - now) / 1000)) : 0;
     },
   };
 }

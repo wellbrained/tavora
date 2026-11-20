@@ -17,7 +17,7 @@ import { normalize } from "./ids.ts";
 import { loadIconStore } from "./icons.ts";
 import { createBrevoMailer, createTestInbox, createTestInboxApp, type Mailer } from "./mail.ts";
 import { clientOf } from "./rate-limit.ts";
-import { gameListKnows, ModuleRequestStore } from "./module-requests.ts";
+import { gameListKnows, ModuleRequestStore, voteSalt } from "./module-requests.ts";
 import { StatsStore } from "./stats.ts";
 import { ReviewStore } from "./reviews.ts";
 import { ConversationStore } from "./conversations.ts";
@@ -139,8 +139,9 @@ const lifecycle = accountStore ? accountLifecycle({ accounts: accountStore, cata
 console.log(`[tavora-api] ${catalog.index().length} modules in the catalog.`);
 // Plain daily totals (stats.ts): nothing about a user. Once a day the account numbers are written down too.
 const stats = new StatsStore(path.join(stateDir, "stats.sqlite"));
-// Votes for a module for a game (module-requests.ts): their own file, in the daily backup.
-const moduleRequests = new ModuleRequestStore(path.join(stateDir, "module-requests.sqlite"));
+// Votes for a module for a game (module-requests.ts): their own file, in the daily backup; the secret for their networks
+// stays out of it.
+const moduleRequests = new ModuleRequestStore(path.join(stateDir, "module-requests.sqlite"), { salt: voteSalt(process.env, path.join(stateDir, "module-requests.salt")) });
 // Which requested games the game list knows; the list may be newer than the votes, and rows from before this have none.
 moduleRequests.refreshKnown(gameListKnows(db));
 const activity = new ActivityLog(path.join(stateDir, "activity.sqlite"));

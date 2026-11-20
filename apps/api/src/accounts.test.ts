@@ -667,6 +667,56 @@ describe("the day's emails", () => {
     expect(await (await call("POST", "/delete/code", {}, tokens[20], "203.0.113.1")).json()).toMatchObject({ reason: "daily-limit" });
   });
 
+  it("keeps the reserved emails from accounts made today and from one network's many accounts (review)", async () => {
+    // 50 a day: 30 for sign-in codes, 20 reserved.
+    const { call, oldAccount, signIn, store, clock } = setup({ mailDailyLimit: 50 });
+    const today = await signIn("today@example.com");
+    const tokens = Array.from({ length: 5 }, (_, n) => oldAccount(`a${n}@example.com`));
+    const day = new Date(clock.now).toISOString().slice(0, 10);
+    while (store.mailsSent(day) < 30) store.countMail(day);
+    // An account made today gets no delete code from them.
+    expect(await (await call("POST", "/delete/code", {}, today, "203.0.113.1")).json()).toMatchObject({ reason: "daily-limit" });
+    // Two a network, whichever accounts ask.
+    for (const [n, token] of tokens.entries()) {
+      const answer = await call("POST", "/delete/code", {}, token, `2001:db8:1:${n}::/64`);
+      expect(answer.status).toBe(n < 2 ? 202 : 503);
+    }
+    expect(store.mailsSent(day)).toBe(32);
+    // Another network has its own two; the third account's refusal above didn't use its own one up.
+    expect((await call("POST", "/delete/code", {}, tokens[2], "198.51.100.9")).status).toBe(202);
+  });
+
+  it("sends a suspended account's delete code within the same shares and reserve, and answers like any other address", async () => {
+    const { call, oldAccount, store, clock, inbox, pauses } = setup({ mailDailyLimit: 50, accounts: { codeDayRateLimiter: createRateLimiter({ limit: 2, windowMs: 24 * 60 * 60_000 }) } });
+    oldAccount("held@example.com");
+    oldAccount("held2@example.com");
+    for (const email of ["held@example.com", "held2@example.com"]) store.suspend(store.accountByEmail(email)!.id, "spam", null, clock.now);
+    // The client's day share holds for every address alike.
+    for (const email of ["nobody@example.com", "held@example.com"]) expect((await call("POST", "/delete/suspended/code", { email }, undefined, "203.0.113.1")).status).toBe(202);
+    expect((await call("POST", "/delete/suspended/code", { email: "held@example.com" }, undefined, "203.0.113.1")).status).toBe(429);
+    expect(inbox.mails().map((mail) => mail.to)).toEqual(["held@example.com"]);
+    // Once sign-in codes ran out: one from the reserve for the account, then answered like an address without one.
+    const day = new Date(clock.now).toISOString().slice(0, 10);
+    while (store.mailsSent(day) < 30) store.countMail(day);
+    clock.now += 15 * 60_000;
+    expect((await call("POST", "/delete/suspended/code", { email: "held2@example.com" }, undefined, "198.51.100.1")).status).toBe(202);
+    expect(inbox.mails()).toHaveLength(2);
+    clock.now += 15 * 60_000;
+    const before = pauses.length;
+    expect(await (await call("POST", "/delete/suspended/code", { email: "held2@example.com" }, undefined, "198.51.100.2")).json()).toEqual({ status: "sent" });
+    expect([inbox.mails().length, pauses.length]).toEqual([2, before + 1]);
+  });
+
+  it("counts an owner's code against none of the shares when one of them refuses (review)", async () => {
+    const { call, oldAccount, inbox } = setup({ accounts: { codeNetworkRateLimiter: createRateLimiter({ limit: 1, windowMs: 24 * 60 * 60_000 }) } });
+    const token = oldAccount("me@example.com");
+    // Another client used the network's share: the refusal leaves the account's 5 alone.
+    expect((await call("POST", "/code", { email: "someone@example.com" }, undefined, "198.51.100.1")).status).toBe(202);
+    for (let i = 0; i < 6; i++) expect((await call("POST", "/delete/code", {}, token, "198.51.100.2")).status).toBe(429);
+    for (let i = 0; i < 3; i++) expect((await call("POST", "/delete/code", {}, token, `203.0.${i}.1`)).status).toBe(202);
+    expect(inbox.mails().filter((mail) => mail.to === "me@example.com")).toHaveLength(3);
+  });
+
   it("limits codes for a new address: 3 changes a day per account, the day's shares, and new addresses' emails only", async () => {
     const { call, oldAccount, store, clock } = setup({ mailDailyLimit: 50 });
     const token = oldAccount("me@example.com");

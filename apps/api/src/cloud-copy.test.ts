@@ -252,6 +252,53 @@ describe("the cloud copy", () => {
     expect(copies.addParts("y5", [part(30)], later, { since: later - day })).toBe("ok");
   });
 
+  it("never lets uploading and saving again grow a copy past the total, the young slice or the network's day (review)", () => {
+    const now = Date.parse("2026-11-20T12:00:00Z");
+    const day = 24 * 60 * 60_000;
+    /** Saves `start` bytes, then over and over uploads as much again (the room for its next version) and saves both. */
+    const grow = (copies: CopyStore, who: { since: number; network?: string } | undefined, start: number) => {
+      const first = part(start);
+      expect(copies.addParts("a", [first], now, who)).toBe("ok");
+      let kept = [first.id];
+      expect(copies.swap("a", 0, new Uint8Array(1), kept, now, who)).toMatchObject({ ok: true });
+      let refused = false;
+      for (let round = 1; round <= 16 && !refused; round++) {
+        const saved = copies.info("a")!.size - 1;
+        const next = part(saved);
+        expect(copies.addParts("a", [next], now + round, who)).toBe("ok");
+        const result = copies.swap("a", round, new Uint8Array(1), [...kept, next.id], now + round, who);
+        if (result.ok) kept = [...kept, next.id];
+        else {
+          expect(result).toEqual({ ok: false, reason: "unavailable" });
+          refused = true;
+        }
+      }
+      expect(refused).toBe(true);
+      return copies.info("a")!.size;
+    };
+    // The total: 1 + 100, 200, 400, 800, then 1600 doesn't fit in 1000.
+    const total = new CopyStore(":memory:", { totalLimit: 1000 });
+    expect(grow(total, undefined, 100)).toBe(801);
+    total.sweep(now + 2 * day);
+    expect(total.storedTotal()).toBe(801);
+    // The young accounts' slice: a quarter of 100 000.
+    expect(grow(new CopyStore(":memory:", { totalLimit: 100_000 }), { since: now - day }, 1000)).toBe(16_001);
+    // The network's day: 1000 counted at the upload, then 1000, 2000 when saved; 4000 more doesn't fit in 5000.
+    expect(grow(new CopyStore(":memory:", { networkDayLimit: 5000 }), { since: now - 30 * day, network: "198.51.100.0/24" }, 1000)).toBe(4001);
+  });
+
+  it("counts bytes against the network's day once, at the upload or at the save", () => {
+    const now = Date.parse("2026-11-20T12:00:00Z");
+    const who = { since: now - 30 * 24 * 60 * 60_000, network: "198.51.100.0/24" };
+    const copies = new CopyStore(":memory:", { networkDayLimit: 1000 });
+    const kept = part(600);
+    expect(copies.addParts("a", [kept], now, who)).toBe("ok");
+    expect(copies.swap("a", 0, new Uint8Array(1), [kept.id], now, who)).toMatchObject({ ok: true });
+    // 601 counted: 399 left for the network.
+    expect(copies.addParts("b", [part(400)], now, who)).toBe("no-room");
+    expect(copies.addParts("b", [part(399)], now, who)).toBe("ok");
+  });
+
   it("lets one network add at most its bytes a day to the total, but never stops a version that replaces one", () => {
     const now = Date.parse("2026-11-20T12:00:00Z");
     const old = (network: string) => ({ since: now - 30 * 24 * 60 * 60_000, network });

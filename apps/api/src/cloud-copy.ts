@@ -162,6 +162,10 @@ export class CopyStore {
     // When a part was stored, so one no saved version uses can go after a while (sweep()); null for parts from before it.
     const columns = (this.db.prepare("pragma table_info(parts)").all() as unknown as { name: string }[]).map((column) => column.name);
     if (!columns.includes("created_at")) this.db.exec("alter table parts add column created_at integer");
+    // Bytes of an unsaved part that were counted against the total when it was stored (addParts); the rest came out of the
+    // account's room for its next version (replacing()) and is counted when a version keeps it (swap()). Null once a
+    // version keeps it, and for parts from before it.
+    if (!columns.includes("charged")) this.db.exec("alter table parts add column charged integer");
     // The sizes and times on their own, so adding them up and finding unused parts never reads the parts' bytes. Building it
     // reads copies.sqlite once, at the first start with it.
     this.db.exec("drop index if exists parts_size");
@@ -226,12 +230,19 @@ export class CopyStore {
     return this.newAccountMs > 0 && who.since > now - this.newAccountMs;
   }
 
-  /** Bytes of parts and manifests of the accounts younger than newAccountMs. */
-  private youngBytes(now: number): number {
+  /** Bytes of parts and manifests of the accounts younger than newAccountMs, but `except`. */
+  private youngBytes(now: number, except = ""): number {
     const since = now - this.newAccountMs;
-    const parts = (this.db.prepare("select coalesce(sum(p.size), 0) as total from holders h join parts p on p.account_id = h.account_id where h.since > ?").get(since) as { total: number }).total;
-    const manifests = (this.db.prepare("select coalesce(sum(length(c.manifest)), 0) as total from holders h join copies c on c.account_id = h.account_id where h.since > ?").get(since) as { total: number })
-      .total;
+    const parts = (
+      this.db.prepare("select coalesce(sum(p.size), 0) as total from holders h join parts p on p.account_id = h.account_id where h.since > ? and h.account_id <> ?").get(since, except) as {
+        total: number;
+      }
+    ).total;
+    const manifests = (
+      this.db.prepare("select coalesce(sum(length(c.manifest)), 0) as total from holders h join copies c on c.account_id = h.account_id where h.since > ? and h.account_id <> ?").get(since, except) as {
+        total: number;
+      }
+    ).total;
     return parts + manifests;
   }
 
@@ -259,7 +270,8 @@ export class CopyStore {
   /**
    * Bytes of parts the account may add outside the total: as much as its saved version's parts, less the parts it stored
    * since, so an account with a copy can always upload its next version of the same size, however full the total is (its
-   * old parts go once it is saved, and unsaved ones after a day). Only growth draws from the total. 0 without a copy.
+   * old parts go once it is saved, and unsaved ones after a day). Only growth draws from the total: what a saved version
+   * keeps of these bytes beyond the one before is counted when it is saved (swap()). 0 without a copy.
    */
   private replacing(accountId: string): number {
     const copy = this.db.prepare("select size, length(manifest) as manifest from copies where account_id = ?").get(accountId) as { size: number; manifest: number } | undefined;
@@ -344,10 +356,16 @@ export class CopyStore {
     if (this.stored(accountId) + adding > STORED_LIMIT) return "copy-full";
     const drawn = pooled(adding);
     if (this.fits(adding, drawn, who, now) !== "ok") return "no-room";
-    const insert = this.db.prepare("insert into parts (account_id, id, data, size, created_at) values (?, ?, ?, ?, ?)");
+    const insert = this.db.prepare("insert into parts (account_id, id, data, size, created_at, charged) values (?, ?, ?, ?, ?, ?)");
+    // The bytes from the room for the next version go first; each part keeps how much of it was counted against the total.
+    let free = adding - drawn;
     this.db.exec("begin");
     try {
-      for (const part of fresh) insert.run(accountId, part.id, part.data, part.data.length, now);
+      for (const part of fresh) {
+        const uncounted = Math.min(free, part.data.length);
+        free -= uncounted;
+        insert.run(accountId, part.id, part.data, part.data.length, now, part.data.length - uncounted);
+      }
       this.remember(accountId, who);
       this.db.exec("commit");
     } catch (error) {
@@ -377,7 +395,9 @@ export class CopyStore {
   /**
    * Makes `manifest` with `parts` the account's copy, if the PC started from the current version
    * (0 when there is none). Parts no longer used are dropped. A manifest bigger than the one it replaces needs room like new
-   * parts do (addParts, `who` too).
+   * parts do (addParts, `who` too), and so does a version whose parts grew past the saved one's with bytes that came out of
+   * the room for the next version (replacing()): once saved, the total, the young accounts' slice and the network's day must
+   * still hold them, or the save answers `unavailable`. So uploading and saving again never grows a copy past them.
    */
   swap(accountId: string, base: number, manifest: Uint8Array, parts: Uint8Array[], now: number, who?: CopyHolder): SwapResult {
     const current = this.info(accountId);
@@ -386,24 +406,31 @@ export class CopyStore {
     const growth = manifest.length - previous;
     // Before the parts are looked up: a sweep for room may drop old unused ones, which then count as missing.
     if (!this.room(growth, () => growth, who, now)) return { ok: false, reason: "unavailable" };
-    const sizeOf = this.db.prepare("select size, created_at from parts where account_id = ? and id = ?");
+    const sizeOf = this.db.prepare("select size, created_at, charged from parts where account_id = ? and id = ?");
     const keep = new Map<string, Uint8Array>();
     for (const id of parts) keep.set(Buffer.from(id).toString("hex"), id);
     let size = manifest.length;
     let missing = 0;
+    let charged = 0;
     // Saved no earlier than its newest part, so sweep() never takes a part this version uses for one stored after it.
     let savedAt = now;
     for (const id of keep.values()) {
-      const row = sizeOf.get(accountId, id) as { size: number; created_at: number | null } | undefined;
+      const row = sizeOf.get(accountId, id) as { size: number; created_at: number | null; charged: number | null } | undefined;
       if (!row) {
         missing++;
         continue;
       }
       size += row.size;
+      charged += row.charged ?? 0;
       if (row.created_at !== null) savedAt = Math.max(savedAt, row.created_at);
     }
     if (missing > 0) return { ok: false, reason: "missing-parts", missing };
     if (size > COPY_LIMIT) return { ok: false, reason: "copy-full", size };
+    // Growth of the parts past the saved version's that nothing counted yet: it needs room as if it were uploaded now.
+    const savedParts = current ? current.size - previous : 0;
+    const uncounted = Math.max(0, size - manifest.length - savedParts - charged);
+    const totalAfter = this.total + growth - (this.stored(accountId) - (size - manifest.length));
+    if (uncounted > 0 && !this.keeps(accountId, totalAfter, size, uncounted + Math.max(0, growth), who, now)) return { ok: false, reason: "unavailable" };
     // After a delete, numbers go on from the deleted copy's, so a PC that still knows that one never takes a new copy for it.
     const version = Math.max(base, this.retired(accountId)) + 1;
     let dropped = 0;
@@ -419,6 +446,8 @@ export class CopyStore {
         drop.run(accountId, part.id);
         dropped += part.size;
       }
+      // What the version keeps is counted now.
+      this.db.prepare("update parts set charged = null where account_id = ?").run(accountId);
       this.remember(accountId, who);
       this.db.exec("commit");
     } catch (error) {
@@ -426,9 +455,21 @@ export class CopyStore {
       throw error;
     }
     this.total += growth - dropped;
-    this.countNetwork(who, growth, now);
+    this.countNetwork(who, uncounted + Math.max(0, growth), now);
     this.db.exec("pragma incremental_vacuum");
     return { ok: true, version, size };
+  }
+
+  /**
+   * Whether a saved version of `size` bytes that adds `adding` bytes nothing counted yet still fits: `totalAfter` (the total
+   * once its unused parts went) within the total, the young accounts' slice with this copy as it will be, and the network's
+   * bytes for the day.
+   */
+  private keeps(accountId: string, totalAfter: number, size: number, adding: number, who: CopyHolder | undefined, now: number): boolean {
+    if (totalAfter > this.totalLimit) return false;
+    if (who && this.isYoung(who, now) && this.youngBytes(now, accountId) + size > Math.floor(this.totalLimit * this.newAccountShare)) return false;
+    if (who?.network !== undefined && this.networkDayLimit > 0 && this.networkUsed(who.network, now) + adding > this.networkDayLimit) return false;
+    return true;
   }
 
   /** The version of the account's last deleted copy, 0 when none was. */

@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
-import { mkdirSync } from "node:fs";
+import { createHmac, randomBytes } from "node:crypto";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { isGameId } from "@tavora/module-schema";
@@ -69,10 +69,35 @@ export function parseRequest(body: unknown): ParsedRequest | null {
 
 /**
  * A vote's network (an IPv4 /24, an IPv6 /48) for one game, so votes are counted once per network: 4 hex digits of a hash
- * of both, enough to tell a game's networks apart (two of them rarely share one, and then count once), too few to tell which
- * network it was or to link one network's votes across games.
+ * of both under a secret only the server has (voteSalt), enough to tell a game's networks apart (two of them rarely share
+ * one, and then count once). Without the secret nobody can work out a network from it; with it, 4 digits still match
+ * many networks and don't link one network's votes across games.
  */
-const networkMark = (key: string, network: string) => createHash("sha256").update(`vote-network:${key}:${network}`).digest("hex").slice(0, 4);
+const networkMark = (salt: string, key: string, network: string) => createHmac("sha256", salt).update(`vote-network:${key}:${network}`).digest("hex").slice(0, 4);
+
+/** A secret: at least 32 characters. */
+const SALT = /^\S{32,}$/;
+
+/**
+ * The secret for vote networks: MODULE_REQUEST_SALT when it is set (at least 32 characters), else the one in `file`, made
+ * (64 hex digits, readable by the service only) the first time. Kept out of the daily backup, so a copy of the votes alone
+ * tells no network; if it is lost, a new one is made and each network may count once more per game.
+ */
+export function voteSalt(env: Record<string, string | undefined>, file: string, warn: (message: string) => void = console.warn): string {
+  const set = env.MODULE_REQUEST_SALT?.trim();
+  if (set && SALT.test(set)) return set;
+  if (set) warn("[tavora-api] MODULE_REQUEST_SALT is shorter than 32 characters; using the one in the state folder.");
+  try {
+    const kept = readFileSync(file, "utf8").trim();
+    if (SALT.test(kept)) return kept;
+  } catch {
+    // None yet.
+  }
+  const made = randomBytes(32).toString("hex");
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, `${made}\n`, { mode: 0o600 });
+  return made;
+}
 
 /** Which votes count as the same game: the Steam id, else Tavora's id, else the name in lower case letters and digits. */
 export function gameKey(game: RequestedGame): string {
@@ -101,8 +126,11 @@ export function gameListKnows(dataset: DatabaseSync): (key: string) => boolean {
 
 export class ModuleRequestStore {
   private readonly db: DatabaseSync;
+  private readonly salt: string;
 
-  constructor(file: string) {
+  /** `salt`: the secret for vote networks (voteSalt); a new random one when absent, as for a test. */
+  constructor(file: string, { salt = randomBytes(32).toString("hex") }: { salt?: string } = {}) {
+    this.salt = salt;
     if (file !== ":memory:") mkdirSync(path.dirname(file), { recursive: true });
     this.db = new DatabaseSync(file);
     this.db.exec(`
@@ -153,7 +181,7 @@ export class ModuleRequestStore {
     { known = false, maxGames = MAX_GAMES, network }: { known?: boolean; maxGames?: number; network?: string } = {},
   ): boolean {
     const key = gameKey(game);
-    const mark = network === undefined ? null : networkMark(key, network);
+    const mark = network === undefined ? null : networkMark(this.salt, key, network);
     this.db.exec("begin immediate");
     try {
       if (!this.db.prepare("select 1 from games where key = ?").get(key)) {
