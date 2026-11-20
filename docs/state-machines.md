@@ -110,9 +110,9 @@ the pull request that makes it explicit.
 - **Browser panel** (`main/browser-view.ts`: `status`, `error`, `committedUrl`, `requestedUrl`) →
   `blank | loading | page | failed | crashed`. `failed` also holds a page's own move to a site of the other session
   (`otherSession`) until the user opens it or stays (`openAsked`, `stay`); while it asks, redirects to the other session
-  don't count and other failures don't replace it. How the navigation under way started is already one union
+  don't count, and other failures and the page's own commits don't replace it. How the navigation under way started is already one union
   (`navigationStart`: `user | page | restored`, with `crossSessionStep` as its step and tests; `restored` is the saved
-  address `reopen` loads and Try again, whose redirects to the other session ask); `ownNavigation` marks Tavora's own
+  address `reopen` loads, Reload, Back, Forward and Try again, whose redirects to the other session ask); `ownNavigation` marks Tavora's own
   load, with its start, until Chromium reports it.
 
 - **Window visibility** (`main/host.ts`: `windowHidden`, `windowBehind`, `windowClosed`) → `front | behind | hidden | closed`.

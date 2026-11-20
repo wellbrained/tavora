@@ -524,7 +524,7 @@ describe("open Stream overlay pages", () => {
   it("are served only to the owner, with the connector, while the module has an overlay page", async () => {
     const { streaming, port, token, world } = await running();
     try {
-      expect(await get(port, `/overlay/${token}/`)).toBe(200);
+      expect(await get(port, `/overlay/${token}/`)).toBe(302);
       world.module = { ...MODULE, root, owner: "someone-else" };
       expect(await get(port, `/overlay/${token}/`)).toBe(404);
       const { overlay: _overlay, ...withoutOverlay } = MODULE.manifest;
@@ -535,7 +535,7 @@ describe("open Stream overlay pages", () => {
       expect(await get(port, `/overlay/${token}/`)).toBe(404);
       expect(streaming.view().links).toEqual([]);
       world.granted = true;
-      expect(await get(port, `/overlay/${token}/`)).toBe(200);
+      expect(await get(port, `/overlay/${token}/`)).toBe(302);
       expect(streaming.view().links).toHaveLength(1);
     } finally {
       await streaming.shutdown();

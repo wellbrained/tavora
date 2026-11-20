@@ -80,7 +80,8 @@ vi.mock("electron", () => {
   };
 });
 
-const { ModuleView, allowedHere, ADD_DIALOG_MS, CONNECT_GAP_MS, GESTURE_MS } = await import("./module-view");
+const { ModuleView, allowedHere, ADD_DIALOG_MS, CONNECT_GAP_MS, GESTURE_MS, HEARTBEAT_MS } = await import("./module-view");
+const { STORAGE_CHECK_MS } = await import("./storage-guard");
 const { CLIPBOARD_PATH, JSON_EXPORT_PATH } = await import("@tavora/sdk/protocol");
 
 function make(extra: Record<string, unknown> = {}) {
@@ -967,30 +968,42 @@ describe("the storage guard", () => {
     const over: number[] = [];
     let view: InstanceType<typeof ModuleView> | undefined;
     let ses: { storagePath?: string } | undefined;
+    const spies: { mockRestore(): void }[] = [];
     try {
       await writeFile(path.join(dir, "big"), Buffer.alloc(100));
+      // The storage watch is the view's only timer with STORAGE_CHECK_MS (the heartbeat's is HEARTBEAT_MS).
+      expect(HEARTBEAT_MS).not.toBe(STORAGE_CHECK_MS);
+      const started = vi.spyOn(globalThis, "setInterval");
+      const cleared = vi.spyOn(globalThis, "clearInterval");
+      spies.push(started, cleared);
+      const watches = () => started.mock.calls.filter((call) => call[1] === STORAGE_CHECK_MS).length;
       view = make({ storageLimit: 10, onStorageOver: () => over.push(Date.now()), onStatus: () => undefined });
       ses = (view as unknown as { view: { webContents: { session: { storagePath?: string } } } }).view.webContents.session;
       ses.storagePath = dir;
       // The page starts, and holds its load: no did-finish-load ever comes.
       made.handlers["did-start-navigation"]!({ isMainFrame: true, isSameDocument: false });
       expect(view.status).toBe("loading");
+      expect(watches()).toBe(1);
       await vi.advanceTimersByTimeAsync(1_000);
       await vi.waitFor(() => expect(over.length).toBeGreaterThan(0));
 
       // One watch only, still one after the page does finish loading, and none once the panel closes.
       made.handlers["did-finish-load"]!();
+      expect(watches()).toBe(1);
+      const watch = started.mock.results.find((_result, index) => started.mock.calls[index]![1] === STORAGE_CHECK_MS)!.value as unknown;
       over.length = 0;
       await vi.advanceTimersByTimeAsync(3_000);
       await vi.waitFor(() => expect(over.length).toBeGreaterThan(0));
       expect(over.length).toBeLessThanOrEqual(3);
       void view.dispose(true);
+      expect(cleared.mock.calls.some((call) => call[0] === watch)).toBe(true);
       await vi.advanceTimersByTimeAsync(10);
       over.length = 0;
       await vi.advanceTimersByTimeAsync(5_000);
       expect(over).toEqual([]);
     } finally {
       if (ses) delete ses.storagePath;
+      for (const spy of spies) spy.mockRestore();
       vi.useRealTimers();
       await rm(dir, { recursive: true, force: true });
     }

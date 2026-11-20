@@ -5,13 +5,15 @@
 // listens on 127.0.0.1, refuses any other Host header (so a web page can't reach it through DNS rebinding), and serves
 // a link only while its module is installed under the same owner with the `stream-overlay` connector granted.
 //
-// In OBS Tavora can't stop a page from navigating away (there is no will-navigate there), so the link serves a frame
+// In OBS Tavora can't stop a page from navigating away (there is no will-navigate there), so the link leads to a frame
 // page of Tavora's own (overlayFrame), and the module's page runs inside it: in a sandboxed iframe that may not
 // navigate the top page, open windows or send forms, under a policy that lets the iframe show nothing but that page's
 // own origin. The module's page gets an origin of its own per link, `<token>.localhost` (Chromium resolves any
 // `*.localhost` name to this PC), so it is not the frame page's origin and can't reach into it to lift the sandbox.
-// The page's document is served only for a single-use key (FrameKeys) that the frame page puts in the frame's address,
-// so nothing but a frame page Tavora just served can show it.
+// The link itself (on 127.0.0.1, where Tavoras before 0.24.105 served modules' pages) only redirects to the frame page,
+// which has an origin of its own too, `f<token>.localhost`, that no page of a module ever ran on. The module's page is
+// served as a document only with a key (FrameKeys) the frame page puts in the frame's address, and only that frame
+// page's origin may frame it.
 import { createHash, randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
@@ -41,9 +43,11 @@ const TOKEN = /^[0-9a-f]{32}$/;
 
 /** The query parameter that carries a frame page's key to the module's page (FrameKeys). */
 export const FRAME_KEY_PARAM = "tavoraFrameKey";
-/** How long a frame page's key may wait for its frame to load the page. */
+/** How long after the frame page loaded its key lets the page load (again, when it reloads or moves within its frame). */
 export const FRAME_KEY_MS = 30_000;
-/** Keys waiting at once; the oldest goes first, so nothing can make the server keep more. */
+/** How often one key lets the page load within that time. */
+export const FRAME_KEY_USES = 10;
+/** Keys kept at once; the oldest goes first, so nothing can make the server keep more. */
 const MAX_FRAME_KEYS = 256;
 
 /** Who an overlay link belongs to, and the module's id for it. */
@@ -266,8 +270,8 @@ export const OVERLAY_CSP = [...PAGE_POLICY, "frame-ancestors 'none'"].join("; ")
 export const OVERLAY_REQUIRED_CSP = PAGE_POLICY.join("; ");
 
 /** The policy of a module's overlay page in OBS: the same, shown only inside the link's frame page. */
-export function streamOverlayCsp(port: number): string {
-  return [...PAGE_POLICY, `frame-ancestors http://127.0.0.1:${port} http://localhost:${port}`].join("; ");
+export function streamOverlayCsp(port: number, token: string): string {
+  return [...PAGE_POLICY, `frame-ancestors ${overlayFrameOrigin(port, token)}`].join("; ");
 }
 
 const COMMON_HEADERS = {
@@ -287,6 +291,11 @@ export function overlayUrl(port: number, token: string): string {
 /** Where the module's own page of a link is served: an origin of its own, which only that link's frame page shows. */
 export function overlayPageOrigin(port: number, token: string): string {
   return `http://${token}.localhost:${port}`;
+}
+
+/** Where a link's frame page is served (the link redirects there): an origin no page of a module ever ran on. */
+export function overlayFrameOrigin(port: number, token: string): string {
+  return `http://f${token}.localhost:${port}`;
 }
 
 const FRAME_STYLE = "html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}iframe{display:block;width:100%;height:100%;border:0}";
@@ -344,6 +353,8 @@ export function overlayFrame(port: number, token: string, search = "", key?: str
 
 /** The Host of a module's page, `<token>.localhost:<port>`. */
 const PAGE_HOST = /^([0-9a-f]{32})\.localhost:(\d+)$/;
+/** The Host of a link's frame page, `f<token>.localhost:<port>`. */
+const FRAME_HOST = /^f([0-9a-f]{32})\.localhost:(\d+)$/;
 
 /** Where a request puts what it loads into a frame or window of its own: a document. */
 const DOCUMENT_DESTS = new Set(["document", "iframe", "frame", "embed", "object", "fencedframe"]);
@@ -351,12 +362,13 @@ const DOCUMENT_DESTS = new Set(["document", "iframe", "frame", "embed", "object"
 const DOCUMENT_TYPE = /^(text\/html|application\/xhtml\+xml|image\/svg\+xml|text\/xml|application\/xml)\b/;
 
 /**
- * The single-use keys of the frame pages Tavora served: each lets the page of its link be loaded as a document once, for
- * FRAME_KEY_MS. A document anything else made on an allowed origin (a service worker an older Tavora's page left on the
- * link's address, say) can't get the page without fetching a frame page from Tavora, which clears that worker.
+ * The keys of the frame pages Tavora served: each lets the page of its link be loaded as a document, for FRAME_KEY_MS
+ * after its frame page loaded and at most FRAME_KEY_USES times, so the page can reload or move within its frame. Only the
+ * frame page (on its own origin, which nothing but Tavora ever served) and the page in it see a key: a service worker an
+ * older Tavora's page left on the link's address only sees the link's redirect, not where it leads.
  */
 export class FrameKeys {
-  private readonly keys = new Map<string, { token: string; until: number }>();
+  private readonly keys = new Map<string, { token: string; until: number; uses: number }>();
 
   constructor(private readonly now: () => number = Date.now) {}
 
@@ -366,17 +378,19 @@ export class FrameKeys {
     for (const [key, entry] of this.keys) if (entry.until <= now) this.keys.delete(key);
     while (this.keys.size >= MAX_FRAME_KEYS) this.keys.delete(this.keys.keys().next().value!);
     const key = randomBytes(16).toString("hex");
-    this.keys.set(key, { token, until: now + FRAME_KEY_MS });
+    this.keys.set(key, { token, until: now + FRAME_KEY_MS, uses: 0 });
     return key;
   }
 
-  /** Whether `key` was made for this link and is still unused and fresh; it is used up either way. */
+  /** Whether `key` was made for this link and still lets the page load; each load counts. */
   spend(token: string, key: string | null): boolean {
-    if (!key) return false;
-    const entry = this.keys.get(key);
-    if (!entry) return false;
-    this.keys.delete(key);
-    return entry.token === token && entry.until > this.now();
+    const entry = key ? this.keys.get(key) : undefined;
+    if (!key || !entry || entry.token !== token) return false;
+    if (entry.until <= this.now() || ++entry.uses > FRAME_KEY_USES) {
+      this.keys.delete(key);
+      return false;
+    }
+    return true;
   }
 }
 
@@ -464,37 +478,43 @@ export class OverlayServer {
       // 127.0.0.1 sends its own.
       const host = request.headers.host?.toLowerCase();
       const pageHost = host ? PAGE_HOST.exec(host) : null;
-      const frameHost = host === `127.0.0.1:${port}` || host === `localhost:${port}`;
-      if (!frameHost && pageHost?.[2] !== String(port)) return this.plain(response, 421, "Misdirected request");
+      const frameHost = host ? FRAME_HOST.exec(host) : null;
+      const linkHost = host === `127.0.0.1:${port}` || host === `localhost:${port}`;
+      // Nothing of a module runs on the link's origin any more. A service worker a page registered there under an older
+      // Tavora could still answer the link itself; every answer from there clears it, when it reaches the browser.
+      if (linkHost) response.setHeader("Clear-Site-Data", '"storage"');
+      if (!linkHost && pageHost?.[2] !== String(port) && frameHost?.[2] !== String(port)) return this.plain(response, 421, "Misdirected request");
       if (request.method !== "GET" && request.method !== "HEAD") return this.plain(response, 405, "Method not allowed");
       const url = new URL(request.url ?? "/", `http://127.0.0.1:${port}`);
       if (pageHost) return await this.page(request, response, port, pageHost[1]!, url);
-      // Nothing of a module runs on this origin any more. A service worker a page registered here under an older Tavora
-      // could still answer the link itself; whatever reaches Tavora (its update check, a frame page, a page of that
-      // Tavora still open asking for its state) clears it.
-      response.setHeader("Clear-Site-Data", '"storage"');
+      if (frameHost) return this.frame(request, response, port, frameHost[1]!, url);
       const match = /^\/overlay\/([0-9a-f]{32})(\/.*)?$/.exec(url.pathname);
       const found = match ? this.options.store.find(match[1]!) : null;
       if (!match || !found || !this.options.page(found.link)) return this.plain(response, 404, "Not found");
       const rest = match[2];
-      if (rest === undefined) {
-        response.writeHead(308, { ...COMMON_HEADERS, Location: `/overlay/${match[1]}/` });
+      // The link leads to its frame page, on an origin no service worker of an older Tavora's page can be on: such a
+      // worker that answers the link sees only this redirect (opaque to it), never the frame page's key.
+      if (rest === undefined || rest === "/") {
+        response.writeHead(302, { ...COMMON_HEADERS, Location: `${overlayFrameOrigin(port, found.link.token)}/${url.search}` });
         return void response.end();
       }
-      if (rest === "/") {
-        // Each load of the frame page gets a key of its own, so OBS's Refresh shows the page again.
-        const key = request.method === "HEAD" ? undefined : this.frameKeys.mint(found.link.token);
-        const frame = overlayFrame(port, found.link.token, url.search, key);
-        return this.send(request, response, "text/html; charset=utf-8", Buffer.from(frame.html), frame.csp);
-      }
       // A page an older Tavora served here ran outside any sandbox: it gets nothing more (its state, its font) and shows
-      // again, framed, once OBS reloads the source. The Clear-Site-Data above also removes what it left on this origin.
+      // again, framed, once OBS reloads the source.
       return this.plain(response, 404, "Not found");
     } catch (error) {
       console.error("[tavora] overlay request failed", error);
       if (!response.headersSent) this.plain(response, 500, "Something went wrong");
       else response.end();
     }
+  }
+
+  /** A request on a link's frame page origin: the frame page, with a key of its own for each load (OBS's Refresh too). */
+  private frame(request: IncomingMessage, response: ServerResponse, port: number, token: string, url: URL): void {
+    const found = this.options.store.find(token);
+    if (!found || !this.options.page(found.link) || url.pathname !== "/") return this.plain(response, 404, "Not found");
+    const key = request.method === "HEAD" ? undefined : this.frameKeys.mint(token);
+    const frame = overlayFrame(port, token, url.search, key);
+    this.send(request, response, "text/html; charset=utf-8", Buffer.from(frame.html), frame.csp);
   }
 
   /** A request on a link's own origin: the module's page and its files, its state and Tavora's font. */
@@ -514,10 +534,10 @@ export class OverlayServer {
     if (!file) return this.plain(response, 404, "Not found");
     const type = contentTypeFor(file);
     // A document (the frame's page, or anything a browser without Sec-Fetch-Dest could show as one) only for the key of a
-    // frame page Tavora just served. The page's scripts, styles, pictures, state and font need none.
+    // frame page Tavora served. The page's scripts, styles, pictures, state and font need none.
     const asDocument = request.method !== "HEAD" && (dest === undefined ? DOCUMENT_TYPE.test(type) : DOCUMENT_DESTS.has(dest));
     if (asDocument && !this.frameKeys.spend(token, url.searchParams.get(FRAME_KEY_PARAM))) return this.plain(response, 404, "Not found");
-    this.send(request, response, type, await readFile(file), streamOverlayCsp(port));
+    this.send(request, response, type, await readFile(file), streamOverlayCsp(port, token));
   }
 
   private send(request: IncomingMessage, response: ServerResponse, type: string, body: Buffer, csp?: string): void {

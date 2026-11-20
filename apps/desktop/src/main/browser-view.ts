@@ -20,9 +20,10 @@ export function browserPartition(kind: BrowserKind, workspaceId: string): string
 const GESTURE_MS = 1_000;
 
 /**
- * How a main-frame navigation started: by the user (the address bar, Back, Reload, a tab Tavora opened for a click), by
- * the page, and then whether right after a click or key press in it, or by Tavora reopening an address the page may have
- * chosen itself (`restored`: the address the panel showed last time, Try again). `referrer` is what its first request sent.
+ * How a main-frame navigation started: by the user (the address bar, a tab Tavora opened for a click, Open while the
+ * panel asks), by the page, and then whether right after a click or key press in it, or by Tavora going again to an
+ * address the page may have chosen itself (`restored`: the address the panel showed last time, Reload, Back, Forward,
+ * Try again). `referrer` is what its first request sent.
  */
 export type NavigationStart =
   | { by: "user"; referrer?: Referrer | undefined }
@@ -342,8 +343,11 @@ export class BrowserPanel {
       this.redirectSwitches = 0;
       this.committedUrl = url;
       this.hopUrl = null;
-      this.error = null;
-      this.requestedUrl = null;
+      // A page the page behind the question goes to in its own session doesn't end the question: Stay shows it.
+      if (!this.asking) {
+        this.error = null;
+        this.requestedUrl = null;
+      }
       this.applyVisibility();
       if (isWebUrl(url)) this.options.onAddress(url);
       this.changed();
@@ -526,18 +530,23 @@ export class BrowserPanel {
     this.goTo(1);
   }
 
-  /** Back or Forward, pressed by the user. */
+  /** Back or Forward, pressed by the user, to an address the page may have chosen (`restored`). */
   private goTo(step: -1 | 1): void {
     const history = this.view.webContents.navigationHistory;
     if (!(step < 0 ? history.canGoBack() : history.canGoForward())) return;
+    // Like Reload: from the page shown before the question, never the address it asks about.
+    if (this.asking) this.stay();
     this.expectOwn(history.getEntryAtIndex(history.getActiveIndex() + step)?.url);
     if (step < 0) history.goBack();
     else history.goForward();
   }
 
-  /** Tavora is about to take the page to `url` itself; Chromium reports it as a navigation like any other. */
+  /**
+   * Tavora is about to take the page again to `url`, an address of its history (Back, Forward, Reload) that the page may
+   * have chosen itself, so it is `restored`. Chromium reports it as a navigation like any other.
+   */
   private expectOwn(url: string | undefined): void {
-    this.ownNavigation = url ? { url, start: { by: "user" } } : null;
+    this.ownNavigation = url ? { url, start: RESTORED } : null;
   }
 
   /** Stops loading the page. */

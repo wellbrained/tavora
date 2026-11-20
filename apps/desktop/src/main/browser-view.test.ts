@@ -475,6 +475,44 @@ describe("a Browser panel's page going to a site of the other session", () => {
     expect(browser.state.url).toBe(SHARED);
   });
 
+  it("asks when Back, Forward or Reload goes to an address of the page's history that redirects there", () => {
+    // Back to an entry the page made itself.
+    const back = navigating();
+    back.commit(PUBLIC);
+    (back.contents as unknown as { back: string }).back = "https://bounce.example/b";
+    back.browser.back();
+    back.start("https://bounce.example/b");
+    back.redirect(SHARED);
+    expect(world.loads).toEqual([]);
+    expect(back.sessions).toEqual(["workspace"]);
+    expect(back.browser.state.error).toEqual({ kind: "otherSession", detail: "" });
+
+    // Reload of the page it went to by itself.
+    const reload = navigating();
+    reload.commit("https://bounce.example/r");
+    (reload.contents as unknown as { getURL: () => string }).getURL = () => "https://bounce.example/r";
+    reload.browser.reload();
+    reload.start("https://bounce.example/r");
+    reload.redirect(SHARED);
+    expect(world.loads).toEqual([]);
+    expect(reload.sessions).toEqual(["workspace"]);
+    expect(reload.browser.state.error).toEqual({ kind: "otherSession", detail: "" });
+  });
+
+  it("keeps asking when the page behind the question goes elsewhere in its own session, and Stay then shows it there", () => {
+    const { browser, commit, willNavigate, start } = navigating();
+    commit(PUBLIC);
+    willNavigate(SHARED);
+    start("https://other.example/");
+    commit("https://other.example/");
+    expect(browser.state.error).toEqual({ kind: "otherSession", detail: "" });
+    expect(browser.state.url).toBe(SHARED);
+    expect(browser.capturable).toBe(false);
+    browser.stay();
+    expect(browser.state.error).toBeNull();
+    expect(browser.state.url).toBe("https://other.example/");
+  });
+
   it("hands a new tab the referrer Chromium worked out for the page", async () => {
     const { contents, commit, click, tabs } = navigating();
     commit("https://page.example/a");
