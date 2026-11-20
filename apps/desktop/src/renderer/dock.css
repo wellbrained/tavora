@@ -457,39 +457,34 @@
   box-shadow: 0 1px 0 color-mix(in srgb, black 30%, transparent);
 }
 
-/* Pill (outside Classic, whose tabs stay as they are): the tab row is one soft groove, like a segmented control; the
-   open tab of the panel you work in is a raised light capsule in it, the open tab of other panels only a soft step. */
+/* Pill (outside Classic, whose tabs stay as they are): rounded tabs straight on the frame, no box around the row. The
+   open tab of the panel you work in is a raised light tile; in other panels the open tab is only a soft fill. */
 :root[data-look-tabs="pill"][data-style]:not([data-style="tavora.classic"]) .dockview-theme-tavora .dv-tabs-container {
   align-items: center;
-  align-self: center;
   gap: 2px;
-  height: calc(var(--dv-tabs-and-actions-container-height) - 8px);
-  padding: 2px;
-  border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--foreground) 6%, transparent);
-  box-shadow: inset 0 1px 2px color-mix(in srgb, black 12%, transparent);
 }
 :root[data-look-tabs="pill"][data-style]:not([data-style="tavora.classic"]) .dockview-theme-tavora .dv-tab {
-  height: 100%;
+  height: calc(var(--dv-tabs-and-actions-container-height) - 10px);
   border-radius: var(--radius-md);
   color: var(--muted-foreground);
   --tab-divider: 0 0 transparent;
   --tab-line: 0 0 transparent;
 }
 :root[data-look-tabs="pill"][data-style]:not([data-style="tavora.classic"]) .dockview-theme-tavora .dv-tab:hover {
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
   color: var(--foreground);
 }
 :root[data-look-tabs="pill"][data-style]:not([data-style="tavora.classic"]) .dockview-theme-tavora .dv-tab.dv-active-tab {
-  background: color-mix(in srgb, var(--foreground) 9%, transparent);
-  color: color-mix(in srgb, var(--foreground) 80%, transparent);
+  background: color-mix(in srgb, var(--foreground) 7%, transparent);
+  color: var(--foreground);
 }
 :root[data-look-tabs="pill"][data-style]:not([data-style="tavora.classic"]) .dockview-theme-tavora .dv-groupview.dv-active-group .dv-tab.dv-active-tab {
   background: var(--card);
-  color: var(--foreground);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, white 22%, transparent), 0 1px 3px color-mix(in srgb, black 25%, transparent);
+  box-shadow: 0 0 0 0.5px color-mix(in srgb, black 10%, transparent), 0 1px 3px color-mix(in srgb, black 14%, transparent);
 }
 :root.dark[data-look-tabs="pill"][data-style]:not([data-style="tavora.classic"]) .dockview-theme-tavora .dv-groupview.dv-active-group .dv-tab.dv-active-tab {
-  background: color-mix(in srgb, var(--foreground) 20%, var(--card));
+  background: color-mix(in srgb, var(--foreground) 14%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 8%, transparent), 0 1px 3px color-mix(in srgb, black 35%, transparent);
 }
 
 /* Underline: words; a line under the open tab, in the accent colour in the panel you work in. No dividers. */
