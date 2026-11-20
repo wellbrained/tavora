@@ -70,6 +70,7 @@ export default defineConfig({
           { text: "Module manifest", link: "/reference/manifest" },
           { text: "Bridge protocol", link: "/reference/protocol" },
           { text: "Theme packages", link: "/reference/theme" },
+          { text: "Style packages", link: "/reference/style" },
           { text: "SDK changelog", link: "/reference/changelog" },
         ],
       },

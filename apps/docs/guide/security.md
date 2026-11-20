@@ -424,6 +424,10 @@ Tavora updates itself from `updates.mytavora.app`. That server alone is not trus
 - **A server that was broken into can at most hold updates back.** It can't make Tavora install another installer, a version older than the one it runs, or a release under another version number. It can still offer an older signed release (newer than yours) instead of the newest one.
 - **Proven end to end.** Every release build installs the version it builds, offers it a test build of the next one from a local feed and checks, with the real updater and throwaway keys, that unsigned, foreign-key, changed and relabelled updates are refused and that updates signed by either pinned key are taken and install on quit (`apps/desktop/scripts/update-check.mjs`).
 
+## Themes and styles
+
+Themes (`tavora.theme.json`) and design styles (`tavora.style.json`) are data only, checked against a strict schema before they load: colours, picks from a fixed list of looks, and numbers kept in their ranges. Tavora reads nothing else from their folders, so a theme or style can't run code, add CSS, load a font or a file, or reach a module; a style picks only fonts Tavora ships. Ids starting with `tavora.` load only from Tavora's own folders. The user's own come from their data folder, which only the user (or someone who can already act as them) can write.
+
 ## Known limits
 
 - **The sandbox is Chromium's.** A Chromium renderer exploit would break the isolation guarantees, so Tavora follows Electron releases. Electron fuses turn off `RunAsNode`, `NODE_OPTIONS`, `--inspect` and extra `file://` privileges, keep cookies encrypted, and load the app only from its `app.asar`, which must match the hash built into `Tavora.exe` (CI reads the fuses of the packaged build in every check run and every release build). A few files sit next to the archive, outside that check: the system-info worker and the `koffi` library (with its native file) that it and the main process load to call Windows. A packaged Tavora quits when started with switches that weaken the sandbox or the network rules.
