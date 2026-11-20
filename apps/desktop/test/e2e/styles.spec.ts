@@ -51,7 +51,7 @@ test("a style reaches Tavora and its panels at once, inset panels get dark colou
   expect(await inNotes(app, VAR("--radius"))).toBe("4px");
   // Inset: the host page is light, the module panel a dark screen in the theme's dark colours.
   await expect.poll(() => onHost(page, VAR("--background"))).toBe("#e2e3df");
-  await expect.poll(() => inNotes(app, VAR("--background"))).toBe("#121314");
+  await expect.poll(() => inNotes(app, VAR("--background"))).toBe("#101113");
   expect(await inNotes(app, `document.documentElement.dataset.mode ?? ""`)).toBe("dark");
   await app.close();
 
