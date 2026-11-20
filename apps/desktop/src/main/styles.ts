@@ -16,6 +16,8 @@ export const STYLE_MANIFEST = "tavora.style.json";
 export const STYLE_LIMITS = {
   /** A manifest is well under a kilobyte; anything far bigger is not a style. */
   manifestBytes: 16 * 1024,
+  /** Longest id; data-style on the page takes no longer one. */
+  id: 64,
   name: 40,
   description: 200,
   author: 60,
@@ -84,7 +86,9 @@ export function validateStyle(raw: unknown): StyleCheck {
   if (!isRecord(raw)) return fail("The manifest is not a JSON object");
   const extra = unknownKeys(raw, ["id", "name", "description", "author", "version", "looks", "values", "radius", "font", "themes"]);
   if (extra.length) return fail(`Unknown fields: ${extra.join(", ")}`);
-  if (!isModuleId(raw.id)) return fail('The id must look like "publisher.name", in lowercase');
+  // At most 64 characters: the page's data-style takes no longer word (the SDK's styleMarks), and the page and main
+  // must agree on which style is in use.
+  if (!isModuleId(raw.id) || raw.id.length > STYLE_LIMITS.id) return fail(`The id must look like "publisher.name", in lowercase, at most ${STYLE_LIMITS.id} characters`);
   if (!text(raw.name, STYLE_LIMITS.name)) return fail(`The name must be 1 to ${STYLE_LIMITS.name} characters`);
   if (!optionalText(raw.description, STYLE_LIMITS.description)) return fail(`The description must be at most ${STYLE_LIMITS.description} characters`);
   if (!optionalText(raw.author, STYLE_LIMITS.author)) return fail(`The author must be at most ${STYLE_LIMITS.author} characters`);

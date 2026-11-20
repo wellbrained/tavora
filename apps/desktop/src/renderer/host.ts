@@ -11,9 +11,7 @@ import { SETTING_SECTIONS, type SettingsPlace, type SettingsSection } from "./co
 import { MAC, numberedWorkspaces } from "./shortcuts";
 import { isLanguageReady, loadLanguage, setLanguage, t } from "./i18n";
 import { applyTheme } from "./theme";
-
-/** The style whose panels keep the user's panel style (Classic, Framed, Folders). */
-const CLASSIC_STYLE = "tavora.classic";
+import { CLASSIC_STYLE_ID as CLASSIC_STYLE } from "../shared/styles";
 import { developerSetup } from "./developer-setup";
 import { createDialogQueue } from "./dialog-queue";
 import { answerStep, askAllStep, dialogsHolding, measureStep, NO_WATCH, openWatch, POPUPS, type PopupRequest, type PopupWatch } from "./overlay-area";

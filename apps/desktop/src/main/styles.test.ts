@@ -71,6 +71,9 @@ describe("validateStyle", () => {
 
   it("checks the id, name, version, radius, font and themes", () => {
     expect(fail(manifest({ id: "Chunky" }))).toMatch(/id must look like/);
+    // The page's data-style takes up to 64 characters; a longer id would make the page and main disagree.
+    expect(fail(manifest({ id: `community.${"a".repeat(55)}` }))).toMatch(/at most 64 characters/);
+    expect(validateStyle(manifest({ id: `community.${"a".repeat(54)}` })).ok).toBe(true);
     expect(fail(manifest({ name: "" }))).toMatch(/name must be/);
     expect(fail(manifest({ version: "1" }))).toMatch(/version must be/);
     expect(fail(manifest({ radius: "4" }))).toBe("radius must be a number from 0 to 16");
@@ -208,6 +211,8 @@ describe("resolveRadius and resolveFontId", () => {
     expect(resolveFontId(undefined, FALLBACK_STYLE)).toBe("inter");
     expect(resolveFontId(null, HARDWARE)).toBe("saira");
     expect(resolveFontId("inter", HARDWARE)).toBe("inter");
+    // A font from a newer Tavora counts as no pick: the style's font, not Inter.
+    expect(resolveFontId("gone-font", HARDWARE)).toBe("saira");
   });
 
   it("a radius override is a whole number from 0 to 16", () => {

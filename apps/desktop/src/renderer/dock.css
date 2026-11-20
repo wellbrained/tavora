@@ -511,9 +511,10 @@
   box-shadow: 0 0 6px var(--primary);
 }
 
-/* Content. Inset: the module is a screen set into the panel, with a dark bezel around it (its colours come in dark). */
+/* Content. Inset: the module is a screen set into the panel, with a dark bezel around it (its colours come in dark).
+   Only the bezel: the panel body keeps the theme's background, because Tavora's own parts in it (the Browser's
+   toolbar, update and permission bars) stay in the theme's colours. */
 :root[data-look-content="inset"] .panel-body {
-  background: color-mix(in srgb, black 82%, var(--background));
   box-shadow:
     0 0 0 1px color-mix(in srgb, black 45%, var(--border)),
     0 0 0 3px color-mix(in srgb, var(--foreground) 5%, transparent);

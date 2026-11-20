@@ -1,6 +1,10 @@
 // Design styles (docs/features/style-system.md): what the host main and the host page both need to turn the user's
 // settings into the corner radius and font in use. The style files themselves are read in main/styles.ts.
 // The host page imports this too, so it takes nothing but types from the SDK (styles.test.ts checks the id).
+import { UI_FONTS } from "./ui-fonts";
+
+/** The interface fonts this Tavora has. */
+const UI_FONT_IDS: readonly string[] = UI_FONTS.map((font) => font.id);
 
 /** Classic, today's look: the style a library without one, and Reset, mean. The SDK's CLASSIC_STYLE.id. */
 export const CLASSIC_STYLE_ID = "tavora.classic";
@@ -30,7 +34,10 @@ export function resolveRadius(override: number | null | undefined, style: Pick<S
   return style.id === CLASSIC_STYLE_ID ? variationRadius : style.radius;
 }
 
-/** The font id in use: the user's own (`override`), else the style's (Classic's is Inter). */
-export function resolveFontId(override: string | null | undefined, style: Pick<StyleDefaults, "font">): string {
-  return override ?? style.font;
+/**
+ * The font id in use: the user's own (`override`), else the style's (Classic's is Inter). A saved font this Tavora
+ * doesn't have (say from a newer one) counts as no pick, so the style's font shows instead of Inter.
+ */
+export function resolveFontId(override: string | null | undefined, style: Pick<StyleDefaults, "font">, known: readonly string[] = UI_FONT_IDS): string {
+  return override && known.includes(override) ? override : style.font;
 }
