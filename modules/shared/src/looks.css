@@ -37,8 +37,9 @@
    caller's own height still wins. */
 
 /* Keyboard focus: several looks replace a control's box-shadow, which is where the kit draws its focus ring, so in
-   every style but Classic a focused button or field gets an outline instead. */
-:root[data-style]:not([data-style="tavora.classic"]) :is(.tavora-button, [data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"], [data-slot="combobox-anchor"], [data-slot="tabs-trigger"]):focus-visible {
+   every style but Classic a focused button, tab or toggle gets an outline instead. */
+/* Fields keep their own focus edge (a second outline around them would double it). */
+:root[data-style]:not([data-style="tavora.classic"]) :is(.tavora-button, [data-slot="tabs-trigger"], [data-slot="toggle"], [data-slot="toggle-group"] > *):focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
@@ -321,7 +322,24 @@
 
 /* In a button group (a split button) only the first button lights: the rest are parts of the same control. */
 :root[data-look-status="led"] {
-  & [data-slot="tabs-trigger"][data-state="active"]::before,
+  /* Tabs: every tab keeps the light's room, lit or not, so opening one never changes its width (written more
+     specific than the tab looks below, so their padding doesn't take the room away). */
+  &[data-look-tabs] [data-slot="tabs-trigger"] {
+    position: relative;
+    padding-left: 16px;
+  }
+  & [data-slot="tabs-trigger"][data-state="active"]::before {
+    content: "";
+    position: absolute;
+    left: 6px;
+    top: 50%;
+    width: 5px;
+    height: 5px;
+    margin-top: -2.5px;
+    border-radius: 50%;
+    background: var(--primary);
+    box-shadow: 0 0 6px var(--primary);
+  }
   & .tavora-button[data-variant="default"]:not([data-size^="icon"]):not([data-slot="button-group"] > :not(:first-child))::before {
     content: "";
     flex: none;
@@ -436,4 +454,143 @@
 :root[data-look-numbers="thin"] .tavora-numerals {
   font-weight: 200;
   letter-spacing: -0.03em;
+}
+
+/* ---------- Segmented controls follow the style's tabs ---------- */
+
+/* Keycap and block: the picked option is a solid key in the text colour. */
+:root:is([data-look-tabs="keycap"], [data-look-tabs="block"]) {
+  & [data-slot="segmented-pill"] {
+    background: var(--foreground);
+    border-color: var(--foreground);
+    border-radius: var(--radius-sm);
+  }
+  & [data-slot="segmented-item"][data-state="checked"] {
+    color: var(--background);
+  }
+}
+:root[data-look-tabs="block"] [data-slot="segmented-pill"] {
+  border-radius: 0;
+}
+/* Underline: words with a line under the picked one, no box around them. */
+:root[data-look-tabs="underline"] {
+  & [data-slot="segmented-control"] {
+    border-color: transparent;
+    background: transparent;
+  }
+  & [data-slot="segmented-pill"] {
+    background: transparent;
+    border-width: 0 0 2px;
+    border-color: var(--primary);
+    border-radius: 0;
+  }
+  & [data-slot="segmented-item"][data-state="checked"] {
+    color: var(--foreground);
+  }
+}
+/* Pill (outside Classic): a round control, the picked option a light capsule. */
+:root[data-look-tabs="pill"][data-style]:not([data-style="tavora.classic"]) {
+  & [data-slot="segmented-control"] {
+    border-radius: 999px;
+  }
+  & [data-slot="segmented-pill"] {
+    background: color-mix(in srgb, var(--foreground) 14%, var(--background));
+    border-color: transparent;
+    border-radius: 999px;
+    box-shadow: inset 0 1px 0 color-mix(in srgb, white 18%, transparent), 0 1px 3px color-mix(in srgb, black 18%, transparent);
+  }
+  & [data-slot="segmented-item"] {
+    border-radius: 999px;
+  }
+  & [data-slot="segmented-item"][data-state="checked"] {
+    color: var(--foreground);
+  }
+}
+
+/* ---------- Dotted: every line that frames or divides is dotted ---------- */
+
+/* Containers, sections and dividers, in the kit and in modules (any border on them turns dotted); controls keep their
+   solid edge, so a field or a key still reads as something to press or type in. A data grid keeps solid cell lines:
+   dotted ones in every cell would be noise. */
+:root[data-look-surface="dotted"] *:not(
+    [data-slot="data-grid"] *,
+    .tavora-button,
+    input,
+    textarea,
+    select,
+    [data-slot="input"],
+    [data-slot="textarea"],
+    [data-slot="select-trigger"],
+    [data-slot="combobox-anchor"],
+    [data-slot="number-field"],
+    [data-slot="checkbox"],
+    [data-slot="radio-group-item"],
+    [data-slot="switch"],
+    [data-slot="slider-thumb"],
+    [data-slot="segmented-pill"],
+    [data-slot="toggle"],
+    [data-slot="toggle-group"] > *,
+    [data-slot="tabs-trigger"],
+    [data-slot="badge"],
+    [data-slot="kbd"]
+  ) {
+  border-style: dotted;
+}
+
+/* ---------- Toggles (Bold, Italic…) follow the style's tabs ---------- */
+
+/* Keycap and block: a pressed toggle is a solid key in the text colour. */
+:root:is([data-look-tabs="keycap"], [data-look-tabs="block"]) :is([data-slot="toggle"], [data-slot="toggle-group"] > *)[data-state="on"] {
+  background: var(--foreground);
+  border-color: var(--foreground);
+  color: var(--background);
+}
+/* Underline: a pressed toggle gets the accent line under it, no fill. */
+:root[data-look-tabs="underline"] :is([data-slot="toggle"], [data-slot="toggle-group"] > *)[data-state="on"] {
+  background: transparent;
+  color: var(--foreground);
+  box-shadow: inset 0 -2px 0 var(--primary);
+}
+
+/* ---------- Pill tabs outside Classic (Liquid Glass): the kit's Tabs as round capsules ---------- */
+
+:root[data-look-tabs="pill"][data-style]:not([data-style="tavora.classic"]) {
+  & :is([data-slot="tabs-list"], [data-slot="tab-strip"]) .tavora-indicator {
+    display: none;
+  }
+  & [data-slot="tabs-list"] {
+    gap: 2px;
+    border-bottom: 0;
+  }
+  & [data-slot="tabs-trigger"] {
+    margin: 3px 0;
+    height: auto;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 999px;
+    &[data-state="active"] {
+      background: color-mix(in srgb, var(--foreground) 12%, transparent);
+      color: var(--foreground);
+    }
+  }
+}
+
+/* ---------- The chosen row of a pick-one list (Select, Picker, Combobox, menu radio items) ---------- */
+
+/* Inverted lists: chosen is a soft step in the text colour, bold; highlighted it turns fully inverted (above). */
+:root[data-look-lists="inverted"] [data-state="checked"]:is([data-slot$="-item"], [data-slot$="-radio-item"]) {
+  background: color-mix(in srgb, var(--foreground) 14%, transparent);
+  box-shadow: none;
+  &:is([data-highlighted], :focus) {
+    background: var(--foreground);
+    color: var(--background);
+  }
+}
+/* Bar lists: chosen gets the accent line at its start, no fill. */
+:root[data-look-lists="bar"] [data-state="checked"]:is([data-slot$="-item"], [data-slot$="-radio-item"]) {
+  background: transparent;
+  box-shadow: inset 2px 0 0 var(--primary);
+  &:is([data-highlighted], :focus) {
+    background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  }
 }

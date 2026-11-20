@@ -521,6 +521,20 @@ nav[data-expanded="true"] .footer-slot > [aria-hidden="true"] {
   background: color-mix(in srgb, var(--tone) 28%, transparent);
 }
 
+/* Outside Classic the plates drop their colour wash: a plain group with the style's border, the open page marked the
+   style's way (looks.css lists), headings in the text colour. */
+:root[data-style]:not([data-style="tavora.classic"]) .nav-plates [data-slot="nav-group"] {
+  --tone: var(--foreground);
+  background: transparent;
+  border-color: var(--border);
+}
+:root[data-style]:not([data-style="tavora.classic"]) .nav-plates [data-slot="nav-group"] > h3 {
+  color: var(--muted-foreground);
+}
+:root[data-style]:not([data-style="tavora.classic"]) .nav-plates [data-slot="nav-group"] [aria-current="page"] {
+  box-shadow: none;
+}
+
 /* Thin scrollbars in theme colours, without the system's arrow buttons. Only the webkit rules: Chromium ignores them
    once the standard scrollbar-width or scrollbar-color is set, and then draws arrows again. */
 .thin-scroll {

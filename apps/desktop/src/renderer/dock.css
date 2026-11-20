@@ -499,7 +499,9 @@
 
 /* Status light: the open tab of the panel you work in has a glowing dot. The tab is a block, not a flex row, so the dot
    sits on top of it (absolute) in room the tab makes on its left; in the flow it pushed the label below the tab. */
-:root[data-look-status="led"] .dockview-theme-tavora .dv-groupview.dv-active-group .dv-tab.dv-active-tab {
+/* Every tab keeps the light's room, lit or not, so opening a tab never changes its width. */
+:root[data-look-status="led"] .dockview-theme-tavora .dv-tab {
+  position: relative;
   padding-left: 8px;
 }
 :root[data-look-status="led"] .dockview-theme-tavora .dv-groupview.dv-active-group .dv-tab.dv-active-tab::before {

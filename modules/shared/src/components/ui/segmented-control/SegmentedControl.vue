@@ -29,8 +29,8 @@ function pick(value: unknown) {
 </script>
 
 <template>
-  <RadioGroupRoot ref="root" :model-value="model" orientation="horizontal" :aria-label="label" :disabled="disabled" :class="cn('bg-background group/segmented relative inline-flex flex-none gap-0.5 rounded-lg border p-0.5', props.class)" @update:model-value="pick">
-    <span aria-hidden="true" class="tavora-indicator border-primary/50 bg-primary/15 rounded-sm border" data-testid="segmented-pill" />
+  <RadioGroupRoot ref="root" data-slot="segmented-control" :model-value="model" orientation="horizontal" :aria-label="label" :disabled="disabled" :class="cn('bg-background group/segmented relative inline-flex flex-none gap-0.5 rounded-lg border p-0.5', props.class)" @update:model-value="pick">
+    <span aria-hidden="true" data-slot="segmented-pill" class="tavora-indicator border-primary/50 bg-primary/15 rounded-sm border" data-testid="segmented-pill" />
     <RadioGroupItem
       v-for="option in options"
       :key="option.value"
@@ -39,6 +39,7 @@ function pick(value: unknown) {
       :aria-disabled="isSoftOption(option, disabled) ? 'true' : undefined"
       :aria-label="option.iconOnly && option.icon ? option.label : undefined"
       :title="optionHint(option)"
+      data-slot="segmented-item"
       :data-testid="option.testid"
       :class="
         cn(
