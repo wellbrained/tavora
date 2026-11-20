@@ -1,4 +1,6 @@
 import { readFileSync } from "node:fs";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -955,5 +957,42 @@ describe("the module's origin", () => {
     }
     // Another module's address, too.
     expect((await made.serve!(new Request("tavora-module://local.other/x"))).headers.get("Content-Security-Policy")).toBe("default-src 'none'; sandbox");
+  });
+});
+
+describe("the storage guard", () => {
+  it("measures the module's storage from the start, also while its page never finishes loading", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "tavora-view-guard-"));
+    vi.useFakeTimers();
+    const over: number[] = [];
+    let view: InstanceType<typeof ModuleView> | undefined;
+    let ses: { storagePath?: string } | undefined;
+    try {
+      await writeFile(path.join(dir, "big"), Buffer.alloc(100));
+      view = make({ storageLimit: 10, onStorageOver: () => over.push(Date.now()), onStatus: () => undefined });
+      ses = (view as unknown as { view: { webContents: { session: { storagePath?: string } } } }).view.webContents.session;
+      ses.storagePath = dir;
+      // The page starts, and holds its load: no did-finish-load ever comes.
+      made.handlers["did-start-navigation"]!({ isMainFrame: true, isSameDocument: false });
+      expect(view.status).toBe("loading");
+      await vi.advanceTimersByTimeAsync(1_000);
+      await vi.waitFor(() => expect(over.length).toBeGreaterThan(0));
+
+      // One watch only, still one after the page does finish loading, and none once the panel closes.
+      made.handlers["did-finish-load"]!();
+      over.length = 0;
+      await vi.advanceTimersByTimeAsync(3_000);
+      await vi.waitFor(() => expect(over.length).toBeGreaterThan(0));
+      expect(over.length).toBeLessThanOrEqual(3);
+      void view.dispose(true);
+      await vi.advanceTimersByTimeAsync(10);
+      over.length = 0;
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(over).toEqual([]);
+    } finally {
+      if (ses) delete ses.storagePath;
+      vi.useRealTimers();
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

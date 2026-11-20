@@ -4456,7 +4456,7 @@ export class Host {
     this.panels.open(record, () => ({ adapter, start: () => panel.attach() }));
     // The page the panel showed last time opens again.
     void this.data.panelState.get(instanceId).then(
-      (saved) => this.panels.get(instanceId) === adapter && panel.restore((saved as { url?: unknown } | null)?.url),
+      (saved) => this.panels.get(instanceId) === adapter && panel.reopen((saved as { url?: unknown } | null)?.url),
       () => undefined,
     );
   }

@@ -10,6 +10,8 @@
 // navigate the top page, open windows or send forms, under a policy that lets the iframe show nothing but that page's
 // own origin. The module's page gets an origin of its own per link, `<token>.localhost` (Chromium resolves any
 // `*.localhost` name to this PC), so it is not the frame page's origin and can't reach into it to lift the sandbox.
+// The page's document is served only for a single-use key (FrameKeys) that the frame page puts in the frame's address,
+// so nothing but a frame page Tavora just served can show it.
 import { createHash, randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
@@ -36,6 +38,13 @@ const STREAM_PING_MS = 15_000;
 const SAVE_DELAY_MS = 250;
 
 const TOKEN = /^[0-9a-f]{32}$/;
+
+/** The query parameter that carries a frame page's key to the module's page (FrameKeys). */
+export const FRAME_KEY_PARAM = "tavoraFrameKey";
+/** How long a frame page's key may wait for its frame to load the page. */
+export const FRAME_KEY_MS = 30_000;
+/** Keys waiting at once; the oldest goes first, so nothing can make the server keep more. */
+const MAX_FRAME_KEYS = 256;
 
 /** Who an overlay link belongs to, and the module's id for it. */
 export interface OverlaySubject {
@@ -226,6 +235,8 @@ export interface OverlayServerOptions {
   store: OverlayStore;
   /** The page for a link, or null when its module is gone, is another owner's now, or lost the connector. */
   page(link: OverlayLink): OverlayPage | null;
+  /** The clock frame page keys are timed by (tests). */
+  now?: () => number;
 }
 
 /**
@@ -312,8 +323,9 @@ const escapeAttribute = (text: string) => text.replace(/&/g, "&amp;").replace(/"
  * so the page can't take the frame to any other address either. Inline styles are allowed only so OBS's Custom CSS
  * gets in (and on to the page); the frame page has nothing a style could reveal.
  */
-export function overlayFrame(port: number, token: string, search = ""): { html: string; csp: string } {
-  const src = `${overlayPageOrigin(port, token)}/${search}`;
+export function overlayFrame(port: number, token: string, search = "", key?: string): { html: string; csp: string } {
+  const query = key === undefined ? search : `${search ? `${search}&` : "?"}${FRAME_KEY_PARAM}=${key}`;
+  const src = `${overlayPageOrigin(port, token)}/${query}`;
   const html =
     `<!doctype html><html><head><meta charset="utf-8"><title>Tavora overlay</title><style id="frame">${FRAME_STYLE}</style></head>` +
     `<body><iframe id="page" data-src="${escapeAttribute(src)}" sandbox="${OVERLAY_SANDBOX}" csp="${escapeAttribute(OVERLAY_REQUIRED_CSP)}" allow="autoplay" scrolling="no"></iframe>` +
@@ -333,6 +345,41 @@ export function overlayFrame(port: number, token: string, search = ""): { html: 
 /** The Host of a module's page, `<token>.localhost:<port>`. */
 const PAGE_HOST = /^([0-9a-f]{32})\.localhost:(\d+)$/;
 
+/** Where a request puts what it loads into a frame or window of its own: a document. */
+const DOCUMENT_DESTS = new Set(["document", "iframe", "frame", "embed", "object", "fencedframe"]);
+/** Files a browser shows as a document of their own, which could run the module's scripts outside the frame page's sandbox. */
+const DOCUMENT_TYPE = /^(text\/html|application\/xhtml\+xml|image\/svg\+xml|text\/xml|application\/xml)\b/;
+
+/**
+ * The single-use keys of the frame pages Tavora served: each lets the page of its link be loaded as a document once, for
+ * FRAME_KEY_MS. A document anything else made on an allowed origin (a service worker an older Tavora's page left on the
+ * link's address, say) can't get the page without fetching a frame page from Tavora, which clears that worker.
+ */
+export class FrameKeys {
+  private readonly keys = new Map<string, { token: string; until: number }>();
+
+  constructor(private readonly now: () => number = Date.now) {}
+
+  /** A new key for one load of the page of the link with `token`. */
+  mint(token: string): string {
+    const now = this.now();
+    for (const [key, entry] of this.keys) if (entry.until <= now) this.keys.delete(key);
+    while (this.keys.size >= MAX_FRAME_KEYS) this.keys.delete(this.keys.keys().next().value!);
+    const key = randomBytes(16).toString("hex");
+    this.keys.set(key, { token, until: now + FRAME_KEY_MS });
+    return key;
+  }
+
+  /** Whether `key` was made for this link and is still unused and fresh; it is used up either way. */
+  spend(token: string, key: string | null): boolean {
+    if (!key) return false;
+    const entry = this.keys.get(key);
+    if (!entry) return false;
+    this.keys.delete(key);
+    return entry.token === token && entry.until > this.now();
+  }
+}
+
 /** The HTTP server behind Stream overlays; runs only while the user has them on. */
 export class OverlayServer {
   private server: Server | null = null;
@@ -340,8 +387,11 @@ export class OverlayServer {
   /** Each open live stream and the link it is for. */
   private readonly streams = new Map<ServerResponse, OverlayLink>();
   status: OverlayServerStatus = "off";
+  private readonly frameKeys: FrameKeys;
 
-  constructor(private readonly options: OverlayServerOptions) {}
+  constructor(private readonly options: OverlayServerOptions) {
+    this.frameKeys = new FrameKeys(options.now);
+  }
 
   /** The port it listens on, or null while it does not. */
   get port(): number | null {
@@ -418,9 +468,10 @@ export class OverlayServer {
       if (!frameHost && pageHost?.[2] !== String(port)) return this.plain(response, 421, "Misdirected request");
       if (request.method !== "GET" && request.method !== "HEAD") return this.plain(response, 405, "Method not allowed");
       const url = new URL(request.url ?? "/", `http://127.0.0.1:${port}`);
-      if (pageHost) return await this.page(request, response, port, pageHost[1]!, url.pathname);
+      if (pageHost) return await this.page(request, response, port, pageHost[1]!, url);
       // Nothing of a module runs on this origin any more. A service worker a page registered here under an older Tavora
-      // could still answer the link itself; whatever reaches Tavora (its update check, a legacy stream) clears it.
+      // could still answer the link itself; whatever reaches Tavora (its update check, a frame page, a page of that
+      // Tavora still open asking for its state) clears it.
       response.setHeader("Clear-Site-Data", '"storage"');
       const match = /^\/overlay\/([0-9a-f]{32})(\/.*)?$/.exec(url.pathname);
       const found = match ? this.options.store.find(match[1]!) : null;
@@ -431,12 +482,13 @@ export class OverlayServer {
         return void response.end();
       }
       if (rest === "/") {
-        const frame = overlayFrame(port, found.link.token, url.search);
+        // Each load of the frame page gets a key of its own, so OBS's Refresh shows the page again.
+        const key = request.method === "HEAD" ? undefined : this.frameKeys.mint(found.link.token);
+        const frame = overlayFrame(port, found.link.token, url.search, key);
         return this.send(request, response, "text/html; charset=utf-8", Buffer.from(frame.html), frame.csp);
       }
-      // A page an older Tavora served here, still open in OBS until it reloads, keeps getting its state and font.
-      if (rest === `/${OVERLAY_STATE_PATH}`) return this.stream(request, response, found.link, found.state);
-      if (rest === `/${OVERLAY_FONT_PATH}`) return this.send(request, response, "text/css; charset=utf-8", Buffer.from(overlayFontCss()));
+      // A page an older Tavora served here ran outside any sandbox: it gets nothing more (its state, its font) and shows
+      // again, framed, once OBS reloads the source. The Clear-Site-Data above also removes what it left on this origin.
       return this.plain(response, 404, "Not found");
     } catch (error) {
       console.error("[tavora] overlay request failed", error);
@@ -446,19 +498,26 @@ export class OverlayServer {
   }
 
   /** A request on a link's own origin: the module's page and its files, its state and Tavora's font. */
-  private async page(request: IncomingMessage, response: ServerResponse, port: number, token: string, pathname: string): Promise<void> {
+  private async page(request: IncomingMessage, response: ServerResponse, port: number, token: string, url: URL): Promise<void> {
+    const { pathname } = url;
     const found = this.options.store.find(token);
     const page = found ? this.options.page(found.link) : null;
     // Never as a page of its own, only inside the link's frame page (the sandbox there is what keeps it in), and never as
     // a worker's script: a service worker could answer the page's address with a document of its own later.
-    const dest = request.headers["sec-fetch-dest"];
+    const header = request.headers["sec-fetch-dest"];
+    const dest = typeof header === "string" ? header : undefined;
     const refused = dest === "document" || dest === "serviceworker" || dest === "sharedworker" || dest === "worker" || request.headers["service-worker"] !== undefined;
     if (!found || !page || refused) return this.plain(response, 404, "Not found");
     if (pathname === `/${OVERLAY_STATE_PATH}`) return this.stream(request, response, found.link, found.state);
     if (pathname === `/${OVERLAY_FONT_PATH}`) return this.send(request, response, "text/css; charset=utf-8", Buffer.from(overlayFontCss()));
     const file = await resolveOverlayFile(page, pathname);
     if (!file) return this.plain(response, 404, "Not found");
-    this.send(request, response, contentTypeFor(file), await readFile(file), streamOverlayCsp(port));
+    const type = contentTypeFor(file);
+    // A document (the frame's page, or anything a browser without Sec-Fetch-Dest could show as one) only for the key of a
+    // frame page Tavora just served. The page's scripts, styles, pictures, state and font need none.
+    const asDocument = request.method !== "HEAD" && (dest === undefined ? DOCUMENT_TYPE.test(type) : DOCUMENT_DESTS.has(dest));
+    if (asDocument && !this.frameKeys.spend(token, url.searchParams.get(FRAME_KEY_PARAM))) return this.plain(response, 404, "Not found");
+    this.send(request, response, type, await readFile(file), streamOverlayCsp(port));
   }
 
   private send(request: IncomingMessage, response: ServerResponse, type: string, body: Buffer, csp?: string): void {

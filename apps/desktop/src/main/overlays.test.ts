@@ -6,7 +6,21 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { LIMITS } from "@tavora/sdk/protocol";
 import { setOverlayFont } from "./overlay-font";
-import { OVERLAY_CSP, OVERLAY_REQUIRED_CSP, OVERLAY_SANDBOX, OverlayServer, OverlayStore, overlayPageOrigin, overlayUrl, OVERLAYS_FILE, streamOverlayCsp, type OverlayLink, type OverlaySubject } from "./overlays";
+import {
+  FRAME_KEY_MS,
+  FRAME_KEY_PARAM,
+  OVERLAY_CSP,
+  OVERLAY_REQUIRED_CSP,
+  OVERLAY_SANDBOX,
+  OverlayServer,
+  OverlayStore,
+  overlayPageOrigin,
+  overlayUrl,
+  OVERLAYS_FILE,
+  streamOverlayCsp,
+  type OverlayLink,
+  type OverlaySubject,
+} from "./overlays";
 
 let dir: string;
 let root: string;
@@ -152,11 +166,18 @@ describe("OverlayServer", () => {
   let server: OverlayServer;
   let allowed: boolean;
   let port: number;
+  /** The server's clock, for the frame page keys. */
+  let now: number;
 
   beforeEach(async () => {
     store = await OverlayStore.load(dir);
     allowed = true;
-    server = new OverlayServer({ store, page: (link: OverlayLink) => (allowed && link.moduleId === "tavora.clock-counter" ? { root, entry: "dist/overlay.html" } : null) });
+    now = 1_000_000;
+    server = new OverlayServer({
+      store,
+      page: (link: OverlayLink) => (allowed && link.moduleId === "tavora.clock-counter" ? { root, entry: "dist/overlay.html" } : null),
+      now: () => now,
+    });
     // A port of its own per test; a busy one moves on.
     for (port = 47900 + Math.floor(Math.random() * 1000); (await server.start(port)) !== "running"; port++);
   });
@@ -168,6 +189,15 @@ describe("OverlayServer", () => {
   /** The Host of a link's own page, as OBS's browser sends it inside the frame page. */
   const pageHost = (token: string) => `${token}.localhost:${port}`;
   const sha256 = (text: string) => `'sha256-${createHash("sha256").update(text).digest("base64")}'`;
+  /** The address the link's frame page gives its frame, path and query, as OBS would load it. */
+  const frameSrc = async (token: string, search = "") => {
+    const frame = await get(port, `/overlay/${token}/${search}`);
+    const src = /data-src="([^"]*)"/.exec(frame.body)![1]!.replace(/&amp;/g, "&");
+    const url = new URL(src);
+    return `${url.pathname}${url.search}`;
+  };
+  /** The module's page as the frame of a frame page Tavora just served loads it. */
+  const framed = async (token: string) => get(port, await frameSrc(token), pageHost(token), "GET", { "Sec-Fetch-Dest": "iframe" });
 
   it("serves Tavora's frame page at the link: the module's page fills a sandboxed frame on an origin of its own", async () => {
     const { token } = store.link(subject());
@@ -179,8 +209,8 @@ describe("OverlayServer", () => {
     // Nothing of the module in it: just the frame.
     expect(frame.body).not.toContain("overlay.js");
     const iframe = /<iframe [^>]*>/.exec(frame.body)![0];
-    // The frame page's script gives it the address (with the link's #…, which never reaches Tavora).
-    expect(iframe).toContain(`data-src="${overlayPageOrigin(port, token)}/"`);
+    // The frame page's script gives it the address (with the link's #…, which never reaches Tavora), with a key of its own.
+    expect(iframe).toMatch(new RegExp(`data-src="${overlayPageOrigin(port, token)}/\\?${FRAME_KEY_PARAM}=[0-9a-f]{32}"`));
     expect(iframe).toContain(`sandbox="${OVERLAY_SANDBOX}"`);
     // Every document in it must carry the page policy (CSP Embedded Enforcement).
     expect(iframe).toContain(`csp="${OVERLAY_REQUIRED_CSP}"`);
@@ -212,12 +242,12 @@ describe("OverlayServer", () => {
   it("hands the link's query on to the page, as text", async () => {
     const { token } = store.link(subject());
     const frame = await get(port, `/overlay/${token}/?a=1&b="x"`);
-    expect(frame.body).toContain(`data-src="${overlayPageOrigin(port, token)}/?a=1&amp;b=%22x%22"`);
+    expect(frame.body).toContain(`data-src="${overlayPageOrigin(port, token)}/?a=1&amp;b=%22x%22&amp;${FRAME_KEY_PARAM}=`);
   });
 
   it("serves the module's page and the files next to it on the link's own origin, locked down", async () => {
     const { token } = store.link(subject());
-    const page = await get(port, "/", pageHost(token), "GET", { "Sec-Fetch-Dest": "iframe" });
+    const page = await framed(token);
     expect(page.status).toBe(200);
     expect(page.body).toContain("overlay.js");
     expect(page.headers["content-security-policy"]).toBe(streamOverlayCsp(port));
@@ -241,7 +271,46 @@ describe("OverlayServer", () => {
     const { token } = store.link(subject());
     expect((await get(port, "/", pageHost(token), "GET", { "Sec-Fetch-Dest": "document" })).status).toBe(404);
     expect((await get(port, "/assets/overlay.js", pageHost(token), "GET", { "Sec-Fetch-Dest": "document" })).status).toBe(404);
-    expect((await get(port, "/", pageHost(token), "GET", { "Sec-Fetch-Dest": "iframe" })).status).toBe(200);
+    // Not even with a frame page's key.
+    expect((await get(port, await frameSrc(token), pageHost(token), "GET", { "Sec-Fetch-Dest": "document" })).status).toBe(404);
+    expect((await framed(token)).status).toBe(200);
+  });
+
+  it("shows the module's page only in a frame page Tavora just served: each key once, for its own link, for a short while", async () => {
+    const { token } = store.link(subject());
+    const other = store.link(subject("item-2")).token;
+    const iframe = { "Sec-Fetch-Dest": "iframe" };
+    // Something else on an allowed origin framing it (a worker an older Tavora's page left there): no key, no page.
+    expect((await get(port, "/", pageHost(token), "GET", iframe)).status).toBe(404);
+    expect((await get(port, `/?${FRAME_KEY_PARAM}=${"0".repeat(32)}`, pageHost(token), "GET", iframe)).status).toBe(404);
+    for (const dest of ["frame", "embed", "object", "fencedframe"]) {
+      expect((await get(port, "/", pageHost(token), "GET", { "Sec-Fetch-Dest": dest })).status, dest).toBe(404);
+    }
+    // A key works once.
+    const src = await frameSrc(token);
+    expect((await get(port, src, pageHost(token), "GET", iframe)).status).toBe(200);
+    expect((await get(port, src, pageHost(token), "GET", iframe)).status).toBe(404);
+    // Only for the link whose frame page it came with.
+    expect((await get(port, await frameSrc(other), pageHost(token), "GET", iframe)).status).toBe(404);
+    // Only for a short while.
+    const late = await frameSrc(token);
+    now += FRAME_KEY_MS + 1;
+    expect((await get(port, late, pageHost(token), "GET", iframe)).status).toBe(404);
+    // Each load of the frame page (OBS's Refresh) brings a new key.
+    expect((await framed(token)).status).toBe(200);
+    expect((await framed(token)).status).toBe(200);
+    // Its files, state and font need none.
+    expect((await get(port, "/assets/overlay.js", pageHost(token), "GET", { "Sec-Fetch-Dest": "script" })).status).toBe(200);
+    expect((await get(port, "/_font.css", pageHost(token), "GET", { "Sec-Fetch-Dest": "style" })).status).toBe(200);
+  });
+
+  it("asks a key for a page that comes without Sec-Fetch-Dest, which a browser could show as a document", async () => {
+    const { token } = store.link(subject());
+    await writeFile(path.join(root, "dist", "picture.svg"), "<svg xmlns='http://www.w3.org/2000/svg'/>");
+    expect((await get(port, "/", pageHost(token))).status).toBe(404);
+    expect((await get(port, "/picture.svg", pageHost(token))).status).toBe(404);
+    expect((await get(port, await frameSrc(token), pageHost(token))).status).toBe(200);
+    expect((await get(port, "/assets/overlay.js", pageHost(token))).status).toBe(200);
   });
 
   it("serves no worker script, so no service worker can answer the page's address later", async () => {
@@ -268,7 +337,7 @@ describe("OverlayServer", () => {
     expect((await get(port, "/", `${token}.localhost:${port + 1}`)).status).toBe(421);
     expect((await get(port, "/", `evil.localhost:${port}`)).status).toBe(421);
     expect((await get(port, "/", `${token}.localhost`)).status).toBe(421);
-    expect((await get(port, "/", pageHost(token).toUpperCase())).status).toBe(200);
+    expect((await get(port, "/assets/overlay.js", pageHost(token).toUpperCase())).status).toBe(200);
   });
 
   it("serves nothing for an unknown token, a path out of the package, or a module that lost the connector", async () => {
@@ -307,11 +376,14 @@ describe("OverlayServer", () => {
     ]);
   });
 
-  it("keeps streaming to a page an older Tavora served at the link itself", async () => {
+  it("sends nothing more to a page an older Tavora served at the link itself, and clears what it left there", async () => {
     store.publish(subject(), { value: 1 });
     const { token } = store.link(subject());
-    expect(await events(port, `/overlay/${token}/_state`, 1)).toEqual([{ state: { value: 1 }, font: "inter" }]);
-    expect((await get(port, `/overlay/${token}/_font.css`)).status).toBe(200);
+    for (const rest of ["_state", "_font.css"]) {
+      const answer = await get(port, `/overlay/${token}/${rest}`);
+      expect(answer.status, rest).toBe(404);
+      expect(answer.headers["clear-site-data"], rest).toBe('"storage"');
+    }
   });
 
   it("sends the state again with the new font when the user picks another, and serves that font next to the page", async () => {

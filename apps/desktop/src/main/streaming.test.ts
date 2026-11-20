@@ -442,9 +442,9 @@ describe("open Stream overlay pages", () => {
     return { ...parts, port, token };
   }
 
-  function get(port: number, pathname: string): Promise<number> {
+  function get(port: number, pathname: string, host = `127.0.0.1:${port}`): Promise<number> {
     return new Promise((resolve, reject) => {
-      const req = request({ host: "127.0.0.1", port, path: pathname, headers: { host: `127.0.0.1:${port}` } }, (res) => {
+      const req = request({ host: "127.0.0.1", port, path: pathname, headers: { host } }, (res) => {
         res.resume();
         resolve(res.statusCode ?? 0);
       });
@@ -453,10 +453,10 @@ describe("open Stream overlay pages", () => {
     });
   }
 
-  /** Opens the live stream and waits for its first event; `ended` settles when the server closes it. */
+  /** Opens the live stream on the link's own origin, as its page does, and waits for its first event; `ended` settles when the server closes it. */
   function open(port: number, token: string): Promise<{ ended: Promise<void> }> {
     return new Promise((resolve, reject) => {
-      const req = request({ host: "127.0.0.1", port, path: `/overlay/${token}/_state`, headers: { host: `127.0.0.1:${port}` } }, (res: IncomingMessage) => {
+      const req = request({ host: "127.0.0.1", port, path: "/_state", headers: { host: `${token}.localhost:${port}` } }, (res: IncomingMessage) => {
         const ended = new Promise<void>((done) => res.on("end", () => done()));
         res.setEncoding("utf8");
         res.once("data", () => resolve({ ended }));
@@ -477,7 +477,7 @@ describe("open Stream overlay pages", () => {
       world.granted = false;
       streaming.recheckStreams();
       await ended(stream);
-      expect(await get(port, `/overlay/${token}/_state`)).toBe(404);
+      expect(await get(port, "/_state", `${token}.localhost:${port}`)).toBe(404);
       expect(await get(port, `/overlay/${token}/`)).toBe(404);
     } finally {
       await streaming.shutdown();
@@ -491,7 +491,7 @@ describe("open Stream overlay pages", () => {
       world.module = undefined;
       streaming.recheckStreams();
       await ended(stream);
-      expect(await get(port, `/overlay/${token}/_state`)).toBe(404);
+      expect(await get(port, "/_state", `${token}.localhost:${port}`)).toBe(404);
     } finally {
       await streaming.shutdown();
     }
@@ -504,7 +504,7 @@ describe("open Stream overlay pages", () => {
       world.module = { ...MODULE, root, owner: "someone-else" };
       streaming.recheckStreams();
       await ended(stream);
-      expect(await get(port, `/overlay/${token}/_state`)).toBe(404);
+      expect(await get(port, "/_state", `${token}.localhost:${port}`)).toBe(404);
     } finally {
       await streaming.shutdown();
     }
