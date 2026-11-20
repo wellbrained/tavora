@@ -7,7 +7,7 @@
 import { readdir, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { isModuleId, isReleaseVersion, needsNewerTavora } from "@tavora/module-schema";
-import { DEFAULT_THEME_FONT, OPTIONAL_THEME_TOKENS, THEME_TOKENS, type TavoraTheme, type ThemeFont, type ThemeToken, type ToastPosition } from "@tavora/sdk/protocol";
+import { DEFAULT_THEME_FONT, OPTIONAL_THEME_TOKENS, THEME_TOKENS, type TavoraStyle, type TavoraTheme, type ThemeFont, type ThemeToken, type ToastPosition } from "@tavora/sdk/protocol";
 import { THEME } from "./games";
 import { compareModuleVersions } from "../shared/module-version";
 import { OFFICIAL_PREFIX, type Provenance } from "./registry";
@@ -402,7 +402,11 @@ export async function discoverThemes({ official = [], local = [] }: ThemeSources
   return { themes, problems, hints };
 }
 
-async function candidates(dir: string): Promise<string[]> {
+/**
+ * The package folders in a directory: the directory itself when it has the manifest, else its direct children that have
+ * one, by name. Styles (styles.ts) are found the same way with their own manifest.
+ */
+export async function candidates(dir: string, manifest: string = THEME_MANIFEST): Promise<string[]> {
   let root: string;
   try {
     root = await realpath(dir);
@@ -411,7 +415,7 @@ async function candidates(dir: string): Promise<string[]> {
   }
   const hasManifest = async (folder: string) => {
     try {
-      return (await stat(path.join(folder, THEME_MANIFEST))).isFile();
+      return (await stat(path.join(folder, manifest))).isFile();
     } catch {
       return false;
     }
@@ -460,17 +464,43 @@ export function resolveTheme(
   return { theme: fallback, variation: systemMode ? variationForMode(fallback, saved.id, systemMode) : saved };
 }
 
-/** What modules get through ui.getTheme and the ui.theme event, with where the user wants toasts and the font they picked. */
-export function moduleTheme(variation: ThemeVariation, toasts: ToastPosition = "bottom-center", font: ThemeFont = DEFAULT_THEME_FONT): TavoraTheme {
+/**
+ * What modules get through ui.getTheme and the ui.theme event, with where the user wants toasts, the font in use and the
+ * design style (styles.ts; left out, the theme has none, as from a Tavora before styles).
+ */
+export function moduleTheme(variation: ThemeVariation, toasts: ToastPosition = "bottom-center", font: ThemeFont = DEFAULT_THEME_FONT, style?: TavoraStyle): TavoraTheme {
   const { colors } = variation;
   return {
     mode: variation.mode,
-    colors: { background: colors.background, surface: colors.card, text: colors.foreground, textMuted: colors["muted-foreground"], accent: colors.primary },
+    colors: themeSummary(colors),
     tokens: { ...colors },
     radius: variation.radius,
     toasts,
     font: { ...font },
+    ...(style ? { style: { ...style, looks: { ...style.looks }, values: { ...style.values } } } : {}),
   };
+}
+
+const themeSummary = (colors: Record<ThemeToken, string>): TavoraTheme["colors"] => ({
+  background: colors.background,
+  surface: colors.card,
+  text: colors.foreground,
+  textMuted: colors["muted-foreground"],
+  accent: colors.primary,
+});
+
+/**
+ * The theme module panels get, from the one the host page shows. A style whose content is set in (`looks.content`
+ * "inset") shows a light variation's panels as screens in the theme's dark colours: the dark variation of the same
+ * contrast, else the first dark one. A theme without a dark variation, or a dark variation in use, changes nothing.
+ * Browser pages keep the host's theme (docs/features/style-system.md, "Inset content").
+ */
+export function insetPanelTheme(theme: ThemePackage, variation: ThemeVariation, host: TavoraTheme): TavoraTheme {
+  if (host.style?.looks.content !== "inset" || variation.mode !== "light") return host;
+  const darks = theme.variations.filter((item) => item.mode === "dark");
+  const dark = darks.find((item) => item.contrast === variation.contrast) ?? darks[0];
+  if (!dark) return host;
+  return { ...host, mode: "dark", colors: themeSummary(dark.colors), tokens: { ...dark.colors } };
 }
 
 // ── A starter for the user's own theme ─────────────────────────────────

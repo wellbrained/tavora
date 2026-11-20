@@ -105,6 +105,10 @@ const officialThemeDirs = !app.isPackaged && process.env.TAVORA_OFFICIAL_THEME_D
   ? dirList(process.env.TAVORA_OFFICIAL_THEME_DIRS)
   : [app.isPackaged ? path.join(process.resourcesPath, "official-themes") : path.join(repoRoot, "themes")];
 const themeDirs = !app.isPackaged && process.env.TAVORA_THEME_DIRS ? dirList(process.env.TAVORA_THEME_DIRS) : [];
+// Styles too, but only Tavora's own for now.
+const officialStyleDirs = !app.isPackaged && process.env.TAVORA_OFFICIAL_STYLE_DIRS
+  ? dirList(process.env.TAVORA_OFFICIAL_STYLE_DIRS)
+  : [app.isPackaged ? path.join(process.resourcesPath, "official-styles") : path.join(repoRoot, "styles")];
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -190,6 +194,7 @@ if (!app.requestSingleInstanceLock()) {
         officialModuleDirs,
         officialThemeDirs,
         themeDirs,
+        officialStyleDirs,
         rendererDir: path.join(__dirname, "../renderer"),
         modulePreload: path.join(__dirname, "../preload/module.cjs"),
         hostPreload: path.join(__dirname, "../preload/host.cjs"),
