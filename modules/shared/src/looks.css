@@ -234,6 +234,14 @@
     &:is([data-highlighted], [data-state="open"]) {
       background: var(--foreground);
       color: var(--background);
+      /* What sits in the row (a badge, a grey line under the name) turns with it, or it vanishes on the bar. */
+      & :is([data-slot="badge"], .text-muted-foreground, .text-primary) {
+        color: inherit;
+      }
+      & [data-slot="badge"] {
+        background: color-mix(in srgb, var(--background) 22%, transparent);
+        border-color: transparent;
+      }
     }
   }
   & [data-slot="nav-list"] [aria-current="page"] {

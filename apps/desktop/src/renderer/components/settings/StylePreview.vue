@@ -5,11 +5,11 @@
 import { computed } from "vue";
 import type { StyleView } from "../../../shared/host-api";
 
-const props = defineProps<{ style: StyleView; size?: "sm" | "md" }>();
+const props = defineProps<{ look: StyleView; size?: "sm" | "md" }>();
 
-const looks = computed(() => props.style.looks);
+const looks = computed(() => props.look.looks);
 /** The style's corner, scaled down to the picture (Classic shows a middle one: its corners come from the theme). */
-const corner = computed(() => `${Math.round((props.style.id === "tavora.classic" ? 8 : props.style.radius) / 2.5)}px`);
+const corner = computed(() => `${Math.round((props.look.id === "tavora.classic" ? 8 : props.look.radius) / 2.5)}px`);
 const button = computed(() => (looks.value.buttons === "capsule" ? "999px" : looks.value.buttons === "keycap" ? "1px" : corner.value));
 </script>
 

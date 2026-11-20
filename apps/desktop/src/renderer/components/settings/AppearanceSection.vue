@@ -168,14 +168,14 @@ const showVariation = computed(() => {
       <Select :model-value="appearance.styleId" @update:model-value="(id) => pickStyle(String(id))">
         <SelectTrigger class="h-auto! w-72 py-1.5 pl-1.5 text-left" :aria-label="t('settings.style.label')" data-testid="style-select">
           <span class="flex min-w-0 items-center gap-2.5">
-            <StylePreview v-if="activeStyle" :style="activeStyle" size="sm" />
+            <StylePreview v-if="activeStyle" :look="activeStyle" size="sm" />
             <span class="flex min-w-0 flex-col">
               <span class="truncate font-medium">{{ activeStyle ? styleText(activeStyle, "name") : "" }}</span>
-              <span v-if="activeStyle" class="text-muted-foreground truncate text-xs">{{ styleText(activeStyle, "description") }}</span>
+              <span v-if="activeStyle" class="text-muted-foreground truncate text-xs" :title="styleText(activeStyle, 'description')">{{ styleText(activeStyle, "description") }}</span>
             </span>
           </span>
         </SelectTrigger>
-        <SelectContent class="w-[26rem]" data-testid="styles">
+        <SelectContent class="w-[26rem]" align="end" data-testid="styles">
           <SelectItem
             v-for="item in appearance.styles"
             :key="item.id"
@@ -184,7 +184,7 @@ const showVariation = computed(() => {
             class="items-center! gap-3 pr-2 [&>span:first-child]:hidden"
             :data-testid="`style-${item.id}`"
           >
-            <template #thumb><StylePreview :style="item" size="md" /></template>
+            <template #thumb><StylePreview :look="item" size="md" /></template>
             <span class="flex items-center gap-2">
               {{ styleText(item, "name") }}
               <Badge v-if="item.id === appearance.styleId" class="bg-primary/15 text-primary flex-none border-transparent py-0 text-[10px] font-semibold" data-testid="style-in-use">{{
@@ -208,12 +208,12 @@ const showVariation = computed(() => {
             <ThemePreview v-if="active" :variation="previewOf(active)" size="sm" />
             <span class="flex min-w-0 flex-col">
               <span class="truncate font-medium">{{ active?.name }}</span>
-              <span v-if="active?.description" class="text-muted-foreground truncate text-xs">{{ active.description }}</span>
+              <span v-if="active?.description" class="text-muted-foreground truncate text-xs" :title="active.description">{{ active.description }}</span>
             </span>
           </span>
         </SelectTrigger>
         <!-- The kit's list hides its scrollbar; this list is long, so it shows one. -->
-        <SelectContent class="theme-list max-h-[min(70vh,36rem)] w-[26rem]" data-testid="themes">
+        <SelectContent class="theme-list max-h-[min(70vh,36rem)] w-[26rem]" align="end" data-testid="themes">
           <SelectGroup v-for="group in themeGroups" :key="group.label">
           <SelectLabel v-if="group.label" :data-testid="`theme-group-${group.label}`">{{ group.label }}</SelectLabel>
           <SelectItem
