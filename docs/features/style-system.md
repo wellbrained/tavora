@@ -71,7 +71,7 @@ export interface TavoraStyle { id: string; name: string; looks: StyleLooks; valu
 - `data-style="<id>"` and `data-look-<part>="<look>"` for all eight parts
 - CSS variables (prefixed so they never collide with Tailwind's own `--text-*`, `--spacing`, …): `--style-border-width: <n>px`, `--style-depth: <n>`, `--style-text: <n>px`, `--style-control-height: <n>px`, `--style-space: <factor>`, `--style-glass-opacity: <n>`
 - With no `style` (older host), set nothing: the kit's CSS defaults are Classic. A theme without `style` after one with it removes them again.
-- One list for both: the SDK's `styleMarks(style)` (`protocol.ts`); main sends it to the host page as `AppearanceView.styleMarks`. The first host with `style` is `STYLE_TAVORA` (0.24.104 for now; re-check at merge).
+- One list for both: the SDK's `styleMarks(style)` (`protocol.ts`); main sends it to the host page as `AppearanceView.styleMarks`. The first host with `style` is `STYLE_TAVORA` (0.24.106 for now, main is 0.24.105; re-check at merge).
 
 **Classic values** (`styles/classic`): looks `surface flat, tabs pill, content plain, buttons soft, inputs soft, lists fill, labels normal, status none`; values `borderWidth 1, depth 1, textSize 13, controlHeight 32, spacing 1, glassOpacity 0.8`; radius 8; font `inter`. The kit half may correct these numbers so Classic stays pixel-identical; it says so in its commit.
 
