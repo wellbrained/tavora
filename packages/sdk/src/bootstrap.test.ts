@@ -61,7 +61,7 @@ describe("applyHostTheme", () => {
 const HARDWARE: TavoraStyle = {
   id: "tavora.hardware",
   name: "Hardware",
-  looks: { surface: "raised", tabs: "keycap", content: "inset", buttons: "keycap", inputs: "inset", lists: "inverted", labels: "caps-mono", status: "led" },
+  looks: { surface: "raised", tabs: "keycap", content: "inset", buttons: "keycap", inputs: "inset", lists: "inverted", labels: "caps-mono", status: "led", numbers: "dot" },
   values: { borderWidth: 0, depth: 2, textSize: 12.5, controlHeight: 30, spacing: 0.9, glassOpacity: 0.8 },
 };
 const STYLE_VARS = ["--style-border-width", "--style-depth", "--style-text", "--style-control-height", "--style-space", "--style-glass-opacity"];

@@ -1,7 +1,7 @@
 // Style packages: data that changes Tavora's design language (docs/features/style-system.md, ADR 0003). A package is a
 // folder with a tavora.style.json that picks one look per kit part and sets a few sizes, a corner radius and a bundled
 // font. Nothing else is read from the folder, so a style can never run code or load CSS. Colours stay in themes.
-// Only Tavora's own styles exist for now; `local` folders are there so the user's own can come later, like themes.
+// Tavora's own styles ship with the app; the user's own load from the styles folder of their data folder, like themes.
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { isModuleId } from "@tavora/module-schema";
