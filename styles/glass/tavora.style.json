@@ -12,7 +12,8 @@
     "inputs": "capsule",
     "lists": "fill",
     "labels": "normal",
-    "status": "none"
+    "status": "none",
+    "numbers": "normal"
   },
   "values": {
     "borderWidth": 1,
@@ -24,5 +25,7 @@
   },
   "radius": 10,
   "font": "inter",
-  "themes": ["tavora.glass"]
+  "themes": [
+    "tavora.glass"
+  ]
 }

@@ -15,6 +15,8 @@ import atkinsonLatin from "@fontsource-variable/atkinson-hyperlegible-next/files
 import atkinsonLatinExt from "@fontsource-variable/atkinson-hyperlegible-next/files/atkinson-hyperlegible-next-latin-ext-wght-normal.woff2";
 import monoLatin from "@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2";
 import monoLatinExt from "@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-ext-wght-normal.woff2";
+import outfitLatin from "@fontsource-variable/outfit/files/outfit-latin-wght-normal.woff2";
+import outfitLatinExt from "@fontsource-variable/outfit/files/outfit-latin-ext-wght-normal.woff2";
 import alloLatin from "../fonts/allo/allo-latin-wght-normal.woff2";
 import alloLatinExt from "../fonts/allo/allo-latin-ext-wght-normal.woff2";
 import type { ThemeFont } from "@tavora/sdk/protocol";
@@ -36,6 +38,7 @@ const FILES: Record<UiFontId, [string, string]> = {
   saira: [sairaLatin, sairaLatinExt],
   atkinson: [atkinsonLatin, atkinsonLatinExt],
   "jetbrains-mono": [monoLatin, monoLatinExt],
+  outfit: [outfitLatin, outfitLatinExt],
 };
 
 const made = new Map<string, string>();

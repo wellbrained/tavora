@@ -524,3 +524,53 @@
     0 0 0 1px color-mix(in srgb, black 45%, var(--border)),
     0 0 0 3px color-mix(in srgb, var(--foreground) 5%, transparent);
 }
+
+/* ---------- Rabbit and Nothing ---------- */
+
+/* Dotted: flat panels on the plain background, a dotted line around each (Nothing). */
+:root[data-look-surface="dotted"] {
+  --panel-canvas: var(--background);
+}
+:root[data-look-surface="dotted"] .dockview-theme-tavora .dv-groupview,
+:root[data-look-surface="dotted"] .dockview-theme-tavora .dv-groupview.dv-active-group {
+  background: var(--background);
+  border: var(--style-border-width, 1px) dotted color-mix(in srgb, var(--foreground) 35%, transparent);
+  box-shadow: none;
+}
+:root[data-look-surface="dotted"] .dockview-theme-tavora .dv-groupview.dv-active-group {
+  border-color: color-mix(in srgb, var(--foreground) 70%, transparent);
+}
+:root[data-look-surface="dotted"] [data-testid="rail"] {
+  border-right-style: dotted;
+}
+
+/* Tabs, block: the open tab of the panel you work in is a solid block in the text colour; tabs run the row's height. */
+:root[data-look-tabs="block"] .dockview-theme-tavora .dv-tab {
+  border-radius: 0;
+  --tab-divider: 0 0 transparent;
+  --tab-line: 0 0 transparent;
+}
+:root[data-look-tabs="block"] .dockview-theme-tavora .dv-tab.dv-active-tab {
+  background: color-mix(in srgb, var(--foreground) 14%, transparent);
+}
+:root[data-look-tabs="block"] .dockview-theme-tavora .dv-groupview.dv-active-group .dv-tab.dv-active-tab {
+  background: var(--foreground);
+  color: var(--background);
+}
+
+/* Labels, lower: tab names in lowercase (Rabbit). */
+:root[data-look-labels="lower"] .dockview-theme-tavora .dv-tab,
+:root[data-look-labels="lower"] .workspace-title {
+  text-transform: lowercase;
+}
+
+/* The workspace's name in the top bar follows the big-number look: dot matrix (Nothing) or thin (Rabbit). */
+:root[data-look-numbers="dot"] .workspace-title {
+  font-family: "Doto Variable", var(--font-mono);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+:root[data-look-numbers="thin"] .workspace-title {
+  font-weight: 300;
+  letter-spacing: -0.01em;
+}

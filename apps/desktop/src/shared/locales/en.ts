@@ -83,6 +83,7 @@ export const en = {
   "settings.font.hint.saira": "Gaming",
   "settings.font.hint.atkinson": "Easiest to read",
   "settings.font.hint.jetbrains-mono": "Every letter equally wide",
+  "settings.font.hint.outfit": "Round and light",
   "settings.font.fromStyle": "From style",
   "settings.corner-radius.label": "Corners",
   "settings.corner-radius.search": "How round corners are, on top of your style.",

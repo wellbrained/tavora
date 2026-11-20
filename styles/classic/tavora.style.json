@@ -12,7 +12,8 @@
     "inputs": "soft",
     "lists": "fill",
     "labels": "normal",
-    "status": "none"
+    "status": "none",
+    "numbers": "normal"
   },
   "values": {
     "borderWidth": 1,
@@ -24,5 +25,7 @@
   },
   "radius": 8,
   "font": "inter",
-  "themes": ["tavora.default"]
+  "themes": [
+    "tavora.default"
+  ]
 }

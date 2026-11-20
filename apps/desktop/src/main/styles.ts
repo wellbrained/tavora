@@ -5,7 +5,7 @@
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { isModuleId } from "@tavora/module-schema";
-import { CLASSIC_STYLE, STYLE_LOOKS, STYLE_PARTS, STYLE_RANGES, type StyleLooks, type StyleValues, type TavoraStyle, type TavoraTheme, type ToastPosition } from "@tavora/sdk/protocol";
+import { CLASSIC_STYLE, LATER_STYLE_PARTS, STYLE_LOOKS, STYLE_PARTS, STYLE_RANGES, type StyleLooks, type StyleValues, type TavoraStyle, type TavoraTheme, type ToastPosition } from "@tavora/sdk/protocol";
 import { candidates, glassOpacity, insetPanelTheme, moduleTheme, withRadius, type ThemePackage, type ThemeVariation } from "./themes";
 import { OFFICIAL_PREFIX, type Provenance } from "./registry";
 import { CLASSIC_STYLE_ID, resolveFontId, resolveRadius, STYLE_RADIUS } from "../shared/styles";
@@ -101,6 +101,11 @@ export function validateStyle(raw: unknown): StyleCheck {
   for (const part of STYLE_PARTS) {
     const look = raw.looks[part];
     const allowed: readonly string[] = STYLE_LOOKS[part];
+    // A part added later may be left out (a style written before it): it gets the first look.
+    if (look === undefined && LATER_STYLE_PARTS.includes(part)) {
+      looks[part] = allowed[0]!;
+      continue;
+    }
     if (look === undefined) return fail(`looks needs ${part}: one of ${allowed.join(", ")}`);
     if (typeof look !== "string" || !allowed.includes(look)) return fail(`looks.${part} must be one of ${allowed.join(", ")}`);
     looks[part] = look;

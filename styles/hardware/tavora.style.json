@@ -12,7 +12,8 @@
     "inputs": "inset",
     "lists": "inverted",
     "labels": "caps-mono",
-    "status": "led"
+    "status": "led",
+    "numbers": "normal"
   },
   "values": {
     "borderWidth": 1,
@@ -24,5 +25,7 @@
   },
   "radius": 4,
   "font": "jetbrains-mono",
-  "themes": ["tavora.hardware"]
+  "themes": [
+    "tavora.hardware"
+  ]
 }

@@ -1,0 +1,31 @@
+{
+  "id": "tavora.rabbit",
+  "name": "Rabbit",
+  "description": "Thin type, hairlines, one orange light. Everything in lowercase.",
+  "author": "Tavora",
+  "version": "1.0.0",
+  "looks": {
+    "surface": "hairline",
+    "tabs": "underline",
+    "content": "plain",
+    "buttons": "line",
+    "inputs": "underline",
+    "lists": "bar",
+    "labels": "lower",
+    "status": "led",
+    "numbers": "thin"
+  },
+  "values": {
+    "borderWidth": 1,
+    "depth": 0,
+    "textSize": 13,
+    "controlHeight": 32,
+    "spacing": 1.05,
+    "glassOpacity": 0.8
+  },
+  "radius": 0,
+  "font": "outfit",
+  "themes": [
+    "tavora.rabbit"
+  ]
+}

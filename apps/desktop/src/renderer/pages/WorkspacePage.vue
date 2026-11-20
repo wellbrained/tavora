@@ -469,7 +469,7 @@ const emptySlot = EmptySlot as unknown as VueComponent;
     <!-- pl-6 leaves room for the rail's round expand button, which hangs over the rail's edge. -->
     <header class="app-drag flex h-14 flex-none items-center gap-3 pr-[calc(100vw-env(titlebar-area-x,0px)-env(titlebar-area-width,100vw)+0.5rem)] pl-6">
       <WorkspaceIcon v-if="workspace" :workspace="workspace" :size="32" />
-      <h1 class="max-w-72 min-w-0 truncate text-lg font-semibold">{{ workspace?.name }}</h1>
+      <h1 class="workspace-title max-w-72 min-w-0 truncate text-lg font-semibold">{{ workspace?.name }}</h1>
       <!-- While this workspace's game runs. Overlays have their own Start / Stop on the right. -->
       <span
         v-if="view.workspaceRunning"

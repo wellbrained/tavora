@@ -28,7 +28,7 @@ Lets Nik (later others) change Tavora's whole design language while the structur
 - **Modules:** get the active style with the theme (`ui.getTheme` / `ui.theme`); kit controls follow it; modules may draw style-specific parts (optional). Older modules look Classic. The native panel corner radius (today a fixed 10 px in `module-view.ts` / `browser-view.ts`) follows the style.
 - **Liquid Glass:** real glass on host-drawn parts (rail, top bar, tab strips, panel frames) over a soft colour field from the theme; panel content solid ([ADR 0004](#adr-0004-glass-on-host-chrome-only)).
 - **Not in this branch:** Whiteboard (Excalidraw) and PDF pages keep their own look; the in-game overlay plates are untouched.
-- **Ships:** Classic, Hardware (theme "Hardware": Light grey with red signal, Dark graphite with orange signal), Liquid Glass (theme "Glass": Light, Dark); Playground style + theme switcher with specimens for every look. **Second PR:** Rabbit and Nothing at normal size, with Doto and Outfit fonts.
+- **Ships:** Classic, Hardware (theme "Hardware": Light grey with red signal, Dark graphite with orange signal), Liquid Glass (theme "Glass": Light, Dark); Playground style + theme switcher with specimens for every look. **Also in this PR (Nik, 2026-11-20: "the whole system in one PR"):** Rabbit (hairline, underline tabs and fields, line buttons, bar lists, lowercase, thin numbers, Outfit, theme Rabbit) and Nothing (dotted, block tabs, line buttons, inverted lists, mono caps, dot-matrix numbers in Doto, theme Nothing), at normal size; own styles; Tavora's toasts follow the style.
 
 ## Contract between the halves (implementation, 2026-11-20)
 
@@ -46,7 +46,9 @@ export const STYLE_LOOKS = {
   lists: ["fill", "inverted", "bar"],
   labels: ["normal", "caps", "caps-mono"],
   status: ["none", "led"],
+  numbers: ["normal", "dot", "thin"],   // added later: optional in a style file (first look then)
 } as const;
+// Added for Rabbit and Nothing: surface "dotted", tabs "block", buttons "line", inputs "underline", labels "lower".
 export type StylePart = keyof typeof STYLE_LOOKS;
 export type StyleLooks = { [P in StylePart]: (typeof STYLE_LOOKS)[P][number] };
 export interface StyleValues {

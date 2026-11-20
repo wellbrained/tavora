@@ -18,6 +18,7 @@ const button = computed(() => (looks.value.buttons === "capsule" ? "999px" : loo
   <div
     :class="['style-preview relative block flex-none overflow-hidden rounded-[5px] border', size === 'md' ? 'h-10 w-[60px]' : 'h-8 w-12']"
     :data-surface="looks.surface"
+    :data-buttons="looks.buttons"
     aria-hidden="true"
     data-testid="style-preview"
   >
@@ -61,6 +62,15 @@ const button = computed(() => (looks.value.buttons === "capsule" ? "999px" : loo
 }
 [data-surface="hairline"] .panel {
   background: transparent;
+}
+[data-surface="dotted"] .panel {
+  background: transparent;
+  border-style: dotted;
+  border-color: color-mix(in srgb, var(--foreground) 55%, transparent);
+}
+[data-buttons="line"] .key {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 55%, transparent);
 }
 .screen {
   background: color-mix(in srgb, black 85%, var(--background));

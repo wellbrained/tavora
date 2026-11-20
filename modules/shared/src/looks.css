@@ -326,3 +326,103 @@
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 35%, transparent), 0 0 8px var(--primary);
   }
 }
+
+/* ---------- Looks for Rabbit and Nothing ---------- */
+
+/* Surface, dotted: no depth, a dotted line around each surface (Nothing). */
+:root[data-look-surface="dotted"] :is(
+    [data-slot="dialog-content"],
+    [data-slot="popover-content"],
+    [data-slot="dropdown-menu-content"],
+    [data-slot="dropdown-menu-sub-content"],
+    [data-slot="context-menu-content"],
+    [data-slot="context-menu-sub-content"],
+    [data-slot="select-content"],
+    [data-slot="item-card"],
+    [data-slot="toast"]
+  ) {
+  box-shadow: none;
+  border: var(--style-border-width, 1px) dotted color-mix(in srgb, var(--foreground) 45%, transparent);
+}
+
+/* Tabs, block: words in a row; the open one is a solid block in the text colour (Nothing). */
+:root[data-look-tabs="block"] {
+  & :is([data-slot="tabs-list"], [data-slot="tab-strip"]) .tavora-indicator {
+    display: none;
+  }
+  & [data-slot="tabs-list"] {
+    gap: 0;
+  }
+  & [data-slot="tabs-trigger"] {
+    padding: 0 10px;
+    border: 0;
+    border-radius: 0;
+    &[data-state="active"] {
+      background: var(--foreground);
+      color: var(--background);
+    }
+  }
+}
+
+/* Buttons, line: thin outlines, no fill and no depth; Primary stays a solid block (Rabbit, Nothing). */
+:root[data-look-buttons="line"] .tavora-button {
+  box-shadow: none;
+  &:is([data-variant="secondary"], [data-variant="outline"]) {
+    background: transparent;
+    border: var(--style-border-width, 1px) solid color-mix(in srgb, var(--foreground) 35%, transparent);
+    &:hover {
+      background: color-mix(in srgb, var(--foreground) 8%, transparent);
+    }
+  }
+  &[data-variant="default"] {
+    box-shadow: none;
+  }
+}
+
+/* Inputs, underline: a line under each field, nothing around it (Rabbit). Checkboxes stay boxes. */
+:root[data-look-inputs="underline"] {
+  & :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"], [data-slot="combobox-anchor"], [data-slot="number-field"]) {
+    border-width: 0 0 var(--style-border-width, 1px);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    &[aria-invalid="true"] {
+      border-color: var(--destructive);
+    }
+    &:focus-visible,
+    &:focus-within {
+      border-color: var(--primary);
+    }
+  }
+  & [data-slot="checkbox"] {
+    border-radius: 0;
+  }
+}
+
+/* Labels, lower: everything in lowercase, as the device writes it (Rabbit). */
+:root[data-look-labels="lower"] :is(
+    [data-slot="label"],
+    [data-slot="dropdown-menu-label"],
+    [data-slot="context-menu-label"],
+    [data-slot="select-label"],
+    [data-slot="combobox-label"],
+    [data-slot="tabs-trigger"],
+    [data-slot="badge"],
+    .tavora-button:not([data-variant="link"])
+  ) {
+  text-transform: lowercase;
+}
+
+/* ---------- Big numbers (a module marks them with tavora-numerals) ---------- */
+
+/* Dot: a dot-matrix face, like a phone's glyph display (Nothing). */
+:root[data-look-numbers="dot"] .tavora-numerals {
+  font-family: "Doto Variable", var(--font-mono);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+/* Thin: very light, a little tighter (Rabbit). */
+:root[data-look-numbers="thin"] .tavora-numerals {
+  font-weight: 200;
+  letter-spacing: -0.03em;
+}

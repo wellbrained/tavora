@@ -17,7 +17,7 @@ export interface PageDef {
 export const PAGES = [
   // Foundations
   { id: "colours", group: "foundations", keywords: "color tokens theme palette swatches tailwind class hex background foreground primary fill", examples: ["Tokens", "TextOnSurface", "DoDont"] },
-  { id: "text", group: "foundations", keywords: "typography fonts headings caption mono numbers size weight tabular case capitals sentence", examples: ["TypeScale", "Weights", "Numbers", "Capitals", "Mono"] },
+  { id: "text", group: "foundations", keywords: "typography fonts headings caption mono numbers size weight tabular case capitals sentence", examples: ["TypeScale", "Weights", "Numbers", "BigNumbers", "Capitals", "Mono"] },
   { id: "spacing", group: "foundations", keywords: "radius rounded corners nested gap padding margin scale grid depth shadow border surface elevation", examples: ["Scale", "Radius", "NestedCorners", "Depth"] },
   { id: "motion", group: "foundations", keywords: "animation duration ease curve spring transition timing reduced press play", examples: ["Curves", "Durations", "Rules", "ReducedMotion"] },
   { id: "writing", group: "foundations", keywords: "texts words copy tone german english translation you du plain short friendly", examples: ["FewWords", "Descriptions", "PlainWords", "YouDu", "Names"] },

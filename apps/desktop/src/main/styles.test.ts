@@ -44,7 +44,8 @@ describe("validateStyle", () => {
       description: "Big keys.",
       author: "Ash",
       version: "1.0.0",
-      looks: manifest().looks,
+      // A style written before the numbers part gets its first look.
+      looks: { ...manifest().looks, numbers: "normal" },
       values: manifest().values,
       radius: 4,
       font: "saira",
@@ -56,13 +57,17 @@ describe("validateStyle", () => {
   it("refuses unknown fields, parts and looks", () => {
     expect(fail(manifest({ css: "body{}" }))).toBe("Unknown fields: css");
     expect(fail(manifest({ looks: { ...manifest().looks, knob: "round" } }))).toBe("Unknown parts in looks: knob");
-    expect(fail(manifest({ looks: { ...manifest().looks, tabs: "folder" } }))).toBe("looks.tabs must be one of pill, keycap, underline");
+    expect(fail(manifest({ looks: { ...manifest().looks, tabs: "folder" } }))).toBe("looks.tabs must be one of pill, keycap, underline, block");
     expect(fail(manifest({ values: { ...manifest().values, blur: 3 } }))).toBe("Unknown values: blur");
   });
 
   it("needs every part and every value", () => {
     const { status: _status, ...looks } = manifest().looks;
     expect(fail(manifest({ looks }))).toBe("looks needs status: one of none, led");
+    // A part added later may be left out; one set must still be a look it has.
+    expect(fail(manifest({ looks: { ...manifest().looks, numbers: "bold" } }))).toBe("looks.numbers must be one of normal, dot, thin");
+    const later = validateStyle(manifest({ looks: { ...manifest().looks, numbers: "dot" } }));
+    expect(later.ok && later.style.looks.numbers).toBe("dot");
     const { spacing: _spacing, ...values } = manifest().values;
     expect(fail(manifest({ values }))).toBe("values.spacing must be a number from 0.85 to 1.2");
     expect(fail(manifest({ values: { ...manifest().values, depth: "2" } }))).toBe("values.depth must be a number from 0 to 3");
