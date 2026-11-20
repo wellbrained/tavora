@@ -566,7 +566,7 @@
 
 /* Tabs, block: the open tab of the panel you work in is a solid block in the text colour; tabs run the row's height. */
 :root[data-look-tabs="block"] .dockview-theme-tavora .dv-tab {
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   --tab-divider: 0 0 transparent;
   --tab-line: 0 0 transparent;
 }

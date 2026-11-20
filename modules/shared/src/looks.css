@@ -197,7 +197,7 @@
     box-shadow: var(--style-sink);
   }
   & [data-slot="checkbox"] {
-    border-radius: 2px;
+    border-radius: var(--radius-sm);
     box-shadow: var(--style-sink);
   }
   & [data-slot="switch"] {
@@ -253,7 +253,7 @@
       [data-slot="select-item"],
       [data-slot="combobox-item"]
     ) {
-    border-radius: 2px;
+    border-radius: var(--radius-sm);
     &:is([data-highlighted], [data-state="open"]) {
       background: var(--foreground);
       color: var(--background);
@@ -287,14 +287,14 @@
       [data-slot="select-item"],
       [data-slot="combobox-item"]
     ) {
-    border-radius: 0;
+    border-radius: var(--radius-sm);
     &:is([data-highlighted], [data-state="open"]) {
       background: color-mix(in srgb, var(--foreground) 6%, transparent);
       box-shadow: inset 2px 0 0 var(--primary);
     }
   }
   & [data-slot="nav-list"] [aria-current="page"] {
-    border-radius: 0;
+    border-radius: var(--radius-sm);
     box-shadow: inset 2px 0 0 var(--primary);
   }
 }
@@ -402,7 +402,7 @@
   & [data-slot="tabs-trigger"] {
     padding: 0 10px;
     border: 0;
-    border-radius: 0;
+    border-radius: var(--radius-sm);
     &[data-state="active"] {
       background: var(--foreground);
       color: var(--background);
@@ -443,7 +443,7 @@
     }
   }
   & [data-slot="checkbox"] {
-    border-radius: 0;
+    border-radius: var(--radius-sm);
   }
 }
 
@@ -491,7 +491,7 @@
   }
 }
 :root[data-look-tabs="block"] [data-slot="segmented-pill"] {
-  border-radius: 0;
+  border-radius: var(--radius-sm);
 }
 /* Underline: words with a line under the picked one, no box around them. */
 :root[data-look-tabs="underline"] {
@@ -697,7 +697,7 @@
 :root[data-look-inputs="underline"] {
   & [data-slot="switch"],
   & [data-slot="switch-thumb"] {
-    border-radius: 0;
+    border-radius: var(--radius-sm);
     box-shadow: none;
   }
 }
