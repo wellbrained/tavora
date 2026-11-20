@@ -19,6 +19,8 @@ import { maybe, setLanguage, t } from "./i18n";
 import type { TextKey } from "./locales";
 import { FIRST_PAGE, GROUPS, OLD_TABS, PAGES, isPageId, keys, matches, pageById, searchText, type PageId } from "./pages";
 import ExampleBox from "./shell/ExampleBox.vue";
+import { STYLES, THEMES, previewStyle } from "./shell/style-preview";
+import type { TavoraTheme } from "@tavora/sdk";
 
 interface PanelState {
   page: PageId;
@@ -55,6 +57,25 @@ const examples = computed(() =>
     return [{ name, example, title: text(keys.example(id, name)), note: maybe(keys.note(id, name)), rule: maybe(keys.rule(id, name)) }];
   }),
 );
+
+// Style and theme preview: "" follows Tavora. Not saved; the panel opens like Tavora again.
+const previewStyleId = ref("");
+const previewThemeId = ref("");
+const hostTheme = shallowRef<TavoraTheme | null>(null);
+const styleOptions = computed(() => [{ value: "", label: t("app.likeTavora") }, ...STYLES.map((style) => ({ value: style.id, label: style.name }))]);
+const themeOptions = computed(() => [
+  { value: "", label: t("app.likeTavora") },
+  ...THEMES.map((item) => ({ value: item.id, label: `${item.theme.name} · ${item.variation.name}`, group: item.theme.name })),
+]);
+watch([previewStyleId, previewThemeId, hostTheme], ([style, theme, host]) => previewStyle(style, theme, host));
+// Screenshots and tests can open a page in a style straight away: ?style=tavora.hardware&theme=tavora.hardware/light&page=buttons
+{
+  const params = new URLSearchParams(location.search);
+  previewStyleId.value = params.get("style") ?? "";
+  previewThemeId.value = params.get("theme") ?? "";
+  const wanted = params.get("page");
+  if (wanted && isPageId(wanted)) page.value = wanted;
+}
 
 // The page scrolls under the fixed header; a new page starts at its top and, after a pick with the pointer, fades in.
 const scroller = ref<HTMLElement | null>(null);
@@ -121,6 +142,9 @@ onMounted(async () => {
     showDisabled.value = state?.disabled === true;
     sdk.value = connected;
     cleanup.push(flushViewsOnLifecycle(connected.lifecycle));
+    // What Tavora sends, so a preview can go back to it (and "Like Tavora" keeps its colours).
+    hostTheme.value = await connected.ui.getTheme().catch(() => null);
+    cleanup.push(connected.ui.onThemeChange((theme) => (hostTheme.value = theme)));
     void connected.storage.app.delete(OLD_DEV_TOOLS_KEY).catch(() => undefined);
     if (saved && !pickedEarly) page.value = saved;
   } catch {
@@ -152,6 +176,11 @@ onBeforeUnmount(() => cleanup.forEach((fn) => fn()));
           <span class="text-muted-foreground/60 flex-none" aria-hidden="true">/</span>
           <h1 class="truncate font-semibold" data-testid="page-title">{{ text(keys.page(current.id)) }}</h1>
         </div>
+        <!-- Preview the kit in another style and theme; only this panel changes. -->
+        <template v-if="!narrow">
+          <Picker v-model="previewStyleId" :options="styleOptions" :label="t('app.style')" :title="t('app.previewHint')" class="w-36 flex-none" testid="preview-style" />
+          <Picker v-model="previewThemeId" :options="themeOptions" :label="t('app.theme')" :search="t('app.theme')" :title="t('app.previewHint')" class="w-44 flex-none" testid="preview-theme" />
+        </template>
         <!-- Always there, in the same place on every page, so turning it on or off moves nothing. The title is its tooltip. -->
         <SwitchField :model-value="showDisabled" :label="t('app.showDisabled')" :title="t('app.showDisabledHint')" class="flex-none items-center [&_label]:whitespace-nowrap" data-testid="disable-all" @update:model-value="setShowDisabled" />
       </header>

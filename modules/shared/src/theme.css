@@ -11,6 +11,8 @@
 @import "./motion.css";
 /* Balanced titles, the play triangle, the edge around pictures. */
 @import "./details.css";
+/* How each part looks in a style other than Classic (data-look-* on <html>, set from the host's theme). */
+@import "./looks.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -99,17 +101,18 @@
      live (under @theme inline a plain name would be written into every rule). Inter until it is set. */
   --font-sans: var(--tavora-font-sans, "Inter Variable", system-ui, sans-serif);
   --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
-  /* Type scale from the style guide; nothing is smaller than 12px. */
-  --text-xs: 12px;
-  --text-xs--line-height: 16px;
-  --text-sm: 13px;
-  --text-sm--line-height: 18px;
-  --text-base: 14px;
-  --text-base--line-height: 20px;
-  --text-lg: 16px;
-  --text-lg--line-height: 22px;
-  --text-xl: 20px;
-  --text-xl--line-height: 26px;
+  /* Type scale from the style guide; nothing is smaller than 12px. A style other than Classic sets --style-text-*
+     (looks.css); without one these are exactly the guide's sizes. */
+  --text-xs: var(--style-text-xs, 12px);
+  --text-xs--line-height: var(--style-text-xs-lh, 16px);
+  --text-sm: var(--style-text-sm, 13px);
+  --text-sm--line-height: var(--style-text-sm-lh, 18px);
+  --text-base: var(--style-text-base, 14px);
+  --text-base--line-height: var(--style-text-base-lh, 20px);
+  --text-lg: var(--style-text-lg, 16px);
+  --text-lg--line-height: var(--style-text-lg-lh, 22px);
+  --text-xl: var(--style-text-xl, 20px);
+  --text-xl--line-height: var(--style-text-xl-lh, 26px);
 }
 
 @layer base {
@@ -167,6 +170,12 @@
     animation-duration: 0ms !important;
     transition-duration: 0ms !important;
   }
+}
+
+/* Modules only (the host page doesn't load this file): with the inset-screen look a panel's content reads as a screen
+   set into the frame, so its edges sink in. The host sends the theme's dark colours for it. */
+:root[data-look-content="inset"] body {
+  box-shadow: inset 0 2px 10px color-mix(in srgb, black 55%, transparent);
 }
 
 /* Disabled buttons, inputs and text areas in the UI kit fade by --disabled-opacity instead of their own 50%, so "Save",

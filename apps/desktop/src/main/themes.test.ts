@@ -291,7 +291,7 @@ describe("the official themes", () => {
   it("are all valid, and the default's Dark is exactly the look in code and styles.css", async () => {
     const { themes, problems } = await discoverThemes({ official: [officialDir] });
     expect(problems).toEqual([]);
-    expect([...themes.keys()].sort()).toEqual(["tavora.amethyst", "tavora.ashen-keep", "tavora.default", "tavora.dusk-rose", "tavora.garnet", "tavora.graphite", "tavora.hearthwood", "tavora.nightfall", "tavora.tidewater"]);
+    expect([...themes.keys()].sort()).toEqual(["tavora.amethyst", "tavora.ashen-keep", "tavora.default", "tavora.dusk-rose", "tavora.garnet", "tavora.glass", "tavora.graphite", "tavora.hardware", "tavora.hearthwood", "tavora.nightfall", "tavora.tidewater"]);
     expect([...themes.values()].every((entry) => entry.provenance === "official")).toBe(true);
     // Every official theme comes in Dark and Light, nothing else.
     for (const { theme } of themes.values()) expect(theme.variations.map((item) => [item.id, item.mode])).toEqual([["dark", "dark"], ["light", "light"]]);
@@ -300,11 +300,11 @@ describe("the official themes", () => {
     expect(moduleTheme(dark)).toEqual(THEME);
   });
 
-  it("look as before: only Ashen Keep Dark has a button fill of its own", async () => {
+  it("look as before: only Ashen Keep Dark and Hardware have a button fill of their own", async () => {
     const { themes } = await discoverThemes({ official: [officialDir] });
     for (const { theme } of themes.values()) {
       for (const { id, colors } of theme.variations) {
-        const own = theme.id === "tavora.ashen-keep" && id === "dark";
+        const own = (theme.id === "tavora.ashen-keep" && id === "dark") || theme.id === "tavora.hardware";
         const same = colors["primary-fill"] === colors.primary && colors["primary-fill-hover"] === colors["primary-hover"] && colors["primary-fill-foreground"] === colors["primary-foreground"];
         expect([theme.id, id, same]).toEqual([theme.id, id, !own]);
       }

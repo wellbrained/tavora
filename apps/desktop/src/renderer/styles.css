@@ -8,6 +8,8 @@
 @import "../../../../modules/shared/src/motion.css";
 /* Balanced titles, the play triangle, the edge around pictures (shared with the modules). */
 @import "../../../../modules/shared/src/details.css";
+/* How each part looks in a style other than Classic (shared with the modules). */
+@import "../../../../modules/shared/src/looks.css";
 /* The shared controls (@tavora/official-ui) use Tailwind classes too. */
 @source "../../../../modules/shared/src/components";
 
@@ -108,19 +110,20 @@
      live (under @theme inline a plain name would be written into every rule). Inter until it is set. */
   --font-sans: var(--tavora-font-sans, "Inter Variable", system-ui, sans-serif);
   --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
-  /* Type scale from the style guide; nothing is smaller than 12px. */
-  --text-xs: 12px;
-  --text-xs--line-height: 16px;
-  --text-sm: 13px;
-  --text-sm--line-height: 18px;
-  --text-base: 14px;
-  --text-base--line-height: 20px;
-  --text-lg: 16px;
-  --text-lg--line-height: 22px;
-  --text-xl: 20px;
-  --text-xl--line-height: 26px;
-  --text-3xl: 28px;
-  --text-3xl--line-height: 34px;
+  /* Type scale from the style guide; nothing is smaller than 12px. A style other than Classic sets --style-text-*
+     (the kit's looks.css); without one these are exactly the guide's sizes. */
+  --text-xs: var(--style-text-xs, 12px);
+  --text-xs--line-height: var(--style-text-xs-lh, 16px);
+  --text-sm: var(--style-text-sm, 13px);
+  --text-sm--line-height: var(--style-text-sm-lh, 18px);
+  --text-base: var(--style-text-base, 14px);
+  --text-base--line-height: var(--style-text-base-lh, 20px);
+  --text-lg: var(--style-text-lg, 16px);
+  --text-lg--line-height: var(--style-text-lg-lh, 22px);
+  --text-xl: var(--style-text-xl, 20px);
+  --text-xl--line-height: var(--style-text-xl-lh, 26px);
+  --text-3xl: var(--style-text-3xl, 28px);
+  --text-3xl--line-height: var(--style-text-3xl-lh, 34px);
 }
 
 @layer base {
