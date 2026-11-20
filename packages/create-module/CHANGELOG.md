@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.40
+
+- New projects start on `@tavora/pack` 0.3.5: zip entries named like a Windows device (`NUL.txt`, `COM¹`, `CONIN$`) are refused.
+
 ## 0.1.39
 
 - New projects start on `@tavora/sdk` 0.4.2: a panel can tell when it is over the game (`panel.isOverGame`, `panel.onOverGameChange`).
