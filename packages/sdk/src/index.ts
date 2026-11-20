@@ -36,7 +36,9 @@ import {
   type ReadOnlyFileState,
   HELLO_MESSAGE,
   LIMITS,
+  MAX_OVERLAY_CSS,
   OVERLAY_COLOR_SCHEME_MESSAGE,
+  OVERLAY_CSS_MESSAGE,
   OVERLAY_FRAME_PARAM,
   OVERLAY_FONT_PATH,
   OVERLAY_STATE_PATH,
@@ -836,10 +838,10 @@ export function inTavoraFrame(): boolean {
  * variable a fallback, such as `var(--tavora-font-sans, "Inter Variable", sans-serif)`.
  *
  * In OBS the page sits in a frame of Tavora's own page; watchOverlay tells that frame the page's `color-scheme`, so a
- * page with a dark one stays see-through there.
+ * page with a dark one stays see-through there, and puts the Browser Source's Custom CSS from OBS into the page.
  */
 export function watchOverlay(fn: (state: JsonValue | null) => void): Unsubscribe {
-  tellFrameColorScheme();
+  const unlinkFrame = linkToFrame();
   const source = new EventSource(new URL(OVERLAY_STATE_PATH, window.location.href));
   source.onmessage = (event: MessageEvent<string>) => {
     let message: { state?: JsonValue | null; font?: unknown };
@@ -859,24 +861,56 @@ export function watchOverlay(fn: (state: JsonValue | null) => void): Unsubscribe
       console.error("[tavora] watchOverlay listener failed", error);
     }
   };
-  return () => source.close();
+  return () => {
+    source.close();
+    unlinkFrame();
+  };
 }
 
 /**
- * In OBS the page runs in a frame of Tavora's own page: tells it the page's colour scheme, now and once the page has
- * loaded, so the frame stays see-through (OVERLAY_COLOR_SCHEME_MESSAGE). Nothing happens in a window of its own.
+ * In OBS the page runs in a frame of Tavora's own page. This tells that frame the page's colour scheme, at once, once the
+ * page has loaded and whenever it changes, so the frame stays see-through (OVERLAY_COLOR_SCHEME_MESSAGE), and puts the
+ * Custom CSS the frame passes on from OBS into the page (OVERLAY_CSS_MESSAGE). Nothing happens in a window of its own.
+ * Returns a function that stops it.
  */
-function tellFrameColorScheme(): void {
-  if (typeof window === "undefined" || typeof document === "undefined" || window.parent === window) return;
-  const send = () => {
+function linkToFrame(): () => void {
+  if (typeof window === "undefined" || typeof document === "undefined" || window.parent === window) return () => {};
+  let told: string | null = null;
+  const tell = () => {
     try {
-      window.parent.postMessage({ type: OVERLAY_COLOR_SCHEME_MESSAGE, colorScheme: getComputedStyle(document.documentElement).colorScheme }, "*");
+      const colorScheme = getComputedStyle(document.documentElement).colorScheme;
+      if (colorScheme === told) return;
+      told = colorScheme;
+      window.parent.postMessage({ type: OVERLAY_COLOR_SCHEME_MESSAGE, colorScheme }, "*");
     } catch {
       // The frame keeps its scheme; the state still comes.
     }
   };
-  send();
-  if (document.readyState !== "complete") window.addEventListener("load", send, { once: true });
+  const onMessage = (event: MessageEvent) => {
+    const data = event.data as { type?: unknown; css?: unknown } | null;
+    if (event.source !== window.parent || data?.type !== OVERLAY_CSS_MESSAGE || typeof data.css !== "string") return;
+    let style = document.head.querySelector<HTMLStyleElement>("style[data-tavora-obs-css]");
+    if (!style) {
+      style = document.createElement("style");
+      style.dataset.tavoraObsCss = "";
+      document.head.append(style);
+    }
+    style.textContent = data.css.slice(0, MAX_OVERLAY_CSS);
+  };
+  window.addEventListener("message", onMessage);
+  tell();
+  // The scheme can change with the page's own styles and classes, or with the system's light or dark mode.
+  if (document.readyState !== "complete") window.addEventListener("load", tell, { once: true });
+  const observer = typeof MutationObserver === "undefined" ? null : new MutationObserver(tell);
+  observer?.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "style"] });
+  const dark = typeof matchMedia === "undefined" ? null : matchMedia("(prefers-color-scheme: dark)");
+  dark?.addEventListener("change", tell);
+  return () => {
+    window.removeEventListener("message", onMessage);
+    window.removeEventListener("load", tell);
+    observer?.disconnect();
+    dark?.removeEventListener("change", tell);
+  };
 }
 
 /** Puts `_font.css` for the font `id` in the page (watchOverlay), unless the page has it. */

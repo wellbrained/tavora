@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { watchOverlay } from "./index.js";
-import { OVERLAY_COLOR_SCHEME_MESSAGE } from "./protocol.js";
+import { MAX_OVERLAY_CSS, OVERLAY_COLOR_SCHEME_MESSAGE, OVERLAY_CSS_MESSAGE } from "./protocol.js";
 
 class FakeEventSource {
   static last: FakeEventSource | undefined;
@@ -64,17 +64,46 @@ describe("watchOverlay", () => {
     expect(links()).toHaveLength(0);
   });
 
-  it("tells the frame it runs in (OBS) the page's colour scheme, and nothing in a window of its own", () => {
+  it("tells the frame it runs in (OBS) the page's colour scheme, again when it changes, and nothing in a window of its own", async () => {
     const posted = vi.spyOn(window, "postMessage");
-    watchOverlay(() => undefined);
+    watchOverlay(() => undefined)();
     // jsdom's page is its own parent: no frame around it.
     expect(posted).not.toHaveBeenCalled();
 
     const parent = { postMessage: vi.fn() };
     vi.spyOn(window, "parent", "get").mockReturnValue(parent as unknown as Window);
-    vi.spyOn(window, "getComputedStyle").mockReturnValue({ colorScheme: "dark" } as CSSStyleDeclaration);
-    watchOverlay(() => undefined);
+    let scheme = "dark";
+    vi.spyOn(window, "getComputedStyle").mockImplementation(() => ({ colorScheme: scheme }) as CSSStyleDeclaration);
+    const stop = watchOverlay(() => undefined);
     expect(parent.postMessage).toHaveBeenCalledWith({ type: OVERLAY_COLOR_SCHEME_MESSAGE, colorScheme: "dark" }, "*");
+    // Its own class changes the scheme: the frame hears it once.
+    scheme = "light";
+    document.documentElement.className = "light";
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    document.documentElement.className = "light other";
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(parent.postMessage.mock.calls.map(([message]) => (message as { colorScheme: string }).colorScheme)).toEqual(["dark", "light"]);
+    stop();
+    document.documentElement.className = "";
+    vi.restoreAllMocks();
+  });
+
+  it("puts the Custom CSS the frame passes on from OBS into the page, and only from the frame", () => {
+    const parent = { postMessage: vi.fn() };
+    vi.spyOn(window, "parent", "get").mockReturnValue(parent as unknown as Window);
+    const stop = watchOverlay(() => undefined);
+    const obs = () => document.head.querySelectorAll("style[data-tavora-obs-css]");
+    window.dispatchEvent(new MessageEvent("message", { source: window, data: { type: OVERLAY_CSS_MESSAGE, css: "body { color: red }" } }));
+    expect(obs()).toHaveLength(0);
+    window.dispatchEvent(new MessageEvent("message", { source: parent as unknown as Window, data: { type: OVERLAY_CSS_MESSAGE, css: "body { color: red }" } }));
+    window.dispatchEvent(new MessageEvent("message", { source: parent as unknown as Window, data: { type: OVERLAY_CSS_MESSAGE, css: "body { margin: 0 }" } }));
+    expect(Array.from(obs()).map((style) => style.textContent)).toEqual(["body { margin: 0 }"]);
+    window.dispatchEvent(new MessageEvent("message", { source: parent as unknown as Window, data: { type: OVERLAY_CSS_MESSAGE, css: "x".repeat(MAX_OVERLAY_CSS + 10) } }));
+    expect(obs()[0]!.textContent).toHaveLength(MAX_OVERLAY_CSS);
+    stop();
+    // Stopped: nothing more comes in.
+    window.dispatchEvent(new MessageEvent("message", { source: parent as unknown as Window, data: { type: OVERLAY_CSS_MESSAGE, css: "a {}" } }));
+    expect(obs()[0]!.textContent).toHaveLength(MAX_OVERLAY_CSS);
     vi.restoreAllMocks();
   });
 });

@@ -1723,6 +1723,7 @@ export const en = {
   "browser.downloadRefused": "Tavora doesn't download files. Use Open in your browser to download it there.",
   "browser.tryAgain": "Try again",
   "browser.openSite": "Open",
+  "browser.stay": "Stay on this page",
   "browser.startTitle": "Search or type an address above",
   "browser.startText": "Sign-ins stay with this workspace unless you share a site for all workspaces. Ads are blocked and files are never downloaded.",
   "settings.section.integrations": "Integrations",

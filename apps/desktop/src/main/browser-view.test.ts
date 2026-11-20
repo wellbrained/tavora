@@ -12,7 +12,21 @@ vi.mock("electron", () => {
     static next = 1;
     id = Contents.next++;
     handlers = new Map<string, ((...args: never[]) => void)[]>();
-    navigationHistory = { canGoBack: () => false, canGoForward: () => false };
+    /** Back goes to `back`, when a test sets it. */
+    back: string | null = null;
+    reloads = 0;
+    navigationHistory = {
+      canGoBack: () => this.back !== null,
+      canGoForward: () => false,
+      getActiveIndex: () => 1,
+      getEntryAtIndex: (index: number) => (index === 0 && this.back ? { url: this.back, title: "" } : null),
+      goBack: () => undefined,
+      goForward: () => undefined,
+    };
+    getURL = () => "";
+    reload() {
+      this.reloads++;
+    }
     on(name: string, fn: (...args: never[]) => void) {
       this.handlers.set(name, [...(this.handlers.get(name) ?? []), fn]);
       return this;
@@ -81,7 +95,8 @@ function panel() {
     onChange: () => undefined,
   });
   const contents = browser.view.webContents as unknown as Emitting;
-  const start = (url: string) => contents.emit("did-start-navigation", { url, isMainFrame: true, isSameDocument: false });
+  const start = (url: string, more: { isSameDocument?: boolean; initiator?: unknown } = {}) =>
+    contents.emit("did-start-navigation", { url, isMainFrame: true, isSameDocument: false, ...more });
   const redirect = (url: string) => contents.emit("will-redirect", { url, isMainFrame: true, preventDefault: () => undefined });
   const commit = (url: string) => contents.emit("did-navigate", {}, url);
   const stop = () => contents.emit("did-stop-loading");
@@ -209,7 +224,7 @@ describe("a Browser panel's page going to a site of the other session", () => {
     expect(browser.state.error).toEqual({ kind: "otherSession", detail: "" });
     expect(browser.state.url).toBe(SHARED);
 
-    browser.reload();
+    browser.openAsked();
     expect(sessions).toEqual(["workspace", "shared"]);
     // The user's press, so no referrer, like a typed address.
     expect(world.loads).toEqual([{ contents: browser.view.webContents.id, url: SHARED, options: undefined }]);
@@ -239,6 +254,78 @@ describe("a Browser panel's page going to a site of the other session", () => {
     contents.emit("will-navigate", { url: PUBLIC, isMainFrame: true, preventDefault: () => undefined });
     expect(world.loads).toEqual([]);
     expect(browser.state.error).toEqual({ kind: "otherSession", detail: "" });
+  });
+
+  it("stays on the page when the user says so, and Reload then reloads that page, never the address asked about", () => {
+    const { browser, contents, commit, willNavigate, sessions } = navigating();
+    commit(PUBLIC);
+    willNavigate(SHARED);
+    browser.stay();
+    expect(browser.state.error).toBeNull();
+    expect(browser.state.url).toBe(PUBLIC);
+    expect(browser.capturable).toBe(true);
+
+    willNavigate(SHARED);
+    browser.reload();
+    expect(browser.state.error).toBeNull();
+    expect((contents as unknown as { reloads: number }).reloads).toBe(1);
+    expect(world.loads).toEqual([]);
+    expect(sessions).toEqual(["workspace"]);
+  });
+
+  it("asks one thing at a time: Open opens the address shown, not one the page asked for after it", () => {
+    const { browser, commit, willNavigate } = navigating();
+    commit(PUBLIC);
+    willNavigate(SHARED);
+    willNavigate("https://shared.example/elsewhere");
+    expect(browser.state.url).toBe(SHARED);
+    browser.openAsked();
+    expect(world.loads.map((load) => load.url)).toEqual([SHARED]);
+  });
+
+  it("counts a key press as Windows reports it (rawKeyDown)", () => {
+    const { browser, contents, commit, willNavigate, sessions } = navigating();
+    commit(PUBLIC);
+    contents.emit("input-event", {}, { type: "rawKeyDown" });
+    willNavigate(SHARED);
+    expect(sessions).toEqual(["workspace", "shared"]);
+    expect(browser.state.error).toBeNull();
+  });
+
+  it("uses up a click with the page's navigation it came before, so one click lets one address be loaded by Tavora", () => {
+    const { browser, commit, click, start, willNavigate } = navigating();
+    commit(PUBLIC);
+    click();
+    // The click takes the page somewhere in its own session.
+    start("https://other.example/");
+    commit("https://other.example/");
+    // A script then sends it to the other session: no click left for that.
+    willNavigate(SHARED);
+    expect(world.loads).toEqual([]);
+    expect(browser.state.error).toEqual({ kind: "otherSession", detail: "" });
+  });
+
+  it("takes only Tavora's own navigation for the user's, even when it stayed within the page", () => {
+    // Back to a pushState entry: Tavora's navigation never leaves the page.
+    const back = navigating();
+    back.commit(PUBLIC);
+    (back.contents as unknown as { back: string }).back = "https://example.com/list";
+    back.browser.back();
+    back.start("https://example.com/list", { isSameDocument: true });
+    // Later the page goes to that same address by itself, and is redirected to the other session.
+    back.start("https://example.com/list");
+    back.redirect(SHARED);
+    expect(world.loads).toEqual([]);
+    expect(back.browser.state.error).toEqual({ kind: "otherSession", detail: "" });
+
+    // Started by a frame of the page, even to the address Tavora loads: the page's.
+    const framed = navigating();
+    framed.browser.navigate("https://short.example/x");
+    framed.start("https://short.example/x", { initiator: {} });
+    world.loads.length = 0;
+    framed.redirect(SHARED);
+    expect(world.loads).toEqual([]);
+    expect(framed.browser.state.error).toEqual({ kind: "otherSession", detail: "" });
   });
 
   it("lets a page go anywhere in its own session as before", () => {

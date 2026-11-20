@@ -248,7 +248,8 @@ export class BrowserPanel {
     // A page may open a link in a "new window" only right after the user
     // clicked or typed; it then opens as a new Browser tab instead.
     contents.on("input-event", (_event, input) => {
-      if (input.type === "mouseDown" || input.type === "keyDown" || input.type === "gestureTap") this.lastGesture = Date.now();
+      // Windows reports a key press as rawKeyDown.
+      if (input.type === "mouseDown" || input.type === "rawKeyDown" || input.type === "keyDown" || input.type === "gestureTap") this.lastGesture = Date.now();
     });
     // A link the user opened in a new tab or window (target=_blank,
     // Ctrl+click, middle click) becomes a new Browser tab beside this one.
@@ -279,15 +280,18 @@ export class BrowserPanel {
       if (!url || !["http:", "https:", "about:", "data:", "blob:"].includes(url.protocol)) event.preventDefault();
     });
     contents.on("did-start-navigation", (event) => {
-      if (!current() || !event.isMainFrame || event.isSameDocument) return;
-      this.hopUrl = event.url;
-      // Tavora's own load, or else the page's (a link, a script, its history), with or without a click just before.
+      if (!current() || !event.isMainFrame) return;
+      // Tavora's own navigation is the next one of the main frame Chromium reports (also one within the page, such as
+      // Back to a pushState entry), started by no frame, to the address Tavora asked for. Anything else is the page's
+      // (a link, a script, its history), and a click just before it is used up by it.
       const own = this.ownNavigation;
       this.ownNavigation = null;
+      if (event.isSameDocument) return;
+      this.hopUrl = event.url;
       this.navigationStart =
-        own && sameAddress(own.url, event.url)
+        own && !event.initiator && sameAddress(own.url, event.url)
           ? { by: "user", referrer: own.referrer }
-          : { by: "page", gesture: Date.now() - this.lastGesture < GESTURE_MS, referrer: pageReferrer(this.committedUrl) };
+          : { by: "page", gesture: this.takeGesture(), referrer: pageReferrer(this.committedUrl) };
       // Counted from here: the new page's first requests can be blocked before did-navigate arrives.
       this.blocked = 0;
     });
@@ -398,8 +402,31 @@ export class BrowserPanel {
   /** A navigation that must move to the other session: carried there, or shown so the user can open it (crossSessionStep). */
   private crossSession(url: string, kind: BrowserKind, start: NavigationStart): void {
     const step = crossSessionStep(start);
-    if (step.action === "ask") this.failed(url, { kind: "otherSession", detail: "" });
-    else this.open(url, kind, step.referrer);
+    if (step.action === "reissue") return this.open(url, kind, step.referrer);
+    // One question at a time: what Open opens is the address the panel shows.
+    if (this.asking) return;
+    this.failed(url, { kind: "otherSession", detail: "" });
+  }
+
+  /** Whether the panel asks the user about a page's move to the other session (crossSessionStep). */
+  private get asking(): boolean {
+    return this.error?.kind === "otherSession";
+  }
+
+  /** Open, while the panel asks: the address shown, in the session it belongs in, as the user's own navigation. */
+  openAsked(): void {
+    const url = this.requestedUrl;
+    if (!this.asking || !url) return;
+    this.open(url, this.kindFor(url));
+  }
+
+  /** Stay on this page, while the panel asks: the page shows again, where it was. */
+  stay(): void {
+    if (!this.asking) return;
+    this.error = null;
+    this.requestedUrl = null;
+    this.applyVisibility();
+    this.changed();
   }
 
   /** Whether the page may take the panel to an address: web only, and not from a public page to a local one. */
@@ -566,10 +593,12 @@ export class BrowserPanel {
   resume(): void {}
 
   reload(): void {
+    // Reload while the panel asks reloads the page shown before, never the address it asks about.
+    if (this.asking) this.stay();
     if (this.status === "crashed" || this.error) {
       const url = this.requestedUrl ?? this.committedUrl;
       this.setStatus("ready");
-      // In the session the site belongs in: also an address a page wanted to take the panel to (crossSessionStep).
+      // In the session the site belongs in.
       if (url) this.open(url, this.kindFor(url));
       return;
     }

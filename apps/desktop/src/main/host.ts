@@ -3829,6 +3829,10 @@ export class Host {
         return panel.setMuted(command === "mute");
       case "exit-fullscreen":
         return panel.exitFullscreen();
+      case "open-asked":
+        return panel.openAsked();
+      case "stay":
+        return panel.stay();
       case "open-external": {
         // Only the page's own http or https address, and only on the user's click.
         const url = panel.externalUrl;

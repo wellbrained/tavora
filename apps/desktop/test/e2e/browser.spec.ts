@@ -330,7 +330,12 @@ test("sign-ins are per workspace unless the site is shared, and the panel reopen
   const asked = page.locator('[data-testid^="browser-error-"]');
   await expect(asked).toContainText("This page wants to open another site.");
   expect(hits).not.toContain("public.test/landing");
-  await asked.getByRole("button", { name: "Open" }).click();
+  // Stay on this page: the page shows again; asked again, Open goes there.
+  await asked.getByRole("button", { name: "Stay on this page" }).click();
+  await expect(asked).toBeHidden();
+  await inPage(app, `http://other.test:${port}/page`, `location.href = ${JSON.stringify(publicUrl("/landing?via=script"))}; null`);
+  await expect(asked).toContainText("This page wants to open another site.");
+  await asked.getByRole("button", { name: "Open", exact: true }).click();
   await waitForPage(app, publicUrl("/landing?via=script"));
   expect(await inShared(publicUrl("/landing?via=script"))).toBe(true);
   expect(referers.get("public.test/landing?via=script")).toBeUndefined();

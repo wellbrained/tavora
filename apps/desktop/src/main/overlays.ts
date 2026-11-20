@@ -14,7 +14,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import path from "node:path";
-import { LIMITS, OVERLAY_COLOR_SCHEME_MESSAGE, OVERLAY_FONT_PATH, OVERLAY_STATE_PATH, type JsonValue } from "@tavora/sdk/protocol";
+import { LIMITS, OVERLAY_COLOR_SCHEME_MESSAGE, OVERLAY_CSS_MESSAGE, OVERLAY_FONT_PATH, OVERLAY_STATE_PATH, type JsonValue } from "@tavora/sdk/protocol";
 import { overlayFontCss, overlayMessage, watchOverlayFont } from "./overlay-font";
 import { contentTypeFor, resolveAsset } from "./assets";
 import { HostError } from "./errors";
@@ -228,7 +228,10 @@ export interface OverlayServerOptions {
   page(link: OverlayLink): OverlayPage | null;
 }
 
-/** Strict: the page loads only its own files and talks only to the server it came from. */
+/**
+ * Strict: the page loads only its own files and talks only to the server it came from. No workers: a service worker
+ * could answer the page's own address later with a document of its own.
+ */
 const PAGE_POLICY = [
   "default-src 'none'",
   "script-src 'self'",
@@ -236,12 +239,20 @@ const PAGE_POLICY = [
   "img-src 'self' data:",
   "font-src 'self' data:",
   "connect-src 'self'",
+  "worker-src 'none'",
   "base-uri 'none'",
   "form-action 'none'",
 ];
 
 /** The policy of an overlay page in Tavora's own windows (game-overlay-page.ts), which nothing may frame. */
 export const OVERLAY_CSP = [...PAGE_POLICY, "frame-ancestors 'none'"].join("; ");
+
+/**
+ * The policy the frame page requires of every document in its frame (the iframe's `csp`, CSP Embedded Enforcement):
+ * Chromium shows a document there only if its own policy is at least this strict, so nothing the page could get
+ * served another way (a cached or synthesized response) runs without it.
+ */
+export const OVERLAY_REQUIRED_CSP = PAGE_POLICY.join("; ");
 
 /** The policy of a module's overlay page in OBS: the same, shown only inside the link's frame page. */
 export function streamOverlayCsp(port: number): string {
@@ -269,11 +280,21 @@ export function overlayPageOrigin(port: number, token: string): string {
 
 const FRAME_STYLE = "html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}iframe{display:block;width:100%;height:100%;border:0}";
 /**
- * The frame takes the colour scheme the page reports (OVERLAY_COLOR_SCHEME_MESSAGE, sent by watchOverlay): Chromium
- * paints an opaque backdrop behind a frame whose scheme differs from its page's, and an overlay must stay see-through.
- * It reads nothing else from the page and gives it nothing.
+ * The frame page's one script. It gives the frame its address, with the link's `#…` (which never reaches the
+ * server). It takes on the colour scheme the page reports (OVERLAY_COLOR_SCHEME_MESSAGE, sent by watchOverlay):
+ * Chromium paints an opaque backdrop behind a frame whose scheme differs from its page's, and an overlay must stay
+ * see-through. And it passes on the Custom CSS OBS puts into the frame page (a `<style>` OBS adds once the page has
+ * loaded) to the page, only to the page's origin (OVERLAY_CSS_MESSAGE), as OBS used to give it to the page itself.
+ * It reads nothing else from the page and gives it nothing else.
  */
-const FRAME_SCRIPT = `addEventListener("message",function(e){var f=document.getElementById("page"),d=e.data;if(f&&e.source===f.contentWindow&&d&&d.type===${JSON.stringify(OVERLAY_COLOR_SCHEME_MESSAGE)}&&typeof d.colorScheme==="string"&&/^[a-z ]{1,32}$/.test(d.colorScheme))f.style.colorScheme=d.colorScheme});`;
+const FRAME_SCRIPT =
+  `(function(){var f=document.getElementById("page"),src=f.getAttribute("data-src"),origin=new URL(src).origin,sent=null;` +
+  `function css(){var t=[];document.querySelectorAll("style:not(#frame)").forEach(function(s){t.push(s.textContent||"")});return t.join("\\n")}` +
+  `function send(){var c=css();if(c===sent||!f.contentWindow)return;sent=c;f.contentWindow.postMessage({type:${JSON.stringify(OVERLAY_CSS_MESSAGE)},css:c},origin)}` +
+  `addEventListener("message",function(e){var d=e.data;if(e.source!==f.contentWindow||!d||d.type!==${JSON.stringify(OVERLAY_COLOR_SCHEME_MESSAGE)})return;` +
+  `if(typeof d.colorScheme==="string"&&/^[a-z ]{1,32}$/.test(d.colorScheme))f.style.colorScheme=d.colorScheme;sent=null;send()});` +
+  `new MutationObserver(send).observe(document.documentElement,{childList:true,subtree:true,characterData:true});` +
+  `f.src=src+location.hash})();`;
 const hashOf = (text: string) => `'sha256-${createHash("sha256").update(text).digest("base64")}'`;
 /**
  * What the iframe allows the page: its scripts, and its own origin, so its files, `_state` and `_font.css` load as they
@@ -288,17 +309,19 @@ const escapeAttribute = (text: string) => text.replace(/&/g, "&amp;").replace(/"
 /**
  * The frame page OBS loads for a link: no content of its own, only the module's page, filling it. `search` (the link's
  * query, usually none) goes on to the page. Its policy lets it run its one script and show only the page's origin,
- * so the page can't take the frame to any other address either.
+ * so the page can't take the frame to any other address either. Inline styles are allowed only so OBS's Custom CSS
+ * gets in (and on to the page); the frame page has nothing a style could reveal.
  */
 export function overlayFrame(port: number, token: string, search = ""): { html: string; csp: string } {
   const src = `${overlayPageOrigin(port, token)}/${search}`;
   const html =
-    `<!doctype html><html><head><meta charset="utf-8"><title>Tavora overlay</title><style>${FRAME_STYLE}</style><script>${FRAME_SCRIPT}</script></head>` +
-    `<body><iframe id="page" src="${escapeAttribute(src)}" sandbox="${OVERLAY_SANDBOX}" allow="autoplay" scrolling="no"></iframe></body></html>`;
+    `<!doctype html><html><head><meta charset="utf-8"><title>Tavora overlay</title><style id="frame">${FRAME_STYLE}</style></head>` +
+    `<body><iframe id="page" data-src="${escapeAttribute(src)}" sandbox="${OVERLAY_SANDBOX}" csp="${escapeAttribute(OVERLAY_REQUIRED_CSP)}" allow="autoplay" scrolling="no"></iframe>` +
+    `<script>${FRAME_SCRIPT}</script></body></html>`;
   const csp = [
     "default-src 'none'",
     `script-src ${hashOf(FRAME_SCRIPT)}`,
-    `style-src ${hashOf(FRAME_STYLE)}`,
+    "style-src 'unsafe-inline'",
     `frame-src ${overlayPageOrigin(port, token)}`,
     "base-uri 'none'",
     "form-action 'none'",
@@ -396,6 +419,9 @@ export class OverlayServer {
       if (request.method !== "GET" && request.method !== "HEAD") return this.plain(response, 405, "Method not allowed");
       const url = new URL(request.url ?? "/", `http://127.0.0.1:${port}`);
       if (pageHost) return await this.page(request, response, port, pageHost[1]!, url.pathname);
+      // Nothing of a module runs on this origin any more. A service worker a page registered here under an older Tavora
+      // could still answer the link itself; whatever reaches Tavora (its update check, a legacy stream) clears it.
+      response.setHeader("Clear-Site-Data", '"storage"');
       const match = /^\/overlay\/([0-9a-f]{32})(\/.*)?$/.exec(url.pathname);
       const found = match ? this.options.store.find(match[1]!) : null;
       if (!match || !found || !this.options.page(found.link)) return this.plain(response, 404, "Not found");
@@ -423,8 +449,11 @@ export class OverlayServer {
   private async page(request: IncomingMessage, response: ServerResponse, port: number, token: string, pathname: string): Promise<void> {
     const found = this.options.store.find(token);
     const page = found ? this.options.page(found.link) : null;
-    // Never as a page of its own, only inside the link's frame page: the sandbox there is what keeps it in.
-    if (!found || !page || request.headers["sec-fetch-dest"] === "document") return this.plain(response, 404, "Not found");
+    // Never as a page of its own, only inside the link's frame page (the sandbox there is what keeps it in), and never as
+    // a worker's script: a service worker could answer the page's address with a document of its own later.
+    const dest = request.headers["sec-fetch-dest"];
+    const refused = dest === "document" || dest === "serviceworker" || dest === "sharedworker" || dest === "worker" || request.headers["service-worker"] !== undefined;
+    if (!found || !page || refused) return this.plain(response, 404, "Not found");
     if (pathname === `/${OVERLAY_STATE_PATH}`) return this.stream(request, response, found.link, found.state);
     if (pathname === `/${OVERLAY_FONT_PATH}`) return this.send(request, response, "text/css; charset=utf-8", Buffer.from(overlayFontCss()));
     const file = await resolveOverlayFile(page, pathname);

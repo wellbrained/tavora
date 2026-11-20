@@ -586,7 +586,8 @@ export interface AiUsageView {
 }
 
 /** Toolbar buttons of a Browser panel. */
-export type BrowserCommand = "back" | "forward" | "reload" | "stop" | "open-external" | "mute" | "unmute" | "exit-fullscreen";
+/** `open-asked` and `stay` answer the panel's question about a page's move to the other session (error `otherSession`). */
+export type BrowserCommand = "back" | "forward" | "reload" | "stop" | "open-external" | "mute" | "unmute" | "exit-fullscreen" | "open-asked" | "stay";
 
 /**
  * A docking layout: a tree of splits whose leaves are tab groups of panels.

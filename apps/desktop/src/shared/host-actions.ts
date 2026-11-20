@@ -128,7 +128,7 @@ const conversationReport: Field<{ reason: (typeof CONVERSATION_REPORT_REASONS)[n
 /** Most icons offered in one action; the dialog sends more in turns. */
 export const MAX_SHARE_BATCH = 50;
 
-const BROWSER_COMMANDS = ["back", "forward", "reload", "stop", "open-external", "mute", "unmute", "exit-fullscreen"] as const satisfies readonly BrowserCommand[];
+const BROWSER_COMMANDS = ["back", "forward", "reload", "stop", "open-external", "mute", "unmute", "exit-fullscreen", "open-asked", "stay"] as const satisfies readonly BrowserCommand[];
 const DEVELOPER_LINKS = ["docs", "discussions", "issue"] as const satisfies readonly DeveloperLink[];
 const LEGAL_PAGES = ["privacy", "terms", "imprint"] as const satisfies readonly LegalPage[];
 const AI_PROVIDERS = ["claude", "codex"] as const satisfies readonly AiProvider[];

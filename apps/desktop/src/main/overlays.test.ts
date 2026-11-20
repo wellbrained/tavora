@@ -6,7 +6,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { LIMITS } from "@tavora/sdk/protocol";
 import { setOverlayFont } from "./overlay-font";
-import { OVERLAY_CSP, OVERLAY_SANDBOX, OverlayServer, OverlayStore, overlayPageOrigin, overlayUrl, OVERLAYS_FILE, streamOverlayCsp, type OverlayLink, type OverlaySubject } from "./overlays";
+import { OVERLAY_CSP, OVERLAY_REQUIRED_CSP, OVERLAY_SANDBOX, OverlayServer, OverlayStore, overlayPageOrigin, overlayUrl, OVERLAYS_FILE, streamOverlayCsp, type OverlayLink, type OverlaySubject } from "./overlays";
 
 let dir: string;
 let root: string;
@@ -179,19 +179,23 @@ describe("OverlayServer", () => {
     // Nothing of the module in it: just the frame.
     expect(frame.body).not.toContain("overlay.js");
     const iframe = /<iframe [^>]*>/.exec(frame.body)![0];
-    expect(iframe).toContain(`src="${overlayPageOrigin(port, token)}/"`);
+    // The frame page's script gives it the address (with the link's #…, which never reaches Tavora).
+    expect(iframe).toContain(`data-src="${overlayPageOrigin(port, token)}/"`);
     expect(iframe).toContain(`sandbox="${OVERLAY_SANDBOX}"`);
+    // Every document in it must carry the page policy (CSP Embedded Enforcement).
+    expect(iframe).toContain(`csp="${OVERLAY_REQUIRED_CSP}"`);
     expect(OVERLAY_SANDBOX.split(" ").sort()).toEqual(["allow-same-origin", "allow-scripts"]);
     expect(overlayPageOrigin(port, token)).toBe(`http://${token}.localhost:${port}`);
 
-    // Its policy: nothing but its own script and style, and a frame that shows only the page's origin.
+    // Its policy: nothing but its own script, inline styles (for OBS's Custom CSS), and a frame that shows only the page's origin.
     const csp = String(frame.headers["content-security-policy"]).split("; ");
     const script = /<script>(.*?)<\/script>/.exec(frame.body)![1]!;
-    const style = /<style>(.*?)<\/style>/.exec(frame.body)![1]!;
+    const style = /<style id="frame">(.*?)<\/style>/.exec(frame.body)![1]!;
+    expect(frame.body.match(/<script/g)).toHaveLength(1);
     expect(csp).toEqual([
       "default-src 'none'",
       `script-src ${sha256(script)}`,
-      `style-src ${sha256(style)}`,
+      "style-src 'unsafe-inline'",
       `frame-src ${overlayPageOrigin(port, token)}`,
       "base-uri 'none'",
       "form-action 'none'",
@@ -201,12 +205,14 @@ describe("OverlayServer", () => {
     expect(style).toContain("background:transparent");
     expect(style).toContain("overflow:hidden");
     expect(iframe).toContain('scrolling="no"');
+    // A service worker an older Tavora's page left on this origin is cleared by whatever reaches Tavora.
+    expect(frame.headers["clear-site-data"]).toBe('"storage"');
   });
 
   it("hands the link's query on to the page, as text", async () => {
     const { token } = store.link(subject());
     const frame = await get(port, `/overlay/${token}/?a=1&b="x"`);
-    expect(frame.body).toContain(`src="${overlayPageOrigin(port, token)}/?a=1&amp;b=%22x%22"`);
+    expect(frame.body).toContain(`data-src="${overlayPageOrigin(port, token)}/?a=1&amp;b=%22x%22"`);
   });
 
   it("serves the module's page and the files next to it on the link's own origin, locked down", async () => {
@@ -216,6 +222,12 @@ describe("OverlayServer", () => {
     expect(page.body).toContain("overlay.js");
     expect(page.headers["content-security-policy"]).toBe(streamOverlayCsp(port));
     expect(streamOverlayCsp(port)).toBe(OVERLAY_CSP.replace("frame-ancestors 'none'", `frame-ancestors http://127.0.0.1:${port} http://localhost:${port}`));
+    // At least as strict as the frame requires (the same directives), so Chromium shows it there; no workers.
+    expect(streamOverlayCsp(port).startsWith(`${OVERLAY_REQUIRED_CSP}; `)).toBe(true);
+    expect(OVERLAY_REQUIRED_CSP.split("; ")).toContain("worker-src 'none'");
+    expect(OVERLAY_CSP.split("; ")).toContain("worker-src 'none'");
+    // Nothing of a module's origin clears the frame page's storage.
+    expect(page.headers["clear-site-data"]).toBeUndefined();
     expect(page.headers["x-content-type-options"]).toBe("nosniff");
     const script = await get(port, "/assets/overlay.js", pageHost(token));
     expect(script.status).toBe(200);
@@ -230,6 +242,15 @@ describe("OverlayServer", () => {
     expect((await get(port, "/", pageHost(token), "GET", { "Sec-Fetch-Dest": "document" })).status).toBe(404);
     expect((await get(port, "/assets/overlay.js", pageHost(token), "GET", { "Sec-Fetch-Dest": "document" })).status).toBe(404);
     expect((await get(port, "/", pageHost(token), "GET", { "Sec-Fetch-Dest": "iframe" })).status).toBe(200);
+  });
+
+  it("serves no worker script, so no service worker can answer the page's address later", async () => {
+    const { token } = store.link(subject());
+    for (const dest of ["serviceworker", "sharedworker", "worker"]) {
+      expect((await get(port, "/assets/overlay.js", pageHost(token), "GET", { "Sec-Fetch-Dest": dest })).status).toBe(404);
+    }
+    expect((await get(port, "/assets/overlay.js", pageHost(token), "GET", { "Service-Worker": "script" })).status).toBe(404);
+    expect((await get(port, "/assets/overlay.js", pageHost(token), "GET", { "Sec-Fetch-Dest": "script" })).status).toBe(200);
   });
 
   it("adds the slash a link without one is missing", async () => {

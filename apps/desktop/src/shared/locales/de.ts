@@ -1725,6 +1725,7 @@ export const de: Record<keyof typeof en, string> = {
   "browser.downloadRefused": "Tavora lädt keine Dateien herunter. Nutze „In deinem Browser öffnen“, um sie dort herunterzuladen.",
   "browser.tryAgain": "Erneut versuchen",
   "browser.openSite": "Öffnen",
+  "browser.stay": "Auf dieser Seite bleiben",
   "browser.startTitle": "Suche oder gib oben eine Adresse ein",
   "browser.startText": "Anmeldungen bleiben bei diesem Arbeitsbereich, es sei denn, du teilst eine Seite für alle Arbeitsbereiche. Werbung wird blockiert und Dateien werden nie heruntergeladen.",
   "settings.section.integrations": "Integrationen",
