@@ -30,6 +30,50 @@ Lets Nik (later others) change Tavora's whole design language while the structur
 - **Not in this branch:** Whiteboard (Excalidraw) and PDF pages keep their own look; the in-game overlay plates are untouched.
 - **Ships:** Classic, Hardware (theme "Hardware": Light grey with red signal, Dark graphite with orange signal), Liquid Glass (theme "Glass": Light, Dark); Playground style + theme switcher with specimens for every look. **Second PR:** Rabbit and Nothing at normal size, with Doto and Outfit fonts.
 
+## Contract between the halves (implementation, 2026-11-20)
+
+Both the host/SDK work (step 1) and the kit work (steps 2–3) code against this. Change it only here, in the same commit as the code.
+
+**Parts and looks** (`packages/sdk/src/protocol.ts`, exported):
+
+```ts
+export const STYLE_LOOKS = {
+  surface: ["flat", "raised", "glass", "hairline"],
+  tabs: ["pill", "keycap", "underline"],
+  content: ["plain", "inset"],
+  buttons: ["soft", "keycap", "capsule"],
+  inputs: ["soft", "inset", "capsule"],
+  lists: ["fill", "inverted", "bar"],
+  labels: ["normal", "caps", "caps-mono"],
+  status: ["none", "led"],
+} as const;
+export type StylePart = keyof typeof STYLE_LOOKS;
+export type StyleLooks = { [P in StylePart]: (typeof STYLE_LOOKS)[P][number] };
+export interface StyleValues {
+  borderWidth: number;   // 0–2 px
+  depth: number;         // 0–3 (none … strong), the kit maps it to shadows per look
+  textSize: number;      // 12–15 px body text
+  controlHeight: number; // 28–40 px
+  spacing: number;       // 0.85–1.2 factor
+  glassOpacity: number;  // 0.55–0.95, used by glass surfaces only
+}
+export interface TavoraStyle { id: string; name: string; looks: StyleLooks; values: StyleValues }
+// TavoraTheme gains: style?: TavoraStyle   (missing = an older host: the kit uses Classic)
+```
+
+**Style file** `styles/<name>/tavora.style.json`: `{ id, name, description?, author?, version, looks, values, radius, font, themes? }`. `radius` (0–16) and `font` (a bundled `ThemeFont` id) are the style's defaults; `themes` lists theme ids shown first for this style. Validated like theme manifests: unknown keys, unknown parts or looks are errors; numbers outside the ranges are clamped (with a hint). Built-in ids: `tavora.classic`, `tavora.hardware`, `tavora.glass`.
+
+**Resolving** (host main): the user's font and radius settings get a "style default" value (`null`). Final radius = user override ?? (style is Classic ? theme variation radius : style radius). Final font = user override ?? style font (Classic's font is Inter, so today's default stays). These land in the existing `TavoraTheme.radius` / `font`, so modules on an older kit still get the right corners and font. The saved settings must stay readable by the previous app version (add fields, don't rename).
+
+**Applying** (SDK `bootstrap.ts` `applyHostTheme()` for modules, `renderer/theme.ts` `applyTheme()` for the host page), on `document.documentElement`:
+- `data-style="<id>"` and `data-look-<part>="<look>"` for all eight parts
+- CSS variables: `--border-width: <n>px`, `--depth: <n>`, `--text-base: <n>px`, `--control-height: <n>px`, `--space: <factor>`, `--glass-opacity: <n>`
+- With no `style` (older host), set nothing: the kit's CSS defaults are Classic.
+
+**Classic values** (`styles/classic`): looks `surface flat, tabs pill, content plain, buttons soft, inputs soft, lists fill, labels normal, status none`; values `borderWidth 1, depth 1, textSize 13, controlHeight 32, spacing 1, glassOpacity 0.8`; radius 8; font `inter`. The kit half may correct these numbers so Classic stays pixel-identical; it says so in its commit.
+
+**Native panel corners**: `module-view.ts` `PANEL_RADIUS` and `browser-view.ts` `PAGE_RADIUS` come from one function of (style, panel style, radius). In Classic it returns today's values (10 / 9, and the Framed/Folders inset values); in other styles it follows the resolved radius (0 allowed).
+
 ## Facts found (2026-11-20)
 
 - 130 of 140 renderer `.vue` files use `@tavora/official-ui`; dock panels are `dockview-vue`, restyled via `--dv-*` in `dock.css`.
