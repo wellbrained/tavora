@@ -1,0 +1,54 @@
+---
+updated: 2026-11-20
+---
+# Style system
+
+Lets Nik (later others) change Tavora's whole design language while the structure stays. Grilled with Nik on 2026-11-20 from drawn mockups (`docs/features/style-system/`: `round-2.html` plus PNGs; Nik's notes: Hardware and Liquid Glass look good, Rabbit and Nothing look good but their parts are far too big). Records: ADR 0003 and ADR 0004 at the end. Terms (vault glossary): **Style** = the design language (shapes, depth, borders, font, sizes; never colours, never layout); **Theme** = colour variations, pairs with any style; **Look** = one fixed way the kit draws a part; **Classic** = today's look, the default.
+
+## Decided
+
+- **Goal:** one branch, ready to merge, that lets the whole look change. Styles come only from Tavora at first; the format allows others later.
+- **A style is data:** `styles/<name>/tavora.style.json`, schema-checked, no CSS or code. Picks one look per part and sets values. Never layout.
+- **Parts and looks (first set):**
+  | Part | Looks |
+  |---|---|
+  | Surfaces (app background, rail, top bar, panel) | flat · raised · glass · hairline |
+  | Panel tab strip | pill · keycap · underline |
+  | Panel content area | plain · inset screen |
+  | Buttons | soft · keycap · capsule |
+  | Inputs, checkboxes, switches | soft · inset · capsule |
+  | Lists and selection | fill · inverted · accent bar |
+  | Menus, popovers, dialogs | follow the surface look |
+  | Labels, small headings | normal · small caps (letter spacing, optional mono) |
+  | Status light | none · LED dot |
+- **Values a style sets:** radius 0–16, border width, shadows, font (only bundled fonts), sizes within range: body text 12–15 px (13 today), control height 28–40 px (32 today), spacing 0.85–1.2×; out-of-range values are clamped.
+- **Colours stay in themes.** Any style with any theme; each style's own themes are listed first; every pairing passes the contrast check. Glass surfaces are checked as the mixed colour, with a minimum opacity.
+- **Settings:** Appearance gets a Style dropdown with previews at the top (show Nik a preview image before building). Font and corner radius become "Style default" plus override; radius range opens to 0–16. Panel style (Classic/Framed/Folders) stays, only inside Classic.
+- **Default:** Classic = today's look.
+- **Modules:** get the active style with the theme (`ui.getTheme` / `ui.theme`); kit controls follow it; modules may draw style-specific parts (optional). Older modules look Classic. The native panel corner radius (today a fixed 10 px in `module-view.ts` / `browser-view.ts`) follows the style.
+- **Liquid Glass:** real glass on host-drawn parts (rail, top bar, tab strips, panel frames) over a soft colour field from the theme; panel content solid ([ADR 0004](#adr-0004-glass-on-host-chrome-only)).
+- **Not in this branch:** Whiteboard (Excalidraw) and PDF pages keep their own look; the in-game overlay plates are untouched.
+- **Ships:** Classic, Hardware (theme "Hardware": Light grey with red signal, Dark graphite with orange signal), Liquid Glass (theme "Glass": Light, Dark); Playground style + theme switcher with specimens for every look. **Second PR:** Rabbit and Nothing at normal size, with Doto and Outfit fonts.
+
+## Facts found (2026-11-20)
+
+- 130 of 140 renderer `.vue` files use `@tavora/official-ui`; dock panels are `dockview-vue`, restyled via `--dv-*` in `dock.css`.
+- Theme tokens are CSS variables set by `renderer/theme.ts` `applyTheme()` and, in modules, by SDK `bootstrap.ts` `applyHostTheme()` via `connectModule()`. One `--radius` drives kit corners; shadows, borders and several radii are Tailwind classes or literals (host ~23 shadows, 178 `rounded-*`; kit ~16 shadows, 81 `rounded-*`).
+- No global density or text-size setting exists today.
+- Module panels and Browser pages are native `WebContentsView`s placed over the host page; the host draws frames and tabs; views are opaque except over games.
+
+## ADR 0003: styles are data
+
+2026-11-20: A style is a data file (`styles/<name>/tavora.style.json`, schema-checked like themes) that picks one look per kit part (surfaces, tab strip, content area, buttons, inputs, lists, labels, status light) and sets values (radius 0–16, border width, shadows, a bundled font, sizes within a fixed range). It carries no CSS and no code. The kit draws every look; the host sends the active style to modules with the theme, and the kit applies it.
+
+Alternatives: CSS per style inside the kit (most freedom, but every module bundles its own kit copy, so each new style would need every module rebuilt), or CSS shipped in a style package (others' CSS could hide or fake controls and slow the app). Data choices let a new style made of existing looks reach every up-to-date module without a rebuild, and let others make styles later without changing the security model.
+
+Consequences: a look that doesn't exist yet (a knob, dot-matrix numbers) is a kit update with a Playground specimen, then styles can pick it. Modules built against an older kit show Classic. Styles never change layout, and sizes are clamped to the range (text 12–15 px, controls 28–40 px, spacing 0.85–1.2×).
+
+## ADR 0004: glass on host chrome only
+
+2026-11-20: In the Liquid Glass style, real glass (blur over a colour field from the theme) is only on what the host page draws: rail, top bar, tab strips and panel frames. A panel's content stays solid, because each module and web page is its own native view over the host page and cannot see or blur what is behind it.
+
+Alternative: making module views transparent and letting modules paint a half-transparent background. It works mechanically (views already go transparent over games) but gives no blur, uneven text contrast and more chances of flicker, and every module would have to handle it.
+
+Consequences: glass styles set a solid content surface; the contrast check measures glass surfaces as the mixed colour with a minimum opacity the style can't go below.
