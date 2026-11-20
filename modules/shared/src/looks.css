@@ -167,7 +167,8 @@
 /* Capsule: rounded (the style's own corner, not a full pill), light and slightly see-through. */
 :root[data-look-buttons="capsule"] .tavora-button:not([data-slot="action-tile"]) {
   border-radius: var(--radius-lg);
-  &:is([data-variant="secondary"], [data-variant="outline"]) {
+  /* Pickers are left out: they look like the style's fields (below). */
+  &:is([data-variant="secondary"], [data-variant="outline"]):not([aria-haspopup="listbox"], [role="combobox"]) {
     background: color-mix(in srgb, var(--card) 72%, transparent);
     border: 0;
     box-shadow:
@@ -175,6 +176,14 @@
       0 0 0 0.5px color-mix(in srgb, black 10%, transparent),
       0 2px 8px -3px color-mix(in srgb, black 22%, transparent);
   }
+}
+/* In dark, the top light is a faint sheen, not a bright line. */
+:root.dark[data-look-buttons="capsule"] .tavora-button:is([data-variant="secondary"], [data-variant="outline"]):not([data-slot="action-tile"], [aria-haspopup="listbox"], [role="combobox"]) {
+  background: color-mix(in srgb, var(--foreground) 9%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 7%, transparent),
+    0 0 0 0.5px color-mix(in srgb, white 6%, transparent),
+    0 2px 6px -3px color-mix(in srgb, black 40%, transparent);
 }
 
 /* ---------- Inputs, checkboxes, switches ---------- */
