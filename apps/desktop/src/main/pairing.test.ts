@@ -79,6 +79,66 @@ describe("approving a new PC through the service", () => {
     old.pairing.dispose();
   });
 
+  it("gets the new key to a PC whose key no longer opens the account's vault, and that PC hands out nothing", async () => {
+    const cloud = await service();
+    const stale = await onPc(cloud.fetch, cloud.token);
+    await stale.accountKey.setUp();
+    const old = stale.accountKey.get()!;
+    // Another PC starts over with a new key.
+    const fresh = await onPc(cloud.fetch, await cloud.signIn("Laptop"));
+    await fresh.accountKey.enter(stale.accountKey.recoveryKey()!);
+    await fresh.accountKey.startOver();
+    expect(await stale.accountKey.setUp()).toEqual({ status: "ask" });
+    expect(stale.accountKey.trouble).toBe("unopened");
+
+    // The stale PC asks, and doesn't cancel itself for the key it still has.
+    await stale.pairing.start();
+    await fresh.pairing.lookForRequests();
+    await stale.pairing.lookForAnswer();
+    expect(stale.pairing.view().asking).toMatchObject({ step: "code" });
+    await fresh.pairing.lookForRequests();
+    await fresh.pairing.decide(fresh.pairing.view().approve!.id, true);
+    await stale.pairing.confirm();
+    await stale.pairing.lookForAnswer();
+    expect(stale.pairing.view().asking).toBeNull();
+    expect(stale.accountKey.get()?.equals(fresh.accountKey.get()!)).toBe(true);
+    expect(stale.accountKey.get()?.equals(old)).toBe(false);
+    expect(stale.accountKey.trouble).toBeNull();
+    stale.pairing.dispose();
+    fresh.pairing.dispose();
+  });
+
+  it("never answers another PC while its key doesn't open the account's vault, and checks before it sends", async () => {
+    const cloud = await service();
+    const a = await onPc(cloud.fetch, cloud.token);
+    await a.accountKey.setUp();
+    const b = await onPc(cloud.fetch, await cloud.signIn("Tower"));
+    await b.accountKey.enter(a.accountKey.recoveryKey()!);
+    const newPc = await onPc(cloud.fetch, await cloud.signIn("Laptop"));
+    expect(await newPc.accountKey.setUp()).toEqual({ status: "ask" });
+    await newPc.pairing.start();
+
+    // B answers, then A starts over before B's user clicks Add: B sees its key no longer fits and sends nothing.
+    await b.pairing.lookForRequests();
+    await newPc.pairing.lookForAnswer();
+    await b.pairing.lookForRequests();
+    const id = b.pairing.view().approve!.id;
+    await a.accountKey.startOver();
+    await expect(b.pairing.decide(id, true)).rejects.toMatchObject({ key: "pairing.error.oldKey" });
+    expect(b.accountKey.trouble).toBe("unopened");
+    await newPc.pairing.lookForAnswer();
+    expect(newPc.accountKey.get()).toBeNull();
+
+    // Asked again, B doesn't answer at all now.
+    await newPc.pairing.start();
+    await b.pairing.lookForRequests();
+    await newPc.pairing.lookForAnswer();
+    expect(newPc.pairing.view().asking).toMatchObject({ step: "waiting" });
+    newPc.pairing.dispose();
+    b.pairing.dispose();
+    a.pairing.dispose();
+  });
+
   it("asks again when Add did not get through, so the user can try again", async () => {
     const cloud = await service();
     let offline = false;

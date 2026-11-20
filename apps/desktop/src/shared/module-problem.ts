@@ -14,7 +14,8 @@ export type ModuleProblemKind =
   | "reserved-id"
   | "webassembly"
   | "duplicate-id"
-  | "blocked";
+  | "blocked"
+  | "changed";
 
 /** The details a problem's text names; only the ones its kind uses are set. */
 export interface ModuleProblemValues {
@@ -25,7 +26,7 @@ export interface ModuleProblemValues {
   current?: string;
   /** "not-built" and "icon-missing": the file that is missing. */
   file?: string;
-  /** "blocked": the module and why Tavora stopped it. */
+  /** "blocked": the module and why Tavora stopped it ("changed": the module). */
   name?: string;
   version?: string;
   reason?: string;
@@ -46,7 +47,7 @@ const REASONS: Partial<Record<ModuleProblemKind, MessageKey>> = {
 /**
  * The text for a problem in Settings. `where` says which list it sits in: the modules list
  * prefixes a reason with "can't load", the development list with "not loaded". Kinds that
- * are a whole sentence (not built, no module, missing, blocked) bring their own words; `folderName` is the project folder a not-built text names.
+ * are a whole sentence (not built, no module, missing, blocked, changed) bring their own words; `folderName` is the project folder a not-built text names.
  */
 export function problemText(translate: Translate, where: "modules" | "development", kind: ModuleProblemKind | null | undefined, values: ModuleProblemValues = {}, folderName = ""): string {
   const folder = where === "development";
@@ -54,6 +55,7 @@ export function problemText(translate: Translate, where: "modules" | "developmen
   if (kind === "no-module") return translate("settings.devFolders.noModule");
   if (kind === "missing") return translate("settings.devFolders.missing");
   if (kind === "blocked") return translate("moduleProblem.blocked", { name: values.name ?? "", version: values.version ?? "", reason: values.reason ?? "" });
+  if (kind === "changed") return translate("moduleProblem.changed", { name: values.name ?? "" });
   const reason = kind ? REASONS[kind] : undefined;
   if (!reason) return translate("moduleProblem.generic");
   return translate(folder ? "settings.devFolders.problem" : "settings.modules.problem", {

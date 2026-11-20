@@ -72,13 +72,15 @@ function changeOwnerRecords(userData: string, change: (records: OwnerRecords) =>
 
 /**
  * Gives modules in the user's modules folder the owner the installer recorded for them, when the folder's files are
- * still exactly what that owner's key signed (security audit 2026-11-20). A folder put there by hand, one whose
- * module id no longer matches the record, or one whose files were changed, replaced or signed by another key stays
- * `local`, like any unsigned folder: it never gets the recorded owner's data or grants. `checks` keeps what it found
- * by each folder's stamp, so an unchanged folder is not hashed again. A record from before `signedSha256` gets it
- * here, in memory, from the files that were checked.
+ * still exactly what that owner's key signed (security audit 2026-11-20). A folder put there by hand, or one whose
+ * module id no longer matches the record, stays `local`. One whose files were changed, replaced or signed by another
+ * key is answered (by id) and keeps `local` here: the caller stops it (installed-modules.ts), so it never runs with
+ * the recorded owner's data or grants, nor writes data of its own that would later sit apart from them. `checks` keeps
+ * what it found by each folder's stamp, so an unchanged folder is not hashed again. A record from before
+ * `signedSha256` gets it here, in memory, from the files that were checked.
  */
-export async function applyOwners(modules: Map<string, InstalledModule>, userModulesRoot: string, records: OwnerRecords, checks: FolderChecks = new FolderChecks()): Promise<void> {
+export async function applyOwners(modules: Map<string, InstalledModule>, userModulesRoot: string, records: OwnerRecords, checks: FolderChecks = new FolderChecks()): Promise<string[]> {
+  const changed: string[] = [];
   for (const [id, module] of modules) {
     if (module.provenance !== "local" || path.dirname(module.root) !== userModulesRoot) continue;
     const record = records[path.basename(module.root)];
@@ -87,12 +89,13 @@ export async function applyOwners(modules: Map<string, InstalledModule>, userMod
     // The installer records the first key of the account as the owner, and the key that signed as `signer` when they differ.
     const signedBy = record.signer ?? record.owner;
     if (!verified || verified.id !== id || verified.signer !== signedBy || (record.signedSha256 !== undefined && record.signedSha256 !== verified.signedSha256)) {
-      console.warn(`[tavora] ${path.basename(module.root)}: its files are not what its publisher signed, so it loads as an unsigned folder`);
+      changed.push(id);
       continue;
     }
     module.owner = record.owner;
     record.signedSha256 ??= verified.signedSha256;
   }
+  return changed;
 }
 
 /** Forgets the recorded owner of a folder that was removed. Its data stays under that owner. */
@@ -229,7 +232,8 @@ export async function checkZipData(zip: Buffer, { userModules, modules, tavoraVe
       throw new InstallError("error.installTaken", { name, folder: existing.root });
     }
     if (existing.owner !== owner) throw new InstallError("error.installOtherPublisher", { name: existing.manifest.name });
-    if (compareModuleVersions(manifest.version, existing.manifest.version) <= 0) {
+    // A changed folder's own version says nothing (its files aren't the publisher's): a zip of theirs repairs it, at any version.
+    if (!existing.changed && compareModuleVersions(manifest.version, existing.manifest.version) <= 0) {
       throw new InstallError("error.installNotNewer", { name: existing.manifest.name, installed: existing.manifest.version, version: manifest.version });
     }
     updated = true;

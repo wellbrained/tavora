@@ -54,7 +54,15 @@ export interface AccountKeyOptions {
   /** The sign-in token, or null when signed out. */
   token: () => string | null;
   timeoutMs?: number;
+  /**
+   * How long a vault found missing is looked at again before this PC puts back the one it last read: another PC's
+   * Start over deletes the vault and puts a new one right after, and a put-back in between would take its place.
+   */
+  putBackAfterMs?: number;
 }
+
+/** See AccountKeyOptions.putBackAfterMs. */
+export const PUT_BACK_AFTER_MS = 5_000;
 
 export type KeySetUp = { status: "ready"; created: boolean } | { status: "ask" };
 
@@ -161,13 +169,18 @@ export class AccountKey {
   /** The account's key, typed in as the recovery key or sent by another PC (pairing.ts): checked against the vault, then kept. */
   async take(key: Buffer): Promise<void> {
     const generation = this.generation;
-    const vault = await this.vault(key);
+    // Not kept as the last read yet: only once the key is kept on this PC.
+    const vault = await this.vault();
     if (vault && !opens(key, vault.data)) throw new UserError("cloudCopy.error.wrongKey");
-    // No vault: the typed key becomes the account's, with what this PC last read under it. A vault seen before and
-    // gone now is not made again empty without the user (rebuild): the key is kept, and the trouble shown.
-    const trouble = vault ? null : await this.putBack(key);
     await this.save(key, generation);
-    this.problem = trouble;
+    if (vault) {
+      await this.keep(vault.data);
+      this.problem = null;
+      return;
+    }
+    // No vault: the key becomes the account's, with what this PC last read under it. A vault seen before and gone now
+    // is not made again empty without the user (rebuild): the key is kept, and the trouble shown.
+    await this.putBack(key);
   }
 
   /**
@@ -195,11 +208,18 @@ export class AccountKey {
     const generation = this.generation;
     const old = this.key ? await this.vault(this.key).catch(() => null) : null;
     // The publisher keys move over: from the vault when the old key opens it, else from what this PC last read.
-    const content = (old && this.key && openContent(this.key, old.data)) || (this.key && (await this.cached(this.key))) || EMPTY_VAULT;
-    await this.request("DELETE");
-    this.key = null;
+    const oldKey = this.key;
+    const content = (old && oldKey && openContent(oldKey, old.data)) || (oldKey && (await this.cached(oldKey))) || EMPTY_VAULT;
     const key = newCopyKey();
-    if (!(await this.putVault(0, key, content))) throw new CopyError("failed", "another PC made a key at the same moment");
+    this.key = null;
+    for (let attempt = 0; ; attempt++) {
+      await this.request("DELETE");
+      if (await this.putVault(0, key, content)) break;
+      // Another PC came first. One that put back the old vault (it saw it missing) is undone and tried again; a vault
+      // under any other key is another PC's new key, which stays.
+      const now = await this.vault().catch(() => null);
+      if (attempt >= 2 || !now || !oldKey || !opens(oldKey, now.data)) throw new CopyError("failed", "another PC made a key at the same moment");
+    }
     await this.save(key, generation);
     this.problem = null;
   }
@@ -226,7 +246,7 @@ export class AccountKey {
         this.problem = (await this.seen()) ? "gone" : null;
         return EMPTY_VAULT;
       }
-      if (await this.putVault(0, key, cached).catch(() => false)) this.problem = null;
+      await this.restore(key, cached).catch(() => undefined);
       return cached;
     }
     const content = openContent(key, vault.data);
@@ -314,13 +334,28 @@ export class AccountKey {
    */
   private async putBack(key: Buffer): Promise<VaultTrouble | null> {
     const cached = await this.cached(key);
-    if (!cached && (await this.seen())) {
-      this.problem = "gone";
-      return "gone";
-    }
-    await this.putVault(0, key, cached ?? EMPTY_VAULT);
-    this.problem = null;
-    return null;
+    if (cached) return this.restore(key, cached);
+    if (await this.seen()) return (this.problem = "gone");
+    // The account's first vault.
+    if (await this.putVault(0, key, EMPTY_VAULT)) return (this.problem = null);
+    return this.settle(key);
+  }
+
+  /**
+   * Puts back the vault this PC last read, when the account's is still missing a few seconds after it was found so (it
+   * may be another PC's Start over, between its delete and its new vault). Answers the trouble left.
+   */
+  private async restore(key: Buffer, cached: VaultContent): Promise<VaultTrouble | null> {
+    const wait = this.options.putBackAfterMs ?? PUT_BACK_AFTER_MS;
+    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+    if ((await this.vault(key)) === null && (await this.putVault(0, key, cached))) return (this.problem = null);
+    return this.settle(key);
+  }
+
+  /** Another PC made the account's vault meanwhile: the trouble is whether this PC's key opens it. */
+  private async settle(key: Buffer): Promise<VaultTrouble | null> {
+    const vault = await this.vault(key);
+    return (this.problem = vault ? (opens(key, vault.data) ? null : "unopened") : "gone");
   }
 
   /** Whether this PC has seen the account's vault: in this run, or before (the seen file, or a vault it kept). */

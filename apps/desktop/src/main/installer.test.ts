@@ -217,7 +217,9 @@ describe("applyOwners", () => {
     const folder = path.join(userModules, id);
     const ownerNow = async () => {
       const modules = new Map([[id, loaded(id, folder, "local")]]);
-      await applyOwners(modules, userModules, records);
+      const changed = await applyOwners(modules, userModules, records);
+      // A folder that fails the check is named, for the caller to stop.
+      expect(changed).toEqual(modules.get(id)!.owner === "local" ? [id] : []);
       return modules.get(id)!.owner;
     };
     expect(await ownerNow()).toBe(fingerprint(key));

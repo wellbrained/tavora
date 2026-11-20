@@ -53,7 +53,7 @@ function rebuild() {
     <Notice v-else-if="!view.recoveryKey && view.vault === 'gone'" variant="warning" class="my-4" :title="t('recoveryKey.gone.title')" data-testid="recovery-key-gone">
       {{ t("recoveryKey.gone.text") }}
       <template #action>
-        <Button size="sm" variant="secondary" :disabled="busy" data-testid="recovery-key-rebuild" @click="rebuild">{{ t("recoveryKey.gone.button") }}</Button>
+        <Button size="sm" variant="danger" :disabled="busy" data-testid="recovery-key-rebuild" @click="rebuild">{{ t("recoveryKey.gone.button") }}</Button>
       </template>
     </Notice>
 
@@ -67,11 +67,9 @@ function rebuild() {
     </div>
 
     <form v-else-if="asking" class="flex flex-col gap-3 py-4" @submit.prevent="keyText.trim() && enter()">
-      <!-- With a key here (its vault doesn't open), another PC can't send one: it is typed in. -->
-      <template v-if="view.status === 'ask'">
-        <span class="text-muted-foreground">{{ t("recoveryKey.ask") }}</span>
-        <PairingAsk />
-      </template>
+      <span v-if="view.status === 'ask'" class="text-muted-foreground">{{ t("recoveryKey.ask") }}</span>
+      <!-- Also when this PC's key no longer opens the account's vault: another PC sends the new one. -->
+      <PairingAsk />
       <span class="text-muted-foreground text-sm">{{ t("pairing.typeKey") }}</span>
       <div class="flex gap-2">
         <Input v-model="keyText" class="max-w-120 font-mono" maxlength="200" autocomplete="off" spellcheck="false" :aria-label="t('cloudCopy.askKey.label')" data-testid="recovery-key-input" />

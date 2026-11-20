@@ -12,7 +12,7 @@ const encryptor = { isAvailable: () => true, encrypt: (text: string) => Buffer.f
 type Service = Awaited<ReturnType<typeof service>>;
 
 /** The account's key on one PC of the test account (`userData`: the same PC again, as at the next start). */
-async function onPc(cloud: Service, { keyStore = true, fetch = cloud.fetch, userData: folder, kept = false }: { keyStore?: boolean; fetch?: typeof globalThis.fetch; userData?: string; kept?: boolean } = {}) {
+async function onPc(cloud: Service, { keyStore = true, fetch = cloud.fetch, userData: folder, kept = false, putBackAfterMs = 0 }: { keyStore?: boolean; fetch?: typeof globalThis.fetch; userData?: string; kept?: boolean; putBackAfterMs?: number } = {}) {
   const userData = folder ?? (await pc({ "library.json": "{}" })).userData;
   const file = path.join(userData, "account-key.json");
   const key = new AccountKey({
@@ -24,6 +24,7 @@ async function onPc(cloud: Service, { keyStore = true, fetch = cloud.fetch, user
     baseUrl: "http://tavora.test/v1/account",
     fetch,
     token: () => cloud.token,
+    putBackAfterMs,
   });
   return { key, file, userData };
 }
@@ -213,6 +214,69 @@ describe("the account's key", () => {
     expect(await a.key.setUp()).toEqual({ status: "ready", created: true });
     expect(service2.state.puts).toBe(1);
     expect(a.key.trouble).toBeNull();
+  });
+
+  it("doesn't put the old vault back between another PC's delete and its new vault", async () => {
+    const cloud = await service();
+    let between: (() => Promise<void>) | null = null;
+    // A's Start over: right after its delete, B looks at the vault, before A puts its new one.
+    const startingOver = (async (url: string, init?: RequestInit) => {
+      const answer = await cloud.fetch(url, init);
+      if (init?.method === "DELETE" && between) {
+        const run = between;
+        between = null;
+        void run();
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      return answer;
+    }) as typeof fetch;
+    const a = await onPc(cloud, { fetch: startingOver });
+    await a.key.setUp();
+    const b = await onPc(cloud, { kept: true, putBackAfterMs: 200 });
+    await b.key.enter(a.key.recoveryKey()!);
+    let looked: Promise<unknown> = Promise.resolve();
+    between = async () => void (looked = b.key.setUp());
+    await a.key.startOver();
+    expect(await looked).toEqual({ status: "ready", created: false });
+    // B looked again, found A's new vault, and put nothing back over it.
+    expect(b.key.trouble).toBe("unopened");
+    expect(JSON.parse(openVault(a.key.get()!, new Uint8Array(await (await vault(cloud)).arrayBuffer())).toString("utf8"))).toEqual({ v: 1 });
+  });
+
+  it("starts over even when another PC put the old vault back meanwhile", async () => {
+    const cloud = await service();
+    let between: (() => Promise<void>) | null = null;
+    const startingOver = (async (url: string, init?: RequestInit) => {
+      const answer = await cloud.fetch(url, init);
+      if (init?.method === "DELETE" && between) {
+        const run = between;
+        between = null;
+        await run();
+      }
+      return answer;
+    }) as typeof fetch;
+    const a = await onPc(cloud, { fetch: startingOver });
+    await a.key.setUp();
+    const old = a.key.get()!;
+    const b = await onPc(cloud, { kept: true });
+    await b.key.enter(a.key.recoveryKey()!);
+    // B (looking again at once) puts the old vault back before A's new one goes up: A's put is refused, and A tries again.
+    between = async () => void (await b.key.setUp());
+    cloud.routes.length = 0;
+    await a.key.startOver();
+    expect(cloud.routes.filter((route) => route === "DELETE /v1/account/vault")).toHaveLength(2);
+    const now = new Uint8Array(await (await vault(cloud)).arrayBuffer());
+    expect(a.key.get()?.equals(old)).toBe(false);
+    expect(JSON.parse(openVault(a.key.get()!, now).toString("utf8"))).toEqual({ v: 1 });
+  });
+
+  it("keeps the vault it read as the last read only once the key is kept", async () => {
+    const cloud = await service();
+    const a = await onPc(cloud);
+    await a.key.setUp();
+    const b = await onPc(cloud, { kept: true, keyStore: false });
+    await expect(b.key.enter(a.key.recoveryKey()!)).rejects.toMatchObject({ key: "cloudCopy.error.cantKeep" });
+    await expect(access(path.join(b.userData, "account-vault.bin"))).rejects.toThrow();
   });
 
   it("never opens a sealed copy part as a vault", () => {

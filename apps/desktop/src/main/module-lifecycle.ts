@@ -28,7 +28,7 @@ export interface ModuleLifecycleOptions {
   tavoraVersion: string;
   /** The modules loaded now. */
   modules(): ReadonlyMap<string, InstalledModule>;
-  /** The modules stopped because their zip is blocked; they still count as installed, so a fixed zip is their update. */
+  /** The modules stopped because their zip is blocked or their folder changed; they still count as installed, so a good zip is their update. */
   blocked(): ReadonlyMap<string, InstalledModule>;
   /** The ids the installer recorded as installed from the catalog. */
   catalogIds(): ReadonlySet<string>;
@@ -255,6 +255,12 @@ export class ModuleLifecycle {
       // A module stopped by a block counts too: an update that is not blocked brings it back (C14).
       const module = this.options.modules().get(id) ?? this.options.blocked().get(id);
       if (!module || module.owner === LOCAL_OWNER) continue;
+      // A changed folder too: the catalog's version repairs it. Its own manifest isn't trusted, so it counts as the
+      // oldest version, asking for nothing (whatever the repair asks for is asked).
+      if (module.changed) {
+        installed.push({ id, owner: module.owner, version: "0.0.0", asks: { network: [], connectors: [], folders: [] } });
+        continue;
+      }
       const { network, connectors = [], folders = [] } = module.manifest.permissions;
       installed.push({ id, owner: module.owner, version: module.manifest.version, asks: { network: [...network], connectors: [...connectors], folders: folders.map(folderKey) } });
     }

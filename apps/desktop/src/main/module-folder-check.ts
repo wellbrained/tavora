@@ -101,6 +101,9 @@ export class FolderChecks {
   private readonly used = new Set<string>();
   private loaded: Promise<void> | null = null;
   private changed = false;
+  /** Folders looked at, and those read and hashed (not taken from the kept check), for the log. */
+  looked = 0;
+  hashed = 0;
 
   constructor(private readonly file?: string) {}
 
@@ -108,12 +111,14 @@ export class FolderChecks {
   async check(dir: string): Promise<Verified | null> {
     await this.load();
     this.used.add(dir);
+    this.looked++;
     const seen = await readFolder(dir, false);
     if (seen === null) return this.forget(dir);
     const cached = this.checks.get(dir);
     if (cached?.stamp === stampHash(seen.stamp)) return cached.verified;
     const read = await readFolder(dir, true);
     if (read === null) return this.forget(dir);
+    this.hashed++;
     // What was read is what is checked; a folder that changed between the two is checked again next time.
     const verified = verifyFolder(read.files);
     this.checks.set(dir, { stamp: stampHash(read.stamp), verified });

@@ -24,7 +24,7 @@ export interface InstalledModulesOptions {
 export interface InstalledModules {
   /** Every module that loads, the Browser included. */
   modules: Map<string, InstalledModule>;
-  /** Modules taken out because their zip is blocked; the installer still counts them as installed. */
+  /** Modules taken out because their zip is blocked or their folder changed; the installer still counts them as installed. */
   blocked: Map<string, InstalledModule>;
   /** Ids of the modules (loaded or blocked) the catalog installed and keeps up to date. */
   catalog: Set<string>;
@@ -53,10 +53,13 @@ export async function loadInstalledModules(options: InstalledModulesOptions): Pr
   const records = await readOwnerRecords(options.userData);
   // Each folder's files are checked against the owner's signature; unchanged folders by their stamp alone.
   const checks = new FolderChecks(path.join(options.userData, MODULE_CHECKS_FILE));
-  await applyOwners(modules, userRoot, records, checks);
+  const started = Date.now();
+  const changed = await applyOwners(modules, userRoot, records, checks);
+  if (checks.hashed > 0 || changed.length > 0) console.log(`[tavora] checked installed module folders: ${checks.hashed} of ${checks.looked} read and hashed, ${changed.length} changed, ${Date.now() - started} ms`);
   await checks.save();
+  const stopped = stopChanged(modules, changed, records, problems);
   await addSignedHashes(modules, userRoot, records);
-  const blocked = stopBlocked(modules, userRoot, records, options.safety, problems);
+  const blocked = new Map([...stopped, ...stopBlocked(modules, userRoot, records, options.safety, problems)]);
   const catalog = new Set(
     [...blocked.values(), ...modules.values()]
       .filter((module) => {
@@ -69,6 +72,33 @@ export async function loadInstalledModules(options: InstalledModulesOptions): Pr
   modules.set(BROWSER_MODULE_ID, browserModule(options.tavoraVersion));
   const info = await describeModules(options.userModules, modules);
   return { modules, blocked, catalog, info, problems };
+}
+
+/**
+ * Stops installed folders whose files are not what their publisher signed. They don't load at all, rather than as an
+ * unsigned folder: as one they would start over without their data and write new data apart from it, which a repair
+ * would leave behind. They keep the recorded owner, so the installer and the catalog take a zip from that publisher as
+ * their repair (at any version, installer.ts), and Settings > Modules says what happened. Their panels wait.
+ */
+function stopChanged(modules: Map<string, InstalledModule>, ids: readonly string[], records: OwnerRecords, problems: ModuleProblem[]): Map<string, InstalledModule> {
+  const stopped = new Map<string, InstalledModule>();
+  for (const id of ids) {
+    const module = modules.get(id);
+    const record = module && records[path.basename(module.root)];
+    if (!module || !record) continue;
+    modules.delete(id);
+    stopped.set(id, { ...module, owner: record.owner, changed: true });
+    console.warn(`[tavora] ${path.basename(module.root)}: its files are not what its publisher signed, so it is stopped`);
+    problems.push({
+      folder: path.basename(module.root),
+      path: module.root,
+      kind: "changed",
+      values: { name: module.manifest.name },
+      about: { name: module.manifest.name, version: module.manifest.version, id },
+      message: `${module.manifest.name} changed since it was installed: its files are not what its publisher signed. Reinstall it to use it again; its data stays.`,
+    });
+  }
+  return stopped;
 }
 
 /** A signature file bigger than this is not read for its hash: a zip holds at most a few thousand files. */
