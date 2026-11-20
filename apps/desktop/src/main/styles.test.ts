@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { CLASSIC_STYLE, STYLE_LOOKS } from "@tavora/sdk/protocol";
 import { THEME } from "./games";
 import { appearanceThemes, discoverStyles, FALLBACK_STYLE, resolveStyle, STYLE_MANIFEST, tavoraStyle, validateStyle, type StylePackage } from "./styles";
-import { insetPanelTheme, moduleTheme, type ThemePackage, type ThemeVariation } from "./themes";
+import { discoverThemes, glassOpacity, glassProblems, insetPanelTheme, mixed, moduleTheme, type ThemePackage, type ThemeVariation } from "./themes";
 import { CLASSIC_STYLE_ID, isStyleRadius, resolveFontId, resolveRadius } from "../shared/styles";
 import { UI_FONTS } from "../shared/ui-fonts";
 
@@ -274,5 +274,66 @@ describe("insetPanelTheme", () => {
     expect(insetPanelTheme(themeOf(light, dark), light, plain)).toBe(plain);
     const older = moduleTheme(light);
     expect(insetPanelTheme(themeOf(light, dark), light, older)).toBe(older);
+  });
+});
+
+describe("glass and every theme", () => {
+  const themeDir = path.join(repo, "themes");
+
+  it("mixes like CSS color-mix in srgb", () => {
+    expect(mixed("#ffffff", "#000000", 0.5)).toBe("#808080");
+    expect(mixed("#ff0000", "#0000ff", 1)).toBe("#ff0000");
+    expect(mixed("#ff0000", "#0000ff", 0)).toBe("#0000ff");
+  });
+
+  it("finds an opacity for every theme of Tavora's at which all text on glass keeps its contrast", async () => {
+    const { styles } = await discoverStyles({ official: [officialDir] });
+    const glass = styles.get("tavora.glass")!.style;
+    const { themes } = await discoverThemes({ official: [themeDir] });
+    for (const { theme } of themes.values()) {
+      for (const item of theme.variations) {
+        const opacity = glassOpacity(item, glass.values.glassOpacity);
+        expect(opacity, `${theme.id} ${item.id}`).toBeGreaterThanOrEqual(glass.values.glassOpacity);
+        expect(glassProblems(item, opacity), `${theme.id} ${item.id}`).toEqual([]);
+      }
+    }
+  });
+
+  it("keeps the style's own opacity with the style's own themes", async () => {
+    const { styles } = await discoverStyles({ official: [officialDir] });
+    const { themes } = await discoverThemes({ official: [themeDir] });
+    for (const { style: item } of styles.values()) {
+      if (item.looks.surface !== "glass") continue;
+      for (const id of item.themes) {
+        for (const v of themes.get(id)!.theme.variations) expect(glassOpacity(v, item.values.glassOpacity), `${id} ${v.id}`).toBe(item.values.glassOpacity);
+      }
+    }
+  });
+
+  it("raises the opacity only as far as needed, and never past solid", () => {
+    // Pale text on a pale card: fine solid, not with a dark field showing through.
+    const pale = variation("pale", "light");
+    const colors = { ...pale.colors, background: "#202020", card: "#ffffff", rail: "#ffffff", popover: "#ffffff", primary: "#202020", info: "#202020", success: "#202020", warning: "#202020" };
+    for (const token of ["foreground", "card-foreground", "popover-foreground", "muted-foreground", "destructive", "ring"] as const) colors[token] = "#6a6a6a";
+    const item = { colors, contrast: "normal" as const };
+    expect(glassProblems(item, 0.55).length).toBeGreaterThan(0);
+    const opacity = glassOpacity(item, 0.55);
+    expect(opacity).toBeGreaterThan(0.55);
+    expect(opacity).toBeLessThanOrEqual(1);
+    expect(glassProblems(item, opacity)).toEqual([]);
+    expect(glassProblems(item, opacity - 0.01).length).toBeGreaterThan(0);
+  });
+
+  it("sends the raised opacity with a glass style, and the style's own otherwise", async () => {
+    const { themes } = await discoverThemes({ official: [themeDir] });
+    const garnet = themes.get("tavora.garnet")!.theme;
+    const dark = garnet.variations.find((item) => item.mode === "dark")!;
+    const glass = style({ id: "tavora.glass", looks: { ...CLASSIC_STYLE.looks, surface: "glass" }, values: { ...CLASSIC_STYLE.values, glassOpacity: 0.72 } });
+    const sent = appearanceThemes({ theme: garnet, variation: dark }, glass, { radius: null, toasts: "bottom-center" }).host.style!;
+    expect(sent.values.glassOpacity).toBe(glassOpacity(dark, 0.72));
+    expect(sent.values.glassOpacity).toBeGreaterThan(0.72);
+    // A style without glass sends its value as it is: nothing is drawn see-through.
+    const flat = appearanceThemes({ theme: garnet, variation: dark }, style({ values: { ...CLASSIC_STYLE.values, glassOpacity: 0.6 } }), { radius: null, toasts: "bottom-center" }).host.style!;
+    expect(flat.values.glassOpacity).toBe(0.6);
   });
 });

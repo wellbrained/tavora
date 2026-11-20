@@ -6,7 +6,7 @@ import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { isModuleId } from "@tavora/module-schema";
 import { CLASSIC_STYLE, STYLE_LOOKS, STYLE_PARTS, STYLE_RANGES, type StyleLooks, type StyleValues, type TavoraStyle, type TavoraTheme, type ToastPosition } from "@tavora/sdk/protocol";
-import { candidates, insetPanelTheme, moduleTheme, withRadius, type ThemePackage, type ThemeVariation } from "./themes";
+import { candidates, glassOpacity, insetPanelTheme, moduleTheme, withRadius, type ThemePackage, type ThemeVariation } from "./themes";
 import { OFFICIAL_PREFIX, type Provenance } from "./registry";
 import { CLASSIC_STYLE_ID, resolveFontId, resolveRadius, STYLE_RADIUS } from "../shared/styles";
 import { DEFAULT_FONT_ID, themeFont, UI_FONTS, type UiFontId } from "../shared/ui-fonts";
@@ -237,6 +237,8 @@ export interface AppearanceSettings {
 /**
  * The theme the host page shows and the one module panels get, for a theme choice, a style and the user's settings: the
  * radius and font resolved (shared/styles.ts), the style along. They differ only for an inset style (`insetPanelTheme`).
+ * With glass surfaces, the style's glass opacity is raised as far as this theme variation needs for every text on glass
+ * to keep its contrast (themes.ts `glassOpacity`), so any style works with any theme.
  */
 export function appearanceThemes(
   choice: { theme: ThemePackage; variation: ThemeVariation },
@@ -245,6 +247,12 @@ export function appearanceThemes(
 ): { host: TavoraTheme; panel: TavoraTheme } {
   const radius = resolveRadius(settings.radius, style, choice.variation.radius);
   const font = themeFont(resolveFontId(settings.font, style));
-  const host = moduleTheme(withRadius(choice.variation, radius), settings.toasts, font, tavoraStyle(style));
-  return { host, panel: insetPanelTheme(choice.theme, choice.variation, host) };
+  const sent = tavoraStyle(style);
+  if (style.looks.surface === "glass") sent.values.glassOpacity = glassOpacity(choice.variation, style.values.glassOpacity);
+  const host = moduleTheme(withRadius(choice.variation, radius), settings.toasts, font, sent);
+  const panel = insetPanelTheme(choice.theme, choice.variation, host);
+  // A panel in other colours (an inset style) draws its menus and dialogs as glass over those.
+  if (panel === host || style.looks.surface !== "glass") return { host, panel };
+  const panelOpacity = glassOpacity({ colors: panel.tokens, contrast: choice.variation.contrast }, sent.values.glassOpacity);
+  return { host, panel: { ...panel, style: { ...panel.style!, values: { ...panel.style!.values, glassOpacity: panelOpacity } } } };
 }

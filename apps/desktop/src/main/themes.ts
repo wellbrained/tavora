@@ -204,6 +204,60 @@ export function contrastProblems(variation: Pick<ThemeVariation, "colors" | "con
   return problems;
 }
 
+// ── Glass ────────────────────────────────────────────────────────────────
+
+/** `a` over `b` at `amount` (0 to 1), as CSS color-mix(in srgb, a amount, b) draws it: both #rrggbb. */
+export function mixed(a: string, b: string, amount: number): string {
+  const channel = (offset: number) => Math.round(parseInt(a.slice(offset, offset + 2), 16) * amount + parseInt(b.slice(offset, offset + 2), 16) * (1 - amount));
+  return `#${[1, 3, 5].map((offset) => channel(offset).toString(16).padStart(2, "0")).join("")}`;
+}
+
+/**
+ * What can show through a glass surface: the window's background and the brightest spots of the soft colour field the
+ * glass look paints behind everything (dock.css --style-field: primary and info at 30 %, success and warning at 26 %).
+ */
+function glassBackdrops(colors: Record<ThemeToken, string>): string[] {
+  const field: [ThemeToken, number][] = [["primary", 0.3], ["info", 0.3], ["success", 0.26], ["warning", 0.26]];
+  return [colors.background, ...field.map(([token, amount]) => mixed(colors[token], colors.background, amount))];
+}
+
+/** The pairs drawn on glass: text and lines on the rail, the panel frames and cards, and menus and dialogs. */
+const GLASS_PAIRS: Pair[] = [
+  ["foreground", "rail", "text"],
+  ["card-foreground", "card", "text"],
+  ["muted-foreground", "card", "text"],
+  ["primary", "card", "text"],
+  ["destructive", "card", "text"],
+  ["ring", "card", "non-text"],
+  ["popover-foreground", "popover", "text"],
+];
+
+/**
+ * The pairs below the ratio they need when the surfaces are glass at `opacity`, each measured on the mixed colour over
+ * every backdrop (`glassBackdrops`). The blur and its saturation are left out: they move colours a little, never much.
+ */
+export function glassProblems(variation: Pick<ThemeVariation, "colors" | "contrast">, opacity: number): string[] {
+  const problems: string[] = [];
+  const backdrops = glassBackdrops(variation.colors);
+  for (const [fore, back, kind] of GLASS_PAIRS) {
+    const needed = kind === "non-text" ? NON_TEXT : variation.contrast === "high" ? TEXT_AAA : TEXT_AA;
+    const worst = Math.min(...backdrops.map((backdrop) => contrast(variation.colors[fore], mixed(variation.colors[back], backdrop, opacity))));
+    if (worst < needed) problems.push(`${fore} on glass ${back} has a contrast of ${worst.toFixed(2)}:1 and needs ${needed}:1`);
+  }
+  return problems;
+}
+
+/**
+ * The glass opacity a theme variation gets with a style: the style's own, raised in steps of 0.01 until every glass pair
+ * passes. At 1 the glass is the solid colour, which the theme's own check passed, so every pairing works.
+ */
+export function glassOpacity(variation: Pick<ThemeVariation, "colors" | "contrast">, opacity: number): number {
+  for (let step = Math.round(Math.max(0, Math.min(1, opacity)) * 100); step < 100; step++) {
+    if (glassProblems(variation, step / 100).length === 0) return step / 100;
+  }
+  return 1;
+}
+
 // ── Validation ───────────────────────────────────────────────────────────
 
 type Fields = Record<string, unknown>;

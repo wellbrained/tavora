@@ -77,6 +77,8 @@ export interface TavoraStyle { id: string; name: string; looks: StyleLooks; valu
 
 **Inset content** (`looks.content = "inset"`): module panels (not web pages) get the colour tokens of the theme's dark variation when the active variation is light and the theme has a dark one (same contrast level preferred), so their content reads as a screen set into the light frame. The host draws the inset frame around the module view (dock CSS, kit half). `TavoraTheme.mode` then says `dark` for that module. With no dark variation, nothing changes.
 
+**Glass contrast** (host main, `themes.ts` `glassProblems` / `glassOpacity`): with `looks.surface = "glass"`, the text pairs drawn on glass (on `rail`, `card`, `popover`) are measured on the mixed colour over the window background and the colour field's brightest spots (primary and info at 30 %, success and warning at 26 %, as `--style-field` in dock.css). The host raises the sent `values.glassOpacity` in 0.01 steps until all pass (at most 1, the solid colour the theme check already passed), so every style works with every theme and the kit never has to check. Tavora's own: Glass's themes keep 0.72; Garnet Dark goes to 0.83.
+
 **Native panel corners**: `main/panel-corners.ts` `panelCorners(style, panelStyle, radius)` gives `{ module, page, cover }` for module views, Browser pages and the loading cover. In Classic it returns today's values for every panel style (module 9, page 9, cover 10); in other styles the dock always draws Framed's frame with the body at `--radius`, so all three are the resolved radius (0 allowed) and the saved panel style is ignored. The host re-applies it when the theme, style, radius or panel style changes.
 
 ## Facts found (2026-11-20)
