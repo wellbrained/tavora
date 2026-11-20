@@ -84,6 +84,11 @@ test("New style copies the style in use into the styles folder, and it can be pi
   await page.getByTestId("style-select").click();
   await expect(page.getByTestId("style-local.my-hardware")).toContainText("My Hardware");
   await expect(page.getByTestId("style-local.my-hardware")).toContainText("Local");
+  // Classic first, then Tavora's own by name, the user's own last; only theirs carries a tag.
+  const order = await page.locator('[data-testid="styles"] [data-testid^="style-"][role="option"]').evaluateAll((rows) => rows.map((row) => row.getAttribute("data-testid")));
+  expect(order[0]).toBe("style-tavora.classic");
+  expect(order.at(-1)).toBe("style-local.my-hardware");
+  await expect(page.getByTestId("style-local")).toHaveCount(1);
   await page.getByTestId("style-local.my-hardware").click();
   await expect.poll(() => onHost(page, STYLE)).toBe("local.my-hardware");
   expect(await onHost(page, LOOK("tabs"))).toBe("keycap");

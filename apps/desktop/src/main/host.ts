@@ -5198,8 +5198,9 @@ export class Host {
     const { theme, variation } = this.currentChoice();
     const style = this.currentStyle();
     const fontId = resolveFontId(this.library.font, style);
-    // Classic first, then Tavora's other styles by name.
-    const styles = [...this.styles.values()].sort((a, b) => Number(b.style.id === CLASSIC_STYLE_ID) - Number(a.style.id === CLASSIC_STYLE_ID) || a.style.name.localeCompare(b.style.name));
+    // Classic first, then Tavora's other styles by name, then the user's own by name.
+    const styleOrder = (entry: InstalledStyle) => (entry.style.id === CLASSIC_STYLE_ID ? 0 : entry.provenance === "official" ? 1 : 2);
+    const styles = [...this.styles.values()].sort((a, b) => styleOrder(a) - styleOrder(b) || a.style.name.localeCompare(b.style.name));
     // Official themes first, the default leading, then the user's own by name.
     const order = (entry: InstalledTheme) => (entry.theme.id === DEFAULT_THEME.id ? 0 : entry.provenance === "official" ? 1 : 2);
     const themes = [...this.themes.values()].sort((a, b) => order(a) - order(b) || a.theme.name.localeCompare(b.theme.name));

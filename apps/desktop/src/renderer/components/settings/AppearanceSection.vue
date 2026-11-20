@@ -51,7 +51,6 @@ const themeGroups = computed(() => {
 const active = computed(() => appearance.value.themes.find((theme) => theme.id === appearance.value.themeId));
 /** Official and Local tags only when the list has both; on every card they would say nothing. */
 const mixedThemes = computed(() => new Set(appearance.value.themes.map((theme) => theme.provenance)).size > 1);
-const mixedStyles = computed(() => new Set(appearance.value.styles.map((style) => style.provenance)).size > 1);
 
 /** The variation a card previews: the one with the active variation's id (so Light shows Light), otherwise the theme's first. */
 function previewOf(theme: ThemeView): ThemeVariationView {
@@ -191,9 +190,8 @@ const showVariation = computed(() => {
               <Badge v-if="item.id === appearance.styleId" class="bg-primary/15 text-primary flex-none border-transparent py-0 text-[10px] font-semibold" data-testid="style-in-use">{{
                 t("settings.theme.inUse")
               }}</Badge>
-              <Badge v-if="mixedStyles" variant="outline" :class="cn('flex-none py-0 font-normal', item.provenance === 'official' ? 'border-primary/40 text-primary' : 'text-muted-foreground')">{{
-                item.provenance === "official" ? t("common.official") : t("common.local")
-              }}</Badge>
+              <!-- Only the user's own are tagged: Tavora's are the norm here, and a tag on every row would be noise. -->
+              <Badge v-if="item.provenance === 'local'" variant="outline" class="text-muted-foreground flex-none py-0 font-normal" data-testid="style-local">{{ t("common.local") }}</Badge>
             </span>
           </SelectItem>
         </SelectContent>
