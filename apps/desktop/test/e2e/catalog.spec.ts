@@ -467,7 +467,8 @@ test("the Add a game picker badges games that have modules, and the empty game p
 
     // Its empty page offers the modules made for it first; a tile installs one and opens its panel.
     await emptyTheWorkspace(page);
-    await expect(page.getByTestId("made-for-add-wellbrained.sat-map")).toContainText("Map and Pings");
+    await expect(page.getByTestId("made-for-add-wellbrained.sat-map")).toContainText("Sat Map");
+    await expect(page.getByTestId("made-for-add-wellbrained.sat-map")).toHaveAttribute("title", "Map and Pings");
     await page.getByTestId("made-for-add-wellbrained.sat-calc").click();
     await expectModuleText(app, "wellbrained.sat-calc", "version", "1.0.0");
     await expect(panels(page, "wellbrained.sat-map")).toHaveCount(0);
