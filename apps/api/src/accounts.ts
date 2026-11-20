@@ -38,8 +38,18 @@ export interface AccountOptions {
   accountNetworkRateLimiter?: RateLimiter;
   /** Codes for changing the address per account, a day: 3 by default. */
   changeEmailRateLimiter?: RateLimiter;
-  /** Sign-in codes one address may draw a day from the emails kept for accounts (MAIL_FOR_ACCOUNTS_SHARE): 3 by default. */
+  /**
+   * Sign-in codes one address may draw a day from the emails kept for accounts (MAIL_FOR_ACCOUNTS_SHARE): 3 by default,
+   * counted apart for the networks the address signed in from and for everyone else.
+   */
   accountShareRateLimiter?: RateLimiter;
+  /**
+   * Emails one account asks for to its own address a day: codes to delete it or to connect or remove a sign-in method,
+   * and the notice of a key replacement. 5 by default, for all of them together.
+   */
+  ownerMailRateLimiter?: RateLimiter;
+  /** Delete codes one account may draw a day from the reserved emails (MAIL_RESERVED) once sign-in codes ran out: 1 by default. */
+  reserveRateLimiter?: RateLimiter;
   /** Waits this long (ms); a test passes its own so nothing really waits. */
   pause?: (ms: number) => Promise<void>;
   /** A number from 0 up to 1 for the jitter of a pause (Math.random by default). */
@@ -71,7 +81,11 @@ export interface AccountOptions {
   lifecycle?: AccountLifecycle;
 }
 
-/** Of the day's emails, the last ones are kept for changing the address and deleting the account. */
+/**
+ * Of the day's emails, the last ones are kept for deleting an account: once sign-in codes ran out, each account may still
+ * draw one delete code a day from them. Everything else an owner asks for (connecting or removing a sign-in method, a key
+ * replacement's notice) stops with the sign-in codes, so no number of accounts spends these by asking for those.
+ */
 export const MAIL_RESERVED = 20;
 /**
  * Of the emails left for sign-in codes, this share (rounded down) only goes to addresses that already have an account:
@@ -88,8 +102,8 @@ export const ACCOUNTS_PER_DAY = 500;
 export const SEND_PAUSE = { startMs: 500, minMs: 50, maxMs: 3000 } as const;
 const DAY_MS = 24 * 60 * 60_000;
 const utcDay = (at: number) => new Date(at).toISOString().slice(0, 10);
-/** An address as a limiter key: a hash, so memory holds no address. */
-const addressLimitKey = (email: string) => createHash("sha256").update(`share:${email}`).digest("hex");
+/** An address and who asks for it (account-store.ts codeGroup) as a limiter key: a hash, so memory holds no address. */
+const addressLimitKey = (email: string, group: string) => createHash("sha256").update(`share:${group}:${email}`).digest("hex");
 const nextUtcDay = (at: number) => {
   const date = new Date(at);
   return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + 1);
@@ -170,6 +184,10 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   const accountNetworkLimiter = options.accountNetworkRateLimiter ?? createRateLimiter({ limit: 20, windowMs: DAY_MS });
   const changeEmailLimiter = options.changeEmailRateLimiter ?? createRateLimiter({ limit: 3, windowMs: DAY_MS });
   const accountShareLimiter = options.accountShareRateLimiter ?? createRateLimiter({ limit: 3, windowMs: DAY_MS });
+  // Half the owner group's day (account-store.ts CODES_PER_DAY), for every purpose together: a person deletes an account or
+  // changes a sign-in method a few times at most, and an account made only to spend the day's emails yields few.
+  const ownerMailLimiter = options.ownerMailRateLimiter ?? createRateLimiter({ limit: 5, windowMs: DAY_MS });
+  const reserveLimiter = options.reserveRateLimiter ?? createRateLimiter({ limit: 1, windowMs: DAY_MS });
   const pause = options.pause ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   const random = options.random ?? Math.random;
   const app = new Hono<Env>();
@@ -180,8 +198,9 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   const deleteAccount = (id: string) => lifecycle.delete(id, now());
 
   /**
-   * The day's emails can't take `count` more: `important` ones (changing the address, deleting) may use all of them,
-   * sign-in codes all but the reserved ones, and codes to `new` addresses also leave the share kept for accounts.
+   * The day's emails can't take `count` more: `important` ones (a delete code, within reserveLimiter) may use all of them,
+   * sign-in codes and everything else all but the reserved ones, and codes to `new` addresses also leave the share kept
+   * for accounts.
    */
   const usedUp = (kind: "important" | "sign-in" | "new", count = 1) => {
     if (options.mailDailyLimit === undefined) return false;
@@ -195,6 +214,21 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   /** Who asks for a code to an address that isn't their own account's: their network, held in memory only. */
   const stranger = (context: Context): CodeAsker => ({ from: networkOf(clientKey(context.req.raw)) });
   const OWNER: CodeAsker = { owner: true };
+
+  /**
+   * Seconds before the signed-in account may have another email sent to its own address, or 0; counts one. The same
+   * day's shares per client and network as sign-in codes, and ownerMailLimiter per account, so accounts made for it
+   * can't spend the day's emails: owners' emails take at most 5 an account and 40 a network a day.
+   */
+  const ownerShare = (context: Context, accountId: string) => {
+    const client = clientKey(context.req.raw);
+    return Math.max(codeDayLimiter.check(client), codeNetworkLimiter.check(networkOf(client)), ownerMailLimiter.check(accountId));
+  };
+  /** No room for an owner's code today: everything stops with the sign-in codes, but a delete code once a day (MAIL_RESERVED). */
+  const ownerMailFull = (accountId: string, purpose: "delete" | "other") => {
+    if (!usedUp("sign-in")) return false;
+    return purpose === "other" || usedUp("important") || reserveLimiter.check(accountId) > 0;
+  };
 
   const dayStart = (at: number) => nextUtcDay(at) - DAY_MS;
 
@@ -277,20 +311,28 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     if (usedUp("sign-in")) return usedUpAnswer(context);
     const at = now();
     const account = store.accountByEmail(email);
-    // Once new addresses' share is used up, the rest of the sign-in emails is kept for accounts made before today,
-    // and one address draws at most 3 codes from it, so accounts made for it can't spend it either.
+    const asker = stranger(context);
+    // Once new addresses' share is used up, the rest of the sign-in emails is kept for accounts made before today, and
+    // one address draws at most 3 codes from it, so accounts made for it can't spend it either. The 3 are counted apart
+    // for the networks the address signed in from and for everyone else, and only for a request the address's limits let
+    // through for that asker, so strangers can't use up the owner's.
     const quiet = usedUp("new");
     if (quiet) newAddressesFull();
-    const mails = !quiet || (account !== null && Date.parse(account.createdAt) < dayStart(at) && accountShareLimiter.check(addressLimitKey(email), at) === 0);
+    const mails =
+      !quiet ||
+      (account !== null &&
+        Date.parse(account.createdAt) < dayStart(at) &&
+        store.codeWait(email, at, asker) === 0 &&
+        accountShareLimiter.check(addressLimitKey(email, store.codeGroup(email, at, asker)), at) === 0);
     if (!mails) {
       // Answered the same as a code that went out, after about as long, and counted against the same limits, so neither
       // the answer nor its time tells which addresses have an account; no mail goes out.
-      const refused = store.countCodeRequest(email, at, stranger(context));
+      const refused = store.countCodeRequest(email, at, asker);
       if (refused > 0) return tooMany(context, refused);
       await likeASend();
       return context.json({ status: "sent" }, 202);
     }
-    const request = store.requestCode(email, "sign-in", null, at, stranger(context));
+    const request = store.requestCode(email, "sign-in", null, at, asker);
     if (!request.ok) return tooMany(context, request.retryAfter);
     // The mail differs for a new address, but only its owner reads it; the answer is the same.
     const failed = await send(context, codeMail(account ? "sign-in" : "create", email, request.code, mailLanguage(input.language)));
@@ -505,8 +547,11 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     if (result === "open") return context.json({ error: "This key already waits to be replaced.", reason: "key-in-request" }, 409);
     const after = store.keyRequest(old);
     const isNew = !before || before.declinedAt !== null || before.leaked !== after?.leaked;
-    // Best effort: the request stands even when the day's emails are used up.
-    if (isNew && account.email && !usedUp("sign-in")) await send(context, keyRequestMail(account.email, old, input.leaked, mailLanguage(input.language)));
+    // Best effort: the request stands even when the day's emails, or the account's own share of them, are used up. Only
+    // the account's share counts, not its client's or network's, so nobody stops the notice by spending those first.
+    if (isNew && account.email && !usedUp("sign-in") && ownerMailLimiter.check(account.id) === 0) {
+      await send(context, keyRequestMail(account.email, old, input.leaked, mailLanguage(input.language)));
+    }
     return context.json(developerAnswer(account.id));
   });
 
@@ -623,7 +668,9 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const account = context.get("account");
     if (!account.email) return context.json({ error: "This account has no email address.", reason: "no-email" }, 409);
     if (!account.discord) return lastMethod(context);
-    if (usedUp("important")) return usedUpAnswer(context);
+    const shareWait = ownerShare(context, account.id);
+    if (shareWait > 0) return tooMany(context, shareWait);
+    if (ownerMailFull(account.id, "other")) return usedUpAnswer(context);
     const request = store.requestCode(account.email, "remove-email", account.id, now(), OWNER);
     if (!request.ok) return tooMany(context, request.retryAfter);
     return (await send(context, codeMail("remove-email", account.email, request.code, mailLanguage(input.language)))) ?? context.json({ status: "sent" }, 202);
@@ -649,7 +696,9 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const account = context.get("account");
     // A Discord-only account confirms with a fresh Discord sign-in instead (/delete/discord).
     if (!account.email) return context.json({ error: "This account has no email address; confirm with Discord.", reason: "no-email" }, 409);
-    if (usedUp("important")) return usedUpAnswer(context);
+    const shareWait = ownerShare(context, account.id);
+    if (shareWait > 0) return tooMany(context, shareWait);
+    if (ownerMailFull(account.id, "delete")) return usedUpAnswer(context);
     const request = store.requestCode(account.email, "delete", account.id, now(), OWNER);
     if (!request.ok) return tooMany(context, request.retryAfter);
     return (await send(context, codeMail("delete", account.email, request.code, mailLanguage(input.language)))) ?? context.json({ status: "sent" }, 202);
@@ -736,7 +785,9 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const account = context.get("account");
     if (account.discord) return discordConnected(context);
     if (!account.email) return noEmail(context);
-    if (usedUp("important")) return usedUpAnswer(context);
+    const shareWait = ownerShare(context, account.id);
+    if (shareWait > 0) return tooMany(context, shareWait);
+    if (ownerMailFull(account.id, "other")) return usedUpAnswer(context);
     const request = store.requestCode(account.email, "connect-discord", account.id, now(), OWNER);
     if (!request.ok) return tooMany(context, request.retryAfter);
     return (await send(context, codeMail("connect-discord", account.email, request.code, mailLanguage(input.language)))) ?? context.json({ status: "sent" }, 202);
@@ -773,7 +824,9 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const account = context.get("account");
     if (!account.discord) return noDiscord(context);
     if (!account.email) return lastMethod(context);
-    if (usedUp("important")) return usedUpAnswer(context);
+    const shareWait = ownerShare(context, account.id);
+    if (shareWait > 0) return tooMany(context, shareWait);
+    if (ownerMailFull(account.id, "other")) return usedUpAnswer(context);
     const request = store.requestCode(account.email, "remove-discord", account.id, now(), OWNER);
     if (!request.ok) return tooMany(context, request.retryAfter);
     return (await send(context, codeMail("remove-discord", account.email, request.code, mailLanguage(input.language)))) ?? context.json({ status: "sent" }, 202);

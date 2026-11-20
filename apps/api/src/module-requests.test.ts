@@ -1,10 +1,14 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import { createAdminApp } from "./admin-app.ts";
 import { createApp } from "./app.ts";
 import { buildDataset, writeDatabase } from "./dataset.ts";
 import { createHostedStore } from "./hosted-store.ts";
 import { IconState } from "./icon-state.ts";
-import { gameKey, gameListKnows, MAX_GAMES, ModuleRequestStore, parseRequest } from "./module-requests.ts";
+import { gameKey, gameListKnows, KNOWN_KEEP_MS, MAX_GAMES, ModuleRequestStore, parseRequest } from "./module-requests.ts";
 import { createRateLimiter } from "./rate-limit.ts";
 import { createSubmissions } from "./submissions.ts";
 
@@ -132,6 +136,77 @@ describe("the votes", () => {
     expect(steamIds()).toEqual([1, 3]);
   });
 
+  it("lets a known game take the place of known games nobody asked for in 90 days, the fewest votes first (audit)", () => {
+    // As the audit planned it: five known games with two votes each (from two networks) fill a list of five.
+    const store = new ModuleRequestStore(":memory:");
+    const game = (steamAppId: number) => ({ name: `Game ${steamAppId}`, steamAppId, gameId: null });
+    const steamIds = () => store.ranked().map((entry) => entry.steamAppId).sort((a, b) => (a ?? 0) - (b ?? 0));
+    const now = Date.parse("2026-11-20T12:00:00Z");
+    for (let id = 1; id <= 5; id++) {
+      store.vote({ game: game(id), voter: voter(id * 10) }, now + id, { known: true, maxGames: 5, network: "198.51.100.0/24" });
+      store.vote({ game: game(id), voter: voter(id * 10 + 1) }, now + id, { known: true, maxGames: 5, network: "203.0.113.0/24" });
+    }
+    // Game 1 gets a third network's vote, so it goes last.
+    store.vote({ game: game(1), voter: voter(99) }, now + 6, { known: true, maxGames: 5, network: "192.0.2.0/24" });
+    const madeUp = { name: "Made Up", steamAppId: null, gameId: null };
+    const at = (time: number) => [
+      store.vote({ game: game(6), voter: voter(1) }, time, { known: true, maxGames: 5, network: "10.0.0.0/24" }),
+      store.vote({ game: madeUp, voter: voter(1) }, time, { known: false, maxGames: 5, network: "10.0.0.0/24" }),
+    ];
+    expect(at(now + 10)).toEqual([false, false]);
+    expect(at(now + 2 + KNOWN_KEEP_MS)).toEqual([false, false]);
+    expect(steamIds()).toEqual([1, 2, 3, 4, 5]);
+    // 90 days without a vote: a known newcomer takes the place of the one with the fewest votes and the oldest last vote; a
+    // made-up one still never does.
+    expect(at(now + 3 + KNOWN_KEEP_MS)).toEqual([true, false]);
+    expect(steamIds()).toEqual([1, 3, 4, 5, 6]);
+    // A year on, game 6 is on the list (its vote changes nothing now), and the made-up one still finds no place.
+    expect(at(now + 365 * 24 * 60 * 60_000)).toEqual([true, false]);
+    expect(steamIds()).toEqual([1, 3, 4, 5, 6]);
+  });
+
+  it("counts a game's votes once per network, and each vote from before networks were kept on its own", () => {
+    const store = new ModuleRequestStore(":memory:");
+    const votes = () => store.ranked().map((entry) => entry.votes);
+    // Two votes from before.
+    store.vote({ game: { ...valheim, gameId: null }, voter: voter(1) }, 1000);
+    store.vote({ game: { ...valheim, gameId: null }, voter: voter(2) }, 1000);
+    expect(votes()).toEqual([2]);
+    // Ten made-up voter codes from one network count once, and don't make the game look asked for lately.
+    for (let n = 10; n < 20; n++) expect(store.vote({ game: { ...valheim, gameId: null }, voter: voter(n) }, 2000 + n, { network: "2001:db8:1::/48" })).toBe(true);
+    expect(votes()).toEqual([3]);
+    expect(store.ranked()[0]?.lastAt).toBe(new Date(2010).toISOString());
+    // Another network counts.
+    store.vote({ game: { ...valheim, gameId: null }, voter: voter(30) }, 3000, { network: "203.0.113.0/24" });
+    expect(votes()).toEqual([4]);
+    // The same network asks for another game: that counts there.
+    store.vote({ game: { name: "Siedler 3", steamAppId: null, gameId: null }, voter: voter(31) }, 4000, { network: "2001:db8:1::/48" });
+    expect(store.ranked().map((entry) => [entry.name, entry.votes])).toEqual([
+      ["Valheim", 4],
+      ["Siedler 3", 1],
+    ]);
+  });
+
+  it("opens a list from before networks were kept, and the service before it still opens the new one", () => {
+    const file = path.join(mkdtempSync(path.join(tmpdir(), "tavora-requests-")), "module-requests.sqlite");
+    const before = new DatabaseSync(file);
+    before.exec(`
+      create table games (key text primary key, name text not null, steam_appid integer, game_id text, votes integer not null, first_at integer not null, last_at integer not null) without rowid;
+      create table votes (key text not null, voter text not null, primary key (key, voter)) without rowid;
+      insert into games values ('steam:892970', 'Valheim', 892970, null, 1, 1000, 1000);
+      insert into votes values ('steam:892970', '${voter(1)}');
+    `);
+    before.close();
+    const store = new ModuleRequestStore(file);
+    store.vote({ game: { ...valheim, gameId: null }, voter: voter(2) }, 2000, { network: "203.0.113.0/24" });
+    expect(store.ranked().map((entry) => entry.votes)).toEqual([2]);
+    // What the service before this does with it: its own insert and read still work.
+    const old = new DatabaseSync(file);
+    old.prepare("insert or ignore into votes (key, voter) values (?, ?)").run("steam:892970", voter(3));
+    expect(old.prepare("select key, votes from games").all()).toEqual([{ key: "steam:892970", votes: 2 }]);
+    old.close();
+  });
+
   it("knows games by the game list's Steam ids and Tavora ids, never by a name alone", () => {
     const dataset = writeDatabase(":memory:", buildDataset({ builtIns: [{ id: "elden-ring", name: "Elden Ring" }], wikidata: [], steam: [] }));
     (dataset as unknown as { exec(sql: string): void }).exec("insert into games (id, name, steam_appid, built_in) values ('valheim', 'Valheim', 892970, 0)");
@@ -163,11 +238,13 @@ describe("the votes", () => {
     expect(store.ranked().map((game) => game.votes)).toEqual([1]);
   });
 
-  it("keeps nothing but the game and a code", () => {
+  it("keeps nothing but the game, a code and 4 hex digits for the network", () => {
     const store = new ModuleRequestStore(":memory:");
-    store.vote({ game: { ...valheim, gameId: null }, voter: voter(1) });
+    store.vote({ game: { ...valheim, gameId: null }, voter: voter(1) }, 1000, { network: "203.0.113.0/24" });
     const db = (store as unknown as { db: { prepare(sql: string): { all(): Record<string, unknown>[] } } }).db;
-    expect(Object.keys(db.prepare("select * from votes").all()[0]!).sort()).toEqual(["key", "voter"]);
+    const [row] = db.prepare("select * from votes").all();
+    expect(Object.keys(row!).sort()).toEqual(["key", "network", "voter"]);
+    expect(row!.network).toMatch(/^[0-9a-f]{4}$/);
     expect(Object.keys(db.prepare("select * from games").all()[0]!).sort()).toEqual(["first_at", "game_id", "key", "known", "last_at", "name", "steam_appid", "votes"]);
   });
 });
@@ -201,13 +278,28 @@ describe("asking through the service", () => {
     expect((await send(createApp({ db }), { game: valheim, voter: voter(1) })).status).toBe(503);
   });
 
-  it("limits how many new games one client adds, but not its votes for games on the list", async () => {
+  it("limits how many new games one network adds, and its votes for games on the list apart from those", async () => {
     const moduleRequests = new ModuleRequestStore(":memory:");
-    const app = createApp({ db, moduleRequests, moduleRequestRateLimiter: createRateLimiter({ limit: 1000, windowMs: 60_000 }), newGameRateLimiter: createRateLimiter({ limit: 2, windowMs: 86_400_000 }) });
-    expect((await send(app, { game: { name: "One" }, voter: voter(1) })).status).toBe(204);
-    expect((await send(app, { game: { name: "Two" }, voter: voter(1) })).status).toBe(204);
-    expect((await send(app, { game: { name: "Three" }, voter: voter(1) })).status).toBe(429);
-    expect((await send(app, { game: { name: "One" }, voter: voter(2) })).status).toBe(204);
+    const app = createApp({
+      db,
+      moduleRequests,
+      clientKey: (request) => request.headers.get("x-client") ?? "shared",
+      moduleRequestRateLimiter: createRateLimiter({ limit: 1000, windowMs: 60_000 }),
+      newGameRateLimiter: createRateLimiter({ limit: 2, windowMs: 86_400_000 }),
+      voteNetworkRateLimiter: createRateLimiter({ limit: 3, windowMs: 86_400_000 }),
+    });
+    const from = (client: string, name: string, n = 1) =>
+      app.request("http://tavora.test/v1/module-requests", { method: "POST", headers: { "content-type": "application/json", "x-client": client }, body: JSON.stringify({ game: { name }, voter: voter(n) }) });
+    expect((await from("198.51.100.1", "One")).status).toBe(204);
+    expect((await from("198.51.100.1", "Two")).status).toBe(204);
+    expect((await from("198.51.100.1", "Three")).status).toBe(429);
+    // Votes for games on the list: another network's count, more from the same network don't; 3 a day per network.
+    expect((await from("203.0.113.5", "One", 2)).status).toBe(204);
+    expect((await from("198.51.100.2", "One", 3)).status).toBe(204);
+    expect((await from("198.51.100.3", "Two", 4)).status).toBe(204);
+    expect((await from("198.51.100.4", "One", 5)).status).toBe(204);
+    const limited = await from("198.51.100.5", "Two", 6);
+    expect([limited.status, limited.headers.get("retry-after") !== null]).toEqual([429, true]);
     expect(moduleRequests.ranked().map((game) => [game.name, game.votes])).toEqual([
       ["One", 2],
       ["Two", 1],

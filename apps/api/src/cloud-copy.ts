@@ -3,7 +3,7 @@ import { bodyLimit } from "hono/body-limit";
 import { statfsSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import type { AccountStore } from "./account-store.ts";
-import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
+import { createRateLimiter, networkOf, type RateLimiter } from "./rate-limit.ts";
 import { requireSignIn, tooMany, type SignedInEnv } from "./sign-in.ts";
 
 /**
@@ -23,6 +23,15 @@ export const STORED_LIMIT = 2 * COPY_LIMIT;
 export const TOTAL_LIMIT = 20 * 1024 * 1024 * 1024;
 /** Free space on the disk that new parts never take (COPY_FREE_FLOOR_GB): the accounts and the other stores share that disk. */
 export const FREE_FLOOR = 2 * 1024 * 1024 * 1024;
+/** An account this young (COPY_NEW_ACCOUNT_DAYS) draws from the new accounts' slice of the total. */
+export const NEW_ACCOUNT_MS = 7 * 24 * 60 * 60 * 1000;
+/** The share of the total that accounts younger than NEW_ACCOUNT_MS may hold together (COPY_NEW_ACCOUNT_SHARE). */
+export const NEW_ACCOUNT_SHARE = 0.25;
+/** Bytes one network (an IPv4 /24, an IPv6 /48) may add to the total a day (COPY_NETWORK_DAY_GB). */
+export const NETWORK_DAY_LIMIT = 2 * 1024 * 1024 * 1024;
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** Networks counted at once for NETWORK_DAY_LIMIT; past this the oldest go first. */
+const MAX_NETWORKS = 100_000;
 /** Parts no saved version uses are dropped once they are this old (sweep()): an upload that never got saved. */
 export const UNUSED_PART_MS = 24 * 60 * 60 * 1000;
 /** A copy without room sweeps at most this often before it refuses, so a full service doesn't sweep on every upload. */
@@ -61,27 +70,44 @@ export interface CopyStoreOptions {
   freeBytes?: () => number | null;
   /** Free bytes new parts leave on that disk; FREE_FLOOR by default. */
   freeFloor?: number;
+  /** How young an account draws from the new accounts' slice (ms); NEW_ACCOUNT_MS by default, 0 turns the slice off. */
+  newAccountMs?: number;
+  /** The share of the total (0 to 1) that young accounts may hold together; NEW_ACCOUNT_SHARE by default. */
+  newAccountShare?: number;
+  /** Bytes one network may add to the total a day; NETWORK_DAY_LIMIT by default, 0 turns the check off. */
+  networkDayLimit?: number;
+}
+
+/** Who adds bytes, for the shares of the total: when their account was made (ms) and their network. Absent: an account of long ago, on no network. */
+export interface CopyHolder {
+  since: number;
+  network?: string;
 }
 
 const GIB = 1024 * 1024 * 1024;
 
 /**
- * The limits from the environment: COPY_TOTAL_LIMIT_GB (20 by default) and COPY_FREE_FLOOR_GB (2 by default, 0 turns the
- * free-space check off), in GiB, fractions allowed; a value that is not a number of 0 or more keeps the default. The free space
- * is read from the disk that holds `dir`.
+ * The limits from the environment: COPY_TOTAL_LIMIT_GB (20 by default), COPY_FREE_FLOOR_GB (2 by default, 0 turns the
+ * free-space check off) and COPY_NETWORK_DAY_GB (2 by default, 0 turns it off), in GiB, fractions allowed;
+ * COPY_NEW_ACCOUNT_DAYS (7 by default, 0 turns the slice off) and COPY_NEW_ACCOUNT_SHARE (0.25 by default, 0 to 1). A
+ * value that is not a number in its range keeps the default. The free space is read from the disk that holds `dir`.
  */
 export function copyLimitsFromEnv(env: Record<string, string | undefined>, dir: string, warn: (message: string) => void = console.warn): Required<CopyStoreOptions> {
-  const gib = (name: string, fallback: number) => {
+  const number = (name: string, fallback: number, scale: number, max = Number.POSITIVE_INFINITY, unit = "GiB") => {
     const text = env[name]?.trim();
     if (!text) return fallback;
     const value = Number(text);
-    if (Number.isFinite(value) && value >= 0) return Math.floor(value * GIB);
-    warn(`[tavora-api] ${name} is not a number of GiB; using ${fallback / GIB}.`);
+    if (Number.isFinite(value) && value >= 0 && value <= max) return scale === 1 ? value : Math.floor(value * scale);
+    warn(`[tavora-api] ${name} is not a number of ${unit}; using ${fallback / scale}.`);
     return fallback;
   };
+  const gib = (name: string, fallback: number) => number(name, fallback, GIB);
   return {
     totalLimit: gib("COPY_TOTAL_LIMIT_GB", TOTAL_LIMIT),
     freeFloor: gib("COPY_FREE_FLOOR_GB", FREE_FLOOR),
+    networkDayLimit: gib("COPY_NETWORK_DAY_GB", NETWORK_DAY_LIMIT),
+    newAccountMs: number("COPY_NEW_ACCOUNT_DAYS", NEW_ACCOUNT_MS, DAY_MS, Number.POSITIVE_INFINITY, "days"),
+    newAccountShare: number("COPY_NEW_ACCOUNT_SHARE", NEW_ACCOUNT_SHARE, 1, 1, "0 to 1"),
     freeBytes: () => {
       try {
         const disk = statfsSync(dir);
@@ -101,15 +127,26 @@ export class CopyStore {
   private readonly totalLimit: number;
   private readonly freeBytes: (() => number | null) | undefined;
   private readonly freeFloor: number;
+  private readonly newAccountMs: number;
+  private readonly newAccountShare: number;
+  private readonly networkDayLimit: number;
   /** Bytes of parts and manifests of every account, counted once at the start and kept up to date by every change. */
   private total: number;
+  /** Bytes each network added to the total in its current day: in memory only, like the rate limits. */
+  private readonly networkBytes = new Map<string, { bytes: number; resetAt: number }>();
   private warned = false;
   private lastSweep = Number.NEGATIVE_INFINITY;
 
-  constructor(path: string, { totalLimit = TOTAL_LIMIT, freeBytes, freeFloor = FREE_FLOOR }: CopyStoreOptions = {}) {
+  constructor(
+    path: string,
+    { totalLimit = TOTAL_LIMIT, freeBytes, freeFloor = FREE_FLOOR, newAccountMs = NEW_ACCOUNT_MS, newAccountShare = NEW_ACCOUNT_SHARE, networkDayLimit = NETWORK_DAY_LIMIT }: CopyStoreOptions = {},
+  ) {
     this.totalLimit = totalLimit;
     this.freeBytes = freeBytes;
     this.freeFloor = freeFloor;
+    this.newAccountMs = newAccountMs;
+    this.newAccountShare = newAccountShare;
+    this.networkDayLimit = networkDayLimit;
     this.db = new DatabaseSync(path);
     // Freed pages go back to the disk after a version or a copy is dropped (set before the first table).
     this.db.exec("pragma auto_vacuum = incremental");
@@ -129,6 +166,10 @@ export class CopyStore {
     // reads copies.sqlite once, at the first start with it.
     this.db.exec("drop index if exists parts_size");
     this.db.exec("create index if not exists parts_meta on parts (account_id, created_at, size)");
+    // When each account that stored something was made, so young accounts' bytes can be added up (NEW_ACCOUNT_MS). Accounts
+    // from before it have no row and count as old; an older service leaves it alone.
+    this.db.exec("create table if not exists holders (account_id text primary key, since integer not null)");
+    this.db.exec("create index if not exists holders_since on holders (since)");
     const parts = (this.db.prepare("select coalesce(sum(size), 0) as total from parts").get() as { total: number }).total;
     const manifests = (this.db.prepare("select coalesce(sum(length(manifest)), 0) as total from copies").get() as { total: number }).total;
     this.total = parts + manifests;
@@ -147,23 +188,84 @@ export class CopyStore {
     }[]).map((row) => ({ ...row }));
   }
 
-  /** Whether `adding` more bytes stay within the total and leave the disk's free space. */
-  private fits(adding: number): boolean {
-    if (adding <= 0) return true;
+  /**
+   * Whether `adding` more bytes fit: they always leave the disk's free space, and the `pooled` part of them (what is not
+   * the account's own next version, replacing()) stays within the total, within the young accounts' slice of it for a young
+   * account, and within its network's bytes for the day. "full" when the total or the disk is the reason.
+   */
+  private fits(adding: number, pooled: number, who: CopyHolder | undefined, now: number): "ok" | "full" | "share" {
+    if (adding <= 0) return "ok";
     const free = this.freeBytes?.() ?? null;
-    return this.total + adding <= this.totalLimit && (free === null || free - adding >= this.freeFloor);
+    if (free !== null && free - adding < this.freeFloor) return "full";
+    if (pooled <= 0) return "ok";
+    if (this.total + pooled > this.totalLimit) return "full";
+    if (who && this.isYoung(who, now) && this.youngBytes(now) + pooled > Math.floor(this.totalLimit * this.newAccountShare)) return "share";
+    if (who?.network !== undefined && this.networkDayLimit > 0 && this.networkUsed(who.network, now) + pooled > this.networkDayLimit) return "share";
+    return "ok";
   }
 
-  /** Room for `adding` more bytes: when there is none, unused parts are swept first (at most once a minute), then it checks again. */
-  private room(adding: number, now: number): boolean {
-    if (!this.fits(adding) && now - this.lastSweep >= SWEEP_GAP_MS) this.sweep(now);
-    if (this.fits(adding)) {
+  /**
+   * Room for `adding` more bytes (fits()): when there is none, unused parts are swept first (at most once a minute), then it
+   * checks again. The log hears once when the total or the disk is full, not for one account's or network's share.
+   */
+  private room(adding: number, pooled: () => number, who: CopyHolder | undefined, now: number): boolean {
+    if (this.fits(adding, pooled(), who, now) !== "ok" && now - this.lastSweep >= SWEEP_GAP_MS) this.sweep(now);
+    const fits = this.fits(adding, pooled(), who, now);
+    if (fits === "ok") {
       this.warned = false;
       return true;
     }
-    if (!this.warned) console.warn("[tavora-api] The cloud copies have no room: new parts and versions are refused until there is some.");
-    this.warned = true;
+    if (fits === "full") {
+      if (!this.warned) console.warn("[tavora-api] The cloud copies have no room: new parts and versions are refused until there is some.");
+      this.warned = true;
+    }
     return false;
+  }
+
+  private isYoung(who: CopyHolder, now: number): boolean {
+    return this.newAccountMs > 0 && who.since > now - this.newAccountMs;
+  }
+
+  /** Bytes of parts and manifests of the accounts younger than newAccountMs. */
+  private youngBytes(now: number): number {
+    const since = now - this.newAccountMs;
+    const parts = (this.db.prepare("select coalesce(sum(p.size), 0) as total from holders h join parts p on p.account_id = h.account_id where h.since > ?").get(since) as { total: number }).total;
+    const manifests = (this.db.prepare("select coalesce(sum(length(c.manifest)), 0) as total from holders h join copies c on c.account_id = h.account_id where h.since > ?").get(since) as { total: number })
+      .total;
+    return parts + manifests;
+  }
+
+  private networkUsed(network: string, now: number): number {
+    const entry = this.networkBytes.get(network);
+    return entry && entry.resetAt > now ? entry.bytes : 0;
+  }
+
+  private countNetwork(who: CopyHolder | undefined, bytes: number, now: number): void {
+    if (who?.network === undefined || bytes <= 0) return;
+    const entry = this.networkBytes.get(who.network);
+    if (entry && entry.resetAt > now) {
+      entry.bytes += bytes;
+      return;
+    }
+    // Full: forget the oldest, which a Map keeps first (as the rate limits do).
+    if (!entry && this.networkBytes.size >= MAX_NETWORKS) this.networkBytes.delete(this.networkBytes.keys().next().value!);
+    this.networkBytes.set(who.network, { bytes, resetAt: now + DAY_MS });
+  }
+
+  private remember(accountId: string, who: CopyHolder | undefined): void {
+    if (who) this.db.prepare("insert into holders (account_id, since) values (?, ?) on conflict (account_id) do nothing").run(accountId, who.since);
+  }
+
+  /**
+   * Bytes of parts the account may add outside the total: as much as its saved version's parts, less the parts it stored
+   * since, so an account with a copy can always upload its next version of the same size, however full the total is (its
+   * old parts go once it is saved, and unsaved ones after a day). Only growth draws from the total. 0 without a copy.
+   */
+  private replacing(accountId: string): number {
+    const copy = this.db.prepare("select size, length(manifest) as manifest from copies where account_id = ?").get(accountId) as { size: number; manifest: number } | undefined;
+    if (!copy) return 0;
+    const saved = copy.size - copy.manifest;
+    return Math.max(0, saved - (this.stored(accountId) - saved));
   }
 
   /**
@@ -214,10 +316,12 @@ export class CopyStore {
   }
 
   /**
-   * Stores the parts the account does not have yet. Nothing is stored when they would pass STORED_LIMIT (`copy-full`), the
-   * total of every account, or eat into the free space the disk keeps (`no-room`).
+   * Stores the parts the account does not have yet. Nothing is stored when they would pass STORED_LIMIT (`copy-full`), or
+   * eat into the free space the disk keeps, or draw more than fits from the total (`no-room`): beyond what the account's
+   * next version may take (replacing()), they need room in the total of every account, in the young accounts' slice of it
+   * when `who` is young, and in their network's bytes for the day. Without `who`, an account of long ago on no network.
    */
-  addParts(accountId: string, parts: { id: Uint8Array; data: Uint8Array }[], now: number = Date.now()): AddPartsResult {
+  addParts(accountId: string, parts: { id: Uint8Array; data: Uint8Array }[], now: number = Date.now(), who?: CopyHolder): AddPartsResult {
     const has = this.db.prepare("select 1 from parts where account_id = ? and id = ?");
     const freshOf = () => {
       const seen = new Set<string>();
@@ -232,22 +336,26 @@ export class CopyStore {
     let fresh = freshOf();
     if (bytesOf(fresh) === 0) return "ok";
     if (this.stored(accountId) + bytesOf(fresh) > STORED_LIMIT) return "copy-full";
-    if (!this.room(bytesOf(fresh), now)) return "no-room";
+    const pooled = (bytes: number) => Math.max(0, bytes - this.replacing(accountId));
+    if (!this.room(bytesOf(fresh), () => pooled(bytesOf(fresh)), who, now)) return "no-room";
     // A sweep for room may have dropped old unused parts of this account too: those are stored again.
     fresh = freshOf();
     const adding = bytesOf(fresh);
     if (this.stored(accountId) + adding > STORED_LIMIT) return "copy-full";
-    if (!this.fits(adding)) return "no-room";
+    const drawn = pooled(adding);
+    if (this.fits(adding, drawn, who, now) !== "ok") return "no-room";
     const insert = this.db.prepare("insert into parts (account_id, id, data, size, created_at) values (?, ?, ?, ?, ?)");
     this.db.exec("begin");
     try {
       for (const part of fresh) insert.run(accountId, part.id, part.data, part.data.length, now);
+      this.remember(accountId, who);
       this.db.exec("commit");
     } catch (error) {
       this.db.exec("rollback");
       throw error;
     }
     this.total += adding;
+    this.countNetwork(who, drawn, now);
     return "ok";
   }
 
@@ -268,14 +376,16 @@ export class CopyStore {
 
   /**
    * Makes `manifest` with `parts` the account's copy, if the PC started from the current version
-   * (0 when there is none). Parts no longer used are dropped. A manifest bigger than the one it replaces needs room like parts do.
+   * (0 when there is none). Parts no longer used are dropped. A manifest bigger than the one it replaces needs room like new
+   * parts do (addParts, `who` too).
    */
-  swap(accountId: string, base: number, manifest: Uint8Array, parts: Uint8Array[], now: number): SwapResult {
+  swap(accountId: string, base: number, manifest: Uint8Array, parts: Uint8Array[], now: number, who?: CopyHolder): SwapResult {
     const current = this.info(accountId);
     if ((current?.version ?? 0) !== base) return { ok: false, reason: "copy-changed", version: current?.version ?? 0 };
     const previous = (this.db.prepare("select length(manifest) as bytes from copies where account_id = ?").get(accountId) as { bytes: number } | undefined)?.bytes ?? 0;
+    const growth = manifest.length - previous;
     // Before the parts are looked up: a sweep for room may drop old unused ones, which then count as missing.
-    if (!this.room(manifest.length - previous, now)) return { ok: false, reason: "unavailable" };
+    if (!this.room(growth, () => growth, who, now)) return { ok: false, reason: "unavailable" };
     const sizeOf = this.db.prepare("select size, created_at from parts where account_id = ? and id = ?");
     const keep = new Map<string, Uint8Array>();
     for (const id of parts) keep.set(Buffer.from(id).toString("hex"), id);
@@ -309,12 +419,14 @@ export class CopyStore {
         drop.run(accountId, part.id);
         dropped += part.size;
       }
+      this.remember(accountId, who);
       this.db.exec("commit");
     } catch (error) {
       this.db.exec("rollback");
       throw error;
     }
-    this.total += manifest.length - previous - dropped;
+    this.total += growth - dropped;
+    this.countNetwork(who, growth, now);
     this.db.exec("pragma incremental_vacuum");
     return { ok: true, version, size };
   }
@@ -335,6 +447,7 @@ export class CopyStore {
       else this.db.prepare("insert into retired (account_id, version) values (?, ?) on conflict (account_id) do update set version = excluded.version").run(accountId, version);
       this.db.prepare("delete from parts where account_id = ?").run(accountId);
       this.db.prepare("delete from copies where account_id = ?").run(accountId);
+      if (forever) this.db.prepare("delete from holders where account_id = ?").run(accountId);
       this.db.exec("commit");
     } catch (error) {
       this.db.exec("rollback");
@@ -425,6 +538,8 @@ export function copyRoutes({ copies, accounts, clientKey, rateLimiter, now = Dat
   app.use("*", requireSignIn(accounts, now));
   app.use("*", bodyLimit({ maxSize: MAX_BODY, onError: (context) => context.json({ error: "Too big.", reason: "too-big" }, 413) }));
   const bytes = async (context: Context) => new Uint8Array(await context.req.arrayBuffer());
+  /** Who adds bytes, for the shares of the total: when the account was made, and the request's network. */
+  const holder = (context: Context<Env>): CopyHolder => ({ since: Date.parse(context.get("account").createdAt), network: networkOf(clientKey(context.req.raw)) });
 
   app.get("/", (context) => {
     const info = copies.info(context.get("account").id);
@@ -443,7 +558,7 @@ export function copyRoutes({ copies, accounts, clientKey, rateLimiter, now = Dat
     const parts = readParts(await bytes(context));
     if (!parts) return bad(context, "Send parts: a 32-byte id, a 4-byte length and the bytes, one after another.");
     const account = context.get("account");
-    const added = copies.addParts(account.id, parts, now());
+    const added = copies.addParts(account.id, parts, now(), holder(context));
     if (added === "copy-full") return context.json({ error: "The cloud copy is full.", reason: "copy-full", limit: COPY_LIMIT }, 413);
     // The service's own room, not this account's: the app keeps its data and tries again later, as for any 503.
     if (added === "no-room") return context.json({ error: "The cloud copy has no room right now. Try again later.", reason: "unavailable" }, 503);
@@ -463,7 +578,7 @@ export function copyRoutes({ copies, accounts, clientKey, rateLimiter, now = Dat
   app.put("/", async (context) => {
     const swap = readSwap(await bytes(context));
     if (!swap) return bad(context, "Send the version it started from, the part ids and the manifest.");
-    const result = copies.swap(context.get("account").id, swap.base, swap.manifest, swap.parts, now());
+    const result = copies.swap(context.get("account").id, swap.base, swap.manifest, swap.parts, now(), holder(context));
     if (result.ok) return context.json({ version: result.version, size: result.size });
     if (result.reason === "copy-changed") return context.json({ error: "The cloud copy changed on another PC.", reason: result.reason, version: result.version }, 409);
     if (result.reason === "missing-parts") return context.json({ error: "Some parts are missing; upload them again.", reason: result.reason, missing: result.missing }, 409);

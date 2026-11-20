@@ -23,7 +23,9 @@ export const CODE_MAX_TRIES = 5;
  *   every 15 minutes and 5 a day per network, and 10 a day from all of them together.
  * Strangers on other networks can only use up the last group: the owner still signs in from a network they used
  * before and still changes or deletes from inside the account, and strangers can mail the address at most 10 times a
- * day. An owner on a network they never signed in from shares that group with strangers.
+ * day. An owner on a network they never signed in from shares that group with strangers. The 3 codes an address may
+ * draw from the emails kept for accounts on a busy day (accounts.ts accountShareRateLimiter) are counted per group too
+ * (codeGroup), so strangers can't use up those of the networks the owner signed in from either.
  */
 export const CODES_PER_WINDOW = 3;
 export const CODE_WINDOW_MS = 15 * 60_000;
@@ -1105,6 +1107,12 @@ export class AccountStore {
     const mine = "from" in asker ? (this.askers.get(askerKey(asker.from, email)) ?? []).filter((at) => at > now - DAY_MS) : [];
     const network = limitWait(mine, now, [CODES_PER_WINDOW, CODE_WINDOW_MS], [CODES_PER_ASKER_DAY, DAY_MS]);
     return group === ASKED_BY.known ? network : Math.max(network, limitWait(recent, now, [CODES_FROM_OTHERS_PER_DAY, DAY_MS]));
+  }
+
+  /** Which group of an address's limits `asker` counts in (see CODES_PER_WINDOW): its own account, a network it signed in from, or anyone else. */
+  codeGroup(email: string, now: number, asker: CodeAsker): "owner" | "known" | "stranger" {
+    const group = this.askedBy(email, now, asker);
+    return group === ASKED_BY.owner ? "owner" : group === ASKED_BY.known ? "known" : "stranger";
   }
 
   /** Which group of an address's limits a request counts in (see CODES_PER_WINDOW). */
