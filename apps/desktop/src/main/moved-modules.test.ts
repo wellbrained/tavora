@@ -70,6 +70,26 @@ describe("Discord and AI Usage leaving Tavora", () => {
     expect(JSON.parse(await readFile(path.join(userData, "hotkeys.json"), "utf8")).hotkeys[0]).toMatchObject({ owner: OWNER, moduleId: "wellbrained.ai-usage" });
   });
 
+  it("move every panel, whoever's page ran in it last; one the official copy ran in goes on as the catalog module's", async () => {
+    const userData = await mkdtemp(path.join(tmpdir(), "tavora-moved-"));
+    const instances = [
+      { instanceId: "a", moduleId: "tavora.discord", owner: "official", content: { id: "c", title: "Voice" } },
+      { instanceId: "b", moduleId: "tavora.ai-usage", owner: "local" },
+      { instanceId: "c", moduleId: "tavora.notes", owner: "official" },
+    ];
+    await put(path.join(userData, "workspace.json"), JSON.stringify({ version: 3, workspaces: { valheim: { instances, layout: null, snapshots: [] } } }));
+
+    await moveOfficialModules(userData, () => undefined, path.join(userData, "module-files"));
+
+    const workspace = JSON.parse(await readFile(path.join(userData, "workspace.json"), "utf8"));
+    expect(workspace.workspaces.valheim.instances).toEqual([
+      { instanceId: "a", moduleId: "wellbrained.discord", owner: OWNER, content: { id: "c", title: "Voice" } },
+      // Another owner's page ran in it: it moves too, still noted as that owner's (it starts without what that one left).
+      { instanceId: "b", moduleId: "wellbrained.ai-usage", owner: "local" },
+      { instanceId: "c", moduleId: "tavora.notes", owner: "official" },
+    ]);
+  });
+
   it("do nothing when there is nothing of theirs", async () => {
     const userData = await mkdtemp(path.join(tmpdir(), "tavora-moved-"));
     await moveOfficialModules(userData, () => undefined, path.join(userData, "module-files"));

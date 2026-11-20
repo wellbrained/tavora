@@ -70,6 +70,7 @@ test("data from before the workspace names opens with every workspace, its panel
   expect(library).not.toHaveProperty("games");
   const workspace = JSON.parse(await readFile(path.join(userData, "workspace.json"), "utf8"));
   expect(workspace.version).toBe(3);
-  expect(workspace.workspaces["local-personal"].instances).toEqual([{ instanceId: NOTES_PANEL, moduleId: NOTES }]);
+  // The panel notes the owner its page ran as (Notes is built in): what it saves is that owner's.
+  expect(workspace.workspaces["local-personal"].instances).toEqual([{ instanceId: NOTES_PANEL, moduleId: NOTES, owner: "official" }]);
   expect((await readdir(path.join(userData, "backups", "before-workspaces"))).sort()).toEqual(["library.json", "workspace.json"]);
 });

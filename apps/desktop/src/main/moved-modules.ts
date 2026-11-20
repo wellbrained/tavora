@@ -64,11 +64,18 @@ export async function moveOfficialModules(userData: string, log: (line: string) 
       if (!(await exists(target))) await rename(path.join(partitions, name), target);
     }
   }
-  for (const file of [WORKSPACE_FILE, GAME_OVERLAYS_FILE, OVERLAYS_FILE, HOTKEYS_FILE]) await renameIn(path.join(userData, file));
+  await renameIn(path.join(userData, WORKSPACE_FILE), true);
+  for (const file of [GAME_OVERLAYS_FILE, OVERLAYS_FILE, HOTKEYS_FILE]) await renameIn(path.join(userData, file), false);
 }
 
-/** Points every record of a moved module in one saved file at its catalog module. */
-async function renameIn(file: string): Promise<void> {
+/**
+ * Points every record of a moved module in one saved file at its catalog module. In the overlays, stream links and
+ * hotkeys, a record's owner names the copy it is for: only the official copy's move. A panel's owner in the workspace
+ * (`panels`) names whose page ran in it last (host.ts settleOwner): every panel moves, and one the official copy ran in
+ * goes on as the catalog module's, as its data does; another owner's stays noted, so the catalog module starts it
+ * without what that owner left.
+ */
+async function renameIn(file: string, panels: boolean): Promise<void> {
   let text: string;
   try {
     text = await readFile(file, "utf8");
@@ -82,10 +89,9 @@ async function renameIn(file: string): Promise<void> {
     if (typeof value !== "object" || value === null) return;
     const record = value as Record<string, unknown>;
     const moved = MOVED_MODULES.find(({ from }) => record.moduleId === from);
-    // Records with an owner name one (the official copy); the workspace's name the module alone.
-    if (moved && (!("owner" in record) || record.owner === OFFICIAL_OWNER)) {
+    if (moved && (panels || !("owner" in record) || record.owner === OFFICIAL_OWNER)) {
       record.moduleId = moved.to;
-      if ("owner" in record) record.owner = MOVED_MODULES_OWNER;
+      if ("owner" in record && record.owner === OFFICIAL_OWNER) record.owner = MOVED_MODULES_OWNER;
       changed = true;
     }
     // A saved layout names the module of each slot: `modules: { slot: moduleId }`.
