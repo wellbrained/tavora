@@ -1,6 +1,6 @@
 import { generateKeyPairSync } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { catalogPublicKey, isNewerCatalogList, nextCatalogList, readCatalogList, signCatalogList, type BlockList } from "./index.ts";
+import { catalogListChanges, catalogPublicKey, isNewerCatalogList, nextCatalogList, readCatalogList, signCatalogList, type BlockList } from "./index.ts";
 
 const catalogue = generateKeyPairSync("ed25519").privateKey;
 const publicKey = catalogPublicKey(catalogue);
@@ -45,5 +45,21 @@ describe("catalog lists", () => {
     expect(isNewerCatalogList(blocks(2), blocks(2))).toBe(false);
     expect(isNewerCatalogList(blocks(3, "2026-01-01T00:00:00Z"), blocks(2))).toBe(false);
     expect(isNewerCatalogList(blocks(1), null)).toBe(true);
+  });
+
+  it("lists what the next list adds, drops and changes, by each entry's id", () => {
+    const b = { sha256: hash("b"), reason: "Dummy B." };
+    const next: BlockList = { ...blocks(2), blocked: [b, { sha256: hash("c"), reason: "Dummy C." }] };
+    const previous: BlockList = { ...blocks(1), blocked: [{ sha256: hash("a"), reason: "Sends your files away." }, { ...b, reason: "Older words." }] };
+    expect(catalogListChanges("blocks", previous, next)).toEqual([
+      { change: "changed", id: hash("b"), before: [{ ...b, reason: "Older words." }], after: [b] },
+      { change: "added", id: hash("c"), before: [], after: [{ sha256: hash("c"), reason: "Dummy C." }] },
+      { change: "removed", id: hash("a"), before: [{ sha256: hash("a"), reason: "Sends your files away." }], after: [] },
+    ]);
+    expect(catalogListChanges("blocks", next, { ...next, sequence: 3, blocked: [...next.blocked].reverse() })).toEqual([]);
+    expect(catalogListChanges("blocks", null, blocks(1)).map((change) => change.change)).toEqual(["added"]);
+    const succession = { old: "1".repeat(32), new: "2".repeat(32), account: "acc1" };
+    const successions = (list: (typeof succession)[]) => ({ kind: "successions" as const, sequence: 1, issued: "2026-10-18T12:00:00Z", successions: list });
+    expect(catalogListChanges("successions", successions([succession]), successions([{ ...succession, new: "3".repeat(32) }]))).toMatchObject([{ change: "changed", id: succession.old }]);
   });
 });

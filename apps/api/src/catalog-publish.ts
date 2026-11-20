@@ -201,7 +201,11 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
       throw error;
     }
     const key = store.publisherKey(checked.owner);
-    if (!key) return refuse(context, 403, "key-not-linked", "This publisher key is not linked to a Tavora account.");
+    if (!key) {
+      // A leaked key whose account unlinked it or was deleted says so, rather than asking to link it (which is refused).
+      if (store.isLeakedKey(checked.owner)) return refuse(context, 403, "key-leaked", "This publisher key was reported as leaked, so it publishes nothing new.");
+      return refuse(context, 403, "key-not-linked", "This publisher key is not linked to a Tavora account.");
+    }
     if (!signedStatement(Buffer.from(key.publicKey, "base64"), `${PUBLISH_STATEMENT}\n${checked.sha256}`, signature)) {
       return refuse(context, 403, "bad-signature", "The upload is not signed by the key that signed the zip.");
     }
@@ -225,8 +229,7 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
       if (store.publisherKey(checked.owner)?.accountId !== key.accountId) return refuse(context, 403, "key-not-linked", "This publisher key is not linked to a Tavora account.");
       if (trust.revoked(checked.owner, checked.sha256)) return refuse(context, 403, "key-revoked", "This publisher key was revoked and publishes nothing new. Link a new key to your account.");
       // Reported as leaked in the app: nothing new from it while the revocation waits to be signed.
-      const reported = store.keyRequest(checked.owner);
-      if (reported?.leaked && reported.declinedAt === null) return refuse(context, 403, "key-leaked", "You reported this publisher key as leaked, so it publishes nothing new. Publish with your new key.");
+      if (store.isLeakedKey(checked.owner)) return refuse(context, 403, "key-leaked", "You reported this publisher key as leaked, so it publishes nothing new. Publish with your new key.");
       return null;
     };
     const keyNow = keyRefused();

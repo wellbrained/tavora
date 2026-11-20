@@ -8,6 +8,7 @@ export { asSigner, keySigner, type Signer } from "./signer.ts";
 export { isSafeEntryName, readZip, writeZip, ZIP_LIMITS, ZipError, type ZipFile, type ZipLimits } from "./zip.ts";
 export {
   CATALOG_LIST_KINDS,
+  catalogListChanges,
   catalogPublicKey,
   isCatalogList,
   isNewerCatalogList,
@@ -18,6 +19,7 @@ export {
   type Block,
   type BlockList,
   type CatalogList,
+  type CatalogListChange,
   type CatalogListKind,
   type CatalogListOf,
   type Revocation,

@@ -9,11 +9,15 @@
 //   half, for CATALOGUE_PUBLIC_KEY in apps/desktop/src/main/safety-lists.ts.
 // pnpm tavora-catalog-sign public <key file>
 //   Prints the public half of the catalogue key again.
-// pnpm tavora-catalog-sign <revocations|blocks|successions> <entries.json> --key <key file> --out <signed file>
+// pnpm tavora-catalog-sign <revocations|blocks|successions> <entries.json> --key <key file> --out <signed file> [--allow-change <id> ...]
 //   Signs the entries as the next list of that kind. When <signed file>
 //   exists (the list served now), its sequence number plus one is used, so
 //   the app takes the new list over the old one; otherwise it starts at 1.
 //   Each list holds every entry still in force, not only new ones.
+//   First it prints every entry the new list adds (+), drops (-) or changes (~)
+//   against <signed file>. It signs nothing that drops or changes an entry in
+//   force unless each one is named with --allow-change: the block's sha256,
+//   the revoked key's fingerprint or the succession's old key.
 // pnpm tavora-catalog-sign show <signed file> --key <key file>
 //   Checks a signed file against the key and prints the list.
 //
@@ -32,12 +36,13 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { TAVORA_PUBLISHER_KEY } from "../packages/module-schema/src/index.ts";
-import { CATALOG_LIST_KINDS, catalogPublicKey, nextCatalogList, readCatalogList, signCatalogList, type CatalogListKind } from "../packages/pack/src/catalog-lists.ts";
+import { CATALOG_LIST_KINDS, catalogPublicKey, nextCatalogList, readCatalogList, signCatalogList, type CatalogListKind, type Succession } from "../packages/pack/src/catalog-lists.ts";
+import { reviewCatalogList } from "./catalog-sign-review.ts";
 
 const USAGE = [
   "usage: tavora-catalog-sign key <key file>",
   "       tavora-catalog-sign public <key file>",
-  "       tavora-catalog-sign <revocations|blocks|successions> <entries.json> --key <key file> --out <signed file>",
+  "       tavora-catalog-sign <revocations|blocks|successions> <entries.json> --key <key file> --out <signed file> [--allow-change <id> ...]",
   "       tavora-catalog-sign show <signed file> --key <key file>",
 ].join("\n");
 
@@ -81,8 +86,20 @@ function warnPinnedChain(entries: unknown, previous: { successions?: { old: stri
   console.error("");
 }
 
+/** Every new or changed succession lets its new key update that publisher's modules: check each one. */
+function warnSuccessions(successions: readonly Succession[]): void {
+  if (successions.length === 0) return;
+  console.error("\n!!! Check every new or changed succession: whoever holds the new key may then update that publisher's modules. !!!");
+  console.error("!!! Sign it only if you know that account linked the old key and asked for this. !!!");
+  for (const { old, new: next, account } of successions) console.error(`!!!   ${old} -> ${next} (account ${account})`);
+  console.error("");
+}
+
 async function main(): Promise<number> {
-  const { values, positionals } = parseArgs({ allowPositionals: true, options: { key: { type: "string" }, out: { type: "string" }, help: { type: "boolean", short: "h" } } });
+  const { values, positionals } = parseArgs({
+    allowPositionals: true,
+    options: { key: { type: "string" }, out: { type: "string" }, "allow-change": { type: "string", multiple: true }, help: { type: "boolean", short: "h" } },
+  });
   const [command, file] = positionals;
   if (values.help || positionals.length !== 2 || !command || !file) {
     console.error(USAGE);
@@ -134,6 +151,16 @@ async function main(): Promise<number> {
   if (previousText !== null && previous === null) throw new Error(`${values.out} is not a ${kind} list signed by this key; move it away or pass another --out`);
   if (kind === "successions" && TAVORA_PUBLISHER_KEY !== "") warnPinnedChain(entries, previous);
   const list = nextCatalogList(kind, entries, previous, new Date());
+  // The entries come from the service: show what they change before anything is signed.
+  const review = reviewCatalogList(kind, previous, list, values["allow-change"] ?? []);
+  for (const line of review.lines) console.log(line);
+  warnSuccessions(review.successions);
+  for (const id of review.unused) console.error(`--allow-change ${id} names no entry this list drops or changes.`);
+  if (review.refused.length > 0) {
+    console.error(`\nSigned nothing: ${review.refused.length} ${review.refused.length === 1 ? "entry" : "entries"} in force would be dropped or changed (- and ~ above).`);
+    console.error("Check where each change came from. To sign it anyway, name each one: " + review.refused.map((id) => `--allow-change ${id}`).join(" "));
+    return 1;
+  }
   await writeFile(values.out, signCatalogList(list, key));
   console.log(`Signed ${kind} list ${list.sequence} (${list.issued}) into ${path.resolve(values.out)}. Upload it as ${kind}.json.`);
   return 0;

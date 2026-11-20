@@ -541,6 +541,21 @@ ${"A".repeat(64)}
     expect(store.declineKeyRequest(old, clock.now)).toBe(true);
     expect((await send(key, moduleZip(key, "wellbrained.timer", "1.0.1"))).status).toBe(201);
   });
+
+  it("refuses a key reported as leaked after its account is deleted, whoever uploads it", async () => {
+    const { store, clock, developer, send, reason } = setup();
+    const { key, accountId } = developer("dev@example.com");
+    const next = generateKeyPairSync("ed25519").privateKey;
+    store.linkKey(accountId, keyFingerprint(rawKey(next)), rawKey(next).toString("base64"), clock.now);
+    const old = keyFingerprint(rawKey(key));
+    expect(store.requestReplacement(accountId, old, keyFingerprint(rawKey(next)), true, clock.now)).toBe("ok");
+    store.deleteAccount(accountId);
+    const other = developer("other@example.com");
+    expect(store.linkKey(other.accountId, old, rawKey(key).toString("base64"), clock.now)).toBe("taken");
+    const answer = await send(key, moduleZip(key, "other.timer"), other.token);
+    expect(answer.status).toBe(403);
+    expect(await reason(answer)).toBe("key-leaked");
+  });
 });
 
 describe("claiming an id prefix before the first publish", () => {

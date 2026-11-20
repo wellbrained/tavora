@@ -81,9 +81,13 @@ export async function keepNewerFile(file: string, supportedVersion: number): Pro
 /**
  * Reads and writes the data files in `userData`. Writes run one after another in the order they were
  * asked for, each with a copy of the data as it was then; a failed write is logged and the next one runs.
+ * A file waits for at most one write: a newer save while one is still waiting gives that write the newer
+ * data instead of queueing another, so a fast caller can't grow the queue.
  */
 export class SavedData {
   private saving: Promise<void> = Promise.resolve();
+  /** The newest data per file whose write is queued but hasn't started. */
+  private readonly waiting = new Map<string, () => Promise<void>>();
 
   constructor(private readonly userData: string) {}
 
@@ -147,7 +151,7 @@ export class SavedData {
     this.enqueue(() => writeFileAtomic(this.file(WINDOW_FILE), body), "window");
   }
 
-  /** Resolves once pending writes are on disk. */
+  /** Resolves once pending writes, each file's newest data included, are on disk. */
   flush(): Promise<void> {
     return this.saving;
   }
@@ -157,6 +161,15 @@ export class SavedData {
   }
 
   private enqueue(write: () => Promise<void>, what: string): void {
-    this.saving = this.saving.then(write).catch((error: unknown) => console.error(`[tavora] could not save ${what}`, error));
+    const queued = this.waiting.has(what);
+    this.waiting.set(what, write);
+    if (queued) return;
+    this.saving = this.saving
+      .then(() => {
+        const newest = this.waiting.get(what);
+        this.waiting.delete(what);
+        return newest?.();
+      })
+      .catch((error: unknown) => console.error(`[tavora] could not save ${what}`, error));
   }
 }

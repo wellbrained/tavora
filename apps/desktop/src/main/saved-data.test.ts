@@ -4,9 +4,25 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { emptyLibrary } from "./library";
 import { DATA_FILES, keepNewerFile, readGrayscaleText, SavedData, WINDOW_FILE } from "./saved-data";
+import { emptyWorkspaces } from "./workspace";
+
+// Counts the writes per file, so a test can tell how many a burst of saves cost.
+const writes = vi.hoisted(() => new Map<string, number>());
+vi.mock("./fsutil", async (original) => {
+  const actual = await original<typeof import("./fsutil")>();
+  return {
+    ...actual,
+    writeFileAtomic: (file: string, ...rest: unknown[]) => {
+      const name = path.basename(file);
+      writes.set(name, (writes.get(name) ?? 0) + 1);
+      return (actual.writeFileAtomic as (...args: unknown[]) => Promise<void>)(file, ...rest);
+    },
+  };
+});
 
 let dir: string;
 beforeEach(async () => {
+  writes.clear();
   dir = await mkdtemp(path.join(tmpdir(), "tavora-saved-"));
 });
 afterEach(async () => {
@@ -52,6 +68,38 @@ describe("SavedData", () => {
     await rm(path.join(dir, "profile.json"), { recursive: true });
     await saved.saveProfile(first.profile);
     expect((await saved.loadProfile()).saved).toBe(true);
+  });
+
+  it("keeps one waiting write per file however fast saves come, and the newest one lands", async () => {
+    const saved = new SavedData(dir);
+    const workspace = emptyWorkspaces(["w"]);
+    const library = emptyLibrary();
+    for (let call = 0; call < 1000; call++) {
+      // Two titles in turn, as a page calling panel.setContent in a loop would.
+      workspace.workspaces.w!.instances = [{ instanceId: "p", moduleId: "m", content: { id: "a", title: call % 2 ? "two" : "one" } }];
+      saved.saveWorkspace(workspace);
+      library.onlineSearch = call % 2 === 1;
+      saved.saveLibrary(library);
+      saved.saveWindow({ bounds: { x: call, y: 0, width: 800, height: 600 }, maximized: false });
+      // Let the writes run now and then, so new saves arrive while one is on its way.
+      if (call % 50 === 0) await new Promise((resolve) => setImmediate(resolve));
+    }
+    await saved.flush();
+    for (const name of ["workspace.json", "library.json", WINDOW_FILE]) expect(writes.get(name)).toBeLessThanOrEqual(21);
+    expect(JSON.parse(await read("workspace.json")).workspaces.w.instances[0].content.title).toBe("two");
+    expect(JSON.parse(await read("library.json")).onlineSearch).toBe(true);
+    expect(JSON.parse(await read(WINDOW_FILE)).bounds.x).toBe(999);
+  });
+
+  it("writes a save that comes in while the same file is being written", async () => {
+    const saved = new SavedData(dir);
+    const library = emptyLibrary();
+    saved.saveLibrary(library);
+    await Promise.resolve();
+    library.onlineSearch = true;
+    saved.saveLibrary(library);
+    await saved.flush();
+    expect(JSON.parse(await read("library.json")).onlineSearch).toBe(true);
   });
 
   it("copies aside every data file a newer Tavora wrote", async () => {

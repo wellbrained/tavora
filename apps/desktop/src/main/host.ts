@@ -4280,7 +4280,8 @@ export class Host {
     if (content) record.content = content;
     else delete record.content;
     this.workspaces.save();
-    this.pushState();
+    // A page may call this as fast as it likes; the host UI takes one push per burst.
+    this.pushStateSoon();
   }
 
   /** Connectors a module may use now: its grant, as far as the module installed now still asks for them. */

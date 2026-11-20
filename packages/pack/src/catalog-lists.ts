@@ -149,6 +149,50 @@ export function catalogPublicKey(key: KeyObject): string {
   return rawPublicKey(key).toString("base64");
 }
 
+/** One entry the next list adds, drops or changes against the one before it. */
+export interface CatalogListChange {
+  change: "added" | "removed" | "changed";
+  /** What names the entry: a block's SHA-256, a revoked key's fingerprint, a succession's old key. */
+  id: string;
+  /** The entries with this id in the previous list, and in the next one. */
+  before: unknown[];
+  after: unknown[];
+}
+
+const ENTRY_ID = { revocations: "fingerprint", blocks: "sha256", successions: "old" } as const;
+
+/** An entry as text that doesn't depend on the order of its fields, or of a revocation's allowed zips. */
+function entryText(entry: Record<string, unknown>): string {
+  return JSON.stringify(Object.fromEntries(Object.keys(entry).sort().map((key) => [key, Array.isArray(entry[key]) ? [...(entry[key] as string[])].sort() : entry[key]])));
+}
+
+/**
+ * Every entry `next` adds, drops or changes against `previous` (null: every entry is new), by its id. Only what an
+ * entry says counts, not where it is in the list.
+ */
+export function catalogListChanges<K extends CatalogListKind>(kind: K, previous: CatalogListOf<K> | null, next: CatalogListOf<K>): CatalogListChange[] {
+  const byId = (list: CatalogList | null) => {
+    const map = new Map<string, Record<string, unknown>[]>();
+    const entries = list ? ((list as unknown as Record<string, unknown>)[ENTRIES[kind]] as Record<string, unknown>[]) : [];
+    for (const entry of entries) {
+      const id = String(entry[ENTRY_ID[kind]]);
+      map.set(id, [...(map.get(id) ?? []), entry]);
+    }
+    return map;
+  };
+  const text = (entries: Record<string, unknown>[]) => entries.map(entryText).sort().join("\n");
+  const before = byId(previous);
+  const after = byId(next);
+  const changes: CatalogListChange[] = [];
+  for (const [id, entries] of after) {
+    const old = before.get(id);
+    if (!old) changes.push({ change: "added", id, before: [], after: entries });
+    else if (text(old) !== text(entries)) changes.push({ change: "changed", id, before: old, after: entries });
+  }
+  for (const [id, entries] of before) if (!after.has(id)) changes.push({ change: "removed", id, before: entries, after: [] });
+  return changes;
+}
+
 /**
  * The next list of a kind: these entries, the sequence number after the
  * previous list's (1 for the first), issued now. Throws when the entries are
