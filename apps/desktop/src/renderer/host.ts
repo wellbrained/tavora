@@ -227,6 +227,8 @@ export const hiddenSettingIds = computed<ReadonlySet<string>>(
       ...(asksFor("ai-usage") ? [] : ["ai-usage-accounts"]),
       ...(asksFor("leaderboards") ? [] : ["leaderboards"]),
       ...(state.value?.gameOverlays.supported ? [] : GAME_OVERLAY_SETTINGS),
+      // Panel styles belong to Classic; in another style the row is hidden, so search doesn't lead there.
+      ...(state.value && state.value.appearance.styleId !== CLASSIC_STYLE ? ["panel-style"] : []),
     ]),
 );
 
