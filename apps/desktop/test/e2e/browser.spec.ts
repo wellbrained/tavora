@@ -21,6 +21,8 @@ let tls: Server;
 let port: number;
 let tlsPort: number;
 const hits: string[] = [];
+/** The Referer of each request, by host, path and query. */
+const referers = new Map<string, string | undefined>();
 
 /** openssl from PATH, or else the one Git for Windows ships (Windows has none of its own). */
 function openssl(): string {
@@ -57,11 +59,15 @@ const PAGES: Record<string, (request: IncomingMessage) => string> = {
   "/redirect-file": () => "",
   "/redirect-local": () => "",
   "/redirect-other": () => "",
+  "/landing": () => `<title>Landing</title><h1>Landing</h1>`,
+  "/to-shared": () => `<title>To shared</title>
+    <a id="go" href="${publicUrl("/landing?via=click")}" style="position:fixed;inset:0;display:block">go</a>`,
 };
 
 function handle(request: IncomingMessage, response: ServerResponse) {
   const url = new URL(request.url ?? "/", "http://x");
   hits.push(`${request.headers.host?.split(":")[0]}${url.pathname}`);
+  referers.set(`${request.headers.host?.split(":")[0]}${url.pathname}${url.search}`, request.headers.referer);
   if (url.pathname === "/redirect-file") return response.writeHead(302, { Location: "file:///etc/passwd" }).end();
   if (url.pathname === "/redirect-local") return response.writeHead(302, { Location: localUrl("/redirected") }).end();
   if (url.pathname === "/redirect-other") return response.writeHead(302, { Location: `http://other.test:${port}/page?via=redirect` }).end();
@@ -317,6 +323,24 @@ test("sign-ins are per workspace unless the site is shared, and the panel reopen
   await go(page, `http://other.test:${port}/page`);
   await waitForPage(app, `http://other.test:${port}/page`);
   await expect(page.getByTestId("browser-shared")).toHaveAttribute("aria-pressed", "false");
+  const inShared = (prefix: string) =>
+    app.evaluate(({ session, webContents }, prefix) => webContents.getAllWebContents().find((item) => item.getURL().startsWith(prefix))!.session === session.fromPartition("persist:browser"), prefix);
+  // A page that sends itself to a shared site without a click doesn't take its cookies along: the panel asks first.
+  await inPage(app, `http://other.test:${port}/page`, `location.href = ${JSON.stringify(publicUrl("/landing?via=script"))}; null`);
+  const asked = page.locator('[data-testid^="browser-error-"]');
+  await expect(asked).toContainText("This page wants to open another site.");
+  expect(hits).not.toContain("public.test/landing");
+  await asked.getByRole("button", { name: "Open" }).click();
+  await waitForPage(app, publicUrl("/landing?via=script"));
+  expect(await inShared(publicUrl("/landing?via=script"))).toBe(true);
+  expect(referers.get("public.test/landing?via=script")).toBeUndefined();
+  // A link the user clicks takes the page there, with the page's origin as the referrer.
+  await go(page, `http://other.test:${port}/to-shared`);
+  await waitForPage(app, `http://other.test:${port}/to-shared`);
+  await clickPage(app, `http://other.test:${port}/to-shared`);
+  await waitForPage(app, publicUrl("/landing?via=click"));
+  expect(await inShared(publicUrl("/landing?via=click"))).toBe(true);
+  expect(referers.get("public.test/landing?via=click")).toBe(`http://other.test:${port}/`);
   // A redirect from a shared site to another one ends in the game's session too, as a link would.
   await go(page, publicUrl("/redirect-other"));
   const redirected = `http://other.test:${port}/page?via=redirect`;

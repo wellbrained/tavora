@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { watchOverlay } from "./index.js";
+import { OVERLAY_COLOR_SCHEME_MESSAGE } from "./protocol.js";
 
 class FakeEventSource {
   static last: FakeEventSource | undefined;
@@ -61,5 +62,19 @@ describe("watchOverlay", () => {
     FakeEventSource.last!.send({ state: null });
     expect(seen).toEqual([null]);
     expect(links()).toHaveLength(0);
+  });
+
+  it("tells the frame it runs in (OBS) the page's colour scheme, and nothing in a window of its own", () => {
+    const posted = vi.spyOn(window, "postMessage");
+    watchOverlay(() => undefined);
+    // jsdom's page is its own parent: no frame around it.
+    expect(posted).not.toHaveBeenCalled();
+
+    const parent = { postMessage: vi.fn() };
+    vi.spyOn(window, "parent", "get").mockReturnValue(parent as unknown as Window);
+    vi.spyOn(window, "getComputedStyle").mockReturnValue({ colorScheme: "dark" } as CSSStyleDeclaration);
+    watchOverlay(() => undefined);
+    expect(parent.postMessage).toHaveBeenCalledWith({ type: OVERLAY_COLOR_SCHEME_MESSAGE, colorScheme: "dark" }, "*");
+    vi.restoreAllMocks();
   });
 });

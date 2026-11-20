@@ -1035,7 +1035,8 @@ export interface CatalogMatch {
 
 /** Why a Browser panel's page is not shown: `detail` is what the engine said, for the "unknown" kind. */
 export interface BrowserError {
-  kind: "cert" | "notFound" | "offline" | "noAnswer" | "badAddress" | "unknown" | "crashed";
+  /** `otherSession`: the page wants to take the panel to a site of the other session by itself; the user opens it. */
+  kind: "cert" | "notFound" | "offline" | "noAnswer" | "badAddress" | "unknown" | "crashed" | "otherSession";
   detail: string;
 }
 

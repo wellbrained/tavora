@@ -180,7 +180,7 @@ onBeforeUnmount(() => dock.unregister(id, element.value!));
     <div v-else-if="panel?.browser?.error" class="flex size-full flex-col items-center justify-center gap-3 p-4 text-center" :data-testid="`browser-error-${id}`">
       <p class="font-medium">{{ t(`browser.error.${panel.browser.error.kind}`, { detail: panel.browser.error.detail }) }}</p>
       <p class="text-muted-foreground max-w-sm truncate text-sm">{{ panel.browser.host }}</p>
-      <Button variant="outline" size="sm" @click="act({ type: 'browser-command', instanceId: id, command: 'reload' })">{{ t("browser.tryAgain") }}</Button>
+      <Button variant="outline" size="sm" @click="act({ type: 'browser-command', instanceId: id, command: 'reload' })">{{ t(panel.browser.error.kind === "otherSession" ? "browser.openSite" : "browser.tryAgain") }}</Button>
     </div>
     <div v-else-if="panel?.browser && !panel.browser.url" class="text-muted-foreground flex size-full flex-col items-center justify-center gap-1 p-4 text-center text-sm">
       <p class="text-foreground font-medium">{{ t("browser.startTitle") }}</p>

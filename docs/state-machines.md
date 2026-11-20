@@ -108,7 +108,10 @@ the pull request that makes it explicit.
 - **Panel dialog** (`components/PanelDialog.vue`, `main/panel-views.ts` `dialogState`) → `closed | placing | drawn | shown`.
 
 - **Browser panel** (`main/browser-view.ts`: `status`, `error`, `committedUrl`, `requestedUrl`) →
-  `blank | loading | page | failed | crashed`.
+  `blank | loading | page | failed | crashed`. `failed` also holds a page's own move to a site of the other session
+  (`otherSession`) until the user opens it. How the navigation under way started is already one union
+  (`navigationStart`: `user | page`, with `crossSessionStep` as its step and tests); `ownNavigation` marks Tavora's own
+  load until Chromium reports it.
 
 - **Window visibility** (`main/host.ts`: `windowHidden`, `windowBehind`, `windowClosed`) → `front | behind | hidden | closed`.
 

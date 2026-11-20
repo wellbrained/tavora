@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
 // A Browser panel needs a little of Electron: a page view whose contents report navigations, and a session to lock.
-const world = vi.hoisted(() => ({ pairing: [] as ((details: unknown, callback: (response: { confirmed: boolean }) => void) => void)[] }));
+const world = vi.hoisted(() => ({
+  pairing: [] as ((details: unknown, callback: (response: { confirmed: boolean }) => void) => void)[],
+  /** Every loadURL: which page view, the address and its options. */
+  loads: [] as { contents: number; url: string; options: unknown }[],
+}));
 
 vi.mock("electron", () => {
   class Contents {
@@ -17,11 +21,18 @@ vi.mock("electron", () => {
       for (const fn of this.handlers.get(name) ?? []) (fn as (...a: unknown[]) => void)(...args);
     }
     setWebRTCIPHandlingPolicy() {}
-    setWindowOpenHandler() {}
-    loadURL = async () => undefined;
+    openHandler: unknown;
+    setWindowOpenHandler(fn: unknown) {
+      this.openHandler = fn;
+    }
+    loadURL = async (url: string, options?: unknown) => {
+      world.loads.push({ contents: this.id, url, options });
+    };
     isDestroyed = () => false;
     isLoading = () => false;
     getTitle = () => "";
+    isCurrentlyAudible = () => false;
+    isAudioMuted = () => false;
     close() {}
   }
   class WebContentsView {
@@ -45,21 +56,26 @@ vi.mock("electron", () => {
   return { WebContentsView, session: { fromPartition: () => ses } };
 });
 
-const { BrowserPanel, browserSession } = await import("./browser-view");
+const { BrowserPanel, browserSession, crossSessionStep, pageReferrer } = await import("./browser-view");
 
 type Emitting = { emit(name: string, ...args: unknown[]): void };
 
 function panel() {
+  const sessions: string[] = [];
+  const tabs: unknown[] = [];
   const browser = new BrowserPanel({
     instanceId: "browser-1",
     devTools: false,
     background: () => "#000",
-    sessionFor: () => ({}) as never,
+    sessionFor: (kind) => {
+      sessions.push(kind);
+      return {} as never;
+    },
     isSharedSite: (url) => url.startsWith("https://shared.example/"),
     adblockOn: () => true,
     swap: () => undefined,
     onFocusAddress: () => undefined,
-    onOpenTab: () => undefined,
+    onOpenTab: (url, background, referrer) => tabs.push({ url, background, referrer }),
     onCloseTab: () => undefined,
     onAddress: () => undefined,
     onChange: () => undefined,
@@ -70,7 +86,7 @@ function panel() {
   const commit = (url: string) => contents.emit("did-navigate", {}, url);
   const stop = () => contents.emit("did-stop-loading");
   const fail = (url: string) => contents.emit("did-fail-load", {}, -105, "ERR_NAME_NOT_RESOLVED", url, true);
-  return { browser, contents, start, redirect, commit, stop, fail };
+  return { browser, contents, start, redirect, commit, stop, fail, sessions, tabs };
 }
 
 const LOCAL = "http://localhost:8080/";
@@ -143,5 +159,137 @@ describe("a Browser session", () => {
     const answers: { confirmed: boolean }[] = [];
     world.pairing[0]!({ deviceId: "d", pairingKind: "confirm", frame: null }, (response) => answers.push(response));
     expect(answers).toEqual([{ confirmed: false }]);
+  });
+});
+
+describe("a navigation that has to move to the other session", () => {
+  const referrer = { url: "https://page.example/", policy: "strict-origin" as const };
+
+  it("is carried over when the user started it, or the page did right after a click or key press", () => {
+    expect(crossSessionStep({ by: "user" })).toEqual({ action: "reissue", referrer: undefined });
+    expect(crossSessionStep({ by: "user", referrer })).toEqual({ action: "reissue", referrer });
+    expect(crossSessionStep({ by: "page", gesture: true, referrer })).toEqual({ action: "reissue", referrer });
+  });
+
+  it("is left to the user when the page started it by itself", () => {
+    expect(crossSessionStep({ by: "page", gesture: false, referrer })).toEqual({ action: "ask" });
+  });
+
+  it("sends the page's origin as the referrer, and nothing for a page off the web", () => {
+    expect(pageReferrer("https://page.example/path/to?q=secret#x")).toEqual({ url: "https://page.example/", policy: "strict-origin" });
+    expect(pageReferrer("http://page.example:8080/a")).toEqual({ url: "http://page.example:8080/", policy: "strict-origin" });
+    expect(pageReferrer(null)).toBeUndefined();
+    expect(pageReferrer("about:blank")).toBeUndefined();
+    expect(pageReferrer("file:///C:/secret.txt")).toBeUndefined();
+  });
+});
+
+describe("a Browser panel's page going to a site of the other session", () => {
+  const SHARED = "https://shared.example/account";
+
+  function navigating() {
+    const made = panel();
+    world.loads.length = 0;
+    const willNavigate = (url: string) => {
+      let prevented = false;
+      made.contents.emit("will-navigate", { url, isMainFrame: true, preventDefault: () => (prevented = true) });
+      return prevented;
+    };
+    const click = () => made.contents.emit("input-event", {}, { type: "mouseDown" });
+    return { ...made, willNavigate, click };
+  }
+
+  it("asks the user when the page goes there by itself, and opens it in that session when they press Open", () => {
+    const { browser, commit, willNavigate, sessions } = navigating();
+    commit(PUBLIC);
+    expect(willNavigate(SHARED)).toBe(true);
+    // Nothing loaded: the page's navigation is not turned into Tavora's own.
+    expect(world.loads).toEqual([]);
+    expect(sessions).toEqual(["workspace"]);
+    expect(browser.state.error).toEqual({ kind: "otherSession", detail: "" });
+    expect(browser.state.url).toBe(SHARED);
+
+    browser.reload();
+    expect(sessions).toEqual(["workspace", "shared"]);
+    // The user's press, so no referrer, like a typed address.
+    expect(world.loads).toEqual([{ contents: browser.view.webContents.id, url: SHARED, options: undefined }]);
+  });
+
+  it("carries the page there right after a click, with the page's origin as the referrer", () => {
+    const { browser, commit, willNavigate, click, sessions } = navigating();
+    commit("https://page.example/path?q=1");
+    click();
+    expect(willNavigate(SHARED)).toBe(true);
+    expect(sessions).toEqual(["workspace", "shared"]);
+    expect(world.loads).toEqual([
+      { contents: browser.view.webContents.id, url: SHARED, options: { httpReferrer: { url: "https://page.example/", policy: "strict-origin" } } },
+    ]);
+    expect(browser.state.error).toBeNull();
+  });
+
+  it("uses a click up once", () => {
+    const { browser, commit, willNavigate, click } = navigating();
+    commit(PUBLIC);
+    click();
+    willNavigate(SHARED);
+    // The page is in the shared session now; going back to a workspace site by itself needs a click of its own.
+    const contents = browser.view.webContents as unknown as Emitting;
+    contents.emit("did-navigate", {}, SHARED);
+    world.loads.length = 0;
+    contents.emit("will-navigate", { url: PUBLIC, isMainFrame: true, preventDefault: () => undefined });
+    expect(world.loads).toEqual([]);
+    expect(browser.state.error).toEqual({ kind: "otherSession", detail: "" });
+  });
+
+  it("lets a page go anywhere in its own session as before", () => {
+    const { commit, willNavigate } = navigating();
+    commit(PUBLIC);
+    expect(willNavigate("https://other.example/")).toBe(false);
+    expect(world.loads).toEqual([]);
+  });
+
+  it("follows a redirect there only as the navigation it belongs to would", () => {
+    // The page's own navigation, no click: the redirect is left to the user.
+    const page = navigating();
+    page.commit(PUBLIC);
+    page.start("https://short.example/x");
+    page.redirect(SHARED);
+    expect(world.loads).toEqual([]);
+    expect(page.browser.state.error).toEqual({ kind: "otherSession", detail: "" });
+
+    // After a click: carried over, with the referrer the page's navigation had.
+    const clicked = navigating();
+    clicked.commit("https://page.example/a");
+    clicked.click();
+    clicked.start("https://short.example/x");
+    clicked.redirect(SHARED);
+    expect(clicked.sessions).toEqual(["workspace", "shared"]);
+    expect(world.loads).toEqual([
+      { contents: clicked.browser.view.webContents.id, url: SHARED, options: { httpReferrer: { url: "https://page.example/", policy: "strict-origin" } } },
+    ]);
+
+    // Typed into the address bar: carried over, with no referrer.
+    const typed = navigating();
+    typed.browser.navigate("https://short.example/x");
+    typed.start("https://short.example/x");
+    world.loads.length = 0;
+    typed.redirect(SHARED);
+    expect(typed.sessions).toEqual(["workspace", "shared"]);
+    expect(world.loads).toEqual([{ contents: typed.browser.view.webContents.id, url: SHARED, options: undefined }]);
+  });
+
+  it("hands a new tab the referrer Chromium worked out for the page", async () => {
+    const { contents, commit, click, tabs } = navigating();
+    commit("https://page.example/a");
+    const open = (contents as unknown as { openHandler: (details: unknown) => { action: string } }).openHandler;
+    click();
+    expect(open({ url: SHARED, disposition: "foreground-tab", referrer: { url: "https://page.example/a", policy: "strict-origin-when-cross-origin" } })).toEqual({ action: "deny" });
+    click();
+    open({ url: PUBLIC, disposition: "background-tab", referrer: { url: "", policy: "no-referrer" } });
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(tabs).toEqual([
+      { url: SHARED, background: false, referrer: { url: "https://page.example/a", policy: "strict-origin-when-cross-origin" } },
+      { url: PUBLIC, background: true, referrer: undefined },
+    ]);
   });
 });

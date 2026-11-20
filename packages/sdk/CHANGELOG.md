@@ -1,3 +1,9 @@
+## 0.4.3
+
+Stream overlays in OBS. The next Tavora shows an overlay page in OBS inside a frame of its own, so the page can't navigate away. `MIN_TAVORA` stays (Tavora 0.21.43).
+
+- `watchOverlay` tells that frame the page's `color-scheme` (the `OVERLAY_COLOR_SCHEME_MESSAGE` message in `protocol.ts`), so a page with a dark one stays see-through in OBS. In Tavora's own windows, and with an older Tavora, nothing changes.
+
 ## 0.4.2
 
 Panels learn when they are over the game. It comes with the next Tavora (`PANEL_OVER_GAME_TAVORA` in `protocol.ts`; the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.21.43).

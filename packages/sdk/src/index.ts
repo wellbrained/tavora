@@ -36,6 +36,7 @@ import {
   type ReadOnlyFileState,
   HELLO_MESSAGE,
   LIMITS,
+  OVERLAY_COLOR_SCHEME_MESSAGE,
   OVERLAY_FRAME_PARAM,
   OVERLAY_FONT_PATH,
   OVERLAY_STATE_PATH,
@@ -192,7 +193,7 @@ function localDay(at: number): string {
 }
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.4.2";
+export const SDK_VERSION = "0.4.3";
 
 /**
  * The oldest Tavora that has everything this SDK version offers, worked out from the table of calls
@@ -833,8 +834,12 @@ export function inTavoraFrame(): boolean {
  * It also gives the page Tavora's interface font, the one the user picked, as `var(--tavora-font-sans)` (with its
  * files), and swaps it when the user picks another. On a Tavora before the font setting there is none: give the
  * variable a fallback, such as `var(--tavora-font-sans, "Inter Variable", sans-serif)`.
+ *
+ * In OBS the page sits in a frame of Tavora's own page; watchOverlay tells that frame the page's `color-scheme`, so a
+ * page with a dark one stays see-through there.
  */
 export function watchOverlay(fn: (state: JsonValue | null) => void): Unsubscribe {
+  tellFrameColorScheme();
   const source = new EventSource(new URL(OVERLAY_STATE_PATH, window.location.href));
   source.onmessage = (event: MessageEvent<string>) => {
     let message: { state?: JsonValue | null; font?: unknown };
@@ -855,6 +860,23 @@ export function watchOverlay(fn: (state: JsonValue | null) => void): Unsubscribe
     }
   };
   return () => source.close();
+}
+
+/**
+ * In OBS the page runs in a frame of Tavora's own page: tells it the page's colour scheme, now and once the page has
+ * loaded, so the frame stays see-through (OVERLAY_COLOR_SCHEME_MESSAGE). Nothing happens in a window of its own.
+ */
+function tellFrameColorScheme(): void {
+  if (typeof window === "undefined" || typeof document === "undefined" || window.parent === window) return;
+  const send = () => {
+    try {
+      window.parent.postMessage({ type: OVERLAY_COLOR_SCHEME_MESSAGE, colorScheme: getComputedStyle(document.documentElement).colorScheme }, "*");
+    } catch {
+      // The frame keeps its scheme; the state still comes.
+    }
+  };
+  send();
+  if (document.readyState !== "complete") window.addEventListener("load", send, { once: true });
 }
 
 /** Puts `_font.css` for the font `id` in the page (watchOverlay), unless the page has it. */

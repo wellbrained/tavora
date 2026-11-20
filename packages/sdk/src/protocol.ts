@@ -1314,6 +1314,14 @@ export const OVERLAY_FONT_PATH = "_font.css";
 export const OVERLAY_FRAME_PARAM = "tavoraFrame";
 
 /**
+ * In OBS an overlay page runs inside a frame of Tavora's own page, which keeps it from navigating away. The page tells
+ * that frame its `color-scheme` with this message (`{ type, colorScheme }`, sent to its parent), and the frame takes the
+ * same one: Chromium paints an opaque backdrop behind a frame whose scheme differs from the page's. `watchOverlay` sends
+ * it by itself.
+ */
+export const OVERLAY_COLOR_SCHEME_MESSAGE = "tavora:overlay-color-scheme";
+
+/**
  * One entry of a menu drawn by Tavora (ui.showMenu). Text only; Tavora draws it in the current theme.
  * An item list where any item sets `checked` keeps a column for the mark, so labels line up.
  */
