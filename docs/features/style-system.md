@@ -72,6 +72,8 @@ export interface TavoraStyle { id: string; name: string; looks: StyleLooks; valu
 
 **Classic values** (`styles/classic`): looks `surface flat, tabs pill, content plain, buttons soft, inputs soft, lists fill, labels normal, status none`; values `borderWidth 1, depth 1, textSize 13, controlHeight 32, spacing 1, glassOpacity 0.8`; radius 8; font `inter`. The kit half may correct these numbers so Classic stays pixel-identical; it says so in its commit.
 
+**Inset content** (`looks.content = "inset"`): module panels (not web pages) get the colour tokens of the theme's dark variation when the active variation is light and the theme has a dark one (same contrast level preferred), so their content reads as a screen set into the light frame. The host draws the inset frame around the module view (dock CSS, kit half). `TavoraTheme.mode` then says `dark` for that module. With no dark variation, nothing changes.
+
 **Native panel corners**: `module-view.ts` `PANEL_RADIUS` and `browser-view.ts` `PAGE_RADIUS` come from one function of (style, panel style, radius). In Classic it returns today's values (10 / 9, and the Framed/Folders inset values); in other styles it follows the resolved radius (0 allowed).
 
 ## Facts found (2026-11-20)
