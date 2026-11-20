@@ -48,14 +48,14 @@ test("picking a theme recolours Tavora and its modules, and is kept after a rest
   await again.app.close();
 });
 
-test("the user's own corner radius sits on top of the theme, reaches modules, and Reset clears it", async () => {
+test("the user's own corner radius sits on top of the style's (Classic: the theme's), reaches modules, and Reset clears it", async () => {
   const userData = await newUserData();
   const { app, page } = await launch(userData);
   await openWorkspace(page, "poe2");
   await openModule(page, VANILLA);
 
   await openAppearance(page);
-  await expect(page.getByTestId("radius-theme")).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByTestId("radius-style")).toHaveAttribute("aria-checked", "true");
   await page.getByTestId("radius-12").click();
   await expect.poll(() => rootToken(page, "radius")).toBe("12px");
   await expect.poll(() => inModule<string>(app, VANILLA, `getComputedStyle(document.documentElement).getPropertyValue("--tavora-radius").trim()`)).toBe("12px");
@@ -73,11 +73,11 @@ test("the user's own corner radius sits on top of the theme, reaches modules, an
   const again = await launch(userData);
   await expect.poll(() => rootToken(again.page, "radius")).toBe("12px");
   await openAppearance(again.page);
-  await again.page.getByTestId("radius-theme").click();
+  await again.page.getByTestId("radius-style").click();
   await expect.poll(() => rootToken(again.page, "radius")).toBe("8px");
   await again.page.getByTestId("radius-4").click();
   await again.page.getByTestId("reset-theme").click();
-  await expect(again.page.getByTestId("radius-theme")).toHaveAttribute("aria-checked", "true");
+  await expect(again.page.getByTestId("radius-style")).toHaveAttribute("aria-checked", "true");
   await expect.poll(() => rootToken(again.page, "radius")).toBe("8px");
   await again.app.close();
 });
