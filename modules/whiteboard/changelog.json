@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.3.30",
+    "date": "2026-11-20",
+    "notes": [
+      "Follows the style you pick in Settings > Appearance."
+    ]
+  },
+  {
     "version": "0.3.29",
     "date": "2026-11-19",
     "notes": [
