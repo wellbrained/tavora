@@ -19,6 +19,12 @@ describe("cleanPictureName", () => {
     expect(cleanPictureName("CON")).toBe("Picture");
     expect(cleanPictureName("x".repeat(200))).toHaveLength(80);
   });
+
+  it("falls back to Picture for a device name with an extension, a superscript digit or CONIN$", () => {
+    for (const name of ["COM1.x", "NUL.a", "LPT1.b", "con.txt", "COM¹", "lpt³.png", "CONIN$", "conout$.json", "CON .txt"]) expect(cleanPictureName(name), name).toBe("Picture");
+    // Names that only start like one stay.
+    for (const name of ["Console", "COM10", "Nullify.x", "auxiliary"]) expect(cleanPictureName(name), name).toBe(name);
+  });
 });
 
 describe("freeFileName", () => {

@@ -261,6 +261,15 @@ describe("publishing without the connector", () => {
     overlay.publish("item-1", { value: 1 });
     expect(stored(streaming, "item-1")?.state).toEqual({ value: 1 });
   });
+
+  it("doesn't count the grant of another owner's copy installed under the same id", async () => {
+    const { streaming, overlay, world } = await setup();
+    // A development folder now loads the module as owner local, and the user granted that copy the connector.
+    world.module = { ...MODULE, owner: "local" };
+    overlay.publish("item-1", { value: 1 });
+    expect(stored(streaming, "item-1")).toBeNull();
+    expect(overlay.copyNeedsWindow()).toBe(true);
+  });
 });
 
 describe("keys of game overlays", () => {

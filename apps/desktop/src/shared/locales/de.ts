@@ -1808,6 +1808,7 @@ export const de: Record<keyof typeof en, string> = {
   "modules.catalogUpdated": "{name} wurde auf {version} aktualisiert. Was neu ist, steht in Einstellungen > Module.",
   "modules.catalogUpdatedMany": "{count} Module wurden aktualisiert. Was neu ist, steht in Einstellungen > Module.",
   "modules.storageCleared": "{name} hat mehr in seinem eigenen Browser-Speicher abgelegt, als ein Modul darf. Tavora hat diesen Speicher geleert und das Panel neu gestartet. Was es über Tavora gespeichert hat, ist unverändert.",
+  "modules.storageStopped": "{name} hat seinen Browser-Speicher wieder überfüllt, darum hat Tavora ihn geleert und das Panel angehalten. Lade es neu, wenn du es noch mal versuchen willst.",
   "settings.workspaces.label": "Arbeitsbereiche",
   "settings.workspaces.search": "Alle deine Arbeitsbereiche in einer Liste. Wähl mehrere auf einmal und verschieb sie in den Papierkorb.",
   "settings.workspaces.keywords": "arbeitsbereiche, spiele, bibliothek, entfernen, löschen, viele, alle, auswählen, verwalten, import, workspaces, games, library, remove, delete, select, manage",

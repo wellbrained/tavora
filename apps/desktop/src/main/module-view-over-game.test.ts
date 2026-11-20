@@ -657,6 +657,46 @@ describe("a dialog right after Add", () => {
     expect(opened).toEqual([]);
   });
 
+  it("is not there for a page that held back its hello and loaded again later", async () => {
+    const opened: Opened[] = [];
+    const view = make({ setDialog: (open: boolean, _size: unknown, how?: { byClick: boolean }) => void opened.push({ open, byClick: how?.byClick }) });
+    const inner = view as unknown as { startPage(launch: unknown): void; requestDialog(open: boolean, size: typeof SIZE): Promise<void> };
+    const navigate = () => made.handlers["did-start-navigation"]!({ isMainFrame: true, isSameDocument: false });
+    // The first page starts and never asks for its bridge; then it loads again and asks at once.
+    navigate();
+    navigate();
+    // The host still holds the Add the first page never took.
+    inner.startPage({ reason: "add" });
+    await expect(inner.requestDialog(true, SIZE)).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+    expect(opened).toEqual([]);
+  });
+
+  it("is still there when the first page asks after its own load started", async () => {
+    const opened: Opened[] = [];
+    const view = make({ setDialog: (open: boolean, _size: unknown, how?: { byClick: boolean }) => void opened.push({ open, byClick: how?.byClick }) });
+    const inner = view as unknown as { startPage(launch: unknown): void; requestDialog(open: boolean, size: typeof SIZE): Promise<void> };
+    made.handlers["did-start-navigation"]!({ isMainFrame: true, isSameDocument: false });
+    inner.startPage({ reason: "add" });
+    await inner.requestDialog(true, SIZE);
+    expect(opened).toEqual([{ open: true, byClick: false }]);
+  });
+
+  it("is not there when the first page asks only once 10 seconds have gone since it started", async () => {
+    const now = vi.spyOn(Date, "now");
+    try {
+      now.mockReturnValue(1_000_000);
+      const opened: Opened[] = [];
+      const view = make({ setDialog: (open: boolean, _size: unknown, how?: { byClick: boolean }) => void opened.push({ open, byClick: how?.byClick }) });
+      const inner = view as unknown as { startPage(launch: unknown): void; requestDialog(open: boolean, size: typeof SIZE): Promise<void> };
+      now.mockReturnValue(1_000_000 + 60 * 60_000);
+      inner.startPage({ reason: "add" });
+      await expect(inner.requestDialog(true, SIZE)).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+      expect(opened).toEqual([]);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
   it("opens from a real press as clicked, which uses up the pass", async () => {
     const { view, opened, ask } = made_({ reason: "add" });
     view.noteGesture();

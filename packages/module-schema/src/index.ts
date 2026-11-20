@@ -516,7 +516,17 @@ export const KEY_EXTENSIONS: readonly string[] = ["pem", "key", "p12", "pfx", "p
  */
 export const TAVORA_DOCUMENTS_FOLDER = "Tavora";
 const FOLDER_EXTENSION = /^[a-z0-9]{1,16}$/;
-const WINDOWS_RESERVED = /^(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\..*)?$/i;
+const WINDOWS_DEVICE = /^(?:con|prn|aux|nul|conin\$|conout\$|com[0-9¹²³]|lpt[0-9¹²³]) *(?:\..*)?$/i;
+
+/**
+ * Whether Windows keeps `name` for a device (CON, PRN, AUX, NUL, CONIN$, CONOUT$, COM0-9, LPT0-9, and COM and LPT with
+ * a superscript ¹ ² ³), also with an extension or spaces after it (`NUL.txt`, `com1.x`, `CON .json`): Windows may open
+ * the device for such a name instead of a file. Compared without regard to case. One rule for every name Tavora makes
+ * or checks: folder names in manifests, file names in module zips, names of files a module saves.
+ */
+export function isWindowsDeviceName(name: string): boolean {
+  return WINDOWS_DEVICE.test(name);
+}
 
 /**
  * One folder name a path may hold: 1 to `max` (64) characters that Windows allows in a name, not `.` or `..`, not starting or
@@ -530,7 +540,7 @@ export function isFolderName(value: string, max = 64): boolean {
     value !== "." &&
     value !== ".." &&
     !/^\s|\s$|\.$/.test(value) &&
-    !WINDOWS_RESERVED.test(value)
+    !isWindowsDeviceName(value)
   );
 }
 

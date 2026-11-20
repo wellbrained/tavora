@@ -2,6 +2,10 @@
 
 What changed in `@tavora/module-schema`, newest first.
 
+## 0.2.1
+
+- New `isWindowsDeviceName(name)`: whether Windows keeps a name for a device, also with an extension or spaces after it (`NUL.txt`, `com1.x`, `CON .json`), with a superscript digit (`COM¹`, `LPT³`) and as `CONIN$` or `CONOUT$`. `isFolderName` uses it, so a manifest folder name such as `COM¹` or `CONIN$` is now refused too.
+
 ## 0.2.0
 
 **Breaking.** The old manifest field `workspaces` is gone, so the manifest is ready to be locked for Tavora 1.0.

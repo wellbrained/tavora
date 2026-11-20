@@ -1225,6 +1225,18 @@ describe("cleanup", () => {
     expect(rig.calls).not.toContain(`revoked ${A}`);
   });
 
+  it("releasing a view drops an Add its page never asked for, so a view made later starts as a restore", () => {
+    const { rig, b } = everything();
+    rig.views.release(A);
+    expect(rig.views.takeLaunch(A)).toBeUndefined();
+    expect(rig.views.takeWelcome(A)).toBe(true);
+    // A panel opened by another one keeps what it was opened on.
+    rig.views.setLaunch(B, { reason: "open", content: null });
+    rig.views.release(B);
+    expect(b.disposed).toBe(true);
+    expect(rig.views.takeLaunch(B)).toEqual({ reason: "open", content: null });
+  });
+
   it("closing all keeps panels lent to the layer or kept for overlays, and forgets places", () => {
     const rig = panelViewsRig();
     const a = rig.add(A);

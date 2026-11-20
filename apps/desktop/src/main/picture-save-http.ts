@@ -4,6 +4,7 @@
 // it goes (host.ts); the module only suggests its name and learns the name it was saved under, or null when the
 // user closed the dialog, never where the folder is.
 
+import { isWindowsDeviceName } from "@tavora/module-schema";
 import { LIMITS } from "@tavora/sdk/protocol";
 import { CLIPBOARD_PNG_LIMITS, json, readBody, STATUS } from "./clipboard-http";
 import { HostError } from "./errors";
@@ -22,14 +23,14 @@ export const MAX_PICTURE_NAME = 80;
 // Characters Windows does not allow in a file name, and control characters.
 // eslint-disable-next-line no-control-regex
 const UNSAFE = /[<>:"/\\|?*\u0000-\u001f\u007f]/g;
-const RESERVED = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/i;
 
 /** A safe file name (without .png) from what the module suggested; "Picture" when nothing is left. */
 export function cleanPictureName(value: string): string {
   let name = value.replace(UNSAFE, " ").replace(/\s+/g, " ").trim().slice(0, MAX_PICTURE_NAME).trim();
   // Windows drops trailing dots and spaces, and a name may not start with a dot here (no hidden files).
   name = name.replace(/^[.\s]+|[.\s]+$/g, "");
-  if (!name || RESERVED.test(name)) return "Picture";
+  // A name Windows keeps for a device, with an extension too (NUL.a, COM1.x, COM¹): the bytes could go to the device.
+  if (!name || isWindowsDeviceName(name)) return "Picture";
   return name;
 }
 

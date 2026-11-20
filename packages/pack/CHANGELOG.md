@@ -2,6 +2,10 @@
 
 What changed in `@tavora/pack`, newest first.
 
+## 0.3.5
+
+- A zip may no longer hold a file or folder named like a Windows device with a superscript digit (`COM¹`, `LPT³`) or `CONIN$` / `CONOUT$`, also with an extension. The rule is module-schema's `isWindowsDeviceName` (0.2.1).
+
 ## 0.3.4
 
 - Packs with `@tavora/module-schema` 0.2.0: a manifest with the old field `workspaces` is refused, and the `personalWorkspaces` message no longer sends you to it.

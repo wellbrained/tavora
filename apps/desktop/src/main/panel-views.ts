@@ -448,6 +448,12 @@ export class PanelViews {
       this.noWelcome.delete(instanceId);
     }
     const entry = this.entries.get(instanceId);
+    // An Add is for the view made for it: a view made again later (its workspace opened again) starts as a restore, so
+    // the Add's pass for a dialog without a click can't be kept for later.
+    if (entry && this.launches.get(instanceId)?.reason === "add") {
+      this.launches.delete(instanceId);
+      this.noWelcome.delete(instanceId);
+    }
     const adapter = entry?.adapter;
     if (entry && adapter) {
       this.entries.delete(instanceId);

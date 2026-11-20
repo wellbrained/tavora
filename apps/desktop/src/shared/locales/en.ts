@@ -1806,6 +1806,7 @@ export const en = {
   "modules.catalogUpdated": "{name} was updated to {version}. What's new is in Settings > Modules.",
   "modules.catalogUpdatedMany": "{count} modules were updated. What's new is in Settings > Modules.",
   "modules.storageCleared": "{name} stored more in its own browser storage than a module may, so Tavora cleared that storage and restarted the panel. What it saved through Tavora is untouched.",
+  "modules.storageStopped": "{name} overfilled its browser storage again, so Tavora cleared it and stopped the panel. Reload it when you want to try again.",
   "settings.workspaces.label": "Workspaces",
   "settings.workspaces.search": "All your workspaces in one list. Pick many at once and move them to Trash.",
   "settings.workspaces.keywords": "workspaces, games, library, remove, delete, many, all, select, bulk, manage, import",

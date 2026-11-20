@@ -2,7 +2,7 @@ import { glob, readFile } from "node:fs/promises";
 import { Ajv } from "ajv";
 import { describe, expect, it } from "vitest";
 import schema from "../schema/tavora.module.schema.json" with { type: "json" };
-import { allowsPersonalWorkspaces, BLOCKED_LOCAL_PORTS, folderAccessProblem, folderKey, isFolderPath, isTavoraOwnFolder, isLocalLowGameFolder, isLocalPort, LAST_TAVORA_WITHOUT_LOCAL_PORTS, LAST_TAVORA_WITHOUT_LOCALLOW_FOLDERS, parseFolderKey, splitFolderPath, localPortOf, CHANGELOG_LIMITS, connectorsAtAdd, continuingPanelType, firstKeyOf, isOfficialSigner, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, isReleaseVersion, LAST_TAVORA_WITHOUT_GAME_OVERLAYS, LAST_TAVORA_WITHOUT_BOARD_NAMES, LAST_TAVORA_WITHOUT_LEADERBOARDS, LAST_TAVORA_WITHOUT_PANEL_LAYOUT, LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES, LAST_TAVORA_WITHOUT_TRANSLATIONS, LAST_TAVORA_WITHOUT_WIDE_LAYOUT, needsNewerTavora, panelTypes, translateManifest, validateManifest, type ModuleManifest } from "./index";
+import { allowsPersonalWorkspaces, BLOCKED_LOCAL_PORTS, folderAccessProblem, folderKey, isFolderName, isFolderPath, isTavoraOwnFolder, isWindowsDeviceName, isLocalLowGameFolder, isLocalPort, LAST_TAVORA_WITHOUT_LOCAL_PORTS, LAST_TAVORA_WITHOUT_LOCALLOW_FOLDERS, parseFolderKey, splitFolderPath, localPortOf, CHANGELOG_LIMITS, connectorsAtAdd, continuingPanelType, firstKeyOf, isOfficialSigner, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, isReleaseVersion, LAST_TAVORA_WITHOUT_GAME_OVERLAYS, LAST_TAVORA_WITHOUT_BOARD_NAMES, LAST_TAVORA_WITHOUT_LEADERBOARDS, LAST_TAVORA_WITHOUT_PANEL_LAYOUT, LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES, LAST_TAVORA_WITHOUT_TRANSLATIONS, LAST_TAVORA_WITHOUT_WIDE_LAYOUT, needsNewerTavora, panelTypes, translateManifest, validateManifest, type ModuleManifest } from "./index";
 
 const valid = {
   id: "community.example.campaign-companion",
@@ -861,5 +861,21 @@ describe("the shared official-signer rules", () => {
     expect(isOfficialSigner({ key: "k5", account: null }, false, pins)).toBe(false);
     expect(isOfficialSigner({ key: "k0", account: null }, true, pins)).toBe(false);
     expect(isOfficialSigner({ key: "", account: null }, false, { key: "", account: "" })).toBe(false);
+  });
+});
+
+describe("Windows device names", () => {
+  it("refuses device names, also with an extension, a superscript digit or as CONIN$ and CONOUT$", () => {
+    for (const name of ["CON", "nul", "COM1.x", "NUL.a", "con.txt", "COM¹", "LPT².log", "CONIN$", "conout$", "CON .txt", "AUX."]) {
+      expect(isWindowsDeviceName(name), name).toBe(true);
+      expect(isFolderName(name), name).toBe(false);
+    }
+  });
+
+  it("lets through names that only start like one", () => {
+    for (const name of ["Console", "COM10", "nullify", "LPT", "conin", "my con.txt"]) {
+      expect(isWindowsDeviceName(name), name).toBe(false);
+      expect(isFolderName(name), name).toBe(true);
+    }
   });
 });

@@ -53,6 +53,7 @@ import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData
 import { AI_USAGE_MODULE_ID, DISCORD_MODULE_ID, movedModule, MOVED_MODULES_OWNER, moveOfficialModules } from "./moved-modules";
 import { checkZipData, readOwnerRecords } from "./installer";
 import { Installed, loadInstalledModules, type InstalledModules } from "./installed-modules";
+import { sameOwner, viewsOfAnotherOwner } from "./module-owner";
 import { PendingQuestions } from "./pending-questions";
 import { createOverlayServices } from "./overlay-wiring";
 import { readModulePage } from "./module-page";
@@ -209,7 +210,7 @@ import { thisDeviceName } from "./device-name";
 import { AccountClient, deviceOs, linkCommand, loadAccount, saveAccount, type AccountClientOptions, type ProfileData } from "./account";
 import { discordLogin } from "./discord-login";
 import { loadDiscordSecrets, saveDiscordSecrets, type Encryptor } from "./discord-store";
-import { viewsInSession } from "./storage-purge";
+import { PurgeCount, viewsInSession } from "./storage-purge";
 import {
   DEFAULT_THEME,
   discoverThemes,
@@ -1121,13 +1122,25 @@ export class Host {
     const { modules } = this.installed;
     this.moduleData = await listModuleData(this.options.userData, this.files.root());
     this.dropPanelsOfMissingModules();
+    // A module id now loaded for another owner (a development folder over an installed copy, or back): its open panels
+    // stop, so no page runs as one owner with another's grants or data. They start again as the new owner's below
+    // (syncPanelTypes, syncOverlayPanels), or ask first when that copy still misses access.
+    const restarted = new Set<string>();
+    for (const view of viewsOfAnotherOwner(this.moduleViews(), modules)) {
+      restarted.add(view.moduleId);
+      this.tooltips?.forgetModule(view.moduleId);
+      this.panels.close(view.instanceId);
+      if (this.needsAnswer(view.moduleId)) this.panels.setAwaiting(view.instanceId);
+    }
     // A module removed, blocked, replaced by another publisher's or updated without the connector ends its open OBS pages now.
     this.streaming?.recheckStreams();
     this.noteModuleVersions();
     this.workspaces.settlePanelTypes(panelTypesOf(modules));
     this.syncPanelTypes();
+    if (restarted.size > 0) this.syncOverlayPanels();
     const moved = new Set([...modules].filter(([id, module]) => roots.has(id) && roots.get(id) !== module.root).map(([id]) => id));
-    for (const id of moved) this.reloadModuleViews(id);
+    // Panels started anew just now load the new copy already.
+    for (const id of moved) if (!restarted.has(id)) this.reloadModuleViews(id);
     await this.watchDevelopmentFolders();
     void this.refreshPublisherNames();
     return moved;
@@ -4082,8 +4095,9 @@ export class Host {
       setMaximized: (maximized) => this.window.webContents.send("host:shortcut", `${maximized ? "maximize" : "restore"}:${record.instanceId}`),
       setDialog: (open, size, how) => (open ? this.openPanelDialog(record.instanceId, module, size, how?.byClick ?? true) : this.closePanelDialog(record.instanceId)),
       setDialogTitle: (title) => this.setPanelDialogTitle(record.instanceId, title),
-      networkHosts: () => this.networkHostsOf(record.moduleId),
-      connectors: () => this.connectorsOf(record.moduleId),
+      // The grants of the owner this page runs as: a copy of another owner installed under the same id later has its own.
+      networkHosts: () => this.networkHostsOf(module),
+      connectors: () => this.connectorsOf(module),
       folders: this.folderHostOf(module),
       appSettings: this.data.appSettings(module.owner, module.manifest.id),
       appBlobs: this.data.appBlobs(module.owner, module.manifest.id),
@@ -4284,19 +4298,21 @@ export class Host {
     this.pushStateSoon();
   }
 
-  /** Connectors a module may use now: its grant, as far as the module installed now still asks for them. */
-  private connectorsOf(moduleId: string): ReadonlySet<string> {
-    const module = this.modules.get(moduleId);
-    return new Set(module ? this.grants.allowed(module).connectors : []);
+  /**
+   * Connectors a module may use now: its grant, as far as the module installed now still asks for them. None while its
+   * id is installed for another owner (a development folder over a catalog copy): that copy's grants are not its own.
+   */
+  private connectorsOf(module: Pick<InstalledModule, "owner" | "manifest">): ReadonlySet<string> {
+    const current = sameOwner(module, this.modules);
+    return new Set(current ? this.grants.allowed(current).connectors : []);
   }
 
-  /** Hosts a module may reach now: its grant, as far as the module installed now still asks for them. */
   /**
    * The folders of permissions.folders a module may read now (folder-access.ts): the grant is asked again on every call,
    * for the module installed now, so a revoke or an update that changed the folder takes effect at once.
    */
   private folderHostOf(module: InstalledModule): FolderHost & { granted(): boolean } {
-    const current = () => ((found) => (found && found.owner === module.owner ? found : undefined))(this.modules.get(module.manifest.id));
+    const current = () => sameOwner(module, this.modules);
     const allowed = (): ReadonlySet<string> => ((found) => new Set(found ? this.grants.allowed(found).folders : []))(current());
     const host = folderHost({
       folders: () => current()?.manifest.permissions.folders,
@@ -4361,9 +4377,10 @@ export class Host {
     };
   }
 
-  private networkHostsOf(moduleId: string): ReadonlySet<string> {
-    const module = this.modules.get(moduleId);
-    return new Set(module ? this.grants.allowed(module).network : []);
+  /** Hosts a module may reach now: its grant, as far as the module installed now, of the same owner, still asks for them. */
+  private networkHostsOf(module: Pick<InstalledModule, "owner" | "manifest">): ReadonlySet<string> {
+    const current = sameOwner(module, this.modules);
+    return new Set(current ? this.grants.allowed(current).network : []);
   }
 
   private createBrowser(record: InstanceRecord, workspace: TavoraWorkspace): void {
@@ -4436,10 +4453,13 @@ export class Host {
 
   /** Modules being cleared right now, so several panels of one module do it once. */
   private readonly purging = new Set<string>();
+  /** How often each module's storage was cleared lately, per workspace (a second time soon after leaves its panels stopped). */
+  private readonly purges = new PurgeCount();
 
   /**
-   * A module's browser storage grew past the limit (storage-guard.ts): stop its
-   * panels, clear the storage and start the panels again, and say so.
+   * A module's browser storage grew past the limit (storage-guard.ts): stop its panels, clear the storage and start
+   * the panels again, and say so. Cleared a second time within PURGE_WINDOW_MS, the panels stay stopped until the user
+   * reloads them, so a module can't keep the disk full in a loop.
    */
   private async purgeModuleStorage(moduleId: string, workspaceId: string, ses: Electron.Session): Promise<void> {
     const key = `${moduleId}@${workspaceId}`;
@@ -4454,10 +4474,11 @@ export class Host {
       // Said before the clearing, which can take a few seconds; the panels already show they stopped.
       const installed = this.modules.get(moduleId);
       const name = installed ? this.shown(installed.manifest).name : moduleId;
-      this.notice = translate(this.language, "modules.storageCleared", { name });
+      const restart = this.purges.note(key);
+      this.notice = translate(this.language, restart ? "modules.storageCleared" : "modules.storageStopped", { name });
       this.pushState();
       await ses.clearStorageData();
-      for (const view of views) view.reload();
+      if (restart) for (const view of views) view.reload();
     } catch (error) {
       console.error("[tavora] clearing a module's storage failed", error);
     } finally {
@@ -5112,7 +5133,8 @@ export class Host {
   private syncConnection(): void {
     if (!this.connection) return;
     const present = this.workspaces.workspacesUsing(SYSTEM_MONITOR_ID).length > 0;
-    this.connection.setActive(process.platform === "win32" && present && this.connectorsOf(SYSTEM_MONITOR_ID).has("system-info"));
+    const monitor = this.modules.get(SYSTEM_MONITOR_ID);
+    this.connection.setActive(process.platform === "win32" && present && monitor !== undefined && this.connectorsOf(monitor).has("system-info"));
   }
 
   /** Pushes the state once for a burst of changes, such as every panel of a workspace that just opened loading at once. */

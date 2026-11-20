@@ -85,10 +85,13 @@ export class Streaming {
     return this.overlays;
   }
 
-  /** Whether the user granted the module the stream-overlay connector, as it is installed now. */
-  private overlayGranted(moduleId: string): boolean {
+  /**
+   * Whether the user granted `owner`'s module the stream-overlay connector, as it is installed now. A copy of another
+   * owner installed under the same id (a development folder over a catalog copy) has its own grant, never this one.
+   */
+  private overlayGranted(moduleId: string, owner: string): boolean {
     const module = this.options.installed.get(moduleId);
-    return module !== undefined && this.options.grants.allowed(module).connectors.includes("stream-overlay");
+    return module !== undefined && module.owner === owner && this.options.grants.allowed(module).connectors.includes("stream-overlay");
   }
 
   /** The module panels of the workspace shown now. */
@@ -118,7 +121,7 @@ export class Streaming {
   /** The overlay page of a link's module, while it may serve one: installed under the link's owner, with the connector granted. */
   private pageOf(link: OverlayLink): { root: string; entry: string } | null {
     const module = this.options.installed.shown(link.moduleId);
-    if (!module || module.owner !== link.owner || !module.manifest.overlay || !this.overlayGranted(link.moduleId)) return null;
+    if (!module || module.owner !== link.owner || !module.manifest.overlay || !this.overlayGranted(link.moduleId, link.owner)) return null;
     return { root: module.root, entry: module.manifest.overlay };
   }
 
@@ -142,7 +145,7 @@ export class Streaming {
   overlayFor(module: StreamingModule, workspaceId: string) {
     const subject = (key: string): OverlaySubject => ({ owner: module.owner, moduleId: module.manifest.id, workspaceId, key });
     const granted = async (): Promise<boolean> => {
-      if (this.overlayGranted(module.manifest.id)) return true;
+      if (this.overlayGranted(module.manifest.id, module.owner)) return true;
       if (!(module.manifest.permissions.onRequest ?? []).includes("stream-overlay")) {
         throw new HostError("PERMISSION_DENIED", 'overlay.copyLink needs the "overlay" permission', { capability: "overlay" });
       }
@@ -153,7 +156,7 @@ export class Streaming {
         // Without the connector nothing reads a link, so state is kept only for a key that a game overlay shows.
         // Otherwise a module could fill the disk, or keep feeding a link it lost the right to.
         const own = subject(key);
-        if (this.overlayGranted(module.manifest.id) || this.overlayKeys?.has(own)) this.overlays.publish(own, state);
+        if (this.overlayGranted(module.manifest.id, module.owner) || this.overlayKeys?.has(own)) this.overlays.publish(own, state);
       },
       remove: (key: string) => this.overlays.remove(subject(key)),
       copyLink: async (key: string): Promise<OverlayLinkResult> => {
@@ -170,7 +173,7 @@ export class Streaming {
       resetLink: (key: string) => this.overlays.reset(subject(key)),
       /** Whether copyLink would open Tavora's own window now: the consent dialog, or the setting that is off. */
       copyNeedsWindow: (): boolean =>
-        !this.overlayGranted(module.manifest.id) || !this.options.settings().streamOverlays || this.server.port === null,
+        !this.overlayGranted(module.manifest.id, module.owner) || !this.options.settings().streamOverlays || this.server.port === null,
     };
   }
 

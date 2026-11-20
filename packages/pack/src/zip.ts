@@ -3,6 +3,7 @@
 // installer"): it refuses links, unsafe names, encryption and zip64, and caps
 // sizes and compression before anything is unpacked.
 import { crc32, deflateRawSync, inflateRawSync } from "node:zlib";
+import { isWindowsDeviceName } from "@tavora/module-schema";
 
 export interface ZipLimits {
   maxArchiveBytes: number;
@@ -36,7 +37,6 @@ const UTF8 = 0x0800;
 // 1980-01-01 00:00, so the same files always give the same zip.
 const DOS_DATE = (1 << 5) | 1;
 
-const RESERVED = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i;
 
 /**
  * A path a package may contain: relative, "/" only, no "." or ".." parts, no
@@ -46,7 +46,7 @@ const RESERVED = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i;
 export function isSafeEntryName(name: string): boolean {
   if (name.length === 0 || name.length > 256) return false;
   if (name.startsWith("/") || name.includes("\\") || name.includes(":") || /[\u0000-\u001f\u007f<>"|?*]/.test(name)) return false;
-  return name.split("/").every((part) => part !== "" && part !== "." && part !== ".." && !RESERVED.test(part) && !/[. ]$/.test(part));
+  return name.split("/").every((part) => part !== "" && part !== "." && part !== ".." && !isWindowsDeviceName(part) && !/[. ]$/.test(part));
 }
 
 export function writeZip(files: readonly ZipFile[]): Buffer {

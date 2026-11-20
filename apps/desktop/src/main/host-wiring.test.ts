@@ -30,6 +30,25 @@ describe("host.ts", () => {
     expect(body(/async flush\(\): Promise<void> \{/)).toContain("this.workspaces.flush();");
   });
 
+  it("gives a panel only the grants of the owner its page runs as, and restarts panels whose module changed owner", () => {
+    const view = body(/private createView\(/);
+    expect(view).toContain("networkHosts: () => this.networkHostsOf(module),");
+    expect(view).toContain("connectors: () => this.connectorsOf(module),");
+    expect(body(/private networkHostsOf\(/)).toContain("sameOwner(module, this.modules)");
+    expect(body(/private connectorsOf\(/)).toContain("sameOwner(module, this.modules)");
+    expect(body(/private folderHostOf\(/)).toContain("sameOwner(module, this.modules)");
+    const reload = body(/private async reloadModules\(\)/);
+    expect(reload).toContain("viewsOfAnotherOwner(this.moduleViews(), modules)");
+    expect(reload).toContain("this.panels.close(view.instanceId);");
+  });
+
+  it("starts panels again after clearing their storage only when it wasn't cleared just before", () => {
+    const purge = body(/private async purgeModuleStorage\(/);
+    expect(purge).toContain("const restart = this.purges.note(key);");
+    expect(purge).toContain("if (restart) for (const view of views) view.reload();");
+    expect(purge).not.toMatch(/^\s*for \(const view of views\) view\.reload\(\);/m);
+  });
+
   it("deletes a refused update's installer", () => {
     expect(host).toMatch(/onRefused: \(info\) => removeRefusedInstaller\(info, app\.isPackaged\)/);
   });
