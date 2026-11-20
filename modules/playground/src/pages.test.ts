@@ -88,8 +88,8 @@ describe("foundations", () => {
     const sizes = [...source("text/TypeScale").matchAll(/cls: "text-(\w+)[^"]*", size: "(\d+) \/ (\d+) px"/g)];
     expect(sizes.map((match) => match[1])).toEqual(["xl", "lg", "base", "sm", "xs"]);
     for (const [, name, size, line] of sizes) {
-      expect(themeCss, name).toContain(`--text-${name}: ${size}px;`);
-      expect(themeCss, name).toContain(`--text-${name}--line-height: ${line}px;`);
+      expect(themeCss, name).toContain(`--text-${name}: var(--style-text-${name}, ${size}px);`);
+      expect(themeCss, name).toContain(`--text-${name}--line-height: var(--style-text-${name}-lh, ${line}px);`);
     }
   });
 

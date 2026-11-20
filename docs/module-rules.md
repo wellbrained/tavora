@@ -116,6 +116,13 @@ themes; anything hard-coded breaks in one of them.
   existing kit controls for it.
 - **Depth**: areas separate by a surface step and a 1 px `border-border`. Shadows only on floating layers and on the kit's Primary and Secondary buttons (a faint
   top light, Primary also a hairline contact shadow); both come from the kit. No `z-index` of your own except inside a canvas or map.
+- **Styles**: besides the theme's colours the user picks a style (Classic, Hardware, Liquid Glass, …) that changes how
+  the kit's controls are shaped: keycaps or capsules, inset fields, inverted lists, small caps, a status light. Kit
+  controls follow it by themselves, so a module built from them needs nothing. Build nothing that only looks right in
+  Classic: no own shadows, bevels or pill shapes on things the kit already has, and use the kit's sizes, not fixed
+  heights. A module may draw a part differently in a style (a dot clock, segment bars): read `data-style` and
+  `data-look-<part>` on `<html>` in CSS, or `theme.style` from the module bootstrap. Without them it must still look
+  right. ([docs/features/style-system.md](features/style-system.md))
 - **Canvas**: a canvas keeps the colours it was drawn with, so one that reads theme colours redraws when the theme
   changes (`onTheme` from the module bootstrap, or watch `<html>` as the kit's `Sparkline` does).
 - **Focus**: the kit controls bring the focus ring. Never remove it and never draw your own.
@@ -347,6 +354,7 @@ Before you say it is done, check each item and name in your summary any you coul
 - [ ] No hex, `rgb()`, palette colour, hex fallback, literal font name, px radius or off-scale text size in the new code
       (search the diff for `#[0-9a-f]{3,6}`, `rgb(`, `neutral-`, `white`, `px` in CSS).
 - [ ] Looked at in a dark and a light theme (for example Tavora Dark and Hearthwood Light), and in German.
+- [ ] Looked at in Hardware and Liquid Glass too (the Playground's Style and Theme pickers show any page in them).
 - [ ] Looked at at the manifest's minimum size and, if set, the wide minimum.
 - [ ] Every visible text is in `en` and `de`; `checkCatalogs` passes; no glued sentences.
 - [ ] Saves through the SDK store; panel state is read back after a reload.
