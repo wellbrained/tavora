@@ -72,6 +72,7 @@ export const de: Record<keyof typeof en, string> = {
   "settings.font.hint.nunito": "Weich",
   "settings.font.hint.saira": "Gaming",
   "settings.font.hint.atkinson": "Am besten lesbar",
+  "settings.font.hint.jetbrains-mono": "Jeder Buchstabe gleich breit",
   "settings.corner-radius.label": "Ecken",
   "settings.corner-radius.search": "Wie rund die Ecken sind, unabhängig vom Design.",
   "settings.corner-radius.keywords": "ecke, ecken, radius, rund, abgerundet, eckig, kante, rand, corner, radius, round, rounded, sharp, square, border",
