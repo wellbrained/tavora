@@ -246,7 +246,7 @@ const STORES: { name: string; file: () => string; version: number; versionKey?: 
     file: () => at("cloud-copy-key.json"),
     version: STORE_VERSIONS.sealed,
     versionKey: "v",
-    load: () => new AccountKey({ file: at("cloud-copy-key.json"), encryptor, baseUrl: "http://localhost/v1/account", fetch, token: () => null }).load(),
+    load: () => new AccountKey({ file: at("cloud-copy-key.json"), encryptor, baseUrl: "http://localhost/v1/account", fetch, token: () => null, account: () => null }).load(),
   },
 ];
 

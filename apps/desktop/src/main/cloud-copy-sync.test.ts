@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -27,7 +27,7 @@ function tavora(cloud: Service, at: Pc, { signedIn = true, devData = false } = {
     enabled: true,
     devData,
     files: { root: () => at.moduleFiles },
-    account: { token: () => (signedIn ? cloud.token : null) },
+    account: { token: () => (signedIn ? cloud.token : null), id: () => (signedIn ? "me" : null) },
     serviceUrl: "http://tavora.test/v1/account",
     fetch: cloud.fetch,
     encryptor,
@@ -451,6 +451,22 @@ describe("the cloud copy, as Tavora runs it", () => {
     expect(sync.view()).toMatchObject({ on: false, askKey: true });
   });
 
+  it("signed out with the copy in a folder: the key stays for it, the account's vault as last read goes", async () => {
+    const cloud = await service();
+    const a = await pc({ "library.json": "a1" });
+    const { sync } = await startCopy(cloud, a);
+    const folder = await mkdtemp(path.join(os.tmpdir(), "tavora-signed-out-"));
+    await sync.move(folder);
+    expect(sync.view()).toMatchObject({ on: true, folder });
+    await expect(stat(path.join(a.userData, "account-vault.bin"))).resolves.toBeTruthy();
+
+    await sync.signedOut();
+    expect(sync.view()).toMatchObject({ on: true, folder });
+    await expect(stat(path.join(a.userData, "account-key.json"))).resolves.toBeTruthy();
+    await expect(stat(path.join(a.userData, "account-vault.bin"))).rejects.toThrow();
+    await rm(folder, { recursive: true, force: true });
+  });
+
   it("starts over with a new key when the old one is lost, and other PCs then ask for it", async () => {
     const cloud = await service();
     const a = await pc({ "library.json": "a1" });
@@ -559,7 +575,7 @@ describe("what the copy is doing, and closing while it uploads", () => {
       userData: at.userData,
       enabled: true,
       files: { root: () => at.moduleFiles },
-      account: { token: () => cloud.token },
+      account: { token: () => cloud.token, id: () => "me" },
       serviceUrl: "http://tavora.test/v1/account",
       fetch: (async (input, init) => {
         if (netGate && heldRoute(`${init?.method ?? "GET"} ${new URL(String(input)).pathname}`)) {

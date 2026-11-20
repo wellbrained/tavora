@@ -54,7 +54,7 @@ import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData
 import { AI_USAGE_MODULE_ID, DISCORD_MODULE_ID, movedModule, MOVED_MODULES_OWNER, moveOfficialModules } from "./moved-modules";
 import { checkZipData, readOwnerRecords } from "./installer";
 import { Installed, loadInstalledModules, type InstalledModules } from "./installed-modules";
-import { sameOwner, viewsOfAnotherOwner } from "./module-owner";
+import { sameOwner, settlePanelOwner, viewsOfAnotherOwner } from "./module-owner";
 import { PendingQuestions } from "./pending-questions";
 import { createOverlayServices } from "./overlay-wiring";
 import { readModulePage } from "./module-page";
@@ -686,6 +686,8 @@ export class Host {
     this.workspaces = new Workspaces(workspaces, {
       save: (state) => this.savedData.saveWorkspace(state),
     });
+    // Panels from before their owner was noted: what they left is their module's owner's now (settleOwner).
+    this.workspaces.noteOwners((moduleId) => this.modules.get(moduleId)?.owner);
     this.lifecycle = new ModuleLifecycle({
       userData: options.userData,
       tavoraVersion: app.getVersion(),
@@ -737,7 +739,8 @@ export class Host {
         this.inboxSignedIn = view.account !== null;
         this.inbox.accountChanged(view.account !== null);
       }
-      this.developerKeys?.accountChanged(view.account !== null);
+      // Which account, not only whether one: what was read for one is never shown to another.
+      this.developerKeys?.accountChanged(view.account !== null ? prepared.signIn.id() : null);
     });
     this.inbox = new Inbox({
       baseUrl: serviceUrl(options.apiUrl),
@@ -1133,16 +1136,21 @@ export class Host {
     for (const view of viewsOfAnotherOwner(this.moduleViews(), modules)) {
       restarted.add(view.moduleId);
       this.tooltips?.forgetModule(view.moduleId);
-      void this.data.panelState.handOver(view.instanceId, view.owner, modules.get(view.moduleId)!.owner).catch((error: unknown) => console.error("[tavora]", error));
+      const owner = modules.get(view.moduleId)!.owner;
+      void this.data.panelState.handOver(view.instanceId, view.owner, owner).catch((error: unknown) => console.error("[tavora]", error));
       const record = this.records(view.workspaceId).find((item) => item.instanceId === view.instanceId);
-      if (record?.content) {
+      if (record) {
         delete record.content;
+        record.owner = owner;
         contentDropped = true;
       }
       this.panels.restart(view.instanceId);
       if (this.needsAnswer(view.moduleId)) this.panels.setAwaiting(view.instanceId);
     }
     if (contentDropped) this.workspaces.saveSoon();
+    // Panels that are not open (another workspace, or waiting) are handed over when they start (settleOwner); those
+    // of a module that wasn't loaded before get its owner now.
+    this.workspaces.noteOwners((moduleId) => modules.get(moduleId)?.owner);
     // A module removed, blocked, replaced by another publisher's or updated without the connector ends its open OBS pages now.
     this.streaming?.recheckStreams();
     this.noteModuleVersions();
@@ -4056,6 +4064,7 @@ export class Host {
     if (panelType === undefined) return;
     let measured = openedAt === undefined;
     const module = this.modules.get(record.moduleId)!;
+    this.settleOwner(record, module.owner);
     const view = new ModuleView({
       instanceId: record.instanceId,
       module,
@@ -4165,6 +4174,18 @@ export class Host {
         this.window.contentView.addChildView(view.view);
       },
     }));
+  }
+
+  /**
+   * A panel whose module id loads for another owner than the one its page last ran as (changed while the panel was
+   * closed, in a workspace not shown, or while Tavora was closed): what that owner left stays its own, as reloadModules
+   * does for open panels. The content its tab named goes, and its panel state is kept apart (a file from before owners
+   * were noted counts as the old owner's).
+   */
+  private settleOwner(record: InstanceRecord, owner: string): void {
+    const { changed, from } = settlePanelOwner(record, owner);
+    if (from !== null) void this.data.panelState.handOver(record.instanceId, from, owner).catch((error: unknown) => console.error("[tavora]", error));
+    if (changed) this.workspaces.saveSoon();
   }
 
   /**

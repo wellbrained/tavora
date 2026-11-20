@@ -28,6 +28,7 @@ async function tavora(cloud: Service, options: { offline?: () => boolean; signed
     baseUrl: "http://tavora.test/v1/account",
     fetch: fetchImpl,
     token: () => cloud.token,
+    account: () => "me",
   });
   const linked: string[] = [];
   const keys = new DeveloperKeys({

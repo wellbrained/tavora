@@ -168,9 +168,10 @@ export function keepNewerCopy(file: string, version: number, bytes: Buffer): Pro
  * gives null. One that is damaged is set aside, the user is told, and it gives null. One whose data doesn't open here
  * (sealed by another Windows user, a keyring that is locked for now, or `open` refuses it) stays where it is, so the
  * next start can try again, and a copy goes aside (`<file>.unopened`) in case something is written over it meanwhile.
- * Never throws. Copies of a sealed file hold what it held: forgetSealedFile removes them with it.
+ * Never throws. Copies of a sealed file hold what it held: forgetSealedFile removes them with it. `open` also gets the
+ * whole record, for fields kept next to the sealed data.
  */
-export async function openSealedFile<T>(file: string, open: (data: string) => T | Promise<T>): Promise<T | null> {
+export async function openSealedFile<T>(file: string, open: (data: string, saved: SavedRecord) => T | Promise<T>): Promise<T | null> {
   const version = STORE_VERSIONS.sealed;
   let saved: SavedRecord | null;
   try {
@@ -184,7 +185,7 @@ export async function openSealedFile<T>(file: string, open: (data: string) => T 
     return null;
   }
   try {
-    return await open(saved.data);
+    return await open(saved.data, saved);
   } catch {
     await keepCopy(path.dirname(file), `${path.basename(file)}.unopened`, Buffer.from(JSON.stringify(saved))).catch(() => undefined);
     return null;

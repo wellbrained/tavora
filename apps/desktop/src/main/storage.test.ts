@@ -155,12 +155,47 @@ describe("PanelStateStore", () => {
     await asOwner(store, "k1").set(A, { tab: 2 });
     await asOwner(store, "k1").set(A, null);
     expect(await asOwner(store, "k1").get(A)).toEqual({ tab: 1 });
-    // The new owner's page writes its own.
+    // The new owner's page writes its own; the old owner's state waits aside for it.
     await asOwner(store, "local").set(A, { mine: true });
     expect(await asOwner(store, "local").get(A)).toEqual({ mine: true });
     await asOwner(store, "k1").set(A, { tab: 3 });
     expect(await asOwner(store, "local").get(A)).toEqual({ mine: true });
-    expect(await asOwner(store, "k1").get(A)).toBeNull();
+    expect(await asOwner(store, "k1").get(A)).toEqual({ tab: 1 });
+  });
+
+  it("never writes over or clears another owner's state, also without a hand-over in this run", async () => {
+    const folder = path.join(dir, "panel-state");
+    await asOwner(new PanelStateStore(folder), "k1").set(A, { k: "canary" });
+    // A later run: the id loads for another owner, whose page writes and clears.
+    const later = new PanelStateStore(folder);
+    expect(await asOwner(later, "local").get(A)).toBeNull();
+    await asOwner(later, "local").set(A, { local: 1 });
+    expect(await asOwner(later, "local").get(A)).toEqual({ local: 1 });
+    expect(await asOwner(later, "k1").get(A)).toEqual({ k: "canary" });
+    // The id comes back to k1 in another run: its state is there, and local's waits aside in turn.
+    const back = new PanelStateStore(folder);
+    expect(await asOwner(back, "k1").get(A)).toEqual({ k: "canary" });
+    await asOwner(back, "k1").set(A, { k: "again" });
+    expect(await asOwner(back, "local").get(A)).toEqual({ local: 1 });
+    // A clear by one owner leaves the other's alone.
+    await asOwner(back, "local").set(A, null);
+    expect(await asOwner(back, "local").get(A)).toBeNull();
+    expect(await asOwner(back, "k1").get(A)).toEqual({ k: "again" });
+  });
+
+  it("removes and prunes the state every owner left for a panel", async () => {
+    const folder = path.join(dir, "panel-state");
+    const store = new PanelStateStore(folder);
+    for (const id of [A, B]) {
+      await asOwner(store, "k1").set(id, { k: 1 });
+      await asOwner(store, "local").set(id, { local: 1 });
+    }
+    expect((await readdir(folder)).length).toBe(4);
+    await store.prune(new Set([B]));
+    expect((await readdir(folder)).filter((name) => name.startsWith(A))).toEqual([]);
+    expect(await asOwner(store, "k1").get(B)).toEqual({ k: 1 });
+    await store.remove(B);
+    expect(await readdir(folder)).toEqual([]);
   });
 
   it("keeps the owner noted when a newer Tavora's fields are kept, and writes it once", async () => {

@@ -18,6 +18,11 @@ export interface InstanceRecord {
   panelType?: string;
   /** What the panel last said it shows (panel.setContent); kept across workspace switches and restarts. */
   content?: PanelContent;
+  /**
+   * The owner (publisher) the panel's page last ran as, whose its content and panel state are: when the module id loads
+   * for another owner, the panel starts without them (host.ts settleOwner). Missing in a file from before it was noted.
+   */
+  owner?: string;
 }
 
 /**
@@ -79,7 +84,10 @@ export function emptyWorkspace(): Workspace {
 // The fields this Tavora knows, per record. The rest (a newer Tavora's) are kept as they were and written back.
 const STATE_FIELDS = Object.keys({ version: true, workspaces: true } satisfies Record<keyof WorkspaceState, true>);
 const WORKSPACE_FIELDS = Object.keys({ instances: true, layout: true, snapshots: true } satisfies Record<keyof Workspace, true>);
-const INSTANCE_FIELDS = Object.keys({ instanceId: true, moduleId: true, panelType: true, content: true } satisfies Record<keyof InstanceRecord, true>);
+const INSTANCE_FIELDS = Object.keys({ instanceId: true, moduleId: true, panelType: true, content: true, owner: true } satisfies Record<keyof InstanceRecord, true>);
+
+/** An owner as a panel's record notes it (a publisher key's fingerprint, local, official). */
+const isOwner = (value: unknown): value is string => typeof value === "string" && value.length > 0 && value.length <= 200;
 const SNAPSHOT_FIELDS = Object.keys({ id: true, name: true, savedAt: true, layout: true, modules: true, panelTypes: true } satisfies Record<keyof Snapshot, true>);
 
 export function emptyWorkspaces(workspaceIds: readonly string[]): WorkspaceState {
@@ -138,9 +146,16 @@ export async function loadWorkspace(
           isInstalled(record.moduleId),
       )
       .map((record): InstanceRecord => {
-        const { instanceId, moduleId, panelType, content } = record;
+        const { instanceId, moduleId, panelType, content, owner } = record;
         const checked = checkPanelContent(content);
-        return { ...unknownFields(record, INSTANCE_FIELDS), instanceId, moduleId, ...(isPanelTypeId(panelType) ? { panelType } : {}), ...(checked ? { content: checked } : {}) };
+        return {
+          ...unknownFields(record, INSTANCE_FIELDS),
+          instanceId,
+          moduleId,
+          ...(isPanelTypeId(panelType) ? { panelType } : {}),
+          ...(checked ? { content: checked } : {}),
+          ...(isOwner(owner) ? { owner } : {}),
+        };
       });
     const open = new Set(instances.map((record) => record.instanceId));
     const snapshots = (Array.isArray(workspace.snapshots) ? workspace.snapshots : [])
@@ -193,6 +208,23 @@ export function settlePanelTypes(state: WorkspaceState, typesOf: (moduleId: stri
       else delete snapshot.panelTypes;
     }
   }
+}
+
+/**
+ * Notes the owner a panel runs as on every panel from before owners were noted, whose module is loaded (`ownerOf`): what
+ * it left counts as that owner's. True when one was noted.
+ */
+export function noteOwners(state: WorkspaceState, ownerOf: (moduleId: string) => string | undefined): boolean {
+  let noted = false;
+  for (const workspace of Object.values(state.workspaces)) {
+    for (const record of workspace.instances) {
+      const owner = record.owner === undefined ? ownerOf(record.moduleId) : undefined;
+      if (owner === undefined) continue;
+      record.owner = owner;
+      noted = true;
+    }
+  }
+  return noted;
 }
 
 /** Writes the workspace file whole or not at all (fsutil.ts writeFileAtomic), like the other data files. */
@@ -317,6 +349,11 @@ export class Workspaces {
 
   settlePanelTypes(typesOf: (moduleId: string) => PanelTypesOf | undefined): void {
     settlePanelTypes(this.state, typesOf);
+  }
+
+  /** See noteOwners; saved when one was noted. */
+  noteOwners(ownerOf: (moduleId: string) => string | undefined): void {
+    if (noteOwners(this.state, ownerOf)) this.saveSoon();
   }
 
   /** Empty panels and layouts for workspaces new to the library. */

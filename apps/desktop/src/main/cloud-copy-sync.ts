@@ -70,7 +70,11 @@ export interface CopySyncOptions {
   /** The folder modules keep pictures in, which may be anywhere. */
   files: { root(): string };
   /** The account: its sign-in token seals nothing, but lets the copy and the key reach Tavora's service. */
-  account: { token(): string | null };
+  account: {
+    token(): string | null;
+    /** The account signed in (sign-in.ts accountIdOf): the account's key is only ever used for its own. */
+    id(): string | null;
+  };
   /** The account service, ending in /v1/account. */
   serviceUrl: string;
   fetch?: typeof fetch;
@@ -164,6 +168,7 @@ export class CopySync {
       seenFile: path.join(options.userData, "account-vault-seen"),
       encryptor: options.encryptor,
       ...service,
+      account: () => options.account.id(),
     });
     this.cloud = new CloudCopy(this.service);
   }
@@ -828,8 +833,13 @@ export class CopySync {
    * until signed in again. A copy in a folder stays on.
    */
   async signedOut(): Promise<void> {
-    // A copy in the user's own folder needs no account: it stays on, with its key.
-    if (this.folder !== null && (this.copyOn || this.asked("askKey"))) return;
+    // A copy in the user's own folder needs no account: it stays on, with its key (still the account's). The account's
+    // vault as last read, with its publisher keys, goes.
+    if (this.folder !== null && (this.copyOn || this.asked("askKey"))) {
+      await this.accountKeys.forgetVault();
+      this.changed();
+      return;
+    }
     if (this.copyOn || this.asked("askKey")) await this.forget(null);
     else {
       // Not on yet: a turn-on on its way (checking the key, looking for a copy) stops too, and forgets where it was going.

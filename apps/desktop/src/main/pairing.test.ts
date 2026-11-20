@@ -14,7 +14,7 @@ const encryptor = { isAvailable: () => true, encrypt: (text: string) => Buffer.f
 /** One PC: its account key and its pairing, through the service with `token` or through `folder`. */
 async function onPc(fetch: typeof globalThis.fetch, token: string | null, transport?: PairingTransport) {
   const { userData } = await pc({ "library.json": "{}" });
-  const accountKey = new AccountKey({ file: path.join(userData, "account-key.json"), encryptor, baseUrl: "http://tavora.test/v1/account", fetch, token: () => token });
+  const accountKey = new AccountKey({ file: path.join(userData, "account-key.json"), encryptor, baseUrl: "http://tavora.test/v1/account", fetch, token: () => token, account: () => (token ? "me" : null) });
   const views: PairingView[] = [];
   let focused = 0;
   const pairing = new Pairing({
