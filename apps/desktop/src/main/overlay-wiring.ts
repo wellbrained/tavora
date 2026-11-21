@@ -15,7 +15,7 @@ import { GameVeilWindow } from "./game-veil-window";
 import type { GameWatcher } from "./game-watch";
 import type { GrantStore } from "./grants";
 import type { Installed } from "./installed-modules";
-import { LayoutPictures, MAX_PICTURE_BYTES, MAX_PICTURE_WIDTH, PICTURES_FOLDER, picturePixels, sourceForHandle } from "./layout-pictures";
+import { clientArea, LayoutPictures, MAX_PICTURE_BYTES, MAX_PICTURE_WIDTH, PICTURES_FOLDER, picturePixels, sourceForHandle } from "./layout-pictures";
 import type { Library } from "./library";
 import { windowsForegroundProbe } from "./foreground";
 import { OverlayCanvas } from "./overlay-canvas";
@@ -230,7 +230,9 @@ function overlayLayout(wiring: OverlayWiring, gameOverlays: GameOverlays): Overl
       const thumbnailSize = picturePixels(size, display.scaleFactor);
       const sources = await desktopCapturer.getSources({ types: ["window"], thumbnailSize, fetchWindowIcons: false });
       const found = sources.find((source) => source.id === wanted.id);
-      return found && !found.thumbnail.isEmpty() ? found.thumbnail.toPNG() : null;
+      if (!found || found.thumbnail.isEmpty()) return null;
+      // Only the game itself: the window's title bar is cut off, so the picture has the canvas's shape (`size`).
+      return found.thumbnail.crop(clientArea(found.thumbnail.getSize(), size)).toPNG();
     },
     choose: async () => {
       const file = await ports.page.choosePicture();

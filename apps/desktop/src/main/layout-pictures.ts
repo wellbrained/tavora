@@ -98,3 +98,21 @@ export function picturePixels(size: { width: number; height: number }, scaleFact
   const k = Math.max(1, Math.min(scaleFactor, MAX_PICTURE_WIDTH / Math.max(1, size.width)));
   return { width: Math.round(size.width * k), height: Math.round(size.height * k) };
 }
+
+/**
+ * The part of a window's picture that is its client area, the game itself: Windows' capture takes the whole window,
+ * with the title bar on top of a windowed game, while overlays sit on the client area (`client`, any size of its
+ * shape). The title bar is cut off the top; side and bottom borders are a pixel or none on Windows 10 and 11, so the
+ * client's shape is kept from the bottom. A picture of the client's shape (full screen, borderless) is kept whole, and
+ * one that is wider than the client keeps its middle.
+ */
+export function clientArea(image: { width: number; height: number }, client: { width: number; height: number }): { x: number; y: number; width: number; height: number } {
+  const whole = { x: 0, y: 0, width: image.width, height: image.height };
+  if (!(image.width > 0 && image.height > 0 && client.width > 0 && client.height > 0)) return whole;
+  const height = Math.round((image.width * client.height) / client.width);
+  // Within a pixel of the client's shape: nothing to cut.
+  if (Math.abs(height - image.height) <= 1) return whole;
+  if (height < image.height) return { x: 0, y: image.height - height, width: image.width, height };
+  const width = Math.round((image.height * client.width) / client.height);
+  return { x: Math.floor((image.width - width) / 2), y: 0, width, height: image.height };
+}
