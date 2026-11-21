@@ -212,6 +212,19 @@ describe("throttle", () => {
     expect(send.mock.calls).toEqual([[1], [3]]);
   });
 
+  it("flush sends a waiting call at once, and only once", () => {
+    vi.useFakeTimers();
+    const send = vi.fn();
+    const fn = throttle(send, 250);
+    fn(1);
+    fn(2);
+    fn.flush();
+    expect(send.mock.calls).toEqual([[1], [2]]);
+    fn.flush();
+    vi.advanceTimersByTime(500);
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+
   it("cancel drops a waiting call", () => {
     vi.useFakeTimers();
     const send = vi.fn();

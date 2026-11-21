@@ -21,6 +21,7 @@ import {
   newItem,
   overlayState,
   parseList,
+  typedNumber,
   readClock,
   clocksRunning,
   remove,
@@ -107,6 +108,39 @@ describe("clocks", () => {
     expect(watch.lapTimes).toHaveLength(MAX.laps);
     resetClock(watch);
     expect(watch).toMatchObject({ since: null, counted: 0, lapTimes: [] });
+    expect(watch.lapBase).toBeUndefined();
+    expect(watch.lapsDropped).toBeUndefined();
+  });
+
+  it("keep each lap's own length and number once the oldest drop off", () => {
+    const watch = clock("stopwatch");
+    watch.laps = true;
+    startPause(watch, 0);
+    for (let n = 1; n <= MAX.laps + 3; n++) lap(watch, n * 1_000);
+    expect(lapSplits(watch).every((split) => split === 1_000)).toBe(true);
+    expect(watch.lapsDropped).toBe(3);
+    // A saved stopwatch reads them back; one saved before has neither.
+    const read = parseList({ items: [watch] } as never).items[0] as typeof watch;
+    expect(lapSplits(read)[0]).toBe(1_000);
+    expect(read.lapsDropped).toBe(3);
+    const { lapBase: _base, lapsDropped: _dropped, ...before } = watch;
+    expect(parseList({ items: [before] } as never).items[0]).not.toHaveProperty("lapBase");
+  });
+});
+
+describe("typedNumber", () => {
+  it("reads what people type into a number field", () => {
+    expect(typedNumber("5")).toBe(5);
+    expect(typedNumber(" +5 ")).toBe(5);
+    expect(typedNumber("-3")).toBe(-3);
+    expect(typedNumber("2.5")).toBe(2.5);
+    expect(typedNumber("2,5")).toBe(2.5);
+    expect(typedNumber("1.000")).toBe(1000);
+    expect(typedNumber("1,000,000")).toBe(1_000_000);
+  });
+
+  it("is null for anything else", () => {
+    for (const text of ["", "abc", "1e5", "1-2", "--2", "."]) expect(typedNumber(text)).toBeNull();
   });
 });
 

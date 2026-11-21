@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.2.36",
+    "date": "2026-11-21",
+    "notes": [
+      "The list over the game gets your last change when the panel closes.",
+      "Enter no longer ends a name while you're still composing it (Japanese, Chinese, Korean).",
+      "The delete button is red."
+    ]
+  },
+  {
     "version": "0.2.35",
     "date": "2026-11-21",
     "notes": [

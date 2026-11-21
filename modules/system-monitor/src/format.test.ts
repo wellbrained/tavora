@@ -28,6 +28,22 @@ describe("size", () => {
   });
 });
 
+describe("numbers that round up to the next size", () => {
+  it("never write 10.0 or 1024", () => {
+    expect(size(9.96 * GB)).toBe("10 GB");
+    expect(size(9.94 * GB)).toBe("9.9 GB");
+    expect(size(1023.7 * GB)).toBe("1.0 TB");
+    expect(size(1023.4 * GB)).toBe("1023 GB");
+    expect(size(9.96 * 1024 * GB)).toBe("10 TB");
+    expect(speed(9.96 * MB)).toBe("10 MB/s");
+    expect(memory(1023.7 * MB)).toBe("1.0 GB");
+    expect(memory(1023.4 * MB)).toBe("1023 MB");
+    expect(mbit(9.96)).toBe("10");
+    expect(lossPercent(9.96)).toBe("10");
+    expect(lossPercent(0)).toBe("0");
+  });
+});
+
 describe("speed and memory", () => {
   it("writes MB/s", () => {
     expect(speed(0)).toBe("0.0 MB/s");

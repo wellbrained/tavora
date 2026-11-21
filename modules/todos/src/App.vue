@@ -201,16 +201,26 @@ const showMenu = (request: MenuOptions) => sdk.value?.ui.showMenu(request) ?? Pr
 provide(PANEL, { finished, editing, draft, folded, toggleFolded: (id) => toggle(folded, id), linger, lingering, offerUndo, showMenu });
 
 const cleanup: (() => void)[] = [];
+/** The panel went while it was still connecting: what arrives after that is closed again, not kept. */
+let unmounted = false;
 
 onMounted(async () => {
   try {
     const connection = await connectModule({ texts: { en, de } });
     if (connection.status !== "ready" || !connection.sdk) throw connection.error;
     const connected = connection.sdk;
+    if (unmounted) {
+      connection.dispose();
+      return;
+    }
     // The components read the module's own translator; it follows the language the handle reports.
     setLanguage(connection.language);
     cleanup.push(connection.onLanguage(setLanguage), connection.dispose);
     const [state, todos] = await Promise.all([connected.panel.getState<Partial<PanelState> & OldPanelState>(), createTodoStore(connected)]);
+    if (unmounted) {
+      void todos.dispose();
+      return;
+    }
     const ids = (value: unknown) => (Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : []);
     // Panels saved by the version before had a "hide finished" switch instead.
     finished.value = state?.finished === "vanish" || (state?.finished === undefined && state?.hideDone === true) ? "vanish" : "stay";
@@ -220,6 +230,8 @@ onMounted(async () => {
     look.value = withFinished(parseLook(state?.live ?? { background: state?.liveBackground, padding: state?.livePadding }), finished.value);
     panelLook.value = parsePanelLook(state?.panel);
     cleanup.push(connected.panel.onDialogChange((open) => moved("dialog", open)));
+    // Hidden or closed right after a change: the live view over the game still gets it.
+    cleanup.push(connected.lifecycle.onSuspend(sendLive.flush), connected.lifecycle.onDispose(sendLive.flush));
     // A page that (re)loads while over the game asks; a change while it runs comes as an event and wins over a late
     // answer. An older Tavora has neither and keeps the full panel there.
     let heardOverGame = false;
@@ -245,9 +257,11 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  unmounted = true;
+  // Before the connection goes: the live view keeps showing the last change.
+  sendLive.flush();
   cleanup.forEach((fn) => fn());
   clearTimeout(lingerTimer);
-  sendLive.cancel();
   // The panel goes: its offers end, and what was deleted stays deleted.
   for (const offer of offers) offer.close();
 });

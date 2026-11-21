@@ -44,6 +44,7 @@ import {
   type OverlayLook,
   type OverlayState,
   type Size,
+  typedNumber,
 } from "./items";
 import OverlayPreview from "./OverlayPreview.vue";
 import { ACTIONS, PANEL } from "./panel";
@@ -265,7 +266,11 @@ function splitDuration(ms: number) {
   return { h: String(Math.floor(seconds / 3600)), m: String(Math.floor((seconds % 3600) / 60)), s: String(seconds % 60) };
 }
 
-const number = (value: string, fallback: number) => (/^-?\d+$/.test(value.trim()) ? Number(value.trim()) : fallback);
+/** A whole number from a field; what can't be read as a number keeps `fallback`. */
+const number = (value: string, fallback: number) => {
+  const typed = typedNumber(value);
+  return typed === null ? fallback : Math.round(typed);
+};
 
 function saveLabel() {
   const next = label.value.trim().slice(0, MAX.label);
@@ -295,7 +300,8 @@ function saveFormat(next = format.value) {
 }
 
 function saveDuration() {
-  const ms = (number(duration.value.h, 0) * 3600 + number(duration.value.m, 0) * 60 + number(duration.value.s, 0)) * 1000;
+  // 2.5 minutes is two and a half minutes.
+  const ms = Math.round((typedNumber(duration.value.h) ?? 0) * 3600 + (typedNumber(duration.value.m) ?? 0) * 60 + (typedNumber(duration.value.s) ?? 0)) * 1000;
   const next = Math.min(MAX.durationMs, Math.max(1000, ms));
   duration.value = splitDuration(next);
   if (props.item.kind === "countdown" && next !== props.item.duration) updateClock((clock) => (clock.duration = next));
