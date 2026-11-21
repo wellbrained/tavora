@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.35",
+    "date": "2026-11-21",
+    "notes": [
+      "Hardware and Liquid Glass look cleaner: clearer fields, softer edges in Liquid Glass dark, calmer badges and disabled buttons in Hardware."
+    ]
+  },
+  {
     "version": "0.1.34",
     "date": "2026-11-20",
     "notes": [
