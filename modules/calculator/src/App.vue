@@ -289,10 +289,12 @@ function onPaste(event: ClipboardEvent): void {
   if (!text) return;
   event.preventDefault();
   problem.value = null;
-  for (const name of pasteKeys(text)) entry.value = press(entry.value, name);
+  for (const name of pasteKeys(text, comma.value)) entry.value = press(entry.value, name);
 }
 
 const cleanup: (() => void)[] = [];
+/** The panel went while it was still connecting: what arrives after that is closed again, not kept. */
+let unmounted = false;
 
 onMounted(async () => {
   window.addEventListener("keydown", onKeydown);
@@ -305,11 +307,19 @@ onMounted(async () => {
     const connection = await connectModule({ texts: { en, de } });
     if (connection.status !== "ready" || !connection.sdk) throw connection.error;
     const connected = connection.sdk;
+    if (unmounted) {
+      connection.dispose();
+      return;
+    }
     // The components read the module's own translator; it follows the language the handle reports.
     setLanguage(connection.language);
     cleanup.push(connection.onLanguage(setLanguage), connection.dispose);
     settings.value = parseSettings(await connected.storage.app.get(SETTINGS_KEY));
     const stored = await createListsStore(connected);
+    if (unmounted) {
+      void stored.dispose();
+      return;
+    }
     cleanup.push(() => void stored.dispose());
     lists.value = stored;
     cleanup.push(connected.panel.onDialogChange((open) => (dialogOpen.value = open)));
@@ -320,6 +330,7 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  unmounted = true;
   cleanup.forEach((fn) => fn());
   clearTimeout(copiedTimer);
   // The panel goes: what was deleted stays deleted.

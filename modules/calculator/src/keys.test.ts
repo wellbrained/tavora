@@ -64,4 +64,34 @@ describe("pasteKeys", () => {
     const entry = pasteKeys("2 × 3").reduce(press, EMPTY);
     expect(entry.text).toBe("2*3");
   });
+
+  const pasted = (text: string, comma = false) => pasteKeys(text, comma).join("");
+
+  it("reads thousands marks and the decimal mark, whichever way round", () => {
+    expect(pasted("1,234.56")).toBe("1234.56");
+    expect(pasted("1.234,56")).toBe("1234.56");
+    expect(pasted("1,234,567")).toBe("1234567");
+    expect(pasted("1.234.567", true)).toBe("1234567");
+    expect(pasted("1,234.56 + 2.000,5")).toBe("1234.56+2000.5");
+  });
+
+  it("reads a single mark before three digits the way the language writes it", () => {
+    expect(pasted("1,234")).toBe("1234");
+    expect(pasted("1,234", true)).toBe("1.234");
+    expect(pasted("1.234")).toBe("1.234");
+    expect(pasted("1.234", true)).toBe("1234");
+  });
+
+  it("keeps a single mark that can only be a decimal", () => {
+    expect(pasted("1,5")).toBe("1.5");
+    expect(pasted("1.5", true)).toBe("1.5");
+    expect(pasted("0,234")).toBe("0.234");
+    expect(pasted("12,3456")).toBe("12.3456");
+  });
+
+  it("takes a copied result with an exponent as that number", () => {
+    expect(pasted("1e+21")).toBe("1000000000000000000000");
+    expect(pasted("1,5e+3", true)).toBe("1500");
+    expect(pasted("2e-3")).toBe("0.002");
+  });
 });
