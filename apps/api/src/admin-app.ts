@@ -82,6 +82,11 @@ export interface AdminOptions {
   /** The votes for modules for games, for GET /api/module-requests. Absent: the route answers 503. */
   moduleRequests?: ModuleRequestStore;
   /** The review before listing (`/api/moderation/*`; needs `catalog` and `accounts`): the scanner, and how developers are emailed. */
+  /**
+   * A second token that may only read the summary and the stats (STATS_TOKEN), for Cortex, Nik's dashboard on the
+   * same server. It is sent as X-Stats-Token and opens nothing else: no other route, no change.
+   */
+  statsToken?: string;
   /** The owner's address (MAINTAINER_EMAIL): that account is marked as the owner and can't be suspended or banned. */
   ownerEmail?: string;
   /** What the maintainer did, for the Activity page. Absent: nothing is kept and the page is empty. */
@@ -93,10 +98,14 @@ export interface AdminOptions {
 
 const digest = (value: string) => createHash("sha256").update(value).digest();
 
-export function createAdminApp({ token, submissions, state, store, catalog, accounts, catalogueKey, reviews, conversations, leaderboards, copies, adminDir, probes, dataset, mailDailyLimit, stateDir, stats, moduleRequests, moderation, ownerEmail, activity, lifecycle: given }: AdminOptions) {
+/** What the read-only stats token may read (GET only) */
+const STATS_PATHS = new Set(["/api/summary", "/api/stats"]);
+
+export function createAdminApp({ token, statsToken, submissions, state, store, catalog, accounts, catalogueKey, reviews, conversations, leaderboards, copies, adminDir, probes, dataset, mailDailyLimit, stateDir, stats, moduleRequests, moderation, ownerEmail, activity, lifecycle: given }: AdminOptions) {
   const lifecycle = given ?? (accounts ? accountLifecycle({ accounts, catalog, copies, reviews, conversations, leaderboards, icons: state }) : undefined);
   const app = new Hono();
   const expected = digest(token);
+  const readOnly = statsToken ? digest(statsToken) : null;
 
   // A file of the built panel. Only plain names under the panel's own folder; hashed assets never change.
   const page = (name: string): Response => {
@@ -132,7 +141,13 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
 
   app.use("/api/*", async (context, next) => {
     const sent = context.req.header("x-admin-token") ?? "";
-    if (!timingSafeEqual(digest(sent), expected)) return context.json({ error: "Wrong token." }, 401);
+    if (!timingSafeEqual(digest(sent), expected)) {
+      // the read-only token: GET of the summary and the stats, nothing else
+      const stats = context.req.header("x-stats-token");
+      const readable = context.req.method === "GET" && STATS_PATHS.has(context.req.path);
+      if (readOnly && stats !== undefined && readable && timingSafeEqual(digest(stats), readOnly)) return next();
+      return context.json({ error: "Wrong token." }, 401);
+    }
     if (context.req.method === "POST" && !(context.req.header("content-type") ?? "").toLowerCase().startsWith("application/json")) {
       return context.json({ error: "Send JSON." }, 415);
     }

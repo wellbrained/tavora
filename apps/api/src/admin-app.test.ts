@@ -94,6 +94,26 @@ describe("the token", () => {
     }
   });
 
+  it("lets the read-only stats token read the summary and the stats, and nothing else", async () => {
+    const STATS = "st4ts-".repeat(5);
+    const withStats = createAdminApp({ token: TOKEN, statsToken: STATS, submissions, state, store: createHostedStore({ list: () => [], file: () => null }, state), adminDir: panel });
+    const read = (path: string, init: { method?: string; stats?: string } = {}) =>
+      withStats.request(`http://admin.test${path}`, { method: init.method ?? "GET", headers: { "X-Stats-Token": init.stats ?? STATS, ...(init.method === "POST" ? { "Content-Type": "application/json" } : {}) }, ...(init.method === "POST" ? { body: "{}" } : {}) });
+    for (const path of ["/api/summary", "/api/stats"]) {
+      expect((await read(path)).status, path).not.toBe(401);
+      expect((await read(path, { stats: "wrong" })).status, path).toBe(401);
+      expect((await read(path, { stats: `${STATS}x` })).status, path).toBe(401);
+    }
+    for (const path of ["/api/overview", "/api/accounts", "/api/hosted/hades-2.png", "/api/summary/", "/api/stats/x"]) {
+      expect((await read(path)).status, path).toBe(401);
+    }
+    for (const path of ["/api/approve", "/api/takedown", "/api/summary"]) {
+      expect((await read(path, { method: "POST" })).status, path).toBe(401);
+    }
+    // without a stats token set, the header opens nothing
+    expect((await app.request("http://admin.test/api/summary", { headers: { "X-Stats-Token": STATS } })).status).toBe(401);
+  });
+
   it("wants JSON for a change, so another web page cannot send one", async () => {
     offer();
     const sha = state.listPending()[0]!.sha256;

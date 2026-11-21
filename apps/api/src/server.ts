@@ -219,8 +219,11 @@ const adminToken = process.env.ADMIN_TOKEN?.trim();
 if (adminToken && adminToken.length >= 24) {
   const adminPort = Number(process.env.ADMIN_PORT ?? 4011);
   const meta = () => Object.fromEntries((db.prepare("select key, value from meta").all() as unknown as { key: string; value: string }[]).map(({ key, value }) => [key, value]));
+  // a read-only token for the summary and the stats (Cortex); unset, under 24 characters or the admin token: off
+  const statsToken = process.env.STATS_TOKEN?.trim();
   const admin = createAdminApp({
     token: adminToken,
+    ...(statsToken && statsToken.length >= 24 && statsToken !== adminToken ? { statsToken } : {}),
     submissions,
     state,
     store: icons,
