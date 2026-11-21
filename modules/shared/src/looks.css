@@ -382,7 +382,7 @@
     height: auto;
     padding: 0 12px;
     border: 0;
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-md);
     &[data-state="active"] {
       background: color-mix(in srgb, var(--foreground) 12%, transparent);
       color: var(--foreground);
@@ -514,4 +514,37 @@
     border-top-right-radius: 0;
     border-bottom-right-radius: 0;
   }
+}
+
+/* ---------- Polish (2026-11-21 pass) ---------- */
+
+/* Liquid Glass, dark: fields and pickers stand out from the card; toggles, segmented controls and tiles get a faint edge
+   instead of the theme's hard border. */
+:root.dark[data-look-inputs="capsule"] {
+  & :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"], [data-slot="combobox-anchor"], [data-slot="combobox-input"], [data-slot="slider-input"], [data-slot="number-field"]),
+  & .tavora-button[aria-haspopup="listbox"] {
+    background: color-mix(in srgb, var(--foreground) 8%, var(--background));
+  }
+}
+:root.dark[data-look-surface="glass"] :is([data-slot="toggle"], [data-slot="toggle-group"], [data-slot="toggle-group"] > *, [data-slot="segmented-control"], [data-slot="action-tile"]) {
+  border-color: color-mix(in srgb, var(--foreground) 9%, transparent);
+}
+:root.dark[data-look-surface="glass"] [data-slot="segmented-control"] {
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+:root.dark[data-look-tabs="pill"][data-style]:not([data-style="tavora.classic"]) [data-slot="segmented-pill"] {
+  background: color-mix(in srgb, var(--foreground) 16%, var(--card));
+}
+
+/* Hardware: badges are small keys with a coloured edge, not the soft tinted pills of Classic. */
+:root[data-look-buttons="keycap"] [data-slot="badge"]:is(.text-destructive, .text-success, .text-warning, .text-info) {
+  background: transparent;
+  border-color: color-mix(in srgb, currentColor 45%, transparent);
+}
+/* Hardware, light: a disabled key is flat and dim, never a solid grey that reads as pressed. */
+:root[data-look-buttons="keycap"] .tavora-button:is(:disabled, [aria-disabled="true"]):is([data-variant="default"], [data-variant="secondary"], [data-variant="outline"], [data-variant="destructive"]) {
+  background: transparent;
+  border: var(--style-border-width, 1px) dashed color-mix(in srgb, var(--foreground) 22%, transparent);
+  box-shadow: none;
+  color: color-mix(in srgb, var(--foreground) 45%, transparent);
 }
