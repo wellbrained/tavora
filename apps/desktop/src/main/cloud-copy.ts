@@ -1,11 +1,12 @@
 import { apiReason } from "@tavora/module-schema";
 import { createHash } from "node:crypto";
-import { cp, mkdir, open as openFile, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { cp, mkdir, open as openFile, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isOwnerId } from "@tavora/module-schema";
 import { DATA_DIRS, PICTURE_DIRS } from "./backup";
 import { copyKeys, open, PART_ID_BYTES, partId, seal } from "./copy-crypto";
 import { writeFileAtomic } from "./fsutil";
+import { renameHeld } from "./rename-held";
 import { readSavedFile } from "./json";
 import { STORE_VERSIONS } from "./saved-versions";
 import { OWNER_RECORDS_FILE } from "./installer";
@@ -594,46 +595,48 @@ export interface DownloadedCopy {
  */
 async function move(from: string, to: string): Promise<void> {
   await mkdir(path.dirname(to), { recursive: true });
+  // A rename would silently replace a file that is there, and a backup is never written over.
+  if (await exists(to)) throw new Error(`${to} is already there`);
   try {
-    await rename(from, to);
+    await renameHeld(from, to);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "EXDEV") throw error;
     const part = `${to}.part`;
     await rm(part, { recursive: true, force: true });
     await cp(from, part, { recursive: true });
-    await rename(part, to);
+    await renameHeld(part, to);
     const done = `${from}.moved`;
-    await rename(from, done);
+    await renameHeld(from, done);
     await rm(done, { recursive: true, force: true });
   }
 }
 
-/**
- * Puts one root (or one entry of a root) of the copy in place. Safe to run again after being cut off at any point:
- * something the copy holds whose staged side is gone is in place already and stays; once what was here is kept, a
- * half-finished arrival is dropped and the staged side, still whole, goes in.
- */
-async function swapOne(place: string, staged: string, kept: string, inCopy: boolean): Promise<void> {
-  await rm(`${place}.moved`, { recursive: true, force: true });
-  const arrived = await exists(staged);
-  if (!arrived && inCopy) return;
-  if (await exists(place)) {
-    if (arrived && (await exists(kept))) await rm(place, { recursive: true, force: true });
-    else await move(place, kept);
+/** `target`, or with a number after it when that name is taken. */
+async function freePath(target: string): Promise<string> {
+  for (let n = 1; ; n++) {
+    const candidate = n === 1 ? target : `${target}.${n}`;
+    if (!(await exists(candidate))) return candidate;
   }
-  if (arrived) await move(staged, place);
 }
 
-/**
- * Puts a downloaded copy (in `staging`) in place of this PC's data, after moving what was there into
- * `keepIn`, so the side not kept stays as a local backup. A copy that left out pictures leaves this PC's
- * pictures where they are. Only runs while nothing reads the data (before the workspaces load). Cut off, it
- * is run again with the same `keepIn` and goes on where it stopped (swapOne).
- * Returns the state to keep: the copy's files with their dates on this PC.
- */
-export async function swapInCopy(staging: string, roots: CopyRoot[], keepIn: string, copy: DownloadedCopy): Promise<CopyState> {
-  const taking = roots.filter((root) => copy.pictures || !root.picture);
-  await mkdir(keepIn, { recursive: true });
+/** Where a swap's backup keeps what was written in a place after the swap began (the app ran on a swap that failed). */
+const WRITTEN_SINCE = "written-since";
+
+/** The date of a synced file that was changed after it arrived: no real file has it, so it counts as changed. */
+const CHANGED_SINCE = -1;
+
+/** Where one root (or one entry of a root) is during a swap. */
+interface SwapPlace {
+  place: string;
+  staged: string;
+  kept: string;
+  /** Where something written since the swap began goes. */
+  since: string;
+  inCopy: boolean;
+}
+
+/** Every root the copy replaces, or for a folder the user may share each of Tavora's entries in it. */
+async function swapPlaces(staging: string, roots: CopyRoot[], keepIn: string, copy: DownloadedCopy): Promise<SwapPlace[]> {
   // What the copy holds, by root and by a root's top-level entry.
   const held = new Set<string>();
   for (const file of Object.keys(copy.files)) {
@@ -641,22 +644,80 @@ export async function swapInCopy(staging: string, roots: CopyRoot[], keepIn: str
     held.add(root!);
     if (entry !== undefined) held.add(`${root}/${entry}`);
   }
-  for (const root of taking) {
+  const places: SwapPlace[] = [];
+  for (const root of roots.filter((candidate) => copy.pictures || !candidate.picture)) {
     const staged = path.join(staging, root.name);
-    if (root.keep) {
-      // Only Tavora's own entries of a folder the user may share (the module files folder).
-      const here = (await readdir(root.path).catch(() => [] as string[])).filter(root.keep);
-      const names = new Set([...here, ...(await readdir(staged).catch(() => [] as string[]))]);
-      for (const name of names) await swapOne(path.join(root.path, name), path.join(staged, name), path.join(keepIn, root.name, name), held.has(`${root.name}/${name}`));
+    const kept = path.join(keepIn, root.name);
+    const since = path.join(keepIn, WRITTEN_SINCE, root.name);
+    if (!root.keep) {
+      places.push({ place: root.path, staged, kept, since, inCopy: held.has(root.name) });
       continue;
     }
-    await swapOne(root.path, staged, path.join(keepIn, root.name), held.has(root.name));
+    // Only Tavora's own entries of a folder the user may share (the module files folder).
+    const here = (await readdir(root.path).catch(() => [] as string[])).filter(root.keep);
+    const names = new Set([...here, ...(await readdir(staged).catch(() => [] as string[])), ...(await readdir(kept).catch(() => [] as string[]))]);
+    for (const name of names) places.push({ place: path.join(root.path, name), staged: path.join(staged, name), kept: path.join(kept, name), since: path.join(since, name), inCopy: held.has(`${root.name}/${name}`) });
   }
+  return places;
+}
+
+/**
+ * Puts one root (or one entry of a root) of the copy in place. Safe to run again after being cut off at any point:
+ * something the copy holds whose staged side is gone is in place already and stays. Once what was here is kept, whatever
+ * is here now (a half-finished arrival, or what the app wrote after a swap failed) goes aside, never over the backup.
+ */
+async function swapOne({ place, staged, kept, since, inCopy }: SwapPlace): Promise<void> {
+  await rm(`${place}.moved`, { recursive: true, force: true });
+  const waiting = await exists(staged);
+  if (!waiting && inCopy) return;
+  if (await exists(place)) await move(place, (await exists(kept)) ? await freePath(since) : kept);
+  if (waiting) await move(staged, place);
+}
+
+/** The places a copy will fill that hold nothing now, noted before a swap so taking it back can empty them again. */
+export async function emptyPlaces(staging: string, roots: CopyRoot[], keepIn: string, copy: DownloadedCopy): Promise<string[]> {
+  const empty: string[] = [];
+  for (const { place, inCopy } of await swapPlaces(staging, roots, keepIn, copy)) if (inCopy && !(await exists(place))) empty.push(place);
+  return empty;
+}
+
+/**
+ * Takes back a swap that didn't finish, when the user would rather have this PC's data: what was kept goes back in its
+ * place, and what the copy or the app put there goes aside in the backup, also in a place that was `empty` before. Safe
+ * to run again. The caller clears the staging.
+ */
+export async function undoSwap(staging: string, roots: CopyRoot[], keepIn: string, copy: DownloadedCopy, empty: readonly string[]): Promise<void> {
+  for (const { place, kept, since } of await swapPlaces(staging, roots, keepIn, copy)) {
+    await rm(`${place}.moved`, { recursive: true, force: true });
+    const isThere = await exists(place);
+    if (await exists(kept)) {
+      if (isThere) await move(place, await freePath(since));
+      await move(kept, place);
+    } else if (isThere && empty.includes(place)) {
+      await move(place, await freePath(since));
+    }
+  }
+}
+
+/**
+ * Puts a downloaded copy (in `staging`) in place of this PC's data, after moving what was there into
+ * `keepIn`, so the side not kept stays as a local backup. A copy that left out pictures leaves this PC's
+ * pictures where they are. Only runs while nothing reads the data (before the workspaces load). Cut off, it
+ * is run again with the same `keepIn` and `resumed`, and goes on where it stopped (swapOne); a file the app changed
+ * in place meanwhile then counts as changed, so it goes up instead of passing for what the copy holds.
+ * Returns the state to keep: the copy's files with their dates on this PC.
+ */
+export async function swapInCopy(staging: string, roots: CopyRoot[], keepIn: string, copy: DownloadedCopy, resumed = false): Promise<CopyState> {
+  const taking = roots.filter((root) => copy.pictures || !root.picture);
+  await mkdir(keepIn, { recursive: true });
+  for (const place of await swapPlaces(staging, roots, keepIn, copy)) await swapOne(place);
   await rm(staging, { recursive: true, force: true });
   const files: Record<string, SyncedFile> = {};
   for (const found of await scanCopy(taking)) {
     const synced = copy.files[found.path];
-    if (synced) files[found.path] = { ...synced, mtimeMs: found.mtimeMs };
+    if (!synced) continue;
+    const same = !resumed || (found.size === synced.size && createHash("sha256").update(await readFile(found.file)).digest("hex") === synced.sha256);
+    files[found.path] = { ...synced, mtimeMs: same ? found.mtimeMs : CHANGED_SINCE };
   }
   return { version: copy.version, pictures: copy.pictures, files, ...(copy.sealed ? { sealed: true } : {}) };
 }

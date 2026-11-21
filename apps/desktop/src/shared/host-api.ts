@@ -550,6 +550,8 @@ export interface CloudCopyView {
   conflict: boolean;
   /** Part of this PC's data couldn't be opened: nothing goes up until the user chooses, and `conflict` asks them. */
   lostData: boolean;
+  /** A copy stopped halfway going in: nothing goes up, and `conflict` asks to try again or go back to this PC's data. */
+  swapUnfinished: boolean;
   /** A newer copy from another PC is downloaded; a restart takes it. */
   restartToTake: boolean;
   /** Closing waits for the last upload. */

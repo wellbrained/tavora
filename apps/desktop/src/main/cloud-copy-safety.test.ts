@@ -69,7 +69,7 @@ describe("data lost on this PC", () => {
     await damaged.sync.beforeLoad();
     await damaged.sync.checkDataFiles();
     expect(damaged.sync.view()).toMatchObject({ conflict: true, lostData: true });
-    expect(damaged.sync.dataLost).toBe(true);
+    expect(damaged.sync.dataHeld).toBe(true);
 
     // Tavora goes on and saves an empty library; the timer's upload waits.
     await writeFile(path.join(a.userData, "library.json"), library());
