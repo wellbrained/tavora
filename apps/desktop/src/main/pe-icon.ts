@@ -1,5 +1,5 @@
 import { open } from "node:fs/promises";
-import { MAX_STEAM_ICON_BYTES } from "./steam-icons";
+import { isIco, MAX_STEAM_ICON_BYTES } from "./steam-icons";
 
 /**
  * Reads the icon of a Windows program out of its own resources and returns it
@@ -227,12 +227,20 @@ async function read(readAt: ReadAt, index: number): Promise<Uint8Array | null> {
   return ico;
 }
 
-/** The icon of a program file on disk, or null. `index` is the number after the comma in a `DisplayIcon` value. */
+/**
+ * The icon of a program file on disk, or null. `index` is the number after the comma in a `DisplayIcon` value. A
+ * `DisplayIcon` can also name an `.ico` file, which is taken as it is when it is a usable icon.
+ */
 export async function readIcoFromFile(file: string, index = 0): Promise<Uint8Array | null> {
   let handle;
   try {
     handle = await open(file, "r");
     const { size } = await handle.stat();
+    if (/\.ico$/i.test(file)) {
+      if (size > MAX_STEAM_ICON_BYTES) return null;
+      const bytes = new Uint8Array(await handle.readFile());
+      return isIco(bytes) && icoFramesAgree(bytes) ? bytes : null;
+    }
     const readAt: ReadAt = async (offset, length) => {
       if (offset < 0 || offset >= size || length <= 0) return new Uint8Array(0);
       const buffer = new Uint8Array(Math.min(length, size - offset));

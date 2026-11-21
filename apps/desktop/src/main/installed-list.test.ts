@@ -81,6 +81,7 @@ describe("catalogIdFor", () => {
     expect(catalogIdFor("Baldur's Gate 3")).toBe("baldurs-gate-3");
     expect(catalogIdFor("bg3")).toBe("baldurs-gate-3");
     expect(catalogIdFor("Unknown Indie")).toBeNull();
+    expect(catalogIdFor("The Elder Scrolls V: Skyrim Special Edition", 489830)).toBe("skyrim");
   });
 
   it("doesn't take a Steam game named like a built-in game with another Steam id for it", () => {

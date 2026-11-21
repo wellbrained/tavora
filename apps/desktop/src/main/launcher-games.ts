@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { normalizeName } from "../shared/same-game";
+import { decodeConsoleText } from "./windows-text";
 
 /**
  * Finds the games installed on this PC by looking at what the launchers leave
@@ -154,8 +155,8 @@ function queryWindowsRegistry(key: string): Promise<string | null> {
     execFile(
       "reg",
       ["query", key, "/s"],
-      { timeout: 15_000, windowsHide: true, maxBuffer: 64 * 1024 * 1024, encoding: "utf8" },
-      (error, stdout) => resolve(error ? null : stdout),
+      { timeout: 15_000, windowsHide: true, maxBuffer: 64 * 1024 * 1024, encoding: "buffer" },
+      (error, stdout) => resolve(error ? null : decodeConsoleText(stdout)),
     );
   });
 }

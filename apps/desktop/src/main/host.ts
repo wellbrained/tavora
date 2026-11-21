@@ -3451,6 +3451,7 @@ export class Host {
         steamDir: await findSteamDir(),
         baseUrl: this.options.steamIcons,
         serviceUrl: this.options.apiUrl,
+        shortcutDirs: this.steamShortcutDirs(),
         loadHostedList: () => this.loadHostedList(),
         shouldRun: () => !this.window.isDestroyed(),
         onChange: () => {
@@ -3463,6 +3464,17 @@ export class Host {
     } catch (error) {
       console.error("[tavora] finding game icons failed", error);
     }
+  }
+
+  /** Where Steam's shortcuts are, with the Desktop where Windows says it is (OneDrive can move it). */
+  private steamShortcutDirs(): string[] {
+    let desktop: string | undefined;
+    try {
+      desktop = app.getPath("desktop");
+    } catch {
+      // Windows can't say: the usual places are still looked at.
+    }
+    return shortcutFolders(process.env, desktop);
   }
 
   // ── Offering icons to the Tavora service ─────────────────────────────
@@ -3684,7 +3696,7 @@ export class Host {
     } catch (error) {
       if (!(error instanceof AppInfoError)) throw error;
     }
-    const shortcuts = await readShortcutIcons(shortcutFolders()).catch(() => new Map<number, string[]>());
+    const shortcuts = await readShortcutIcons(this.steamShortcutDirs()).catch(() => new Map<number, string[]>());
     const views: SteamShareView[] = [];
     for (const game of games) {
       const hashes = [clientIcons.get(game.appid), ...(shortcuts.get(game.appid) ?? [])].filter((hash): hash is string => hash !== undefined);

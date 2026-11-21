@@ -96,4 +96,12 @@ describe("shortcutFolders", () => {
     ]);
     expect(shortcutFolders({})).toEqual([]);
   });
+
+  it("looks on the Desktop where Windows says it is, once", () => {
+    const env = { USERPROFILE: "C:\\Users\\Kim", PUBLIC: "C:\\Users\\Public" };
+    const usual = path.join(env.USERPROFILE, "Desktop");
+    const moved = "C:\\Users\\Kim\\OneDrive\\Schreibtisch";
+    expect(shortcutFolders(env, moved)).toEqual([moved, usual, path.join(env.PUBLIC, "Desktop")]);
+    expect(shortcutFolders(env, usual.toUpperCase())).toHaveLength(2);
+  });
 });

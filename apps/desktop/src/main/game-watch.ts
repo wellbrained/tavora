@@ -118,7 +118,11 @@ export function runningGames(entries: readonly WorkspaceEntry[], installed: read
     if (pick) running.add(pick.id);
   };
 
-  if (steamAppId) add(games.filter((entry) => entry.steamAppId === steamAppId));
+  if (steamAppId) {
+    // The built-in game this Steam id belongs to: an entry of it counts for any of its editions (Skyrim and its Special Edition).
+    const builtIn = catalogIdFor("", steamAppId);
+    add(games.filter((entry) => entry.steamAppId === steamAppId || (builtIn !== null && workspaceGameIds(entry).includes(builtIn))));
+  }
 
   const folders = new Map<string, WorkspaceEntry[]>();
   for (const [key, inFolder] of oneGameFolders(installed)) {

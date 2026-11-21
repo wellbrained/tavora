@@ -3,6 +3,7 @@ import { access, readdir, readFile, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { writeFileAtomic } from "./fsutil";
+import { decodeConsoleText } from "./windows-text";
 
 /**
  * A game's own Steam icon, the `.ico` file Steam itself uses for the game's
@@ -97,10 +98,10 @@ function windowsRegistryPath(): Promise<string | null> {
     execFile(
       "reg",
       ["query", "HKCU\\Software\\Valve\\Steam", "/v", "SteamPath"],
-      { timeout: 3000, windowsHide: true },
+      { timeout: 3000, windowsHide: true, encoding: "buffer" },
       (error, stdout) => {
         if (error) return resolve(null);
-        resolve(/SteamPath\s+REG_SZ\s+(.+?)\s*$/m.exec(stdout)?.[1] ?? null);
+        resolve(/SteamPath\s+REG_SZ\s+(.+?)\s*$/m.exec(decodeConsoleText(stdout))?.[1] ?? null);
       },
     );
   });

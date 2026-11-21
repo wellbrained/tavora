@@ -11,6 +11,8 @@ export interface CatalogGame {
   aliases?: string[];
   /** The game's Steam application id, when it is on Steam. Used to fetch its icon on the user's PC. */
   steamAppId?: number;
+  /** Steam's ids for other editions of this game, which count as this game when they run or are installed. */
+  otherSteamAppIds?: number[];
   /** One of the few games most people know: offered as a one-click tile in the first-run welcome. */
   popular?: true;
 }
@@ -57,7 +59,7 @@ export const CATALOG: readonly CatalogGame[] = [
   { id: "rocket-league", name: "Rocket League", steamAppId: 252950 },
   { id: "rust", name: "Rust", steamAppId: 252490 },
   { id: "satisfactory", name: "Satisfactory", steamAppId: 526870 },
-  { id: "skyrim", name: "The Elder Scrolls V: Skyrim", aliases: ["Skyrim"], steamAppId: 72850 },
+  { id: "skyrim", name: "The Elder Scrolls V: Skyrim", aliases: ["Skyrim"], steamAppId: 72850, otherSteamAppIds: [489830] },
   { id: "slay-the-spire", name: "Slay the Spire", aliases: ["StS"], steamAppId: 646570 },
   { id: "starcraft-2", name: "StarCraft II", aliases: ["SC2", "StarCraft 2"] },
   { id: "stardew-valley", name: "Stardew Valley", steamAppId: 413150 },
