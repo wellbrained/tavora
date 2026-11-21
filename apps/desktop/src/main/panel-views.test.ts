@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { clampRect, FREEZE_TIMEOUT_MS, FROZEN_GONE_MS, PREPARED_FRESH_MS, SHOW_DIALOG_CAP_MS, STAND_INS_KEPT } from "./panel-views";
 import { panelViewsRig } from "./panel-views.test-helper";
+import { dialogPictureKey } from "../shared/dialog-picture";
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const A = id(1);
@@ -1368,5 +1369,142 @@ describe("a welcome", () => {
     expect(rig.views.takeWelcome(B)).toBe(false);
     // Asked again (a reload), the host answers by the launch reason, which is no longer add.
     expect(rig.views.takeWelcome(B)).toBe(true);
+  });
+});
+
+describe("a panel's own dialog: tooltips and menus", () => {
+  const PICTURE = "data:image/jpeg;base64,AAAA";
+  const KEY = dialogPictureKey(A);
+  const DIALOG = { x: 100, y: 50, width: 600, height: 400 };
+
+  /** A in its dialog with the frame on screen, B in its slot under it, as the host UI leaves them. */
+  async function inDialog() {
+    const rig = panelViewsRig();
+    const adapter = rig.add(A);
+    const other = rig.add(B);
+    rig.views.place([place(A), place(B, 400)]);
+    rig.views.openDialog(A, { width: 600, height: 400 });
+    await rig.views.freeze(true);
+    rig.views.placeDialog(DIALOG);
+    rig.views.showDialog(A);
+    await vi.advanceTimersByTimeAsync(0);
+    return { rig, adapter, other };
+  }
+
+  it("lets the panel in its dialog show a tooltip, placed by the dialog", async () => {
+    const { rig } = await inDialog();
+    expect(rig.views.isShowing(A)).toBe(true);
+    expect(rig.views.placeOf(A)).toEqual(DIALOG);
+    expect(rig.views.isShowing(B)).toBe(false);
+    expect(rig.views.placeOf(B)).toBe(rig.views.boundsOf(B));
+  });
+
+  it("takes that back while a page dialog lies over it, and closes its tooltip", async () => {
+    const placing = vi.fn();
+    const rig = panelViewsRig({ placing });
+    rig.add(A);
+    rig.views.place([place(A)]);
+    rig.views.openDialog(A, { width: 600, height: 400 });
+    await rig.views.freeze(true);
+    rig.views.placeDialog(DIALOG);
+    rig.views.showDialog(A);
+    placing.mockClear();
+    rig.views.coverDialog(true);
+    expect(placing).toHaveBeenCalled();
+    expect(rig.views.isShowing(A)).toBe(false);
+    expect(rig.views.mayShowMenu(A)).toBe(false);
+    expect(rig.views.placeOf(A)).toBe(rig.views.boundsOf(A));
+  });
+
+  it("allows a menu only for the panel in the dialog", async () => {
+    const { rig } = await inDialog();
+    expect(rig.views.mayShowMenu(A)).toBe(true);
+    expect(rig.views.mayShowMenu(B)).toBe(false);
+  });
+
+  it("steps the view aside behind its picture for the menu, and brings it back", async () => {
+    const { rig, adapter } = await inDialog();
+    expect(adapter.visible).toBe(true);
+    await rig.views.openDialogMenu(A);
+    expect(adapter.visible).toBe(false);
+    expect(rig.frozen.at(-1)![KEY]).toBe(PICTURE);
+    expect(rig.awaited.at(-1)).toEqual([KEY]);
+    expect(rig.views.isShowing(A)).toBe(false);
+    rig.views.closeDialogMenu();
+    expect(adapter.visible).toBe(true);
+    // The picture stays under the page until it has drawn.
+    expect(rig.frozen.at(-1)![KEY]).toBe(PICTURE);
+    await vi.advanceTimersByTimeAsync(FROZEN_GONE_MS);
+    expect(rig.frozen.at(-1)![KEY]).toBeUndefined();
+    expect(rig.views.isShowing(A)).toBe(true);
+  });
+
+  it("steps aside without a picture too, so the menu is never under the view", async () => {
+    const { rig, adapter } = await inDialog();
+    adapter.image = null;
+    await rig.views.openDialogMenu(A);
+    expect(adapter.visible).toBe(false);
+    expect(rig.frozen.at(-1)?.[KEY]).toBeUndefined();
+  });
+
+  it("leaves the view in sight when the menu closed before its picture was there", async () => {
+    const { rig, adapter } = await inDialog();
+    let finish: (image: string) => void = () => undefined;
+    adapter.capture = () => new Promise((resolve) => (finish = resolve));
+    const opening = rig.views.openDialogMenu(A);
+    rig.views.closeDialogMenu();
+    finish(PICTURE);
+    await opening;
+    expect(adapter.visible).toBe(true);
+    expect(rig.frozen.at(-1)?.[KEY]).toBeUndefined();
+  });
+
+  it("drops the picture at once when the dialog closes during the menu", async () => {
+    const { rig } = await inDialog();
+    await rig.views.openDialogMenu(A);
+    rig.views.closeDialog();
+    expect(rig.frozen.at(-1)?.[KEY]).toBeUndefined();
+    expect(rig.views.isShowing(A)).toBe(false);
+  });
+});
+
+describe("a panel that goes during a host menu", () => {
+  it("keeps nothing of a panel closed while its picture was taken", async () => {
+    const rig = panelViewsRig();
+    const adapter = rig.add(A);
+    rig.views.place([place(A)]);
+    let finish: (image: string) => void = () => undefined;
+    adapter.capture = () => new Promise((resolve) => (finish = resolve));
+    const freezing = rig.views.freeze(true, [A], 1);
+    await vi.advanceTimersByTimeAsync(0);
+    rig.views.close(A);
+    adapter.visible = true;
+    finish("data:image/jpeg;base64,AAAA");
+    await freezing;
+    expect(adapter.visible).toBe(true);
+    expect(rig.frozen.at(-1)?.[A]).toBeUndefined();
+    expect(rig.calls).toContain("overlayReady 1");
+  });
+
+  it("steps the new view of a panel restarted while its picture was taken aside until the menu closes", async () => {
+    const rig = panelViewsRig();
+    const first = rig.add(A);
+    rig.views.place([place(A)]);
+    let finish: (image: string) => void = () => undefined;
+    first.capture = () => new Promise((resolve) => (finish = resolve));
+    const freezing = rig.views.freeze(true, [A], 1);
+    await vi.advanceTimersByTimeAsync(0);
+    rig.views.restart(A);
+    const second = rig.add(A);
+    rig.views.applyBounds();
+    expect(second.visible).toBe(true);
+    finish("data:image/jpeg;base64,AAAA");
+    await freezing;
+    expect(second.visible).toBe(false);
+    expect(rig.frozen.at(-1)?.[A]).toBeUndefined();
+    const closing = rig.views.freeze(false);
+    await vi.advanceTimersByTimeAsync(1000);
+    await closing;
+    expect(second.visible).toBe(true);
   });
 });

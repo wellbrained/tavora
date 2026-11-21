@@ -60,6 +60,7 @@ Update this page in the pull request that adds, removes or changes a flow.
 | Discord connector | `main/discord.ts`, `shared/host-api.ts` (`DiscordStatus`) | `off \| signed-out \| connecting \| not-running \| approving \| connected \| error`; a generation drops old attempts. While Discord voice is paused (`shared/discord-voice.ts`) it stays `off` | `DiscordView.status` |
 | Media connector | `main/media.ts` | `starting \| ready \| failed \| unavailable` | the SDK's `MediaState.state` |
 | Stream overlay server | `main/overlays.ts` (`OverlayServerStatus`) | `off \| running \| in-use \| failed`; starts and stops run in turn | Settings > Streaming |
+| In-game veil's page | `main/game-veil-window.ts` (`page`) | `alive \| stalled \| dead`; click-through while `stalled` or `dead`, `stalled → alive` when it answers again, `dead` stays | The veil takes clicks or lets them through |
 | Cloud copy | `main/cloud-copy-sync.ts` (`CopySync`) | on or off, with the questions it waits on (`askKey`, `conflict`, `restartToTake`) and closing as `open → holding → released`; work started before it was turned off writes nothing (a turn raised by `forget`) | `CloudCopyView` |
 | Developer keys | `main/developer-keys.ts` (`DeveloperKeys`) | `loading \| ready \| none \| ask \| signed-out \| offline`; the newest read wins, and another account (or none) signed in goes back to `loading` (`signed-out`) at once, dropping the keys read for the one before. Apart from it, the account's vault on the service (`main/account-key.ts`, `trouble`): fine, `unopened` (this PC's key doesn't open it: the new key is typed in, the keys read last stay in use) or `gone` (nothing to put back: Start empty, after a confirm) | `DeveloperKeysView.status`, `.vault` |
 | Connection tracker | `main/connection.ts` | online, or an outage of a kind (`ConnectionTracker.feed`) | Settings > Connections |
@@ -106,6 +107,8 @@ the pull request that makes it explicit.
   and `data-status` on the slot.
 
 - **Panel dialog** (`components/PanelDialog.vue`, `main/panel-views.ts` `dialogState`) → `closed | placing | drawn | shown`.
+  A menu of the panel over its dialog is already one value (`dialogMenu`: `null | picturing | out`): the view steps aside
+  behind its picture (`dialogPicture`) while the host page draws the menu.
 
 - **Browser panel** (`main/browser-view.ts`: `status`, `error`, `committedUrl`, `requestedUrl`) →
   `blank | loading | page | failed | crashed`. `failed` also holds a page's own move to a site of the other session

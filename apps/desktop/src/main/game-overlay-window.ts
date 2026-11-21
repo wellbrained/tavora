@@ -71,6 +71,9 @@ function edgesOf(edge: unknown): Edges | null {
   return { left: edge.includes("l"), right: edge.includes("r"), top: edge.includes("t"), bottom: edge.includes("b") };
 }
 
+/** Sessions that already refuse downloads: `on` adds a listener each time, while the other handlers below replace theirs. */
+const refusingDownloads = new WeakSet<Session>();
+
 /** A session that can reach nothing but the overlay's own address. */
 export function lockedSession(partition: string, allowed: (url: string) => boolean): Session {
   const ses = session.fromPartition(partition);
@@ -83,7 +86,10 @@ export function lockedSession(partition: string, allowed: (url: string) => boole
   ses.setPermissionCheckHandler(() => false);
   ses.setDevicePermissionHandler(() => false);
   ses.setSpellCheckerEnabled(false);
-  ses.on("will-download", (event) => event.preventDefault());
+  if (!refusingDownloads.has(ses)) {
+    refusingDownloads.add(ses);
+    ses.on("will-download", (event) => event.preventDefault());
+  }
   return ses;
 }
 

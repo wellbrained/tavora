@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { programPath, type Windows } from "./program-list";
+import { nextPrograms, programPath, windowsProgramProbe, type ListedProcess, type Windows } from "./program-list";
 
 // Ban safety: Tavora only reads a program's path, with limited rights, and never touches another process.
 const PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
@@ -9,7 +9,6 @@ const PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
 function windows(overrides: Partial<Windows> = {}) {
   const calls: string[] = [];
   const fake: Windows = {
-    enumProcesses: vi.fn(() => 0),
     openProcess: vi.fn(() => {
       calls.push("open");
       return 7n;
@@ -50,6 +49,71 @@ describe("looking at a program", () => {
     const { fake } = windows({ openProcess: vi.fn(() => null) });
     expect(programPath(fake, 1, new Uint16Array(8))).toBeNull();
     expect(fake.queryFullProcessImageName).not.toHaveBeenCalled();
+  });
+});
+
+describe("looking again and again", () => {
+  const process = (pid: number, startTime = 100): ListedProcess => ({ pid, startTime });
+
+  it("asks about each process once, however many looks it stays", () => {
+    const ask = vi.fn((pid: number) => `C:/p${pid}.exe`);
+    let state = nextPrograms([process(10), process(11)], new Map(), ask);
+    for (let look = 0; look < 5; look += 1) state = nextPrograms([process(10), process(11)], state.known, ask);
+    expect(ask).toHaveBeenCalledTimes(2);
+    expect([...state.programs.values()]).toEqual(["C:/p10.exe", "C:/p11.exe"]);
+  });
+
+  it("never asks a process that said no again (ban safety)", () => {
+    const ask = vi.fn(() => null);
+    let state = nextPrograms([process(66)], new Map(), ask);
+    for (let look = 0; look < 100; look += 1) state = nextPrograms([process(66)], state.known, ask);
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(state.programs.size).toBe(0);
+  });
+
+  it("doesn't take a new process on a reused id for the one that ended", () => {
+    const ask = vi.fn((pid: number) => (ask.mock.calls.length === 1 ? `C:/game${pid}.exe` : "C:/notepad.exe"));
+    const first = nextPrograms([process(10, 100)], new Map(), ask);
+    expect(first.programs.get(10)).toBe("C:/game10.exe");
+    const reused = nextPrograms([process(10, 200)], first.known, ask);
+    expect(reused.programs.get(10)).toBe("C:/notepad.exe");
+    expect(ask).toHaveBeenCalledTimes(2);
+  });
+
+  it("forgets a process that ended", () => {
+    const ask = vi.fn(() => "C:/a.exe");
+    const first = nextPrograms([process(10)], new Map(), ask);
+    expect(nextPrograms([], first.known, ask).known.size).toBe(0);
+  });
+
+  it("leaves System Idle and System alone", () => {
+    const ask = vi.fn(() => "C:/a.exe");
+    nextPrograms([process(0, 0), process(4, 0)], new Map(), ask);
+    expect(ask).not.toHaveBeenCalled();
+  });
+
+  it("opens each process once over many looks of the real probe", () => {
+    const { fake } = windows();
+    const probe = windowsProgramProbe(() => [process(10), process(11)], () => fake);
+    for (let look = 0; look < 10; look += 1) probe();
+    expect(fake.openProcess).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the last programs when the list fails once, and fails on a first look that can't list", () => {
+    const { fake } = windows();
+    let broken = false;
+    const probe = windowsProgramProbe(() => {
+      if (broken) throw new Error("the process list kept growing");
+      return [process(10)];
+    }, () => fake);
+    expect(probe().programs.size).toBe(1);
+    broken = true;
+    expect(probe().programs.size).toBe(1);
+    expect(fake.openProcess).toHaveBeenCalledTimes(1);
+    const never = windowsProgramProbe(() => {
+      throw new Error("no ntdll");
+    }, () => fake);
+    expect(() => never()).toThrow("no ntdll");
   });
 });
 

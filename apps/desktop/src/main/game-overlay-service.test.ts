@@ -521,6 +521,23 @@ describe("which window is in front", () => {
     expect(live()).toHaveLength(0);
     expect(service.frontGame()).toBeNull();
   });
+
+  it("says once that Windows can't be asked, and doesn't ask again", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const { service, world, live } = await setup();
+      show(service);
+      world.broken = true;
+      service.tick();
+      const asked = world.probeCalls;
+      for (let look = 0; look < 5; look += 1) service.tick();
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(world.probeCalls).toBe(asked);
+      expect(live()).toHaveLength(0);
+    } finally {
+      warn.mockRestore();
+    }
+  });
 });
 
 describe("modes and settings", () => {
@@ -1376,14 +1393,20 @@ describe("a panel in the game", () => {
     expect(service.hasPanel(PANEL)).toBe(true);
   });
 
-  it("makes no window and lends nothing the second time when Panel views refuses the panel", async () => {
+  it("keeps its setups and key when it can't be lent for a moment, and comes up on the next look", async () => {
     const { service, world, key } = await setup();
     add(service);
+    const toggle = key(toggleBinding(service.panelSubject(PANEL)!));
     world.views.refused.add(PANEL);
     service.pressed(layerKey(key));
     expect(panelWindows(world)).toHaveLength(0);
     expect(world.views.log).toEqual([]);
-    expect(service.hasPanel(PANEL)).toBe(false);
+    expect(service.hasPanel(PANEL)).toBe(true);
+    expect(world.removedKeys).not.toContainEqual(toggle);
+    world.views.refused.delete(PANEL);
+    service.tick();
+    expect(panelWindows(world)).toHaveLength(1);
+    expect(world.views.log).toEqual([`lend ${PANEL}`]);
   });
 
   it("comes back to Tavora when it opens its dialog: the layer closes and the game doesn't get the keyboard", async () => {
@@ -1506,7 +1529,7 @@ describe("a panel in the game", () => {
     expect(panelWindows(world)).toHaveLength(0);
   });
 
-  it("is dropped when the panel is gone, and has no window when it can't be made", async () => {
+  it("is dropped when the panel is gone, and only has no window while it can't be made", async () => {
     const { service, world, key } = await setup();
     add(service);
     world.gone.add(PANEL);
@@ -1517,6 +1540,9 @@ describe("a panel in the game", () => {
     add(service);
     service.pressed(layerKey(key));
     expect(panelWindows(world)).toHaveLength(0);
+    expect(service.hasPanel(PANEL)).toBe(true);
+    world.gone.add(PANEL);
+    service.tick();
     expect(service.hasPanel(PANEL)).toBe(false);
   });
 

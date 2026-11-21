@@ -61,7 +61,13 @@ export function parseProfile(input: string): Profile {
   }
   const match = /^\/(id|profiles)\/([^/]+)\/?$/.exec(url.pathname);
   if (!match) throw new SteamError(400, "not-steam-link", "Enter a steamcommunity.com profile link.");
-  const value = decodeURIComponent(match[2]!);
+  let value: string;
+  try {
+    value = decodeURIComponent(match[2]!);
+  } catch {
+    // A stray % in the link.
+    throw new SteamError(400, "bad-link", "Enter a Steam profile link or a SteamID64.");
+  }
   if (match[1] === "profiles") {
     if (!STEAM_ID.test(value)) throw new SteamError(400, "bad-id", "That profile link has no valid SteamID64.");
     return { kind: "id", id: value };

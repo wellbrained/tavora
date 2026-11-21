@@ -1,11 +1,11 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, readdir, rm, utimes, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createKeyFile, fingerprint, readZip, verifyFiles } from "@tavora/pack";
 import type { KeyObject } from "node:crypto";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { blockingChanges, HOST_ONLY, isTestFile, moduleFacingFiles, OfficialPublisher, PublishCancelled, WORKTREE_PREFIX, type Run } from "./official-publish";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { blockingChanges, HOST_ONLY, isTestFile, moduleFacingFiles, OfficialPublisher, PublishCancelled, WORKTREE_KEEP_MS, WORKTREE_PREFIX, type Run } from "./official-publish";
 
 const SHA = "a".repeat(40);
 const manifest = (version: string, extra: object = {}) => ({ id: "tavora.notes", name: "Notes", version, apiVersion: "1", entry: "dist/index.html", games: [], viewport: { minWidth: 100, minHeight: 100 }, permissions: { network: [] }, changelog: "CHANGELOG.json", ...extra });
@@ -315,6 +315,26 @@ describe("publishing a built-in module from a dev build", () => {
     await utimes(old, twoHoursAgo, twoHoursAgo);
     await publisher().sweep();
     expect((await readdir(temp)).sort()).toEqual(["something-else", `${WORKTREE_PREFIX}fresh`]);
+  });
+
+  it("keeps an open preview's worktree fresh, so another dev Tavora's sweep leaves it, and lets go when it ends", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    try {
+      const one = publisher();
+      await one.prepare("tavora.notes");
+      const worktree = world.worktrees[0]!;
+      const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+      await utimes(worktree, twoHoursAgo, twoHoursAgo);
+      vi.advanceTimersByTime(WORKTREE_KEEP_MS);
+      for (let tries = 0; tries < 200 && (await stat(worktree)).mtimeMs <= twoHoursAgo.getTime(); tries += 1) await new Promise((resolve) => setTimeout(resolve, 5));
+      await publisher().sweep();
+      expect(await readdir(temp)).toContain(path.basename(worktree));
+      await one.cancel();
+      expect(vi.getTimerCount()).toBe(0);
+      expect(await readdir(temp)).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

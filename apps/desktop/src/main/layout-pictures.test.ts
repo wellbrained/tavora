@@ -2,7 +2,7 @@ import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { LayoutPictures, MAX_PICTURE_BYTES, MAX_PICTURE_WIDTH, captureSize, isPng, pictureName, sourceForHandle } from "./layout-pictures";
+import { LayoutPictures, MAX_PICTURE_BYTES, MAX_PICTURE_WIDTH, captureSize, isPng, pictureName, picturePixels, sourceForHandle } from "./layout-pictures";
 
 let dir: string;
 beforeEach(async () => {
@@ -103,5 +103,17 @@ describe("captureSize", () => {
     expect(captureSize(5120, 1440)).toEqual({ width: MAX_PICTURE_WIDTH, height: 1080 });
     expect(captureSize(0, 0)).toEqual({ width: 1920, height: 1080 });
     expect(captureSize(Number.NaN, 100)).toEqual({ width: 1920, height: 1080 });
+  });
+});
+
+describe("picturePixels", () => {
+  it("follows the scale of the screen the game is on", () => {
+    expect(picturePixels({ width: 1280, height: 720 }, 1)).toEqual({ width: 1280, height: 720 });
+    expect(picturePixels({ width: 1280, height: 720 }, 1.5)).toEqual({ width: 1920, height: 1080 });
+  });
+
+  it("stays within the widest picture, and never shrinks the window's size", () => {
+    expect(picturePixels({ width: 2560, height: 1440 }, 2)).toEqual({ width: MAX_PICTURE_WIDTH, height: 2160 });
+    expect(picturePixels({ width: 1280, height: 720 }, 0.5)).toEqual({ width: 1280, height: 720 });
   });
 });

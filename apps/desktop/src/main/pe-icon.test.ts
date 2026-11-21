@@ -277,6 +277,26 @@ describe("readIcoFromFile", () => {
     await writeFile(path.join(dir, "notes.exe"), "just text");
     expect(await readIcoFromFile(path.join(dir, "notes.exe"))).toBeNull();
   });
+
+  it("takes an .ico file as it is, whatever its index", async () => {
+    const ico = new Uint8Array(6 + 16 + 40);
+    const view = new DataView(ico.buffer);
+    view.setUint16(2, 1, true);
+    view.setUint16(4, 1, true);
+    ico[6] = 16;
+    ico[7] = 16;
+    view.setUint32(6 + 8, 40, true);
+    view.setUint32(6 + 12, 22, true);
+    await writeFile(path.join(dir, "game.ICO"), ico);
+    expect(await readIcoFromFile(path.join(dir, "game.ICO"), 3)).toEqual(ico);
+  });
+
+  it("gives null for an .ico that isn't one, or is too big", async () => {
+    await writeFile(path.join(dir, "fake.ico"), "just text, long enough to pass a size check");
+    expect(await readIcoFromFile(path.join(dir, "fake.ico"))).toBeNull();
+    await writeFile(path.join(dir, "huge.ico"), new Uint8Array(MAX_STEAM_ICON_BYTES + 1));
+    expect(await readIcoFromFile(path.join(dir, "huge.ico"))).toBeNull();
+  });
 });
 
 describe("icoFramesAgree", () => {

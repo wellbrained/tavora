@@ -27,8 +27,14 @@ describe("parseProfile", () => {
     "https://steamcommunity.com/id/someone/games",
     "ftp://steamcommunity.com/id/someone",
     "javascript:alert(1)",
+    "https://steamcommunity.com/id/100%",
+    "https://steamcommunity.com/profiles/%E0%A4%A",
   ])("refuses %j", (input) => {
     expect(() => parseProfile(input)).toThrow(SteamError);
+  });
+
+  it("answers a stray % in a link as a bad link, not a crash", () => {
+    expect(() => parseProfile("https://steamcommunity.com/id/100%")).toThrow(expect.objectContaining({ status: 400, code: "bad-link" }));
   });
 
   it.each([

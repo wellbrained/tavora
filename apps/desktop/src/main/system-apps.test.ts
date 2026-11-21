@@ -5,7 +5,7 @@ import { appName, AppsReader, isWindowsProcess, onlySystemMonitor, parseProcesse
 const GB = 1e9;
 /** CPU time in 100-nanosecond units for `ms` milliseconds. */
 const ms = (value: number) => value * 10_000;
-const entry = (pid: number, name: string, privateBytes: number, cpuTime = 0): ProcessEntry => ({ pid, name, privateBytes, cpuTime });
+const entry = (pid: number, name: string, privateBytes: number, cpuTime = 0, startTime = 1): ProcessEntry => ({ pid, name, privateBytes, cpuTime, startTime });
 
 describe("names", () => {
   it("drops .exe and writes the first letter big, leaving the rest", () => {
@@ -41,16 +41,24 @@ describe("AppsReader", () => {
     // 1 second on 4 threads: 2 s of CPU time is half the PC.
     const read = reader.read([entry(10, "game.exe", GB, ms(2000)), entry(20, "new.exe", GB, ms(500))], 2000, 0);
     expect(read.apps.find((app) => app.name === "Game")!.cpu).toBe(50);
-    // A process that started since counts from the next reading.
-    expect(read.apps.find((app) => app.name === "New")!.cpu).toBe(0);
+    // A process that started since used all its time since the last reading: 0.5 s of 4 thread-seconds.
+    expect(read.apps.find((app) => app.name === "New")!.cpu).toBe(12.5);
     expect(reader.age(2500)).toBe(500);
   });
 
-  it("does not count a reused PID's time as the old process's", () => {
+  it("counts a reused PID from the new process's own start", () => {
     const reader = new AppsReader(1);
     reader.read([entry(10, "old.exe", GB, ms(100))], 1000, 0);
-    const read = reader.read([entry(10, "other.exe", GB, ms(900))], 2000, 0);
-    expect(read.apps[0]!.cpu).toBe(0);
+    const read = reader.read([entry(10, "other.exe", GB, ms(900), 2)], 2000, 0);
+    expect(read.apps[0]!.cpu).toBe(90);
+  });
+
+  it("tells a restarted program from itself by its start time", () => {
+    const reader = new AppsReader(1);
+    reader.read([entry(10, "game.exe", GB, ms(800), 1)], 1000, 0);
+    // Same name on the same PID, with less CPU time than before: without the start time this read 0 %.
+    const read = reader.read([entry(10, "game.exe", GB, ms(300), 2)], 2000, 0);
+    expect(read.apps[0]!.cpu).toBe(30);
   });
 
   it("caps CPU at 100", () => {
@@ -62,13 +70,14 @@ describe("AppsReader", () => {
 
 describe("parseProcesses", () => {
   /** Builds a SystemProcessInformation buffer the way Windows lays it out on 64-bit, names after each entry. */
-  function buffer(base: bigint, list: { pid: number; name: string; privateBytes: number; user: number; kernel: number }[]): Buffer {
+  function buffer(base: bigint, list: { pid: number; name: string; privateBytes: number; user: number; kernel: number; created?: number }[]): Buffer {
     const ENTRY = 256;
     const out = Buffer.alloc(ENTRY * list.length);
     list.forEach((item, index) => {
       const at = index * ENTRY;
       out.writeUInt32LE(index === list.length - 1 ? 0 : ENTRY, at);
       out.writeBigInt64LE(BigInt(item.privateBytes), at + 8);
+      out.writeBigInt64LE(BigInt(item.created ?? 0), at + 32);
       out.writeBigInt64LE(BigInt(item.user), at + 40);
       out.writeBigInt64LE(BigInt(item.kernel), at + 48);
       const name = Buffer.from(item.name, "utf16le");
@@ -86,12 +95,12 @@ describe("parseProcesses", () => {
     const read = parseProcesses(buffer(base, [
       { pid: 0, name: "", privateBytes: 0, user: 0, kernel: 7 },
       { pid: 4, name: "", privateBytes: 100, user: 0, kernel: 9 },
-      { pid: 1234, name: "Föö.exe", privateBytes: 6.8e9, user: 30, kernel: 12 },
+      { pid: 1234, name: "Föö.exe", privateBytes: 6.8e9, user: 30, kernel: 12, created: 133_000_000_000_000_000 },
     ]), base);
     expect(read).toEqual([
-      { pid: 0, name: "", privateBytes: 0, cpuTime: 7 },
-      { pid: 4, name: "System", privateBytes: 100, cpuTime: 9 },
-      { pid: 1234, name: "Föö.exe", privateBytes: 6.8e9, cpuTime: 42 },
+      { pid: 0, name: "", privateBytes: 0, cpuTime: 7, startTime: 0 },
+      { pid: 4, name: "System", privateBytes: 100, cpuTime: 9, startTime: 0 },
+      { pid: 1234, name: "Föö.exe", privateBytes: 6.8e9, cpuTime: 42, startTime: 133_000_000_000_000_000 },
     ]);
   });
 

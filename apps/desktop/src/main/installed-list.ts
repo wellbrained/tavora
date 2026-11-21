@@ -42,7 +42,7 @@ export function gameKey(game: Pick<InstalledGame, "name" | "steamAppId">): strin
  */
 export function catalogIdFor(name: string, steamAppId?: number): string | null {
   if (steamAppId !== undefined) {
-    const byId = CATALOG.find((game) => game.steamAppId === steamAppId);
+    const byId = CATALOG.find((game) => game.steamAppId === steamAppId || game.otherSteamAppIds?.includes(steamAppId));
     if (byId) return byId.id;
   }
   const wanted = normalizeName(name);

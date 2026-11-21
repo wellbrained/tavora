@@ -6,6 +6,7 @@ import { catalogPublicKey, nextCatalogList, signCatalogList, signFiles, writeZip
 import { describe, expect, it } from "vitest";
 import { AccountStore } from "./account-store.ts";
 import { createAdminApp } from "./admin-app.ts";
+import { revocationEntries } from "./key-requests.ts";
 import { createApp } from "./app.ts";
 import { CatalogStore } from "./catalog.ts";
 import { buildDataset, writeDatabase } from "./dataset.ts";
@@ -125,6 +126,85 @@ describe("asking to replace a lost key", () => {
       clock.now += 15 * 60_000;
     }
     expect((await request("POST", "/v1/account/delete/code", {}, dev.token)).status).toBe(429);
+  });
+
+  it("allows what was listed before the first request, and asks about what was listed up to the leak report", async () => {
+    const { store, catalog, clock, developer } = setup();
+    const dev = await developer("dev@example.com");
+    const asked = clock.now;
+    const before = catalog.add(moduleZip(dev.lost, "0.9.0"), new Date(asked - 1000));
+    store.requestReplacement(dev.accountId, dev.old, dev.new, false, asked);
+    const between = catalog.add(moduleZip(dev.lost, "1.0.0"), new Date(asked + 86_400_000));
+    const reported = asked + 2 * 86_400_000;
+    store.requestReplacement(dev.accountId, dev.old, dev.new, true, reported);
+    catalog.add(moduleZip(dev.lost, "1.0.1"), new Date(reported + 1000));
+    expect(store.keyRequest(dev.old)).toMatchObject({ requestedAt: asked, leakedAt: reported });
+    const expected = [
+      {
+        fingerprint: dev.old,
+        revoked: new Date(reported).toISOString().replace(/\.\d{3}Z$/, "Z"),
+        allow: [before.sha256],
+        decide: [{ sha256: between.sha256, id: "wellbrained.timer", version: "1.0.0", listedAt: new Date(asked + 86_400_000).toISOString() }],
+      },
+    ];
+    expect(revocationEntries(store, null, catalog)).toEqual(expected);
+    // The sign script refuses it as it is.
+    expect(() => nextCatalogList("revocations", expected, null, new Date())).toThrow();
+    // Both dates stay right once the request goes with the key's link.
+    store.unlinkKey(dev.accountId, dev.old);
+    expect(store.leakedKeys()).toEqual([{ fingerprint: dev.old, requestedAt: reported }]);
+    expect(revocationEntries(store, null, catalog)).toEqual(expected);
+  });
+
+  it("asks about everything since the request when the report's date wasn't kept", async () => {
+    const { store, catalog, clock, developer } = setup();
+    const dev = await developer("dev@example.com");
+    const asked = clock.now;
+    store.requestReplacement(dev.accountId, dev.old, dev.new, true, asked);
+    // A report from before its date was kept.
+    (store as unknown as { db: { prepare(sql: string): { run(...values: unknown[]): unknown } } }).db.prepare("update key_requests set leaked_at = null where old = ?").run(dev.old);
+    const later = catalog.add(moduleZip(dev.lost, "1.0.0"), new Date(asked + 86_400_000));
+    const expected = [
+      {
+        fingerprint: dev.old,
+        revoked: new Date(asked).toISOString().replace(/\.\d{3}Z$/, "Z"),
+        allow: [],
+        decide: [{ sha256: later.sha256, id: "wellbrained.timer", version: "1.0.0", listedAt: new Date(asked + 86_400_000).toISOString() }],
+      },
+    ];
+    expect(revocationEntries(store, null, catalog)).toEqual(expected);
+    store.unlinkKey(dev.accountId, dev.old);
+    expect(revocationEntries(store, null, catalog)).toEqual(expected);
+  });
+
+  it("asks about versions since the date of a leaked key kept before its request date was", async () => {
+    const { store, catalog, clock, developer } = setup();
+    const dev = await developer("dev@example.com");
+    const asked = clock.now;
+    store.requestReplacement(dev.accountId, dev.old, dev.new, true, asked);
+    store.unlinkKey(dev.accountId, dev.old);
+    (store as unknown as { db: { exec(sql: string): void } }).db.exec("update leaked_keys set asked_at = null, reported_at = null; delete from key_requests");
+    const later = catalog.add(moduleZip(dev.lost, "1.0.0"), new Date(asked + 1000));
+    expect(revocationEntries(store, null, catalog)).toEqual([expect.objectContaining({ fingerprint: dev.old, allow: [], decide: [expect.objectContaining({ sha256: later.sha256 })] })]);
+  });
+
+  it("asks nothing about a key reported as leaked from the start", async () => {
+    const { store, catalog, clock, developer } = setup();
+    const dev = await developer("dev@example.com");
+    const before = catalog.add(moduleZip(dev.lost, "1.0.0"), new Date(clock.now - 1000));
+    store.requestReplacement(dev.accountId, dev.old, dev.new, true, clock.now);
+    catalog.add(moduleZip(dev.lost, "1.0.1"), new Date(clock.now + 1000));
+    expect(revocationEntries(store, null, catalog)).toEqual([{ fingerprint: dev.old, revoked: new Date(clock.now).toISOString().replace(/\.\d{3}Z$/, "Z"), allow: [before.sha256] }]);
+  });
+
+  it("counts a key reported as leaked from the start from that moment, and a plain request has no leak date", async () => {
+    const { store, clock, developer } = setup();
+    const leaked = await developer("leaked@example.com");
+    store.requestReplacement(leaked.accountId, leaked.old, leaked.new, true, clock.now);
+    expect(store.keyRequest(leaked.old)).toMatchObject({ leakedAt: clock.now });
+    const plain = await developer("plain@example.com");
+    store.requestReplacement(plain.accountId, plain.old, plain.new, false, clock.now);
+    expect(store.keyRequest(plain.old)).toMatchObject({ leakedAt: null });
   });
 
   it("needs both keys linked to this account, and one open request per key", async () => {

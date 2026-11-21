@@ -3,7 +3,8 @@
  * (systemInfo.apps). One call into Windows lists every process with its numbers: NtQuerySystemInformation with
  * SystemProcessInformation, the list Task Manager reads too. It opens no handle to any process, so a game and its
  * anti-cheat are never touched; the price is that only the file name is known, never a path or an icon. Read in the
- * system-info worker, only while the System Monitor's apps dialog asks.
+ * system-info worker, only while the System Monitor's apps dialog asks. The game watcher (program-list.ts) reads the same
+ * list, so it can tell which processes are new without opening any.
  */
 import os from "node:os";
 import type { SystemApp, SystemApps } from "@tavora/sdk/protocol";
@@ -27,6 +28,8 @@ export interface ProcessEntry {
   privateBytes: number;
   /** CPU time used since it started, in 100-nanosecond units. */
   cpuTime: number;
+  /** When it started, as Windows counts time: with `pid` it names one process, since Windows reuses ids. */
+  startTime: number;
 }
 
 /** Windows' own processes, by file name without ".exe" in lower case. They get the Windows mark. */
@@ -56,7 +59,7 @@ export const isWindowsProcess = (name: string) => WINDOWS_NAMES.has(stripExe(nam
  * PC like Task Manager. The first reading has no CPU yet (null); the worker takes two a moment apart then.
  */
 export class AppsReader {
-  private last = new Map<number, { name: string; cpuTime: number }>();
+  private last = new Map<number, { name: string; cpuTime: number; startTime: number }>();
   private lastAt = 0;
 
   private readonly threads: number;
@@ -73,11 +76,11 @@ export class AppsReader {
   read(entries: readonly ProcessEntry[], now: number, usedBytes: number): SystemApps {
     const elapsed = this.lastAt ? (now - this.lastAt) * 10_000 * this.threads : 0;
     const apps = new Map<string, SystemApp>();
-    const seen = new Map<number, { name: string; cpuTime: number }>();
+    const seen = new Map<number, { name: string; cpuTime: number; startTime: number }>();
     for (const entry of entries) {
       // PID 0 is the Idle process: its "CPU" is the time nothing ran.
       if (entry.pid === 0 || !entry.name) continue;
-      seen.set(entry.pid, { name: entry.name, cpuTime: entry.cpuTime });
+      seen.set(entry.pid, { name: entry.name, cpuTime: entry.cpuTime, startTime: entry.startTime });
       const key = stripExe(entry.name).toLowerCase();
       let app = apps.get(key);
       if (!app) {
@@ -86,8 +89,9 @@ export class AppsReader {
       }
       app.memoryBytes += Math.max(0, entry.privateBytes);
       const before = this.last.get(entry.pid);
-      // A PID Windows gave to a new process counts from nothing only when the name matches; else from its start.
-      if (app.cpu !== null && before && before.name === entry.name) app.cpu += Math.max(0, entry.cpuTime - before.cpuTime);
+      // A process seen last time counts what it used since then. A new one, also on a reused PID, started since then, so all its time counts.
+      const same = before !== undefined && before.name === entry.name && before.startTime === entry.startTime;
+      if (app.cpu !== null) app.cpu += Math.max(0, same ? entry.cpuTime - before.cpuTime : entry.cpuTime);
     }
     this.last = seen;
     this.lastAt = now;
@@ -104,7 +108,7 @@ const SYSTEM_PROCESS_INFORMATION = 5;
 const STATUS_INFO_LENGTH_MISMATCH = 0xc0000004 | 0;
 
 /** Offsets in SYSTEM_PROCESS_INFORMATION on 64-bit Windows. */
-const OFFSET = { next: 0, privateWorkingSet: 8, userTime: 40, kernelTime: 48, nameLength: 56, nameBuffer: 64, pid: 80 } as const;
+const OFFSET = { next: 0, privateWorkingSet: 8, createTime: 32, userTime: 40, kernelTime: 48, nameLength: 56, nameBuffer: 64, pid: 80 } as const;
 
 /** Reads one SystemProcessInformation buffer that starts at address `base`. Names point into the same buffer. */
 export function parseProcesses(buffer: Buffer, base: bigint): ProcessEntry[] {
@@ -123,6 +127,7 @@ export function parseProcesses(buffer: Buffer, base: bigint): ProcessEntry[] {
       name,
       privateBytes: Number(buffer.readBigInt64LE(at + OFFSET.privateWorkingSet)),
       cpuTime: Number(buffer.readBigInt64LE(at + OFFSET.userTime) + buffer.readBigInt64LE(at + OFFSET.kernelTime)),
+      startTime: Number(buffer.readBigInt64LE(at + OFFSET.createTime)),
     });
     const next = buffer.readUInt32LE(at + OFFSET.next);
     if (next === 0) break;

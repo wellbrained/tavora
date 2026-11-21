@@ -28,6 +28,66 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.121",
+    date: "2026-11-22",
+    title: "Menus and tooltips in panel dialogs",
+    notes: [
+      "Menus and tooltips now work inside a panel's own dialog, right next to what you clicked.",
+      "Closing a panel while a menu is open no longer leaves an old picture behind.",
+    ],
+    prs: [
+      { number: 872, title: "Panel dialogs: menus and tooltips work, no stale state after a closed panel" },
+    ],
+    tags: ["workspace"],
+  },
+  {
+    version: "0.24.120",
+    date: "2026-11-22",
+    title: "Better game detection",
+    notes: [
+      "Game names and folders with umlauts now work on German Windows.",
+      "A closed game no longer counts as running when Windows reuses its process.",
+      "Tavora now asks about each running program only once, so protected games are left alone.",
+      "Skyrim Special Edition now counts as Skyrim.",
+      "Games with an .ico icon now get their icon, and Steam shortcuts on a OneDrive Desktop are found.",
+      "System Monitor shows CPU for apps that just started.",
+    ],
+    prs: [
+      { number: 870, title: "Game detection: fewer process opens, reused ids, umlauts, more games found" },
+    ],
+    tags: ["catalog", "games", "icons", "system-monitor"],
+  },
+  {
+    version: "0.24.119",
+    date: "2026-11-21",
+    title: "Small fixes",
+    notes: [
+      "AI Usage no longer asks you to sign in when your Claude token only ran out.",
+      "Tavora stays quicker with a big game library.",
+    ],
+    prs: [
+      { number: 873, title: "Small desktop fixes: expired Claude token, publish sweep, icon file checks" },
+    ],
+    tags: ["ai-usage", "icons"],
+  },
+  {
+    version: "0.24.118",
+    date: "2026-11-21",
+    title: "Steadier overlays",
+    notes: [
+      "A panel over your game keeps its setups and hotkey when it can't open for a moment.",
+      "The dark layer over your game blocks clicks again after a short freeze.",
+      "Dragging a frame in Arrange stays smooth, however often you open it.",
+      "Two hotkeys on the same key now both work.",
+      "Game pictures come out sharp on a second monitor with its own scaling.",
+      "Closed overlay previews no longer keep running in the background.",
+    ],
+    prs: [
+      { number: 871, title: "Overlay windows: keep panels through a failed lend, end leaks and stacking" },
+    ],
+    tags: ["hotkeys", "overlays", "workspace"],
+  },
+  {
     version: "0.24.117",
     date: "2026-11-21",
     title: "Styles read better",

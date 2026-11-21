@@ -9,11 +9,14 @@ import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue
 import { X } from "@lucide/vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Dialog, DialogContent, DialogTitle, type DismissAttempt } from "@tavora/official-ui/components/ui/dialog";
-import { api, overlayPending, panelDialog, panelDialogDrawn, panelDialogTitle } from "../host";
+import { dialogPictureKey } from "../../shared/dialog-picture";
+import { api, frozen, overlayPending, panelDialog, panelDialogDrawn, panelDialogTitle } from "../host";
 import { t } from "../i18n";
 import { dialogPlace, type Room } from "../panel-dialog-place";
 
 const body = ref<HTMLElement | null>(null);
+/** The still image of the page while a menu is open over the dialog. */
+const picture = computed(() => (panelDialog.value ? (frozen.value[dialogPictureKey(panelDialog.value.instanceId)] ?? null) : null));
 let observer: ResizeObserver | undefined;
 let roomObserver: ResizeObserver | undefined;
 let showTimer: ReturnType<typeof setTimeout> | undefined;
@@ -135,7 +138,19 @@ function onDismissAttempt({ reason }: DismissAttempt): void {
         <DialogTitle class="min-w-0 flex-1 truncate text-sm font-semibold">{{ panelDialogTitle ?? panelDialog.title }}</DialogTitle>
         <Button variant="ghost" size="icon-sm" :aria-label="t('common.close')" data-testid="panel-dialog-close" @click="close"><X class="size-4" /></Button>
       </header>
-      <div ref="body" class="min-h-0 flex-1" data-testid="panel-dialog-body" />
+      <div ref="body" class="relative min-h-0 flex-1 overflow-hidden" data-testid="panel-dialog-body">
+        <!-- The page while a menu is open over it: its view steps aside, as a menu is drawn under native views. -->
+        <img
+          v-if="picture"
+          :key="picture.gen"
+          :src="picture.url"
+          v-bind="{ elementtiming: `frozen:${dialogPictureKey(panelDialog.instanceId)}` }"
+          decoding="sync"
+          alt=""
+          class="pointer-events-none absolute top-0 left-0 size-full select-none"
+          data-testid="panel-dialog-picture"
+        />
+      </div>
     </DialogContent>
   </Dialog>
 </template>

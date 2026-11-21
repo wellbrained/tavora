@@ -14,13 +14,17 @@ const MAX_SHORTCUTS = 1000;
 const MAX_SHORTCUT_BYTES = 8 * 1024;
 const HASH_ICON = /^([0-9a-f]{40})\.ico$/i;
 
-/** Where Steam's shortcuts are: its Start menu folder, and the desktops. */
-export function shortcutFolders(env: NodeJS.ProcessEnv = process.env): string[] {
+/**
+ * Where Steam's shortcuts are: its Start menu folder, and the desktops. `desktop` is where Windows says the user's
+ * Desktop is: OneDrive can move it, and gives it a translated name there ("Schreibtisch").
+ */
+export function shortcutFolders(env: NodeJS.ProcessEnv = process.env, desktop?: string): string[] {
   const folders: string[] = [];
   if (env.APPDATA) folders.push(path.join(env.APPDATA, "Microsoft", "Windows", "Start Menu", "Programs", "Steam"));
+  if (desktop) folders.push(desktop);
   if (env.USERPROFILE) folders.push(path.join(env.USERPROFILE, "Desktop"));
   if (env.PUBLIC) folders.push(path.join(env.PUBLIC, "Desktop"));
-  return folders;
+  return [...new Map(folders.map((folder) => [folder.toLowerCase(), folder])).values()];
 }
 
 /** The icon name (without its folder) and game id one shortcut states, or null when it is not a Steam game's shortcut. */

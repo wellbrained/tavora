@@ -31,7 +31,8 @@ import { BUILT_IN_TEXTS, CONTACT_KINDS, cleanContactValue, contactFromLegacy, co
  * but the admin closes a Tavora conversation. 30 days without a message closes a developer conversation (`timeout`), and
  * a closed one is deleted 180 days after closing unless it is reported. Closed is read-only; a new conversation links to
  * the closed one (`previousId`). Deleting an account closes its conversations with `left`, removes the text of its
- * messages and deletes its reports.
+ * messages and deletes its reports. A block outlives its conversation (`conversation_blocks`: only the user's account and
+ * the module), so deleting a blocked conversation doesn't open the way to a new one; it goes with the user's account.
  *
  * Limits: the 24 h minimum account age (as for ratings), 5 new conversations and 50 messages per account in 24 h, one
  * open conversation per user and module, and the per-client hourly limit.
@@ -188,6 +189,14 @@ export class ConversationStore {
       create table if not exists account_contact (account_id text primary key, kind text not null, value text);
       create table if not exists account_settings (account_id text primary key, email_copies integer not null);
       create table if not exists texts (key text primary key, en text not null, de text not null);
+      create table if not exists conversation_blocks (
+        user_account_id text not null, module_id text not null, at integer not null,
+        primary key (user_account_id, module_id)
+      );
+      -- Blocks from before this table are read from their conversations; safe to run at every start.
+      insert or ignore into conversation_blocks (user_account_id, module_id, at)
+        select user_account_id, module_id, coalesce(closed_at, created_at) from conversations
+        where kind = 'developer' and close_reason = 'blocked' and user_account_id is not null and module_id is not null;
     `);
     // Contact kinds (2026-10-30): a row from before has only enabled and link, read as a kind (contactFromLegacy).
     const columns = (this.db.prepare("pragma table_info(module_contact)").all() as { name: string }[]).map((column) => column.name);
@@ -244,10 +253,9 @@ export class ConversationStore {
       .run(conversationId, conversationId);
   }
 
-  /** The open developer conversation of a user about a module, if any. */
-  /** Whether a conversation of this user about this module was blocked (by either side): no new one then. */
+  /** Whether a conversation of this user about this module was blocked (by either side), even one deleted since: no new one then. */
   blockedFor(userAccountId: string, moduleId: string): boolean {
-    return this.db.prepare("select 1 from conversations where user_account_id = ? and module_id = ? and kind = 'developer' and close_reason = 'blocked' limit 1").get(userAccountId, moduleId) !== undefined;
+    return this.db.prepare("select 1 from conversation_blocks where user_account_id = ? and module_id = ?").get(userAccountId, moduleId) !== undefined;
   }
 
   /** How many messages one side has not read yet. */
@@ -267,6 +275,7 @@ export class ConversationStore {
     return true;
   }
 
+  /** The open developer conversation of a user about a module, if any. */
   openFor(userAccountId: string, moduleId: string): Conversation | null {
     const row = this.db
       .prepare("select * from conversations where kind = 'developer' and user_account_id = ? and module_id = ? and state = 'open' limit 1")
@@ -324,7 +333,13 @@ export class ConversationStore {
 
   /** Closes an open conversation. False when it was not open. */
   closeConversation(id: string, reason: CloseReason, now: number): boolean {
-    return Number(this.db.prepare("update conversations set state = 'closed', close_reason = ?, closed_at = ? where id = ? and state = 'open'").run(reason, now, id).changes) > 0;
+    const closed = Number(this.db.prepare("update conversations set state = 'closed', close_reason = ?, closed_at = ? where id = ? and state = 'open'").run(reason, now, id).changes) > 0;
+    if (closed && reason === "blocked") {
+      this.db
+        .prepare("insert or ignore into conversation_blocks (user_account_id, module_id, at) select user_account_id, module_id, ? from conversations where id = ? and kind = 'developer' and user_account_id is not null and module_id is not null")
+        .run(now, id);
+    }
+    return closed;
   }
 
   /** The admin reopens its own conversation. Its last activity moves to now. */
@@ -408,7 +423,9 @@ export class ConversationStore {
 
   /** The account is deleted: its conversations close with `left`, its message texts go, its reports go. */
   forget(accountId: string, now = Date.now()): void {
-    for (const row of this.db.prepare("select * from conversations where user_account_id = ? or developer_account_id = ?").all(accountId, accountId) as unknown as ConversationSql[]) {
+    const own = this.db.prepare("select * from conversations where user_account_id = ? or developer_account_id = ?").all(accountId, accountId) as unknown as ConversationSql[];
+    const reported = this.db.prepare("select conversation_id from conversation_reports where reporter_account_id = ?").all(accountId) as unknown as { conversation_id: string }[];
+    for (const row of own) {
       const asUser = row.user_account_id === accountId;
       // Nothing to keep of a Tavora conversation once its account is gone.
       if (row.kind === "tavora") {
@@ -420,8 +437,9 @@ export class ConversationStore {
       if (!this.closeConversation(row.id, "left", now)) this.db.prepare("update conversations set close_reason = 'left' where id = ?").run(row.id);
     }
     this.db.prepare("delete from conversation_reports where reporter_account_id = ?").run(accountId);
-    // A conversation whose reports just went, and whose sides are both gone, goes too.
-    for (const row of this.db.prepare("select id from conversations").all() as unknown as { id: string }[]) this.purgeIfDone(row.id);
+    // One of these whose reports just went, and whose sides are both gone, goes too. No other conversation changed.
+    for (const id of new Set([...own.map((row) => row.id), ...reported.map((row) => row.conversation_id)])) this.purgeIfDone(id);
+    this.db.prepare("delete from conversation_blocks where user_account_id = ?").run(accountId);
     this.db.prepare("delete from limits where account_id = ?").run(accountId);
     this.db.prepare("delete from account_settings where account_id = ?").run(accountId);
     this.db.prepare("delete from account_contact where account_id = ?").run(accountId);
@@ -571,9 +589,15 @@ export function accountName(accounts: AccountStore, accountId: string): string |
   return accounts.profile(accountId)?.name.trim() || accounts.developer(accountId)?.name || accounts.account(accountId)?.email || null;
 }
 
-/** The account that takes a module's messages: the one whose publisher key owns it, else the holder of its id prefix. */
+/**
+ * The account that takes a module's messages: the one whose publisher key owns it, else the holder of its id prefix. A deleted
+ * account keeps its prefixes, so nobody can take its name, but it takes no messages.
+ */
 export function developerOf(accounts: AccountStore, moduleId: string, owner: string): string | null {
-  return accounts.publisherKey(owner)?.accountId ?? accounts.prefixHolder(moduleId.split(".")[0]!) ?? null;
+  const byKey = accounts.publisherKey(owner)?.accountId;
+  if (byKey) return byKey;
+  const holder = accounts.prefixHolder(moduleId.split(".")[0]!);
+  return holder && accounts.account(holder) ? holder : null;
 }
 
 /**
@@ -583,7 +607,9 @@ export function developerOf(accounts: AccountStore, moduleId: string, owner: str
 export function publicContact(conversations: ConversationStore, accounts: AccountStore, moduleId: string, owner: string): Contact & { enabled: boolean; link: string | null } {
   const developer = developerOf(accounts, moduleId, owner);
   const { kind, value } = conversations.contact(moduleId, developer);
-  const shown: Contact = developer && accounts.isBanned(developer) ? { kind: "none", value: null } : developer && accounts.isSuspended(developer) && kind === "tavora" ? { kind: "none", value: null } : { kind, value };
+  // Nobody to write to in Tavora: no account takes this module's messages (it was deleted, or the module was added by hand).
+  const unreachable = kind === "tavora" && (!developer || accounts.isSuspended(developer));
+  const shown: Contact = (developer && accounts.isBanned(developer)) || unreachable ? { kind: "none", value: null } : { kind, value };
   // enabled and link are what apps before contact kinds read.
   return { ...shown, ...contactToLegacy(shown) };
 }

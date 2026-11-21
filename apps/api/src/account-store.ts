@@ -150,6 +150,8 @@ export interface KeyRequest {
   accountId: string;
   leaked: boolean;
   requestedAt: number;
+  /** When the key was reported as leaked, which can be after the request; null when it wasn't, or for a report from before this was kept. */
+  leakedAt: number | null;
   /** When the maintainer turned it down; null while it waits or once it is signed. */
   declinedAt: number | null;
   /**
@@ -209,6 +211,7 @@ interface KeyRequestRow {
   new: string;
   leaked: number;
   requested_at: number;
+  leaked_at?: number | null;
   declined_at: number | null;
   notified?: number | null;
 }
@@ -219,6 +222,7 @@ const keyRequestOf = (row: KeyRequestRow): KeyRequest => ({
   accountId: row.account_id,
   leaked: row.leaked === 1,
   requestedAt: row.requested_at,
+  leakedAt: row.leaked_at ?? null,
   declinedAt: row.declined_at,
   notified: row.notified === null || row.notified === undefined ? null : row.notified === 1,
 });
@@ -359,6 +363,12 @@ export class AccountStore {
     // service writes requests without it, which then read as null.
     const keyRequestColumns = (this.db.prepare("pragma table_info(key_requests)").all() as unknown as { name: string }[]).map((column) => column.name);
     if (!keyRequestColumns.includes("notified")) this.db.exec("alter table key_requests add column notified integer");
+    // When a key was reported as leaked: a report can come after the request. Older reports read as made at the request.
+    if (!keyRequestColumns.includes("leaked_at")) this.db.exec("alter table key_requests add column leaked_at integer");
+    // A leaked key's request and report dates, kept once its request is gone, for the versions listed between them (revocationEntries).
+    const leakedColumns = (this.db.prepare("pragma table_info(leaked_keys)").all() as unknown as { name: string }[]).map((column) => column.name);
+    if (!leakedColumns.includes("asked_at")) this.db.exec("alter table leaked_keys add column asked_at integer");
+    if (!leakedColumns.includes("reported_at")) this.db.exec("alter table leaked_keys add column reported_at integer");
     const columns = (this.db.prepare("pragma table_info(accounts)").all() as unknown as { name: string }[]).map((column) => column.name);
     if (columns.includes("discord_id")) return;
     const before = (this.db.prepare("select count(*) as n from accounts").get() as { n: number }).n;
@@ -800,8 +810,17 @@ export class AccountStore {
   /** Copies the leaked reports (not turned down) among the key requests `where` picks into leaked_keys, where they outlive the account. */
   private keepLeaked(where: string, ...values: string[]): void {
     this.db
-      .prepare(`insert into leaked_keys (fingerprint, requested_at) select old, requested_at from key_requests where ${where} and leaked = 1 and declined_at is null on conflict (fingerprint) do nothing`)
+      .prepare(`insert into leaked_keys (fingerprint, requested_at, asked_at, reported_at) select old, coalesce(leaked_at, requested_at), requested_at, leaked_at from key_requests where ${where} and leaked = 1 and declined_at is null on conflict (fingerprint) do nothing`)
       .run(...values);
+  }
+
+  /**
+   * The keys of leakedKeys() with the time nobody can vouch for: from when the key was first asked about (`from`) to when it was
+   * reported as leaked (`to`). `to` is null when that report's date wasn't kept (reports from before it was).
+   */
+  leakedKeyWindows(): { fingerprint: string; reportedAt: number; from: number; to: number | null }[] {
+    const rows = this.db.prepare("select fingerprint, requested_at, asked_at, reported_at from leaked_keys order by requested_at, rowid").all() as unknown as { fingerprint: string; requested_at: number; asked_at: number | null; reported_at: number | null }[];
+    return rows.map((row) => ({ fingerprint: row.fingerprint, reportedAt: row.requested_at, from: row.asked_at ?? row.requested_at, to: row.asked_at === null ? null : row.reported_at }));
   }
 
   /** Whether a key was reported as leaked and the report wasn't turned down, also after its account unlinked it or was deleted. */
@@ -856,14 +875,14 @@ export class AccountStore {
     const current = this.keyRequest(old);
     if (current && current.declinedAt === null) {
       if (current.new !== next) return "open";
-      if (leaked && !current.leaked) this.db.prepare("update key_requests set leaked = 1 where old = ?").run(old);
+      if (leaked && !current.leaked) this.db.prepare("update key_requests set leaked = 1, leaked_at = ? where old = ?").run(now, old);
       return "ok";
     }
     this.db
       .prepare(
-        "insert into key_requests (old, account_id, new, leaked, requested_at, declined_at, notified) values (?, ?, ?, ?, ?, null, null) on conflict (old) do update set account_id = excluded.account_id, new = excluded.new, leaked = excluded.leaked, requested_at = excluded.requested_at, declined_at = null, notified = null",
+        "insert into key_requests (old, account_id, new, leaked, requested_at, leaked_at, declined_at, notified) values (?, ?, ?, ?, ?, ?, null, null) on conflict (old) do update set account_id = excluded.account_id, new = excluded.new, leaked = excluded.leaked, requested_at = excluded.requested_at, leaked_at = excluded.leaked_at, declined_at = null, notified = null",
       )
-      .run(old, accountId, next, leaked ? 1 : 0, now);
+      .run(old, accountId, next, leaked ? 1 : 0, now, leaked ? now : null);
     return "ok";
   }
 

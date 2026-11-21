@@ -100,6 +100,12 @@ function* foldersRunning<T>(folders: ReadonlyMap<string, T>, programs: Iterable<
   }
 }
 
+/** Of the entries for a game, the ones of this very edition (by Steam id) when the library has one; else all of them (the built-in game stands for every edition). */
+function exactEdition(matches: WorkspaceEntry[], steamAppIds: readonly number[]): WorkspaceEntry[] {
+  const exact = matches.filter((entry) => entry.steamAppId !== undefined && entry.steamAppId !== null && steamAppIds.includes(entry.steamAppId));
+  return exact.length ? exact : matches;
+}
+
 /** Of several entries for one game, the one opened most recently (then the one added last). */
 function mostRecent(entries: readonly WorkspaceEntry[]): WorkspaceEntry | undefined {
   return [...entries].sort((a, b) => (b.lastOpenedAt ?? "").localeCompare(a.lastOpenedAt ?? "") || b.addedAt.localeCompare(a.addedAt))[0];
@@ -118,11 +124,18 @@ export function runningGames(entries: readonly WorkspaceEntry[], installed: read
     if (pick) running.add(pick.id);
   };
 
-  if (steamAppId) add(games.filter((entry) => entry.steamAppId === steamAppId));
+  if (steamAppId) {
+    // The built-in game this Steam id belongs to: an entry of it counts for any of its editions (Skyrim and its Special Edition).
+    const builtIn = catalogIdFor("", steamAppId);
+    add(exactEdition(games.filter((entry) => entry.steamAppId === steamAppId || (builtIn !== null && workspaceGameIds(entry).includes(builtIn))), [steamAppId]));
+  }
 
   const folders = new Map<string, WorkspaceEntry[]>();
   for (const [key, inFolder] of oneGameFolders(installed)) {
-    const matches = games.filter((entry) => inFolder.some((game) => entryIsGame(entry, game)));
+    const matches = exactEdition(
+      games.filter((entry) => inFolder.some((game) => entryIsGame(entry, game))),
+      inFolder.flatMap((game) => (game.steamAppId ? [game.steamAppId] : [])),
+    );
     if (matches.length) folders.set(key, matches);
   }
   for (const matches of foldersRunning(folders, programs)) add(matches);

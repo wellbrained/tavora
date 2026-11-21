@@ -1,5 +1,6 @@
 import { createPublicKey, generateKeyPairSync, type KeyObject } from "node:crypto";
 import { mkdtempSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { signFiles, writeZip, type ZipFile } from "@tavora/pack";
@@ -326,6 +327,57 @@ describe("after a block", () => {
     conversations.forget(otto.account.id);
     expect(conversations.get(fixed.id)).toMatchObject({ closeReason: "left" });
   });
+
+  it("still refuses a new conversation once the blocked one is deleted by both sides", async () => {
+    const { user, started, start, call, devToken, conversations } = setup();
+    const mara = user("mara@example.com");
+    const first = await started(mara.token);
+    await call("POST", `/v1/conversations/${first.id}/block`, devToken, {});
+    await call("DELETE", `/v1/conversations/${first.id}`, mara.token);
+    await call("DELETE", `/v1/conversations/${first.id}`, devToken);
+    expect(conversations.get(first.id)).toBeNull();
+    const again = await start(mara.token);
+    expect(again.status).toBe(403);
+    expect(await again.json()).toMatchObject({ reason: "blocked" });
+  });
+
+  it("still refuses one after the sweep removed the blocked conversation", async () => {
+    const { user, started, start, call, devToken, conversations, clock } = setup();
+    const mara = user("mara@example.com");
+    const first = await started(mara.token);
+    await call("POST", `/v1/conversations/${first.id}/block`, devToken, {});
+    clock.now += 181 * DAY;
+    conversations.sweep(clock.now);
+    expect(conversations.get(first.id)).toBeNull();
+    expect(((await (await start(mara.token)).json()) as { reason: string }).reason).toBe("blocked");
+  });
+
+  it("keeps blocks from before the blocks table, however often the service starts", () => {
+    const file = path.join(mkdtempSync(path.join(tmpdir(), "tavora-blocks-")), "conversations.sqlite");
+    const before = new ConversationStore(file);
+    const made = before.startDeveloper({ moduleId: "a.b", moduleName: "B", developerAccountId: "dev", userAccountId: "mara", type: "bug", text: "Hi", versions: VERSIONS, previousId: null }, 1000);
+    before.closeConversation(made.id, "blocked", 2000);
+    before.close();
+    const raw = new DatabaseSync(file);
+    raw.exec("drop table conversation_blocks");
+    raw.close();
+    for (let start = 0; start < 2; start++) {
+      const after = new ConversationStore(file);
+      expect(after.blockedFor("mara", "a.b")).toBe(true);
+      expect(after.blockedFor("mara", "a.c")).toBe(false);
+      after.close();
+    }
+  });
+
+  it("forgets the block with the user's account", async () => {
+    const { user, started, call, devToken, conversations } = setup();
+    const mara = user("mara@example.com");
+    const first = await started(mara.token);
+    await call("POST", `/v1/conversations/${first.id}/block`, devToken, {});
+    expect(conversations.blockedFor(mara.account.id, "wellbrained.timer")).toBe(true);
+    conversations.forget(mara.account.id);
+    expect(conversations.blockedFor(mara.account.id, "wellbrained.timer")).toBe(false);
+  });
 });
 
 describe("deleting a conversation", () => {
@@ -437,6 +489,34 @@ describe("deleting an account", () => {
     expect(conversations.get(maras.id)).toBeNull();
     // The account route does this too.
     expect(conversations.listFor(mara.account.id)).toEqual([]);
+  });
+
+  it("removes a conversation left with no side once its last reporter is gone, and leaves others alone", async () => {
+    const { user, started, call, devToken, developer, conversations } = setup();
+    const mara = user("mara@example.com");
+    const otto = user("otto@example.com", "Otto");
+    const reported = await started(mara.token);
+    await call("POST", `/v1/conversations/${reported.id}/report`, devToken, { reason: "spam" });
+    const untouched = await started(otto.token);
+    conversations.forget(mara.account.id);
+    expect(conversations.get(reported.id)).not.toBeNull();
+    conversations.forget(developer.id);
+    expect(conversations.get(reported.id)).toBeNull();
+    expect(conversations.get(untouched.id)).toMatchObject({ closeReason: "left", userAccountId: otto.account.id });
+  });
+
+  it("takes no new message for a module whose developer deleted their account, though the prefix stays held", async () => {
+    const { user, start, call, developer, conversations, store, clock } = setup();
+    store.reservePrefix(developer.id, "wellbrained", clock.now);
+    conversations.forget(developer.id);
+    store.deleteAccount(developer.id);
+    expect(store.prefixHolder("wellbrained")).toBe(developer.id);
+    const mara = user("mara@example.com");
+    const refused = await start(mara.token);
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toMatchObject({ reason: "contact-off" });
+    const page = (await (await call("GET", "/v1/catalog/modules/wellbrained.timer")).json()) as { module: { contact: { kind: string; enabled: boolean } } };
+    expect(page.module.contact).toMatchObject({ kind: "none", enabled: false });
   });
 });
 
