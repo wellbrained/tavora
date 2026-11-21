@@ -627,6 +627,8 @@ export const en = {
   "cloudCopy.unfinished.title": "Your cloud copy didn't finish",
   "cloudCopy.unfinished.text": "A file was busy while Tavora put your copy in place. Try again, or go back to what was on this PC.",
   "cloudCopy.unfinished.hint": "Either way, Tavora restarts.",
+  "cloudCopy.unfinished.off": "Restart Tavora to settle it before you turn your cloud copy on.",
+  "cloudCopy.notice.keptAside": "What you changed while your cloud copy waited is saved in {folder}.",
   "cloudCopy.error.restartFirst": "Restart Tavora first, then turn your cloud copy on.",
   "cloudCopy.later": "Later",
   "cloudCopy.newer.title": "Newer data from your other PC",

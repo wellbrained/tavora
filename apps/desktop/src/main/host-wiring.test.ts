@@ -16,6 +16,10 @@ function body(start: RegExp): string {
 }
 
 describe("host.ts", () => {
+  it("tells the user where work done while a cloud copy waited is kept", () => {
+    expect(body(/static async create\(/)).toMatch(/copySync\.changesKeptIn\) host\.notice = translate\(host\.language, "cloudCopy\.notice\.keptAside"/);
+  });
+
   it("ends open OBS pages when grants change and whenever modules are looked for again", () => {
     expect(body(/grantsChanged: \(\) => \{/)).toContain("this.streaming?.recheckStreams()");
     expect(body(/private async reloadModulesNow\(\)/)).toContain("this.streaming?.recheckStreams()");

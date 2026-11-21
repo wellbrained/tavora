@@ -1,5 +1,6 @@
 import { apiReason } from "@tavora/module-schema";
 import { createHash } from "node:crypto";
+import { createReadStream, type Stats } from "node:fs";
 import { cp, mkdir, open as openFile, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isOwnerId } from "@tavora/module-schema";
@@ -91,6 +92,11 @@ export interface CopyState {
    */
   sealed?: boolean;
   /**
+   * The user went back to this PC's data from a copy that didn't finish: a newer copy isn't taken by itself, and the
+   * keep-which-side question stands until it is answered, also across restarts. An older Tavora ignores it.
+   */
+  wentBack?: boolean;
+  /**
    * Data files this PC lost (unreadable, or gone though it synced them). Until the user chooses a side nothing goes up,
    * also across restarts, as what is here now would replace the good copy. An older Tavora ignores it.
    */
@@ -152,28 +158,57 @@ interface Found {
   picture: boolean;
 }
 
+/** Only this means a file isn't there. Any other error (a virus scan holding it) says nothing about whether it is. */
+export function isGone(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException | undefined)?.code;
+  return code === "ENOENT" || code === "ENOTDIR";
+}
+
+/** Whether a file is there; one that can't be looked at right now throws, so nothing acts as if it were gone. */
 async function exists(target: string): Promise<boolean> {
   return stat(target).then(
     () => true,
-    () => false,
+    (error: unknown) => {
+      if (isGone(error)) return false;
+      throw error;
+    },
   );
+}
+
+/** A folder's names; empty when it isn't there, and one that can't be read right now throws. */
+async function namesIn(dir: string): Promise<string[]> {
+  return readdir(dir).catch((error: unknown) => {
+    if (isGone(error)) return [] as string[];
+    throw error;
+  });
+}
+
+/** A file's SHA-256, read a piece at a time. */
+export async function fileSha256(file: string): Promise<string> {
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(file)) hash.update(chunk as Buffer);
+  return hash.digest("hex");
+}
+
+async function statIfThere(file: string): Promise<Stats | null> {
+  try {
+    return await stat(file);
+  } catch (error) {
+    if (isGone(error)) return null;
+    throw error;
+  }
 }
 
 /** Every file the copy would hold right now, by its path in the copy. Temp files of a write in progress are left out. */
 export async function scanCopy(roots: CopyRoot[]): Promise<Found[]> {
   const found: Found[] = [];
   const walk = async (root: CopyRoot, dir: string, prefix: string, top: boolean) => {
-    let names: string[];
-    try {
-      names = await readdir(dir);
-    } catch {
-      return;
-    }
-    for (const name of names.sort()) {
+    // What can't be read right now stops the scan: left out, it would be gone from the copy on every PC.
+    for (const name of (await namesIn(dir)).sort()) {
       if (name.endsWith(".tmp") || !SAFE_SEGMENT.test(name)) continue;
       if (top && root.keep && !root.keep(name)) continue;
       const file = path.join(dir, name);
-      const info = await stat(file).catch(() => null);
+      const info = await statIfThere(file);
       if (!info) continue;
       if (info.isDirectory()) await walk(root, file, `${prefix}/${name}`, false);
       else if (info.isFile()) found.push({ path: `${prefix}/${name}`, file, size: info.size, mtimeMs: info.mtimeMs, picture: root.picture });
@@ -182,7 +217,7 @@ export async function scanCopy(roots: CopyRoot[]): Promise<Found[]> {
   for (const root of roots) {
     if (root.dir) await walk(root, root.path, root.name, true);
     else {
-      const info = await stat(root.path).catch(() => null);
+      const info = await statIfThere(root.path);
       if (info?.isFile()) found.push({ path: root.name, file: root.path, size: info.size, mtimeMs: info.mtimeMs, picture: false });
     }
   }
@@ -428,7 +463,8 @@ export class CloudCopy {
         let content: Buffer;
         try {
           content = await readFile(file.file);
-        } catch {
+        } catch (error) {
+          if (!isGone(error)) throw error;
           continue; // gone since the scan; the next sync sees it
         }
         const parts: string[] = [];
@@ -573,6 +609,8 @@ async function joinParts(partsDir: string, file: { size: number; sha256: string;
       hash.update(content);
       await out.writeFile(content);
     }
+    // On the disk before its list says it is there: a power cut can't leave a file of the right size full of zeros.
+    await out.sync();
   } finally {
     await out.close();
   }
@@ -620,7 +658,7 @@ async function freePath(target: string): Promise<string> {
 }
 
 /** Where a swap's backup keeps what was written in a place after the swap began (the app ran on a swap that failed). */
-const WRITTEN_SINCE = "written-since";
+export const WRITTEN_SINCE = "written-since";
 
 /** The date of a synced file that was changed after it arrived: no real file has it, so it counts as changed. */
 const CHANGED_SINCE = -1;
@@ -654,8 +692,8 @@ async function swapPlaces(staging: string, roots: CopyRoot[], keepIn: string, co
       continue;
     }
     // Only Tavora's own entries of a folder the user may share (the module files folder).
-    const here = (await readdir(root.path).catch(() => [] as string[])).filter(root.keep);
-    const names = new Set([...here, ...(await readdir(staged).catch(() => [] as string[])), ...(await readdir(kept).catch(() => [] as string[]))]);
+    const here = (await namesIn(root.path)).filter(root.keep);
+    const names = new Set([...here, ...(await namesIn(staged)), ...(await namesIn(kept))]);
     for (const name of names) places.push({ place: path.join(root.path, name), staged: path.join(staged, name), kept: path.join(kept, name), since: path.join(since, name), inCopy: held.has(`${root.name}/${name}`) });
   }
   return places;
@@ -716,7 +754,7 @@ export async function swapInCopy(staging: string, roots: CopyRoot[], keepIn: str
   for (const found of await scanCopy(taking)) {
     const synced = copy.files[found.path];
     if (!synced) continue;
-    const same = !resumed || (found.size === synced.size && createHash("sha256").update(await readFile(found.file)).digest("hex") === synced.sha256);
+    const same = !resumed || (found.size === synced.size && (await fileSha256(found.file)) === synced.sha256);
     files[found.path] = { ...synced, mtimeMs: same ? found.mtimeMs : CHANGED_SINCE };
   }
   return { version: copy.version, pictures: copy.pictures, files, ...(copy.sealed ? { sealed: true } : {}) };
@@ -735,12 +773,12 @@ export async function loadCopyState(file: string): Promise<CopyState> {
     const saved = await readSavedFile(file, { version: STORE_VERSIONS.cloudCopy, versionKey: "v", notice: false, leaveInPlace: true });
     if (saved?.v !== STORE_VERSIONS.cloudCopy || typeof saved.version !== "number" || typeof saved.files !== "object" || saved.files === null) return EMPTY_STATE;
     const lost = Array.isArray(saved.lost) ? saved.lost.filter((name): name is string => typeof name === "string") : [];
-    return { version: saved.version, pictures: saved.pictures !== false, files: saved.files as Record<string, SyncedFile>, ...(saved.kept === true ? { kept: true } : {}), ...(saved.sealed === true ? { sealed: true } : {}), ...(lost.length ? { lost } : {}) };
+    return { version: saved.version, pictures: saved.pictures !== false, files: saved.files as Record<string, SyncedFile>, ...(saved.kept === true ? { kept: true } : {}), ...(saved.sealed === true ? { sealed: true } : {}), ...(lost.length ? { lost } : {}), ...(saved.wentBack === true ? { wentBack: true } : {}) };
   } catch {
     return EMPTY_STATE;
   }
 }
 
 export async function saveCopyState(file: string, state: CopyState): Promise<void> {
-  await writeFileAtomic(file, JSON.stringify({ v: STORE_VERSIONS.cloudCopy, version: state.version, pictures: state.pictures, files: state.files, ...(state.kept ? { kept: true } : {}), ...(state.sealed ? { sealed: true } : {}), ...(state.lost?.length ? { lost: state.lost } : {}) }));
+  await writeFileAtomic(file, JSON.stringify({ v: STORE_VERSIONS.cloudCopy, version: state.version, pictures: state.pictures, files: state.files, ...(state.kept ? { kept: true } : {}), ...(state.sealed ? { sealed: true } : {}), ...(state.lost?.length ? { lost: state.lost } : {}), ...(state.wentBack ? { wentBack: true } : {}) }));
 }

@@ -13,8 +13,11 @@ import {
   loadCopyState,
   saveCopyState,
   emptyPlaces,
+  fileSha256,
+  isGone,
   swapInCopy,
   undoSwap,
+  WRITTEN_SINCE,
   type CopyRoot,
   type CopyState,
   type CopyStorage,
@@ -167,6 +170,8 @@ export class CopySync {
   private problem: CloudCopyProblem | null = null;
   /** A swap failed at this start and the app runs on half of it: nothing goes up until the next start settles it. */
   private swapStuck = false;
+  /** The backup holding what was written while a swap waited, when this start settled one: the user is told. */
+  private keptAside: string | null = null;
   /** One thing at a time: an upload, a download, a check. */
   private running: Promise<unknown> = Promise.resolve();
   /**
@@ -307,7 +312,7 @@ export class CopySync {
       recoveryKey: this.shownKey,
       ...questionsView(this.questions),
       lostData: this.dataLost,
-      swapUnfinished: this.swapStuck && this.copyOn,
+      swapUnfinished: this.swapStuck,
       closing: this.closing.phase === "holding" && this.closing.shown,
       problem: this.problem,
     };
@@ -410,8 +415,8 @@ export class CopySync {
       }
       if (swapFailed) throw swapFailed.error;
       if (finished || (await this.takeStaged())) return;
-      // Data lost on an earlier start and not decided yet: nothing goes up until the user chooses a side.
-      if (this.dataLost) this.ask("conflict");
+      // Data lost, or a copy the user went back from, and not decided yet: nothing moves until they choose a side.
+      if (this.dataLost || this.state.wentBack) this.ask("conflict");
       if (!this.on) return;
       let late = false;
       let swapping = false;
@@ -443,8 +448,14 @@ export class CopySync {
       // A swap that failed leaves half of the copy in place: nothing goes up, and the user hears of it.
       this.swapStuck = await this.swapUnfinished();
       if (this.swapStuck) this.log("cloud copy: a copy couldn't be put in place; nothing goes up until the next start settles it");
-      if (this.on && this.dataHeld) this.ask("conflict");
+      // Also with the copy off: this question is the way out of a swap that couldn't be taken back.
+      if (this.swapStuck || (this.on && this.dataHeld)) this.ask("conflict");
     }
+  }
+
+  /** The backup folder with what was written while a swap waited, when this start settled one. */
+  get changesKeptIn(): string | null {
+    return this.keptAside;
   }
 
   /** Data files this PC lost and the user hasn't decided about yet. */
@@ -502,7 +513,7 @@ export class CopySync {
     this.copy = { size: remote.size, savedAt: remote.updatedAt };
     if (remote.version === this.state.version) return false;
     // Changed here, or this PC's last save lost against another PC's (in a synced folder): the user chooses.
-    if (remote.follows === false || (await hasLocalChanges(this.roots(), this.state))) {
+    if (remote.follows === false || this.state.wentBack || (await hasLocalChanges(this.roots(), this.state))) {
       if (turn !== this.turn) return false;
       this.ask("conflict");
       this.changed();
@@ -563,18 +574,45 @@ export class CopySync {
     return { ...staged, take };
   }
 
+  /** The staged list; null when there is none or it makes no sense. One that can't be read right now throws. */
   private async readStaged(): Promise<Staged | null> {
+    let text: string;
     try {
-      const staged = JSON.parse(await readFile(this.stagedFile, "utf8")) as Staged;
+      text = await readFile(this.stagedFile, "utf8");
+    } catch (error) {
+      if (isGone(error)) return null;
+      throw error;
+    }
+    try {
+      const staged = JSON.parse(text) as Staged;
       return staged.v === 1 && typeof staged.version === "number" && typeof staged.files === "object" ? staged : null;
     } catch {
       return null;
     }
   }
 
+  /**
+   * The journal of a swap; null only when there is none, and one that can't be read right now throws. One whose content
+   * makes no sense (a power cut) is written anew with a fresh backup folder: swapOne can go on from any point without it.
+   */
   private async readJournal(): Promise<SwapJournal | null> {
+    let text: string;
     try {
-      const saved = JSON.parse(await readFile(this.journalFile, "utf8")) as Partial<SwapJournal> | null;
+      text = await readFile(this.journalFile, "utf8");
+    } catch (error) {
+      if (isGone(error)) return null;
+      throw error;
+    }
+    const journal = this.parseJournal(text);
+    if (journal) return journal;
+    const rebuilt: SwapJournal = { v: 1, keepIn: await this.backupFolder("this-pc", false), moduleFiles: this.options.files.root(), own: pcSettingsOf(await readJson(libraryFile(this.options.userData))), empty: [] };
+    await writeFileAtomic(this.journalFile, JSON.stringify(rebuilt));
+    return rebuilt;
+  }
+
+  private parseJournal(text: string): SwapJournal | null {
+    try {
+      const saved = JSON.parse(text) as Partial<SwapJournal> | null;
       if (saved?.v !== 1 || typeof saved.keepIn !== "string" || typeof saved.moduleFiles !== "string") return null;
       if (path.dirname(saved.keepIn) !== backupsDir(this.options.userData) || !path.isAbsolute(saved.moduleFiles)) return null;
       const own = typeof saved.own === "object" && saved.own !== null && !Array.isArray(saved.own) ? saved.own : null;
@@ -585,13 +623,34 @@ export class CopySync {
     }
   }
 
-  /** Whether every file the staged list names is there: a crash can leave the list without them. */
+  /**
+   * Whether every file the staged list names is there with the content it names: a crash can leave the list without
+   * them, and a power cut can leave them full of zeros. One that can't be read right now throws, so the copy stays staged.
+   */
   private async stagedWhole(staged: Staged): Promise<boolean> {
     for (const [name, file] of Object.entries(staged.files)) {
-      const info = await stat(path.join(this.stagedData, ...name.split("/"))).catch(() => null);
-      if (info?.size !== file.size) return false;
+      const target = path.join(this.stagedData, ...name.split("/"));
+      try {
+        if ((await stat(target)).size !== file.size || (await fileSha256(target)) !== file.sha256) return false;
+      } catch (error) {
+        if (isGone(error)) return false;
+        throw error;
+      }
     }
     return true;
+  }
+
+  /** Whether a file is there; one that can't be looked at right now counts as there. */
+  private async mayBeThere(file: string): Promise<boolean> {
+    return stat(file).then(
+      () => true,
+      (error: unknown) => !isGone(error),
+    );
+  }
+
+  /** What was written while a swap waited is in its backup: noted, so the user hears where. */
+  private async noteKeptAside(keepIn: string): Promise<void> {
+    if (await this.mayBeThere(path.join(keepIn, WRITTEN_SINCE))) this.keptAside = keepIn;
   }
 
   /** What the next start does with a swap that didn't finish: finish it, or take it back. */
@@ -602,9 +661,12 @@ export class CopySync {
     await writeFileAtomic(this.journalFile, JSON.stringify({ ...rest, ...(undo ? { undo: true } : {}) } satisfies SwapJournal));
   }
 
-  /** A swap was cut off and waits for the next start to finish: the staging folder holds the only copy of what's left. */
+  /**
+   * A swap was cut off and waits for the next start to finish: the staging folder holds the only copy of what's left.
+   * Only a journal or a staged list that really isn't there says otherwise; a busy one counts as there.
+   */
   private async swapUnfinished(): Promise<boolean> {
-    return (await this.readJournal()) !== null && (await this.readStaged()) !== null;
+    return (await this.mayBeThere(this.journalFile)) && (await this.mayBeThere(this.stagedFile));
   }
 
   private async refuseDuringSwap(): Promise<void> {
@@ -636,29 +698,39 @@ export class CopySync {
    * or taken back when the user chose this PC's data or turned the copy off (false).
    */
   private async finishCutOffSwap(): Promise<boolean> {
+    if (!(await this.swapUnfinished())) return false;
     const staged = await this.readStaged();
-    const journal = staged && (await this.readJournal());
-    if (!staged || !journal) return false;
+    const journal = await this.readJournal();
+    if (!journal) return false;
     if (journal.undo) {
-      await undoSwap(this.stagedData, copyRoots(this.options.userData, journal.moduleFiles), journal.keepIn, staged, journal.empty ?? []);
+      // What was kept goes back by itself; the staged list only says what else came, and may be what is damaged.
+      await undoSwap(this.stagedData, copyRoots(this.options.userData, journal.moduleFiles), journal.keepIn, staged ?? { version: 0, pictures: true, files: {} }, journal.empty ?? []);
+      // Going back sticks: the same start doesn't take the newer copy again, and the question stands until answered.
+      if (this.on) {
+        this.state = { ...this.state, wentBack: true };
+        await saveCopyState(this.stateFile, this.state);
+      }
+      await this.noteKeptAside(journal.keepIn);
       await rm(this.stagingDir, { recursive: true, force: true });
       this.log("cloud copy: a copy that didn't finish was taken back; this PC's data is in place");
       return false;
     }
+    if (!staged) throw new CopyError("failed", "the list of a copy going in can't be read");
     await this.putIn(staged, journal, true);
     return true;
   }
 
   /** Swaps a staged copy in: when the user chose it, or when this PC has not changed since it last synced. */
   private async takeStaged(): Promise<boolean> {
+    if (await this.swapUnfinished()) return false;
     const staged = await this.readStaged();
-    if (!staged || (await this.readJournal())) return false;
+    if (!staged) return false;
     // One the user chose is taken at any version: restoring the version this PC already has is how lost data comes back.
     if (!this.on || (!staged.take && staged.version <= this.state.version) || !(await this.stagedWhole(staged))) {
       await rm(this.stagingDir, { recursive: true, force: true });
       return false;
     }
-    if (!staged.take && (this.dataLost || (await hasLocalChanges(this.roots(), this.state)) || (await this.copyDropsWorkspaces()))) {
+    if (!staged.take && (this.dataLost || this.state.wentBack || (await hasLocalChanges(this.roots(), this.state)) || (await this.copyDropsWorkspaces()))) {
       this.ask("conflict");
       return false;
     }
@@ -683,17 +755,26 @@ export class CopySync {
       this.state = state;
       await saveCopyState(this.stateFile, state);
     }
+    await this.noteKeptAside(journal.keepIn);
     await rm(this.stagingDir, { recursive: true, force: true });
     this.problem = null;
     this.log(`cloud copy: took version ${staged.version}; this PC's data is in ${journal.keepIn}`);
   }
 
-  /** A new folder under backups/ for the side that is replaced, keeping the last few. */
-  private async backupFolder(side: "this-pc" | "cloud"): Promise<string> {
+  /**
+   * A new folder under backups/ for the side that is replaced, keeping the last few. One holding what the user wrote
+   * while a swap waited is never pruned: it may be the only place that work is.
+   */
+  private async backupFolder(side: "this-pc" | "cloud", prune = true): Promise<string> {
     const root = backupsDir(this.options.userData);
     await mkdir(root, { recursive: true });
-    const old = (await readdir(root)).filter((name) => name.startsWith("cloud-copy-")).sort();
-    for (const name of old.slice(0, Math.max(0, old.length - (KEEP_BACKUPS - 1)))) await rm(path.join(root, name), { recursive: true, force: true });
+    if (prune) {
+      const old: string[] = [];
+      for (const name of (await readdir(root)).filter((item) => item.startsWith("cloud-copy-")).sort()) {
+        if (!(await this.mayBeThere(path.join(root, name, WRITTEN_SINCE)))) old.push(name);
+      }
+      for (const name of old.slice(0, Math.max(0, old.length - (KEEP_BACKUPS - 1)))) await rm(path.join(root, name), { recursive: true, force: true });
+    }
     const stamp = this.now().toISOString().replace(/[:.]/g, "-");
     return path.join(root, `cloud-copy-${stamp}-${side}`);
   }
@@ -999,12 +1080,13 @@ export class CopySync {
 
   /** Keeps one side when both changed. The other side is kept as a local backup. */
   async keep(side: "pc" | "cloud"): Promise<void> {
-    if (!this.on) return;
-    // A swap that stopped halfway is settled at a start, when nothing reads the data: finished, or taken back.
+    // A swap that stopped halfway is settled at a start, when nothing reads the data: finished, or taken back. Also with
+    // the copy off, where this is the only way out of it.
     if (await this.swapUnfinished()) {
       await this.setSwapUndo(side === "pc");
       return this.restart();
     }
+    if (!this.on) return;
     if (side === "cloud") return this.takeCopy();
     const turn = this.turn;
     await this.exclusive("downloading", async () => {
@@ -1022,7 +1104,7 @@ export class CopySync {
           // older, or made anew). Marked on disk, so it counts as changed until an upload succeeds, also across a restart;
           // the files keep their dates and parts, so a retry reads only what really changed.
           // Choosing this PC's side also answers for data it lost: what is here now is what the user wants up.
-          const { lost: _answered, ...mine } = this.state;
+          const { lost: _answered, wentBack: _settled, ...mine } = this.state;
           this.state = { ...mine, version: staged.version, kept: true };
         } else {
           this.state = EMPTY_STATE;
@@ -1141,11 +1223,13 @@ export class CopySync {
     this.clear("conflict");
     this.clear("restartToTake");
     this.problem = problem;
+    // Half of a copy that is no longer wanted: the next start puts this PC's data back. Marked before the copy is
+    // forgotten, so a crash in between can't finish the swap instead.
+    const unfinished = await this.swapUnfinished();
+    if (unfinished) await this.setSwapUndo(true).catch((error: unknown) => this.log(`cloud copy: can't mark the unfinished copy: ${error instanceof Error ? error.message : String(error)}`));
     await rm(this.stateFile, { force: true });
     await rm(this.placeFile, { force: true });
-    // Half of a copy that is no longer wanted: the next start puts this PC's data back.
-    if (await this.swapUnfinished()) await this.setSwapUndo(true);
-    else await rm(this.stagingDir, { recursive: true, force: true });
+    if (!unfinished) await rm(this.stagingDir, { recursive: true, force: true });
     this.use(null);
     this.changed();
   }

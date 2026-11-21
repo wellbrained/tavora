@@ -629,6 +629,8 @@ export const de: Record<keyof typeof en, string> = {
   "cloudCopy.unfinished.title": "Deine Cloud-Kopie wurde nicht fertig",
   "cloudCopy.unfinished.text": "Eine Datei war gerade belegt, als Tavora deine Kopie eingespielt hat. Versuch es noch mal oder geh zurück zu den Daten von diesem PC.",
   "cloudCopy.unfinished.hint": "So oder so startet Tavora neu.",
+  "cloudCopy.unfinished.off": "Starte Tavora neu, damit das geklärt ist, bevor du deine Cloud-Kopie einschaltest.",
+  "cloudCopy.notice.keptAside": "Was du geändert hast, während deine Cloud-Kopie gewartet hat, liegt in {folder}.",
   "cloudCopy.error.restartFirst": "Starte Tavora zuerst neu und schalte deine Cloud-Kopie dann ein.",
   "cloudCopy.later": "Später",
   "cloudCopy.newer.title": "Neuere Daten von deinem anderen PC",

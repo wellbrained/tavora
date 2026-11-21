@@ -998,6 +998,8 @@ export class Host {
 
     const host = new Host(options, { encryptor, signIn, copySync, installed, safetyLists, official, grants, connection, systemInfo, openTimes, emblem, styles }, library, workspaces, profile, windowState, themes, themeProblems, themeHints, savedData);
     if (ownersNoted) host.workspaces.saveSoon();
+    // What the user did while a cloud copy waited is safe in a backup: they hear where.
+    if (copySync.changesKeptIn) host.notice = translate(host.language, "cloudCopy.notice.keptAside", { folder: copySync.changesKeptIn });
     host.openedAtStart = openedTimes(library);
     // Before any module opens, so none sees the pictures half moved.
     await host.files.moveFromOldDefault((line) => console.warn(`[tavora] ${line}`));
