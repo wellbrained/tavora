@@ -225,9 +225,11 @@ mod windows_media {
         Ok(())
     }
 
-    /// Listens to every session there is now, keeping the ones already listened to (by app and position in the list).
+    /// Listens to every session there is now, keeping the ones already listened to. A session is the same one when it
+    /// is the same object, not when it has the same app and position: a session that closed leaves its place to the next
+    /// one of that app, which has to be listened to as a new one (the id is only its current place in the list).
     fn subscribe(manager: &Manager, tx: &Sender<Msg>, before: Vec<Tracked>) -> Result<Vec<Tracked>> {
-        let mut old: HashMap<String, Tracked> = before.into_iter().map(|t| (t.id.clone(), t)).collect();
+        let mut old = before;
         let mut seen: HashMap<String, u32> = HashMap::new();
         let mut now = Vec::new();
         for session in manager.GetSessions()? {
@@ -235,7 +237,9 @@ mod windows_media {
             let n = seen.entry(app.clone()).or_insert(0);
             let id = format!("{app}#{n}");
             *n += 1;
-            if let Some(t) = old.remove(&id) {
+            if let Some(at) = old.iter().position(|t| t.session == session) {
+                let mut t = old.swap_remove(at);
+                t.id = id;
                 now.push(t);
                 continue;
             }

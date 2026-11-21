@@ -13,7 +13,7 @@ const TEXTS = {
 };
 type Language = keyof typeof TEXTS;
 const text = (language: Language, key: keyof (typeof TEXTS)["en"], params: Record<string, string | number> = {}) =>
-  TEXTS[language][key].replace(/{(w+)}/g, (match, name: string) => String(params[name] ?? match));
+  TEXTS[language][key].replace(/\{(\w+)\}/g, (match, name: string) => String(params[name] ?? match));
 
 function App() {
   const [tavora, setTavora] = useState<TavoraSDK | null>(null);

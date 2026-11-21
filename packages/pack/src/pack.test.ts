@@ -1,6 +1,7 @@
+import { execFileSync } from "node:child_process";
 import { generateKeyPairSync } from "node:crypto";
 import { mkdir, mkdtemp, rm, stat, symlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { tmpdir, userInfo } from "node:os";
 import path from "node:path";
 import { isOwnerId } from "@tavora/module-schema";
 import { describe, expect, it } from "vitest";
@@ -88,6 +89,29 @@ describe("packModule versions", () => {
   it("refuses a pre-release version, so only plain major.minor.patch reaches users", async () => {
     const dir = await moduleFolder({ "tavora.module.json": JSON.stringify({ ...manifest, version: "0.1.0-alpha.44" }) });
     await expect(packModule(dir, key())).rejects.toThrow("version 0.1.0-alpha.44 is a pre-release; module versions are plain major.minor.patch, e.g. 0.1.0");
+  });
+});
+
+describe("packModule and earlier zips", () => {
+  const rootEntry = { ...manifest, entry: "index.html" };
+  const rootModule = (extra: Record<string, string> = {}) => moduleFolder({ "tavora.module.json": JSON.stringify(rootEntry), "index.html": "<p>hi</p>", ...extra });
+  const names = async (dir: string, options = {}) => readZip((await packModule(dir, key(), options)).zip).map((file) => file.name);
+
+  it("leaves out the zip an earlier pack wrote next to the manifest, by default name or --out", async () => {
+    const dir = await rootModule({ "wellbrained.tracker-1.0.0.zip": "old", "wellbrained.tracker-0.9.0.zip": "older", "build/out.zip": "x", "mine.zip": "y" });
+    const plain = await names(dir);
+    expect(plain).not.toContain("wellbrained.tracker-1.0.0.zip");
+    expect(plain).not.toContain("wellbrained.tracker-0.9.0.zip");
+    expect(plain).toContain("mine.zip");
+    expect(plain).toContain("build/out.zip");
+    expect(await names(dir, { outFile: path.join(dir, "mine.zip") })).not.toContain("mine.zip");
+  });
+
+  it("packs the same files again after a pack wrote its zip into the folder", async () => {
+    const dir = await rootModule();
+    const first = await names(dir);
+    await writeFile(path.join(dir, "wellbrained.tracker-1.0.0.zip"), "the first zip");
+    expect(await names(dir)).toEqual(first);
   });
 });
 
@@ -266,6 +290,12 @@ describe("createKeyFile", () => {
     const { key } = await createKeyFile(file);
     expect(fingerprint(key)).toBe(fingerprint((await loadExistingKey(file)).key));
     if (process.platform !== "win32") expect((await stat(file)).mode & 0o077).toBe(0);
+    if (process.platform === "win32") {
+      // The access list names this user and nobody else (no Everyone, Users or Authenticated Users).
+      const listing = execFileSync("icacls", [file], { encoding: "utf8" });
+      expect(listing).not.toMatch(/Everyone|BUILTIN\\Users|Authenticated Users/i);
+      expect(listing).toContain(userInfo().username);
+    }
     await expect(createKeyFile(file)).rejects.toThrow(/already exists/);
     expect(fingerprint((await loadExistingKey(file)).key)).toBe(fingerprint(key));
   });

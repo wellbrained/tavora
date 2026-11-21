@@ -140,3 +140,25 @@ describe("versions", () => {
     expect(VERSIONS).toEqual({ sdk: SDK_VERSION, pack: pack.version, minTavora: MIN_TAVORA });
   });
 });
+
+describe("the starter templates' text helper", () => {
+  /** Runs the page's own `text` function, cut out of the template source, with its types stripped. */
+  async function textHelper(template: "vanilla" | "react"): Promise<(key: string, params?: Record<string, string | number>) => string> {
+    const ts = await import("typescript");
+    const file = template === "vanilla" ? "src/main.ts" : "src/main.tsx";
+    const source = await lines(path.resolve(import.meta.dirname, "../templates", template, file));
+    const start = source.indexOf("const TEXTS");
+    const end = source.indexOf("\n\n", source.indexOf("const text ="));
+    const snippet = source.slice(start, end);
+    const js = ts.transpileModule(snippet, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+    const body = `${js}\n return (key, params) => ${template === "react" ? 'text("en", key, params)' : "text(key, params)"};`;
+    return new Function(body)() as (key: string, params?: Record<string, string | number>) => string;
+  }
+
+  it.each(["vanilla", "react"] as const)("fills {placeholders} in %s, and leaves an unknown one as it is", async (template) => {
+    const text = await textHelper(template);
+    expect(text("here", { workspace: "Main" })).toBe("You're in Main.");
+    expect(text("clicked", { count: 3 })).toBe("Clicked 3 times here.");
+    expect(text("clicked", {})).toBe("Clicked {count} times here.");
+  });
+});

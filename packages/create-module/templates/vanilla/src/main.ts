@@ -13,7 +13,7 @@ const TEXTS = {
 };
 let language: keyof typeof TEXTS = "en";
 const text = (key: keyof (typeof TEXTS)["en"], params: Record<string, string | number>) =>
-  TEXTS[language][key].replace(/{(w+)}/g, (match, name: string) => String(params[name] ?? match));
+  TEXTS[language][key].replace(/\{(\w+)\}/g, (match, name: string) => String(params[name] ?? match));
 
 async function start() {
   // Connects, applies Tavora's theme as CSS variables (--background, --foreground, --primary, ...) and keeps

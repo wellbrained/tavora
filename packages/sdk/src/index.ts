@@ -1007,7 +1007,14 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
         reject(new TavoraError({ code: "TIMEOUT", message: `${method} timed out` }));
       }, Math.max(timeoutMs, requestTimeoutMs));
       pending.set(id, { resolve: resolve as (value: unknown) => void, reject, timer });
-      port.postMessage({ v: PROTOCOL_VERSION, id, method, params });
+      try {
+        port.postMessage({ v: PROTOCOL_VERSION, id, method, params });
+      } catch (error) {
+        // Parameters that can't be copied (a function, a DOM node) or a closed port: fail now, not after the timeout.
+        pending.delete(id);
+        clearTimeout(timer);
+        reject(new TavoraError({ code: "INTERNAL", message: `${method} could not be sent: ${error instanceof Error ? error.message : String(error)}` }));
+      }
     });
   }
 
@@ -1044,7 +1051,17 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
     return () => set.delete(listener);
   }
 
-  const host = await call("bridge.handshake", { protocol: PROTOCOL_VERSION, sdkVersion: SDK_VERSION });
+  let host: Methods["bridge.handshake"]["result"];
+  try {
+    host = await call("bridge.handshake", { protocol: PROTOCOL_VERSION, sdkVersion: SDK_VERSION });
+  } catch (error) {
+    // A host this SDK can't talk to (or none): let go of the port so a later connect() starts clean.
+    port.onmessage = null;
+    port.close();
+    for (const entry of pending.values()) clearTimeout(entry.timer);
+    pending.clear();
+    throw error;
+  }
 
   /** Files at `path` (BLOB_PATH or APP_BLOB_PATH), listed and deleted through the calls under `prefix`. */
   const blobFiles = (path: string, prefix: "blobs" | "blobs.app"): BlobFiles => ({

@@ -24,6 +24,8 @@ export class PrivateKeyError extends PackError {
 export interface PackOptions {
   /** The key file the zip is signed with (tavora-pack --key): it never goes in, whatever its name or content. */
   keyFile?: string;
+  /** The zip being written (tavora-pack --out). When it sits in the module folder, an earlier copy of it never goes into the new one. */
+  outFile?: string;
 }
 
 /**
@@ -48,9 +50,18 @@ export async function collectFiles(dir: string, options: PackOptions = {}): Prom
 
   const names = new Set<string>([MANIFEST_FILE]);
   const { entries, icons, screenshots } = manifestFiles(manifest);
+  // The zips tavora-pack writes next to the manifest by default (<id>-<version>.zip) or at --out: earlier ones are not part of the module.
+  const earlierZips = new Set<string>();
+  const outFile = options.outFile === undefined ? null : await realOrGiven(path.resolve(options.outFile));
   // Panel types may have pages of their own; each page's folder goes in.
   const folders = new Set(entries.map((entry) => (entry.includes("/") ? entry.split("/")[0]! : "")));
   for (const folder of folders) for (const name of await walk(dir, folder)) names.add(name);
+  for (const name of [...names]) {
+    const own = !name.includes("/") && name.startsWith(`${manifest.id}-`) && /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\.zip$/.test(name.slice(manifest.id.length + 1));
+    const out = outFile !== null && samePath(path.join(await realOrGiven(dir), name), outFile);
+    if (own || out) earlierZips.add(name);
+  }
+  for (const name of earlierZips) if (!entries.includes(name) && !icons.includes(name) && !screenshots.includes(name)) names.delete(name);
   for (const icon of [...icons, ...screenshots]) names.add(icon);
   if (manifest.readme !== undefined) {
     const info = await lstat(path.join(dir, manifest.readme)).catch(() => null);

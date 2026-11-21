@@ -33,6 +33,11 @@ function fakeHost(respond: Responder, { answerHello = true } = {}) {
   vi.stubGlobal("window", fakeWindow);
   return {
     requests,
+    /** Whether the module's side let go of the port (the host's end then sees it close). */
+    closed: () => new Promise<boolean>((resolve) => {
+      hostPort!.addEventListener("close", () => resolve(true));
+      setTimeout(() => resolve(false), 200);
+    }),
     emit: (event: string, data: unknown) => hostPort!.postMessage({ v: PROTOCOL_VERSION, event, data }),
     raw: (message: unknown) => hostPort!.postMessage(message),
     close: () => hostPort?.close(),
@@ -142,6 +147,13 @@ describe("connect", () => {
     await expect(sdk.connect()).rejects.toMatchObject({ name: "TavoraError", code: "INCOMPATIBLE" });
   });
 
+  it("lets go of the port when the handshake fails", async () => {
+    const host = fakeHost(({ method }) => (method === "bridge.handshake" ? { error: { code: "INCOMPATIBLE", message: "nope" } } : undefined));
+    hosts.push(host);
+    await expect(sdk.connect()).rejects.toMatchObject({ code: "INCOMPATIBLE" });
+    expect(await host.closed()).toBe(true);
+  });
+
   it("rejects with HOST_UNAVAILABLE outside Tavora, and can be retried", async () => {
     hosts.push(fakeHost(standard, { answerHello: false }));
     await expect(sdk.connect({ connectTimeoutMs: 20 })).rejects.toMatchObject({ code: "HOST_UNAVAILABLE" });
@@ -152,6 +164,21 @@ describe("connect", () => {
 });
 
 describe("requests", () => {
+  it("rejects at once, without a pending call, when the request can't be sent", async () => {
+    vi.useFakeTimers();
+    hosts.push(fakeHost(standard));
+    const connecting = sdk.connect();
+    await vi.advanceTimersByTimeAsync(10);
+    const tavora = await connecting;
+    // A function can't be copied to the host, so postMessage throws.
+    const error = await tavora.storage.set("k", (() => 1) as unknown as never).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(sdk.TavoraError);
+    expect(error).toMatchObject({ code: "INTERNAL" });
+    expect((error as Error).message).toMatch(/could not be sent/);
+    // No timer is left waiting for an answer that will never come.
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it("turns host errors into TavoraError with their details", async () => {
     hosts.push(fakeHost(standard));
     const tavora = await sdk.connect();

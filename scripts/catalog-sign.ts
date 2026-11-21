@@ -36,6 +36,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { TAVORA_PUBLISHER_KEY } from "../packages/module-schema/src/index.ts";
+import { writePrivateFile } from "../packages/pack/src/keys.ts";
 import { CATALOG_LIST_KINDS, catalogPublicKey, nextCatalogList, readCatalogList, signCatalogList, type CatalogListKind, type Succession } from "../packages/pack/src/catalog-lists.ts";
 import { reviewCatalogList } from "./catalog-sign-review.ts";
 
@@ -109,8 +110,8 @@ async function main(): Promise<number> {
   if (command === "key") {
     const { privateKey } = generateKeyPairSync("ed25519");
     await mkdir(path.dirname(path.resolve(file)), { recursive: true });
-    // "wx" never replaces a key; 0600 keeps it the owner's.
-    await writeFile(file, privateKey.export({ format: "pem", type: "pkcs8" }), { flag: "wx", mode: 0o600 });
+    // Never replaces a key; readable by its owner only (on Windows its access list is cut down to this user).
+    await writePrivateFile(file, privateKey.export({ format: "pem", type: "pkcs8" }));
     console.log(`Made the catalogue key: ${path.resolve(file)}`);
     console.log("Keep it offline and back it up. Whoever holds it can revoke keys, block modules and move a publisher's data.");
     console.log(`Public key for CATALOGUE_PUBLIC_KEY: ${catalogPublicKey(privateKey)}`);
