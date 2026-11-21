@@ -1684,7 +1684,7 @@ export const PANEL_OVER_GAME_TAVORA = "0.24.90";
  * written. Set it to the version the pull request merges as, right before merging, then run
  * `pnpm --filter @tavora/docs protocol`. An older Tavora leaves `style` out, which means Classic.
  */
-export const STYLE_TAVORA = "0.24.109";
+export const STYLE_TAVORA = "0.24.110";
 
 export const METHOD_INFO: Readonly<Record<CallName, MethodInfo>> = {
   "bridge.handshake": call("0.1.0"),
