@@ -326,7 +326,9 @@ export class GameOverlayWindow {
 
   /** Puts the window above the other windows of its level (the veil is shown first, and everything above it is raised after). */
   raise(): void {
-    if (!this.isDestroyed) this.window.moveTop();
+    // Among the usual windows it is stacked right above the game instead (window-order.ts): moved to the top, it would
+    // come up over a window that covers the game.
+    if (!this.isDestroyed && this.topmost) this.window.moveTop();
   }
 
   /**

@@ -232,6 +232,10 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
     windowsChanged: 0,
     /** What was stacked right above the game's window: its handle and the windows, top first. */
     stackedAboveGame: [] as { game: number; windows: number[] }[],
+    /** The game's window is always on top itself (some borderless games). */
+    gameOnTop: false,
+    /** Windows' calls to stack windows can't be made. */
+    stackFails: false,
   };
   const probe: ForegroundProbe = {
     look: () => {
@@ -291,7 +295,8 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
         world.windows.push(window);
         return window;
       },
-      stackAboveGame: (game, windows) => void world.stackedAboveGame.push({ game, windows: [...windows] }),
+      stackAboveGame: (game, windows) => (world.stackedAboveGame.push({ game, windows: [...windows] }), !world.stackFails),
+      gameOnTop: () => world.gameOnTop,
       openVeil: () => {
         const veil = new FakeVeil();
         world.veils.push(veil);
@@ -2253,6 +2258,20 @@ describe("setups on screen", () => {
     expect(byKey("own").topmost).toBe(false);
     expect(byKey("clock").topmost).toBe(true);
     expect(world.stackedAboveGame.at(-1)).toEqual({ game: 4242, windows: [byKey("own").handle] });
+    // A game that is always on top itself can't be covered: its overlays stay above every window, as before.
+    world.gameOnTop = true;
+    const before = world.stackedAboveGame.length;
+    service.tick();
+    expect(byKey("own").topmost).toBe(true);
+    expect(world.stackedAboveGame).toHaveLength(before);
+    world.gameOnTop = false;
+    // Windows won't stack them: above every window rather than lost under the game.
+    world.stackFails = true;
+    service.tick();
+    expect(byKey("own").topmost).toBe(true);
+    world.stackFails = false;
+    service.tick();
+    expect(byKey("own").topmost).toBe(false);
     // Keep off: nothing stays, so nothing is stacked over the game.
     world.stay = false;
     const stacked = world.stackedAboveGame.length;
