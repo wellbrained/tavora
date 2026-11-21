@@ -15,7 +15,7 @@ import { GameVeilWindow } from "./game-veil-window";
 import type { GameWatcher } from "./game-watch";
 import type { GrantStore } from "./grants";
 import type { Installed } from "./installed-modules";
-import { LayoutPictures, MAX_PICTURE_BYTES, MAX_PICTURE_WIDTH, PICTURES_FOLDER, sourceForHandle } from "./layout-pictures";
+import { LayoutPictures, MAX_PICTURE_BYTES, MAX_PICTURE_WIDTH, PICTURES_FOLDER, picturePixels, sourceForHandle } from "./layout-pictures";
 import type { Library } from "./library";
 import { windowsForegroundProbe } from "./foreground";
 import { OverlayCanvas } from "./overlay-canvas";
@@ -224,9 +224,10 @@ function overlayLayout(wiring: OverlayWiring, gameOverlays: GameOverlays): Overl
       if (!wanted) return null;
       // Electron can't capture one window alone: it takes a picture of every open window at this size and hands them all
       // over. Tavora keeps the game's by its id and lets the rest go at once, unread.
-      // The size is in DIPs; the window's pixels are more on a scaled screen (never wider than a picture may be).
-      const k = Math.max(1, Math.min(screen.getPrimaryDisplay().scaleFactor, MAX_PICTURE_WIDTH / Math.max(1, size.width)));
-      const thumbnailSize = { width: Math.round(size.width * k), height: Math.round(size.height * k) };
+      // The size is in DIPs; the window's pixels are more on a scaled screen, and the game may not be on the main one.
+      const gameWindow = gameOverlays.layout.gameWindow();
+      const display = gameWindow ? screen.getDisplayMatching(gameWindow) : screen.getPrimaryDisplay();
+      const thumbnailSize = picturePixels(size, display.scaleFactor);
       const sources = await desktopCapturer.getSources({ types: ["window"], thumbnailSize, fetchWindowIcons: false });
       const found = sources.find((source) => source.id === wanted.id);
       return found && !found.thumbnail.isEmpty() ? found.thumbnail.toPNG() : null;

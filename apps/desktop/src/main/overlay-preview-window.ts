@@ -88,9 +88,11 @@ export class OverlayPreviewWindow implements PreviewWindow {
     void this.chrome.webContents.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(previewChromeDocument(options.labels))}`).catch(() => {});
     void this.page.webContents.loadURL(`${GAME_OVERLAY_ORIGIN}/`).catch(() => {});
     this.window.once("closed", () => {
-      const wasDestroyed = this.destroyed;
+      if (this.destroyed) return;
       this.destroyed = true;
-      if (!wasDestroyed) request.closed();
+      // The user closed the window: its two pages don't end with it, so they are closed here.
+      this.closeViews();
+      request.closed();
     });
     if (!options.hidden) this.window.show();
   }
@@ -119,8 +121,12 @@ export class OverlayPreviewWindow implements PreviewWindow {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
-    for (const view of [this.chrome, this.page]) if (!view.webContents.isDestroyed()) view.webContents.close();
+    this.closeViews();
     if (!this.window.isDestroyed()) this.window.destroy();
+  }
+
+  private closeViews(): void {
+    for (const view of [this.chrome, this.page]) if (!view.webContents.isDestroyed()) view.webContents.close();
   }
 }
 

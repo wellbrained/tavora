@@ -1,5 +1,21 @@
 [
   {
+    "version": "0.1.37",
+    "date": "2026-11-21",
+    "notes": [
+      "In Hardware, the keys keep their size and you can see keyboard focus on switches and number fields."
+    ]
+  },
+  {
+    "version": "0.1.36",
+    "date": "2026-11-21",
+    "notes": [
+      "Pasting 1,234.56 or 1.234,56 gives the right number.",
+      "Rounding shows 1.005 as 1.01, and a result just under a billion as 1B instead of 1000M.",
+      "After a very big result, typing goes on as a new number instead of changing it."
+    ]
+  },
+  {
     "version": "0.1.35",
     "date": "2026-11-21",
     "notes": [

@@ -1,5 +1,20 @@
 [
   {
+    "version": "0.1.31",
+    "date": "2026-11-21",
+    "notes": [
+      "In Hardware, names keep their case and you can see keyboard focus on switches and number fields.",
+      "Enter no longer ends a tab name while you're still composing it (Japanese, Chinese, Korean)."
+    ]
+  },
+  {
+    "version": "0.1.30",
+    "date": "2026-11-21",
+    "notes": [
+      "Reloading a changed file can't break its entry any more."
+    ]
+  },
+  {
     "version": "0.1.29",
     "date": "2026-11-21",
     "notes": [

@@ -221,6 +221,15 @@ describe("adding to the catalog", () => {
     expect(catalog.index()).toEqual([]);
   });
 
+  it("refuses a new version the app would leave out of its catalog list, so it can't make a module vanish", () => {
+    const catalog = store();
+    const games = (count: number) => Array.from({ length: count }, (_, index) => `game-${index}`);
+    expect(() => catalog.add(moduleZip({ version: `1.1.${"1".repeat(70)}` }))).toThrow(/longer than 64/);
+    expect(() => catalog.add(moduleZip({ games: games(101) }))).toThrow(/at most 100/);
+    expect(catalog.add(moduleZip({ games: games(100) })).manifest.games).toHaveLength(100);
+    expect(catalog.index()).toHaveLength(1);
+  });
+
   it("refuses unsigned zips, Tavora's own ids, broken manifests and zips that do not match their signature", () => {
     const catalog = store();
     expect(() => catalog.add(moduleZip({ key: null }))).toThrow(/not signed/);

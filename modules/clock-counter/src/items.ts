@@ -124,6 +124,10 @@ export type Clock = Base & {
   showLastLap: boolean;
   /** Stopwatch: the time of each lap, from the start, oldest first. */
   lapTimes: number[];
+  /** Stopwatch, past MAX.laps: when the newest lap that dropped off ended, so the oldest kept lap keeps its own length. */
+  lapBase?: number;
+  /** Stopwatch, past MAX.laps: how many laps dropped off, so the kept ones keep their numbers. */
+  lapsDropped?: number;
 };
 
 export type CounterLink = {
@@ -251,6 +255,9 @@ function parseItem(raw: unknown): Item | null {
     laps: bool(raw.laps, false),
     showLastLap: bool(raw.showLastLap, false),
     lapTimes: (Array.isArray(raw.lapTimes) ? raw.lapTimes : []).filter((lap): lap is number => typeof lap === "number" && Number.isFinite(lap) && lap >= 0).slice(-MAX.laps),
+    // Left out until laps drop off, so data from before stays as it was saved.
+    ...(typeof raw.lapBase === "number" && Number.isFinite(raw.lapBase) && raw.lapBase >= 0 ? { lapBase: raw.lapBase } : {}),
+    ...(typeof raw.lapsDropped === "number" && Number.isSafeInteger(raw.lapsDropped) && raw.lapsDropped > 0 ? { lapsDropped: raw.lapsDropped } : {}),
   };
 }
 
@@ -326,17 +333,36 @@ export function resetClock(clock: Clock): void {
   clock.since = null;
   clock.counted = 0;
   clock.lapTimes = [];
+  delete clock.lapBase;
+  delete clock.lapsDropped;
 }
 
-/** Notes a lap while the stopwatch runs; the oldest go past MAX.laps. */
+/** Notes a lap while the stopwatch runs; the oldest go past MAX.laps, and what they leave is kept for the lengths and numbers. */
 export function lap(clock: Clock, now: number): void {
   if (clock.kind !== "stopwatch" || !clock.laps || clock.since === null) return;
-  clock.lapTimes = [...clock.lapTimes, elapsed(clock, now)].slice(-MAX.laps);
+  const times = [...clock.lapTimes, elapsed(clock, now)];
+  const dropped = times.length - MAX.laps;
+  if (dropped > 0) {
+    clock.lapBase = times[dropped - 1]!;
+    clock.lapsDropped = (clock.lapsDropped ?? 0) + dropped;
+  }
+  clock.lapTimes = times.slice(-MAX.laps);
 }
 
 /** Each lap's own time, oldest first. */
 export function lapSplits(clock: Clock): number[] {
-  return clock.lapTimes.map((time, index) => time - (clock.lapTimes[index - 1] ?? 0));
+  return clock.lapTimes.map((time, index) => time - (clock.lapTimes[index - 1] ?? clock.lapBase ?? 0));
+}
+
+/**
+ * A number typed into a field: a plus sign, a decimal point or comma and thousands marks (1.000 or 1,000) are fine.
+ * Null for anything else, so the field can keep what it had.
+ */
+export function typedNumber(value: string): number | null {
+  let text = value.trim();
+  if (/^[+-]?[1-9]\d{0,2}([.,]\d{3})+$/.test(text)) text = text.replace(/[.,]/g, "");
+  text = text.replace(",", ".");
+  return /^[+-]?(\d+\.?\d*|\.\d+)$/.test(text) ? Number(text) : null;
 }
 
 // ── Counters ───────────────────────────────────────────────────────────

@@ -1,5 +1,20 @@
 [
   {
+    "version": "0.3.33",
+    "date": "2026-11-21",
+    "notes": [
+      "In Hardware, names keep their case and you can see keyboard focus on switches and number fields."
+    ]
+  },
+  {
+    "version": "0.3.32",
+    "date": "2026-11-21",
+    "notes": [
+      "A board too big to save stays open when you switch, so your drawing isn't lost.",
+      "Clear board is red, like the other actions that remove things."
+    ]
+  },
+  {
     "version": "0.3.31",
     "date": "2026-11-21",
     "notes": [

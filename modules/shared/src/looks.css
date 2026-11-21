@@ -188,6 +188,12 @@
   }
 }
 
+/* The sunk look takes the box-shadow the kit draws their focus ring with, so keyboard focus is an outline here. */
+:root[data-look-inputs="inset"] :is([data-slot="switch"], [data-slot="checkbox"]):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
 /* Capsule: round fields, round checkboxes. */
 :root[data-look-inputs="capsule"] {
   & :is([data-slot="input"], [data-slot="select-trigger"], [data-slot="combobox-anchor"], [data-slot="combobox-input"], [data-slot="slider-input"], [data-slot="number-field"]) {
@@ -201,7 +207,8 @@
     border-color: transparent;
     box-shadow: none;
     /* A field with a problem keeps its red edge; focus keeps the ring. */
-    &:focus-visible {
+    &:focus-visible,
+    &:has(:focus-visible) {
       border-color: var(--ring);
     }
     /* After focus: a field with a problem stays red while you type in it. */
@@ -248,12 +255,17 @@
   & [data-slot="nav-list"] [aria-current="page"] {
     background: var(--foreground);
     color: var(--background);
+    /* Its icon and count turn with the bar, or the accent colour is hard to read on it. */
+    & .text-primary {
+      color: inherit;
+    }
   }
 }
 
 /* ---------- Labels: small headings, menu labels, tabs, button text ---------- */
 
-/* A button that shows a picked value (a Picker) keeps the value as written: only real labels change case. */
+/* Only real labels change case and size. A button that shows a picked value (a Picker) or a name of any length (its text
+   truncates) keeps it as written, and one with its own bigger text (a calculator key) keeps that size and case. */
 :root[data-look-labels="caps-mono"] :is(
     [data-slot="label"],
     [data-slot="dropdown-menu-label"],
@@ -265,7 +277,7 @@
     [data-slot="nav-group"] > h3,
     [data-slot="badge"],
     [data-slot="kbd"],
-    .tavora-button:not([data-variant="link"], [aria-haspopup="listbox"], [role="combobox"])
+    .tavora-button:not([data-variant="link"], [aria-haspopup="listbox"], [role="combobox"], .text-base, .text-lg, .text-xl, .text-2xl, .text-3xl, :has(.truncate))
   ) {
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -282,7 +294,7 @@
     [data-slot="nav-group"] > h3,
     [data-slot="badge"],
     [data-slot="kbd"],
-    .tavora-button:not([data-variant="link"], [aria-haspopup="listbox"], [role="combobox"])
+    .tavora-button:not([data-variant="link"], [aria-haspopup="listbox"], [role="combobox"], .text-base, .text-lg, .text-xl, .text-2xl, .text-3xl, :has(.truncate))
   ) {
   font-family: var(--font-mono);
   letter-spacing: 0.06em;
@@ -294,7 +306,7 @@
 :root[data-look-status="led"] {
   /* Tabs: every tab keeps the light's room, lit or not, so opening one never changes its width (written more
      specific than the tab looks below, so their padding doesn't take the room away). */
-  &[data-look-tabs] [data-slot="tabs-trigger"] {
+  &[data-look-tabs][data-style]:not([data-style="tavora.classic"]) [data-slot="tabs-trigger"] {
     position: relative;
     padding-left: 18px;
   }

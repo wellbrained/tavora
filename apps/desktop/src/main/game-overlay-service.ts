@@ -14,7 +14,6 @@
 // workspace slots, overlays are click-through again, and the game gets the keyboard back.
 //
 // Tavora only reads which window is in front (foreground.ts) and draws its own windows above it.
-import { isVoicePaused } from "../shared/discord-voice";
 import type { GameOverlayResult, JsonValue, OverlaySource } from "@tavora/sdk/protocol";
 import type { GameOverlaysView } from "../shared/host-api";
 import { translate, type Language } from "../shared/i18n";
@@ -320,6 +319,8 @@ export class GameOverlays {
   private stackKey = "";
   private timer: ReturnType<typeof setInterval> | undefined;
   private probe: ForegroundProbe | null = null;
+  /** Windows' functions could not be loaded: nothing is looked at or shown until Tavora starts again. */
+  private probeFailed = false;
   /** The game in front that has something to show, and where its window is (DIPs). */
   private front: string | null = null;
   private game: Rect | null = null;
@@ -919,14 +920,19 @@ export class GameOverlays {
 
   private look(): void {
     let foreground: Foreground | null = null;
-    try {
-      this.probe ??= this.options.platform.probe();
-      foreground = this.probe.look();
-    } catch (error) {
-      // Windows' functions could not be loaded; looking again won't help.
-      console.warn(`[tavora] game overlays stopped: ${error instanceof Error ? error.message : String(error)}`);
-      clearInterval(this.timer);
-      this.timer = undefined;
+    if (!this.probeFailed) {
+      try {
+        this.probe ??= this.options.platform.probe();
+        foreground = this.probe.look();
+      } catch (error) {
+        // Windows' functions could not be loaded; looking again won't help, so it is said once and not tried again.
+        console.warn(`[tavora] game overlays stopped: ${error instanceof Error ? error.message : String(error)}`);
+        this.probeFailed = true;
+        clearInterval(this.timer);
+        this.timer = undefined;
+      }
+    }
+    if (this.probeFailed) {
       this.closeAll();
       this.setFront(null, null);
       return;
@@ -1092,7 +1098,6 @@ export class GameOverlays {
       if (entry.mode !== mode) entry.window.setMode((entry.mode = mode));
     }
     // Panels are over the game (or the screen) only while the layer is open.
-    const gone: InGamePanel[] = [];
     if (layerOpen) {
       for (const { setup, item: panel } of panels.values()) {
         const area = this.areaOf(setup);
@@ -1102,11 +1107,9 @@ export class GameOverlays {
         let entry = this.open.get(id);
         if (!entry) {
           entry = this.createPanel(panel, id, setup) ?? undefined;
-          if (!entry) {
-            // A paused Discord panel doesn't start (shared/discord-voice.ts), but it isn't gone: it stays in its setup.
-            if (!isVoicePaused(panel.moduleId)) gone.push(panel);
-            continue;
-          }
+          // It can't be lent right now (its view is restarting, or a paused Discord panel doesn't start). It keeps its
+          // setups and key, and the next look asks again; a panel that is really gone is taken out by `prune`.
+          if (!entry) continue;
         }
         entry.setup = setup;
         if (!entry.window.dragging) entry.window.setRect(placeItem(panel, area));
@@ -1197,8 +1200,6 @@ export class GameOverlays {
     }
     // The card stays on top of everything the layer shows; a window given the keyboard comes to the top of its level, so after that.
     if (restack || cardNew || shownNow || focused) this.card?.raise();
-    // A panel that is gone (its window couldn't be made) is in no setup any more either.
-    if (gone.length > 0) this.forgetPanels((panel) => gone.some((item) => item.instanceId === panel.instanceId));
     this.keysFollow();
     this.updateShowing();
   }

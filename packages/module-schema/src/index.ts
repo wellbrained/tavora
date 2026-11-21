@@ -223,6 +223,20 @@ const VIEWPORT_FIELDS = ["minWidth", "minHeight", "preferredWidth", "preferredHe
 
 /** Most screenshots a manifest may name, and the longest homepage address. */
 export const MAX_SCREENSHOTS = 5;
+/** The most games a catalog listing can name; Tavora skips a listing with more. */
+export const MAX_LISTED_GAMES = 100;
+/** The longest version a catalog listing can have; Tavora skips a listing with a longer one. */
+export const MAX_LISTED_VERSION = 64;
+
+/**
+ * Why the catalog can't list this manifest, or null. Checked when a version is published, not in validateManifest: a
+ * manifest past these limits still runs where it is already installed, and must keep doing so.
+ */
+export function catalogListingProblem(manifest: { version: string; games: readonly string[] }): string | null {
+  if (manifest.version.length > MAX_LISTED_VERSION) return `Its version is longer than ${MAX_LISTED_VERSION} characters. Use a shorter one.`;
+  if (manifest.games.length > MAX_LISTED_GAMES) return `It names ${manifest.games.length} games. A module in the catalog can name at most ${MAX_LISTED_GAMES}.`;
+  return null;
+}
 /** Largest readme file the catalog takes. */
 export const MAX_README_BYTES = 20 * 1024;
 /** Largest screenshot file the catalog takes and the app shows. */

@@ -45,6 +45,19 @@ describe("useItemSession", () => {
     await vi.waitFor(() => expect((host.documents.get("plan-a")?.data as unknown as Plan).items).toEqual(["one", "two"]));
   });
 
+  it("keeps an edit made before the session has loaded", async () => {
+    const { sdk, host } = createMemoryHost();
+    host.documents.put({ id: "plan-a", title: "A", data: { name: "A", items: [] } });
+    const scope = effectScope();
+    const plans = scope.run(() => useItemSession(sdk, options))!;
+    plans.update((draft) => void draft.items.push("early"));
+    await plans.ready;
+    await plans.flush();
+    expect(plans.current.value?.items).toEqual(["early"]);
+    expect((host.documents.get("plan-a")?.data as unknown as Plan).items).toEqual(["early"]);
+    scope.stop();
+  });
+
   it("reload shows a copy written through this panel's own sdk", async () => {
     const { sdk, host } = createMemoryHost();
     host.documents.put({ id: "plan-a", title: "A", data: { name: "A", items: [] } });

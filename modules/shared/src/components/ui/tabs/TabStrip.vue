@@ -14,6 +14,7 @@ import { nextTick, ref, watch } from "vue";
 import { useResizeObserver } from "@vueuse/core";
 import { X } from "@lucide/vue";
 import { TabsRoot } from "reka-ui";
+import { isComposing } from "../../../lib/keys";
 import { cn } from "../../../lib/utils";
 import { Input } from "../input";
 import { Tooltip, type TooltipRect } from "../../tooltip";
@@ -116,6 +117,13 @@ function stopRename(refocus: boolean) {
   renaming.value = null;
   renameProblem.value = "";
   if (refocus && id) nextTick(() => tabElement(id)?.focus());
+}
+
+/** Enter keeps the new name, unless it only confirms text an input method is still composing. */
+function onRenameEnter(event: KeyboardEvent) {
+  if (isComposing(event)) return;
+  event.preventDefault();
+  finishRename(true, true);
 }
 
 function finishRename(keep: boolean, refocus: boolean) {
@@ -250,7 +258,7 @@ function endDrag(settled: boolean) {
               data-tab-rename
               data-testid="tab-rename-input"
               @update:model-value="renameProblem = ''"
-              @keydown.enter.prevent="finishRename(true, true)"
+              @keydown.enter="onRenameEnter"
               @keydown.esc.prevent.stop="finishRename(false, true)"
               @blur="finishRename(true, false)"
             />

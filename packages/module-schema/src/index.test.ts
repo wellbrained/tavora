@@ -2,7 +2,7 @@ import { glob, readFile } from "node:fs/promises";
 import { Ajv } from "ajv";
 import { describe, expect, it } from "vitest";
 import schema from "../schema/tavora.module.schema.json" with { type: "json" };
-import { allowsPersonalWorkspaces, BLOCKED_LOCAL_PORTS, folderAccessProblem, folderKey, isFolderName, isFolderPath, isTavoraOwnFolder, isWindowsDeviceName, isLocalLowGameFolder, isLocalPort, LAST_TAVORA_WITHOUT_LOCAL_PORTS, LAST_TAVORA_WITHOUT_LOCALLOW_FOLDERS, parseFolderKey, splitFolderPath, localPortOf, CHANGELOG_LIMITS, connectorsAtAdd, continuingPanelType, firstKeyOf, isOfficialSigner, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, isReleaseVersion, LAST_TAVORA_WITHOUT_GAME_OVERLAYS, LAST_TAVORA_WITHOUT_BOARD_NAMES, LAST_TAVORA_WITHOUT_LEADERBOARDS, LAST_TAVORA_WITHOUT_PANEL_LAYOUT, LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES, LAST_TAVORA_WITHOUT_TRANSLATIONS, LAST_TAVORA_WITHOUT_WIDE_LAYOUT, needsNewerTavora, panelTypes, translateManifest, validateManifest, type ModuleManifest } from "./index";
+import { allowsPersonalWorkspaces, BLOCKED_LOCAL_PORTS, catalogListingProblem, MAX_LISTED_GAMES, MAX_LISTED_VERSION, folderAccessProblem, folderKey, isFolderName, isFolderPath, isTavoraOwnFolder, isWindowsDeviceName, isLocalLowGameFolder, isLocalPort, LAST_TAVORA_WITHOUT_LOCAL_PORTS, LAST_TAVORA_WITHOUT_LOCALLOW_FOLDERS, parseFolderKey, splitFolderPath, localPortOf, CHANGELOG_LIMITS, connectorsAtAdd, continuingPanelType, firstKeyOf, isOfficialSigner, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, isReleaseVersion, LAST_TAVORA_WITHOUT_GAME_OVERLAYS, LAST_TAVORA_WITHOUT_BOARD_NAMES, LAST_TAVORA_WITHOUT_LEADERBOARDS, LAST_TAVORA_WITHOUT_PANEL_LAYOUT, LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES, LAST_TAVORA_WITHOUT_TRANSLATIONS, LAST_TAVORA_WITHOUT_WIDE_LAYOUT, needsNewerTavora, panelTypes, translateManifest, validateManifest, type ModuleManifest } from "./index";
 
 const valid = {
   id: "community.example.campaign-companion",
@@ -14,6 +14,24 @@ const valid = {
   viewport: { minWidth: 320, minHeight: 240, preferredWidth: 720 },
   permissions: { network: [] },
 };
+
+describe("catalogListingProblem", () => {
+  const games = (count: number) => Array.from({ length: count }, (_, index) => `game-${index}`);
+
+  it("passes a manifest right at the limits", () => {
+    expect(catalogListingProblem({ version: `1.0.${"1".repeat(MAX_LISTED_VERSION - 4)}`, games: games(MAX_LISTED_GAMES) })).toBeNull();
+  });
+
+  it("names what the catalog can't list", () => {
+    expect(catalogListingProblem({ version: "1.0.0", games: games(MAX_LISTED_GAMES + 1) })).toMatch(/at most 100/);
+    expect(catalogListingProblem({ version: `1.0.${"1".repeat(MAX_LISTED_VERSION)}`, games: [] })).toMatch(/longer than 64/);
+  });
+
+  it("leaves validateManifest alone, so a module past the limits keeps running where it is installed", () => {
+    expect(validateManifest({ ...valid, games: games(MAX_LISTED_GAMES + 1) }).ok).toBe(true);
+    expect(validateManifest({ ...valid, version: `1.0.${"1".repeat(MAX_LISTED_VERSION)}` }).ok).toBe(true);
+  });
+});
 
 describe("validateManifest", () => {
   it("takes a panelLayout only of the module's own panel types, each once, from a minTavora that knows it", () => {

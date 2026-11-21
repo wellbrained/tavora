@@ -26,6 +26,29 @@ const PARTS = ["nigga", "faggot", "schwuchtel", "judensau"];
 
 /** Something that reads like a web address, a bare domain or an email address. */
 const LINK = /(?:https?:\/\/|www\.|[a-z0-9-]+(?:\.|\s?(?:\(dot\)|\[dot\])\s?)(?:com|net|org|io|gg|de|at|ch|ru|xyz|app|ly|me|co|tv|link|site|shop|info|biz|eu|uk|us)\b|\S+@\S+\.\S+|discord\.gg|t\.me\/)/i;
+const LINK_GLOBAL = new RegExp(LINK.source, "gi");
+
+/**
+ * A sentence that only lacks the space after its full stop ("Great game.Me too"): a plain word, then one of the
+ * address endings that also start a sentence, capitalised, with the sentence going on after it. Anything else stays a link.
+ */
+const MISSING_SPACE = /^[A-Z]?[a-z]{2,}\.(?:Me|At|Us)$/;
+
+function holdsLink(text: string): boolean {
+  for (const match of text.matchAll(LINK_GLOBAL)) {
+    const sentenceGoesOn = /^\s+\p{L}/u.test(text.slice(match.index + match[0].length));
+    if (!(MISSING_SPACE.test(match[0]) && sentenceGoesOn)) return true;
+  }
+  return false;
+}
+
+/**
+ * A part inside one word, or spread over words that start with it ("nig ga"). The start counts: "wenig Gameplay" and
+ * "König gab" only hold the letters across a word gap, in the middle of an honest word.
+ */
+function holdsPart(words: readonly string[]): boolean {
+  return PARTS.some((part) => words.some((word, index) => word.includes(part) || words.slice(index, index + part.length).join("").startsWith(part)));
+}
 
 function plainWords(text: string): string {
   return text
@@ -45,12 +68,11 @@ export type FilterResult = "ok" | "words" | "link";
 
 /** Whether a review or reply may be posted as it is. */
 export function checkReviewText(text: string): FilterResult {
-  if (LINK.test(text)) return "link";
-  const words = ` ${plainWords(text)} `;
+  if (holdsLink(text)) return "link";
+  const plain = plainWords(text);
+  const words = ` ${plain} `;
   if (WORDS.some((word) => words.includes(` ${word} `))) return "words";
-  const joined = words.replace(/ /g, "");
-  if (PARTS.some((part) => joined.includes(part))) return "words";
-  return "ok";
+  return holdsPart(plain.split(" ")) ? "words" : "ok";
 }
 
 /**
@@ -80,5 +102,3 @@ export function checkModuleText(text: string): ModuleTextResult {
   if (ADULT_WORDS.some((word) => words.includes(` ${word} `)) || ADULT_RAW.test(text)) return "adult";
   return "ok";
 }
-
-const LINK_GLOBAL = new RegExp(LINK.source, "gi");

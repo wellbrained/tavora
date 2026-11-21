@@ -11,6 +11,7 @@
 // With either on, the row never squeezes: the slider keeps a least width and the box (or the value) drops under it
 // when the row is too narrow.
 import { computed, nextTick, ref, useTemplateRef, watch, type HTMLAttributes } from "vue";
+import { isComposing } from "../../../lib/keys";
 import { cn } from "../../../lib/utils";
 import { Button } from "../button";
 import { Input } from "../input";
@@ -65,6 +66,7 @@ function commit() {
 }
 
 function onKeydown(event: KeyboardEvent) {
+  if (isComposing(event)) return;
   if (event.key === "Enter" && changed()) {
     event.preventDefault();
     commit();

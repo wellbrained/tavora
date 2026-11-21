@@ -236,6 +236,19 @@ describe("deleting", () => {
     expect(view.discard).toHaveBeenCalled();
   });
 
+  it("stays on the board when what is drawn on it can't be stored", async () => {
+    const { a } = panels();
+    const library = await open(a.sdk);
+    const second = await library.create("blank");
+    await library.open("board-start");
+    const view: OpenBoardView = { flush: vi.fn(async () => Promise.reject(new Error("too big"))), discard: vi.fn(), resume: vi.fn() };
+    library.attach(view);
+    await expect(library.open(second)).rejects.toThrow("too big");
+    await expect(library.create("blank")).rejects.toThrow("too big");
+    expect(library.currentId).toBe("board-start");
+    expect(library.boards).toHaveLength(2);
+  });
+
   it("lets the view save again when the delete does not go through", async () => {
     const { a } = panels();
     const library = await open(a.sdk);

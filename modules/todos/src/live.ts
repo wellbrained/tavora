@@ -253,7 +253,7 @@ export function buildLiveState(list: TodoList, collapsed: readonly string[], loo
 }
 
 /** Wraps `send` so it runs at most once per `ms`: the first call straight away, a burst ends with its last state. */
-export function throttle<A extends unknown[]>(send: (...args: A) => void, ms: number): { (...args: A): void; cancel(): void } {
+export function throttle<A extends unknown[]>(send: (...args: A) => void, ms: number): { (...args: A): void; cancel(): void; flush(): void } {
   let last = -Infinity;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let pending: A | undefined;
@@ -275,6 +275,11 @@ export function throttle<A extends unknown[]>(send: (...args: A) => void, ms: nu
     clearTimeout(timer);
     timer = undefined;
     pending = undefined;
+  };
+  /** Sends a waiting call now, for when the page is about to go. */
+  throttled.flush = () => {
+    clearTimeout(timer);
+    if (pending) run();
   };
   return throttled;
 }

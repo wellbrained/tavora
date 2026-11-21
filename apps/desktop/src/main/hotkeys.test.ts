@@ -1,7 +1,7 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LIMITS } from "@tavora/sdk/protocol";
 import { HotkeyRegistrar, HotkeyStore, HOTKEYS_FILE, type HotkeyRecord, type ShortcutRegistry } from "./hotkeys";
 
@@ -96,6 +96,31 @@ describe("HotkeyRegistrar", () => {
     expect(registrar.apply([record({ target: "item-2", accelerator: "F9" })])).toBe(true);
     expect([...registered.keys()]).toEqual(["F9"]);
     expect(registrar.apply([record({ target: "item-2", accelerator: "F9" })])).toBe(false);
+  });
+
+  it("does both when two hotkeys want one key at the same moment", () => {
+    const { shortcuts, registered } = fakeShortcuts();
+    const pressed: string[] = [];
+    const registrar = new HotkeyRegistrar(shortcuts, (hit) => pressed.push(hit.target));
+    const module = record({ target: "module", accelerator: "F9" });
+    const overlay = record({ workspaceId: "game", target: "overlay", accelerator: "F9" });
+    registrar.apply([module, overlay]);
+    registered.get("F9")!();
+    expect(pressed).toEqual(["module", "overlay"]);
+    expect(registrar.apply([module, overlay])).toBe(false);
+  });
+
+  it("keeps a shared key registered when one of its hotkeys leaves", () => {
+    const { shortcuts, registered } = fakeShortcuts();
+    const unregister = vi.spyOn(shortcuts, "unregister");
+    const pressed: string[] = [];
+    const registrar = new HotkeyRegistrar(shortcuts, (hit) => pressed.push(hit.target));
+    const module = record({ target: "module", accelerator: "F9" });
+    registrar.apply([module, record({ workspaceId: "game", target: "overlay", accelerator: "F9" })]);
+    expect(registrar.apply([module])).toBe(true);
+    expect(unregister).not.toHaveBeenCalled();
+    registered.get("F9")!();
+    expect(pressed).toEqual(["module"]);
   });
 
   it("notes keys another program holds", () => {

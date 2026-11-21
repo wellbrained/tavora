@@ -3,7 +3,7 @@ import path from "node:path";
 import type { AiUsageAccountInfo, AiUsageReading, JsonValue } from "@tavora/sdk/protocol";
 import { LIMITS } from "@tavora/sdk/protocol";
 import type { AiProvider, AiUsageView } from "../shared/host-api";
-import { claudeAccessToken, claudePlan, codexPlan, parseEmail } from "./ai-usage-parse";
+import { claudeAccessToken, claudePlan, claudeTokenRenews, codexPlan, parseEmail } from "./ai-usage-parse";
 import { CodexMissingError, type CodexReading } from "./ai-usage-codex";
 import { HostError } from "./errors";
 import { isJsonValue } from "./json";
@@ -315,7 +315,8 @@ export class AiUsageConnector {
         "user-agent": `Tavora/${this.deps.version}`,
       },
     });
-    if (response.status === 401 || response.status === 403) return { status: "sign-in" };
+    // A token that only ran out is no lost login: the next reading after Claude Code renewed it works again.
+    if (response.status === 401 || response.status === 403) return { status: claudeTokenRenews(credentials, this.deps.now()) ? "unavailable" : "sign-in" };
     if (response.status === 429) return { status: "rate-limited", retryAfterMs: retryAfter(response.headers.get("retry-after"), this.deps.now()) };
     if (!response.ok) return { status: "unavailable" };
     const text = await response.text();

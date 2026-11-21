@@ -67,3 +67,13 @@ export function claudeAccessToken(credentials: unknown): string | null {
   const token = oauth?.accessToken;
   return typeof token === "string" && token.trim() !== "" && token.length <= 4096 ? token : null;
 }
+
+/**
+ * Whether the saved access token has run out while the login itself is fine: Claude Code renews it the next time it
+ * runs. Tavora never renews it, since that would replace the login Claude Code holds.
+ */
+export function claudeTokenRenews(credentials: unknown, now: number): boolean {
+  const oauth = isObject(credentials) && isObject(credentials.claudeAiOauth) ? credentials.claudeAiOauth : null;
+  if (!oauth || typeof oauth.expiresAt !== "number" || !Number.isFinite(oauth.expiresAt)) return false;
+  return oauth.expiresAt <= now && typeof oauth.refreshToken === "string" && oauth.refreshToken.trim() !== "";
+}
