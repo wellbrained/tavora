@@ -144,7 +144,7 @@ import { removeRefusedInstaller } from "./refused-update";
 import { fingerprint, loadExistingKey } from "@tavora/pack";
 import { OfficialUpdates, resolveOfficialPins } from "./official-updates";
 import { CATALOGUE_PUBLIC_KEY, SAFETY_REFRESH_MS, SafetyLists } from "./safety-lists";
-import { createToneReader, iconVersion } from "./icon-tone";
+import { createToneReader, iconVersions } from "./icon-tone";
 import { syncIcons } from "./icon-sync";
 import { fetchSteamLibrary, importSteamGames, MAX_IMPORT_GAMES, steamGameStatus, steamLibraryView } from "./steam-import";
 import { icoFrameNear, isShareCandidate, largestIcoFrame, shareableIconFile, shareSource, steamShareGames, submitIcon } from "./share-icons";
@@ -3454,6 +3454,7 @@ export class Host {
         loadHostedList: () => this.loadHostedList(),
         shouldRun: () => !this.window.isDestroyed(),
         onChange: () => {
+          this.iconFileVersions?.forget();
           this.saveLibrary();
           this.pushState();
         },
@@ -4996,13 +4997,16 @@ export class Host {
   private ownIcon(workspace: WorkspaceEntry): { steamIcon: string | null; steamIconTone: IconTone | null } {
     if (!(this.library.steamIcons && workspace.useOriginalIcon && workspace.iconFile)) return { steamIcon: null, steamIconTone: null };
     const dir = this.steamIconDir;
+    const version = (this.iconFileVersions ??= iconVersions(dir)).of(workspace.iconFile);
     return {
-      steamIcon: `${STEAM_ICON_URL}${workspace.iconFile}?v=${iconVersion(dir, workspace.iconFile)}`,
-      steamIconTone: (this.toneReader ??= createToneReader(dir, loadSmallBitmap))(workspace.iconFile),
+      steamIcon: `${STEAM_ICON_URL}${workspace.iconFile}?v=${version}`,
+      steamIconTone: (this.toneReader ??= createToneReader(dir, loadSmallBitmap))(workspace.iconFile, version),
     };
   }
 
-  private toneReader: ((file: string) => IconTone) | undefined;
+  private toneReader: ((file: string, version?: string) => IconTone) | undefined;
+  /** The saved icons' versions: this state is sent often, so the disk isn't asked for each game every time. */
+  private iconFileVersions: ReturnType<typeof iconVersions> | undefined;
 
   private workspaceView(workspace: WorkspaceEntry): WorkspaceView {
     return {

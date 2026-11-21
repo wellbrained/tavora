@@ -1,6 +1,6 @@
 import { createHash, type KeyObject } from "node:crypto";
 import { execFile } from "node:child_process";
-import { appendFile, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { appendFile, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { isModuleId, validateChangelog, validateManifest } from "@tavora/module-schema";
@@ -98,6 +98,8 @@ export const NEVER_PUBLISHED: ReadonlySet<string> = new Set([BROWSER_MODULE_ID, 
 export const WORKTREE_PREFIX = "tavora-publish-worktree-";
 /** A worktree left behind is swept once it is this old, so a run in progress (another dev Tavora) is never touched. */
 const STALE_WORKTREE_MS = 60 * 60 * 1000;
+/** How often a worktree in use is marked as fresh: a preview can stay open for hours, and another dev Tavora may sweep. */
+export const WORKTREE_KEEP_MS = 10 * 60 * 1000;
 
 export interface RunOptions {
   cwd: string;
@@ -302,6 +304,8 @@ const noStep = () => undefined;
 export class OfficialPublisher {
   private readonly run: Run;
   private state: RunState = { phase: "idle" };
+  /** The worktree this run is using, kept fresh on disk until it is removed. */
+  private held: { worktree: string; timer: ReturnType<typeof setInterval> } | null = null;
 
   constructor(private readonly options: OfficialPublisherOptions) {
     this.run = options.run ?? runCommand;
@@ -396,6 +400,7 @@ export class OfficialPublisher {
 
       step("worktree");
       worktree = await mkdtemp(path.join(this.temp(), WORKTREE_PREFIX));
+      this.holdWorktree(worktree);
       await git("worktree", "add", "--detach", worktree, head.commit);
       const moduleDir = path.join(worktree, item.folder);
       const manifest = await this.readManifest(moduleDir, moduleId);
@@ -433,7 +438,10 @@ export class OfficialPublisher {
       if (abort.signal.aborted) throw new PublishCancelled();
       throw error;
     } finally {
-      if (worktree) await this.removeWorktree(worktree);
+      if (worktree) {
+        await this.removeWorktree(worktree);
+        this.holdWorktree(null);
+      }
     }
   }
 
@@ -551,9 +559,26 @@ export class OfficialPublisher {
     try {
       await state.removed;
     } finally {
+      this.holdWorktree(null);
       // The window already reads "idle" since the discard began: no second change to announce.
       this.state = { phase: "idle" };
     }
+  }
+
+  /**
+   * Keeps this worktree's time fresh while the run uses it, so the sweep of another dev Tavora doesn't take it for one
+   * left behind. After a crash nothing touches it any more, and it is swept once it is old. Null lets go.
+   */
+  private holdWorktree(worktree: string | null): void {
+    if (this.held) clearInterval(this.held.timer);
+    this.held = null;
+    if (!worktree) return;
+    const timer = setInterval(() => {
+      const at = new Date(this.options.now?.() ?? Date.now());
+      void utimes(worktree, at, at).catch(() => undefined);
+    }, WORKTREE_KEEP_MS);
+    timer.unref?.();
+    this.held = { worktree, timer };
   }
 
   /** Removes worktrees an earlier run left behind (a crash, a quit with a preview open), and git's note of them. */
@@ -564,7 +589,7 @@ export class OfficialPublisher {
     for (const name of entries) {
       if (!name.startsWith(WORKTREE_PREFIX)) continue;
       const full = path.join(temp, name);
-      if (full === this.prepared?.worktree || (this.state.phase === "discarding" && full === this.state.worktree)) continue;
+      if (full === this.held?.worktree) continue;
       const info = await stat(full).catch(() => null);
       if (info && now - info.mtimeMs > STALE_WORKTREE_MS) await removeFolder(full);
     }
