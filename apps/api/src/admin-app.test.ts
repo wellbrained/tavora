@@ -110,6 +110,9 @@ describe("the token", () => {
     for (const path of ["/api/approve", "/api/takedown", "/api/summary"]) {
       expect((await read(path, { method: "POST" })).status, path).toBe(401);
     }
+    // HEAD runs the GET handler in Hono but is not a GET: refused; the stats token is no admin token
+    expect((await read("/api/stats", { method: "HEAD" })).status).toBe(401);
+    expect((await withStats.request("http://admin.test/api/overview", { headers: { "X-Admin-Token": STATS } })).status).toBe(401);
     // without a stats token set, the header opens nothing
     expect((await app.request("http://admin.test/api/summary", { headers: { "X-Stats-Token": STATS } })).status).toBe(401);
   });
