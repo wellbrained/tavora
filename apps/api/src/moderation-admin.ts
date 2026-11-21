@@ -1,5 +1,6 @@
 import { readZip } from "@tavora/pack";
 import { Hono } from "hono";
+import { catalogListingProblem } from "@tavora/module-schema";
 import { accountLifecycle, type AccountLifecycle } from "./account-lifecycle.ts";
 import type { AccountStore } from "./account-store.ts";
 import { CatalogError, checkCatalogZip, isOfficialId, type CatalogStore, type ReviewReason, type WaitingVersion } from "./catalog.ts";
@@ -160,6 +161,9 @@ export function moderationRoutes({ catalog, accounts, scanner, mailer, mailDaily
     if (typeof sha256 !== "string") return context.json({ error: "Send { sha256 }." }, 400);
     const waiting = catalog.waitingVersion(sha256);
     if (!waiting) return context.json({ error: "Nothing with this hash is waiting." }, 404);
+    // A version that waited since before the listing limits: listed, the app would leave it out of its list.
+    const listingProblem = catalogListingProblem(waiting.manifest);
+    if (listingProblem) return context.json({ error: `${listingProblem} Decline the version.` }, 409);
     if (waiting.accountId && accounts.isBanned(waiting.accountId)) return context.json({ error: "This developer is banned. Unban them first, or decline the version." }, 409);
     if (waiting.accountId && accounts.isSuspended(waiting.accountId)) return context.json({ error: "This developer is suspended. Unsuspend them first, or decline the version." }, 409);
     // The key's state as an upload checks it: a key unlinked, revoked or reported as leaked since the upload lists nothing new.

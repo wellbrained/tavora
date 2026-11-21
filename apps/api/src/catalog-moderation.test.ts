@@ -2,6 +2,8 @@ import { createHash, createPublicKey, generateKeyPairSync, randomBytes, type Key
 import { existsSync, mkdtempSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import { MAX_LISTED_GAMES } from "@tavora/module-schema";
 import { catalogPublicKey, nextCatalogList, publishSignature, signCatalogList, signFiles, writeZip, type ZipFile } from "@tavora/pack";
 import { describe, expect, it } from "vitest";
 import { AccountStore } from "./account-store.ts";
@@ -123,6 +125,25 @@ function setup(options: { scanner?: Scanner | undefined; maintainer?: string; wa
   };
   return { store, catalog, dir, inbox, clock, developer, tokens, send, own, post, get, sha, zipFile, answer, verdict, admin, app };
 }
+
+describe("approving a version from before the listing limits", () => {
+  it("refuses one the app would leave out of its list, and keeps it waiting", async () => {
+    const { developer, send, post, sha, catalog, dir } = setup();
+    const { key } = developer("dev@example.com");
+    const zip = moduleZip(key, { network: ["example.org"] });
+    expect((await send(key, zip)).status).toBe(202);
+    const manifest = { ...catalog.waitingVersion(sha(zip))!.manifest, games: Array.from({ length: MAX_LISTED_GAMES + 1 }, (_, index) => `game-${index}`) };
+    const raw = new DatabaseSync(path.join(dir, "catalog.sqlite"));
+    raw.prepare("update versions set manifest = ? where sha256 = ?").run(JSON.stringify(manifest), sha(zip));
+    raw.close();
+
+    const response = await post("/approve", { sha256: sha(zip) });
+    expect(response.status).toBe(409);
+    expect(((await response.json()) as { error: string }).error).toMatch(/at most 100/);
+    expect(catalog.waitingVersion(sha(zip))).not.toBeNull();
+    expect(catalog.index()).toEqual([]);
+  });
+});
 
 describe("a new version that passes every check", () => {
   it("lists at once, like before, and tells the developer it was published", async () => {

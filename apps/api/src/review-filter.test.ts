@@ -27,6 +27,12 @@ describe("the review word filter", () => {
       "Fun game.Me too, I play it daily.",
       "Tolles Spiel.At least it runs.",
       "Works for the two of us.Us too.",
+      "wenig",
+      "König",
+      "Das ist schön.Me too",
+      "Modul.App läuft",
+      "Mein Sofa got dirty",
+      "Eine Uni gab Geld",
     ]) {
       expect(checkReviewText(text), text).toBe("ok");
     }
@@ -35,6 +41,18 @@ describe("the review word filter", () => {
   it("still refuses a slur spread over words, in any spelling it caught before", () => {
     for (const text of ["nig ga", "ni gga", "n igga", "nigg a", "nig gas", "NIG-GA", "n1g g4", "ni g ga", "fag got", "schwuch tel", "juden sau", "you xnigga", "faggotry"]) {
       expect(checkReviewText(text), text).toBe("words");
+    }
+  });
+
+  it("refuses a slur spread over words that starts one letter into the first", () => {
+    for (const text of ["xnig ga", "xfa ggot", "xschwuch tel", "xjuden sau", "you xni gga"]) {
+      expect(checkReviewText(text), text).toBe("words");
+    }
+  });
+
+  it("reads an address as a link when only a line break follows it", () => {
+    for (const text of ["evil.Me\nnow", "evil.Me\r\nnow", "evil.At\n\nnow", "evil.App\nnow"]) {
+      expect(checkReviewText(text), JSON.stringify(text)).toBe("link");
     }
   });
 

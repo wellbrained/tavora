@@ -29,25 +29,36 @@ const LINK = /(?:https?:\/\/|www\.|[a-z0-9-]+(?:\.|\s?(?:\(dot\)|\[dot\])\s?)(?:
 const LINK_GLOBAL = new RegExp(LINK.source, "gi");
 
 /**
- * A sentence that only lacks the space after its full stop ("Great game.Me too"): a plain word, then one of the
- * address endings that also start a sentence, capitalised, with the sentence going on after it. Anything else stays a link.
+ * A sentence that only lacks the space after its full stop ("Great game.Me too", "Modul.App läuft"): a plain word, umlauts
+ * included, then one of the address endings that also start a sentence, capitalised, with the sentence going on after it on
+ * the same line. Anything else stays a link.
  */
-const MISSING_SPACE = /^[A-Z]?[a-z]{2,}\.(?:Me|At|Us)$/;
+const MISSING_SPACE = /^\p{Lu}?\p{Ll}{2,}\.(?:Me|At|Us|App)$/u;
+const WORD_CHAR = /[\p{L}\p{N}-]/u;
 
 function holdsLink(text: string): boolean {
   for (const match of text.matchAll(LINK_GLOBAL)) {
-    const sentenceGoesOn = /^\s+\p{L}/u.test(text.slice(match.index + match[0].length));
-    if (!(MISSING_SPACE.test(match[0]) && sentenceGoesOn)) return true;
+    const sentenceGoesOn = /^[ \t]+\p{L}/u.test(text.slice(match.index + match[0].length));
+    // The address pattern knows only a to z, so "schön.Me" matches from its "n": read the whole word.
+    let start = match.index;
+    while (start > 0 && WORD_CHAR.test(text[start - 1]!)) start--;
+    if (!(MISSING_SPACE.test(text.slice(start, match.index) + match[0]) && sentenceGoesOn)) return true;
   }
   return false;
 }
 
 /**
- * A part inside one word, or spread over words that start with it ("nig ga"). The start counts: "wenig Gameplay" and
- * "König gab" only hold the letters across a word gap, in the middle of an honest word.
+ * A part inside one word, or spread over words from the start of one or one letter into it ("nig ga", "xnig ga"). Further in
+ * doesn't count: "wenig Gameplay" and "König gab" only hold the letters across a word gap, in the middle of an honest word.
  */
 function holdsPart(words: readonly string[]): boolean {
-  return PARTS.some((part) => words.some((word, index) => word.includes(part) || words.slice(index, index + part.length).join("").startsWith(part)));
+  return PARTS.some((part) =>
+    words.some((word, index) => {
+      if (word.includes(part)) return true;
+      const run = words.slice(index, index + part.length + 1).join("");
+      return run.startsWith(part) || run.startsWith(part, 1);
+    }),
+  );
 }
 
 function plainWords(text: string): string {
