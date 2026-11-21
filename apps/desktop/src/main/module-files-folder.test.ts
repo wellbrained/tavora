@@ -25,9 +25,21 @@ async function setup(chosen: string | null = null) {
     remember: () => undefined,
     notify: () => undefined,
     changed: () => undefined,
+    writesDone: async () => true,
   };
   return { base, userData, host, set, folder: new ModuleFilesFolder(host) };
 }
+
+describe("ModuleFilesFolder.reset", () => {
+  it("doesn't move while a picture is still being saved, and changes nothing", async () => {
+    const chosen = await mkdtemp(path.join(tmpdir(), "tavora-chosen-"));
+    const { host, set } = await setup(chosen);
+    const folder = new ModuleFilesFolder({ ...host, writesDone: async () => false });
+    await expect(folder.reset()).rejects.toMatchObject({ key: "error.moduleFilesBusy" });
+    expect(set).not.toHaveBeenCalled();
+    expect(folder.moving).toBe(false);
+  });
+});
 
 describe("ModuleFilesFolder.moveFromOldDefault", () => {
   it("moves pictures from the old folder in the app's data to Pictures\\Tavora", async () => {

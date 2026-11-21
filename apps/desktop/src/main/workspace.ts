@@ -51,6 +51,11 @@ export interface Workspace {
 export interface WorkspaceState {
   version: 3;
   workspaces: Record<string, Workspace>;
+  /**
+   * Entries of the file for workspaces the library doesn't list (it may have been lost), exactly as read. Nothing uses
+   * them; they are written back into `workspaces`, so a library brought back finds its layouts. In memory only.
+   */
+  unlisted?: Record<string, unknown>;
 }
 
 /** A problem with the workspace that the user can fix; its message is shown as-is. */
@@ -82,7 +87,7 @@ export function emptyWorkspace(): Workspace {
 }
 
 // The fields this Tavora knows, per record. The rest (a newer Tavora's) are kept as they were and written back.
-const STATE_FIELDS = Object.keys({ version: true, workspaces: true } satisfies Record<keyof WorkspaceState, true>);
+const STATE_FIELDS = Object.keys({ version: true, workspaces: true, unlisted: true } satisfies Record<keyof WorkspaceState, true>);
 const WORKSPACE_FIELDS = Object.keys({ instances: true, layout: true, snapshots: true } satisfies Record<keyof Workspace, true>);
 const INSTANCE_FIELDS = Object.keys({ instanceId: true, moduleId: true, panelType: true, content: true, owner: true } satisfies Record<keyof InstanceRecord, true>);
 
@@ -117,10 +122,47 @@ function parseSnapshot(raw: unknown, isInstalled: (moduleId: string) => boolean)
   return { ...unknownFields(raw, SNAPSHOT_FIELDS), id, name, savedAt, layout, modules, ...(Object.keys(panelTypes).length ? { panelTypes } : {}) };
 }
 
+/** One saved workspace, with only panels of modules that are still installed. */
+function parseWorkspace(workspace: Partial<Record<keyof Workspace, unknown>>, isInstalled: (moduleId: string) => boolean): Workspace {
+  const instances = (Array.isArray(workspace.instances) ? workspace.instances : [])
+    .filter(
+      (record): record is InstanceRecord =>
+        typeof record?.instanceId === "string" &&
+        INSTANCE_ID.test(record.instanceId) &&
+        typeof record.moduleId === "string" &&
+        isInstalled(record.moduleId),
+    )
+    .map((record): InstanceRecord => {
+      const { instanceId, moduleId, panelType, content, owner } = record;
+      const checked = checkPanelContent(content);
+      return {
+        ...unknownFields(record, INSTANCE_FIELDS),
+        instanceId,
+        moduleId,
+        ...(isPanelTypeId(panelType) ? { panelType } : {}),
+        ...(checked ? { content: checked } : {}),
+        ...(isOwner(owner) ? { owner } : {}),
+      };
+    });
+  const open = new Set(instances.map((record) => record.instanceId));
+  const snapshots = (Array.isArray(workspace.snapshots) ? workspace.snapshots : [])
+    .map((snapshot) => parseSnapshot(snapshot, isInstalled))
+    .filter((snapshot): snapshot is Snapshot => snapshot !== null)
+    .slice(0, MAX_SNAPSHOTS);
+  return {
+    ...unknownFields(workspace, WORKSPACE_FIELDS),
+    instances,
+    layout: pruneLayout(parseSavedLayout(workspace.layout), (id) => open.has(id)),
+    snapshots,
+  };
+}
+
 /**
- * Reads the saved workspace, keeping only workspaces in the library (Trash
- * included) and modules that are still installed. A missing file gives empty
- * workspaces; an unreadable one is set aside first, and one a newer Tavora
+ * Reads the saved workspace, using only workspaces in the library (Trash
+ * included) and modules that are still installed. Entries of other workspaces
+ * are kept as they were and written back (`unlisted`): the library may have
+ * been lost, and they are the layouts it would bring back. A missing file gives
+ * empty workspaces; an unreadable one is set aside first, and one a newer Tavora
  * wrote is copied aside (json.ts readSavedFile). Version 1 files (panels
  * without a layout) are read as they are; the host UI places their panels.
  * Fields this Tavora doesn't know, at the top, on a workspace, a panel or a
@@ -136,40 +178,11 @@ export async function loadWorkspace(
   if (!saved) return state;
   for (const workspaceId of workspaceIds) {
     const workspace = saved.workspaces?.[workspaceId];
-    if (!isRecord(workspace)) continue;
-    const instances = (Array.isArray(workspace.instances) ? workspace.instances : [])
-      .filter(
-        (record): record is InstanceRecord =>
-          typeof record?.instanceId === "string" &&
-          INSTANCE_ID.test(record.instanceId) &&
-          typeof record.moduleId === "string" &&
-          isInstalled(record.moduleId),
-      )
-      .map((record): InstanceRecord => {
-        const { instanceId, moduleId, panelType, content, owner } = record;
-        const checked = checkPanelContent(content);
-        return {
-          ...unknownFields(record, INSTANCE_FIELDS),
-          instanceId,
-          moduleId,
-          ...(isPanelTypeId(panelType) ? { panelType } : {}),
-          ...(checked ? { content: checked } : {}),
-          ...(isOwner(owner) ? { owner } : {}),
-        };
-      });
-    const open = new Set(instances.map((record) => record.instanceId));
-    const snapshots = (Array.isArray(workspace.snapshots) ? workspace.snapshots : [])
-      .map((snapshot) => parseSnapshot(snapshot, isInstalled))
-      .filter((snapshot): snapshot is Snapshot => snapshot !== null)
-      .slice(0, MAX_SNAPSHOTS);
-    state.workspaces[workspaceId] = {
-      ...unknownFields(workspace, WORKSPACE_FIELDS),
-      instances,
-      layout: pruneLayout(parseSavedLayout(workspace.layout), (id) => open.has(id)),
-      snapshots,
-    };
+    if (isRecord(workspace)) state.workspaces[workspaceId] = parseWorkspace(workspace, isInstalled);
   }
-  return { ...unknownFields(saved, STATE_FIELDS), ...state };
+  const listed = new Set(workspaceIds);
+  const unlisted = Object.fromEntries(Object.entries(isRecord(saved.workspaces) ? saved.workspaces : {}).filter(([id]) => !listed.has(id)));
+  return { ...unknownFields(saved, STATE_FIELDS), ...state, ...(Object.keys(unlisted).length ? { unlisted } : {}) };
 }
 
 /** A module's panel types as the workspace needs them: their ids, and the one older panels become. */
@@ -231,7 +244,8 @@ export function noteOwners(state: WorkspaceState, ownerOf: (moduleId: string) =>
 
 /** Writes the workspace file whole or not at all (fsutil.ts writeFileAtomic), like the other data files. */
 export async function saveWorkspace(file: string, state: WorkspaceState): Promise<void> {
-  await writeFileAtomic(file, JSON.stringify(state, null, 2));
+  const { unlisted, ...saved } = state;
+  await writeFileAtomic(file, JSON.stringify(unlisted ? { ...saved, workspaces: { ...unlisted, ...saved.workspaces } } : saved, null, 2));
 }
 
 /**
@@ -282,6 +296,8 @@ export interface WorkspacesOptions {
   /** Ids for new panels and snapshots; random by default. */
   newId?(): string;
   now?(): Date;
+  /** Which modules a workspace added back may keep its panels of, as when a start reads them. All by default. */
+  isInstalled?(moduleId: string): boolean;
 }
 
 /**
@@ -358,10 +374,15 @@ export class Workspaces {
     if (noteOwners(this.state, ownerOf)) this.saveSoon();
   }
 
-  /** Empty panels and layouts for workspaces new to the library. */
+  /** Workspaces new to the library: empty, or with the panels and layout the file still holds for them (`unlisted`). */
   addWorkspaces(workspaceIds: readonly string[]): void {
     if (workspaceIds.length === 0) return;
-    for (const id of workspaceIds) this.state.workspaces[id] = emptyWorkspace();
+    const isInstalled = (moduleId: string) => this.options.isInstalled?.(moduleId) ?? true;
+    for (const id of workspaceIds) {
+      const kept = this.state.unlisted?.[id];
+      this.state.workspaces[id] = isRecord(kept) ? parseWorkspace(kept, isInstalled) : emptyWorkspace();
+      delete this.state.unlisted?.[id];
+    }
     this.save();
   }
 
@@ -381,6 +402,8 @@ export class Workspaces {
   forgetWorkspace(workspaceId: string): InstanceRecord[] {
     const records = this.state.workspaces[workspaceId]?.instances ?? [];
     delete this.state.workspaces[workspaceId];
+    // Trash emptied at start: the library no longer lists it, and this is the delete.
+    delete this.state.unlisted?.[workspaceId];
     this.save();
     return records;
   }

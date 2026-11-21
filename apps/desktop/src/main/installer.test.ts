@@ -1,10 +1,10 @@
 import { generateKeyPairSync } from "node:crypto";
-import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fingerprint, readZip, SIGNATURE_FILE, signedHash, signFiles, writeZip, type ZipFile } from "@tavora/pack";
 import { describe, expect, it } from "vitest";
-import { applyOwners, compareModuleVersions, forgetOwner, installZip, readOwnerRecords } from "./installer";
+import { applyOwners, compareModuleVersions, forgetOwner, installZip, readOwnerRecords, recoverInstalls } from "./installer";
 import { FolderChecks } from "./module-folder-check";
 import type { InstalledModule } from "./registry";
 
@@ -270,5 +270,54 @@ describe("applyOwners", () => {
     expect(await last.check(folder)).toBeNull();
     await last.save();
     expect(JSON.parse(await readFile(cache, "utf8"))).toEqual({ folders: {} });
+  });
+});
+
+describe("an update cut off", () => {
+  const signed = (id: string, version: string, key: ReturnType<typeof generateKeyPairSync>["privateKey"]) => {
+    const files = packageFiles(id, version, `<p>${version}</p>`);
+    return [...files, signFiles(files, key)];
+  };
+  const page = (dir: string) => readFile(path.join(dir, "dist", "index.html"), "utf8");
+  const recover = (userData: string, userModules: string) => recoverInstalls({ userData, userModules, officialDir: path.join(userData, "official-updates"), log: () => undefined });
+
+  async function installedThenCut(cutAfterRecord: boolean) {
+    const { userData, userModules } = await setup();
+    const key = generateKeyPairSync("ed25519").privateKey;
+    const id = "wellbrained.tracker";
+    const target = path.join(userModules, id);
+    await installZip(await zipFile(userData, signed(id, "1.0.0", key)), { userData, userModules, tavoraVersion: TAVORA, modules: new Map() });
+    const old = path.join(userData, "module-staging", "old-cut");
+    await cp(target, old, { recursive: true });
+    if (cutAfterRecord) {
+      await installZip(await zipFile(userData, signed(id, "2.0.0", key)), { userData, userModules, tavoraVersion: TAVORA, modules: new Map([[id, loaded(id, target, fingerprint(key))]]) });
+    } else {
+      // The new files are in place, and the record still names the old ones.
+      const next = await mkdtemp(path.join(userData, "next-"));
+      for (const file of signed(id, "2.0.0", key)) {
+        await mkdir(path.dirname(path.join(next, file.name)), { recursive: true });
+        await writeFile(path.join(next, file.name), file.data);
+      }
+      await rm(target, { recursive: true });
+      await rename(next, target);
+    }
+    return { userData, userModules, target, old, key, id };
+  }
+
+  it("goes back to the old copy when the new one was never recorded, so the module isn't stopped as changed", async () => {
+    const { userData, userModules, target, key, id } = await installedThenCut(false);
+    await recover(userData, userModules);
+    expect(await page(target)).toBe("<p>1.0.0</p>");
+    expect(await readdir(path.join(userData, "module-staging"))).toEqual([]);
+    const modules = new Map([[id, loaded(id, target, "local")]]);
+    expect(await applyOwners(modules, userModules, await readOwnerRecords(userData))).toEqual([]);
+    expect(modules.get(id)!.owner).toBe(fingerprint(key));
+  });
+
+  it("keeps the new copy once it was recorded, and clears the old one", async () => {
+    const { userData, userModules, target } = await installedThenCut(true);
+    await recover(userData, userModules);
+    expect(await page(target)).toBe("<p>2.0.0</p>");
+    expect(await readdir(path.join(userData, "module-staging"))).toEqual([]);
   });
 });

@@ -18,7 +18,7 @@ import { DEFAULT_OVERLAY_PORT, MAX_OVERLAY_PORT, MIN_OVERLAY_PORT } from "./over
 import { iconFileAllowed, isSteamAppId, needsIcon } from "./steam-icons";
 import { DEFAULT_THEME, isVariationId, type ThemeChoice } from "./themes";
 import { CLASSIC_STYLE_ID, isStyleRadius } from "../shared/styles";
-import { isFontId } from "../shared/ui-fonts";
+import { DEFAULT_FONT_ID, isFontId } from "../shared/ui-fonts";
 import { isLearnableGameId, learnsGameId } from "./workspace-game";
 import { unknownFields } from "./json";
 
@@ -965,9 +965,13 @@ export function sanitizeLibrary(raw: unknown): Library {
   const theme = asRecord(saved.theme);
   if (isModuleId(theme.id) && isVariationId(theme.variation)) library.theme = { id: theme.id, variation: theme.variation };
   if (typeof saved.followSystem === "boolean") library.followSystem = saved.followSystem;
+  // Either form (libraryToSave). A radius an older Tavora set since wins over the one it couldn't read.
+  const savedOnly = saved as Record<string, unknown>;
   if (isStyleRadius(saved.radius)) library.radius = saved.radius;
+  else if (isStyleRadius(savedOnly.cornerRadius)) library.radius = savedOnly.cornerRadius;
   // Inter too: in a style with another font, Inter is the user's own pick. A library from before styles never saved it.
   if (isFontId(saved.font)) library.font = saved.font;
+  else if (isFontId(savedOnly.interfaceFont)) library.font = savedOnly.interfaceFont;
   if (isModuleId(saved.styleId) && saved.styleId !== CLASSIC_STYLE_ID) library.styleId = saved.styleId;
   const styleThemes: Record<string, ThemeChoice> = {};
   for (const [styleId, value] of Object.entries(asRecord(saved.styleThemes)).slice(0, MAX_STYLE_THEMES)) {
@@ -985,7 +989,30 @@ export function sanitizeLibrary(raw: unknown): Library {
   if (typeof saved.lastWorkspaceId === "string" && isLive(library, saved.lastWorkspaceId)) library.lastWorkspaceId = saved.lastWorkspaceId;
   library.pc = { ...asRecord(saved.pc) };
   // Fields a library may leave out (font) are known too: a bad saved value is dropped, not passed through.
-  return { ...unknownFields(saved, [...Object.keys(library), ...OPTIONAL_FIELDS]), ...library };
+  return { ...unknownFields(saved, [...Object.keys(library), ...OPTIONAL_FIELDS, ...SAVED_ONLY_FIELDS]), ...library };
+}
+
+/** Fields only the saved file has (libraryToSave); in memory they are `radius` and `font`. */
+const SAVED_ONLY_FIELDS = ["cornerRadius", "interfaceFont"];
+/** The corner radii a Tavora from before styles (0.24.108 and older) reads; it saves any other as "none". */
+const OLDER_RADIUS = { min: 4, max: 12 };
+
+/**
+ * The library as it is written. A Tavora from before styles rebuilds `radius` and `font` from what it knows, so a radius
+ * outside 4 to 12 or an explicit Inter would be erased by its next save, also through the cloud copy. Those go in fields
+ * of their own, which it keeps as they are, and `radius` and `font` hold what it can read.
+ */
+export function libraryToSave(library: Library): Record<string, unknown> {
+  const saved: Record<string, unknown> = { ...library };
+  if (library.radius !== null && (library.radius < OLDER_RADIUS.min || library.radius > OLDER_RADIUS.max)) {
+    saved.radius = null;
+    saved.cornerRadius = library.radius;
+  }
+  if (library.font === DEFAULT_FONT_ID) {
+    delete saved.font;
+    saved.interfaceFont = library.font;
+  }
+  return saved;
 }
 
 /** Most styles whose theme a library remembers. */

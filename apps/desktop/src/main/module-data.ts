@@ -2,7 +2,7 @@ import { mkdir, readdir, readFile, rename, rm, rmdir, stat } from "node:fs/promi
 import path from "node:path";
 import { isModuleId, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER } from "@tavora/module-schema";
 import { isWorkspaceId } from "./workspace-id";
-import { writeFileAtomic } from "./fsutil";
+import { SerialQueue, writeFileAtomic } from "./fsutil";
 import { keepNewerCopy, readSavedFile, setAside } from "./json";
 import { SUPPORTED_VERSIONS } from "./saved-versions";
 import { defaultFilesRoot } from "./module-files";
@@ -155,8 +155,8 @@ export async function holdLeftovers(userData: string, filesRead: boolean, leftov
  * module. A backup copied back by hand is moved too; data already under an
  * owner is never overwritten, and the old copy then stays where it is.
  */
-export async function migrateModuleData(userData: string, log: (line: string) => void = () => undefined, blobRoot?: string): Promise<void> {
-  await applyPending(userData, log, blobRoot);
+export async function migrateModuleData(userData: string, log: (line: string) => void = () => undefined, blobRoot?: string, isLoaded: (owner: string, moduleId: string) => boolean = () => false): Promise<void> {
+  await applyPending(userData, log, blobRoot, isLoaded);
   const ownerOf = (moduleId: string) => (moduleId.startsWith(OFFICIAL_PREFIX) ? OFFICIAL_OWNER : LOCAL_OWNER);
 
   for (const dataRoot of dataRoots(userData, blobRoot)) {
@@ -239,13 +239,44 @@ async function readPending(userData: string): Promise<PendingChanges> {
   };
 }
 
-async function queue(userData: string, change: PendingChanges): Promise<void> {
-  const pending = await readPending(userData);
-  const next: PendingChanges = {
-    moves: [...(pending.moves ?? []), ...(change.moves ?? [])],
-    deletePartitions: [...new Set([...(pending.deletePartitions ?? []), ...(change.deletePartitions ?? [])])],
-  };
-  await writeFileAtomic(path.join(userData, PENDING), `${JSON.stringify({ version: SUPPORTED_VERSIONS[PENDING], ...next }, null, 2)}\n`);
+/** Changes to the file, one at a time, so two at once can't drop each other's. */
+const pendingChanges = new SerialQueue();
+
+async function writePending(userData: string, changes: PendingChanges): Promise<void> {
+  await writeFileAtomic(path.join(userData, PENDING), `${JSON.stringify({ version: SUPPORTED_VERSIONS[PENDING], ...changes }, null, 2)}\n`);
+}
+
+function queue(userData: string, change: PendingChanges): Promise<void> {
+  return pendingChanges.run(async () => {
+    const pending = await readPending(userData);
+    await writePending(userData, {
+      moves: [...(pending.moves ?? []), ...(change.moves ?? [])],
+      deletePartitions: [...new Set([...(pending.deletePartitions ?? []), ...(change.deletePartitions ?? [])])],
+    });
+  });
+}
+
+/** The (owner, module) a queued `persist:module:<owner>:<module>@<workspace>` belongs to. */
+function partitionModule(partition: string): { owner: string; moduleId: string } | null {
+  const match = /^persist:module:([a-z0-9]+):([a-z0-9.-]+)@[a-z0-9-]+$/.exec(partition);
+  return match ? { owner: match[1]!, moduleId: match[2]! } : null;
+}
+
+/**
+ * The module is installed again: its browser storage, cleared when its data was deleted, holds what it saved since, so
+ * the delete queued for the next start is called off.
+ */
+export function cancelPartitionDeletes(userData: string, owner: string, moduleId: string): Promise<void> {
+  return pendingChanges.run(async () => {
+    const pending = await readPending(userData);
+    const kept = (pending.deletePartitions ?? []).filter((partition) => {
+      const of = partitionModule(partition);
+      return of?.owner !== owner || of.moduleId !== moduleId;
+    });
+    if (kept.length === (pending.deletePartitions ?? []).length) return;
+    if (kept.length === 0 && (pending.moves ?? []).length === 0) await rm(path.join(userData, PENDING), { force: true });
+    else await writePending(userData, { moves: pending.moves ?? [], deletePartitions: kept });
+  });
 }
 
 /**
@@ -262,9 +293,10 @@ export async function queueLocalDataMove(userData: string, moduleId: string, to:
  * Carries out what was queued, before any module session or store opens:
  * local data moves to the signed owner workspace by workspace (a workspace where the signed
  * module already saved something keeps its own data, and the local copy stays),
- * and deleted modules' browser storage folders go.
+ * and deleted modules' browser storage folders go, unless their module is back (any way it came: a zip, the catalog, a
+ * development folder): what it saved since is in that folder.
  */
-async function applyPending(userData: string, log: (line: string) => void, blobRoot?: string): Promise<void> {
+async function applyPending(userData: string, log: (line: string) => void, blobRoot: string | undefined, isLoaded: (owner: string, moduleId: string) => boolean): Promise<void> {
   const pending = await readPending(userData);
   const partitions = path.join(userData, "Partitions");
   for (const { moduleId, to } of pending.moves ?? []) {
@@ -292,6 +324,8 @@ async function applyPending(userData: string, log: (line: string) => void, blobR
     }
   }
   for (const partition of pending.deletePartitions ?? []) {
+    const of = partitionModule(partition);
+    if (of && isLoaded(of.owner, of.moduleId)) continue;
     await rm(path.join(partitions, partitionDirName(partition)), { recursive: true, force: true });
   }
   await rm(path.join(userData, PENDING), { force: true });

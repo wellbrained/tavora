@@ -4,7 +4,7 @@
 // verified before anything is written, then the files go to a staging folder
 // that is renamed into place. Nothing from the zip is ever run.
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isModuleId, isOwnerId, LOCAL_OWNER, manifestFiles, needsNewerTavora, OFFICIAL_OWNER, validateManifest, type ModuleManifest } from "@tavora/module-schema";
 import { MANIFEST_FILE, readZip, signedHash, verifyFiles, ZIP_LIMITS, ZipError, type ZipFile } from "@tavora/pack";
@@ -13,9 +13,10 @@ import { SerialQueue, writeFileAtomic } from "./fsutil";
 import { readSavedFile } from "./json";
 import { SUPPORTED_VERSIONS } from "./saved-versions";
 import { UserError } from "./messages";
+import { cancelPartitionDeletes } from "./module-data";
 import { MOVED_MODULES } from "./moved-modules";
-import { FolderChecks } from "./module-folder-check";
-import type { OfficialUpdates } from "./official-updates";
+import { FolderChecks, readFolder, verifyFolder, type Verified } from "./module-folder-check";
+import { readOfficialRecords, type OfficialUpdates } from "./official-updates";
 import { OFFICIAL_PREFIX, type InstalledModule } from "./registry";
 import type { SafetyCheck } from "./safety-lists";
 
@@ -284,6 +285,8 @@ async function writeFiles({ files, manifest, owner, signer, sha256, signedSha256
   const stagingRoot = path.join(userData, "module-staging");
   await mkdir(stagingRoot, { recursive: true });
   const staging = await mkdtemp(path.join(stagingRoot, "install-"));
+  /** The folder this update replaced: it goes once the new one is recorded, or recoverInstalls sorts it out. */
+  let replaced: string | null = null;
   try {
     for (const file of files) {
       const destination = path.join(staging, ...file.name.split("/"));
@@ -300,7 +303,7 @@ async function writeFiles({ files, manifest, owner, signer, sha256, signedSha256
         await rename(old, target);
         throw error;
       }
-      await rm(old, { recursive: true, force: true });
+      replaced = old;
     } else {
       await rename(staging, target);
     }
@@ -311,13 +314,74 @@ async function writeFiles({ files, manifest, owner, signer, sha256, signedSha256
   if (downloaded && official) {
     // The folder is in place first: a record without it is ignored, and a folder without its record is not used.
     await official.save({ id: manifest.id, version: manifest.version, sha256, signer, ...(signedSha256 ? { signedSha256 } : {}) });
-    return { manifest, owner, sha256, updated };
+  } else {
+    await changeOwnerRecords(userData, (records) => {
+      if (owner === LOCAL_OWNER) delete records[folder];
+      else records[folder] = { id: manifest.id, owner, ...(signer !== owner ? { signer } : {}), sha256, ...(signedSha256 ? { signedSha256 } : {}), ...(catalog ? { catalog: true as const } : {}) };
+    });
   }
-  await changeOwnerRecords(userData, (records) => {
-    if (owner === LOCAL_OWNER) delete records[folder];
-    else records[folder] = { id: manifest.id, owner, ...(signer !== owner ? { signer } : {}), sha256, ...(signedSha256 ? { signedSha256 } : {}), ...(catalog ? { catalog: true as const } : {}) };
-  });
+  // The update counts from here. A locked file can't undo it: what is left of the old folder goes at the next start.
+  if (replaced) await rm(replaced, { recursive: true, force: true }).catch(() => undefined);
+  await cancelPartitionDeletes(userData, owner, manifest.id).catch((error: unknown) => console.warn("[tavora] calling off a queued storage delete failed", error));
   return { manifest, owner, sha256, updated };
+}
+
+/** Whether a folder's files are the ones its record names. */
+function matchesRecord(verified: Verified | null, id: string, record: { signer: string; signedSha256?: string; version?: string }): boolean {
+  return verified !== null && verified.id === id && verified.signer === record.signer && (record.signedSha256 === undefined || record.signedSha256 === verified.signedSha256) && (record.version === undefined || record.version === verified.version);
+}
+
+async function verifiedFolder(dir: string): Promise<Verified | null> {
+  const read = await readFolder(dir, true);
+  return read && verifyFolder(read.files);
+}
+
+/**
+ * Puts right a module update that was cut off, at start, before modules are looked for. Each `old-*` folder is a module's
+ * previous copy. With nothing in its place, it goes back. With a new copy in place, that copy stays when it is what the
+ * records name; when the records still name the old one, the update never finished, and the old one goes back, so the
+ * module isn't stopped as changed. Half-unpacked installs go too. Nothing here touches what modules saved.
+ */
+export async function recoverInstalls({ userData, userModules, officialDir, log }: { userData: string; userModules: string; officialDir: string; log: (line: string) => void }): Promise<void> {
+  const stagingRoot = path.join(userData, "module-staging");
+  const names = await readdir(stagingRoot).catch(() => [] as string[]);
+  for (const name of names.filter((item) => item.startsWith("install-"))) await rm(path.join(stagingRoot, name), { recursive: true, force: true }).catch(() => undefined);
+  const leftovers = names.filter((item) => item.startsWith("old-"));
+  if (leftovers.length === 0) return;
+  const owners = await readOwnerRecords(userData);
+  const officials = await readOfficialRecords(userData);
+  for (const name of leftovers) {
+    const old = path.join(stagingRoot, name);
+    let id: unknown;
+    try {
+      id = (JSON.parse(await readFile(path.join(old, MANIFEST_FILE), "utf8")) as { id?: unknown } | null)?.id;
+    } catch {
+      id = undefined;
+    }
+    if (!isModuleId(id)) {
+      log(`${name} in module-staging isn't a module; it stays`);
+      continue;
+    }
+    const isOfficial = id.startsWith(OFFICIAL_PREFIX);
+    const target = path.join(isOfficial ? officialDir : userModules, id);
+    if (!(await exists(target))) {
+      await mkdir(path.dirname(target), { recursive: true });
+      await rename(old, target);
+      log(`an update of ${id} was cut off; its previous copy is back`);
+      continue;
+    }
+    const owner = owners[id];
+    const record = isOfficial ? officials[id] : owner && { signer: owner.signer ?? owner.owner, ...(owner.signedSha256 ? { signedSha256: owner.signedSha256 } : {}) };
+    if (record && !matchesRecord(await verifiedFolder(target), id, record) && matchesRecord(await verifiedFolder(old), id, record)) {
+      const unfinished = path.join(stagingRoot, `unfinished-${randomUUID()}`);
+      await rename(target, unfinished);
+      await rename(old, target);
+      await rm(unfinished, { recursive: true, force: true }).catch(() => undefined);
+      log(`an update of ${id} was cut off before it was recorded; its previous copy is back`);
+      continue;
+    }
+    await rm(old, { recursive: true, force: true }).catch(() => undefined);
+  }
 }
 
 async function exists(target: string): Promise<boolean> {
