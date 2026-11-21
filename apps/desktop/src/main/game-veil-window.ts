@@ -3,7 +3,7 @@
 // overlays and works in panels. It loads one tiny page of its own (no files, no network, no bridge) that paints the
 // veil only while Tavora's main process keeps telling it so (a beat every BEAT_MS); with no beat for EXPIRE_MS the
 // page turns fully transparent, so a Tavora that stopped responding doesn't leave the game under a dark sheet.
-// If the page itself dies, the window is made click-through at once. It never takes the keyboard (the game keeps it
+// If the page itself dies or stalls, the window is made click-through at once (after a stall, until it answers again). It never takes the keyboard (the game keeps it
 // until a panel asks), and is visible to screen capture like the overlays. Nothing is injected into the game.
 //
 // Limit: the veil stops mouse clicks as a window does. A game that reads the mouse straight from the device (raw
@@ -78,13 +78,22 @@ export class GameVeilWindow implements VeilWindow {
     const contents = window.webContents;
     contents.on("will-navigate", (event) => event.preventDefault());
     contents.setWindowOpenHandler(() => ({ action: "deny" }));
-    // A page that died or hangs can't take the veil down by itself: the window stops taking clicks.
-    const passThrough = () => {
+    // A page that died or hangs can't take the veil down by itself: the window stops taking clicks. One that only
+    // stalled takes them again once it answers, or clicks would reach the game under a veil that looks in place.
+    let page: "alive" | "stalled" | "dead" = "alive";
+    const passThrough = (next: "stalled" | "dead") => {
+      if (page === "dead") return;
+      page = next;
       if (!window.isDestroyed()) window.setIgnoreMouseEvents(true);
     };
-    contents.on("render-process-gone", passThrough);
-    contents.on("unresponsive", passThrough);
-    void contents.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(VEIL_PAGE)}`).catch(() => passThrough());
+    contents.on("render-process-gone", () => passThrough("dead"));
+    contents.on("unresponsive", () => passThrough("stalled"));
+    contents.on("responsive", () => {
+      if (page !== "stalled") return;
+      page = "alive";
+      if (!window.isDestroyed()) window.setIgnoreMouseEvents(false);
+    });
+    void contents.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(VEIL_PAGE)}`).catch(() => passThrough("dead"));
     const tell = () => {
       if (!this.destroyed && !contents.isDestroyed() && !contents.isLoading()) void contents.executeJavaScript("window.__beat && window.__beat()").catch(() => {});
     };

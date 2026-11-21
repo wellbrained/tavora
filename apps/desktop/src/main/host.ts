@@ -4757,7 +4757,8 @@ export class Host {
     const module = record && this.modules.get(record.moduleId);
     if (!record) return null;
     // Unknown (module not loaded yet) counts as allowed: a panel is dropped only when its type is known to say no. A module without panel types says it at the top (`inGame`), as To-Dos does.
-    const allowed = this.panelTypeOf(record) === undefined || this.canShowInGame(record);
+    // A Browser panel can never be lent to the layer, so it doesn't stay in a setup.
+    const allowed = record.moduleId !== BROWSER_MODULE_ID && (this.panelTypeOf(record) === undefined || this.canShowInGame(record));
     const viewport = module && (this.panelTypeOf(record)?.viewport ?? this.shown(module.manifest).viewport);
     return {
       name: this.panelName(instanceId),

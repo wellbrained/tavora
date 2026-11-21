@@ -36,7 +36,17 @@ function build(name: string, closeLabel: string, layoutLabel: string) {
     handle.dataset.edge = edge;
     frame.append(handle);
   }
-  let dragging = false;
+  // The frame is the same element every time it is built (each Arrange): it gets its pointer listeners once.
+  if (listening !== frame) {
+    listening = frame;
+    listen(frame);
+  }
+}
+
+let listening: HTMLElement | null = null;
+let dragging = false;
+
+function listen(frame: HTMLElement) {
   frame.addEventListener("pointerdown", (event) => {
     if (event.button !== 0) return;
     dragging = true;
