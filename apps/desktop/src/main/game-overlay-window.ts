@@ -116,6 +116,8 @@ export class GameOverlayWindow {
   /** The item's place as last given (setRect); a panel's window may be bigger, with the arrange frame around it. */
   private place: Rect | null = null;
   private destroyed = false;
+  /** Above every window (the game in front), or among the usual windows, stacked right above the game (window-order.ts). */
+  private topmost = true;
   /** Tavora is quitting: the window may close then (an app quit closes every window and must not be held up). */
   private quitting = false;
   private readonly onQuit = () => {
@@ -290,8 +292,9 @@ export class GameOverlayWindow {
         this.applyMouse();
       }
       this.window.showInactive();
-      // The system may have put it under the game's window; ask again each time it comes back.
-      this.window.setAlwaysOnTop(true, "screen-saver");
+      // The system may have put it under the game's window; ask again each time it comes back (unless it sits among the
+      // usual windows while the user is elsewhere: the service stacks it over the game then).
+      this.window.setAlwaysOnTop(this.topmost, "screen-saver");
       if (panel) {
         panel.resume();
         void panel.nextFrame().then(() => {
@@ -324,6 +327,22 @@ export class GameOverlayWindow {
   /** Puts the window above the other windows of its level (the veil is shown first, and everything above it is raised after). */
   raise(): void {
     if (!this.isDestroyed) this.window.moveTop();
+  }
+
+  /**
+   * Above every window (`true`, the usual: the game is in front), or among the usual windows (`false`, while the user is in
+   * another window and overlays stay), where the service stacks it right above the game so other windows can cover it.
+   */
+  setTopmost(on: boolean): void {
+    if (this.isDestroyed || this.topmost === on) return;
+    this.topmost = on;
+    this.window.setAlwaysOnTop(on, "screen-saver");
+    if (on) this.window.moveTop();
+  }
+
+  /** The window's handle for Windows' calls (window-order.ts). */
+  get handle(): number {
+    return Number(this.window.getNativeWindowHandle().readBigUInt64LE(0));
   }
 
   /** Gives the keyboard to the panel (the service does so for one panel window only), in Use. */

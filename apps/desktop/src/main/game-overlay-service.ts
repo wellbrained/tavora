@@ -77,7 +77,7 @@ import type { Shell } from "./shell";
 
 /** The part of a game overlay's window the service drives (a test stands in for Electron). */
 export type OverlayWindow = Pick<GameOverlayWindow, "setRect" | "setShown" | "setMode" | "setHideFromCapture" | "setOpacity" | "destroy" | "dragging"> &
-  Partial<Pick<GameOverlayWindow, "focused" | "focusPanel" | "raise" | "setZoom" | "refreshFont" | "placed" | "setVeiled">>;
+  Partial<Pick<GameOverlayWindow, "focused" | "focusPanel" | "raise" | "setZoom" | "refreshFont" | "placed" | "setVeiled" | "setTopmost" | "handle">>;
 
 /** Which overlay or panel an item of the Overlay layout is. */
 export type LayoutItemRef = ItemRef;
@@ -221,6 +221,11 @@ export interface OverlayPlatform {
   screen?(): Rect;
   /** Whether one of Tavora's windows has the keyboard (its main window, a dialog); the service tells its own overlay windows apart. Everywhere hides then. */
   tavoraInFront?(): boolean;
+  /**
+   * Stacks windows (their handles, top first) right above the game's window (its handle) in Windows' order of windows
+   * (window-order.ts). Windows only; left out, overlays stay above every window while the user is elsewhere.
+   */
+  stackAboveGame?(game: number, windows: readonly number[]): void;
   /** A window for an overlay's page, or for the lent view of a panel (`panel`). */
   openWindow(request: OverlayWindowRequest, panel?: OverlayPanel): OverlayWindow;
   /** The veil over the game window (or the screen) while the layer is open. */
@@ -1190,6 +1195,15 @@ export class GameOverlays {
     const restack = veilNew || stackKey !== this.stackKey;
     if (restack) for (const one of stack) one.entry.window.raise?.();
     this.stackKey = stackKey;
+    // Overlays stay while the user is in another window: the game's stay right above its window instead of above every
+    // window, so a window brought over the game (a browser) covers them as it covers the game. Everywhere's stay on top.
+    const game = this.front === null && this.away !== null ? Number(this.probe?.keptHandle?.() ?? 0) : 0;
+    for (const one of stack) one.entry.window.setTopmost?.(game === 0 || one.entry.setup === EVERYWHERE);
+    if (game !== 0) {
+      const overGame = stack.filter((one) => one.entry.setup !== EVERYWHERE).flatMap((one) => (one.entry.window.handle ? [one.entry.window.handle] : []));
+      // Top first: the last in the stack is the highest.
+      if (overGame.length > 0) this.options.platform.stackAboveGame?.(game, overGame.reverse());
+    }
     // One window takes the keyboard, the panel used last; not each in turn.
     let focused = false;
     if (started.length > 0) {
