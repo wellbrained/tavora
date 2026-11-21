@@ -49,7 +49,7 @@ The button is hidden while overlays are off in Settings. Main sends a new live s
 
 ## Settings and runtime
 
-- Settings > Overlays keeps only the on/off switch and the global options (Keep when you switch windows, the layer key).
+- Settings > Overlays keeps only the on/off switch and the global options (Keep overlays on the game when you alt-tab, the layer key).
 - The layer key works whenever something shows, including Everywhere over the desktop; Esc closes it. The layer opens in Use (panels ready to click and type in, no frames); its card at the top switches to Arrange to move and resize ([overlay-layout.md](overlay-layout.md#panels-in-the-in-game-layer)).
 - Everywhere showing outside games is a new reach for module pages: the [security model](../../apps/docs/guide/security.md) is updated in the same pull request.
 

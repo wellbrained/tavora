@@ -192,7 +192,7 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
     enabled,
     /** One of Tavora's own windows has the keyboard. */
     tavora: false,
-    /** Settings > Overlays: Keep when you switch windows. */
+    /** Settings > Overlays: Keep overlays on the game when you alt-tab. */
     stay: false,
     /** The game window kept by the probe, where it is now; null once it is minimized or closed. */
     kept: null as Rect | null,

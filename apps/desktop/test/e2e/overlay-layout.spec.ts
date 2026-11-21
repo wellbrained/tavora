@@ -155,16 +155,16 @@ test("Reset position and Reset size work from the page, Take picture says why it
     await expect(page.locator("[role=tooltip] kbd")).toHaveText([/^(Ctrl|Cmd)$/, "Z"]);
     expect((await state(page)).pictureHint).toBe("start");
 
-    // Alt-tab: the toolbar shows Settings > Overlays' "Keep when you switch windows" (on at first) and changes it.
+    // Alt-tab: the toolbar shows Settings > Overlays' "Keep overlays on the game when you alt-tab" (on at first) and changes it.
     const saved = async () => (JSON.parse(await readFile(path.join(userData, "library.json"), "utf8")) as { overlaysStay?: boolean }).overlaysStay;
     const stay = page.getByRole("button", { name: "When you alt-tab out of the game", exact: true });
-    await expect(stay).toContainText("Overlays stay");
+    await expect(stay).toContainText("Stay on the game");
     await stay.hover();
-    await expect(page.locator("[role=tooltip]")).toHaveText("They stay over the game's window and go when you minimize or close it.");
+    await expect(page.locator("[role=tooltip]")).toHaveText("They stay on the game's window, under any window you put over it.");
     await stay.click();
     await shot(page, "00-alt-tab-menu");
     await page.getByTestId("layout-stay-option-hide").click();
-    await expect(stay).toContainText("Overlays hide");
+    await expect(stay).toContainText("Hide");
     await stay.hover();
     await expect(page.locator("[role=tooltip]")).toHaveText("They show only while the game is in front.");
     await shot(page, "00-alt-tab-hint");
