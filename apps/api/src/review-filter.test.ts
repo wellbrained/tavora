@@ -50,9 +50,58 @@ describe("the review word filter", () => {
   });
 
   it("reads doubled letters, digits and letters of other alphabets back", () => {
-    for (const text of ["niigga", "faaggot", "ni99a", "nіgga", "fаggot", "ѕchwuchtel", "niigger", "niiggaa", "NIIGGA", "nі 99a", "raape"]) {
+    for (const text of ["niigga", "faaggot", "ni99a", "ni66a", "nlgga", "nlgger", "nіgga", "fаggot", "ѕchwuchtel", "niigger", "niiggaa", "NIIGGA", "raape", "n 1 g g a", "n 1 9 9 a", "5lut", "r3tard", "k1ke", "f4ggot"]) {
       expect(checkReviewText(text), JSON.stringify(text)).toBe("words");
     }
+  });
+
+  it("keeps years and numbers as numbers, next to any short word", () => {
+    for (const text of [
+      "Released in 1994",
+      "Released on 1994",
+      "an 1994",
+      "en 1994",
+      "un 1994",
+      "Uni 994",
+      "Uni 1994",
+      "in 1994er",
+      "Released in1994",
+      "on1994",
+      "Das Spiel von 1996",
+      "ni 1994",
+      "in 99",
+      "Uni 99",
+      "Nintendo 64",
+      "x64",
+      "Win10 on 64 bit",
+      "Version 9.9.4",
+      "Top 10 in 2026",
+      "Kapitel 9 an 6 Tagen",
+      "1994",
+      "99",
+    ]) {
+      expect(checkReviewText(text), text).toBe("ok");
+      expect(checkModuleText(text), text).toBe("ok");
+    }
+  });
+
+  it("never reads a year as a letter, right after or joined to a short word", () => {
+    for (const word of ["in", "on", "an", "en", "un", "uni", "ani", "ini", "ni"]) {
+      for (let year = 1900; year < 2100; year++) {
+        expect(checkReviewText(`${word} ${year}`), `${word} ${year}`).toBe("ok");
+        expect(checkReviewText(`${word}${year}`), `${word}${year}`).toBe("ok");
+      }
+    }
+  });
+
+  it("gets through long spaced-out text quickly", () => {
+    expect(checkReviewText(`${"a ".repeat(10_000)}aa`)).toBe("ok");
+    expect(checkReviewText(`a${" ".repeat(20_000)}aa`)).toBe("ok");
+  });
+
+  it("holds a possible address written with a full-width dot, and reads the rest as a link", () => {
+    expect(checkReviewText("freerobux．App now")).toBe("hold");
+    expect(checkReviewText("cheapgold．shop now")).toBe("link");
   });
 
   it("leaves honest words with doubled letters and other alphabets alone", () => {

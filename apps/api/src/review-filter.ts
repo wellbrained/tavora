@@ -6,7 +6,7 @@
  */
 
 /** Letters people swap in to get around a filter, read back as the letter they stand for. */
-const LOOKALIKE: Record<string, string> = { "0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t", "8": "b", "9": "g", "@": "a", $: "s", "!": "i", "|": "i" };
+const LOOKALIKE: Record<string, string> = { "0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "6": "g", "7": "t", "8": "b", "9": "g", "@": "a", $: "s", "!": "i", "|": "i" };
 
 /** Letters of other alphabets that look like a Latin one, written as escapes so they can't be mistaken for it here. */
 const HOMOGLYPHS: Record<string, string> = {
@@ -25,7 +25,7 @@ const HOMOGLYPH = new RegExp(`[${Object.keys(HOMOGLYPHS).join("")}]`, "g");
  * Slurs against a group, and the strongest insults; plain swearing ("shit", "Scheiße") stays allowed.
  */
 const WORDS = [
-  "nigger", "nigga", "niggers", "niggas", "faggot", "faggots", "fag", "fags", "retard", "retards", "retarded", "tranny", "trannies",
+  "nigger", "nigga", "niggers", "niggas", "nlgger", "nlggers", "faggot", "faggots", "fag", "fags", "retard", "retards", "retarded", "tranny", "trannies",
   "kike", "kikes", "spic", "spics", "chink", "chinks", "gook", "gooks", "wetback", "wetbacks", "raghead", "ragheads", "coon", "coons",
   "cunt", "cunts", "whore", "whores", "slut", "sluts", "rape", "raped", "rapist",
   "neger", "kanake", "kanaken", "schwuchtel", "schwuchteln", "spast", "spasti", "spasten", "fotze", "fotzen", "hure", "huren", "nutte", "nutten",
@@ -34,7 +34,7 @@ const WORDS = [
 ];
 
 /** Parts refused even inside a longer word, where no honest word holds them. */
-const PARTS = ["nigga", "faggot", "schwuchtel", "judensau"];
+const PARTS = ["nigga", "nlgga", "faggot", "schwuchtel", "judensau"];
 
 /** Something that reads like a web address, a bare domain or an email address. */
 const LINK = /(?:https?:\/\/|www\.|[a-z0-9-]+(?:\.|\s?(?:\(dot\)|\[dot\])\s?)(?:com|net|org|io|gg|de|at|ch|ru|xyz|app|ly|me|co|tv|link|site|shop|info|biz|eu|uk|us)\b|\S+@\S+\.\S+|discord\.gg|t\.me\/)/i;
@@ -50,7 +50,9 @@ const MAYBE_ADDRESS = /^\p{Lu}?\p{Ll}{2,}\.App$/u;
 const WORD_CHAR = /[\p{L}\p{N}-]/u;
 
 /** "link" for what reads as an address, "hold" when only a person can tell, null when there is neither. */
-function linkIn(text: string): "link" | "hold" | null {
+function linkIn(original: string): "link" | "hold" | null {
+  // A full-width dot opens the same address in a browser.
+  const text = original.replace(/．/g, ".");
   let found: "hold" | null = null;
   for (const match of text.matchAll(LINK_GLOBAL)) {
     if (!/^[ \t]+\p{L}/u.test(text.slice(match.index + match[0].length))) return "link";
@@ -86,13 +88,30 @@ function latinWord(word: string): string {
   return /^[a-z]+$/.test(read) ? read : word;
 }
 
+const readDigit = (digit: string) => LOOKALIKE[digit] ?? digit;
+
+/**
+ * Digits read as letters only inside a word that has letters too ("ni99a", "f4ggot"), and only one or two in a row (one at its
+ * start), so a number stays a number: "in 1994", "on1994" and "1994er" hold no letters to join up with the word before them.
+ */
+function readDigits(token: string): string {
+  if (!/\p{L}/u.test(token)) return token;
+  return token.replace(/\d+/g, (run: string, at: number) => (run.length > 2 || (at === 0 && run.length > 1) ? run : run.replace(/\d/g, readDigit)));
+}
+
+/** Single characters in a row ("n 1 g g a"), with at least two letters among them, so a lone number isn't read as a letter. */
+const SPACED_OUT = /(?<![\p{L}\p{N}])(?:[\p{L}\d][^\p{L}\p{N}]+){2,}[\p{L}\d](?![\p{L}\p{N}])/gu;
+const readSpacedOut = (run: string) => ((run.match(/\p{L}/gu)?.length ?? 0) >= 2 ? run.replace(/\d/g, readDigit) : run);
+
 function plainWords(text: string): string {
   return text
     .toLowerCase()
     .normalize("NFKD")
     .replace(/[̀-ͯ]/g, "")
     .replace(/ß/g, "ss")
-    .replace(/[0-9@$!|]/g, (char) => LOOKALIKE[char] ?? char)
+    .replace(SPACED_OUT, readSpacedOut)
+    .replace(/[\p{L}\p{N}]+/gu, readDigits)
+    .replace(/[@$!|]/g, (char) => LOOKALIKE[char] ?? char)
     .replace(/\p{L}+/gu, latinWord)
     .replace(/[^a-z]+/g, " ")
     // "n i g g e r" or "f.a.g": single letters in a row are read as one word.
