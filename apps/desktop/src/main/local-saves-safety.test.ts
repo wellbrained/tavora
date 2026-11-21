@@ -146,6 +146,7 @@ describe("a module update that was cut off", () => {
 
   it("puts the previous copy back when nothing took its place", async () => {
     await put(at("module-staging", "old-1", "tavora.module.json"), manifest("wellbrained.dice", "1.0.0"));
+    await put(at("module-staging", "old-1.updating"), "");
     await mkdir(at("modules"));
     await recoverInstalls({ userData: dir, userModules: at("modules"), officialDir: at("official-updates"), log: () => undefined });
     expect((await json(at("modules", "wellbrained.dice", "tavora.module.json"))).version).toBe("1.0.0");

@@ -4,7 +4,7 @@
 // verified before anything is written, then the files go to a staging folder
 // that is renamed into place. Nothing from the zip is ever run.
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, open, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isModuleId, isOwnerId, LOCAL_OWNER, manifestFiles, needsNewerTavora, OFFICIAL_OWNER, validateManifest, type ModuleManifest } from "@tavora/module-schema";
 import { MANIFEST_FILE, readZip, SIGNATURE_FILE, signedHash, verifyFiles, ZIP_LIMITS, ZipError, type ZipFile } from "@tavora/pack";
@@ -16,7 +16,7 @@ import { SUPPORTED_VERSIONS } from "./saved-versions";
 import { UserError } from "./messages";
 import { cancelPartitionDeletes } from "./module-data";
 import { MOVED_MODULES } from "./moved-modules";
-import { FolderChecks, readFolder, verifyFolder, type Verified } from "./module-folder-check";
+import { FolderChecks, readFolderOrThrow, verifyFolder, type Verified } from "./module-folder-check";
 import { readOfficialRecords, type OfficialUpdates } from "./official-updates";
 import { OFFICIAL_PREFIX, type InstalledModule, type ModuleProblem } from "./registry";
 import type { SafetyCheck } from "./safety-lists";
@@ -289,19 +289,36 @@ async function writeFiles({ files, manifest, owner, signer, sha256, signedSha256
   /** The folder this update replaced: it goes once the new one is recorded, or recoverInstalls sorts it out. */
   let replaced: string | null = null;
   try {
-    for (const file of files) {
-      const destination = path.join(staging, ...file.name.split("/"));
-      await mkdir(path.dirname(destination), { recursive: true });
-      await writeFile(destination, file.data, { flag: "wx" });
+    // On the disk before the record says this copy is the module: a power cut can't leave a recorded folder half empty.
+    for (let at = 0; at < files.length; at += FLUSH_AT_ONCE) {
+      await Promise.all(files.slice(at, at + FLUSH_AT_ONCE).map(async (file) => {
+        const destination = path.join(staging, ...file.name.split("/"));
+        await mkdir(path.dirname(destination), { recursive: true });
+        const handle = await open(destination, "wx");
+        try {
+          await handle.writeFile(file.data);
+          await handle.sync();
+        } finally {
+          await handle.close();
+        }
+      }));
     }
     await mkdir(path.dirname(target), { recursive: true });
     if (downloaded ? await exists(target) : updated) {
       const old = path.join(stagingRoot, `old-${randomUUID()}`);
-      await renameHeld(target, old);
+      // Says this copy is an update on its way, so recovery can tell it from one a module's removal left behind.
+      await writeFile(`${old}${UPDATING}`, "");
       try {
-        await renameHeld(staging, target);
+        await renameHeld(target, old);
+        try {
+          await renameHeld(staging, target);
+        } catch (error) {
+          await renameHeld(old, target);
+          throw error;
+        }
       } catch (error) {
-        await renameHeld(old, target);
+        // Still there, the old copy keeps its mark, so the next start puts it back.
+        if (!(await exists(old).catch(() => true))) await rm(`${old}${UPDATING}`, { force: true }).catch(() => undefined);
         throw error;
       }
       replaced = old;
@@ -332,10 +349,18 @@ function matchesRecord(verified: Verified | null, id: string, record: { signer: 
   return verified !== null && verified.id === id && verified.signer === record.signer && (record.signedSha256 === undefined || record.signedSha256 === verified.signedSha256) && (record.version === undefined || record.version === verified.version);
 }
 
+/** The signature check of a folder; null when it isn't a signed module's, and one that can't be read right now throws. */
 async function verifiedFolder(dir: string): Promise<Verified | null> {
-  const read = await readFolder(dir, true);
+  const read = await readFolderOrThrow(dir, true);
   return read && verifyFolder(read.files);
 }
+
+/** Files written and flushed at once while a module is unpacked: a flush per file, one at a time, is slow on a big module. */
+const FLUSH_AT_ONCE = 16;
+/** Next to `old-<id>`: this Tavora moved it there for an update that hasn't finished. */
+const UPDATING = ".updating";
+const DONE = ".done";
+const isOldCopy = (name: string) => name.startsWith("old-") && !name.endsWith(DONE) && !name.endsWith(UPDATING);
 
 /** What a previous copy must match to come back. */
 type CopyRecord = { signer: string; signedSha256?: string; version?: string };
@@ -352,14 +377,24 @@ export function strandedModules(userData: string): readonly ModuleProblem[] {
  * knows this copy must never come back, whatever happens to the module meanwhile.
  */
 async function retireOldCopy(old: string): Promise<void> {
-  await writeFile(`${old}.done`, "").catch(() => undefined);
+  await writeFile(`${old}${DONE}`, "").catch(() => undefined);
+  await rm(`${old}${UPDATING}`, { force: true }).catch(() => undefined);
   await rm(old, { recursive: true, force: true }).catch(() => undefined);
-  if (!(await exists(old))) await rm(`${old}.done`, { force: true }).catch(() => undefined);
+  if (!(await exists(old).catch(() => true))) await rm(`${old}${DONE}`, { force: true }).catch(() => undefined);
 }
 
+/** The module a previous copy is of; null when it isn't one. A manifest that can't be read right now throws. */
 async function oldCopyId(old: string): Promise<string | null> {
+  let text: string;
   try {
-    const id = (JSON.parse(await readFile(path.join(old, MANIFEST_FILE), "utf8")) as { id?: unknown } | null)?.id;
+    text = await readFile(path.join(old, MANIFEST_FILE), "utf8");
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "ENOTDIR" || code === "EISDIR") return null;
+    throw error;
+  }
+  try {
+    const id = (JSON.parse(text) as { id?: unknown } | null)?.id;
     return isModuleId(id) ? id : null;
   } catch {
     return null;
@@ -370,30 +405,39 @@ async function oldCopyId(old: string): Promise<string | null> {
 export async function dropOldCopies(userData: string, moduleId: string): Promise<void> {
   const stagingRoot = path.join(userData, "module-staging");
   for (const name of await readdir(stagingRoot).catch(() => [] as string[])) {
-    if (!name.startsWith("old-") || name.endsWith(".done")) continue;
+    if (!isOldCopy(name)) continue;
     const old = path.join(stagingRoot, name);
-    if ((await oldCopyId(old)) === moduleId) await retireOldCopy(old);
+    if ((await oldCopyId(old).catch(() => null)) === moduleId) await retireOldCopy(old);
   }
   stranded.set(userData, strandedModules(userData).filter((problem) => problem.about?.id !== moduleId));
 }
 
 /**
  * One previous copy, at start. It comes back only as what it was: the copy the records still name, or an unsigned local
- * module, which never has a record. A signed copy no record names belongs to a module that was removed: as an unsigned
- * folder it would load past the signature and block checks, so it goes. With a new copy in place, the new one stays
- * when it is what the records name; when they still name the old one, the update never finished and the old one goes back.
+ * module (which never has a record) whose update this Tavora marked as on its way. A signed copy no record names belongs
+ * to a module that was removed: as an unsigned folder it would load past the signature and block checks, so it goes. An
+ * unsigned one without the mark, from an older Tavora, may be a module the user removed: it doesn't come back, and its
+ * files stay as `left-*`. With a new copy in place, the new one stays when it is what the records name; when they still
+ * name the old one, the update never finished and the old one goes back. What can't be read right now throws: "busy"
+ * never counts as invalid, as this may be the module's only copy.
  */
-async function recoverOldCopy(id: string, old: string, target: string, record: CopyRecord | undefined, stagingRoot: string, log: (line: string) => void): Promise<void> {
-  const read = await readFolder(old, true);
+async function recoverOldCopy(id: string, old: string, target: string, record: CopyRecord | undefined, updating: boolean, stagingRoot: string, log: (line: string) => void): Promise<void> {
+  const read = await readFolderOrThrow(old, true);
   const recorded = record !== undefined && matchesRecord(read && verifyFolder(read.files), id, record);
   const plainLocal = record === undefined && !id.startsWith(OFFICIAL_PREFIX) && read !== null && !read.files.some((file) => file.name === SIGNATURE_FILE);
   if (!(await exists(target))) {
+    if (plainLocal && !updating) {
+      log(`a previous copy of ${id} from an older Tavora doesn't come back; its files stay in module-staging`);
+      await renameHeld(old, path.join(stagingRoot, path.basename(old).replace(/^old-/, "left-")));
+      return;
+    }
     if (!recorded && !plainLocal) {
       log(`a previous copy of ${id} isn't what its records name, so it doesn't come back`);
       return retireOldCopy(old);
     }
     await mkdir(path.dirname(target), { recursive: true });
     await renameHeld(old, target);
+    await rm(`${old}${UPDATING}`, { force: true }).catch(() => undefined);
     log(`an update of ${id} was cut off; its previous copy is back`);
     return;
   }
@@ -406,6 +450,7 @@ async function recoverOldCopy(id: string, old: string, target: string, record: C
     await renameHeld(unfinished, target);
     throw error;
   }
+  await rm(`${old}${UPDATING}`, { force: true }).catch(() => undefined);
   await rm(unfinished, { recursive: true, force: true }).catch(() => undefined);
   log(`an update of ${id} was cut off before it was recorded; its previous copy is back`);
 }
@@ -417,12 +462,22 @@ async function recoverOldCopy(id: string, old: string, target: string, record: C
  */
 export async function recoverInstalls({ userData, userModules, officialDir, log }: { userData: string; userModules: string; officialDir: string; log: (line: string) => void }): Promise<void> {
   const stagingRoot = path.join(userData, "module-staging");
-  const names = await readdir(stagingRoot).catch(() => [] as string[]);
   const waiting: ModuleProblem[] = [];
   stranded.set(userData, waiting);
+  /** Can't tell whose this is right now: without an id, every panel waits (panelsWait), until the next start looks again. */
+  const unsure = (where: string) => waiting.push({ folder: path.basename(where), path: where, message: "a module update can't be read right now", kind: "unreadable", official: true });
+  let names: string[];
+  try {
+    names = await readdir(stagingRoot);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") unsure(stagingRoot);
+    return;
+  }
   for (const name of names.filter((item) => item.startsWith("install-"))) await rm(path.join(stagingRoot, name), { recursive: true, force: true }).catch(() => undefined);
-  for (const name of names.filter((item) => item.startsWith("old-") && item.endsWith(".done"))) await retireOldCopy(path.join(stagingRoot, name.slice(0, -".done".length)));
-  const leftovers = names.filter((item) => item.startsWith("old-") && !item.endsWith(".done") && !names.includes(`${item}.done`));
+  for (const name of names.filter((item) => item.startsWith("old-") && item.endsWith(DONE))) await retireOldCopy(path.join(stagingRoot, name.slice(0, -DONE.length)));
+  // A mark whose folder never moved: the update stopped before it began.
+  for (const name of names.filter((item) => item.startsWith("old-") && item.endsWith(UPDATING) && !names.includes(item.slice(0, -UPDATING.length)))) await rm(path.join(stagingRoot, name), { force: true }).catch(() => undefined);
+  const leftovers = names.filter((item) => isOldCopy(item) && !names.includes(`${item}${DONE}`));
   let records: { owners: OwnerRecords; officials: Awaited<ReturnType<typeof readOfficialRecords>> } | null = null;
   if (leftovers.length > 0) {
     try {
@@ -433,7 +488,14 @@ export async function recoverInstalls({ userData, userModules, officialDir, log 
   }
   for (const name of leftovers) {
     const old = path.join(stagingRoot, name);
-    const id = await oldCopyId(old);
+    let id: string | null;
+    try {
+      id = await oldCopyId(old);
+    } catch (error) {
+      log(`${name} in module-staging can't be read now: ${error instanceof Error ? error.message : String(error)}`);
+      unsure(old);
+      continue;
+    }
     if (id === null) {
       log(`${name} in module-staging isn't a module; it stays`);
       continue;
@@ -444,18 +506,22 @@ export async function recoverInstalls({ userData, userModules, officialDir, log 
       if (!records) throw new Error("its records can't be read");
       const owner = records.owners[id];
       const record: CopyRecord | undefined = isOfficial ? records.officials[id] : owner?.id === id ? { signer: owner.signer ?? owner.owner, ...(owner.signedSha256 ? { signedSha256: owner.signedSha256 } : {}) } : undefined;
-      await recoverOldCopy(id, old, target, record, stagingRoot, log);
+      await recoverOldCopy(id, old, target, record, names.includes(`${name}${UPDATING}`), stagingRoot, log);
     } catch (error) {
       log(`an update of ${id} can't be put right yet: ${error instanceof Error ? error.message : String(error)}`);
-      if (!(await exists(target))) waiting.push({ folder: id, path: old, message: "an update of this module was cut off", kind: "unreadable", about: { name: id, version: null, id }, official: true });
+      if (!(await exists(target).catch(() => false))) waiting.push({ folder: id, path: old, message: "an update of this module was cut off", kind: "unreadable", about: { name: id, version: null, id }, official: true });
     }
   }
   for (const name of names.filter((item) => item.startsWith("unfinished-"))) await rm(path.join(stagingRoot, name), { recursive: true, force: true }).catch(() => undefined);
 }
 
+/** Whether a file is there; one that can't be looked at right now throws, so nothing acts as if it were gone. */
 async function exists(target: string): Promise<boolean> {
   return stat(target).then(
     () => true,
-    () => false,
+    (error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT" || error.code === "ENOTDIR") return false;
+      throw error;
+    },
   );
 }

@@ -104,7 +104,7 @@ describe("a previous copy whose module is gone", () => {
 
   it("isn't brought back when deleting it failed after a finished update, and the module was then removed", async () => {
     await install(signed(ID, "1.0.0"));
-    heldRm = (dir) => path.basename(dir).startsWith("old-");
+    heldRm = (dir) => /^old-[^.]+$/.test(path.basename(dir));
     await install(signed(ID, "2.0.0"), new Map([[ID, loaded(ID, target(), fingerprint(key))]]));
     heldRm = () => false;
     expect((await readdir(staging)).filter((name) => name.startsWith("old-") && !name.endsWith(".done"))).toHaveLength(1);
@@ -165,8 +165,10 @@ describe("an update that really was cut off", () => {
 
   it("puts back an unsigned local module, which never had a record", async () => {
     await put(path.join(staging, "old-1"), unsigned(ID, "1.0.0"));
+    await writeFile(path.join(staging, "old-1.updating"), "");
     await recover();
     expect(await page(target())).toBe("<p>1.0.0</p>");
+    expect(await readdir(staging)).toEqual([]);
   });
 
   it("puts back one of Tavora's own only when its record names it", async () => {
