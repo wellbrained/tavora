@@ -622,6 +622,8 @@ export const en = {
   "cloudCopy.conflict.keepPc": "Keep this PC's",
   "cloudCopy.conflict.useCloud": "Use the cloud copy",
   "cloudCopy.conflict.cloudHint": "Using the cloud copy restarts Tavora.",
+  "cloudCopy.lost.title": "Some of your data couldn't be opened",
+  "cloudCopy.lost.text": "Your cloud copy can bring it back. If you keep this PC's, what's missing goes from your cloud copy too.",
   "cloudCopy.later": "Later",
   "cloudCopy.newer.title": "Newer data from your other PC",
   "cloudCopy.newer.text": "Restart Tavora to load it.",

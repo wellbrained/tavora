@@ -88,7 +88,12 @@ export class FolderStorage implements CopyStorage {
   /** The manifests, newest first. */
   private async manifests(): Promise<ManifestFile[]> {
     await this.reachable();
-    const names = await readdir(this.manifestsDir).catch(() => [] as string[]);
+    // Only a folder that isn't there means no copy. One that can't be read right now throws: it says nothing about the
+    // copy, and "no copy" would turn it off on this PC.
+    const names = await readdir(this.manifestsDir).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return [] as string[];
+      throw error;
+    });
     const found: ManifestFile[] = [];
     for (const name of names) {
       const match = MANIFEST_NAME.exec(name);

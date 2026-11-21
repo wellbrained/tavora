@@ -30,6 +30,13 @@ export function serializeJson(value: unknown, what: string): string {
 /** How many of the user's files were set aside this run because they couldn't be read, and who hears of each new one. */
 let keptCount = 0;
 let keptListener: (() => void) | null = null;
+/** The files set aside this run. */
+const setAsideFiles = new Set<string>();
+
+/** Whether this file was set aside this run because it couldn't be read. */
+export function wasSetAside(file: string): boolean {
+  return setAsideFiles.has(path.resolve(file));
+}
 
 /** How many of the user's saved files were set aside this run because they couldn't be read. */
 export function unreadableFilesKept(): number {
@@ -67,6 +74,7 @@ export async function setAside(file: string, notice = false): Promise<void> {
     await rename(file, target);
     break;
   }
+  setAsideFiles.add(path.resolve(file));
   console.error(`[tavora] unreadable file has been set aside: ${file}`);
   if (notice) tellKept();
 }

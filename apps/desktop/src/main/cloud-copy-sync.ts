@@ -23,10 +23,10 @@ import type { Encryptor } from "./discord-store";
 import { recoveryKey } from "./copy-crypto";
 import { checkFolder, FolderStorage } from "./copy-folder";
 import { writeFileAtomic } from "./fsutil";
-import { readSavedFile } from "./json";
+import { readSavedFile, wasSetAside } from "./json";
 import { STORE_VERSIONS } from "./saved-versions";
 import { UserError } from "./messages";
-import { LIBRARY_FILE, libraryFile, PC_SETTINGS } from "./saved-data";
+import { DATA_FILES, LIBRARY_FILE, libraryFile, PC_SETTINGS } from "./saved-data";
 
 // When the cloud copy syncs (decided 2026-10-19), using the engine in cloud-copy.ts:
 // - At start, before anything reads the data, a newer copy is taken when this PC has
@@ -60,6 +60,19 @@ interface Staged {
   sealed?: boolean;
   /** The user chose it (restore, or keeping the copy's side): taken even though this PC changed. */
   take: boolean;
+}
+
+/**
+ * A swap in progress (`swap.json` in the staging folder), written before the first file moves and removed after the
+ * state is saved. Cut off by a crash or a locked file, the next start finishes it with the same backup folder.
+ */
+interface SwapJournal {
+  v: 1;
+  keepIn: string;
+  /** The module files folder when it began: the library that names it may be the part that is moved away. */
+  moduleFiles: string;
+  /** This PC's own settings from before the swap (PC_SETTINGS). */
+  own: Record<string, unknown> | null;
 }
 
 export interface CopySyncOptions {
@@ -212,6 +225,9 @@ export class CopySync {
   private get stagedFile() {
     return path.join(this.stagingDir, "staged.json");
   }
+  private get journalFile() {
+    return path.join(this.stagingDir, "swap.json");
+  }
   private roots(): CopyRoot[] {
     return copyRoots(this.options.userData, this.options.files.root());
   }
@@ -281,6 +297,7 @@ export class CopySync {
       pictures: this.state.pictures,
       recoveryKey: this.shownKey,
       ...questionsView(this.questions),
+      lostData: this.dataLost,
       closing: this.closing.phase === "holding" && this.closing.shown,
       problem: this.problem,
     };
@@ -373,22 +390,64 @@ export class CopySync {
         this.use(place);
       }
       if (await this.takeStaged()) return;
+      // Data lost on an earlier start and not decided yet: nothing goes up until the user chooses a side.
+      if (this.dataLost) this.ask("conflict");
       if (!this.on) return;
       let late = false;
+      let swapping = false;
       const turn = this.turn;
       const check = this.fetchNewer(turn).then(async (staged) => {
         // Turned off while it looked: nothing waits for a restart.
         if (!staged || turn !== this.turn) return;
-        if (!late && (await this.takeStaged())) return;
+        if (!late) {
+          swapping = true;
+          if (await this.takeStaged()) return;
+          // Not taken without the user: they choose a side.
+          if (this.asked("conflict")) return void this.changed();
+        }
         // Finished after the workspaces loaded: it waits for a restart.
         this.ask("restartToTake");
         this.changed();
       });
       const timer = new Promise<"late">((resolve) => setTimeout(() => resolve("late"), budgetMs).unref?.());
       if ((await Promise.race([check.then(() => "done" as const), timer])) === "late") {
-        late = true;
-        this.running = check.catch((error: unknown) => void this.noteProblem(error));
+        // Already swapping files in: the start waits for it, so nothing reads the data halfway.
+        if (swapping) await check;
+        else {
+          late = true;
+          this.running = check.catch((error: unknown) => void this.noteProblem(error));
+        }
       }
+    } catch (error) {
+      this.noteProblem(error);
+    }
+  }
+
+  /** Data files this PC lost and the user hasn't decided about yet: uploads wait, and the start's sweep deletes nothing. */
+  get dataLost(): boolean {
+    return (this.state.lost?.length ?? 0) > 0;
+  }
+
+  /**
+   * Once the data files were read, before anything writes them: one that was unreadable (set aside) or that this PC
+   * synced and is gone now would go up as empty and replace the good copy on every PC. It is noted (across restarts
+   * too) and the user chooses: the copy brings it back, or this PC's side goes up as it is. Never throws.
+   */
+  async checkDataFiles(): Promise<void> {
+    if (!this.options.enabled || !this.on) return;
+    try {
+      const lost: string[] = [];
+      for (const name of DATA_FILES) {
+        const file = path.join(this.options.userData, name);
+        const there = await stat(file).then(() => true, () => false);
+        if (!there && (wasSetAside(file) || this.state.files[name] !== undefined)) lost.push(name);
+      }
+      if (lost.length === 0) return;
+      this.state = { ...this.state, lost: [...new Set([...(this.state.lost ?? []), ...lost])] };
+      await saveCopyState(this.stateFile, this.state);
+      this.log(`cloud copy: ${lost.join(", ")} can't be read here; nothing goes up until the user chooses a side`);
+      this.ask("conflict");
+      this.changed();
     } catch (error) {
       this.noteProblem(error);
     }
@@ -433,10 +492,12 @@ export class CopySync {
    * version than `since` is refused ("older"); only the check at start passes one, the user's own choices take any.
    */
   private async stage(take: boolean, since = 0): Promise<Staged | null> {
+    await this.refuseDuringSwap();
+    const turn = this.turn;
     await rm(this.stagingDir, { recursive: true, force: true });
     let copy: Awaited<ReturnType<CloudCopy["download"]>>;
     try {
-      copy = await this.cloud.download(this.key!, this.roots(), this.stagedData, since, this.state.sealed === true);
+      copy = await this.cloud.download(this.key!, this.roots(), this.stagedData, since, this.state.sealed === true, () => turn === this.turn);
     } catch (error) {
       // The account's vault doesn't open with this PC's key either (another PC started over with a new key, or the
       // service sent something else): the copy goes off here, and turning it on asks for the new key. The key and the
@@ -447,6 +508,11 @@ export class CopySync {
       }
       throw error;
     }
+    // Turned off while it came down: nothing of it stays.
+    if (turn !== this.turn) {
+      await this.clearStaging();
+      return null;
+    }
     if (!copy) return null;
     const staged: Staged = { v: 1, ...copy, take };
     await writeFileAtomic(this.stagedFile, JSON.stringify(staged));
@@ -455,6 +521,7 @@ export class CopySync {
 
   /** The copy as it is now in the staging folder: the one staged already when it is still current, else downloaded. */
   private async stageCurrent(take: boolean): Promise<Staged | null> {
+    await this.refuseDuringSwap();
     const staged = await this.readStaged();
     const remote = staged ? await this.cloud.remote() : null;
     if (!staged || !remote || remote.version !== staged.version) return this.stage(take);
@@ -471,29 +538,81 @@ export class CopySync {
     }
   }
 
-  /** Swaps a staged copy in: when the user chose it, or when this PC has not changed since it last synced. */
+  private async readJournal(): Promise<SwapJournal | null> {
+    try {
+      const saved = JSON.parse(await readFile(this.journalFile, "utf8")) as Partial<SwapJournal> | null;
+      if (saved?.v !== 1 || typeof saved.keepIn !== "string" || typeof saved.moduleFiles !== "string") return null;
+      if (path.dirname(saved.keepIn) !== backupsDir(this.options.userData) || !path.isAbsolute(saved.moduleFiles)) return null;
+      const own = typeof saved.own === "object" && saved.own !== null && !Array.isArray(saved.own) ? saved.own : null;
+      return { v: 1, keepIn: saved.keepIn, moduleFiles: saved.moduleFiles, own };
+    } catch {
+      return null;
+    }
+  }
+
+  /** A swap was cut off and waits for the next start to finish: the staging folder holds the only copy of what's left. */
+  private async swapUnfinished(): Promise<boolean> {
+    return (await this.readJournal()) !== null && (await this.readStaged()) !== null;
+  }
+
+  private async refuseDuringSwap(): Promise<void> {
+    if (await this.swapUnfinished()) throw new CopyError("failed", "a copy is still being put in place");
+  }
+
+  /** Empties the staging folder, unless a swap cut off still needs it. */
+  private async clearStaging(): Promise<void> {
+    if (!(await this.swapUnfinished())) await rm(this.stagingDir, { recursive: true, force: true });
+  }
+
+  /**
+   * Whether a copy not chosen by the user would take every workspace away: this PC lists some and the copy none of
+   * them. That is what a library lost on another PC looks like, and taking it would delete their browser data here.
+   */
+  private async copyDropsWorkspaces(): Promise<boolean> {
+    const ids = (library: Record<string, unknown> | null) => {
+      const workspaces = library?.workspaces;
+      return typeof workspaces === "object" && workspaces !== null ? Object.keys(workspaces) : [];
+    };
+    const here = ids(await readJson(libraryFile(this.options.userData)));
+    if (here.length === 0) return false;
+    const taken = new Set(ids(await readJson(path.join(this.stagedData, LIBRARY_FILE))));
+    return !here.some((id) => taken.has(id));
+  }
+
+  /**
+   * Swaps a staged copy in: when the user chose it, or when this PC has not changed since it last synced. A swap that
+   * was cut off is finished first, whatever else changed, as part of the data is in place already.
+   */
   private async takeStaged(): Promise<boolean> {
     const staged = await this.readStaged();
     if (!staged) return false;
-    if (!this.on || staged.version <= this.state.version) {
-      await rm(this.stagingDir, { recursive: true, force: true });
-      return false;
-    }
-    if (!staged.take && (await hasLocalChanges(this.roots(), this.state))) {
-      this.ask("conflict");
-      return false;
+    const journal = await this.readJournal();
+    if (!journal) {
+      // One the user chose is taken at any version: restoring the version this PC already has is how lost data comes back.
+      if (!this.on || (!staged.take && staged.version <= this.state.version)) {
+        await rm(this.stagingDir, { recursive: true, force: true });
+        return false;
+      }
+      if (!staged.take && (this.dataLost || (await hasLocalChanges(this.roots(), this.state)) || (await this.copyDropsWorkspaces()))) {
+        this.ask("conflict");
+        return false;
+      }
     }
     const library = libraryFile(this.options.userData);
-    const ownSettings = await readJson(library);
-    const keepIn = await this.backupFolder("this-pc");
-    const roots = this.roots();
-    const sealedSeen = this.state.sealed === true;
-    this.state = await swapInCopy(this.stagedData, roots, keepIn, staged);
+    const moduleFiles = journal?.moduleFiles ?? this.options.files.root();
+    const own = journal ? journal.own : pcSettingsOf(await readJson(library));
+    const keepIn = journal?.keepIn ?? (await this.backupFolder("this-pc"));
+    if (!journal) await writeFileAtomic(this.journalFile, JSON.stringify({ v: 1, keepIn, moduleFiles, own } satisfies SwapJournal));
+    const taken = await swapInCopy(this.stagedData, copyRoots(this.options.userData, moduleFiles), keepIn, staged);
     // Once seen, a sealed copy stays seen, also after taking an older Tavora's copy.
-    if (sealedSeen) this.state = { ...this.state, sealed: true };
+    const state = this.state.sealed === true ? { ...taken, sealed: true } : taken;
+    await keepPcSettings(library, own, state);
+    // Turned off before the cut: the files are finished, and the copy stays off.
+    if (this.copyOn) {
+      this.state = state;
+      await saveCopyState(this.stateFile, state);
+    }
     await rm(this.stagingDir, { recursive: true, force: true });
-    await keepPcSettings(library, ownSettings, this.state);
-    await saveCopyState(this.stateFile, this.state);
     this.problem = null;
     this.log(`cloud copy: took version ${staged.version}; this PC's data is in ${keepIn}`);
     return true;
@@ -660,6 +779,8 @@ export class CopySync {
    * new key. The data on every PC stays.
    */
   async startOver(): Promise<void> {
+    // It would replace the copy with what is left here.
+    if (this.dataLost) throw new UserError("cloudCopy.error.conflict");
     const turn = this.turn;
     const base = await this.exclusive("checking", async () => {
       const remote = await this.cloud.remote();
@@ -819,11 +940,13 @@ export class CopySync {
           // This PC's side goes up on top of the copy, even when nothing changed here since its last sync (the copy was
           // older, or made anew). Marked on disk, so it counts as changed until an upload succeeds, also across a restart;
           // the files keep their dates and parts, so a retry reads only what really changed.
-          this.state = { ...this.state, version: staged.version, kept: true };
+          // Choosing this PC's side also answers for data it lost: what is here now is what the user wants up.
+          const { lost: _answered, ...mine } = this.state;
+          this.state = { ...mine, version: staged.version, kept: true };
         } else {
           this.state = EMPTY_STATE;
         }
-        await rm(this.stagingDir, { recursive: true, force: true });
+        await this.clearStaging();
         await this.keepState(turn);
       } catch (error) {
         throw CopySync.userError(this.noteProblem(error));
@@ -839,7 +962,7 @@ export class CopySync {
     const turn = this.turn;
     await this.exclusive("downloading", async () => {
       try {
-        if (!(await this.stageCurrent(true))) throw new UserError("cloudCopy.error.noCopy");
+        if (!(await this.stageCurrent(true)) && turn === this.turn) throw new UserError("cloudCopy.error.noCopy");
       } catch (error) {
         if (error instanceof KeyChanged) throw CopySync.userError(this.noteProblem(error));
         if (error instanceof UserError) throw error;
@@ -935,7 +1058,7 @@ export class CopySync {
     this.problem = problem;
     await rm(this.stateFile, { force: true });
     await rm(this.placeFile, { force: true });
-    await rm(this.stagingDir, { recursive: true, force: true });
+    await this.clearStaging();
     this.use(null);
     this.changed();
   }
@@ -1014,9 +1137,15 @@ async function readJson(file: string): Promise<Record<string, unknown> | null> {
   }
 }
 
+/** Only this PC's own settings of a library, for the swap's journal. */
+function pcSettingsOf(library: Record<string, unknown> | null): Record<string, unknown> | null {
+  return library && Object.fromEntries(PC_SETTINGS.filter((name) => name in library).map((name) => [name, library[name]]));
+}
+
 /**
  * Puts this PC's own settings (its module files folder, development folders, …) back into the library a
- * copy brought. The synced state keeps the copy's hash, so this alone is not a change to upload.
+ * copy brought. The synced state keeps the copy's hash, so this alone is not a change to upload. A swap finished
+ * after being cut off may find them back already; the state still gets the file's size and date.
  */
 async function keepPcSettings(file: string, own: Record<string, unknown> | null, state: CopyState): Promise<void> {
   const taken = await readJson(file);
@@ -1029,11 +1158,11 @@ async function keepPcSettings(file: string, own: Record<string, unknown> | null,
     else taken[name] = value;
     changed = true;
   }
-  if (!changed) return;
-  await writeFileAtomic(file, JSON.stringify(taken, null, 2));
+  if (changed) await writeFileAtomic(file, JSON.stringify(taken, null, 2));
   const synced = state.files[LIBRARY_FILE];
+  if (!synced) return;
   const info = await stat(file);
-  if (synced) state.files[LIBRARY_FILE] = { ...synced, size: info.size, mtimeMs: info.mtimeMs };
+  state.files[LIBRARY_FILE] = { ...synced, size: info.size, mtimeMs: info.mtimeMs };
 }
 
 /** The copy was sealed with a key that doesn't open the account's vault: another PC started over, or the service changed it. */

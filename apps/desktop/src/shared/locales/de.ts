@@ -624,6 +624,8 @@ export const de: Record<keyof typeof en, string> = {
   "cloudCopy.conflict.keepPc": "Die von diesem PC",
   "cloudCopy.conflict.useCloud": "Die Cloud-Kopie",
   "cloudCopy.conflict.cloudHint": "Mit der Cloud-Kopie startet Tavora neu.",
+  "cloudCopy.lost.title": "Ein Teil deiner Daten ließ sich nicht öffnen",
+  "cloudCopy.lost.text": "Deine Cloud-Kopie kann sie zurückholen. Behältst du die von diesem PC, fehlt das auch in deiner Cloud-Kopie.",
   "cloudCopy.later": "Später",
   "cloudCopy.newer.title": "Neuere Daten von deinem anderen PC",
   "cloudCopy.newer.text": "Starte Tavora neu, um sie zu laden.",

@@ -11,8 +11,10 @@ import ModalDialog from "./ModalDialog.vue";
 const busy = ref(false);
 const megabytes = (bytes: number) => Math.max(0, Math.ceil(bytes / (1024 * 1024)));
 
-const title = computed(() => t(copyQuestion.value === "closing" ? "cloudCopy.closing.title" : copyQuestion.value === "conflict" ? "cloudCopy.conflict.title" : "cloudCopy.newer.title"));
+const lost = computed(() => copyQuestion.value === "conflict" && cloudCopy.value?.lostData === true);
+const title = computed(() => t(lost.value ? "cloudCopy.lost.title" : copyQuestion.value === "closing" ? "cloudCopy.closing.title" : copyQuestion.value === "conflict" ? "cloudCopy.conflict.title" : "cloudCopy.newer.title"));
 const text = computed(() => {
+  if (lost.value) return t("cloudCopy.lost.text");
   if (copyQuestion.value === "conflict") return t("cloudCopy.conflict.text");
   if (copyQuestion.value === "newer") return t("cloudCopy.newer.text");
   const progress = cloudCopy.value?.progress;

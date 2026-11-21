@@ -957,6 +957,8 @@ export class Host {
     }
     const ownersNoted = noteOwners(workspaces, (moduleId) => modules.get(moduleId)?.owner, (instanceId) => stamps.get(instanceId));
     const { profile, saved: profileSaved } = await savedData.loadProfile();
+    // Every data file is read, nothing has written one yet: one that was lost must not go up as empty.
+    await copySync.checkDataFiles();
     const windowState = initialBounds(
       await savedData.loadWindow(),
       screen.getAllDisplays().map((display) => display.workArea),
@@ -1022,7 +1024,7 @@ export class Host {
     const livePanels = new Set(Object.values(workspaces.workspaces).flatMap((workspace) => workspace.instances.map((i) => i.instanceId)));
     const stalePanels = (await readdir(path.join(userData, "panel-state")).catch(() => [] as string[])).filter((name) => name.endsWith(".json") && !livePanels.has(name.slice(0, -".json".length))).map((name) => name.slice(0, -".json".length));
     const leftovers = { workspaces: new Set(orphaned.map((dir) => partitionWorkspace(dir)!)), panels: new Set(stalePanels) };
-    const held = await holdLeftovers(userData, libraryRead && workspaceRead, leftovers).catch(() => leftovers);
+    const held = await holdLeftovers(userData, libraryRead && workspaceRead && !copySync.dataLost, leftovers).catch(() => leftovers);
     for (const dir of orphaned) if (!held.workspaces.has(partitionWorkspace(dir)!)) await rm(dir, { recursive: true, force: true });
     await host.data.panelState.prune(new Set([...livePanels, ...held.panels]));
     for (const workspace of expired) await host.deleteWorkspaceData(workspace);
