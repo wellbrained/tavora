@@ -1082,7 +1082,11 @@ export class CatalogStore {
       if (read.heldBytes >= FREE_AFTER_BYTES) freeMemory();
       if ("refused" in read) {
         // The zip is exactly what was uploaded and can't be read: nothing can install it, so there is nothing to compare with.
-        if (read.unreadable) fillCopies.run("[]", row.sha256);
+        try {
+          if (read.unreadable) fillCopies.run("[]", row.sha256);
+        } catch {
+          // Tried again at the next start; the zip is named below either way.
+        }
         skip(read.refused);
         continue;
       }
