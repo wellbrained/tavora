@@ -1486,7 +1486,7 @@ describe("a panel that goes during a host menu", () => {
     expect(rig.calls).toContain("overlayReady 1");
   });
 
-  it("doesn't hide the new view of a panel restarted while its picture was taken", async () => {
+  it("steps the new view of a panel restarted while its picture was taken aside until the menu closes", async () => {
     const rig = panelViewsRig();
     const first = rig.add(A);
     rig.views.place([place(A)]);
@@ -1500,7 +1500,11 @@ describe("a panel that goes during a host menu", () => {
     expect(second.visible).toBe(true);
     finish("data:image/jpeg;base64,AAAA");
     await freezing;
-    expect(second.visible).toBe(true);
+    expect(second.visible).toBe(false);
     expect(rig.frozen.at(-1)?.[A]).toBeUndefined();
+    const closing = rig.views.freeze(false);
+    await vi.advanceTimersByTimeAsync(1000);
+    await closing;
+    expect(second.visible).toBe(true);
   });
 });

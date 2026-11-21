@@ -456,9 +456,10 @@ export class Host {
       this.pushStateSoon();
       this.openPendingDialog();
     },
-    dialogClosed: () => {
-      // A tooltip of the panel in its dialog was placed there.
+    dialogClosed: (instanceId) => {
+      // A tooltip or menu of the panel in its dialog was placed there; neither outlives it.
       this.tooltips?.close();
+      this.closeModuleMenu(instanceId);
       if (this.window.isDestroyed()) return;
       this.window.webContents.send("host:panel-dialog", null);
       // The dialog's page may have held the keys; they go back to the host page (which returns focus to where it was).

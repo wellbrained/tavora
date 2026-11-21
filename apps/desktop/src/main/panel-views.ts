@@ -130,7 +130,7 @@ export interface PanelViewsDeps {
   /** A panel is back in its slot from the in-game layer (the host UI shows it, a waiting dialog may open). */
   returned?(instanceId: string): void;
   /** The panel dialog closed (the host UI takes its frame away). */
-  dialogClosed(): void;
+  dialogClosed(instanceId: string): void;
   /** The panel's page in its dialog has drawn (or will not: it is hidden), so the host UI may show the frame. */
   dialogDrawn?(instanceId: string): void;
   /** The wait for a workspace's panels ended; `show`: the panels are placed now. */
@@ -749,7 +749,16 @@ export class PanelViews {
     if (images.size) await this.deps.frozenOnScreen();
     if (session !== this.overlaySession || this.deps.windowGone()) return;
     for (const [instanceId, { adapter }] of targets) {
-      if (this.get(instanceId) !== adapter) continue;
+      const now = this.get(instanceId);
+      if (now !== adapter) {
+        // Restarted while its picture was taken: the new view has no picture yet, and in sight it would draw over the menu.
+        if (now && !this.lent.has(instanceId) && !this.inDialog(instanceId)) {
+          this.out.add(instanceId);
+          this.inSight.delete(instanceId);
+          now.setVisible(false);
+        }
+        continue;
+      }
       this.picturing.delete(instanceId);
       // A picture that came to nothing leaves the panel in sight under a menu, since its slot would show empty. Under a
       // dialog or drag it steps aside all the same: it would draw over them.
@@ -1040,7 +1049,7 @@ export class PanelViews {
       this.dialogPicture = null;
       this.sendPictures();
     }
-    this.deps.dialogClosed();
+    this.deps.dialogClosed(open.instanceId);
     const adapter = this.get(open.instanceId);
     adapter?.setInDialog(false);
     this.layOut(open.instanceId, adapter);
