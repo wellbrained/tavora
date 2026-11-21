@@ -119,10 +119,11 @@ export interface ShortcutRegistry {
 
 /**
  * Keeps the system's registered keys in step with the hotkeys that should work now. Applying the same set again
- * changes nothing, so it can run on every state change.
+ * changes nothing, so it can run on every state change. Two hotkeys can want one key at the same moment (a game overlay's
+ * key and a key of the workspace shown, which don't count as a conflict): a press then does both, so neither goes dead.
  */
 export class HotkeyRegistrar {
-  private active = new Map<string, HotkeyRecord>();
+  private active = new Map<string, HotkeyRecord[]>();
   private paused = false;
   /** Keys another program holds right now, so Settings can say so. */
   readonly taken = new Set<string>();
@@ -137,20 +138,30 @@ export class HotkeyRegistrar {
   apply(records: readonly HotkeyRecord[]): boolean {
     this.wanted = [...records];
     if (this.paused) return false;
-    const next = new Map(records.map((record) => [record.accelerator, record]));
-    let changed = false;
-    for (const [accelerator, record] of this.active) {
-      const want = next.get(accelerator);
-      if (want && sameBinding(want, record)) continue;
-      this.shortcuts.unregister(accelerator);
-      this.active.delete(accelerator);
-      changed = true;
+    const next = new Map<string, HotkeyRecord[]>();
+    for (const record of records) {
+      const sharing = next.get(record.accelerator);
+      if (!sharing) next.set(record.accelerator, [record]);
+      else if (!sharing.some((other) => sameBinding(other, record))) sharing.push(record);
     }
-    for (const [accelerator, record] of next) {
+    let changed = false;
+    for (const [accelerator, held] of this.active) {
+      const want = next.get(accelerator);
+      if (!want) {
+        this.shortcuts.unregister(accelerator);
+        this.active.delete(accelerator);
+        changed = true;
+      } else if (want.length !== held.length || want.some((record, index) => !sameBinding(record, held[index]!))) {
+        // The key stays registered, so it can't be lost to another program in between; a press now does what is wanted.
+        this.active.set(accelerator, want);
+        changed = true;
+      }
+    }
+    for (const [accelerator, want] of next) {
       if (this.active.has(accelerator)) continue;
       changed = true;
-      if (this.shortcuts.register(accelerator, () => this.pressed(record))) {
-        this.active.set(accelerator, record);
+      if (this.shortcuts.register(accelerator, () => this.fire(accelerator))) {
+        this.active.set(accelerator, want);
         this.taken.delete(accelerator);
       } else {
         this.taken.add(accelerator);
@@ -158,6 +169,11 @@ export class HotkeyRegistrar {
     }
     for (const accelerator of [...this.taken]) if (!next.has(accelerator)) this.taken.delete(accelerator);
     return changed;
+  }
+
+  /** A key was pressed: everything it stands for now, from a copy, since an action may change what is registered. */
+  private fire(accelerator: string): void {
+    for (const record of [...(this.active.get(accelerator) ?? [])]) this.pressed(record);
   }
 
   /** Lets every key go, so Tavora's hotkey dialog can catch any of them; resume puts them back. */

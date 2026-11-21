@@ -28,6 +28,36 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.119",
+    date: "2026-11-21",
+    title: "Small fixes",
+    notes: [
+      "AI Usage no longer asks you to sign in when your Claude token only ran out.",
+      "Tavora stays quicker with a big game library.",
+    ],
+    prs: [
+      { number: 873, title: "Small desktop fixes: expired Claude token, publish sweep, icon file checks" },
+    ],
+    tags: ["ai-usage", "icons"],
+  },
+  {
+    version: "0.24.118",
+    date: "2026-11-21",
+    title: "Steadier overlays",
+    notes: [
+      "A panel over your game keeps its setups and hotkey when it can't open for a moment.",
+      "The dark layer over your game blocks clicks again after a short freeze.",
+      "Dragging a frame in Arrange stays smooth, however often you open it.",
+      "Two hotkeys on the same key now both work.",
+      "Game pictures come out sharp on a second monitor with its own scaling.",
+      "Closed overlay previews no longer keep running in the background.",
+    ],
+    prs: [
+      { number: 871, title: "Overlay windows: keep panels through a failed lend, end leaks and stacking" },
+    ],
+    tags: ["hotkeys", "overlays", "workspace"],
+  },
+  {
     version: "0.24.117",
     date: "2026-11-21",
     title: "Styles read better",

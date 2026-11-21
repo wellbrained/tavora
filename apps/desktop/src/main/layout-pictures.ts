@@ -92,3 +92,9 @@ export function captureSize(width: number, height: number): { width: number; hei
   const scale = Math.min(1, MAX_PICTURE_WIDTH / width);
   return { width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)) };
 }
+
+/** A size in DIPs in the pixels of the screen the window is on (`scaleFactor`), never wider than a picture may be. */
+export function picturePixels(size: { width: number; height: number }, scaleFactor: number): { width: number; height: number } {
+  const k = Math.max(1, Math.min(scaleFactor, MAX_PICTURE_WIDTH / Math.max(1, size.width)));
+  return { width: Math.round(size.width * k), height: Math.round(size.height * k) };
+}

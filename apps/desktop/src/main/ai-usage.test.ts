@@ -5,7 +5,7 @@ import { AI_USAGE_VERSION, AiUsageConnector, MAX_ANSWER_BYTES, USAGE_URL, type A
 import { parseClaudeStatus } from "./ai-usage-claude";
 import { profileEnv } from "./ai-usage-cli";
 import { CodexMissingError, type CodexReading } from "./ai-usage-codex";
-import { claudeAccessToken, claudePlan, codexPlan, parseEmail } from "./ai-usage-parse";
+import { claudeAccessToken, claudePlan, claudeTokenRenews, codexPlan, parseEmail } from "./ai-usage-parse";
 import { HostError } from "./errors";
 import { UserError } from "./messages";
 
@@ -53,6 +53,16 @@ describe("plans and tokens", () => {
     expect(claudeAccessToken({ claudeAiOauth: { accessToken: "abc" } })).toBe("abc");
     expect(claudeAccessToken({ claudeAiOauth: { accessToken: "  " } })).toBeNull();
     expect(claudeAccessToken(null)).toBeNull();
+  });
+
+  it("tells a token that ran out from a lost login", () => {
+    const login = (fields: object) => ({ claudeAiOauth: { accessToken: "abc", ...fields } });
+    expect(claudeTokenRenews(login({ expiresAt: 1000, refreshToken: "r" }), 1000)).toBe(true);
+    expect(claudeTokenRenews(login({ expiresAt: 1001, refreshToken: "r" }), 1000)).toBe(false);
+    expect(claudeTokenRenews(login({ expiresAt: 1000 }), 2000)).toBe(false);
+    expect(claudeTokenRenews(login({ expiresAt: 1000, refreshToken: " " }), 2000)).toBe(false);
+    expect(claudeTokenRenews(login({ expiresAt: "soon", refreshToken: "r" }), 2000)).toBe(false);
+    expect(claudeTokenRenews(null, 2000)).toBe(false);
   });
 });
 
@@ -245,6 +255,22 @@ describe("AiUsageConnector reads", () => {
     const { connector, fetchMock } = setup(onlyClaude);
     fetchMock.mockImplementationOnce(async () => answer());
     expect(await connector.read(await firstId(connector))).toMatchObject({ status, answer: null });
+  });
+
+  it.each([
+    ["ran out, with a way to renew it", { expiresAt: Date.parse("2026-10-16T11:00:00Z"), refreshToken: "made-up" }, "unavailable"],
+    ["is still valid but refused", { expiresAt: Date.parse("2026-10-16T13:00:00Z"), refreshToken: "made-up" }, "sign-in"],
+    ["ran out, with no way to renew it", { expiresAt: Date.parse("2026-10-16T11:00:00Z") }, "sign-in"],
+  ])("a refused token that %s", async (_name, fields, status) => {
+    const { connector, fetchMock, store } = setup(onlyClaude);
+    const file = path.join(CLAUDE_DIR, ".credentials.json");
+    const login = JSON.stringify({ claudeAiOauth: { accessToken: "test-token", subscriptionType: "pro", ...fields } });
+    store.set(file, login);
+    fetchMock.mockImplementationOnce(async () => new Response("no", { status: 401 }));
+    expect(await connector.read(await firstId(connector))).toMatchObject({ status, answer: null });
+    // Tavora never renews it: the login stays Claude Code's.
+    expect(store.get(file)).toBe(login);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("maps an unreachable provider to unavailable", async () => {
