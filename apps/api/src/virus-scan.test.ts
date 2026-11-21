@@ -19,6 +19,8 @@ describe("clamd's answers", () => {
 function fakeClamd(reply: (received: Buffer) => string | null, delayMs = 0) {
   const received: Buffer[] = [];
   const server = net.createServer((socket) => {
+    // A scan that was stopped closes its connection, so a late answer here can meet a reset.
+    socket.on("error", () => {});
     let data = Buffer.alloc(0);
     socket.on("data", (chunk) => {
       data = Buffer.concat([data, chunk]);
@@ -100,6 +102,25 @@ describe("scanning through clamd", () => {
     await expect(scanner.scan(Buffer.from("zip bytes"), files)).rejects.toThrow(/clamd answered/);
     await new Promise((resolve) => setTimeout(resolve, 200));
     expect(clamd.received.length).toBeLessThanOrEqual(8);
+  });
+
+  it("turns a connection clamd resets into a failed scan, not an uncaught error", async () => {
+    const server = net.createServer((socket) => {
+      socket.on("error", () => {});
+      socket.once("data", () => socket.resetAndDestroy());
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    closers.push(() => server.close());
+    const uncaught: unknown[] = [];
+    const note = (error: unknown) => uncaught.push(error);
+    process.on("uncaughtException", note);
+    try {
+      await expect(clamdScan({ port: (server.address() as net.AddressInfo).port }, Buffer.alloc(200_000, "a"), 2000)).rejects.toThrow(/clamd/);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    } finally {
+      process.off("uncaughtException", note);
+    }
+    expect(uncaught).toEqual([]);
   });
 
   it("gives a bigger stream more time", async () => {
