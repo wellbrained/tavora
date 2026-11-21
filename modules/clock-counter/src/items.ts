@@ -360,7 +360,7 @@ export function lapSplits(clock: Clock): number[] {
  */
 export function typedNumber(value: string): number | null {
   let text = value.trim();
-  if (/^[+-]?\d{1,3}([.,]\d{3})+$/.test(text)) text = text.replace(/[.,]/g, "");
+  if (/^[+-]?[1-9]\d{0,2}([.,]\d{3})+$/.test(text)) text = text.replace(/[.,]/g, "");
   text = text.replace(",", ".");
   return /^[+-]?(\d+\.?\d*|\.\d+)$/.test(text) ? Number(text) : null;
 }

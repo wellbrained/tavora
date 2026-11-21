@@ -136,6 +136,7 @@ describe("typedNumber", () => {
     expect(typedNumber("2.5")).toBe(2.5);
     expect(typedNumber("2,5")).toBe(2.5);
     expect(typedNumber("1.000")).toBe(1000);
+    expect(typedNumber("0.500")).toBe(0.5);
     expect(typedNumber("1,000,000")).toBe(1_000_000);
   });
 

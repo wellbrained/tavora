@@ -218,7 +218,7 @@ onMounted(async () => {
     cleanup.push(connection.onLanguage(setLanguage), connection.dispose);
     const [state, todos] = await Promise.all([connected.panel.getState<Partial<PanelState> & OldPanelState>(), createTodoStore(connected)]);
     if (unmounted) {
-      void todos.dispose();
+      void todos.dispose().catch(() => undefined);
       return;
     }
     const ids = (value: unknown) => (Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : []);
@@ -248,7 +248,7 @@ onMounted(async () => {
         .catch(() => {});
     addEventListener("keydown", onKey);
     cleanup.push(() => removeEventListener("keydown", onKey));
-    cleanup.push(() => void todos.dispose());
+    cleanup.push(() => void todos.dispose().catch(() => undefined));
     sdk.value = connected;
     store.value = todos;
   } catch (reason) {
