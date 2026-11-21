@@ -56,6 +56,17 @@ describe("runningGames", () => {
     expect(runningNotInLibrary(liveWorkspaces(library), [special], [special.file], 489830, new Set([489830]))).toEqual([]);
   });
 
+  it("picks the Special Edition's own entry over the built-in Skyrim opened later", () => {
+    const library = emptyLibrary();
+    addWorkspace(library, { name: "The Elder Scrolls V: Skyrim Special Edition", steamAppId: 489830 }, day(1));
+    const skyrim = addWorkspace(library, { catalogId: "skyrim" }, day(2));
+    markOpened(library, skyrim, day(3));
+    const special = liveWorkspaces(library).find((entry) => entry.steamAppId === 489830)!;
+    expect([...runningGames(liveWorkspaces(library), [], [], 489830)]).toEqual([special.id]);
+    const installed: InstalledGame = { source: "steam", name: "The Elder Scrolls V: Skyrim Special Edition", steamAppId: 489830, file: "D:\\Steam\\steamapps\\common\\Skyrim Special Edition\\SkyrimSE.exe", index: 0, folder: "D:\\Steam\\steamapps\\common\\Skyrim Special Edition" };
+    expect([...runningGames(liveWorkspaces(library), [installed], [installed.file], null)]).toEqual([special.id]);
+  });
+
   it("counts a game in the library twice once, as the one opened last", () => {
     const library = emptyLibrary();
     addWorkspace(library, { catalogId: "diablo-4" }, day(1));
