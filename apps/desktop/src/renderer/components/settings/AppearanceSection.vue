@@ -57,6 +57,12 @@ function previewOf(theme: ThemeView): ThemeVariationView {
   return theme.variations.find((item) => item.id === appearance.value.variationId) ?? theme.variations[0]!;
 }
 
+/** The colours a style shows in the list: its own first theme (what it starts with), in the variation shown now. */
+function styleVariation(style: StyleView): ThemeVariationView | undefined {
+  const own = appearance.value.themes.find((theme) => style.themes.includes(theme.id));
+  return own ? previewOf(own) : undefined;
+}
+
 function pickId(id: string) {
   const theme = appearance.value.themes.find((item) => item.id === id);
   if (!theme || theme.id === appearance.value.themeId) return;
@@ -168,7 +174,7 @@ const showVariation = computed(() => {
       <Select :model-value="appearance.styleId" @update:model-value="(id) => pickStyle(String(id))">
         <SelectTrigger class="h-auto! w-72 py-1.5 pl-1.5 text-left" :aria-label="t('settings.style.label')" data-testid="style-select">
           <span class="flex min-w-0 items-center gap-2.5">
-            <StylePreview v-if="activeStyle" :look="activeStyle" size="sm" />
+            <StylePreview v-if="activeStyle" :look="activeStyle" :variation="active ? previewOf(active) : undefined" size="sm" />
             <span class="flex min-w-0 flex-col">
               <span class="truncate font-medium">{{ activeStyle ? styleText(activeStyle, "name") : "" }}</span>
               <span v-if="activeStyle" class="text-muted-foreground truncate text-xs" :title="styleText(activeStyle, 'description')">{{ styleText(activeStyle, "description") }}</span>
@@ -184,7 +190,7 @@ const showVariation = computed(() => {
             class="items-center! gap-3 pr-2 [&>span:first-child]:hidden"
             :data-testid="`style-${item.id}`"
           >
-            <template #thumb><StylePreview :look="item" size="md" /></template>
+            <template #thumb><StylePreview :look="item" :variation="styleVariation(item)" size="md" /></template>
             <span class="flex items-center gap-2">
               {{ styleText(item, "name") }}
               <Badge v-if="item.id === appearance.styleId" class="bg-primary/15 text-primary flex-none border-transparent py-0 text-[10px] font-semibold" data-testid="style-in-use">{{
