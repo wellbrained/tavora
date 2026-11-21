@@ -186,7 +186,9 @@ function unpackEntry(zip: Buffer, entry: DirectoryEntry): Buffer {
     data = Buffer.from(packed);
   } else {
     try {
-      data = inflateRawSync(packed, { maxOutputLength: Math.max(entry.size, 1) });
+      // One output block of the size the directory gives (a byte more, so it never asks for a second): by default zlib
+      // collects 16 KB pieces and joins them, which holds the file twice for a moment.
+      data = inflateRawSync(packed, { maxOutputLength: Math.max(entry.size, 1), chunkSize: Math.max(entry.size + 1, 64) });
     } catch {
       throw new ZipError(`${entry.name} cannot be unpacked`);
     }
@@ -202,6 +204,11 @@ function unpackEntry(zip: Buffer, entry: DirectoryEntry): Buffer {
  */
 export function readZip(zip: Buffer, limits: Readonly<ZipLimits> = ZIP_LIMITS): ZipFile[] {
   return readDirectory(zip, limits).map((entry) => ({ name: entry.name, data: unpackEntry(zip, entry) }));
+}
+
+/** Every file of a package zip, unpacked one at a time, so only the current one is held. Throws a ZipError like readZip. */
+export function* zipFiles(zip: Buffer, limits: Readonly<ZipLimits> = ZIP_LIMITS): Generator<ZipFile> {
+  for (const entry of readDirectory(zip, limits)) yield { name: entry.name, data: unpackEntry(zip, entry) };
 }
 
 /** The files of a package zip with their unpacked sizes, without unpacking any. Throws a ZipError like readZip. */

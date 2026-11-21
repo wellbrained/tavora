@@ -1,9 +1,9 @@
 import { createHash, createPublicKey, generateKeyPairSync, randomBytes, type KeyObject } from "node:crypto";
-import { existsSync, mkdtempSync } from "node:fs";
+import { existsSync, mkdtempSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { catalogPublicKey, nextCatalogList, PUBLISH_TIMEOUT_MS, publishSignature, signCatalogList, signFiles, writeZip, ZIP_LIMITS, type ZipFile } from "@tavora/pack";
+import { catalogPublicKey, nextCatalogList, PUBLISH_TIMEOUT_MS, publishReadMs, publishSignature, publishTimeoutMs, signCatalogList, signFiles, writeZip, ZIP_LIMITS, zipFiles, type ZipFile } from "@tavora/pack";
 import { Hono } from "hono";
 import { describe, expect, it } from "vitest";
 import { AccountStore } from "./account-store.ts";
@@ -17,7 +17,7 @@ import { SCAN_LIMIT_MS } from "./moderation.ts";
 import { encodePng } from "./png.ts";
 import { keyFingerprint } from "./publishers.ts";
 import { createRateLimiter } from "./rate-limit.ts";
-import { createUploadMemory, MAX_MANIFEST_BYTES, MAX_SIGNATURE_BYTES, UPLOAD_MEMORY_BYTES, zipMemory, type UploadMemory } from "./upload-memory.ts";
+import { createUploadMemory, freeMemory, MAX_MANIFEST_BYTES, MAX_SIGNATURE_BYTES, readUpload, UPLOAD_MEMORY_BYTES, zipMemory, type UploadMemory } from "./upload-memory.ts";
 import type { Scanner } from "./virus-scan.ts";
 
 const db = writeDatabase(":memory:", buildDataset({ builtIns: [{ id: "elden-ring", name: "Elden Ring" }], wikidata: [], steam: [] }));
@@ -29,8 +29,8 @@ const catalogue = generateKeyPairSync("ed25519").privateKey;
 const picture = (seed: number) => Buffer.from(encodePng(16, 16, Uint8Array.from({ length: 16 * 16 * 4 }, (_, i) => (i % 4 === 3 ? 255 : (i * seed) % 256))));
 const sha = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
 
-function moduleZip(key: KeyObject, { version = "1.0.0", network = [], extra = [], icon }: { version?: string; network?: string[]; extra?: ZipFile[]; icon?: Buffer } = {}): Buffer {
-  const manifest = { id: "wellbrained.timer", name: "Timer", version, apiVersion: "1", entry: "index.html", games: [], viewport: { minWidth: 200, minHeight: 150 }, permissions: { network }, ...(icon ? { icon: "icon.png" } : {}) };
+function moduleZip(key: KeyObject, { id = "wellbrained.timer", name = "Timer", version = "1.0.0", network = [], extra = [], icon }: { id?: string; name?: string; version?: string; network?: string[]; extra?: ZipFile[]; icon?: Buffer } = {}): Buffer {
+  const manifest = { id, name, version, apiVersion: "1", entry: "index.html", games: [], viewport: { minWidth: 200, minHeight: 150 }, permissions: { network }, ...(icon ? { icon: "icon.png" } : {}) };
   const files: ZipFile[] = [{ name: "tavora.module.json", data: Buffer.from(JSON.stringify(manifest)) }, { name: "index.html", data: Buffer.from("<p>timer</p>") }, ...(icon ? [{ name: "icon.png", data: icon }] : []), ...extra];
   return writeZip([...files, signFiles(files, key)]);
 }
@@ -147,7 +147,7 @@ describe("reading an upload", () => {
 
   it("holds memory while it reads, so unfinished uploads can't add up past the budget", async () => {
     const memory = createUploadMemory(ZIP_LIMITS.maxArchiveBytes + 1024);
-    const { app, developer, send } = withMemory(memory, clean, { readLimits: { idleMs: 200, totalMs: 1000 } });
+    const { app, developer, send } = withMemory(memory, clean, { readLimits: { idleMs: 200 } });
     const first = developer("first@example.com");
     const second = developer("second@example.com");
     const stalled = app.request(chunkedRequest(url, chunkedBody(45, { stallAfter: 1 }).stream, first.token));
@@ -160,7 +160,7 @@ describe("reading an upload", () => {
 
   it("ends an upload that stops sending, and gives its memory back", async () => {
     const memory = createUploadMemory();
-    const { app, developer } = withMemory(memory, clean, { readLimits: { idleMs: 30, totalMs: 5000 } });
+    const { app, developer } = withMemory(memory, clean, { readLimits: { idleMs: 30 } });
     const dev = developer("dev@example.com");
     const response = await app.request(chunkedRequest(url, chunkedBody(45, { stallAfter: 2 }).stream, dev.token));
     expect(response.status).toBe(408);
@@ -168,8 +168,8 @@ describe("reading an upload", () => {
     expect(memory.take(UPLOAD_MEMORY_BYTES)).not.toBeNull();
   });
 
-  it("ends an upload that keeps dripping past the whole deadline", async () => {
-    const { app, developer } = withMemory(createUploadMemory(), clean, { readLimits: { idleMs: 200, totalMs: 60 } });
+  it("ends an upload that keeps dripping slower than the slowest line it allows", async () => {
+    const { app, developer } = withMemory(createUploadMemory(), clean, { readLimits: { idleMs: 200, graceMs: 60, bytesPerSecond: 100_000 } });
     const dev = developer("dev@example.com");
     const drip = new ReadableStream<Uint8Array>({
       async pull(controller) {
@@ -180,8 +180,30 @@ describe("reading an upload", () => {
     expect((await app.request(chunkedRequest(url, drip, dev.token))).status).toBe(408);
   });
 
+  it("lets a slow honest line finish long past the grace time", async () => {
+    let sent = 0;
+    const body = new ReadableStream<Uint8Array>({
+      async pull(controller) {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+        if (sent++ === 10) controller.close();
+        else controller.enqueue(new Uint8Array(8192));
+      },
+    }, { highWaterMark: 0 });
+    const request = new Request(url, { method: "POST", body, duplex: "half" } as RequestInit);
+    const read = await readUpload(request, 1024 * 1024, { idleMs: 500, graceMs: 40, bytesPerSecond: 100_000 });
+    expect(read).toMatchObject({ bytes: expect.objectContaining({ length: 81_920 }) });
+  });
+
+  it("gives a bigger upload longer to arrive, and its client longer to wait", () => {
+    const biggest = ZIP_LIMITS.maxArchiveBytes;
+    // 50 MB at about 1 Mbit/s, where a flat 3 minutes needed 2.3 Mbit/s.
+    expect(publishReadMs(biggest)).toBeGreaterThan(biggest / 125);
+    expect(publishTimeoutMs(biggest)).toBeGreaterThanOrEqual(publishReadMs(biggest) + SCAN_LIMIT_MS);
+    expect(publishTimeoutMs(1024)).toBe(PUBLISH_TIMEOUT_MS);
+  });
+
   it("takes one upload per account while it is being read", async () => {
-    const { app, developer, send } = withMemory(createUploadMemory(), clean, { readLimits: { idleMs: 200, totalMs: 1000 } });
+    const { app, developer, send } = withMemory(createUploadMemory(), clean, { readLimits: { idleMs: 200 } });
     const dev = developer("dev@example.com");
     const stalled = app.request(chunkedRequest(url, chunkedBody(5, { stallAfter: 1 }).stream, dev.token));
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -316,6 +338,180 @@ describe("the copy check and older versions", () => {
     expect(hashes()).not.toBeNull();
     raw.close();
     catalog.close();
+  });
+});
+
+describe("the memory budget", () => {
+  it("leaves the service room under its 256 MB limit", () => {
+    expect(UPLOAD_MEMORY_BYTES).toBeLessThanOrEqual(96 * 1024 * 1024);
+  });
+
+  it("really hands memory back when asked", async () => {
+    let big: { data: Uint8Array } | null = { data: new Uint8Array(1024) };
+    const ref = new WeakRef(big);
+    big = null;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    freeMemory();
+    expect(ref.deref()).toBeUndefined();
+  });
+
+  it("unpacks a big file into one block, never holding it twice", () => {
+    const key = generateKeyPairSync("ed25519").privateKey;
+    const data = randomBytes(1024 * 1024);
+    const file = [...zipFiles(moduleZip(key, { extra: [{ name: "big.bin", data }] }))].find((entry) => entry.name === "big.bin")!;
+    expect(file.data.equals(data)).toBe(true);
+    expect(file.data.buffer.byteLength).toBe(data.length + 1);
+  });
+});
+
+describe("a version that can't be added", () => {
+  const countingScanner = () => {
+    const state = { scans: 0, release: () => {} };
+    const gate = new Promise<void>((resolve) => (state.release = resolve));
+    const held = { value: false };
+    const scanner: Scanner = {
+      scan: async () => {
+        state.scans += 1;
+        if (held.value) await gate;
+        return { clean: true };
+      },
+    };
+    return { state, held, scanner };
+  };
+
+  it("is refused before the scan, so it can't hold the shared memory through one", async () => {
+    const { state, scanner } = countingScanner();
+    const { developer, send, reason, catalog } = setup({}, scanner);
+    const dev = developer("dev@example.com");
+    expect((await send(dev, moduleZip(dev.key))).status).toBe(201);
+    expect(state.scans).toBe(1);
+
+    const same = await send(dev, moduleZip(dev.key, { extra: [{ name: "big.bin", data: randomBytes(4096) }] }));
+    expect(same.status).toBe(409);
+    expect(await reason(same)).toBe("conflict");
+    expect(state.scans).toBe(1);
+    expect(catalog.uploadsSince(dev.accountId, new Date(0))).toBe(1);
+  });
+
+  it("counts towards the daily limit when it is only refused after its scan", async () => {
+    const { state, held, scanner } = countingScanner();
+    const { developer, send, reason, catalog, clock } = setup({}, scanner);
+    const dev = developer("dev@example.com");
+    held.value = true;
+    const upload = send(dev, moduleZip(dev.key));
+    while (state.scans < 1) await new Promise((resolve) => setTimeout(resolve, 1));
+    // A newer version arrives by hand during the scan, so this one can't be added any more.
+    catalog.add(moduleZip(dev.key, { version: "2.0.0" }), new Date(clock.now));
+    state.release();
+    const answer = await upload;
+    expect(answer.status).toBe(409);
+    expect(await reason(answer)).toBe("conflict");
+    expect(catalog.uploadsSince(dev.accountId, new Date(0))).toBe(1);
+  });
+});
+
+describe("comparing with versions that have no stored hashes", () => {
+  const shared = { name: "shared.bin", data: randomBytes(4096) };
+
+  it("makes an upload wait, and finds the copy once the hashes are there", async () => {
+    const { developer, send, catalog, dir } = setup();
+    const original = developer("original@example.com");
+    const other = developer("other@example.com");
+    expect((await send(original, moduleZip(original.key, { extra: [shared] }))).status).toBe(201);
+    const raw = new DatabaseSync(path.join(dir, "catalog.sqlite"));
+    raw.exec("update versions set file_hashes = null");
+    raw.close();
+
+    const copy = (version: string) => moduleZip(other.key, { id: "other.clock", name: "Clock", version, extra: [shared] });
+    const waiting = await send(other, copy("1.0.0"));
+    expect(waiting.status).toBe(202);
+    expect(await waiting.json()).toMatchObject({ reasons: [expect.objectContaining({ check: "compare" })] });
+
+    expect(catalog.backfillSignedHashes().filled).toBe(1);
+    const found = await send(other, copy("1.0.1"));
+    expect(found.status).toBe(202);
+    expect(await found.json()).toMatchObject({ reasons: [expect.objectContaining({ check: "copy" })] });
+  });
+
+  it("doesn't hold an upload back for the account's own older version", async () => {
+    const { developer, send, dir } = setup();
+    const dev = developer("dev@example.com");
+    await send(dev, moduleZip(dev.key, { extra: [shared] }));
+    const raw = new DatabaseSync(path.join(dir, "catalog.sqlite"));
+    raw.exec("update versions set file_hashes = null");
+    raw.close();
+    expect((await send(dev, moduleZip(dev.key, { version: "1.0.1", extra: [shared] }))).status).toBe(201);
+  });
+});
+
+describe("downloading a zip", () => {
+  const big = () => [{ name: "big.bin", data: randomBytes(300_000) }];
+  const url = (hash: string) => `http://tavora.test/v1/catalog/zips/${hash}.zip`;
+
+  it("sends it from disk with the headers the shipped app gets, never loading it whole", async () => {
+    const { developer, send, catalog, app } = setup();
+    const dev = developer("dev@example.com");
+    const zip = moduleZip(dev.key, { extra: big() });
+    await send(dev, zip);
+    catalog.zip = () => {
+      throw new Error("loaded whole");
+    };
+    const response = await app.request(url(sha(zip)));
+    expect(response.status).toBe(200);
+    expect(Object.fromEntries(response.headers)).toMatchObject({
+      "content-type": "application/zip",
+      "content-length": String(zip.length),
+      "content-disposition": "attachment",
+      "cache-control": "public, max-age=31536000, immutable",
+    });
+    expect(Buffer.from(await response.arrayBuffer()).equals(zip)).toBe(true);
+  });
+
+  it("answers HEAD as before, with no body and no file opened", async () => {
+    const { developer, send, app } = setup();
+    const dev = developer("dev@example.com");
+    const zip = moduleZip(dev.key);
+    await send(dev, zip);
+    const response = await app.request(url(sha(zip)), { method: "HEAD" });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("application/zip");
+    expect(response.headers.get("content-length")).toBeNull();
+    expect(response.body).toBeNull();
+  });
+
+  it("holds one small chunk at a time, however slowly it is read", async () => {
+    const { developer, send, catalog } = setup();
+    const dev = developer("dev@example.com");
+    const zip = moduleZip(dev.key, { extra: big() });
+    await send(dev, zip);
+    const reader = (await catalog.openZip(sha(zip)))!.stream().getReader();
+    const first = await reader.read();
+    expect(first.value!.length).toBeLessThanOrEqual(64 * 1024);
+    await reader.cancel();
+    expect((await reader.read()).done).toBe(true);
+  });
+
+  it("answers 404 for a file that isn't what its name says, also after it was served", async () => {
+    const { developer, send, app, dir } = setup();
+    const dev = developer("dev@example.com");
+    const zip = moduleZip(dev.key, { extra: big() });
+    await send(dev, zip);
+    await (await app.request(url(sha(zip)))).arrayBuffer();
+    const changed = Buffer.from(zip);
+    changed[100] = changed[100]! ^ 0xff;
+    const file = path.join(dir, "zips", `${sha(zip)}.zip`);
+    writeFileSync(file, changed);
+    utimesSync(file, new Date(), new Date(Date.now() + 5000));
+    expect((await app.request(url(sha(zip)))).status).toBe(404);
+  });
+
+  it("answers 404 for a zip of a module taken down", async () => {
+    const { developer, send, catalog, app } = setup();
+    const dev = developer("dev@example.com");
+    const zip = moduleZip(dev.key);
+    await send(dev, zip);
+    catalog.setListed("wellbrained.timer", false);
+    expect((await app.request(url(sha(zip)))).status).toBe(404);
   });
 });
 

@@ -1,6 +1,6 @@
 import type { KeyObject } from "node:crypto";
 import { apiReason, type ApiReason } from "@tavora/module-schema";
-import { linkRequest, PUBLISH_TIMEOUT_MS, publishSignature, publishZip, type Published } from "@tavora/pack";
+import { linkRequest, publishSignature, publishTimeoutMs, publishZip, type Published } from "@tavora/pack";
 import { assertNever } from "../shared/assert-never";
 import type { AccountDevice, AccountPending, AccountPrefix, AccountPublishToken, AccountView, ChangeEmailProof, DeviceOs, KeyRequestView, PrefixState } from "../shared/host-api";
 import type { Language, MessageKey } from "../shared/i18n";
@@ -22,8 +22,6 @@ import type { SignIn } from "./sign-in";
 // part of backups or diagnostic info. Modules learn nothing about the account.
 
 export const ACCOUNT_TIMEOUT_MS = 10_000;
-/** An upload to the catalog takes longer: sending the zip, then the catalog's checks. */
-export const UPLOAD_TIMEOUT_MS = PUBLISH_TIMEOUT_MS;
 
 const PREFIX_STATES: readonly PrefixState[] = ["held", "free", "taken", "reserved", "too-many", "invalid"];
 
@@ -595,7 +593,8 @@ export class AccountClient {
     this.ensure(true);
     const answer = await this.call("POST", "/publish", zip, true, "/v1/catalog", {
       headers: { "X-Tavora-Signature": publishSignature(key, zip), "Accept-Language": this.options.language() },
-      timeoutMs: UPLOAD_TIMEOUT_MS,
+      // Sending the zip, then the catalog's checks: longer for a bigger zip, so a slow line isn't cut off.
+      timeoutMs: publishTimeoutMs(zip.length),
     });
     if (typeof answer.id !== "string" || typeof answer.version !== "string" || typeof answer.sha256 !== "string") throw new UserError("error.generic");
     // The upload reserved the prefix when it was new.

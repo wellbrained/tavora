@@ -325,6 +325,8 @@ export function createAdminApp({ token, statsToken, submissions, state, store, c
     if (typeof id !== "string" || typeof listed !== "boolean" || (reason !== undefined && !isUnpublishReason(reason)) || text === undefined || (text !== null && text.length > 500)) {
       return context.json({ error: `Send { id, listed, reason?, note? } with reason one of ${UNPUBLISH_REASONS.join(", ")} and a note of at most 500 characters.` }, 400);
     }
+    // Listing it now would serve the version it was taken down for, while its replacement still waits.
+    if (listed && catalog?.replacementWaits(id)) return context.json({ error: "A new version of this module is waiting. Approve and list it, or decline it first.", reason: "replacement-waiting" }, 409);
     const found = catalog?.adminModules().find((module) => module.id === id) ?? null;
     if (!catalog?.setListed(id, listed)) return context.json({ error: "No such module." }, 404);
     let mailed = false;

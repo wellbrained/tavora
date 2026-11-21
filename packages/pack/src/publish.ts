@@ -18,6 +18,22 @@ export class PublishError extends Error {}
 /** The upload and the catalog's checks together: its virus scan alone may take 3 minutes. */
 export const PUBLISH_TIMEOUT_MS = 300_000;
 
+/** How the catalog times an upload: a minute to get going, then what has arrived buys time at about 1 Mbit/s. */
+export const PUBLISH_READ_GRACE_MS = 60_000;
+export const PUBLISH_MIN_BYTES_PER_SECOND = 125_000;
+/** The catalog's checks after the upload has arrived: the 3 minute scan and a little more. */
+const PUBLISH_CHECKS_MS = 200_000;
+
+/** The longest a zip of this size may take to reach the catalog. */
+export function publishReadMs(bytes: number): number {
+  return PUBLISH_READ_GRACE_MS + Math.ceil((bytes / PUBLISH_MIN_BYTES_PER_SECOND) * 1000);
+}
+
+/** How long a client waits for the answer to an upload of this size, so a slow line isn't cut off before the catalog is done. */
+export function publishTimeoutMs(bytes: number): number {
+  return Math.max(PUBLISH_TIMEOUT_MS, publishReadMs(bytes) + PUBLISH_CHECKS_MS);
+}
+
 /** Where to read what is not allowed in the catalog; linked from what `tavora-pack publish` prints. */
 export const CATALOG_RULES_URL = "https://docs.mytavora.app/guide/catalog-rules";
 
@@ -101,7 +117,7 @@ export async function publishZip(options: {
       },
       body: new Uint8Array(options.zip),
       redirect: "error",
-      signal: AbortSignal.timeout(PUBLISH_TIMEOUT_MS),
+      signal: AbortSignal.timeout(publishTimeoutMs(options.zip.length)),
     });
   } catch {
     throw new PublishError(`Tavora's service could not be reached (${url}). Check your internet connection.`);

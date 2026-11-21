@@ -344,13 +344,14 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     stats?.count("module-update", id);
     return context.body(null, 204);
   });
-  catalogApp.get("/zips/:file", (context) => {
+  catalogApp.get("/zips/:file", async (context) => {
     const match = /^([0-9a-f]{64})\.zip$/.exec(context.req.param("file"));
-    const bytes = match ? catalog!.zip(match[1]!) : null;
-    if (!bytes) return fail(context, 404, "not-found", "Not found.");
-    // Named by its hash, so it never changes.
-    return new Response(new Uint8Array(bytes), {
-      headers: { "Content-Type": "application/zip", "Content-Disposition": "attachment", "Cache-Control": "public, max-age=31536000, immutable" },
+    const file = match ? await catalog!.openZip(match[1]!) : null;
+    if (!file) return fail(context, 404, "not-found", "Not found.");
+    const head = context.req.method === "HEAD";
+    // Sent from disk, so a slow client holds one chunk and not the whole zip. Named by its hash, so it never changes.
+    return new Response(head ? null : file.stream(), {
+      headers: { "Content-Type": "application/zip", ...(head ? {} : { "Content-Length": String(file.size) }), "Content-Disposition": "attachment", "Cache-Control": "public, max-age=31536000, immutable" },
     });
   });
   catalogApp.get("/pictures/:file", (context) => {

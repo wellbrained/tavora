@@ -2,10 +2,10 @@ export { createKeyFile, loadExistingKey } from "./keys.ts";
 export { cleanLinkCode, DEFAULT_API_URL, LINK_STATEMENT, LinkError, linkKey, linkRequest } from "./link.ts";
 export { collectFiles, MANIFEST_FILE, packModule, PackError, PrivateKeyError, type PackOptions } from "./pack.ts";
 export { privateKeyFile } from "./private-keys.ts";
-export { CATALOG_RULES_URL, PUBLISH_STATEMENT, PUBLISH_TIMEOUT_MS, PublishError, publishSignature, publishZip, withdrawVersion, type Published } from "./publish.ts";
+export { CATALOG_RULES_URL, PUBLISH_MIN_BYTES_PER_SECOND, PUBLISH_READ_GRACE_MS, PUBLISH_STATEMENT, PUBLISH_TIMEOUT_MS, PublishError, publishReadMs, publishSignature, publishTimeoutMs, publishZip, withdrawVersion, type Published } from "./publish.ts";
 export { fileHashes, fingerprint, publicKeyFromRaw, rawPublicKey, SIGNATURE_FILE, signatureFile, signedBytes, signedHash, signFiles, verifyFiles, type PackageSignature, type VerifyResult } from "./signature.ts";
 export { asSigner, keySigner, type Signer } from "./signer.ts";
-export { isSafeEntryName, readZip, readZipEntry, writeZip, ZIP_LIMITS, zipDirectory, ZipError, type ZipFile, type ZipLimits } from "./zip.ts";
+export { isSafeEntryName, readZip, readZipEntry, writeZip, ZIP_LIMITS, zipDirectory, ZipError, zipFiles, type ZipFile, type ZipLimits } from "./zip.ts";
 export {
   CATALOG_LIST_KINDS,
   catalogListChanges,

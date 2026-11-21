@@ -3,6 +3,7 @@ import { folderKey, validateChangelog } from "@tavora/module-schema";
 import type { ZipFile } from "@tavora/pack";
 import { type CatalogStore, type CheckedZip, copyHashes, type ReviewReason } from "./catalog.ts";
 import { checkModuleText } from "./review-filter.ts";
+import { FREE_AFTER_BYTES, freeMemory } from "./upload-memory.ts";
 import type { Scanner } from "./virus-scan.ts";
 
 /**
@@ -12,7 +13,7 @@ import type { Scanner } from "./virus-scan.ts";
  */
 
 /** Names of the checks; the developer's email has a sentence for each (mail.ts). */
-export const CHECKS = ["words", "permissions", "copy", "code", "virus", "first-module", "pictures"] as const;
+export const CHECKS = ["words", "permissions", "copy", "compare", "code", "virus", "first-module", "pictures"] as const;
 export type CheckName = (typeof CHECKS)[number];
 
 /** Who a version is checked as: its account and that account's keys, which "another publisher" is measured against. */
@@ -148,11 +149,17 @@ function checkCopies(checked: CheckedZip, catalog: CatalogStore, subject: Subjec
     if (mine.some((a) => theirs.some((b) => a === b || (a.length >= 6 && withinOne(a, b))))) found.push(`name like ${other.id} ("${other.names[0]}")`);
   }
   const hashes = copyHashes(checked.files);
+  let uncompared: { id: string; version: string }[] = [];
   if (hashes.reduce((sum, [, size]) => sum + size, 0) >= COPY_MIN_BYTES) {
     const similar = catalog.mostSimilar(self, hashes);
     if (similar && similar.share >= COPY_SHARE) found.push(`${Math.round(similar.share * 100)}% of its files are the same as ${similar.id} ${similar.version}`);
+    uncompared = catalog.uncomparedVersions(self);
   }
-  return found.length === 0 ? null : reason("copy", "It looks like another developer's module.", found.slice(0, 5).join("; "));
+  if (found.length > 0) return reason("copy", "It looks like another developer's module.", found.slice(0, 5).join("; "));
+  // A check that can't run counts as failed: it could be a copy of a version whose files aren't known.
+  if (uncompared.length === 0) return null;
+  const names = uncompared.slice(0, 5).map(({ id, version }) => `${id} ${version}`).join(", ");
+  return reason("compare", "It couldn't be compared with every module, so a person looks at it.", `No stored file hashes for ${names}${uncompared.length > 5 ? ` (+${uncompared.length - 5} more)` : ""}`);
 }
 
 // ── 4. Code warning signs ─────────────────────────────────────────────────
@@ -228,6 +235,8 @@ function signsIn(name: string, text: string): { sign: Sign; detail: string }[] {
 function checkCode(files: readonly ZipFile[]): ReviewReason | null {
   const signs = new Map<Sign, string[]>();
   const note = (sign: Sign, detail: string) => (signs.get(sign) ?? signs.set(sign, []).get(sign)!).push(detail);
+  // Each file is read as text once; those copies are handed back as it goes, or a big module holds all of them next to its files.
+  let unfreed = 0;
   for (const file of files) {
     if (/\.wasm$/i.test(file.name) || (file.data.length >= 4 && file.data.readUInt32BE(0) === 0x0061736d)) note("wasm", `${file.name}: a WebAssembly file`);
     if (!CODE_FILE.test(file.name)) continue;
@@ -236,6 +245,11 @@ function checkCode(files: readonly ZipFile[]): ReviewReason | null {
       continue;
     }
     for (const { sign, detail } of signsIn(file.name, file.data.toString("utf8"))) note(sign, detail);
+    unfreed += file.data.length;
+    if (unfreed >= FREE_AFTER_BYTES) {
+      freeMemory();
+      unfreed = 0;
+    }
   }
   if (signs.size === 0) return null;
   const detail = [...signs].map(([sign, where]) => `${SIGN_LABEL[sign]}: ${where.slice(0, 3).join(" | ")}${where.length > 3 ? ` (+${where.length - 3} more)` : ""}`).join("; ");

@@ -31,6 +31,9 @@ try {
     const prefix = added.manifest.id.split(".")[0];
     if (reservedFor) console.log(`Reserved the prefix "${prefix}" for account ${reservedFor}, which the key is linked to.`);
     else if (unheld) console.log(`Nobody holds the prefix "${prefix}": it stays taken until the key is linked to an account, which may then claim it.`);
+  } else if (command === "relist" && argument && rest.length === 0 && store.replacementWaits(argument)) {
+    console.log(`A new version of ${argument} is waiting. Approve and list it on the review page, or decline it first.`);
+    process.exitCode = 1;
   } else if ((command === "delist" || command === "relist") && argument && rest.length === 0) {
     const changed = store.setListed(argument, command === "relist");
     console.log(changed ? `${command === "relist" ? "Listed" : "Delisted"} ${argument}.` : `There is no module ${argument} in the catalog.`);

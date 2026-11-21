@@ -95,7 +95,7 @@ function setup(limits: Partial<PublishLimits> = {}, maintainerEmail?: string, pr
   const publish = (zip: Buffer, signature?: string, type = "application/zip", auth: string | null | undefined = firstSignIn) =>
     app.request("http://tavora.test/v1/catalog/publish", {
       method: "POST",
-      headers: { "content-type": type, ...(signature === undefined ? {} : { "x-tavora-signature": signature }), ...(auth ? { authorization: `Bearer ${auth}` } : {}) },
+      headers: { "content-type": type, "content-length": String(zip.length), ...(signature === undefined ? {} : { "x-tavora-signature": signature }), ...(auth ? { authorization: `Bearer ${auth}` } : {}) },
       body: new Uint8Array(zip),
     });
   const send = (key: KeyObject, zip: Buffer, auth: string | null | undefined = signIns.get(key) ?? firstSignIn) => publish(zip, publishSignature(key, zip), "application/zip", auth);
@@ -285,7 +285,8 @@ ${"A".repeat(64)}
     expect(store.prefixHolder("gamma")).toBe(second.accountId);
     expect(store.prefixes(first.accountId)).toEqual([]);
     expect(catalog.modules()).toEqual([]);
-    expect(catalog.uploadsSince(first.accountId, new Date(0))).toBe(0);
+    // It cost a whole scan, so it counts.
+    expect(catalog.uploadsSince(first.accountId, new Date(0))).toBe(1);
   });
 
   it("refuses an upload whose account was banned during the scan, and adds nothing", async () => {

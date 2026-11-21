@@ -209,6 +209,32 @@ describe("approve, deny and takedown", () => {
   });
 });
 
+describe("listing a taken-down module", () => {
+  it("is refused while a replacement waits, so the old version isn't served again", async () => {
+    const catalog = new CatalogStore(mkdtempSync(path.join(tmpdir(), "tavora-catalog-")));
+    const key = generateKeyPairSync("ed25519").privateKey;
+    const zipOf = (version: string) => {
+      const manifest = { id: "wellbrained.timer", name: "Timer", version, apiVersion: "1", entry: "index.html", games: [], viewport: { minWidth: 200, minHeight: 150 }, permissions: { network: [] } };
+      const files: ZipFile[] = [{ name: "tavora.module.json", data: Buffer.from(JSON.stringify(manifest)) }, { name: "index.html", data: Buffer.from(`<p>${version}</p>`) }];
+      return writeZip([...files, signFiles(files, key)]);
+    };
+    catalog.add(zipOf("1.0.0"));
+    catalog.setListed("wellbrained.timer", false);
+    const replacement = catalog.add(zipOf("1.0.1"), new Date(), null, undefined, undefined, { reasons: [{ check: "taken-down", text: "Taken down." }], language: "en", token: null });
+    app = createAdminApp({ token: TOKEN, submissions, state, store: createHostedStore({ list: () => [], file: () => null }, state), catalog });
+
+    const refused = await post("/api/catalog/listed", { id: "wellbrained.timer", listed: true });
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toMatchObject({ reason: "replacement-waiting" });
+    expect(catalog.index()).toEqual([]);
+
+    // With nothing waiting any more, listing it is the maintainer's call again.
+    catalog.removeWaiting(replacement.sha256);
+    expect((await post("/api/catalog/listed", { id: "wellbrained.timer", listed: true })).status).toBe(200);
+    expect(catalog.index()).toEqual([expect.objectContaining({ version: "1.0.0" })]);
+  });
+});
+
 describe("reports", () => {
   it("lists reported modules, delists and relists them, and dismisses reports, all with the token", async () => {
     const catalog = new CatalogStore(mkdtempSync(path.join(tmpdir(), "tavora-catalog-")));

@@ -11,7 +11,7 @@ import { createNotifier, waitingMail, waitingNoticeMail } from "./moderation-mai
 import { reviewUpload, runChecks } from "./moderation.ts";
 import { signedStatement } from "./publishers.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
-import { readUpload, uploadMemory, type MemoryTicket, type UploadMemory, zipPlan } from "./upload-memory.ts";
+import { FREE_AFTER_BYTES, freeMemory, readUpload, uploadMemory, type MemoryTicket, type ReadLimits, type UploadMemory, zipPlan } from "./upload-memory.ts";
 import type { Scanner } from "./virus-scan.ts";
 
 /**
@@ -80,8 +80,8 @@ export interface PublishOptions {
   scanner?: Scanner | undefined;
   /** What uploads may hold in memory at once (the process's shared budget by default). */
   memory?: UploadMemory;
-  /** How long an upload may take to arrive and may send nothing (UPLOAD_READ_MS and UPLOAD_IDLE_MS by default). */
-  readLimits?: { idleMs?: number; totalMs?: number };
+  /** How patient the read of an upload is (the catalog's own limits by default). */
+  readLimits?: ReadLimits;
   /** The longest a virus scan may take (SCAN_LIMIT_MS by default). */
   scanLimitMs?: number;
 }
@@ -237,8 +237,14 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
       return await accept(context, catalog, store, by, ticket, read.bytes, scans);
     } finally {
       if (oneAtATime) uploading.delete(by.accountId);
-      if (scans.length === 0) ticket.release();
-      else void Promise.all(scans).then(() => ticket.release());
+      // Once nothing refers to the zip any more, so the next upload doesn't start on top of this one's garbage.
+      const big = ticket.held >= FREE_AFTER_BYTES;
+      const done = () => {
+        ticket.release();
+        if (big) setImmediate(freeMemory);
+      };
+      if (scans.length === 0) done();
+      else void Promise.all(scans).then(done);
     }
   };
 
@@ -384,6 +390,9 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     };
     const overNow = await refusedByLimit();
     if (overNow) return overNow;
+    // Before the scan, so a version that can't be added doesn't hold the shared memory through it.
+    const conflict = catalog.versionConflict(checked, firstKey);
+    if (conflict) return refuse(context, 409, "conflict", conflict);
 
     // The automatic checks. They never throw: one that cannot run is a reason to wait.
     // Tavora's own modules skip the first-module and new-picture rules; the other checks still run and are kept for the admin page.
@@ -394,10 +403,15 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     // prefix may have changed hands too: another upload of this account may have taken its last free prefix, or another
     // account claimed this one. So all of it is checked again, and the prefix reserved, with nothing awaited before the
     // version is added, and a reservation made here goes again when the version isn't added.
+    // A refusal from here on cost a whole scan, so it counts towards the daily limit like an upload that was added.
+    const afterScan = (response: Response) => {
+      catalog.countUpload(key.accountId, checked.sha256, new Date(at));
+      return response;
+    };
     const barredAfter = barred();
-    if (barredAfter) return barredAfter;
+    if (barredAfter) return afterScan(barredAfter);
     const keyAfter = keyRefused();
-    if (keyAfter) return keyAfter;
+    if (keyAfter) return afterScan(keyAfter);
     // The first try of a retry may have finished during this scan.
     const sentMeanwhile = answerBefore();
     if (sentMeanwhile) return sentMeanwhile;
@@ -406,20 +420,20 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     if (takenDown) reasons.push(TAKEN_DOWN);
     const listsNow = !takenDown && (official || reasons.length === 0);
     const overAfter = overLimit(listsNow);
-    if (overAfter instanceof Response) return overAfter;
+    if (overAfter instanceof Response) return afterScan(overAfter);
     if (overAfter) {
       await tellFull(catalog, store, at, usedBytes);
-      return overAfter.full;
+      return afterScan(overAfter.full);
     }
     const held = prefixState();
     const refusedNow = prefixRefusal(held);
-    if (refusedNow) return refusedNow;
+    if (refusedNow) return afterScan(refusedNow);
     if (held === "free") store.reservePrefix(key.accountId, prefix, at);
     try {
       catalog.add(bytes, new Date(at), key.accountId, checked, firstKey, { reasons, language: languageOf(context), token: by.token, ...(official && !takenDown ? { official: true } : {}) });
     } catch (error) {
       if (held === "free") store.releasePrefix(key.accountId, prefix);
-      if (error instanceof CatalogError) return refuse(context, 409, "conflict", error.message);
+      if (error instanceof CatalogError) return afterScan(refuse(context, 409, "conflict", error.message));
       throw error;
     }
     // It fit, whether it lists now or waits.

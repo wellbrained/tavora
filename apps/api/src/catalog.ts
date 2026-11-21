@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { createReadStream, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { open, stat, type FileHandle } from "node:fs/promises";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { allowsPersonalWorkspaces, catalogListingProblem, folderKey, isGameId, isReleaseVersion, LOCAL_OWNER, manifestFiles, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, validateChangelog, validateManifest, type LeaderboardBoard, type ModuleManifest } from "@tavora/module-schema";
-import { MANIFEST_FILE, privateKeyFile, readZip, SIGNATURE_FILE, signedHash, verifyFiles, ZIP_LIMITS, zipDirectory, ZipError, type ZipFile } from "@tavora/pack";
+import { MANIFEST_FILE, privateKeyFile, readZip, SIGNATURE_FILE, signedHash, verifyFiles, ZIP_LIMITS, zipDirectory, ZipError, zipFiles, type ZipFile } from "@tavora/pack";
 import { inspectPng, isWebp } from "./png.ts";
-import { MAX_MANIFEST_BYTES, metadataProblem, UPLOAD_MEMORY_BYTES, zipMemory } from "./upload-memory.ts";
+import { FREE_AFTER_BYTES, freeMemory, MAX_MANIFEST_BYTES, MAX_SIGNATURE_BYTES, metadataProblem, UPLOAD_MEMORY_BYTES } from "./upload-memory.ts";
 
 /**
  * The module catalog (Milestone E, docs/catalog-threat-model.md): community modules, each with the
@@ -22,6 +23,75 @@ export const REMOVED_ZIP = "its zip was removed to make room";
 /** catalog_state: the zip the backfill is reading now, and the ones a run died reading (see backfillSignedHashes). */
 const BACKFILL_READING = "signed_backfill_reading";
 const BACKFILL_STALLED = "signed_backfill_stalled";
+/** A zip a start died reading this many times in a row is left alone for BACKFILL_RETRY_MS. */
+const BACKFILL_DEATHS = 2;
+const BACKFILL_RETRY_MS = 86_400_000;
+
+type StalledZips = Record<string, { deaths: number; at: number }>;
+
+/** The saved marks. An older service kept a plain list of hashes "for good": those read as never tried again yet, so they are. */
+function stalledZips(saved: string | null): StalledZips {
+  const value = JSON.parse(saved ?? "{}") as unknown;
+  return Array.isArray(value) || typeof value !== "object" || value === null ? {} : (value as StalledZips);
+}
+
+/** How much of a zip a download holds at a time. */
+const ZIP_CHUNK_BYTES = 64 * 1024;
+
+/** The SHA-256 of a file, read through a small buffer. */
+async function fileSha256(file: string): Promise<string> {
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(file, { highWaterMark: ZIP_CHUNK_BYTES })) hash.update(chunk as Buffer);
+  return hash.digest("hex");
+}
+
+/** The first `size` bytes of a file as a stream that reads a chunk only when asked for one, and closes the file when it ends or is cancelled. */
+function fileStream(file: string, size: number): ReadableStream<Uint8Array> {
+  let handle: FileHandle | null = null;
+  let position = 0;
+  const close = async () => {
+    const open = handle;
+    handle = null;
+    await open?.close();
+  };
+  return new ReadableStream<Uint8Array>(
+    {
+      async pull(controller) {
+        try {
+          handle ??= await open(file, "r");
+          const chunk = Buffer.allocUnsafeSlow(Math.min(ZIP_CHUNK_BYTES, size - position));
+          const { bytesRead } = chunk.length === 0 ? { bytesRead: 0 } : await handle.read(chunk, 0, chunk.length, position);
+          if (bytesRead === 0) {
+            await close();
+            if (position === size) controller.close();
+            else controller.error(new Error("the zip ended early"));
+            return;
+          }
+          position += bytesRead;
+          controller.enqueue(new Uint8Array(chunk.buffer, chunk.byteOffset, bytesRead));
+          if (position === size) {
+            await close();
+            controller.close();
+          }
+        } catch (error) {
+          await close().catch(() => {});
+          controller.error(error);
+        }
+      },
+      cancel: close,
+    },
+    { highWaterMark: 0 },
+  );
+}
+
+/** What reading a zip file by file holds at most: the zip and its biggest file. Zero when its directory can't be read (reading it then fails at once). */
+function largestHold(zip: Buffer): number {
+  try {
+    return zip.length + Math.max(0, ...zipDirectory(zip).map((file) => file.size));
+  } catch {
+    return 0;
+  }
+}
 
 /** Tavora's own modules stay bundled with the app; the catalog holds community modules only. */
 const OFFICIAL_PREFIX = "tavora.";
@@ -396,6 +466,9 @@ export class CatalogStore {
   private readonly zips: string;
   private readonly shots: string;
   private readonly lists: string;
+  /** Zips whose file was checked against their hash, with the size and change time it had then. */
+  private readonly checkedZips = new Map<string, string>();
+  private readonly checkingZips = new Map<string, Promise<boolean>>();
 
   constructor(dir: string) {
     mkdirSync(dir, { recursive: true });
@@ -498,13 +571,9 @@ export class CatalogStore {
   ): CheckedZip {
     const { manifest, owner, sha256 } = checked;
     checkReleaseVersion(manifest);
+    const conflict = this.versionConflict(checked, firstKey);
+    if (conflict) throw new CatalogError(conflict);
     const module = this.db.prepare("select owner from modules where id = ?").get(manifest.id) as { owner: string } | undefined;
-    if (module && module.owner !== owner && firstKey(owner) !== module.owner) throw new CatalogError(`${manifest.id} belongs to another publisher key.`);
-    const latest = this.db.prepare("select version from versions where module_id = ? order by seq desc limit 1").get(manifest.id) as { version: string } | undefined;
-    if (latest && compareModuleVersions(manifest.version, latest.version) <= 0) {
-      throw new CatalogError(`${manifest.id} already has ${latest.version}; a new version must be newer.`);
-    }
-    if (this.db.prepare("select 1 from versions where sha256 = ?").get(sha256)) throw new CatalogError("This exact zip is already in the catalog.");
 
     // The files first, under their hashes, so a row never points at a file that is not there.
     const write = (target: string, data: Buffer) => {
@@ -555,6 +624,21 @@ export class CatalogStore {
       throw error;
     }
     return checked;
+  }
+
+  /** Why this zip can't be added as the module's next version (another key's module, not newer, or already here), or null. */
+  versionConflict({ manifest, owner, sha256 }: Pick<CheckedZip, "manifest" | "owner" | "sha256">, firstKey: (fingerprint: string) => string = (fingerprint) => fingerprint): string | null {
+    const module = this.db.prepare("select owner from modules where id = ?").get(manifest.id) as { owner: string } | undefined;
+    if (module && module.owner !== owner && firstKey(owner) !== module.owner) return `${manifest.id} belongs to another publisher key.`;
+    const latest = this.db.prepare("select version from versions where module_id = ? order by seq desc limit 1").get(manifest.id) as { version: string } | undefined;
+    if (latest && compareModuleVersions(manifest.version, latest.version) <= 0) return `${manifest.id} already has ${latest.version}; a new version must be newer.`;
+    if (this.db.prepare("select 1 from versions where sha256 = ?").get(sha256)) return "This exact zip is already in the catalog.";
+    return null;
+  }
+
+  /** Counts an upload that was refused after its scan: it used the service as much as one that was added. */
+  countUpload(accountId: string, sha256: string, now: Date): void {
+    this.db.prepare("insert into upload_log (account_id, sha256, at) values (?, ?, ?)").run(accountId, sha256, now.toISOString());
   }
 
   /** How many versions an account uploaded since a moment, withdrawn ones too. Versions from before the log count by their own row. */
@@ -872,6 +956,27 @@ export class CatalogStore {
     return best;
   }
 
+  /**
+   * Other publishers' listed versions that keep their zip but have no stored hashes (a backfill couldn't read them): a new
+   * upload can't be told apart from them, so it waits for a person.
+   */
+  uncomparedVersions(self: { moduleId: string; accountId: string | null; fingerprints: readonly string[] }): { id: string; version: string }[] {
+    const rows = this.db
+      .prepare(
+        `select v.module_id, v.version, v.account_id, coalesce(v.signer, m.owner) as signer from versions v join modules m on m.id = v.module_id
+         where v.status = 'listed' and v.file_hashes is null and v.zip_removed is null order by v.seq`,
+      )
+      .all() as unknown as { module_id: string; version: string; account_id: string | null; signer: string }[];
+    return rows
+      .filter((row) => !isOfficialId(row.module_id) && row.module_id !== self.moduleId && !(self.accountId !== null && row.account_id === self.accountId) && !self.fingerprints.includes(row.signer))
+      .map((row) => ({ id: row.module_id, version: row.version }));
+  }
+
+  /** A taken-down module with a version waiting: listing it alone would serve the old version again, so that version goes first. */
+  replacementWaits(id: string): boolean {
+    return this.isTakenDown(id) && this.waitingCountOfModule(id) > 0;
+  }
+
   /** The ids of every module an account's keys or uploads made, listed or not. */
   modulesOfAccount(accountId: string, fingerprints: readonly string[]): string[] {
     const ids = new Set((this.db.prepare("select distinct module_id from versions where account_id = ?").all(accountId) as unknown as { module_id: string }[]).map((row) => row.module_id));
@@ -933,17 +1038,20 @@ export class CatalogStore {
    * to make room, missing, not what its name says, unreadable, or without a readable signature) is skipped and reported,
    * and the rest still go in. The server runs it at every start; `catalog backfill-signed` runs it by hand.
    *
-   * Reading a zip unpacks all of it, so the zip being read is noted first. If a run dies there (the service's memory
-   * limit), the next run skips that zip for good when `skipStalled` is set (the server's start, so it can't loop on
-   * it); without it (the command, which has no such limit) it tries again. With `skipStalled` a zip that unpacks past
-   * `memoryLimit` is skipped too, unread, so the server's start never goes near its memory limit for one.
+   * A zip is unpacked one file at a time, with memory handed back between big ones, and the zip being read is noted first.
+   * A run can die there for any reason (a restart, the service's memory limit), so one death proves nothing about the zip and
+   * the next run reads it again. With `skipStalled` (the server's start, so it can't loop on it) a zip that was being read at
+   * two deaths in a row is left alone for a day, then tried again; a clean read forgets it. Without it (the command, which has
+   * no such limit) it is always tried. With `skipStalled` a zip whose biggest file doesn't fit `memoryLimit` next to the zip is
+   * skipped too, unread, so the server's start never goes near its memory limit for one.
    */
-  backfillSignedHashes({ skipStalled = false, memoryLimit = UPLOAD_MEMORY_BYTES }: { skipStalled?: boolean; memoryLimit?: number } = {}): { filled: number; skipped: { sha256: string; id: string; version: string; reason: string }[] } {
-    const stalled = new Set(JSON.parse(this.getState(BACKFILL_STALLED) ?? "[]") as string[]);
+  backfillSignedHashes({ skipStalled = false, memoryLimit = UPLOAD_MEMORY_BYTES, now = Date.now() }: { skipStalled?: boolean; memoryLimit?: number; now?: number } = {}): { filled: number; skipped: { sha256: string; id: string; version: string; reason: string }[] } {
+    const stalled = stalledZips(this.getState(BACKFILL_STALLED));
+    const saveStalled = () => this.setState(BACKFILL_STALLED, JSON.stringify(stalled));
     const died = this.getState(BACKFILL_READING);
     if (died) {
-      stalled.add(died);
-      this.setState(BACKFILL_STALLED, JSON.stringify([...stalled]));
+      stalled[died] = { deaths: (stalled[died]?.deaths ?? 0) + 1, at: now };
+      saveStalled();
       this.setState(BACKFILL_READING, "");
     }
     const rows = this.db.prepare("select sha256, module_id, version, zip_removed from versions where signed_sha256 is null or (file_hashes is null and zip_removed is null) order by seq").all() as unknown as {
@@ -962,31 +1070,26 @@ export class CatalogStore {
         skip(REMOVED_ZIP);
         continue;
       }
-      if (skipStalled && stalled.has(row.sha256)) {
+      const mark = stalled[row.sha256];
+      if (skipStalled && mark && mark.deaths >= BACKFILL_DEATHS && now - mark.at < BACKFILL_RETRY_MS) {
         skip("an earlier run stopped while reading its zip; try `catalog backfill-signed`");
         continue;
       }
-      const bytes = this.zipBytes(row.sha256);
-      if (!bytes) {
-        skip("its zip is missing or not what its name says");
-        continue;
-      }
-      if (skipStalled && (zipMemory(bytes) ?? 0) > memoryLimit) {
-        skip("its zip is too big to read while the server starts; try `catalog backfill-signed`");
-        continue;
-      }
-      let hash: string | null;
-      let copies: string;
       this.setState(BACKFILL_READING, row.sha256);
-      try {
-        const files = readZip(bytes);
-        hash = signedHash(files);
-        copies = JSON.stringify(copyHashes(files));
-      } catch (error) {
-        skip(`its zip can't be read: ${error instanceof Error ? error.message : String(error)}`);
+      // In a function of its own, so nothing here still refers to the zip when its memory is handed back below.
+      const read = this.hashesFromZip(row.sha256, skipStalled ? memoryLimit : Infinity);
+      this.setState(BACKFILL_READING, "");
+      if (read.heldBytes >= FREE_AFTER_BYTES) freeMemory();
+      if ("refused" in read) {
+        // The zip is exactly what was uploaded and can't be read: nothing can install it, so there is nothing to compare with.
+        if (read.unreadable) fillCopies.run("[]", row.sha256);
+        skip(read.refused);
         continue;
-      } finally {
-        this.setState(BACKFILL_READING, "");
+      }
+      const { hash, copies } = read;
+      if (mark) {
+        delete stalled[row.sha256];
+        saveStalled();
       }
       try {
         const copiesFilled = Number(fillCopies.run(copies, row.sha256).changes) > 0;
@@ -1000,6 +1103,32 @@ export class CatalogStore {
       }
     }
     return { filled, skipped };
+  }
+
+  /** A stored zip's signed hash and file hashes, unpacking one file at a time; or why it can't give them. */
+  private hashesFromZip(sha256: string, memoryLimit: number): ({ hash: string | null; copies: string } | { refused: string; unreadable?: boolean }) & { heldBytes: number } {
+    const bytes = this.zipBytes(sha256);
+    if (!bytes) return { refused: "its zip is missing or not what its name says", heldBytes: 0 };
+    if (largestHold(bytes) > memoryLimit) return { refused: "its zip is too big to read while the server starts; try `catalog backfill-signed`", heldBytes: bytes.length };
+    let heldBytes = bytes.length;
+    try {
+      const hashes: [string, number][] = [];
+      let signature: ZipFile[] = [];
+      let unfreed = 0;
+      for (const file of zipFiles(bytes)) {
+        if (file.name === SIGNATURE_FILE) signature = file.data.length <= MAX_SIGNATURE_BYTES ? [file] : [];
+        hashes.push(...copyHashes([file]));
+        heldBytes += file.data.length;
+        unfreed += file.data.length;
+        if (unfreed >= FREE_AFTER_BYTES) {
+          freeMemory();
+          unfreed = 0;
+        }
+      }
+      return { hash: signedHash(signature), copies: JSON.stringify(hashes), heldBytes };
+    } catch (error) {
+      return { refused: `its zip can't be read: ${error instanceof Error ? error.message : String(error)}`, unreadable: error instanceof ZipError, heldBytes };
+    }
   }
 
   /** A saved note of the catalog (the one-time run's results), or null. */
@@ -1269,6 +1398,38 @@ export class CatalogStore {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * A zip of a listed module to send from disk, or null, under the same rules as zip(). Its hash is checked by reading the file
+   * through a small buffer, once per version of the file on disk, and the stream then holds one chunk at a time however slow
+   * the client is. Nothing is opened until the stream is read, so an answer nobody reads leaves no file open.
+   */
+  async openZip(sha256: string): Promise<{ size: number; stream: () => ReadableStream<Uint8Array> } | null> {
+    if (!SHA256.test(sha256)) return null;
+    const row = this.db.prepare("select v.size from versions v join modules m on m.id = v.module_id where v.sha256 = ? and m.listed = 1 and v.zip_removed is null and v.status = 'listed'").get(sha256) as { size: number } | undefined;
+    if (!row) return null;
+    const target = this.zipPath(sha256);
+    let stamp: string;
+    try {
+      const info = await stat(target);
+      if (info.size !== row.size) return null;
+      stamp = `${info.size}:${info.mtimeMs}`;
+    } catch {
+      return null;
+    }
+    if (this.checkedZips.get(sha256) !== stamp) {
+      // Clients asking at once share one read of the file.
+      let check = this.checkingZips.get(`${sha256}:${stamp}`);
+      if (!check) {
+        check = fileSha256(target).then((hash) => hash === sha256, () => false);
+        this.checkingZips.set(`${sha256}:${stamp}`, check);
+        void check.finally(() => this.checkingZips.delete(`${sha256}:${stamp}`));
+      }
+      if (!(await check)) return null;
+      this.checkedZips.set(sha256, stamp);
+    }
+    return { size: row.size, stream: () => fileStream(target, row.size) };
   }
 
   /** A zip of a listed module by its hash, or null. A delisted module's zips are not handed out. */
