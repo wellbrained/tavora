@@ -111,8 +111,7 @@ function clear(): void {
 
 const CARD = "bg-card text-card-foreground flex flex-col gap-1.5 rounded-lg border p-2.5";
 const LABEL = "text-muted-foreground flex-none text-[0.6875rem] font-medium tracking-wide uppercase";
-// tavora-numerals: the style may draw big numbers its own way (dot matrix, thin).
-const BIG = "text-[1.625rem] leading-none font-semibold tabular-nums tavora-numerals";
+const BIG = "text-[1.625rem] leading-none font-semibold tabular-nums";
 </script>
 
 <template>

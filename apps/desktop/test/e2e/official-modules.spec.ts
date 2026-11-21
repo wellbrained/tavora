@@ -714,7 +714,7 @@ test.describe("ui playground pages", () => {
     // Every page of the group lists its examples, and none says it is coming.
     const expected: Record<string, string[]> = {
       colours: ["Tokens", "TextOnSurface", "DoDont"],
-      text: ["TypeScale", "Weights", "Numbers", "BigNumbers", "Capitals", "Mono"],
+      text: ["TypeScale", "Weights", "Numbers", "Capitals", "Mono"],
       spacing: ["Scale", "Radius", "NestedCorners", "Depth"],
       motion: ["Curves", "Durations", "Rules", "ReducedMotion"],
       writing: ["FewWords", "Descriptions", "PlainWords", "YouDu", "Names"],

@@ -39,10 +39,10 @@ withDefaults(defineProps<{
     </header>
     <!-- The usage and the temperature are one pair, centred together; until Tavora reports one, a muted dash holds its place so the usage does not move later. -->
     <div class="flex items-baseline justify-center gap-3 whitespace-nowrap" data-testid="usage">
-      <span class="text-[2.125rem] leading-none font-semibold tabular-nums tavora-numerals">{{ usage }}<span v-if="usage" class="text-muted-foreground ml-0.5 text-base font-normal">%</span></span>
+      <span class="text-[2.125rem] leading-none font-semibold tabular-nums">{{ usage }}<span v-if="usage" class="text-muted-foreground ml-0.5 text-base font-normal">%</span></span>
       <template v-if="hasTemperature">
-      <span v-if="temperature" :class="cn('text-[2.125rem] leading-none font-semibold tabular-nums tavora-numerals', temperatureClass)" data-testid="temperature">{{ temperature }}<span class="text-muted-foreground ml-0.5 text-base font-normal">°C</span></span>
-      <span v-else class="text-muted-foreground text-[2.125rem] leading-none font-semibold tabular-nums tavora-numerals" :title="temperatureHint" :tabindex="temperatureHint ? 0 : undefined" data-testid="temperature-none">–<span class="ml-0.5 text-base font-normal">°C</span></span>
+      <span v-if="temperature" :class="cn('text-[2.125rem] leading-none font-semibold tabular-nums', temperatureClass)" data-testid="temperature">{{ temperature }}<span class="text-muted-foreground ml-0.5 text-base font-normal">°C</span></span>
+      <span v-else class="text-muted-foreground text-[2.125rem] leading-none font-semibold tabular-nums" :title="temperatureHint" :tabindex="temperatureHint ? 0 : undefined" data-testid="temperature-none">–<span class="ml-0.5 text-base font-normal">°C</span></span>
       </template>
     </div>
     <UsageGraph :values="values" :label="graphLabel" />

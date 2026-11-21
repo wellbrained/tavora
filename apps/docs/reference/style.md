@@ -26,7 +26,7 @@ If something is wrong, "Your styles" lists the folder and the first problem inst
     "buttons": "keycap",
     "inputs": "inset",
     "lists": "inverted",
-    "labels": "caps",
+    "labels": "caps-mono",
     "status": "led"
   },
   "values": {
@@ -54,7 +54,7 @@ Unknown fields, parts and looks are refused, so a typo fails loudly rather than 
 | `description` | no | At most 200 characters. |
 | `author` | no | At most 60 characters. |
 | `version` | yes | `major.minor.patch`. |
-| `looks` | yes | One look for every part below (`numbers` may be left out). |
+| `looks` | yes | One look for every part below. |
 | `values` | yes | Every value below. |
 | `radius` | yes | The corner radius in px, 0 (square) to 16. The user can still pick their own in Settings. |
 | `font` | yes | One of the fonts Tavora ships (below). The user can still pick their own. |
@@ -64,15 +64,14 @@ Unknown fields, parts and looks are refused, so a typo fails loudly rather than 
 
 | Part | Looks | What it draws |
 | --- | --- | --- |
-| `surface` | `flat`, `raised`, `glass`, `hairline`, `dotted` | The app background, rail, top bar and panels; menus, popovers and dialogs follow it. `glass` is see-through with blur on Tavora's own frames; a panel's content stays solid. |
-| `tabs` | `pill`, `keycap`, `underline`, `block` | A panel's tab strip. |
+| `surface` | `flat`, `raised`, `glass` | The app background, rail, top bar and panels; menus, popovers and dialogs follow it. `glass` is see-through with blur on Tavora's own frames; a panel's content stays solid. |
+| `tabs` | `pill`, `keycap` | A panel's tab strip. |
 | `content` | `plain`, `inset` | A panel's content area. `inset` sets it in like a screen: over a light theme, module panels get the theme's dark colours. |
-| `buttons` | `soft`, `keycap`, `capsule`, `line` | Buttons. |
-| `inputs` | `soft`, `inset`, `capsule`, `underline` | Inputs, checkboxes and switches. |
-| `lists` | `fill`, `inverted`, `bar` | Lists and the selected row. |
-| `labels` | `normal`, `caps`, `caps-mono`, `lower` | Labels and small headings. |
+| `buttons` | `soft`, `keycap`, `capsule` | Buttons. |
+| `inputs` | `soft`, `inset`, `capsule` | Inputs, checkboxes and switches. |
+| `lists` | `fill`, `inverted` | Lists and the selected row. |
+| `labels` | `normal`, `caps-mono` | Labels and small headings. |
 | `status` | `none`, `led` | A small glowing light on what is on or open. |
-| `numbers` | `normal`, `dot`, `thin` | Big numbers a module shows, such as a clock or a counter. Optional: left out, it is `normal`. |
 
 The same lists are `STYLE_LOOKS` in `@tavora/sdk/protocol`. A look that doesn't exist yet is a change to Tavora's kit first; then styles can pick it.
 

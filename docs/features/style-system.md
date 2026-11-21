@@ -12,14 +12,14 @@ Lets Nik (later others) change Tavora's whole design language while the structur
 - **Parts and looks (first set):**
   | Part | Looks |
   |---|---|
-  | Surfaces (app background, rail, top bar, panel) | flat · raised · glass · hairline |
-  | Panel tab strip | pill · keycap · underline |
+  | Surfaces (app background, rail, top bar, panel) | flat · raised · glass |
+  | Panel tab strip | pill · keycap |
   | Panel content area | plain · inset screen |
   | Buttons | soft · keycap · capsule |
   | Inputs, checkboxes, switches | soft · inset · capsule |
-  | Lists and selection | fill · inverted · accent bar |
+  | Lists and selection | fill · inverted |
   | Menus, popovers, dialogs | follow the surface look |
-  | Labels, small headings | normal · small caps (letter spacing, optional mono) |
+  | Labels, small headings | normal · small caps in the mono font |
   | Status light | none · LED dot |
 - **Values a style sets:** radius 0–16, border width, shadows, font (only bundled fonts), sizes within range: body text 12–15 px (13 today), control height 28–40 px (32 today), spacing 0.85–1.2×; out-of-range values are clamped.
 - **Colours stay in themes.** Any style with any theme; each style's own themes are listed first; every pairing passes the contrast check. Glass surfaces are checked as the mixed colour, with a minimum opacity.
@@ -28,7 +28,7 @@ Lets Nik (later others) change Tavora's whole design language while the structur
 - **Modules:** get the active style with the theme (`ui.getTheme` / `ui.theme`); kit controls follow it; modules may draw style-specific parts (optional). Older modules look Classic. The native panel corner radius (today a fixed 10 px in `module-view.ts` / `browser-view.ts`) follows the style.
 - **Liquid Glass:** real glass on host-drawn parts (rail, top bar, tab strips, panel frames) over a soft colour field from the theme; panel content solid ([ADR 0004](#adr-0004-glass-on-host-chrome-only)).
 - **Not in this branch:** Whiteboard (Excalidraw) and PDF pages keep their own look; the in-game overlay plates are untouched.
-- **Ships:** Classic, Hardware (theme "Hardware": Light grey with red signal, Dark graphite with orange signal), Liquid Glass (theme "Glass": Light, Dark); Playground style + theme switcher with specimens for every look. **Also in this PR (Nik, 2026-11-20: "the whole system in one PR"):** Rabbit (hairline, underline tabs and fields, line buttons, bar lists, lowercase, thin numbers, Outfit, theme Rabbit) and Nothing (dotted, block tabs, line buttons, inverted lists, mono caps, dot-matrix numbers in Doto, theme Nothing), at normal size; own styles; Tavora's toasts follow the style.
+- **Ships:** Classic, Hardware (theme "Hardware": Light grey with red signal, Dark graphite with orange signal), Liquid Glass (theme "Glass": Light, Dark); Playground style + theme switcher with specimens for every look. **Also in this PR (Nik, 2026-11-20: "the whole system in one PR"):** own styles; Tavora's toasts follow the style. **Dropped (Nik, 2026-11-21):** the Rabbit and Nothing styles, and with them the looks only they used (surface hairline and dotted, tabs underline and block, buttons line, inputs underline, lists bar, labels caps and lower, big numbers dot and thin with the Doto font) and the Rabbit theme. Less to maintain; three styles are enough. The Nothing theme stays as a colour theme.
 
 ## Contract between the halves (implementation, 2026-11-20)
 
@@ -38,17 +38,15 @@ Both the host/SDK work (step 1) and the kit work (steps 2–3) code against this
 
 ```ts
 export const STYLE_LOOKS = {
-  surface: ["flat", "raised", "glass", "hairline"],
-  tabs: ["pill", "keycap", "underline"],
+  surface: ["flat", "raised", "glass"],
+  tabs: ["pill", "keycap"],
   content: ["plain", "inset"],
   buttons: ["soft", "keycap", "capsule"],
   inputs: ["soft", "inset", "capsule"],
-  lists: ["fill", "inverted", "bar"],
-  labels: ["normal", "caps", "caps-mono"],
+  lists: ["fill", "inverted"],
+  labels: ["normal", "caps-mono"],
   status: ["none", "led"],
-  numbers: ["normal", "dot", "thin"],   // added later: optional in a style file (first look then)
 } as const;
-// Added for Rabbit and Nothing: surface "dotted", tabs "block", buttons "line", inputs "underline", labels "lower".
 export type StylePart = keyof typeof STYLE_LOOKS;
 export type StyleLooks = { [P in StylePart]: (typeof STYLE_LOOKS)[P][number] };
 export interface StyleValues {
@@ -66,7 +64,7 @@ export interface TavoraStyle { id: string; name: string; looks: StyleLooks; valu
 **Style file** `styles/<name>/tavora.style.json`: `{ id, name, description?, author?, version, looks, values, radius, font, themes? }`. `radius` (0–16) and `font` (a bundled `ThemeFont` id) are the style's defaults; `themes` lists theme ids shown first for this style. Validated like theme manifests: unknown keys, unknown parts or looks are errors; numbers outside the ranges are clamped (with a hint). Built-in ids: `tavora.classic`, `tavora.hardware`, `tavora.glass`.
 
 **Resolving** (host main): the user's font and radius settings get a "style default" value (`null`). Final radius = user override ?? (style is Classic ? theme variation radius : style radius). Final font = user override ?? style font (Classic's font is Inter, so today's default stays). These land in the existing `TavoraTheme.radius` / `font`, so modules on an older kit still get the right corners and font. The saved settings must stay readable by the previous app version (add fields, don't rename).
-- Saved (`library.json`, `main/library.ts`): `styleId` (left out for Classic, kept while not installed), `radius` (0–16, `null` = style default; a Tavora before styles reads 4–12 and uses the theme's for any other), `font` (left out = style default; `"inter"` is now kept as the user's own pick). Actions: `set-style { styleId }`, `set-radius { radius: 0–16 | null }`, `set-font { font: id | null }`; `reset-theme` also goes back to Classic.
+- Saved (`library.json`, `main/library.ts`): `styleId` (left out for Classic, kept while not installed), `radius` (0–16, `null` = style default; a Tavora before styles reads 4–12 and uses the theme's for any other), `font` (left out = style default; `"inter"` is now kept as the user's own pick), `styleThemes` (each style's last theme, Classic's too, by style id; left out while empty). **Each style keeps its own theme** (Nik, 2026-11-21): switching styles remembers the theme for the style left and brings back the new style's last one; a style never used starts with its own first theme (Classic: Tavora's), in the mode shown now (`library.ts` `switchStyle`). Actions: `set-style { styleId }`, `set-radius { radius: 0–16 | null }`, `set-font { font: id | null }`; `reset-theme` also goes back to Classic and forgets the styles' themes.
 - The host page gets, in `AppearanceView` (`shared/host-api.ts`): `styleId` (in use), `styles: StyleView[]` (`{ id, name, description, author, provenance, radius, font, themes, looks, values }`, Classic first), `radius` (override or `null`), `resolvedRadius`, `font` (in use, `{ id, family }`), `fontOverride` (id or `null`), `styleMarks` (what goes on `<html>`) and `styleProblems`.
 
 **Applying** (SDK `bootstrap.ts` `applyHostTheme()` for modules, `renderer/theme.ts` `applyTheme()` for the host page), on `document.documentElement`:
@@ -98,7 +96,7 @@ export interface TavoraStyle { id: string; name: string; looks: StyleLooks; valu
 
 Alternatives: CSS per style inside the kit (most freedom, but every module bundles its own kit copy, so each new style would need every module rebuilt), or CSS shipped in a style package (others' CSS could hide or fake controls and slow the app). Data choices let a new style made of existing looks reach every up-to-date module without a rebuild, and let others make styles later without changing the security model.
 
-Consequences: a look that doesn't exist yet (a knob, dot-matrix numbers) is a kit update with a Playground specimen, then styles can pick it. Modules built against an older kit show Classic. Styles never change layout, and sizes are clamped to the range (text 12–15 px, controls 28–40 px, spacing 0.85–1.2×).
+Consequences: a look that doesn't exist yet (a knob) is a kit update with a Playground specimen, then styles can pick it. Modules built against an older kit show Classic. Styles never change layout, and sizes are clamped to the range (text 12–15 px, controls 28–40 px, spacing 0.85–1.2×).
 
 ## ADR 0004: glass on host chrome only
 

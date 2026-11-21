@@ -107,6 +107,7 @@ import {
   markIconShared,
   setWorkspaceLabel,
   setRail,
+  switchStyle,
   sortedRoot,
   trashedWorkspaces,
   trashWorkspace,
@@ -2870,9 +2871,14 @@ export class Host {
         this.applyTheme();
       }),
       // A style that is not installed is kept, like a theme, and shows Classic until it is back.
+      // Each style keeps its own theme: one never used starts with its own first theme (Classic: Tavora's), in the mode
+      // shown now.
       "set-style": saved((action) => {
-        if (action.styleId === CLASSIC_STYLE_ID) delete this.library.styleId;
-        else this.library.styleId = action.styleId;
+        const style = resolveStyle(this.styles, action.styleId);
+        const firstId = action.styleId === CLASSIC_STYLE_ID ? DEFAULT_THEME.id : (style.id === action.styleId ? style.themes.find((id) => this.themes.has(id)) : undefined) ?? DEFAULT_THEME.id;
+        const first = this.themes.get(firstId)?.theme;
+        const mode = this.currentChoice().variation.mode;
+        switchStyle(this.library, action.styleId, { id: firstId, variation: first ? variationForMode(first, "", mode).id : DEFAULT_THEME.variation });
         this.applyTheme();
       }),
       "reset-theme": saved(() => {
@@ -2881,6 +2887,7 @@ export class Host {
         this.library.radius = null;
         delete this.library.font;
         delete this.library.styleId;
+        delete this.library.styleThemes;
         this.applyTheme();
       }),
       "reload-themes": () => this.reloadThemes(),

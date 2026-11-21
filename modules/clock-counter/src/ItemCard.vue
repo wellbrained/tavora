@@ -115,7 +115,7 @@ const startLabel = computed(() => {
         </div>
       </div>
 
-      <span class="ml-auto min-w-0 flex-[0_1_auto] truncate text-right text-xl font-semibold tabular-nums tavora-numerals" :class="flashing && 'clock-done'" data-testid="value"><CountTo v-if="item.kind === 'counter'" :value="item.value" :format="String" /><template v-else>{{ display }}</template></span>
+      <span class="ml-auto min-w-0 flex-[0_1_auto] truncate text-right text-xl font-semibold tabular-nums" :class="flashing && 'clock-done'" data-testid="value"><CountTo v-if="item.kind === 'counter'" :value="item.value" :format="String" /><template v-else>{{ display }}</template></span>
 
       <div class="flex flex-none items-center gap-1">
         <template v-if="item.kind === 'counter'">

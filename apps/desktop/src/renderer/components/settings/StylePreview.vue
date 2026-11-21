@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// A small picture of a style, drawn from its looks in the colours in use: a panel on the canvas (flat, raised, glass
-// or hairline), its content (plain bars or an inset screen), a button (soft, keycap or capsule) and, with a status
-// light, its dot. Settings > Appearance shows it in the Style list, the way ThemePreview shows a theme.
+// A small picture of a style, drawn from its looks in the colours in use: a panel on the canvas (flat, raised or
+// glass), its content (plain bars or an inset screen), a button (soft, keycap or capsule) and, with a status light, its
+// dot. Settings > Appearance shows it in the Style list, the way ThemePreview shows a theme.
 import { computed } from "vue";
 import type { StyleView } from "../../../shared/host-api";
 
@@ -59,18 +59,6 @@ const button = computed(() => (looks.value.buttons === "capsule" ? "999px" : loo
   background: color-mix(in srgb, var(--card) 65%, transparent);
   border-color: color-mix(in srgb, white 50%, transparent);
   box-shadow: inset 0 1px 0 color-mix(in srgb, white 60%, transparent);
-}
-[data-surface="hairline"] .panel {
-  background: transparent;
-}
-[data-surface="dotted"] .panel {
-  background: transparent;
-  border-style: dotted;
-  border-color: color-mix(in srgb, var(--foreground) 55%, transparent);
-}
-[data-buttons="line"] .key {
-  background: transparent;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 55%, transparent);
 }
 .screen {
   background: color-mix(in srgb, black 85%, var(--background));

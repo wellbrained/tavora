@@ -12,8 +12,7 @@
     "inputs": "inset",
     "lists": "inverted",
     "labels": "caps-mono",
-    "status": "led",
-    "numbers": "normal"
+    "status": "led"
   },
   "values": {
     "borderWidth": 1,

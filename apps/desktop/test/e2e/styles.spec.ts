@@ -33,13 +33,11 @@ test("a style reaches Tavora and its panels at once, inset panels get dark colou
   expect(await onHost(page, VAR("--style-control-height"))).toBe("32px");
   expect(await inNotes(app, VAR("--style-text"))).toBe("13px");
 
-  // Hardware, picked in Settings > Appearance, with its own theme in Light.
+  // Hardware, picked in Settings > Appearance: never used before, so it comes with its own theme. In Light.
   await openAppearance(page);
   await page.getByTestId("style-select").click();
   await page.getByTestId("style-tavora.hardware").click();
   await expect.poll(() => onHost(page, STYLE)).toBe("tavora.hardware");
-  await page.getByTestId("theme-select").click();
-  await page.getByTestId("theme-tavora.hardware").click();
   await page.getByTestId("mode-light").click();
 
   await expect.poll(() => onHost(page, LOOK("tabs"))).toBe("keycap");
@@ -55,8 +53,11 @@ test("a style reaches Tavora and its panels at once, inset panels get dark colou
   expect(await inNotes(app, `document.documentElement.dataset.mode ?? ""`)).toBe("dark");
   await app.close();
 
-  const saved = JSON.parse(await readFile(path.join(userData, "library.json"), "utf8")) as { styleId?: unknown };
+  const saved = JSON.parse(await readFile(path.join(userData, "library.json"), "utf8")) as { styleId?: unknown; theme?: { id?: unknown }; styleThemes?: Record<string, { id: string }> };
   expect(saved.styleId).toBe("tavora.hardware");
+  expect(saved.theme?.id).toBe("tavora.hardware");
+  // Classic keeps the theme it had, for when the user goes back to it.
+  expect(saved.styleThemes?.["tavora.classic"]?.id).toBe("tavora.default");
 
   // Kept after a restart; Reset goes back to Classic and leaves no style in the library.
   const again = await launch(userData);
@@ -68,6 +69,7 @@ test("a style reaches Tavora and its panels at once, inset panels get dark colou
   await again.app.close();
   const reset = JSON.parse(await readFile(path.join(userData, "library.json"), "utf8")) as Record<string, unknown>;
   expect("styleId" in reset).toBe(false);
+  expect("styleThemes" in reset).toBe(false);
 });
 
 test("New style copies the style in use into the styles folder, and it can be picked", async () => {
@@ -104,7 +106,7 @@ test("New style copies the style in use into the styles folder, and it can be pi
 test("the user's own styles load on Reload, broken ones say why, and numbers out of range are kept in it", async () => {
   const userData = await newUserData();
   const { app, page } = await launch(userData);
-  const looks = { surface: "hairline", tabs: "underline", content: "plain", buttons: "capsule", inputs: "capsule", lists: "bar", labels: "caps", status: "none" };
+  const looks = { surface: "glass", tabs: "keycap", content: "plain", buttons: "capsule", inputs: "capsule", lists: "inverted", labels: "caps-mono", status: "none" };
   const values = { borderWidth: 1, depth: 0, textSize: 14, controlHeight: 36, spacing: 1.1, glassOpacity: 0.8 };
   const write = async (folder: string, style: unknown) => {
     await mkdir(path.join(userData, "styles", folder), { recursive: true });
@@ -131,7 +133,7 @@ test("the user's own styles load on Reload, broken ones say why, and numbers out
   await page.getByTestId("style-select").click();
   await page.getByTestId("style-community.airy").click();
   await expect.poll(() => onHost(page, STYLE)).toBe("community.airy");
-  expect(await onHost(page, LOOK("lists"))).toBe("bar");
+  expect(await onHost(page, LOOK("lists"))).toBe("inverted");
   expect(await onHost(page, VAR("--style-text"))).toBe("15px");
   expect(await onHost(page, VAR("--radius"))).toBe("6px");
   await app.close();

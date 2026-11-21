@@ -423,17 +423,6 @@
   background: color-mix(in srgb, var(--card) calc(min(1, var(--style-glass-opacity, 0.72) + 0.12) * 100%), transparent);
 }
 
-/* Hairline: flat panels on the plain background, one thin line around each. */
-:root[data-look-surface="hairline"] {
-  --panel-canvas: var(--background);
-}
-:root[data-look-surface="hairline"] .dockview-theme-tavora .dv-groupview,
-:root[data-look-surface="hairline"] .dockview-theme-tavora .dv-groupview.dv-active-group {
-  background: var(--background);
-  border: var(--style-border-width, 1px) solid var(--border);
-  box-shadow: none;
-}
-
 /* Tabs. Keycap: small keys in the row; the open tab of the panel you work in is pressed in (inverted). */
 :root[data-look-tabs="keycap"] .dockview-theme-tavora .dv-tabs-container {
   align-items: center;
@@ -487,29 +476,18 @@
   box-shadow: inset 0 1px 0 color-mix(in srgb, white 8%, transparent), 0 1px 3px color-mix(in srgb, black 35%, transparent);
 }
 
-/* Keycap, underline and block draw no line between tabs, also in the Framed layout (whose own divider rule is more
+/* Keycap draws no line between tabs, also in the Framed layout (whose own divider rule is more
    specific than a look's). */
-:root[data-look-tabs]:is([data-look-tabs="keycap"], [data-look-tabs="underline"], [data-look-tabs="block"]) .dockview-theme-tavora .dv-tab + .dv-tab {
+:root[data-look-tabs]:is([data-look-tabs="keycap"]) .dockview-theme-tavora .dv-tab + .dv-tab {
   --tab-divider: 0 0 transparent;
 }
-/* Keycap and block mark the open tab with their fill, never the Framed layout's underline. */
-:root[data-look-tabs]:is([data-look-tabs="keycap"], [data-look-tabs="block"]) .dockview-theme-tavora .dv-groupview .dv-tab.dv-active-tab {
+/* Keycap marks the open tab with its fill, never the Framed layout's underline. */
+:root[data-look-tabs]:is([data-look-tabs="keycap"]) .dockview-theme-tavora .dv-groupview .dv-tab.dv-active-tab {
   --tab-line: 0 0 transparent;
 }
 
-/* Underline: words; a line under the open tab, in the accent colour in the panel you work in. No dividers. */
-:root[data-look-tabs="underline"] .dockview-theme-tavora .dv-tab {
-  --tab-divider: 0 0 transparent;
-}
-:root[data-look-tabs="underline"] .dockview-theme-tavora .dv-tab.dv-active-tab {
-  --tab-line: inset 0 -2px 0 color-mix(in srgb, var(--foreground) 30%, transparent);
-}
-:root[data-look-tabs="underline"] .dockview-theme-tavora .dv-groupview.dv-active-group .dv-tab.dv-active-tab {
-  --tab-line: inset 0 -2px 0 var(--primary);
-}
-
-/* Labels: tab names in small caps (and mono). */
-:root:is([data-look-labels="caps"], [data-look-labels="caps-mono"]) .dockview-theme-tavora .dv-tab {
+/* Labels: tab names in small caps, mono. */
+:root[data-look-labels="caps-mono"] .dockview-theme-tavora .dv-tab {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-size: var(--text-xs);
@@ -548,42 +526,3 @@
     0 0 0 1px color-mix(in srgb, black 45%, var(--border)),
     0 0 0 3px color-mix(in srgb, var(--foreground) 5%, transparent);
 }
-
-/* ---------- Rabbit and Nothing ---------- */
-
-/* Dotted: flat panels on the plain background, a dotted line around each (Nothing). */
-:root[data-look-surface="dotted"] {
-  --panel-canvas: var(--background);
-}
-:root[data-look-surface="dotted"] .dockview-theme-tavora .dv-groupview,
-:root[data-look-surface="dotted"] .dockview-theme-tavora .dv-groupview.dv-active-group {
-  background: var(--background);
-  border: var(--style-border-width, 1px) dotted color-mix(in srgb, var(--foreground) 35%, transparent);
-  box-shadow: none;
-}
-:root[data-look-surface="dotted"] .dockview-theme-tavora .dv-groupview.dv-active-group {
-  border-color: color-mix(in srgb, var(--foreground) 70%, transparent);
-}
-:root[data-look-surface="dotted"] [data-testid="rail"] {
-  border-right-style: dotted;
-}
-
-/* Tabs, block: the open tab of the panel you work in is a solid block in the text colour; tabs run the row's height. */
-:root[data-look-tabs="block"] .dockview-theme-tavora .dv-tab {
-  border-radius: var(--radius-sm);
-  --tab-divider: 0 0 transparent;
-  --tab-line: 0 0 transparent;
-}
-:root[data-look-tabs="block"] .dockview-theme-tavora .dv-tab.dv-active-tab {
-  background: color-mix(in srgb, var(--foreground) 14%, transparent);
-}
-:root[data-look-tabs="block"] .dockview-theme-tavora .dv-groupview.dv-active-group .dv-tab.dv-active-tab {
-  background: var(--foreground);
-  color: var(--background);
-}
-
-/* Labels, lower: tab names in lowercase (Rabbit). */
-:root[data-look-labels="lower"] .dockview-theme-tavora .dv-tab {
-  text-transform: lowercase;
-}
-

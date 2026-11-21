@@ -90,22 +90,6 @@
 }
 /* Cards inside a panel stay solid in glass: a module can't see behind its own view (ADR 0004). */
 
-/* Hairline: no depth at all, a thin line around each surface. */
-:root[data-look-surface="hairline"] :is(
-    [data-slot="dialog-content"],
-    [data-slot="popover-content"],
-    [data-slot="dropdown-menu-content"],
-    [data-slot="dropdown-menu-sub-content"],
-    [data-slot="context-menu-content"],
-    [data-slot="context-menu-sub-content"],
-    [data-slot="select-content"],
-    [data-slot="item-card"],
-    [data-slot="toast"]
-  ) {
-  box-shadow: none;
-  border: var(--style-border-width, 1px) solid var(--border);
-}
-
 /* ---------- Tabs (the kit's Tabs and TabStrip; the dock's tab strip follows in the host's dock.css) ---------- */
 
 /* Keycap: each tab is a small key; the open one is pressed in (inverted), no sliding line. */
@@ -132,12 +116,6 @@
       box-shadow: 0 1px 0 color-mix(in srgb, black 30%, transparent);
     }
   }
-}
-
-/* Underline: words with a line under the open one, nothing else (the kit's Tabs already work this way). */
-:root[data-look-tabs="underline"] [data-slot="tabs-trigger"] {
-  padding: 0 4px;
-  margin-right: 12px;
 }
 
 /* ---------- Buttons ---------- */
@@ -273,36 +251,10 @@
   }
 }
 
-/* Bar: square rows; the highlighted one gets a line in the accent colour at its start. */
-:root[data-look-lists="bar"] {
-  & :is(
-      [data-slot="dropdown-menu-item"],
-      [data-slot="dropdown-menu-checkbox-item"],
-      [data-slot="dropdown-menu-radio-item"],
-      [data-slot="dropdown-menu-sub-trigger"],
-      [data-slot="context-menu-item"],
-      [data-slot="context-menu-checkbox-item"],
-      [data-slot="context-menu-radio-item"],
-      [data-slot="context-menu-sub-trigger"],
-      [data-slot="select-item"],
-      [data-slot="combobox-item"]
-    ) {
-    border-radius: var(--radius-sm);
-    &:is([data-highlighted], [data-state="open"]) {
-      background: color-mix(in srgb, var(--foreground) 6%, transparent);
-      box-shadow: inset 2px 0 0 var(--primary);
-    }
-  }
-  & [data-slot="nav-list"] [aria-current="page"] {
-    border-radius: var(--radius-sm);
-    box-shadow: inset 2px 0 0 var(--primary);
-  }
-}
-
 /* ---------- Labels: small headings, menu labels, tabs, button text ---------- */
 
 /* A button that shows a picked value (a Picker) keeps the value as written: only real labels change case. */
-:root:is([data-look-labels="caps"], [data-look-labels="caps-mono"]) :is(
+:root[data-look-labels="caps-mono"] :is(
     [data-slot="label"],
     [data-slot="dropdown-menu-label"],
     [data-slot="context-menu-label"],
@@ -373,114 +325,10 @@
   }
 }
 
-/* ---------- Looks for Rabbit and Nothing ---------- */
-
-/* Surface, dotted: no depth, a dotted line around each surface (Nothing). */
-:root[data-look-surface="dotted"] :is(
-    [data-slot="dialog-content"],
-    [data-slot="popover-content"],
-    [data-slot="dropdown-menu-content"],
-    [data-slot="dropdown-menu-sub-content"],
-    [data-slot="context-menu-content"],
-    [data-slot="context-menu-sub-content"],
-    [data-slot="select-content"],
-    [data-slot="item-card"],
-    [data-slot="toast"]
-  ) {
-  box-shadow: none;
-  border: var(--style-border-width, 1px) dotted color-mix(in srgb, var(--foreground) 45%, transparent);
-}
-
-/* Tabs, block: words in a row; the open one is a solid block in the text colour (Nothing). */
-:root[data-look-tabs="block"] {
-  & :is([data-slot="tabs-list"], [data-slot="tab-strip"]) .tavora-indicator {
-    display: none;
-  }
-  & [data-slot="tabs-list"] {
-    gap: 0;
-  }
-  & [data-slot="tabs-trigger"] {
-    padding: 0 10px;
-    border: 0;
-    border-radius: var(--radius-sm);
-    &[data-state="active"] {
-      background: var(--foreground);
-      color: var(--background);
-    }
-  }
-}
-
-/* Buttons, line: thin outlines, no fill and no depth; Primary stays a solid block (Rabbit, Nothing). */
-:root[data-look-buttons="line"] .tavora-button {
-  box-shadow: none;
-  &:is([data-variant="secondary"], [data-variant="outline"]) {
-    background: transparent;
-    border: var(--style-border-width, 1px) solid color-mix(in srgb, var(--foreground) 35%, transparent);
-    &:hover {
-      background: color-mix(in srgb, var(--foreground) 8%, transparent);
-    }
-  }
-  &[data-variant="default"] {
-    box-shadow: none;
-  }
-}
-
-/* Inputs, underline: a line under each field, nothing around it (Rabbit). Checkboxes stay boxes. */
-:root[data-look-inputs="underline"] {
-  & :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"], [data-slot="combobox-anchor"], [data-slot="combobox-input"], [data-slot="slider-input"], [data-slot="number-field"]) {
-    border-width: 0 0 var(--style-border-width, 1px);
-    border-radius: 0;
-    background: transparent;
-    box-shadow: none;
-    &:focus-visible,
-    &:focus-within {
-      border-color: var(--primary);
-    }
-    /* After focus: a field with a problem stays red while you type in it (a number field marks its inner input). */
-    &[aria-invalid="true"],
-    &:has([aria-invalid="true"]) {
-      border-color: var(--destructive);
-    }
-  }
-  & [data-slot="checkbox"] {
-    border-radius: var(--radius-sm);
-  }
-}
-
-/* Labels, lower: everything in lowercase, as the device writes it (Rabbit). */
-:root[data-look-labels="lower"] :is(
-    [data-slot="label"],
-    [data-slot="dropdown-menu-label"],
-    [data-slot="context-menu-label"],
-    [data-slot="select-label"],
-    [data-slot="combobox-label"],
-    [data-slot="tabs-trigger"],
-    [data-slot="segmented-item"],
-    [data-slot="nav-group"] > h3,
-    [data-slot="badge"],
-    .tavora-button:not([data-variant="link"], [aria-haspopup="listbox"], [role="combobox"])
-  ) {
-  text-transform: lowercase;
-}
-
-/* ---------- Big numbers (a module marks them with tavora-numerals) ---------- */
-
-/* Dot: a dot-matrix face, like a phone's glyph display (Nothing). */
-:root[data-look-numbers="dot"] .tavora-numerals {
-  font-family: "Tavora Doto Digits", var(--font-mono);
-  font-weight: 800;
-  letter-spacing: 0.04em;
-}
-/* Thin: very light, a little tighter (Rabbit). */
-:root[data-look-numbers="thin"] .tavora-numerals {
-  font-weight: 200;
-  letter-spacing: -0.03em;
-}
-
 /* ---------- Segmented controls follow the style's tabs ---------- */
 
-/* Keycap and block: the picked option is a solid key in the text colour. */
-:root:is([data-look-tabs="keycap"], [data-look-tabs="block"]) {
+/* Keycap: the picked option is a solid key in the text colour. */
+:root[data-look-tabs="keycap"] {
   & [data-slot="segmented-pill"] {
     background: var(--foreground);
     border-color: var(--foreground);
@@ -488,25 +336,6 @@
   }
   & [data-slot="segmented-item"][data-state="checked"] {
     color: var(--background);
-  }
-}
-:root[data-look-tabs="block"] [data-slot="segmented-pill"] {
-  border-radius: var(--radius-sm);
-}
-/* Underline: words with a line under the picked one, no box around them. */
-:root[data-look-tabs="underline"] {
-  & [data-slot="segmented-control"] {
-    border-color: transparent;
-    background: transparent;
-  }
-  & [data-slot="segmented-pill"] {
-    background: transparent;
-    border-width: 0 0 2px;
-    border-color: var(--primary);
-    border-radius: 0;
-  }
-  & [data-slot="segmented-item"][data-state="checked"] {
-    color: var(--foreground);
   }
 }
 /* Pill (outside Classic): a round control, the picked option a light capsule. */
@@ -529,49 +358,13 @@
   }
 }
 
-/* ---------- Dotted: every line that frames or divides is dotted ---------- */
-
-/* Containers, sections and dividers, in the kit and in modules (any border on them turns dotted); controls keep their
-   solid edge, so a field or a key still reads as something to press or type in. A data grid keeps solid cell lines:
-   dotted ones in every cell would be noise. */
-:root[data-look-surface="dotted"] *:not(
-    [data-slot="data-grid"] *,
-    .tavora-button,
-    input,
-    textarea,
-    select,
-    [data-slot="input"],
-    [data-slot="textarea"],
-    [data-slot="select-trigger"],
-    [data-slot="combobox-anchor"],
-    [data-slot="number-field"],
-    [data-slot="checkbox"],
-    [data-slot="radio-group-item"],
-    [data-slot="switch"],
-    [data-slot="slider-thumb"],
-    [data-slot="segmented-pill"],
-    [data-slot="toggle"],
-    [data-slot="toggle-group"] > *,
-    [data-slot="tabs-trigger"],
-    [data-slot="badge"],
-    [data-slot="kbd"]
-  ) {
-  border-style: dotted;
-}
-
 /* ---------- Toggles (Bold, Italic…) follow the style's tabs ---------- */
 
-/* Keycap and block: a pressed toggle is a solid key in the text colour. */
-:root:is([data-look-tabs="keycap"], [data-look-tabs="block"]) :is([data-slot="toggle"][data-state="on"], [data-slot="toggle-group"] > [data-state="on"], .tavora-button[aria-pressed="true"]) {
+/* Keycap: a pressed toggle is a solid key in the text colour. */
+:root[data-look-tabs="keycap"] :is([data-slot="toggle"][data-state="on"], [data-slot="toggle-group"] > [data-state="on"], .tavora-button[aria-pressed="true"]) {
   background: var(--foreground);
   border-color: var(--foreground);
   color: var(--background);
-}
-/* Underline: a pressed toggle gets the accent line under it, no fill. */
-:root[data-look-tabs="underline"] :is([data-slot="toggle"][data-state="on"], [data-slot="toggle-group"] > [data-state="on"], .tavora-button[aria-pressed="true"]) {
-  background: transparent;
-  color: var(--foreground);
-  box-shadow: inset 0 -2px 0 var(--primary);
 }
 
 /* ---------- Pill tabs outside Classic (Liquid Glass): the kit's Tabs as round capsules ---------- */
@@ -608,14 +401,6 @@
     color: var(--background);
   }
 }
-/* Bar lists: chosen gets the accent line at its start, no fill. */
-:root[data-look-lists="bar"] [data-state="checked"]:is([data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-checkbox-item"], [data-slot="context-menu-radio-item"], [data-slot="context-menu-checkbox-item"], [data-slot="select-item"], [data-slot="combobox-item"], [role="option"]) {
-  background: transparent;
-  box-shadow: inset 2px 0 0 var(--primary);
-  &:is([data-highlighted], :focus) {
-    background: color-mix(in srgb, var(--foreground) 6%, transparent);
-  }
-}
 
 /* ---------- Pickers look like the style's fields (they pick a value, like a Select) ---------- */
 
@@ -629,14 +414,6 @@
   border-radius: var(--radius-lg);
   border-color: transparent;
   background: color-mix(in srgb, var(--foreground) 5%, var(--background));
-  box-shadow: none;
-}
-:root[data-look-inputs="underline"] .tavora-button[aria-haspopup="listbox"] {
-  border-width: 0 0 var(--style-border-width, 1px);
-  border-style: solid;
-  border-color: color-mix(in srgb, var(--foreground) 30%, transparent);
-  border-radius: 0;
-  background: transparent;
   box-shadow: none;
 }
 
@@ -656,11 +433,9 @@
 
 /* ---------- Notices: a plain panel in the style's surface, the coloured icon and text keep their meaning ---------- */
 
-:root:is([data-look-surface="raised"], [data-look-surface="hairline"], [data-look-surface="dotted"]) [data-slot="notice"] {
+:root[data-look-surface="raised"] [data-slot="notice"] {
   background: var(--card);
   border: var(--style-border-width, 1px) solid var(--border);
-}
-:root[data-look-surface="raised"] [data-slot="notice"] {
   box-shadow: var(--style-bevel), var(--style-cast);
 }
 
@@ -678,27 +453,10 @@
     box-shadow: var(--style-bevel), 0 1px 0 color-mix(in srgb, black 16%, transparent);
   }
 }
-:root[data-look-buttons="line"] .tavora-button[data-variant="danger"] {
-  background: transparent;
-  border: var(--style-border-width, 1px) solid color-mix(in srgb, var(--destructive) 60%, transparent);
-}
 
 /* Capsule styles: an action tile (a picture and a name) is a rounded square, never a circle. */
 :root[data-look-buttons="capsule"] [data-slot="action-tile"] {
   border-radius: var(--radius-xl);
-}
-
-/* ---------- Underline inputs (Rabbit): switches are lines too, square and without glow ---------- */
-
-:root[data-look-inputs="underline"] {
-  & [data-slot="switch"],
-  & [data-slot="switch-thumb"] {
-    border-radius: var(--radius-sm);
-    box-shadow: none;
-  }
-}
-:root[data-look-inputs="underline"][data-look-status="led"] [data-slot="switch"][data-state="checked"] [data-slot="switch-thumb"] {
-  box-shadow: none;
 }
 
 /* ---------- Liquid Glass details ---------- */

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { addOrRestoreWorkspace, gameCopyFinder } from "./game-copy";
 import {
   addWorkspace,
+  switchStyle,
   iconFileShared,
   createFolder,
   deleteFolder,
@@ -227,6 +228,31 @@ describe("adding games", () => {
     expect(sanitizeLibrary({ styleId: "community.future" }).styleId).toBe("community.future");
     expect(sanitizeLibrary({ styleId: "tavora.classic" }).styleId).toBeUndefined();
     for (const bad of ["Hardware", "../x", "", 3, null]) expect(sanitizeLibrary({ styleId: bad }).styleId, String(bad)).toBeUndefined();
+  });
+
+  it("gives each style its own theme: a style never used starts with its first, and going back brings the last one", () => {
+    const library = emptyLibrary();
+    library.theme = { id: "tavora.nightfall", variation: "light" };
+    switchStyle(library, "tavora.hardware", { id: "tavora.hardware", variation: "light" });
+    expect([library.styleId, library.theme]).toEqual(["tavora.hardware", { id: "tavora.hardware", variation: "light" }]);
+    library.theme = { id: "tavora.nothing", variation: "dark" };
+    switchStyle(library, "tavora.glass", { id: "tavora.glass", variation: "dark" });
+    expect(library.theme).toEqual({ id: "tavora.glass", variation: "dark" });
+    // Back to Classic: the theme it had before styles; back to Hardware: the one picked there, not its first.
+    switchStyle(library, "tavora.classic", { id: "tavora.default", variation: "dark" });
+    expect([library.styleId, library.theme]).toEqual([undefined, { id: "tavora.nightfall", variation: "light" }]);
+    switchStyle(library, "tavora.hardware", { id: "tavora.hardware", variation: "light" });
+    expect(library.theme).toEqual({ id: "tavora.nothing", variation: "dark" });
+    // Picking the style in use changes nothing.
+    switchStyle(library, "tavora.hardware", { id: "tavora.hardware", variation: "light" });
+    expect(library.theme).toEqual({ id: "tavora.nothing", variation: "dark" });
+  });
+
+  it("keeps each style's theme across a save, left out while no style was switched, and drops broken entries", () => {
+    expect("styleThemes" in sanitizeLibrary({})).toBe(false);
+    const saved = sanitizeLibrary({ styleThemes: { "tavora.hardware": { id: "tavora.hardware", variation: "dark" }, "../x": { id: "a.b", variation: "dark" }, "tavora.glass": { id: 3 } } });
+    expect(saved.styleThemes).toEqual({ "tavora.hardware": { id: "tavora.hardware", variation: "dark" } });
+    expect(sanitizeLibrary(JSON.parse(JSON.stringify(saved))).styleThemes).toEqual(saved.styleThemes);
   });
 
   it("takes a corner radius from 0 to 16 over the style's, and null for the style's", () => {

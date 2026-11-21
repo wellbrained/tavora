@@ -68,29 +68,21 @@ export interface TavoraTheme {
  */
 export const STYLE_LOOKS = {
   /** App background, rail, top bar and panel; menus, popovers and dialogs follow it. */
-  surface: ["flat", "raised", "glass", "hairline", "dotted"],
+  surface: ["flat", "raised", "glass"],
   /** The tab strip of a panel. */
-  tabs: ["pill", "keycap", "underline", "block"],
+  tabs: ["pill", "keycap"],
   /** A panel's content area: as it is, or set in like a screen. */
   content: ["plain", "inset"],
-  buttons: ["soft", "keycap", "capsule", "line"],
+  buttons: ["soft", "keycap", "capsule"],
   /** Inputs, checkboxes and switches. */
-  inputs: ["soft", "inset", "capsule", "underline"],
+  inputs: ["soft", "inset", "capsule"],
   /** Lists and the selected row. */
-  lists: ["fill", "inverted", "bar"],
-  /** Labels and small headings: as they are, small caps, small caps in the mono font, or all lowercase. */
-  labels: ["normal", "caps", "caps-mono", "lower"],
+  lists: ["fill", "inverted"],
+  /** Labels and small headings: as they are, or small caps in the mono font. */
+  labels: ["normal", "caps-mono"],
   /** A status light next to things that run. */
   status: ["none", "led"],
-  /**
-   * Big numbers a module shows (a clock, a counter, a reading), marked with the kit's `tavora-numerals` class: as they
-   * are, in a dot-matrix face, or thin. Added after the first parts, so a style may leave it out (then `normal`).
-   */
-  numbers: ["normal", "dot", "thin"],
 } as const;
-
-/** Parts added after the first ones: a style file may leave them out and gets the first look. */
-export const LATER_STYLE_PARTS: readonly StylePart[] = ["numbers"];
 
 /** A part of the kit a style picks a look for. */
 export type StylePart = keyof typeof STYLE_LOOKS;
@@ -168,7 +160,7 @@ export function styleMarks(style: TavoraStyle | undefined): { attributes: [name:
 export const CLASSIC_STYLE: TavoraStyle = {
   id: "tavora.classic",
   name: "Classic",
-  looks: { surface: "flat", tabs: "pill", content: "plain", buttons: "soft", inputs: "soft", lists: "fill", labels: "normal", status: "none", numbers: "normal" },
+  looks: { surface: "flat", tabs: "pill", content: "plain", buttons: "soft", inputs: "soft", lists: "fill", labels: "normal", status: "none" },
   values: { borderWidth: 1, depth: 1, textSize: 13, controlHeight: 32, spacing: 1, glassOpacity: 0.8 },
 };
 

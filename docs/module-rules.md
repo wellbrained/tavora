@@ -120,8 +120,7 @@ themes; anything hard-coded breaks in one of them.
   the kit's controls are shaped: keycaps or capsules, inset fields, inverted lists, small caps, a status light. Kit
   controls follow it by themselves, so a module built from them needs nothing. Build nothing that only looks right in
   Classic: no own shadows, bevels or pill shapes on things the kit already has, and use the kit's sizes, not fixed
-  heights. A big number the panel is about (a clock, a counter, a reading) gets the kit's `tavora-numerals` class, so
-  the style can draw it (dot matrix in Nothing, thin in Rabbit). A module may draw a part differently in a style: read `data-style` and
+  heights. A module may draw a part differently in a style: read `data-style` and
   `data-look-<part>` on `<html>` in CSS, or `theme.style` from the module bootstrap. Without them it must still look
   right. ([docs/features/style-system.md](features/style-system.md))
 - **Canvas**: a canvas keeps the colours it was drawn with, so one that reads theme colours redraws when the theme

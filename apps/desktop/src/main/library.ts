@@ -172,6 +172,12 @@ export interface Library {
    * even while that style is not installed, which shows Classic.
    */
   styleId?: string;
+  /**
+   * The theme each style was last used with (style id, Classic's too), so going back to a style brings its theme back. A
+   * style missing here starts with its own first theme (styleSwitch). Left out while empty, so a library that never
+   * switched styles is written as before.
+   */
+  styleThemes?: Record<string, { id: string; variation: string }>;
   /** False until the first-run welcome was finished or skipped. */
   onboarded: boolean;
   /** True once the user said they want to make modules (Settings > Development, Let's go): its tools show. */
@@ -804,7 +810,7 @@ const WORKSPACE_ENTRY_FIELDS = Object.keys({
 const FOLDER_FIELDS = Object.keys({ id: true, name: true, label: true, workspaces: true } satisfies Record<keyof Folder, true>);
 
 /** Library fields that are left out when they hold their default, so a library that never set them is written as before. */
-const OPTIONAL_FIELDS = ["font", "styleId"] as const satisfies readonly (keyof Library)[];
+const OPTIONAL_FIELDS = ["font", "styleId", "styleThemes"] as const satisfies readonly (keyof Library)[];
 
 /**
  * Turns whatever was saved into a consistent library: broken entries are
@@ -963,6 +969,12 @@ export function sanitizeLibrary(raw: unknown): Library {
   // Inter too: in a style with another font, Inter is the user's own pick. A library from before styles never saved it.
   if (isFontId(saved.font)) library.font = saved.font;
   if (isModuleId(saved.styleId) && saved.styleId !== CLASSIC_STYLE_ID) library.styleId = saved.styleId;
+  const styleThemes: Record<string, { id: string; variation: string }> = {};
+  for (const [styleId, value] of Object.entries(asRecord(saved.styleThemes)).slice(0, MAX_STYLE_THEMES)) {
+    const choice = asRecord(value);
+    if (isModuleId(styleId) && isModuleId(choice.id) && isVariationId(choice.variation)) styleThemes[styleId] = { id: choice.id, variation: choice.variation };
+  }
+  if (Object.keys(styleThemes).length) library.styleThemes = styleThemes;
   // A library saved before the welcome existed belongs to someone who is past it.
   library.onboarded = typeof saved.onboarded === "boolean" ? saved.onboarded : true;
   if (typeof saved.makesModules === "boolean") library.makesModules = saved.makesModules;
@@ -974,6 +986,23 @@ export function sanitizeLibrary(raw: unknown): Library {
   library.pc = { ...asRecord(saved.pc) };
   // Fields a library may leave out (font) are known too: a bad saved value is dropped, not passed through.
   return { ...unknownFields(saved, [...Object.keys(library), ...OPTIONAL_FIELDS]), ...library };
+}
+
+/** Most styles whose theme a library remembers. */
+export const MAX_STYLE_THEMES = 50;
+
+/**
+ * Switches the library to another style: the theme in use is remembered for the style left, and the new style gets the
+ * theme it was last used with, or `first` (its own first theme) when it was never used.
+ */
+export function switchStyle(library: Library, styleId: string, first: { id: string; variation: string }): void {
+  const from = library.styleId ?? CLASSIC_STYLE_ID;
+  if (from === styleId) return;
+  const remembered = { ...library.styleThemes, [from]: { ...library.theme } };
+  library.theme = { ...(remembered[styleId] ?? first) };
+  library.styleThemes = Object.fromEntries(Object.entries(remembered).slice(-MAX_STYLE_THEMES));
+  if (styleId === CLASSIC_STYLE_ID) delete library.styleId;
+  else library.styleId = styleId;
 }
 
 /** Most sites a Browser list keeps. */

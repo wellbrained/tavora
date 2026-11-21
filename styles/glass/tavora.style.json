@@ -12,8 +12,7 @@
     "inputs": "capsule",
     "lists": "fill",
     "labels": "normal",
-    "status": "none",
-    "numbers": "normal"
+    "status": "none"
   },
   "values": {
     "borderWidth": 1,
