@@ -2877,11 +2877,16 @@ export class Host {
       // Each style keeps its own theme: one never used starts with its own first theme (Classic: Tavora's), in the mode
       // shown now.
       "set-style": saved((action) => {
-        const style = resolveStyle(this.styles, action.styleId);
-        const firstId = action.styleId === CLASSIC_STYLE_ID ? DEFAULT_THEME.id : (style.id === action.styleId ? style.themes.find((id) => this.themes.has(id)) : undefined) ?? DEFAULT_THEME.id;
+        const picked = this.styles.get(action.styleId)?.style;
+        const firstId = picked?.themes.find((id) => this.themes.has(id)) ?? DEFAULT_THEME.id;
         const first = this.themes.get(firstId)?.theme;
-        const mode = this.currentChoice().variation.mode;
-        switchStyle(this.library, action.styleId, { id: firstId, variation: first ? variationForMode(first, "", mode).id : DEFAULT_THEME.variation });
+        const variation = first ? variationForMode(first, "", this.currentChoice().variation.mode).id : DEFAULT_THEME.variation;
+        switchStyle(this.library, {
+          from: resolveStyle(this.styles, this.library.styleId).id,
+          to: action.styleId,
+          first: { id: firstId, variation },
+          hasTheme: (id) => this.themes.has(id),
+        });
         this.applyTheme();
       }),
       "reset-theme": saved(() => {
@@ -5255,7 +5260,7 @@ export class Host {
     return {
       themeId: theme.id,
       variationId: variation.id,
-      isDefault: theme.id === DEFAULT_THEME.id && this.library.followSystem && this.library.radius === null && this.library.font === undefined && this.library.styleId === undefined,
+      isDefault: theme.id === DEFAULT_THEME.id && this.library.followSystem && this.library.radius === null && this.library.font === undefined && style.id === CLASSIC_STYLE_ID,
       followSystem: this.library.followSystem,
       radius: this.library.radius,
       resolvedRadius: resolveRadius(this.library.radius, style, variation.radius),

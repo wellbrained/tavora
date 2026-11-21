@@ -477,12 +477,12 @@
 }
 
 /* Keycap draws no line between tabs, also in the Framed layout (whose own divider rule is more
-   specific than a look's). */
-:root[data-look-tabs]:is([data-look-tabs="keycap"]) .dockview-theme-tavora .dv-tab + .dv-tab {
+   specific than a look's; [data-style] keeps these one step above it). */
+:root[data-look-tabs="keycap"][data-style] .dockview-theme-tavora .dv-tab + .dv-tab {
   --tab-divider: 0 0 transparent;
 }
 /* Keycap marks the open tab with its fill, never the Framed layout's underline. */
-:root[data-look-tabs]:is([data-look-tabs="keycap"]) .dockview-theme-tavora .dv-groupview .dv-tab.dv-active-tab {
+:root[data-look-tabs="keycap"][data-style] .dockview-theme-tavora .dv-groupview .dv-tab.dv-active-tab {
   --tab-line: 0 0 transparent;
 }
 

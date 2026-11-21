@@ -16,7 +16,7 @@ import { UserError } from "./messages";
 import { CATALOG, catalogGame } from "./catalog";
 import { DEFAULT_OVERLAY_PORT, MAX_OVERLAY_PORT, MIN_OVERLAY_PORT } from "./overlays";
 import { iconFileAllowed, isSteamAppId, needsIcon } from "./steam-icons";
-import { DEFAULT_THEME, isVariationId } from "./themes";
+import { DEFAULT_THEME, isVariationId, type ThemeChoice } from "./themes";
 import { CLASSIC_STYLE_ID, isStyleRadius } from "../shared/styles";
 import { isFontId } from "../shared/ui-fonts";
 import { isLearnableGameId, learnsGameId } from "./workspace-game";
@@ -174,10 +174,10 @@ export interface Library {
   styleId?: string;
   /**
    * The theme each style was last used with (style id, Classic's too), so going back to a style brings its theme back. A
-   * style missing here starts with its own first theme (styleSwitch). Left out while empty, so a library that never
+   * style missing here starts with its own first theme (switchStyle). Left out while empty, so a library that never
    * switched styles is written as before.
    */
-  styleThemes?: Record<string, { id: string; variation: string }>;
+  styleThemes?: Record<string, ThemeChoice>;
   /** False until the first-run welcome was finished or skipped. */
   onboarded: boolean;
   /** True once the user said they want to make modules (Settings > Development, Let's go): its tools show. */
@@ -969,7 +969,7 @@ export function sanitizeLibrary(raw: unknown): Library {
   // Inter too: in a style with another font, Inter is the user's own pick. A library from before styles never saved it.
   if (isFontId(saved.font)) library.font = saved.font;
   if (isModuleId(saved.styleId) && saved.styleId !== CLASSIC_STYLE_ID) library.styleId = saved.styleId;
-  const styleThemes: Record<string, { id: string; variation: string }> = {};
+  const styleThemes: Record<string, ThemeChoice> = {};
   for (const [styleId, value] of Object.entries(asRecord(saved.styleThemes)).slice(0, MAX_STYLE_THEMES)) {
     const choice = asRecord(value);
     if (isModuleId(styleId) && isModuleId(choice.id) && isVariationId(choice.variation)) styleThemes[styleId] = { id: choice.id, variation: choice.variation };
@@ -991,18 +991,30 @@ export function sanitizeLibrary(raw: unknown): Library {
 /** Most styles whose theme a library remembers. */
 export const MAX_STYLE_THEMES = 50;
 
+/** A style switch: the style shown now (Classic for a saved one that isn't installed), the one picked, its own first theme, and which themes are installed. */
+export interface StyleSwitch {
+  from: string;
+  to: string;
+  first: ThemeChoice;
+  hasTheme(id: string): boolean;
+}
+
 /**
  * Switches the library to another style: the theme in use is remembered for the style left, and the new style gets the
- * theme it was last used with, or `first` (its own first theme) when it was never used.
+ * theme it was last used with, or its own first theme when it was never used or that theme is gone.
  */
-export function switchStyle(library: Library, styleId: string, first: { id: string; variation: string }): void {
-  const from = library.styleId ?? CLASSIC_STYLE_ID;
-  if (from === styleId) return;
-  const remembered = { ...library.styleThemes, [from]: { ...library.theme } };
-  library.theme = { ...(remembered[styleId] ?? first) };
-  library.styleThemes = Object.fromEntries(Object.entries(remembered).slice(-MAX_STYLE_THEMES));
-  if (styleId === CLASSIC_STYLE_ID) delete library.styleId;
-  else library.styleId = styleId;
+export function switchStyle(library: Library, change: StyleSwitch): void {
+  if (change.from !== change.to) {
+    // Remembered last, so the newest entries are the ones a full list keeps.
+    const remembered = { ...library.styleThemes };
+    delete remembered[change.from];
+    remembered[change.from] = { ...library.theme };
+    const last = remembered[change.to];
+    library.theme = { ...(last && change.hasTheme(last.id) ? last : change.first) };
+    library.styleThemes = Object.fromEntries(Object.entries(remembered).slice(-MAX_STYLE_THEMES));
+  }
+  if (change.to === CLASSIC_STYLE_ID) delete library.styleId;
+  else library.styleId = change.to;
 }
 
 /** Most sites a Browser list keeps. */

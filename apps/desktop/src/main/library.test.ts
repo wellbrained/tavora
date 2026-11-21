@@ -3,6 +3,7 @@ import { addOrRestoreWorkspace, gameCopyFinder } from "./game-copy";
 import {
   addWorkspace,
   switchStyle,
+  MAX_STYLE_THEMES,
   iconFileShared,
   createFolder,
   deleteFolder,
@@ -231,21 +232,43 @@ describe("adding games", () => {
   });
 
   it("gives each style its own theme: a style never used starts with its first, and going back brings the last one", () => {
+    const installed = new Set(["tavora.default", "tavora.nightfall", "tavora.hardware", "tavora.glass", "tavora.nothing"]);
+    const go = (from: string, to: string, first: string) => switchStyle(library, { from, to, first: { id: first, variation: "dark" }, hasTheme: (id) => installed.has(id) });
     const library = emptyLibrary();
     library.theme = { id: "tavora.nightfall", variation: "light" };
-    switchStyle(library, "tavora.hardware", { id: "tavora.hardware", variation: "light" });
-    expect([library.styleId, library.theme]).toEqual(["tavora.hardware", { id: "tavora.hardware", variation: "light" }]);
+    go("tavora.classic", "tavora.hardware", "tavora.hardware");
+    expect([library.styleId, library.theme]).toEqual(["tavora.hardware", { id: "tavora.hardware", variation: "dark" }]);
     library.theme = { id: "tavora.nothing", variation: "dark" };
-    switchStyle(library, "tavora.glass", { id: "tavora.glass", variation: "dark" });
+    go("tavora.hardware", "tavora.glass", "tavora.glass");
     expect(library.theme).toEqual({ id: "tavora.glass", variation: "dark" });
     // Back to Classic: the theme it had before styles; back to Hardware: the one picked there, not its first.
-    switchStyle(library, "tavora.classic", { id: "tavora.default", variation: "dark" });
+    go("tavora.glass", "tavora.classic", "tavora.default");
     expect([library.styleId, library.theme]).toEqual([undefined, { id: "tavora.nightfall", variation: "light" }]);
-    switchStyle(library, "tavora.hardware", { id: "tavora.hardware", variation: "light" });
+    go("tavora.classic", "tavora.hardware", "tavora.hardware");
     expect(library.theme).toEqual({ id: "tavora.nothing", variation: "dark" });
     // Picking the style in use changes nothing.
-    switchStyle(library, "tavora.hardware", { id: "tavora.hardware", variation: "light" });
+    go("tavora.hardware", "tavora.hardware", "tavora.hardware");
     expect(library.theme).toEqual({ id: "tavora.nothing", variation: "dark" });
+    // A remembered theme that is gone: the style's own first theme instead.
+    installed.delete("tavora.glass");
+    library.styleThemes = { ...library.styleThemes, "tavora.glass": { id: "tavora.gone", variation: "dark" } };
+    go("tavora.hardware", "tavora.glass", "tavora.glass");
+    expect(library.theme).toEqual({ id: "tavora.glass", variation: "dark" });
+  });
+
+  it("remembers the theme under the style shown, and keeps the newest when the list is full", () => {
+    // A saved style that isn't installed shows Classic: picking Classic clears it and keeps the theme.
+    const library = emptyLibrary();
+    library.styleId = "tavora.rabbit";
+    library.theme = { id: "tavora.nightfall", variation: "dark" };
+    switchStyle(library, { from: "tavora.classic", to: "tavora.classic", first: { id: "tavora.default", variation: "dark" }, hasTheme: () => true });
+    expect([library.styleId, library.theme.id]).toEqual([undefined, "tavora.nightfall"]);
+    // The style just left is never the one dropped.
+    library.styleThemes = Object.fromEntries(Array.from({ length: MAX_STYLE_THEMES }, (_, i) => [`local.s${i}`, { id: "tavora.default", variation: "dark" }]));
+    library.styleId = "local.s0";
+    switchStyle(library, { from: "local.s0", to: "tavora.hardware", first: { id: "tavora.hardware", variation: "dark" }, hasTheme: () => true });
+    expect(Object.keys(library.styleThemes ?? {})).toHaveLength(MAX_STYLE_THEMES);
+    expect(library.styleThemes?.["local.s0"]?.id).toBe("tavora.nightfall");
   });
 
   it("keeps each style's theme across a save, left out while no style was switched, and drops broken entries", () => {
