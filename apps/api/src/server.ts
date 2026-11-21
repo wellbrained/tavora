@@ -122,7 +122,7 @@ const catalog = new CatalogStore(path.join(stateDir, "catalog"));
   if (filled > 0) console.log(`[tavora-api] Filled the signed hash of ${filled} catalog versions.`);
   const removed = skipped.filter((version) => version.reason === REMOVED_ZIP).length;
   if (removed > 0) console.log(`[tavora-api] ${removed} catalog versions have no signed hash: their zip was removed to make room.`);
-  for (const version of skipped.filter((version) => version.reason !== REMOVED_ZIP)) console.warn(`[tavora-api] No signed hash for ${version.id} ${version.version} (${version.sha256}): ${version.reason}.`);
+  for (const version of skipped.filter((version) => version.reason !== REMOVED_ZIP)) console.warn(`[tavora-api] Hashes not filled for ${version.id} ${version.version} (${version.sha256}): ${version.reason}.`);
 }
 // Ratings and reviews of catalog modules, keyed by account: their own file, in the daily backup.
 const reviews = accountStore ? new ReviewStore(path.join(stateDir, "reviews.sqlite")) : undefined;

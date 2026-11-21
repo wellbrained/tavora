@@ -112,9 +112,10 @@ describe("reading an upload", () => {
   const url = "http://tavora.test/publish";
 
   it("reads nothing of a chunked upload without a sign-in", async () => {
-    const { app } = withMemory(createUploadMemory());
+    // Through the service's own route, with everything that runs in front of the handler.
+    const { app } = setup();
     const body = chunkedBody(45);
-    const response = await app.request(chunkedRequest(url, body.stream));
+    const response = await app.request(chunkedRequest("http://tavora.test/v1/catalog/publish", body.stream));
     expect(response.status).toBe(401);
     expect(body.pulled()).toBe(0);
   });
@@ -294,6 +295,26 @@ describe("the copy check and older versions", () => {
     expect(catalog.backfillSignedHashes()).toEqual({ filled: 1, skipped: [] });
     expect(catalog.mostSimilar(self, hashes)).toMatchObject({ id: "wellbrained.timer", share: 1 });
     expect(catalog.backfillSignedHashes()).toEqual({ filled: 0, skipped: [] });
+    catalog.close();
+  });
+
+  it("leaves a zip too big for the budget unread at the server's start", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "tavora-copy-backfill-"));
+    const catalog = new CatalogStore(dir);
+    const key = generateKeyPairSync("ed25519").privateKey;
+    const zip = moduleZip(key, { extra: [{ name: "big.bin", data: randomBytes(8192) }] });
+    catalog.add(zip, new Date("2026-11-20T12:00:00Z"), "older-account");
+    const raw = new DatabaseSync(path.join(dir, "catalog.sqlite"));
+    raw.exec("update versions set file_hashes = null");
+    const hashes = () => (raw.prepare("select file_hashes from versions").get() as { file_hashes: string | null }).file_hashes;
+
+    const started = catalog.backfillSignedHashes({ skipStalled: true, memoryLimit: 1024 });
+    expect(started).toEqual({ filled: 0, skipped: [expect.objectContaining({ sha256: sha(zip), reason: expect.stringContaining("too big") })] });
+    expect(hashes()).toBeNull();
+    // The command has no such limit.
+    expect(catalog.backfillSignedHashes({ memoryLimit: 1024 }).filled).toBe(1);
+    expect(hashes()).not.toBeNull();
+    raw.close();
     catalog.close();
   });
 });
@@ -580,7 +601,7 @@ describe("room in the catalog", () => {
     const key = generateKeyPairSync("ed25519").privateKey;
     const extra = [{ name: "data.bin", data: Buffer.from(filler(3)) }];
     const roomFor = moduleZip(key, { extra }).length;
-    const { developer, send, withdraw, reason } = setup({ keepVersions: 1, accountBytes: Math.floor(roomFor * 2.5) });
+    const { developer, send, withdraw, reason } = setup({ keepVersions: 1, accountBytes: Math.floor(roomFor * 1.5) });
     const dev = developer("dev@example.com");
     const data = (seed: number) => [{ name: "data.bin", data: Buffer.from(filler(seed)) }];
     expect((await send(dev, moduleZip(dev.key, { extra }))).status).toBe(201);

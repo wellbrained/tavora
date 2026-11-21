@@ -93,12 +93,13 @@ describe("scanning through clamd", () => {
 
   it("stops the other streams when one fails", async () => {
     let answered = 0;
-    const clamd = await fakeClamd(() => (++answered === 1 ? "stream: broken ERROR" : null));
+    const clamd = await fakeClamd(() => (++answered === 1 ? "stream: broken ERROR" : "stream: OK"), 10);
     closers.push(clamd.close);
     const scanner = createClamdScanner({ port: clamd.port }, { timeoutMs: 30_000 });
     const files = Array.from({ length: 40 }, (_, index) => ({ name: `f${index}.js`, data: Buffer.from(`file ${index}`) }));
     await expect(scanner.scan(Buffer.from("zip bytes"), files)).rejects.toThrow(/clamd answered/);
-    expect(clamd.received.length).toBeLessThanOrEqual(5);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(clamd.received.length).toBeLessThanOrEqual(8);
   });
 
   it("gives a bigger stream more time", async () => {

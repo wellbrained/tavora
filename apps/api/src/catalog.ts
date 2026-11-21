@@ -5,7 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import { allowsPersonalWorkspaces, folderKey, isGameId, isReleaseVersion, LOCAL_OWNER, manifestFiles, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, validateChangelog, validateManifest, type LeaderboardBoard, type ModuleManifest } from "@tavora/module-schema";
 import { MANIFEST_FILE, privateKeyFile, readZip, SIGNATURE_FILE, signedHash, verifyFiles, ZIP_LIMITS, zipDirectory, ZipError, type ZipFile } from "@tavora/pack";
 import { inspectPng, isWebp } from "./png.ts";
-import { MAX_MANIFEST_BYTES, metadataProblem } from "./upload-memory.ts";
+import { MAX_MANIFEST_BYTES, metadataProblem, UPLOAD_MEMORY_BYTES, zipMemory } from "./upload-memory.ts";
 
 /**
  * The module catalog (Milestone E, docs/catalog-threat-model.md): community modules, each with the
@@ -920,9 +920,10 @@ export class CatalogStore {
    *
    * Reading a zip unpacks all of it, so the zip being read is noted first. If a run dies there (the service's memory
    * limit), the next run skips that zip for good when `skipStalled` is set (the server's start, so it can't loop on
-   * it); without it (the command, which has no such limit) it tries again.
+   * it); without it (the command, which has no such limit) it tries again. With `skipStalled` a zip that unpacks past
+   * `memoryLimit` is skipped too, unread, so the server's start never goes near its memory limit for one.
    */
-  backfillSignedHashes({ skipStalled = false }: { skipStalled?: boolean } = {}): { filled: number; skipped: { sha256: string; id: string; version: string; reason: string }[] } {
+  backfillSignedHashes({ skipStalled = false, memoryLimit = UPLOAD_MEMORY_BYTES }: { skipStalled?: boolean; memoryLimit?: number } = {}): { filled: number; skipped: { sha256: string; id: string; version: string; reason: string }[] } {
     const stalled = new Set(JSON.parse(this.getState(BACKFILL_STALLED) ?? "[]") as string[]);
     const died = this.getState(BACKFILL_READING);
     if (died) {
@@ -953,6 +954,10 @@ export class CatalogStore {
       const bytes = this.zipBytes(row.sha256);
       if (!bytes) {
         skip("its zip is missing or not what its name says");
+        continue;
+      }
+      if (skipStalled && (zipMemory(bytes) ?? 0) > memoryLimit) {
+        skip("its zip is too big to read while the server starts; try `catalog backfill-signed`");
         continue;
       }
       let hash: string | null;
