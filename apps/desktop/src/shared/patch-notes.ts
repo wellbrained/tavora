@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.122",
+    date: "2026-11-22",
+    title: "AI Usage asks you to sign in",
+    notes: [
+      "When a Claude login has been stuck for a day, AI Usage asks you to sign in again instead of saying it can't read an allowance.",
+    ],
+    prs: [
+      { number: 876, title: "AI Usage: ask to sign in when a Claude token stays run out for a day" },
+    ],
+    tags: ["ai-usage"],
+  },
+  {
     version: "0.24.121",
     date: "2026-11-22",
     title: "Menus and tooltips in panel dialogs",

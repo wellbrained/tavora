@@ -5,7 +5,7 @@ import { AI_USAGE_VERSION, AiUsageConnector, MAX_ANSWER_BYTES, USAGE_URL, type A
 import { parseClaudeStatus } from "./ai-usage-claude";
 import { profileEnv } from "./ai-usage-cli";
 import { CodexMissingError, type CodexReading } from "./ai-usage-codex";
-import { claudeAccessToken, claudePlan, claudeTokenRenews, codexPlan, parseEmail } from "./ai-usage-parse";
+import { CLAUDE_RENEW_WAIT_MS, claudeAccessToken, claudePlan, claudeTokenRenews, codexPlan, parseEmail } from "./ai-usage-parse";
 import { HostError } from "./errors";
 import { UserError } from "./messages";
 
@@ -63,6 +63,9 @@ describe("plans and tokens", () => {
     expect(claudeTokenRenews(login({ expiresAt: 1000, refreshToken: " " }), 2000)).toBe(false);
     expect(claudeTokenRenews(login({ expiresAt: "soon", refreshToken: "r" }), 2000)).toBe(false);
     expect(claudeTokenRenews(null, 2000)).toBe(false);
+    // Run out for a day: the renewal may be revoked, so the user is asked to sign in.
+    expect(claudeTokenRenews(login({ expiresAt: 1000, refreshToken: "r" }), 1000 + CLAUDE_RENEW_WAIT_MS - 1)).toBe(true);
+    expect(claudeTokenRenews(login({ expiresAt: 1000, refreshToken: "r" }), 1000 + CLAUDE_RENEW_WAIT_MS)).toBe(false);
   });
 });
 
@@ -261,6 +264,7 @@ describe("AiUsageConnector reads", () => {
     ["ran out, with a way to renew it", { expiresAt: Date.parse("2026-10-16T11:00:00Z"), refreshToken: "made-up" }, "unavailable"],
     ["is still valid but refused", { expiresAt: Date.parse("2026-10-16T13:00:00Z"), refreshToken: "made-up" }, "sign-in"],
     ["ran out, with no way to renew it", { expiresAt: Date.parse("2026-10-16T11:00:00Z") }, "sign-in"],
+    ["ran out over a day ago, with a renewal that never came", { expiresAt: Date.parse("2026-10-15T11:00:00Z"), refreshToken: "made-up" }, "sign-in"],
   ])("a refused token that %s", async (_name, fields, status) => {
     const { connector, fetchMock, store } = setup(onlyClaude);
     const file = path.join(CLAUDE_DIR, ".credentials.json");
