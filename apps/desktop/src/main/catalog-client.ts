@@ -5,7 +5,7 @@
 // matches the listing. After that the zip goes through the same installer as Install from zip, which
 // checks the publisher signature itself.
 import { createHash } from "node:crypto";
-import { apiReason, isConnector, MAX_FOLDERS, parseFolderKey, isGameId, isHomepage, isLanguageCode, isSupportEmail, isSupportLink, isModuleId, isNetworkEntry, MAX_NETWORK_HOSTS, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOTS, MAX_TRANSLATIONS, OFFICIAL_PINS, officialOn, translationsFor, type ApiReason, type Connector } from "@tavora/module-schema";
+import { apiReason, isConnector, MAX_FOLDERS, parseFolderKey, isGameId, isHomepage, isLanguageCode, isSupportEmail, isSupportLink, isModuleId, isNetworkEntry, MAX_LISTED_GAMES, MAX_LISTED_VERSION, MAX_NETWORK_HOSTS, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOTS, MAX_TRANSLATIONS, OFFICIAL_PINS, officialOn, translationsFor, type ApiReason, type Connector } from "@tavora/module-schema";
 import { ZIP_LIMITS } from "@tavora/pack";
 import type { CatalogListResult, CatalogModuleView, CatalogOwnReview, CatalogRating } from "../shared/host-api";
 import { isWebUrl } from "./browser-url";
@@ -228,7 +228,7 @@ const REVIEW_REASONS: Partial<Record<ApiReason, MessageKey>> = {
 export function parseCatalogVersion(raw: unknown): CatalogVersion | null {
   if (typeof raw !== "object" || raw === null) return null;
   const { version, publishedAt, notes } = raw as Record<string, unknown>;
-  if (typeof version !== "string" || !SEMVER.test(version) || version.length > 64) return null;
+  if (typeof version !== "string" || !SEMVER.test(version) || version.length > MAX_LISTED_VERSION) return null;
   return { version, publishedAt: typeof publishedAt === "string" && publishedAt.length <= 40 ? publishedAt : "", notes: plainNotes(notes) };
 }
 
@@ -237,11 +237,11 @@ export function parseCatalogEntry(raw: unknown): CatalogEntry | null {
   if (typeof raw !== "object" || raw === null) return null;
   const entry = raw as Record<string, unknown>;
   const { id, version, minTavora, games, personalWorkspaces, permissions, owner, publisher, zip, publishedAt } = entry;
-  if (!isModuleId(id) || typeof version !== "string" || !SEMVER.test(version) || version.length > 64) return null;
+  if (!isModuleId(id) || typeof version !== "string" || !SEMVER.test(version) || version.length > MAX_LISTED_VERSION) return null;
   const name = plain(entry.name, 100);
   if (!name) return null;
   if (minTavora !== null && minTavora !== undefined && (typeof minTavora !== "string" || !TAVORA_VERSION.test(minTavora))) return null;
-  if (!Array.isArray(games) || games.length > 100 || !games.every(isGameId)) return null;
+  if (!Array.isArray(games) || games.length > MAX_LISTED_GAMES || !games.every(isGameId)) return null;
   if (typeof owner !== "string" || !FINGERPRINT.test(owner)) return null;
   const asks = (typeof permissions === "object" && permissions !== null ? permissions : {}) as Record<string, unknown>;
   const network = asks.network ?? [];
