@@ -51,7 +51,7 @@ const style = computed(() => ({ left: `${Math.max(8, Math.min(props.left, window
     <Button variant="ghost" size="icon-sm" class="flex-none" data-testid="image-open" :aria-label="t('image.openLarger')" :title="t('image.openLarger')" @click="emit('open')">
       <Maximize2 />
     </Button>
-    <Button variant="ghost" size="icon-sm" class="flex-none" data-testid="image-remove" :aria-label="t('image.remove')" :title="t('image.remove')" @click="emit('remove')">
+    <Button variant="danger" size="icon-sm" class="flex-none" data-testid="image-remove" :aria-label="t('image.remove')" :title="t('image.remove')" @click="emit('remove')">
       <Trash2 />
     </Button>
   </div>

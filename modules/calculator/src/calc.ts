@@ -139,17 +139,34 @@ const SHORT = [
   [1e6, "M"],
 ] as const;
 
+/** A number to `places` decimals, rounding the digits as written: 1.005 is 1.01, though the stored number is a hair less. */
+function fixed(value: number, places: number): string {
+  const shifted = Number(`${Math.abs(value)}e${places}`);
+  // Too long to shift exactly (or already written with an exponent): the number's own rounding is as good as it gets.
+  if (!Number.isSafeInteger(Math.ceil(shifted))) return value.toFixed(places);
+  return ((Math.sign(value) * Math.round(shifted)) / 10 ** places).toFixed(places);
+}
+
 /** How a result shows with the player's choices: rounded to the decimal places picked ("auto" keeps what format
  * writes), and with `short` from a million on as 1.5M, 2B or 3T (two places at most on auto). Only for showing:
  * Copy, sums and saved values keep the full number. */
 export function rounded(text: string, decimals: "auto" | number, short: boolean): string {
   const value = Number(text);
   if (!text || !Number.isFinite(value)) return text;
-  const scale = short ? SHORT.find(([size]) => Math.abs(value) >= size) : undefined;
-  const number = scale ? value / scale[0] : value;
-  const places = decimals === "auto" ? (scale ? 2 : null) : decimals;
-  let shown = places === null ? format(number) : number.toFixed(places);
-  if (decimals === "auto" && scale) shown = format(Number(shown));
+  const write = (step: (typeof SHORT)[number] | undefined) => {
+    const number = step ? value / step[0] : value;
+    const places = decimals === "auto" ? (step ? 2 : null) : decimals;
+    const written = places === null ? format(number) : fixed(number, places);
+    return decimals === "auto" && step ? format(Number(written)) : written;
+  };
+  let scale = short ? SHORT.find(([size]) => Math.abs(value) >= size) : undefined;
+  let shown = write(scale);
+  // Rounding can reach the next step up: 999,999,600 is 1B, not 1000M.
+  const larger = short ? SHORT[(scale ? SHORT.indexOf(scale) : SHORT.length) - 1] : undefined;
+  if (larger && Math.abs(Number(shown)) * (scale?.[0] ?? 1) >= larger[0]) {
+    scale = larger;
+    shown = write(larger);
+  }
   if (Number(shown) === 0) shown = shown.replace(/^-/, "");
   return shown + (scale?.[1] ?? "");
 }
@@ -229,6 +246,8 @@ const isGroup = (text: string) => opening(text, text.length - 1) === 0;
 
 /** Whether the entry ends in something a number can follow only with a ×: a closed group, % or ², or k m b. */
 const CLOSED = /[)%²⌉\]kmb]$/;
+/** Whether the entry ends in a number written with an exponent, such as a big result (1e+21). Its digits can't be typed on. */
+const EXPONENT_END = /(\d+\.?\d*|\.\d+)e[+-]?\d+$/i;
 /** Whether the entry ends in a number or group that % or a bracket can follow. */
 const OPERAND_END = /[\d.)%²⌉\]kmb]$/;
 
@@ -267,8 +286,10 @@ function applyTo(entry: Entry, key: "sqrt" | "square" | "negate" | "ceil"): Entr
   return next(`${before}-${operand}`);
 }
 
-/** Delete last: a saved value goes as a whole, and a round-up loses both its brackets. */
+/** Delete last: a saved value or a number with an exponent goes as a whole, and a round-up loses both its brackets. */
 function back(text: string): string {
+  const exponent = EXPONENT_END.exec(text);
+  if (exponent) return text.slice(0, exponent.index);
   const last = text.at(-1);
   const start = last === "]" || last === "⌉" ? opening(text, text.length - 1) : -1;
   if (start < 0) return text.slice(0, -1);
@@ -282,15 +303,15 @@ export function press(entry: Entry, key: string): Entry {
   const last = text.at(-1) ?? "";
   const open = [...text].filter((char) => char === "(").length - [...text].filter((char) => char === ")").length;
   const next = (value: string): Entry => ({ text: value, fresh: false });
-  const closed = CLOSED.test(last);
+  const closed = CLOSED.test(last) || EXPONENT_END.test(text);
 
   if (key === "clear") return EMPTY;
   if (key === "back") return next(back(entry.text));
   if (key === "sqrt" || key === "square" || key === "negate" || key === "ceil") return applyTo(entry, key);
   if (/^\d$/.test(key)) return next(closed ? `${text}*${key}` : text + key);
   if (key === ".") {
-    if (text.match(/[\d.]*$/)![0].includes(".")) return entry;
-    return next(/\d$/.test(last) ? `${text}.` : `${closed ? `${text}*` : text}0.`);
+    if (!EXPONENT_END.test(text) && text.match(/[\d.]*$/)![0].includes(".")) return entry;
+    return next(/\d$/.test(last) && !closed ? `${text}.` : `${closed ? `${text}*` : text}0.`);
   }
   // k m b go right after a number, once: another one replaces it.
   if (/^[kmb]$/.test(key)) {

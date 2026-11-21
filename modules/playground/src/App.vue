@@ -11,6 +11,7 @@ import { Picker } from "@tavora/official-ui/components/ui/picker";
 import { SearchInput } from "@tavora/official-ui/components/ui/search-input";
 import { SwitchField } from "@tavora/official-ui/components/ui/switch";
 import { Toaster } from "@tavora/official-ui/components/ui/toast";
+import { isComposing } from "@tavora/official-ui/lib/keys";
 import type { TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { flushViewsOnLifecycle } from "./lifecycleFlush";
@@ -102,7 +103,7 @@ function open(id: string) {
 
 const nav = ref<HTMLElement | null>(null);
 function onSearchKey(event: KeyboardEvent) {
-  if (event.key === "Enter" && found.value[0]) {
+  if (event.key === "Enter" && !isComposing(event) && found.value[0]) {
     event.preventDefault();
     open(found.value[0].id);
   } else if (event.key === "ArrowDown") {

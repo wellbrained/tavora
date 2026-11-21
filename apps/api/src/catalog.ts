@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { allowsPersonalWorkspaces, folderKey, isGameId, isReleaseVersion, LOCAL_OWNER, manifestFiles, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, validateChangelog, validateManifest, type LeaderboardBoard, type ModuleManifest } from "@tavora/module-schema";
+import { allowsPersonalWorkspaces, catalogListingProblem, folderKey, isGameId, isReleaseVersion, LOCAL_OWNER, manifestFiles, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, validateChangelog, validateManifest, type LeaderboardBoard, type ModuleManifest } from "@tavora/module-schema";
 import { MANIFEST_FILE, privateKeyFile, readZip, SIGNATURE_FILE, signedHash, verifyFiles, ZIP_LIMITS, zipDirectory, ZipError, type ZipFile } from "@tavora/pack";
 import { inspectPng, isWebp } from "./png.ts";
 import { MAX_MANIFEST_BYTES, metadataProblem, UPLOAD_MEMORY_BYTES, zipMemory } from "./upload-memory.ts";
@@ -124,10 +124,13 @@ export interface CheckedZip {
 
 /**
  * Refuses a pre-release version (1.0.0-beta.1): new versions are plain major.minor.patch for every publisher
- * (decided 2026-10-30). Versions listed before stay listed and install, and the checks of live versions don't use this.
+ * (decided 2026-10-30). Also refuses what the app would leave out of its catalog list, so a new version can't make a
+ * module vanish. Versions listed before stay listed and install, and the checks of live versions don't use this.
  */
 export function checkReleaseVersion(manifest: ModuleManifest): void {
   if (!isReleaseVersion(manifest.version)) throw new CatalogError(`Its version ${manifest.version} is a pre-release. Publish a plain major.minor.patch version such as ${manifest.version.split("-")[0]}.`);
+  const problem = catalogListingProblem(manifest);
+  if (problem) throw new CatalogError(problem);
 }
 
 /** Why a version waits: which check stopped it, a short text for its developer, and what helps the maintainer judge it. */

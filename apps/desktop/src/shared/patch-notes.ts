@@ -28,6 +28,62 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.117",
+    date: "2026-11-21",
+    title: "Styles read better",
+    notes: [
+      "Hardware keeps calculator keys at their size and names as you wrote them.",
+      "You can see the keyboard focus on switches, checkboxes and number fields in Hardware and Liquid Glass.",
+      "The selected row in Hardware lists is easier to read, and tab names are the right size.",
+    ],
+    prs: [
+      { number: 862, title: "Styles and kit: readable Hardware, visible focus, IME-safe Enter" },
+    ],
+    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard", "workspace"],
+  },
+  {
+    version: "0.24.116",
+    date: "2026-11-21",
+    title: "Your work stays put",
+    notes: [
+      "Whiteboard: a board too big to save stays open when you switch, so your drawing isn't lost.",
+      "Notes: pasting from Excel or Word keeps the text.",
+      "PDF Viewer: reloading a changed file can't break its entry any more.",
+    ],
+    prs: [
+      { number: 864, title: "Whiteboard, Notes, PDF Viewer: keep what you made" },
+    ],
+    tags: ["notes", "pdf-viewer", "whiteboard"],
+  },
+  {
+    version: "0.24.115",
+    date: "2026-11-21",
+    title: "Small fixes in your modules",
+    notes: [
+      "To-Dos: the list over the game gets your last change when you close the panel.",
+      "Clock & Counter: laps past 99 keep their time and number, and number fields understand 2.5 and +5.",
+      "System Monitor: sizes no longer read 10.0 GB or 1024 GB.",
+    ],
+    prs: [
+      { number: 865, title: "To-Dos, Clock & Counter, System Monitor: small fixes" },
+    ],
+    tags: ["clock-counter", "system-monitor", "todos", "ui-kit"],
+  },
+  {
+    version: "0.24.114",
+    date: "2026-11-21",
+    title: "Calculator gets its numbers right",
+    notes: [
+      "Pasting 1,234.56 or 1.234,56 gives the right number.",
+      "Results round the way you'd expect: 1.005 shows as 1.01, and just under a billion as 1B.",
+      "Typing after a very big result works now.",
+    ],
+    prs: [
+      { number: 863, title: "Calculator: read pasted numbers, round as written, type after big results" },
+    ],
+    tags: ["calculator"],
+  },
+  {
     version: "0.24.113",
     date: "2026-11-21",
     title: "Media connector",

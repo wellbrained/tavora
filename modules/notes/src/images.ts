@@ -17,6 +17,14 @@ export function isAcceptedType(type: string): boolean {
   return (ACCEPTED_TYPES as readonly string[]).includes(type);
 }
 
+/**
+ * Whether a paste carries text. Excel and Word also put a picture of the selection on the clipboard; the text is what
+ * was copied, so the picture is only taken when there is no text.
+ */
+export function clipboardHasText(data: Pick<DataTransfer, "getData"> | null | undefined): boolean {
+  return !!data?.getData("text/plain").trim();
+}
+
 /** The size to draw at so the longest side is at most `max`; never larger than the original. */
 export function fitSize(width: number, height: number, max: number): { width: number; height: number } {
   const longest = Math.max(width, height);

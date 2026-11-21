@@ -1,3 +1,4 @@
+import { LIMITS } from "@tavora/sdk";
 import { describe, expect, it } from "vitest";
 import { insert, newItem, startPause, type Clock, type Counter, type ItemList } from "./items";
 import { buildLiveState, isLive, LIVE_MAX_ROWS, rowText } from "./live";
@@ -11,6 +12,18 @@ const list = (...items: ReturnType<typeof newItem>[]): ItemList => {
 describe("buildLiveState", () => {
   it("has nothing to show for an empty list", () => {
     expect(buildLiveState({ items: [] }, "+{count} more")).toBeNull();
+  });
+
+  it("stays under what Tavora accepts: rows with long texts go under +n more", () => {
+    const items = Array.from({ length: 30 }, (_, n) => {
+      const item = newItem("counter", `c${n}`, "é".repeat(60));
+      item.look.text = `{count} ${"ü".repeat(190)}`;
+      return item;
+    });
+    const state = buildLiveState(list(...items), "+{count} more")!;
+    expect(new TextEncoder().encode(JSON.stringify(state)).length).toBeLessThanOrEqual(LIMITS.maxOverlayStateBytes);
+    expect(state.rows.length).toBeLessThan(LIVE_MAX_ROWS);
+    expect(state.rows.length + state.more).toBe(30);
   });
 
   it("lists every item in the order the panel shows, with what the page needs to count a clock itself", () => {

@@ -8,6 +8,7 @@ import { ChevronRight, Ellipsis } from "@lucide/vue";
 import { cn, useFocusRecovery } from "@tavora/official-ui";
 import { leaveRow } from "@tavora/official-ui/components/ui/animated-list";
 import { CountTo } from "@tavora/official-ui/components/ui/count-to";
+import { isComposing } from "@tavora/official-ui/lib/keys";
 import { computed, inject, nextTick, onBeforeUnmount, provide, ref } from "vue";
 import AddInput from "./AddInput.vue";
 import { plural, t } from "./i18n";
@@ -319,7 +320,7 @@ function dropMark(position: number): "before" | "after" | null {
         data-testid="group-name-input"
         class="focus-visible:border-ring h-7 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 text-sm font-semibold outline-none"
         @blur="finishRename"
-        @keydown.enter="($event.target as HTMLInputElement).blur()"
+        @keydown.enter="!isComposing($event) && ($event.target as HTMLInputElement).blur()"
         @keydown.escape="renaming = false"
       />
       <div v-else class="min-w-0 flex-1">

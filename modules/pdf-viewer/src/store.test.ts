@@ -1,3 +1,4 @@
+import { TavoraError } from "@tavora/sdk";
 import { createMemoryHost } from "@tavora/sdk/testing";
 import { describe, expect, it } from "vitest";
 import { createFilesStore } from "./store";
@@ -104,6 +105,36 @@ describe("files linked to their original", () => {
     expect(store.find(id)).toMatchObject({ previous: entry.id, name: "Rules.pdf", view: { page: 7 }, link: { size: 23, modifiedAt: 2000 } });
     expect((await sdk.blobs.list()).map((blob) => blob.id)).toEqual([id]);
     expect(await store.check(id)).toBe("same");
+  });
+
+  it("keeps the old copy, and says so, when the list with the new one can't be saved", async () => {
+    const { sdk, host, original, picked } = linkedHost();
+    const store = await open(sdk);
+    const entry = await store.addLinked(picked);
+    original.bytes = new TextEncoder().encode("%PDF-1.7 second version");
+    original.modifiedAt = 2000;
+    host.answer("documents.put", () => {
+      throw new TavoraError({ code: "QUOTA_EXCEEDED", message: "disk full" });
+    });
+    await expect(store.reload(entry.id)).rejects.toMatchObject({ kind: "store", message: "disk full" });
+    host.unanswer("documents.put");
+    expect(store.files.value.map((file) => file.id)).toEqual([entry.id]);
+    expect((await sdk.blobs.list()).map((blob) => blob.id)).toEqual([entry.id]);
+  });
+
+  it("leaves nothing behind when the file is removed during a reload", async () => {
+    const { sdk, host, original, picked } = linkedHost();
+    const store = await open(sdk);
+    const entry = await store.addLinked(picked);
+    original.bytes = new TextEncoder().encode("%PDF-1.7 second version");
+    original.modifiedAt = 2000;
+    host.answer("files.read", async () => {
+      await store.remove(entry.id);
+      return original.bytes;
+    });
+    expect(await store.reload(entry.id)).toBe(entry.id);
+    expect(store.files.value).toEqual([]);
+    expect(await sdk.blobs.list()).toEqual([]);
   });
 
   it("asks no more about a version the user skipped, but does about the next one", async () => {

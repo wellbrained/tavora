@@ -25,6 +25,7 @@ import {
 } from "@lucide/vue";
 import { cn, errorMessage } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { isComposing } from "@tavora/official-ui/lib/keys";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,6 +44,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import ImageBar from "./ImageBar.vue";
 import ImageLightbox from "./ImageLightbox.vue";
 import { ImageNode } from "./ImageNode";
+import { clipboardHasText } from "./images";
 import LinkDialog from "./LinkDialog.vue";
 import LinkPopover from "./LinkPopover.vue";
 import { t } from "./i18n";
@@ -122,7 +124,8 @@ const editor = useEditor({
   ],
   editorProps: {
     handleClick: (_view, _pos, event) => onEditorClick(event),
-    handlePaste: (_view, event) => onFiles(event.clipboardData?.files, event),
+    // Excel and Word also put a picture of the selection on the clipboard: the text is what was copied.
+    handlePaste: (_view, event) => !clipboardHasText(event.clipboardData) && onFiles(event.clipboardData?.files, event),
     handleDrop: (view, event) => onFiles(event.dataTransfer?.files, event, view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos),
     attributes: { class: "note-content", "data-testid": "editor", "aria-label": t("editor.text"), spellcheck: "true" },
   },
@@ -259,6 +262,13 @@ function onTitleInput() {
   titleDirty = true;
   saveState.value = "pending";
   schedule();
+}
+
+/** Enter goes on to the text, unless it only confirms what an input method is still composing. */
+function onTitleEnter(event: KeyboardEvent) {
+  if (isComposing(event)) return;
+  event.preventDefault();
+  editor.value?.commands.focus("start");
 }
 
 function onTitleFocus() {
@@ -609,7 +619,7 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
           <FilePlus />
         </Button>
         <Button
-          variant="ghost"
+          variant="danger"
           size="icon-sm"
           class="flex-none"
           data-testid="clear-scratchpad"
@@ -656,7 +666,7 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
           @input="onTitleInput"
           @focus="onTitleFocus"
           @blur="onTitleBlur"
-          @keydown.enter.prevent="editor?.commands.focus('start')"
+          @keydown.enter="onTitleEnter"
         />
         <EditorContent :editor="editor" />
       </div>

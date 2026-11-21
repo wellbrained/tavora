@@ -88,8 +88,38 @@ export function keyAction(press: KeyPress, context: { selection?: boolean; focus
   return name ? { type: "key", name } : null;
 }
 
-/** The pad keys a paste types: plain signs and the k m b letters, with × ÷ − and a decimal comma turned into plain ones. */
-export function pasteKeys(text: string): string[] {
-  const plain = text.replace(/×/g, "*").replace(/÷/g, "/").replace(/−/g, "-").replace(/,/g, ".").toLowerCase();
+/**
+ * One number with marks inside it, as plain digits and a decimal point. With both marks the last one is the decimal
+ * (1,234.56 and 1.234,56). A mark that repeats groups thousands (1,234,567). A single mark before exactly three digits
+ * is read the way this language writes it: 1,234 is 1234 in English and 1.234 in German, and the other way round for a point.
+ */
+function plainNumber(run: string, comma: boolean): string {
+  if (run.includes(",") && run.includes(".")) {
+    const decimal = run.lastIndexOf(",") > run.lastIndexOf(".") ? "," : ".";
+    return run.replaceAll(decimal === "," ? "." : ",", "").replace(decimal, ".");
+  }
+  const mark = run.includes(",") ? "," : ".";
+  const parts = run.split(mark);
+  const grouped = /^[1-9]\d{0,2}$/.test(parts[0]!) && parts.slice(1).every((part) => part.length === 3);
+  if (grouped && (parts.length > 2 || (mark === ",") !== comma)) return parts.join("");
+  return parts.join(".");
+}
+
+/** A number with an exponent (a big result that was copied) written out, since the pad has no key for the exponent. */
+const writtenOut = (number: string) => Number(number.replace(",", ".")).toLocaleString("en", { useGrouping: false, maximumFractionDigits: 20 });
+
+/**
+ * The pad keys a paste types: plain signs and the k m b letters, with × ÷ − turned into plain ones, and numbers read with
+ * their thousands marks and decimal mark. `comma`: this language writes decimals with a comma.
+ */
+export function pasteKeys(text: string, comma = false): string[] {
+  const plain = text
+    .replace(/×/g, "*")
+    .replace(/÷/g, "/")
+    .replace(/−/g, "-")
+    .replace(/(?<![\w.,])\d+(?:[.,]\d+)?e[+-]?\d+(?![\w.,])/gi, writtenOut)
+    .replace(/\d+(?:[.,]\d+)+/g, (run) => plainNumber(run, comma))
+    .replace(/,/g, ".")
+    .toLowerCase();
   return [...plain].filter((char) => /^[\d.+\-*/%()kmb]$/.test(char));
 }

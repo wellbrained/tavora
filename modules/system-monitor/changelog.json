@@ -1,5 +1,20 @@
 [
   {
+    "version": "0.1.31",
+    "date": "2026-11-21",
+    "notes": [
+      "In Hardware, names keep their case and you can see keyboard focus on switches and number fields."
+    ]
+  },
+  {
+    "version": "0.1.30",
+    "date": "2026-11-21",
+    "notes": [
+      "Sizes and speeds no longer read 10.0 or 1024 GB.",
+      "Clear is red, like the other actions that remove things."
+    ]
+  },
+  {
     "version": "0.1.29",
     "date": "2026-11-21",
     "notes": [

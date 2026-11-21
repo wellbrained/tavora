@@ -215,7 +215,46 @@ describe("saved values", () => {
   });
 });
 
+describe("a number with an exponent in the entry", () => {
+  const big: Entry = { text: "1e+21", fresh: false };
+
+  it("is not typed on: a digit or point starts the next factor", () => {
+    expect(press(big, "5").text).toBe("1e+21*5");
+    expect(press(big, ".").text).toBe("1e+21*0.");
+    expect(evaluate(press(big, "5").text)).toEqual({ ok: true, value: 5e21 });
+  });
+
+  it("goes as a whole on delete", () => {
+    expect(press(big, "back").text).toBe("");
+    expect(press({ text: "1e+21", fresh: true }, "back").text).toBe("");
+    expect(press({ text: "3+1.5e-7", fresh: false }, "back").text).toBe("3+");
+  });
+
+  it("still starts over after a result, and plain numbers type as before", () => {
+    expect(press({ text: "1e+21", fresh: true }, "5").text).toBe("5");
+    expect(press({ text: "12", fresh: false }, "3").text).toBe("123");
+    expect(press({ text: "12", fresh: false }, ".").text).toBe("12.");
+    expect(press({ text: "1.5", fresh: false }, ".").text).toBe("1.5");
+  });
+});
+
 describe("rounded", () => {
+  it("rounds the digits as written", () => {
+    expect(rounded("1.005", 2, false)).toBe("1.01");
+    expect(rounded("-1.005", 2, false)).toBe("-1.01");
+    expect(rounded("1.004", 2, false)).toBe("1.00");
+    expect(rounded("1e+21", 2, false)).toBe("1e+21");
+  });
+
+  it("moves to the next step when rounding reaches it", () => {
+    expect(rounded("999999600", "auto", true)).toBe("1B");
+    expect(rounded("999999600", 2, true)).toBe("1.00B");
+    expect(rounded("999999.6", 0, true)).toBe("1M");
+    expect(rounded("999994000", "auto", true)).toBe("999.99M");
+    // There is no step above T.
+    expect(rounded("999999996000000", "auto", true)).toBe("1000T");
+  });
+
   it("shows the decimal places picked, keeping auto as it is", () => {
     expect(rounded("3.14159", "auto", false)).toBe("3.14159");
     expect(rounded("3.14159", 2, false)).toBe("3.14");

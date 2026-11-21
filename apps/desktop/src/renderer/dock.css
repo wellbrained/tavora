@@ -496,6 +496,10 @@
   font-family: var(--font-mono);
   letter-spacing: 0.06em;
 }
+/* The tab's own content sets the normal text size; the small caps are a step smaller. */
+:root[data-look-labels="caps-mono"] .dockview-theme-tavora .dv-tab [data-panel-tab] {
+  font-size: var(--text-xs);
+}
 
 /* Status light: the open tab of the panel you work in has a glowing dot. The tab is a block, not a flex row, so the dot
    sits on top of it (absolute) in room the tab makes on its left; in the flow it pushed the label below the tab. */

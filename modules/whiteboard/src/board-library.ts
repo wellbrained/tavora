@@ -23,11 +23,13 @@ export interface BoardWords {
 export interface BoardLibraryOptions {
   words(): BoardWords;
   debounceMs?: number;
+  /** A switch asked for from outside was refused because the open board could not be stored. */
+  onNotSaved?: () => void;
 }
 
 /** What the open board's view lets the library do around a switch. */
 export interface OpenBoardView {
-  /** Stores what was drawn but not handed to the board's document yet. */
+  /** Stores what was drawn but not handed to the board's document yet; rejects when it could not be stored. */
   flush(): Promise<void>;
   /** Lets go without storing what is left (the board is being deleted). */
   discard(): void;
@@ -73,7 +75,12 @@ export async function openBoardLibrary(sdk: TavoraSDK, options: BoardLibraryOpti
   });
 
   const stopNavigating = sdk.panel.onNavigate(async (content) => {
-    await view?.flush();
+    try {
+      await view?.flush();
+    } catch (error) {
+      options.onNotSaved?.();
+      throw error;
+    }
     if (!(await session.job(() => session.pick(content.id)))) throw new Error("another board was picked first");
   });
 
