@@ -229,7 +229,9 @@ export function relativeTime(iso: string, now = Date.now(), words: TimeWords = E
   const today = new Date(now);
   const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
   if (then >= startOfToday) return date.toLocaleTimeString(words.locale, { hour: "2-digit", minute: "2-digit" });
-  if (then >= startOfToday - 86_400_000) return words.yesterday;
+  // Midnight by the calendar: the day before can have 23 or 25 hours when the clocks change.
+  const startOfYesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1).getTime();
+  if (then >= startOfYesterday) return words.yesterday;
   return date.toLocaleDateString(words.locale, {
     day: "numeric",
     month: "short",

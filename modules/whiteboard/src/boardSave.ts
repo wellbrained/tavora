@@ -47,6 +47,14 @@ export interface BoardSaverOptions {
   delayMs?: number;
 }
 
+/** What was drawn could not be stored (too big, or the host refused it), so the board must stay open. */
+export class BoardNotSaved extends Error {
+  constructor() {
+    super("the board could not be saved");
+    this.name = "BoardNotSaved";
+  }
+}
+
 export function createBoardSaver(options: BoardSaverOptions) {
   const { document, pictures } = options;
   const delay = options.delayMs ?? SAVE_DELAY_MS;
@@ -157,8 +165,13 @@ export function createBoardSaver(options: BoardSaverOptions) {
       if (stopped || signatureOf(scene) === queued) return;
       schedule();
     },
-    /** Saves what is not stored yet; resolves once it is. */
+    /** Saves what is not stored yet; resolves once it is, or once saving failed (the state says so). */
     flush,
+    /** Saves what is not stored yet and rejects when that failed, so a switch stays on this board instead of losing it. */
+    async settled(): Promise<void> {
+      await flush();
+      if (!stopped && state.save === "error") throw new BoardNotSaved();
+    },
     /** Lets go without saving what is left (the board is being deleted). */
     discard(): void {
       if (stopped === null) stopped = "discarded";

@@ -2,7 +2,7 @@ import { TavoraError, type JsonValue } from "@tavora/sdk";
 import { openDocument } from "@tavora/sdk/store";
 import { createMemoryHost } from "@tavora/sdk/testing";
 import { describe, expect, it, vi } from "vitest";
-import { createBoardSaver, type Problem, type Scene, type SceneElement } from "./boardSave";
+import { BoardNotSaved, createBoardSaver, type Problem, type Scene, type SceneElement } from "./boardSave";
 import type { SaverState } from "./boardSave";
 import { flushOnLifecycle } from "./lifecycleFlush";
 import { boardTitle, emptyBoard, MAX_BOARD_BYTES, parseBoard, type BoardData, type StoredFile } from "./boards";
@@ -161,6 +161,26 @@ describe("when saving fails", () => {
     await saver.flush();
     expect(saver.state).toMatchObject({ save: "saved", dirty: false });
     expect(read()?.elements).toHaveLength(1);
+    error.mockRestore();
+  });
+
+  it("rejects `settled` while the drawing can't be stored, and resolves once it can", async () => {
+    const { saver } = await setup();
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    saver.change(scene([{ ...rectangle(), filler: "x".repeat(MAX_BOARD_BYTES + 1) } as SceneElement]));
+    await expect(saver.settled()).rejects.toBeInstanceOf(BoardNotSaved);
+    saver.change(scene([rectangle()]));
+    await expect(saver.settled()).resolves.toBeUndefined();
+    error.mockRestore();
+  });
+
+  it("does not reject `settled` for a board that is being deleted", async () => {
+    const { saver } = await setup();
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    saver.change(scene([{ ...rectangle(), filler: "x".repeat(MAX_BOARD_BYTES + 1) } as SceneElement]));
+    await saver.flush();
+    saver.discard();
+    await expect(saver.settled()).resolves.toBeUndefined();
     error.mockRestore();
   });
 

@@ -15,6 +15,7 @@ import type { DocumentHandle } from "@tavora/sdk/store";
 import { computed, defineAsyncComponent, h, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import BoardMenu from "./BoardMenu.vue";
 import { openBoardLibrary, type BoardKind, type BoardLibrary } from "./board-library";
+import { BoardNotSaved } from "./boardSave";
 import { flushOnLifecycle } from "./lifecycleFlush";
 import { initialBoardState, type BoardState, type View } from "./boardState";
 import type { BoardSession } from "./boardSession";
@@ -141,6 +142,9 @@ watch(
   (view) => view && rememberView(view),
 );
 
+/** Why a new board didn't open: the open one couldn't be saved first (it stays open), or making the new one failed. */
+const creationProblem = (reason: unknown) => (reason instanceof BoardNotSaved ? t("save.error") : t("starter.failed", { error: errorMessage(reason) }));
+
 async function createBoard(kind: BoardKind = "blank") {
   if (kind === "screenshot") { screenshotInput.value?.click(); return; }
   const lib = library.value;
@@ -152,7 +156,7 @@ async function createBoard(kind: BoardKind = "blank") {
     const id = newBoardId();
     fitBoardId.value = kind === "idea" ? id : null;
     await lib.create(kind, data, id);
-  } catch (reason) { notify(t("starter.failed", { error: errorMessage(reason) })); }
+  } catch (reason) { notify(creationProblem(reason)); }
   finally { creatingBoard.value = false; }
 }
 
@@ -172,7 +176,7 @@ async function createScreenshot(event: Event) {
     const id = newBoardId();
     fitBoardId.value = id;
     await lib.create("screenshot", data, id);
-  } catch (reason) { notify(t("starter.failed", { error: errorMessage(reason) })); }
+  } catch (reason) { notify(creationProblem(reason)); }
   finally { creatingBoard.value = false; }
 }
 

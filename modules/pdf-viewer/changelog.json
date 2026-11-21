@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.30",
+    "date": "2026-11-21",
+    "notes": [
+      "Reloading a changed file can't break its entry any more."
+    ]
+  },
+  {
     "version": "0.1.29",
     "date": "2026-11-21",
     "notes": [

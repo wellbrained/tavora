@@ -100,8 +100,23 @@ export async function createFilesStore(sdk: TavoraSDK, options: { /** The docume
     const { bytes, link } = await readOriginal(file.link.ref, file.name);
     const info = await store(bytes, file.name, detectType({ name: file.name, type: "" }) ?? file.type);
     if (info.id === id) return id;
-    doc.update((data) => replaceCopy(data, id, info, link));
-    await doc.flush();
+    // A failed save is told to `onError`, not to `flush`, and puts the list back as it was stored.
+    let failure: unknown;
+    const stopErrors = doc.onError((error, kind) => {
+      if (kind === "save") failure = error;
+    });
+    try {
+      doc.update((data) => replaceCopy(data, id, info, link));
+      await doc.flush();
+    } finally {
+      stopErrors();
+    }
+    // The list didn't take the new copy (the save failed, or the file was removed meanwhile): the old copy stays, the new one goes.
+    if (!doc.data.files.some((other) => other.id === info.id)) {
+      await sdk.blobs.delete(info.id).catch(() => undefined);
+      if (failure !== undefined) throw new FileProblem("store", failure instanceof Error ? failure.message : String(failure), file.name);
+      return id;
+    }
     await sdk.blobs.delete(id).catch(() => undefined);
     return info.id;
   }

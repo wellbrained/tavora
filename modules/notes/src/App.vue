@@ -104,6 +104,8 @@ function resetSidebarWidth() {
 const cleanup: (() => void)[] = [];
 const onResize = () => (width.value = window.innerWidth);
 const flushNow = () => void editor.value?.flush();
+/** The panel went while it was still connecting: what arrives after that is closed again, not kept. */
+let unmounted = false;
 
 onMounted(async () => {
   addEventListener("resize", onResize);
@@ -113,11 +115,19 @@ onMounted(async () => {
     const connection = await connectModule({ texts: { en, de } });
     if (connection.status !== "ready" || !connection.sdk) throw connection.error;
     const connected = connection.sdk;
+    if (unmounted) {
+      connection.dispose();
+      return;
+    }
     // The components read the module's own translator; it follows the language the handle reports.
     setLanguage(connection.language);
     cleanup.push(connection.onLanguage(setLanguage), connection.dispose);
     const notes = await createNotesStore(connected);
     const [state] = await Promise.all([connected.panel.getState<PanelState>(), notes.load(), notes.loadAppearance(), notes.loadImageQuality()]);
+    if (unmounted) {
+      void notes.dispose();
+      return;
+    }
     if (typeof state?.sidebarWidth === "number" && Number.isFinite(state.sidebarWidth)) sidebarWidth.value = clampSidebar(state.sidebarWidth);
     collapsed.value = state?.collapsed === true;
     notes.onBeforeSwitch(() => editor.value?.flush());
@@ -138,6 +148,7 @@ watch(selectedId, () => {
 });
 
 onBeforeUnmount(() => {
+  unmounted = true;
   cleanup.forEach((fn) => fn());
   const notes = store.value;
   // The editor hands its last typing to the note's document first; then the documents are saved and closed.

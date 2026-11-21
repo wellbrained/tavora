@@ -27,7 +27,7 @@ export interface BoardLibraryOptions {
 
 /** What the open board's view lets the library do around a switch. */
 export interface OpenBoardView {
-  /** Stores what was drawn but not handed to the board's document yet. */
+  /** Stores what was drawn but not handed to the board's document yet; rejects when it could not be stored. */
   flush(): Promise<void>;
   /** Lets go without storing what is left (the board is being deleted). */
   discard(): void;

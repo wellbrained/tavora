@@ -1,6 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { fitSize, isAcceptedType } from "./images";
+import { clipboardHasText, fitSize, isAcceptedType } from "./images";
 import { clampWidth } from "./ImageNode";
+
+describe("clipboardHasText", () => {
+  const clipboard = (text: string) => ({ getData: (type: string) => (type === "text/plain" ? text : "") });
+
+  it("sees the text Excel or Word put next to their picture", () => {
+    expect(clipboardHasText(clipboard("Iron\t12\r\nCopper\t8"))).toBe(true);
+  });
+
+  it("leaves a plain picture to be added", () => {
+    expect(clipboardHasText(clipboard(""))).toBe(false);
+    expect(clipboardHasText(clipboard(" \r\n"))).toBe(false);
+    expect(clipboardHasText(null)).toBe(false);
+  });
+});
 
 describe("fitSize", () => {
   it("shrinks so the longest side fits, keeping the shape", () => {

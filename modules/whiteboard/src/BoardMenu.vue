@@ -13,6 +13,7 @@ import {
 } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { DropdownMenuCheckboxItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
+import { isComposing } from "@tavora/official-ui/lib/keys";
 import { nextTick, ref } from "vue";
 import { MAX_NAME, type BoardSummary } from "./boards";
 import { t } from "./i18n";
@@ -35,6 +36,13 @@ async function startRename() {
   await nextTick();
   input.value?.$el.focus();
   input.value?.$el.select();
+}
+
+/** Enter keeps the name, unless it only confirms text an input method is still composing. */
+function onRenameEnter(event: KeyboardEvent) {
+  if (isComposing(event)) return;
+  event.preventDefault();
+  finishRename(true, event);
 }
 
 /** The menu gives focus back to its button when it closes; during a rename the input keeps it. */
@@ -60,7 +68,7 @@ function finishRename(save: boolean, event?: Event) {
     :maxlength="MAX_NAME"
     :aria-label="t('board.renameLabel')"
     data-testid="board-rename-input"
-    @keydown.enter.prevent="finishRename(true, $event)"
+    @keydown.enter="onRenameEnter"
     @keydown.esc.stop.prevent="finishRename(false)"
     @blur="finishRename(true, $event)"
   />
@@ -94,7 +102,7 @@ function finishRename(save: boolean, event?: Event) {
           {{ t("board.rename") }}
         </DropdownMenuItem>
         <!-- Clearing shows Undo afterwards (and Ctrl+Z works), so it needs no question first. -->
-        <DropdownMenuItem :disabled="!canClear" :disabled-reason="t('board.nothingYet')" :title="t('clear.hint')" data-testid="clear-board" @select="emit('clear')">
+        <DropdownMenuItem variant="destructive" :disabled="!canClear" :disabled-reason="t('board.nothingYet')" :title="t('clear.hint')" data-testid="clear-board" @select="emit('clear')">
           <Eraser />
           {{ t("clear.button") }}
         </DropdownMenuItem>

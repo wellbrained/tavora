@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { cleanTitle, collectImageIds, contentFromText, formatMegabytes, fontStack, matches, normalizeLink, nudged, parseAppearance, parseNote, parseOrder, reordered, previewFor, relativeTime, sections, titleFor, type NoteEntry } from "./notes";
 
 function entry(id: string, patch: Partial<NoteEntry> = {}): NoteEntry {
@@ -119,6 +119,30 @@ describe("relativeTime", () => {
     expect(relativeTime(new Date(now - 5 * 60_000).toISOString(), now)).toBe("5 min ago");
     expect(relativeTime(new Date(now - 26 * 3_600_000).toISOString(), now)).toBe("Yesterday");
     expect(relativeTime("garbage", now)).toBe("");
+  });
+});
+
+describe("relativeTime when the clocks change", () => {
+  const zone = process.env.TZ;
+  afterEach(() => {
+    if (zone === undefined) delete process.env.TZ;
+    else process.env.TZ = zone;
+  });
+
+  it("calls the whole day before Yesterday, also when it had 25 hours", () => {
+    process.env.TZ = "Europe/Berlin";
+    // 25 October 2026 has 25 hours in Berlin.
+    const now = new Date(2026, 9, 26, 12).getTime();
+    expect(relativeTime(new Date(2026, 9, 25, 0, 30).toISOString(), now)).toBe("Yesterday");
+    expect(relativeTime(new Date(2026, 9, 24, 23, 30).toISOString(), now)).not.toBe("Yesterday");
+  });
+
+  it("does not call two days ago Yesterday after a 23 hour day", () => {
+    process.env.TZ = "Europe/Berlin";
+    // 29 March 2026 has 23 hours in Berlin.
+    const now = new Date(2026, 2, 30, 12).getTime();
+    expect(relativeTime(new Date(2026, 2, 28, 23, 30).toISOString(), now)).not.toBe("Yesterday");
+    expect(relativeTime(new Date(2026, 2, 29, 0, 30).toISOString(), now)).toBe("Yesterday");
   });
 });
 
