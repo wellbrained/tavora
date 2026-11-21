@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.59",
+    "date": "2026-11-21",
+    "notes": [
+      "Enter in the search waits until you've finished composing a word (Japanese, Chinese, Korean)."
+    ]
+  },
+  {
     "version": "0.1.58",
     "date": "2026-11-21",
     "notes": [

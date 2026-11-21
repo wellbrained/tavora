@@ -46,6 +46,7 @@ import {
   type Size,
   typedNumber,
 } from "./items";
+import { isComposing } from "@tavora/official-ui/lib/keys";
 import OverlayPreview from "./OverlayPreview.vue";
 import { ACTIONS, PANEL } from "./panel";
 import { counterName } from "./store";
@@ -490,7 +491,7 @@ onBeforeUnmount(saveFields);
         <SettingsPage v-if="current === 'item'" :title="itemPage" :description="t(item.kind === 'counter' ? 'edit.about.counter' : 'edit.about.clock')">
           <SettingsSection>
             <SettingsRow :label="t('edit.name')" :hint="t('edit.nameHint')">
-              <Input :id="`${prefix}-label`" v-model="label" class="w-full" :maxlength="MAX.label" :placeholder="t(`kind.${item.kind}`)" :aria-label="t('edit.name')" @blur="saveLabel" @keydown.enter="saveLabel" />
+              <Input :id="`${prefix}-label`" v-model="label" class="w-full" :maxlength="MAX.label" :placeholder="t(`kind.${item.kind}`)" :aria-label="t('edit.name')" @blur="saveLabel" @keydown.enter="!isComposing($event) && saveLabel()" />
             </SettingsRow>
 
             <template v-if="item.kind !== 'counter'">
@@ -525,18 +526,18 @@ onBeforeUnmount(saveFields);
               <template v-if="item.kind === 'countdown'">
                 <SettingsRow :label="t('edit.duration')" :hint="t('edit.durationHint')">
                   <div class="flex items-center gap-1">
-                    <Input :id="`${prefix}-h`" v-model="duration.h" class="w-14 text-center tabular-nums" inputmode="numeric" maxlength="2" :aria-label="t('edit.hours')" @blur="saveDuration" @keydown.enter="saveDuration" />
+                    <Input :id="`${prefix}-h`" v-model="duration.h" class="w-14 text-center tabular-nums" inputmode="numeric" maxlength="2" :aria-label="t('edit.hours')" @blur="saveDuration" @keydown.enter="!isComposing($event) && saveDuration()" />
                     <span aria-hidden="true">:</span>
-                    <Input :id="`${prefix}-m`" v-model="duration.m" class="w-14 text-center tabular-nums" inputmode="numeric" maxlength="3" :aria-label="t('edit.minutes')" @blur="saveDuration" @keydown.enter="saveDuration" />
+                    <Input :id="`${prefix}-m`" v-model="duration.m" class="w-14 text-center tabular-nums" inputmode="numeric" maxlength="3" :aria-label="t('edit.minutes')" @blur="saveDuration" @keydown.enter="!isComposing($event) && saveDuration()" />
                     <span aria-hidden="true">:</span>
-                    <Input :id="`${prefix}-s`" v-model="duration.s" class="w-14 text-center tabular-nums" inputmode="numeric" maxlength="4" :aria-label="t('edit.seconds')" @blur="saveDuration" @keydown.enter="saveDuration" />
+                    <Input :id="`${prefix}-s`" v-model="duration.s" class="w-14 text-center tabular-nums" inputmode="numeric" maxlength="4" :aria-label="t('edit.seconds')" @blur="saveDuration" @keydown.enter="!isComposing($event) && saveDuration()" />
                   </div>
                 </SettingsRow>
                 <SettingsRow :label="t('edit.repeat')" :hint="t('edit.repeatHint')">
                   <Switch :model-value="item.repeat" :aria-label="t('edit.repeat')" @update:model-value="(on: boolean) => updateClock((clock) => (clock.repeat = on))" />
                 </SettingsRow>
                 <SettingsRow v-if="!item.repeat" :label="t('edit.doneText')" :hint="t('edit.doneTextHint')">
-                  <Input :id="`${prefix}-done`" v-model="doneText" class="w-full" :maxlength="MAX.doneText" :placeholder="t('item.done')" :aria-label="t('edit.doneText')" @blur="saveDoneText" @keydown.enter="saveDoneText" />
+                  <Input :id="`${prefix}-done`" v-model="doneText" class="w-full" :maxlength="MAX.doneText" :placeholder="t('item.done')" :aria-label="t('edit.doneText')" @blur="saveDoneText" @keydown.enter="!isComposing($event) && saveDoneText()" />
                 </SettingsRow>
               </template>
 
@@ -552,10 +553,10 @@ onBeforeUnmount(saveFields);
 
             <template v-else>
               <SettingsRow :label="t('edit.step')" :hint="t('edit.stepHint')">
-                <Input :id="`${prefix}-step`" v-model="step" class="w-24 tabular-nums" inputmode="numeric" :aria-label="t('edit.step')" @blur="saveStep" @keydown.enter="saveStep" />
+                <Input :id="`${prefix}-step`" v-model="step" class="w-24 tabular-nums" inputmode="numeric" :aria-label="t('edit.step')" @blur="saveStep" @keydown.enter="!isComposing($event) && saveStep()" />
               </SettingsRow>
               <SettingsRow :label="t('edit.goal')" :hint="t('edit.goalHint')">
-                <Input :id="`${prefix}-goal`" v-model="goal" class="w-24 tabular-nums" inputmode="numeric" :aria-label="t('edit.goal')" @blur="saveGoal" @keydown.enter="saveGoal" />
+                <Input :id="`${prefix}-goal`" v-model="goal" class="w-24 tabular-nums" inputmode="numeric" :aria-label="t('edit.goal')" @blur="saveGoal" @keydown.enter="!isComposing($event) && saveGoal()" />
               </SettingsRow>
               <SettingsRow :label="t('edit.negative')" :hint="t('edit.negativeHint')">
                 <Switch :model-value="item.negative" :aria-label="t('edit.negative')" @update:model-value="(on: boolean) => updateCounter((counter) => (counter.negative = on))" />
@@ -579,7 +580,7 @@ onBeforeUnmount(saveFields);
                   :aria-label="t('edit.linkAmount', { label: link.label })"
                   @update:model-value="(value: string | number) => (amountDrafts[link.target] = String(value))"
                   @blur="saveLinkAmount(link.target)"
-                  @keydown.enter="saveLinkAmount(link.target)"
+                  @keydown.enter="!isComposing($event) && saveLinkAmount(link.target)"
                 />
                 <Link class="text-muted-foreground size-3.5 flex-none" aria-hidden="true" />
                 <Button variant="ghost" size="icon-sm" :aria-label="t('edit.linkRemove', { label: link.label })" :title="t('edit.linkRemove', { label: link.label })" @click="removeLink(link.target)">
@@ -631,7 +632,7 @@ onBeforeUnmount(saveFields);
                   data-testid="overlay-text"
                   @focusin="textFocused = true"
                   @focusout="leaveText"
-                  @keydown.enter="saveText"
+                  @keydown.enter="!isComposing($event) && saveText()"
                 />
                 <p v-if="problem" class="text-destructive text-xs" role="alert" data-testid="text-problem">{{ problem }} {{ t("edit.textInvalid") }}</p>
                 <div class="flex flex-wrap items-center gap-1" role="group" :aria-label="t('edit.insert')">
