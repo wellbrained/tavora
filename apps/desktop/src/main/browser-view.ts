@@ -56,6 +56,12 @@ export function pageReferrer(pageUrl: string | null): Referrer | undefined {
   return url ? { url: `${url.origin}/`, policy: "strict-origin" } : undefined;
 }
 
+/** A site's home page: its origin and nothing a page could have chosen after it. */
+function siteHome(url: string): string {
+  const parsed = parseUrl(url);
+  return parsed ? `${parsed.origin}/` : url;
+}
+
 /** Whether two addresses are the same once Chromium has written them its way (a slash after the host, lower-case names). */
 function sameAddress(a: string, b: string): boolean {
   return a === b || (parseUrl(a)?.href ?? a) === (parseUrl(b)?.href ?? b);
@@ -175,8 +181,11 @@ export class BrowserPanel {
   private visible = false;
   /** The page's address once it committed; requests of the page are judged against it, unless a public page is on its way (hopUrl). */
   private committedUrl: string | null = null;
-  /** How the navigation that committed the page started: a site-list change moves the page to the other session by it. */
-  private committedStart: NavigationStart = { by: "user" };
+  /**
+   * Whether the user chose the page's very address (typed it, Open, a link they opened in a new tab): a site-list change
+   * then loads it again in the other session. Otherwise the page or a redirect chose it, and only its site's home loads.
+   */
+  private committedChosen = false;
   /** Where the main frame is going (the current hop of a navigation) until it commits or stops. Redirects are judged from it, and the page's requests too while it is public. */
   private hopUrl: string | null = null;
   /** The address last asked for: shown until a page commits, and tried again by Reload when it failed. */
@@ -190,6 +199,8 @@ export class BrowserPanel {
   private ownNavigation: { url: string; start: NavigationStart } | null = null;
   /** How the navigation under way started; its redirects follow the same rule (crossSessionStep). */
   private navigationStart: NavigationStart = { by: "user" };
+  /** The address that navigation started at; a page it ends on elsewhere (a redirect) wasn't the start's choice. */
+  private navigationUrl: string | null = null;
   /**
    * Redirects that moved the page to the other session since a page last committed or the user went somewhere: two sites
    * can't bounce it forever. Nothing counts while the panel asks, so the page can't turn the question into an error.
@@ -316,6 +327,7 @@ export class BrowserPanel {
       this.ownNavigation = null;
       if (event.isSameDocument) return;
       this.hopUrl = event.url;
+      this.navigationUrl = event.url;
       this.navigationStart =
         own && !event.initiator && sameAddress(own.url, event.url)
           ? own.start
@@ -344,8 +356,7 @@ export class BrowserPanel {
       if (!current()) return;
       this.redirectSwitches = 0;
       this.committedUrl = url;
-      // A click the page's navigation came with is used up by it.
-      this.committedStart = this.navigationStart.by === "page" ? { ...this.navigationStart, gesture: false } : this.navigationStart;
+      this.committedChosen = this.navigationStart.by === "user" && this.navigationUrl !== null && sameAddress(this.navigationUrl, url);
       this.hopUrl = null;
       // A page the page behind the question goes to in its own session doesn't end the question: Stay shows it.
       if (!this.asking) {
@@ -358,6 +369,8 @@ export class BrowserPanel {
     });
     contents.on("did-navigate-in-page", (_event, url, isMainFrame) => {
       if (!current() || !isMainFrame) return;
+      // The page put this address there itself (pushState, or its history).
+      if (url !== this.committedUrl) this.committedChosen = false;
       this.committedUrl = url;
       if (isWebUrl(url)) this.options.onAddress(url);
       this.changed();
@@ -454,14 +467,15 @@ export class BrowserPanel {
   /** A navigation that must move to the other session: carried there, or shown so the user can open it (crossSessionStep). */
   private crossSession(url: string, kind: BrowserKind, start: NavigationStart): void {
     const step = crossSessionStep(start);
-    if (step.action === "reissue") return this.open(url, kind, { by: "user", referrer: step.referrer });
+    // Carried over, a page's navigation stays the page's: the address is its choice, and its click is used up by it.
+    if (step.action === "reissue") return this.open(url, kind, start.by === "page" ? start : { by: "user", referrer: step.referrer });
     // One question at a time: what Open opens is the address the panel shows.
     if (this.asking) return;
     this.failed(url, { kind: "otherSession", detail: "" });
   }
 
   /** Whether the panel asks the user about a page's move to the other session (crossSessionStep). */
-  private get asking(): boolean {
+  get asking(): boolean {
     return this.error?.kind === "otherSession";
   }
 
@@ -473,9 +487,18 @@ export class BrowserPanel {
     this.open(url, this.kindFor(url));
   }
 
-  /** Stay on this page, while the panel asks: the page shows again, where it was. */
+  /**
+   * Stay on this page, while the panel asks: the page shows again, where it was, or in the session its site belongs in
+   * now, when a site list changed while the panel asked.
+   */
   stay(): void {
     if (!this.asking) return;
+    this.endAsking();
+    this.siteSettingsChanged();
+  }
+
+  /** Ends the question without opening the address asked about. */
+  private endAsking(): void {
     this.error = null;
     this.requestedUrl = null;
     this.applyVisibility();
@@ -523,18 +546,18 @@ export class BrowserPanel {
   }
 
   /**
-   * The user changed a Browser site list (here, in another panel or in Settings). A page that committed moves to the
-   * session its site belongs in now, as the navigation that brought it there would (crossSessionStep): one the page
-   * went to by itself, or one Tavora reopened, asks first. An address the page only asked for never moves: while the
+   * The user changed a Browser site list (here, in another panel or in Settings): the page shown moves to the session its
+   * site belongs in now. The user chose the site, not the page's address: only an address they chose themselves loads
+   * again there; otherwise the site's home opens, so no address a page picked is loaded like a typed one. While the
    * panel asks, the question stays, and Open decides in the session the site belongs in then.
    */
   siteSettingsChanged(): void {
-    const url = this.asking ? null : this.committedUrl;
-    if (!url || !isWebUrl(url)) return this.changed();
-    const kind = this.kindFor(url);
-    if (kind === this.kind) return this.changed();
+    const url = this.asking ? null : (this.committedUrl ?? this.requestedUrl);
+    const kind = url && isWebUrl(url) ? this.kindFor(url) : this.kind;
+    if (!url || kind === this.kind) return this.changed();
+    const chosen = url === this.committedUrl && this.committedChosen;
     this.redirectSwitches = 0;
-    this.crossSession(url, kind, this.committedStart);
+    this.open(chosen ? url : siteHome(url), kind);
   }
 
   back(): void {
@@ -550,7 +573,7 @@ export class BrowserPanel {
     const history = this.view.webContents.navigationHistory;
     if (!(step < 0 ? history.canGoBack() : history.canGoForward())) return;
     // Like Reload: from the page shown before the question, never the address it asks about.
-    if (this.asking) this.stay();
+    if (this.asking) this.endAsking();
     this.expectOwn(history.getEntryAtIndex(history.getActiveIndex() + step)?.url);
     if (step < 0) history.goBack();
     else history.goForward();
@@ -579,9 +602,9 @@ export class BrowserPanel {
     void this.view.webContents.executeJavaScript("document.exitFullscreen().catch(() => {})", true).catch(() => undefined);
   }
 
-  /** The address to hand to the system browser: the page's own, web only. */
+  /** The address to hand to the system browser: the page's own, web only (never the one the panel asks about). */
   get externalUrl(): string | null {
-    const url = this.committedUrl ?? this.requestedUrl;
+    const url = this.asking ? this.committedUrl : (this.committedUrl ?? this.requestedUrl);
     return url && isWebUrl(url) ? url : null;
   }
 
@@ -601,7 +624,8 @@ export class BrowserPanel {
       canGoBack: history?.canGoBack() ?? false,
       canGoForward: history?.canGoForward() ?? false,
       site: siteOfUrl(url),
-      shared: this.kind === "shared",
+      // From the site list, not the session the page is in: while the panel asks they differ.
+      shared: parsed ? this.options.isSharedSite(url) : this.kind === "shared",
       adblock: parsed ? this.options.adblockOn(url) : true,
       blocked: this.blocked,
       error: this.status === "crashed" ? { kind: "crashed", detail: "" } : this.error,
@@ -659,7 +683,7 @@ export class BrowserPanel {
 
   reload(): void {
     // Reload while the panel asks reloads the page shown before, never the address it asks about.
-    if (this.asking) this.stay();
+    if (this.asking) this.endAsking();
     if (this.status === "crashed" || this.error) {
       const url = this.requestedUrl ?? this.committedUrl;
       this.setStatus("ready");

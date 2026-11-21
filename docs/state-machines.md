@@ -113,9 +113,10 @@ the pull request that makes it explicit.
   don't count, and other failures and the page's own commits don't replace it. How the navigation under way started is already one union
   (`navigationStart`: `user | page | restored`, with `crossSessionStep` as its step and tests; `restored` is the saved
   address `reopen` loads, Reload, Back, Forward and Try again, whose redirects to the other session ask); `ownNavigation` marks Tavora's own
-  load, with its start, until Chromium reports it (or the load stops or fails first). `committedStart` keeps the start of the page that
-  committed (a page's click used up): when a site list changes (`siteSettingsChanged`), only that page moves to the other
-  session, through `crossSessionStep` with it; while the panel asks, nothing moves.
+  load, with its start, until Chromium reports it (or the load stops or fails first). `committedChosen` says whether the user chose the
+  committed page's very address (a `user` start that ended where it began, no pushState since): when a site list changes
+  (`siteSettingsChanged`), that address loads again in the other session, any other page loads its site's home. While the
+  panel asks nothing moves; Stay checks again. A page's navigation carried to the other session keeps its `page` start.
 
 - **Window visibility** (`main/host.ts`: `windowHidden`, `windowBehind`, `windowClosed`) → `front | behind | hidden | closed`.
 
