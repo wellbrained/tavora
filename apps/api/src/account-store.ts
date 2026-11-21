@@ -152,6 +152,11 @@ export interface KeyRequest {
   requestedAt: number;
   /** When the maintainer turned it down; null while it waits or once it is signed. */
   declinedAt: number | null;
+  /**
+   * Whether the account's address was told of the request as it is now (new, or marked leaked): false when no notice
+   * went out, null for a request from before this was kept.
+   */
+  notified: boolean | null;
 }
 
 export type NameChange = { ok: true; developer: Developer } | { ok: false; reason: "name-taken" | "name-reserved" | "name-too-soon"; nextChangeAt?: number };
@@ -205,6 +210,7 @@ interface KeyRequestRow {
   leaked: number;
   requested_at: number;
   declined_at: number | null;
+  notified?: number | null;
 }
 
 const keyRequestOf = (row: KeyRequestRow): KeyRequest => ({
@@ -214,6 +220,7 @@ const keyRequestOf = (row: KeyRequestRow): KeyRequest => ({
   leaked: row.leaked === 1,
   requestedAt: row.requested_at,
   declinedAt: row.declined_at,
+  notified: row.notified === null || row.notified === undefined ? null : row.notified === 1,
 });
 
 /** Why an account is suspended, as the maintainer recorded it. */
@@ -348,6 +355,10 @@ export class AccountStore {
     // When the day's emails for new addresses ran out came later too.
     const mailColumns = (this.db.prepare("pragma table_info(mail_days)").all() as unknown as { name: string }[]).map((column) => column.name);
     if (!mailColumns.includes("new_full_at")) this.db.exec("alter table mail_days add column new_full_at integer");
+    // Whether a key request's address was told of it (setKeyRequestNotified); null for requests from before it. An older
+    // service writes requests without it, which then read as null.
+    const keyRequestColumns = (this.db.prepare("pragma table_info(key_requests)").all() as unknown as { name: string }[]).map((column) => column.name);
+    if (!keyRequestColumns.includes("notified")) this.db.exec("alter table key_requests add column notified integer");
     const columns = (this.db.prepare("pragma table_info(accounts)").all() as unknown as { name: string }[]).map((column) => column.name);
     if (columns.includes("discord_id")) return;
     const before = (this.db.prepare("select count(*) as n from accounts").get() as { n: number }).n;
@@ -845,7 +856,7 @@ export class AccountStore {
     }
     this.db
       .prepare(
-        "insert into key_requests (old, account_id, new, leaked, requested_at, declined_at) values (?, ?, ?, ?, ?, null) on conflict (old) do update set account_id = excluded.account_id, new = excluded.new, leaked = excluded.leaked, requested_at = excluded.requested_at, declined_at = null",
+        "insert into key_requests (old, account_id, new, leaked, requested_at, declined_at, notified) values (?, ?, ?, ?, ?, null, null) on conflict (old) do update set account_id = excluded.account_id, new = excluded.new, leaked = excluded.leaked, requested_at = excluded.requested_at, declined_at = null, notified = null",
       )
       .run(old, accountId, next, leaked ? 1 : 0, now);
     return "ok";
@@ -865,6 +876,11 @@ export class AccountStore {
       }
     }
     return chain;
+  }
+
+  /** Keeps whether the account's address was told of the request as it is now. */
+  setKeyRequestNotified(old: string, notified: boolean): void {
+    this.db.prepare("update key_requests set notified = ? where old = ?").run(notified ? 1 : 0, old);
   }
 
   keyRequest(old: string): KeyRequest | null {

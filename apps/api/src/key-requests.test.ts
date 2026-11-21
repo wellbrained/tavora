@@ -92,7 +92,7 @@ describe("asking to replace a lost key", () => {
   });
 
   it("takes 3 new requests a day, tells the address at most 3 times, and leaves the account's own codes the rest of its 5 (audit)", async () => {
-    const { request, inbox, developer, store, clock } = setup();
+    const { request, inbox, developer, store, clock, adminCall } = setup();
     const dev = await developer("dev@example.com");
     // Seven more keys of the account, each asked to be replaced: 3 new requests a day, a notice each.
     const olds = Array.from({ length: 7 }, () => generateKeyPairSync("ed25519").privateKey);
@@ -102,11 +102,22 @@ describe("asking to replace a lost key", () => {
     expect(answers).toEqual([200, 200, 200, 429, 429, 429, 429, 429]);
     expect(((await (await request("GET", "/v1/account/developer", undefined, dev.token)).json()) as Answer).requests).toHaveLength(3);
     expect(inbox.mails()).toHaveLength(3);
-    // Asking again for one that waits is no new request.
+    // Asking again for one that waits is no new request, and needs no notice.
     expect((await request("POST", `/v1/account/keys/${dev.old}/replace`, { new: dev.new, leaked: false }, dev.token)).status).toBe(200);
-    // Marking one leaked is a notice too: none is left of the 3 today, and the request still changes.
+    // A leaked key past the 3 is still reported, without a notice: the 3 notices are used, and the request says so.
+    const extra = generateKeyPairSync("ed25519").privateKey;
+    store.linkKey(dev.accountId, fingerprintOf(extra), rawKey(extra).toString("base64"), clock.now);
+    expect((await request("POST", `/v1/account/keys/${fingerprintOf(extra)}/replace`, { new: dev.new, leaked: true }, dev.token)).status).toBe(200);
+    expect(store.keyRequest(fingerprintOf(extra))).toMatchObject({ leaked: true, notified: false });
+    expect(store.keyRequest(dev.old)).toMatchObject({ notified: true });
+    // The review page shows which requests' address wasn't told.
+    const listed = (await (await adminCall("/api/keys")).json()) as { requests: { old: string; notified: boolean | null }[] };
+    expect(listed.requests.find((entry) => entry.old === fingerprintOf(extra))).toMatchObject({ notified: false });
+    expect(listed.requests.filter((entry) => entry.notified === true)).toHaveLength(3);
+    // Marking one leaked is a notice too: none is left of the 3 today, and the mark still goes in, noted as untold.
     const leaked = (await (await request("POST", `/v1/account/keys/${dev.old}/replace`, { new: dev.new, leaked: true }, dev.token)).json()) as Answer;
     expect(leaked.requests.find((entry) => entry.old === dev.old)).toMatchObject({ leaked: true });
+    expect(store.keyRequest(dev.old)).toMatchObject({ notified: false });
     expect(inbox.mails()).toHaveLength(3);
     // The owner's codes share the 5 with the notices: 2 are left today.
     for (let i = 0; i < 2; i++) {
@@ -114,9 +125,6 @@ describe("asking to replace a lost key", () => {
       clock.now += 15 * 60_000;
     }
     expect((await request("POST", "/v1/account/delete/code", {}, dev.token)).status).toBe(429);
-    // The next day there are 3 more.
-    clock.now += 24 * 60 * 60_000;
-    expect((await request("POST", `/v1/account/keys/${fingerprintOf(olds[3]!)}/replace`, { new: dev.new, leaked: false }, dev.token)).status).toBe(200);
   });
 
   it("needs both keys linked to this account, and one open request per key", async () => {
@@ -201,7 +209,7 @@ describe("a key reported as leaked", () => {
     // The review page still lists it, with nothing about the account.
     const listed = (await (await adminCall("/api/keys")).json()) as { requests: Record<string, unknown>[] };
     expect(listed.requests).toEqual([
-      { old: dev.old, new: null, account: null, email: null, developer: null, leaked: true, requestedAt: "2026-10-20T12:00:00.000Z", newLinkedAt: null, status: "waiting" },
+      { old: dev.old, new: null, account: null, email: null, developer: null, leaked: true, requestedAt: "2026-10-20T12:00:00.000Z", newLinkedAt: null, status: "waiting", notified: null },
     ]);
     const other = await developer("other@example.com");
     expect(store.linkKey(other.accountId, dev.old, rawKey(dev.lost).toString("base64"), clock.now)).toBe("leaked");
@@ -278,7 +286,18 @@ describe("the review page's key requests", () => {
 
     const listed = (await (await adminCall("/api/keys")).json()) as { requests: Record<string, unknown>[] };
     expect(listed.requests).toEqual([
-      { old: dev.old, new: dev.new, account: dev.accountId, email: "dev@example.com", developer: null, leaked: true, requestedAt: "2026-10-20T12:00:00.000Z", newLinkedAt: "2026-10-20T12:00:00.000Z", status: "waiting" },
+      {
+        old: dev.old,
+        new: dev.new,
+        account: dev.accountId,
+        email: "dev@example.com",
+        developer: null,
+        leaked: true,
+        requestedAt: "2026-10-20T12:00:00.000Z",
+        newLinkedAt: "2026-10-20T12:00:00.000Z",
+        status: "waiting",
+        notified: true,
+      },
     ]);
     const successions = (await (await adminCall("/api/keys/successions.json")).json()) as Succession[];
     expect(successions).toEqual([

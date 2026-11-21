@@ -50,7 +50,7 @@ export interface AccountOptions {
   ownerMailRateLimiter?: RateLimiter;
   /**
    * New key replacement requests one account makes a day: 3 by default, so requests chained from key to key can't fill
-   * the review queue. Marking a waiting one as leaked always goes through.
+   * the review queue. A key reported as leaked, new or marked on a waiting request, always goes through.
    */
   keyRequestRateLimiter?: RateLimiter;
   /**
@@ -246,7 +246,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
    * can't spend the day's emails: owners' emails take at most 5 an account and 40 a network a day. A refusal counts in
    * none of them.
    */
-  const ownerShare = (context: Context, accountId: string, ...more: [RateLimiter, string][]) => dayShares(context, [[ownerMailLimiter, accountId], ...more]);
+  const ownerShare = (context: Context, accountId: string) => dayShares(context, [[ownerMailLimiter, accountId]]);
   /**
    * Whether a delete code may come out of the reserved emails (MAIL_RESERVED) for the account: only for one made before
    * today, once a day per account and twice per network, so neither accounts nor a network made for it can spend them.
@@ -587,24 +587,41 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
       return context.json({ error: "Send { new, leaked, language }.", reason: "bad-request" }, 400);
     }
     const before = store.keyRequest(old);
-    // A request made anew (not one already waiting) counts in the account's 3 a day, and only once the store took it.
+    // A request made anew (not one already waiting) counts in the account's 3 a day, and only once the store took it; a
+    // leaked key is always reported.
     const fresh = !before || before.declinedAt !== null;
-    const wait = fresh ? keyRequestLimiter.peek(account.id, now()) : 0;
+    const capped = fresh && !input.leaked;
+    const wait = capped ? keyRequestLimiter.peek(account.id, now()) : 0;
     if (wait > 0) return tooMany(context, wait, "You asked to replace 3 keys today. Try again tomorrow.");
+    // Whether this changes the request (new, or now marked leaked), and so needs a notice to the account's address.
+    const changes = fresh || (input.leaked && !before.leaked && before.new === input.new);
+    const client = clientKey(context.req.raw);
+    // The notice counts in the client's and its network's day shares (as for codes), the account's own 5 and its 3 key
+    // notices a day, so neither accounts made for it nor chained requests can spend the day's emails. What this sign-in
+    // spends itself (its client's share, the account's) refuses the request rather than leave the address untold, so a
+    // stolen sign-in can't hide a replacement; only a leaked report always goes in. What others spend (the network's
+    // share, the day's emails) never stops a replacement: it goes in without a notice. Either way the request keeps
+    // whether its address was told (`notified`), which the maintainer sees before signing it.
+    const own: [RateLimiter, string][] = [
+      [codeDayLimiter, client],
+      [ownerMailLimiter, account.id],
+      [keyNoticeLimiter, account.id],
+    ];
+    const notice = changes && account.email !== null && !usedUp("sign-in");
+    const ownWait = notice ? Math.max(0, ...own.map(([limiter, key]) => limiter.peek(key))) : 0;
+    if (ownWait > 0 && !input.leaked) return tooMany(context, ownWait, "Too many emails to your address today. Try again tomorrow.");
     const result = store.requestReplacement(account.id, old, input.new, input.leaked, now(), options.officialPins ?? OFFICIAL_PINS, options.trust?.signed("successions")?.successions ?? []);
     if (result === "same") return context.json({ error: "Pick another key to replace it with.", reason: "bad-request" }, 400);
     if (result === "not-linked") return context.json({ error: "Both keys must be linked to this account.", reason: "not-found" }, 404);
     if (result === "pinned") return context.json({ error: "Both keys must be linked to this account.", reason: "not-found" }, 404);
     if (result === "open") return context.json({ error: "This key already waits to be replaced.", reason: "key-in-request" }, 409);
-    if (fresh) keyRequestLimiter.check(account.id, now());
-    const after = store.keyRequest(old);
-    const isNew = fresh || before.leaked !== after?.leaked;
-    // Best effort: the request stands whatever happens to its notice, so nobody stops a replacement by spending the
-    // shares below first. The notice goes out only while the day's sign-in emails have room and every share takes it:
-    // the client's and its network's (as for codes), the account's own 5, and its 3 key notices a day, so neither
-    // accounts made for it nor chained requests can spend the day's emails.
-    if (isNew && account.email && !usedUp("sign-in") && ownerShare(context, account.id, [keyNoticeLimiter, account.id]) === 0) {
-      await send(context, keyRequestMail(account.email, old, input.leaked, mailLanguage(input.language)));
+    if (capped) keyRequestLimiter.check(account.id, now());
+    if (changes) {
+      let notified = false;
+      if (notice && account.email && checkAll([...own, [codeNetworkLimiter, networkOf(client)]]) === 0) {
+        notified = (await send(context, keyRequestMail(account.email, old, input.leaked, mailLanguage(input.language)))) === null;
+      }
+      store.setKeyRequestNotified(old, notified);
     }
     return context.json(developerAnswer(account.id));
   });

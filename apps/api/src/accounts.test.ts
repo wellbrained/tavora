@@ -1028,20 +1028,15 @@ describe("emails that follow a request (audit)", () => {
       for (const key of keys) context.store.linkKey(id, key, "AAAA", context.clock.now);
       return { email, token, id, keys };
     });
-  /** Each account asks for k0 -> k1, marks it leaked, k1 -> k2, marks it leaked, then k2 -> k3: 5 notices if nothing held them. */
+  /** Each account asks for k0 -> k1, k1 -> k2, k2 -> k3 and k3 -> k4, chained: 4 notices if nothing held them. */
   const chain = async (context: ReturnType<typeof setup>, developer: ReturnType<typeof developers>[number], client: string) => {
     const answers: number[] = [];
-    for (const [old, next, leaked] of [
-      [0, 1, false],
-      [0, 1, true],
-      [1, 2, false],
-      [1, 2, true],
-      [2, 3, false],
-    ] as const) {
-      answers.push((await context.call("POST", `/keys/${developer.keys[old]}/replace`, { new: developer.keys[next], leaked }, developer.token, client)).status);
+    for (let k = 0; k < 4; k++) {
+      answers.push((await context.call("POST", `/keys/${developer.keys[k]}/replace`, { new: developer.keys[k + 1], leaked: false }, developer.token, client)).status);
     }
     return answers;
   };
+  const adminKeys = (store: AccountStore) => store.allKeyRequests();
 
   it("counts key replacement notices in the client's day share, 3 an account a day, and keeps every request (audit)", async () => {
     // As the audit planned it, with two more accounts: 50 a day (30 for sign-ins), every request from one client.
@@ -1049,16 +1044,20 @@ describe("emails that follow a request (audit)", () => {
     const { call, store, clock, inbox, oldAccount } = context;
     oldAccount("victim@example.com");
     const client = "198.51.100.7";
-    for (const developer of developers(context, 8, "a")) {
-      expect(await chain(context, developer, client)).toEqual([200, 200, 200, 200, 200]);
-      expect(store.keyRequests(developer.id)).toHaveLength(3);
-      expect((await call("POST", `/keys/${developer.keys[3]}/replace`, { new: developer.keys[4], leaked: false }, developer.token, client)).status).toBe(429);
-    }
-    // 3 an account until the client's 20 were used: the seventh account's third notice and the eighth's don't go out,
-    // and their requests stand all the same. A fourth request in the chain is one too many for the day.
+    const accounts = developers(context, 8, "a");
+    const answers = [];
+    for (const developer of accounts) answers.push(await chain(context, developer, client));
+    // 3 requests an account a day, each told, until the client's 20 were used: then this client's requests are refused
+    // rather than left untold, and nothing is stored for them.
+    expect(answers).toEqual([...Array(6).fill([200, 200, 200, 429]), [200, 200, 429, 429], [429, 429, 429, 429]]);
     const to = (email: string) => inbox.mails().filter((mail) => mail.to === email).length;
     expect([to("a0@attacker.example"), to("a6@attacker.example"), to("a7@attacker.example")]).toEqual([3, 2, 0]);
     expect(store.mailsSent(utcDay(clock.now))).toBe(20);
+    expect(adminKeys(store).every((request) => request.notified === true)).toBe(true);
+    expect(store.keyRequests(accounts[7]!.id)).toHaveLength(0);
+    // A leaked key is always reported, also then: it goes in, noted as untold.
+    expect((await call("POST", `/keys/${accounts[7]!.keys[0]}/replace`, { new: accounts[7]!.keys[1], leaked: true }, accounts[7]!.token, client)).status).toBe(200);
+    expect(store.keyRequest(accounts[7]!.keys[0]!)).toMatchObject({ leaked: true, notified: false });
     // The client's share is spent for its codes as well; everyone else still signs in.
     expect((await call("POST", "/code", { email: "a0@attacker.example" }, undefined, client)).status).toBe(429);
     expect((await call("POST", "/code", { email: "victim@example.com" }, undefined, "203.0.113.9")).status).toBe(202);
@@ -1069,11 +1068,14 @@ describe("emails that follow a request (audit)", () => {
     const context = setup({ mailDailyLimit: 100 });
     const { call, store, clock, oldAccount } = context;
     oldAccount("victim@example.com");
-    // 15 accounts, each from its own /64 of one /48: 45 notices if only the accounts' own limits held them.
+    // 15 accounts, each from its own /64 of one /48: 45 notices if only the accounts' own limits held them. The network's
+    // share is others' too, so it never stops a request: past it, they go in untold, and the review page says so.
     for (const [n, developer] of developers(context, 15, "b").entries()) {
-      expect(await chain(context, developer, `2001:db8:1:${n}::/64`)).toEqual([200, 200, 200, 200, 200]);
+      expect(await chain(context, developer, `2001:db8:1:${n}::/64`)).toEqual([200, 200, 200, 429]);
     }
     expect(store.mailsSent(utcDay(clock.now))).toBe(40);
+    const requests = adminKeys(store);
+    expect([requests.length, requests.filter((request) => request.notified === false).length]).toEqual([45, 5]);
     expect((await call("POST", "/code", { email: "victim@example.com" }, undefined, "203.0.113.9")).status).toBe(202);
   });
 

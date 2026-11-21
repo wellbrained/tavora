@@ -431,7 +431,19 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
   const trust = () => (catalog ? catalogTrust(catalog, catalogueKey) : null);
   app.get("/api/keys", (context) => {
     const lists = trust();
-    type Row = { old: string; new: string | null; account: string | null; email: string | null; developer: string | null; leaked: boolean; requestedAt: string; newLinkedAt: string | null; status: string };
+    type Row = {
+      old: string;
+      new: string | null;
+      account: string | null;
+      email: string | null;
+      developer: string | null;
+      leaked: boolean;
+      requestedAt: string;
+      newLinkedAt: string | null;
+      status: string;
+      /** Whether the account's address was told of the request as it is now; null when not known (from before, or a leaked report alone). */
+      notified: boolean | null;
+    };
     const requests = (accounts?.allKeyRequests() ?? []).map((request): Row => {
       const linkedAt = accounts?.keyLinkedAt(request.new) ?? null;
       return {
@@ -444,6 +456,7 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
         requestedAt: new Date(request.requestedAt).toISOString(),
         newLinkedAt: linkedAt === null ? null : new Date(linkedAt).toISOString(),
         status: keyRequestStatus(request, lists),
+        notified: request.notified,
       };
     });
     // Keys reported as leaked whose request went with the account: only the key and when it was reported are kept.
@@ -460,6 +473,7 @@ export function createAdminApp({ token, submissions, state, store, catalog, acco
         requestedAt: new Date(leaked.requestedAt).toISOString(),
         newLinkedAt: null,
         status: signedRevoked(leaked.fingerprint, lists) ? "done" : "waiting",
+        notified: null,
       });
     }
     requests.sort((a, b) => a.requestedAt.localeCompare(b.requestedAt));

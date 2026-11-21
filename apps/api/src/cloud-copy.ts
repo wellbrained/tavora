@@ -33,7 +33,7 @@ export const NETWORK_DAY_LIMIT = 2 * 1024 * 1024 * 1024;
 /**
  * The share of the total that the accounts of one network may hold together, for good (COPY_NETWORK_SHARE): 2 GiB of the
  * default 20, about 20 full copies or hundreds of usual ones, so filling the total takes at least ten networks at once.
- * An account counts for the network it first stored from, kept only as a mark (networkMark()).
+ * An account counts for the network it last added counted bytes from, kept only as a mark (networkMark()).
  */
 export const NETWORK_SHARE = 0.1;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -261,10 +261,23 @@ export class CopyStore {
     if (pooled <= 0) return "ok";
     if (this.pooledTotal() + pooled > this.totalLimit) return "full";
     if (who && this.isYoung(who, now) && this.youngBytes(now) + pooled > Math.floor(this.totalLimit * this.newAccountShare)) return "share";
-    const network = this.networkOf(accountId, who);
-    if (network !== undefined && this.networkShare > 0 && this.networkHeld(network, accountId) + this.held(accountId) + pooled > this.networkCap()) return "share";
+    // The request's network takes the whole account with these bytes: the account counts for it from now on (remember()).
+    if (who?.network !== undefined && this.networkShare > 0 && this.networkHeld(this.networkMark(who.network), accountId) + this.held(accountId) + pooled > this.networkCap()) return "share";
     if (who?.network !== undefined && this.networkDayLimit > 0 && this.networkUsed(who.network, now) + pooled > this.networkDayLimit) return "share";
     return "ok";
+  }
+
+  /** The log hears once when the total or the disk is full, not for one account's or network's share. */
+  private refused(fits: "ok" | "full" | "share"): boolean {
+    if (fits === "ok") {
+      this.warned = false;
+      return false;
+    }
+    if (fits === "full") {
+      if (!this.warned) console.warn("[tavora-api] The cloud copies have no room: new parts and versions are refused until there is some.");
+      this.warned = true;
+    }
+    return true;
   }
 
   private networkCap(): number {
@@ -277,13 +290,6 @@ export class CopyStore {
    */
   private networkMark(network: string): string {
     return createHmac("sha256", this.networkSalt).update(`copy-network:${network}`).digest("hex").slice(0, 16);
-  }
-
-  /** The mark of the network the account's bytes count for: the one it first stored from, or the request's; none without `who`. */
-  private networkOf(accountId: string, who: CopyHolder | undefined): string | undefined {
-    if (who?.network === undefined) return undefined;
-    const row = this.db.prepare("select network from holders where account_id = ?").get(accountId) as { network: string | null } | undefined;
-    return row?.network ?? this.networkMark(who.network);
   }
 
   /** Bytes of the account that count against the total: its manifest and its parts, but those on top of its copy. */
@@ -308,20 +314,11 @@ export class CopyStore {
 
   /**
    * Room for `adding` more bytes (fits()): when there is none, unused parts are swept first (at most once a minute), then it
-   * checks again. The log hears once when the total or the disk is full, not for one account's or network's share.
+   * checks again.
    */
   private room(accountId: string, adding: number, pooled: () => number, who: CopyHolder | undefined, now: number): boolean {
     if (this.fits(accountId, adding, pooled(), who, now) !== "ok" && now - this.lastSweep >= SWEEP_GAP_MS) this.sweep(now);
-    const fits = this.fits(accountId, adding, pooled(), who, now);
-    if (fits === "ok") {
-      this.warned = false;
-      return true;
-    }
-    if (fits === "full") {
-      if (!this.warned) console.warn("[tavora-api] The cloud copies have no room: new parts and versions are refused until there is some.");
-      this.warned = true;
-    }
-    return false;
+    return !this.refused(this.fits(accountId, adding, pooled(), who, now));
   }
 
   private isYoung(who: CopyHolder, now: number): boolean {
@@ -350,12 +347,18 @@ export class CopyStore {
     this.networkBytes.set(who.network, { bytes, resetAt: now + DAY_MS });
   }
 
-  /** Keeps when the account was made and the network it first stored from (a holder from before networks gets this one). */
-  private remember(accountId: string, who: CopyHolder | undefined): void {
+  /**
+   * Keeps when the account was made and the network it counts for: the request's when it added counted bytes (`moved`, the
+   * share was checked for it), else the one it had (a holder without one gets the request's).
+   */
+  private remember(accountId: string, who: CopyHolder | undefined, moved: boolean): void {
     if (!who) return;
+    const mark = who.network === undefined ? null : this.networkMark(who.network);
     this.db
-      .prepare("insert into holders (account_id, since, network) values (?, ?, ?) on conflict (account_id) do update set network = coalesce(holders.network, excluded.network)")
-      .run(accountId, who.since, who.network === undefined ? null : this.networkMark(who.network));
+      .prepare(
+        `insert into holders (account_id, since, network) values (?, ?, ?) on conflict (account_id) do update set network = ${moved ? "coalesce(excluded.network, holders.network)" : "coalesce(holders.network, excluded.network)"}`,
+      )
+      .run(accountId, who.since, mark);
   }
 
   /**
@@ -458,7 +461,7 @@ export class CopyStore {
         free -= uncounted;
         insert.run(accountId, part.id, part.data, part.data.length, now, part.data.length - uncounted);
       }
-      this.remember(accountId, who);
+      this.remember(accountId, who, drawn > 0);
       this.db.exec("commit");
     } catch (error) {
       this.db.exec("rollback");
@@ -489,43 +492,56 @@ export class CopyStore {
    * Makes `manifest` with `parts` the account's copy, if the PC started from the current version
    * (0 when there is none). Parts no longer used are dropped. A manifest bigger than the one it replaces needs room like new
    * parts do (addParts, `who` too), and so does a version whose parts grew past the saved one's with bytes that came out of
-   * the room for the next version (replacing()): once saved, the total, the young accounts' slice and the network's day must
-   * still hold them, or the save answers `unavailable`. So uploading and saving again never grows a copy past them.
+   * the room for the next version (replacing()): once saved, the total, the young accounts' slice, the network's share and
+   * its day must still hold the copy as it will be, or the save answers `unavailable`. So uploading and saving again never
+   * grows a copy past them, and the parts the save drops never count against it.
    */
   swap(accountId: string, base: number, manifest: Uint8Array, parts: Uint8Array[], now: number, who?: CopyHolder): SwapResult {
     const current = this.info(accountId);
     if ((current?.version ?? 0) !== base) return { ok: false, reason: "copy-changed", version: current?.version ?? 0 };
     const previous = (this.db.prepare("select length(manifest) as bytes from copies where account_id = ?").get(accountId) as { bytes: number } | undefined)?.bytes ?? 0;
     const growth = manifest.length - previous;
-    // Before the parts are looked up: a sweep for room may drop old unused ones, which then count as missing.
-    if (!this.room(accountId, growth, () => growth, who, now)) return { ok: false, reason: "unavailable" };
-    const sizeOf = this.db.prepare("select size, created_at, charged from parts where account_id = ? and id = ?");
     const keep = new Map<string, Uint8Array>();
     for (const id of parts) keep.set(Buffer.from(id).toString("hex"), id);
-    let size = manifest.length;
-    let missing = 0;
-    let charged = 0;
-    // Saved no earlier than its newest part, so sweep() never takes a part this version uses for one stored after it.
-    let savedAt = now;
-    for (const id of keep.values()) {
-      const row = sizeOf.get(accountId, id) as { size: number; created_at: number | null; charged: number | null } | undefined;
-      if (!row) {
-        missing++;
-        continue;
+    const sizeOf = this.db.prepare("select size, created_at, charged from parts where account_id = ? and id = ?");
+    /** The version as it would be saved now, and whether it fits; null `fits` when it can't be saved anyway. */
+    const plan = () => {
+      let size = manifest.length;
+      let missing = 0;
+      let charged = 0;
+      // Saved no earlier than its newest part, so sweep() never takes a part this version uses for one stored after it.
+      let savedAt = now;
+      for (const id of keep.values()) {
+        const row = sizeOf.get(accountId, id) as { size: number; created_at: number | null; charged: number | null } | undefined;
+        if (!row) {
+          missing++;
+          continue;
+        }
+        size += row.size;
+        charged += row.charged ?? 0;
+        if (row.created_at !== null) savedAt = Math.max(savedAt, row.created_at);
       }
-      size += row.size;
-      charged += row.charged ?? 0;
-      if (row.created_at !== null) savedAt = Math.max(savedAt, row.created_at);
+      // Growth of the parts past the saved version's that nothing counted yet: it needs room as if it were uploaded now.
+      const savedParts = current ? current.size - previous : 0;
+      const uncounted = Math.max(0, size - manifest.length - savedParts - charged);
+      const adding = uncounted + Math.max(0, growth);
+      // Once saved, every byte the version keeps counts against the total, and this account has none on top any more.
+      const accountOnTop = this.countOnTop(accountId);
+      const pooledAfter = this.total + growth - (this.stored(accountId) - (size - manifest.length)) - (this.onTop - accountOnTop);
+      const fits = missing > 0 || size > COPY_LIMIT ? null : adding > 0 ? this.keeps(accountId, pooledAfter, size, adding, growth, who, now) : "ok";
+      return { size, missing, savedAt, adding, accountOnTop, fits };
+    };
+    let planned = plan();
+    // No room: unused parts are swept first (at most once a minute), then it is looked at again; a part the sweep dropped
+    // is then missing.
+    if (planned.fits !== null && planned.fits !== "ok" && now - this.lastSweep >= SWEEP_GAP_MS) {
+      this.sweep(now);
+      planned = plan();
     }
+    const { size, missing, savedAt, adding, accountOnTop, fits } = planned;
     if (missing > 0) return { ok: false, reason: "missing-parts", missing };
     if (size > COPY_LIMIT) return { ok: false, reason: "copy-full", size };
-    // Growth of the parts past the saved version's that nothing counted yet: it needs room as if it were uploaded now.
-    const savedParts = current ? current.size - previous : 0;
-    const uncounted = Math.max(0, size - manifest.length - savedParts - charged);
-    // Once saved, every byte the version keeps counts against the total, and this account has none on top any more.
-    const accountOnTop = this.countOnTop(accountId);
-    const pooledAfter = this.total + growth - (this.stored(accountId) - (size - manifest.length)) - (this.onTop - accountOnTop);
-    if (uncounted > 0 && !this.keeps(accountId, pooledAfter, size, uncounted + Math.max(0, growth), who, now)) return { ok: false, reason: "unavailable" };
+    if (fits !== null && this.refused(fits)) return { ok: false, reason: "unavailable" };
     // After a delete, numbers go on from the deleted copy's, so a PC that still knows that one never takes a new copy for it.
     const version = Math.max(base, this.retired(accountId)) + 1;
     let dropped = 0;
@@ -543,7 +559,7 @@ export class CopyStore {
       }
       // What the version keeps is counted now.
       this.db.prepare("update parts set charged = null where account_id = ?").run(accountId);
-      this.remember(accountId, who);
+      this.remember(accountId, who, adding > 0);
       this.db.exec("commit");
     } catch (error) {
       this.db.exec("rollback");
@@ -551,23 +567,25 @@ export class CopyStore {
     }
     this.total += growth - dropped;
     this.onTop -= accountOnTop;
-    this.countNetwork(who, uncounted + Math.max(0, growth), now);
+    this.countNetwork(who, adding, now);
     this.db.exec("pragma incremental_vacuum");
     return { ok: true, version, size };
   }
 
   /**
-   * Whether a saved version of `size` bytes that adds `adding` bytes nothing counted yet still fits: `pooledAfter` (what
-   * counts against the total once its unused parts went) within the total, the young accounts' slice and its network's
-   * share with this copy as it will be, and the network's bytes for the day.
+   * Whether a saved version of `size` bytes that adds `adding` bytes nothing counted yet (`growth` of them its manifest's)
+   * still fits: the manifest's growth leaves the disk's free space, `pooledAfter` (what counts against the total once its
+   * unused parts went) stays within the total, the copy as it will be within the young accounts' slice and the share of the
+   * request's network, and `adding` within the network's bytes for the day.
    */
-  private keeps(accountId: string, pooledAfter: number, size: number, adding: number, who: CopyHolder | undefined, now: number): boolean {
-    if (pooledAfter > this.totalLimit) return false;
-    if (who && this.isYoung(who, now) && this.youngBytes(now, accountId) + size > Math.floor(this.totalLimit * this.newAccountShare)) return false;
-    const network = this.networkOf(accountId, who);
-    if (network !== undefined && this.networkShare > 0 && this.networkHeld(network, accountId) + size > this.networkCap()) return false;
-    if (who?.network !== undefined && this.networkDayLimit > 0 && this.networkUsed(who.network, now) + adding > this.networkDayLimit) return false;
-    return true;
+  private keeps(accountId: string, pooledAfter: number, size: number, adding: number, growth: number, who: CopyHolder | undefined, now: number): "ok" | "full" | "share" {
+    const free = growth > 0 ? (this.freeBytes?.() ?? null) : null;
+    if (free !== null && free - growth < this.freeFloor) return "full";
+    if (pooledAfter > this.totalLimit) return "full";
+    if (who && this.isYoung(who, now) && this.youngBytes(now, accountId) + size > Math.floor(this.totalLimit * this.newAccountShare)) return "share";
+    if (who?.network !== undefined && this.networkShare > 0 && this.networkHeld(this.networkMark(who.network), accountId) + size > this.networkCap()) return "share";
+    if (who?.network !== undefined && this.networkDayLimit > 0 && this.networkUsed(who.network, now) + adding > this.networkDayLimit) return "share";
+    return "ok";
   }
 
   /** The version of the account's last deleted copy, 0 when none was. */
@@ -587,7 +605,9 @@ export class CopyStore {
       else this.db.prepare("insert into retired (account_id, version) values (?, ?) on conflict (account_id) do update set version = excluded.version").run(accountId, version);
       this.db.prepare("delete from parts where account_id = ?").run(accountId);
       this.db.prepare("delete from copies where account_id = ?").run(accountId);
+      // With the copy goes the network it counted for: the next one counts for the network it is stored from.
       if (forever) this.db.prepare("delete from holders where account_id = ?").run(accountId);
+      else this.db.prepare("update holders set network = null where account_id = ?").run(accountId);
       this.db.exec("commit");
     } catch (error) {
       this.db.exec("rollback");
