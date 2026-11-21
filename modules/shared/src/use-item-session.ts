@@ -24,7 +24,7 @@ export interface UseItemSession<T> {
   loaded: Readonly<Ref<boolean>>;
   /** Resolves with the session when loaded; rejects when it cannot be opened (also in `error`). */
   ready: Promise<ItemSession<T>>;
-  /** Changes the open item; does nothing for none. */
+  /** Changes the open item, once it is open; does nothing for none. */
   update(change: DocumentChangeFn<T>): void;
   pick(id: string | null): Promise<boolean>;
   create(data?: T, title?: string): Promise<string>;
@@ -114,7 +114,13 @@ export function useItemSession<T>(sdk: TavoraSDK, options: OpenItemsOptions<T>):
     error,
     loaded,
     ready,
-    update: (change) => session?.current?.update(change),
+    update: (change) => {
+      if (session) return session.current?.update(change);
+      // Not open yet: the change waits for it, like every other call here.
+      void ready.then((opened) => {
+        if (!disposed) opened.current?.update(change);
+      }, () => undefined);
+    },
     pick: (id) => use((opened) => opened.pick(id)),
     create: (data, title) => use((opened) => opened.create(data, title)),
     rename: (id, title) => use((opened) => opened.rename(id, title)),

@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.59",
+    "date": "2026-11-21",
+    "notes": [
+      "Hardware reads better: calculator keys keep their size, names keep their case, and keyboard focus shows on switches and number fields."
+    ]
+  },
+  {
     "version": "0.1.58",
     "date": "2026-11-21",
     "notes": [
