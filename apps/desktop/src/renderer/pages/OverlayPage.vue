@@ -203,13 +203,13 @@ const stayDetails = computed<Record<string, string>>(() => ({ stay: t("overlays.
           <div class="ml-auto flex flex-wrap items-center gap-2">
             <label class="flex items-center gap-2 text-sm">
               <span class="text-muted-foreground">{{ t("overlays.layout.stay") }}</span>
-              <!-- The choice says what happens; its title says when they go. -->
+              <!-- The choice says what happens; its title says when they go, or, while overlays are off, why it is off. -->
               <Picker
                 v-model="stay"
                 :options="stayOptions"
                 :label="t('overlays.layout.stayLabel')"
                 :disabled="!state?.gameOverlays.enabled"
-                :title="stayDetails[stay]"
+                :title="state?.gameOverlays.enabled ? stayDetails[stay] : t('overlays.stayOff')"
                 testid="layout-stay"
               />
             </label>
