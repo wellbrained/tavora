@@ -4,20 +4,21 @@ import { isIP } from "node:net";
 // Nothing about the request is kept except a counter and a time.
 
 export interface RateLimiter {
-  /** Seconds to wait when over the limit, or 0 when the request may go on. */
-  check(key: string, now?: number): number;
+  /** Seconds to wait when over the limit, or 0 when the request may go on. `cost`: how many it counts as (1 by default). */
+  check(key: string, now?: number, cost?: number): number;
   /** What check() would answer now, without counting anything. */
-  peek(key: string, now?: number): number;
+  peek(key: string, now?: number, cost?: number): number;
 }
 
 /**
  * Several limits for one request, all or none: 0 and each one counted when every limit lets it through, or the longest
- * wait, counting nothing, so a refusal by one doesn't use up the others.
+ * wait, counting nothing, so a refusal by one doesn't use up the others. A limit may name what the request costs in it
+ * (1 by default), for a request that leads to several emails.
  */
-export function checkAll(limits: [RateLimiter, string][], now?: number): number {
-  const wait = Math.max(0, ...limits.map(([limiter, key]) => limiter.peek(key, now)));
+export function checkAll(limits: [RateLimiter, string, number?][], now?: number): number {
+  const wait = Math.max(0, ...limits.map(([limiter, key, cost]) => limiter.peek(key, now, cost)));
   if (wait > 0) return wait;
-  for (const [limiter, key] of limits) limiter.check(key, now);
+  for (const [limiter, key, cost] of limits) limiter.check(key, now, cost);
   return 0;
 }
 
@@ -28,8 +29,10 @@ export function createRateLimiter(options: { limit: number; windowMs: number; ma
   const hits = new Map<string, { count: number; resetAt: number }>();
   const maxClients = options.maxClients ?? MAX_CLIENTS;
   let lastSweep = 0;
+  /** A first request is always let through, as one; one that counts as more than the limit holds is not. */
+  const over = (cost: number) => cost > 1 && cost > options.limit;
   return {
-    check(key, now = Date.now()) {
+    check(key, now = Date.now(), cost = 1) {
       if (now - lastSweep > options.windowMs) {
         lastSweep = now;
         for (const [name, entry] of hits) if (entry.resetAt <= now) hits.delete(name);
@@ -39,16 +42,16 @@ export function createRateLimiter(options: { limit: number; windowMs: number; ma
         // Full: forget the oldest, which a Map keeps first. No sweep here, so a flood of new keys costs
         // one deletion each, never a pass over every client; the regular sweep above still runs once a window.
         if (!entry && hits.size >= maxClients) hits.delete(hits.keys().next().value!);
-        hits.set(key, { count: 1, resetAt: now + options.windowMs });
-        return 0;
+        hits.set(key, { count: cost, resetAt: now + options.windowMs });
+        return over(cost) ? Math.max(1, Math.ceil(options.windowMs / 1000)) : 0;
       }
-      entry.count += 1;
+      entry.count += cost;
       return entry.count > options.limit ? Math.max(1, Math.ceil((entry.resetAt - now) / 1000)) : 0;
     },
-    peek(key, now = Date.now()) {
+    peek(key, now = Date.now(), cost = 1) {
       const entry = hits.get(key);
-      if (!entry || entry.resetAt <= now) return 0;
-      return entry.count + 1 > options.limit ? Math.max(1, Math.ceil((entry.resetAt - now) / 1000)) : 0;
+      if (!entry || entry.resetAt <= now) return over(cost) ? Math.max(1, Math.ceil(options.windowMs / 1000)) : 0;
+      return entry.count + cost > options.limit ? Math.max(1, Math.ceil((entry.resetAt - now) / 1000)) : 0;
     },
   };
 }

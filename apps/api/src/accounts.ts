@@ -48,6 +48,16 @@ export interface AccountOptions {
    * and the notice of a key replacement. 5 by default, for all of them together.
    */
   ownerMailRateLimiter?: RateLimiter;
+  /**
+   * New key replacement requests one account makes a day: 3 by default, so requests chained from key to key can't fill
+   * the review queue. Marking a waiting one as leaked always goes through.
+   */
+  keyRequestRateLimiter?: RateLimiter;
+  /**
+   * Key replacement notices one account gets a day, for new requests and leaked marks together: 3 by default, within
+   * ownerMailRateLimiter's 5, so the owner keeps 2 for their own codes.
+   */
+  keyNoticeRateLimiter?: RateLimiter;
   /** Delete codes one account may draw a day from the reserved emails (MAIL_RESERVED) once sign-in codes ran out: 1 by default. */
   reserveRateLimiter?: RateLimiter;
   /** The same per network (an IPv4 /24, an IPv6 /48): 2 a day by default. */
@@ -190,6 +200,8 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   // Half the owner group's day (account-store.ts CODES_PER_DAY), for every purpose together: a person deletes an account or
   // changes a sign-in method a few times at most, and an account made only to spend the day's emails yields few.
   const ownerMailLimiter = options.ownerMailRateLimiter ?? createRateLimiter({ limit: 5, windowMs: DAY_MS });
+  const keyRequestLimiter = options.keyRequestRateLimiter ?? createRateLimiter({ limit: 3, windowMs: DAY_MS });
+  const keyNoticeLimiter = options.keyNoticeRateLimiter ?? createRateLimiter({ limit: 3, windowMs: DAY_MS });
   const reserveLimiter = options.reserveRateLimiter ?? createRateLimiter({ limit: 1, windowMs: DAY_MS });
   // Two a network: a household where two people delete on a full day, never the 20 for accounts made on one network.
   const reserveNetworkLimiter = options.reserveNetworkRateLimiter ?? createRateLimiter({ limit: 2, windowMs: DAY_MS });
@@ -220,10 +232,13 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   const stranger = (context: Context): CodeAsker => ({ from: networkOf(clientKey(context.req.raw)) });
   const OWNER: CodeAsker = { owner: true };
 
-  /** The client's and its network's day shares of codes (as for sign-in codes): 0 and both counted, or the wait, counting neither. */
-  const dayShares = (context: Context, ...more: [RateLimiter, string][]) => {
+  /**
+   * The client's and its network's day shares of codes (as for sign-in codes): 0 and all counted, or the wait, counting
+   * none. `mails`: how many emails the request leads to, each counted in both shares.
+   */
+  const dayShares = (context: Context, more: [RateLimiter, string][] = [], mails = 1) => {
     const client = clientKey(context.req.raw);
-    return checkAll([[codeDayLimiter, client], [codeNetworkLimiter, networkOf(client)], ...more]);
+    return checkAll([[codeDayLimiter, client, mails], [codeNetworkLimiter, networkOf(client), mails], ...more]);
   };
   /**
    * Seconds before the signed-in account may have another email sent to its own address, or 0 and counted. The same
@@ -231,7 +246,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
    * can't spend the day's emails: owners' emails take at most 5 an account and 40 a network a day. A refusal counts in
    * none of them.
    */
-  const ownerShare = (context: Context, accountId: string) => dayShares(context, [ownerMailLimiter, accountId]);
+  const ownerShare = (context: Context, accountId: string, ...more: [RateLimiter, string][]) => dayShares(context, [[ownerMailLimiter, accountId], ...more]);
   /**
    * Whether a delete code may come out of the reserved emails (MAIL_RESERVED) for the account: only for one made before
    * today, once a day per account and twice per network, so neither accounts nor a network made for it can spend them.
@@ -319,8 +334,9 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const client = clientKey(context.req.raw);
     const wait = codeLimiter.check(client);
     if (wait > 0) return tooMany(context, wait);
-    // A day's share per client and per network, so no one requester spends the day's emails.
-    const dayWait = Math.max(codeDayLimiter.check(client), codeNetworkLimiter.check(networkOf(client)));
+    // A day's share per client and per network, so no one requester spends the day's emails. All or none, so a client
+    // its own share refuses doesn't go on spending its network's.
+    const dayWait = dayShares(context);
     if (dayWait > 0) return tooMany(context, dayWait);
     const input = await body(context);
     const email = normalizeEmail(input.email);
@@ -408,17 +424,26 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const dayWait = dayShares(context);
     if (dayWait > 0) return tooMany(context, dayWait);
     if (usedUp("important")) return usedUpAnswer(context);
+    const at = now();
+    const asker = stranger(context);
     const account = store.accountByEmail(email);
     // Once sign-in codes ran out, a suspended account's code comes out of the reserved emails like an owner's delete code
-    // (drawReserve); when it may not, it is answered like any other address, so this doesn't tell that one is suspended.
-    if (!account || !store.isSuspended(account.id) || (usedUp("sign-in") && !drawReserve(context, account))) {
-      // As long as a send would take, so the time doesn't tell either.
+    // (drawReserve), asked only when the address's limits let the request through, so a refused one never spends it.
+    const mails = account !== null && store.isSuspended(account.id) && store.codeWait(email, at, asker) === 0 && (!usedUp("sign-in") || drawReserve(context, account));
+    if (!mails || !account) {
+      // Any other address, and a suspended account that gets no mail, counts against the address's limits as a code would
+      // and is refused alike, after as long as a send would take: neither the answers nor their times tell whether an
+      // address has an account or is suspended (POST /code does the same).
+      const refused = store.countCodeRequest(email, at, asker);
+      if (refused > 0) return tooMany(context, refused);
       await likeASend();
       return context.json({ status: "sent" }, 202);
     }
-    const request = store.requestCode(email, "delete", account.id, now(), stranger(context));
+    const request = store.requestCode(email, "delete", account.id, at, asker);
     if (!request.ok) return tooMany(context, request.retryAfter);
-    return (await send(context, codeMail("delete", email, request.code, mailLanguage(input.language)))) ?? context.json({ status: "sent" }, 202);
+    // A failed send is answered like an address that gets no mail: only a suspended one could fail.
+    await send(context, codeMail("delete", email, request.code, mailLanguage(input.language)));
+    return context.json({ status: "sent" }, 202);
   });
 
   app.post("/delete/suspended", async (context) => {
@@ -562,16 +587,23 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
       return context.json({ error: "Send { new, leaked, language }.", reason: "bad-request" }, 400);
     }
     const before = store.keyRequest(old);
+    // A request made anew (not one already waiting) counts in the account's 3 a day, and only once the store took it.
+    const fresh = !before || before.declinedAt !== null;
+    const wait = fresh ? keyRequestLimiter.peek(account.id, now()) : 0;
+    if (wait > 0) return tooMany(context, wait, "You asked to replace 3 keys today. Try again tomorrow.");
     const result = store.requestReplacement(account.id, old, input.new, input.leaked, now(), options.officialPins ?? OFFICIAL_PINS, options.trust?.signed("successions")?.successions ?? []);
     if (result === "same") return context.json({ error: "Pick another key to replace it with.", reason: "bad-request" }, 400);
     if (result === "not-linked") return context.json({ error: "Both keys must be linked to this account.", reason: "not-found" }, 404);
     if (result === "pinned") return context.json({ error: "Both keys must be linked to this account.", reason: "not-found" }, 404);
     if (result === "open") return context.json({ error: "This key already waits to be replaced.", reason: "key-in-request" }, 409);
+    if (fresh) keyRequestLimiter.check(account.id, now());
     const after = store.keyRequest(old);
-    const isNew = !before || before.declinedAt !== null || before.leaked !== after?.leaked;
-    // Best effort: the request stands even when the day's emails, or the account's own share of them, are used up. Only
-    // the account's share counts, not its client's or network's, so nobody stops the notice by spending those first.
-    if (isNew && account.email && !usedUp("sign-in") && ownerMailLimiter.check(account.id) === 0) {
+    const isNew = fresh || before.leaked !== after?.leaked;
+    // Best effort: the request stands whatever happens to its notice, so nobody stops a replacement by spending the
+    // shares below first. The notice goes out only while the day's sign-in emails have room and every share takes it:
+    // the client's and its network's (as for codes), the account's own 5, and its 3 key notices a day, so neither
+    // accounts made for it nor chained requests can spend the day's emails.
+    if (isNew && account.email && !usedUp("sign-in") && ownerShare(context, account.id, [keyNoticeLimiter, account.id]) === 0) {
       await send(context, keyRequestMail(account.email, old, input.leaked, mailLanguage(input.language)));
     }
     return context.json(developerAnswer(account.id));
@@ -620,18 +652,22 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     if (email === account.email) return context.json({ error: "That is the address the account has.", reason: "same-email" }, 400);
     // A Discord-only account proves itself with Discord at the end: the code would be no use without it.
     if (!account.email && !options.discord) return discordUnavailable(context);
-    // A code to another address each time would dodge every address's own limit, and Discord-only accounts cost no
-    // mail to make: the same day's shares as sign-in codes (per client and network), and 3 changes a day per account.
-    const dayWait = Math.max(codeDayLimiter.check(client), codeNetworkLimiter.check(networkOf(client)), changeEmailLimiter.check(account.id));
-    if (dayWait > 0) return tooMany(context, dayWait);
+    // The change pays for all its emails up front: with a current address, its code, the new address's code and the
+    // notice to the old address once it changed (POST /email); without one, the new address's code alone.
+    const mails = account.email ? 3 : 1;
     // The new address has no account (that is only said once the codes were right), so its code comes out of new
     // addresses' share of the day's emails, never out of what is kept for accounts' sign-ins, confirmations and deletes.
-    if (usedUp("new", account.email ? 2 : 1)) return usedUpAnswer(context);
+    if (usedUp("new", mails)) return usedUpAnswer(context);
     // Both addresses or neither: the limits are checked before either code is made. The new address isn't the
     // account's yet, so its codes count as a stranger's; the current one's are the owner's own.
     const at = now();
     const waitFor = Math.max(store.codeWait(email, at, stranger(context)), account.email ? store.codeWait(account.email, at, OWNER) : 0);
     if (waitFor > 0) return tooMany(context, waitFor);
+    // A code to another address each time would dodge every address's own limit, and Discord-only accounts cost no
+    // mail to make: the same day's shares as sign-in codes (per client and network, each email counted), and 3 changes
+    // a day per account. All or none, and only for a request nothing above refused.
+    const dayWait = dayShares(context, [[changeEmailLimiter, account.id]], mails);
+    if (dayWait > 0) return tooMany(context, dayWait);
     if (account.email) {
       // The current address's code holds only for this new address.
       const current = store.requestCode(account.email, "confirm-email-change", account.id, at, OWNER, email);
@@ -674,8 +710,9 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     if (store.changeEmail(account.id, email, context.get("session").id) === "taken") {
       return context.json({ error: "That address already has a Tavora account.", reason: "email-taken" }, 409);
     }
-    // The old address hears about it as well.
-    if (account.email) await send(context, emailChangedMail(account.email, email, language));
+    // The old address hears about it as well. Its share was counted with the codes (POST /email/code), and it never
+    // takes from the emails kept for delete codes: on a day whose sign-in emails ran out since, it is left out.
+    if (account.email && !usedUp("sign-in")) await send(context, emailChangedMail(account.email, email, language));
     // The new address just proved itself from this network.
     store.rememberNetwork(email, networkOf(clientKey(context.req.raw)), now());
     return context.json({ account: accountAnswer({ ...account, email }) });
