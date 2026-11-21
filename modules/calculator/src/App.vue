@@ -317,10 +317,10 @@ onMounted(async () => {
     settings.value = parseSettings(await connected.storage.app.get(SETTINGS_KEY));
     const stored = await createListsStore(connected);
     if (unmounted) {
-      void stored.dispose();
+      void stored.dispose().catch(() => undefined);
       return;
     }
-    cleanup.push(() => void stored.dispose());
+    cleanup.push(() => void stored.dispose().catch(() => undefined));
     lists.value = stored;
     cleanup.push(connected.panel.onDialogChange((open) => (dialogOpen.value = open)));
     sdk.value = connected;
@@ -480,7 +480,7 @@ onBeforeUnmount(() => {
             <span class="flex-1" />
             <Button
               v-if="shownTab === 'history' && history.length"
-              variant="ghost"
+              variant="danger"
               size="icon-sm"
               :aria-label="t('history.clear')"
               :title="t('history.clear')"
