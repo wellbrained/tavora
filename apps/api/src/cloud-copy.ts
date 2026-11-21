@@ -656,6 +656,13 @@ export function writeParts(parts: { id: Uint8Array; data: Uint8Array }[]): Uint8
   return out;
 }
 
+/** Whether a new version is refused only because its manifest is over MAX_MANIFEST_BYTES. */
+export function swapManifestTooBig(body: Uint8Array): boolean {
+  if (body.length < 8) return false;
+  const count = new DataView(body.buffer, body.byteOffset, body.byteLength).getUint32(4);
+  return count <= MAX_PARTS && body.length - (8 + count * ID_BYTES) > MAX_MANIFEST_BYTES;
+}
+
 /** A new version: the version it started from and the part count (4 bytes each, big-endian), the part ids, then the manifest. */
 export function readSwap(body: Uint8Array): { base: number; parts: Uint8Array[]; manifest: Uint8Array } | null {
   if (body.length < 8) return null;
@@ -737,7 +744,10 @@ export function copyRoutes({ copies, accounts, clientKey, rateLimiter, now = Dat
   });
 
   app.put("/", async (context) => {
-    const swap = readSwap(await bytes(context));
+    const body = await bytes(context);
+    // The app words a 413 as a copy that is too big, which it is; any other refusal reads as a failed sync.
+    if (swapManifestTooBig(body)) return context.json({ error: "The cloud copy's file list is too long.", reason: "too-big" }, 413);
+    const swap = readSwap(body);
     if (!swap) return bad(context, "Send the version it started from, the part ids and the manifest.");
     const result = copies.swap(context.get("account").id, swap.base, swap.manifest, swap.parts, now(), holder(context));
     if (result.ok) return context.json({ version: result.version, size: result.size });

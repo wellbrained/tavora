@@ -6,7 +6,7 @@ import { mkdtempSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { COPY_LIMIT, copyLimitsFromEnv, CopyStore, FREE_FLOOR, MAX_PART_BYTES, NETWORK_DAY_LIMIT, NETWORK_SHARE, NEW_ACCOUNT_MS, NEW_ACCOUNT_SHARE, readParts, readSwap, STORED_LIMIT, TOTAL_LIMIT, UNUSED_PART_MS, writeParts, type CopyHolder, type CopyStoreOptions } from "./cloud-copy.ts";
+import { COPY_LIMIT, copyLimitsFromEnv, CopyStore, FREE_FLOOR, MAX_MANIFEST_BYTES, MAX_PART_BYTES, NETWORK_DAY_LIMIT, NETWORK_SHARE, NEW_ACCOUNT_MS, NEW_ACCOUNT_SHARE, readParts, readSwap, STORED_LIMIT, TOTAL_LIMIT, UNUSED_PART_MS, writeParts, type CopyHolder, type CopyStoreOptions } from "./cloud-copy.ts";
 import { buildDataset, writeDatabase } from "./dataset.ts";
 import { createTestInbox } from "./mail.ts";
 import { createRateLimiter } from "./rate-limit.ts";
@@ -110,6 +110,19 @@ describe("the cloud copy", () => {
     const back = readParts(new Uint8Array(await (await copy("POST", "/parts/get", token, ask)).arrayBuffer()))!;
     expect(back).toHaveLength(1);
     expect(Buffer.from(back[0]!.data).equals(Buffer.from(parts[1]!.data))).toBe(true);
+  });
+
+  it("answers a manifest over the limit as too big, so the app can say so", async () => {
+    const { copy, signIn } = setup();
+    const token = await signIn("me@example.com");
+    const a = part();
+    await copy("POST", "/parts", token, writeParts([a]));
+    const refused = await copy("PUT", "", token, swapBody(0, [a.id], new Uint8Array(MAX_MANIFEST_BYTES + 1)));
+    expect(refused.status).toBe(413);
+    expect(await refused.json()).toMatchObject({ reason: "too-big" });
+    // Right at the limit it still saves, and a body that is simply broken stays a bad request.
+    expect((await copy("PUT", "", token, swapBody(0, [a.id], new Uint8Array(MAX_MANIFEST_BYTES)))).status).toBe(200);
+    expect((await copy("PUT", "", token, new Uint8Array(4))).status).toBe(400);
   });
 
   it("refuses a version that did not start from the current one", async () => {

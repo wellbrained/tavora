@@ -45,17 +45,17 @@ export function successionEntries(store: AccountStore, trust: CatalogTrust | nul
 /**
  * Every revocation to sign next: the ones in force now, then each waiting leaked key, then each leaked key
  * whose request went with the key's link or its account (leaked_keys). A new one allows the zips the catalog
- * took from that key before the request, so users keep what they installed; the maintainer takes out any
- * that look wrong before signing.
+ * took from that key before it was reported as leaked, so users keep what they installed; the maintainer takes
+ * out any that look wrong before signing.
  */
 export function revocationEntries(store: AccountStore, trust: CatalogTrust | null, catalog: CatalogStore | undefined): Revocation[] {
   const entries = [...(trust?.signed("revocations")?.revoked ?? [])];
-  const add = (fingerprint: string, requestedAt: number) => {
+  const add = (fingerprint: string, reportedAt: number) => {
     if (entries.some((entry) => entry.fingerprint === fingerprint)) return;
-    entries.push({ fingerprint, revoked: listDate(requestedAt), allow: catalog?.signedBy(fingerprint, new Date(requestedAt)) ?? [] });
+    entries.push({ fingerprint, revoked: listDate(reportedAt), allow: catalog?.signedBy(fingerprint, new Date(reportedAt)) ?? [] });
   };
   for (const request of store.allKeyRequests()) {
-    if (request.leaked && keyRequestStatus(request, trust) === "waiting") add(request.old, request.requestedAt);
+    if (request.leaked && keyRequestStatus(request, trust) === "waiting") add(request.old, request.leakedAt ?? request.requestedAt);
   }
   for (const leaked of store.leakedKeys()) add(leaked.fingerprint, leaked.requestedAt);
   return entries;
