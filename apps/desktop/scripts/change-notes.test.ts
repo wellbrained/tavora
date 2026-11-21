@@ -1,7 +1,10 @@
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 // @ts-expect-error - plain JavaScript module run by .github/workflows/version.yml and number.yml
-import { applyNotes, checkPullRequest, mergeTags, nextVersion, parseChangeNote, pullRequestOf, renderEntry, tagsForFiles, today } from "./change-notes.mjs";
+import { applyNotes, checkPullRequest, collectPullRequest, mergeTags, nextVersion, parseChangeNote, pullRequestOf, renderEntry, tagsForFiles, today } from "./change-notes.mjs";
 
 describe("parseChangeNote", () => {
   it("reads a title and notes, and raises the patch number by default", () => {
@@ -123,5 +126,79 @@ describe("pull requests and tags, for Tavora Admin", () => {
 describe("today", () => {
   it("is the date in Germany", () => {
     expect(today(new Date("2026-10-20T22:30:00Z"))).toBe("2026-10-21");
+  });
+});
+
+describe("collectPullRequest", () => {
+  /** A throwaway repo shaped like Tavora's: both package.json files and apps/desktop/changes. */
+  function repo() {
+    const dir = mkdtempSync(path.join(tmpdir(), "change-notes-"));
+    const git = (...args: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", ...args], { cwd: dir, encoding: "utf8" }).trim();
+    const write = (file: string, text: string) => {
+      mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+      writeFileSync(path.join(dir, file), text);
+    };
+    const version = (v: string) => {
+      write("package.json", JSON.stringify({ version: v }));
+      write("apps/desktop/package.json", JSON.stringify({ version: v }));
+    };
+    const commit = (message: string) => {
+      git("add", "-A");
+      git("commit", "-q", "-m", message);
+      return git("rev-parse", "HEAD");
+    };
+    git("init", "-q", "-b", "main");
+    return { git, write, version, commit };
+  }
+  const note = (title: string, bump = "") => `${bump ? `bump: ${bump}\n` : ""}# ${title}\n\n- Something users see.\n`;
+
+  it("reads only the notes this pull request adds, not the ones waiting on main", () => {
+    const { git, write, version, commit } = repo();
+    version("0.5.0");
+    commit("start");
+    git("switch", "-q", "-c", "feature");
+    write("apps/desktop/changes/mine.md", note("Mine"));
+    const head = commit("pr");
+    git("switch", "-q", "main");
+    // A stuck Number run: main holds a note that raises the minor number, and an invalid one.
+    write("apps/desktop/changes/stuck.md", note("Stuck", "minor"));
+    write("apps/desktop/changes/broken.md", "not a note\n");
+    commit("main moves");
+    const result = collectPullRequest(git, "main", head);
+    expect(result.problems).toEqual([]);
+    expect(result.notes.map((n: { file: string }) => n.file)).toEqual(["mine.md"]);
+    expect(checkPullRequest({ ...result, featureComplete: false })).toEqual([]);
+  });
+
+  it("compares the version with where the branch left main, not with main's newer one", () => {
+    const { git, write, version, commit } = repo();
+    version("0.5.0");
+    commit("start");
+    git("switch", "-q", "-c", "feature");
+    write("a.txt", "x");
+    const head = commit("pr");
+    git("switch", "-q", "main");
+    version("0.5.1");
+    commit("0.5.1: numbered");
+    const result = collectPullRequest(git, "main", head);
+    expect([result.base, result.head, result.rootHead]).toEqual(["0.5.0", "0.5.0", "0.5.0"]);
+    expect(checkPullRequest({ ...result, featureComplete: false })).toEqual([]);
+  });
+
+  it("still catches a version raised by hand, a bad note, and the label rules", () => {
+    const { git, write, version, commit } = repo();
+    version("0.5.0");
+    commit("start");
+    git("switch", "-q", "-c", "feature");
+    version("0.5.1");
+    write("apps/desktop/changes/mine.md", note("Mine", "minor"));
+    write("apps/desktop/changes/bad.md", "nope\n");
+    const head = commit("pr");
+    const result = collectPullRequest(git, "main", head);
+    expect(result.problems.length).toBeGreaterThan(0);
+    expect(result.head).toBe("0.5.1");
+    const problems = checkPullRequest({ ...result, featureComplete: false });
+    expect(problems.some((p: string) => p.includes("app version changes"))).toBe(true);
+    expect(problems.some((p: string) => p.includes("bump: minor"))).toBe(true);
   });
 });

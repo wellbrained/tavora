@@ -4,6 +4,8 @@ name: Version
 # apps/desktop/changes/ instead; main gives out the number when it merges (number.yml).
 # A note that raises the minor or major number needs the `feature-complete` label,
 # which only the maintainer adds (the decision log, 2026-10-16). Runs again when labels change.
+# It looks only at what this pull request changed since it left main, so a main that moved on or notes
+# waiting to be numbered there never fail it.
 on:
   pull_request:
     branches: [main]
@@ -25,6 +27,6 @@ jobs:
           node-version: 24
       - name: Check the version and change notes
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           LABELED: ${{ contains(github.event.pull_request.labels.*.name, 'feature-complete') }}
-        run: node apps/desktop/scripts/change-notes.mjs check "$BASE_SHA" "$LABELED"
+        run: node apps/desktop/scripts/change-notes.mjs check origin/main "$LABELED" "$HEAD_SHA"

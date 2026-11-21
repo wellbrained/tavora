@@ -75,10 +75,21 @@ describe("fold-notes", () => {
       expect(foldText(once.text, [major], "1.0.0", "1.0.0").nothing).toMatch(/Nothing to fold/);
     });
 
-    it("refuses when a newer entry comes before it", () => {
-      const newer = [{ ...major, version: "1.0.1" }, ...all];
+    it("folds an entry that merged after 1.0.0 was numbered into it, and sends the version back to 1.0.0", () => {
+      const newer = [{ version: "1.0.1", date: "2026-11-16", title: "Later", notes: ["L"], prs: [{ number: 21, title: "E pr" }], tags: ["y"] }, ...all];
       const text = `export const PATCH_NOTES = [\n${newer.map((entry) => formatEntry(entry)).join("")}];\n`;
-      expect(foldText(text, newer, "0.4.0", "1.0.0").problem).toMatch(/must be the newest/);
+      const result = foldText(text, newer, "0.4.0", "1.0.0");
+      expect(result.problem).toBeUndefined();
+      expect(result.setVersion).toBe("1.0.0");
+      expect(result.folded).toEqual(["1.0.1", "0.4.2", "0.4.1", "0.4.0"]);
+      const left = { ...major, notes: ["First public version.", "L"], prs: [{ number: 21, title: "E pr" }, { number: 20, title: "D pr" }, { number: 12, title: "C pr" }, { number: 11, title: "B pr" }, { number: 9, title: "A pr" }], tags: ["a", "b", "c", "y", "z"] };
+      expect(result.text).toBe(`export const PATCH_NOTES = [\n${formatEntry(left)}];\n`);
+      // Run again after the fold was merged: nothing more to do.
+      expect(foldText(result.text, [left], null, "1.0.0").nothing).toMatch(/Nothing to fold/);
+    });
+
+    it("leaves the version alone when 1.0.0 is already the newest entry", () => {
+      expect(foldText(file, all, "0.4.0", "1.0.0").setVersion).toBeUndefined();
     });
 
     // A rehearsal of release day on the real file, as long as it is still before 1.0.0. Once the 1.0.0 entry is

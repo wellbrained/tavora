@@ -10,16 +10,29 @@ import path from "node:path";
 
 const NAME = "RELEASE-RUNNING";
 
-/** Where the lock goes for the checkout at `repo`, or null if there is no releases folder up to three levels up. */
-export function lockPath(repo, env = process.env) {
+/** The first path `git worktree list --porcelain` prints: the main checkout, also when asked from a worktree. Null if there is none. */
+export function mainCheckoutOf(porcelain) {
+  const first = /^worktree (.+)$/m.exec(String(porcelain).replace(/\r\n?/g, "\n"));
+  return first ? first[1].trim() : null;
+}
+
+/**
+ * Where the lock goes for the checkout at `repo`, or null if there is no releases folder up to three levels above the
+ * main checkout (`main`, the first path git lists; a worktree lives elsewhere, so it is no place to look from) or,
+ * failing that, above `repo`. The caller must not go on without a lock when this is null.
+ */
+export function lockPath(repo, env = process.env, main = null) {
   if (env.TAVORA_RELEASE_LOCK) return path.resolve(env.TAVORA_RELEASE_LOCK);
-  let dir = path.resolve(repo);
-  for (let level = 0; level < 3; level++) {
-    const parent = path.dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-    const releases = path.join(dir, "releases");
-    if (existsSync(releases) && statSync(releases).isDirectory()) return path.join(releases, NAME);
+  for (const start of [main, repo]) {
+    if (!start) continue;
+    let dir = path.resolve(start);
+    for (let level = 0; level < 3; level++) {
+      const parent = path.dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+      const releases = path.join(dir, "releases");
+      if (existsSync(releases) && statSync(releases).isDirectory()) return path.join(releases, NAME);
+    }
   }
   return null;
 }
@@ -33,7 +46,7 @@ export function takeLock(file, version, now = new Date()) {
   try {
     writeFileSync(file, text, { flag: "wx" });
   } catch (error) {
-    if (error.code !== "EEXIST") throw error;
+    if (error.code !== "EEXIST") return { problem: `Can't take the release lock at ${file} (${error.code ?? error.message}). Create its folder, or set TAVORA_RELEASE_LOCK to another path.` };
     let held = "";
     try {
       held = readFileSync(file, "utf8").trim();

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 // @ts-expect-error - plain JavaScript module shared with scripts/release.mjs
-import { lockPath, takeLock } from "./release-lock.mjs";
+import { lockPath, mainCheckoutOf, takeLock } from "./release-lock.mjs";
 
 /** A folder like D:\Github\Tavora: a main checkout, a worktrees folder with a clone, and releases. */
 function home(): { root: string; main: string; clone: string } {
@@ -20,6 +20,25 @@ describe("release lock", () => {
     const expected = path.join(root, "releases", "RELEASE-RUNNING");
     expect(lockPath(main, {})).toBe(expected);
     expect(lockPath(clone, {})).toBe(expected);
+  });
+
+  it("finds the releases folder from the main checkout, also when run from a worktree far away", () => {
+    const { root, main } = home();
+    const farAway = path.join(mkdtempSync(path.join(tmpdir(), "release-lock-far-")), "x", "y", "z", "wt");
+    mkdirSync(farAway, { recursive: true });
+    expect(lockPath(farAway, {})).toBeNull();
+    expect(lockPath(farAway, {}, main)).toBe(path.join(root, "releases", "RELEASE-RUNNING"));
+  });
+
+  it("reads the main checkout as the first path git lists", () => {
+    expect(mainCheckoutOf("worktree D:/Github/Tavora/tavora\nHEAD abc\nbranch refs/heads/main\n\nworktree C:/wt/one\nHEAD def\n")).toBe("D:/Github/Tavora/tavora");
+    expect(mainCheckoutOf("worktree /home/a b/repo\r\nHEAD x\r\n")).toBe("/home/a b/repo");
+    expect(mainCheckoutOf("")).toBeNull();
+  });
+
+  it("says why it can't take the lock when the folder is missing, instead of throwing", () => {
+    const { root } = home();
+    expect(takeLock(path.join(root, "nope", "RELEASE-RUNNING"), "1.0.0").problem).toMatch(/Can't take the release lock/);
   });
 
   it("follows TAVORA_RELEASE_LOCK, and is null without a releases folder", () => {

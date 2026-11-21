@@ -29,7 +29,7 @@ import { createInterface } from "node:readline/promises";
 import { AFTER_RELEASE, CHECKLIST, asksHandChecks, checkCi, checkDownload, checkInstalled, checkRelease, failedJobsHint, findDispatchedRun, lastReleased, readCiHashes, releaseFiles, releaseNotes, releaseRunTitle, releaseTitle } from "./release-guards.mjs";
 import { hello, publish } from "../../../scripts/deploy-client.mjs";
 import { installedVersion } from "./installed-version.mjs";
-import { lockPath, takeLock } from "./release-lock.mjs";
+import { lockPath, mainCheckoutOf, takeLock } from "./release-lock.mjs";
 import { checkPinChange, describeSigned, loadUpdateSigningKey, readPinsFromSource, signLatestYml } from "./update-feed.mjs";
 import { PINNED_UPDATE_KEYS } from "../src/main/update-keys.ts";
 import { rawUpdatePublicKey, readPinnedUpdateKeys } from "../src/main/update-signature.ts";
@@ -80,9 +80,19 @@ process.on("SIGINT", () => {
 // when this script ends, however it ends.
 if (!dryRun) {
   const lockVersion = JSON.parse(readFileSync(path.join(desktop, "package.json"), "utf8")).version;
-  const file = lockPath(repo);
-  if (!file) console.warn("No releases folder found above this checkout, so no RELEASE-RUNNING lock; set TAVORA_RELEASE_LOCK to its path.");
-  else {
+  // The releases folder sits next to the main checkout, which is the first path git lists, also from a worktree.
+  let main = null;
+  try {
+    main = mainCheckoutOf(spawnSync("git", ["worktree", "list", "--porcelain"], { cwd: repo, encoding: "utf8" }).stdout);
+  } catch {}
+  const file = lockPath(repo, process.env, main);
+  // No lock means nothing would stop a merge during the release, so this stops instead of going on without one.
+  if (!file) {
+    console.error(`No releases folder found next to the main checkout or above this one, so there is nowhere to put the RELEASE-RUNNING lock. Create the releases folder, or set TAVORA_RELEASE_LOCK to the lock's path.
+Nothing was built or published.`);
+    process.exit(1);
+  }
+  {
     const lock = takeLock(file, lockVersion);
     if (lock.problem) {
       console.error(`${lock.problem}

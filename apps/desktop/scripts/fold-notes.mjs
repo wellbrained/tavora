@@ -73,20 +73,25 @@ export function foldText(text, entries, previous, catalogVersion) {
 }
 
 /**
- * patch-notes.ts for the catalog release: only the `catalogVersion` entry stays, which has to be the newest. It keeps
- * its own notes (they go into latest.yml and the GitHub release) and every pull request and tag of the dropped
- * entries, so Tavora Admin can still search them.
+ * patch-notes.ts for the catalog release: only the `catalogVersion` entry stays. It keeps its own notes (they go into
+ * latest.yml and the GitHub release) and every pull request and tag of the dropped entries, so Tavora Admin can still
+ * search them. A note that merged after 1.0.0 was numbered (entries newer than it) goes into it too: its lines come after
+ * the entry's own, and `setVersion` says the app version goes back to `catalogVersion`, so 1.0.0 stays the first public
+ * release. The wording pass before the pull request covers those lines.
  */
 function catalogText(text, entries, catalogVersion) {
-  if (entries[0].version !== catalogVersion) return { problem: `The ${catalogVersion} entry must be the newest; newer entries can't come before the release catalog.` };
-  // Only the first entry is read from the text; the rest is cut off whatever its layout.
-  const first = /^ {2}\{\r?\n {4}version: "(\d+\.\d+\.\d+)"/m.exec(text);
-  if (first?.[1] !== entries[0].version || text.lastIndexOf("];") < first.index) {
-    return { problem: "patch-notes.ts is not laid out as expected (the first entry starting with `  {` and then its version line)." };
+  const at = entries.findIndex((entry) => entry.version === catalogVersion);
+  const starts = [...text.matchAll(/^ {2}\{\r?\n {4}version: "(\d+\.\d+\.\d+)"/gm)];
+  // Only the entries up to the catalog one are read from the text; the rest is cut off whatever its layout.
+  if (at < 0 || starts.length <= at || starts.slice(0, at + 1).some((match, i) => match[1] !== entries[i].version) || text.lastIndexOf("];") < starts[at].index) {
+    return { problem: "patch-notes.ts is not laid out as expected (each entry starting with `  {` and then its version line)." };
   }
   const eol = text.includes("\r\n") ? "\r\n" : "\n";
-  const entry = { ...foldEntries(entries), notes: entries[0].notes };
-  return { text: text.slice(0, first.index) + formatEntry(entry, eol) + text.slice(text.lastIndexOf("];")), folded: entries.slice(1).map((e) => e.version) };
+  const catalog = entries[at];
+  const later = entries.slice(0, at).reverse();
+  const entry = { ...foldEntries(entries), version: catalog.version, date: catalog.date, title: catalog.title, notes: [...catalog.notes, ...later.flatMap((e) => e.notes)] };
+  const result = { text: text.slice(0, starts[0].index) + formatEntry(entry, eol) + text.slice(text.lastIndexOf("];")), folded: entries.filter((e) => e !== catalog).map((e) => e.version) };
+  return at > 0 ? { ...result, setVersion: catalogVersion } : result;
 }
 
 export const CATALOG_CHECKLIST = [
@@ -124,12 +129,19 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
     console.error(result.problem);
     process.exit(1);
   }
-  const version = PATCH_NOTES[0].version;
+  const version = result.setVersion ?? PATCH_NOTES[0].version;
   if (git("branch", "--show-current") === "main") {
     git("switch", "-c", `release/notes-${version}`);
     console.log(`On the new branch release/notes-${version}.`);
   }
   writeFileSync(file, result.text);
+  if (result.setVersion) {
+    // The entries newer than 1.0.0 went into it, so the app goes back to its version (only the version line changes).
+    for (const pkg of [path.join(desktop, "package.json"), path.join(path.dirname(path.dirname(desktop)), "package.json")]) {
+      writeFileSync(pkg, readFileSync(pkg, "utf8").replace(/("version":\s*)"[^"]*"/, `$1"${result.setVersion}"`));
+    }
+    console.log(`Entries newer than ${result.setVersion} were folded into it, and both package.json files are back at ${result.setVersion}.`);
+  }
   console.log(`Folded ${result.folded.join(", ")} into ${version} (last release: ${previous ?? "none"}) in src/shared/patch-notes.ts.`);
   const catalog = version === CATALOG_VERSION;
   console.log(catalog ? "\nThis is the release with the catalog. Before the pull request, check:" : "\nThis is a draft. Before the pull request, go over the wording:");
