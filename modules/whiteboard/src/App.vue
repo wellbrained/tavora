@@ -143,7 +143,7 @@ watch(
 );
 
 /** Why a new board didn't open: the open one couldn't be saved first (it stays open), or making the new one failed. */
-const creationProblem = (reason: unknown) => (reason instanceof BoardNotSaved ? t("save.error") : t("starter.failed", { error: errorMessage(reason) }));
+const creationProblem = (reason: unknown) => (reason instanceof BoardNotSaved ? t("save.staysOpen") : t("starter.failed", { error: errorMessage(reason) }));
 
 async function createBoard(kind: BoardKind = "blank") {
   if (kind === "screenshot") { screenshotInput.value?.click(); return; }
@@ -185,7 +185,7 @@ async function select(id: string) {
     await library.value?.open(id);
   } catch (reason) {
     // A board another panel deleted meanwhile is gone from the list already.
-    if (!(reason instanceof Error && reason.name === "ItemNotFoundError")) notify(t("save.error"));
+    if (!(reason instanceof Error && reason.name === "ItemNotFoundError")) notify(t(reason instanceof BoardNotSaved ? "save.staysOpen" : "save.error"));
   }
 }
 
@@ -218,7 +218,10 @@ onMounted(async () => {
     views = state?.views && typeof state.views === "object" ? state.views : {};
     palette.value = palettePlace(state?.palette);
 
-    const lib = await openBoardLibrary(connected, { words: () => ({ board: t("boardWord"), idea: t("starter.idea"), screenshot: t("starter.screenshotName") }) });
+    const lib = await openBoardLibrary(connected, {
+      words: () => ({ board: t("boardWord"), idea: t("starter.idea"), screenshot: t("starter.screenshotName") }),
+      onNotSaved: () => notify(t("save.staysOpen")),
+    });
     cleanup.push(() => void lib.dispose());
     library.value = lib;
     list.value = lib.boards;

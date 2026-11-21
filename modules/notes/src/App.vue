@@ -125,7 +125,7 @@ onMounted(async () => {
     const notes = await createNotesStore(connected);
     const [state] = await Promise.all([connected.panel.getState<PanelState>(), notes.load(), notes.loadAppearance(), notes.loadImageQuality()]);
     if (unmounted) {
-      void notes.dispose();
+      void notes.dispose().catch(() => undefined);
       return;
     }
     if (typeof state?.sidebarWidth === "number" && Number.isFinite(state.sidebarWidth)) sidebarWidth.value = clampSidebar(state.sidebarWidth);
@@ -152,7 +152,7 @@ onBeforeUnmount(() => {
   cleanup.forEach((fn) => fn());
   const notes = store.value;
   // The editor hands its last typing to the note's document first; then the documents are saved and closed.
-  if (notes) void (editor.value?.flush() ?? Promise.resolve()).catch(() => undefined).then(() => notes.dispose());
+  if (notes) void (editor.value?.flush() ?? Promise.resolve()).catch(() => undefined).then(() => notes.dispose()).catch(() => undefined);
 });
 
 /** Saves what the editor holds, then drops a note made with New note that stayed empty. */
