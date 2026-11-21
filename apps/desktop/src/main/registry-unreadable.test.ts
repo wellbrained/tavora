@@ -12,12 +12,18 @@ vi.mock("node:fs/promises", async (original) => {
 
 let dir: string;
 let busy: string[] = [];
+let denied: string[] = [];
 beforeEach(async () => {
   dir = await mkdtemp(path.join(tmpdir(), "tavora-registry-"));
   busy = [];
+  denied = [];
   const real = vi.mocked(readdir).getMockImplementation()!;
   vi.mocked(readdir).mockImplementation(((target: string, options: never) =>
-    busy.includes(String(target)) ? Promise.reject(Object.assign(new Error("busy"), { code: "EBUSY" })) : real(target, options)) as never);
+    busy.includes(String(target))
+      ? Promise.reject(Object.assign(new Error("busy"), { code: "EBUSY" }))
+      : denied.includes(String(target))
+        ? Promise.reject(Object.assign(new Error("denied"), { code: "EPERM" }))
+        : real(target, options)) as never);
 });
 afterEach(async () => {
   busy = [];
@@ -51,6 +57,17 @@ describe("a modules folder that can't be read", () => {
     await writeFile(path.join(project, "notes.txt"), "not a manifest yet");
     busy = [project];
     expect(await developmentProjects(folder)).toEqual([project]);
+  });
+
+  it("doesn't keep every panel waiting for a folder inside it Tavora may not read at all", async () => {
+    const folder = path.join(dir, "dev");
+    const system = path.join(folder, "System Volume Information");
+    await mkdir(system, { recursive: true });
+    denied = [system];
+    expect(await developmentProjects(folder)).toEqual([]);
+    const problems: ModuleProblem[] = [];
+    await discoverModules({ development: [folder] }, problems);
+    expect(panelsWait(problems)("some.module")).toBe(false);
   });
 
   it("says nothing about a folder that simply isn't there", async () => {

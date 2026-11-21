@@ -238,8 +238,9 @@ export function mayHoldProject(name: string): boolean {
  * every folder directly inside it that has one, so a developer can add the folder they keep all
  * their modules in. Never deeper, so node_modules and build output are not searched.
  * "missing" when the folder is gone or can't be read right now: Tavora can't tell which modules it holds, so their
- * panels wait (panelsWait). A folder inside it that can't be read counts as a project: reading its manifest then
- * reports it, and panels wait too.
+ * panels wait (panelsWait). A folder inside it that is busy for a moment counts as a project: reading its manifest then
+ * reports it, and panels wait until it is free. One Tavora may not read at all (a system folder on a drive) never held
+ * a module it could load, so it isn't one, or every panel would wait for good.
  */
 export async function developmentProjects(dir: string): Promise<string[] | "missing"> {
   let entries;
@@ -256,7 +257,7 @@ export async function developmentProjects(dir: string): Promise<string[] | "miss
     try {
       if ((await readdir(child, { withFileTypes: true })).some((item) => item.isFile() && item.name === MANIFEST)) projects.push(child);
     } catch (error) {
-      if (!isGone(error)) projects.push(child);
+      if (isBusy(error)) projects.push(child);
     }
   }
   return projects.sort((a, b) => a.localeCompare(b));
@@ -280,6 +281,11 @@ export async function projectEntry(dir: string): Promise<string | undefined> {
   } catch {
     return undefined;
   }
+}
+
+/** Something holds the folder for a moment; it will read again by itself. */
+function isBusy(error: unknown): boolean {
+  return ["EBUSY", "EAGAIN", "EIO", "EMFILE", "ENFILE", "ETIMEDOUT"].includes((error as NodeJS.ErrnoException).code ?? "");
 }
 
 /** The file or folder is not there (rather than there and unreadable for now). */

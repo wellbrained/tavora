@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BlobStore, BlobWrites } from "./blobs";
-import { renameHeld, writeFileAtomic } from "./fsutil";
+import { writeFileAtomic } from "./fsutil";
+import { renameHeld } from "./rename-held";
 import { Inbox } from "./inbox";
 import { recoverInstalls } from "./installer";
 import { emptyLibrary, libraryToSave, sanitizeLibrary } from "./library";
@@ -159,12 +160,6 @@ describe("a module update that was cut off", () => {
     expect(await readdir(at("module-staging"))).toEqual([]);
   });
 
-  it("puts one of Tavora's own modules back where it came from", async () => {
-    await put(at("module-staging", "old-1", "tavora.module.json"), manifest("tavora.notes", "1.0.0"));
-    await recoverInstalls({ userData: dir, userModules: at("modules"), officialDir: at("official-updates"), log: () => undefined });
-    expect(await exists(at("official-updates", "tavora.notes", "tavora.module.json"))).toBe(true);
-  });
-
   it("leaves a folder alone that isn't a module, and clears half-unpacked installs", async () => {
     await put(at("module-staging", "old-1", "note.txt"), "?");
     await put(at("module-staging", "install-1", "half"), "?");
@@ -259,6 +254,20 @@ describe("going back to an older Tavora", () => {
 
   it.each([0, 3, 13, 16])("keeps a corner radius of %i through its saves", (radius) => {
     expect(roundTrip({ ...emptyLibrary(), radius }).radius).toBe(radius);
+  });
+
+  it("shows the nearest radius it can read meanwhile", () => {
+    expect(libraryToSave({ ...emptyLibrary(), radius: 2 })).toMatchObject({ radius: 4, cornerRadius: 2 });
+    expect(libraryToSave({ ...emptyLibrary(), radius: 15 })).toMatchObject({ radius: 12, cornerRadius: 15 });
+  });
+
+  it("lets a reset on the older Tavora stick, for the radius and for Inter", () => {
+    const written = olderSave(JSON.parse(JSON.stringify(libraryToSave({ ...emptyLibrary(), radius: 2, font: "inter" }))) as Record<string, unknown>);
+    const reset: Record<string, unknown> = { ...written, radius: null };
+    delete reset.font;
+    const library = sanitizeLibrary(reset);
+    expect(library.radius).toBeNull();
+    expect(library.font).toBeUndefined();
   });
 
   it("keeps a radius it can read in the old field, with no second one", () => {

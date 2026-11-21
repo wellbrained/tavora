@@ -965,13 +965,14 @@ export function sanitizeLibrary(raw: unknown): Library {
   const theme = asRecord(saved.theme);
   if (isModuleId(theme.id) && isVariationId(theme.variation)) library.theme = { id: theme.id, variation: theme.variation };
   if (typeof saved.followSystem === "boolean") library.followSystem = saved.followSystem;
-  // Either form (libraryToSave). A radius an older Tavora set since wins over the one it couldn't read.
-  const savedOnly = saved as Record<string, unknown>;
-  if (isStyleRadius(saved.radius)) library.radius = saved.radius;
-  else if (isStyleRadius(savedOnly.cornerRadius)) library.radius = savedOnly.cornerRadius;
+  // Either form (libraryToSave). The exact radius counts only while `radius` still holds what was written next to it:
+  // one an older Tavora changed or reset since wins.
+  const cornerRadius = (saved as Record<string, unknown>).cornerRadius;
+  if (isStyleRadius(cornerRadius) && saved.radius === nearestOlderRadius(cornerRadius)) library.radius = cornerRadius;
+  else if (isStyleRadius(saved.radius)) library.radius = saved.radius;
   // Inter too: in a style with another font, Inter is the user's own pick. A library from before styles never saved it.
-  if (isFontId(saved.font)) library.font = saved.font;
-  else if (isFontId(savedOnly.interfaceFont)) library.font = savedOnly.interfaceFont;
+  if (saved.font === INTER_PICKED) library.font = DEFAULT_FONT_ID;
+  else if (isFontId(saved.font)) library.font = saved.font;
   if (isModuleId(saved.styleId) && saved.styleId !== CLASSIC_STYLE_ID) library.styleId = saved.styleId;
   const styleThemes: Record<string, ThemeChoice> = {};
   for (const [styleId, value] of Object.entries(asRecord(saved.styleThemes)).slice(0, MAX_STYLE_THEMES)) {
@@ -992,26 +993,30 @@ export function sanitizeLibrary(raw: unknown): Library {
   return { ...unknownFields(saved, [...Object.keys(library), ...OPTIONAL_FIELDS, ...SAVED_ONLY_FIELDS]), ...library };
 }
 
-/** Fields only the saved file has (libraryToSave); in memory they are `radius` and `font`. */
-const SAVED_ONLY_FIELDS = ["cornerRadius", "interfaceFont"];
+/** Fields only the saved file has (libraryToSave); in memory it is `radius`. */
+const SAVED_ONLY_FIELDS = ["cornerRadius"];
 /** The corner radii a Tavora from before styles (0.24.108 and older) reads; it saves any other as "none". */
 const OLDER_RADIUS = { min: 4, max: 12 };
+/**
+ * An explicit Inter as saved. A Tavora from before styles drops the id "inter" but keeps one it doesn't know and shows
+ * Inter for it, so this survives its saves, and its own reset or pick replaces it. Never the id of a real font.
+ */
+const INTER_PICKED = "inter-picked";
+
+const nearestOlderRadius = (radius: number) => Math.min(OLDER_RADIUS.max, Math.max(OLDER_RADIUS.min, radius));
 
 /**
  * The library as it is written. A Tavora from before styles rebuilds `radius` and `font` from what it knows, so a radius
- * outside 4 to 12 or an explicit Inter would be erased by its next save, also through the cloud copy. Those go in fields
- * of their own, which it keeps as they are, and `radius` and `font` hold what it can read.
+ * outside 4 to 12 or an explicit Inter would be erased by its next save, also through the cloud copy. Such a radius goes
+ * in `cornerRadius`, which it keeps, with the nearest one it can read in `radius`; Inter is saved as INTER_PICKED.
  */
 export function libraryToSave(library: Library): Record<string, unknown> {
   const saved: Record<string, unknown> = { ...library };
-  if (library.radius !== null && (library.radius < OLDER_RADIUS.min || library.radius > OLDER_RADIUS.max)) {
-    saved.radius = null;
+  if (library.radius !== null && library.radius !== nearestOlderRadius(library.radius)) {
+    saved.radius = nearestOlderRadius(library.radius);
     saved.cornerRadius = library.radius;
   }
-  if (library.font === DEFAULT_FONT_ID) {
-    delete saved.font;
-    saved.interfaceFont = library.font;
-  }
+  if (library.font === DEFAULT_FONT_ID) saved.font = INTER_PICKED;
   return saved;
 }
 

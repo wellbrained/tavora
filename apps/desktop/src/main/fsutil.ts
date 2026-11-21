@@ -1,23 +1,7 @@
 import { randomBytes } from "node:crypto";
-import { mkdir, open, readFile, rename, rm, stat } from "node:fs/promises";
+import { mkdir, open, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
-
-/** How long a rename waits, in turn, for a virus scan or an indexer on Windows to let go of the file. */
-const RENAME_WAITS_MS = [20, 50, 100, 200, 400];
-
-/** Renames a file; on Windows it tries again while something else briefly holds the target. */
-export async function renameHeld(from: string, to: string, waits: readonly number[] = RENAME_WAITS_MS): Promise<void> {
-  for (const wait of process.platform === "win32" ? waits : []) {
-    try {
-      return await rename(from, to);
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      if (code !== "EPERM" && code !== "EBUSY" && code !== "EACCES") throw error;
-      await new Promise((resolve) => setTimeout(resolve, wait));
-    }
-  }
-  await rename(from, to);
-}
+import { renameHeld } from "./rename-held";
 
 /**
  * Writes to a temp file, flushes it to the disk and renames it over the target, so readers never see half a file and a
