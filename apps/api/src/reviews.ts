@@ -571,7 +571,8 @@ export function reviewRoutes({ reviews, catalog, accounts, clientKey, writeRateL
     const text = cleanReviewText(input?.text);
     if (!input || Object.keys(input).join() !== "text" || typeof text !== "string") return context.json({ error: "Send { text: at most 500 characters }.", reason: "bad-request" }, 400);
     const check = checkReviewText(text);
-    if (check !== "ok") return refused(context, check);
+    // A reply can't wait for a person like a review can, so what may be an address is refused as one.
+    if (check !== "ok") return refused(context, check === "hold" ? "link" : check);
     reviews.setReply(review.id, text, now());
     return context.json({ review: reviewAnswer(reviews.review(review.id)!, accounts) });
   });

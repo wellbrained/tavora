@@ -175,6 +175,8 @@ describe("starting a conversation with a developer", () => {
       expect((await start(mara.token, extra)).status, JSON.stringify(extra)).toBe(400);
     }
     expect(((await (await start(mara.token, { text: "Visit https://evil.example now" })).json()) as { reason: string }).reason).toBe("message-link");
+    // A message can't wait for a person, so what may be an address is refused.
+    expect(((await (await start(mara.token, { text: "freerobux.App now" })).json()) as { reason: string }).reason).toBe("message-link");
     expect(((await (await start(mara.token, { text: "You are a retard" })).json()) as { reason: string }).reason).toBe("message-words");
     expect((await start(mara.token, { text: "x".repeat(2000) })).status).toBe(201);
     // previousId must be the caller's own closed conversation.

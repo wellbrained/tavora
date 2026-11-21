@@ -131,6 +131,21 @@ describe("rating a catalog module", () => {
     expect(answer.reviews[0]!.author.name).toBeNull();
   });
 
+  it("holds a review that may name an app address for a person, and refuses it as a reply, which can't wait", async () => {
+    const { user, rate, call, devToken } = setup();
+    const mara = user("mara@example.com");
+    const held = await rate(mara.token, { stars: 5, text: "freerobux.App now", version: "1.0.0" });
+    expect(held.status).toBe(200);
+    expect(await held.json()).toMatchObject({ review: { held: true, hidden: true } });
+    expect(await (await call("GET", "/modules/wellbrained.timer/reviews")).json()).toEqual({ summary: null, reviews: [] });
+
+    const otto = user("otto@example.com");
+    const { review } = (await (await rate(otto.token, { stars: 2, text: "Crashes on start", version: "1.0.0" })).json()) as { review: { id: string } };
+    const reply = await call("PUT", `/reviews/${review.id}/reply`, devToken, { text: "freerobux.App now" });
+    expect(reply.status).toBe(400);
+    expect(await reply.json()).toMatchObject({ reason: "review-link" });
+  });
+
   it("lets the user read, change and delete their own rating", async () => {
     const { user, rate, call } = setup();
     const mara = user("mara@example.com");

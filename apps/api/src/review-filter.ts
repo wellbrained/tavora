@@ -6,7 +6,19 @@
  */
 
 /** Letters people swap in to get around a filter, read back as the letter they stand for. */
-const LOOKALIKE: Record<string, string> = { "0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t", "8": "b", "@": "a", $: "s", "!": "i", "|": "i" };
+const LOOKALIKE: Record<string, string> = { "0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t", "8": "b", "9": "g", "@": "a", $: "s", "!": "i", "|": "i" };
+
+/** Letters of other alphabets that look like a Latin one, written as escapes so they can't be mistaken for it here. */
+const HOMOGLYPHS: Record<string, string> = {
+  // Cyrillic
+  "а": "a", "е": "e", "о": "o", "р": "p", "с": "c", "у": "y", "х": "x", "к": "k", "м": "m", "т": "t",
+  "і": "i", "ј": "j", "ѕ": "s", "һ": "h", "ԁ": "d",
+  // Greek
+  "α": "a", "ε": "e", "ι": "i", "κ": "k", "ν": "v", "ο": "o", "ρ": "p", "τ": "t", "υ": "u", "χ": "x",
+  // Latin letters outside a to z
+  "ɑ": "a", "ɡ": "g", "ı": "i",
+};
+const HOMOGLYPH = new RegExp(`[${Object.keys(HOMOGLYPHS).join("")}]`, "g");
 
 /**
  * Words refused on their own (whole words after lookalikes are read back), in English and German.
@@ -29,27 +41,34 @@ const LINK = /(?:https?:\/\/|www\.|[a-z0-9-]+(?:\.|\s?(?:\(dot\)|\[dot\])\s?)(?:
 const LINK_GLOBAL = new RegExp(LINK.source, "gi");
 
 /**
- * A sentence that only lacks the space after its full stop ("Great game.Me too", "Modul.App läuft"): a plain word, umlauts
- * included, then one of the address endings that also start a sentence, capitalised, with the sentence going on after it on
- * the same line. Anything else stays a link.
+ * A sentence that only lacks the space after its full stop ("Great game.Me too"): a plain word, umlauts included, then one of
+ * the address endings that also start a sentence, capitalised, with the sentence going on after it on the same line.
  */
-const MISSING_SPACE = /^\p{Lu}?\p{Ll}{2,}\.(?:Me|At|Us|App)$/u;
+const MISSING_SPACE = /^\p{Lu}?\p{Ll}{2,}\.(?:Me|At|Us)$/u;
+/** The same shape with `.App`, which is as likely a real address ("freerobux.App now") as a sentence ("Modul.App läuft"): a person decides. */
+const MAYBE_ADDRESS = /^\p{Lu}?\p{Ll}{2,}\.App$/u;
 const WORD_CHAR = /[\p{L}\p{N}-]/u;
 
-function holdsLink(text: string): boolean {
+/** "link" for what reads as an address, "hold" when only a person can tell, null when there is neither. */
+function linkIn(text: string): "link" | "hold" | null {
+  let found: "hold" | null = null;
   for (const match of text.matchAll(LINK_GLOBAL)) {
-    const sentenceGoesOn = /^[ \t]+\p{L}/u.test(text.slice(match.index + match[0].length));
+    if (!/^[ \t]+\p{L}/u.test(text.slice(match.index + match[0].length))) return "link";
     // The address pattern knows only a to z, so "schön.Me" matches from its "n": read the whole word.
     let start = match.index;
     while (start > 0 && WORD_CHAR.test(text[start - 1]!)) start--;
-    if (!(MISSING_SPACE.test(text.slice(start, match.index) + match[0]) && sentenceGoesOn)) return true;
+    const word = text.slice(start, match.index) + match[0];
+    if (MISSING_SPACE.test(word)) continue;
+    if (!MAYBE_ADDRESS.test(word)) return "link";
+    found = "hold";
   }
-  return false;
+  return found;
 }
 
 /**
  * A part inside one word, or spread over words from the start of one or one letter into it ("nig ga", "xnig ga"). Further in
- * doesn't count: "wenig Gameplay" and "König gab" only hold the letters across a word gap, in the middle of an honest word.
+ * doesn't count: "wenig Gameplay" and "König gab" only hold the letters across a word gap, in the middle of an honest word,
+ * and two stray letters in front are left to reports.
  */
 function holdsPart(words: readonly string[]): boolean {
   return PARTS.some((part) =>
@@ -61,6 +80,12 @@ function holdsPart(words: readonly string[]): boolean {
   );
 }
 
+/** A word with letters of another alphabet swapped in, read back. A word that also has letters without a Latin twin is left alone: it is honest Russian or Greek. */
+function latinWord(word: string): string {
+  const read = word.replace(HOMOGLYPH, (char) => HOMOGLYPHS[char] ?? char);
+  return /^[a-z]+$/.test(read) ? read : word;
+}
+
 function plainWords(text: string): string {
   return text
     .toLowerCase()
@@ -68,6 +93,7 @@ function plainWords(text: string): string {
     .replace(/[̀-ͯ]/g, "")
     .replace(/ß/g, "ss")
     .replace(/[0-9@$!|]/g, (char) => LOOKALIKE[char] ?? char)
+    .replace(/\p{L}+/gu, latinWord)
     .replace(/[^a-z]+/g, " ")
     // "n i g g e r" or "f.a.g": single letters in a row are read as one word.
     .replace(/\b(?:[a-z] ){2,}[a-z]\b/g, (run) => run.replace(/ /g, ""))
@@ -75,15 +101,21 @@ function plainWords(text: string): string {
     .trim();
 }
 
-export type FilterResult = "ok" | "words" | "link";
+/** `hold`: it may be an address, so a review with it waits for a person; a reply or message, which can't wait, is refused as a link. */
+export type FilterResult = "ok" | "words" | "link" | "hold";
 
 /** Whether a review or reply may be posted as it is. */
 export function checkReviewText(text: string): FilterResult {
-  if (holdsLink(text)) return "link";
+  const link = linkIn(text);
+  if (link === "link") return "link";
   const plain = plainWords(text);
-  const words = ` ${plain} `;
-  if (WORDS.some((word) => words.includes(` ${word} `))) return "words";
-  return holdsPart(plain.split(" ")) ? "words" : "ok";
+  // Doubled vowels read as one ("niigga", "faaggot"). Only for comparing, and consonants stay: "Rappe" isn't "rape", "Minigame" holds no slur.
+  const single = plain.replace(/([aeiou])\1+/g, "$1");
+  for (const reading of plain === single ? [plain] : [plain, single]) {
+    const words = ` ${reading} `;
+    if (WORDS.some((word) => words.includes(` ${word} `)) || holdsPart(reading.split(" "))) return "words";
+  }
+  return link ?? "ok";
 }
 
 /**

@@ -755,7 +755,8 @@ export function conversationRoutes({ conversations, catalog, accounts, clientKey
   };
   const filterRefusal = (context: Context, text: string) => {
     const result = checkReviewText(text);
-    if (result === "link") return context.json({ error: "Messages can't hold links or email addresses.", reason: "message-link" }, 400);
+    // A message can't wait for a person like a review can, so what may be an address is refused as one.
+    if (result === "link" || result === "hold") return context.json({ error: "Messages can't hold links or email addresses.", reason: "message-link" }, 400);
     if (result === "words") return context.json({ error: "Some words in it aren't allowed.", reason: "message-words" }, 400);
     return null;
   };

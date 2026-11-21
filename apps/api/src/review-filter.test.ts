@@ -30,12 +30,45 @@ describe("the review word filter", () => {
       "wenig",
       "König",
       "Das ist schön.Me too",
-      "Modul.App läuft",
       "Mein Sofa got dirty",
       "Eine Uni gab Geld",
     ]) {
       expect(checkReviewText(text), text).toBe("ok");
     }
+  });
+
+  it("holds what may be an app address for a person, and never calls it a link outright", () => {
+    for (const text of ["freerobux.App now", "Modul.App läuft", "Das Modul.App läuft gut", "schön.App ist das"]) {
+      expect(checkReviewText(text), text).toBe("hold");
+    }
+    // A slur or a real link next to it still counts for what it is.
+    expect(checkReviewText("Modul.App läuft, you faggot")).toBe("words");
+    expect(checkReviewText("Modul.App läuft, see cheapgold.shop")).toBe("link");
+    for (const text of ["freerobux.App", "freerobux.App/win now", "FreeRobux.App now", "free-robux.App now", "freerobux.app now"]) {
+      expect(checkReviewText(text), text).toBe("link");
+    }
+  });
+
+  it("reads doubled letters, digits and letters of other alphabets back", () => {
+    for (const text of ["niigga", "faaggot", "ni99a", "nіgga", "fаggot", "ѕchwuchtel", "niigger", "niiggaa", "NIIGGA", "nі 99a", "raape"]) {
+      expect(checkReviewText(text), JSON.stringify(text)).toBe("words");
+    }
+  });
+
+  it("leaves honest words with doubled letters and other alphabets alone", () => {
+    for (const text of [
+      "wenig", "König", "Boot", "Kaffee", "Dinge", "Saal", "Minigame", "Rappe", "Die Rappen laufen", "Moor", "Haare", "Meer", "Waage", "Zoo", "good book", "cool", "seen", "Niigata",
+      "Das Boot gab Kaffee", "Im Saal gab es Dinge", "Wenig Geld, viele Minigames",
+      "Хорошая игра",
+      "кот и сок",
+      "Καλό παιχνίδι",
+    ]) {
+      expect(checkReviewText(text), text).toBe("ok");
+    }
+  });
+
+  it("leaves two stray letters in front of a spread-out slur to reports", () => {
+    expect(checkReviewText("xxnig ga")).toBe("ok");
   });
 
   it("still refuses a slur spread over words, in any spelling it caught before", () => {
@@ -52,6 +85,7 @@ describe("the review word filter", () => {
 
   it("reads an address as a link when only a line break follows it", () => {
     for (const text of ["evil.Me\nnow", "evil.Me\r\nnow", "evil.At\n\nnow", "evil.App\nnow"]) {
+      // On one line it would go on as a sentence, or wait for a person.
       expect(checkReviewText(text), JSON.stringify(text)).toBe("link");
     }
   });
