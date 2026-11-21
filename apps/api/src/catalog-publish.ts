@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 import type { Context } from "hono";
-import { bodyLimit } from "hono/body-limit";
 import { PUBLISH_STATEMENT, ZIP_LIMITS } from "@tavora/pack";
 import type { AccountStore } from "./account-store.ts";
 import { bearerToken, fail as refuse, tooMany } from "./sign-in.ts";
@@ -12,7 +11,7 @@ import { createNotifier, waitingMail, waitingNoticeMail } from "./moderation-mai
 import { reviewUpload, runChecks } from "./moderation.ts";
 import { signedStatement } from "./publishers.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
-import { claimedSigner, type MemoryTicket, uploadMemory, type UploadMemory, zipMemory } from "./upload-memory.ts";
+import { readUpload, uploadMemory, type MemoryTicket, type UploadMemory, zipPlan } from "./upload-memory.ts";
 import type { Scanner } from "./virus-scan.ts";
 
 /**
@@ -81,6 +80,10 @@ export interface PublishOptions {
   scanner?: Scanner | undefined;
   /** What uploads may hold in memory at once (the process's shared budget by default). */
   memory?: UploadMemory;
+  /** How long an upload may take to arrive and may send nothing (UPLOAD_READ_MS and UPLOAD_IDLE_MS by default). */
+  readLimits?: { idleMs?: number; totalMs?: number };
+  /** The longest a virus scan may take (SCAN_LIMIT_MS by default). */
+  scanLimitMs?: number;
 }
 
 /** Why a version of a taken-down module waits: it can't go live until a person puts the module back. */
@@ -106,13 +109,12 @@ interface CatalogFull {
 type LimitCheck = Response | CatalogFull | null;
 
 /** The middleware and handler for POST /v1/catalog/publish. */
-export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits = {}, now = Date.now, catalogueKey, officialPins = OFFICIAL_PINS, maintainer, mail, scanner, memory = uploadMemory }: PublishOptions) {
+export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits = {}, now = Date.now, catalogueKey, officialPins = OFFICIAL_PINS, maintainer, mail, scanner, memory = uploadMemory, readLimits = {}, scanLimitMs }: PublishOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 30, windowMs: 3_600_000 });
   const { uploadsPerDay, accountBytes, catalogBytes, keepVersions, waitingPerAccount } = { ...PUBLISH_LIMITS, ...limits };
-  const limit = bodyLimit({
-    maxSize: ZIP_LIMITS.maxArchiveBytes,
-    onError: (context) => refuse(context, 413, "too-big", `A module zip may be at most ${ZIP_LIMITS.maxArchiveBytes / 1024 / 1024} MB.`),
-  });
+  const tooBig = (context: Context) => refuse(context, 413, "too-big", `A module zip may be at most ${ZIP_LIMITS.maxArchiveBytes / 1024 / 1024} MB.`);
+  /** The accounts with an upload holding memory now: each gets one at a time, so one account can't hold the whole budget. */
+  const uploading = new Set<string>();
 
   // Tells the maintainer by email, at most once a day; the review page shows it either way (C9).
   const tellFull = async (catalog: CatalogStore, store: AccountStore, at: number, usedBytes: number) => {
@@ -201,6 +203,8 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
   };
 
   const handler = async (context: Context) => {
+    const declared = Number(context.req.header("content-length"));
+    if (Number.isSafeInteger(declared) && declared > ZIP_LIMITS.maxArchiveBytes) return tooBig(context);
     // The maintainer's own sign-in skips the hourly limit (decided 2026-10-29: the owner publishes without limits); who
     // signed in is known before the zip is read, so everyone else is still stopped before it.
     const signedIn = store ? uploader(store, context, now()) : null;
@@ -214,31 +218,41 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     if (!by) {
       return refuse(context, 401, "sign-in-needed", "Publishing needs your Tavora sign-in now: update tavora-pack and publish with Tavora open, or from CI with a publish token.");
     }
+    // Nothing is read for an account that can't publish: without a linked key no upload of its can pass. A key it reported as
+    // leaked may be unlinked by now, and that upload still gets its own answer below.
+    if (store.keys(by.accountId).length === 0 && !store.hasLeakedReport(by.accountId)) return refuse(context, 403, "key-not-linked", "This publisher key is not linked to a Tavora account.");
+    // One upload per account at a time; the maintainer ships as much as it needs (decided 2026-10-29), within the shared budget.
+    const oneAtATime = !isMaintainer(store, by.accountId);
+    if (oneAtATime && uploading.has(by.accountId)) return busy(context);
     // Room for the zip before it is read, so uploads at the same time can't add up past the service's memory.
-    const declared = Number(context.req.header("content-length"));
-    const ticket = memory.take(Number.isSafeInteger(declared) && declared > 0 ? Math.min(declared, ZIP_LIMITS.maxArchiveBytes) : ZIP_LIMITS.maxArchiveBytes);
+    const room = Number.isSafeInteger(declared) && declared > 0 ? declared : ZIP_LIMITS.maxArchiveBytes;
+    const ticket = memory.take(room);
     if (!ticket) return busy(context);
+    if (oneAtATime) uploading.add(by.accountId);
+    // A scan that was told to stop but hasn't yet still holds the zip and its files, so their memory stays counted until it has.
+    const scans: Promise<void>[] = [];
     try {
-      return await accept(context, catalog, store, by, ticket);
+      const read = await readUpload(context.req.raw, room, readLimits);
+      if ("refused" in read) return read.refused === "too-big" ? tooBig(context) : refuse(context, 408, "invalid", "The upload took too long. Check your connection and try again.");
+      return await accept(context, catalog, store, by, ticket, read.bytes, scans);
     } finally {
-      ticket.release();
+      if (oneAtATime) uploading.delete(by.accountId);
+      if (scans.length === 0) ticket.release();
+      else void Promise.all(scans).then(() => ticket.release());
     }
   };
 
   /** The upload, with memory held for it until it is answered. */
-  const accept = async (context: Context, catalog: CatalogStore, store: AccountStore, by: { accountId: string; token: string | null }, ticket: MemoryTicket) => {
+  const accept = async (context: Context, catalog: CatalogStore, store: AccountStore, by: { accountId: string; token: string | null }, ticket: MemoryTicket, bytes: Buffer, scans: Promise<void>[]) => {
     const signature = context.req.header("x-tavora-signature");
-    const bytes = Buffer.from(await context.req.arrayBuffer());
     // What unpacking will take, from the zip's directory. A directory that can't be read is refused just below, unpacking nothing.
-    const needed = zipMemory(bytes);
-    if (needed !== null) {
-      if (needed > memory.budget) return refuse(context, 413, "too-big", "This module is too big for the catalog to check. Make it smaller.");
-      if (!ticket.resize(needed)) return busy(context);
-    }
-    // Only the holder of a linked key gets a whole zip unpacked here.
-    const claimed = claimedSigner(bytes);
-    if (claimed) {
-      const early = signerKey(store, context, claimed, createHash("sha256").update(bytes).digest("hex"), signature, by.accountId);
+    const plan = zipPlan(bytes);
+    if (plan) {
+      if (plan.needed > memory.budget) return refuse(context, 413, "too-big", "This module is too big for the catalog to check. Make it smaller.");
+      if (plan.problem) return refuse(context, 400, "invalid", plan.problem);
+      if (!ticket.resize(plan.needed)) return busy(context);
+      // Only the holder of a linked key gets a whole zip unpacked here.
+      const early = signerKey(store, context, plan.signer!, createHash("sha256").update(bytes).digest("hex"), signature, by.accountId);
       if (early instanceof Response) return early;
     }
 
@@ -336,21 +350,24 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     const id = checked.manifest.id;
     // The daily, waiting and storage limits. Checked before the scan and again right before the version is added.
     // Nothing in it is awaited, so the check after the scan and the adding of the version have nothing between them.
-    // Only a version that lists now pushes an older zip out: one that waits frees nothing until it is approved.
+    // A version that lists now pushes an older zip out. One that waits frees it only once approved: the account's limit still
+    // credits it, for one waiting version per module, so an update isn't refused for the zip it replaces. The catalog's own limit
+    // guards the disk, so there only a version that lists now counts what it frees.
     let usedBytes = 0;
     const overLimit = (listsNow: boolean): LimitCheck => {
-      const freed = (accountId?: string) => (listsNow ? catalog.freedByNextVersion(id, keepVersions, accountId) : 0);
+      const freedOnDisk = listsNow ? catalog.freedByNextVersion(id, keepVersions) : 0;
+      const freedForAccount = listsNow || catalog.waitingCountOfModule(id) === 0 ? catalog.freedByNextVersion(id, keepVersions, key.accountId) : 0;
       if (!owner && catalog.uploadsSince(key.accountId, new Date(at - 86_400_000)) >= uploadsPerDay) {
         return refuse(context, 429, "daily-limit", `An account can publish ${uploadsPerDay} versions a day. Try again tomorrow.`);
       }
       if (!owner && catalog.waitingCount(key.accountId) >= waitingPerAccount) {
         return refuse(context, 429, "too-many-waiting", `${waitingPerAccount} of your versions are waiting for review already. Wait for them, or withdraw one.`);
       }
-      if (!owner && catalog.storedBytes(key.accountId) - freed(key.accountId) + checked.size > accountBytes) {
+      if (!owner && catalog.storedBytes(key.accountId) - freedForAccount + checked.size > accountBytes) {
         return refuse(context, 413, "account-full", `Your modules may take at most ${accountBytes / 1024 / 1024} MB in the catalog.`);
       }
       usedBytes = catalog.storedBytes();
-      if (usedBytes - freed() + checked.size > catalogBytes) {
+      if (usedBytes - freedOnDisk + checked.size > catalogBytes) {
         console.warn("[tavora-api] The module catalog is full: uploads are refused until there is room.");
         return { full: refuse(context, 507, "catalog-full", "The catalog has no room right now. Tavora has been told.") };
       }
@@ -371,7 +388,8 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     // The automatic checks. They never throw: one that cannot run is a reason to wait.
     // Tavora's own modules skip the first-module and new-picture rules; the other checks still run and are kept for the admin page.
     const subject = { accountId: key.accountId, fingerprints: store.keys(key.accountId).map((linked) => linked.fingerprint) };
-    const reasons = official ? await runChecks({ catalog, scanner }, checked, bytes, subject) : await reviewUpload({ catalog, scanner }, checked, bytes, subject);
+    const checks = { catalog, scanner, scanLimitMs, holdWhileScanning: (stopped: Promise<void>) => scans.push(stopped) };
+    const reasons = official ? await runChecks(checks, checked, bytes, subject) : await reviewUpload(checks, checked, bytes, subject);
     // The scan can take minutes, and the account may have been banned or suspended, or reached a limit, meanwhile; the
     // prefix may have changed hands too: another upload of this account may have taken its last free prefix, or another
     // account claimed this one. So all of it is checked again, and the prefix reserved, with nothing awaited before the
@@ -454,5 +472,5 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     return context.json({ status: "withdrawn", id: version.id, version: version.version, sha256 });
   };
 
-  return { limit, handler, waiting, withdraw };
+  return { handler, waiting, withdraw };
 }

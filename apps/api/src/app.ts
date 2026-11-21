@@ -287,7 +287,7 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
       ? { maintainer: { email: maintainerEmail.trim(), mailer: accounts.mailer, ...(accounts.mailDailyLimit === undefined ? {} : { mailDailyLimit: accounts.mailDailyLimit }) } }
       : {}),
   });
-  catalogApp.post("/publish", publish.limit, publish.handler);
+  catalogApp.post("/publish", publish.handler);
   // The developer's own versions waiting for review, and taking one back.
   catalogApp.get("/waiting", publish.waiting);
   catalogApp.delete("/waiting/:sha256", publish.withdraw);

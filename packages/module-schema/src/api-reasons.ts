@@ -77,6 +77,7 @@ export const API_REASONS = [
   "steam-unreachable",
   "steam-unreadable",
   "suspended",
+  "taken-down",
   "tavora-only",
   "time",
   "token-new-prefix",

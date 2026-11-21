@@ -3,9 +3,9 @@ import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { allowsPersonalWorkspaces, folderKey, isGameId, isReleaseVersion, LOCAL_OWNER, manifestFiles, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, validateChangelog, validateManifest, type LeaderboardBoard, type ModuleManifest } from "@tavora/module-schema";
-import { MANIFEST_FILE, privateKeyFile, readZip, SIGNATURE_FILE, signedHash, verifyFiles, ZIP_LIMITS, ZipError, type ZipFile } from "@tavora/pack";
+import { MANIFEST_FILE, privateKeyFile, readZip, SIGNATURE_FILE, signedHash, verifyFiles, ZIP_LIMITS, zipDirectory, ZipError, type ZipFile } from "@tavora/pack";
 import { inspectPng, isWebp } from "./png.ts";
-import { UPLOAD_MEMORY_BYTES, zipMemory } from "./upload-memory.ts";
+import { MAX_MANIFEST_BYTES, metadataProblem } from "./upload-memory.ts";
 
 /**
  * The module catalog (Milestone E, docs/catalog-threat-model.md): community modules, each with the
@@ -180,6 +180,9 @@ export function checkCatalogZip(bytes: Buffer, options: { official?: boolean } =
   if (bytes.length > ZIP_LIMITS.maxArchiveBytes) throw new CatalogError("The zip is too big.");
   let files;
   try {
+    // Before anything is unpacked: these files are read as text and as JSON, which takes several times their size.
+    const tooBig = metadataProblem(zipDirectory(bytes));
+    if (tooBig) throw new CatalogError(tooBig);
     files = readZip(bytes);
   } catch (error) {
     if (error instanceof ZipError) throw new CatalogError(`The zip was refused: ${error.message}.`);
@@ -211,7 +214,9 @@ export function checkCatalogZip(bytes: Buffer, options: { official?: boolean } =
 
   let notes: string[] = [];
   if (manifest.changelog !== undefined) {
-    if (!file(manifest.changelog)) throw new CatalogError(`It names ${manifest.changelog}, which is missing.`);
+    const changelogFile = file(manifest.changelog);
+    if (!changelogFile) throw new CatalogError(`It names ${manifest.changelog}, which is missing.`);
+    if (changelogFile.data.length > MAX_MANIFEST_BYTES) throw new CatalogError(`Its ${manifest.changelog} is too big.`);
     const changelog = validateChangelog(json(manifest.changelog));
     if (!changelog.ok) throw new CatalogError(`Its changelog is invalid: ${changelog.errors.slice(0, 2).join("; ")}.`);
     notes = changelog.entries.find((entry) => entry.version === manifest.version)?.notes ?? [];
@@ -711,13 +716,22 @@ export class CatalogStore {
     return (this.db.prepare("select count(*) as n from versions where account_id = ? and status = 'waiting'").get(accountId) as { n: number }).n;
   }
 
-  /** Lists a waiting version, and counts its account as approved from now on. Null when no such version waits or its zip is gone. */
-  approve(sha256: string, now: Date = new Date()): WaitingVersion | null {
+  /** How many versions of a module are waiting. */
+  waitingCountOfModule(moduleId: string): number {
+    return (this.db.prepare("select count(*) as n from versions where module_id = ? and status = 'waiting'").get(moduleId) as { n: number }).n;
+  }
+
+  /**
+   * Lists a waiting version, and counts its account as approved from now on. Null when no such version waits or its zip is gone.
+   * With `relist`, a taken-down module comes back in the same step, so its older version is never served in between.
+   */
+  approve(sha256: string, now: Date = new Date(), { relist = false }: { relist?: boolean } = {}): WaitingVersion | null {
     const waiting = this.waitingVersion(sha256);
     if (!waiting || this.zipBytes(sha256) === null) return null;
     this.db.exec("begin");
     try {
       this.db.prepare("update versions set status = 'listed', listed_at = ? where sha256 = ? and status = 'waiting'").run(now.toISOString(), sha256);
+      if (relist) this.db.prepare("update modules set listed = 1 where id = ?").run(waiting.id);
       if (waiting.accountId) this.trustAccount(waiting.accountId, now);
       this.db.exec("commit");
     } catch (error) {
@@ -734,14 +748,15 @@ export class CatalogStore {
 
   /**
    * Takes a waiting version away for good: its row, its zip and the pictures nothing else uses (withdrawn by its developer or
-   * declined). A module left without any version goes too. Null when no such version waits.
+   * declined). A module left without any version goes too, unless it was taken down: that row is what keeps a new upload of it
+   * from listing by itself. Null when no such version waits.
    */
   removeWaiting(sha256: string): WaitingVersion | null {
     const waiting = this.waitingVersion(sha256);
     if (!waiting) return null;
     this.db.prepare("delete from versions where sha256 = ? and status = 'waiting'").run(sha256);
     rmSync(this.zipPath(sha256), { force: true });
-    if (!this.db.prepare("select 1 from versions where module_id = ?").get(waiting.id)) this.db.prepare("delete from modules where id = ?").run(waiting.id);
+    if (!this.db.prepare("select 1 from versions where module_id = ?").get(waiting.id)) this.db.prepare("delete from modules where id = ? and listed = 1").run(waiting.id);
     for (const picture of [...waiting.screenshots, ...(waiting.icon ? [waiting.icon] : [])]) this.dropPictureIfUnused(picture);
     return waiting;
   }
@@ -819,32 +834,22 @@ export class CatalogStore {
 
   /**
    * The other publisher's version whose files share the most bytes with `hashes` (see copyHashes), as a share of them from 0 to 1;
-   * null when no other publisher's version has a file in common. Versions from before the hashes were kept are read from their zip.
+   * null when no other publisher's version has a file in common. Only stored hashes are compared, so nothing is unpacked next to
+   * an upload: versions from before they were kept get them from backfillSignedHashes() at the server's start.
    */
   mostSimilar(self: { moduleId: string; accountId: string | null; fingerprints: readonly string[] }, hashes: readonly [string, number][]): { id: string; version: string; share: number } | null {
     const total = hashes.reduce((sum, [, size]) => sum + size, 0);
     if (total === 0) return null;
     const rows = this.db
       .prepare(
-        `select v.module_id, v.version, v.sha256, v.account_id, v.file_hashes, v.zip_removed, coalesce(v.signer, m.owner) as signer
-         from versions v join modules m on m.id = v.module_id where v.status = 'listed'`,
+        `select v.module_id, v.version, v.account_id, v.file_hashes, coalesce(v.signer, m.owner) as signer
+         from versions v join modules m on m.id = v.module_id where v.status = 'listed' and v.file_hashes is not null`,
       )
-      .all() as unknown as { module_id: string; version: string; sha256: string; account_id: string | null; file_hashes: string | null; zip_removed: string | null; signer: string }[];
+      .all() as unknown as { module_id: string; version: string; account_id: string | null; file_hashes: string; signer: string }[];
     let best: { id: string; version: string; share: number } | null = null;
     for (const row of rows) {
       if (isOfficialId(row.module_id) || row.module_id === self.moduleId || (self.accountId !== null && row.account_id === self.accountId) || self.fingerprints.includes(row.signer)) continue;
-      let theirs: [string, number][] | null = row.file_hashes === null ? null : (JSON.parse(row.file_hashes) as [string, number][]);
-      if (theirs === null && row.zip_removed === null) {
-        const bytes = this.zipBytes(row.sha256);
-        const needed = bytes ? zipMemory(bytes) : null;
-        try {
-          // Unpacked next to the upload being checked, so one too big to fit is left out rather than risking the service.
-          theirs = bytes && needed !== null && needed <= UPLOAD_MEMORY_BYTES ? copyHashes(readZip(bytes)) : null;
-        } catch {
-          theirs = null;
-        }
-      }
-      if (!theirs) continue;
+      const theirs = JSON.parse(row.file_hashes) as [string, number][];
       const known = new Set(theirs.map(([hash]) => hash));
       const shared = hashes.reduce((sum, [hash, size]) => (known.has(hash) ? sum + size : sum), 0);
       if (shared > 0 && (!best || shared / total > best.share)) best = { id: row.module_id, version: row.version, share: shared / total };
@@ -907,7 +912,8 @@ export class CatalogStore {
   }
 
   /**
-   * Fills signed_sha256 from the stored zip for every version still without one (versions from before the column, S7).
+   * Fills signed_sha256 from the stored zip for every version still without one (versions from before the column, S7), and
+   * file_hashes for the copy check the same way, so no upload ever has to unpack an older zip for it.
    * Safe to run again: it only reads rows that are still null and never changes a filled one. A zip it can't use (removed
    * to make room, missing, not what its name says, unreadable, or without a readable signature) is skipped and reported,
    * and the rest still go in. The server runs it at every start; `catalog backfill-signed` runs it by hand.
@@ -924,13 +930,14 @@ export class CatalogStore {
       this.setState(BACKFILL_STALLED, JSON.stringify([...stalled]));
       this.setState(BACKFILL_READING, "");
     }
-    const rows = this.db.prepare("select sha256, module_id, version, zip_removed from versions where signed_sha256 is null order by seq").all() as unknown as {
+    const rows = this.db.prepare("select sha256, module_id, version, zip_removed from versions where signed_sha256 is null or (file_hashes is null and zip_removed is null) order by seq").all() as unknown as {
       sha256: string;
       module_id: string;
       version: string;
       zip_removed: string | null;
     }[];
     const fill = this.db.prepare("update versions set signed_sha256 = ? where sha256 = ? and signed_sha256 is null");
+    const fillCopies = this.db.prepare("update versions set file_hashes = ? where sha256 = ? and file_hashes is null");
     let filled = 0;
     const skipped: { sha256: string; id: string; version: string; reason: string }[] = [];
     for (const row of rows) {
@@ -949,21 +956,25 @@ export class CatalogStore {
         continue;
       }
       let hash: string | null;
+      let copies: string;
       this.setState(BACKFILL_READING, row.sha256);
       try {
-        hash = signedHash(readZip(bytes));
+        const files = readZip(bytes);
+        hash = signedHash(files);
+        copies = JSON.stringify(copyHashes(files));
       } catch (error) {
         skip(`its zip can't be read: ${error instanceof Error ? error.message : String(error)}`);
         continue;
       } finally {
         this.setState(BACKFILL_READING, "");
       }
-      if (hash === null) {
-        skip("its zip has no readable signature");
-        continue;
-      }
       try {
-        if (Number(fill.run(hash, row.sha256).changes) > 0) filled++;
+        const copiesFilled = Number(fillCopies.run(copies, row.sha256).changes) > 0;
+        if (hash === null) {
+          skip("its zip has no readable signature");
+          continue;
+        }
+        if (Number(fill.run(hash, row.sha256).changes) > 0 || copiesFilled) filled++;
       } catch (error) {
         skip(`it couldn't be saved: ${error instanceof Error ? error.message : String(error)}`);
       }

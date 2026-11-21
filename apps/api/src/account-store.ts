@@ -812,6 +812,11 @@ export class AccountStore {
     );
   }
 
+  /** Whether this account reported a key of its own as leaked and the report wasn't turned down, also when it has unlinked that key since. */
+  hasLeakedReport(accountId: string): boolean {
+    return this.db.prepare("select 1 from key_requests where account_id = ? and leaked = 1 and declined_at is null limit 1").get(accountId) !== undefined;
+  }
+
   /** Keys reported as leaked whose request went with the key's link or its account, oldest first: their revocations still get signed. */
   leakedKeys(): { fingerprint: string; requestedAt: number }[] {
     return (this.db.prepare("select fingerprint, requested_at from leaked_keys order by requested_at, rowid").all() as unknown as { fingerprint: string; requested_at: number }[]).map((row) => ({

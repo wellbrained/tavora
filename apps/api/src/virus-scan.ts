@@ -14,8 +14,11 @@ import type { ZipFile } from "@tavora/pack";
 export type ScanResult = { clean: true } | { clean: false; threats: string[] };
 
 export interface Scanner {
-  /** Scans a zip and the files in it. Resolves clean only when every part was scanned and none was infected; throws when it could not scan. */
-  scan(zip: Buffer, files: readonly ZipFile[]): Promise<ScanResult>;
+  /**
+   * Scans a zip and the files in it. Resolves clean only when every part was scanned and none was infected; throws when it could
+   * not scan. Once `signal` aborts it starts nothing more, ends what is running and throws; it settles only when nothing runs.
+   */
+  scan(zip: Buffer, files: readonly ZipFile[], signal?: AbortSignal): Promise<ScanResult>;
 }
 
 /** What clamd says about one stream: `stream: OK`, `stream: <name> FOUND`; anything else is an error, and throws. */
@@ -44,8 +47,12 @@ const MAX_STREAM = 20 * 1024 * 1024;
 const MS_PER_MB = 5_000;
 
 /** Sends bytes to clamd as one INSTREAM and returns the threat's name, or null when it is clean. */
-export function clamdScan(target: ClamdTarget, data: Buffer, timeoutMs: number): Promise<string | null> {
+export function clamdScan(target: ClamdTarget, data: Buffer, timeoutMs: number, signal?: AbortSignal): Promise<string | null> {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new Error("the scan was stopped"));
+      return;
+    }
     const socket = target.socket ? net.createConnection({ path: target.socket }) : net.createConnection({ host: target.host ?? "127.0.0.1", port: target.port ?? 3310 });
     const chunks: Buffer[] = [];
     let settled = false;
@@ -53,9 +60,12 @@ export function clamdScan(target: ClamdTarget, data: Buffer, timeoutMs: number):
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      signal?.removeEventListener("abort", stopped);
       socket.destroy();
       action();
     };
+    const stopped = () => done(() => reject(new Error("the scan was stopped")));
+    signal?.addEventListener("abort", stopped, { once: true });
     const timer = setTimeout(() => done(() => reject(new Error("clamd did not answer in time"))), timeoutMs);
     socket.on("error", (error) => done(() => reject(new Error(`clamd is not reachable: ${error.message}`))));
     socket.on("data", (chunk) => {
@@ -89,20 +99,42 @@ export function clamdScan(target: ClamdTarget, data: Buffer, timeoutMs: number):
   });
 }
 
-/** Runs `work` over items, at most `limit` at a time; the first rejection rejects the whole. */
-async function pool<T>(items: readonly T[], limit: number, work: (item: T) => Promise<void>): Promise<void> {
+/**
+ * Runs `work` over items, at most `limit` at a time. The first failure, or `signal`, stops it: nothing more starts, what runs is
+ * told to stop through the signal it gets, and only when all of it has ended does this throw that failure.
+ */
+async function pool<T>(items: readonly T[], limit: number, signal: AbortSignal | undefined, work: (item: T, signal: AbortSignal) => Promise<void>): Promise<void> {
+  const stop = new AbortController();
+  const stopped = () => stop.abort();
+  if (signal?.aborted) stop.abort();
+  else signal?.addEventListener("abort", stopped, { once: true });
   let next = 0;
+  let failed = false;
+  let failure: unknown;
   const run = async () => {
-    while (next < items.length) await work(items[next++]!);
+    while (!stop.signal.aborted && next < items.length) {
+      try {
+        await work(items[next++]!, stop.signal);
+      } catch (error) {
+        if (!failed) {
+          failed = true;
+          failure = error;
+        }
+        stop.abort();
+      }
+    }
   };
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, run));
+  signal?.removeEventListener("abort", stopped);
+  if (failed) throw failure;
+  if (signal?.aborted) throw new Error("the scan was stopped");
 }
 
 /** Scans through clamd: the zip itself, then every file in it on its own. Each stream gets `timeoutMs` plus time for its size. */
 export function createClamdScanner(target: ClamdTarget, options: { timeoutMs?: number } = {}): Scanner {
   const timeoutMs = options.timeoutMs ?? 30_000;
   return {
-    async scan(zip, files) {
+    async scan(zip, files, signal) {
       const threats: string[] = [];
       const parts: { label: string; data: Buffer }[] = [];
       if (zip.length <= MAX_STREAM) parts.push({ label: "the zip", data: zip });
@@ -112,8 +144,8 @@ export function createClamdScanner(target: ClamdTarget, options: { timeoutMs?: n
         if (file.data.length > MAX_STREAM) throw new Error(`${file.name} is too big to scan`);
         parts.push({ label: file.name, data: file.data });
       }
-      await pool(parts, 4, async ({ label, data }) => {
-        const threat = await clamdScan(target, data, timeoutMs + Math.ceil((data.length / (1024 * 1024)) * MS_PER_MB));
+      await pool(parts, 4, signal, async ({ label, data }, stop) => {
+        const threat = await clamdScan(target, data, timeoutMs + Math.ceil((data.length / (1024 * 1024)) * MS_PER_MB), stop);
         if (threat !== null) threats.push(`${threat} in ${label}`);
       });
       return threats.length === 0 ? { clean: true } : { clean: false, threats };
@@ -129,33 +161,46 @@ export function createClamscanScanner(options: { command?: string; args?: string
   const command = options.command ?? "clamscan";
   const timeoutMs = options.timeoutMs ?? 120_000;
   return {
-    async scan(zip, files) {
+    async scan(zip, files, signal) {
       const dir = await mkdtemp(path.join(tmpdir(), "tavora-scan-"));
       try {
         const names = new Map<string, string>();
-        await writeFile(path.join(dir, "zip.bin"), zip);
+        signal?.throwIfAborted();
+        await writeFile(path.join(dir, "zip.bin"), zip, signal ? { signal } : {});
         names.set("zip.bin", "the zip");
         for (const [index, file] of files.entries()) {
+          signal?.throwIfAborted();
           // Named by number, never by what the zip calls it.
           const name = `f${index}.bin`;
           names.set(name, file.name);
-          await writeFile(path.join(dir, name), file.data);
+          await writeFile(path.join(dir, name), file.data, signal ? { signal } : {});
         }
+        signal?.throwIfAborted();
         const output = await new Promise<{ code: number | null; out: string }>((resolve, reject) => {
           const child = spawn(command, [...(options.args ?? []), "--no-summary", "-r", dir], { stdio: ["ignore", "pipe", "pipe"] });
           let out = "";
-          const timer = setTimeout(() => {
+          // Both ways of ending it wait for the process to be gone, so the folder is removed after it and nothing runs on.
+          let ended: Error | null = null;
+          const end = (error: Error) => {
+            ended ??= error;
             child.kill("SIGKILL");
-            reject(new Error("clamscan did not finish in time"));
-          }, timeoutMs);
+          };
+          const stopped = () => end(new Error("the scan was stopped"));
+          const timer = setTimeout(() => end(new Error("clamscan did not finish in time")), timeoutMs);
+          signal?.addEventListener("abort", stopped, { once: true });
+          const finished = () => {
+            clearTimeout(timer);
+            signal?.removeEventListener("abort", stopped);
+          };
           child.stdout.on("data", (chunk: Buffer) => (out += chunk.toString("utf8")));
           child.on("error", (error) => {
-            clearTimeout(timer);
-            reject(new Error(`clamscan could not run: ${error.message}`));
+            finished();
+            reject(ended ?? new Error(`clamscan could not run: ${error.message}`));
           });
           child.on("close", (code) => {
-            clearTimeout(timer);
-            resolve({ code, out });
+            finished();
+            if (ended) reject(ended);
+            else resolve({ code, out });
           });
         });
         if (output.code === 0) return { clean: true };

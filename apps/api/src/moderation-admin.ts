@@ -8,7 +8,7 @@ import { catalogTrust, keyRefusal, type CatalogTrust, type KeyRefusal } from "./
 import { mailLanguage, publishedMail, type Mailer } from "./mail.ts";
 import { bannedMail, createNotifier, declinedMail, DECLINE_REASONS, isDeclineReason, type Notifier } from "./moderation-mail.ts";
 import { runChecks } from "./moderation.ts";
-import { uploadMemory, zipMemory } from "./upload-memory.ts";
+import { uploadMemory, type UploadMemory, zipMemory } from "./upload-memory.ts";
 import type { Scanner } from "./virus-scan.ts";
 
 /**
@@ -34,6 +34,10 @@ export interface ModerationAdminOptions {
   lifecycle?: AccountLifecycle | undefined;
   /** The catalogue public key the signed lists are checked against (CATALOGUE_PUBLIC_KEY outside tests). */
   catalogueKey?: string | undefined;
+  /** What the run over live modules may hold in memory (the budget uploads share by default). */
+  memory?: UploadMemory | undefined;
+  /** The longest a virus scan may take (SCAN_LIMIT_MS by default). */
+  scanLimitMs?: number | undefined;
 }
 
 /** Why Approve refuses a version because of its key (keyRefusal), for the maintainer. */
@@ -107,7 +111,7 @@ function describe(waiting: WaitingVersion, catalog: CatalogStore, accounts: Acco
   };
 }
 
-export function moderationRoutes({ catalog, accounts, scanner, mailer, mailDailyLimit, ownerEmail, now = Date.now, keepVersions = PUBLISH_LIMITS.keepVersions, lifecycle: given, catalogueKey }: ModerationAdminOptions) {
+export function moderationRoutes({ catalog, accounts, scanner, mailer, mailDailyLimit, ownerEmail, now = Date.now, keepVersions = PUBLISH_LIMITS.keepVersions, lifecycle: given, catalogueKey, memory = uploadMemory, scanLimitMs }: ModerationAdminOptions) {
   const app = new Hono();
   // Read on every use, so a list signed since counts at once.
   const trust = () => catalogTrust(catalog, catalogueKey);
@@ -162,19 +166,21 @@ export function moderationRoutes({ catalog, accounts, scanner, mailer, mailDaily
   });
 
   app.post("/approve", async (context) => {
-    const { sha256 } = await json(context.req.raw);
+    const { sha256, relist } = await json(context.req.raw);
     if (typeof sha256 !== "string") return context.json({ error: "Send { sha256 }." }, 400);
     const waiting = catalog.waitingVersion(sha256);
     if (!waiting) return context.json({ error: "Nothing with this hash is waiting." }, 404);
     if (waiting.accountId && accounts.isBanned(waiting.accountId)) return context.json({ error: "This developer is banned. Unban them first, or decline the version." }, 409);
     if (waiting.accountId && accounts.isSuspended(waiting.accountId)) return context.json({ error: "This developer is suspended. Unsuspend them first, or decline the version." }, 409);
-    // Approving wouldn't list it, and the developer would be told it's live.
-    if (catalog.isTakenDown(waiting.id)) return context.json({ error: "This module was taken down. List it again first, or decline the version." }, 409);
+    // Approving alone wouldn't list it, and the developer would be told it's live. Listing the module first would serve the
+    // version it was taken down for until this one is approved, so `relist` does both in one step.
+    const takenDown = catalog.isTakenDown(waiting.id);
+    if (takenDown && relist !== true) return context.json({ error: "This module was taken down. Approve and list it, or decline the version.", reason: "taken-down" }, 409);
     // The key's state as an upload checks it: a key unlinked, revoked or reported as leaked since the upload lists nothing new.
     // Nothing is awaited from here to approve(), so the state can't change in between.
     const keyState = keyRefusal(accounts, trust(), waiting.owner, sha256, waiting.accountId);
     if (keyState) return context.json({ error: KEY_REFUSED[keyState], reason: keyState }, 409);
-    const approved = catalog.approve(sha256, new Date(now()));
+    const approved = catalog.approve(sha256, new Date(now()), { relist: takenDown });
     if (!approved) return context.json({ error: "Its zip is gone, so it can't be listed. Decline it." }, 409);
     catalog.prune(waiting.id, keepVersions, new Date(now()));
     catalog.clearFull();
@@ -260,21 +266,29 @@ export function moderationRoutes({ catalog, accounts, scanner, mailer, mailDaily
           continue;
         }
         // It unpacks in the memory uploads use, so it waits its turn like them: a zip that doesn't fit now is a result, not a crash.
-        const ticket = uploadMemory.take(zipMemory(bytes) ?? bytes.length);
+        const needed = zipMemory(bytes) ?? bytes.length;
+        if (needed > memory.budget) {
+          results.push({ ...base, reasons: [], error: "It's too big to check here." });
+          continue;
+        }
+        const ticket = memory.take(needed);
         if (!ticket) {
           results.push({ ...base, reasons: [], error: "There wasn't enough memory free to check it. Run this again." });
           continue;
         }
+        // A scan that was told to stop keeps the memory counted until it has.
+        const scans: Promise<void>[] = [];
         try {
           const checked = checkCatalogZip(bytes, { official: isOfficialId(live.id) });
           const fingerprints = developer ? accounts.keys(developer).map((key) => key.fingerprint) : [live.owner];
-          const reasons = await runChecks({ catalog, scanner }, checked, bytes, { accountId: developer, fingerprints }, live.sha256);
+          const reasons = await runChecks({ catalog, scanner, scanLimitMs, holdWhileScanning: (stopped) => scans.push(stopped) }, checked, bytes, { accountId: developer, fingerprints }, live.sha256);
           results.push({ ...base, reasons });
         } catch (error) {
           // A zip that can't be checked is a result too, not a pass.
           results.push({ ...base, reasons: [], error: error instanceof CatalogError ? error.message : "The checks could not run." });
         } finally {
-          ticket.release();
+          if (scans.length === 0) ticket.release();
+          else void Promise.all(scans).then(() => ticket.release());
         }
       }
       const result = {

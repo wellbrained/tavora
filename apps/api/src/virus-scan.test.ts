@@ -74,6 +74,33 @@ describe("scanning through clamd", () => {
     expect(await scanner.scan(Buffer.from("zip bytes"), files)).toEqual({ clean: false, threats: ["Eicar-Test-Signature in evil.js"] });
   });
 
+  it("starts nothing more once it is told to stop, and settles only when nothing runs", async () => {
+    // clamd never answers, so only the signal can end these.
+    const clamd = await fakeClamd(() => null);
+    closers.push(clamd.close);
+    const scanner = createClamdScanner({ port: clamd.port }, { timeoutMs: 30_000 });
+    const files = Array.from({ length: 40 }, (_, index) => ({ name: `f${index}.js`, data: Buffer.from(`file ${index}`) }));
+    const stop = new AbortController();
+    const scan = scanner.scan(Buffer.from("zip bytes"), files, stop.signal);
+    while (clamd.received.length < 4) await new Promise((resolve) => setTimeout(resolve, 2));
+    stop.abort();
+    await expect(scan).rejects.toThrow(/stopped/);
+    const started = clamd.received.length;
+    expect(started).toBeLessThanOrEqual(4);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(clamd.received.length).toBe(started);
+  });
+
+  it("stops the other streams when one fails", async () => {
+    let answered = 0;
+    const clamd = await fakeClamd(() => (++answered === 1 ? "stream: broken ERROR" : null));
+    closers.push(clamd.close);
+    const scanner = createClamdScanner({ port: clamd.port }, { timeoutMs: 30_000 });
+    const files = Array.from({ length: 40 }, (_, index) => ({ name: `f${index}.js`, data: Buffer.from(`file ${index}`) }));
+    await expect(scanner.scan(Buffer.from("zip bytes"), files)).rejects.toThrow(/clamd answered/);
+    expect(clamd.received.length).toBeLessThanOrEqual(5);
+  });
+
   it("gives a bigger stream more time", async () => {
     const slow = await fakeClamd(() => "stream: OK", 600);
     closers.push(slow.close);

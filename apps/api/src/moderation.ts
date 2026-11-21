@@ -25,6 +25,10 @@ export interface ModerationOptions {
   catalog: CatalogStore;
   /** The virus scanner. Without one, or when it fails, every version waits. */
   scanner?: Scanner | undefined;
+  /** The longest a whole virus scan may take (SCAN_LIMIT_MS by default). */
+  scanLimitMs?: number | undefined;
+  /** Told about a scan that ran out of time and was told to stop: `stopped` settles once it has, and until then it still holds its memory. */
+  holdWhileScanning?: ((stopped: Promise<void>) => void) | undefined;
 }
 
 const reason = (check: CheckName, text: string, detail?: string): ReviewReason => ({ check, text, ...(detail ? { detail } : {}) });
@@ -243,13 +247,23 @@ function checkCode(files: readonly ZipFile[]): ReviewReason | null {
 /** The longest a whole virus scan may take before the version waits instead. */
 export const SCAN_LIMIT_MS = 180_000;
 
-async function checkVirus(bytes: Buffer, files: readonly ZipFile[], scanner: Scanner | undefined): Promise<ReviewReason | null> {
+async function checkVirus(bytes: Buffer, files: readonly ZipFile[], { scanner, scanLimitMs = SCAN_LIMIT_MS, holdWhileScanning }: ModerationOptions): Promise<ReviewReason | null> {
   if (!scanner) return reason("virus", "The virus scan couldn't run, so a person looks at it.", "No virus scanner is set up on the server");
   try {
-    // However a scanner behaves, a scan that takes this long did not run in time.
+    // However a scanner behaves, a scan that takes this long did not run in time: it is told to stop, and the version waits
+    // right away. Its memory stays counted until it really has stopped.
+    const stop = new AbortController();
+    const scan = Promise.resolve().then(() => scanner.scan(bytes, files, stop.signal));
     let timer: NodeJS.Timeout | undefined;
-    const late = new Promise<never>((_, reject) => (timer = setTimeout(() => reject(new Error("the scan took too long")), SCAN_LIMIT_MS)));
-    const result = await Promise.race([Promise.resolve().then(() => scanner.scan(bytes, files)), late]).finally(() => clearTimeout(timer));
+    const late = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        const error = new Error("the scan took too long");
+        stop.abort(error);
+        holdWhileScanning?.(scan.then(() => undefined, () => undefined));
+        reject(error);
+      }, scanLimitMs);
+    });
+    const result = await Promise.race([scan, late]).finally(() => clearTimeout(timer));
     if (result.clean) return null;
     return reason("virus", "The virus scan found something.", `Found: ${result.threats.slice(0, 5).join(", ")}`);
   } catch (error) {
@@ -273,13 +287,13 @@ async function guarded(check: CheckName, run: () => ReviewReason | null | Promis
  * already in the catalog (the one-time run over live modules), so it is not compared to itself.
  */
 export async function runChecks(options: ModerationOptions, checked: CheckedZip, bytes: Buffer, subject: Subject, exceptSha?: string): Promise<ReviewReason[]> {
-  const { catalog, scanner } = options;
+  const { catalog } = options;
   const results = await Promise.all([
     guarded("words", () => checkWords(checked)),
     guarded("permissions", () => checkPermissions(checked, catalog, exceptSha)),
     guarded("copy", () => checkCopies(checked, catalog, subject)),
     guarded("code", () => checkCode(checked.files)),
-    guarded("virus", () => checkVirus(bytes, checked.files, scanner)),
+    guarded("virus", () => checkVirus(bytes, checked.files, options)),
   ]);
   return results.filter((result): result is ReviewReason => result !== null);
 }

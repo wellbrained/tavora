@@ -253,7 +253,8 @@ ${"A".repeat(64)}
 
   it("checks the prefix again after the virus scan, so uploads at once can't give an account a fourth prefix", async () => {
     const scan = heldScanner();
-    const { store, catalog, developer, send, reason } = setup({}, undefined, roomy(), roomy(), scan.scanner);
+    // The maintainer's account, the one that may upload several at once.
+    const { store, catalog, developer, send, reason } = setup({}, "dev@example.com", roomy(), roomy(), scan.scanner);
     const { key, accountId } = developer("dev@example.com");
     store.reservePrefix(accountId, "alpha", 0);
     store.reservePrefix(accountId, "beta", 0);
@@ -332,19 +333,23 @@ ${"A".repeat(64)}
     expect(catalog.modules()).toEqual([]);
   });
 
-  it("checks the daily limit again after the scan, so uploads at once can't go past it", async () => {
+  it("takes one upload per account at a time, so uploads at once can't go past the daily limit", async () => {
     const scan = heldScanner();
     const { catalog, developer, send, reason } = setup({ uploadsPerDay: 1 }, undefined, roomy(), roomy(), scan.scanner);
     const { key, accountId } = developer("dev@example.com");
-    // Both pass the first check while nothing is uploaded yet, then wait for their scans.
     const first = send(key, moduleZip(key, "wellbrained.timer", "1.0.0"));
-    const second = send(key, moduleZip(key, "wellbrained.timer", "1.0.1"));
-    await scan.running(2);
+    await scan.running(1);
+    const second = await send(key, moduleZip(key, "wellbrained.timer", "1.0.1"));
+    expect(second.status).toBe(429);
+    expect(second.headers.get("retry-after")).toBe("60");
+    expect(await reason(second)).toBe("too-many");
     scan.release();
-    const answers = await Promise.all([first, second]);
-    expect(answers.map((answer) => answer.status).sort()).toEqual([201, 429]);
-    expect(await reason(answers.find((answer) => answer.status === 429)!)).toBe("daily-limit");
+    expect((await first).status).toBe(201);
     expect(catalog.uploadsSince(accountId, new Date(0))).toBe(1);
+    // Its turn came, and now the day's limit answers.
+    const third = await send(key, moduleZip(key, "wellbrained.timer", "1.0.1"));
+    expect(third.status).toBe(429);
+    expect(await reason(third)).toBe("daily-limit");
   });
 
   it("gives back a prefix it reserved when the version can't be added", async () => {
