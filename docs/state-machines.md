@@ -106,6 +106,8 @@ the pull request that makes it explicit.
   and `data-status` on the slot.
 
 - **Panel dialog** (`components/PanelDialog.vue`, `main/panel-views.ts` `dialogState`) → `closed | placing | drawn | shown`.
+  A menu of the panel over its dialog is already one value (`dialogMenu`: `null | picturing | out`): the view steps aside
+  behind its picture (`dialogPicture`) while the host page draws the menu.
 
 - **Browser panel** (`main/browser-view.ts`: `status`, `error`, `committedUrl`, `requestedUrl`) →
   `blank | loading | page | failed | crashed`. `failed` also holds a page's own move to a site of the other session

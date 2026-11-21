@@ -457,6 +457,8 @@ export class Host {
       this.openPendingDialog();
     },
     dialogClosed: () => {
+      // A tooltip of the panel in its dialog was placed there.
+      this.tooltips?.close();
       if (this.window.isDestroyed()) return;
       this.window.webContents.send("host:panel-dialog", null);
       // The dialog's page may have held the keys; they go back to the host page (which returns focus to where it was).
@@ -827,7 +829,7 @@ export class Host {
     this.tooltips=new TooltipWindow({parent:this.window,preload:path.join(path.dirname(options.modulePreload),"tooltip.cjs"),hidden:!!options.hidden,theme:()=>this.currentTheme,language:()=>this.language,
       closed:(owner,id)=>{this.moduleView(owner)?.tooltipClosed(id);},
       source:owner=>{
-        const view=this.moduleView(owner),bounds=this.panels.boundsOf(owner);
+        const view=this.moduleView(owner),bounds=this.panels.placeOf(owner);
         if(!view||!bounds||!this.panels.isShowing(owner))return undefined;
         const module=this.modules.get(view.moduleId);if(!module)return undefined;
         return{root:module.root,module:view.moduleId,name:this.shown(module.manifest).name,bounds};
@@ -4851,16 +4853,24 @@ export class Host {
 
   /**
    * Draws a module's menu in the host UI, over its panel and every other one. Only one at a time: a
-   * new one closes the last. Nothing is shown for a panel that is hidden or under a host menu or dialog.
+   * new one closes the last. Nothing is shown for a panel that is hidden or under a host menu or dialog; a panel in its
+   * own dialog can show one, once its view has stepped aside for it.
    */
   private showModuleMenu(instanceId: string, menu: CheckedMenu): Promise<string | null> {
-    if (!this.panels.has(instanceId) || !this.panels.isPlaced(instanceId) || this.panels.isLent(instanceId) || this.panels.overlay || this.window.isDestroyed()) return Promise.resolve(null);
+    if (!this.panels.has(instanceId) || !this.panels.mayShowMenu(instanceId) || this.window.isDestroyed()) return Promise.resolve(null);
     this.closeModuleMenu();
     const { id: requestId, answer } = this.questions.ask("menu", { panel: instanceId }, { choices: menu.choices });
-    // The menu is drawn by the host page, so the keyboard goes there while it is open.
-    this.window.webContents.focus();
     const shown: ModuleMenu = { requestId, instanceId, ...menu.request };
-    this.window.webContents.send("host:module-menu", shown);
+    const draw = () => {
+      if (this.questions.peek("menu")?.id !== requestId || this.window.isDestroyed()) return;
+      // The menu is drawn by the host page, so the keyboard goes there while it is open.
+      this.window.webContents.focus();
+      this.window.webContents.send("host:module-menu", shown);
+    };
+    if (this.panels.inDialog(instanceId)) {
+      this.tooltips.close(instanceId);
+      void this.panels.openDialogMenu(instanceId).then(draw);
+    } else draw();
     return answer;
   }
 
@@ -4870,6 +4880,7 @@ export class Host {
     const open = this.questions.peek("menu");
     if (!open || answer.requestId !== open.id) return;
     this.questions.answer(open.id, typeof answer.id === "string" && open.payload.choices.has(answer.id) ? answer.id : null);
+    this.panels.closeDialogMenu();
     // The keyboard goes back to the panel, so an action such as Rename can take it.
     const view = "panel" in open.scope ? this.moduleView(open.scope.panel) : undefined;
     if (view && !view.view.webContents.isDestroyed()) view.view.webContents.focus();
@@ -4978,6 +4989,7 @@ export class Host {
   /** Closes the module menu shown now (only if it belongs to `instanceId`, when given), as if nothing was chosen. */
   private closeModuleMenu(instanceId?: string): void {
     const ended = instanceId === undefined ? this.questions.cancelKind("menu") : this.questions.cancel({ panel: instanceId }, "menu");
+    if (ended) this.panels.closeDialogMenu();
     if (ended && !this.window.isDestroyed()) this.window.webContents.send("host:module-menu", null);
   }
 

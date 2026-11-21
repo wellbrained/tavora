@@ -5,7 +5,7 @@
 // entries and only accepts an answer it offered.
 import { computed, ref, watch } from "vue";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
-import { api, moduleMenu, useFloating } from "../../host";
+import { api, moduleMenu, panelDialog, useFloating } from "../../host";
 import ModuleMenuEntries from "./ModuleMenuEntries.vue";
 
 const track = useFloating();
@@ -21,8 +21,9 @@ watch(
       track(false);
       return;
     }
-    // `at` is in the panel's pixels; the panel's view lies exactly over its content box here.
-    const box = document.querySelector(`[data-testid="panel-content-${CSS.escape(menu.instanceId)}"]`)?.getBoundingClientRect();
+    // `at` is in the panel's pixels; the panel's view lies exactly over its content box here, or its dialog's body.
+    const place = panelDialog.value?.instanceId === menu.instanceId ? '[data-testid="panel-dialog-body"]' : `[data-testid="panel-content-${CSS.escape(menu.instanceId)}"]`;
+    const box = document.querySelector(place)?.getBoundingClientRect();
     const clamp = (value: number, max: number) => Math.min(Math.max(value, 0), Math.max(max, 0));
     const x = clamp(menu.at.x, box?.width ?? 0);
     const y = clamp(menu.at.y, box?.height ?? 0);
