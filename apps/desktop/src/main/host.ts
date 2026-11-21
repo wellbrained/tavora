@@ -2577,7 +2577,10 @@ export class Host {
         this.saveLibrary();
       };
     const pageSite = (instanceId: string) => {
-      const site = siteOfUrl(this.browser(instanceId).state.url);
+      const panel = this.browser(instanceId);
+      // While the panel asks, the address it shows is the one asked about, not a page of the panel's.
+      if (panel.asking) throw new LibraryError("error.browserAsking");
+      const site = siteOfUrl(panel.state.url);
       if (!site) throw new LibraryError("error.openPageFirst");
       return site;
     };

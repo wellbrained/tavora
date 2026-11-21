@@ -1351,6 +1351,7 @@ export const en = {
   "error.themeGone": "That theme is not installed any more.",
   "error.themeNoMode": "This theme has no {mode} version.",
   "error.openPageFirst": "Open a page first.",
+  "error.browserAsking": "Pick Open or Stay on this page first.",
   "error.workspaceGone": "That workspace no longer exists.",
   "error.openWorkspaceFirst": "Open a workspace first.",
   "error.nothingToShare": "There is nothing to share right now.",

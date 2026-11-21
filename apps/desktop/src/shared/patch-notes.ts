@@ -28,46 +28,39 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.109",
+    date: "2026-11-21",
+    title: "Browser asks, also when you change a site",
+    notes: [
+      "While the Browser asks to open another site, changing a site's sign-in or ad blocking leaves the question there. Only Open opens it.",
+      "The sign-in and ad-block buttons are off while it asks.",
+      "When a site starts or stops signing in for all workspaces, a page you typed opens again as it was. Any other page opens at the site's home.",
+    ],
+    prs: [
+      { number: 853, title: "Browser: a site-list change never opens the asked address; pages move to their site's home" },
+    ],
+    tags: ["browser", "modules", "privacy", "security", "website", "workspace"],
+  },
+  {
     version: "0.24.108",
     date: "2026-11-21",
-    title: "Your keys stay with your account",
+    title: "Your keys stay yours",
     notes: [
+      "An OBS overlay that has stayed open since before 0.24.105 shows nothing new after this update. Press Refresh on its Browser Source in OBS.",
       "Signed out from another device? Your recovery key and publisher keys wait on this PC for you. Someone else who signs in here gets their own and never sees yours.",
       "Sign out removes only your own keys. With your cloud copy in a folder, your key stays for it: only the saved publisher keys go.",
       "Your cloud copy pauses while someone else is signed in. If they turn on a cloud copy of their own here, yours stays off until you turn it on again.",
-      "When a development folder takes over a module, its tabs in other workspaces start fresh too, and the module's own saves wait for it.",
-    ],
-    prs: [
-      { number: 851, title: "Security: account keys stay with their account, panel owner handover for closed panels" },
-    ],
-    tags: ["accounts", "cloud-copy", "modules", "privacy", "publishing", "website", "workspace"],
-  },
-  {
-    version: "0.24.107",
-    date: "2026-11-20",
-    title: "Browser asks, overlays stay framed",
-    notes: [
-      "When the Browser reopens the page you left and it sends you on to a site you sign in to for all workspaces, or away from one, it asks first. Reload, Back, Forward and Try again do the same.",
+      "When the Browser reopens a page, or you press Reload, Back, Forward or Try again, and the site sends you on to a site you sign in to for all workspaces (or away from one), it asks first. The page behind the question can't make it go away.",
       "A site that signs you in through a site you use in all workspaces may now ask once when the Browser reopens it. Press Open to go on.",
-      "While the Browser asks, the page behind it can't make the question go away.",
-      "An OBS overlay that has stayed open since before 0.24.105 shows nothing new after this update. Press Refresh on its Browser Source in OBS.",
-    ],
-    prs: [
-      { number: 849, title: "Security: Browser reloads ask before switching session, storage check from the start, OBS frame on its own origin" },
-    ],
-    tags: ["browser", "modules", "overlays", "privacy", "security", "website"],
-  },
-  {
-    version: "0.24.106",
-    date: "2026-11-20",
-    title: "Tab names say what's wrong",
-    notes: [
+      "When a development folder takes over a module, its tabs in other workspaces start fresh too, and the module's own saves wait for it.",
       "Renaming a tab with an empty name keeps telling you why, even when the tabs move or scroll.",
     ],
     prs: [
+      { number: 851, title: "Security: account keys stay with their account, panel owner handover for closed panels" },
+      { number: 849, title: "Security: Browser reloads ask before switching session, storage check from the start, OBS frame on its own origin" },
       { number: 848, title: "Kit TabStrip: a scroll hides the rename message's card, not the error" },
     ],
-    tags: ["pdf-viewer", "ui-kit"],
+    tags: ["accounts", "browser", "cloud-copy", "modules", "overlays", "pdf-viewer", "privacy", "publishing", "security", "ui-kit", "website", "workspace"],
   },
   {
     version: "0.24.105",

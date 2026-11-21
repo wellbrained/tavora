@@ -1547,7 +1547,8 @@ export class ModuleView {
       this.measuring = true;
       overStorageLimit(folder, limit)
         .then((over) => {
-          if (over) this.options.onStorageOver();
+          // A measurement still running when the panel closes reports nothing: the panel is gone.
+          if (over && !this.disposed) this.options.onStorageOver();
         })
         .catch(() => undefined)
         .finally(() => (this.measuring = false));

@@ -49,6 +49,19 @@ describe("createRateLimiter", () => {
     expect(one.peek("a", 1000)).toBe(0);
   });
 
+  it("counts a request as several when asked, all or none", () => {
+    const five = createRateLimiter({ limit: 5, windowMs: 1000 });
+    const two = createRateLimiter({ limit: 2, windowMs: 1000 });
+    // More than the limit holds at once is refused even as the first.
+    expect(two.peek("a", 0, 3)).toBe(1);
+    expect(checkAll([[five, "a", 3], [two, "a", 3]], 0)).toBe(1);
+    expect(five.peek("a", 0, 5)).toBe(0);
+    expect(checkAll([[five, "a", 3], [two, "a"]], 0)).toBe(0);
+    expect([five.peek("a", 0, 2), five.peek("a", 0, 3)]).toEqual([0, 1]);
+    expect(five.check("a", 0, 2)).toBe(0);
+    expect(five.check("a", 0)).toBe(1);
+  });
+
   it("never keeps more clients than its cap", () => {
     const limiter = createRateLimiter({ limit: 1, windowMs: 60_000, maxClients: 3 });
     for (const key of ["a", "b", "c", "d", "e"]) expect(limiter.check(key, 1000)).toBe(0);

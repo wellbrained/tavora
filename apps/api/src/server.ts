@@ -101,7 +101,9 @@ const accountDailyLimit = Number.isInteger(accountLimit) && accountLimit > 0 ? a
 const accountStore = mailer ? new AccountStore(path.join(stateDir, "accounts.sqlite")) : undefined;
 // The cloud copies: their own file, which the daily backup leaves out (decided 2026-10-19; the PCs upload again).
 // All accounts' copies together stay under a total and leave free space on the state disk (COPY_TOTAL_LIMIT_GB, COPY_FREE_FLOOR_GB).
-const copies = accountStore ? new CopyStore(path.join(stateDir, "copies.sqlite"), copyLimitsFromEnv(process.env, stateDir)) : undefined;
+// The secret for network marks, kept out of every database: module-request votes and the cloud copies' networks.
+const networkSalt = voteSalt(process.env, path.join(stateDir, "module-requests.salt"));
+const copies = accountStore ? new CopyStore(path.join(stateDir, "copies.sqlite"), { ...copyLimitsFromEnv(process.env, stateDir), networkSalt }) : undefined;
 if (copies) {
   // Parts uploaded but never saved in a version go after a day; once an hour is plenty.
   const sweepCopies = () => {
@@ -141,7 +143,7 @@ console.log(`[tavora-api] ${catalog.index().length} modules in the catalog.`);
 const stats = new StatsStore(path.join(stateDir, "stats.sqlite"));
 // Votes for a module for a game (module-requests.ts): their own file, in the daily backup; the secret for their networks
 // stays out of it.
-const moduleRequests = new ModuleRequestStore(path.join(stateDir, "module-requests.sqlite"), { salt: voteSalt(process.env, path.join(stateDir, "module-requests.salt")) });
+const moduleRequests = new ModuleRequestStore(path.join(stateDir, "module-requests.sqlite"), { salt: networkSalt });
 // Which requested games the game list knows; the list may be newer than the votes, and rows from before this have none.
 moduleRequests.refreshKnown(gameListKnows(db));
 const activity = new ActivityLog(path.join(stateDir, "activity.sqlite"));

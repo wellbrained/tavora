@@ -1353,6 +1353,7 @@ export const de: Record<keyof typeof en, string> = {
   "error.themeGone": "Dieses Design ist nicht mehr installiert.",
   "error.themeNoMode": "Dieses Design hat keine Version „{mode}“.",
   "error.openPageFirst": "Öffne zuerst eine Seite.",
+  "error.browserAsking": "Wähle zuerst Öffnen oder Auf dieser Seite bleiben.",
   "error.workspaceGone": "Diesen Arbeitsbereich gibt es nicht mehr.",
   "error.openWorkspaceFirst": "Öffne zuerst einen Arbeitsbereich.",
   "error.nothingToShare": "Im Moment gibt es nichts zu teilen.",

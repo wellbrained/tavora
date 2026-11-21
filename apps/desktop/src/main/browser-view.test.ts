@@ -74,6 +74,9 @@ const { BrowserPanel, browserSession, crossSessionStep, pageReferrer } = await i
 
 type Emitting = { emit(name: string, ...args: unknown[]): void };
 
+/** The sites signed in for all workspaces; a test may change the list. */
+const sharedSites = new Set(["https://shared.example/"]);
+
 function panel() {
   const sessions: string[] = [];
   const tabs: unknown[] = [];
@@ -85,7 +88,7 @@ function panel() {
       sessions.push(kind);
       return {} as never;
     },
-    isSharedSite: (url) => url.startsWith("https://shared.example/"),
+    isSharedSite: (url) => [...sharedSites].some((site) => url.startsWith(site)),
     adblockOn: () => true,
     swap: () => undefined,
     onFocusAddress: () => undefined,
@@ -511,6 +514,201 @@ describe("a Browser panel's page going to a site of the other session", () => {
     browser.stay();
     expect(browser.state.error).toBeNull();
     expect(browser.state.url).toBe("https://other.example/");
+  });
+
+  it("keeps asking when a Browser site list changes, and never opens the address asked about without Open", () => {
+    const { browser, start, redirect, sessions } = navigating();
+    browser.reopen("https://bounce.example/x");
+    start("https://bounce.example/x");
+    redirect(SHARED);
+    expect(browser.state.error).toEqual({ kind: "otherSession", detail: "" });
+    world.loads.length = 0;
+    browser.siteSettingsChanged();
+    expect(sessions).toEqual(["workspace"]);
+    expect(world.loads).toEqual([]);
+    expect(browser.state.error).toEqual({ kind: "otherSession", detail: "" });
+    expect(browser.state.url).toBe(SHARED);
+
+    // The asked site leaves the shared list: the question stays, and Open opens it in the session it belongs in then.
+    sharedSites.delete("https://shared.example/");
+    try {
+      browser.siteSettingsChanged();
+      expect(world.loads).toEqual([]);
+      expect(browser.state.error).toEqual({ kind: "otherSession", detail: "" });
+      browser.openAsked();
+      expect(sessions).toEqual(["workspace"]);
+      expect(world.loads).toEqual([{ contents: browser.view.webContents.id, url: SHARED, options: undefined }]);
+    } finally {
+      sharedSites.add("https://shared.example/");
+    }
+  });
+
+  it("moves a page the user opened to the other session when its site moves there, as before", () => {
+    const { browser, start, commit, sessions } = navigating();
+    browser.navigate("https://moving.example/a");
+    start("https://moving.example/a");
+    commit("https://moving.example/a");
+    world.loads.length = 0;
+    sharedSites.add("https://moving.example/");
+    try {
+      browser.siteSettingsChanged();
+      expect(sessions).toEqual(["workspace", "shared"]);
+      expect(world.loads).toEqual([{ contents: browser.view.webContents.id, url: "https://moving.example/a", options: undefined }]);
+      expect(browser.state.error).toBeNull();
+    } finally {
+      sharedSites.delete("https://moving.example/");
+    }
+  });
+
+  /** Runs `test` with `site` on the shared list. */
+  function withShared(site: string, test: () => void) {
+    sharedSites.add(site);
+    try {
+      test();
+    } finally {
+      sharedSites.delete(site);
+    }
+  }
+
+  it("moves any other page there by its site's home, without asking, as the user chose the site and not the address", () => {
+    const MOVING = "https://moving.example/mail/inbox?id=7";
+    const ways: Record<string, (made: ReturnType<typeof navigating>) => void> = {
+      reopened: ({ browser, start, commit }) => {
+        browser.reopen(MOVING);
+        start(MOVING);
+        commit(MOVING);
+      },
+      "gone to by the page": ({ start, commit }) => {
+        commit(PUBLIC);
+        start(MOVING);
+        commit(MOVING);
+      },
+      "a link the user clicked": ({ start, commit, click }) => {
+        commit(PUBLIC);
+        click();
+        start(MOVING);
+        commit(MOVING);
+      },
+      "redirected to from a typed address": ({ browser, start, redirect, commit }) => {
+        browser.navigate("https://short.example/x");
+        start("https://short.example/x");
+        redirect(MOVING);
+        commit(MOVING);
+      },
+      reloaded: ({ browser, contents, start, commit }) => {
+        commit(MOVING);
+        (contents as unknown as { getURL: () => string }).getURL = () => MOVING;
+        browser.reload();
+        start(MOVING);
+        commit(MOVING);
+      },
+      "gone back to": ({ browser, contents, start, commit }) => {
+        commit(PUBLIC);
+        (contents as unknown as { back: string }).back = MOVING;
+        browser.back();
+        start(MOVING);
+        commit(MOVING);
+      },
+      "typed, then changed by the page": ({ browser, contents, start, commit }) => {
+        browser.navigate("https://moving.example/a");
+        start("https://moving.example/a");
+        commit("https://moving.example/a");
+        contents.emit("did-navigate-in-page", {}, MOVING, true);
+      },
+    };
+    for (const [way, go] of Object.entries(ways)) {
+      const made = navigating();
+      go(made);
+      world.loads.length = 0;
+      withShared("https://moving.example/", () => {
+        made.browser.siteSettingsChanged();
+        expect(made.sessions, way).toEqual(["workspace", "shared"]);
+        expect(world.loads, way).toEqual([{ contents: made.browser.view.webContents.id, url: "https://moving.example/", options: undefined }]);
+        expect(made.browser.state.error, way).toBeNull();
+      });
+    }
+  });
+
+  it("moves a page a click carried to the other session back by its site's home, not the address the page chose", () => {
+    const { browser, commit, willNavigate, click, sessions } = navigating();
+    commit("https://page.example/a");
+    click();
+    willNavigate(SHARED);
+    const contents = browser.view.webContents as unknown as Emitting;
+    contents.emit("did-start-navigation", { url: SHARED, isMainFrame: true, isSameDocument: false });
+    contents.emit("did-navigate", {}, SHARED);
+    world.loads.length = 0;
+    sharedSites.delete("https://shared.example/");
+    try {
+      browser.siteSettingsChanged();
+      expect(sessions).toEqual(["workspace", "shared", "workspace"]);
+      expect(world.loads).toEqual([{ contents: browser.view.webContents.id, url: "https://shared.example/", options: undefined }]);
+    } finally {
+      sharedSites.add("https://shared.example/");
+    }
+  });
+
+  it("moves a page that failed before anything opened by its site's home", () => {
+    const { browser, start, fail, sessions } = navigating();
+    browser.reopen("https://moving.example/a?x");
+    start("https://moving.example/a?x");
+    fail("https://moving.example/a?x");
+    expect(browser.state.error).toEqual({ kind: "notFound", detail: "" });
+    world.loads.length = 0;
+    withShared("https://moving.example/", () => {
+      browser.siteSettingsChanged();
+      expect(sessions).toEqual(["workspace", "shared"]);
+      expect(world.loads).toEqual([{ contents: browser.view.webContents.id, url: "https://moving.example/", options: undefined }]);
+    });
+  });
+
+  it("moves the page behind the question once the user stays, when its site moved while the panel asked", () => {
+    const { browser, commit, willNavigate, sessions } = navigating();
+    commit("https://moving.example/inbox?id=7");
+    willNavigate(SHARED);
+    world.loads.length = 0;
+    withShared("https://moving.example/", () => {
+      browser.siteSettingsChanged();
+      expect(world.loads).toEqual([]);
+      expect(browser.state.error).toEqual({ kind: "otherSession", detail: "" });
+      browser.stay();
+      expect(sessions).toEqual(["workspace", "shared"]);
+      expect(world.loads).toEqual([{ contents: browser.view.webContents.id, url: "https://moving.example/", options: undefined }]);
+      expect(browser.state.error).toBeNull();
+    });
+  });
+
+  it("shows whether the site asked about is shared from the list, and hands only the page's own address to the system browser", () => {
+    const { browser, commit, willNavigate } = navigating();
+    commit(PUBLIC);
+    expect(browser.state.shared).toBe(false);
+    willNavigate(SHARED);
+    expect(browser.asking).toBe(true);
+    expect(browser.state.shared).toBe(true);
+    expect(browser.externalUrl).toBe(PUBLIC);
+
+    const reopened = navigating();
+    reopened.browser.reopen("https://bounce.example/x");
+    reopened.start("https://bounce.example/x");
+    reopened.redirect(SHARED);
+    expect(reopened.browser.externalUrl).toBeNull();
+  });
+
+  it("forgets its own load that stopped or failed before it started, so a later navigation of the page can't take its start", () => {
+    for (const end of ["stop", "fail"] as const) {
+      const { browser, start, redirect, stop, fail, sessions } = navigating();
+      browser.navigate("https://short.example/x");
+      // A beforeunload of the page cancelled it: Chromium never reported its start.
+      if (end === "stop") stop();
+      else fail("https://short.example/x");
+      // Later the page goes to that address by itself and is redirected to the other session.
+      start("https://short.example/x");
+      world.loads.length = 0;
+      redirect(SHARED);
+      expect(world.loads).toEqual([]);
+      expect(sessions).toEqual(["workspace"]);
+      expect(browser.state.error).toEqual({ kind: "otherSession", detail: "" });
+    }
   });
 
   it("hands a new tab the referrer Chromium worked out for the page", async () => {

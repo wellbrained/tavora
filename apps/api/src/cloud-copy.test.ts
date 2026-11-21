@@ -3,9 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 import { AccountStore } from "./account-store.ts";
 import { createApp } from "./app.ts";
 import { mkdtempSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { COPY_LIMIT, copyLimitsFromEnv, CopyStore, FREE_FLOOR, MAX_PART_BYTES, NETWORK_DAY_LIMIT, NEW_ACCOUNT_MS, NEW_ACCOUNT_SHARE, readParts, readSwap, STORED_LIMIT, TOTAL_LIMIT, UNUSED_PART_MS, writeParts, type CopyStoreOptions } from "./cloud-copy.ts";
+import { COPY_LIMIT, copyLimitsFromEnv, CopyStore, FREE_FLOOR, MAX_PART_BYTES, NETWORK_DAY_LIMIT, NETWORK_SHARE, NEW_ACCOUNT_MS, NEW_ACCOUNT_SHARE, readParts, readSwap, STORED_LIMIT, TOTAL_LIMIT, UNUSED_PART_MS, writeParts, type CopyHolder, type CopyStoreOptions } from "./cloud-copy.ts";
 import { buildDataset, writeDatabase } from "./dataset.ts";
 import { createTestInbox } from "./mail.ts";
 import { createRateLimiter } from "./rate-limit.ts";
@@ -477,6 +478,12 @@ describe("the cloud copy", () => {
     expect(warnings).toHaveLength(2);
     expect(copyLimitsFromEnv({ COPY_NEW_ACCOUNT_SHARE: "2", COPY_NEW_ACCOUNT_DAYS: "soon" }, dir, warn)).toMatchObject({ newAccountShare: NEW_ACCOUNT_SHARE, newAccountMs: NEW_ACCOUNT_MS });
     expect(warnings).toHaveLength(4);
+    expect(NETWORK_SHARE).toBe(0.1);
+    expect(copyLimitsFromEnv({}, dir, warn).networkShare).toBe(NETWORK_SHARE);
+    expect(copyLimitsFromEnv({ COPY_NETWORK_SHARE: "0.05" }, dir, warn).networkShare).toBe(0.05);
+    expect(copyLimitsFromEnv({ COPY_NETWORK_SHARE: "0" }, dir, warn).networkShare).toBe(0);
+    expect(copyLimitsFromEnv({ COPY_NETWORK_SHARE: "1.5" }, dir, warn).networkShare).toBe(NETWORK_SHARE);
+    expect(warnings).toHaveLength(5);
     // The real disk's free space, and null for a folder that isn't there.
     expect(copyLimitsFromEnv({}, dir, warn).freeBytes()).toBeGreaterThan(0);
     expect(copyLimitsFromEnv({}, path.join(dir, "missing"), warn).freeBytes()).toBeNull();
@@ -502,7 +509,7 @@ describe("the cloud copy", () => {
   });
 
   it("answers 503 over the routes when young accounts used up their slice, without telling the log the copies are full", async () => {
-    const { copy, signIn, clock } = setup({ totalLimit: 1000 });
+    const { copy, signIn, clock } = setup({ totalLimit: 1000, networkShare: 0 });
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
       const token = await signIn("new@example.com");
@@ -569,5 +576,260 @@ describe("the cloud copy", () => {
     const app = createApp({ db });
     expect((await app.request("http://tavora.test/v1/account/copy")).status).toBe(503);
     expect((await app.request("http://tavora.test/v1/account/copy/manifest")).status).toBe(503);
+  });
+});
+
+describe("the cloud copy's shares of the total (audit)", () => {
+  const now = Date.parse("2026-11-20T12:00:00Z");
+  const day = 24 * 60 * 60_000;
+  const minute = 60_000;
+  const aged = (network?: string) => ({ since: now - 30 * day, ...(network === undefined ? {} : { network }) });
+  /** Stores one part of `size` bytes for the account and saves it as its copy, with a 1-byte manifest. */
+  const save = (copies: CopyStore, accountId: string, size: number, who: CopyHolder | undefined, at = now) => {
+    const kept = part(size);
+    expect(copies.addParts(accountId, [kept], at, who)).toBe("ok");
+    expect(copies.swap(accountId, copies.info(accountId)?.version ?? 0, new Uint8Array(1), [kept.id], at, who)).toMatchObject({ ok: true });
+    return kept;
+  };
+
+  it("never lets the bytes on top of a copy take room in the total or the network's day from anyone else (audit)", () => {
+    // As the audit planned it, without the networks' shares of the total, which it didn't know.
+    const copies = new CopyStore(":memory:", { totalLimit: 1000, networkDayLimit: 600, networkShare: 0 });
+    for (const id of ["a1", "a2"]) save(copies, id, 250, aged("n1"));
+    expect([copies.storedTotal(), copies.pooledTotal()]).toEqual([502, 502]);
+    // Each uploads its next version, as big as its copy: on top of it, counted nowhere.
+    for (const id of ["a1", "a2"]) expect(copies.addParts(id, [part(250)], now + minute, aged("n1"))).toBe("ok");
+    expect([copies.storedTotal(), copies.pooledTotal()]).toEqual([1002, 502]);
+    // n1's day has 98 left: the bytes on top weren't counted there.
+    expect(copies.addParts("c", [part(98)], now + minute, aged("n1"))).toBe("ok");
+    expect(copies.addParts("c", [part(1)], now + minute, aged("n1"))).toBe("no-room");
+    // Another account has the rest of the total.
+    expect(copies.addParts("b", [part(50)], now + 2 * minute, aged("n2"))).toBe("ok");
+    expect(copies.addParts("b", [part(350)], now + 2 * minute, aged("n2"))).toBe("ok");
+    expect(copies.pooledTotal()).toBe(1000);
+    expect(copies.addParts("d", [part(1)], now + 2 * minute, aged("n3"))).toBe("no-room");
+    // After the sweep, the next upload on top again costs nothing, and still takes nothing from the others.
+    copies.sweep(now + minute + UNUSED_PART_MS + 1);
+    expect(copies.pooledTotal()).toBe(902);
+    expect(copies.addParts("a1", [part(250)], now + 2 * minute + UNUSED_PART_MS, aged("n1"))).toBe("ok");
+    expect(copies.pooledTotal()).toBe(902);
+    expect(copies.addParts("d", [part(98)], now + 2 * minute + UNUSED_PART_MS, aged("n3"))).toBe("ok");
+  });
+
+  it("counts what is saved of the bytes on top once a version keeps them, and drops them with the account", () => {
+    const copies = new CopyStore(":memory:", { totalLimit: 1000, networkShare: 0 });
+    save(copies, "a", 300, aged());
+    const next = part(300);
+    expect(copies.addParts("a", [next], now + minute)).toBe("ok");
+    expect([copies.storedTotal(), copies.pooledTotal()]).toEqual([601, 301]);
+    // A version that keeps both parts counts all of them.
+    expect(copies.swap("a", 1, new Uint8Array(1), [next.id], now + minute)).toMatchObject({ ok: true });
+    expect([copies.storedTotal(), copies.pooledTotal()]).toEqual([301, 301]);
+    expect(copies.addParts("a", [part(300)], now + 2 * minute)).toBe("ok");
+    copies.remove("a");
+    expect([copies.storedTotal(), copies.pooledTotal()]).toEqual([0, 0]);
+  });
+
+  it("still keeps the disk's free space from the bytes on top", () => {
+    let free = 1000;
+    const copies = new CopyStore(":memory:", { totalLimit: 1000, networkShare: 0, freeBytes: () => free, freeFloor: 600 });
+    save(copies, "a", 300, aged());
+    free = 800;
+    expect(copies.addParts("a", [part(250)], now + minute)).toBe("no-room");
+    expect(copies.addParts("a", [part(200)], now + minute)).toBe("ok");
+  });
+
+  it("keeps the bytes on top of young accounts' copies out of their slice", () => {
+    // A quarter of 1000 for young accounts: one saves 200 and uploads as much again on top; another still has 49.
+    const copies = new CopyStore(":memory:", { totalLimit: 1000, networkShare: 0 });
+    const young = { since: now - day };
+    save(copies, "y1", 200, young);
+    expect(copies.addParts("y1", [part(200)], now + minute, young)).toBe("ok");
+    expect(copies.addParts("y2", [part(49)], now + minute, young)).toBe("ok");
+    expect(copies.addParts("y2", [part(1)], now + minute, young)).toBe("no-room");
+  });
+
+  it("counts the bytes on top again when it starts", () => {
+    const file = path.join(mkdtempSync(path.join(tmpdir(), "tavora-copies-")), "copies.sqlite");
+    const first = new CopyStore(file, { totalLimit: 1000, networkShare: 0 });
+    save(first, "a", 400, aged());
+    expect(first.addParts("a", [part(400)], now + minute)).toBe("ok");
+    const again = new CopyStore(file, { totalLimit: 1000, networkShare: 0 });
+    expect([again.storedTotal(), again.pooledTotal()]).toEqual([801, 401]);
+    expect(again.addParts("b", [part(599)], now + minute)).toBe("ok");
+  });
+
+  it("lets the accounts of one network hold only their share of the total, so aged accounts can't fill it (audit)", () => {
+    // As the audit planned it: aged accounts on three networks try to fill all 1000 bytes. Each network may hold 300.
+    const copies = new CopyStore(":memory:", { totalLimit: 1000, networkDayLimit: 400, networkShare: 0.3 });
+    const saved = new Map<string, ReturnType<typeof part>>();
+    for (const network of ["n1", "n2", "n3"]) {
+      saved.set(network, save(copies, `${network}-a`, 199, aged(network)));
+      expect(copies.addParts(`${network}-b`, [part(199)], now, aged(network))).toBe("no-room");
+      expect(copies.addParts(`${network}-b`, [part(100)], now, aged(network))).toBe("ok");
+      expect(copies.addParts(`${network}-c`, [part(1)], now, aged(network))).toBe("no-room");
+    }
+    expect(copies.storedTotal()).toBe(900);
+    expect(copies.sweep(now + 2 * day)).toEqual({ parts: 3, bytes: 300 });
+    // Saved versions never age out, but there is room for an account on another network: its parts and its copy.
+    const later = now + 2 * day;
+    const kept = part(10);
+    expect(copies.addParts("b", [kept], later, aged("n9"))).toBe("ok");
+    expect(copies.swap("b", 0, new Uint8Array(5), [kept.id], later, aged("n9"))).toMatchObject({ ok: true });
+    // A saved version that grows past its network's share is refused as well, one within it is not.
+    const n1Kept = saved.get("n1")!.id;
+    const grown = part(150);
+    expect(copies.addParts("n1-a", [grown], later, aged("n1"))).toBe("ok");
+    expect(copies.swap("n1-a", 1, new Uint8Array(1), [n1Kept, grown.id], later, aged("n1"))).toEqual({ ok: false, reason: "unavailable" });
+    const fits = part(100);
+    expect(copies.addParts("n1-a", [fits], later, aged("n1"))).toBe("ok");
+    expect(copies.swap("n1-a", 1, new Uint8Array(1), [n1Kept, fits.id], later, aged("n1"))).toMatchObject({ ok: true, size: 300 });
+  });
+
+  it("counts an account for the network it last added bytes from, and one from before networks for none", () => {
+    // 300 a network.
+    const copies = new CopyStore(":memory:", { totalLimit: 2000, networkShare: 0.15 });
+    save(copies, "a", 150, aged("n1"));
+    save(copies, "b", 200, aged("n2"));
+    // Growing from a network that can't take the whole copy is refused there ...
+    expect(copies.addParts("a", [part(150), part(100)], now + minute, aged("n2"))).toBe("no-room");
+    // ... and from one that can, the account moves there with all of it, freeing its old network.
+    expect(copies.addParts("a", [part(150), part(100)], now + minute, aged("n3"))).toBe("ok");
+    expect(copies.addParts("c", [part(299)], now + minute, aged("n1"))).toBe("ok");
+    expect(copies.addParts("d", [part(49)], now + minute, aged("n3"))).toBe("ok");
+    expect(copies.addParts("d", [part(1)], now + minute, aged("n3"))).toBe("no-room");
+    // Replacing its copy at its saved size adds nothing and moves nothing.
+    save(copies, "e", 100, aged("n4"));
+    const next = part(100);
+    expect(copies.addParts("e", [next], now + minute, aged("n2"))).toBe("ok");
+    expect(copies.swap("e", 1, new Uint8Array(1), [next.id], now + minute, aged("n2"))).toMatchObject({ ok: true });
+    expect(copies.addParts("f", [part(199)], now + minute, aged("n4"))).toBe("ok");
+    expect(copies.addParts("f", [part(1)], now + minute, aged("n4"))).toBe("no-room");
+    // Accounts that stored before networks were kept (no network) don't add up as one network.
+    const legacy = { since: now - 30 * day };
+    for (const id of ["l1", "l2"]) save(copies, id, 150, legacy);
+    expect(copies.addParts("g", [part(1)], now + minute, aged("n5"))).toBe("ok");
+    // The next time one adds bytes from a network, it counts for that one.
+    expect(copies.addParts("l1", [part(160)], now + minute, aged("n5"))).toBe("ok");
+    expect(copies.addParts("g", [part(139)], now + minute, aged("n5"))).toBe("no-room");
+    expect(copies.addParts("g", [part(138)], now + minute, aged("n5"))).toBe("ok");
+  });
+
+  it("lets someone who moved networks (a café, a new carrier) go on growing from where they are (review)", () => {
+    const copies = new CopyStore(":memory:", { totalLimit: 2000, networkShare: 0.15 });
+    // At the café, others hold most of its share; the user's copy started there.
+    save(copies, "user", 50, aged("cafe"));
+    save(copies, "regular", 240, aged("cafe"));
+    expect(copies.addParts("user", [part(50), part(20)], now + minute, aged("cafe"))).toBe("no-room");
+    // At home the whole copy fits, so it grows there and counts there from now on.
+    const grown = part(70);
+    expect(copies.addParts("user", [grown], now + minute, aged("home"))).toBe("ok");
+    expect(copies.swap("user", 1, new Uint8Array(1), [grown.id], now + minute, aged("home"))).toMatchObject({ ok: true, size: 71 });
+    expect(copies.addParts("cafe-guest", [part(59)], now + minute, aged("cafe"))).toBe("ok");
+  });
+
+  it("doesn't let tiny uploads from a network charge bytes stored from elsewhere to it (review)", () => {
+    // Five accounts store a byte from the target network, then fill their copies from their own networks.
+    const copies = new CopyStore(":memory:", { totalLimit: 2000, networkShare: 0.15 });
+    for (let n = 0; n < 5; n++) {
+      expect(copies.addParts(`x${n}`, [part(1)], now, aged("target"))).toBe("ok");
+      expect(copies.addParts(`x${n}`, [part(250)], now + minute, aged(`own${n}`))).toBe("ok");
+    }
+    // The target network still has its whole share.
+    expect(copies.addParts("victim", [part(300)], now + minute, aged("target"))).toBe("ok");
+    expect(copies.addParts("victim", [part(1)], now + minute, aged("target"))).toBe("no-room");
+  });
+
+  it("forgets the network with the copy", () => {
+    const file = path.join(mkdtempSync(path.join(tmpdir(), "tavora-copies-")), "copies.sqlite");
+    const copies = new CopyStore(file, { totalLimit: 2000, networkShare: 0.15 });
+    save(copies, "a", 290, aged("n1"));
+    const network = () => (new DatabaseSync(file).prepare("select network from holders where account_id = ?").get("a") as { network: string | null }).network;
+    expect(network()).toMatch(/^[0-9a-f]{16}$/);
+    copies.remove("a");
+    expect(network()).toBeNull();
+    expect(copies.addParts("b", [part(299)], now, aged("n1"))).toBe("ok");
+    // The next copy counts for the network it is stored from.
+    save(copies, "a", 290, aged("n2"));
+    expect(copies.addParts("c", [part(10)], now, aged("n2"))).toBe("no-room");
+  });
+
+  it("starts the networks' shares afresh with a new secret, until each account adds bytes again", () => {
+    const file = path.join(mkdtempSync(path.join(tmpdir(), "tavora-copies-")), "copies.sqlite");
+    const before = new CopyStore(file, { totalLimit: 2000, networkShare: 0.15, networkSalt: "a".repeat(32) });
+    save(before, "a", 100, aged("n1"));
+    expect(before.addParts("b", [part(200)], now, aged("n1"))).toBe("no-room");
+    const after = new CopyStore(file, { totalLimit: 2000, networkShare: 0.15, networkSalt: "b".repeat(32) });
+    // a's mark under the old secret is no network now: n1 has room ...
+    expect(after.addParts("b", [part(200)], now, aged("n1"))).toBe("ok");
+    // ... and a, adding bytes from n1 again, counts for it under the new one.
+    expect(after.addParts("a", [part(100), part(1)], now + minute, aged("n1"))).toBe("no-room");
+    // From another network it moves there, and n1 is b's alone.
+    expect(after.addParts("a", [part(100), part(1)], now + minute, aged("n2"))).toBe("ok");
+    expect(after.addParts("b", [part(100)], now + minute, aged("n1"))).toBe("ok");
+    expect(after.addParts("b", [part(1)], now + minute, aged("n1"))).toBe("no-room");
+  });
+
+  it("counts what a save keeps of the bytes on top, and drops the rest from both totals", () => {
+    const copies = new CopyStore(":memory:", { totalLimit: 1000, networkShare: 0 });
+    const first = save(copies, "a", 300, aged());
+    const [big, small] = [part(200), part(100)];
+    expect(copies.addParts("a", [big, small], now + minute)).toBe("ok");
+    expect([copies.storedTotal(), copies.pooledTotal()]).toEqual([601, 301]);
+    // Keeping the old part and one of the new: the new one counts now, the other goes.
+    expect(copies.swap("a", 1, new Uint8Array(1), [first.id, big.id], now + minute)).toMatchObject({ ok: true, size: 501 });
+    expect([copies.storedTotal(), copies.pooledTotal()]).toEqual([501, 501]);
+    // On top again, then a save that keeps only part of it and drops the old parts.
+    const next = part(150);
+    expect(copies.addParts("a", [next], now + 2 * minute)).toBe("ok");
+    expect([copies.storedTotal(), copies.pooledTotal()]).toEqual([651, 501]);
+    expect(copies.swap("a", 2, new Uint8Array(1), [big.id, next.id], now + 2 * minute)).toMatchObject({ ok: true, size: 351 });
+    expect([copies.storedTotal(), copies.pooledTotal()]).toEqual([351, 351]);
+    expect(copies.addParts("b", [part(649)], now + 2 * minute)).toBe("ok");
+    expect(copies.addParts("b", [part(1)], now + 2 * minute)).toBe("no-room");
+  });
+
+  it("checks a save that grows its manifest with the copy as it will be, not with the parts it drops (review)", () => {
+    // The network's share: 300. The copy holds 251; its next version is a 100-byte part with a 60-byte manifest.
+    const shared = new CopyStore(":memory:", { totalLimit: 2000, networkShare: 0.15 });
+    save(shared, "a", 250, aged("n1"));
+    const next = part(100);
+    expect(shared.addParts("a", [next], now + minute, aged("n1"))).toBe("ok");
+    expect(shared.swap("a", 1, new Uint8Array(60), [next.id], now + minute, aged("n1"))).toMatchObject({ ok: true, size: 160 });
+    // Still refused when the copy as it will be doesn't fit.
+    const more = part(100);
+    expect(shared.addParts("a", [more], now + 2 * minute, aged("n1"))).toBe("ok");
+    expect(shared.swap("a", 2, new Uint8Array(200), [next.id, more.id], now + 2 * minute, aged("n1"))).toEqual({ ok: false, reason: "unavailable" });
+    // The total too: 951 of 1000 held, a save that drops 900 of them has room for its 59 more manifest bytes.
+    const total = new CopyStore(":memory:", { totalLimit: 1000, networkShare: 0 });
+    save(total, "a", 900, aged());
+    save(total, "b", 49, aged());
+    const small = part(100);
+    expect(total.addParts("a", [small], now + minute)).toBe("ok");
+    expect(total.swap("a", 1, new Uint8Array(60), [small.id], now + minute)).toMatchObject({ ok: true, size: 160 });
+    expect(total.pooledTotal()).toBe(210);
+  });
+
+  it("opens a copies file from before networks, which the older service can still write", () => {
+    const file = path.join(mkdtempSync(path.join(tmpdir(), "tavora-copies-")), "copies.sqlite");
+    const old = new DatabaseSync(file);
+    old.exec("create table holders (account_id text primary key, since integer not null)");
+    old.prepare("insert into holders (account_id, since) values (?, ?)").run("legacy", now - 30 * day);
+    old.close();
+    const copies = new CopyStore(file, { totalLimit: 1000, networkShare: 0.3, networkSalt: "s".repeat(32) });
+    save(copies, "legacy", 200, aged("198.51.100.0/24"));
+    save(copies, "other", 50, aged("198.51.100.0/24"));
+    expect(copies.addParts("third", [part(50)], now, aged("198.51.100.0/24"))).toBe("no-room");
+    // The file keeps a mark of the network under the secret, never the network.
+    const marks = new DatabaseSync(file).prepare("select network from holders order by account_id").all() as { network: string }[];
+    expect(marks.map((row) => row.network)).toEqual([expect.stringMatching(/^[0-9a-f]{16}$/), expect.stringMatching(/^[0-9a-f]{16}$/)]);
+    expect(marks[0]!.network).toBe(marks[1]!.network);
+    // The same secret after a restart finds the same network.
+    expect(new CopyStore(file, { totalLimit: 1000, networkShare: 0.3, networkSalt: "s".repeat(32) }).addParts("third", [part(50)], now, aged("198.51.100.0/24"))).toBe("no-room");
+    // What the older service writes still goes in.
+    const older = new DatabaseSync(file);
+    older.prepare("insert into holders (account_id, since) values (?, ?) on conflict (account_id) do nothing").run("newer", now);
+    expect(older.prepare("select network from holders where account_id = ?").get("newer")).toEqual({ network: null });
+    older.close();
   });
 });

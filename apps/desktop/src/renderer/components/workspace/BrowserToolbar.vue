@@ -73,6 +73,9 @@ watch(
   },
 );
 
+// While the panel asks about another site, the site buttons stay off: they would act on the site asked about.
+const siteButtonsOff = computed(() => !props.browser.site || props.browser.error?.kind === "otherSession");
+
 function toggleShared() {
   void act({ type: "browser-set-shared", instanceId: props.instanceId, shared: !props.browser.shared });
 }
@@ -152,7 +155,7 @@ function toggleAdblock() {
           ? t('browser.adblockOnTitle', { blocked: browser.blocked, site: browser.site ?? t('browser.thisSite') })
           : t('browser.adblockOffTitle', { site: browser.site ?? t('browser.thisSite') })
       "
-      :disabled="!browser.site"
+      :disabled="siteButtonsOff"
       data-testid="browser-adblock"
       :data-blocked="browser.blocked"
       @click="toggleAdblock"
@@ -171,7 +174,7 @@ function toggleAdblock() {
           ? t('browser.sharedOnTitle', { site: browser.site ?? t('browser.thisSite') })
           : t('browser.sharedOffTitle', { site: browser.site ?? t('browser.thisSite') })
       "
-      :disabled="!browser.site"
+      :disabled="siteButtonsOff"
       data-testid="browser-shared"
       @click="toggleShared"
     >

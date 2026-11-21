@@ -326,7 +326,7 @@ describe("signed in", () => {
     expect(await (await call("POST", "/verify", { email: "old@example.com", code: signInCode, create: true })).json()).toMatchObject({ reason: "wrong-code" });
   });
 
-  it("asks for nothing it can't send: both addresses' limits and two of the day's emails come first", async () => {
+  it("asks for nothing it can't send: both addresses' limits and the change's three emails come first", async () => {
     const { call, signIn, inbox, clock, store } = setup({ mailDailyLimit: 30 });
     const token = await signIn("old@example.com");
     clock.now += 15 * 60_000;
@@ -334,10 +334,10 @@ describe("signed in", () => {
     const mails = inbox.mails().length;
     expect((await call("POST", "/email/code", { email: "new@example.com", confirmCurrent: true }, token)).status).toBe(429);
     expect(inbox.mails()).toHaveLength(mails);
-    // One email left today: not enough for two codes.
+    // 30 a day: 10 for sign-in codes, 7 of them for new addresses. Two left: not enough for both codes and the notice.
     clock.now += 15 * 60_000;
     const day = new Date(clock.now).toISOString().slice(0, 10);
-    while (store.mailsSent(day) < 29) store.countMail(day);
+    while (store.mailsSent(day) < 5) store.countMail(day);
     expect(await (await call("POST", "/email/code", { email: "new@example.com", confirmCurrent: true }, token)).json()).toMatchObject({ reason: "daily-limit" });
     expect(inbox.mails()).toHaveLength(mails);
   });
@@ -734,12 +734,18 @@ describe("the day's emails", () => {
     expect((await call("POST", "/delete/code", {}, other)).status).toBe(202);
   });
 
-  it("counts codes for a new address against the client's day share of codes", async () => {
-    const { call, oldAccount } = setup({ accounts: { codeDayRateLimiter: createRateLimiter({ limit: 2, windowMs: 24 * 60 * 60_000 }) } });
+  it("counts each email of an address change against the client's day share of codes: both codes and the notice", async () => {
+    const { call, oldAccount, inbox } = setup({ accounts: { codeDayRateLimiter: createRateLimiter({ limit: 5, windowMs: 24 * 60 * 60_000 }) } });
     const token = oldAccount("me@example.com");
     expect((await call("POST", "/code", { email: "me@example.com" })).status).toBe(202);
     expect((await call("POST", "/email/code", { email: "next@example.com", confirmCurrent: true }, token)).status).toBe(202);
+    // 4 of 5 counted: another change, 3 more, doesn't fit, and sends nothing.
+    const mails = inbox.mails().length;
     expect((await call("POST", "/email/code", { email: "other@example.com", confirmCurrent: true }, token)).status).toBe(429);
+    expect(inbox.mails()).toHaveLength(mails);
+    // The refusal counted nothing: one more sign-in code still fits.
+    expect((await call("POST", "/code", { email: "me@example.com" })).status).toBe(202);
+    expect((await call("POST", "/code", { email: "me@example.com" })).status).toBe(429);
   });
 
   it("says the same when the provider refuses because its allowance is used up", async () => {
@@ -1005,5 +1011,161 @@ describe("Discord client", () => {
     expect(cleanDiscordName("a\u0000b\u202ec")).toBe("abc");
     expect(cleanDiscordName("x".repeat(40))).toHaveLength(32);
     expect(cleanDiscordName("  ")).toBeNull();
+  });
+});
+describe("emails that follow a request (audit)", () => {
+  const codeTo = (inbox: ReturnType<typeof createTestInbox>, email: string) => /\n {4}(\d{6})\n/.exec(inbox.mails().find((mail) => mail.to === email)?.text ?? "")?.[1] ?? "";
+  const utcDay = (at: number) => new Date(at).toISOString().slice(0, 10);
+  /** A key fingerprint for account `n`'s key `k`: 32 hex digits. */
+  const fingerprint = (n: number, k: number) => `${n.toString(16).padStart(16, "0")}${k.toString(16).padStart(16, "0")}`;
+  /** Old accounts with 5 linked keys each, and their tokens. */
+  const developers = (context: ReturnType<typeof setup>, count: number, prefix: string) =>
+    Array.from({ length: count }, (_, n) => {
+      const email = `${prefix}${n}@attacker.example`;
+      const token = context.oldAccount(email);
+      const id = context.store.accountByEmail(email)!.id;
+      const keys = Array.from({ length: 5 }, (_, k) => fingerprint(n, k));
+      for (const key of keys) context.store.linkKey(id, key, "AAAA", context.clock.now);
+      return { email, token, id, keys };
+    });
+  /** Each account asks for k0 -> k1, k1 -> k2, k2 -> k3 and k3 -> k4, chained: 4 notices if nothing held them. */
+  const chain = async (context: ReturnType<typeof setup>, developer: ReturnType<typeof developers>[number], client: string) => {
+    const answers: number[] = [];
+    for (let k = 0; k < 4; k++) {
+      answers.push((await context.call("POST", `/keys/${developer.keys[k]}/replace`, { new: developer.keys[k + 1], leaked: false }, developer.token, client)).status);
+    }
+    return answers;
+  };
+  const adminKeys = (store: AccountStore) => store.allKeyRequests();
+
+  it("counts key replacement notices in the client's day share, 3 an account a day, and keeps every request (audit)", async () => {
+    // As the audit planned it, with two more accounts: 50 a day (30 for sign-ins), every request from one client.
+    const context = setup({ mailDailyLimit: 50 });
+    const { call, store, clock, inbox, oldAccount } = context;
+    oldAccount("victim@example.com");
+    const client = "198.51.100.7";
+    const accounts = developers(context, 8, "a");
+    const answers = [];
+    for (const developer of accounts) answers.push(await chain(context, developer, client));
+    // 3 requests an account a day, each told, until the client's 20 were used: then this client's requests are refused
+    // rather than left untold, and nothing is stored for them.
+    expect(answers).toEqual([...Array(6).fill([200, 200, 200, 429]), [200, 200, 429, 429], [429, 429, 429, 429]]);
+    const to = (email: string) => inbox.mails().filter((mail) => mail.to === email).length;
+    expect([to("a0@attacker.example"), to("a6@attacker.example"), to("a7@attacker.example")]).toEqual([3, 2, 0]);
+    expect(store.mailsSent(utcDay(clock.now))).toBe(20);
+    expect(adminKeys(store).every((request) => request.notified === true)).toBe(true);
+    expect(store.keyRequests(accounts[7]!.id)).toHaveLength(0);
+    // A leaked key is always reported, also then: it goes in, noted as untold.
+    expect((await call("POST", `/keys/${accounts[7]!.keys[0]}/replace`, { new: accounts[7]!.keys[1], leaked: true }, accounts[7]!.token, client)).status).toBe(200);
+    expect(store.keyRequest(accounts[7]!.keys[0]!)).toMatchObject({ leaked: true, notified: false });
+    // The client's share is spent for its codes as well; everyone else still signs in.
+    expect((await call("POST", "/code", { email: "a0@attacker.example" }, undefined, client)).status).toBe(429);
+    expect((await call("POST", "/code", { email: "victim@example.com" }, undefined, "203.0.113.9")).status).toBe(202);
+    expect(inbox.mails()[0]?.to).toBe("victim@example.com");
+  });
+
+  it("counts key replacement notices in the network's day share, whichever of its clients asks (audit)", async () => {
+    const context = setup({ mailDailyLimit: 100 });
+    const { call, store, clock, oldAccount } = context;
+    oldAccount("victim@example.com");
+    // 15 accounts, each from its own /64 of one /48: 45 notices if only the accounts' own limits held them. The network's
+    // share is others' too, so it never stops a request: past it, they go in untold, and the review page says so.
+    for (const [n, developer] of developers(context, 15, "b").entries()) {
+      expect(await chain(context, developer, `2001:db8:1:${n}::/64`)).toEqual([200, 200, 200, 429]);
+    }
+    expect(store.mailsSent(utcDay(clock.now))).toBe(40);
+    const requests = adminKeys(store);
+    expect([requests.length, requests.filter((request) => request.notified === false).length]).toEqual([45, 5]);
+    expect((await call("POST", "/code", { email: "victim@example.com" }, undefined, "203.0.113.9")).status).toBe(202);
+  });
+
+  it("counts the three emails of an address change in the client's day share (audit)", async () => {
+    // As the audit planned it: 3 accounts change their address 3 times each from one client, 15 minutes apart.
+    const { call, oldAccount, store, clock, inbox } = setup({ mailDailyLimit: 300 });
+    const client = "198.51.100.7";
+    const current = ["e0@example.com", "e1@example.com", "e2@example.com"];
+    const tokens = current.map((email) => oldAccount(email));
+    const answers: number[] = [];
+    for (let round = 0; round < 3; round++) {
+      for (const [n, token] of tokens.entries()) {
+        const next = `e${n}-${round}@example.test`;
+        const asked = await call("POST", "/email/code", { email: next, confirmCurrent: true, language: "en" }, token, client);
+        answers.push(asked.status);
+        if (asked.status !== 202) continue;
+        const changed = await call("POST", "/email", { email: next, code: codeTo(inbox, next), currentCode: codeTo(inbox, current[n]!) }, token, client);
+        expect(changed.status).toBe(200);
+        current[n] = next;
+      }
+      clock.now += 15 * 60_000;
+    }
+    // 3 emails a change, each counted: 6 changes fit in the client's 20, and the rest is refused before any mail.
+    expect(answers).toEqual([202, 202, 202, 202, 202, 202, 429, 429, 429]);
+    expect(store.mailsSent(utcDay(clock.now))).toBe(18);
+  });
+
+  it("leaves out the change notice once the day's sign-in emails ran out, keeping the reserve for delete codes (audit)", async () => {
+    // As the audit planned it: 50 a day, 30 for sign-ins; 5 changes asked for, then the sign-in emails run out.
+    const { call, oldAccount, store, clock, inbox } = setup({ mailDailyLimit: 50 });
+    const day = utcDay(clock.now);
+    const accounts = Array.from({ length: 5 }, (_, n) => ({ email: `c${n}@example.com`, next: `f${n}@example.test`, token: oldAccount(`c${n}@example.com`) }));
+    for (const { next, token } of accounts) expect((await call("POST", "/email/code", { email: next, confirmCurrent: true }, token, "198.51.100.7")).status).toBe(202);
+    expect(store.mailsSent(day)).toBe(10);
+    while (store.mailsSent(day) < 30) store.countMail(day);
+    for (const { email, next, token } of accounts) {
+      expect((await call("POST", "/email", { email: next, code: codeTo(inbox, next), currentCode: codeTo(inbox, email) }, token, "198.51.100.7")).status).toBe(200);
+    }
+    expect(store.mailsSent(day)).toBe(30);
+    expect(inbox.mails().filter((mail) => mail.subject === "The email of your Tavora account was changed")).toHaveLength(0);
+    // Every delete code still has its reserve.
+    for (let n = 0; n < 2; n++) expect((await call("POST", "/delete/code", {}, oldAccount(`owner${n}@example.com`), `203.0.${n}.1`)).status).toBe(202);
+  });
+
+  it("answers repeated delete codes for a suspended account like those for any other address (audit)", async () => {
+    // As the audit planned it: 4 requests in 15 minutes for one address from one network.
+    const { call, oldAccount, store, clock, inbox, pauses } = setup({ mailDailyLimit: 50 });
+    oldAccount("s@example.com");
+    oldAccount("n@example.com");
+    store.suspend(store.accountByEmail("s@example.com")!.id, "spam", null, clock.now);
+    const ask = async (email: string, client: string, paths = ["/delete/suspended/code", "/delete/suspended/code", "/delete/suspended/code", "/delete/suspended/code"]) => {
+      const answers: [number, string | null][] = [];
+      for (const path of paths) {
+        const answer = await call("POST", path, { email }, undefined, client);
+        answers.push([answer.status, answer.headers.get("retry-after")]);
+      }
+      return answers;
+    };
+    const suspended = await ask("s@example.com", "198.51.100.7");
+    expect(suspended).toEqual([
+      [202, null],
+      [202, null],
+      [202, null],
+      [429, "900"],
+    ]);
+    expect(await ask("n@example.com", "203.0.113.7")).toEqual(suspended);
+    expect(await ask("nobody@example.com", "192.0.2.7")).toEqual(suspended);
+    expect(inbox.mails().map((mail) => mail.to)).toEqual(["s@example.com", "s@example.com", "s@example.com"]);
+    // Those without a mail waited about as long as a send.
+    expect(pauses).toHaveLength(6);
+    // Across routes: one delete code, then sign-in codes, from a fresh network.
+    const mixed = ["/delete/suspended/code", "/code", "/code", "/code"];
+    clock.now += 15 * 60_000;
+    const across = await ask("s@example.com", "100.64.1.7", mixed);
+    expect(across.map(([status]) => status)).toEqual([202, 202, 202, 429]);
+    expect(await ask("n@example.com", "100.64.2.7", mixed)).toEqual(across);
+  });
+
+  it("answers a suspended account's delete code whose mail failed like any other address (audit)", async () => {
+    const flaky: Mailer = {
+      send: async () => {
+        throw new Error("down");
+      },
+    };
+    const { call, oldAccount, store, clock } = setup({ mailer: flaky });
+    oldAccount("s@example.com");
+    store.suspend(store.accountByEmail("s@example.com")!.id, "spam", null, clock.now);
+    for (const email of ["s@example.com", "nobody@example.com"]) {
+      const answer = await call("POST", "/delete/suspended/code", { email });
+      expect([answer.status, await answer.json()]).toEqual([202, { status: "sent" }]);
+    }
   });
 });
