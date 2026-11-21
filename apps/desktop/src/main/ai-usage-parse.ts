@@ -68,12 +68,16 @@ export function claudeAccessToken(credentials: unknown): string | null {
   return typeof token === "string" && token.trim() !== "" && token.length <= 4096 ? token : null;
 }
 
+/** How long a run-out token still counts as waiting for Claude Code to renew it. After that its login may be gone (a revoked renewal), and running the CLI fixes either case. */
+export const CLAUDE_RENEW_WAIT_MS = 24 * 60 * 60 * 1000;
+
 /**
  * Whether the saved access token has run out while the login itself is fine: Claude Code renews it the next time it
- * runs. Tavora never renews it, since that would replace the login Claude Code holds.
+ * runs. Tavora never renews it, since that would replace the login Claude Code holds. A token run out for longer than
+ * `CLAUDE_RENEW_WAIT_MS` is no longer taken as fine, so the user is asked to sign in instead of seeing "unavailable" for good.
  */
 export function claudeTokenRenews(credentials: unknown, now: number): boolean {
   const oauth = isObject(credentials) && isObject(credentials.claudeAiOauth) ? credentials.claudeAiOauth : null;
   if (!oauth || typeof oauth.expiresAt !== "number" || !Number.isFinite(oauth.expiresAt)) return false;
-  return oauth.expiresAt <= now && typeof oauth.refreshToken === "string" && oauth.refreshToken.trim() !== "";
+  return oauth.expiresAt <= now && now - oauth.expiresAt < CLAUDE_RENEW_WAIT_MS && typeof oauth.refreshToken === "string" && oauth.refreshToken.trim() !== "";
 }
