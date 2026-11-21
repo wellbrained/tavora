@@ -170,7 +170,8 @@ export function createBoardSaver(options: BoardSaverOptions) {
     /** Saves what is not stored yet and rejects when that failed, so a switch stays on this board instead of losing it. */
     async settled(): Promise<void> {
       await flush();
-      if (!stopped && state.save === "error") throw new BoardNotSaved();
+      // An earlier failure only counts while what is on the board is still not stored (Undo may have taken it back).
+      if (!stopped && state.save === "error" && latest && signatureOf(latest) !== stored) throw new BoardNotSaved();
     },
     /** Lets go without saving what is left (the board is being deleted). */
     discard(): void {

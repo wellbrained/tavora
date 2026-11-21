@@ -174,6 +174,19 @@ describe("when saving fails", () => {
     error.mockRestore();
   });
 
+  it("does not reject `settled` once the drawing that failed is taken back", async () => {
+    const { saver } = await setup();
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const kept = rectangle();
+    saver.change(scene([kept]));
+    await saver.settled();
+    saver.change(scene([kept, { ...rectangle(), filler: "x".repeat(MAX_BOARD_BYTES + 1) } as SceneElement]));
+    await expect(saver.settled()).rejects.toBeInstanceOf(BoardNotSaved);
+    saver.change(scene([kept]));
+    await expect(saver.settled()).resolves.toBeUndefined();
+    error.mockRestore();
+  });
+
   it("does not reject `settled` for a board that is being deleted", async () => {
     const { saver } = await setup();
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
