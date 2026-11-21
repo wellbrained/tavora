@@ -28,6 +28,23 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.110",
+    date: "2026-11-21",
+    title: "Styles",
+    notes: [
+      "Pick a style in Settings > Appearance: Classic, Hardware or Liquid Glass.",
+      "A style changes how Tavora is built, from tabs and buttons to depth and fonts. Your theme still picks the colours.",
+      "Each style keeps its own theme. A style you haven't tried starts with its own.",
+      "New themes Hardware, Glass and Nothing, in light and dark.",
+      "Make your own style from a copy of the one you use.",
+      "JetBrains Mono and Outfit are new fonts to pick.",
+    ],
+    prs: [
+      { number: 846, title: "Style system: Classic, Hardware and Liquid Glass styles" },
+    ],
+    tags: ["calculator", "clock-counter", "games", "modules", "notes", "pdf-viewer", "privacy", "publishing", "sdk", "settings", "system-monitor", "todos", "ui-kit", "website", "whiteboard", "workspace"],
+  },
+  {
     version: "0.24.109",
     date: "2026-11-21",
     title: "Browser asks, also when you change a site",
