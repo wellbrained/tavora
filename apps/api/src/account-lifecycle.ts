@@ -47,6 +47,7 @@ export function accountLifecycle(stores: AccountStores) {
       conversations?.forget(accountId, now);
       leaderboards?.forget(accountId);
       catalog?.forgetReporter(accountId);
+      catalog?.forgetUploads(accountId);
       icons?.forgetSender(accountId);
       accounts.deleteAccount(accountId, now);
     },

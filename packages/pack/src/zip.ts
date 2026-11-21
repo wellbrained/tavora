@@ -100,12 +100,21 @@ export function writeZip(files: readonly ZipFile[]): Buffer {
   return Buffer.concat([...locals, directory, end]);
 }
 
+/** One file as the zip's directory describes it, checked but not unpacked. */
+interface DirectoryEntry {
+  name: string;
+  size: number;
+  method: number;
+  crc: number;
+  packedSize: number;
+  dataAt: number;
+}
+
 /**
- * Reads every file of a package zip into memory, or throws a ZipError saying
- * why the zip is refused. Folder entries are skipped; anything that is not a
- * plain file is refused.
+ * Walks the zip's directory and refuses what the reader refuses, without unpacking anything: sizes come from here, and
+ * unpacking is then held to them. Folder entries are skipped; anything that is not a plain file is refused.
  */
-export function readZip(zip: Buffer, limits: Readonly<ZipLimits> = ZIP_LIMITS): ZipFile[] {
+function readDirectory(zip: Buffer, limits: Readonly<ZipLimits>): DirectoryEntry[] {
   if (zip.length > limits.maxArchiveBytes) throw new ZipError("the zip is too big");
   const endAt = findEnd(zip);
   const count = zip.readUInt16LE(endAt + 10);
@@ -118,7 +127,7 @@ export function readZip(zip: Buffer, limits: Readonly<ZipLimits> = ZIP_LIMITS): 
   if (start + size > endAt) throw new ZipError("the zip is damaged");
   if (count > limits.maxFiles) throw new ZipError("the zip has too many files");
 
-  const files: ZipFile[] = [];
+  const entries: DirectoryEntry[] = [];
   const seen = new Set<string>();
   let unpacked = 0;
   let at = start;
@@ -162,23 +171,48 @@ export function readZip(zip: Buffer, limits: Readonly<ZipLimits> = ZIP_LIMITS): 
     const dataAt = localAt + 30 + zip.readUInt16LE(localAt + 26) + zip.readUInt16LE(localAt + 28);
     if (!zip.subarray(localAt + 30, localAt + 30 + zip.readUInt16LE(localAt + 26)).equals(raw)) throw new ZipError("the zip is damaged");
     if (dataAt + packedSize > start) throw new ZipError("the zip is damaged");
-    const packed = zip.subarray(dataAt, dataAt + packedSize);
-    let data: Buffer;
-    if (method === 0) {
-      if (packedSize !== plainSize) throw new ZipError("the zip is damaged");
-      data = Buffer.from(packed);
-    } else {
-      try {
-        data = inflateRawSync(packed, { maxOutputLength: Math.max(plainSize, 1) });
-      } catch {
-        throw new ZipError(`${name} cannot be unpacked`);
-      }
-    }
-    if (data.length !== plainSize || crc32(data) !== crc) throw new ZipError(`${name} is damaged`);
-    files.push({ name, data });
+    entries.push({ name, size: plainSize, method, crc, packedSize, dataAt });
   }
   if (unpacked > 1024 * 1024 && unpacked > zip.length * limits.maxRatio) throw new ZipError("the zip unpacks to far more than its size");
-  return files;
+  return entries;
+}
+
+/** One file's bytes, held to the size and checksum the directory gives. */
+function unpackEntry(zip: Buffer, entry: DirectoryEntry): Buffer {
+  const packed = zip.subarray(entry.dataAt, entry.dataAt + entry.packedSize);
+  let data: Buffer;
+  if (entry.method === 0) {
+    if (entry.packedSize !== entry.size) throw new ZipError("the zip is damaged");
+    data = Buffer.from(packed);
+  } else {
+    try {
+      data = inflateRawSync(packed, { maxOutputLength: Math.max(entry.size, 1) });
+    } catch {
+      throw new ZipError(`${entry.name} cannot be unpacked`);
+    }
+  }
+  if (data.length !== entry.size || crc32(data) !== entry.crc) throw new ZipError(`${entry.name} is damaged`);
+  return data;
+}
+
+/**
+ * Reads every file of a package zip into memory, or throws a ZipError saying
+ * why the zip is refused. Folder entries are skipped; anything that is not a
+ * plain file is refused.
+ */
+export function readZip(zip: Buffer, limits: Readonly<ZipLimits> = ZIP_LIMITS): ZipFile[] {
+  return readDirectory(zip, limits).map((entry) => ({ name: entry.name, data: unpackEntry(zip, entry) }));
+}
+
+/** The files of a package zip with their unpacked sizes, without unpacking any. Throws a ZipError like readZip. */
+export function zipDirectory(zip: Buffer, limits: Readonly<ZipLimits> = ZIP_LIMITS): { name: string; size: number }[] {
+  return readDirectory(zip, limits).map(({ name, size }) => ({ name, size }));
+}
+
+/** One file of a package zip, leaving the others packed; null when it has no such file. Throws a ZipError like readZip. */
+export function readZipEntry(zip: Buffer, name: string, limits: Readonly<ZipLimits> = ZIP_LIMITS): Buffer | null {
+  const entry = readDirectory(zip, limits).find((candidate) => candidate.name === name);
+  return entry ? unpackEntry(zip, entry) : null;
 }
 
 function findEnd(zip: Buffer): number {

@@ -1,4 +1,4 @@
-import { readZip } from "@tavora/pack";
+import { readZipEntry, zipDirectory } from "@tavora/pack";
 import { Hono } from "hono";
 import { accountLifecycle, type AccountLifecycle } from "./account-lifecycle.ts";
 import type { AccountStore } from "./account-store.ts";
@@ -8,6 +8,7 @@ import { catalogTrust, keyRefusal, type CatalogTrust, type KeyRefusal } from "./
 import { mailLanguage, publishedMail, type Mailer } from "./mail.ts";
 import { bannedMail, createNotifier, declinedMail, DECLINE_REASONS, isDeclineReason, type Notifier } from "./moderation-mail.ts";
 import { runChecks } from "./moderation.ts";
+import { uploadMemory, zipMemory } from "./upload-memory.ts";
 import type { Scanner } from "./virus-scan.ts";
 
 /**
@@ -44,6 +45,8 @@ const KEY_REFUSED: Record<KeyRefusal, string> = {
 
 const MAX_NOTE = 500;
 const MAX_FILE_BYTES = 1024 * 1024;
+/** A file bigger than this isn't unpacked to show its first MB. */
+const MAX_UNPACK_TO_SHOW = 16 * 1024 * 1024;
 const MAX_README = 20_000;
 /** Where the one-time run keeps its results. */
 const LIVE_CHECK = "live_check";
@@ -55,7 +58,8 @@ function describe(waiting: WaitingVersion, catalog: CatalogStore, accounts: Acco
   const bytes = catalog.zipBytes(waiting.sha256);
   if (bytes) {
     try {
-      files = readZip(bytes).map((file) => ({ name: file.name, size: file.data.length }));
+      // From the zip's directory: this list is read for every waiting version, and needs nothing unpacked.
+      files = zipDirectory(bytes);
     } catch {
       files = [];
     }
@@ -138,11 +142,13 @@ export function moderationRoutes({ catalog, accounts, scanner, mailer, mailDaily
     const name = context.req.query("name") ?? "";
     const bytes = waiting ? catalog.zipBytes(waiting.sha256) : null;
     if (!waiting || !bytes) return context.json({ error: "Not waiting." }, 404);
-    let data: Buffer | undefined;
+    let data: Buffer | null = null;
     try {
-      data = readZip(bytes).find((file) => file.name === name)?.data;
+      const entry = zipDirectory(bytes).find((file) => file.name === name);
+      if (entry && entry.size > MAX_UNPACK_TO_SHOW) return context.json({ error: "This file is too big to show here." }, 413);
+      data = entry ? readZipEntry(bytes, name) : null;
     } catch {
-      data = undefined;
+      data = null;
     }
     if (!data) return context.json({ error: "No such file." }, 404);
     return new Response(new Uint8Array(data.subarray(0, MAX_FILE_BYTES)), { headers: { "Content-Type": "text/plain; charset=utf-8", "Content-Disposition": "inline", "X-Content-Type-Options": "nosniff" } });
@@ -162,6 +168,8 @@ export function moderationRoutes({ catalog, accounts, scanner, mailer, mailDaily
     if (!waiting) return context.json({ error: "Nothing with this hash is waiting." }, 404);
     if (waiting.accountId && accounts.isBanned(waiting.accountId)) return context.json({ error: "This developer is banned. Unban them first, or decline the version." }, 409);
     if (waiting.accountId && accounts.isSuspended(waiting.accountId)) return context.json({ error: "This developer is suspended. Unsuspend them first, or decline the version." }, 409);
+    // Approving wouldn't list it, and the developer would be told it's live.
+    if (catalog.isTakenDown(waiting.id)) return context.json({ error: "This module was taken down. List it again first, or decline the version." }, 409);
     // The key's state as an upload checks it: a key unlinked, revoked or reported as leaked since the upload lists nothing new.
     // Nothing is awaited from here to approve(), so the state can't change in between.
     const keyState = keyRefusal(accounts, trust(), waiting.owner, sha256, waiting.accountId);
@@ -251,6 +259,12 @@ export function moderationRoutes({ catalog, accounts, scanner, mailer, mailDaily
           skipped++;
           continue;
         }
+        // It unpacks in the memory uploads use, so it waits its turn like them: a zip that doesn't fit now is a result, not a crash.
+        const ticket = uploadMemory.take(zipMemory(bytes) ?? bytes.length);
+        if (!ticket) {
+          results.push({ ...base, reasons: [], error: "There wasn't enough memory free to check it. Run this again." });
+          continue;
+        }
         try {
           const checked = checkCatalogZip(bytes, { official: isOfficialId(live.id) });
           const fingerprints = developer ? accounts.keys(developer).map((key) => key.fingerprint) : [live.owner];
@@ -259,6 +273,8 @@ export function moderationRoutes({ catalog, accounts, scanner, mailer, mailDaily
         } catch (error) {
           // A zip that can't be checked is a result too, not a pass.
           results.push({ ...base, reasons: [], error: error instanceof CatalogError ? error.message : "The checks could not run." });
+        } finally {
+          ticket.release();
         }
       }
       const result = {

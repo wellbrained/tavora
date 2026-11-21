@@ -112,7 +112,7 @@ A zip a user installed by hand with Install from zip isn't updated from the cata
 
 ## Limits
 
-An account can publish 10 versions a day and keep 200 MB of zips in the catalog. One upload is at most 50 MB. The review screen shows most problems before you press Publish. When the service refuses an upload, Tavora (or `tavora-pack publish`, from CI) says why:
+An account can publish 10 versions a day and keep 200 MB of zips in the catalog. One upload is at most 50 MB, and the zip plus its unpacked files at most 128 MB. The review screen shows most problems before you press Publish. When the service refuses an upload, Tavora (or `tavora-pack publish`, from CI) says why:
 
 | Message | What to do |
 | --- | --- |

@@ -5,6 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import { allowsPersonalWorkspaces, folderKey, isGameId, isReleaseVersion, LOCAL_OWNER, manifestFiles, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, validateChangelog, validateManifest, type LeaderboardBoard, type ModuleManifest } from "@tavora/module-schema";
 import { MANIFEST_FILE, privateKeyFile, readZip, SIGNATURE_FILE, signedHash, verifyFiles, ZIP_LIMITS, ZipError, type ZipFile } from "@tavora/pack";
 import { inspectPng, isWebp } from "./png.ts";
+import { UPLOAD_MEMORY_BYTES, zipMemory } from "./upload-memory.ts";
 
 /**
  * The module catalog (Milestone E, docs/catalog-threat-model.md): community modules, each with the
@@ -456,6 +457,11 @@ export class CatalogStore {
     if (!columns.includes("listed_at")) this.db.exec("alter table versions add column listed_at text");
     this.db.exec("update versions set listed_at = published_at where status = 'listed' and listed_at is null");
     this.db.exec("create index if not exists versions_signed_sha256 on versions (signed_sha256)");
+    // Every upload an account made, for the daily limit: a withdrawn version loses its row in `versions` but still counts.
+    this.db.exec(`
+      create table if not exists upload_log (id integer primary key autoincrement, account_id text not null, sha256 text not null, at text not null);
+      create index if not exists upload_log_account on upload_log (account_id, at);
+    `);
     this.db.exec(`
       create table if not exists trusted_accounts (account_id text primary key, since text not null);
       create table if not exists declined (
@@ -531,6 +537,10 @@ export class CatalogStore {
           signedHash(checked.files),
           waits ? null : at,
         );
+      if (uploadedBy !== null) {
+        this.db.prepare("insert into upload_log (account_id, sha256, at) values (?, ?, ?)").run(uploadedBy, sha256, at);
+        this.db.prepare("delete from upload_log where at < ?").run(new Date(now.getTime() - 2 * 86_400_000).toISOString());
+      }
       this.db.exec("commit");
     } catch (error) {
       this.db.exec("rollback");
@@ -539,9 +549,40 @@ export class CatalogStore {
     return checked;
   }
 
-  /** How many versions an account uploaded since a moment (ISO time). */
+  /** How many versions an account uploaded since a moment, withdrawn ones too. Versions from before the log count by their own row. */
   uploadsSince(accountId: string, since: Date): number {
-    return (this.db.prepare("select count(*) as n from versions where account_id = ? and published_at >= ?").get(accountId, since.toISOString()) as { n: number }).n;
+    const from = since.toISOString();
+    return (
+      this.db
+        .prepare(
+          `select (select count(*) from upload_log where account_id = ? and at >= ?)
+             + (select count(*) from versions v where v.account_id = ? and v.published_at >= ?
+                and not exists (select 1 from upload_log l where l.sha256 = v.sha256 and l.at = v.published_at)) as n`,
+        )
+        .get(accountId, from, accountId, from) as { n: number }
+    ).n;
+  }
+
+  /** The account is deleted: its upload log goes with it. */
+  forgetUploads(accountId: string): void {
+    this.db.prepare("delete from upload_log where account_id = ?").run(accountId);
+  }
+
+  /**
+   * What the catalog did with a zip this account already uploaded, when it is still the module's newest version: the answer to
+   * send again when a client lost the first one. Null otherwise, so anything else is refused as a repeat.
+   */
+  uploadedBefore(sha256: string, accountId: string): { status: VersionStatus; reasons: ReviewReason[] } | null {
+    const row = this.db
+      .prepare("select v.status, v.review, m.listed from versions v join modules m on m.id = v.module_id where v.sha256 = ? and v.account_id = ? and v.seq = (select max(seq) from versions where module_id = v.module_id)")
+      .get(sha256, accountId) as { status: VersionStatus; review: string | null; listed: number } | undefined;
+    if (!row || (row.status === "listed" && row.listed !== 1)) return null;
+    return { status: row.status, reasons: row.status === "waiting" && row.review ? (JSON.parse(row.review) as ReviewInfo).reasons : [] };
+  }
+
+  /** Whether a module is in the catalog but was taken off its list. */
+  isTakenDown(id: string): boolean {
+    return this.db.prepare("select 1 from modules where id = ? and listed = 0").get(id) !== undefined;
   }
 
   /** The bytes of every zip an account uploaded, or of the whole catalog, that is still stored. */
@@ -581,7 +622,22 @@ export class CatalogStore {
       mark.run(now.toISOString(), version.sha256);
       rmSync(path.join(this.zips, `${version.sha256}.zip`), { force: true });
     }
+    // Pictures only the removed versions named go too, also those of versions removed before this was done.
+    const removed = this.db.prepare("select screenshots, icon from versions where module_id = ? and zip_removed is not null").all(moduleId) as unknown as { screenshots: string | null; icon: string | null }[];
+    for (const row of removed) {
+      const pictures = [...(row.screenshots ? (JSON.parse(row.screenshots) as CatalogScreenshot[]) : []), ...(row.icon ? [JSON.parse(row.icon) as CatalogScreenshot] : [])];
+      for (const picture of pictures) this.dropPictureIfUnused(picture);
+    }
     return old.length;
+  }
+
+  /** Deletes a picture's file unless a version that keeps its zip, or a module's newest listed version, still names it. */
+  private dropPictureIfUnused(picture: CatalogScreenshot): void {
+    const pattern = `%"${picture.sha256}"%`;
+    const used = this.db
+      .prepare("select 1 from versions v where (v.zip_removed is null or v.seq = (select max(seq) from versions where module_id = v.module_id and status = 'listed')) and (v.screenshots like ? or v.icon like ?) limit 1")
+      .get(pattern, pattern);
+    if (!used) rmSync(path.join(this.shots, `${picture.sha256}.${picture.type}`), { force: true });
   }
 
   /** The zips (SHA-256) a key signed that the catalog listed before a moment, oldest first. A version approved later is not one. */
@@ -686,10 +742,7 @@ export class CatalogStore {
     this.db.prepare("delete from versions where sha256 = ? and status = 'waiting'").run(sha256);
     rmSync(this.zipPath(sha256), { force: true });
     if (!this.db.prepare("select 1 from versions where module_id = ?").get(waiting.id)) this.db.prepare("delete from modules where id = ?").run(waiting.id);
-    for (const picture of [...waiting.screenshots, ...(waiting.icon ? [waiting.icon] : [])]) {
-      const pattern = `%"${picture.sha256}"%`;
-      if (!this.db.prepare("select 1 from versions where screenshots like ? or icon like ?").get(pattern, pattern)) rmSync(path.join(this.shots, `${picture.sha256}.${picture.type}`), { force: true });
-    }
+    for (const picture of [...waiting.screenshots, ...(waiting.icon ? [waiting.icon] : [])]) this.dropPictureIfUnused(picture);
     return waiting;
   }
 
@@ -783,8 +836,10 @@ export class CatalogStore {
       let theirs: [string, number][] | null = row.file_hashes === null ? null : (JSON.parse(row.file_hashes) as [string, number][]);
       if (theirs === null && row.zip_removed === null) {
         const bytes = this.zipBytes(row.sha256);
+        const needed = bytes ? zipMemory(bytes) : null;
         try {
-          theirs = bytes ? copyHashes(readZip(bytes)) : null;
+          // Unpacked next to the upload being checked, so one too big to fit is left out rather than risking the service.
+          theirs = bytes && needed !== null && needed <= UPLOAD_MEMORY_BYTES ? copyHashes(readZip(bytes)) : null;
         } catch {
           theirs = null;
         }

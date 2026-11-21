@@ -861,6 +861,9 @@ describe("the developer side", () => {
 
     answer = () => json({ reason: "daily-limit", error: "An account can publish 10 versions a day." }, 429);
     await expect(account.uploadModule(privateKey, zip)).rejects.toMatchObject({ key: "publish.error.dailyLimit" });
+    // A 429 that waiting a few minutes won't fix says what it is, not "try again in a minute".
+    answer = () => new Response(JSON.stringify({ reason: "too-many-waiting", error: "x" }), { status: 429, headers: { "content-type": "application/json", "retry-after": "60" } });
+    await expect(account.uploadModule(privateKey, zip)).rejects.toMatchObject({ key: "publish.error.tooManyWaiting" });
     answer = () => json({ reason: "prefix-taken", error: "x" }, 403);
     await expect(account.uploadModule(privateKey, zip)).rejects.toMatchObject({ key: "publish.error.prefixTaken" });
     answer = () => json({ reason: "conflict", error: "Version 1.0.1 of me.tracker is\nalready listed." }, 409);

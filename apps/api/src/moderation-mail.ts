@@ -29,6 +29,7 @@ const CHECK_LINES: Record<MailLanguage, Record<string, string>> = {
     virus: "The virus scan found something, or couldn't run.",
     "first-module": "It's your first module.",
     pictures: "It has a new icon or new screenshots.",
+    "taken-down": "This module was taken down. It stays off the catalog until Tavora puts it back.",
   },
   de: {
     words: "Seine Texte brauchen einen genaueren Blick.",
@@ -38,6 +39,7 @@ const CHECK_LINES: Record<MailLanguage, Record<string, string>> = {
     virus: "Der Virenscan hat etwas gefunden oder ließ sich nicht ausführen.",
     "first-module": "Es ist dein erstes Modul.",
     pictures: "Es hat ein neues Icon oder neue Screenshots.",
+    "taken-down": "Dieses Modul wurde aus dem Katalog genommen. Es bleibt draußen, bis Tavora es zurückholt.",
   },
 };
 

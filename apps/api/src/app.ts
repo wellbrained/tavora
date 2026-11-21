@@ -1,3 +1,4 @@
+import type { Succession } from "@tavora/pack";
 import type { DatabaseSync } from "node:sqlite";
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -17,7 +18,7 @@ import { catalogFilter, isOfficialId, isSignedList, type CatalogEntry, type Cata
 import { isBot, parseVisit, referrerDomain, SITE_CLICKS, SITE_ORIGIN, UNKNOWN_COUNTRY } from "./site-visits.ts";
 import { isAppVersion, type StatsStore } from "./stats.ts";
 import { gameKey, gameListKnows, parseRequest, type ModuleRequestStore } from "./module-requests.ts";
-import { catalogTrust, OFFICIAL_PINS, type OfficialPins } from "./catalog-trust.ts";
+import { catalogTrust, OFFICIAL_PINS, publisherNameOf, type OfficialPins } from "./catalog-trust.ts";
 import { publisherRoutes } from "./publishers.ts";
 import { ICON_NOTICE, isIconId, NO_ICONS, type IconStore } from "./icons.ts";
 import { createRateLimiter, networkOf, type RateLimiter } from "./rate-limit.ts";
@@ -257,10 +258,15 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
   // `gameInfo` names each of its games with their Steam appid, so the app knows a game the user added by name
   // (`local-…`) as the game a module is for, and shows the game's name instead of its id.
   const ratings = accounts?.reviews;
-  const listed = (entry: CatalogEntry, summaries?: ReturnType<ReviewStore["summaries"]>) => ({
+  // The signed successions, read at most once per request and only when a listing's key has no name of its own.
+  const successionsOnce = () => {
+    let read: readonly Succession[] | undefined;
+    return () => (read ??= catalog ? (catalogTrust(catalog, catalogueKey).signed("successions")?.successions ?? []) : []);
+  };
+  const listed = (entry: CatalogEntry, summaries?: ReturnType<ReviewStore["summaries"]>, successions = successionsOnce()) => ({
     ...entry,
     gameInfo: entry.games.map(gameInfo),
-    publisher: accounts?.store.publisherName(entry.owner) ?? null,
+    publisher: accounts ? publisherNameOf(accounts.store, successions, entry.owner) : null,
     installs: catalog?.installCount(entry.id) ?? 0,
     rating: (summaries ? summaries.get(entry.id) : ratings?.summary(entry.id)) ?? null,
   });
@@ -311,7 +317,8 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     const summaries = ratings?.summaries();
     // Tavora's own modules are for the app's own update check only: asked for with ?include=official, never in the public index.
     const official = context.req.query("include") === "official";
-    return context.json({ modules: catalog!.index(filter, { official }).map((entry) => listed(entry, summaries ?? new Map())) });
+    const successions = successionsOnce();
+    return context.json({ modules: catalog!.index(filter, { official }).map((entry) => listed(entry, summaries ?? new Map(), successions)) });
   });
   catalogApp.get("/modules/:id", (context) => {
     const found = catalog!.module(context.req.param("id"));

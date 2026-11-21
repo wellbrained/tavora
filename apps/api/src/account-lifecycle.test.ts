@@ -92,7 +92,7 @@ describe("deleting an account", () => {
     const stores = { accounts: record("accounts"), catalog: record("catalog"), copies: record("copies"), reviews: record("reviews"), conversations: record("conversations"), leaderboards: record("leaderboards"), icons: record("icons") } as unknown as AccountStores;
     accountLifecycle(stores).delete("acc", 1);
     expect(calls.sort()).toEqual(
-      ["accounts.deleteAccount(acc)", "catalog.forgetReporter(acc)", "conversations.forget(acc)", "copies.remove(acc)", "icons.forgetSender(acc)", "leaderboards.forget(acc)", "reviews.forget(acc)"].sort(),
+      ["accounts.deleteAccount(acc)", "catalog.forgetReporter(acc)", "catalog.forgetUploads(acc)", "conversations.forget(acc)", "copies.remove(acc)", "icons.forgetSender(acc)", "leaderboards.forget(acc)", "reviews.forget(acc)"].sort(),
     );
   });
 

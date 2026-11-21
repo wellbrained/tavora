@@ -5,7 +5,7 @@ import { tmpdir, userInfo } from "node:os";
 import path from "node:path";
 import { isOwnerId } from "@tavora/module-schema";
 import { describe, expect, it } from "vitest";
-import { fingerprint, loadExistingKey, packModule, PackError, PrivateKeyError, privateKeyFile, readZip, SIGNATURE_FILE, signFiles, verifyFiles, writeZip, ZIP_LIMITS, ZipError, type ZipFile } from "./index.ts";
+import { fingerprint, loadExistingKey, packModule, PackError, PrivateKeyError, privateKeyFile, readZip, readZipEntry, SIGNATURE_FILE, signFiles, verifyFiles, writeZip, ZIP_LIMITS, zipDirectory, ZipError, type ZipFile } from "./index.ts";
 
 const manifest = {
   id: "wellbrained.tracker",
@@ -249,6 +249,25 @@ describe("readZip", () => {
     expect(() => readZip(bomb)).toThrow(/far more/);
     expect(() => readZip(writeZip([plain("a"), plain("b"), plain("c")]), { ...ZIP_LIMITS, maxFiles: 2 })).toThrow(/too many/);
     expect(() => readZip(writeZip([plain("a")]), { ...ZIP_LIMITS, maxArchiveBytes: 10 })).toThrow(/too big/);
+  });
+
+  it("lists files with their sizes and reads one, leaving the others packed", () => {
+    const zip = writeZip([{ name: "a.txt", data: Buffer.from("hello") }, { name: "dir/b.bin", data: Buffer.alloc(5000, 7) }]);
+    expect(zipDirectory(zip)).toEqual([{ name: "a.txt", size: 5 }, { name: "dir/b.bin", size: 5000 }]);
+    expect(readZipEntry(zip, "dir/b.bin")).toEqual(Buffer.alloc(5000, 7));
+    expect(readZipEntry(zip, "nope")).toBeNull();
+    expect(() => zipDirectory(Buffer.from("not a zip"))).toThrow(ZipError);
+  });
+
+  it("refuses by the directory alone, without unpacking a file that lies about its size", () => {
+    const zip = writeZip([{ name: "a", data: Buffer.alloc(1000, 1) }]);
+    const at = zip.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]));
+    const huge = Buffer.from(zip);
+    huge.writeUInt32LE(ZIP_LIMITS.maxUnpackedBytes + 1, at + 24);
+    expect(() => zipDirectory(huge)).toThrow(/too big unpacked/);
+    const lying = Buffer.from(zip);
+    lying.writeUInt32LE(10, at + 24);
+    expect(() => readZipEntry(lying, "a")).toThrow(ZipError);
   });
 
   it("refuses a file that unpacks to more than it says", () => {

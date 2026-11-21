@@ -1,5 +1,5 @@
 import { firstKeyOf, isOfficialSigner, officialOn, OFFICIAL_PINS, type OfficialPins } from "@tavora/module-schema";
-import { readCatalogList, type CatalogListKind, type CatalogListOf } from "@tavora/pack";
+import { readCatalogList, type CatalogListKind, type CatalogListOf, type Succession } from "@tavora/pack";
 import type { AccountStore } from "./account-store.ts";
 import type { CatalogStore } from "./catalog.ts";
 
@@ -47,6 +47,27 @@ export function catalogTrust(catalog: CatalogStore, publicKey: string = CATALOGU
     firstKey: (fingerprint) => firstKeyOf(list("successions")?.successions ?? [], fingerprint),
   };
   return trust;
+}
+
+/**
+ * The developer name shown for a listing's key. When that key was replaced and unlinked, the name comes from the key the signed
+ * successions put in its place, if it is linked to the account they name. Never from the listing itself (C13).
+ */
+export function publisherNameOf(store: AccountStore, successions: () => readonly Succession[], fingerprint: string): string | null {
+  const own = store.publisherName(fingerprint);
+  if (own) return own;
+  const seen = new Set([fingerprint]);
+  let key = fingerprint;
+  for (;;) {
+    const next = successions().find((entry) => entry.old === key && !seen.has(entry.new));
+    if (!next) return null;
+    seen.add(next.new);
+    key = next.new;
+    if (store.publisherKey(key)?.accountId === next.account) {
+      const name = store.publisherName(key);
+      if (name) return name;
+    }
+  }
 }
 
 /** Why a publisher key may not bring a zip into the catalog now: unlinked from the account, revoked, or reported as leaked. */

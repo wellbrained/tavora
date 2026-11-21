@@ -241,7 +241,7 @@ function checkCode(files: readonly ZipFile[]): ReviewReason | null {
 // ── 5. Virus scan ─────────────────────────────────────────────────────────
 
 /** The longest a whole virus scan may take before the version waits instead. */
-const SCAN_LIMIT_MS = 180_000;
+export const SCAN_LIMIT_MS = 180_000;
 
 async function checkVirus(bytes: Buffer, files: readonly ZipFile[], scanner: Scanner | undefined): Promise<ReviewReason | null> {
   if (!scanner) return reason("virus", "The virus scan couldn't run, so a person looks at it.", "No virus scanner is set up on the server");

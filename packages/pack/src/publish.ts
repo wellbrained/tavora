@@ -15,6 +15,9 @@ export const PUBLISH_STATEMENT = "tavora-catalog-publish-1";
 
 export class PublishError extends Error {}
 
+/** The upload and the catalog's checks together: its virus scan alone may take 3 minutes. */
+export const PUBLISH_TIMEOUT_MS = 300_000;
+
 /** Where to read what is not allowed in the catalog; linked from what `tavora-pack publish` prints. */
 export const CATALOG_RULES_URL = "https://docs.mytavora.app/guide/catalog-rules";
 
@@ -98,7 +101,7 @@ export async function publishZip(options: {
       },
       body: new Uint8Array(options.zip),
       redirect: "error",
-      signal: AbortSignal.timeout(120_000),
+      signal: AbortSignal.timeout(PUBLISH_TIMEOUT_MS),
     });
   } catch {
     throw new PublishError(`Tavora's service could not be reached (${url}). Check your internet connection.`);
