@@ -42,21 +42,35 @@ export function successionEntries(store: AccountStore, trust: CatalogTrust | nul
   return entries;
 }
 
+/** A version listed while nobody can say who held the key: the maintainer decides on it before signing. */
+export interface UndecidedVersion {
+  sha256: string;
+  id: string;
+  version: string;
+  listedAt: string;
+}
+
+/** A revocation as exported; `decide` must be emptied by hand, and `tavora-catalog-sign` refuses the file until it is gone. */
+export type RevocationDraft = Revocation & { decide?: UndecidedVersion[] };
+
 /**
  * Every revocation to sign next: the ones in force now, then each waiting leaked key, then each leaked key
  * whose request went with the key's link or its account (leaked_keys). A new one allows the zips the catalog
- * took from that key before it was reported as leaked, so users keep what they installed; the maintainer takes
- * out any that look wrong before signing.
+ * took from that key before anyone asked about the key, so users keep what they installed. A version listed from
+ * that request up to the leak report could be the developer's or a thief's, as the key still worked, so it is neither
+ * allowed nor left out silently: it goes under `decide`. A report without a kept date has no known end, so that
+ * stretch runs on to now.
  */
-export function revocationEntries(store: AccountStore, trust: CatalogTrust | null, catalog: CatalogStore | undefined): Revocation[] {
-  const entries = [...(trust?.signed("revocations")?.revoked ?? [])];
-  const add = (fingerprint: string, reportedAt: number) => {
+export function revocationEntries(store: AccountStore, trust: CatalogTrust | null, catalog: CatalogStore | undefined): RevocationDraft[] {
+  const entries: RevocationDraft[] = [...(trust?.signed("revocations")?.revoked ?? [])];
+  const add = (fingerprint: string, reportedAt: number, from: number, to: number | null) => {
     if (entries.some((entry) => entry.fingerprint === fingerprint)) return;
-    entries.push({ fingerprint, revoked: listDate(reportedAt), allow: catalog?.signedBy(fingerprint, new Date(reportedAt)) ?? [] });
+    const decide = from === to ? [] : (catalog?.signedBetween(fingerprint, new Date(from), to === null ? null : new Date(to)) ?? []);
+    entries.push({ fingerprint, revoked: listDate(reportedAt), allow: catalog?.signedBy(fingerprint, new Date(from)) ?? [], ...(decide.length > 0 ? { decide } : {}) });
   };
   for (const request of store.allKeyRequests()) {
-    if (request.leaked && keyRequestStatus(request, trust) === "waiting") add(request.old, request.leakedAt ?? request.requestedAt);
+    if (request.leaked && keyRequestStatus(request, trust) === "waiting") add(request.old, request.leakedAt ?? request.requestedAt, request.requestedAt, request.leakedAt);
   }
-  for (const leaked of store.leakedKeys()) add(leaked.fingerprint, leaked.requestedAt);
+  for (const leaked of store.leakedKeyWindows()) add(leaked.fingerprint, leaked.reportedAt, leaked.from, leaked.to);
   return entries;
 }

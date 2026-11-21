@@ -593,6 +593,18 @@ export class CatalogStore {
     ).map((row) => row.sha256);
   }
 
+  /** The versions a key signed that the catalog listed from `from` up to `to` (no end when null), oldest first. */
+  signedBetween(fingerprint: string, from: Date, to: Date | null): { sha256: string; id: string; version: string; listedAt: string }[] {
+    return (
+      this.db
+        .prepare(
+          `select v.sha256, v.module_id as id, v.version, coalesce(v.listed_at, v.published_at) as listed_at from versions v join modules m on m.id = v.module_id
+           where coalesce(v.signer, m.owner) = ? and v.status = 'listed' and coalesce(v.listed_at, v.published_at) >= ? and (? is null or coalesce(v.listed_at, v.published_at) < ?) order by v.seq`,
+        )
+        .all(fingerprint, from.toISOString(), to?.toISOString() ?? null, to?.toISOString() ?? null) as unknown as { sha256: string; id: string; version: string; listed_at: string }[]
+    ).map((row) => ({ sha256: row.sha256, id: row.id, version: row.version, listedAt: row.listed_at }));
+  }
+
   /** Takes a module out of the catalog or puts it back. Its versions and zips are kept. */
   setListed(id: string, listed: boolean): boolean {
     const changed = Number(this.db.prepare("update modules set listed = ? where id = ?").run(listed ? 1 : 0, id).changes) > 0;

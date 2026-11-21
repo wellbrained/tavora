@@ -365,6 +365,10 @@ export class AccountStore {
     if (!keyRequestColumns.includes("notified")) this.db.exec("alter table key_requests add column notified integer");
     // When a key was reported as leaked: a report can come after the request. Older reports read as made at the request.
     if (!keyRequestColumns.includes("leaked_at")) this.db.exec("alter table key_requests add column leaked_at integer");
+    // A leaked key's request and report dates, kept once its request is gone, for the versions listed between them (revocationEntries).
+    const leakedColumns = (this.db.prepare("pragma table_info(leaked_keys)").all() as unknown as { name: string }[]).map((column) => column.name);
+    if (!leakedColumns.includes("asked_at")) this.db.exec("alter table leaked_keys add column asked_at integer");
+    if (!leakedColumns.includes("reported_at")) this.db.exec("alter table leaked_keys add column reported_at integer");
     const columns = (this.db.prepare("pragma table_info(accounts)").all() as unknown as { name: string }[]).map((column) => column.name);
     if (columns.includes("discord_id")) return;
     const before = (this.db.prepare("select count(*) as n from accounts").get() as { n: number }).n;
@@ -806,8 +810,17 @@ export class AccountStore {
   /** Copies the leaked reports (not turned down) among the key requests `where` picks into leaked_keys, where they outlive the account. */
   private keepLeaked(where: string, ...values: string[]): void {
     this.db
-      .prepare(`insert into leaked_keys (fingerprint, requested_at) select old, coalesce(leaked_at, requested_at) from key_requests where ${where} and leaked = 1 and declined_at is null on conflict (fingerprint) do nothing`)
+      .prepare(`insert into leaked_keys (fingerprint, requested_at, asked_at, reported_at) select old, coalesce(leaked_at, requested_at), requested_at, leaked_at from key_requests where ${where} and leaked = 1 and declined_at is null on conflict (fingerprint) do nothing`)
       .run(...values);
+  }
+
+  /**
+   * The keys of leakedKeys() with the time nobody can vouch for: from when the key was first asked about (`from`) to when it was
+   * reported as leaked (`to`). `to` is null when that report's date wasn't kept (reports from before it was).
+   */
+  leakedKeyWindows(): { fingerprint: string; reportedAt: number; from: number; to: number | null }[] {
+    const rows = this.db.prepare("select fingerprint, requested_at, asked_at, reported_at from leaked_keys order by requested_at, rowid").all() as unknown as { fingerprint: string; requested_at: number; asked_at: number | null; reported_at: number | null }[];
+    return rows.map((row) => ({ fingerprint: row.fingerprint, reportedAt: row.requested_at, from: row.asked_at ?? row.requested_at, to: row.asked_at === null ? null : row.reported_at }));
   }
 
   /** Whether a key was reported as leaked and the report wasn't turned down, also after its account unlinked it or was deleted. */

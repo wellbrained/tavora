@@ -24,6 +24,8 @@
 // Entries, as a JSON array:
 //   revocations  [{ "fingerprint": "<32 hex>", "revoked": "2026-10-18T12:00:00Z", "allow": ["<zip SHA-256>", ...] }]
 //                allow: zips the key signed before the revocation that users may still install.
+//                The admin panel's revocations.json can add "decide": versions listed between the first request about
+//                the key and its leak report. Nothing is signed until each is moved to allow or left out and the field is gone.
 //   blocks       [{ "sha256": "<zip SHA-256>", "reason": "Sends your files to a stranger's server." }]
 //                reason: one line users read in Settings > Modules. sha256 may also be the hash of what the zip's
 //                signature covers (signedHash in packages/pack), which a repack of the same files can't change: list
@@ -38,7 +40,7 @@ import { parseArgs } from "node:util";
 import { TAVORA_PUBLISHER_KEY } from "../packages/module-schema/src/index.ts";
 import { writePrivateFile } from "../packages/pack/src/keys.ts";
 import { CATALOG_LIST_KINDS, catalogPublicKey, nextCatalogList, readCatalogList, signCatalogList, type CatalogListKind, type Succession } from "../packages/pack/src/catalog-lists.ts";
-import { reviewCatalogList } from "./catalog-sign-review.ts";
+import { reviewCatalogList, undecidedRevocations } from "./catalog-sign-review.ts";
 
 const USAGE = [
   "usage: tavora-catalog-sign key <key file>",
@@ -151,6 +153,15 @@ async function main(): Promise<number> {
   const previous = previousText === null ? null : readCatalogList(kind, previousText, publicKey);
   if (previousText !== null && previous === null) throw new Error(`${values.out} is not a ${kind} list signed by this key; move it away or pass another --out`);
   if (kind === "successions" && TAVORA_PUBLISHER_KEY !== "") warnPinnedChain(entries, previous);
+  if (kind === "revocations") {
+    const undecided = undecidedRevocations(entries);
+    if (undecided.length > 0) {
+      console.error("Signed nothing: these versions were listed after the key was first asked about and before it was reported as leaked, while whoever had it could still publish:");
+      for (const line of undecided) console.error(`  ${line}`);
+      console.error(`In ${file}, put the zip of each one the developer really published into that entry's "allow", leave out the others, then delete the "decide" field.`);
+      return 1;
+    }
+  }
   const list = nextCatalogList(kind, entries, previous, new Date());
   // The entries come from the service: show what they change before anything is signed.
   const review = reviewCatalogList(kind, previous, list, values["allow-change"] ?? []);

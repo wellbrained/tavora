@@ -1,17 +1,36 @@
 import { spawnSync } from "node:child_process";
 import { generateKeyPairSync } from "node:crypto";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { catalogPublicKey, readCatalogList, signCatalogList, type BlockList, type RevocationList, type SuccessionList } from "../packages/pack/src/catalog-lists.ts";
-import { reviewCatalogList } from "./catalog-sign-review.ts";
+import { reviewCatalogList, undecidedRevocations } from "./catalog-sign-review.ts";
 
 const hash = (c: string) => c.repeat(64);
 const key = (c: string) => c.repeat(32);
 const blocks = (sequence: number, blocked: BlockList["blocked"]): BlockList => ({ kind: "blocks", sequence, issued: "2026-10-18T12:00:00Z", blocked });
 const A = { sha256: hash("a"), reason: "Dummy A." };
 const B = { sha256: hash("b"), reason: "Dummy B." };
+
+describe("undecidedRevocations", () => {
+  const entry = { fingerprint: key("a"), revoked: "2026-10-18T12:00:00Z", allow: [] };
+
+  it("names each version a revocation still needs a decision on", () => {
+    const decide = [{ sha256: hash("b"), id: "dev.timer", version: "1.0.1", listedAt: "2026-10-17T12:00:00.000Z" }];
+    expect(undecidedRevocations([entry, { ...entry, fingerprint: key("c"), decide }])).toEqual([`key ${key("c")}: dev.timer 1.0.1, listed 2026-10-17T12:00:00.000Z, zip ${hash("b")}`]);
+  });
+
+  it("doesn't let an emptied or broken field through as decided", () => {
+    expect(undecidedRevocations([{ ...entry, decide: [] }])).toHaveLength(1);
+    expect(undecidedRevocations([{ ...entry, decide: "none" }])).toHaveLength(1);
+  });
+
+  it("has nothing to ask of a file without the field", () => {
+    expect(undecidedRevocations([entry])).toEqual([]);
+    expect(undecidedRevocations("not a list")).toEqual([]);
+  });
+});
 
 describe("reviewCatalogList", () => {
   it("refuses a list that drops a block in force, until the maintainer names it", () => {
@@ -87,5 +106,30 @@ describe("tavora-catalog-sign", () => {
     const named = sign(dir, "--allow-change", hash("a"));
     expect(named.status).toBe(0);
     expect(readCatalogList("blocks", readFileSync(path.join(dir, "blocks.json"), "utf8"), catalogPublicKey(privateKey))).toMatchObject({ sequence: 2, blocked: [B] });
+  });
+
+  it("signs no revocation with a version still to decide on, and signs it once that is decided", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "tavora-catalog-sign-"));
+    const { privateKey } = generateKeyPairSync("ed25519");
+    writeFileSync(path.join(dir, "key.pem"), privateKey.export({ format: "pem", type: "pkcs8" }));
+    const out = path.join(dir, "revocations.json");
+    const revoke = () =>
+      spawnSync(
+        process.execPath,
+        ["--experimental-strip-types", "--disable-warning=ExperimentalWarning", "--conditions=source", path.join(root, "scripts/catalog-sign.ts"), "revocations", path.join(dir, "entries.json"), "--key", path.join(dir, "key.pem"), "--out", out],
+        { encoding: "utf8", cwd: root },
+      );
+    const entry = { fingerprint: key("a"), revoked: "2026-10-18T12:00:00Z", allow: [] as string[] };
+    writeFileSync(path.join(dir, "entries.json"), JSON.stringify([{ ...entry, decide: [{ sha256: hash("b"), id: "dev.timer", version: "1.0.1", listedAt: "2026-10-17T12:00:00.000Z" }] }]));
+
+    const refused = revoke();
+    expect(refused.status).toBe(1);
+    expect(refused.stderr).toContain("dev.timer 1.0.1");
+    expect(refused.stderr).toContain(hash("b"));
+    expect(existsSync(out)).toBe(false);
+
+    writeFileSync(path.join(dir, "entries.json"), JSON.stringify([{ ...entry, allow: [hash("b")] }]));
+    expect(revoke().status).toBe(0);
+    expect(readCatalogList("revocations", readFileSync(out, "utf8"), catalogPublicKey(privateKey))).toMatchObject({ revoked: [{ fingerprint: key("a"), allow: [hash("b")] }] });
   });
 });
