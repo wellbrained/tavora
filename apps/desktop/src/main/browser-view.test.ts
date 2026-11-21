@@ -74,6 +74,9 @@ const { BrowserPanel, browserSession, crossSessionStep, pageReferrer } = await i
 
 type Emitting = { emit(name: string, ...args: unknown[]): void };
 
+/** The sites signed in for all workspaces; a test may change the list. */
+const sharedSites = new Set(["https://shared.example/"]);
+
 function panel() {
   const sessions: string[] = [];
   const tabs: unknown[] = [];
@@ -85,7 +88,7 @@ function panel() {
       sessions.push(kind);
       return {} as never;
     },
-    isSharedSite: (url) => url.startsWith("https://shared.example/"),
+    isSharedSite: (url) => [...sharedSites].some((site) => url.startsWith(site)),
     adblockOn: () => true,
     swap: () => undefined,
     onFocusAddress: () => undefined,
@@ -511,6 +514,91 @@ describe("a Browser panel's page going to a site of the other session", () => {
     browser.stay();
     expect(browser.state.error).toBeNull();
     expect(browser.state.url).toBe("https://other.example/");
+  });
+
+  it("keeps asking when a Browser site list changes, and never opens the address asked about without Open", () => {
+    const { browser, start, redirect, sessions } = navigating();
+    browser.reopen("https://bounce.example/x");
+    start("https://bounce.example/x");
+    redirect(SHARED);
+    expect(browser.state.error).toEqual({ kind: "otherSession", detail: "" });
+    world.loads.length = 0;
+    browser.siteSettingsChanged();
+    expect(sessions).toEqual(["workspace"]);
+    expect(world.loads).toEqual([]);
+    expect(browser.state.error).toEqual({ kind: "otherSession", detail: "" });
+    expect(browser.state.url).toBe(SHARED);
+
+    // The asked site leaves the shared list: the question stays, and Open opens it in the session it belongs in then.
+    sharedSites.delete("https://shared.example/");
+    try {
+      browser.siteSettingsChanged();
+      expect(world.loads).toEqual([]);
+      expect(browser.state.error).toEqual({ kind: "otherSession", detail: "" });
+      browser.openAsked();
+      expect(sessions).toEqual(["workspace"]);
+      expect(world.loads).toEqual([{ contents: browser.view.webContents.id, url: SHARED, options: undefined }]);
+    } finally {
+      sharedSites.add("https://shared.example/");
+    }
+  });
+
+  it("moves a page the user opened to the other session when its site moves there, as before", () => {
+    const { browser, start, commit, sessions } = navigating();
+    browser.navigate("https://moving.example/a");
+    start("https://moving.example/a");
+    commit("https://moving.example/a");
+    world.loads.length = 0;
+    sharedSites.add("https://moving.example/");
+    try {
+      browser.siteSettingsChanged();
+      expect(sessions).toEqual(["workspace", "shared"]);
+      expect(world.loads).toEqual([{ contents: browser.view.webContents.id, url: "https://moving.example/a", options: undefined }]);
+      expect(browser.state.error).toBeNull();
+    } finally {
+      sharedSites.delete("https://moving.example/");
+    }
+  });
+
+  it("asks before it moves a page no click of the user's chose when its site moves to the other session", () => {
+    // The page the panel showed last time, and one the page went to by itself.
+    for (const go of ["reopen", "page"] as const) {
+      const { browser, start, commit, sessions } = navigating();
+      if (go === "reopen") browser.reopen("https://moving.example/a");
+      else commit(PUBLIC);
+      start("https://moving.example/a");
+      commit("https://moving.example/a");
+      world.loads.length = 0;
+      sharedSites.add("https://moving.example/");
+      try {
+        browser.siteSettingsChanged();
+        expect(sessions).toEqual(["workspace"]);
+        expect(world.loads).toEqual([]);
+        expect(browser.state.error).toEqual({ kind: "otherSession", detail: "" });
+        browser.openAsked();
+        expect(sessions).toEqual(["workspace", "shared"]);
+        expect(world.loads).toEqual([{ contents: browser.view.webContents.id, url: "https://moving.example/a", options: undefined }]);
+      } finally {
+        sharedSites.delete("https://moving.example/");
+      }
+    }
+  });
+
+  it("forgets its own load that stopped or failed before it started, so a later navigation of the page can't take its start", () => {
+    for (const end of ["stop", "fail"] as const) {
+      const { browser, start, redirect, stop, fail, sessions } = navigating();
+      browser.navigate("https://short.example/x");
+      // A beforeunload of the page cancelled it: Chromium never reported its start.
+      if (end === "stop") stop();
+      else fail("https://short.example/x");
+      // Later the page goes to that address by itself and is redirected to the other session.
+      start("https://short.example/x");
+      world.loads.length = 0;
+      redirect(SHARED);
+      expect(world.loads).toEqual([]);
+      expect(sessions).toEqual(["workspace"]);
+      expect(browser.state.error).toEqual({ kind: "otherSession", detail: "" });
+    }
   });
 
   it("hands a new tab the referrer Chromium worked out for the page", async () => {

@@ -175,6 +175,8 @@ export class BrowserPanel {
   private visible = false;
   /** The page's address once it committed; requests of the page are judged against it, unless a public page is on its way (hopUrl). */
   private committedUrl: string | null = null;
+  /** How the navigation that committed the page started: a site-list change moves the page to the other session by it. */
+  private committedStart: NavigationStart = { by: "user" };
   /** Where the main frame is going (the current hop of a navigation) until it commits or stops. Redirects are judged from it, and the page's requests too while it is public. */
   private hopUrl: string | null = null;
   /** The address last asked for: shown until a page commits, and tried again by Reload when it failed. */
@@ -342,6 +344,8 @@ export class BrowserPanel {
       if (!current()) return;
       this.redirectSwitches = 0;
       this.committedUrl = url;
+      // A click the page's navigation came with is used up by it.
+      this.committedStart = this.navigationStart.by === "page" ? { ...this.navigationStart, gesture: false } : this.navigationStart;
       this.hopUrl = null;
       // A page the page behind the question goes to in its own session doesn't end the question: Stay shows it.
       if (!this.asking) {
@@ -361,12 +365,17 @@ export class BrowserPanel {
     // A navigation that ends without a new page (stopped, refused, a download, a 204) reports no failure, but loading
     // stops: nothing is on its way any more.
     contents.on("did-stop-loading", () => {
-      if (current()) this.hopUrl = null;
+      if (!current()) return;
+      this.hopUrl = null;
+      // Tavora's own load that never started (a page's beforeunload cancelled it) leaves no start behind for a later one.
+      if (!contents.isLoading()) this.ownNavigation = null;
     });
     contents.on("did-fail-load", (_event, errorCode, description, url, isMainFrame) => {
       if (!current() || !isMainFrame) return;
       // Only the navigation under way ends here: one that replaced it may have started already.
       if (url === this.hopUrl) this.hopUrl = null;
+      // Tavora's own load failed before Chromium reported its start: its start is not one for a later navigation.
+      if (this.ownNavigation && sameAddress(this.ownNavigation.url, url)) this.ownNavigation = null;
       // -3 is ERR_ABORTED: a navigation replaced by another, or one we refused. While the panel asks, a failure of the
       // page's other navigations doesn't replace the question with an error to try again.
       if (errorCode === -3 || this.asking) return;
@@ -513,13 +522,19 @@ export class BrowserPanel {
     this.changed();
   }
 
-  /** The user changed whether this site signs in for all workspaces: the page reloads in the right session. */
+  /**
+   * The user changed a Browser site list (here, in another panel or in Settings). A page that committed moves to the
+   * session its site belongs in now, as the navigation that brought it there would (crossSessionStep): one the page
+   * went to by itself, or one Tavora reopened, asks first. An address the page only asked for never moves: while the
+   * panel asks, the question stays, and Open decides in the session the site belongs in then.
+   */
   siteSettingsChanged(): void {
-    const url = this.committedUrl ?? this.requestedUrl;
+    const url = this.asking ? null : this.committedUrl;
     if (!url || !isWebUrl(url)) return this.changed();
     const kind = this.kindFor(url);
-    if (kind !== this.kind) this.open(url, kind);
-    else this.changed();
+    if (kind === this.kind) return this.changed();
+    this.redirectSwitches = 0;
+    this.crossSession(url, kind, this.committedStart);
   }
 
   back(): void {
