@@ -30,6 +30,7 @@ import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "no
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { compareVersions } from "./release-guards.mjs";
+import { CATALOG_VERSION } from "../src/shared/release-catalog.ts";
 
 export const LABEL = "feature-complete";
 const BUMPS = ["patch", "minor", "major"];
@@ -88,9 +89,9 @@ export function nextVersion(version, bump) {
  * What is wrong with a pull request. Empty means fine.
  * base/head: the app versions before and after it. notes: the parsed change notes it brings.
  */
-export function checkPullRequest({ base, head, rootHead, notes, featureComplete }) {
+export function checkPullRequest({ base, head, rootHead, notes, featureComplete, foldedBack = false }) {
   const problems = [];
-  if (head !== base || rootHead !== base) {
+  if (!foldedBack && (head !== base || rootHead !== base)) {
     problems.push(
       `The app version changes (${base} to ${head}). Leave it at ${base} and add a change note to apps/desktop/changes/ instead; main gives out the number when this merges. Move this pull request's patch-notes entry into the note too.`,
     );
@@ -247,7 +248,8 @@ export function collectPullRequest(git, baseRef, headSha) {
   const version = (sha, file) => JSON.parse(git("show", `${sha}:${file}`)).version;
   const notes = [];
   const dir = "apps/desktop/changes";
-  const files = git("diff", "--name-only", "--diff-filter=AM", mergeBase, headSha, "--", dir)
+  // --no-renames: a file moved in here counts as added, so a renamed note can't skip the label rule.
+  const files = git("diff", "--name-only", "--no-renames", "--diff-filter=AM", mergeBase, headSha, "--", dir)
     .split("\n")
     .map((line) => line.trim())
     .filter((file) => file.startsWith(`${dir}/`) && file.endsWith(".md") && !file.slice(dir.length + 1).includes("/") && file !== `${dir}/README.md`)
@@ -257,18 +259,22 @@ export function collectPullRequest(git, baseRef, headSha) {
     problems.push(...parsed.problems);
     if (parsed.note) notes.push({ ...parsed.note, file: path.posix.basename(file) });
   }
-  return {
-    base: version(mergeBase, "apps/desktop/package.json"),
-    head: version(headSha, "apps/desktop/package.json"),
-    rootHead: version(headSha, "package.json"),
-    notes,
-    problems,
-  };
+  const base = version(mergeBase, "apps/desktop/package.json");
+  const head = version(headSha, "apps/desktop/package.json");
+  const rootHead = version(headSha, "package.json");
+  // The one allowed step back: `pnpm release:fold` put notes that merged after 1.0.0 into it, so the patch notes hold
+  // only the 1.0.0 entry and both package.json files return to it.
+  const foldedBack =
+    head === CATALOG_VERSION &&
+    rootHead === CATALOG_VERSION &&
+    compareVersions(base, head) > 0 &&
+    [...git("show", `${headSha}:apps/desktop/src/shared/patch-notes.ts`).matchAll(/^ {4}version: "(\d+\.\d+\.\d+)"/gm)].map((match) => match[1]).join() === CATALOG_VERSION;
+  return { base, head, rootHead, notes, problems, foldedBack };
 }
 
 function check(baseRef, labeled, headSha = "HEAD") {
-  const { base, head, rootHead, notes, problems } = collectPullRequest(git, baseRef, headSha);
-  problems.push(...checkPullRequest({ base, head, rootHead, notes, featureComplete: labeled }));
+  const { base, head, rootHead, notes, problems, foldedBack } = collectPullRequest(git, baseRef, headSha);
+  problems.push(...checkPullRequest({ base, head, rootHead, notes, featureComplete: labeled, foldedBack }));
   for (const problem of problems) console.error(`::error::${problem}`);
   if (problems.length) process.exit(1);
   console.log(notes.length ? `Change notes fine: ${notes.map((note) => `${note.file} (${note.bump})`).join(", ")}.` : `No change note; the version stays ${base}.`);

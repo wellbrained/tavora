@@ -201,4 +201,44 @@ describe("collectPullRequest", () => {
     expect(problems.some((p: string) => p.includes("app version changes"))).toBe(true);
     expect(problems.some((p: string) => p.includes("bump: minor"))).toBe(true);
   });
+
+  it("counts a note moved in from elsewhere as added, so it can't skip the label rule", () => {
+    const { git, write, version, commit } = repo();
+    version("0.5.0");
+    write("docs/idea.md", note("A long enough title for git to call this a rename", "major"));
+    commit("start");
+    git("switch", "-q", "-c", "feature");
+    mkdirSync(path.join(git("rev-parse", "--show-toplevel"), "apps/desktop/changes"), { recursive: true });
+    git("mv", "docs/idea.md", "apps/desktop/changes/idea.md");
+    const head = commit("pr");
+    const result = collectPullRequest(git, "main", head);
+    expect(result.notes.map((n: { file: string }) => n.file)).toEqual(["idea.md"]);
+    expect(checkPullRequest({ ...result, featureComplete: false }).some((p: string) => p.includes("bump: major"))).toBe(true);
+  });
+
+  describe("the 1.0.0 fold", () => {
+    const patchNotes = (...versions: string[]) => `export const PATCH_NOTES = [\n${versions.map((v) => `  {\n    version: "${v}",\n  },\n`).join("")}];\n`;
+    function foldedTo(...left: string[]) {
+      const { git, write, version, commit } = repo();
+      version("1.0.1");
+      write("apps/desktop/src/shared/patch-notes.ts", patchNotes("1.0.1", "1.0.0"));
+      commit("start");
+      git("switch", "-q", "-c", "fold");
+      version("1.0.0");
+      write("apps/desktop/src/shared/patch-notes.ts", patchNotes(...left));
+      return collectPullRequest(git, "main", commit("fold"));
+    }
+
+    it("lets the version go back to 1.0.0 when only the 1.0.0 entry is left", () => {
+      const result = foldedTo("1.0.0");
+      expect(result.foldedBack).toBe(true);
+      expect(checkPullRequest({ ...result, featureComplete: false })).toEqual([]);
+    });
+
+    it("refuses the step back while other entries are still there", () => {
+      const result = foldedTo("1.0.0", "0.24.112");
+      expect(result.foldedBack).toBe(false);
+      expect(checkPullRequest({ ...result, featureComplete: false }).some((p: string) => p.includes("app version changes"))).toBe(true);
+    });
+  });
 });
