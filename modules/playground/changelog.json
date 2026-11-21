@@ -1,9 +1,17 @@
 [
   {
+    "version": "0.1.60",
+    "date": "2026-11-21",
+    "notes": [
+      "In Hardware, names keep their case and you can see keyboard focus on switches and number fields.",
+      "Enter in tab names and slider boxes waits until you've finished composing a word (Japanese, Chinese, Korean)."
+    ]
+  },
+  {
     "version": "0.1.59",
     "date": "2026-11-21",
     "notes": [
-      "Hardware reads better: calculator keys keep their size, names keep their case, and keyboard focus shows on switches and number fields."
+      "Enter in the search waits until you've finished composing a word (Japanese, Chinese, Korean)."
     ]
   },
   {

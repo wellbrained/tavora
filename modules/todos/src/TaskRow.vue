@@ -10,7 +10,9 @@
 // them share the first line's centre.
 import { ChevronRight, Ellipsis, GripVertical, Pin, Trash2 } from "@lucide/vue";
 import { cn } from "@tavora/official-ui";
+import { Button } from "@tavora/official-ui/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
+import { isComposing } from "@tavora/official-ui/lib/keys";
 import { Popover, PopoverAnchor, PopoverContent } from "@tavora/official-ui/components/ui/popover";
 import { computed, inject, nextTick, ref } from "vue";
 import { t } from "./i18n";
@@ -105,6 +107,8 @@ async function changeLevel(outdent: boolean) {
 }
 
 function onTitleKey(event: KeyboardEvent) {
+  // Enter and Escape belong to text an input method is still composing.
+  if (isComposing(event)) return;
   if (event.key === "Escape") {
     event.preventDefault();
     close(false);
@@ -159,6 +163,7 @@ function focusDescription(event: Event) {
 }
 
 function onDescriptionKey(event: KeyboardEvent) {
+  if (isComposing(event)) return;
   if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
     event.preventDefault();
     setDescribing(false);
@@ -310,16 +315,18 @@ function choose(action: RowAction) {
       </span>
       <!-- Deleting in one click, shown on hover; the toast can put it back. -->
       <span class="flex h-8 flex-none items-center">
-        <button
+        <Button
           type="button"
-          class="text-muted-foreground hover:text-destructive hover:bg-destructive/10 flex size-7 items-center justify-center rounded-md opacity-0 group-hover/task:opacity-100 focus-visible:opacity-100"
+          variant="danger"
+          size="icon-sm"
+          class="size-7 opacity-0 group-hover/task:opacity-100 focus-visible:opacity-100"
           :aria-label="t('task.deleteTitle', { title: task.title })"
           :title="t('task.delete')"
           data-testid="task-delete"
           @click="remove"
         >
           <Trash2 class="size-4" />
-        </button>
+        </Button>
       </span>
       <span class="flex h-8 flex-none items-center">
         <DropdownMenu v-model:open="menuOpen">

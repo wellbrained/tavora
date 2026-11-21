@@ -74,7 +74,7 @@ export interface BoardSession extends Controls {
   scroll(scrollX: number, scrollY: number, zoom: { value: number }): void;
   /** Looks again at which picture locks Excalidraw's menus cover (after the palette moved, say). */
   recheckLocks(): void;
-  /** Saves what is not stored yet. */
+  /** Saves what is not stored yet; rejects when it could not be stored. */
   flush(): Promise<void>;
   /** Lets go without saving what is left (the board is being deleted). */
   discard(): void;
@@ -334,7 +334,7 @@ export function createBoardSession(options: SessionOptions): BoardSession {
     ready,
     scroll: (scrollX, scrollY, zoom) => set({ view: viewOf({ scrollX, scrollY, zoom, width: api?.getAppState().width ?? 0, height: api?.getAppState().height ?? 0 }) }),
     recheckLocks: () => locks.recheck(),
-    flush: () => saver.flush(),
+    flush: () => saver.settled(),
     discard: () => saver.discard(),
     resume: () => saver.resume(),
     async dispose() {

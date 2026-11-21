@@ -173,7 +173,7 @@ const BIG = "text-[1.625rem] leading-none font-semibold tabular-nums";
                 <span :class="LABEL">{{ t("drops.title") }}</span>
                 <span class="min-w-0 flex-1 truncate text-right text-xs tabular-nums" data-testid="drops-today">{{ dropsText }}</span>
               </CollapsibleTrigger>
-              <Button variant="ghost" size="xs" data-testid="drops-clear" @click="confirming = true">{{ t("drops.clear") }}</Button>
+              <Button variant="danger" size="xs" data-testid="drops-clear" @click="confirming = true">{{ t("drops.clear") }}</Button>
             </div>
             <CollapsibleContent>
               <p v-if="rows.length === 0" class="text-muted-foreground pt-1.5 text-xs" data-testid="drops-empty">{{ t("drops.empty") }}</p>

@@ -8,7 +8,7 @@ import { CountTo } from "@tavora/official-ui/components/ui/count-to";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { computed, inject, ref } from "vue";
 import { t } from "./i18n";
-import { canMove, goalReached, lapSplits, readClock, sourcesOf, type Item } from "./items";
+import { canMove, goalReached, lapSplits, readClock, sourcesOf, type Clock, type Item } from "./items";
 import { ACTIVE_ROW, ROW_FADE } from "./active";
 import { PANEL } from "./panel";
 import { formatSeconds } from "./time";
@@ -76,7 +76,7 @@ const from = computed(() => {
 });
 const hasSubline = computed(() => (props.item.kind === "counter" && props.item.goal !== null) || !!adds.value || !!from.value);
 
-const laps = computed(() => (props.item.kind === "stopwatch" && props.item.laps ? lapSplits(props.item).map((ms, index) => ({ number: index + 1, ms })).reverse().slice(0, 5) : []));
+const laps = computed(() => (props.item.kind === "stopwatch" && props.item.laps ? lapSplits(props.item).map((ms, index) => ({ number: index + 1 + ((props.item as Clock).lapsDropped ?? 0), ms })).reverse().slice(0, 5) : []));
 const format = computed(() => (props.item.kind === "counter" ? "m:ss" : props.item.format));
 
 const startLabel = computed(() => {

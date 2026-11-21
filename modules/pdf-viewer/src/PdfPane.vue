@@ -15,6 +15,7 @@ import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { Progress } from "@tavora/official-ui/components/ui/progress";
 import { Separator } from "@tavora/official-ui/components/ui/separator";
 import { Toggle, ToggleGroup } from "@tavora/official-ui/components/ui/toggle";
+import { isComposing } from "@tavora/official-ui/lib/keys";
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from "vue";
 import OutlineList from "./OutlineList.vue";
 import PdfPage from "./PdfPage.vue";
@@ -328,6 +329,13 @@ watch(query, () => {
   typing = setTimeout(() => void runSearch(), 250);
 });
 
+/** Enter goes to the next match (Shift: the one before), unless it only confirms what an input method is composing. */
+function onSearchEnter(event: KeyboardEvent) {
+  if (isComposing(event)) return;
+  event.preventDefault();
+  step(event.shiftKey ? -1 : 1);
+}
+
 function step(direction: 1 | -1) {
   current.value = stepMatch(current.value, matches.value.length, direction);
   void showCurrent();
@@ -539,7 +547,7 @@ const setPageRef = (number: number) => (element: unknown) => {
           :placeholder="t('pdf.searchPlaceholder')"
           :aria-label="t('pdf.searchField')"
           data-testid="pdf-search-input"
-          @keydown.enter.prevent="step($event.shiftKey ? -1 : 1)"
+          @keydown.enter="onSearchEnter"
         />
         <span class="text-muted-foreground min-w-16 text-sm whitespace-nowrap" role="status" data-testid="pdf-search-summary">{{ searchSummary }}</span>
         <Button variant="ghost" size="icon" :disabled="!matches.length" :title="t('pdf.searchPrevious')" :aria-label="t('pdf.searchPrevious')" data-testid="pdf-search-prev" @click="step(-1)">

@@ -10,6 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@tavora/official-ui/components/ui/dropdown-menu";
+import { isComposing } from "@tavora/official-ui/lib/keys";
 import { computed, nextTick, ref, watch } from "vue";
 import { locale, plural, t } from "./i18n";
 import { MAX_FIXED_TITLE, previewFor, relativeTime, SCRATCHPAD_ID, UNTITLED, type NoteEntry } from "./notes";
@@ -57,6 +58,13 @@ function finishRename(save: boolean) {
   if (save && draft.value !== initial) emit("rename", draft.value);
 }
 
+/** Enter keeps the name, unless it only confirms text an input method is still composing. */
+function onRenameEnter(event: KeyboardEvent) {
+  if (isComposing(event)) return;
+  event.preventDefault();
+  finishRename(true);
+}
+
 /** The menu gives focus back to its button when it closes; wait so that does not end the rename at once. */
 function startRenameLater() {
   setTimeout(() => void startRename(), 120);
@@ -88,7 +96,7 @@ defineExpose({ startRename });
         :aria-label="t('row.renameLabel')"
         data-testid="rename-input"
         class="bg-background border-ring placeholder:text-muted-foreground h-6 w-full min-w-0 rounded-sm border px-1 text-sm font-medium outline-none"
-        @keydown.enter.prevent="finishRename(true)"
+        @keydown.enter="onRenameEnter"
         @keydown.esc.stop.prevent="finishRename(false)"
         @dragstart.stop.prevent
         @blur="finishRename(true)"

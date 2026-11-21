@@ -1,11 +1,12 @@
 // The live view: what the panel hands to Tavora (panel.setLive) so the overlay page can show every clock and counter,
 // read-only, over the game while the panel's game layer is closed. Pure functions, so the rules are easy to test.
 // A running clock keeps its start time, so the page counts it itself and the panel only sends when the list changes.
+import { LIMITS } from "@tavora/sdk";
 import { overlayState, readClock, visualOrder, type ItemList, type OverlayState } from "./items";
 import { lineOf } from "./line";
 import { wordsOf } from "./template";
 
-/** Rows the live view shows; Tavora accepts at most 16 KB, and this many stay far below it. */
+/** Rows the live view shows at most; fewer when long texts would pass what Tavora accepts (LIMITS.maxOverlayStateBytes). */
 export const LIVE_MAX_ROWS = 20;
 
 /** One clock or counter as the live view draws it. */
@@ -25,7 +26,10 @@ export function buildLiveState(list: ItemList, moreText: string): LiveState | nu
   if (!list.items.length) return null;
   const order = visualOrder(list);
   const rows = order.slice(0, LIVE_MAX_ROWS).map((item) => overlayState(item) as LiveRow);
-  return { kind: "live", rows, more: order.length - rows.length, moreText };
+  const state = (): LiveState => ({ kind: "live", rows, more: order.length - rows.length, moreText });
+  // Tavora refuses a bigger state and the view would stop following: the last rows go under "+n more" instead.
+  while (rows.length > 1 && new TextEncoder().encode(JSON.stringify(state())).length > LIMITS.maxOverlayStateBytes) rows.pop();
+  return state();
 }
 
 /** Whether this is a live state (the page also gets the state of one item for OBS). */

@@ -1,9 +1,17 @@
 [
   {
+    "version": "0.1.31",
+    "date": "2026-11-21",
+    "notes": [
+      "In Hardware, names keep their case and you can see keyboard focus on switches and number fields."
+    ]
+  },
+  {
     "version": "0.1.30",
     "date": "2026-11-21",
     "notes": [
-      "Hardware reads better: calculator keys keep their size, names keep their case, and keyboard focus shows on switches and number fields."
+      "Sizes and speeds no longer read 10.0 or 1024 GB.",
+      "Clear is red, like the other actions that remove things."
     ]
   },
   {

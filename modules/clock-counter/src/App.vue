@@ -425,6 +425,7 @@ watch([list, sdk], () => store.value && sendLive());
 
 const measure = canvasMeasure();
 let sourcesTimer: ReturnType<typeof setTimeout> | undefined;
+let unmounted = false;
 /** An older Tavora has no Overlay page to list them on: its first answer ends the sending. */
 let sourcesUnknown = false;
 /** What was sent last, and when: the same list isn't sent again. */
@@ -435,6 +436,8 @@ const SOURCES_GAP = 300;
 
 /** Tells Tavora what this panel can show over the game on its own when it changed (a count changes a group's line and its size). */
 function sendSources(): void {
+  // A font that finishes loading after the panel went has nothing to tell.
+  if (unmounted) return;
   clearTimeout(sourcesTimer);
   const wait = SOURCES_GAP - (Date.now() - sentAt);
   if (wait <= 0) flushSources();
@@ -546,6 +549,7 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  unmounted = true;
   removeEventListener("keydown", onKey);
   cleanup.forEach((fn) => fn());
   clearInterval(ticker);

@@ -25,25 +25,28 @@ export function percent(value: number, language = "en"): string {
   return num(Math.round(clamp(value, 0, 100)), 0, language);
 }
 
-/** "7.5 GB", "120 GB", "1.5 TB": one decimal under 10. */
+/** Whether a number still shows under 10 at one decimal: 9.96 rounds to 10.0, so it is written "10". */
+const underTen = (value: number) => Math.round(value * 10) / 10 < 10;
+
+/** "7.5 GB", "120 GB", "1.5 TB": one decimal under 10. What rounds up to 1024 GB is already 1.0 TB. */
 export function size(bytes: number, language = "en"): string {
   const gb = bytes / GB;
-  if (gb >= 1024) {
+  if (Math.round(gb) >= 1024) {
     const tb = gb / 1024;
-    return `${num(tb, tb < 10 ? 1 : 0, language)} TB`;
+    return `${num(tb, underTen(tb) ? 1 : 0, language)} TB`;
   }
-  return `${num(gb, gb < 10 && gb > 0 ? 1 : 0, language)} GB`;
+  return `${num(gb, underTen(gb) && gb > 0 ? 1 : 0, language)} GB`;
 }
 
 /** "3.2 MB/s", "120 MB/s". */
 export function speed(bytesPerSec: number, language = "en"): string {
   const mb = bytesPerSec / MB;
-  return `${num(mb, mb < 10 ? 1 : 0, language)} MB/s`;
+  return `${num(mb, underTen(mb) ? 1 : 0, language)} MB/s`;
 }
 
-/** Tavora's own memory: "180 MB", or "1.2 GB" from a gigabyte on. */
+/** Tavora's own memory: "180 MB", or "1.2 GB" from a gigabyte on (also what rounds up to one). */
 export function memory(bytes: number, language = "en"): string {
-  return bytes >= GB ? size(bytes, language) : `${num(bytes / MB, 0, language)} MB`;
+  return Math.round(bytes / MB) >= 1024 ? size(bytes, language) : `${num(bytes / MB, 0, language)} MB`;
 }
 
 export type DriveTone = "ok" | "warning" | "danger";
@@ -102,12 +105,12 @@ export function pingTone(ms: number | null): DriveTone {
 
 /** "0", "1.5", "12": two decimals are too many for a speed that moves every second. */
 export function mbit(value: number, language = "en"): string {
-  return num(value, value < 10 && value > 0 ? 1 : 0, language);
+  return num(value, underTen(value) && value > 0 ? 1 : 0, language);
 }
 
 /** "0", "2.5": the share of pings lost; one decimal under 10. */
 export function lossPercent(value: number, language = "en"): string {
-  return num(value, value < 10 && value > 0 ? 1 : 0, language);
+  return num(value, underTen(value) && value > 0 ? 1 : 0, language);
 }
 
 /** Yellow from 2 % of the pings lost. */

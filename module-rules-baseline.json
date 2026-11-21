@@ -328,7 +328,6 @@
         "<p class=\"text-muted-foreground mt-1.5 px-0.5 text-[11px]\">{{ t(\"task.descriptionHint\") }}</p>": 1
       },
       "kit-control": {
-        "<button type=\"button\" class=\"text-muted-foreground hover:text-destructive hover:bg-destructive/10 flex size-7 items-center justify-center rounded-md opacity-0 group-hover/task:opacity-100 focus-visible:opacity-100\"": 1,
         "<button v-else type=\"button\" class=\"block w-full cursor-text rounded-sm px-1 py-1.5 text-left font-(family-name:--todo-font) text-(length:--todo-text) leading-(--todo-leading) break-words\"": 1,
         "<button v-if=\"children.total\" type=\"button\"": 1,
         "<input type=\"checkbox\" class=\"todo-check\"": 1,

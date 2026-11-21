@@ -1,9 +1,18 @@
 [
   {
+    "version": "0.6.28",
+    "date": "2026-11-21",
+    "notes": [
+      "In Hardware, names keep their case and you can see keyboard focus on switches and number fields."
+    ]
+  },
+  {
     "version": "0.6.27",
     "date": "2026-11-21",
     "notes": [
-      "Hardware reads better: calculator keys keep their size, names keep their case, and keyboard focus shows on switches and number fields."
+      "Pasting from Excel or Word keeps the text instead of only a picture.",
+      "Yesterday is right on the days the clocks change.",
+      "Clear and Remove picture are red, like the other actions that remove things."
     ]
   },
   {
