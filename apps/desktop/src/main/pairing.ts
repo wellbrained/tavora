@@ -39,6 +39,12 @@ const WATCH_EVERY_MS = 15_000;
  */
 export const MAX_OPEN_ANSWERS = 3;
 export const OPEN_ANSWER_MS = 60 * 60_000;
+/** How long an answered request may go without the new PC's key before this PC lets go of it and looks again. */
+export const ANSWER_WAIT_MS = { service: 10 * 60_000, folder: 30 * 60_000 };
+/** How long a new PC waits with no answer before it says to check the other PC. */
+export const SLOW_ANSWER_MS = { service: 60_000, folder: 15 * 60_000 };
+/** The notice that this PC answers no more for now shows at most this often. */
+const TOO_MANY_NOTICE_MS = 5 * 60_000;
 
 /** One request, as this PC may see it. */
 export interface PairingRequest {
@@ -97,6 +103,9 @@ interface Asking {
   id: string;
   key: PairingKey;
   expiresAt: number;
+  /** When this PC asked, and whether it has said yet that no answer came for a while. */
+  askedAt: number;
+  slow: boolean;
   step: NonNullable<PairingView["asking"]>["step"];
   oldKey: Buffer | null;
   code: string | null;
@@ -112,8 +121,16 @@ interface Answering {
   name: string | null;
   /** The new PC's promise as it was when this PC answered: its key has to be the one in it. */
   commit: Buffer;
+  /** When this PC answered: without the new PC's key for ANSWER_WAIT_MS, it lets go. */
+  at: number;
   reveal: Buffer | null;
   code: string | null;
+}
+
+/** An answer that may end with neither Add nor No: the request it went to (`via:id`; none for one kept from before a restart), and when. */
+interface OpenAnswer {
+  request: string | null;
+  at: number;
 }
 
 /** A promise is a sha256 hash. */
@@ -127,7 +144,10 @@ export class Pairing {
   /** Requests this PC's user turned down or that didn't check out: not answered again. */
   private refused = new Set<string>();
   /** When this PC answered each request that ended (or may end) with neither Add nor No; see MAX_OPEN_ANSWERS. */
-  private openAnswers: Map<string, number> | null = null;
+  private openAnswers: OpenAnswer[] | null = null;
+  /** How often this PC said it answers no more for now (the page shows a notice for each), and when it last did. */
+  private tooManyTries = 0;
+  private tooManyAt = -Infinity;
   private askTimer: ReturnType<typeof setTimeout> | undefined;
   private watchTimer: ReturnType<typeof setInterval> | undefined;
   private followTimer: ReturnType<typeof setTimeout> | undefined;
@@ -192,8 +212,9 @@ export class Pairing {
     const asking = this.asking;
     const answering = this.answering;
     return {
-      asking: asking ? { via: asking.transport.via, step: asking.step, code: asking.code, from: asking.from } : null,
+      asking: asking ? { via: asking.transport.via, step: asking.step, code: asking.code, from: asking.from, slow: asking.step === "waiting" && asking.slow } : null,
       approve: answering?.code ? { id: answering.id, name: answering.name, code: answering.code } : null,
+      tooManyTries: this.tooManyTries,
     };
   }
 
@@ -215,7 +236,7 @@ export class Pairing {
     } catch (error) {
       throw toUserError(error);
     }
-    this.asking = { transport, id: asked.id, key, expiresAt: asked.expiresAt, step: "waiting", oldKey: null, code: null, from: null, sealed: null };
+    this.asking = { transport, id: asked.id, key, expiresAt: asked.expiresAt, askedAt: this.now(), slow: false, step: "waiting", oldKey: null, code: null, from: null, sealed: null };
     this.changed();
     this.askSoon();
   }
@@ -270,6 +291,11 @@ export class Pairing {
     if (!asking) return;
     // The recovery key was typed in meanwhile.
     if (this.hasKey) return this.cancel();
+    // No answer for a while: the page says to check the other PC (it may answer no more for now).
+    if (asking.step === "waiting" && !asking.slow && this.now() - asking.askedAt >= SLOW_ANSWER_MS[asking.transport.via]) {
+      asking.slow = true;
+      this.changed();
+    }
     // A key that came before the codes were checked waits here, unread again (the service hands it over only
     // once), until the press, the recovery key typed in, or the request running out.
     if (asking.sealed) {
@@ -363,6 +389,14 @@ export class Pairing {
     if (this.looking || this.asking || !this.hasKey) return;
     this.looking = true;
     try {
+      // Answered, and the new PC's key never came (or the request can't be read): let go, and look everywhere again.
+      const stale = this.answering;
+      if (stale && !stale.reveal && this.now() - stale.at >= ANSWER_WAIT_MS[stale.transport.via]) {
+        this.refused.add(stale.id);
+        this.answering = null;
+        this.changed();
+        await stale.transport.end(stale.id, false).catch(() => undefined);
+      }
       // While answering one request, only its way is looked at.
       const ways = this.answering ? [this.answering.transport] : [this.service(), this.folder()];
       for (const transport of ways) {
@@ -402,13 +436,18 @@ export class Pairing {
         const commit = unb64(request.commit);
         if (commit.length !== COMMIT_BYTES) return;
         const open = await this.loadOpenAnswers();
-        for (const [id, at] of open) if (this.now() - at >= OPEN_ANSWER_MS) open.delete(id);
-        if (open.size >= MAX_OPEN_ANSWERS) return;
+        if (open.filter((answer) => this.now() - answer.at < OPEN_ANSWER_MS).length >= MAX_OPEN_ANSWERS) return this.tooMany();
         const key = newPairingKey();
-        if (!(await transport.answer(request.id, b64(key.publicKey)))) return;
-        this.answering = { transport, id: request.id, key, name: request.name, commit, reveal: null, code: null };
-        open.set(request.id, this.now());
-        await this.saveOpenAnswers();
+        // Counted before the key goes out: whatever comes back (another PC was first, an error), the other side has
+        // seen it, and the request isn't answered again.
+        await this.countAnswer(transport, request.id);
+        let answered = false;
+        try {
+          answered = await transport.answer(request.id, b64(key.publicKey));
+        } finally {
+          if (!answered) this.refused.add(request.id);
+        }
+        if (answered) this.answering = { transport, id: request.id, key, name: request.name, commit, at: this.now(), reveal: null, code: null };
         return;
       }
       if (answering.id !== request.id) return;
@@ -433,14 +472,15 @@ export class Pairing {
     }
   }
 
-  private async loadOpenAnswers(): Promise<Map<string, number>> {
+  private async loadOpenAnswers(): Promise<OpenAnswer[]> {
     if (this.openAnswers) return this.openAnswers;
-    const open = new Map<string, number>();
+    const open: OpenAnswer[] = [];
     const file = this.options.answersFile;
     if (file) {
       try {
         const saved = JSON.parse(await readFile(file, "utf8")) as { at?: unknown };
-        if (Array.isArray(saved.at)) saved.at.forEach((at, index) => typeof at === "number" && Number.isFinite(at) && open.set(`saved-${index}`, at));
+        // A time ahead of now (the clock was ahead) counts from now, so it can't hold answering up for longer.
+        if (Array.isArray(saved.at)) for (const at of saved.at) if (typeof at === "number" && Number.isFinite(at)) open.push({ request: null, at: Math.min(at, this.now()) });
       } catch {
         // None yet, or unreadable: none counted.
       }
@@ -449,10 +489,28 @@ export class Pairing {
     return (this.openAnswers ??= open);
   }
 
+  /** One more answer that may end with neither Add nor No; a request counts once. */
+  private async countAnswer(transport: PairingTransport, id: string): Promise<void> {
+    const open = await this.loadOpenAnswers();
+    const request = `${transport.via}:${id}`;
+    const now = this.now();
+    this.openAnswers = [...open.filter((answer) => now - answer.at < OPEN_ANSWER_MS && answer.request !== request), { request, at: now }];
+    await this.saveOpenAnswers();
+  }
+
   private async saveOpenAnswers(): Promise<void> {
     const file = this.options.answersFile;
     if (!file || !this.openAnswers) return;
-    await writeFileAtomic(file, JSON.stringify({ v: 1, at: [...this.openAnswers.values()] })).catch((error: unknown) => this.options.log?.(`pairing: ${error instanceof Error ? error.message : String(error)}`));
+    await writeFileAtomic(file, JSON.stringify({ v: 1, at: this.openAnswers.map((answer) => answer.at) })).catch((error: unknown) => this.options.log?.(`pairing: ${error instanceof Error ? error.message : String(error)}`));
+  }
+
+  /** A PC asks while this one answers no more for now: the page says so, now and then. */
+  private tooMany(): void {
+    if (this.now() - this.tooManyAt < TOO_MANY_NOTICE_MS) return;
+    this.tooManyAt = this.now();
+    this.tooManyTries++;
+    this.options.log?.("pairing: too many answers without a click, answering none for now");
+    this.changed();
   }
 
   /** Something on the way is off: the request is turned down and not answered again. */
@@ -471,7 +529,12 @@ export class Pairing {
     this.answering = null;
     this.refused.add(id);
     // The user saw the question and clicked: no longer an open answer.
-    if ((await this.loadOpenAnswers()).delete(id)) await this.saveOpenAnswers();
+    const request = `${answering.transport.via}:${id}`;
+    const open = await this.loadOpenAnswers();
+    if (open.some((answer) => answer.request === request)) {
+      this.openAnswers = open.filter((answer) => answer.request !== request);
+      await this.saveOpenAnswers();
+    }
     this.changed();
     const key = this.hasKey ? this.key() : null;
     try {

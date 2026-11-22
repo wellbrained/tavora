@@ -62,6 +62,13 @@ watch(
   },
   { immediate: true },
 );
+// A PC asked while this one answers no more for now (main/pairing.ts MAX_OPEN_ANSWERS): say so each time.
+watch(
+  () => pairing.value?.tooManyTries ?? 0,
+  (count, before) => {
+    if (count > (before ?? 0)) showToast(t("pairing.tooMany"));
+  },
+);
 </script>
 
 <template>
