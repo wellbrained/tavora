@@ -79,6 +79,8 @@ export const HOST_ONLY: ReadonlySet<string> = new Set(
     "main/module-page.ts",
     "main/publisher-names.ts",
     "main/account.ts",
+    // What follows the account in the host window: messages, publisher keys, the cloud copy, the first developer steps (account-flows.ts).
+    "main/account-flows.ts",
     // The profile card and what of it goes to the account (user-profile.ts).
     "main/user-profile.ts",
     "main/account-key.ts",

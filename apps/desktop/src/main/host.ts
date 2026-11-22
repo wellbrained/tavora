@@ -35,7 +35,6 @@ import { MAX_PICKER_COVERS } from "../shared/host-api";
 import { isForWorkspaceGame } from "./workspace-game";
 import { resolveLanguage, translate, type Language } from "../shared/i18n";
 import { ownKeys } from "./own-keys";
-import { suggestPrefix } from "../shared/id-prefix";
 import { isVoicePaused } from "../shared/discord-voice";
 import { UserError } from "./messages";
 import { UndoGoneError, UndoShelf } from "./undo-shelf";
@@ -177,6 +176,7 @@ import { LibraryWorkspaces } from "./workspace-lookup";
 
 import { CopySync, type CopySyncOptions } from "./cloud-copy-sync";
 import { Inbox } from "./inbox";
+import { AccountFlows } from "./account-flows";
 import { thisDeviceName } from "./device-name";
 import { AccountClient, deviceOs, linkCommand, loadAccount, saveAccount, type AccountClientOptions } from "./account";
 import { discordLogin } from "./discord-login";
@@ -461,7 +461,8 @@ export class Host {
   private readonly account: AccountClient;
   /** The user's messages with developers and Tavora (inbox.ts). */
   private readonly inbox: Inbox;
-  private inboxSignedIn = false;
+  /** What follows the account: the messages, publisher keys and cloud copy, sign-out, the first developer steps (account-flows.ts). */
+  private readonly accountFlows: AccountFlows;
   /** The cloud copy: made before the data is read, since a newer copy is taken before anything reads it. */
   private readonly copySync: CopySync;
   /** The publisher keys the account's vault keeps (developer-keys.ts). */
@@ -898,14 +899,8 @@ export class Host {
     });
     this.account = Host.accountClient(options, prepared.signIn, prepared.encryptor, () => this.language, { get: () => this.userProfile.data(), apply: (remote) => this.userProfile.apply(remote) }, (view) => {
       if (!this.window.isDestroyed()) this.window.webContents.send("host:account", view);
-      if (this.inbox && this.inboxSignedIn !== (view.account !== null)) {
-        this.inboxSignedIn = view.account !== null;
-        this.inbox.accountChanged(view.account !== null);
-      }
-      // Which account, not only whether one: what was read for one is never shown to another.
-      const accountId = view.account !== null ? prepared.signIn.id() : null;
-      this.developerKeys?.accountChanged(accountId);
-      this.copySync.accountChanged(accountId);
+      // Made once the messages and publisher keys are: the account says nothing before init().
+      this.accountFlows?.changed(view);
     });
     this.moduleBoards = new ModuleBoards({ installed: this.installed, account: this.account, language: () => this.language });
     this.gameIcons = new GameIcons({
@@ -1073,6 +1068,15 @@ export class Host {
       onChange: (view) => {
         if (!this.window.isDestroyed()) this.window.webContents.send("host:developer-keys", view);
       },
+    });
+    this.accountFlows = new AccountFlows({
+      account: this.account,
+      signInId: () => prepared.signIn.id(),
+      inbox: this.inbox,
+      developerKeys: this.developerKeys,
+      copy: this.copySync,
+      dialogs: this.fileDialogs,
+      online: () => this.library.onlineSearch,
     });
     this.publisher = this.modulePublisher();
     this.pairing = new Pairing({
@@ -1447,13 +1451,6 @@ export class Host {
     const workspace = this.workspace;
     if (!workspace) return;
     for (const instanceId of this.workspaces.vacate(moduleId, workspace.id)) this.closeView(instanceId);
-  }
-
-  /** A messages action: online features must be on, and the user needs a sign-in. */
-  private async inboxAction<T>(run: () => Promise<T>): Promise<T> {
-    if (!this.library.onlineSearch) throw new UserError("error.catalogOff");
-    if (!this.account.token()) throw new UserError("account.error.signedOut");
-    return run();
   }
 
   private static themeSources(options: HostOptions) {
@@ -2189,16 +2186,16 @@ export class Host {
       "check-module-updates": () => this.moduleCatalog.checkUpdatesNow(),
       "ask-module": (action) => this.moduleCatalog.ask({ name: askedName(action.name), steamAppId: action.steamAppId, gameId: action.gameId }),
       "report-catalog-module": (action) => this.moduleCatalog.report(action.moduleId, { reason: action.reason, note: action.note }),
-      "inbox-send-request": (action) => this.inboxAction(() => this.inbox.sendRequest(action.moduleId, action.requestType, action.text, action.previousId)),
-      "inbox-reply": (action) => this.inboxAction(() => this.inbox.reply(action.id, action.text)),
-      "inbox-close": (action) => this.inboxAction(() => this.inbox.close(action.id, action.outcome)),
-      "inbox-block": (action) => this.inboxAction(() => this.inbox.block(action.id, action.report)),
-      "inbox-report": (action) => this.inboxAction(() => this.inbox.report(action.id, action.report)),
-      "inbox-delete": (action) => this.inboxAction(() => this.inbox.delete(action.id)),
-      "inbox-email-copies": (action) => this.inboxAction(() => this.inbox.setEmailCopies(action.on)),
-      "inbox-contact": (action) => this.inboxAction(() => this.inbox.setContact(action.moduleId, { kind: action.kind, value: action.value })),
-      "inbox-contact-default": (action) => this.inboxAction(() => this.inbox.setContactDefault({ kind: action.kind, value: action.value })),
-      "open-contact-link": (action) => this.inboxAction(() => this.inbox.openContactLink(action.moduleId)),
+      "inbox-send-request": (action) => this.accountFlows.messages(() => this.inbox.sendRequest(action.moduleId, action.requestType, action.text, action.previousId)),
+      "inbox-reply": (action) => this.accountFlows.messages(() => this.inbox.reply(action.id, action.text)),
+      "inbox-close": (action) => this.accountFlows.messages(() => this.inbox.close(action.id, action.outcome)),
+      "inbox-block": (action) => this.accountFlows.messages(() => this.inbox.block(action.id, action.report)),
+      "inbox-report": (action) => this.accountFlows.messages(() => this.inbox.report(action.id, action.report)),
+      "inbox-delete": (action) => this.accountFlows.messages(() => this.inbox.delete(action.id)),
+      "inbox-email-copies": (action) => this.accountFlows.messages(() => this.inbox.setEmailCopies(action.on)),
+      "inbox-contact": (action) => this.accountFlows.messages(() => this.inbox.setContact(action.moduleId, { kind: action.kind, value: action.value })),
+      "inbox-contact-default": (action) => this.accountFlows.messages(() => this.inbox.setContactDefault({ kind: action.kind, value: action.value })),
+      "open-contact-link": (action) => this.accountFlows.messages(() => this.inbox.openContactLink(action.moduleId)),
       "inbox-note-seen": () => this.inbox.noteSeen(),
       "inbox-developer-note-seen": () => this.inbox.developerNoteSeen(),
       "inbox-refresh": async () => {
@@ -2268,22 +2265,13 @@ export class Host {
       "account-create": (action) => this.account.create(action.ageConfirmed),
       "account-cancel": () => this.account.cancel(),
       "account-refresh": () => this.account.refresh(),
-      "account-sign-out": async () => {
-        // Which account signed out, read before its sign-in goes: only its key goes with it.
-        const who = this.account.accountId();
-        await this.account.signOut();
-        return this.copySync.signedOut(who);
-      },
+      "account-sign-out": () => this.accountFlows.signOut(),
       "account-sign-out-device": (action) => this.account.signOutDevice(action.deviceId),
       "account-rename-device": (action) => this.account.renameDevice(action.deviceId, action.name),
       "account-email-code": (action) => this.account.sendEmailCode(action.email),
       "account-change-email": (action) => this.account.changeEmail(action.code, action.currentCode),
       "account-delete-code": () => this.account.sendDeleteCode(),
-      "account-delete": async (action) => {
-        const who = this.account.accountId();
-        await this.account.deleteAccount(action.code);
-        return this.copySync.signedOut(who);
-      },
+      "account-delete": (action) => this.accountFlows.delete(action.code),
       "account-discord-sign-in": () => this.account.discordSignIn(),
       "account-discord-connect-code": () => this.account.sendConnectDiscordCode(),
       "account-discord-connect": (action) => this.account.connectDiscord(action.code),
@@ -2291,31 +2279,11 @@ export class Host {
       "account-discord-disconnect": (action) => this.account.disconnectDiscord(action.code),
       "account-email-remove-code": () => this.account.sendRemoveEmailCode(),
       "account-email-remove": (action) => this.account.removeEmail(action.code),
-      "account-delete-discord": async () => {
-        const who = this.account.accountId();
-        await this.account.deleteWithDiscord();
-        if (!this.account.view().account) await this.copySync.signedOut(who);
-      },
+      "account-delete-discord": () => this.accountFlows.deleteWithDiscord(),
       "account-profile-choice": (action) => this.account.chooseProfile(action.keep),
 
       // Developer side of the account
-      "account-developer-name": async (action) => {
-        await this.account.setDeveloperName(action.name);
-        // A first-time developer gets the prefix of the name with it (WellBrained: wellbrained) when it
-        // is free; when it isn't, the check stays on screen to pick another.
-        const prefix = suggestPrefix(action.name);
-        if (prefix && this.account.view().prefixes?.held.length === 0) {
-          if ((await this.account.checkPrefix(prefix).catch(() => null)) === "free") await this.account.claimPrefix(prefix).catch(() => undefined);
-        }
-        // And a publisher key: Tavora makes, keeps and links it, and the recovery key is shown. One with
-        // a key already (kept, or a linked key file) gets none.
-        const keys = this.developerKeys.view();
-        // Paused keys count as keys: they are linked again, never replaced by a new one.
-        if ((keys.status === "ready" || keys.status === "none") && !keys.keys.length && ownKeys(this.account.view()).length === 0) {
-          // Another PC keeps the account's key: its recovery key is asked for on screen, then a key is made there.
-          await this.developerKeys.create().catch(() => undefined);
-        }
-      },
+      "account-developer-name": (action) => this.accountFlows.setDeveloperName(action.name),
       "account-link-code": () => this.account.newLinkCode(),
       "account-copy-link-command": () => {
         const code = this.account.view().linkCode?.code;
@@ -2323,14 +2291,7 @@ export class Host {
         clipboard.writeText(linkCommand(code));
       },
       "account-unlink-key": (action) => this.account.unlinkKey(action.fingerprint),
-      "account-replace-key": async (action) => {
-        // The old key may be a paused one whose file is lost (audit 2026-11-22); the new one is a key linked and working,
-        // or one made for it.
-        if (!ownKeys(this.account.view()).includes(action.fingerprint)) throw new UserError("account.error.keyGone");
-        const linked = (this.account.view().publisherKeys ?? []).map((key) => key.fingerprint);
-        const next = await this.developerKeys.replacementFor(action.fingerprint, linked);
-        return this.account.replaceKey(action.fingerprint, next, action.leaked);
-      },
+      "account-replace-key": (action) => this.accountFlows.replaceKey(action.fingerprint, action.leaked),
       "account-publish-token-create": (action) => this.account.createPublishToken(action.name),
       "account-publish-token-copy": () => {
         const token = this.account.newPublishTokenText();
@@ -2378,19 +2339,8 @@ export class Host {
 
       // Cloud copy
       "cloud-copy-on": () => this.copySync.turnOn(),
-      "cloud-copy-on-folder": async () => {
-        const folder = await this.fileDialogs.pick("cloud-copy", { properties: ["openDirectory", "createDirectory"] });
-        if (!folder) return;
-        await this.copySync.turnOn(folder);
-        this.fileDialogs.remember("cloud-copy", folder);
-      },
-      "cloud-copy-move": async (action) => {
-        if (action.to === "server") return this.copySync.move(null);
-        const folder = await this.fileDialogs.pick("cloud-copy", { properties: ["openDirectory", "createDirectory"] });
-        if (!folder) return;
-        await this.copySync.move(folder);
-        this.fileDialogs.remember("cloud-copy", folder);
-      },
+      "cloud-copy-on-folder": () => this.accountFlows.turnOnInFolder(),
+      "cloud-copy-move": (action) => this.accountFlows.moveCopy(action.to),
       "cloud-copy-key": (action) => this.copySync.enterKey(action.key),
       "cloud-copy-cancel": () => this.copySync.cancelKey(),
       "cloud-copy-new-key": () => this.copySync.startOver(),
