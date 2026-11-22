@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
-import { fitDelta, moveSash, sashSides } from "./dock-fit";
+import { backOff, fitDelta, moveSash, sashSides } from "./dock-fit";
 
 // jsdom has no layout, so each view's box is given by hand.
 function boxed<T extends HTMLElement>(element: T, top: number, height: number, left = 0, width = 300): T {
@@ -50,6 +50,20 @@ describe("fitDelta", () => {
   });
   it("leaves the line when nothing scrolls", () => {
     expect(fitDelta(0, 0)).toBe(0);
+  });
+});
+
+describe("backOff", () => {
+  it("moves the line back just as far as the giving side now scrolls", () => {
+    expect(backOff(1300, 450)).toBe(-450);
+    expect(backOff(-200, 30)).toBe(30);
+  });
+  it("never moves it back past where it started", () => {
+    expect(backOff(100, 400)).toBe(-100);
+    expect(backOff(-100, 400)).toBe(100);
+  });
+  it("leaves it when the giving side still fits", () => {
+    expect(backOff(300, 0)).toBe(0);
   });
 });
 

@@ -20,7 +20,7 @@ import { t, templateName } from "../i18n";
 import { LAYOUT_TEMPLATES } from "../../shared/layout-templates";
 import { fromDockview, groupConstraints, guardDrop, layoutAround, maximizedPanel, panelInfo, placePanel, placeTab, toDockview, type PanelInfo } from "../dock";
 import { DockPreview } from "../dock-preview";
-import { fitDelta, moveSash, sashSides } from "../dock-fit";
+import { backOff, fitDelta, moveSash, sashSides } from "../dock-fit";
 import DockPreviewLayer from "../components/workspace/DockPreview.vue";
 import WorkspaceIcon from "../components/WorkspaceIcon.vue";
 import EmptySlot from "../components/workspace/EmptySlot.vue";
@@ -401,24 +401,45 @@ function shownIn(area: HTMLElement): string[] {
   return [...elements].filter(([id, element]) => area.contains(element) && dock?.getPanel(id)?.api.isVisible).map(([id]) => id);
 }
 
+/** How long the panels' pages get to take their new size before they are measured again. */
+const FIT_SETTLE_MS = 150;
+/** True from a double-click on a line until its fit is done: another one waits for that. */
+let fitBusy = false;
+
+function moveQuietly(sash: HTMLElement, axis: "x" | "y", delta: number) {
+  fitting = true;
+  try {
+    moveSash(sash, axis, delta);
+  } finally {
+    fitting = false;
+  }
+}
+
 /** A double-click on the line between two panels gives the one that scrolls the room it needs (dock-fit.ts). */
 async function onDoubleClick(event: MouseEvent) {
   const sash = (event.target as Element | null)?.closest<HTMLElement>(".dv-sash");
-  if (!sash || sash.classList.contains("dv-disabled") || dock?.hasMaximizedGroup()) return;
+  if (fitBusy || !sash || sash.classList.contains("dv-disabled") || dock?.hasMaximizedGroup()) return;
   const sides = sashSides(sash);
   if (!sides) return;
   const before = shownIn(sides.before);
   const after = shownIn(sides.after);
   if (!before.length && !after.length) return;
-  const overflow = await host.panelOverflow([...before, ...after]);
-  const most = (ids: string[]) => Math.max(0, ...ids.map((id) => overflow[id]?.[sides.axis] ?? 0));
-  const delta = fitDelta(most(before), most(after));
-  if (!delta || !sash.isConnected) return;
-  fitting = true;
+  fitBusy = true;
   try {
-    moveSash(sash, sides.axis, delta);
+    const most = (overflow: Record<string, { x: number; y: number }>, ids: string[]) => Math.max(0, ...ids.map((id) => overflow[id]?.[sides.axis] ?? 0));
+    const overflow = await host.panelOverflow([...before, ...after]);
+    const delta = fitDelta(most(overflow, before), most(overflow, after));
+    if (!delta || !sash.isConnected) return;
+    moveQuietly(sash, sides.axis, delta);
+    // The side that gave the room must not start to scroll: once its pages have their new size, the line goes back
+    // by however much more they scroll now.
+    const giving = delta > 0 ? after : before;
+    if (!giving.length) return;
+    await new Promise((resolve) => setTimeout(resolve, FIT_SETTLE_MS));
+    const back = backOff(delta, most(await host.panelOverflow(giving, true), giving));
+    if (back && sash.isConnected) moveQuietly(sash, sides.axis, back);
   } finally {
-    fitting = false;
+    fitBusy = false;
   }
 }
 

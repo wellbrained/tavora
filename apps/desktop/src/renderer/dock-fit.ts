@@ -1,6 +1,7 @@
 // A double-click on the line between two panels gives the panel that scrolls the room it needs, so its scrollbars go.
 // Only grows: the panel above (or left of) the line first, else the one below (or right). The room comes from the
 // panels on the other side, nearest first, and stops at their smallest size: the line is moved as a drag would move it.
+// It never makes the other side scroll: once the line moved, it goes back by however much more that side now scrolls.
 
 export interface SashSides {
   /** Which way the line moves: "y" for panels stacked above each other, "x" for panels side by side. */
@@ -18,6 +19,15 @@ export function fitDelta(before: number, after: number): number {
   if (before > 0) return before;
   if (after > 0) return -after;
   return 0;
+}
+
+/**
+ * How far to move the line back after `delta`, when the panels that gave the room now scroll `squeezed` px more than
+ * before: just enough that they stop, never past where the line started.
+ */
+export function backOff(delta: number, squeezed: number): number {
+  const back = Math.min(Math.max(0, squeezed), Math.abs(delta));
+  return back === 0 ? 0 : -Math.sign(delta) * back;
 }
 
 /** The two areas a dockview line sits between, read from the page: the nearest visible one on each side. */

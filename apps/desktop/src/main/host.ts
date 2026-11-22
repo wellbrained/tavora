@@ -2254,12 +2254,12 @@ export class Host {
     ipcMain.on("host:workspace-bounds", (event, bounds: unknown) => {
       if (fromHost(event)) this.cover.setBounds(this.windowRect(bounds));
     });
-    ipcMain.handle("host:panel-overflow", async (event, ids: unknown): Promise<Record<string, PanelOverflow>> => {
+    ipcMain.handle("host:panel-overflow", async (event, ids: unknown, since: unknown): Promise<Record<string, PanelOverflow>> => {
       if (!fromHost(event) || !Array.isArray(ids) || ids.length > LAYOUT_LIMITS.panels || !ids.every((id) => typeof id === "string" && INSTANCE_ID.test(id))) return {};
       const entries = await Promise.all(
         (ids as string[]).map(async (id) => {
           const adapter = this.panels.get(id);
-          return [id, adapter && this.panels.isPlaced(id) ? await panelOverflow(adapter.webContentsId) : { x: 0, y: 0 }] as const;
+          return [id, adapter && this.panels.isPlaced(id) ? await panelOverflow(adapter.webContentsId, since === true ? "since" : "now") : { x: 0, y: 0 }] as const;
         }),
       );
       return Object.fromEntries(entries);
