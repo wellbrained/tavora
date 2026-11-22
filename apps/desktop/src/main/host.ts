@@ -2,7 +2,7 @@ import { ReadOnlyFiles } from './read-only-files';
 import { ChosenFolders, folderHost, type FolderHost, type FolderPlaces } from './folder-access';
 import { showInBackground, windowLook, type WindowStart } from "./background-window";
 import { saveDialogDirectory } from './save-dialog-folder';
-import { randomUUID, type KeyObject } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { existsSync, watch, type FSWatcher } from "node:fs";
 import os from "node:os";
 import { appendFile, mkdir, readdir, readFile, realpath, rm, stat } from "node:fs/promises";
@@ -31,7 +31,7 @@ import {
 } from "electron";
 import { styleMarks, type TavoraTheme, type TavoraWorkspace } from "@tavora/sdk/protocol";
 import type { PanelDialogSize } from "./bridge";
-import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, InstalledGameView, LegalPage, LicenceList, ModulePageResult, OfficialPublishRun, OfficialPublishView, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, PanelDialog, PanelPlacement, ProfileRanksView, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, UnlistedGame } from "../shared/host-api";
+import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, InstalledGameView, LegalPage, LicenceList, ModulePageResult, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, PanelDialog, PanelPlacement, ProfileRanksView, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, UnlistedGame } from "../shared/host-api";
 import { MAX_PICKER_COVERS } from "../shared/host-api";
 import { addOrRestoreWorkspace } from "./game-copy";
 import { isForWorkspaceGame, learnGameIds, withOnlineId, workspaceGameIds, type ListedGame } from "./workspace-game";
@@ -125,12 +125,11 @@ import { PublisherNames } from "./publisher-names";
 import { PreviewUpdater, previewCheck, UpdateManager, type UpdaterLike } from "./updates";
 import { PINNED_UPDATE_KEYS } from "./update-keys";
 import { checkDownloadedUpdate } from "./update-signature";
-import { OfficialPublisher, PublishCancelled } from "./official-publish";
+import { OfficialPublisher } from "./official-publish";
+import { OfficialPublishing } from "./official-publishing";
 import { OfficialKeyStore } from "./official-key-store";
-import { isHostSender, officialPublishAllowed } from "./host-sender";
-import { loadTrustedSavedKey } from "./official-saved-key";
+import { isHostSender } from "./host-sender";
 import { removeRefusedInstaller } from "./refused-update";
-import { fingerprint, loadExistingKey } from "@tavora/pack";
 import { OfficialUpdates, resolveOfficialPins } from "./official-updates";
 import { CATALOGUE_PUBLIC_KEY, SAFETY_REFRESH_MS, SafetyLists } from "./safety-lists";
 import { fetchSteamLibrary, importSteamGames, MAX_IMPORT_GAMES, steamLibraryView } from "./steam-import";
@@ -501,12 +500,8 @@ export class Host {
   private readonly safetyLists: SafetyLists;
   /** Tavora's own modules downloaded from the catalogue (official-updates.ts); off while the pins are empty. */
   private readonly official: OfficialUpdates;
-  /** Publishing built-in modules from a dev build (official-publish.ts): made on first use, kept for the preview in between. */
-  private officialPublisher: OfficialPublisher | null = null;
-  /** The Tavora key when the developer chose to keep it on this PC (dev builds only). */
-  private readonly officialKeys: OfficialKeyStore;
-  /** Settings > Development's Built-in modules list (state.officialPublish); the publish in progress is the publisher's. */
-  private officialPublish: Pick<OfficialPublishView, "check" | "overview"> = { check: { phase: "idle" }, overview: null };
+  /** Publishing built-in modules from a dev build (official-publishing.ts). */
+  private readonly officialPublishing: OfficialPublishing;
   /** Stream overlays and hotkeys for module actions (streaming.ts); made by Host.create once the Host is there, before any module panel opens. */
   private streaming!: Streaming;
   /** Module overlay pages shown over the game in front (game-overlay-service.ts). */
@@ -756,7 +751,38 @@ export class Host {
       introduce: (owner) => this.publisherNames.refresh([owner]),
       log: (line) => console.warn(`[tavora] ${line}`),
     });
-    this.officialKeys = new OfficialKeyStore(options.userData, prepared.encryptor);
+    this.officialPublishing = new OfficialPublishing({
+      packaged: app.isPackaged,
+      pinsOn: officialOn(OFFICIAL_PINS),
+      trust: () => new OfficialUpdates({ userData: this.options.userData, pins: { ...OFFICIAL_PINS }, safety: this.safetyLists }),
+      publisher: (trust) =>
+        new OfficialPublisher({
+          repo: path.resolve(__dirname, "../../../.."),
+          userData: this.options.userData,
+          listed: async (id) => {
+            try {
+              return { version: (await this.catalog.details(id)).entry.version };
+            } catch (error) {
+              if (error instanceof UserError && error.key === "error.catalogNotListed") return null;
+              throw error;
+            }
+          },
+          trusted: (fingerprint, sha256) => trust.signerTrusted(fingerprint, sha256),
+          upload: (key, zip) => this.account.uploadModule(key, zip),
+          // A run that ends while the app quits (its cancel there) has no window left to tell.
+          onChange: () => {
+            if (!this.window.isDestroyed()) this.pushState();
+          },
+        }),
+      keys: new OfficialKeyStore(options.userData, prepared.encryptor),
+      pickKeyFile: async () => {
+        const picked = await dialog.showOpenDialog(this.window, { title: translate(this.language, "dialog.tavoraKey"), properties: ["openFile"] });
+        const keyFile = picked.filePaths[0];
+        return picked.canceled || !keyFile ? undefined : keyFile;
+      },
+      language: () => this.language,
+      changed: () => this.pushState(),
+    });
     this.discord = Host.discordConnector(options, prepared.encryptor, (view) => {
       if (!this.window.isDestroyed()) this.window.webContents.send("host:discord", view);
     });
@@ -2439,8 +2465,7 @@ export class Host {
       this.pairing.dispose();
       clearInterval(this.catalogTimer);
       this.inbox.dispose();
-      // A worktree a cancel can't remove in time is swept on the next publish.
-      void this.officialPublisher?.cancel();
+      this.officialPublishing.quit();
     });
   }
 
@@ -2473,129 +2498,6 @@ export class Host {
         if (!this.window.isDestroyed()) this.window.webContents.send("host:publish", view);
       },
     });
-  }
-
-  /** The one publisher for built-in modules (dev builds with the pins set). */
-  private officialPublisherFor(trust: OfficialUpdates): OfficialPublisher {
-    this.officialPublisher ??= new OfficialPublisher({
-      repo: path.resolve(__dirname, "../../../.."),
-      userData: this.options.userData,
-      listed: async (id) => {
-        try {
-          return { version: (await this.catalog.details(id)).entry.version };
-        } catch (error) {
-          if (error instanceof UserError && error.key === "error.catalogNotListed") return null;
-          throw error;
-        }
-      },
-      trusted: (fingerprint, sha256) => trust.signerTrusted(fingerprint, sha256),
-      upload: (key, zip) => this.account.uploadModule(key, zip),
-      // A run that ends while the app quits (its cancel there) has no window left to tell.
-      onChange: () => {
-        if (!this.window.isDestroyed()) this.pushState();
-      },
-    });
-    return this.officialPublisher;
-  }
-
-  /** The publish of a built-in module in progress, as state.officialPublish shows it. */
-  private officialRun(): OfficialPublishRun {
-    return this.officialPublisher?.view() ?? { phase: "idle" };
-  }
-
-  /** Dev builds only: works out which built-in modules have something to publish (Settings > Development). */
-  private async checkOfficialPublish(): Promise<void> {
-    const trust = this.officialPublishTrust();
-    // Not while a build runs: both fetch in the same checkout.
-    if (!trust || this.officialPublish.check.phase === "checking" || this.officialRun().phase === "building") return;
-    this.officialPublish = { ...this.officialPublish, check: { phase: "checking" } };
-    this.pushState();
-    try {
-      this.officialPublish = { check: { phase: "idle" }, overview: await this.officialPublisherFor(trust).check() };
-    } catch (error) {
-      const message = error instanceof UserError ? translate(this.language, error.key, error.params) : (error as Error).message;
-      this.officialPublish = { ...this.officialPublish, check: { phase: "failed", error: message } };
-    } finally {
-      this.pushState();
-    }
-  }
-
-  /**
-   * Dev builds only: builds a built-in module's update from origin/main and packs it for the preview, showing each
-   * step. Nothing is signed here; the key is needed only for Sign and upload (confirmOfficialPublish).
-   */
-  private async publishOfficialModule(moduleId: string): Promise<void> {
-    const trust = this.officialPublishTrust();
-    if (!trust) throw new UserError("officialPublish.error.notBuiltIn");
-    if (this.officialRun().phase !== "idle" || this.officialPublish.check.phase === "checking") throw new UserError("officialPublish.error.busy");
-    const name = this.officialPublish.overview?.rows.find((row) => row.id === moduleId)?.name ?? moduleId;
-    try {
-      await this.officialPublisherFor(trust).prepare(moduleId, undefined, name);
-    } catch (error) {
-      if (error instanceof PublishCancelled) return;
-      throw error;
-    }
-  }
-
-  /**
-   * Dev builds only: signs the previewed build and uploads it. The key is the one saved on this PC, while it may still
-   * sign Tavora's modules, or a key file the developer picks now; it is held only for this call. A picked key is saved
-   * (sealed by the system) only when the developer asked for it and only once it is known to be Tavora's key.
-   */
-  private async confirmOfficialPublish(remember: boolean): Promise<string | void> {
-    const trust = this.officialPublishTrust();
-    const publisher = this.officialPublisher;
-    if (!trust || !publisher) throw new UserError("officialPublish.error.notPrepared");
-    const published = await publisher.confirm(() => this.officialKey(trust, remember));
-    if (!published) return;
-    void this.checkOfficialPublish();
-    return `${published.id} ${published.version}`;
-  }
-
-  /** The key for Sign and upload: the saved one, or a key file picked now (null when none is picked). */
-  private async officialKey(trust: OfficialUpdates, remember: boolean): Promise<KeyObject | null> {
-    // A saved key that may no longer sign (revoked, or the pins moved on) is not kept.
-    let key = await loadTrustedSavedKey(this.officialKeys, (saved) => trust.keyTrusted(fingerprint(saved)), () => this.pushState());
-    if (!key) {
-      const picked = await dialog.showOpenDialog(this.window, { title: translate(this.language, "dialog.tavoraKey"), properties: ["openFile"] });
-      const keyFile = picked.filePaths[0];
-      if (picked.canceled || !keyFile) return null;
-      key = await loadExistingKey(path.resolve(keyFile)).then(
-        ({ key: loaded }) => loaded,
-        (error: unknown) => {
-          throw new UserError("officialPublish.error.key", { message: (error as Error).message.replace(/There is no publisher key at .*/, "there is no key file there") });
-        },
-      );
-      if (!trust.keyTrusted(fingerprint(key))) throw new UserError("officialPublish.error.wrongKey");
-      if (remember && this.officialKeys.canRemember()) {
-        await this.officialKeys.save(key).catch(() => {
-          throw new UserError("officialPublish.error.remember");
-        });
-      }
-    }
-    return key;
-  }
-
-  /** Stops the build in progress (its own catch ends the run) or throws the preview away. */
-  private async cancelOfficialPublish(): Promise<void> {
-    // Sign and upload, once pressed, can't be stopped; the dialog stays until it is done (OfficialPublisher.cancel).
-    await this.officialPublisher?.cancel();
-    this.pushState();
-  }
-
-  private async forgetOfficialKey(): Promise<void> {
-    await this.officialKeys.forget();
-    this.pushState();
-  }
-
-  /**
-   * Who may sign Tavora's own modules, for publishing from a dev build: the built-in pins. A dev build never loads
-   * downloaded copies (resolveOfficialPins), but it publishes under the same key and account as the catalogue checks.
-   * Null in a packaged build or while the pins are empty.
-   */
-  private officialPublishTrust(): OfficialUpdates | null {
-    if (!officialPublishAllowed(app.isPackaged, officialOn(OFFICIAL_PINS))) return null;
-    return new OfficialUpdates({ userData: this.options.userData, pins: { ...OFFICIAL_PINS }, safety: this.safetyLists });
   }
 
   /** The project folder a dev module was loaded from, for Publish and Save as zip. */
@@ -2997,11 +2899,11 @@ export class Host {
       "collapse-development-folder": saved((action) => setDevelopmentFolderCollapsed(this.library, action.folder, action.collapsed)),
       "copy-example": (action) => this.copyExampleModule(action.moduleId, action.name, action.folder),
       "open-example-folder": (action) => this.openExampleFolder(action.moduleId),
-      "official-publish-check": () => this.checkOfficialPublish(),
-      "publish-official-module": (action) => this.publishOfficialModule(action.moduleId),
-      "official-publish-confirm": (action) => this.confirmOfficialPublish(action.remember),
-      "official-publish-cancel": () => this.cancelOfficialPublish(),
-      "official-publish-forget-key": () => this.forgetOfficialKey(),
+      "official-publish-check": () => this.officialPublishing.check(),
+      "publish-official-module": (action) => this.officialPublishing.prepare(action.moduleId),
+      "official-publish-confirm": (action) => this.officialPublishing.confirm(action.remember),
+      "official-publish-cancel": () => this.officialPublishing.cancel(),
+      "official-publish-forget-key": () => this.officialPublishing.forgetKey(),
       "open-development-project": (action) => this.openDevelopmentProject(action.project),
       "open-developer-link": (action) => this.openDeveloperLink(action.link),
       "open-legal-page": (action) => this.openLegalPage(action.page),
@@ -4877,12 +4779,7 @@ export class Host {
       })),
       moduleProblems: this.moduleProblems.filter((problem) => !problem.developmentFolder && !problem.official).map(({ folder, path: full, message, kind, values }) => ({ folder, path: full, message, ...(kind ? { kind } : {}), ...(values ? { values } : {}) })),
       devBuild: !app.isPackaged,
-      officialPublish: ((available) => ({
-        available,
-        ...this.officialPublish,
-        run: this.officialRun(),
-        key: { saved: available && this.officialKeys.hasKey(), canRemember: available && this.officialKeys.canRemember() },
-      }))(!app.isPackaged && officialOn(OFFICIAL_PINS)),
+      officialPublish: this.officialPublishing.view(),
       developmentFolders: this.library.developmentFolders.map((folder) => {
         const own = this.moduleProblems.find((item) => item.developmentFolder === folder && !item.developmentProject);
         const projects = new Map<string, HostViewState["developmentFolders"][number]["projects"][number]>();

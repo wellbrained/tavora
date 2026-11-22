@@ -86,6 +86,7 @@ export const HOST_ONLY: ReadonlySet<string> = new Set(
     "main/copy-folder.ts",
     // The publish tooling itself (this file, its key store and the module publish button).
     "main/official-publish.ts",
+    "main/official-publishing.ts",
     "main/official-key-store.ts",
     "main/module-publish.ts",
     // The host window's preload; module pages load module.ts.
