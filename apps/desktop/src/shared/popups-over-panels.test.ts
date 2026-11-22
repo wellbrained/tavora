@@ -12,7 +12,7 @@ function run(events: PopupsEvent<string>[], from: State = NO_POPUPS): State {
 /** The overlay and every panel's step as text, to compare in a table. */
 function seen(state: State): string {
   const overlay = state.overlay.status === "partial" ? `partial(${[...state.overlay.panels].join(",")})` : state.overlay.status;
-  const panels = [...state.panels].map(([id, panel]) => `${id}:${panel.step}${panel.step === "live" ? "" : `[${panel.picture ?? "-"}${panel.step === "settling" ? `,${panel.after}` : ""}]`}`);
+  const panels = [...state.panels].map(([id, panel]) => `${id}:${panel.step}${panel.step === "live" ? "" : `[${panel.picture ?? "-"}]`}`);
   return [overlay, ...panels].join(" ");
 }
 
@@ -24,9 +24,7 @@ const picturing = (...ids: string[]): PopupsEvent<string> => ({ type: "picturing
 const pictured = (id: string, picture: string): PopupsEvent<string> => ({ type: "pictured", id, picture });
 const out = (id: string): PopupsEvent<string> => ({ type: "out", id });
 const stay = (id: string): PopupsEvent<string> => ({ type: "stay", id });
-const back = (id: string, picture: string): PopupsEvent<string> => ({ type: "back", id, picture });
 const settled = (id: string, picture: string): PopupsEvent<string> => ({ type: "settled", id, picture });
-const drop = (id: string, picture: string): PopupsEvent<string> => ({ type: "drop", id, picture });
 const gone = (id: string): PopupsEvent<string> => ({ type: "gone", id });
 
 describe("popups over panels, step by step", () => {
@@ -41,12 +39,10 @@ describe("popups over panels, step by step", () => {
     ["then it is out behind it", [ask("a"), picturing("a"), pictured("a", "A1"), out("a")], "partial(a) a:out[A1]"],
     ["out with no picture under a dialog", [askAll, out("a")], "all a:out[-]"],
     ["a picture that came to nothing under a menu leaves it live", [ask("a"), picturing("a"), stay("a")], "partial(a)"],
-    ["closing: a panel out on a picture settles on it, one with none is live", [askAll, picturing("a"), pictured("a", "A1"), out("a"), out("b"), close], "closed a:settling[A1,overlay]"],
-    ["closing while a picture is still taken: it settles on it all the same", [ask("a"), picturing("a"), pictured("a", "A1"), close], "closed a:settling[A1,overlay]"],
+    ["closing: a panel out on a picture settles on it, one with none is live", [askAll, picturing("a"), pictured("a", "A1"), out("a"), out("b"), close], "closed a:settling[A1]"],
+    ["closing while a picture is still taken: it settles on it all the same", [ask("a"), picturing("a"), pictured("a", "A1"), close], "closed a:settling[A1]"],
     ["it is live once it has drawn on that picture", [askAll, picturing("a"), pictured("a", "A1"), out("a"), close, settled("a", "A1")], "closed"],
-    ["back from another tab, it settles on its last picture until it has drawn", [back("a", "S1")], "closed a:settling[S1,away]"],
-    ["and is live once it has", [back("a", "S1"), settled("a", "S1")], "closed"],
-    ["leaving again before that, it no longer settles on it", [back("a", "S1"), drop("a", "S1")], "closed"],
+    ["a panel with no picture that stays while a menu lies over it is live, with none to settle on", [ask("a"), picturing("a"), stay("a")], "partial(a)"],
     ["a gone panel keeps nothing", [askAll, picturing("a"), pictured("a", "A1"), out("a"), gone("a")], "all"],
   ];
   it.each(table)("%s", (_name, events, expected) => {
@@ -62,7 +58,7 @@ describe("popups over panels, step by step", () => {
 
   it("gives back the same state when nothing changes", () => {
     const menu = run([ask("a"), picturing("a"), pictured("a", "A1"), out("a")]);
-    for (const event of [open, ask("a"), picturing("a"), out("a"), stay("a"), back("a", "S1"), settled("a", "A0"), drop("a", "A1"), gone("z")]) expect(popupsStep(menu, event)).toBe(menu);
+    for (const event of [open, ask("a"), picturing("a"), out("a"), stay("a"), settled("a", "A0"), gone("z")]) expect(popupsStep(menu, event)).toBe(menu);
     expect(popupsStep(NO_POPUPS, close)).toBe(NO_POPUPS);
   });
 });
@@ -78,22 +74,14 @@ describe("an overlay over pictures still settling", () => {
   it("keeps the older picture under a panel pictured again until a new one comes, and settles on it if that one came to nothing", () => {
     const again = run([ask("a"), picturing("a"), pictured("a", "A1"), out("a"), close, ask("a"), picturing("a")]);
     expect(seen(again)).toBe("partial(a) a:picturing[A1]");
-    expect(seen(popupsStep(again, stay("a")))).toBe("partial(a) a:settling[A1,overlay]");
+    expect(seen(popupsStep(again, stay("a")))).toBe("partial(a) a:settling[A1]");
   });
 
-  it("does not take a picture from away into the overlay: the kept pictures still hold it", () => {
-    const fromAway = run([back("a", "S1"), askAll, picturing("a")]);
-    expect(seen(fromAway)).toBe("all a:picturing[-]");
-    expect(seen(run([back("a", "S1"), askAll, out("a")]))).toBe("all a:out[-]");
-    expect(overlayPictures(run([back("a", "S1")])).size).toBe(0);
-  });
-
-  it("does not let a picture from away replace one the overlay holds", () => {
-    const held = run([askAll, picturing("a"), pictured("a", "A1"), out("a")]);
-    expect(popupsStep(held, back("a", "S1"))).toBe(held);
-    const settling = run([askAll, picturing("a"), pictured("a", "A1"), out("a"), close]);
-    expect(popupsStep(settling, back("a", "S1"))).toBe(settling);
-    expect(popupsStep(settling, drop("a", "A1"))).toBe(settling);
+  it("keeps nothing for a panel from another tab: only the overlay's pictures are in the state", () => {
+    expect(run([open, close]).panels.size).toBe(0);
+    expect(overlayPictures(run([ask("a"), picturing("a"), stay("a")])).size).toBe(0);
+    expect(run([ask("a"), picturing("a"), stay("a"), close]).panels.size).toBe(0);
+    expect(run([askAll, out("a"), close]).panels.size).toBe(0);
   });
 });
 
@@ -113,13 +101,12 @@ describe("what both sides read", () => {
   });
 
   it("lists the overlay's pictures and those settling after it", () => {
-    const state = run([askAll, picturing("a", "b"), pictured("a", "A1"), out("a"), out("b"), close, back("c", "S1"), ask("d"), picturing("d"), pictured("d", "D1")]);
+    const state = run([askAll, picturing("a", "b"), pictured("a", "A1"), out("a"), out("b"), close, ask("d"), picturing("d"), pictured("d", "D1")]);
     expect([...overlayPictures(state)]).toEqual([
       ["a", "A1"],
       ["d", "D1"],
     ]);
     expect(settlingAfterOverlay(state)).toEqual([["a", "A1"]]);
-    expect(panelStep(state, "c")).toEqual({ step: "settling", picture: "S1", after: "away" });
     expect(panelStep(state, "b")).toEqual({ step: "live" });
   });
 });

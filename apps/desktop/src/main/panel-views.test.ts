@@ -1686,7 +1686,7 @@ describe("popups over panels as one state", () => {
   /** The overlay and every panel's step, as the shared state has them (shared/popups-over-panels.ts). */
   const steps = (rig: ReturnType<typeof panelViewsRig>) => {
     const { overlay, panels } = rig.views.popupsOverPanels;
-    return { overlay: overlay.status === "partial" ? [...overlay.panels] : overlay.status, panels: Object.fromEntries([...panels].map(([instanceId, panel]) => [instanceId, panel.step === "settling" ? `settling after ${panel.after}` : panel.step])) };
+    return { overlay: overlay.status === "partial" ? [...overlay.panels] : overlay.status, panels: Object.fromEntries([...panels].map(([instanceId, panel]) => [instanceId, panel.step])) };
   };
 
   it("goes from closed to a menu over some panels, to a dialog over all, and back with each picture settling", async () => {
@@ -1710,29 +1710,26 @@ describe("popups over panels as one state", () => {
     a.settled = new Promise((resolve) => (settleA = resolve));
     const closing = rig.views.freeze(false);
     await vi.advanceTimersByTimeAsync(FROZEN_GONE_MS);
-    expect(steps(rig)).toEqual({ overlay: "closed", panels: { [A]: "settling after overlay" } });
+    expect(steps(rig)).toEqual({ overlay: "closed", panels: { [A]: "settling" } });
     settleA();
     await vi.advanceTimersByTimeAsync(FROZEN_GONE_MS);
     await closing;
     expect(steps(rig)).toEqual({ overlay: "closed", panels: {} });
   });
 
-  it("settles a panel back from another tab on its last picture, and lets go when it leaves again first", async () => {
+  it("shows a panel back from another tab on its last picture without a step of its own, and lets go of it once it has drawn", async () => {
     const rig = panelViewsRig();
     const a = rig.add(A);
     rig.views.place([place(A)]);
     a.capture = () => Promise.resolve("data:last");
     rig.views.place([]);
     await vi.advanceTimersByTimeAsync(0);
-    expect(steps(rig).panels).toEqual({});
+    expect(rig.frozen.at(-1)?.[A]).toBeDefined();
     let settle: () => void = () => undefined;
     a.settled = new Promise((resolve) => (settle = resolve));
     rig.views.place([place(A)]);
-    expect(steps(rig).panels).toEqual({ [A]: "settling after away" });
-    rig.views.place([]);
+    // The picture lies under it, and the shared state has nothing for it: no menu or dialog is over it.
     expect(steps(rig).panels).toEqual({});
-    rig.views.place([place(A)]);
-    expect(steps(rig).panels).toEqual({ [A]: "settling after away" });
     settle();
     await vi.advanceTimersByTimeAsync(FROZEN_GONE_MS);
     expect(steps(rig).panels).toEqual({});

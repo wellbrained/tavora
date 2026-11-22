@@ -946,9 +946,6 @@ export class PanelViews {
     const was = this.inSight.has(instanceId);
     if (shown) this.inSight.add(instanceId);
     else this.inSight.delete(instanceId);
-    // Out of sight again before it drew: it no longer settles on its last picture (the list of kept pictures still has it).
-    const settling = panelStep(this.popups, instanceId);
-    if (!shown && settling.step === "settling" && settling.after === "away") this.step({ type: "drop", id: instanceId, picture: settling.picture });
     // Placed but kept hidden (no data yet, a question): its slot shows the loader or the question, never an old picture.
     if (!shown && placed && (!adapter.revealed || this.deps.asking(instanceId))) this.dropStandIn(instanceId);
     if (!was || shown || placed || adapter.status !== "ready" || !adapter.revealed || !adapter.capturable || this.lent.has(instanceId)) return;
@@ -977,9 +974,7 @@ export class PanelViews {
   private liftStandIn(instanceId: string, adapter: PanelViewAdapter): void {
     const picture = this.standIns.get(instanceId);
     if (adapter.status !== "ready" || !picture) return this.dropStandIn(instanceId);
-    this.step({ type: "back", id: instanceId, picture });
     void this.settledThenGone(instanceId).then(() => {
-      this.step({ type: "settled", id: instanceId, picture });
       if (this.standIns.get(instanceId) === picture && this.inSight.has(instanceId)) this.dropStandIn(instanceId);
     });
   }
@@ -988,14 +983,12 @@ export class PanelViews {
     const picture = this.standIns.get(instanceId);
     if (!picture) return;
     this.standIns.delete(instanceId);
-    this.step({ type: "drop", id: instanceId, picture });
     this.sendPictures();
   }
 
   /** The theme changed: pictures taken before show the old colours, so none is kept. */
   forgetStandIns(): void {
     if (!this.standIns.size) return;
-    for (const [instanceId, picture] of this.standIns) this.step({ type: "drop", id: instanceId, picture });
     this.standIns.clear();
     this.sendPictures();
   }

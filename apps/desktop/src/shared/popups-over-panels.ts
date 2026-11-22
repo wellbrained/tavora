@@ -2,8 +2,11 @@
 // Panels are native views drawn above the host page, so a host menu, hint, dialog or drag would be cut off under one.
 // While one is open, the panels under it are hidden behind still pictures of themselves; once it closes, each comes
 // back and its picture stays under it until it has drawn and turned solid. Both sides step this same function: the host
-// UI (renderer host.ts) with the requests it sends, the main process (panel-views.ts) with what it did for them, so
-// the overlay is never one thing on one side and another on the other.
+// UI (renderer host.ts) with the requests it sends, the main process (panel-views.ts) with what it did for them. They
+// are two copies of the overlay, not one shared value, and follow each other loosely: the renderer opens on
+// `overlayOpen` and closes one tick later, main opens on the first request it hears, and the two `session` counters are
+// unrelated. Only the renderer's overlay status (`data-status`) and main's panel steps are read; the rest is each side's own.
+// A panel's last picture from another tab (`standIns` in panel-views.ts) is not part of this state.
 
 /**
  * What floats over the workspace. `partial`: only menus or hints, so only the panels they lie over step aside (none yet:
@@ -18,14 +21,13 @@ export type OverlayStatus = Overlay["status"];
  * - `picturing`: its picture is being taken; it stays in sight until that picture is on screen. `picture`: the newest
  *   one it has (taken now, or one still lying under it from an overlay that closed before).
  * - `out`: hidden behind its picture (`null`: none could stand in for it, under a dialog or drag).
- * - `settling`: back in sight, its picture under it until it has drawn and turned solid. `after` says where it was: out
- *   for an overlay, or away from its slot (another tab in front: its last picture kept for it, `standIns`).
+ * - `settling`: back in sight after an overlay, its picture under it until it has drawn and turned solid.
  */
 export type PanelStep<P> =
   | { step: "live" }
   | { step: "picturing"; picture: P | null }
   | { step: "out"; picture: P | null }
-  | { step: "settling"; picture: P; after: "overlay" | "away" };
+  | { step: "settling"; picture: P };
 
 export type PanelStatus = PanelStep<unknown>["step"];
 
@@ -52,12 +54,8 @@ export type PopupsEvent<P> =
   | { type: "out"; id: string }
   /** Its picture came to nothing under a menu: it stays in sight, since its slot would show empty. */
   | { type: "stay"; id: string }
-  /** Back in its slot from away, on its last picture. Only a live panel settles on it: one an overlay holds keeps its own. */
-  | { type: "back"; id: string; picture: P }
   /** The panel has drawn and turned solid since it showed: `picture` may go, if it is still the one under it. */
   | { type: "settled"; id: string; picture: P }
-  /** The panel left its slot, or its last picture was let go of: it no longer settles on `picture` from away. */
-  | { type: "drop"; id: string; picture: P }
   /** The panel closed, restarted or went away: nothing of it is kept. */
   | { type: "gone"; id: string };
 
@@ -82,31 +80,26 @@ export function popupsStep<P>(state: PopupsOverPanels<P>, event: PopupsEvent<P>)
       const panels = new Map<string, PanelStep<P>>();
       for (const [id, panel] of state.panels) {
         if (panel.step === "settling") panels.set(id, panel);
-        else if (panel.step !== "live" && panel.picture !== null) panels.set(id, { step: "settling", picture: panel.picture, after: "overlay" });
+        else if (panel.step !== "live" && panel.picture !== null) panels.set(id, { step: "settling", picture: panel.picture });
       }
       return { session: state.session + 1, overlay: { status: "closed" }, panels };
     }
     case "picturing":
       return withPanels(state, event.ids, (panel) => {
         if (panel.step === "out" || panel.step === "picturing") return panel;
-        // A picture from away is the stand-in's: the list of kept pictures still has it.
-        return { step: "picturing", picture: panel.step === "settling" && panel.after === "overlay" ? panel.picture : null };
+        return { step: "picturing", picture: panel.step === "settling" ? panel.picture : null };
       });
     case "pictured":
       return withPanels(state, [event.id], (panel) => (panel.step === "picturing" ? { step: "picturing", picture: event.picture } : panel));
     case "out":
-      return withPanels(state, [event.id], (panel) => (panel.step === "out" ? panel : { step: "out", picture: panel.step === "live" || (panel.step === "settling" && panel.after === "away") ? null : panel.picture }));
+      return withPanels(state, [event.id], (panel) => (panel.step === "out" ? panel : { step: "out", picture: panel.step === "live" ? null : panel.picture }));
     case "stay":
       return withPanels(state, [event.id], (panel) => {
         if (panel.step !== "picturing") return panel;
-        return panel.picture === null ? { step: "live" } : { step: "settling", picture: panel.picture, after: "overlay" };
+        return panel.picture === null ? { step: "live" } : { step: "settling", picture: panel.picture };
       });
-    case "back":
-      return withPanels(state, [event.id], (panel) => (panel.step === "live" ? { step: "settling", picture: event.picture, after: "away" } : panel));
     case "settled":
       return withPanels(state, [event.id], (panel) => (panel.step === "settling" && panel.picture === event.picture ? { step: "live" } : panel));
-    case "drop":
-      return withPanels(state, [event.id], (panel) => (panel.step === "settling" && panel.after === "away" && panel.picture === event.picture ? { step: "live" } : panel));
     case "gone":
       return withPanels(state, [event.id], () => ({ step: "live" }));
   }
@@ -156,11 +149,11 @@ export function isSteppedAside(state: PopupsOverPanels<unknown>, id: string): bo
   return panel.step === "out" || (state.overlay.status === "all" && panel.step !== "picturing");
 }
 
-/** The pictures the panels lie on for the overlay: being taken, out, or settling after it (not those from away). */
+/** The pictures the panels lie on for the overlay: being taken, out, or settling after it. */
 export function overlayPictures<P>(state: PopupsOverPanels<P>): Map<string, P> {
   const pictures = new Map<string, P>();
   for (const [id, panel] of state.panels) {
-    if (panel.step === "live" || panel.picture === null || (panel.step === "settling" && panel.after === "away")) continue;
+    if (panel.step === "live" || panel.picture === null) continue;
     pictures.set(id, panel.picture);
   }
   return pictures;
@@ -168,5 +161,5 @@ export function overlayPictures<P>(state: PopupsOverPanels<P>): Map<string, P> {
 
 /** The panels settling on their pictures after the overlay closed. */
 export function settlingAfterOverlay<P>(state: PopupsOverPanels<P>): [string, P][] {
-  return [...state.panels].flatMap(([id, panel]) => (panel.step === "settling" && panel.after === "overlay" ? [[id, panel.picture] as [string, P]] : []));
+  return [...state.panels].flatMap(([id, panel]) => (panel.step === "settling" ? [[id, panel.picture] as [string, P]] : []));
 }

@@ -1032,7 +1032,7 @@ function measurePopups(): void {
   if (!overlayOpen.value || overlayWhole.value || askedAll()) return;
   // A hint measures itself unseen (its own inline style) before it is placed.
   const popups = [...document.querySelectorAll<HTMLElement>(POPUPS)].map((popup) => ({ popup, box: popup.getBoundingClientRect(), hidden: popup.style.visibility === "hidden" }));
-  const { watch, request, hold, show } = measureStep(watchState, popups, placedPanels, { width: innerWidth, height: innerHeight });
+  const { watch, request, hold, show } = measureStep(watchState, popups, placedPanels, { width: innerWidth, height: innerHeight }, askedAll());
   watchState = watch;
   sendRequest(request);
   if (askedAll()) return setPartial(false);
@@ -1066,7 +1066,7 @@ watch(overlayOpen, (open) => {
       stepPopups({ type: "close" });
       api.setOverlay(false);
       stopMeasuring();
-      watchState = { ...watchState, asked: null };
+      watchState = openWatch(watchState);
       setPartial(false);
       clearTimeout(panelsOutCap);
       panelsOut.value = false;

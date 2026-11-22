@@ -85,8 +85,11 @@ export const POPUP_WAIT_FRAMES = 6;
  * answer to an older one is never taken for a newer one.
  */
 export interface PopupWatch {
-  /** The panels asked to step aside, each with the request that asked; "all"; or null before the first request. */
-  asked: "all" | ReadonlyMap<string, number> | null;
+  /**
+   * The panels a menu or hint asked to step aside, each with the request that asked; null before the first request.
+   * Whether every panel is asked is not kept here: it is the overlay's `all` (shared/popups-over-panels.ts), passed in.
+   */
+  asked: ReadonlyMap<string, number> | null;
   /** The last request number used. */
   seq: number;
   /** The newest request the host has answered. */
@@ -113,7 +116,7 @@ export interface PopupRequest {
 /** Every panel steps aside (a dialog, a drag, the window being resized, or a menu that was not found). */
 export function askAllStep(watch: PopupWatch): { watch: PopupWatch; request: PopupRequest } {
   const seq = watch.seq + 1;
-  return { watch: { ...watch, asked: "all", seq, awaited: seq }, request: { seq } };
+  return { watch: { ...watch, seq, awaited: seq }, request: { seq } };
 }
 
 export interface MeasuredPopup<P> {
@@ -127,15 +130,16 @@ export interface MeasuredPopup<P> {
  * One frame's look at the popups while only menus or hints are open. The first request goes once a popup is placed (or
  * every panel is asked after POPUP_WAIT_FRAMES without one); later ones ask for panels a popup reaches that were not
  * asked yet. Each placed popup either waits for the answer to the newest request that asked for a panel under it
- * (`hold`), or may show (`show`).
+ * (`hold`), or may show (`show`). `all`: every panel is asked already (the overlay's status), so there is nothing to measure.
  */
 export function measureStep<P>(
   watch: PopupWatch,
   popups: readonly MeasuredPopup<P>[],
   panels: readonly (Box & { instanceId: string })[],
   viewport: { width: number; height: number },
+  all = false,
 ): { watch: PopupWatch; request: PopupRequest | null; hold: { popup: P; seq: number }[]; show: P[] } {
-  if (watch.asked === "all") return { watch, request: null, hold: [], show: [] };
+  if (all) return { watch, request: null, hold: [], show: [] };
   const placed = popups.filter((item) => isPlaced(item.box, item.hidden, viewport)).map((item) => ({ popup: item.popup, ids: panelsUnder(item.box, panels) }));
   if (watch.asked === null && !placed.length) {
     const quiet = { ...watch, quietFrames: watch.quietFrames + 1 };
@@ -164,5 +168,5 @@ export function measureStep<P>(
 
 /** The host answered request `seq`. `showAll`: what waited for the awaited request may show; an older answer shows nothing. */
 export function answerStep(watch: PopupWatch, seq: number): { watch: PopupWatch; showAll: boolean } {
-  return { watch: { ...watch, answered: Math.max(watch.answered, seq) }, showAll: watch.asked !== null && seq >= watch.awaited };
+  return { watch: { ...watch, answered: Math.max(watch.answered, seq) }, showAll: seq >= watch.awaited };
 }

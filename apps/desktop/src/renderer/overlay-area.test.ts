@@ -91,8 +91,11 @@ describe("the popups of a menu or hint (measureStep, answerStep)", () => {
     }
     const last = measureStep(watch, [], panels, viewport);
     expect(last.request).toEqual({ seq: 1 });
-    expect(last.watch.asked).toBe("all");
-    expect(measureStep(last.watch, [over("menu", OVER_LEFT)], panels, viewport).request).toBeNull();
+    // Every panel is asked now: the overlay says so, and the watch keeps no second copy of it.
+    expect(last.watch.asked).toBeNull();
+    const again = measureStep(last.watch, [over("menu", OVER_LEFT)], panels, viewport, true);
+    expect(again).toEqual({ watch: last.watch, request: null, hold: [], show: [] });
+    expect(measureStep(last.watch, [over("menu", OVER_LEFT)], panels, viewport).request).not.toBeNull();
   });
 
   it("holds a second popup over a panel asked for a moment ago, and asks only for new panels", () => {
