@@ -11,6 +11,7 @@ import {
   BLOB_TYPES,
   DOCUMENT_ID,
   DOCUMENT_ID_RULE_TAVORA,
+  DOCUMENT_ID_ZERO_DEVICES_TAVORA,
   CLASSIC_STYLE,
   FIELD_SINCE,
   STYLE_TAVORA,
@@ -457,6 +458,14 @@ function storeOps(shared: Shared, map: Map<string, string>, maxBytes: () => numb
   };
 }
 
+/** Refuses an id a new document can't have on this Tavora (the SDK's one rule; an older Tavora took some of them). */
+function checkNewDocumentId(version: string, id: string, saved: Iterable<string>): void {
+  if (!versionAtLeast(version, DOCUMENT_ID_RULE_TAVORA)) return;
+  if (!versionAtLeast(version, DOCUMENT_ID_ZERO_DEVICES_TAVORA) && /^(?:com|lpt)0$/i.test(id)) return;
+  const problem = newDocumentIdProblem(id, saved);
+  if (problem !== null) fail("INVALID_PARAMS", problem);
+}
+
 /** Puts a document with the host's rules; `origin` is the panel that did it (it is not told), or null for the test itself. */
 function putDocument(shared: Shared, params: unknown, origin: Panel | null): DocumentSummary {
   if (typeof params !== "object" || params === null) fail("INVALID_PARAMS", "params must be an object");
@@ -472,11 +481,9 @@ function putDocument(shared: Shared, params: unknown, origin: Panel | null): Doc
   if (ifRevision !== undefined && !Number.isSafeInteger(ifRevision)) fail("INVALID_PARAMS", "ifRevision must be an integer");
 
   const existing = shared.documents.get(docId);
+  // Before the revision, as Tavora checks it.
+  if (!existing) checkNewDocumentId(shared.version, docId, shared.documents.keys());
   checkRevision(existing, ifRevision);
-  if (!existing && versionAtLeast(shared.version, DOCUMENT_ID_RULE_TAVORA)) {
-    const problem = newDocumentIdProblem(docId, shared.documents.keys());
-    if (problem !== null) fail("INVALID_PARAMS", problem);
-  }
   if (!existing && shared.documents.size >= shared.limits.maxDocuments) {
     fail("QUOTA_EXCEEDED", `a module may keep at most ${shared.limits.maxDocuments} documents per workspace`);
   }

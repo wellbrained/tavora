@@ -1562,13 +1562,15 @@ export function isWindowsDeviceName(name: string): boolean {
 
 /** The first Tavora that refuses the document ids `newDocumentIdProblem` names; an older one takes them. */
 export const DOCUMENT_ID_RULE_TAVORA = "0.24.73";
+/** The first Tavora that refuses `com0` and `lpt0` as document ids too; from `DOCUMENT_ID_RULE_TAVORA` up to it, they are taken. */
+export const DOCUMENT_ID_ZERO_DEVICES_TAVORA = "0.24.103";
 
 /**
  * Why `documents.put` refuses `id` for a new document, or null. Ids are saved as file names, so a new document can't be
  * called `index` (the store's own file) or a name Windows keeps for devices (`con`, `nul`, `com1`, …), in any case, and
  * can't differ from a saved document's id (`saved`) only by case, as Windows doesn't tell `Notes.json` from `notes.json`.
- * A document already saved under such an id stays readable and writable. Tavora `DOCUMENT_ID_RULE_TAVORA` and newer;
- * the memory host of `@tavora/sdk/testing` applies the same rule.
+ * A document already saved under such an id stays readable and writable. Tavora `DOCUMENT_ID_RULE_TAVORA` and newer
+ * (`com0` and `lpt0` from `DOCUMENT_ID_ZERO_DEVICES_TAVORA`); the memory host of `@tavora/sdk/testing` applies the same rule.
  */
 export function newDocumentIdProblem(id: string, saved: Iterable<string>): string | null {
   if (id.toLowerCase() === "index" || isWindowsDeviceName(id)) return `"${id}" can't be a document id: Windows or Tavora keeps that name for itself`;

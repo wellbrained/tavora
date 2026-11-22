@@ -128,7 +128,7 @@ describe("documents", () => {
 
   it("refuses the ids Tavora refuses for a new document, as Tavora does", async () => {
     const { sdk, host } = createMemoryHost();
-    for (const id of ["index", "INDEX", "con", "Nul", "com1", "LPT9"]) {
+    for (const id of ["index", "INDEX", "con", "Nul", "com1", "LPT9", "com0", "lpt0"]) {
       expect(await failure(sdk.documents.put({ id, title: "T", data: 1 }))).toMatchObject({ code: "INVALID_PARAMS", message: `"${id}" can't be a document id: Windows or Tavora keeps that name for itself` });
     }
     await sdk.documents.put({ id: "notes", title: "N", data: 1 });
@@ -138,6 +138,20 @@ describe("documents", () => {
     await sdk.documents.put({ id: "notes", title: "N", data: 3 });
     for (const id of ["console", "com10", "indexes", "nul_list"]) await sdk.documents.put({ id, title: "T", data: 1 });
     expect((await sdk.documents.list()).map((doc) => doc.id).sort()).toEqual(["com10", "console", "indexes", "notes", "nul_list"]);
+  });
+
+  it("checks the id before the revision, as Tavora does", async () => {
+    const { sdk } = createMemoryHost();
+    expect(await failure(sdk.documents.put({ id: "con", title: "C", data: 1, ifRevision: 3 }))).toMatchObject({ code: "INVALID_PARAMS" });
+  });
+
+  it("takes com0 and lpt0 on a Tavora from before they were refused", async () => {
+    const { sdk } = createMemoryHost({ version: "0.24.102" });
+    await sdk.documents.put({ id: "com0", title: "C", data: 1 });
+    await sdk.documents.put({ id: "LPT0", title: "L", data: 1 });
+    expect(await failure(sdk.documents.put({ id: "com1", title: "C", data: 1 }))).toMatchObject({ code: "INVALID_PARAMS" });
+    const { sdk: newer } = createMemoryHost({ version: "0.24.103" });
+    expect(await failure(newer.documents.put({ id: "com0", title: "C", data: 1 }))).toMatchObject({ code: "INVALID_PARAMS" });
   });
 
   it("takes those ids on a Tavora from before the rule", async () => {
