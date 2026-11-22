@@ -51,9 +51,10 @@ const WORD_CHAR = /[\p{L}\p{N}-]/u;
 
 /** "link" for what reads as an address, "hold" when only a person can tell, null when there is neither. */
 function linkIn(original: string): "link" | "hold" | null {
-  // A full-width dot opens the same address in a browser. So do the Japanese and Chinese full stops, but those also end
-  // sentences, so they only count with a Latin letter right behind them.
-  const text = original.replace(/．/g, ".").replace(/[。｡](?=[a-z])/gi, ".");
+  // A full-width dot opens the same address in a browser, and NFKC reads it back, with full-width letters ("ｃｏｍ"); it also
+  // makes the half-width full stop the Japanese one. That full stop ends sentences too, so it counts as a dot only before a
+  // Latin word that ends there ("free。com now"), not one a sentence goes on from ("このmod。Co-opも").
+  const text = original.normalize("NFKC").replace(/。(?=[a-z0-9-]+(?:[^\p{L}\p{N}-]|$))/giu, ".");
   let found: "hold" | null = null;
   for (const match of text.matchAll(LINK_GLOBAL)) {
     if (!/^[ \t]+\p{L}/u.test(text.slice(match.index + match[0].length))) return "link";
@@ -93,6 +94,10 @@ const readDigit = (digit: string) => LOOKALIKE[digit] ?? digit;
 
 /** A model or part code: one or two letters, then one or two digits, three or four characters in all ("F46", "FA6", "X64"). */
 const PART_CODE = /^\p{L}{1,2}\d{1,2}$/u;
+/** Codes that are no product's, only a slur or a threat read back ("ky5", "fa65"): these are read like any other word. */
+const NOT_A_CODE = new Set(["kys", "fags"]);
+/** A year joined to a word ("in1994er", "den1994er Modellen"): a number, never letters. */
+const JOINED_YEAR = /^(?:19|20)\d\d(?:er|ern|s|th)?$/;
 
 /**
  * Digits read as letters only inside a word that has letters too, so a number stays a number: "in 1994", "on1994" and "1994er"
@@ -101,9 +106,11 @@ const PART_CODE = /^\p{L}{1,2}\d{1,2}$/u;
  */
 function readDigits(token: string): string {
   if (!/\p{L}/u.test(token)) return token;
-  const code = token.length >= 3 && PART_CODE.test(token);
+  const code = token.length >= 3 && PART_CODE.test(token) && !NOT_A_CODE.has(token.replace(/\d/g, readDigit));
   return token.replace(/\d+/g, (run: string, at: number) => {
     const lettersBefore = at > 0;
+    // A 2 stands for no letter, so a run holding one is a number ("i512600k", "F462A"), and so is a year after a word.
+    if (run.includes("2") || (lettersBefore && JOINED_YEAR.test(token.slice(at)))) return run;
     const lettersAfter = at + run.length < token.length;
     const read = lettersBefore && lettersAfter ? true : lettersBefore ? run.length <= 2 && !code : run.length === 1;
     return read ? run.replace(/\d/g, readDigit) : run;

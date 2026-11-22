@@ -104,22 +104,29 @@ describe("the review word filter", () => {
       "x64 and x86",
       "PS4",
       "R6",
+      "i512600k",
+      "i912900k",
+      "i72600k",
+      "F462A",
+      "in1994er",
+      "den1994er Modellen",
+      "von1964er",
     ]) {
       expect(checkReviewText(text), text).toBe("ok");
     }
   });
 
   it("reads digits between letters however many there are, and short spelled-out pieces", () => {
-    for (const text of ["f4990t", "fa990t", "ni999a", "n1999a", "n1 gg a", "n1g g4", "f4g"]) {
+    for (const text of ["f4990t", "fa990t", "ni999a", "n1999a", "n1 gg a", "n1g g4", "f4g", "ky5", "fa65"]) {
       expect(checkReviewText(text), text).toBe("words");
     }
   });
 
   it("reads Japanese and Chinese full stops as dots only with a Latin letter right behind them", () => {
-    for (const text of ["free。com", "free｡com", "free。com now"]) {
+    for (const text of ["free。com", "free｡com", "free。com now", "free。ｃｏｍ", "freeｃｏｍ．ｃｏｍ"]) {
       expect(checkReviewText(text), text).toBe("link");
     }
-    for (const text of ["いいゲーム。", "いいゲーム。 とても楽しい", "良いゲーム。次も遊ぶ", "Great game。", "Great game。 Thanks", "好玩。再来一次"]) {
+    for (const text of ["いいゲーム。", "いいゲーム。 とても楽しい", "良いゲーム。次も遊ぶ", "Great game。", "Great game。 Thanks", "好玩。再来一次", "このmod。Co-opも楽しい", "这个mod。Info很多", "良いgame。Link切れ"]) {
       expect(checkReviewText(text), text).toBe("ok");
     }
   });
