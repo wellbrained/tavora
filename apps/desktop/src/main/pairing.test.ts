@@ -437,6 +437,73 @@ describe("approving a new PC through the copy's folder", () => {
     old.pairing.dispose();
   });
 
+  it("waits for a request file a sync app hasn't finished, and leaves other PCs' files alone", async () => {
+    const { root } = await pc();
+    const folder = path.join(root, "OneDrive");
+    const dir = path.join(folder, "Tavora", "pairing");
+    await mkdir(path.join(folder, "Tavora"), { recursive: true });
+    const old = await onPc(fetch, null, new FolderPairing(folder, "Desk"));
+    await old.accountKey.setUpHere(false);
+    // A third PC with the key, which didn't answer.
+    const other = new FolderPairing(folder, "Tower");
+    const fresh = await onPc(fetch, null, new FolderPairing(folder, "Laptop"));
+    const halfway = async (file: string, look: () => Promise<unknown>) => {
+      const whole = await readFile(path.join(dir, file), "utf8");
+      await writeFile(path.join(dir, file), whole.slice(0, 5));
+      await look();
+      await writeFile(path.join(dir, file), whole);
+    };
+
+    await fresh.pairing.start();
+    const [id] = (await readdir(dir)).map((name) => name.split(".")[0]!);
+    // Half there before anyone answered: nobody answers it, and nobody deletes it.
+    await halfway(`${id}.request.json`, async () => {
+      await old.pairing.lookForRequests();
+      expect(await other.read()).toBeNull();
+    });
+    expect(await readdir(dir)).toEqual([`${id}.request.json`]);
+    await old.pairing.lookForRequests();
+    // Half there while both PCs are at it: each looks again, nothing is deleted or turned down.
+    await halfway(`${id}.request.json`, async () => {
+      await fresh.pairing.lookForAnswer();
+      await old.pairing.lookForRequests();
+      await other.read();
+    });
+    expect(fresh.pairing.view().asking).toMatchObject({ step: "waiting" });
+    expect((await readdir(dir)).sort()).toEqual([`${id}.answer.json`, `${id}.request.json`]);
+    await fresh.pairing.lookForAnswer();
+    expect(fresh.pairing.view().asking).toMatchObject({ step: "code" });
+    await halfway(`${id}.request.json`, () => old.pairing.lookForRequests());
+    await old.pairing.lookForRequests();
+    expect(old.pairing.view().approve).toMatchObject({ id, code: fresh.pairing.view().asking!.code });
+    // An answer that isn't readable yet is someone's: the third PC doesn't answer over it.
+    await halfway(`${id}.answer.json`, async () => {
+      expect(await other.read()).toBeNull();
+      expect(await other.answer(id!, newPairingKey().publicKey.toString("base64url"))).toBe(false);
+    });
+    await old.pairing.decide(id!, true);
+    await fresh.pairing.lookForAnswer();
+    await fresh.pairing.confirm();
+    expect(fresh.accountKey.get()?.equals(old.accountKey.get()!)).toBe(true);
+    fresh.pairing.dispose();
+    old.pairing.dispose();
+  });
+
+  it("cleans up a request file that is still unreadable once it is older than any request lasts", async () => {
+    const { root } = await pc();
+    let now = Date.now();
+    await mkdir(path.join(root, "Tavora", "pairing"), { recursive: true });
+    const dir = path.join(root, "Tavora", "pairing");
+    await writeFile(path.join(dir, "0123456789abcdef.request.json"), "{\"v\":1,");
+    await writeFile(path.join(dir, "0123456789abcdef.answer.json"), "{}");
+    const pcWithKey = new FolderPairing(root, "Desk", () => now);
+    expect(await pcWithKey.read()).toBeNull();
+    expect(await readdir(dir)).toHaveLength(2);
+    now += FOLDER_PAIRING_MS + 60_000;
+    expect(await pcWithKey.read()).toBeNull();
+    expect(await readdir(dir)).toEqual([]);
+  });
+
   it("stops answering, also after a restart, when request after request ends without a click", async () => {
     const { root, userData } = await pc();
     const folder = path.join(root, "OneDrive");

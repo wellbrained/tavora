@@ -282,7 +282,7 @@ export class Pairing {
       request = await asking.transport.read();
     } catch (error) {
       if (error instanceof CopyError && (error.reason === "signed-out" || error.reason === "no-folder" || error.reason === "folder-locked")) return this.stop(asking, "failed");
-      // Offline for a moment: looked at again soon.
+      // Offline for a moment, or a file a sync app is still bringing: looked at again soon.
       this.askSoon();
       return;
     }
@@ -664,9 +664,16 @@ export class FolderPairing implements PairingTransport {
         continue;
       }
       const request = await this.readStep(id, "request");
-      const expiresAt = typeof request?.expiresAt === "number" ? request.expiresAt : 0;
-      if (!request || typeof request.commit !== "string" || expiresAt <= this.now()) {
-        if (request || !own) await this.remove(id);
+      if (!request || typeof request.commit !== "string" || typeof request.expiresAt !== "number") {
+        // Not readable (yet): a sync app may still be bringing it, or have it locked. Cleaned up only once it is older
+        // than any request lasts; until then, a request this PC asked or answered is looked at again next time.
+        if (await this.isOld(id, "request")) await this.remove(id);
+        else if (own || this.answered.has(id)) throw new Error("a pairing file isn't readable yet");
+        continue;
+      }
+      const expiresAt = request.expiresAt;
+      if (expiresAt <= this.now()) {
+        await this.remove(id);
         continue;
       }
       if (have.has("declined")) {
@@ -675,8 +682,9 @@ export class FolderPairing implements PairingTransport {
       }
       const answer = have.has("answer") ? await this.readStep(id, "answer") : null;
       const mine = answer && answer.by === this.answered.get(id);
-      // Answered by another PC: not for this one.
-      if (!own && answer && !mine) continue;
+      // Answered by another PC: not for this one. An answer that isn't readable yet is someone's too, unless this PC
+      // answered: then the request comes without it, and is looked at again.
+      if (!own && have.has("answer") && !mine && (answer || !this.answered.has(id))) continue;
       const reveal = have.has("reveal") ? await this.readStep(id, "reveal") : null;
       const key = own && have.has("key") ? await this.readStep(id, "key") : null;
       const seen: PairingRequest = {
@@ -697,10 +705,13 @@ export class FolderPairing implements PairingTransport {
   }
 
   private async removeIfOld(id: string): Promise<void> {
-    for (const step of ["answer", "reveal", "key", "declined"] as const) {
-      const info = await stat(this.file(id, step)).catch(() => null);
-      if (info && this.now() - info.mtimeMs > FOLDER_PAIRING_MS) await rm(this.file(id, step), { force: true });
-    }
+    for (const step of ["answer", "reveal", "key", "declined"] as const) if (await this.isOld(id, step)) await rm(this.file(id, step), { force: true });
+  }
+
+  /** Written longer ago than any request lasts. */
+  private async isOld(id: string, step: Step): Promise<boolean> {
+    const info = await stat(this.file(id, step)).catch(() => null);
+    return info !== null && this.now() - info.mtimeMs > FOLDER_PAIRING_MS;
   }
 
   async ask(commit: string): Promise<{ id: string; expiresAt: number }> {
@@ -713,7 +724,8 @@ export class FolderPairing implements PairingTransport {
   }
 
   async answer(id: string, publicKey: string): Promise<boolean> {
-    if (await this.readStep(id, "answer")) return false;
+    // Any answer there, readable yet or not, is another PC's.
+    if (await stat(this.file(id, "answer")).catch(() => null)) return false;
     const by = randomBytes(8).toString("hex");
     this.answered.set(id, by);
     await this.write(id, "answer", { by, name: this.name, publicKey });
