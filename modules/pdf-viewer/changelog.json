@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.32",
+    "date": "2026-11-22",
+    "notes": [
+      "Files that don't fit the tab row show in a list or behind arrows, as you set under Settings > Appearance > Too many tabs."
+    ]
+  },
+  {
     "version": "0.1.31",
     "date": "2026-11-21",
     "notes": [

@@ -1,3 +1,11 @@
+## 0.4.7
+
+Too many tabs. Tavora tells modules how the user reaches tabs that don't fit a row (Settings > Appearance > Too many tabs), so the kit's `TabStrip` can follow it like Tavora's own panel tabs. It comes with the next Tavora (`TAB_OVERFLOW_TAVORA` in `protocol.ts`; the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.21.43).
+
+- `TavoraTheme` gets an optional `tabOverflow`: `"list"` (a button with the hidden tabs' count opens a menu of them) or `"arrows"` (‹ › open the tab before or after the open one). It comes with `ui.getTheme` and every `ui.theme` event, so it can change while the module is open. Type `TabOverflow`, values `TAB_OVERFLOWS`.
+- `tabOverflowOf(theme)` reads it: an older Tavora leaves it out, and that, like a value this SDK doesn't know, means `"list"`.
+- `@tavora/sdk/testing`: the memory host and `themeFromPackage` send `"list"`, `host.changeTheme({ tabOverflow })` sends another one and `{ tabOverflow: undefined }` none; a host older than `TAB_OVERFLOW_TAVORA` never sends one.
+
 ## 0.4.6
 
 The document-id rule in one place. `MIN_TAVORA` stays (Tavora 0.21.43).

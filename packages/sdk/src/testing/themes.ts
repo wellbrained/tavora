@@ -88,7 +88,7 @@ const DEFAULT_RADIUS = 8;
 
 /**
  * The theme a panel gets in Tavora for one variation of a theme package (`ui.getTheme`, the `ui.theme` event): every token,
- * the colours a theme may leave out filled in as Tavora does, the summary `colors`, the radius, toasts at the bottom centre and Inter (Tavora's defaults). `variation` picks it by
+ * the colours a theme may leave out filled in as Tavora does, the summary `colors`, the radius, toasts at the bottom centre, Inter and the list for tabs that don't fit (Tavora's defaults). `variation` picks it by
  * id, or by mode (`"dark"`, `"light"`; normal contrast first); left out, the first variation. Throws a TypeError when the
  * variation isn't there or misses a token.
  *
@@ -121,6 +121,7 @@ export function themeFromPackage(pkg: ThemePackageJson, variation?: string): Tav
     toasts: "bottom-center",
     font: { ...DEFAULT_THEME_FONT },
     style: structuredClone(CLASSIC_STYLE),
+    tabOverflow: "list",
   };
 }
 

@@ -38,7 +38,7 @@ paint(await tavora.ui.getTheme());
 tavora.ui.onThemeChange(paint);
 ```
 
-`theme.tokens` has every colour by its shadcn-vue name (`background`, `primary`, `muted-foreground`, …), so a shadcn-vue or Tailwind project can set each one as `--<name>`. `theme.radius` is the corner radius in CSS pixels, `theme.toasts` is where the user wants toasts (the shared kit's Toaster follows it by itself), `theme.font` is the interface font the user picked (see below), and `theme.style` is the design style the user picked (see below). How themes are made is in [Theme packages](../reference/theme.md).
+`theme.tokens` has every colour by its shadcn-vue name (`background`, `primary`, `muted-foreground`, …), so a shadcn-vue or Tailwind project can set each one as `--<name>`. `theme.radius` is the corner radius in CSS pixels, `theme.toasts` is where the user wants toasts (the shared kit's Toaster follows it by itself), `theme.font` is the interface font the user picked (see below), `theme.style` is the design style the user picked (see below), and `theme.tabOverflow` is how the user reaches tabs that don't fit a row, `list` or `arrows` (the kit's `TabStrip` follows it by itself; read it with `tabOverflowOf(theme)`, which gives `list` for an older Tavora). How themes are made is in [Theme packages](../reference/theme.md).
 
 ### Design styles
 

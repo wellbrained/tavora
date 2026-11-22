@@ -62,6 +62,9 @@ export function previewStyle(styleId: string, themeId: string, host: TavoraTheme
     radius: style.id === CLASSIC.id ? variationRadius : style.radius,
     font: { id: style.font, family: FONTS[style.font] ?? FONTS.inter },
     style: { id: style.id, name: style.name, looks: style.looks, values: style.values },
+    // The kit reads these page-wide too: a preview keeps the user's toast position and Too many tabs.
+    toasts: host?.toasts,
+    tabOverflow: host?.tabOverflow,
   } as unknown as TavoraTheme;
   applyHostTheme(theme, root);
   applyKitTheme(theme, root);

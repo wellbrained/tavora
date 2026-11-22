@@ -60,6 +60,22 @@ export interface TavoraTheme {
    * Classic (`CLASSIC_STYLE`). `applyHostTheme` writes it to the page.
    */
   style?: TavoraStyle;
+  /**
+   * How the user reaches tabs that don't fit a row (Settings > Appearance > Too many tabs): a list button or arrows. The
+   * kit's `TabStrip` follows it, like Tavora's own panel tabs. It can change while the module is open, like the colours.
+   * Older Tavora (before `TAB_OVERFLOW_TAVORA`) leaves it out, which means `"list"`; read it with `tabOverflowOf`.
+   */
+  tabOverflow?: TabOverflow;
+}
+
+/** How tabs that don't fit a row are reached (`TavoraTheme.tabOverflow`): a list of them, or arrows that step through them. */
+export type TabOverflow = "list" | "arrows";
+export const TAB_OVERFLOWS = ["list", "arrows"] as const satisfies readonly TabOverflow[];
+
+/** What a theme says about tabs that don't fit: its `tabOverflow`, or `"list"` when it has none or one this SDK doesn't know. */
+export function tabOverflowOf(theme: Pick<TavoraTheme, "tabOverflow"> | undefined | null): TabOverflow {
+  const value = theme?.tabOverflow;
+  return (TAB_OVERFLOWS as readonly unknown[]).includes(value) ? (value as TabOverflow) : "list";
 }
 
 /**
@@ -1724,6 +1740,12 @@ export const PANEL_OVER_GAME_TAVORA = "0.24.90";
  * `pnpm --filter @tavora/docs protocol`. An older Tavora leaves `style` out, which means Classic.
  */
 export const STYLE_TAVORA = "0.24.110";
+/**
+ * The first Tavora that sends how the user reaches tabs that don't fit (`TavoraTheme.tabOverflow`): the one place that
+ * number is written. Set it to the version the pull request merges as, right before merging, then run
+ * `pnpm --filter @tavora/docs protocol`. An older Tavora leaves it out, which means `"list"`.
+ */
+export const TAB_OVERFLOW_TAVORA = "0.24.135";
 
 export const METHOD_INFO: Readonly<Record<CallName, MethodInfo>> = {
   "bridge.handshake": call("0.1.0"),

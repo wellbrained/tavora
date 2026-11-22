@@ -11,6 +11,7 @@ import MenuButton from "../menus/MenuButton.vue";
 import { DOCK, panelMenu } from "./dock-context";
 import { ChevronDown, ChevronLeft, ChevronRight, PanelLeftClose, PanelRightClose } from "@lucide/vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { revealBy, tabsOutOfView } from "@tavora/official-ui/components/ui/tabs";
 
 const props = defineProps<{ params: IDockviewHeaderActionsProps }>();
 const dock = inject(DOCK)!;
@@ -48,19 +49,19 @@ function measure(keepActive = true) {
   const box = row.getBoundingClientRect();
   const active = props.params.group.activePanel && tabOf(row, props.params.group.activePanel.id)?.getBoundingClientRect();
   if (keepActive && active) {
-    const by = active.right > box.right + 1 ? Math.min(active.right - box.right, active.left - box.left) : active.left < box.left - 1 ? active.left - box.left : 0;
+    // The same rule as the kit's TabStrip.
+    const by = revealBy(box, active);
     if (by) {
       row.scrollLeft += by;
       // Dockview keeps its own copy of the row's scroll position and writes it back; a scroll event updates it now.
       row.dispatchEvent(new Event("scroll"));
     }
   }
-  const next = panels
-    .filter((panel) => {
-      const rect = tabOf(row, panel.id)?.getBoundingClientRect();
-      return rect ? rect.left < box.left - 1 || rect.right > box.right + 1 : false;
-    })
-    .map((panel) => panel.id);
+  const tabs = panels.flatMap((panel) => {
+    const rect = tabOf(row, panel.id)?.getBoundingClientRect();
+    return rect ? [{ id: panel.id, left: rect.left, right: rect.right }] : [];
+  });
+  const next = tabsOutOfView(box, tabs).hidden;
   if (next.join() !== hidden.value.join()) hidden.value = next;
 }
 
