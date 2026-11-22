@@ -69,7 +69,7 @@
 .tavora-item-card[data-layout=unit][data-font]{font-family:var(--skin-font),var(--font-sans);line-height:1}
 .tavora-item-card[data-layout=unit][data-pixel]{-webkit-font-smoothing:none}
 .tavora-item-card[data-layout=unit][data-portrait]{padding-top:19px}
-.tavora-item-card[data-layout=unit][data-pips]{padding-bottom:10px}
+.tavora-item-card[data-layout=unit][data-pips]{padding-bottom:12px}
 .tavora-item-card[data-layout=unit][data-extra]{padding-bottom:24px}
 .tavora-item-card-portrait{position:absolute;left:0;top:0;z-index:2;box-sizing:border-box;width:44px;height:67px;border:2px solid var(--ic-unit-line);background:color-mix(in srgb,var(--ic-bar) 45%,var(--ic-surface));overflow:hidden}
 .tavora-item-card-portrait img{display:block;width:100%;height:100%;object-fit:cover;object-position:50% 10%}

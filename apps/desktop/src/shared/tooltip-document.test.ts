@@ -43,7 +43,7 @@ describe("tooltip page: a unit", () => {
     });
 
     it("keeps room under the body for the pips and their extra label, so the window measures them", () => {
-        expect(TOOLTIP_DOCUMENT).toContain("body.unit .u-card.has-pips{padding-bottom:10px}body.unit .u-card.has-extra{padding-bottom:24px}");
+        expect(TOOLTIP_DOCUMENT).toContain("body.unit .u-card.has-pips{padding-bottom:12px}body.unit .u-card.has-extra{padding-bottom:24px}");
     });
 
     it("has the unit's sizes, the skin's font for the whole unit and no named or raw colours of its own", () => {
