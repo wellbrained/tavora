@@ -1,3 +1,10 @@
+## 0.4.6
+
+The document-id rule in one place. `MIN_TAVORA` stays (Tavora 0.21.43).
+
+- `@tavora/sdk/testing`: the memory host's `documents.put` now refuses the ids Tavora refuses for a new document, with `INVALID_PARAMS` and Tavora's message: `index` and the names Windows keeps for devices (`con`, `nul`, `com1`, …) in any case, and an id that differs from a saved one only by case (`Notes` next to `notes`). Before, a module test could pass with an id Tavora refuses. The id is checked before `ifRevision`, as in Tavora. A host older than `DOCUMENT_ID_RULE_TAVORA`, Tavora 0.24.73, still takes them, and one older than `DOCUMENT_ID_ZERO_DEVICES_TAVORA`, Tavora 0.24.103, still takes `com0` and `lpt0`, as those Tavoras do.
+- `protocol.ts`: `newDocumentIdProblem(id, savedIds)` says why a new document can't have an id (or null), the rule Tavora itself uses. `isWindowsDeviceName(name)` comes from here now; `@tavora/module-schema` passes it on.
+
 ## 0.4.5
 
 Unit cards. The shared tooltip gets a layout for a game unit as games show it on the board. It comes with the next Tavora (`UNIT_CARD_TAVORA` in `protocol.ts`; the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.21.43).
