@@ -654,13 +654,16 @@ export class AccountStore {
    * A new one-time code to link a publisher key; any earlier one of the account stops working. Only its hash is kept, with
    * the sign-in that asked for it (`sessionId`), which the key it links is kept with.
    */
-  linkCode(accountId: string, now: number, sessionId: string | null = null): { code: string; expiresAt: number } {
+  linkCode(accountId: string, now: number, sessionId: string | null = null): { code: string; expiresAt: number } | null {
     this.sweep(now);
     this.db.prepare("delete from link_codes where account_id = ?").run(accountId);
     const code = Array.from({ length: 8 }, () => LINK_ALPHABET[randomInt(0, LINK_ALPHABET.length)]).join("");
     const expiresAt = now + LINK_CODE_TTL_MS;
-    this.db.prepare("insert into link_codes (code_hash, account_id, expires_at, session_id) values (?, ?, ?, ?)").run(sha256(`link:${code}`), accountId, expiresAt, sessionId);
-    return { code, expiresAt };
+    // Only while the sign-in that asks still exists, as for publish tokens; null otherwise.
+    const made = this.db
+      .prepare("insert into link_codes (code_hash, account_id, expires_at, session_id) select ?, ?, ?, ? where ? is null or exists (select 1 from sessions where id = ? and account_id = ?)")
+      .run(sha256(`link:${code}`), accountId, expiresAt, sessionId, sessionId, sessionId, accountId);
+    return Number(made.changes) > 0 ? { code, expiresAt } : null;
   }
 
   /** The account a link code was made for, used up by taking it; null when unknown or expired. */
@@ -1193,7 +1196,7 @@ export class AccountStore {
   /**
    * A token for publishing from CI (decided 2026-10-20): shown once, kept here only as a hash, good for a
    * year. It publishes under the account's prefixes, never a new one, and only together with the key's
-   * signature. Null when the account has as many as it may. `sessionId`: the sign-in that made it, which changing the
+   * signature. Null when the account has as many as it may, or `sessionId` ended. `sessionId`: the sign-in that made it, which changing the
    * address keeps it with (revokeMinted).
    */
   createPublishToken(accountId: string, name: string, now: number, sessionId: string | null = null): { token: string; publishToken: PublishToken } | null {
@@ -1201,9 +1204,14 @@ export class AccountStore {
     const token = `${PUBLISH_TOKEN_PREFIX}${randomBytes(32).toString("base64url")}`;
     const id = randomBytes(12).toString("base64url");
     const expiresAt = now + PUBLISH_TOKEN_TTL_MS;
-    this.db
-      .prepare("insert into publish_tokens (id, account_id, token_hash, name, created_at, expires_at, session_id) values (?, ?, ?, ?, ?, ?, ?)")
-      .run(id, accountId, sha256(`publish:${token}`), name, now, expiresAt, sessionId);
+    // Only while the sign-in that asks still exists, checked in the same statement (audit 2026-11-22): one ended meanwhile
+    // (the email changed, the device was removed) makes no token that nothing would take back.
+    const made = this.db
+      .prepare(
+        "insert into publish_tokens (id, account_id, token_hash, name, created_at, expires_at, session_id) select ?, ?, ?, ?, ?, ?, ? where ? is null or exists (select 1 from sessions where id = ? and account_id = ?)",
+      )
+      .run(id, accountId, sha256(`publish:${token}`), name, now, expiresAt, sessionId, sessionId, sessionId, accountId);
+    if (Number(made.changes) === 0) return null;
     return { token, publishToken: { id, name, createdAt: now, expiresAt, lastUsedAt: null } };
   }
 
@@ -1473,6 +1481,11 @@ export class AccountStore {
   /** Names one device of an account; false when the account has no such device. */
   renameSession(accountId: string, id: string, name: string): boolean {
     return Number(this.db.prepare("update sessions set name = ? where id = ? and account_id = ?").run(name, id, accountId).changes) > 0;
+  }
+
+  /** Whether a sign-in still exists (sign-in.ts stillSignedIn). */
+  sessionAlive(id: string): boolean {
+    return this.db.prepare("select 1 from sessions where id = ?").get(id) !== undefined;
   }
 
   /**

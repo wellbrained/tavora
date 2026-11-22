@@ -6,7 +6,7 @@ import { mkdtempSync } from "node:fs";
 import { DatabaseSync, StatementSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { COPY_LIMIT, copyLimitsFromEnv, CopyStore, FREE_FLOOR, MAX_MANIFEST_BYTES, MAX_PART_BYTES, MAX_STORED_PARTS, MIN_PART_BYTES, NETWORK_DAY_LIMIT, NETWORK_SHARE, NEW_ACCOUNT_MS, NEW_ACCOUNT_SHARE, readParts, readSwap, STORED_LIMIT, SWEEP_PAGE, TOTAL_LIMIT, UNUSED_PART_MS, writeParts, type CopyHolder, type CopyStoreOptions } from "./cloud-copy.ts";
+import { COPY_LIMIT, copyLimitsFromEnv, CopyStore, FREE_FLOOR, MAX_MANIFEST_BYTES, MAX_PART_BYTES, MAX_STORED_PARTS, MIN_PART_BYTES, NETWORK_DAY_LIMIT, NETWORK_SHARE, NEW_ACCOUNT_MS, NEW_ACCOUNT_SHARE, readParts, readSwap, ROOM_SWEEP_PAGES, STORED_LIMIT, SWEEP_PAGE, TOTAL_LIMIT, UNUSED_PART_MS, writeParts, type CopyHolder, type CopyStoreOptions } from "./cloud-copy.ts";
 import { buildDataset, writeDatabase } from "./dataset.ts";
 import { createTestInbox } from "./mail.ts";
 import { createRateLimiter } from "./rate-limit.ts";
@@ -441,6 +441,33 @@ describe("the cloud copy", () => {
     }
     expect(copies.storedTotal()).toBe(3005);
     expect(copies.parts("b0", kept.map((item) => item.id))).toHaveLength(3000);
+  });
+
+  it("sweeps in the background a page at a time, so the service answers meanwhile (audit 2026-11-22)", async () => {
+    const copies = testCopies(":memory:");
+    const count = 3 * SWEEP_PAGE + 10;
+    copies.addParts("a", Array.from({ length: count }, () => part(2)), 1000);
+    const at = 1000 + UNUSED_PART_MS + 1;
+    const late = part(5);
+    let pauses = 0;
+    const swept = await copies.sweepInBackground(at, async () => {
+      pauses += 1;
+      // An upload between two pages goes in, and the totals stay right.
+      if (pauses === 1) expect(copies.addParts("b", [late], at)).toBe("ok");
+    });
+    expect(swept).toEqual({ parts: count, bytes: 2 * count });
+    expect(pauses).toBe(3);
+    expect(copies.storedTotal()).toBe(5);
+    expect(copies.pooledTotal()).toBe(5);
+    expect(copies.parts("b", [late.id])).toHaveLength(1);
+  });
+
+  it("drops at most ROOM_SWEEP_PAGES pages while an upload waits for room, and leaves the rest to the hourly round", () => {
+    const count = ROOM_SWEEP_PAGES * SWEEP_PAGE + 500;
+    const copies = testCopies(":memory:", { totalLimit: count });
+    copies.addParts("a", Array.from({ length: count }, () => part(1)), 1000);
+    expect(copies.addParts("b", [part(1)], 1000 + UNUSED_PART_MS + 1)).toBe("ok");
+    expect(copies.storedTotal()).toBe(500 + 1);
   });
 
   it("counts every part as at least 1 KiB in the limits, so tiny parts can't fill the service for free (audit 2026-11-22)", () => {

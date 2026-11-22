@@ -441,7 +441,7 @@ export function reviewRoutes({ reviews, catalog, accounts, clientKey, writeRateL
   const writeLimiter = writeRateLimiter ?? createRateLimiter({ limit: 30, windowMs: 3_600_000 });
   const app = new Hono<Env>();
 
-  const signedIn = requireSignIn(accounts, now);
+  const signedIn = requireSignIn(accounts, now, 4000);
   const writes = async (context: Context<Env>, next: () => Promise<void>) => {
     if (context.req.method === "GET") return next();
     const wait = writeLimiter.check(clientKey(context.req.raw));

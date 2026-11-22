@@ -201,7 +201,12 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
    */
   const tellAccount = async (store: AccountStore, context: Context, accountId: string, kind: UnsentNotice["kind"], module: { id: string; name: string; version: string }, write: (to: string, language: MailLanguage) => Mail, at: number) => {
     const to = store.account(accountId)?.email;
-    if (!mail || !to) return;
+    // An account without an address (Discord only) hears of nothing by mail: Publishing lists all of it instead.
+    if (!to) {
+      store.recordUnsentNotice(accountId, kind, module, at);
+      return;
+    }
+    if (!mail) return;
     if (!(await notice(store, accountId, mail, write(to, languageOf(context)), at))) store.recordUnsentNotice(accountId, kind, module, at);
   };
 

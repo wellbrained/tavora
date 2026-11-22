@@ -106,15 +106,22 @@ const accountStore = mailer ? new AccountStore(path.join(stateDir, "accounts.sql
 // The secret for network marks, kept out of every database: module-request votes and the cloud copies' networks.
 const networkSalt = voteSalt(process.env, path.join(stateDir, "module-requests.salt"));
 const copies = accountStore ? new CopyStore(path.join(stateDir, "copies.sqlite"), { ...copyLimitsFromEnv(process.env, stateDir), networkSalt }) : undefined;
-if (copies) {
-  // Parts uploaded but never saved in a version go after a day; once an hour is plenty.
-  const sweepCopies = () => {
-    const { parts, bytes } = copies.sweep(Date.now());
-    if (parts > 0) console.log(`[tavora-api] Dropped ${parts} unused cloud-copy parts (${Math.round(bytes / 1024 / 1024)} MB).`);
-  };
-  sweepCopies();
-  setInterval(sweepCopies, 60 * 60_000).unref();
-}
+// Parts uploaded but never saved in a version go after a day; once an hour is plenty. In the background, a page at a time
+// (cloud-copy.ts sweepInBackground), and the first round only once the service listens, so millions of them never hold up
+// the start or the deploy's health check (audit 2026-11-22). One round at a time.
+let sweeping = false;
+const sweepCopies = () => {
+  if (!copies || sweeping) return;
+  sweeping = true;
+  void copies
+    .sweepInBackground(Date.now())
+    .then(({ parts, bytes }) => {
+      if (parts > 0) console.log(`[tavora-api] Dropped ${parts} unused cloud-copy parts (${Math.round(bytes / 1024 / 1024)} MB).`);
+    })
+    .catch((error: unknown) => console.error("[tavora-api] Sweeping the cloud copies failed:", error))
+    .finally(() => (sweeping = false));
+};
+if (copies) setInterval(sweepCopies, 60 * 60_000).unref();
 // The module catalog, read-only here: modules are added by hand with catalog.mjs (scripts/catalog.ts).
 const catalog = new CatalogStore(path.join(stateDir, "catalog"));
 // The signed hash of each version from before it was kept (S7), so a block can name it too, and its file hashes for the copy check.
@@ -207,6 +214,7 @@ const app = createApp({
 
 const publicServer = serve({ fetch: app.fetch, port, hostname: "127.0.0.1" }, (info) => {
   console.log(`[tavora-api] listening on http://127.0.0.1:${info.port}`);
+  sweepCopies();
 });
 setServerTimeouts(publicServer as Server);
 

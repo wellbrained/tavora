@@ -11,7 +11,7 @@ import { keyRequestStatus } from "./key-requests.ts";
 import { codeMail, confirmEmailChangeMail, emailChangedMail, keyRequestMail, MailLimitError, mailLanguage, type Mail, type Mailer } from "./mail.ts";
 import { inspectPng } from "./png.ts";
 import { checkAll, createRateLimiter, networkOf, type RateLimiter } from "./rate-limit.ts";
-import { requireSignIn, tooMany, type SignedInEnv } from "./sign-in.ts";
+import { requireSignIn, signedOut, stillSignedIn, tooMany, type SignedInEnv } from "./sign-in.ts";
 import type { ReviewStore } from "./reviews.ts";
 import type { ConversationStore } from "./conversations.ts";
 import type { LeaderboardStore } from "./leaderboards.ts";
@@ -480,7 +480,10 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   // ── Signed in ─────────────────────────────────────────────────────────
 
   const signedIn = new Hono<Env>();
-  signedIn.use("*", requireSignIn(store, now));
+  // The body first (a profile with its picture at most), then the sign-in (sign-in.ts requireSignIn); a route that writes
+  // after an await checks again (stillSignedIn).
+  signedIn.use("*", requireSignIn(store, now, PROFILE_BODY));
+  const gone = (context: Context<SignedInEnv>) => (stillSignedIn(store, context) ? null : signedOut(context));
 
   signedIn.get("/", (context) => {
     const account = context.get("account");
@@ -515,6 +518,8 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   signedIn.put("/profile", async (context) => {
     const profile = parseProfile(await body(context), now());
     if (!profile) return context.json({ error: "Send { name, initials, picture, updatedAt }.", reason: "bad-request" }, 400);
+    const ended = gone(context);
+    if (ended) return ended;
     return context.json({ profile: profileAnswer(store.setProfile(context.get("account").id, profile)) });
   });
 
@@ -557,6 +562,8 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const name = cleanDeveloperName((await body(context)).name);
     if (!name) return context.json({ error: "A name is 3 to 32 letters, digits, spaces, dots, dashes or underscores.", reason: "bad-name" }, 400);
     const account = context.get("account");
+    const ended = gone(context);
+    if (ended) return ended;
     const result = store.setDeveloperName(account.id, name, now());
     if (!result.ok) {
       const messages = { "name-taken": "That name is taken.", "name-reserved": "That name cannot be used.", "name-too-soon": "The name can change once in 30 days." } as const;
@@ -569,8 +576,9 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   signedIn.post("/keys/code", (context) => {
     const account = context.get("account");
     if (!store.developer(account.id)) return context.json({ error: "Choose a developer name first.", reason: "no-developer-name" }, 409);
-    const { code, expiresAt } = store.linkCode(account.id, now(), context.get("session").id);
-    return context.json({ code, expiresAt: new Date(expiresAt).toISOString() });
+    const made = store.linkCode(account.id, now(), context.get("session").id);
+    if (!made) return signedOut(context);
+    return context.json({ code: made.code, expiresAt: new Date(made.expiresAt).toISOString() });
   });
 
   // Module id prefixes: checked and claimed before the first publish, so the app can show whether an id
@@ -601,6 +609,8 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     if (state === "taken") return context.json({ error: `The id prefix "${prefix}" belongs to another developer.`, reason: "prefix-taken" }, 403);
     if (state === "reserved") return context.json({ error: `The id prefix "${prefix}" is reserved.`, reason: "prefix-reserved" }, 403);
     if (state === "too-many") return context.json({ error: `Your account holds ${MAX_PREFIXES} id prefixes, as many as it can.`, reason: "too-many-prefixes" }, 403);
+    const ended = gone(context);
+    if (ended) return ended;
     if (state === "free") store.reservePrefix(account.id, prefix, now());
     return context.json({ prefix, state: "held" });
   });
@@ -638,6 +648,8 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const notice = changes && account.email !== null && !usedUp("sign-in");
     const ownWait = notice ? Math.max(0, ...own.map(([limiter, key]) => limiter.peek(key))) : 0;
     if (ownWait > 0 && !input.leaked) return tooMany(context, ownWait, "Too many emails to your address today. Try again tomorrow.");
+    const ended = gone(context);
+    if (ended) return ended;
     const result = store.requestReplacement(account.id, old, input.new, input.leaked, now(), options.officialPins ?? OFFICIAL_PINS, options.trust?.signed("successions")?.successions ?? []);
     if (result === "same") return context.json({ error: "Pick another key to replace it with.", reason: "bad-request" }, 400);
     if (result === "not-linked") return context.json({ error: "Both keys must be linked to this account.", reason: "not-found" }, 404);
@@ -661,7 +673,11 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const name = typeof raw === "string" ? raw.trim() : "";
     if (!name || name.length > 40 || /[\u0000-\u001f\u007f]/.test(name)) return context.json({ error: "A token's name is 1 to 40 characters.", reason: "bad-name" }, 400);
     if (!store.developer(account.id)) return context.json({ error: "Choose a developer name first.", reason: "no-developer-name" }, 409);
+    // The store makes it only while this sign-in still exists (account-store.ts createPublishToken).
+    const ended = gone(context);
+    if (ended) return ended;
     const created = store.createPublishToken(account.id, name, now(), context.get("session").id);
+    if (!created && !stillSignedIn(store, context)) return signedOut(context);
     if (!created) return context.json({ error: "This account has as many publish tokens as it can. Remove one first.", reason: "too-many-tokens" }, 409);
     return context.json({ token: created.token, ...developerAnswer(account.id) }, 201);
   });

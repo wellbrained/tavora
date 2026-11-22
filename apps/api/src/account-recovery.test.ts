@@ -89,7 +89,30 @@ function setup(scanner: Scanner | undefined = cleanScanner) {
     expect(changed.status).toBe(200);
     return ((await changed.json()) as { token: string }).token;
   };
-  return { store, catalog, clock, call, link, newToken, publish, reason, account, changeEmail, inbox };
+  /**
+   * A request whose body, with the right Content-Length, arrives only on release(): the sign-in is still good when it
+   * starts, and may have ended by the time the body is in.
+   */
+  const slow = (method: string, url: string, token: string, contentType: string, bytes: Uint8Array) => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const body = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        await gate;
+        controller.enqueue(bytes);
+        controller.close();
+      },
+    });
+    const response = app.request(`http://tavora.test${url}`, {
+      method,
+      headers: { "content-type": contentType, "content-length": String(bytes.length), authorization: `Bearer ${token}` },
+      body,
+      duplex: "half",
+    } as RequestInit);
+    return { response, release };
+  };
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+  return { store, catalog, clock, call, link, newToken, publish, reason, account, changeEmail, inbox, slow, settle };
 }
 
 describe("taking an account back by changing its email", () => {
@@ -183,6 +206,45 @@ describe("taking an account back by changing its email", () => {
     release();
     expect(await reason(await upload)).toBe("key-not-linked");
     expect(catalog.index()).toEqual([]);
+  });
+});
+
+describe("a body that arrives after the sign-in ended", () => {
+  const tokenBody = new TextEncoder().encode(JSON.stringify({ name: "Late" }));
+
+  it("makes no publish token once the email changed meanwhile", async () => {
+    const { store, clock, account, changeEmail, slow, settle } = setup();
+    const { id, owner, stolen } = await account();
+    const late = slow("POST", "/v1/account/publish-tokens", stolen, "application/json", tokenBody);
+    await settle();
+    await changeEmail(owner);
+    late.release();
+    expect((await late.response).status).toBe(401);
+    expect(store.publishTokens(id, clock.now)).toEqual([]);
+  });
+
+  it("makes no publish token once the device was removed meanwhile", async () => {
+    const { store, clock, call, account, slow, settle } = setup();
+    const { id, owner, stolen } = await account();
+    const late = slow("POST", "/v1/account/publish-tokens", stolen, "application/json", tokenBody);
+    await settle();
+    const { devices } = (await (await call("GET", "/v1/account", undefined, owner)).json()) as { devices: { id: string; current: boolean }[] };
+    expect((await call("DELETE", `/v1/account/devices/${devices.find((device) => !device.current)!.id}`, undefined, owner)).status).toBe(204);
+    late.release();
+    expect((await late.response).status).toBe(401);
+    expect(store.publishTokens(id, clock.now)).toEqual([]);
+  });
+
+  it("writes no key vault once the email changed meanwhile", async () => {
+    const { store, account, changeEmail, slow, settle } = setup();
+    const { id, owner, stolen } = await account();
+    const vault = new Uint8Array([0, 0, 0, 0, 1, 2, 3, 4]);
+    const late = slow("PUT", "/v1/account/vault", stolen, "application/octet-stream", vault);
+    await settle();
+    await changeEmail(owner);
+    late.release();
+    expect((await late.response).status).toBe(401);
+    expect(store.vault(id)).toBeNull();
   });
 });
 

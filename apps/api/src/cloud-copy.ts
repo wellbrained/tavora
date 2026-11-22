@@ -5,7 +5,7 @@ import { statfsSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import type { AccountStore } from "./account-store.ts";
 import { createRateLimiter, networkOf, type RateLimiter } from "./rate-limit.ts";
-import { requireSignIn, tooMany, type SignedInEnv } from "./sign-in.ts";
+import { requireSignIn, signedOut, stillSignedIn, tooMany, type SignedInEnv } from "./sign-in.ts";
 
 /**
  * The cloud copy (decided 2026-10-19): one copy of a user's Tavora data per account, which only the
@@ -62,6 +62,8 @@ export const SWEEP_PAGE = 1000;
  * can't fill it for free. Its `size` is kept as this much; a real part of user data is far bigger anyway.
  */
 export const MIN_PART_BYTES = 1024;
+/** Pages a sweep for room may drop while a request waits for it; the hourly round in the background takes the rest. */
+export const ROOM_SWEEP_PAGES = 10;
 /** Parts one download may ask for. */
 export const MAX_ASK = 2048;
 const ID_BYTES = 32;
@@ -144,6 +146,12 @@ export function copyLimitsFromEnv(env: Record<string, string | undefined>, dir: 
       }
     },
   };
+}
+
+/** Where a sweep goes on from: the last part of the page before. */
+interface SweepCursor {
+  accountId: string;
+  id: Uint8Array;
 }
 
 /** Why parts were not stored: this account's copy is full, or the copies of all accounts have no room. */
@@ -334,7 +342,7 @@ export class CopyStore {
    * checks again.
    */
   private room(accountId: string, adding: number, pooled: () => number, who: CopyHolder | undefined, now: number): boolean {
-    if (this.fits(accountId, adding, pooled(), who, now) !== "ok" && now - this.lastSweep >= SWEEP_GAP_MS) this.sweep(now);
+    if (this.fits(accountId, adding, pooled(), who, now) !== "ok" && now - this.lastSweep >= SWEEP_GAP_MS) this.sweep(now, ROOM_SWEEP_PAGES);
     return !this.refused(this.fits(accountId, adding, pooled(), who, now));
   }
 
@@ -395,46 +403,78 @@ export class CopyStore {
    * Drops the parts no saved version uses that are older than UNUSED_PART_MS: those of an account without a copy, and those
    * stored after its copy was last saved (a save drops every part it doesn't use, so what came after it is unused). Parts
    * from before created_at count as old; with a copy they stay until its next save, as they did. Answers what went.
+   * `maxPages`: at most so many pages (SWEEP_PAGE parts each), for a sweep a request waits for (ROOM_SWEEP_PAGES).
    */
-  sweep(now: number = Date.now()): { parts: number; bytes: number } {
+  sweep(now: number = Date.now(), maxPages = Number.POSITIVE_INFINITY): { parts: number; bytes: number } {
     this.lastSweep = now;
-    // One pass in the parts' own order (account, then id), a page at a time from where the last one ended, each dropped in
-    // its own transaction: no part is read twice, so millions take one walk through the table and little memory.
-    const page = this.db.prepare(
-      `select p.account_id as accountId, p.id as id, p.size as size from parts p left join copies c on c.account_id = p.account_id
-       where (p.account_id, p.id) > (?, ?) and coalesce(p.created_at, 0) < ? and (c.account_id is null or (p.created_at is not null and p.created_at > c.updated_at))
-       order by p.account_id, p.id limit ?`,
-    );
-    let after: { accountId: string; id: Uint8Array } = { accountId: "", id: new Uint8Array(0) };
-    const drop = this.db.prepare("delete from parts where account_id = ? and id = ?");
     let parts = 0;
     let bytes = 0;
-    try {
-      for (;;) {
-        const unused = page.all(after.accountId, after.id, now - UNUSED_PART_MS, SWEEP_PAGE) as unknown as { accountId: string; id: Uint8Array; size: number }[];
-        if (unused.length === 0) break;
-        after = unused.at(-1)!;
-        this.db.exec("begin");
-        try {
-          for (const part of unused) drop.run(part.accountId, part.id);
-          this.db.exec("commit");
-        } catch (error) {
-          this.db.exec("rollback");
-          throw error;
-        }
-        const dropped = unused.reduce((total, part) => total + part.size, 0);
-        this.total -= dropped;
-        bytes += dropped;
-        parts += unused.length;
-        if (unused.length < SWEEP_PAGE) break;
-      }
-    } finally {
-      // Kept right for the pages that went, also when a later one failed.
-      if (parts > 0) this.onTop = this.countOnTop();
+    let after: SweepCursor = { accountId: "", id: new Uint8Array(0) };
+    for (let pages = 0; pages < maxPages; pages++) {
+      const page = this.sweepPage(now, after);
+      parts += page.parts;
+      bytes += page.bytes;
+      if (!page.next) break;
+      after = page.next;
     }
-    if (parts === 0) return { parts: 0, bytes: 0 };
-    this.db.exec("pragma incremental_vacuum");
+    if (parts > 0) this.db.exec("pragma incremental_vacuum");
     return { parts, bytes };
+  }
+
+  /**
+   * sweep() for the start and the hourly round (audit 2026-11-22): the same pass, but it gives the event loop back between
+   * pages (`pause`), so the service answers while millions of parts go. Uploads and saves meanwhile are safe: each page is
+   * read and dropped in one step, and the next one looks again at what is unused then.
+   */
+  async sweepInBackground(now: number = Date.now(), pause: () => Promise<void> = () => new Promise((resolve) => setImmediate(resolve))): Promise<{ parts: number; bytes: number }> {
+    this.lastSweep = now;
+    let parts = 0;
+    let bytes = 0;
+    let after: SweepCursor = { accountId: "", id: new Uint8Array(0) };
+    for (;;) {
+      const page = this.sweepPage(now, after);
+      parts += page.parts;
+      bytes += page.bytes;
+      if (!page.next) break;
+      after = page.next;
+      await pause();
+    }
+    if (parts > 0) this.db.exec("pragma incremental_vacuum");
+    return { parts, bytes };
+  }
+
+  /**
+   * One page of the sweep: up to SWEEP_PAGE unused parts after `after` in the parts' own order (account, then id), read and
+   * dropped in one transaction, with the totals kept right for exactly what went. No part is read twice, so millions take
+   * one walk through the table. `next`: where the next page starts, null at the end.
+   */
+  private sweepPage(now: number, after: SweepCursor): { parts: number; bytes: number; next: SweepCursor | null } {
+    const unused = this.db
+      .prepare(
+        `select p.account_id as accountId, p.id as id, p.size as size, p.charged as charged from parts p left join copies c on c.account_id = p.account_id
+         where (p.account_id, p.id) > (?, ?) and coalesce(p.created_at, 0) < ? and (c.account_id is null or (p.created_at is not null and p.created_at > c.updated_at))
+         order by p.account_id, p.id limit ?`,
+      )
+      .all(after.accountId, after.id, now - UNUSED_PART_MS, SWEEP_PAGE) as unknown as { accountId: string; id: Uint8Array; size: number; charged: number | null }[];
+    if (unused.length === 0) return { parts: 0, bytes: 0, next: null };
+    const drop = this.db.prepare("delete from parts where account_id = ? and id = ?");
+    let bytes = 0;
+    let onTop = 0;
+    this.db.exec("begin");
+    try {
+      for (const part of unused) {
+        if (Number(drop.run(part.accountId, part.id).changes) === 0) continue;
+        bytes += part.size;
+        if (part.charged !== null) onTop += part.size - part.charged;
+      }
+      this.db.exec("commit");
+    } catch (error) {
+      this.db.exec("rollback");
+      throw error;
+    }
+    this.total -= bytes;
+    this.onTop -= onTop;
+    return { parts: unused.length, bytes, next: unused.length < SWEEP_PAGE ? null : unused.at(-1)! };
   }
 
   /** Parts stored for the account, used by a version or not. */
@@ -573,7 +613,7 @@ export class CopyStore {
     // No room: unused parts are swept first (at most once a minute), then it is looked at again; a part the sweep dropped
     // is then missing.
     if (planned.fits !== null && planned.fits !== "ok" && now - this.lastSweep >= SWEEP_GAP_MS) {
-      this.sweep(now);
+      this.sweep(now, ROOM_SWEEP_PAGES);
       planned = plan();
     }
     const { size, missing, savedAt, adding, accountOnTop, fits } = planned;
@@ -741,7 +781,8 @@ export function copyRoutes({ copies, accounts, clientKey, rateLimiter, now = Dat
     }
     await next();
   });
-  app.use("*", requireSignIn(accounts, now));
+  // The body first, then the sign-in (sign-in.ts requireSignIn), and again right before a write.
+  app.use("*", requireSignIn(accounts, now, MAX_BODY));
   app.use("*", bodyLimit({ maxSize: MAX_BODY, onError: (context) => context.json({ error: "Too big.", reason: "too-big" }, 413) }));
   const bytes = async (context: Context) => new Uint8Array(await context.req.arrayBuffer());
   /** Who adds bytes, for the shares of the total: when the account was made, and the request's network. */
@@ -764,6 +805,7 @@ export function copyRoutes({ copies, accounts, clientKey, rateLimiter, now = Dat
     const parts = readParts(await bytes(context));
     if (!parts) return bad(context, "Send parts: a 32-byte id, a 4-byte length and the bytes, one after another.");
     const account = context.get("account");
+    if (!stillSignedIn(accounts, context)) return signedOut(context);
     const added = copies.addParts(account.id, parts, now(), holder(context));
     if (added === "copy-full") return context.json({ error: "The cloud copy is full.", reason: "copy-full", limit: COPY_LIMIT }, 413);
     // The service's own room, not this account's: the app keeps its data and tries again later, as for any 503.
@@ -787,6 +829,7 @@ export function copyRoutes({ copies, accounts, clientKey, rateLimiter, now = Dat
     if (swapManifestTooBig(body)) return context.json({ error: "The cloud copy's file list is too long.", reason: "too-big" }, 413);
     const swap = readSwap(body);
     if (!swap) return bad(context, "Send the version it started from, the part ids and the manifest.");
+    if (!stillSignedIn(accounts, context)) return signedOut(context);
     const result = copies.swap(context.get("account").id, swap.base, swap.manifest, swap.parts, now(), holder(context));
     if (result.ok) return context.json({ version: result.version, size: result.size });
     if (result.reason === "copy-changed") return context.json({ error: "The cloud copy changed on another PC.", reason: result.reason, version: result.version }, 409);

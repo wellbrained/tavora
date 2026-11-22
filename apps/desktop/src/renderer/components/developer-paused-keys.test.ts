@@ -13,17 +13,35 @@ const host = vi.hoisted(() => ({
 }));
 vi.mock("../host", async () => {
   const { shallowRef } = await import("vue");
-  return { ...host, account: shallowRef(null), developerKeys: shallowRef(null), inbox: shallowRef({ contactDefault: null }) };
+  const { computed } = await import("vue");
+  return {
+    ...host,
+    account: shallowRef(null),
+    developerKeys: shallowRef(null),
+    inbox: shallowRef({ contactDefault: null }),
+    developerReady: computed(() => false),
+    dialog: shallowRef(null),
+    publishModule: vi.fn(),
+    state: shallowRef({ developmentFolders: [] }),
+  };
 });
 // Parts of the page this test is not about.
 vi.mock("./developer/PrefixClaim.vue", async () => ({ default: (await import("vue")).defineComponent({ render: () => null }) }));
 vi.mock("./developer/ContactChoice.vue", async () => ({ default: (await import("vue")).defineComponent({ render: () => null }) }));
+vi.mock("./settings/RecoveryKeySettings.vue", async () => ({ default: (await import("vue")).defineComponent({ render: () => null }) }));
+vi.mock("./settings/SignInForm.vue", async () => ({ default: (await import("vue")).defineComponent({ render: () => null }) }));
+// The dialog's frame, without the real overlay.
+vi.mock("./ModalDialog.vue", async () => {
+  const { defineComponent, h } = await import("vue");
+  return { default: defineComponent({ setup: (_props, { slots }) => () => h("div", slots.default?.()) }) };
+});
 vi.mock("./settings/SettingRow.vue", async () => {
   const { defineComponent, h } = await import("vue");
   return { default: defineComponent({ props: { label: String, description: String }, setup: (props, { slots }) => () => h("div", [props.label, props.description, slots.default?.()]) }) };
 });
 
 import { account, developerKeys } from "../host";
+import DeveloperStartDialog from "./developer/DeveloperStartDialog.vue";
 import ModuleDeveloperSettings from "./developer/ModuleDeveloperSettings.vue";
 
 const KEPT = "0123456789abcdef0123456789abcdef";
@@ -46,7 +64,7 @@ afterEach(() => {
 });
 const $$ = (id: string) => [...root.querySelectorAll(`[data-testid="${id}"]`)] as HTMLElement[];
 
-async function mount(view: Partial<AccountView>) {
+async function mount(view: Partial<AccountView>, kept = [{ fingerprint: KEPT }], component: object = ModuleDeveloperSettings) {
   (account as { value: AccountView | null }).value = {
     enabled: true,
     account: { email: "me@example.com", discord: null, createdAt: LINKED_AT },
@@ -57,8 +75,8 @@ async function mount(view: Partial<AccountView>) {
     prefixes: { held: [], max: 3 },
     ...view,
   } as unknown as AccountView;
-  (developerKeys as { value: DeveloperKeysView | null }).value = { status: "ready", keys: [{ fingerprint: KEPT }], hasKey: true } as unknown as DeveloperKeysView;
-  app = createApp(defineComponent({ render: () => h(ModuleDeveloperSettings, { highlight: null }) }));
+  (developerKeys as { value: DeveloperKeysView | null }).value = { status: kept.length ? "ready" : "none", keys: kept, hasKey: true } as unknown as DeveloperKeysView;
+  app = createApp(defineComponent({ render: () => h(component as never, { highlight: null }) }));
   app.mount(root);
   await tick();
   await tick();
@@ -90,5 +108,27 @@ describe("paused publisher keys", () => {
     await mount({});
     expect($$("developer-unsent")).toEqual([]);
     expect($$("account-key-relink")).toEqual([]);
+  });
+});
+
+describe("Publish with paused keys", () => {
+  const $ = (id: string) => root.querySelector(`[data-testid="${id}"]`) as HTMLElement | null;
+  const prefixes = { held: [{ prefix: "example", reservedAt: 0 }], max: 3 };
+
+  it("offers Link again for a paused key Tavora keeps, never a new key", async () => {
+    await mount({ prefixes, pausedKeys: [{ fingerprint: KEPT, linkedAt: LINKED_AT }] } as unknown as Partial<AccountView>, [{ fingerprint: KEPT }], DeveloperStartDialog);
+    expect($("developer-start-make-key")).toBeNull();
+    $("developer-start-relink")!.click();
+    await tick();
+    expect(host.act).toHaveBeenLastCalledWith({ type: "developer-key-link", fingerprint: KEPT });
+  });
+
+  it("offers a link code for a paused key file, never a new key", async () => {
+    await mount({ prefixes, pausedKeys: [{ fingerprint: FILE, linkedAt: LINKED_AT }] } as unknown as Partial<AccountView>, [], DeveloperStartDialog);
+    expect($("developer-start-make-key")).toBeNull();
+    expect($("developer-start-paused-file")?.textContent).toContain("Your publisher key file was paused");
+    $("developer-start-link-code")!.click();
+    await tick();
+    expect(host.act).toHaveBeenLastCalledWith({ type: "account-link-code" });
   });
 });

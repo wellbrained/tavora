@@ -46,9 +46,10 @@ function setup(mailDailyLimit: number | undefined, uploadsPerDay = 10) {
     accounts: { store, mailer: inbox, codeRateLimiter: roomy(), verifyRateLimiter: roomy(), now: () => clock.now, ...(mailDailyLimit === undefined ? {} : { mailDailyLimit }) },
   });
   /** A developer with a linked key and a version approved before, so every upload lists at once and mails a notice. */
-  const developer = (name: string) => {
+  /** `discord`: an account with a Discord login and no address. */
+  const developer = (name: string, discord = false) => {
     const key = generateKeyPairSync("ed25519").privateKey;
-    const account = store.createAccount({ email: `${name}@example.com` }, clock.now - 86_400_000);
+    const account = store.createAccount(discord ? { discord: { id: `id-${name}`, name } } : { email: `${name}@example.com` }, clock.now - 86_400_000);
     catalog.trustAccount(account.id, new Date(clock.now));
     store.linkKey(account.id, keyFingerprint(rawKey(key)), rawKey(key).toString("base64"), clock.now);
     const token = store.createSession(account.id, "windows", clock.now).token;
@@ -97,6 +98,14 @@ describe("notices about publishing", () => {
       { kind: "published", id: "bravo.timer", version: "1.0.1" },
       { kind: "published", id: "bravo.timer", version: "1.0.0" },
     ]);
+  });
+
+  it("lists everything for an account without an address, which no mail can reach", async () => {
+    const { developer, developerSide, inbox } = setup(300);
+    const dev = developer("delta", true);
+    expect((await dev.publish("1.0.0")).status).toBe(201);
+    expect(inbox.mails()).toEqual([]);
+    expect((await developerSide(dev.token)).unsentNotices).toEqual([expect.objectContaining({ kind: "published", id: "delta.timer", version: "1.0.0" })]);
   });
 
   it("sends one account at most its own share a day", async () => {
