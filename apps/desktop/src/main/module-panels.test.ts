@@ -92,6 +92,7 @@ describe("ModulePanels", () => {
     await panels.reload();
 
     // What the old owner's page left is set aside before its page closes; closing for good would forget the panel's bounds.
+    expect(calls).toContain("hand over map from abcd1234 to local");
     expect(calls.indexOf("hand over map from abcd1234 to local")).toBeLessThan(calls.indexOf("restart map"));
     expect(calls).not.toContain("close map");
     expect(calls).not.toContain("close for good map");
@@ -112,6 +113,8 @@ describe("ModulePanels", () => {
     await asks.panels.reload();
     expect(asks.calls).toContain("await map");
     expect(asks.calls).not.toContain("start map now");
+    // The restarted panel goes where it was, even while it asks first.
+    expect(asks.calls).toContain("bounds");
 
     const free = setup({ before: [module("wellbrained.map", "abcd1234")], records: structuredClone(records) });
     free.awaiting.add("map");
