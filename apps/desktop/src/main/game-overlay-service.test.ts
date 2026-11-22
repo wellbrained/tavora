@@ -6,7 +6,8 @@ import { LIMITS, type JsonValue } from "@tavora/sdk/protocol";
 import { DEFAULT_RECT, placeLegacy } from "../shared/overlay-anchor";
 import { fillScale } from "../shared/overlay-content";
 import type { Foreground, ForegroundProbe } from "./foreground";
-import { GameOverlays, isOverlayAction, layerBinding, toggleBinding, type OverlayWindow, type OverlayWindowRequest } from "./game-overlay-service";
+import { GameOverlays, isOverlayAction, layerBinding, toggleBinding } from "./game-overlay-service";
+import type { OverlayWindow, OverlayWindowRequest } from "./game-layer-windows";
 import type { OverlayPanel } from "./game-overlay-window";
 import type { VeilWindow } from "./game-veil-window";
 import type { LayerCard, LayerCardRequest } from "./game-layer-card";
@@ -14,7 +15,7 @@ import { GameOverlayStore, OVERLAY_LAYER_ACTION, OVERLAY_TOGGLE_ACTION, type Ove
 import type { LayerCardContent } from "../shared/layer-card";
 import type { HotkeyRecord, ShortcutRegistry } from "./hotkeys";
 import { OverlayStore } from "./overlays";
-import { panelViewsRig, type PanelViewsRig } from "./panel-views.test-helper";
+import { panelViewsRig, type MemoryPanelView, type PanelViewsRig } from "./panel-views.test-helper";
 import type { StreamingModule } from "./streaming";
 import { moveToWorkspaces } from "./workspace-move";
 
@@ -133,7 +134,7 @@ function layerPanels(names: ReadonlyMap<string, string>) {
     lending: (instanceId) => void log.push(`lend ${instanceId}`),
     returned: (instanceId) => void log.push(`return ${instanceId}`),
   });
-  return { views: rig.views, log, made, refused };
+  return { views: rig.views, log, made, refused, mounted: rig.mounted };
 }
 
 class FakeCard implements LayerCard {
@@ -1391,11 +1392,17 @@ describe("a panel in the game", () => {
     add(service);
     service.pressed(layerKey(key));
     const [window] = panelWindows(world);
+    const view = window!.panel as MemoryPanelView;
     world.views.views.close(PANEL);
     expect(service.hasPanel(PANEL)).toBe(false);
     expect(window!.destroyed).toBe(true);
     expect(world.views.views.isLent(PANEL)).toBe(false);
     expect(world.views.log).toEqual([`lend ${PANEL}`]);
+    // The view that closed is gone: disposed, and never put back in Tavora's window.
+    expect(view.disposed).toBe(true);
+    expect(world.views.mounted.has(view.view)).toBe(false);
+    service.tick();
+    expect(world.views.mounted.has(view.view)).toBe(false);
   });
 
   it("gives the view back when its window ended on its own, and keeps the panel for the next layer", async () => {
