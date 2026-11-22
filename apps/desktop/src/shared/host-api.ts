@@ -511,7 +511,7 @@ export interface PairingView {
   /** Another PC asks this one: "Add <name>?", with the code both show. */
   approve: { id: string; name: string | null; code: string } | null;
   /**
-   * Goes up each time a PC asks while this one answers no more for now (too many tries ended without Add or No); the
+   * Goes up each time a PC asks while this one answers no more for now (too many tries ended without an Add); the
    * page shows a notice for each.
    */
   tooManyTries: number;

@@ -62,11 +62,12 @@ watch(
   },
   { immediate: true },
 );
-// A PC asked while this one answers no more for now (main/pairing.ts MAX_OPEN_ANSWERS): say so each time.
+// A PC asked while this one answers no more for now (main/pairing.ts MAX_OPEN_ANSWERS): say so each time. The count
+// the window first sees is from before it was there, so only a rise after that shows the notice.
 watch(
-  () => pairing.value?.tooManyTries ?? 0,
+  () => pairing.value?.tooManyTries,
   (count, before) => {
-    if (count > (before ?? 0)) showToast(t("pairing.tooMany"));
+    if (count !== undefined && before !== undefined && count > before) showToast(t("pairing.tooMany"));
   },
 );
 </script>

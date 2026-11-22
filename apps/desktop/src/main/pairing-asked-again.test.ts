@@ -4,6 +4,7 @@ import { afterEach, expect, it } from "vitest";
 import { AccountKey } from "./account-key";
 import { cleanUp, pc } from "./cloud-copy.test-helper";
 import { newPairingKey, pairingCommit } from "./copy-crypto";
+import type { PairingKey } from "./copy-crypto";
 import { ANSWER_WAIT_MS, FolderPairing, MAX_OPEN_ANSWERS, OPEN_ANSWER_MS, Pairing, ServicePairing, SLOW_ANSWER_MS, type PairingOptions, type PairingTransport } from "./pairing";
 
 // An old PC asked again and again by whoever carries the messages: each answer counts, however it ends.
@@ -169,4 +170,75 @@ it("says so when it answers no more for now, and the new PC says to check the ot
   await fresh.pairing.lookForAnswer();
   expect(fresh.pairing.view().asking).toMatchObject({ step: "waiting", slow: true });
   fresh.pairing.dispose();
+});
+
+it("keeps counting an answer after a No, so a wrong code shown isn't a free try", async () => {
+  const { root } = await pc();
+  const folder = path.join(root, "OneDrive");
+  await mkdir(path.join(folder, "Tavora"), { recursive: true });
+  const old = await oldPc(new FolderPairing(folder, "Desk"));
+  // Whoever can write the folder asks with a key of its own and reveals it: the old PC shows a code that matches
+  // nothing, and its user says no.
+  const rogue = new FolderPairing(folder, "Laptop");
+  const tryOnce = async () => {
+    const theirs: PairingKey = newPairingKey();
+    const { id } = await rogue.ask(pairingCommit(theirs.publicKey).toString("base64url"));
+    await old.pairing.lookForRequests();
+    const answered = (await rogue.read())?.answer !== undefined;
+    if (answered) {
+      await rogue.reveal(id, theirs.publicKey.toString("base64url"));
+      await old.pairing.lookForRequests();
+      await old.pairing.decide(old.pairing.view().approve!.id, false);
+    }
+    await rogue.end(id, false);
+    return answered;
+  };
+  const tries: boolean[] = [];
+  for (let i = 0; i < MAX_OPEN_ANSWERS + 1; i++) tries.push(await tryOnce());
+  expect(tries).toEqual([...Array(MAX_OPEN_ANSWERS).fill(true), false]);
+  old.pairing.dispose();
+});
+
+it("answers a second new PC after the first one is done, whatever its old files look like", async () => {
+  const { root } = await pc();
+  const folder = path.join(root, "OneDrive");
+  const dir = path.join(folder, "Tavora", "pairing");
+  await mkdir(path.join(folder, "Tavora"), { recursive: true });
+  const old = await oldPc(new FolderPairing(folder, "Desk"));
+  const pairOnce = async (name: string, end: "add" | "cancel") => {
+    const fresh = await onPc(new FolderPairing(folder, name));
+    await fresh.pairing.start();
+    const id = (await readdir(dir)).find((file) => file.endsWith(".request.json"))!.split(".")[0]!;
+    await old.pairing.lookForRequests();
+    await fresh.pairing.lookForAnswer();
+    await old.pairing.lookForRequests();
+    expect(old.pairing.view().approve).toMatchObject({ name, code: fresh.pairing.view().asking!.code });
+    if (end === "add") {
+      await old.pairing.decide(id, true);
+      await fresh.pairing.lookForAnswer();
+      await fresh.pairing.confirm();
+    } else {
+      await fresh.pairing.cancel();
+      await old.pairing.lookForRequests();
+    }
+    fresh.pairing.dispose();
+    // Its request file comes back half there (a sync app bringing an old copy): it doesn't hold up the next PC.
+    await writeFile(path.join(dir, `${id}.request.json`), "{");
+  };
+  await pairOnce("Laptop", "add");
+  await pairOnce("Tablet", "cancel");
+  await pairOnce("Tower", "add");
+  old.pairing.dispose();
+});
+
+it("doesn't answer when it can't note the answer down", async () => {
+  const { userData } = await pc();
+  // A folder where the file should be: it can't be written.
+  const answersFile = path.join(userData, "pairing-answers.json");
+  await mkdir(path.join(answersFile, "taken"), { recursive: true });
+  const { transport, answered } = carrier(async () => true);
+  const old = await oldPc(transport, { answersFile });
+  await look(old.pairing, 3);
+  expect(answered).toEqual([]);
+  old.pairing.dispose();
 });

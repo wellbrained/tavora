@@ -33,9 +33,9 @@ const ASK_EVERY_MS = { service: 3_000, folder: 5_000 };
 /** How often a PC with the key looks for a PC that asks. */
 const WATCH_EVERY_MS = 15_000;
 /**
- * Answers that end with neither Add nor No count for an hour; with this many, the PC answers no more until one is an
- * hour old. Otherwise whoever carries the messages could ask again and again, without anyone seeing a question, until
- * the code this PC would show matches the one a new PC shows.
+ * Answers that don't end with Add (No, no click, an error, a request that went away) count for an hour; with this many,
+ * the PC answers no more until one is an hour old. Otherwise whoever carries the messages could ask again and again,
+ * without anyone seeing a question or after a No, until the code this PC would show matches the one a new PC shows.
  */
 export const MAX_OPEN_ANSWERS = 3;
 export const OPEN_ANSWER_MS = 60 * 60_000;
@@ -127,7 +127,7 @@ interface Answering {
   code: string | null;
 }
 
-/** An answer that may end with neither Add nor No: the request it went to (`via:id`; none for one kept from before a restart), and when. */
+/** An answer that may not end with Add: the request it went to (`via:id`; none for one kept from before a restart), and when. */
 interface OpenAnswer {
   request: string | null;
   at: number;
@@ -143,11 +143,13 @@ export class Pairing {
   private answering: Answering | null = null;
   /** Requests this PC's user turned down or that didn't check out: not answered again. */
   private refused = new Set<string>();
-  /** When this PC answered each request that ended (or may end) with neither Add nor No; see MAX_OPEN_ANSWERS. */
+  /** When this PC answered each request that didn't (or may not) end with Add; see MAX_OPEN_ANSWERS. */
   private openAnswers: OpenAnswer[] | null = null;
   /** How often this PC said it answers no more for now (the page shows a notice for each), and when it last did. */
   private tooManyTries = 0;
   private tooManyAt = -Infinity;
+  /** The last save of the open answers, which the next one waits for. */
+  private saving: Promise<void> = Promise.resolve();
   private askTimer: ReturnType<typeof setTimeout> | undefined;
   private watchTimer: ReturnType<typeof setInterval> | undefined;
   private followTimer: ReturnType<typeof setTimeout> | undefined;
@@ -440,7 +442,8 @@ export class Pairing {
         const key = newPairingKey();
         // Counted before the key goes out: whatever comes back (another PC was first, an error), the other side has
         // seen it, and the request isn't answered again.
-        await this.countAnswer(transport, request.id);
+        // Not saved, a restart would forget it: then the key doesn't go out.
+        if (!(await this.countAnswer(transport, request.id))) return;
         let answered = false;
         try {
           answered = await transport.answer(request.id, b64(key.publicKey));
@@ -489,19 +492,42 @@ export class Pairing {
     return (this.openAnswers ??= open);
   }
 
-  /** One more answer that may end with neither Add nor No; a request counts once. */
-  private async countAnswer(transport: PairingTransport, id: string): Promise<void> {
+  /** One more answer that may not end with Add; a request counts once. False when it couldn't be saved. */
+  private async countAnswer(transport: PairingTransport, id: string): Promise<boolean> {
     const open = await this.loadOpenAnswers();
     const request = `${transport.via}:${id}`;
     const now = this.now();
     this.openAnswers = [...open.filter((answer) => now - answer.at < OPEN_ANSWER_MS && answer.request !== request), { request, at: now }];
+    return this.saveOpenAnswers();
+  }
+
+  /** The user clicked Add and the key went out: that answer no longer counts. */
+  private async uncountAnswer(transport: PairingTransport, id: string): Promise<void> {
+    const request = `${transport.via}:${id}`;
+    const open = await this.loadOpenAnswers();
+    if (!open.some((answer) => answer.request === request)) return;
+    this.openAnswers = open.filter((answer) => answer.request !== request);
     await this.saveOpenAnswers();
   }
 
-  private async saveOpenAnswers(): Promise<void> {
+  /**
+   * Writes the answers as they are when its turn comes, one save after another, so an older list never lands last.
+   * False when it couldn't be written.
+   */
+  private saveOpenAnswers(): Promise<boolean> {
     const file = this.options.answersFile;
-    if (!file || !this.openAnswers) return;
-    await writeFileAtomic(file, JSON.stringify({ v: 1, at: this.openAnswers.map((answer) => answer.at) })).catch((error: unknown) => this.options.log?.(`pairing: ${error instanceof Error ? error.message : String(error)}`));
+    if (!file) return Promise.resolve(true);
+    const saved = this.saving.then(async () => {
+      try {
+        await writeFileAtomic(file, JSON.stringify({ v: 1, at: (this.openAnswers ?? []).map((answer) => answer.at) }));
+        return true;
+      } catch (error) {
+        this.options.log?.(`pairing: ${error instanceof Error ? error.message : String(error)}`);
+        return false;
+      }
+    });
+    this.saving = saved.then(() => undefined);
+    return saved;
   }
 
   /** A PC asks while this one answers no more for now: the page says so, now and then. */
@@ -528,13 +554,6 @@ export class Pairing {
     if (!answering || answering.id !== id || !answering.reveal) throw new UserError("pairing.error.gone");
     this.answering = null;
     this.refused.add(id);
-    // The user saw the question and clicked: no longer an open answer.
-    const request = `${answering.transport.via}:${id}`;
-    const open = await this.loadOpenAnswers();
-    if (open.some((answer) => answer.request === request)) {
-      this.openAnswers = open.filter((answer) => answer.request !== request);
-      await this.saveOpenAnswers();
-    }
     this.changed();
     const key = this.hasKey ? this.key() : null;
     try {
@@ -557,6 +576,8 @@ export class Pairing {
       throw toUserError(error);
     }
     if (allow && !key) throw new UserError("pairing.error.gone");
+    // Only an Add takes an answer off the count: after a No it stays, or every wrong code shown would be a free try.
+    if (allow) await this.uncountAnswer(answering.transport, id);
   }
 }
 
@@ -718,11 +739,14 @@ export class FolderPairing implements PairingTransport {
       set.add(match[2] as Step);
       steps.set(match[1]!, set);
     }
+    // A request this PC answered whose files are all gone is done with.
+    for (const id of this.answered.keys()) if (!steps.has(id)) this.answered.delete(id);
     let found: PairingRequest | null = null;
     for (const [id, have] of steps) {
       const own = id === this.ownId;
       if (!have.has("request")) {
-        // Its request is gone: what's left is cleaned up once it is old.
+        // Its request is gone: done with it here too, and what's left is cleaned up once it is old.
+        this.answered.delete(id);
         if (!own) await this.removeIfOld(id);
         continue;
       }
@@ -747,6 +771,7 @@ export class FolderPairing implements PairingTransport {
       const mine = answer && answer.by === this.answered.get(id);
       // Answered by another PC: not for this one. An answer that isn't readable yet is someone's too, unless this PC
       // answered: then the request comes without it, and is looked at again.
+      if (!own && answer && !mine) this.answered.delete(id);
       if (!own && have.has("answer") && !mine && (answer || !this.answered.has(id))) continue;
       const reveal = have.has("reveal") ? await this.readStep(id, "reveal") : null;
       const key = own && have.has("key") ? await this.readStep(id, "key") : null;
@@ -790,6 +815,8 @@ export class FolderPairing implements PairingTransport {
     // Any answer there, readable yet or not, is another PC's.
     if (await stat(this.file(id, "answer")).catch(() => null)) return false;
     const by = randomBytes(8).toString("hex");
+    // One request at a time: the one answered before is done with.
+    this.answered.clear();
     this.answered.set(id, by);
     await this.write(id, "answer", { by, name: this.name, publicKey });
     return true;
@@ -801,6 +828,7 @@ export class FolderPairing implements PairingTransport {
 
   async sendKey(id: string, sealed: string): Promise<void> {
     await this.write(id, "key", { sealed });
+    this.answered.delete(id);
   }
 
   async end(id: string, declined: boolean): Promise<void> {
