@@ -435,8 +435,8 @@ export async function dropOldCopies(userData: string, moduleId: string): Promise
  * One previous copy, at start. It comes back only as what it was: the copy the records still name, or an unsigned local
  * module (which never has a record) whose update this Tavora marked as on its way. A signed copy no record names belongs
  * to a module that was removed: as an unsigned folder it would load past the signature and block checks, so it goes.
- * Records that can't be trusted (`known` false) decide nothing: the copy stays and its panels wait. A marked copy that
- * can't be verified, or an unsigned one from an older Tavora, doesn't come back, and its files stay as `left-*`. With a
+ * Records that can't be trusted (`known` false) decide nothing: the copy stays and its panels wait. A copy that can't be
+ * verified, marked or not, or an unsigned one from an older Tavora, doesn't come back, and its files stay as `left-*`. With a
  * new copy in place, the new one stays when it is what the records name; when they still name the old one, the update
  * never finished and the old one goes back. What is held throws: this may be the module's only copy.
  */
@@ -457,7 +457,8 @@ async function recoverOldCopy(id: string, old: string, target: string, record: C
       log(`an update of ${id} was cut off; its previous copy is back`);
       return;
     }
-    if (read === null && updating) return leave();
+    // A link or a folder over the limits can't be verified, but it may be the only copy: it is never deleted here.
+    if (read === null) return leave();
     if (!known && !plainLocal) throw new Error("its records can't be trusted");
     if (updating || plainLocal) return leave();
     log(`a previous copy of ${id} isn't what its records name, so it doesn't come back`);

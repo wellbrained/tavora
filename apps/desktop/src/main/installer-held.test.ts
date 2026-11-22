@@ -220,6 +220,20 @@ describe("a marked copy that can't be verified (D10)", () => {
   });
 });
 
+describe("an unmarked copy that can't be verified, with its module folder gone", () => {
+  it("moves to left-*, as it may be the only copy", async () => {
+    const old = await put(path.join(staging, "old-1"), files("1.0.0"));
+    await writeFile(path.join(userData, "module-owners.json"), JSON.stringify({ version: 1, folders: {} }));
+    await mkdir(path.join(userData, "elsewhere"));
+    await symlink(path.join(userData, "elsewhere"), path.join(old, "link"), "junction");
+    await recover();
+    expect(await there(target(userModules, ID))).toBe(false);
+    const left = (await readdir(staging)).filter((name) => name.startsWith("left-"));
+    expect(left).toHaveLength(1);
+    expect(await page(path.join(staging, left[0]!))).toBe("<p>1.0.0</p>");
+  });
+});
+
 describe("an install whose rollback fails too (D11)", () => {
   it("leaves the module waiting, with its panels", async () => {
     await installZip(await zip(files("1.0.0")), { userData, userModules, tavoraVersion: "0.17.0", modules: new Map() });
