@@ -36,7 +36,7 @@ export class ModuleBoards {
   }
 
   /** The profile card's ranks: the listed modules with boards the user agreed to be shown on (profile-ranks.ts). */
-  ranks(): Promise<ProfileRanksView> {
+  async ranks(): Promise<ProfileRanksView> {
     const language = this.options.language();
     const sources: ProfileRankSource[] = [...this.options.installed.modules.values()]
       .filter((module) => this.listed(module) && (module.manifest.leaderboards?.boards.length ?? 0) > 0)

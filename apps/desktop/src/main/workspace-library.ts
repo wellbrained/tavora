@@ -118,18 +118,18 @@ export class WorkspaceLibrary {
    * Moves workspaces to Trash and answers with the token that takes them back: out of Trash into their places. `strict`:
    * every one must be there; else those already gone are skipped, so a list the screen showed a moment ago still works.
    * Undo opens a workspace again only when it was open and the user is still on the Home it left them on; one switched to
-   * meanwhile stays open. The open one is read after the trash, as host.ts always did: trashing clears the library's last
-   * workspace, which is what host.ts shows, so today the screen stays and Undo brings it back as the last one instead.
+   * meanwhile stays open. An open one is left for Home before it is trashed: trashing clears the library's last workspace,
+   * which is what the screen shows, and leaving it is what ends its panels and questions.
    */
   trash(ids: readonly string[], strict: boolean): string {
     const { library, saveLibrary, screen } = this.options;
     const live = strict ? [...ids] : ids.filter((id) => isLive(library, id));
     const places = live.map((id) => placeOf(library, id));
-    const now = new Date();
-    for (const id of live) trashWorkspace(library, id, now);
     const shown = screen.shown();
     const wasOpen = shown !== null && live.includes(shown) ? shown : null;
     if (wasOpen) screen.goHome();
+    const now = new Date();
+    for (const id of live) trashWorkspace(library, id, now);
     saveLibrary();
     return this.options.undos.keep(() => {
       const back = untrashWorkspaces(library, places);
