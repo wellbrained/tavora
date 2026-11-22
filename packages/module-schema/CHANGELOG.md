@@ -4,7 +4,7 @@ What changed in `@tavora/module-schema`, newest first.
 
 ## 0.2.2
 
-- A panel type may set `withGame: true`: with the user's yes, Tavora runs that panel out of sight while one of the module's games runs. At most one type per module, only for a module whose `games` names its games, and it needs a `minTavora` newer than `LAST_TAVORA_WITHOUT_WITH_GAME_PANELS` (0.24.128), except Tavora's own modules. `panelTypes` passes it on (`ResolvedPanelType.withGame`), and `withGamePanelType(manifest)` names that type. The JSON Schema knows the field.
+- A panel type may set `withGame: true`: with the user's yes, Tavora runs that panel out of sight while one of the module's games runs. At most one type per module, only for a module whose `games` names its games, and it needs a `minTavora` newer than `LAST_TAVORA_WITHOUT_WITH_GAME_PANELS` (0.24.130). Tavora's built-in modules (`tavora.*`) can't set it. `panelTypes` passes it on (`ResolvedPanelType.withGame`), and `withGamePanelType(manifest)` names that type. The JSON Schema knows the field.
 
 ## 0.2.1
 

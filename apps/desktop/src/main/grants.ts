@@ -34,12 +34,18 @@ export interface Grant extends Permissions {
   version: string;
   /** When the user last granted something to it. */
   grantedAt: string;
+  /**
+   * With `withGame` true: the games (the manifest's `games`) the yes was for. A version made for a game not in it is
+   * asked again, as when it first brought `withGame`.
+   */
+  withGameFor?: string[];
 }
 
 /** The module a grant is for: who publishes it and what it asks for. */
 export interface GrantSubject {
   owner: string;
-  manifest: Pick<ModuleManifest, "id" | "version" | "permissions" | "panels">;
+  /** `games`: the games it is made for; left out, none (only test subjects and modules that don't run with a game). */
+  manifest: Pick<ModuleManifest, "id" | "version" | "permissions" | "panels"> & { games?: readonly string[] };
 }
 
 type GrantFile = { version: number; owners: Record<string, Record<string, Grant>> };
@@ -61,9 +67,16 @@ export function asksWithGame(manifest: Pick<ModuleManifest, "panels">): boolean 
   return withGamePanelType(manifest) !== null;
 }
 
+/** Whether a stored yes to running with the game covers every game the manifest is made for now. */
+function withGameCovers(manifest: GrantSubject["manifest"], grant: Grant | undefined): boolean {
+  if (grant?.withGame !== true) return false;
+  const covered = new Set(grant.withGameFor ?? []);
+  return (manifest.games ?? []).every((game) => covered.has(game));
+}
+
 function sanitizeGrant(value: unknown): Grant | null {
   if (typeof value !== "object" || value === null) return null;
-  const { version, grantedAt, network, connectors = [], folders = [], withGame } = value as Record<string, unknown>;
+  const { version, grantedAt, network, connectors = [], folders = [], withGame, withGameFor } = value as Record<string, unknown>;
   if (typeof version !== "string" || typeof grantedAt !== "string" || !Array.isArray(network) || !Array.isArray(connectors) || !Array.isArray(folders)) return null;
   return {
     version,
@@ -73,6 +86,7 @@ function sanitizeGrant(value: unknown): Grant | null {
     folders: [...new Set(folders.filter((key): key is string => parseFolderKey(key) !== null))],
     // Anything but true or false is as if never answered.
     ...(typeof withGame === "boolean" ? { withGame } : {}),
+    ...(withGame === true && Array.isArray(withGameFor) ? { withGameFor: [...new Set(withGameFor.filter((game): game is string => typeof game === "string"))] } : {}),
   };
 }
 
@@ -106,8 +120,8 @@ export function missingPermissions(manifest: GrantSubject["manifest"], grant: Gr
     network: ask.network.filter((host) => !hosts.has(host)),
     connectors: ask.connectors.filter((name) => !connectors.has(name)),
     folders: ask.folders.filter((key) => !folders.has(key)),
-    // Switched off in Settings is an answer too.
-    ...(asksWithGame(manifest) && grant?.withGame === undefined ? { withGame: true } : {}),
+    // Switched off in Settings is an answer too; a yes for other games than the module is made for now is not.
+    ...(asksWithGame(manifest) && (grant?.withGame === undefined || (grant.withGame === true && !withGameCovers(manifest, grant))) ? { withGame: true } : {}),
   };
 }
 
@@ -122,7 +136,7 @@ export function effectivePermissions(manifest: GrantSubject["manifest"], grant: 
     network: ask.network.filter((host) => hosts.has(host)),
     connectors: ask.connectors.filter((name) => connectors.has(name)),
     folders: ask.folders.filter((key) => folders.has(key)),
-    ...(ask.withGame && grant.withGame === true ? { withGame: true } : {}),
+    ...(ask.withGame && withGameCovers(manifest, grant) ? { withGame: true } : {}),
   };
 }
 
@@ -166,10 +180,14 @@ export class GrantStore {
     const network = [...new Set([...(previous?.network ?? []), ...what.network.filter((host) => ask.network.includes(host))])];
     const connectors = [...new Set([...(previous?.connectors ?? []), ...what.connectors.filter((name) => ask.connectors.includes(name))])];
     const folders = [...new Set([...(previous?.folders ?? []), ...what.folders.filter((key) => ask.folders.includes(key))])];
-    // Granted when asked and shown; else what the user answered before stays (a switch turned off too).
-    const withGame = what.withGame === true && ask.withGame === true ? true : previous?.withGame;
+    // Granted when asked and shown, for the games it is made for now; else what the user answered before stays (a
+    // switch turned off too).
+    const answer: Pick<Grant, "withGame" | "withGameFor"> =
+      what.withGame === true && ask.withGame === true
+        ? { withGame: true, withGameFor: [...(manifest.games ?? [])] }
+        : { ...(previous?.withGame !== undefined ? { withGame: previous.withGame } : {}), ...(previous?.withGameFor ? { withGameFor: previous.withGameFor } : {}) };
     if (!this.owners.has(owner)) this.owners.set(owner, new Map());
-    this.owners.get(owner)!.set(manifest.id, { version: manifest.version, grantedAt: this.now().toISOString(), network, connectors, folders, ...(withGame !== undefined ? { withGame } : {}) });
+    this.owners.get(owner)!.set(manifest.id, { version: manifest.version, grantedAt: this.now().toISOString(), network, connectors, folders, ...answer });
     return this.save();
   }
 
@@ -182,10 +200,25 @@ export class GrantStore {
     if (!asksWithGame(manifest)) return Promise.resolve();
     const previous = this.get(owner, manifest.id);
     const now = this.now().toISOString();
-    const base = previous ?? { version: manifest.version, grantedAt: now, network: [], connectors: [], folders: [] };
+    const { withGameFor: _games, ...base } = previous ?? { version: manifest.version, grantedAt: now, network: [], connectors: [], folders: [] };
     if (!this.owners.has(owner)) this.owners.set(owner, new Map());
-    this.owners.get(owner)!.set(manifest.id, { ...base, ...(on ? { grantedAt: now } : {}), withGame: on });
+    this.owners.get(owner)!.set(manifest.id, { ...base, ...(on ? { grantedAt: now, withGame: true, withGameFor: [...(manifest.games ?? [])] } : { withGame: false }) });
     return this.save();
+  }
+
+  /**
+   * A version that no longer asks to run with its game forgets the answer, yes or off: a later version that brings it
+   * back asks again, however it was installed (the catalog's updates ask as well, catalog-updates.ts newAsks).
+   * Resolves true when there was an answer to forget.
+   */
+  async forgetWithGame(subject: GrantSubject): Promise<boolean> {
+    const { owner, manifest } = subject;
+    const previous = this.get(owner, manifest.id);
+    if (asksWithGame(manifest) || previous?.withGame === undefined) return false;
+    const { withGame: _answer, withGameFor: _games, ...rest } = previous;
+    this.owners.get(owner)!.set(manifest.id, rest);
+    await this.save();
+    return true;
   }
 
   /** Takes back some of a module's grant, or all of it when `what` is left out. Takes effect at the next call. */
@@ -199,9 +232,11 @@ export class GrantStore {
     const connectors = previous.connectors.filter((name) => !takenConnectors.has(name));
     const folders = previous.folders.filter((key) => !takenFolders.has(key));
     // Taken back on its own, running with the game stays answered (off), so it isn't asked again.
-    const withGame = what?.withGame === true && previous.withGame !== undefined ? false : previous.withGame;
+    const off = what?.withGame === true && previous.withGame !== undefined;
+    const withGame = off ? false : previous.withGame;
     if (what && (network.length + connectors.length + folders.length > 0 || withGame !== undefined)) {
-      this.owners.get(owner)!.set(moduleId, { ...previous, network, connectors, folders, ...(withGame !== undefined ? { withGame } : {}) });
+      const { withGameFor, ...kept } = previous;
+      this.owners.get(owner)!.set(moduleId, { ...kept, network, connectors, folders, ...(withGame !== undefined ? { withGame } : {}), ...(!off && withGameFor ? { withGameFor } : {}) });
     }
     else this.owners.get(owner)!.delete(moduleId);
     if (this.owners.get(owner)!.size === 0) this.owners.delete(owner);

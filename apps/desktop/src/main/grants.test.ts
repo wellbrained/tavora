@@ -219,6 +219,34 @@ describe("running while its game runs", () => {
     expect(grants.get(KEY, "community.someone.kings")).toBeUndefined();
   });
 
+  it("asks again when the module is made for a game the yes wasn't for", async () => {
+    const { grants } = await store();
+    const forGames = (games: string[], version = "1.0.0"): GrantSubject => ({ owner: KEY, manifest: { ...withGame(version).manifest, games } });
+    await grants.grant(forGames(["9-kings"]));
+    expect(grants.get(KEY, "community.someone.kings")?.withGameFor).toEqual(["9-kings"]);
+    expect(grants.allowed(forGames(["9-kings"], "1.1.0"))).toMatchObject({ withGame: true });
+    // An update made for another game too: not allowed until asked again.
+    expect(grants.allowed(forGames(["9-kings", "other"], "1.2.0")).withGame).toBeUndefined();
+    expect(grants.missing(forGames(["9-kings", "other"], "1.2.0"))).toMatchObject({ withGame: true });
+    await grants.grant(forGames(["9-kings", "other"], "1.2.0"));
+    expect(grants.allowed(forGames(["9-kings", "other"], "1.2.0"))).toMatchObject({ withGame: true });
+    // Switched on in Settings: for the games it is made for then.
+    await grants.setWithGame(forGames(["9-kings", "other"], "1.2.0"), false);
+    await grants.setWithGame(forGames(["third"], "1.3.0"), true);
+    expect(grants.get(KEY, "community.someone.kings")?.withGameFor).toEqual(["third"]);
+  });
+
+  it("forgets the answer when a version drops it, so bringing it back asks again however it is installed", async () => {
+    const { grants } = await store();
+    await grants.grant(withGame("1.0.0", true, ["api.example.com"]));
+    expect(await grants.forgetWithGame(withGame("1.0.0", true, ["api.example.com"]))).toBe(false);
+    expect(await grants.forgetWithGame(withGame("1.1.0", false, ["api.example.com"]))).toBe(true);
+    expect(grants.get(KEY, "community.someone.kings")).toMatchObject({ network: ["api.example.com"] });
+    expect(grants.get(KEY, "community.someone.kings")?.withGame).toBeUndefined();
+    expect(grants.missing(withGame("1.2.0", true, ["api.example.com"]))).toMatchObject({ withGame: true });
+    expect(await grants.forgetWithGame(withGame("1.1.0", false, ["api.example.com"]))).toBe(false);
+  });
+
   it("reads grants from before it existed, and drops a value that is no answer", () => {
     const read = sanitizeGrants({ owners: { [KEY]: { "community.a.b": { version: "1.0.0", grantedAt: "x", network: [] }, "community.c.d": { version: "1.0.0", grantedAt: "x", network: [], withGame: "yes" } } } });
     expect(read.get(KEY)?.get("community.a.b")).toEqual({ version: "1.0.0", grantedAt: "x", network: [], connectors: [], folders: [] });

@@ -248,7 +248,7 @@ import { initialBounds, MIN_SIZE, type WindowState } from "./window-state";
 import { layoutKey, OpenTimes, PanelCover } from "./panel-cover";
 import { BrowserPanelView, ModulePanelView } from "./panel-view-adapters";
 import { clampRect, PanelViews, type PanelViewAdapter } from "./panel-views";
-import { withGameInstanceId, withGamePlan, WithGameRunner, type WithGameModule, type WithGameRun } from "./with-game";
+import { withGameInstanceId, WithGamePanels, type WithGameModule } from "./with-game";
 
 /**
  * How long a workspace's panels may keep each other waiting when it opens; past it, every panel shows. Each page gives up on
@@ -567,18 +567,28 @@ export class Host {
     return this.installed.catalog;
   }
   private running: string[] = [];
-  /** The library games running now as the watcher last said, whatever "When a game starts" says: panels running with their game follow it. */
-  private gamesNow: ReadonlySet<string> = new Set();
-  /** The hidden panels that run with their game (with-game.ts), by id: never placed in a layout, made again each run. */
-  private readonly withGameRecords = new Map<string, InstanceRecord>();
-  /** The panels running with their game now; starts and stops them (syncWithGame). */
-  private readonly withGame = new WithGameRunner({
-    start: (run) => this.startWithGame(run),
-    stop: (run) => this.stopWithGame(run),
-    restart: (run) => {
-      this.panels.release(run.instanceId);
-      this.startWithGame(run);
+  /** The panels running with their game (with-game.ts): they follow the games running, whatever "When a game starts" says. */
+  private readonly withGame = new WithGamePanels({
+    ready: () => this.panelPages.step === "running" && !this.windowClosed,
+    isGameWorkspace: (id) => isLive(this.library, id) && this.library.workspaces[id]!.kind === "game",
+    modules: () => this.withGameModules(),
+    fits: (module, workspaceId) => {
+      const installed = this.modules.get(module.moduleId);
+      return installed !== undefined && this.supportsWorkspace(installed, workspaceId);
     },
+    records: (workspaceId) => this.records(workspaceId),
+    shownWorkspaceId: () => this.workspace?.id ?? null,
+    panels: () => this.panels,
+    createView: (record, workspaceId) => {
+      const entry = this.library.workspaces[workspaceId];
+      if (entry && !entry.trashedAt) this.createView(record, { id: entry.id, displayName: entry.name, kind: entry.kind });
+    },
+    held: (moduleId, workspaceId) => this.purging.has(`${moduleId}@${workspaceId}`),
+    moduleName: (moduleId) => {
+      const module = this.modules.get(moduleId);
+      return module ? this.shown(module.manifest).name : null;
+    },
+    changed: () => this.pushStateSoon(),
   });
   /** The running games not in the library, the one started last at the end (game-watch.ts). */
   private unlistedRunning: readonly UnlistedGame[] = [];
@@ -688,6 +698,8 @@ export class Host {
     this.safetyLists = prepared.safetyLists;
     this.official = prepared.official;
     this.grants = prepared.grants;
+    // A version that dropped running with its game (installed while Tavora was closed, say) forgets the answer.
+    void this.forgetDroppedWithGame();
     this.connection = prepared.connection;
     this.systemInfo = prepared.systemInfo;
     this.openTimes = prepared.openTimes;
@@ -1048,7 +1060,8 @@ export class Host {
     // The hidden panels that run with their game keep what they saved, for every game workspace and module that has one.
     for (const module of host.modules.values()) {
       if (!withGamePanelType(module.manifest)) continue;
-      for (const entry of liveWorkspaces(library)) if (entry.kind === "game") livePanels.add(withGameInstanceId(entry.id, module.manifest.id, module.owner));
+      // Trashed game workspaces too: restoring one brings its panels back with what they saved.
+      for (const entry of Object.values(library.workspaces)) if (entry.kind === "game") livePanels.add(withGameInstanceId(entry.id, module.manifest.id, module.owner));
     }
     const stalePanels = (await readdir(path.join(userData, "panel-state")).catch(() => [] as string[])).filter((name) => name.endsWith(".json") && !livePanels.has(name.slice(0, -".json".length))).map((name) => name.slice(0, -".json".length));
     const leftovers = { workspaces: new Set(orphaned.map((dir) => partitionWorkspace(dir)!)), panels: new Set(stalePanels) };
@@ -1243,7 +1256,9 @@ export class Host {
     this.workspaces.settlePanelTypes(panelTypesOf(modules));
     this.syncPanelTypes();
     if (restarted.size > 0) this.syncOverlayPanels();
-    // A module that came, went or changed may run with its game (or no longer): the watcher and those panels follow.
+    // A module that came, went or changed may run with its game (or no longer): the watcher and those panels follow. A
+    // version that dropped it forgets the answer first, so bringing it back asks again however it was installed.
+    await this.forgetDroppedWithGame();
     this.syncGameWatcher();
     this.syncWithGame();
     const moved = new Set([...modules].filter(([id, module]) => roots.has(id) && roots.get(id) !== module.root).map(([id]) => id));
@@ -2396,6 +2411,8 @@ export class Host {
       this.closeOverlayWindows();
       void this.gameOverlays.shutdown().catch((error: unknown) => console.error("[tavora]", error));
       void this.closePanelPages();
+      // Their pages are closing with the rest (closePanelPages waits for them); nothing runs with a game any more.
+      this.withGame.clear();
       onUnreadableFileKept(null);
       this.cover.dispose();
       this.toastView.dispose();
@@ -3925,8 +3942,7 @@ export class Host {
     // Game overlays forget the window of a game that stopped, whatever the switch below says.
     this.gameOverlays?.gamesRunning(running);
     // Panels that run with their game start and stop with it, whatever the switch below says.
-    this.gamesNow = new Set(running);
-    this.syncWithGame();
+    this.withGame.gamesRunning(running);
     // With "When a game starts" off the watcher only serves game overlays, which look at the window in front themselves.
     if (this.library.gameStart === "off") {
       this.running = [];
@@ -3973,7 +3989,7 @@ export class Host {
 
   /** Whether some module may run with its game, so the game watcher has to look even with game start and overlays off. */
   private withGameWanted(): boolean {
-    return this.withGameModules().length > 0;
+    return this.withGame.wanted();
   }
 
   /**
@@ -3982,57 +3998,18 @@ export class Host {
    * the modules change, and with every state push (a layout changed: a panel of that type added or closed there).
    */
   private syncWithGame(): void {
-    if (this.panelPages.step !== "running" || this.windowClosed) return;
-    const running = new Set([...this.gamesNow].filter((id) => isLive(this.library, id) && this.library.workspaces[id]!.kind === "game"));
-    if (running.size === 0 && this.withGame.all().length === 0) return;
-    const plan = withGamePlan({
-      running,
-      modules: this.withGameModules(),
-      fits: (module, workspaceId) => {
-        const installed = this.modules.get(module.moduleId);
-        return installed !== undefined && this.supportsWorkspace(installed, workspaceId);
-      },
-      records: (workspaceId) => this.records(workspaceId),
-    });
-    this.withGame.sync(running, plan);
+    this.withGame.sync();
   }
 
-  /** The record a run's panel goes by: the layout's own, or the hidden one (made once per run of Tavora). */
-  private withGameRecord(run: WithGameRun): InstanceRecord | undefined {
-    if (run.inLayout) return this.records(run.workspaceId).find((record) => record.instanceId === run.instanceId);
-    let record = this.withGameRecords.get(run.instanceId);
-    if (!record) {
-      record = { instanceId: run.instanceId, moduleId: run.moduleId, panelType: run.panelType, owner: run.owner };
-      this.withGameRecords.set(run.instanceId, record);
+  /**
+   * Installed modules whose version no longer asks to run with their game forget the answer (grants.ts forgetWithGame),
+   * at every start and module reload. Nothing shown changes: a module that doesn't ask has nothing to answer.
+   */
+  private async forgetDroppedWithGame(): Promise<void> {
+    for (const module of this.modules.values()) {
+      if (module.builtIn) continue;
+      await this.grants.forgetWithGame(module).catch((error: unknown) => console.error("[tavora] forgetting a grant failed", error));
     }
-    return record;
-  }
-
-  /** Starts a run's panel, hidden and kept running whatever workspace is shown. A panel open already just stays. */
-  private startWithGame(run: WithGameRun): void {
-    const entry = this.library.workspaces[run.workspaceId];
-    const record = this.withGameRecord(run);
-    if (!entry || entry.trashedAt || !record) return;
-    this.panels.keepRunning(run.instanceId, "game");
-    if (!this.panels.has(run.instanceId)) this.createView(record, { id: entry.id, displayName: entry.name, kind: entry.kind });
-    // Never placed: laid out here so it runs (a kept panel isn't paused for being out of sight).
-    this.panels.layOut(run.instanceId);
-    this.pushStateSoon();
-  }
-
-  /** Lets go of a run's panel: the hidden one goes; one of the layout stays while its workspace shows, it is over the game or the overlays keep it. */
-  private stopWithGame(run: WithGameRun): void {
-    this.panels.stopKeeping(run.instanceId, "game");
-    const shownHere = run.inLayout && this.workspace?.id === run.workspaceId && this.records(run.workspaceId).some((record) => record.instanceId === run.instanceId);
-    if (!shownHere && !this.panels.isLent(run.instanceId) && !this.panels.isKept(run.instanceId)) this.panels.release(run.instanceId);
-    if (!run.inLayout) this.withGameRecords.delete(run.instanceId);
-    this.pushStateSoon();
-  }
-
-  /** The panel runs now only with its game, out of sight: the hidden one, or one of a workspace not shown (not over the game). */
-  private runsOnlyWithGame(instanceId: string, workspaceId: string): boolean {
-    if (this.withGameRecords.has(instanceId)) return true;
-    return this.withGame.has(instanceId) && this.workspace?.id !== workspaceId && !this.panels.isLent(instanceId);
   }
 
   /** For a module running with its game, made for one game: that game's name in the library (the one opened last), for the consent dialog. */
@@ -4041,18 +4018,6 @@ export class Host {
     if (games.length !== 1 || !withGamePanelType(module.manifest)) return null;
     const entries = liveWorkspaces(this.library).filter((entry) => entry.kind === "game" && isForWorkspaceGame(games, entry));
     return entries.sort((a, b) => (b.lastOpenedAt ?? "").localeCompare(a.lastOpenedAt ?? ""))[0]?.name ?? null;
-  }
-
-  /** The names of the modules running with this game, for the running game's card in the rail. */
-  private withGameNames(workspaceId: string): string[] {
-    const names = this.withGame
-      .all()
-      .filter((run) => run.workspaceId === workspaceId)
-      .flatMap((run) => {
-        const module = this.modules.get(run.moduleId);
-        return module ? [this.shown(module.manifest).name] : [];
-      });
-    return [...new Set(names)];
   }
 
   /** Opens a workspace without bringing the window to the front, so the game keeps the focus. */
@@ -4411,7 +4376,7 @@ export class Host {
       launch: () => this.launchOf(record),
       mayWelcome: () => this.panels.takeWelcome(record.instanceId),
       // The hidden panel running with its game has no tab to name.
-      setContent: (content) => (this.withGameRecords.has(record.instanceId) ? undefined : this.setPanelContent(record, content)),
+      setContent: (content) => (this.withGame.isHidden(record.instanceId) ? undefined : this.setPanelContent(record, content)),
       openPanel: (type, content) => this.openRelatedPanel(record, type, content),
       openPanels: async (types) => this.openPanels(record, types),
       setLive: (state) => this.gameOverlays.setLive(record.instanceId, module.owner, state),
@@ -4449,11 +4414,11 @@ export class Host {
           measured = true;
           timings.record("panel-open", performance.now() - openedAt!);
         }
-        // Out of sight with its game, a crashed page starts again once (with-game.ts); nobody is told.
-        if (status === "crashed" && this.runsOnlyWithGame(record.instanceId, workspace.id)) setImmediate(() => this.withGame.crashed(record.instanceId));
+        // Out of sight with its game, a page that crashed or hangs starts again once (with-game.ts); nobody is told.
+        this.withGame.status(record.instanceId, workspace.id, record.moduleId, view, status);
         this.pushStateSoon();
       },
-      runsOnlyWithGame: () => this.runsOnlyWithGame(record.instanceId, workspace.id),
+      runsOnlyWithGame: () => this.withGame.runsOnlyWithGame(record.instanceId, workspace.id),
     });
     view.setWindowBehind(this.windowBehind);
     const adapter = new ModulePanelView(view);
@@ -5213,7 +5178,6 @@ export class Host {
 
   /** What the host UI shows. */
   private viewState(): HostViewState {
-    const runningGameId = this.running.filter((id) => id !== this.workspaceId && isLive(this.library, id)).at(-1) ?? null;
     const library = this.library;
     const current = this.workspace;
     const workspace = current ? this.workspaces.workspace(current.id) : emptyWorkspace();
@@ -5408,8 +5372,8 @@ export class Host {
       layoutEpoch: this.workspaces.epoch,
       opening: this.panels.opening,
       ...pending,
-      runningGameId,
-      runningWithGame: runningGameId ? this.withGameNames(runningGameId) : [],
+      runningGameId: this.running.filter((id) => id !== this.workspaceId && isLive(this.library, id)).at(-1) ?? null,
+      runningWithGame: this.withGame.lines(),
       workspaceRunning: this.workspaceId !== null && this.running.includes(this.workspaceId),
       unlistedGame: this.unlistedRunning.length ? unlistedToOffer(this.unlistedRunning, liveWorkspaces(this.library), this.running, this.library.gameStart) : null,
       pendingGameSwitch: pending.pendingGameSwitch && isLive(this.library, pending.pendingGameSwitch) ? pending.pendingGameSwitch : null,

@@ -320,7 +320,7 @@
           },
           "withGame": {
             "type": "boolean",
-            "description": "With the user's yes, Tavora runs this panel hidden while one of the module's games runs, for example to watch a save folder. At most one panel type, only for a module whose games names its games, and a minTavora newer than 0.24.128 (except Tavora's own modules); the TypeScript validator checks that."
+            "description": "With the user's yes, Tavora runs this panel hidden while one of the module's games runs, for example to watch a save folder. At most one panel type, only for a module whose games names its games, never for Tavora's built-in modules, and a minTavora newer than 0.24.130; the TypeScript validator checks that."
           }
         }
       }

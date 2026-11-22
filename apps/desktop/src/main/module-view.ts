@@ -244,6 +244,35 @@ async function countWrite(ses: Session, request: Request, serve: () => Promise<R
   }
 }
 
+/**
+ * The addresses a session answers that act on a press (the clipboard, the save and open dialogs). The press is the
+ * session's, shared by every page of the module in that workspace, so they are refused for a page that runs only with
+ * its game (outOfSight): it can't use a click made in a panel of the same module the user sees.
+ */
+const PRESS_PATHS: ReadonlySet<string> = new Set([CLIPBOARD_PATH, JSON_EXPORT_PATH, PICTURES_PATH, JSON_SAVE_PATH, JSON_OPEN_PATH, FILE_SAVE_PATH, FILE_OPEN_PATH]);
+
+/** The module pages that are open, by their page's id: their session, and whether they run only with their game now. */
+const outOfSight = new Map<number, { session: Session; now(): boolean }>();
+
+/**
+ * Whether a request to the session's own addresses is refused before it is answered (onBeforeRequest): one that acts on
+ * a press, from a page running only with its game. A request no page can be named for (a worker of no page) is refused
+ * while any page of the session runs that way.
+ */
+export function refusedOutOfSight(url: string, origin: string, webContentsId: number | undefined, ses: Session): boolean {
+  if (!url.startsWith(`${origin}/`)) return false;
+  let pathname: string;
+  try {
+    pathname = new URL(url).pathname;
+  } catch {
+    return false;
+  }
+  if (!PRESS_PATHS.has(pathname)) return false;
+  const page = webContentsId === undefined ? undefined : outOfSight.get(webContentsId);
+  if (page) return page.now();
+  return [...outOfSight.values()].some((other) => other.session === ses && other.now());
+}
+
 function gestureOf(ses: Session): SessionGesture {
   let gesture = sessionGestures.get(ses);
   if (!gesture) sessionGestures.set(ses, (gesture = { press: null }));
@@ -356,7 +385,7 @@ function moduleSession(module: InstalledModule, workspace: TavoraWorkspace, blob
   // network.fetch, which the main process makes (network.ts).
   ses.webRequest.onBeforeRequest((details, callback) => {
     const allowed = details.url.startsWith(`${origin}/`) || details.url.startsWith("devtools://");
-    callback({ cancel: !allowed });
+    callback({ cancel: !allowed || refusedOutOfSight(details.url, origin, details.webContentsId, ses) });
   });
   // Belt and braces: anything that bypasses webRequest still has to go
   // through a proxy that does not exist, loopback included.
@@ -507,6 +536,10 @@ export class ModuleView {
     const contents = this.view.webContents;
     const origin = moduleOrigin(module.manifest.id);
     const sameModule = (url: string) => url.startsWith(`${origin}/`);
+    // So the session can tell this page's requests from those of the module's other pages (refusedOutOfSight).
+    const pageId = contents.id;
+    outOfSight.set(pageId, { session: contents.session, now: () => this.options.runsOnlyWithGame?.() ?? false });
+    contents.on("destroyed", () => outOfSight.delete(pageId));
 
     // The page is a native view, so a click in it never reaches the dock: the host makes its group active instead.
     contents.on("focus", () => !this.disposed && this.options.onFocus?.());
@@ -591,7 +624,8 @@ export class ModuleView {
     });
     contents.on("render-process-gone", (_event, details) => {
       if (this.disposed) return this.closeNow();
-      recordCrash({ type: "module page", reason: details.reason, exitCode: details.exitCode, moduleId: module.manifest.id });
+      // Tavora's own stop (stop()) is no crash of the module's.
+      if (!this.stoppedByTavora) recordCrash({ type: "module page", reason: details.reason, exitCode: details.exitCode, moduleId: module.manifest.id });
       this.disconnect();
       this.setStatus("crashed");
     });
@@ -1580,8 +1614,18 @@ export class ModuleView {
     this.heartbeat = undefined;
   }
 
+  /**
+   * The page ended because Tavora stopped it (stop(): its storage was cleared, the user's Stop), not by crashing; true
+   * until it loads again. Panels running with their game don't count that as a crash (host.ts).
+   */
+  get stoppedByTavora(): boolean {
+    return this.stopping;
+  }
+  private stopping = false;
+
   /** Loads the page again; with `next`, from the module as installed now (an update may be in another folder). */
   reload(next?: InstalledModule): void {
+    this.stopping = false;
     if (next && next.manifest.id === this.options.module.manifest.id && next.owner === this.options.module.owner) {
       this.options.module = next;
       const page = this.contents();
@@ -1602,6 +1646,7 @@ export class ModuleView {
   stop(): Promise<void> {
     const contents = this.view.webContents;
     if (contents.isDestroyed()) return Promise.resolve();
+    this.stopping = true;
     const gone = new Promise<void>((resolve) => {
       contents.once("render-process-gone", () => resolve());
       contents.once("destroyed", () => resolve());

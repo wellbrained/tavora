@@ -46,8 +46,8 @@ export interface ModulePanelType {
   /**
    * With the user's yes (asked with the module's other permissions), Tavora runs this panel hidden while one of the
    * module's games runs, so it can keep track of the game (watch a save folder, say) without being open. At most one
-   * type per module, only for a module whose `games` names its games, and it needs a `minTavora` newer than
-   * LAST_TAVORA_WITHOUT_WITH_GAME_PANELS.
+   * type per module, only for a module whose `games` names its games, never a built-in module (`tavora.*`), and it
+   * needs a `minTavora` newer than LAST_TAVORA_WITHOUT_WITH_GAME_PANELS.
    */
   withGame?: boolean;
 }
@@ -680,7 +680,7 @@ export const LAST_TAVORA_WITHOUT_GAME_OVERLAYS = "0.20.50";
 /** The last Tavora that refuses a panel type's `inGame`; a manifest with it needs a newer `minTavora`. */
 export const LAST_TAVORA_WITHOUT_IN_GAME_PANELS = "0.21.2";
 /** The last Tavora that refuses a panel type's `withGame`; a manifest with it needs a newer `minTavora`. */
-export const LAST_TAVORA_WITHOUT_WITH_GAME_PANELS = "0.24.128";
+export const LAST_TAVORA_WITHOUT_WITH_GAME_PANELS = "0.24.130";
 /** The last Tavora that refuses `translations`; a manifest with them needs a newer `minTavora`. */
 export const LAST_TAVORA_WITHOUT_TRANSLATIONS = "0.20.12";
 /** The last Tavora that refuses `overlaySize`; a manifest with it needs a newer `minTavora`. */
@@ -837,11 +837,13 @@ interface PanelChecks {
   inGameAllowed: boolean;
   wideAllowed: boolean;
   withGameAllowed: boolean;
+  /** A built-in module (`tavora.*`): it can't run with a game. */
+  builtIn: boolean;
   /** `games` names specific games (not empty, which means any game). */
   forGames: boolean;
 }
 
-function checkPanels(panels: unknown, errors: string[], { inGameAllowed, wideAllowed, withGameAllowed, forGames }: PanelChecks): void {
+function checkPanels(panels: unknown, errors: string[], { inGameAllowed, wideAllowed, withGameAllowed, builtIn, forGames }: PanelChecks): void {
   if (!Array.isArray(panels) || panels.length === 0 || panels.length > MAX_PANEL_TYPES) {
     errors.push(`panels must be an array of 1 to ${MAX_PANEL_TYPES} panel types`);
     return;
@@ -875,7 +877,8 @@ function checkPanels(panels: unknown, errors: string[], { inGameAllowed, wideAll
     if (type.withGame !== undefined && typeof type.withGame !== "boolean") errors.push(`${at}.withGame must be true or false`);
     else if (type.withGame === true) {
       withGame++;
-      if (!forGames) errors.push(`${at}.withGame needs games to name the module's games: it runs while one of them runs`);
+      if (builtIn) errors.push(`${at}.withGame is not for Tavora's built-in modules`);
+      else if (!forGames) errors.push(`${at}.withGame needs games to name the module's games: it runs while one of them runs`);
       if (!withGameAllowed) errors.push(`${at}.withGame needs a minTavora newer than ${LAST_TAVORA_WITHOUT_WITH_GAME_PANELS}, because older Tavoras refuse it`);
     }
     const unknown = Object.keys(type).filter((key) => !PANEL_FIELDS.includes(key));
@@ -1107,6 +1110,7 @@ export function validateManifest(input: unknown): ManifestResult {
       inGameAllowed: officialId(input) || needsNewerTavora(minTavora, LAST_TAVORA_WITHOUT_IN_GAME_PANELS),
       wideAllowed,
       withGameAllowed: officialId(input) || needsNewerTavora(minTavora, LAST_TAVORA_WITHOUT_WITH_GAME_PANELS),
+      builtIn: officialId(input),
       forGames: Array.isArray(input.games) && input.games.length > 0,
     });
   }

@@ -93,7 +93,7 @@ describe("the consent dialog", () => {
     app.mount(root);
     await settle();
     expect(find("grant-with-game")?.textContent).toContain("Run while 9 Kings runs");
-    expect(find("grant-with-game")?.textContent).toContain("It keeps working out of sight while you play, for example to record your runs.");
+    expect(find("grant-with-game")?.textContent).toContain("It keeps working out of sight while you play.");
     find("grant-allow")!.click();
     await settle();
     expect(bridge.act.mock.calls[0]![0]).toEqual({ type: "grant-module", moduleId: KINGS, network: [], connectors: [], folders: [], withGame: true });

@@ -138,6 +138,17 @@ describe("newAsks", () => {
     expect(newAsks({ ...none, withGame: true }, { network: [] }, true)).toEqual(none);
     expect(newAsks({ ...none, withGame: true }, { network: [] }, false)).toEqual(none);
   });
+
+  it("asks again when the update runs with a game the installed version wasn't made for", () => {
+    const none = { network: [], connectors: [], folders: [] };
+    const asked = { ...none, withGame: true };
+    expect(newAsks(asked, { network: [] }, true, { before: ["9-kings"], after: ["9-kings", "9-kings-2"] })).toEqual(asked);
+    // Fewer games, or the same ones, ask nothing new.
+    expect(newAsks(asked, { network: [] }, true, { before: ["9-kings", "9-kings-2"], after: ["9-kings"] })).toEqual(none);
+    expect(newAsks(asked, { network: [] }, true, { before: ["9-kings"], after: ["9-kings"] })).toEqual(none);
+    // Without withGame a new game asks nothing for it.
+    expect(newAsks(none, { network: [] }, false, { before: ["9-kings"], after: ["other"] })).toEqual(none);
+  });
 });
 
 describe("notesSince", () => {

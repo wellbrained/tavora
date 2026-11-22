@@ -14,12 +14,16 @@ const made = vi.hoisted(() => ({
   shell: { showItemInFolder: vi.fn(), openPath: vi.fn(async () => "") },
   /** The last page's event handlers, by event name. */
   handlers: {} as Record<string, (...args: unknown[]) => void>,
+  /** The session's check of each request before it is answered (webRequest.onBeforeRequest). */
+  beforeRequest: undefined as ((details: { url: string; webContentsId?: number }, callback: (answer: { cancel: boolean }) => void) => void) | undefined,
+  /** The id the next page gets. */
+  nextId: 1,
 }));
 
 vi.mock("electron", () => {
   const session = () => ({
     protocol: { handle: (_scheme: string, serve: (request: Request) => Promise<Response>) => void (made.serve = serve) },
-    webRequest: { onBeforeRequest: () => undefined },
+    webRequest: { onBeforeRequest: (check: typeof made.beforeRequest) => void (made.beforeRequest = check) },
     setProxy: async () => undefined,
     setPermissionRequestHandler: () => undefined,
     setPermissionCheckHandler: () => undefined,
@@ -31,6 +35,7 @@ vi.mock("electron", () => {
   class WebContentsView {
     state = { background: "", visible: true, throttled: true, css: [] as string[], removed: [] as string[] };
     webContents = {
+      id: made.nextId++,
       session: ses,
       setWindowOpenHandler: () => undefined,
       setWebRTCIPHandlingPolicy: () => undefined,
@@ -82,7 +87,7 @@ vi.mock("electron", () => {
 
 const { ModuleView, allowedHere, ADD_DIALOG_MS, CONNECT_GAP_MS, GESTURE_MS, HEARTBEAT_MS } = await import("./module-view");
 const { STORAGE_CHECK_MS } = await import("./storage-guard");
-const { CLIPBOARD_PATH, JSON_EXPORT_PATH } = await import("@tavora/sdk/protocol");
+const { BLOB_PATH, CLIPBOARD_PATH, FILE_OPEN_PATH, FILE_SAVE_PATH, JSON_EXPORT_PATH, JSON_OPEN_PATH, JSON_SAVE_PATH, PICTURES_PATH } = await import("@tavora/sdk/protocol");
 
 function make(extra: Record<string, unknown> = {}) {
   const options = {
@@ -847,9 +852,10 @@ describe("guarded calls", () => {
   ];
 
   /** A connected System Monitor panel whose every guarded call ends in a spy of `spies`. */
-  function guarded() {
+  function guarded(extra: Record<string, unknown> = {}) {
     const spies = effects();
     const view = make({
+      ...extra,
       module: {
         owner: "official",
         root: "/nowhere",
@@ -924,6 +930,22 @@ describe("guarded calls", () => {
     nothingDone(spies);
   });
 
+  it.each(ROWS.map((row) => [row.name, row] as const))("%s is refused while the panel runs only with its game, even after a press, and does nothing", async (_name, row) => {
+    const told = vi.fn();
+    const { view, context, spies } = guarded({ runsOnlyWithGame: () => true, onNeedsTavora: told });
+    view.noteGesture();
+    await expect(row.call(context)).rejects.toMatchObject({ code: "PERMISSION_DENIED", message: expect.stringContaining("runs with its game") });
+    nothingDone(spies);
+    // Nobody is told.
+    expect(told).not.toHaveBeenCalled();
+  });
+
+  it("the dialog the pass of a panel just added would open is refused too while it runs only with its game", async () => {
+    const { context, spies } = guarded({ runsOnlyWithGame: () => true, launch: () => ({ reason: "added" }) });
+    await expect(context.setDialog(true, "medium")).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+    expect(spies.setDialog).not.toHaveBeenCalled();
+  });
+
   it("a fresh press gets each call past its check, which uses the press up", async () => {
     for (const row of ROWS) {
       const { view, context } = guarded();
@@ -943,6 +965,71 @@ describe("guarded calls", () => {
   it("cover every call module-view.ts refuses over the game", () => {
     const refused = [...source("module-view.ts").matchAll(/\brefuseOverGame\(\s*["'`]([^"'`]+)["'`]\)/g)].map((match) => match[1]!);
     expect([...new Set(refused)].sort()).toEqual(ROWS.filter((row) => row.overGame).map((row) => row.name).sort());
+  });
+});
+
+describe("a page running only with its game", () => {
+  const ORIGIN = "tavora-module://tavora.todos";
+  const PRESS_ADDRESSES = [CLIPBOARD_PATH, JSON_EXPORT_PATH, PICTURES_PATH, JSON_SAVE_PATH, JSON_OPEN_PATH, FILE_SAVE_PATH, FILE_OPEN_PATH];
+  /** Whether the session cancels the page's request before answering it. */
+  const cancelled = (url: string, webContentsId: number | undefined) => {
+    let answer: boolean | undefined;
+    made.beforeRequest!({ url, ...(webContentsId === undefined ? {} : { webContentsId }) }, ({ cancel }) => (answer = cancel));
+    return answer;
+  };
+  const idOf = (view: InstanceType<typeof ModuleView>) => view.webContentsId;
+
+  it.each(PRESS_ADDRESSES)("can't reach %s, not even with a click made in a panel of the same module the user sees", (address) => {
+    const hidden = make({ runsOnlyWithGame: () => true });
+    const shown = make();
+    // The click lands in the panel the user sees; the press is the session's.
+    shown.noteGesture();
+    expect(cancelled(`${ORIGIN}${address}?name=Plan`, idOf(hidden))).toBe(true);
+    expect(cancelled(`${ORIGIN}${address}?name=Plan`, idOf(shown))).toBe(false);
+    // A request no page can be named for is refused while a page of the session runs that way.
+    expect(cancelled(`${ORIGIN}${address}`, undefined)).toBe(true);
+    hidden.dispose(true);
+    shown.dispose(true);
+  });
+
+  it("still loads its files and reaches its data", () => {
+    const hidden = make({ runsOnlyWithGame: () => true });
+    expect(cancelled(`${ORIGIN}/dist/index.html`, idOf(hidden))).toBe(false);
+    expect(cancelled(`${ORIGIN}${BLOB_PATH}a`, idOf(hidden))).toBe(false);
+    // Elsewhere is cancelled for every page, as before.
+    expect(cancelled("https://example.com/", idOf(hidden))).toBe(true);
+    hidden.dispose(true);
+  });
+
+  it("gets its addresses back once it runs in sight again", () => {
+    let outOfSight = true;
+    const panel = make({ runsOnlyWithGame: () => outOfSight });
+    expect(cancelled(`${ORIGIN}${PICTURES_PATH}`, idOf(panel))).toBe(true);
+    outOfSight = false;
+    expect(cancelled(`${ORIGIN}${PICTURES_PATH}`, idOf(panel))).toBe(false);
+    panel.dispose(true);
+  });
+
+  it("names Tavora's own stop as such, until the page loads again", async () => {
+    vi.useFakeTimers();
+    try {
+      const view = make({ onStatus: () => undefined });
+      const contents = (view as unknown as { view: { webContents: Record<string, unknown> } }).view.webContents;
+      // A new process id on every ask: the page counts as gone, so stop() never kills a process of its own.
+      let pid = 4_000_000;
+      Object.assign(contents, { getOSProcessId: () => pid++, forcefullyCrashRenderer: () => made.handlers["render-process-gone"]?.({}, { reason: "killed", exitCode: 1 }), once: () => undefined, reload: () => undefined });
+      expect(view.stoppedByTavora).toBe(false);
+      void view.stop();
+      expect(view.stoppedByTavora).toBe(true);
+      expect(view.status).toBe("crashed");
+      view.reload();
+      expect(view.stoppedByTavora).toBe(false);
+      // stop()'s fallbacks run out without touching anything.
+      await vi.advanceTimersByTimeAsync(6_000);
+      await view.dispose(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

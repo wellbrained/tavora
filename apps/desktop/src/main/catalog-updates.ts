@@ -22,6 +22,8 @@ export interface CatalogInstalled {
   version: string;
   /** What the installed version asks for. */
   asks: Permissions;
+  /** The games the installed version is made for (its `games`); an update that runs with a game not in it asks again. */
+  games?: readonly string[];
   /** One of Tavora's own modules that ships with the app: its listing counts when a trusted Tavora key signed it (no owner to match). */
   official?: true;
 }
@@ -81,9 +83,17 @@ export function findUpdates(
 
 /**
  * What `after` asks for that `before` did not; connectors it asks for on request wait until the module needs them.
- * `afterWithGame`: the new version runs a panel while its game runs, asked only when the installed one didn't.
+ * `afterWithGame`: the new version runs a panel while its game runs, asked when the installed one didn't, or when the
+ * new one is made for a game the installed one wasn't (`games`, before and after).
  */
-export function newAsks(before: Permissions, after: Pick<ModuleManifest, "permissions">["permissions"], afterWithGame = false): Permissions {
+export function newAsks(
+  before: Permissions,
+  after: Pick<ModuleManifest, "permissions">["permissions"],
+  afterWithGame = false,
+  games: { before?: readonly string[]; after?: readonly string[] } = {},
+): Permissions {
+  const gamesBefore = new Set(games.before ?? []);
+  const newGame = (games.after ?? []).some((game) => !gamesBefore.has(game));
   const hosts = new Set(before.network);
   const connectors = new Set(before.connectors);
   const folders = new Set(before.folders);
@@ -91,7 +101,7 @@ export function newAsks(before: Permissions, after: Pick<ModuleManifest, "permis
     network: after.network.filter((host) => !hosts.has(host)),
     connectors: connectorsAtAdd(after).filter((name: Connector) => !connectors.has(name)),
     folders: (after.folders ?? []).map(folderKey).filter((key) => !folders.has(key)),
-    ...(afterWithGame && !before.withGame ? { withGame: true } : {}),
+    ...(afterWithGame && (!before.withGame || newGame) ? { withGame: true } : {}),
   };
 }
 
@@ -225,7 +235,7 @@ export class CatalogUpdater {
         // The zip must be signed by the listed key; the installer then checks it is this module's owner.
         const expect = { id: entry.id, owner: entry.owner };
         const checked = await this.options.check(zip, expect);
-        const asks = newAsks(module.asks, checked.manifest.permissions, withGamePanelType(checked.manifest) !== null);
+        const asks = newAsks(module.asks, checked.manifest.permissions, withGamePanelType(checked.manifest) !== null, { ...(module.games ? { before: module.games } : {}), after: checked.manifest.games });
         if (asksNothing(asks) && this.options.autoInstall?.()) {
           outcome.updated.push((await this.installOnce(entry.id, asks, () => this.options.install(zip, expect))).installed);
           continue;

@@ -13,7 +13,7 @@ const KINGS_APP = 2784470;
 function rig() {
   const log: string[] = [];
   const runner = new WithGameRunner({
-    start: (run) => log.push(`start ${run.workspaceId} ${run.inLayout ? run.instanceId : "hidden"}`),
+    start: (run) => (log.push(`start ${run.workspaceId} ${run.inLayout ? run.instanceId : "hidden"}`), true),
     stop: (run) => log.push(`stop ${run.workspaceId} ${run.inLayout ? run.instanceId : "hidden"}`),
     restart: (run) => log.push(`restart ${run.workspaceId} ${run.inLayout ? run.instanceId : "hidden"}`),
   });
@@ -100,7 +100,7 @@ describe("WithGameRunner", () => {
     expect(log).toEqual(["start kings hidden", "restart kings hidden"]);
     runner.crashed(run!.instanceId);
     expect(log.slice(2)).toEqual(["stop kings hidden"]);
-    expect(runner.isOff(run!.instanceId)).toBe(true);
+    expect(runner.isOff(run!)).toBe(true);
     // Still the same game session: it stays off.
     runner.sync(running, [run!]);
     expect(log).toHaveLength(3);
@@ -110,6 +110,35 @@ describe("WithGameRunner", () => {
     expect(log.slice(3)).toEqual(["start kings hidden"]);
     runner.crashed(run!.instanceId);
     expect(log.slice(4)).toEqual(["restart kings hidden"]);
+  });
+
+  it("counts crashes per game and module, so closing a crashed layout panel doesn't start the count again", () => {
+    const { log, runner } = rig();
+    const running = new Set(["kings"]);
+    const placed = { kings: [{ instanceId: "placed", moduleId: KINGS.moduleId, panelType: "history" }] };
+    runner.sync(running, plan(["kings"], placed));
+    runner.crashed("placed");
+    expect(log).toEqual(["start kings placed", "restart kings placed"]);
+    // The user removes the crashed panel: the hidden one takes over, and its first crash is the second.
+    runner.sync(running, plan(["kings"]));
+    const [hidden] = plan(["kings"]);
+    runner.crashed(hidden!.instanceId);
+    expect(log.slice(2)).toEqual(["stop kings placed", "start kings hidden", "stop kings hidden"]);
+    expect(runner.all()).toEqual([]);
+    // Another game's workspace has a count of its own.
+    expect(runner.isOff({ workspaceId: "kings-2", moduleId: KINGS.moduleId, owner: PUBLISHER })).toBe(false);
+  });
+
+  it("doesn't count a panel that couldn't start as running, and tries again at the next sync", () => {
+    const log: string[] = [];
+    let ready = false;
+    const runner = new WithGameRunner({ start: (run) => (log.push(`start ${run.workspaceId}`), ready), stop: () => log.push("stop"), restart: () => log.push("restart") });
+    runner.sync(new Set(["kings"]), plan(["kings"]));
+    expect(runner.all()).toEqual([]);
+    ready = true;
+    runner.sync(new Set(["kings"]), plan(["kings"]));
+    expect(runner.all()).toHaveLength(1);
+    expect(log).toEqual(["start kings", "start kings"]);
   });
 
   it("ignores a crash of a panel that doesn't run with its game", () => {

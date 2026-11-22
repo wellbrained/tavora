@@ -20,6 +20,11 @@ function withGameAsk(module: InstalledModule): { withGame?: true } {
   return asksWithGame(module.manifest) ? { withGame: true } : {};
 }
 
+/** The installed version's games, so an update made for another game asks again (catalog-updates.ts newAsks). */
+function gamesOf(module: InstalledModule): { games: string[] } {
+  return { games: [...module.manifest.games] };
+}
+
 /** What the lifecycle may do to a module's open panels. */
 export interface ModulePanels {
   /** Starts a module's open panels again, so they load a new version or connect with a new grant. */
@@ -266,7 +271,7 @@ export class ModuleLifecycle {
       for (const [id, module] of this.options.modules()) {
         if (module.provenance !== "official" || module.builtIn || module.shippedVersion === undefined) continue;
         const { network, connectors = [], folders = [] } = module.manifest.permissions;
-        installed.push({ id, owner: module.owner, version: module.manifest.version, asks: { network: [...network], connectors: [...connectors], folders: folders.map(folderKey), ...withGameAsk(module) }, official: true });
+        installed.push({ id, owner: module.owner, version: module.manifest.version, asks: { network: [...network], connectors: [...connectors], folders: folders.map(folderKey), ...withGameAsk(module) }, ...gamesOf(module), official: true });
       }
     }
     for (const id of this.options.catalogIds()) {
@@ -280,7 +285,7 @@ export class ModuleLifecycle {
         continue;
       }
       const { network, connectors = [], folders = [] } = module.manifest.permissions;
-      installed.push({ id, owner: module.owner, version: module.manifest.version, asks: { network: [...network], connectors: [...connectors], folders: folders.map(folderKey), ...withGameAsk(module) } });
+      installed.push({ id, owner: module.owner, version: module.manifest.version, asks: { network: [...network], connectors: [...connectors], folders: folders.map(folderKey), ...withGameAsk(module) }, ...gamesOf(module) });
     }
     return installed;
   }

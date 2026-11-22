@@ -486,9 +486,9 @@ const cases: [string, unknown, boolean][] = [
   ["module inGame", { ...valid, minTavora: "0.21.3", inGame: true }, true],
   ["panel inGame false", { ...valid, panels: [{ id: "planner", name: "Planner", inGame: false }] }, true],
   ["panel inGame as a string", { ...valid, minTavora: "0.21.3", panels: [{ id: "planner", name: "Planner", inGame: "yes" }] }, false],
-  ["panel withGame", { ...valid, minTavora: "0.24.129", panels: [{ id: "history", name: "History", withGame: true }] }, true],
+  ["panel withGame", { ...valid, minTavora: "0.24.131", panels: [{ id: "history", name: "History", withGame: true }] }, true],
   ["panel withGame false", { ...valid, panels: [{ id: "history", name: "History", withGame: false }] }, true],
-  ["panel withGame as a string", { ...valid, minTavora: "0.24.129", panels: [{ id: "history", name: "History", withGame: "yes" }] }, false],
+  ["panel withGame as a string", { ...valid, minTavora: "0.24.131", panels: [{ id: "history", name: "History", withGame: "yes" }] }, false],
   ["a folder to read", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "Documents/StarCraft II", read: ["sc2replay"], names: ["lnk"] }] } }, true],
   ["a folder in Saved Games, names only", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "Saved Games/My Game/Saves", names: ["sav"] }] } }, true],
   ["a folder in AppData", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "AppData/Roaming/Discord", read: ["ldb"] }] } }, false],
@@ -572,19 +572,20 @@ describe("panel types", () => {
 
   it("takes withGame on one panel type of a module for named games, from a minTavora newer than the last without it", () => {
     const panels = [{ id: "history", name: "History", withGame: true }, { id: "stats", name: "Stats" }];
-    const newer = { ...valid, minTavora: "0.24.129", panels };
+    const newer = { ...valid, minTavora: "0.24.131", panels };
     expect(validateManifest(newer)).toMatchObject({ ok: true });
     expect(validateManifest({ ...newer, minTavora: LAST_TAVORA_WITHOUT_WITH_GAME_PANELS })).toEqual({
       ok: false,
       errors: [`panels[0].withGame needs a minTavora newer than ${LAST_TAVORA_WITHOUT_WITH_GAME_PANELS}, because older Tavoras refuse it`],
     });
-    expect(validateManifest({ ...valid, id: "tavora.history", panels }).ok).toBe(true);
+    // Built-in modules can't run with a game (they have no grant to ask with).
+    expect(validateManifest({ ...valid, id: "tavora.history", panels })).toEqual({ ok: false, errors: ["panels[0].withGame is not for Tavora's built-in modules"] });
     expect(validateManifest({ ...newer, games: [] })).toEqual({ ok: false, errors: ["panels[0].withGame needs games to name the module's games: it runs while one of them runs"] });
     expect(validateManifest({ ...newer, panels: [panels[0], { ...panels[1], withGame: true }] })).toEqual({ ok: false, errors: ["only one panel type may set withGame"] });
   });
 
   it("passes withGame on to the resolved type and names that type", () => {
-    const manifest = { ...valid, minTavora: "0.24.129", panels: [{ id: "a", name: "A" }, { id: "b", name: "B", withGame: true }] } as ModuleManifest;
+    const manifest = { ...valid, minTavora: "0.24.131", panels: [{ id: "a", name: "A" }, { id: "b", name: "B", withGame: true }] } as ModuleManifest;
     expect(panelTypes(manifest).map((type) => type.withGame)).toEqual([undefined, true]);
     expect(withGamePanelType(manifest)).toBe("b");
     expect(withGamePanelType(valid as ModuleManifest)).toBeNull();
