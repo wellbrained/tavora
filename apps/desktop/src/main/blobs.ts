@@ -57,6 +57,39 @@ export const BLOB_LIMITS: BlobLimits = { maxFileBytes: LIMITS.maxBlobBytes, maxT
 /** Enough of a file to tell its kind. */
 const HEAD_BYTES = 16;
 
+/** The files being written across all stores, so moving their folder can wait until none is on its way. */
+export class BlobWrites {
+  private active = 0;
+  private waiting: (() => void)[] = [];
+
+  /** A write starts; the answer ends it. */
+  begin(): () => void {
+    this.active++;
+    let ended = false;
+    return () => {
+      if (ended) return;
+      ended = true;
+      if (--this.active === 0) for (const wake of this.waiting.splice(0)) wake();
+    };
+  }
+
+  /** True once no write is on its way; false when one still is after `timeoutMs` (a stream that stalled). */
+  idle(timeoutMs: number): Promise<boolean> {
+    if (this.active === 0) return Promise.resolve(true);
+    return new Promise((resolve) => {
+      const wake = () => {
+        clearTimeout(timer);
+        resolve(true);
+      };
+      const timer = setTimeout(() => {
+        this.waiting = this.waiting.filter((item) => item !== wake);
+        resolve(false);
+      }, timeoutMs);
+      this.waiting.push(wake);
+    });
+  }
+}
+
 export class BlobStore {
   private readonly queue = new SerialQueue();
 
@@ -68,6 +101,7 @@ export class BlobStore {
     private readonly locked: () => boolean = () => false,
     /** What the total is counted over, for the message when it is full. */
     private readonly scope: "workspace" | "app" = "workspace",
+    private readonly writes: BlobWrites = new BlobWrites(),
   ) {}
 
   list(): Promise<BlobInfo[]> {
@@ -91,11 +125,15 @@ export class BlobStore {
    * one file may be, would take the module past its total, or is not a picture, PDF or sound of a kind we accept.
    */
   put(body: AsyncIterable<Uint8Array>, declaredBytes?: number): Promise<BlobInfo> {
-    if (this.locked()) return Promise.reject(new HostError("INTERNAL", "pictures are being moved to another folder; try again in a moment"));
+    if (this.locked()) return Promise.reject(this.moving());
     if (declaredBytes !== undefined && declaredBytes > this.limits.maxFileBytes) {
       return Promise.reject(this.tooLarge());
     }
+    // Counted from now: a move of the folder waits for this write, also while it is still in the queue.
+    const ended = this.writes.begin();
     return this.queue.run(async () => {
+      // The folder started moving while this waited its turn.
+      if (this.locked()) throw this.moving();
       const used = (await this.scan()).reduce((sum, file) => sum + file.bytes, 0);
       const room = Math.min(this.limits.maxFileBytes, this.limits.maxTotalBytes - used);
       if (room <= 0) throw this.tooMuch();
@@ -132,7 +170,7 @@ export class BlobStore {
         await rm(temp, { force: true });
         throw error;
       }
-    });
+    }).finally(ended);
   }
 
   /** Removes a file; a missing one is not an error. An id that is not one of ours is refused. */
@@ -194,6 +232,10 @@ export class BlobStore {
       }
     }
     return files.sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+  }
+
+  private moving(): HostError {
+    return new HostError("INTERNAL", "pictures are being moved to another folder; try again in a moment");
   }
 
   private tooLarge(): HostError {

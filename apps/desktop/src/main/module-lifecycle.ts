@@ -8,7 +8,7 @@ import { folderKey, LOCAL_OWNER, OFFICIAL_OWNER, type Connector } from "@tavora/
 import type { CatalogClient } from "./catalog-client";
 import { CatalogUpdater, asksNothing, type CatalogInstalled } from "./catalog-updates";
 import type { GrantStore } from "./grants";
-import { checkZipData, forgetOwner, installZip, installZipData, type InstallOptions, type Installed } from "./installer";
+import { checkZipData, dropOldCopies, forgetOwner, installZip, installZipData, type InstallOptions, type Installed } from "./installer";
 import { LibraryError } from "./library";
 import { UserError } from "./messages";
 import type { OfficialUpdates } from "./official-updates";
@@ -191,6 +191,8 @@ export class ModuleLifecycle {
     this.updates.forget(moduleId);
     // Its data stays under its owner, so the same publisher's module finds it again.
     await step(() => forgetOwner(this.options.userData, path.basename(module.root)));
+    // A previous copy an update couldn't delete must not come back at the next start.
+    await step(() => dropOldCopies(this.options.userData, moduleId));
     await step(() => this.options.reload());
     if (failed.length > 0) throw failed[0];
   }

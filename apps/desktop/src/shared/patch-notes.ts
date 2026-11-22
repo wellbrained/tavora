@@ -28,6 +28,22 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.125",
+    date: "2026-11-22",
+    title: "Your saves are safer",
+    notes: [
+      "A power cut can't leave your library empty anymore.",
+      "Layouts stay when your library can't be read, and come back with it.",
+      "A module you reinstall keeps what it saves.",
+      "A module update that gets cut off puts itself right at the next start.",
+      "Your corners and font survive going back to an older Tavora.",
+    ],
+    prs: [
+      { number: 861, title: "Local saves: survive power cuts, lost libraries, cut-off updates and downgrades" },
+    ],
+    tags: ["games", "modules", "updates", "workspace"],
+  },
+  {
     version: "0.24.124",
     date: "2026-11-22",
     title: "Overlays stay with the game",

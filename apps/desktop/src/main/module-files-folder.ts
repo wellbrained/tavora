@@ -27,7 +27,12 @@ export interface ModuleFilesFolderHost {
   notify(message: string): void;
   /** Tells the host UI that something here changed. */
   changed(): void;
+  /** True once no picture is being written; false when one still is after `timeoutMs`. */
+  writesDone(timeoutMs: number): Promise<boolean>;
 }
+
+/** How long a move waits for pictures that are being saved right now. */
+const WRITES_DONE_MS = 15_000;
 
 export class ModuleFilesFolder {
   /** The pictures are being copied to another folder. */
@@ -110,6 +115,8 @@ export class ModuleFilesFolder {
     this.moving = true;
     this.host.changed();
     try {
+      // A picture still being saved would land in the old folder after the list was made, and be left behind.
+      if (!(await this.host.writesDone(WRITES_DONE_MS))) throw new LibraryError("error.moduleFilesBusy");
       const files = await listStoredFiles(from);
       try {
         await copyStoredFiles(from, target, files);

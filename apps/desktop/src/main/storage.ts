@@ -3,7 +3,7 @@ import { mkdir, readdir, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import { isModuleId, isOwnerId } from "@tavora/module-schema";
 import { LIMITS, type JsonValue } from "@tavora/sdk/protocol";
-import { BlobStore } from "./blobs";
+import { BlobStore, BlobWrites } from "./blobs";
 import { DocumentStore } from "./documents";
 import { HostError } from "./errors";
 import { SerialQueue, writeFileAtomic } from "./fsutil";
@@ -71,9 +71,7 @@ export class ModuleStore {
       if (next > this.maxBytes) {
         throw new HostError("QUOTA_EXCEEDED", `settings are limited to ${this.maxBytes} bytes per store`);
       }
-      entries.set(key, serialized);
-      this.bytes = next;
-      await this.persist(entries);
+      await this.change(entries, key, serialized, next);
     });
   }
 
@@ -83,10 +81,25 @@ export class ModuleStore {
       const entries = await this.load();
       const previous = entries.get(key);
       if (previous === undefined) return;
-      entries.delete(key);
-      this.bytes -= entrySize(key, previous);
-      await this.persist(entries);
+      await this.change(entries, key, undefined, this.bytes - entrySize(key, previous));
     });
+  }
+
+  /** Sets or removes one entry and writes the file; when the write fails, memory goes back to what is on disk. */
+  private async change(entries: Map<string, string>, key: string, value: string | undefined, bytes: number): Promise<void> {
+    const previous = entries.get(key);
+    const before = this.bytes;
+    if (value === undefined) entries.delete(key);
+    else entries.set(key, value);
+    this.bytes = bytes;
+    try {
+      await this.persist(entries);
+    } catch (error) {
+      if (previous === undefined) entries.delete(key);
+      else entries.set(key, previous);
+      this.bytes = before;
+      throw error;
+    }
   }
 
   /**
@@ -102,22 +115,11 @@ export class ModuleStore {
       const previous = entries.get(key);
       const current = previous === undefined ? null : (JSON.parse(previous) as JsonValue);
       if (!sameJson(current, wanted)) return false;
-      const before = this.bytes;
-      const next = before - (previous === undefined ? 0 : entrySize(key, previous)) + entrySize(key, serialized);
+      const next = this.bytes - (previous === undefined ? 0 : entrySize(key, previous)) + entrySize(key, serialized);
       if (next > this.maxBytes) {
         throw new HostError("QUOTA_EXCEEDED", `settings are limited to ${this.maxBytes} bytes per store`);
       }
-      entries.set(key, serialized);
-      this.bytes = next;
-      try {
-        await this.persist(entries);
-      } catch (error) {
-        // Not written: the next compare must see what is on disk.
-        if (previous === undefined) entries.delete(key);
-        else entries.set(key, previous);
-        this.bytes = before;
-        throw error;
-      }
+      await this.change(entries, key, serialized, next);
       return true;
     });
   }
@@ -366,6 +368,8 @@ export class DataRegistry {
   private readonly data = new Map<string, ModuleData>();
   private readonly app = new Map<string, ModuleStore>();
   private readonly appFiles = new Map<string, BlobStore>();
+  /** Files being written in any module's store: moving the files folder waits for them. */
+  readonly blobWrites = new BlobWrites();
   readonly panelState: PanelStateStore;
 
   constructor(
@@ -388,7 +392,7 @@ export class DataRegistry {
       data = {
         settings: new ModuleStore(path.join(dir, "storage.json")),
         documents: new DocumentStore(path.join(dir, "documents")),
-        blobs: new BlobStore(() => path.join(this.blobRoot(), owner, moduleId, workspaceId), undefined, this.blobsLocked),
+        blobs: new BlobStore(() => path.join(this.blobRoot(), owner, moduleId, workspaceId), undefined, this.blobsLocked, "workspace", this.blobWrites),
       };
       this.data.set(dir, data);
     }
@@ -412,7 +416,7 @@ export class DataRegistry {
     if (!isOwnerId(owner) || !isModuleId(moduleId)) throw new Error("invalid owner or module id");
     const key = `${owner}/${moduleId}`;
     let store = this.appFiles.get(key);
-    if (!store) this.appFiles.set(key, (store = new BlobStore(() => path.join(this.blobRoot(), owner, moduleId, APP_DATA_DIR), undefined, this.blobsLocked, "app")));
+    if (!store) this.appFiles.set(key, (store = new BlobStore(() => path.join(this.blobRoot(), owner, moduleId, APP_DATA_DIR), undefined, this.blobsLocked, "app", this.blobWrites)));
     return store;
   }
 

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { writeFileAtomic } from "./fsutil";
 import { keepNewerCopy, readJsonOrSetAside, readSavedFile, setAside } from "./json";
-import { sanitizeLibrary, type Library } from "./library";
+import { libraryToSave, sanitizeLibrary, type Library } from "./library";
 import { isProfileId, sanitizeProfile, type Profile } from "./profile";
 import { SUPPORTED_VERSIONS } from "./saved-versions";
 import type { WindowState } from "./window-state";
@@ -132,7 +132,7 @@ export class SavedData {
   }
 
   saveLibrary(library: Library): void {
-    const body = JSON.stringify(library, null, 2);
+    const body = JSON.stringify(libraryToSave(library), null, 2);
     this.enqueue(() => writeFileAtomic(this.file(LIBRARY_FILE), body), "library");
   }
 
