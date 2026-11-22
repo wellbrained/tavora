@@ -36,8 +36,16 @@ const WORDS = [
 /** Parts refused even inside a longer word, where no honest word holds them. */
 const PARTS = ["nigga", "nlgga", "faggot", "schwuchtel", "judensau"];
 
-/** Something that reads like a web address, a bare domain or an email address. */
-const LINK = /(?:https?:\/\/|www\.|[a-z0-9-]+(?:\.|\s?(?:\(dot\)|\[dot\])\s?)(?:com|net|org|io|gg|de|at|ch|ru|xyz|app|ly|me|co|tv|link|site|shop|info|biz|eu|uk|us)\b|\S+@\S+\.\S+|discord\.gg|t\.me\/)/i;
+/**
+ * Something that reads like a web address, a bare domain or an email address.
+ *
+ * It runs over untrusted text of up to 20 KB (a module readme) on the service's one event loop, so it must stay linear: the
+ * domain and email parts start only where their run of characters starts (the lookbehinds), so no run is scanned again from
+ * every position inside it. The leftmost address in a run starts there anyway. The email part is "name@x.y" with one `@` before
+ * the dot (an `@` right after the first one counts as part of the domain), so it never tries every `@` and every dot in a long
+ * run of them (`\S+@\S+\.\S+` did, cubic in the run's length).
+ */
+const LINK = /(?:https?:\/\/|www\.|(?<![a-z0-9-])[a-z0-9-]+(?:\.|\s?(?:\(dot\)|\[dot\])\s?)(?:com|net|org|io|gg|de|at|ch|ru|xyz|app|ly|me|co|tv|link|site|shop|info|biz|eu|uk|us)\b|(?<![^\s@])[^\s@]+@\S[^\s.@]*\.\S+|discord\.gg|t\.me\/)/i;
 const LINK_GLOBAL = new RegExp(LINK.source, "gi");
 
 /**
@@ -141,17 +149,22 @@ function plainWords(text: string): string {
 /** `hold`: it may be an address, so a review with it waits for a person; a reply or message, which can't wait, is refused as a link. */
 export type FilterResult = "ok" | "words" | "link" | "hold";
 
+/** Whether the text holds a slur, in any spelling plainWords reads back. */
+function holdsWords(text: string): boolean {
+  const plain = plainWords(text);
+  // Doubled vowels read as one ("niigga", "faaggot"). Only for comparing, and consonants stay: "Rappe" isn't "rape", "Minigame" holds no slur.
+  const single = plain.replace(/([aeiou])\1+/g, "$1");
+  return (plain === single ? [plain] : [plain, single]).some((reading) => {
+    const words = ` ${reading} `;
+    return WORDS.some((word) => words.includes(` ${word} `)) || holdsPart(reading.split(" "));
+  });
+}
+
 /** Whether a review or reply may be posted as it is. */
 export function checkReviewText(text: string): FilterResult {
   const link = linkIn(text);
   if (link === "link") return "link";
-  const plain = plainWords(text);
-  // Doubled vowels read as one ("niigga", "faaggot"). Only for comparing, and consonants stay: "Rappe" isn't "rape", "Minigame" holds no slur.
-  const single = plain.replace(/([aeiou])\1+/g, "$1");
-  for (const reading of plain === single ? [plain] : [plain, single]) {
-    const words = ` ${reading} `;
-    if (WORDS.some((word) => words.includes(` ${word} `)) || holdsPart(reading.split(" "))) return "words";
-  }
+  if (holdsWords(text)) return "words";
   return link ?? "ok";
 }
 
@@ -177,7 +190,8 @@ export type ModuleTextResult = "ok" | "words" | "adult";
  * look: the slur list of the reviews, plus the adult terms. Links are fine here, a readme has them.
  */
 export function checkModuleText(text: string): ModuleTextResult {
-  if (checkReviewText(text.replace(LINK_GLOBAL, " ")) === "words") return "words";
+  // The words without the links, never cut short by a link the cut left behind ("a.com-b.com" keeps "-b.com").
+  if (holdsWords(text.replace(LINK_GLOBAL, " "))) return "words";
   const words = ` ${plainWords(text)} `;
   if (ADULT_WORDS.some((word) => words.includes(` ${word} `)) || ADULT_RAW.test(text)) return "adult";
   return "ok";

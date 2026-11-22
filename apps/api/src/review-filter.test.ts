@@ -207,6 +207,32 @@ describe("the review word filter", () => {
     }
   });
 
+  it("reads every shape of email address as a link", () => {
+    for (const text of ["first.last@mail.example.com", "write to me@x..de", "a@b@c.de", "mail@@cheats.ru", "(me@x.io)", "ä@ö.ü"]) {
+      expect(checkReviewText(text), text).toBe("link");
+    }
+    for (const text of ["@home.", "me @ home","a@b", "@@@", "Version 1.2.0 @ 60 fps"]) {
+      expect(checkReviewText(text), text).not.toBe("link");
+    }
+  });
+
+  // The old email pattern (\S+@\S+\.\S+) took minutes on 20 KB of `@`: one readme or message could stop the whole service.
+  it("checks 20 KB of text built to make the patterns backtrack in a few milliseconds", () => {
+    const size = 20 * 1024;
+    const fill = (piece: string) => piece.repeat(Math.ceil(size / piece.length)).slice(0, size);
+    for (const piece of ["@", "a@", "a@@", "@.", "a.a@", "a.", "a", "-", "aaaa.aaaa.", "a (dot) ", "。a", "a!", "a1", "a "]) {
+      const text = fill(piece);
+      for (const check of [checkReviewText, checkModuleText]) {
+        const start = performance.now();
+        check(text);
+        expect(performance.now() - start, `${check.name} on ${JSON.stringify(piece)}`).toBeLessThan(150);
+      }
+    }
+    const start = performance.now();
+    checkModuleText(`a@${"b".repeat(size)}`);
+    expect(performance.now() - start).toBeLessThan(150);
+  });
+
   it("refuses slurs, also with letters swapped or spread out", () => {
     for (const text of ["you f4ggot", "you r e t a r d", "dev is a kanake", "Schwuchtel-Modul", "kys"]) {
       expect(checkReviewText(text), text).toBe("words");
@@ -227,5 +253,9 @@ describe("the module text filter", () => {
     expect(checkModuleText("N S F W mods")).toBe("adult");
     expect(checkModuleText("Hentai nude patch")).toBe("adult");
     for (const text of ["For 18+ only", "Ab 18", "+18 content", "XXX pack", "R18 mod", "Erotik-Modul"]) expect(checkModuleText(text), text).toBe("adult");
+  });
+
+  it("drops only the links, so a slur right next to one still counts", () => {
+    for (const text of ["mail me@x.de kanake", "kanake a@b@c.de", "see a.com-b.com, kanake"]) expect(checkModuleText(text), text).toBe("words");
   });
 });

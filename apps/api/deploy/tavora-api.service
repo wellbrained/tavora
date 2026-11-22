@@ -1,6 +1,7 @@
 [Unit]
 Description=Tavora game search service
-After=network.target
+# After clamd and its filter when they are there (ordering only), so /run/clamav exists to be hidden below.
+After=network.target clamav-daemon.service tavora-clamd-filter.service
 
 [Service]
 User=tavora-api
@@ -16,7 +17,7 @@ Environment=TAVORA_STATE_DIR=/var/lib/tavora-api
 # The Steam Web API key lives here (STEAM_WEB_API_KEY=…), set with tavora-api-set-steam-key.sh. Optional.
 # TAKEDOWN_CONTACT=... (where publishers ask for an icon to be removed; hosted icons are only served when it is set) and ADMIN_TOKEN=... (Tavora Admin,
 # on 127.0.0.1:4011 only) and MAINTAINER_EMAIL=... (told when the module catalog is full, and when a version waits for review) live in the same file; set them with tavora-api-set-setting.sh.
-# CLAMD_SOCKET=... (the virus scan of new catalog versions; without it every new version waits for review) is set by tavora-api-clamav.sh, which also adds this user to the clamav group.
+# CLAMD_SOCKET=... (the virus scan of new catalog versions; without it every new version waits for review) is set by tavora-api-clamav.sh to the clamd filter's socket.
 EnvironmentFile=-/srv/tavora-api/shared/production.env
 ExecStart=/usr/local/bin/node /srv/tavora-api/current/server.mjs
 # The only writable place: icons users offered, approved ones and takedowns, accounts (small SQLite files), and the module catalog with its zips.
@@ -33,6 +34,8 @@ ProtectHome=true
 ProtectKernelTunables=true
 ProtectControlGroups=true
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# clamd's own socket takes any command (SCAN a path, SHUTDOWN): the service gets only tavora-clamd-filter's, which passes scans.
+InaccessiblePaths=-/run/clamav
 # Only its own two ports: it can't take over another app's port while that app restarts.
 SocketBindAllow=tcp:4010
 SocketBindAllow=tcp:4011

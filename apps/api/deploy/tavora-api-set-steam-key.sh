@@ -13,7 +13,9 @@ read -rsp 'Steam Web API key (input is hidden): ' key; echo
 key="$(printf '%s' "$key" | tr -d '[:space:]')"
 [[ "$key" =~ ^[A-Fa-f0-9]{32}$ ]] || { echo 'That does not look like a Steam Web API key (32 hex characters).'; exit 1; }
 
-code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 -H "x-webapi-key: $key" 'https://api.steampowered.com/ISteamWebAPIUtil/GetSupportedAPIList/v1/')"
+# The key goes to curl on its stdin as a config line (printf is the shell's own, so it starts no program): an argument
+# would show in /proc to every user on the server while curl runs.
+code="$(printf 'header = "x-webapi-key: %s"\n' "$key" | curl -s -K - -o /dev/null -w '%{http_code}' --max-time 15 'https://api.steampowered.com/ISteamWebAPIUtil/GetSupportedAPIList/v1/')"
 [[ "$code" == 200 ]] || { echo "Steam rejected the key (status $code). Nothing was saved."; exit 1; }
 
 # Only this one line changes; the other settings in the file (TAKEDOWN_CONTACT, ADMIN_TOKEN) stay.

@@ -11,7 +11,7 @@
 #                                            it once; it is stored nowhere else, so save it
 #   tavora-api-set-setting.sh maintainer-email [address]
 #                                            who hears when the module catalog is full
-#   tavora-api-set-setting.sh clamav         tells the service where ClamAV's clamd socket is, for the virus scan of new
+#   tavora-api-set-setting.sh clamav         tells the service where the clamd filter's socket is, for the virus scan of new
 #                                            catalog versions (tavora-api-clamav installs ClamAV and runs this)
 #   tavora-api-set-setting.sh brevo-key      asks for the Brevo API key (not shown while typed);
 #                                            the service sends sign-in codes with it
@@ -62,8 +62,8 @@ case "${1:-}" in
     shown='the Brevo API key'
     ;;
   clamav)
-    set_var CLAMD_SOCKET /var/run/clamav/clamd.ctl
-    shown='the ClamAV socket'
+    set_var CLAMD_SOCKET /run/tavora-clamd/clamd.sock
+    shown='the clamd filter socket'
     ;;
   admin-token)
     token="$(openssl rand -hex 24)"

@@ -33,7 +33,10 @@ admin work and is never in a `TAVORA_*` setting.
 - The update feed refuses a version that is not newer than the live one. A bad release is fixed by a newer one.
 
 What a stolen deploy key can still do (accepted 2026-10-31): the API key runs code as the `tavora-api` service
-(that is what a deploy is), the docs key can change the docs, the Admin key can change the panel, and the
+(that is what a deploy is), so it can read `production.env` (the Brevo key, the admin token, the Steam key) and every
+database, the docs key can change the docs, the Admin key can change the panel, and with it read the admin token the
+next time it is typed into the panel (the browser trusts whatever the panel's release serves; the API key already
+gets that token, so the Admin key is no weaker than the API key), and the
 updates key can stall releases (it can hold the job's publish lock while an upload of its own hangs), but can't put
 anything on the feed that Tavora's update key didn't sign. The receiver publishes an update only when its `latest.yml`
 is exactly electron-builder's for that one installer (one `files` entry, no address outside the plain release notes,
@@ -60,7 +63,7 @@ file either: grant access only to a file that belongs to a site, never to one a 
 
 The setup ([server/setup-deploy-access.sh](server/setup-deploy-access.sh)) makes the users, folders, keys,
 sshd and sudo rules, and installs the API's root-level files (systemd unit, Caddy site, the `tavora-api-*`
-helpers, the backup timer), which a deploy no longer touches. Run it again whenever one of those changes or a
+helpers, the backup timer, the clamd filter), which a deploy no longer touches. Run it again whenever one of those changes or a
 deploy says the server's setup is older than the repo. It changes only what differs and prints what it did.
 
 ```powershell

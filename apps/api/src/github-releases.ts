@@ -1,3 +1,4 @@
+import { fetchSameOrigin, readCappedJson } from "./capped-fetch.ts";
 import { isAppVersion } from "./stats.ts";
 
 /** The public repo whose releases also carry the installer (each one's Tavora-Setup-<version>.exe). */
@@ -5,6 +6,8 @@ export const RELEASES_URL = "https://api.github.com/repos/wellbrained/tavora/rel
 /** Most pages of 100 releases read, so a broken answer can never loop. */
 const MAX_PAGES = 10;
 const SETUP = /^Tavora-Setup-([0-9.]+)\.exe$/;
+/** Most bytes read of one page: 100 releases with their notes and assets are well under 1 MB today. */
+const PAGE_BYTES = 8 * 1024 * 1024;
 
 /**
  * How often each version's installer was downloaded from the GitHub releases, all time (GitHub's own running
@@ -14,12 +17,13 @@ const SETUP = /^Tavora-Setup-([0-9.]+)\.exe$/;
 export async function githubInstallerTotals(fetchFn: typeof fetch = fetch): Promise<Record<string, number>> {
   const totals: Record<string, number> = {};
   for (let page = 1; page <= MAX_PAGES; page++) {
-    const response = await fetchFn(`${RELEASES_URL}?per_page=100&page=${page}`, {
+    // A redirect (a renamed repo) is followed on api.github.com only; the page is read up to PAGE_BYTES.
+    const response = await fetchSameOrigin(fetchFn, `${RELEASES_URL}?per_page=100&page=${page}`, {
       headers: { accept: "application/vnd.github+json", "user-agent": "tavora-api" },
       signal: AbortSignal.timeout(15_000),
     });
     if (!response.ok) throw new Error(`GitHub answered ${response.status}.`);
-    const releases = (await response.json()) as { assets?: { name?: unknown; download_count?: unknown }[] }[];
+    const releases = (await readCappedJson(response, PAGE_BYTES)) as { assets?: { name?: unknown; download_count?: unknown }[] }[];
     if (!Array.isArray(releases)) throw new Error("GitHub sent no list of releases.");
     for (const release of releases) {
       for (const asset of release.assets ?? []) {

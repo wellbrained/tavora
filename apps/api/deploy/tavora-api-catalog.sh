@@ -13,8 +13,12 @@
 set -euo pipefail
 # catalog.mjs comes with each API deploy, so it never gets root's terminal: setsid drops it as controlling
 # terminal (no keystrokes pushed into the maintainer's shell), its input is a file or /dev/null, and its output
-# goes through a pipe (pipefail keeps its exit status).
-run() { setsid --wait runuser -u tavora-api -- env TAVORA_STATE_DIR=/var/lib/tavora-api /usr/local/bin/node --no-warnings /srv/tavora-api/current/catalog.mjs "$@" 2>&1 | cat; }
+# goes through a pipe (pipefail keeps its exit status). It gets none of root's environment either (env -i: no agent
+# socket, token or other setting the maintainer's shell holds), only these few settings.
+run() {
+  setsid --wait runuser -u tavora-api -- env -i PATH=/usr/bin:/bin LANG=C.UTF-8 HOME=/nonexistent TAVORA_STATE_DIR=/var/lib/tavora-api \
+    /usr/local/bin/node --no-warnings /srv/tavora-api/current/catalog.mjs "$@" 2>&1 | cat
+}
 case "${1:-}" in
   add)
     [[ $# -eq 2 && -f "$2" ]] || { echo 'Usage: tavora-api-catalog add <module.zip>'; exit 2; }

@@ -1,8 +1,11 @@
 /**
  * What the admin panel asks the outside world, read-only: the update feed, the public sites, npm and
  * the repository's main branch. Each answer is kept for a minute so opening the panel in a loop does
- * not hammer anyone; a failed ask is an answer too (null / not up), never an error for the panel.
+ * not hammer anyone; a failed ask is an answer too (null / not up), never an error for the panel. Answers are read
+ * up to a cap and redirects are followed only on the same host, so none of these hosts can make the service read
+ * without end or ask somewhere else.
  */
+import { fetchSameOrigin, readCapped, readCappedJson } from "./capped-fetch.ts";
 
 export interface FeedInfo {
   version: string;
@@ -27,6 +30,9 @@ export interface Probes {
 
 export const FEED_URL = "https://updates.mytavora.app";
 export const REPO_RAW = "https://raw.githubusercontent.com/wellbrained/tavora/main";
+/** latest.yml is a few hundred bytes; npm's and GitHub's package.json answers a few KB (npm's can carry a readme). */
+const FEED_BYTES = 64 * 1024;
+const VERSION_BYTES = 1024 * 1024;
 
 /** `1.2.10` > `1.2.9`; anything that is not major.minor.patch counts as 0.0.0. */
 export function compareVersions(a: string, b: string): number {
@@ -57,18 +63,18 @@ export function createProbes(fetchFn: typeof fetch = fetch, now: () => number = 
     kept.set(key, { at: now(), value });
     return value;
   };
-  const get = (url: string, init: RequestInit = {}) => fetchFn(url, { redirect: "follow", signal: AbortSignal.timeout(6000), ...init });
+  const get = (url: string, init: RequestInit = {}) => fetchSameOrigin(fetchFn, url, { signal: AbortSignal.timeout(6000), ...init });
   const version = async (url: string) => {
     const response = await get(url, { headers: { accept: "application/json" } });
     if (!response.ok) return null;
-    const found = ((await response.json()) as { version?: unknown }).version;
+    const found = ((await readCappedJson(response, VERSION_BYTES)) as { version?: unknown } | null)?.version;
     return typeof found === "string" ? found : null;
   };
   return {
     feed: () =>
       once("feed", async () => {
         const response = await get(`${FEED_URL}/latest.yml`);
-        return response.ok ? parseLatestYml(await response.text()) : null;
+        return response.ok ? parseLatestYml(await readCapped(response, FEED_BYTES)) : null;
       }),
     site: (url) =>
       once(`site:${url}`, async (): Promise<SiteState> => {

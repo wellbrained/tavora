@@ -3,4 +3,15 @@ Description=Consistent backup of the Tavora service's accounts and icons
 
 [Service]
 Type=oneshot
+# Starts as root only to write into /srv/tavora-api/backups, root's alone, so the service can't read or change a backup.
+# Everything that opens the service's own folder (sqlite3, tar) runs as tavora-api: the script hands it to runuser.
 ExecStart=/usr/local/sbin/tavora-api-backup
+# The databases are copied into a private /var/tmp (on disk, not in memory) before they are packed.
+PrivateTmp=true
+UMask=0077
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=full
+ProtectKernelTunables=true
+ProtectControlGroups=true
+PrivateNetwork=true

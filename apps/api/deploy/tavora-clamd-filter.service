@@ -1,0 +1,35 @@
+[Unit]
+Description=Tavora's clamd filter (passes only scans from the Tavora service to clamd)
+After=clamav-daemon.service
+Wants=clamav-daemon.service
+
+[Service]
+# clamav may reach clamd's socket; the filter's own socket gets the tavora-api group, so only the service (and root) can open it.
+User=clamav
+Group=tavora-api
+SupplementaryGroups=clamav
+RuntimeDirectory=tavora-clamd
+RuntimeDirectoryMode=0750
+ExecStart=/usr/local/bin/node /usr/local/lib/tavora/tavora-clamd-filter.mjs /run/tavora-clamd/clamd.sock /run/clamav/clamd.ctl
+Restart=on-failure
+RestartSec=5
+MemoryMax=128M
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+CapabilityBoundingSet=
+LockPersonality=true
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

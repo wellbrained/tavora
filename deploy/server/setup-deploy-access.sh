@@ -269,6 +269,11 @@ before_unit="$(sha256sum /etc/systemd/system/tavora-api.service 2>/dev/null || t
 put apps/api/deploy/tavora-api.service /etc/systemd/system/tavora-api.service 644
 put apps/api/deploy/tavora-api-backup.service /etc/systemd/system/tavora-api-backup.service 644
 put apps/api/deploy/tavora-api-backup.timer /etc/systemd/system/tavora-api-backup.timer 644
+# The clamd filter (tavora-api-clamav starts it once ClamAV is there): root's file, run as clamav, never a deploy's code.
+before_filter="$(cat /etc/systemd/system/tavora-clamd-filter.service /usr/local/lib/tavora/tavora-clamd-filter.mjs 2>/dev/null | sha256sum)"
+install -d -m 755 -o root -g root /usr/local/lib/tavora
+put apps/api/deploy/tavora-clamd-filter.service /etc/systemd/system/tavora-clamd-filter.service 644
+put apps/api/deploy/tavora-clamd-filter.mjs /usr/local/lib/tavora/tavora-clamd-filter.mjs 644
 [[ "$(sha256sum /etc/systemd/system/tavora-api.service)" == "$before_unit" ]] || unit_changed=1
 for helper in set-steam-key set-setting catalog backup clamav; do
   put "apps/api/deploy/tavora-api-$helper.sh" "/usr/local/sbin/tavora-api-$helper" 750
@@ -277,6 +282,13 @@ systemctl daemon-reload
 systemctl enable tavora-api >/dev/null 2>&1 || true
 systemctl enable --now tavora-api-backup.timer >/dev/null
 if [[ "$unit_changed" == 1 && -L /srv/tavora-api/current ]]; then systemctl restart tavora-api; say 'restarted tavora-api for its new unit'; fi
+if [[ "$(cat /etc/systemd/system/tavora-clamd-filter.service /usr/local/lib/tavora/tavora-clamd-filter.mjs | sha256sum)" != "$before_filter" ]] && systemctl is-active --quiet tavora-clamd-filter; then
+  systemctl restart tavora-clamd-filter; say 'restarted tavora-clamd-filter'
+fi
+# The service reaches clamd only through the filter now; a setting from before still names clamd's own socket.
+if grep -qE '^CLAMD_SOCKET=(/var)?/run/clamav/' /srv/tavora-api/shared/production.env 2>/dev/null; then
+  say 'The virus scan still points at clamd itself, which the service can no longer reach: run tavora-api-clamav once.'
+fi
 
 if ! cmp -s "$src/apps/api/deploy/tavora-api.caddy" /etc/caddy/tavora-api.caddy; then
   stamp="$(date -u +%Y%m%d%H%M%S)"
