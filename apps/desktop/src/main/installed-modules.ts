@@ -3,7 +3,7 @@ import path from "node:path";
 import { SIGNATURE_FILE, signedHash } from "@tavora/pack";
 import { FolderChecks } from "./module-folder-check";
 import type { OfficialUpdates } from "./official-updates";
-import { applyOwners, readOwnerRecords, type OwnerRecords } from "./installer";
+import { applyOwners, readOwnerRecords, strandedModules, type OwnerRecords } from "./installer";
 import { BROWSER_MODULE_ID, browserModule, describeModules, discoverModules, type InstalledModule, type ModuleInfo, type ModuleProblem, type ModuleSources } from "./registry";
 import { stopBlocked, type SafetyCheck } from "./safety-lists";
 
@@ -38,7 +38,8 @@ export interface InstalledModules {
  * this same step, so nothing they know about the modules can differ.
  */
 export async function loadInstalledModules(options: InstalledModulesOptions): Promise<InstalledModules> {
-  const problems: ModuleProblem[] = [];
+  // A module whose update couldn't be put right yet isn't gone: its panels wait.
+  const problems: ModuleProblem[] = [...strandedModules(options.userData)];
   const { official } = options;
   if (official?.on) await official.load();
   const downloads = official?.on ? { officialUpdates: { dir: official.dir, trusted: (id: string, dir: string) => official.trusted(id, dir) } } : {};

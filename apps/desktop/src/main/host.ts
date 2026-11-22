@@ -52,7 +52,7 @@ import { parseAction, runAction, type ActionHandlers } from "./actions";
 import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
 import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, holdLeftovers, orphanedPartitions, partitionsOf, partitionWorkspace, queueLocalDataMove } from "./module-data";
 import { AI_USAGE_MODULE_ID, DISCORD_MODULE_ID, movedModule, MOVED_MODULES_OWNER, moveOfficialModules } from "./moved-modules";
-import { checkZipData, readOwnerRecords } from "./installer";
+import { checkZipData, readOwnerRecords, recoverInstalls } from "./installer";
 import { Installed, loadInstalledModules, type InstalledModules } from "./installed-modules";
 import { sameOwner, settlePanelOwner, viewsOfAnotherOwner } from "./module-owner";
 import { PendingQuestions } from "./pending-questions";
@@ -231,7 +231,7 @@ import { appearanceThemes, discoverStyles, resolveStyle, starterStyle, STYLE_MAN
 import { panelCorners, type PanelCorners } from "./panel-corners";
 import { CLASSIC_STYLE_ID, resolveFontId, resolveRadius } from "../shared/styles";
 import { copyExample, slugOf } from "./example-copy";
-import { writeFileAtomic } from "./fsutil";
+import { SerialQueue, writeFileAtomic } from "./fsutil";
 import {
   emptyWorkspace,
   Workspaces,
@@ -698,6 +698,7 @@ export class Host {
       remember: (picked) => this.rememberPicked("module-files", picked),
       notify: (message) => (this.notice = message),
       changed: () => this.pushState(),
+      writesDone: (timeoutMs) => this.data.blobWrites.idle(timeoutMs),
     });
     this.data = new DataRegistry(options.userData, () => this.files.root(), () => this.files.moving);
     this.onlineSearch = new OnlineSearch(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl });
@@ -706,6 +707,8 @@ export class Host {
     this.catalog = new CatalogClient({ ...(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl }), onGames: (games) => this.learnFromCatalog(games) });
     this.workspaces = new Workspaces(workspaces, {
       save: (state) => this.savedData.saveWorkspace(state),
+      // A workspace added back gets the panels it had, as a start would read them.
+      isInstalled: (moduleId) => this.modules.has(moduleId) || panelsWait(this.moduleProblems)(moduleId) || movedModule(moduleId) !== undefined,
     });
     this.lifecycle = new ModuleLifecycle({
       userData: options.userData,
@@ -919,12 +922,16 @@ export class Host {
     });
     await safetyLists.load();
     const official = new OfficialUpdates({ userData, pins: resolveOfficialPins(app.isPackaged), safety: safetyLists });
+    // A module update cut off between its steps is put right before any module is looked for.
+    await recoverInstalls({ userData, userModules: userModulesDir(options), officialDir: official.dir, log: (line) => console.warn(`[tavora] ${line}`) }).catch((error: unknown) =>
+      console.error("[tavora] recovering a module update failed", error),
+    );
     const installed = new Installed(await Host.loadModules(options, library.developmentFolders, safetyLists, official), (manifest) => translateManifest(manifest, Host.languageOf(library, options)));
     const { modules, problems: moduleProblems } = installed;
     const { themes, problems: themeProblems, hints: themeHints } = await discoverThemes(Host.themeSources(options), app.getVersion());
     const styles = await discoverStyles(Host.styleSources(options));
     // Before any module session or store is opened (S5: data is keyed by owner and id).
-    await migrateModuleData(userData, (line) => console.warn(`[tavora] ${line}`), library.moduleFilesFolder ?? defaultFilesRoot(userData)).catch((error: unknown) =>
+    await migrateModuleData(userData, (line) => console.warn(`[tavora] ${line}`), library.moduleFilesFolder ?? defaultFilesRoot(userData), (owner, moduleId) => modules.get(moduleId)?.owner === owner).catch((error: unknown) =>
       console.error("[tavora] moving module data under its owner failed", error),
     );
     // Discord and AI Usage left Tavora for the catalog: what they saved goes with them.
@@ -1152,9 +1159,16 @@ export class Host {
   /**
    * Looks for modules again; panels of modules that are gone are closed, and panels of a module now loaded
    * from another folder start again from it (a blocked built-in update falls back to the shipped copy at once).
-   * Answers with the modules whose panels started again.
+   * Answers with the modules whose panels started again. One at a time: a look that finished later with an older view
+   * of the folders would close the panels of a module the newer one just found.
    */
-  private async reloadModules(): Promise<ReadonlySet<string>> {
+  private reloadModules(): Promise<ReadonlySet<string>> {
+    return this.moduleReloads.run(() => this.reloadModulesNow());
+  }
+
+  private readonly moduleReloads = new SerialQueue();
+
+  private async reloadModulesNow(): Promise<ReadonlySet<string>> {
     const roots = new Map([...this.modules].map(([id, module]) => [id, module.root]));
     this.installed.replace(await Host.loadModules(this.options, this.library.developmentFolders, this.safetyLists, this.official));
     const { modules } = this.installed;

@@ -159,7 +159,12 @@ export async function discoverModules(
     else if (project?.length === 0) {
       problems.push({ folder: path.basename(dir), path: dir, message: "there is no tavora.module.json in this folder or in the folders directly inside it", developmentFolder: dir, kind: "no-module" });
     }
-    const found = project === undefined ? await candidates(dir) : project === "missing" ? [] : project;
+    const found =
+      project === undefined
+        ? await candidates(dir, () => problems.push({ folder: path.basename(dir), path: dir, message: "this folder can't be read", kind: "missing", ...(provenance === "official" ? { official: true as const } : {}) }))
+        : project === "missing"
+          ? []
+          : project;
     for (const candidate of found) {
       const report = (message: string, kind?: ModuleProblem["kind"], about?: ModuleProblem["about"], values?: ModuleProblemValues) =>
         problems.push({
@@ -232,15 +237,17 @@ export function mayHoldProject(name: string): boolean {
  * The module projects in a development folder: the folder itself when it has a manifest, else
  * every folder directly inside it that has one, so a developer can add the folder they keep all
  * their modules in. Never deeper, so node_modules and build output are not searched.
- * "missing" when the folder is gone.
+ * "missing" when the folder is gone or can't be read right now: Tavora can't tell which modules it holds, so their
+ * panels wait (panelsWait). A folder inside it that is busy for a moment counts as a project: reading its manifest then
+ * reports it, and panels wait until it is free. One Tavora may not read at all (a system folder on a drive) never held
+ * a module it could load, so it isn't one, or every panel would wait for good.
  */
 export async function developmentProjects(dir: string): Promise<string[] | "missing"> {
   let entries;
   try {
     entries = await readdir(dir, { withFileTypes: true });
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    return code === "ENOENT" || code === "ENOTDIR" ? "missing" : [];
+  } catch {
+    return "missing";
   }
   if (entries.some((entry) => entry.isFile() && entry.name === MANIFEST)) return [dir];
   const projects: string[] = [];
@@ -249,8 +256,8 @@ export async function developmentProjects(dir: string): Promise<string[] | "miss
     const child = path.join(dir, entry.name);
     try {
       if ((await readdir(child, { withFileTypes: true })).some((item) => item.isFile() && item.name === MANIFEST)) projects.push(child);
-    } catch {
-      // Gone or unreadable: not a project.
+    } catch (error) {
+      if (isBusy(error)) projects.push(child);
     }
   }
   return projects.sort((a, b) => a.localeCompare(b));
@@ -276,12 +283,25 @@ export async function projectEntry(dir: string): Promise<string | undefined> {
   }
 }
 
-async function candidates(dir: string): Promise<string[]> {
+/** Something holds the folder for a moment; it will read again by itself. */
+function isBusy(error: unknown): boolean {
+  return ["EBUSY", "EAGAIN", "EIO", "EMFILE", "ENFILE", "ETIMEDOUT"].includes((error as NodeJS.ErrnoException).code ?? "");
+}
+
+/** The file or folder is not there (rather than there and unreadable for now). */
+function isGone(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException).code;
+  return code === "ENOENT" || code === "ENOTDIR";
+}
+
+/** The module folders in `dir`. One that is there but can't be read right now is reported, so panels aren't forgotten. */
+async function candidates(dir: string, unreadable: () => void): Promise<string[]> {
   try {
     const entries = await readdir(dir, { withFileTypes: true });
     if (entries.some((entry) => entry.isFile() && entry.name === MANIFEST)) return [dir];
     return entries.filter((entry) => entry.isDirectory()).map((entry) => path.join(dir, entry.name));
-  } catch {
+  } catch (error) {
+    if (!isGone(error)) unreadable();
     return [];
   }
 }

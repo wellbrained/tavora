@@ -21,6 +21,15 @@ export interface FolderRead {
  * may. With `read` off no file is opened: only the stamp is made, to see whether the folder changed since it was checked.
  */
 export async function readFolder(root: string, read: boolean): Promise<FolderRead | null> {
+  try {
+    return await readFolderOrThrow(root, read);
+  } catch {
+    return null;
+  }
+}
+
+/** readFolder for a caller that must tell "not a module's folder" (null) from "can't be read right now" (it throws). */
+export async function readFolderOrThrow(root: string, read: boolean): Promise<FolderRead | null> {
   const files: ZipFile[] = [];
   const stamp: string[] = [];
   let total = 0;
@@ -42,11 +51,7 @@ export async function readFolder(root: string, read: boolean): Promise<FolderRea
     }
     return true;
   };
-  try {
-    return (await walk(root, "")) ? { files, stamp: stamp.sort().join("\n") } : null;
-  } catch {
-    return null;
-  }
+  return (await walk(root, "")) ? { files, stamp: stamp.sort().join("\n") } : null;
 }
 
 /** What the signature check found in a folder. */

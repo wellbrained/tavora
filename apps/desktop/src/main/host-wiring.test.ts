@@ -18,7 +18,7 @@ function body(start: RegExp): string {
 describe("host.ts", () => {
   it("ends open OBS pages when grants change and whenever modules are looked for again", () => {
     expect(body(/grantsChanged: \(\) => \{/)).toContain("this.streaming?.recheckStreams()");
-    expect(body(/private async reloadModules\(\)/)).toContain("this.streaming?.recheckStreams()");
+    expect(body(/private async reloadModulesNow\(\)/)).toContain("this.streaming?.recheckStreams()");
   });
 
   it("saves and pushes once per burst of panel.setContent, and writes a held-back save before flushing", () => {
@@ -37,7 +37,7 @@ describe("host.ts", () => {
     expect(body(/private networkHostsOf\(/)).toContain("sameOwner(module, this.modules)");
     expect(body(/private connectorsOf\(/)).toContain("sameOwner(module, this.modules)");
     expect(body(/private folderHostOf\(/)).toContain("sameOwner(module, this.modules)");
-    const reload = body(/private async reloadModules\(\)/);
+    const reload = body(/private async reloadModulesNow\(\)/);
     expect(reload).toContain("viewsOfAnotherOwner(this.moduleViews(), modules)");
     // In place: closing for good would forget the panel's bounds, and the host UI sends none while they don't change.
     expect(reload).toContain("this.panels.restart(view.instanceId);");

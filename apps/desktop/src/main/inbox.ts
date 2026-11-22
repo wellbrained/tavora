@@ -169,6 +169,8 @@ export class Inbox {
   private loaded = false;
   private timer: ReturnType<typeof setInterval> | undefined;
   private busy: Promise<void> | null = null;
+  /** A refresh asked for while a read runs: one more read follows. */
+  private readAgain: { justSent: boolean } | null = null;
 
   constructor(options: InboxOptions) {
     this.o = options;
@@ -254,7 +256,23 @@ export class Inbox {
 
   /** Reads the conversations, the email switch and (now and then) the editable texts. Quietly; offline keeps what was shown. */
   refresh(justSent = false): Promise<void> {
-    this.busy ??= this.read(justSent).finally(() => (this.busy = null));
+    if (this.busy) {
+      // A read on its way may have started before what this refresh is about (a message just sent): one more follows it.
+      this.readAgain = { justSent: justSent || this.readAgain?.justSent === true };
+      return this.busy;
+    }
+    this.busy = (async () => {
+      try {
+        let next: { justSent: boolean } | null = { justSent };
+        while (next) {
+          this.readAgain = null;
+          await this.read(next.justSent);
+          next = this.readAgain;
+        }
+      } finally {
+        this.busy = null;
+      }
+    })();
     return this.busy;
   }
 

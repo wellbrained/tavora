@@ -1,17 +1,25 @@
 import { randomBytes } from "node:crypto";
-import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
+import { renameHeld } from "./rename-held";
 
 /**
- * Writes to a temp file and renames it over the target, so readers never see half a file. Each write has a temp file
- * of its own, so two writes of the same file at once can't move each other's half-written one into place.
+ * Writes to a temp file, flushes it to the disk and renames it over the target, so readers never see half a file and a
+ * power cut leaves the old file or the new one, never an empty one. Each write has a temp file of its own, so two
+ * writes of the same file at once can't move each other's half-written one into place.
  */
 export async function writeFileAtomic(file: string, body: string | Uint8Array): Promise<void> {
   await mkdir(path.dirname(file), { recursive: true });
   const temp = `${file}.${randomBytes(6).toString("hex")}.tmp`;
   try {
-    await writeFile(temp, body);
-    await rename(temp, file);
+    const handle = await open(temp, "wx");
+    try {
+      await handle.writeFile(body);
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    await renameHeld(temp, file);
   } catch (error) {
     await rm(temp, { force: true }).catch(() => undefined);
     throw error;
