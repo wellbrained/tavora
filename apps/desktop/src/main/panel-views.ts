@@ -394,6 +394,15 @@ export class PanelViews {
     if (reasons.size === 0) this.keep.delete(instanceId);
   }
 
+  /**
+   * Lets go of one reason the panel runs out of sight (`stopKeeping`); with none left, its view goes too (`release`),
+   * unless its workspace is shown or it is lent to the in-game layer. It comes back with its workspace.
+   */
+  letGo(instanceId: string, why: KeepReason = "overlay"): void {
+    this.stopKeeping(instanceId, why);
+    if (!this.deps.shownHere(instanceId) && !this.lent.has(instanceId) && !this.keep.has(instanceId)) this.release(instanceId);
+  }
+
   /** Kept for that reason, or for any when left out. */
   isKept(instanceId: string, why?: KeepReason): boolean {
     const reasons = this.keep.get(instanceId);

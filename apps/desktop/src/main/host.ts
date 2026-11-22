@@ -3358,13 +3358,8 @@ export class Host {
         }
       }
     }
-    for (const instanceId of this.panels.keptIds()) {
-      if (wanted.has(instanceId)) continue;
-      this.panels.stopKeeping(instanceId);
-      const shownHere = this.workspace && this.records(this.workspace.id).some((record) => record.instanceId === instanceId);
-      // Still running with its game: it stays.
-      if (!shownHere && !this.panels.isLent(instanceId) && !this.panels.isKept(instanceId)) this.panels.release(instanceId);
-    }
+    // One still running with its game, shown in its workspace or over the game stays.
+    for (const instanceId of this.panels.keptIds()) if (!wanted.has(instanceId)) this.panels.letGo(instanceId);
   }
 
   /** Back from the Overlay page to the workspace it was opened from, else Home. */

@@ -36,13 +36,18 @@ function rig() {
   const panels: WithGamePanelViews = {
     keepRunning: (id, why = "overlay") => void (kept.get(id) ?? kept.set(id, new Set()).get(id)!).add(why),
     stopKeeping: (id, why = "overlay") => void kept.get(id)?.delete(why),
-    isKept: (id, why) => (why ? (kept.get(id)?.has(why) ?? false) : (kept.get(id)?.size ?? 0) > 0),
+    // As Panel views does (its own tests check it): the view goes once nothing keeps it and its workspace isn't shown.
+    letGo: (id, why = "overlay") => {
+      kept.get(id)?.delete(why);
+      const shownHere = world.shown !== null && (layouts[world.shown] ?? []).some((record) => record.instanceId === id);
+      if (!shownHere && (kept.get(id)?.size ?? 0) === 0) panels.release(id);
+    },
     has: (id) => open.has(id),
-    layOut: (id) => void log.push(`lay out ${id === HIDDEN ? "hidden" : id}`),
     release: (id) => {
       open.delete(id);
       log.push(`release ${id === HIDDEN ? "hidden" : id}`);
     },
+    layOut: (id) => void log.push(`lay out ${id === HIDDEN ? "hidden" : id}`),
     isLent: () => false,
   };
   const withGame = new WithGamePanels({
@@ -121,7 +126,7 @@ describe("WithGamePanels", () => {
       fits: () => true,
       records: () => [],
       shownWorkspaceId: () => null,
-      panels: () => ({ keepRunning: () => undefined, stopKeeping: () => undefined, isKept: () => false, has: () => false, layOut: () => undefined, release: () => undefined, isLent: () => false }),
+      panels: () => ({ keepRunning: () => undefined, stopKeeping: () => undefined, letGo: () => undefined, has: () => false, layOut: () => undefined, release: () => undefined, isLent: () => false }),
       createView: () => void log.push("create"),
       held: () => false,
       moduleName: () => null,

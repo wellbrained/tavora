@@ -1310,6 +1310,33 @@ describe("cleanup", () => {
     expect(rig.views.keptIds("game")).toEqual([]);
   });
 
+  it("lets go of a kept panel's view only once nothing holds it: no reason left, its workspace not shown, not over the game", () => {
+    const rig = panelViewsRig();
+    rig.add(A);
+    rig.add(B);
+    rig.add(C);
+    for (const instanceId of [A, B, C]) rig.views.keepRunning(instanceId, "game");
+    rig.views.keepRunning(A);
+    rig.world.away = new Set([A, C]);
+    // Still kept for the overlays.
+    rig.views.letGo(A, "game");
+    expect(rig.views.has(A)).toBe(true);
+    // Its workspace is shown: it stays in its slot.
+    rig.views.letGo(B, "game");
+    expect(rig.views.has(B)).toBe(true);
+    expect(rig.views.isKept(B)).toBe(false);
+    // Over the game: it stays with the layer, and goes when it comes back to a workspace that isn't shown.
+    const lent = rig.lend(C);
+    rig.views.letGo(C, "game");
+    expect(rig.views.has(C)).toBe(true);
+    lent.end();
+    expect(rig.views.has(C)).toBe(false);
+    // Nothing holds it any more.
+    rig.views.letGo(A);
+    expect(rig.views.has(A)).toBe(false);
+    expect(rig.calls).toContain(`releasing ${A} false`);
+  });
+
   it("closing a panel nobody built a view for still forgets its state", () => {
     const rig = panelViewsRig();
     rig.views.setAwaiting(A);
