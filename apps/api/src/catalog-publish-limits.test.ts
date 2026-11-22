@@ -644,6 +644,21 @@ describe("a zip that's gone", () => {
     expect(catalog.mostSimilar(self, copyHashes([shared]))).toMatchObject({ id: "wellbrained.timer" });
   });
 
+  it("still serves a restored zip when its mark can't be written", async () => {
+    const { catalog, kept, file } = await twoPublishers();
+    rmSync(file);
+    catalog.backfillSignedHashes();
+    writeFileSync(file, kept);
+    const db = (catalog as unknown as { db: DatabaseSync }).db;
+    const prepare = db.prepare.bind(db);
+    const refused = vi.spyOn(db, "prepare").mockImplementation((sql: string) => {
+      if (sql.startsWith("update versions set file_hashes = coalesce")) throw new Error("attempt to write a readonly database");
+      return prepare(sql);
+    });
+    expect(await catalog.openZip(sha(kept))).not.toBeNull();
+    expect(refused).toHaveBeenCalled();
+  });
+
   it("lets a waiting version be approved once its right file is back", async () => {
     const { developer, send, approve, catalog, dir } = setup();
     const dev = developer("dev@example.com", false);

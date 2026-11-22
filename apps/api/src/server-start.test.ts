@@ -112,6 +112,17 @@ describe("a request that stops sending its body", () => {
     expect(line.isClosed()).toBe(true);
   });
 
+  it("is cut off through the real HTTP adapter while a route is still reading it", async () => {
+    const app = new Hono().post("/v1/account/profile", async (context) => context.text(await context.req.text()));
+    const server = serve({ fetch: app.fetch, port: 0, hostname: "127.0.0.1" }) as Server;
+    servers.push(server);
+    setServerTimeouts(server, { bodyMs: 80, answeredMs: 40 });
+    await new Promise((resolve) => server.once("listening", resolve));
+    const line = stalled((server.address() as net.AddressInfo).port, "/v1/account/profile");
+    await line.closed;
+    expect(line.isClosed()).toBe(true);
+  });
+
   it("leaves a finished request's connection open for the next one", async () => {
     const port = await serverWith(true);
     const socket = net.connect(port, "127.0.0.1");

@@ -1546,6 +1546,9 @@ export class CatalogStore {
       const [copies, hash] = "refused" in read ? ["[]", null] : [read.copies, read.hash];
       this.db.prepare("update versions set file_hashes = coalesce(file_hashes, ?), signed_sha256 = coalesce(signed_sha256, ?), zip_removed = null where sha256 = ? and zip_removed like ?").run(copies, hash, sha256, `${MISSING_ZIP}%`);
       return true;
+    } catch {
+      // A database that can't be written right now must not turn a good download into an error; it stays marked.
+      return false;
     } finally {
       ticket.release();
       if (needed >= FREE_AFTER_BYTES) setImmediate(freeMemory);
