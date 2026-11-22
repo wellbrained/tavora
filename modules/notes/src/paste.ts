@@ -7,7 +7,7 @@ import { combineTransactionSteps, Extension, getChangedRanges } from "@tiptap/co
 import { Fragment, Slice } from "@tiptap/pm/model";
 import { Plugin, PluginKey, type Transaction } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
-import { clipboardHasText } from "./images";
+import { clipboardHasText, isAcceptedType } from "./images";
 
 /** Longer text is pasted as plain paragraphs, without looking for links or Markdown in it. */
 export const PLAIN_PASTE_CHARS = 100_000;
@@ -15,6 +15,23 @@ export const PLAIN_PASTE_CHARS = 100_000;
 export const MAX_PASTE_CHARS = 500_000;
 /** In a paragraph longer than this, typing doesn't turn web addresses into links (the finder would read all of it). */
 export const LONG_TEXTBLOCK = 20_000;
+/**
+ * A word (characters without a space) at least this long is not searched for links: the finder is about quadratic on
+ * dotted text (`a.a.a…`, minified code), 1 s for 20k characters, while 2k take about 10 ms. Real addresses are shorter.
+ */
+export const LONG_WORD = 2_000;
+
+/** Whether the text has a run of at least `min` characters without whitespace. Linear, unlike /\S{2000,}/. */
+export function hasLongWord(text: string, min = LONG_WORD): boolean {
+  let run = 0;
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    // Space, tab, line breaks and the no-break space split words for the link finder.
+    if (code === 32 || (code >= 9 && code <= 13) || code === 160) run = 0;
+    else if (++run >= min) return true;
+  }
+  return false;
+}
 
 /** The pictures and texts of a whiteboard's copy, in the order they were drawn. */
 export interface WhiteboardClip {
@@ -64,7 +81,8 @@ export function readWhiteboardClip(text: string): WhiteboardClip | null {
     if (seen.has(fileId) || !isRecord(file) || typeof file.dataURL !== "string") return;
     seen.add(fileId);
     const picture = fileFromDataUrl(file.dataURL, `picture-${pictures.length + 1}`);
-    if (picture) pictures.push(picture);
+    // Only kinds a note can hold (no SVG or HTML): the others would each bring a "not supported" message.
+    if (picture && isAcceptedType(picture.type)) pictures.push(picture);
   };
   for (const element of elements) {
     if (element.isDeleted === true) continue;
@@ -109,9 +127,11 @@ export function handleNotePaste(view: EditorView, event: ClipboardEvent, host: P
   const clip = readWhiteboardClip(text);
   if (clip) {
     event.preventDefault();
-    if (clip.texts.length) insertPlainText(view, clip.texts.join("\n"));
+    const words = clip.texts.join("\n");
+    if (words.length > MAX_PASTE_CHARS) host.notice(host.texts.tooLong);
+    else if (words) insertPlainText(view, words);
     if (clip.pictures.length) host.addImages(clip.pictures);
-    else if (!clip.texts.length) host.notice(host.texts.drawingOnly);
+    else if (!words) host.notice(host.texts.drawingOnly);
     return true;
   }
   if (text.length > MAX_PASTE_CHARS) {
@@ -119,22 +139,32 @@ export function handleNotePaste(view: EditorView, event: ClipboardEvent, host: P
     host.notice(host.texts.tooLong);
     return true;
   }
-  if (text.length <= PLAIN_PASTE_CHARS) return false;
+  // Long text, or a word too long for the link finder, goes in plain. The HTML side isn't checked: a web page's copy
+  // often carries its pictures as long data: URLs, which the editor drops quickly, and it should keep its formatting.
+  if (text.length <= PLAIN_PASTE_CHARS && !hasLongWord(text)) return false;
   event.preventDefault();
   insertPlainText(view, text);
   return true;
 }
 
-/** Whether a change touches a paragraph (or heading) longer than LONG_TEXTBLOCK. */
+/**
+ * Whether a change touches a paragraph (or heading) longer than LONG_TEXTBLOCK, or ends a word of LONG_WORD or more
+ * (autolink reads the last word before the change).
+ */
 function touchesLongText(tr: Transaction): boolean {
   let long = false;
   for (const { newRange } of getChangedRanges(combineTransactionSteps(tr.before, [tr]))) {
     const from = Math.max(0, newRange.from);
     const to = Math.min(tr.doc.content.size, newRange.to);
-    tr.doc.nodesBetween(from, to, (node) => {
+    tr.doc.nodesBetween(from, to, (node, pos) => {
       if (long) return false;
       if (!node.isTextblock) return true;
-      long = node.content.size > LONG_TEXTBLOCK;
+      if (node.content.size > LONG_TEXTBLOCK) long = true;
+      else if (node.content.size >= LONG_WORD) {
+        // The text just before and inside the change: enough to hold one word too long to search.
+        const start = pos + 1;
+        long = hasLongWord(tr.doc.textBetween(Math.max(start, from - LONG_WORD), Math.min(start + node.content.size, to), " ", " "));
+      }
       return false;
     });
     if (long) return true;

@@ -131,6 +131,32 @@ describe("pasting into a note", () => {
     expect(editor.getText({ blockSeparator: "\n" })).toBe(lines.join("\n"));
   });
 
+  it("pastes dotted text without spaces at once, though it is shorter than long text", () => {
+    // Minified code and long dotted chains: the link finder is about quadratic on them (40k took 5.8 s).
+    const { editor } = setup();
+    const text = "a.".repeat(20_000);
+    const started = performance.now();
+    paste(editor, text);
+    expect(performance.now() - started).toBeLessThan(1500);
+    expect(editor.getText()).toBe(text);
+  });
+
+  it("refuses a whiteboard's texts too long for a note, but keeps its pictures", () => {
+    const { editor, host } = setup();
+    paste(editor, whiteboardCopy([{ id: "t", type: "text", text: "x".repeat(MAX_PASTE_CHARS + 1) }, imageElement("a")], { a: `data:image/png;base64,${PNG}` }));
+    expect(host.notice).toHaveBeenCalledWith("too long");
+    expect(host.addImages).toHaveBeenCalledTimes(1);
+    expect(editor.getText()).toBe("");
+  });
+
+  it("leaves out picture kinds a note can't hold, and says it's only a drawing", () => {
+    const { editor, host } = setup();
+    paste(editor, whiteboardCopy([imageElement("a")], { a: `data:image/svg+xml;base64,${btoa("<svg/>")}` }));
+    expect(host.addImages).not.toHaveBeenCalled();
+    expect(host.notice).toHaveBeenCalledWith("drawing only");
+    expect(editor.getText()).toBe("");
+  });
+
   it("still turns a short pasted address into a link", () => {
     const { editor } = setup();
     paste(editor, "https://tavora.gg");
@@ -150,6 +176,15 @@ describe("a note that already holds a pasted picture's text", () => {
     editor.commands.insertContent("ok ");
     expect(performance.now() - started).toBeLessThan(1500);
     expect(editor.getText({ blockSeparator: "\n" }).endsWith(" \nok ")).toBe(true);
+  });
+
+  it("can be typed in after a long dotted word in a short paragraph, without freezing", () => {
+    const { editor } = setup({ type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "a.".repeat(9_500) }] }] });
+    const started = performance.now();
+    editor.chain().focus("end").insertContent(" ").run();
+    editor.commands.insertContent("ok ");
+    expect(performance.now() - started).toBeLessThan(500);
+    expect(editor.getText().endsWith(" ok ")).toBe(true);
   });
 
   it("still links an address typed in a short paragraph", () => {
