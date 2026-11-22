@@ -699,15 +699,19 @@ export class PanelViews {
     return !!adapter && [...this.entries].some(([instanceId, entry]) => entry.adapter === adapter && this.lent.has(instanceId));
   }
 
-  /** Back in the window and laid out at once; a panel whose workspace is not shown is let go of instead. Only this lend's, once. */
+  /**
+   * Back in the window and laid out at once; a panel whose workspace is not shown and that nothing keeps running is let
+   * go of instead (as `letGo` does). Only this lend's, once.
+   */
   private takeBack(instanceId: string, loan: { revoked: () => void }): void {
     if (this.lent.get(instanceId) !== loan) return;
     this.lent.delete(instanceId);
     const adapter = this.get(instanceId);
     // Not here any more: the panel itself is closing, or Tavora is.
     if (!adapter || this.deps.windowGone()) return;
-    // The slot it comes back to is not on screen: the panel closes like any panel of a workspace that is left, and opens again with its workspace.
-    if (!this.deps.shownHere(instanceId)) return this.remove(instanceId, "release");
+    // The slot it comes back to is not on screen: the panel closes like any panel of a workspace that is left, and opens
+    // again with its workspace. One kept for the overlays or with its game goes on running, hidden, as after closeAll.
+    if (!this.deps.shownHere(instanceId) && !this.keep.has(instanceId)) return this.remove(instanceId, "release");
     this.deps.mount(adapter);
     adapter.setVisible(false);
     this.layOut(instanceId, adapter);
