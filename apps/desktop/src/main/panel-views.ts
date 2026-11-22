@@ -1,5 +1,6 @@
 import { dialogPictureKey } from "../shared/dialog-picture";
 import type { InstanceStatus, PanelPicture, PanelPlacement } from "../shared/host-api";
+import type { OverlayPanel } from "./game-overlay-window";
 import { INSTANCE_ID } from "./ids";
 import { LAYOUT_LIMITS } from "./layout";
 import type { PanelLaunch } from "./panel-content";
@@ -90,6 +91,8 @@ export interface PanelViewAdapter {
   readonly settled: Promise<void>;
   /** Whether a still image can stand in for the panel while a menu is open. */
   readonly capturable: boolean;
+  /** The panel as a window of the in-game layer holds it, or null when it can't go there (a Browser panel, a page that is gone). */
+  inGame(): OverlayPanel | null;
   setBounds(rect: PanelRect): void;
   setVisible(visible: boolean): void;
   suspend(): void;
@@ -127,6 +130,10 @@ export interface PanelViewsDeps {
   moduleGone?(moduleId: string): void;
   /** Whether the panel belongs to the workspace shown (a panel back from the in-game layer to another workspace is let go of). */
   shownHere(instanceId: string): boolean;
+  /** Makes the view of a panel whose workspace isn't shown, for the in-game layer (`lend`); a panel that can't have one is left without. */
+  openForGame?(instanceId: string, workspaceId: string): void;
+  /** A panel's view is about to leave the window for the in-game layer: its tooltips and menus go. */
+  lending?(instanceId: string): void;
   /** A panel is back in its slot from the in-game layer (the host UI shows it, a waiting dialog may open). */
   returned?(instanceId: string): void;
   /** The panel dialog closed (the host UI takes its frame away). */
@@ -159,11 +166,21 @@ export interface PanelViewsDeps {
   now?(): number;
 }
 
-/** A panel's view lent to the in-game layer: it holds the view until `return` puts it back in its slot. */
-export interface PanelLease {
-  readonly view: PanelViewAdapter;
-  /** Gives the view back, laid out where its workspace last put it; does nothing when it was given back or the panel closed. */
-  return(): void;
+/** What holds a lent panel's view: a window of the in-game layer, which lets go of the view when it is destroyed. */
+export interface PanelHolder {
+  destroy(): void;
+}
+
+/**
+ * A panel's view lent to the in-game layer (`lend`), held by `window` until it comes back to its slot. Each step happens
+ * once: a step after the panel closed for good, or after it came back, does nothing more (a later lend is never touched).
+ */
+export interface PanelInGame<W extends PanelHolder> {
+  readonly window: W;
+  /** The window goes (destroyed first, so it lets go of the view), then the view is back in its slot. */
+  end(): void;
+  /** Only the view goes back to its slot: its window ended on its own, and is destroyed later with `end`. */
+  giveBack(): void;
 }
 
 /** Why a panel runs out of sight: an overlay or panel item of the in-game overlays, or its game running (a `withGame` type). */
@@ -212,8 +229,8 @@ export class PanelViews {
   private readonly placements = new Map<string, PanelPlacement>();
   /** Panels that run out of sight, from any workspace, and why: for the overlays, or with their game (KeepReason). */
   private readonly keep = new Map<string, Set<KeepReason>>();
-  /** Panels lent to the in-game layer, with what to tell it when the panel closes for good. */
-  private readonly lent = new Map<string, () => void>();
+  /** Panels lent to the in-game layer: each lend, with what to tell the layer when the panel closes for good. */
+  private readonly lent = new Map<string, { revoked: () => void }>();
   private openingState: { startedAt: number; timer: ReturnType<typeof setTimeout>; tag: string } | null = null;
   private overlayOpen = false;
   /** Counts host overlays opened and closed, so the work of one that ended never touches the next. */
@@ -377,6 +394,15 @@ export class PanelViews {
     if (reasons.size === 0) this.keep.delete(instanceId);
   }
 
+  /**
+   * Lets go of one reason the panel runs out of sight (`stopKeeping`); with none left, its view goes too (`release`),
+   * unless its workspace is shown or it is lent to the in-game layer. It comes back with its workspace.
+   */
+  letGo(instanceId: string, why: KeepReason = "overlay"): void {
+    this.stopKeeping(instanceId, why);
+    if (!this.deps.shownHere(instanceId) && !this.lent.has(instanceId) && !this.keep.has(instanceId)) this.release(instanceId);
+  }
+
   /** Kept for that reason, or for any when left out. */
   isKept(instanceId: string, why?: KeepReason): boolean {
     const reasons = this.keep.get(instanceId);
@@ -498,9 +524,9 @@ export class PanelViews {
       if (this.dialogState?.instanceId === instanceId) this.closeDialog();
       // A panel in the layer is let go of by its window first (the window never closes the page, this does).
       if (ends) {
-        const revoked = this.lent.get(instanceId);
+        const loan = this.lent.get(instanceId);
         this.lent.delete(instanceId);
-        revoked?.();
+        loan?.revoked();
       }
       this.deps.unmount(adapter);
       void this.disposeView(instanceId, adapter, discard);
@@ -622,18 +648,44 @@ export class PanelViews {
   // ── The in-game layer ───────────────────────────────────────────────
 
   /**
-   * Hands the panel's view to the in-game layer, which places, shows and pauses it in its own window until the lease is
-   * returned (`layOut` and the pictures skip a lent panel). `revoked` is called when the panel closes for good while lent.
-   * Nothing when the panel has no view or is lent already.
+   * Lends the panel's view to the in-game layer, in one step: the view leaves the window (its tooltips and menus go), and
+   * `open` makes the window that holds it, which places, shows and pauses it there (`layOut` and the pictures skip a lent
+   * panel) until `end` or `giveBack`. A panel whose workspace isn't shown gets a view made for the layer
+   * (`openForGame`). `revoked` is called when the panel closes for good while lent. When `open` throws, the view is back
+   * in its slot before the error goes on. Null when Tavora's window is gone, the panel can't go in the game (a Browser
+   * panel, no view, a page that is gone) or it is lent already.
    */
-  lend(instanceId: string, revoked: () => void): PanelLease | undefined {
+  lend<W extends PanelHolder>(instanceId: string, workspaceId: string, open: (panel: OverlayPanel) => W, revoked: () => void): PanelInGame<W> | null {
+    if (this.deps.windowGone()) return null;
+    const existing = this.get(instanceId);
+    if (existing && existing.kind !== "module") return null;
+    if (!existing) this.deps.openForGame?.(instanceId, workspaceId);
     const adapter = this.get(instanceId);
-    if (!adapter || this.lent.has(instanceId)) return undefined;
-    this.lent.set(instanceId, revoked);
+    const panel = adapter?.inGame() ?? null;
+    if (!adapter || !panel) return null;
+    this.deps.lending?.(instanceId);
+    if (this.lent.has(instanceId)) return null;
+    const loan = { revoked };
+    this.lent.set(instanceId, loan);
     this.inSight.delete(instanceId);
     this.dropStandIn(instanceId);
     this.deps.unmount(adapter);
-    return { view: adapter, return: () => this.takeBack(instanceId) };
+    const giveBack = () => this.takeBack(instanceId, loan);
+    let window: W;
+    try {
+      window = open(panel);
+    } catch (error) {
+      giveBack();
+      throw error;
+    }
+    return {
+      window,
+      end: () => {
+        window.destroy();
+        giveBack();
+      },
+      giveBack,
+    };
   }
 
   /** Whether the panel is lent to the in-game layer. */
@@ -647,9 +699,10 @@ export class PanelViews {
     return !!adapter && [...this.entries].some(([instanceId, entry]) => entry.adapter === adapter && this.lent.has(instanceId));
   }
 
-  /** Back in the window and laid out at once; a panel whose workspace is not shown is let go of instead. */
-  private takeBack(instanceId: string): void {
-    if (!this.lent.delete(instanceId)) return;
+  /** Back in the window and laid out at once; a panel whose workspace is not shown is let go of instead. Only this lend's, once. */
+  private takeBack(instanceId: string, loan: { revoked: () => void }): void {
+    if (this.lent.get(instanceId) !== loan) return;
+    this.lent.delete(instanceId);
     const adapter = this.get(instanceId);
     // Not here any more: the panel itself is closing, or Tavora is.
     if (!adapter || this.deps.windowGone()) return;

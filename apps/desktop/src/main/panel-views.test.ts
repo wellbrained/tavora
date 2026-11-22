@@ -151,14 +151,15 @@ describe("visibility", () => {
     rig.views.place([place(A)]);
     rig.views.bindContents(a, a.webContentsId);
     const lease = rig.lend(A);
-    expect(lease.view).toBe(a);
+    expect(lease.window.panel).toBe(a);
+    expect(a.overGame).toBe(true);
     expect(rig.mounted.has(a.view)).toBe(false);
     expect(rig.views.isLent(A)).toBe(true);
     expect(rig.views.isLentContents(a.webContentsId)).toBe(true);
     // Lent once: nobody else can take it, nothing is lent that has no view.
-    expect(rig.views.lend(A, () => {})).toBeUndefined();
-    expect(rig.views.lend(B, () => {})).toBeUndefined();
-    lease.return();
+    expect(rig.views.lend(A, "w", () => ({ destroy: () => {} }), () => {})).toBeNull();
+    expect(rig.views.lend(B, "w", () => ({ destroy: () => {} }), () => {})).toBeNull();
+    lease.giveBack();
     expect(rig.views.isLent(A)).toBe(false);
     expect(rig.views.isLentContents(a.webContentsId)).toBe(false);
     expect(rig.mounted.has(a.view)).toBe(true);
@@ -166,7 +167,7 @@ describe("visibility", () => {
     expect(rig.calls).toContain(`returned ${A}`);
     // Returned twice, nothing more happens.
     rig.calls.length = 0;
-    lease.return();
+    lease.giveBack();
     expect(rig.calls).toEqual([]);
   });
 
@@ -176,7 +177,7 @@ describe("visibility", () => {
     rig.views.place([place(A)]);
     const lease = rig.lend(A);
     rig.world.away.add(A);
-    lease.return();
+    lease.giveBack();
     expect(rig.views.has(A)).toBe(false);
     expect(a.disposed).toBe(true);
     expect(rig.calls).toContain(`releasing ${A} false`);
@@ -195,9 +196,100 @@ describe("visibility", () => {
     expect(rig.views.isLent(A)).toBe(false);
     expect(a.disposed).toBe(true);
     // The layer gives the view back afterwards, to a panel that is gone.
-    lease.return();
+    lease.giveBack();
     expect(rig.mounted.has(a.view)).toBe(false);
     expect(rig.calls).not.toContain(`returned ${A}`);
+  });
+
+  it("ends a lend in order: the window lets go of the view first, then the view is back in its slot", () => {
+    const rig = panelViewsRig();
+    const a = rig.add(A);
+    rig.views.place([place(A)]);
+    const lent = rig.lend(A);
+    const order: string[] = [];
+    const destroy = lent.window.destroy.bind(lent.window);
+    lent.window.destroy = () => {
+      order.push(`destroyed, over the game ${a.overGame}`);
+      destroy();
+    };
+    const mount = rig.mounted.add.bind(rig.mounted);
+    rig.mounted.add = (view) => (order.push(`mounted, over the game ${a.overGame}`), mount(view));
+    lent.end();
+    expect(order).toEqual(["destroyed, over the game true", "mounted, over the game false"]);
+    expect(rig.views.isLent(A)).toBe(false);
+    expect(a.visible).toBe(true);
+    // Ended twice, or given back after: nothing more happens.
+    rig.calls.length = 0;
+    lent.end();
+    lent.giveBack();
+    expect(rig.calls).toEqual([]);
+  });
+
+  it("puts the view back in its slot when the window can't be made, and passes the error on", () => {
+    const rig = panelViewsRig();
+    const a = rig.add(A);
+    rig.views.place([place(A)]);
+    expect(() =>
+      rig.views.lend(A, "w", () => {
+        throw new Error("no window");
+      }, () => {}),
+    ).toThrow("no window");
+    expect(rig.views.isLent(A)).toBe(false);
+    expect(rig.mounted.has(a.view)).toBe(true);
+    expect(a.visible).toBe(true);
+    // Lent again at the next try.
+    expect(rig.lend(A).window.panel).toBe(a);
+  });
+
+  it("never lets an older lend's steps touch a newer one", () => {
+    const rig = panelViewsRig();
+    rig.add(A);
+    rig.views.place([place(A)]);
+    const first = rig.lend(A);
+    first.giveBack();
+    const second = rig.lend(A);
+    first.giveBack();
+    first.end();
+    expect(rig.views.isLent(A)).toBe(true);
+    second.end();
+    expect(rig.views.isLent(A)).toBe(false);
+  });
+
+  it("closes the panel's tooltips and menus as its view leaves, and makes a view for a panel whose workspace isn't shown", () => {
+    const made: string[] = [];
+    const rig = panelViewsRig({
+      lending: (id) => void made.push(`lending ${id}`),
+      openForGame: (id, workspaceId) => {
+        made.push(`open ${id} in ${workspaceId}`);
+        if (id === B) rig.add(B);
+      },
+    });
+    rig.add(A);
+    rig.lend(A);
+    expect(made).toEqual([`lending ${A}`]);
+    made.length = 0;
+    const lent = rig.views.lend(B, "elden", (panel) => ({ panel, destroy: () => {} }), () => {});
+    expect(made).toEqual([`open ${B} in elden`, `lending ${B}`]);
+    expect(lent?.window.panel).toBe(rig.views.get(B));
+    // One that gets no view isn't lent.
+    made.length = 0;
+    expect(rig.views.lend(C, "elden", () => ({ destroy: () => {} }), () => {})).toBeNull();
+    expect(made).toEqual([`open ${C} in elden`]);
+  });
+
+  it("lends no Browser panel, no page that is gone, and nothing once Tavora's window is gone", () => {
+    const rig = panelViewsRig();
+    const open = vi.fn(() => ({ destroy: () => {} }));
+    rig.add(A, "browser");
+    expect(rig.views.lend(A, "w", open, () => {})).toBeNull();
+    const b = rig.add(B);
+    b.gone = true;
+    expect(rig.views.lend(B, "w", open, () => {})).toBeNull();
+    b.gone = false;
+    rig.world.gone = true;
+    expect(rig.views.lend(B, "w", open, () => {})).toBeNull();
+    expect(open).not.toHaveBeenCalled();
+    expect(rig.views.isLent(A) || rig.views.isLent(B)).toBe(false);
   });
 
   it("only releasing a lent panel does not tell the layer", () => {
@@ -310,7 +402,7 @@ describe("visibility", () => {
     rig.views.disposeAll();
     expect(a.disposed).toBe(true);
     expect(rig.views.isLent(A)).toBe(false);
-    lease.return();
+    lease.giveBack();
     expect(rig.mounted.has(a.view)).toBe(false);
     expect(rig.calls).not.toContain(`revoked ${A}`);
   });
@@ -320,7 +412,7 @@ describe("visibility", () => {
     const a = rig.add(A);
     const lease = rig.lend(A);
     rig.world.gone = true;
-    lease.return();
+    lease.giveBack();
     expect(rig.mounted.has(a.view)).toBe(false);
     expect(rig.views.isLent(A)).toBe(false);
   });
@@ -911,7 +1003,7 @@ describe("panel dialog", () => {
     expect(rig.views.openDialog(C, { width: 1, height: 1 })).toBe(false);
     const lease = rig.lend(A);
     expect(rig.views.openDialog(A, { width: 1, height: 1 })).toBe(false);
-    lease.return();
+    lease.giveBack();
     expect(rig.views.openDialog(A, { width: 600, height: 400 })).toBe(true);
     expect(rig.views.openDialog(A, { width: 600, height: 400 })).toBe(false);
   });
@@ -1218,6 +1310,33 @@ describe("cleanup", () => {
     expect(rig.views.keptIds("game")).toEqual([]);
   });
 
+  it("lets go of a kept panel's view only once nothing holds it: no reason left, its workspace not shown, not over the game", () => {
+    const rig = panelViewsRig();
+    rig.add(A);
+    rig.add(B);
+    rig.add(C);
+    for (const instanceId of [A, B, C]) rig.views.keepRunning(instanceId, "game");
+    rig.views.keepRunning(A);
+    rig.world.away = new Set([A, C]);
+    // Still kept for the overlays.
+    rig.views.letGo(A, "game");
+    expect(rig.views.has(A)).toBe(true);
+    // Its workspace is shown: it stays in its slot.
+    rig.views.letGo(B, "game");
+    expect(rig.views.has(B)).toBe(true);
+    expect(rig.views.isKept(B)).toBe(false);
+    // Over the game: it stays with the layer, and goes when it comes back to a workspace that isn't shown.
+    const lent = rig.lend(C);
+    rig.views.letGo(C, "game");
+    expect(rig.views.has(C)).toBe(true);
+    lent.end();
+    expect(rig.views.has(C)).toBe(false);
+    // Nothing holds it any more.
+    rig.views.letGo(A);
+    expect(rig.views.has(A)).toBe(false);
+    expect(rig.calls).toContain(`releasing ${A} false`);
+  });
+
   it("closing a panel nobody built a view for still forgets its state", () => {
     const rig = panelViewsRig();
     rig.views.setAwaiting(A);
@@ -1363,7 +1482,8 @@ describe("snapshot", () => {
   it("describes every panel, the opening, the overlay and the dialog", async () => {
     const rig = panelViewsRig();
     const a = rig.add(A);
-    rig.add(B, "browser");
+    // Only a module panel can be lent to the in-game layer.
+    rig.add(B);
     rig.lend(B);
     rig.views.setAwaiting(C);
     rig.views.setOpenedFrom(B, { instanceId: A, background: false });
@@ -1377,7 +1497,7 @@ describe("snapshot", () => {
       dialog: null,
       panels: {
         [A]: { kind: "module", status: "ready", revealed: true, firstDrawn: false, lent: false, placed: true, awaiting: false, kept: true, openedFrom: null },
-        [B]: { kind: "browser", status: "ready", revealed: true, firstDrawn: true, lent: true, placed: false, awaiting: false, kept: false, openedFrom: { instanceId: A, background: false } },
+        [B]: { kind: "module", status: "ready", revealed: true, firstDrawn: true, lent: true, placed: false, awaiting: false, kept: false, openedFrom: { instanceId: A, background: false } },
       },
     });
     rig.views.endOpening(false);

@@ -201,7 +201,7 @@ export interface WithGamePage {
 }
 
 /** The panels as far as WithGamePanels needs them (panel-views.ts PanelViews). */
-export type WithGamePanelViews = Pick<PanelViews, "keepRunning" | "stopKeeping" | "has" | "layOut" | "release" | "isLent" | "isKept">;
+export type WithGamePanelViews = Pick<PanelViews, "keepRunning" | "stopKeeping" | "letGo" | "has" | "layOut" | "release" | "isLent">;
 
 /** The modules running with one game now, for the running game's card in the rail. */
 export interface WithGameLine {
@@ -385,11 +385,8 @@ export class WithGamePanels {
 
   /** Lets go of a run's panel: the hidden one goes; one of the layout stays while its workspace shows, it is over the game or the overlays keep it. */
   private stop(run: WithGameRun): void {
-    const panels = this.deps.panels();
     this.unwatch(run.instanceId);
-    panels.stopKeeping(run.instanceId, "game");
-    const shownHere = run.inLayout && this.deps.shownWorkspaceId() === run.workspaceId && this.deps.records(run.workspaceId).some((record) => record.instanceId === run.instanceId);
-    if (!shownHere && !panels.isLent(run.instanceId) && !panels.isKept(run.instanceId)) panels.release(run.instanceId);
+    this.deps.panels().letGo(run.instanceId, "game");
     if (!run.inLayout) this.hidden.delete(run.instanceId);
     this.deps.changed();
   }

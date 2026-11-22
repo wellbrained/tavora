@@ -33,6 +33,8 @@ import { serveJsonOpen, serveJsonSave } from "./json-file-http";
 import { serveFileOpen, serveFileSave } from "./table-file-http";
 import { serveJsonExport } from './json-export-http';
 import { DRAW_CAP_MS, ON_SCREEN_MS } from "./panel-cover";
+import { stillOf } from "./panel-still";
+import type { PanelViewAdapter } from "./panel-views";
 import { recordCrash } from "./crash-log";
 import { isPrivateUrl, isWebUrl } from "./browser-url";
 import { HostError } from "./errors";
@@ -440,7 +442,10 @@ export const ADD_DIALOG_MS = 10_000;
 const PANEL_VIEW_RADIUS = 9;
 
 /** One panel instance of a module, bound to one workspace. */
-export class ModuleView {
+export class ModuleView implements PanelViewAdapter {
+  /** As Panel views sees it (panel-views.ts). */
+  readonly kind = "module";
+  readonly capturable = true;
   readonly view: WebContentsView;
   private bridge: BridgeSession | undefined;
   /**
@@ -1494,6 +1499,21 @@ export class ModuleView {
   focus(): void {
     const contents = this.view.webContents;
     if (!contents.isDestroyed()) contents.focus();
+  }
+
+  /** The panel as a hotkey hears it. */
+  get hotkeys(): ModuleView {
+    return this;
+  }
+
+  /** A still image of the page, to stand in for it while a menu is over it. */
+  capture(): Promise<string | null> {
+    return stillOf(this.view);
+  }
+
+  /** The page itself goes over the game (game-overlay-window.ts), unless it is gone. */
+  inGame(): ModuleView | null {
+    return this.view.webContents.isDestroyed() ? null : this;
   }
 
   /** The host UI reported whether the panel fills the workspace; the module hears a change. */
