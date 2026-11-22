@@ -10,7 +10,7 @@ import { HOST_SCHEME } from "./assets";
 import type { TavoraTheme } from "@tavora/sdk/protocol";
 import { GameLayerCard } from "./game-layer-card";
 import { GameOverlayWindow, type OverlayPanel } from "./game-overlay-window";
-import { GameOverlays, type OverlayWindowRequest, type PanelInfo, type PanelLoan } from "./game-overlay-service";
+import { GameOverlays, type OverlayWindowRequest, type PanelInfo } from "./game-overlay-service";
 import { GameVeilWindow } from "./game-veil-window";
 import type { GameWatcher } from "./game-watch";
 import type { GrantStore } from "./grants";
@@ -50,11 +50,8 @@ export interface OverlayHostPorts {
   workspaceId(): string | null;
   /** Asks the user in Tavora's consent dialog for a connector the module asks for on request. */
   askConnector(moduleId: string, connector: "stream-overlay"): Promise<boolean>;
-  /** What the in-game layer knows of a panel, and lending its view to the layer. */
-  panelsInGame: {
-    info(instanceId: string, workspaceId?: string): PanelInfo | null;
-    lend(instanceId: string, workspaceId: string, revoked: () => void): PanelLoan | null;
-  };
+  /** What the in-game layer knows of a panel (its view is lent by Panel views itself). */
+  panelInfo(instanceId: string, workspaceId?: string): PanelInfo | null;
   /** The Overlay page's side of the host: every panel, which ones run, leaving the page, and the system's picture dialog. */
   page: {
     sources(): SourcePanel[];
@@ -170,7 +167,7 @@ export async function createOverlayServices(wiring: OverlayWiring): Promise<Over
         }),
       shortcuts: globalShortcut,
     },
-    panels: ports.panelsInGame,
+    panels: { info: ports.panelInfo, lend: (instanceId, workspaceId, open, revoked) => wiring.panels.lend(instanceId, workspaceId, open, revoked) },
     shell: ports.shell,
     language: ports.language,
     changed: ports.overlaysChanged,

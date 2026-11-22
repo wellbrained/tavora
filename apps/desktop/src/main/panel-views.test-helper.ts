@@ -1,11 +1,15 @@
+import type { WebContentsView } from "electron";
+import type { Opacity } from "./game-overlays";
 import type { InstanceStatus } from "../shared/host-api";
-import { PanelViews, type PanelLease, type PanelRect, type PanelViewAdapter, type PanelViewsDeps } from "./panel-views";
+import type { OverlayPanel } from "./game-overlay-window";
+import { PanelViews, type PanelInGame, type PanelRect, type PanelViewAdapter, type PanelViewsDeps } from "./panel-views";
 
 let nextContents = 1;
 
-/** A panel view that only remembers what it was told, for tests of Panel views. */
-export class MemoryPanelView implements PanelViewAdapter {
-  readonly view = {};
+/** A panel view that only remembers what it was told, for tests of Panel views (and of the in-game layer, which holds it). */
+export class MemoryPanelView implements PanelViewAdapter, OverlayPanel {
+  /** Only its identity counts (what is mounted where). */
+  readonly view = {} as WebContentsView;
   readonly webContentsId = nextContents++;
   status: InstanceStatus = "ready";
   revealed = true;
@@ -21,6 +25,10 @@ export class MemoryPanelView implements PanelViewAdapter {
   focused = 0;
   disposed = false;
   image: string | null = "data:image/jpeg;base64,AAAA";
+  /** Its page is gone: it can't go in the game. */
+  gone = false;
+  /** Over the game now (a window of the in-game layer holds it). */
+  overGame = false;
 
   constructor(readonly kind: "module" | "browser" = "module") {}
 
@@ -48,12 +56,39 @@ export class MemoryPanelView implements PanelViewAdapter {
   capture(): Promise<string | null> {
     return Promise.resolve(this.image);
   }
+  inGame(): OverlayPanel | null {
+    return this.kind === "module" && !this.gone ? this : null;
+  }
+  enterGame(): void {
+    this.overGame = true;
+  }
+  leaveGame(): void {
+    this.overGame = false;
+  }
+  setGameOpacity(_opacity: Opacity): void {}
+  setGameZoom(_factor: number): void {}
+  nextFrame(): Promise<void> {
+    return Promise.resolve();
+  }
   /** How the last dispose was asked for: `now` when the panel's data is being deleted. */
   disposedNow: boolean | undefined;
   dispose(now?: boolean): Promise<void> {
     this.disposed = true;
     this.disposedNow = now ?? false;
     return Promise.resolve();
+  }
+}
+
+/** A window of the in-game layer that only holds the panel it was given, as GameOverlayWindow does (it lets go when destroyed). */
+export class MemoryLayerWindow {
+  destroyed = false;
+  constructor(readonly panel: OverlayPanel) {
+    panel.enterGame(() => true);
+  }
+  destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
+    this.panel.leaveGame();
   }
 }
 
@@ -77,8 +112,8 @@ export interface PanelViewsRig {
   /** The pictures each `frozen` call said it waits for. */
   awaited: string[][];
   ended: { show: boolean; tag: string }[];
-  /** Lends a panel to the in-game layer; `revoked <id>` is noted in `calls` if the panel closes meanwhile. */
-  lend(instanceId: string): PanelLease;
+  /** Lends a panel to a window of the in-game layer; `revoked <id>` is noted in `calls` if the panel closes meanwhile. */
+  lend(instanceId: string): PanelInGame<MemoryLayerWindow>;
   /** Opens a panel with a new in-memory view. */
   add(instanceId: string, kind?: "module" | "browser", moduleId?: string): MemoryPanelView;
 }
@@ -131,9 +166,9 @@ export function panelViewsRig(overrides: Partial<PanelViewsDeps> = {}): PanelVie
     awaited,
     ended,
     lend(instanceId) {
-      const lease = views.lend(instanceId, () => void calls.push(`revoked ${instanceId}`));
-      if (!lease) throw new Error(`${instanceId} cannot be lent`);
-      return lease;
+      const lent = views.lend(instanceId, "w", (panel) => new MemoryLayerWindow(panel), () => void calls.push(`revoked ${instanceId}`));
+      if (!lent) throw new Error(`${instanceId} cannot be lent`);
+      return lent;
     },
     add(instanceId, kind = "module", moduleId = "m") {
       const adapter = new MemoryPanelView(kind);

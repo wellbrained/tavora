@@ -24,6 +24,7 @@ import type { ToolbarSetting } from "../shared/layout-toolbar";
 import { HostError } from "./errors";
 import type { Foreground, ForegroundProbe } from "./foreground";
 import type { GameOverlayWindow, OverlayPanel } from "./game-overlay-window";
+import type { PanelInGame } from "./panel-views";
 import type { LayerCard, LayerCardRequest } from "./game-layer-card";
 import { layerCardContent, type LayerMode } from "../shared/layer-card";
 import {
@@ -183,12 +184,6 @@ export interface PanelInfo {
   preferred: { width?: number | undefined; height?: number | undefined } | null;
 }
 
-/** A panel's view lent to the layer by Panel views: the window holds it until `return` puts it back in its workspace slot. */
-export interface PanelLoan {
-  panel: OverlayPanel;
-  return(): void;
-}
-
 /** What a window shows and tells back; the service hands it to `openWindow`. */
 export interface OverlayWindowRequest {
   /** Names the overlay, for the window's sessions. */
@@ -254,8 +249,11 @@ export interface GameOverlayServiceOptions {
   panels?: {
     /** What the host knows of a panel (in this workspace, or wherever it is); null once the panel is gone. */
     info(instanceId: string, workspaceId?: string): PanelInfo | null;
-    /** Panel views lends the panel's view (made for the layer when its workspace isn't shown); null when the panel is gone or can't be. `revoked`: the panel closes for good while lent. */
-    lend(instanceId: string, workspaceId: string, revoked: () => void): PanelLoan | null;
+    /**
+     * Panel views lends the panel's view (made for the layer when its workspace isn't shown) into the window `open` makes
+     * (panel-views.ts `lend`); null when the panel is gone or can't be. `revoked`: the panel closes for good while lent.
+     */
+    lend(instanceId: string, workspaceId: string, open: (panel: OverlayPanel) => OverlayWindow, revoked: () => void): PanelInGame<OverlayWindow> | null;
   };
   /** Opens Settings at one of its settings, and tells the user something (Tavora's notice and a system notification). */
   shell: Pick<Shell, "openSetting" | "notify">;
@@ -311,7 +309,7 @@ interface Open {
   veiled?: boolean;
   instanceId?: string;
   /** The panel's view, lent by Panel views while its window holds it. */
-  loan?: PanelLoan | undefined;
+  loan?: PanelInGame<OverlayWindow> | undefined;
 }
 
 /** An item on screen: the setup it shows from, with its settings there. */
@@ -1365,16 +1363,14 @@ export class GameOverlays {
       () => this.stopPanel(panel.instanceId, this.open.get(id)?.setup),
       () => ({ name: this.options.panels?.info(panel.instanceId)?.name ?? panel.moduleId, closeLabel: translate(this.options.language(), "overlays.stopShowingLabel") }),
     );
-    const loan = this.options.panels?.lend(panel.instanceId, panel.workspaceId, () => this.stopPanel(panel.instanceId));
+    const loan = this.options.panels?.lend(
+      panel.instanceId,
+      panel.workspaceId,
+      (view) => this.options.platform.openWindow(request, view),
+      () => this.stopPanel(panel.instanceId),
+    );
     if (!loan) return null;
-    let window: OverlayWindow;
-    try {
-      window = this.options.platform.openWindow(request, loan.panel);
-    } catch (error) {
-      loan.return();
-      throw error;
-    }
-    const entry: Open = { kind: "panel", window, loan, setup, opacity: 100, hideFromCapture: false, mode: "off", shown: false, shownOrder: 0, zoom: 1, idleSince: null, instanceId: panel.instanceId };
+    const entry: Open = { kind: "panel", window: loan.window, loan, setup, opacity: 100, hideFromCapture: false, mode: "off", shown: false, shownOrder: 0, zoom: 1, idleSince: null, instanceId: panel.instanceId };
     this.open.set(id, entry);
     return entry;
   }
@@ -1383,7 +1379,7 @@ export class GameOverlays {
   private crashed(id: string): void {
     const entry = this.open.get(id);
     // A panel's page is the panel's own; the host shows its crash screen in the slot.
-    if (entry?.kind === "panel") return this.giveBack(entry);
+    if (entry?.kind === "panel") return entry.loan?.giveBack();
     this.dropWindow(id);
     const now = Date.now();
     const lately = [...(this.crashes.get(id) ?? []).filter((at) => now - at < CRASH_SPAN_MS), now];
@@ -1402,14 +1398,8 @@ export class GameOverlays {
 
   /** The window goes; a panel it held is back in its workspace slot. */
   private closeWindow(entry: Open): void {
-    entry.window.destroy();
-    this.giveBack(entry);
-  }
-
-  private giveBack(entry: Open): void {
-    const loan = entry.loan;
-    entry.loan = undefined;
-    loan?.return();
+    if (entry.loan) entry.loan.end();
+    else entry.window.destroy();
   }
 
   /** Overlays of a module that another publisher's module replaced can't be shown and are forgotten; so are panels that no longer exist. */

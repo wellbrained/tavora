@@ -150,8 +150,7 @@ import { syncIcons } from "./icon-sync";
 import { fetchSteamLibrary, importSteamGames, MAX_IMPORT_GAMES, steamGameStatus, steamLibraryView } from "./steam-import";
 import { icoFrameNear, isShareCandidate, largestIcoFrame, shareableIconFile, shareSource, steamShareGames, submitIcon } from "./share-icons";
 import { AppInfoError, readClientIcons, readSteamKinds } from "./steam-appinfo";
-import { GameOverlayWindow, type OverlayPanel } from "./game-overlay-window";
-import { GameOverlays, layerBinding, toggleBinding, type OverlayWindowRequest, type PanelInfo, type PanelLoan } from "./game-overlay-service";
+import { GameOverlays, layerBinding, toggleBinding, type PanelInfo } from "./game-overlay-service";
 import { scopeForKind } from "./game-overlays";
 import { OverlayLayout, type SourcePanel } from "./overlay-layout";
 import { OverlayCanvas } from "./overlay-canvas";
@@ -454,6 +453,16 @@ export class Host {
       });
     },
     shownHere: (instanceId) => !!this.workspaceId && this.records(this.workspaceId).some((record) => record.instanceId === instanceId),
+    // The in-game layer shows a panel of a workspace that isn't shown in a view made for it (no Browser panel goes there).
+    openForGame: (instanceId, workspaceId) => {
+      const record = this.recordOf(instanceId, workspaceId);
+      const entry = this.library.workspaces[workspaceId];
+      if (record && entry && record.moduleId !== BROWSER_MODULE_ID) this.createView(record, { id: entry.id, displayName: entry.name, kind: entry.kind });
+    },
+    lending: (instanceId) => {
+      this.tooltips.close(instanceId);
+      this.closeModuleMenu(instanceId);
+    },
     returned: () => {
       this.pushStateSoon();
       this.openPendingDialog();
@@ -4922,43 +4931,6 @@ export class Host {
     };
   }
 
-  /** Lends a panel's view to the in-game layer: its own when its workspace is shown, else one made for the layer. */
-  private lendPanel(instanceId: string, workspaceId: string, revoked: () => void): PanelLoan | null {
-    if (this.window.isDestroyed()) return null;
-    const existing = this.panels.get(instanceId);
-    if (existing && !(existing instanceof ModulePanelView)) return null;
-    if (!existing) {
-      const record = this.recordOf(instanceId, workspaceId);
-      const entry = this.library.workspaces[workspaceId];
-      if (!record || !entry || record.moduleId === BROWSER_MODULE_ID) return null;
-      this.createView(record, { id: entry.id, displayName: entry.name, kind: entry.kind });
-    }
-    const view = this.moduleView(instanceId);
-    if (!view || view.view.webContents.isDestroyed()) return null;
-    this.tooltips.close(instanceId);
-    this.closeModuleMenu(instanceId);
-    const lease = this.panels.lend(instanceId, revoked);
-    return lease ? { panel: view, return: () => lease.return() } : null;
-  }
-
-  /** The window for an overlay's page, or (with `panel`) for a panel over its game: the panel's own view goes into it, and no copy is made. */
-  private overlayWindow(request: OverlayWindowRequest, panel?: OverlayPanel): GameOverlayWindow {
-    return new GameOverlayWindow({
-      preload: path.join(path.dirname(this.options.modulePreload), "game-overlay.cjs"),
-      hidden: !!this.options.hidden,
-      id: request.id,
-      source: { page: request.page, state: request.state, watch: request.watch },
-      gameBounds: request.gameBounds,
-      moved: request.moved,
-      closeRequested: request.closeRequested,
-      layoutRequested: request.layoutRequested,
-      ended: request.ended,
-      activated: request.activated,
-      frameText: request.frameText,
-      ...(panel ? { panel } : {}),
-    });
-  }
-
   private frozenShown: (() => void) | null = null;
 
   /** Resolves once the host UI says the panels' still images are on screen, or after FROZEN_SHOWN_CAP_MS. */
@@ -5888,10 +5860,7 @@ export class Host {
         saveLibrary: () => this.saveLibrary(),
         workspaceId: () => this.workspaceId,
         askConnector: (moduleId, connector) => this.askConnector(moduleId, connector),
-        panelsInGame: {
-          info: (instanceId, workspaceId) => this.panelInfo(instanceId, workspaceId),
-          lend: (instanceId, workspaceId, revoked) => this.lendPanel(instanceId, workspaceId, revoked),
-        },
+        panelInfo: (instanceId, workspaceId) => this.panelInfo(instanceId, workspaceId),
         page: {
           sources: () => this.overlaySources(),
           keepRunning: (panels) => this.runForOverlayPage(panels),

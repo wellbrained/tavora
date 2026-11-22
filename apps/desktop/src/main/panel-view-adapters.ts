@@ -1,5 +1,6 @@
 import type { WebContentsView } from "electron";
 import type { BrowserPanel } from "./browser-view";
+import type { OverlayPanel } from "./game-overlay-window";
 import type { InstanceStatus, ModuleView } from "./module-view";
 import type { PanelRect, PanelViewAdapter } from "./panel-views";
 import { encodePng } from "./png-encode";
@@ -70,6 +71,10 @@ export class ModulePanelView implements PanelViewAdapter {
   capture(): Promise<string | null> {
     return stillOf(this.panel.view);
   }
+  /** The module's page itself goes over the game, unless it is gone. */
+  inGame(): OverlayPanel | null {
+    return this.panel.view.webContents.isDestroyed() ? null : this.panel;
+  }
   dispose(now?: boolean): Promise<void> {
     return this.panel.dispose(now);
   }
@@ -115,6 +120,10 @@ export class BrowserPanelView implements PanelViewAdapter {
   setMaximized(): void {}
   capture(): Promise<string | null> {
     return stillOf(this.panel.view);
+  }
+  /** A Browser panel never goes over the game. */
+  inGame(): null {
+    return null;
   }
   dispose(): Promise<void> {
     this.panel.dispose();
