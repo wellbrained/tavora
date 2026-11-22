@@ -12,6 +12,8 @@ paths = [
   '''^apps/desktop/src/main/folder-access\.test\.ts$''',
   '''^apps/desktop/src/main/grants\.test\.ts$''',
   '''^apps/desktop/src/main/host-files\.test\.ts$''',
+  '''^apps/desktop/src/main/module-leftovers\.test\.ts$''',
+  '''^apps/desktop/src/main/module-notes-seen\.test\.ts$''',
   '''^apps/desktop/src/main/publisher-names\.test\.ts$''',
   '''^apps/desktop/src/main/saved-samples\.test\.ts$''',
   '''^packages/pack/src/pack\.test\.ts$''',
