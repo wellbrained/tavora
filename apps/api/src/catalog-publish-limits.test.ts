@@ -1133,6 +1133,36 @@ describe("room in the catalog", () => {
     expect(existsSync(file(kept))).toBe(true);
     expect(catalog.picture(sha(kept), "png")).not.toBeNull();
   });
+
+  it("keeps the pictures of a waiting version whose zip is only marked missing", async () => {
+    const { developer, send, catalog, dir, approve } = setup({ keepVersions: 1 });
+    const dev = developer("dev@example.com");
+    const waitingIcon = picture(7);
+    const file = (data: Buffer) => path.join(dir, "pictures", `${sha(data)}.png`);
+
+    const first = moduleZip(dev.key, { icon: picture(3) });
+    expect((await send(dev, first)).status).toBe(202);
+    expect((await approve(first)).status).toBe(200);
+    const second = moduleZip(dev.key, { version: "1.1.0", icon: picture(5) });
+    expect((await send(dev, second)).status).toBe(202);
+    const later = moduleZip(dev.key, { version: "1.2.0", icon: waitingIcon });
+    expect((await send(dev, later)).status).toBe(202);
+    const laterFile = path.join(dir, "zips", `${sha(later)}.zip`);
+    const raw = new DatabaseSync(path.join(dir, "catalog.sqlite"));
+    raw.prepare("update versions set file_hashes = null where sha256 = ?").run(sha(later));
+    raw.close();
+    rmSync(laterFile);
+    catalog.backfillSignedHashes();
+    expect((await approve(later)).status).toBe(409);
+
+    // Approving 1.1.0 prunes 1.0.0; the waiting 1.2.0's zip is gone for now, but it comes back.
+    expect((await approve(second)).status).toBe(200);
+    expect(existsSync(file(waitingIcon))).toBe(true);
+
+    writeFileSync(laterFile, later);
+    expect((await approve(later)).status).toBe(200);
+    expect(catalog.picture(sha(waitingIcon), "png")).not.toBeNull();
+  });
 });
 
 describe("the developer name of a listing", () => {

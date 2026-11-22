@@ -725,11 +725,14 @@ export class CatalogStore {
     return old.length;
   }
 
-  /** Deletes a picture's file unless a version that keeps its zip, or a module's newest listed version, still names it. */
+  /**
+   * Deletes a picture's file unless a version that keeps its zip, one whose zip is only marked missing (it comes back when
+   * the file does), or a module's newest listed version, still names it.
+   */
   private dropPictureIfUnused(picture: CatalogScreenshot): void {
     const pattern = `%"${picture.sha256}"%`;
     const used = this.db
-      .prepare("select 1 from versions v where (v.zip_removed is null or v.seq = (select max(seq) from versions where module_id = v.module_id and status = 'listed')) and (v.screenshots like ? or v.icon like ?) limit 1")
+      .prepare("select 1 from versions v where (v.zip_removed is null or v.zip_removed like 'missing:%' or v.seq = (select max(seq) from versions where module_id = v.module_id and status = 'listed')) and (v.screenshots like ? or v.icon like ?) limit 1")
       .get(pattern, pattern);
     if (!used) rmSync(path.join(this.shots, `${picture.sha256}.${picture.type}`), { force: true });
   }
