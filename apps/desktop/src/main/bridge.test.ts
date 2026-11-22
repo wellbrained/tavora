@@ -2,9 +2,10 @@ import { EventEmitter } from "node:events";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { LIMITS } from "@tavora/sdk/protocol";
+import { LIMITS, type Capability } from "@tavora/sdk/protocol";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { BridgeSession, MAX_IN_FLIGHT_BYTES, newBridgeBudget, type BridgeContext } from "./bridge";
+import { BridgeSession, grantedCalls, MAX_IN_FLIGHT_BYTES, newBridgeBudget, type BridgeContext } from "./bridge";
+import { GATED_CALLS, grantAfterParams, type CallNeeds, type GrantedCall } from "./panel-gate";
 import { HostError } from "./errors";
 import { THEME } from "./games";
 import { DataRegistry } from "./storage";
@@ -1152,5 +1153,37 @@ describe("a panel that closes", () => {
     expect(session.busy).toBe(false);
     expect(await call(p, "bridge.handshake", { protocol: 1, sdkVersion: "0.1.0" })).toMatchObject({ ok: true });
     expect(session.busy).toBe(false);
+  });
+});
+
+describe("calls the user grants (panel-gate.ts GATED_CALLS)", () => {
+  const ALL: Capability[] = ["network", "aiUsage", "systemInfo", "media", "leaderboards", "discord", "overlay", "folders"];
+  /** Params with a good folder name, which is checked before the grant. */
+  const NAMED = { folder: "Documents/Game", on: true, path: "x.txt" };
+
+  it("asks the grant of exactly the calls the gate's table names", () => {
+    const named = Object.entries(GATED_CALLS).flatMap(([name, needs]) => ("grant" in needs ? [name] : []));
+    expect(grantedCalls().sort()).toEqual(named.sort());
+  });
+
+  it.each(grantedCalls())("%s is refused without its grant, before its context hears of it", async (method) => {
+    const capability = (GATED_CALLS[method as GrantedCall] as CallNeeds).grant!;
+    // Every other capability granted: only its own counts. The contexts' fakes throw (INTERNAL) if reached.
+    const p = await connected({ ...makeContext(), capabilities: () => new Set(ALL.filter((other) => other !== capability)) });
+    const params = grantAfterParams(method as GrantedCall) ? NAMED : undefined;
+    expect(await call(p, method, params)).toMatchObject({ ok: false, error: { code: "PERMISSION_DENIED", capability } });
+  });
+
+  it.each(grantedCalls())("%s checks its grant before its params, or a folder's name first", async (method) => {
+    const expected = grantAfterParams(method as GrantedCall) ? { code: "INVALID_PARAMS" } : { code: "PERMISSION_DENIED" };
+    expect(await call(port, method, { bogus: 1 })).toMatchObject({ ok: false, error: expected });
+  });
+
+  it("asks the grant again on every call, so a revoke takes effect at once", async () => {
+    let granted = new Set<Capability>(["aiUsage"]);
+    const p = await connected({ ...makeContext(), capabilities: () => granted, aiUsage: { accounts: async () => [], read: async () => Promise.reject(new Error("unused")) } });
+    expect(await call(p, "aiUsage.accounts")).toMatchObject({ ok: true, result: [] });
+    granted = new Set();
+    expect(await call(p, "aiUsage.accounts")).toMatchObject({ ok: false, error: { code: "PERMISSION_DENIED", capability: "aiUsage" } });
   });
 });

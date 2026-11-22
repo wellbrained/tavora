@@ -55,6 +55,7 @@ import { parseConnectionSettings, parseWatch, type ConnectionSettingsChange, typ
 import { parseControlParams, parseWatchParams } from "./media-parse";
 import type { ModuleData, ModuleStore, PanelStateAccess } from "./storage";
 import type { BlobStore } from "./blobs";
+import { checkGrant, grantAfterParams, type GrantedCall } from "./panel-gate";
 
 /** The parts of Electron's MessagePortMain the bridge uses. */
 export interface BridgePort {
@@ -285,11 +286,6 @@ function required(params: Record<string, unknown>, name: string): unknown {
   return params[name];
 }
 
-/** Refuses a gated method when the user has not granted its capability (G9), before anything else is looked at. */
-function needs(s: BridgeSession, capability: Capability, method: string): void {
-  if (!s.context.capabilities().has(capability)) throw new HostError("PERMISSION_DENIED", `${method} needs the "${capability}" permission`, { capability });
-}
-
 /** Longest address links.open accepts. */
 const LINK_MAX = 2048;
 
@@ -363,22 +359,124 @@ function pickNear(value: unknown): import('@tavora/sdk/protocol').PickNear | und
   return { file: near.file, up };
 }
 
+/**
+ * A call the user grants (panel-gate.ts GATED_CALLS `grant`): its params, checked, and what it does with them. The
+ * session asks the grant before the params or after them, as the table says (`BridgeSession.granted`); no handler asks
+ * it itself.
+ */
+interface GrantedHandler<P> {
+  params(params: unknown): P;
+  run(s: BridgeSession, params: P): Promise<unknown> | unknown;
+}
+
+const granted = <P>(params: (params: unknown) => P, run: (s: BridgeSession, params: P) => Promise<unknown> | unknown): GrantedHandler<P> => ({ params, run });
+/** For a call that takes no params. */
+const none = (params: unknown): void => noParams(params);
+/** For a call whose params its context checks. */
+const asIs = (params: unknown): unknown => params;
+
+/** Every call the gate asks the grant of has its handler here, and nothing else does (the type says so). */
+const grantedHandlers: { readonly [K in GrantedCall]: GrantedHandler<unknown> } = {
+  "folders.state": granted(folderParam, (s, folder) => folderContext(s).state(folder)),
+  "folders.list": granted(folderParam, (s, folder) => folderContext(s).list(folder)),
+  "folders.watch": granted(
+    (params) => {
+      const folder = folderParam(params), on = object(params).on;
+      if (typeof on !== 'boolean') throw new HostError('INVALID_PARAMS','on must be true or false.');
+      return { folder, on };
+    },
+    async (s, { folder, on }) => {
+      await folderContext(s).watch(folder, on);
+      return null;
+    },
+  ),
+  "folders.choose": granted(folderParam, (s, folder) => folderContext(s).choose(folder)),
+  "folders.showInFolder": granted(
+    (params) => {
+      const folder = folderParam(params), file = object(params).path;
+      if (typeof file !== 'string' || file.length === 0 || file.length > 2600) throw new HostError('INVALID_PARAMS','path must be a file path inside the folder, such as Replays/Game.SC2Replay.');
+      return { folder, file };
+    },
+    async (s, { folder, file }) => {
+      await folderContext(s).showInFolder(folder, file);
+      return null;
+    },
+  ),
+
+  "network.readPage": granted(asIs, (s, params) => s.context.readPage(params)),
+  "network.fetch": granted(asIs, async (s, params) => {
+    if (s.budget.networkInFlight >= LIMITS.maxNetworkInFlight) throw new HostError("BAD_REQUEST", `at most ${LIMITS.maxNetworkInFlight} network requests at once`);
+    s.budget.networkInFlight++;
+    try {
+      return await s.context.fetch(params);
+    } finally {
+      s.budget.networkInFlight--;
+    }
+  }),
+
+  "aiUsage.accounts": granted(none, (s) => s.context.aiUsage.accounts()),
+  "aiUsage.read": granted(
+    (params) => {
+      const accountId = required(object(params), "accountId");
+      if (typeof accountId !== "string" || accountId.length === 0 || accountId.length > 64) throw new HostError("INVALID_PARAMS", "params.accountId must be an account id");
+      return accountId;
+    },
+    (s, accountId) => s.context.aiUsage.read(accountId),
+  ),
+
+  "systemInfo.info": granted(none, (s) => s.context.systemInfo.info()),
+  "systemInfo.watch": granted(parseWatch, (s, request) => (s.context.systemInfo.watch(request), null)),
+  "systemInfo.connectionLog": granted(none, (s) => s.context.systemInfo.connectionLog()),
+  "systemInfo.clearConnectionLog": granted(none, async (s) => (await s.context.systemInfo.clearConnectionLog(), null)),
+  "systemInfo.connectionSettings": granted(none, (s) => s.context.systemInfo.connectionSettings()),
+  "systemInfo.setConnectionSettings": granted(parseConnectionSettings, async (s, change) => await s.context.systemInfo.setConnectionSettings(change)),
+  "systemInfo.apps": granted(none, (s) => s.context.systemInfo.apps()),
+  "systemInfo.traffic": granted(none, (s) => s.context.systemInfo.traffic()),
+
+  "media.watch": granted(parseWatchParams, (s, on) => s.context.media.watch(on)),
+  "media.control": granted(parseControlParams, (s, { session, action }) => s.context.media.control(session, action)),
+
+  "leaderboards.status": granted(none, (s) => s.context.leaderboards.status()),
+  "leaderboards.show": granted(none, (s) => s.context.leaderboards.show()),
+  "leaderboards.hide": granted(none, (s) => s.context.leaderboards.hide()),
+  "leaderboards.submit": granted(object, (s, params) => s.context.leaderboards.submit(params)),
+  "leaderboards.top": granted(object, (s, params) => s.context.leaderboards.top(params)),
+  "leaderboards.mine": granted(object, (s, params) => s.context.leaderboards.mine(params)),
+
+  "discord.state": granted(none, (s) => s.context.discord.state()),
+  "discord.connect": granted(none, async (s) => (await s.context.discord.connect(), null)),
+  "discord.allowControl": granted(none, async (s) => (await s.context.discord.allowControl(), null)),
+  "discord.command": granted((params) => discordCommand(object(params)), (s, { command, args }) => s.context.discord.command(command, args)),
+  "discord.subscribe": granted(
+    (params) => discordSubscription(object(params)),
+    async (s, { event, channelId }) => {
+      await s.context.discord.subscribe(event, channelId);
+      return null;
+    },
+  ),
+  "discord.unsubscribe": granted(
+    (params) => discordSubscription(object(params)),
+    async (s, { event, channelId }) => {
+      await s.context.discord.unsubscribe(event, channelId);
+      return null;
+    },
+  ),
+  "discord.image": granted(
+    (params) => {
+      const url = required(object(params), "url");
+      if (typeof url !== "string" || url.length === 0 || url.length > 300) throw new HostError("INVALID_PARAMS", "params.url must be an address on cdn.discordapp.com");
+      return url;
+    },
+    (s, url) => s.context.discord.image(url),
+  ),
+
+  "overlay.resetLink": granted((params) => moduleKey(object(params), "key"), (s, key) => (s.context.overlay.resetLink(key), null)),
+};
+
+/** The calls the session asks the grant of before it serves them (the gate's table, panel-gate.ts). */
+export const grantedCalls = (): string[] => Object.keys(grantedHandlers);
+
 const handlers = new Map<string, Handler>([
-  ['folders.state', (s,params) => { const folder = folderParam(params); needs(s,'folders','folders.state'); return folderContext(s).state(folder); }],
-  ['folders.list', (s,params) => { const folder = folderParam(params); needs(s,'folders','folders.list'); return folderContext(s).list(folder); }],
-  ['folders.watch', async (s,params) => {
-    const folder = folderParam(params), on = object(params).on;
-    if (typeof on !== 'boolean') throw new HostError('INVALID_PARAMS','on must be true or false.');
-    needs(s,'folders','folders.watch');
-    await folderContext(s).watch(folder, on); return null;
-  }],
-  ['folders.choose', (s,params) => { const folder = folderParam(params); needs(s,'folders','folders.choose'); return folderContext(s).choose(folder); }],
-  ['folders.showInFolder', async (s,params) => {
-    const folder = folderParam(params), file = object(params).path;
-    if (typeof file !== 'string' || file.length === 0 || file.length > 2600) throw new HostError('INVALID_PARAMS','path must be a file path inside the folder, such as Replays/Game.SC2Replay.');
-    needs(s,'folders','folders.showInFolder');
-    await folderContext(s).showInFolder(folder, file); return null;
-  }],
   ['files.pickReadOnly', async (s,params) => {
     const extensions = object(params).extensions;
     if (!Array.isArray(extensions) || !extensions.length || extensions.length>10 || extensions.some(e=>typeof e!=='string'|| !/^[a-z0-9]{1,12}$/.test(e))) throw new HostError('INVALID_PARAMS','Choose up to ten file extensions.');
@@ -498,117 +596,6 @@ const handlers = new Map<string, Handler>([
   ],
 
   [
-    "network.readPage",
-    async (s, params) => {
-      needs(s, "network", "network.readPage");
-      return s.context.readPage(params);
-    },
-  ],
-  [
-    "network.fetch",
-    async (s, params) => {
-      // Without any granted host the answer is the same as for every other capability not granted (G9).
-      needs(s, "network", "network.fetch");
-      if (s.budget.networkInFlight >= LIMITS.maxNetworkInFlight) throw new HostError("BAD_REQUEST", `at most ${LIMITS.maxNetworkInFlight} network requests at once`);
-      s.budget.networkInFlight++;
-      try {
-        return await s.context.fetch(params);
-      } finally {
-        s.budget.networkInFlight--;
-      }
-    },
-  ],
-
-  ["aiUsage.accounts", (s, params) => (needs(s, "aiUsage", "aiUsage.accounts"), noParams(params), s.context.aiUsage.accounts())],
-  [
-    "aiUsage.read",
-    (s, params) => {
-      needs(s, "aiUsage", "aiUsage.read");
-      const accountId = required(object(params), "accountId");
-      if (typeof accountId !== "string" || accountId.length === 0 || accountId.length > 64) throw new HostError("INVALID_PARAMS", "params.accountId must be an account id");
-      return s.context.aiUsage.read(accountId);
-    },
-  ],
-
-  ["systemInfo.info", (s, params) => (needs(s, "systemInfo", "systemInfo.info"), noParams(params), s.context.systemInfo.info())],
-  [
-    "systemInfo.watch",
-    (s, params) => {
-      needs(s, "systemInfo", "systemInfo.watch");
-      s.context.systemInfo.watch(parseWatch(params));
-      return null;
-    },
-  ],
-  ["systemInfo.connectionLog", (s, params) => (needs(s, "systemInfo", "systemInfo.connectionLog"), noParams(params), s.context.systemInfo.connectionLog())],
-  ["systemInfo.clearConnectionLog", async (s, params) => (needs(s, "systemInfo", "systemInfo.clearConnectionLog"), noParams(params), await s.context.systemInfo.clearConnectionLog(), null)],
-  ["systemInfo.connectionSettings", (s, params) => (needs(s, "systemInfo", "systemInfo.connectionSettings"), noParams(params), s.context.systemInfo.connectionSettings())],
-  [
-    "systemInfo.setConnectionSettings",
-    async (s, params) => {
-      needs(s, "systemInfo", "systemInfo.setConnectionSettings");
-      return await s.context.systemInfo.setConnectionSettings(parseConnectionSettings(params));
-    },
-  ],
-  ["systemInfo.apps", (s, params) => (needs(s, "systemInfo", "systemInfo.apps"), noParams(params), s.context.systemInfo.apps())],
-  ["systemInfo.traffic", (s, params) => (needs(s, "systemInfo", "systemInfo.traffic"), noParams(params), s.context.systemInfo.traffic())],
-
-  ["media.watch", (s, params) => (needs(s, "media", "media.watch"), s.context.media.watch(parseWatchParams(params)))],
-  [
-    "media.control",
-    async (s, params) => {
-      needs(s, "media", "media.control");
-      const { session, action } = parseControlParams(params);
-      return s.context.media.control(session, action);
-    },
-  ],
-
-  ["leaderboards.status", (s, params) => (needs(s, "leaderboards", "leaderboards.status"), noParams(params), s.context.leaderboards.status())],
-  ["leaderboards.show", (s, params) => (needs(s, "leaderboards", "leaderboards.show"), noParams(params), s.context.leaderboards.show())],
-  ["leaderboards.hide", (s, params) => (needs(s, "leaderboards", "leaderboards.hide"), noParams(params), s.context.leaderboards.hide())],
-  ["leaderboards.submit", (s, params) => (needs(s, "leaderboards", "leaderboards.submit"), s.context.leaderboards.submit(object(params)))],
-  ["leaderboards.top", (s, params) => (needs(s, "leaderboards", "leaderboards.top"), s.context.leaderboards.top(object(params)))],
-  ["leaderboards.mine", (s, params) => (needs(s, "leaderboards", "leaderboards.mine"), s.context.leaderboards.mine(object(params)))],
-
-  ["discord.state", (s, params) => (needs(s, "discord", "discord.state"), noParams(params), s.context.discord.state())],
-  ["discord.connect", async (s, params) => (needs(s, "discord", "discord.connect"), noParams(params), await s.context.discord.connect(), null)],
-  ["discord.allowControl", async (s, params) => (needs(s, "discord", "discord.allowControl"), noParams(params), await s.context.discord.allowControl(), null)],
-  [
-    "discord.command",
-    (s, params) => {
-      needs(s, "discord", "discord.command");
-      const { command, args } = discordCommand(object(params));
-      return s.context.discord.command(command, args);
-    },
-  ],
-  [
-    "discord.subscribe",
-    async (s, params) => {
-      needs(s, "discord", "discord.subscribe");
-      const { event, channelId } = discordSubscription(object(params));
-      await s.context.discord.subscribe(event, channelId);
-      return null;
-    },
-  ],
-  [
-    "discord.unsubscribe",
-    async (s, params) => {
-      needs(s, "discord", "discord.unsubscribe");
-      const { event, channelId } = discordSubscription(object(params));
-      await s.context.discord.unsubscribe(event, channelId);
-      return null;
-    },
-  ],
-  [
-    "discord.image",
-    (s, params) => {
-      needs(s, "discord", "discord.image");
-      const url = required(object(params), "url");
-      if (typeof url !== "string" || url.length === 0 || url.length > 300) throw new HostError("INVALID_PARAMS", "params.url must be an address on cdn.discordapp.com");
-      return s.context.discord.image(url);
-    },
-  ],
-
-  [
     "overlay.publish",
     // Needs no capability: it only sets what a link or a game overlay shows. Copying a link does.
     (s, params) => {
@@ -634,7 +621,6 @@ const handlers = new Map<string, Handler>([
   ["overlay.preview", async (s, params) => (await s.context.overlay.preview(moduleKey(object(params), "key")), null)],
   // A module that asks for the connector on request may call it without the grant: Tavora asks the user then.
   ["overlay.copyLink", (s, params) => s.context.overlay.copyLink(moduleKey(object(params), "key"))],
-  ["overlay.resetLink", (s, params) => (needs(s, "overlay", "overlay.resetLink"), s.context.overlay.resetLink(moduleKey(object(params), "key")), null)],
 
   ["hotkeys.list", (s, params) => (noParams(params), s.context.hotkeys.list())],
   [
@@ -923,6 +909,8 @@ export class BridgeSession {
           throw new HostError("PERMISSION_DENIED", `${method} needs the "${capability}" permission`, { capability });
         }
         throw new HostError("UNKNOWN_METHOD", `${method} is not available in this host version`);
+      } else if (Object.hasOwn(grantedHandlers, method)) {
+        result = await this.granted(method as GrantedCall, params);
       } else {
         const handler = handlers.get(method);
         if (!handler) throw new HostError("UNKNOWN_METHOD", `unknown method ${method}`);
@@ -945,6 +933,19 @@ export class BridgeSession {
       if (!handshake) this.served++;
       if (--this.inFlight === 0) this.context.onBusy?.(false, this.served);
     }
+  }
+
+  /**
+   * Serves a call the user grants: the grant is asked on every call (G9), before anything else, or for a call that names
+   * its folder, once that name is checked (GATED_CALLS `grantAfterParams`).
+   */
+  private granted(call: GrantedCall, raw: unknown): Promise<unknown> | unknown {
+    const handler = grantedHandlers[call];
+    const afterParams = grantAfterParams(call);
+    if (!afterParams) checkGrant(call, this.context.capabilities());
+    const params = handler.params(raw);
+    if (afterParams) checkGrant(call, this.context.capabilities());
+    return handler.run(this, params);
   }
 
   private fail(id: number, error: HostError): void {

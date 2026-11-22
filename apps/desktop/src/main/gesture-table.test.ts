@@ -2,16 +2,16 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { METHOD_INFO, type CallName } from "@tavora/sdk/protocol";
 import { describe, expect, it } from "vitest";
+import { GATED_CALLS } from "./panel-gate";
 
 // The SDK's METHOD_INFO says which calls need a click (the memory host, `needsGesture` and the protocol reference read
 // it); the host's own checks are here. This keeps the two from drifting apart: a check without a table entry, or an
 // entry the host doesn't check, fails. Which params need the click is the SDK's test (protocol.test.ts).
 const source = (file: string) => readFileSync(path.join(import.meta.dirname, file), "utf8").replace(/\r\n/g, "\n");
 
-/** The calls the bridge side checks: `takeGesture("…")` in module-view.ts, `gesture("…")` in connection.ts. */
+/** The calls the bridge side checks: those the panel's gate takes a press for (panel-gate.ts GATED_CALLS `press`). */
 function bridgeChecks(): string[] {
-  const names = [...source("module-view.ts").matchAll(/\btakeGesture\(\s*["'`]([^"'`]+)["'`]/g), ...source("connection.ts").matchAll(/\bawait gesture\(\s*["'`]([^"'`]+)["'`]/g)];
-  return names.map((match) => match[1]!);
+  return Object.entries(GATED_CALLS).flatMap(([call, needs]) => ("press" in needs ? [call] : []));
 }
 
 /** The call each address the module's session answers stands for. A new address must be added here. */

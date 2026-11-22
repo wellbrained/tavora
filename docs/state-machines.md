@@ -126,7 +126,7 @@ the pull request that makes it explicit.
 
 - **Window visibility** (`main/host.ts`: `windowHidden`, `windowBehind`, `windowClosed`) → `front | behind | hidden | closed`.
 
-- **Press windows** (`main/module-view.ts` `Press`, `browser-view.ts` `lastGesture`, tooltips) → one `GestureWindow`.
+- **Press windows** (`main/panel-gate.ts` `Press`, with `PanelGate`'s media hotkey; `browser-view.ts` `lastGesture`, tooltips) → one `GestureWindow`.
 
 - **Gestures** (`WorkspaceRail` resize, `LayoutCanvas` drag and band, `WorkspacePage` panel drag) → one `gesture` union
   each, ended by blur too, with `data-gesture`. The rail and the canvas run on `bindDrag`, whose `phase` is that

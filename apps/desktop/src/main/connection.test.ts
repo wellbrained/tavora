@@ -513,8 +513,10 @@ describe("ConnectionWatcher", () => {
 });
 
 describe("who may change the watcher", () => {
+  // Which module may change it, and the click it needs, are the panel's gate's (panel-gate.test.ts); here, that the gate
+  // is asked first.
   const settings = { enabled: true, target: "1.1.1.1" };
-  function access(owner = "official", id = "tavora.system-monitor", gesture: (what: string) => Promise<void> = async () => undefined) {
+  function access(enter: (call: string) => Promise<void> = async () => undefined) {
     const calls: string[] = [];
     const watcher = {
       outageLog: () => ({ outages: [] }),
@@ -522,37 +524,30 @@ describe("who may change the watcher", () => {
       clearLog: () => void calls.push("clear"),
       setSettings: (change: object) => (calls.push(`set ${JSON.stringify(change)}`), { ...settings, ...change }),
     };
-    return { calls, api: connectionAccess({ owner, manifest: { id } }, watcher, gesture) };
+    return { calls, api: connectionAccess(watcher, enter) };
   }
 
-  it("lets any granted module read the log and the settings", () => {
-    const { api } = access("local", "local.other");
+  it("lets any granted module read the log and the settings, without asking the gate", () => {
+    const { api } = access(async () => {
+      throw new Error("not asked");
+    });
     expect(api.connectionLog()).toEqual({ outages: [] });
     expect(api.connectionSettings()).toEqual(settings);
   });
 
-  it("refuses every other module the changes, even with a click", async () => {
-    for (const [owner, id] of [["local", "local.other"], ["official", "tavora.notes"], ["local", "tavora.system-monitor"], ["a".repeat(64), "tavora.system-monitor"]] as const) {
-      const { api, calls } = access(owner, id);
-      await expect(api.setConnectionSettings({ target: "8.8.8.8" })).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
-      await expect(api.clearConnectionLog()).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
-      expect(calls).toEqual([]);
-    }
-  });
-
-  it("refuses the System Monitor too without a click or key press", async () => {
+  it("changes nothing when the gate refuses", async () => {
     const noClick = async (what: string) => {
       throw new HostError("PERMISSION_DENIED", `${what} must be called right after a click or key press`);
     };
-    const { api, calls } = access("official", "tavora.system-monitor", noClick);
+    const { api, calls } = access(noClick);
     await expect(api.setConnectionSettings({ enabled: false })).rejects.toThrow(/click or key press/);
     await expect(api.clearConnectionLog()).rejects.toThrow(/click or key press/);
     expect(calls).toEqual([]);
   });
 
-  it("does what the System Monitor asks after a click", async () => {
+  it("does what the gate lets through", async () => {
     const asked: string[] = [];
-    const { api, calls } = access("official", "tavora.system-monitor", async (what) => void asked.push(what));
+    const { api, calls } = access(async (what) => void asked.push(what));
     await expect(api.setConnectionSettings({ target: "8.8.8.8" })).resolves.toEqual({ enabled: true, target: "8.8.8.8" });
     await api.clearConnectionLog();
     expect(calls).toEqual(['set {"target":"8.8.8.8"}', "clear"]);

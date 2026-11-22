@@ -8,7 +8,6 @@
  * thinks it is online, and one read of the adapter's byte counters. What a look finds goes through the ConnectionTracker
  * (pure, tested with fakes). Nothing is run and nothing is sent but the two pings.
  */
-import type { CallName } from "@tavora/sdk/protocol";
 import { SYSTEM_PING_TARGET, type SystemConnection, type SystemConnectionLog, type SystemConnectionSettings, type SystemOutage, type SystemOutageKind } from "@tavora/sdk/protocol";
 import { mkdirSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -331,28 +330,22 @@ export const SYSTEM_MONITOR_ID = "tavora.system-monitor";
 /**
  * What a module granted System info gets of the watcher. Everyone granted may read the log and the settings. Changing
  * the settings (where Tavora pings, whether it watches) and clearing the log affect the whole PC, so they are only for
- * the official System Monitor, and each needs a click or key press in its page (`gesture` waits for it and throws
- * without one), as Discord's sign-in does.
+ * the official System Monitor, and each needs a click or key press in its page, as Discord's sign-in does: the panel's
+ * gate (panel-gate.ts) checks both, and `enter` throws when it refuses.
  */
 export function connectionAccess(
-  module: { owner: string; manifest: { id: string } },
   watcher: Pick<ConnectionWatcher, "outageLog" | "clearLog" | "getSettings" | "setSettings">,
-  gesture: (what: CallName) => Promise<void>,
+  enter: (call: "systemInfo.clearConnectionLog" | "systemInfo.setConnectionSettings") => Promise<void>,
 ) {
-  const official = (what: string): void => {
-    if (module.owner !== "official" || module.manifest.id !== SYSTEM_MONITOR_ID) throw new HostError("PERMISSION_DENIED", `${what} is only for Tavora's own System Monitor`);
-  };
   return {
     connectionLog: () => watcher.outageLog(),
     connectionSettings: () => watcher.getSettings(),
     clearConnectionLog: async (): Promise<void> => {
-      official("systemInfo.clearConnectionLog");
-      await gesture("systemInfo.clearConnectionLog");
+      await enter("systemInfo.clearConnectionLog");
       watcher.clearLog();
     },
     setConnectionSettings: async (change: ConnectionSettingsChange): Promise<SystemConnectionSettings> => {
-      official("systemInfo.setConnectionSettings");
-      await gesture("systemInfo.setConnectionSettings");
+      await enter("systemInfo.setConnectionSettings");
       return watcher.setSettings(change);
     },
   };

@@ -5,7 +5,7 @@ import { serveFolderFile, type FolderHost, type FolderWatch } from './folder-acc
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { app, BrowserWindow, clipboard, ClipboardItem, MessageChannelMain, session, shell, WebContentsView, type IpcMainEvent, type Session, type WebContents } from "electron";
-import type { CallName, Capability, GameOverlayResult, MediaAction, ReadOnlyFile, SystemApps, SystemInfo, SystemTraffic, HotkeyBinding, HotkeySetResult, JsonValue, OverlayLinkResult, OverlaySource, TavoraTheme, TavoraViewport, TavoraWorkspace } from "@tavora/sdk/protocol";
+import type { GameOverlayResult, ReadOnlyFile, SystemApps, SystemInfo, SystemTraffic, HotkeyBinding, HotkeySetResult, JsonValue, OverlayLinkResult, OverlaySource, TavoraTheme, TavoraViewport, TavoraWorkspace } from "@tavora/sdk/protocol";
 import type { ResolvedPanelType } from "@tavora/module-schema";
 import { modulePartition } from "./module-data";
 import { gestureCounts, type OverGame } from "./game-overlays";
@@ -38,7 +38,7 @@ import type { PanelViewAdapter } from "./panel-views";
 import { recordCrash } from "./crash-log";
 import { isPrivateUrl, isWebUrl } from "./browser-url";
 import { HostError } from "./errors";
-import { onlySystemMonitor } from "./system-apps";
+import { GESTURE_MS, grantedCapabilities, PanelGate, unused, type Press } from "./panel-gate";
 import { moduleFetch, type TestHosts } from "./network";
 import type { InstalledModule } from "./registry";
 import type { InstanceStatus } from "../shared/host-api";
@@ -194,20 +194,6 @@ const serving = new WeakMap<Session, InstalledModule>();
  * panels are the same module.
  */
 const sessionGestures = new WeakMap<Session, SessionGesture>();
-
-/**
- * One click or key press in a page. The panel and its session hold the same one, so it allows exactly one call,
- * made through the bridge or through an address the session answers.
- */
-interface Press {
-  at: number;
-  used: boolean;
-}
-
-/** The press is recent and no call has used it yet. */
-function unused(press: Press | null): press is Press {
-  return press !== null && !press.used && Date.now() - press.at <= GESTURE_MS;
-}
 
 /** `overGame`: the latest press came from a panel over the game, whose calls that need Tavora's window are refused. */
 interface SessionGesture {
@@ -425,18 +411,8 @@ export type PagePhase = Exclude<InstanceStatus, "ready"> | "settling" | "reveale
 /** How a panel answered panel.navigate. */
 export type NavigateOutcome = "switched" | "failed" | "unhandled";
 
-/** How long after a click or key press a link may be opened. */
-export const GESTURE_MS = 2_000;
-/**
- * The hotkey actions that control media, and the one control each allows: a module's actions with these ids (manifest
- * `actions`). A press of any other of its hotkeys allows none, whatever the module does with it.
- */
-export const MEDIA_HOTKEY_ACTIONS: Readonly<Record<string, MediaAction>> = { "play-pause": "playPause", next: "next", previous: "previous" };
-/**
- * How long a call that needs a click waits for it. The preload reports clicks on another channel than
- * the bridge, so the report can land just after the call the click made.
- */
-const GESTURE_LATE_MS = 250;
+/** How long after a click or key press a gated call may be made (panel-gate.ts). */
+export { GESTURE_MS };
 /**
  * How long after its page starts a panel just added may open its dialog once without a click (the Add click carries
  * over, for a welcome on first add).
@@ -475,8 +451,6 @@ export class ModuleView implements PanelViewAdapter {
   private readonly folderWatches = new Map<string, FolderWatch>();
   /** How many folders.watch calls each folder had, so a slow start can't outlive a later call. */
   private readonly folderTurns = new Map<string, number>();
-  /** The last press of one of the module's media hotkeys for this panel (MEDIA_HOTKEY_ACTIONS): it allows that one media.control. */
-  private mediaHotkey: { action: MediaAction; at: number } | null = null;
   /** The theme's colours in the current page, replaced when the theme changes. */
   private readonly themeCss = new InsertedCss(() => this.view.webContents);
   /** The font in the current page, replaced only when the user picks another (InsertedCss skips the same sheet). */
@@ -512,8 +486,20 @@ export class ModuleView implements PanelViewAdapter {
   /** panel.navigate requests waiting for the page's answer. */
   private readonly navigations = new Map<number, (outcome: NavigateOutcome) => void>();
 
+  /** What this panel's page may call now: the grant, the press, where the panel is, and its live page (panel-gate.ts). */
+  private readonly gate: PanelGate;
+
   constructor(private readonly options: ModuleViewOptions) {
     const { module, workspace } = options;
+    this.gate = new PanelGate({
+      module,
+      // The grants of the owner the page runs as (host.ts): a copy of another owner under the same id has its own.
+      granted: () => grantedCapabilities(options),
+      page: () => this.bridge,
+      runsOnlyWithGame: () => options.runsOnlyWithGame?.() ?? false,
+      overGame: () => this.overGame !== null,
+      onNeedsTavora: () => options.onNeedsTavora?.(),
+    });
     this.view = new WebContentsView({
       webPreferences: {
         session: moduleSession(module, workspace, options.data.blobs, options.appBlobs, {
@@ -649,8 +635,6 @@ export class ModuleView implements PanelViewAdapter {
     });
   }
 
-  /** The user's last click or key press in the page (reported by the preload from real input only), shared with the session. */
-  private press: Press | null = null;
   private pointer:{x:number;y:number;at:number}|null=null;
   notePointer(raw:unknown):void{
     if(raw===null){this.pointer=null;this.options.tooltip?.close(undefined,true,true);return;}
@@ -667,69 +651,19 @@ export class ModuleView implements PanelViewAdapter {
   }
   tooltipClosed(id:string):void{this.bridge?.emit("ui.tooltipClosed",{id});}
 
-  /** Calls waiting for a click report that is still on its way (takeGestureSoon). */
-  private readonly gestureWaiters = new Set<() => void>();
-
   noteGesture(): void {
     // A closed panel's last click opens nothing more (see letGo).
     if (this.disposed) return;
     // Over the game the panel takes input only in Use (OverGame.takesInput); any report at another time is not the user's.
     if (!gestureCounts(this.overGame !== null, this.overGame?.takesInput ?? false)) return;
-    this.press = { at: Date.now(), used: false };
-    this.usedAt = this.press.at;
     const page = this.contents();
+    const press = this.gate.notePress(page !== undefined);
+    this.usedAt = press.at;
     if (!page) return;
     const shared = gestureOf(page.session);
-    shared.press = this.press;
+    shared.press = press;
     shared.overGame = this.overGame !== null;
-    shared.refuse = () => this.needsTavora();
-    for (const wake of this.gestureWaiters) wake();
-  }
-
-  /**
-   * Something only a click or key press in the page may do, once per click. Waits a moment first for a click
-   * whose report has not arrived yet.
-   */
-  /** The press whose refusal the user was told about, so one press shows the notice once. */
-  private toldFor: Press | null = null;
-
-  /** Tells the user once per press that the panel has to come back first. */
-  private needsTavora(): void {
-    if (this.press !== null && this.toldFor === this.press) return;
-    this.toldFor = this.press;
-    this.options.onNeedsTavora?.();
-  }
-
-  /** What needs the user is not for a panel that runs only with its game, out of sight: refused, and nobody is told. */
-  private refuseWithGame(what: string): void {
-    if (this.options.runsOnlyWithGame?.()) throw new HostError("PERMISSION_DENIED", `${what} is not available while the panel runs with its game, out of sight`);
-  }
-
-  /** Calls that need Tavora's own window (a dialog, a menu, another panel) are not for a panel over the game. */
-  private refuseOverGame(what: string): void {
-    this.refuseWithGame(what);
-    if (!this.overGame) return;
-    this.needsTavora();
-    throw new HostError("PERMISSION_DENIED", `${what} is not available while the panel is shown over the game; bring it back first`);
-  }
-
-  /** `what` is the call as METHOD_INFO names it (gesture-table.test.ts holds the two together); `detail` only goes into the error. */
-  private async takeGesture(what: CallName, detail?: string): Promise<void> {
-    this.refuseWithGame(detail ?? what);
-    if (!unused(this.press)) {
-      await new Promise<void>((resolve) => {
-        const done = () => {
-          clearTimeout(timer);
-          this.gestureWaiters.delete(done);
-          resolve();
-        };
-        const timer = setTimeout(done, GESTURE_LATE_MS);
-        this.gestureWaiters.add(done);
-      });
-    }
-    const press = this.press;
-    if (!unused(press)) throw new HostError("PERMISSION_DENIED", `${detail ?? what} must be called right after a click or key press`);
-    press.used = true;
+    shared.refuse = () => this.gate.tellNeedsTavora();
   }
 
   /** links.open: only a web address, and only right after the user did something in the page. */
@@ -737,8 +671,7 @@ export class ModuleView implements PanelViewAdapter {
     if (!isWebUrl(url)) throw new HostError("INVALID_PARAMS", "params.url must be an http or https address");
     if (isPrivateUrl(url)) throw new HostError("PERMISSION_DENIED", "links.open opens only public addresses, not this PC or the local network");
     // One click opens one link, so a script cannot open a pile of them.
-    this.refuseOverGame("links.open");
-    await this.takeGesture("links.open");
+    await this.gate.enter("links.open");
     this.options.onOpenLink(url);
   }
 
@@ -767,12 +700,12 @@ export class ModuleView implements PanelViewAdapter {
   /** panel.setDialog: opening takes a click or key press, or the pass of a panel just added (used up either way). */
   private async requestDialog(open: boolean, size: PanelDialogSize): Promise<void> {
     if (!open) return this.options.setDialog(false, size);
-    this.refuseWithGame("panel.setDialog");
+    this.gate.check("panel.setDialog");
     const pass = this.addPass;
     this.addPass = null;
-    if (pass && !unused(this.press) && !this.overGame && Date.now() <= pass.until) return this.options.setDialog(true, size, { byClick: false });
+    if (pass && !this.gate.pressed && !this.overGame && Date.now() <= pass.until) return this.options.setDialog(true, size, { byClick: false });
     // Covering the app takes a click, as maximizing does. Over the game too: the host brings Tavora to the front for it.
-    await this.takeGesture("panel.setDialog");
+    await this.gate.enter("panel.setDialog");
     this.options.setDialog(true, size, { byClick: true });
   }
 
@@ -874,14 +807,12 @@ export class ModuleView implements PanelViewAdapter {
         setContent: this.options.setContent,
         openPanel: async (type, content) => {
           // One click opens or switches one panel, so a page cannot keep panels coming on its own.
-          this.refuseOverGame("panels.open");
-          await this.takeGesture("panels.open");
+          await this.gate.enter("panels.open");
           return this.options.openPanel(type, content);
         },
         openPanels: async (types) => {
           // One press opens the whole call, but only the module's own types, each once, in this panel's area (the host checks).
-          this.refuseOverGame("panels.openMany");
-          await this.takeGesture("panels.openMany");
+          await this.gate.enter("panels.openMany");
           return this.options.openPanels(types);
         },
         navigated: (requestId, handled, ok) => {
@@ -892,8 +823,7 @@ export class ModuleView implements PanelViewAdapter {
         setMaximized: async (maximized) => {
           // Covering the other panels takes a click, so a page cannot take over the workspace on its own.
           if (maximized) {
-            this.refuseOverGame("panel.setMaximized");
-            await this.takeGesture("panel.setMaximized");
+            await this.gate.enter("panel.setMaximized");
           }
           this.options.setMaximized(maximized);
         },
@@ -911,13 +841,12 @@ export class ModuleView implements PanelViewAdapter {
           status: () => this.options.leaderboards.status(),
           show: async () => {
             // Tavora asks in this panel: one click asks once, and not while the panel is over the game.
-            this.refuseOverGame("leaderboards.show");
-            await this.takeGesture("leaderboards.show");
+            await this.gate.enter("leaderboards.show");
             return this.options.leaderboards.show();
           },
           hide: async () => {
             // Deleting the user's results takes their click, so a page can't do it on its own.
-            await this.takeGesture("leaderboards.hide");
+            await this.gate.enter("leaderboards.hide");
             return this.options.leaderboards.hide();
           },
           submit: (params) => this.options.leaderboards.submit(params),
@@ -927,7 +856,7 @@ export class ModuleView implements PanelViewAdapter {
         systemInfo: this.systemInfoFor(() => bridge),
         media: this.mediaFor(() => bridge),
         discord: this.discordFor(() => bridge),
-        capabilities: () => this.capabilities(),
+        capabilities: () => this.gate.granted(),
         readPage: (params) => moduleReadPage(params, {
           allowedHosts: this.options.networkHosts,
           userAgent: `Tavora/${hostVersion} (module ${module.manifest.id})`,
@@ -952,14 +881,14 @@ export class ModuleView implements PanelViewAdapter {
         openLink: (url) => this.openLink(url),
         tooltip:{
           show:async request=>{
-            this.refuseWithGame("ui.tooltip.show");
+            this.gate.check("ui.tooltip.show");
             if(!this.tooltipAnchorAllowed(request.at))return false;
-            if(request.pinned)await this.takeGesture("ui.tooltip.show", "a pinned ui.tooltip.show");
+            if(request.pinned)await this.gate.enter("ui.tooltip.show", { detail: "a pinned ui.tooltip.show" });
             else {
               if(!this.tooltipPointerMatches(request))await new Promise(resolve=>setTimeout(resolve,40));
-              if(!this.tooltipPointerMatches(request)&&!unused(this.press))return false;
+              if(!this.tooltipPointerMatches(request)&&!this.gate.pressed)return false;
             }
-            if(this.bridge!==bridge)return false;
+            if(!this.gate.live(bridge))return false;
             return this.options.tooltip?.show(request)??false;
           },
           move:anchor=>{if(this.tooltipAnchorAllowed(anchor.at)&&this.tooltipPointerMatches(anchor))this.options.tooltip?.move(anchor);},
@@ -969,14 +898,13 @@ export class ModuleView implements PanelViewAdapter {
         ...(this.options.folders ? { folders: this.foldersFor(() => bridge, this.options.folders) } : {}),
         readOnlyFiles: {
           pick: async (extensions, multiple, near) => {
-            this.refuseOverGame('files.pickReadOnly');
-            await this.takeGesture('files.pickReadOnly');
+            await this.gate.enter("files.pickReadOnly");
             const selected = (await this.options.pickReadOnlyFile?.(extensions, multiple, near)) ?? [];
-            if (!selected.length || this.bridge !== bridge) return [];
+            if (!selected.length || !this.gate.live(bridge)) return [];
             const files = new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,workspace.id);
             const picked: ReadOnlyFile[] = [];
             try {
-              for (const path of selected) picked.push(await files.remember(path,()=>this.bridge===bridge));
+              for (const path of selected) picked.push(await files.remember(path,()=>this.gate.live(bridge)));
             } catch (error) {
               // All or nothing: a pick that fails part-way leaves no links behind that the module never heard of.
               await Promise.all(picked.map(file=>files.forget(file.id).catch(()=>undefined)));
@@ -987,16 +915,14 @@ export class ModuleView implements PanelViewAdapter {
           forget: id => new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,workspace.id).forget(id),
           check: id => new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,workspace.id).check(id),
           showInFolder: async id => {
-            this.refuseOverGame('files.showInFolder');
-            await this.takeGesture('files.showInFolder');
+            await this.gate.enter("files.showInFolder");
             const place = await new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,workspace.id).locate(id);
-            if (this.bridge === bridge) shell.showItemInFolder(place);
+            if (this.gate.live(bridge)) shell.showItemInFolder(place);
           },
         },
         showMenu: async (menu) => {
           // One click opens one menu, so a page cannot keep menus coming on its own.
-          this.refuseOverGame("ui.showMenu");
-          await this.takeGesture("ui.showMenu");
+          await this.gate.enter("ui.showMenu");
           return this.options.showMenu(menu);
         },
         overlay: {
@@ -1004,15 +930,13 @@ export class ModuleView implements PanelViewAdapter {
           remove: (key) => this.options.overlay.remove(key),
           copyLink: async (key) => {
             // One click copies one link, so a page cannot keep the clipboard to itself.
-            if (this.options.overlay.copyNeedsWindow?.()) this.refuseOverGame("overlay.copyLink");
-            await this.takeGesture("overlay.copyLink");
+            await this.gate.enter("overlay.copyLink", { opensWindow: this.options.overlay.copyNeedsWindow?.() ?? false });
             return this.options.overlay.copyLink(key);
           },
           resetLink: (key) => this.options.overlay.resetLink(key),
           showOverGame: async (key) => {
             // One click shows one overlay, so a page cannot keep opening windows over the game.
-            this.refuseOverGame("overlay.showOverGame");
-            await this.takeGesture("overlay.showOverGame");
+            await this.gate.enter("overlay.showOverGame");
             return this.options.overlay.showOverGame(key);
           },
           hideOverGame: (key) => this.options.overlay.hideOverGame(key),
@@ -1020,14 +944,12 @@ export class ModuleView implements PanelViewAdapter {
           setSources: (sources) => this.options.overlay.setSources(sources),
           preview: async (key) => {
             // One click opens one window, so a page cannot keep opening windows.
-            this.refuseOverGame("overlay.preview");
-            await this.takeGesture("overlay.preview");
+            await this.gate.enter("overlay.preview");
             return this.options.overlay.preview(key);
           },
           openPage: async () => {
             // One click changes the screen once, so a page cannot keep pulling the user away from what they are doing.
-            this.refuseOverGame("overlay.openPage");
-            await this.takeGesture("overlay.openPage");
+            await this.gate.enter("overlay.openPage");
             this.options.overlay.openPage();
           },
         },
@@ -1036,8 +958,7 @@ export class ModuleView implements PanelViewAdapter {
           set: async (action, target, label) => {
             if (!(module.manifest.actions ?? []).some((item) => item.id === action)) throw new HostError("INVALID_PARAMS", `this module has no action "${action}" in its manifest`);
             // Tavora's dialog takes the key; one click opens it once.
-            this.refuseOverGame("hotkeys.set");
-            await this.takeGesture("hotkeys.set");
+            await this.gate.enter("hotkeys.set");
             return this.options.hotkeys.set(action, target, label);
           },
           remove: (target, action) => this.options.hotkeys.remove(target, action),
@@ -1059,20 +980,6 @@ export class ModuleView implements PanelViewAdapter {
     );
     this.bridge = bridge;
     this.view.webContents.postMessage("tavora:port", null, [port2]);
-  }
-
-  /** What the user has granted now (grants.ts): `network` with any granted host, `aiUsage`, `leaderboards`, `systemInfo`, `media`, `discord` and `overlay` with their connectors. */
-  private capabilities(): ReadonlySet<Capability> {
-    const granted = new Set<Capability>();
-    if (this.options.networkHosts().size > 0) granted.add("network");
-    if (this.options.connectors().has("ai-usage")) granted.add("aiUsage");
-    if (this.options.connectors().has("leaderboards")) granted.add("leaderboards");
-    if (this.options.connectors().has("system-info")) granted.add("systemInfo");
-    if (this.options.connectors().has("media")) granted.add("media");
-    if (this.options.connectors().has("discord")) granted.add("discord");
-    if (this.options.connectors().has("stream-overlay")) granted.add("overlay");
-    if (this.options.folders?.granted()) granted.add("folders");
-    return granted;
   }
 
   /**
@@ -1097,30 +1004,27 @@ export class ModuleView implements PanelViewAdapter {
         let watcher: FolderWatch | null;
         try {
           watcher = await folders.watch(folder, (change) => {
-            if (this.bridge === bridge() && this.capabilities().has("folders")) bridge().emit("folders.changed", change);
-            else this.stopFolderWatches();
+            if (!this.gate.send(bridge(), "folders", "folders.changed", change)) this.stopFolderWatches();
           });
         } catch (error) {
           if (this.folderTurns.get(folder) === turn) this.folderTurns.delete(folder);
           throw error;
         }
         if (!watcher) return;
-        if (this.bridge === bridge() && this.folderTurns.get(folder) === turn) this.folderWatches.set(folder, watcher);
+        if (this.gate.live(bridge()) && this.folderTurns.get(folder) === turn) this.folderWatches.set(folder, watcher);
         else watcher.close();
       },
       choose: async (folder) => {
         // Tavora's folder dialog; one click opens it once, and not while the panel is over the game.
-        this.refuseOverGame("folders.choose");
-        await this.takeGesture("folders.choose");
+        await this.gate.enter("folders.choose");
         return folders.choose(folder);
       },
       showInFolder: async (folder, file) => {
         // Explorer opens once per click, and not over the game; the file must pass the same checks as a listing.
-        this.refuseOverGame("folders.showInFolder");
-        await this.takeGesture("folders.showInFolder");
+        await this.gate.enter("folders.showInFolder");
         const target = await folders.reveal(folder, file);
         // Nothing to show, or the panel or the grant went while it was looked up: the same quiet answer.
-        if (!target || this.bridge !== bridge() || !this.capabilities().has("folders")) return;
+        if (!target || !this.gate.live(bridge(), "folders")) return;
         // Only ever selected in its own folder, also the folder a gone file was in: nothing is launched or opened.
         shell.showItemInFolder(target.path);
       },
@@ -1138,36 +1042,34 @@ export class ModuleView implements PanelViewAdapter {
    * while the panel is hidden (suspend and resume).
    */
   private systemInfoFor(bridge: () => BridgeSession): BridgeContext["systemInfo"] {
-    const connected = () => this.bridge === bridge() && this.capabilities().has("systemInfo");
     return {
       info: () => this.options.systemInfo.info(),
       apps: () => {
-        onlySystemMonitor(this.options.module.owner, this.options.module.manifest.id, "systemInfo.apps");
+        this.gate.check("systemInfo.apps");
         return this.options.systemInfo.apps();
       },
       traffic: () => {
-        onlySystemMonitor(this.options.module.owner, this.options.module.manifest.id, "systemInfo.traffic");
+        this.gate.check("systemInfo.traffic");
         return this.options.systemInfo.traffic();
       },
       watch: (request) => {
         if (!this.systemWatch) {
           this.systemWatch = this.options.systemInfo.subscribe({
             snapshot: (snapshot) => {
-              if (connected()) bridge().emit("systemInfo.snapshot", snapshot);
-              else this.stopSystemWatch();
+              if (!this.gate.send(bridge(), "systemInfo", "systemInfo.snapshot", snapshot)) this.stopSystemWatch();
             },
             drivesChanged: () => {
-              if (connected()) bridge().emit("systemInfo.drivesChanged", null);
+              this.gate.send(bridge(), "systemInfo", "systemInfo.drivesChanged", null);
             },
             connectionChanged: (connection) => {
-              if (connected()) bridge().emit("systemInfo.connectionChanged", connection);
+              this.gate.send(bridge(), "systemInfo", "systemInfo.connectionChanged", connection);
             },
           });
           if (this.suspended) this.systemWatch.setSuspended(true);
         }
         this.systemWatch.watch(request);
       },
-      ...connectionAccess(this.options.module, this.options.connection, (what) => this.takeGesture(what)),
+      ...connectionAccess(this.options.connection, (what) => this.gate.enter(what)),
     };
   }
 
@@ -1181,10 +1083,9 @@ export class ModuleView implements PanelViewAdapter {
    * ends the watch at the next change at the latest, and closing the panel ends it at once). Unlike system info they
    * keep coming while the panel is hidden: they are rare and cheap, and a module's overlay over the game or on stream
    * has to stay current while Tavora is behind the game. A control needs a click or key press in the page, or a press
-   * of the module's hotkey for that very control (MEDIA_HOTKEY_ACTIONS), just before; one press allows one control.
+   * of the module's hotkey for that very control (panel-gate.ts MEDIA_HOTKEY_ACTIONS), just before; one press allows one control.
    */
   private mediaFor(bridge: () => BridgeSession): BridgeContext["media"] {
-    const connected = () => this.bridge === bridge() && this.capabilities().has("media");
     return {
       watch: (on) => {
         if (!on) {
@@ -1192,16 +1093,13 @@ export class ModuleView implements PanelViewAdapter {
           return null;
         }
         this.mediaWatch ??= this.options.media.subscribe((state) => {
-          if (connected()) bridge().emit("media.changed", state);
-          else this.stopMediaWatch();
+          if (!this.gate.send(bridge(), "media", "media.changed", state)) this.stopMediaWatch();
         });
         return this.mediaWatch.state();
       },
       control: async (session, action) => {
         if (!this.mediaWatch) return false;
-        const pressed = this.mediaHotkey;
-        if (pressed?.action === action && Date.now() - pressed.at <= GESTURE_MS) this.mediaHotkey = null;
-        else await this.takeGesture("media.control");
+        await this.gate.enter("media.control", { control: action });
         return (await this.mediaWatch?.control(session, action)) ?? false;
       },
     };
@@ -1223,22 +1121,22 @@ export class ModuleView implements PanelViewAdapter {
     const instanceId = this.options.instanceId;
     const listener: DiscordListener = {
       state: (state) => {
-        if (this.bridge === bridge() && this.capabilities().has("discord")) bridge().emit("discord.state", state);
+        this.gate.send(bridge(), "discord", "discord.state", state);
       },
       event: (event) => {
-        if (this.bridge === bridge() && this.capabilities().has("discord")) bridge().emit("discord.event", event);
+        this.gate.send(bridge(), "discord", "discord.event", event);
       },
     };
     const use = () => connector.use(instanceId, listener);
     return {
       state: async () => (await use(), connector.state()),
       connect: async () => {
-        await this.takeGesture("discord.connect");
+        await this.gate.enter("discord.connect");
         await use();
         await connector.connectNow();
       },
       allowControl: async () => {
-        await this.takeGesture("discord.allowControl");
+        await this.gate.enter("discord.allowControl");
         await use();
         await connector.allowControl();
       },
@@ -1246,7 +1144,7 @@ export class ModuleView implements PanelViewAdapter {
         // Joining or leaving, and muting or deafening the user (which can switch their microphone back on),
         // only follow a click or key press (D8). A person's volume streams while a slider is dragged, and only
         // changes what the user hears, so it needs none.
-        if (command === "SELECT_VOICE_CHANNEL" || command === "SET_VOICE_SETTINGS") await this.takeGesture("discord.command", command);
+        if (command === "SELECT_VOICE_CHANNEL" || command === "SET_VOICE_SETTINGS") await this.gate.enter("discord.command", { detail: command });
         await use();
         return connector.command(command, args);
       },
@@ -1273,15 +1171,13 @@ export class ModuleView implements PanelViewAdapter {
 
   /** The user pressed a hotkey set for this module in this workspace. */
   hotkeyPressed(binding: HotkeyBinding): void {
-    // Object.hasOwn: an action id like `constructor` must not find something of Object's.
-    const media = Object.hasOwn(MEDIA_HOTKEY_ACTIONS, binding.action) ? MEDIA_HOTKEY_ACTIONS[binding.action] : undefined;
-    this.mediaHotkey = media ? { action: media, at: Date.now() } : null;
+    this.gate.noteHotkey(binding.action);
     this.bridge?.emit("hotkeys.pressed", { ...binding });
   }
 
   /** The user changed the AI accounts; a module granted the connector hears it. */
   notifyAiUsageAccounts(): void {
-    if (this.capabilities().has("aiUsage")) this.bridge?.emit("aiUsage.accountsChanged", null);
+    if (this.gate.granted().has("aiUsage")) this.bridge?.emit("aiUsage.accountsChanged", null);
   }
 
   setBounds(bounds: { x: number; y: number; width: number; height: number }): void {
@@ -1803,7 +1699,7 @@ export class ModuleView implements PanelViewAdapter {
     this.options.tooltip?.close();this.pointer=null;
     this.addPass = null;
     // A closed panel's last click opens nothing more, here or through its session (the session shares the press).
-    if (this.disposed && this.press) this.press.used = true;
+    if (this.disposed) this.gate.usePress();
     // A page that goes away answers nothing more.
     for (const finish of [...this.navigations.values()]) finish("failed");
     this.stopSystemWatch();

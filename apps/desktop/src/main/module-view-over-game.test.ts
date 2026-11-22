@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -88,6 +87,7 @@ vi.mock("electron", () => {
 
 const { ModuleView, allowedHere, ADD_DIALOG_MS, CONNECT_GAP_MS, GESTURE_MS, HEARTBEAT_MS } = await import("./module-view");
 const { STORAGE_CHECK_MS } = await import("./storage-guard");
+const { GATED_CALLS } = await import("./panel-gate");
 const { BLOB_PATH, CLIPBOARD_PATH, FILE_OPEN_PATH, FILE_SAVE_PATH, JSON_EXPORT_PATH, JSON_OPEN_PATH, JSON_SAVE_PATH, PICTURES_PATH } = await import("@tavora/sdk/protocol");
 
 /** How the window holding a panel says it is over the game: taking input or not, faded and zoomed as `look` says. */
@@ -170,7 +170,7 @@ describe("closing a panel", () => {
 });
 
 describe("one press", () => {
-  const take = (view: InstanceType<typeof ModuleView>) => (view as unknown as { takeGesture(what: string): Promise<void> }).takeGesture("links.open");
+  const take = (view: InstanceType<typeof ModuleView>) => (view as unknown as { gate: { enter(what: string): Promise<void> } }).gate.enter("links.open");
   /** The page writes to the clipboard through its session: 403 when no unused press allows it. */
   const copy = () => made.serve!(new Request(`tavora-module://tavora.todos${CLIPBOARD_PATH}`, { method: "POST" }));
 
@@ -449,7 +449,7 @@ describe("a panel over the game", () => {
   it("refuses calls that need Tavora's window while over the game, and tells the user once per press", () => {
     const told = vi.fn();
     const view = make({ onNeedsTavora: told });
-    const refuse = (what: string) => (view as unknown as { refuseOverGame(what: string): void }).refuseOverGame(what);
+    const refuse = (what: string) => (view as unknown as { gate: { check(what: string): void } }).gate.check(what);
     // In the workspace nothing is refused.
     expect(() => refuse("ui.showMenu")).not.toThrow();
     expect(told).not.toHaveBeenCalled();
@@ -786,15 +786,15 @@ describe("asking for a port", () => {
   });
 });
 
-// Every call that needs a click (takeGesture) or Tavora's own window (refuseOverGame), each with what it would do: a
-// refused call must do nothing. The last tests hold the tables to module-view.ts and connection.ts, so a new check
-// without a row here fails.
+// Every call that needs a click or Tavora's own window (panel-gate.ts GATED_CALLS `press` and `window`), each with what
+// it would do: a refused call must do nothing. The last tests hold the rows to the gate's table, so a new check without
+// a row here fails.
 describe("guarded calls", () => {
   type Context = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
   interface Row {
     /** The call as METHOD_INFO names it. */
     name: string;
-    /** Whether it is refused over the game too (refuseOverGame). */
+    /** Whether it is refused over the game too (GATED_CALLS `window`). */
     overGame: boolean;
     call(context: Context): Promise<unknown>;
   }
@@ -990,19 +990,18 @@ describe("guarded calls", () => {
       view.noteGesture();
       // files.showInFolder then looks for a file this test never picked; the press is what counts here.
       await row.call(context).catch((error: { code?: string }) => expect(error.code, row.name).not.toBe("PERMISSION_DENIED"));
-      expect((view as unknown as { press: { used: boolean } }).press.used, row.name).toBe(true);
+      expect((view as unknown as { gate: { lastPress: { used: boolean } } }).gate.lastPress.used, row.name).toBe(true);
     }
   });
 
-  const source = (file: string) => readFileSync(path.join(import.meta.dirname, file), "utf8");
-  it("cover every call module-view.ts checks for a press", () => {
-    const checked = [...source("module-view.ts").matchAll(/\btakeGesture\(\s*["'`]([^"'`]+)["'`]/g), ...source("connection.ts").matchAll(/\bawait gesture\(\s*["'`]([^"'`]+)["'`]/g)].map((match) => match[1]!);
-    expect([...new Set(checked)].sort()).toEqual(ROWS.map((row) => row.name).sort());
+  it("cover every call the gate takes a press for", () => {
+    const checked = Object.entries(GATED_CALLS).flatMap(([call, needs]) => ("press" in needs ? [call] : []));
+    expect(checked.sort()).toEqual(ROWS.map((row) => row.name).sort());
   });
 
-  it("cover every call module-view.ts refuses over the game", () => {
-    const refused = [...source("module-view.ts").matchAll(/\brefuseOverGame\(\s*["'`]([^"'`]+)["'`]\)/g)].map((match) => match[1]!);
-    expect([...new Set(refused)].sort()).toEqual(ROWS.filter((row) => row.overGame).map((row) => row.name).sort());
+  it("cover every call the gate refuses over the game", () => {
+    const refused = Object.entries(GATED_CALLS).flatMap(([call, needs]) => ("window" in needs ? [call] : []));
+    expect(refused.sort()).toEqual(ROWS.filter((row) => row.overGame).map((row) => row.name).sort());
   });
 });
 
