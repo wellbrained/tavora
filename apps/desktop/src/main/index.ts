@@ -1,6 +1,6 @@
 import { readdirSync, existsSync } from "node:fs";
 import path from "node:path";
-import { app, protocol } from "electron";
+import { app, protocol, session } from "electron";
 import { GAME_OVERLAY_SCHEME, HOST_SCHEME, MODULE_SCHEME } from "./assets";
 import { parseWindowStart } from "./background-window";
 import { recordCrash, useCrashLog } from "./crash-log";
@@ -12,6 +12,7 @@ import { readGrayscaleText } from "./saved-data";
 import { reportStartupFailure } from "./startup-failure";
 import { quitOnUnsafeSwitches } from "./unsafe-start";
 import { refuseClientCertificates } from "./client-certificates";
+import { refuseDevices } from "./devices";
 
 // The last errors of this run, for Settings > Copy diagnostic info.
 errorLog.capture();
@@ -63,6 +64,8 @@ app.on("web-contents-created", (_event, contents) => {
   contents.on("will-attach-webview", (event) => event.preventDefault());
 });
 refuseClientCertificates(app);
+// No page gets a Bluetooth, HID, serial or USB device, whichever session or view it is in.
+refuseDevices(app, () => session.defaultSession);
 
 // `pnpm dev` serves the host UI with hot reload and restarts Tavora when
 // main code changes. Packaged builds always use the built files.

@@ -1,18 +1,18 @@
-import { mkdir, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { PairingView } from "../shared/host-api";
 import { AccountKey } from "./account-key";
 import { cleanUp, pc, service } from "./cloud-copy.test-helper";
 import { newCopyKey, newPairingKey, openFromPc, pairingCode, pairingCommit, sealForPc } from "./copy-crypto";
-import { FOLDER_PAIRING_MS, FolderPairing, Pairing, ServicePairing, type PairingTransport } from "./pairing";
+import { FOLDER_PAIRING_MS, FolderPairing, MAX_OPEN_ANSWERS, OPEN_ANSWER_MS, Pairing, ServicePairing, type PairingOptions, type PairingTransport } from "./pairing";
 
 afterEach(cleanUp);
 
 const encryptor = { isAvailable: () => true, encrypt: (text: string) => Buffer.from(`sealed:${text}`), decrypt: (data: Buffer) => data.toString().replace(/^sealed:/, "") };
 
 /** One PC: its account key and its pairing, through the service with `token` or through `folder`. */
-async function onPc(fetch: typeof globalThis.fetch, token: string | null, transport?: PairingTransport) {
+async function onPc(fetch: typeof globalThis.fetch, token: string | null, transport?: PairingTransport, extra: Partial<PairingOptions> = {}) {
   const { userData } = await pc({ "library.json": "{}" });
   const accountKey = new AccountKey({ file: path.join(userData, "account-key.json"), encryptor, baseUrl: "http://tavora.test/v1/account", fetch, token: () => token, account: () => (token ? "me" : null) });
   const views: PairingView[] = [];
@@ -26,6 +26,7 @@ async function onPc(fetch: typeof globalThis.fetch, token: string | null, transp
     ...(transport ? { folderTransport: () => transport } : {}),
     onChange: (view) => views.push(view),
     focus: () => focused++,
+    ...extra,
   });
   return { accountKey, pairing, views, focused: () => focused };
 }
@@ -356,6 +357,215 @@ describe("approving a new PC through the copy's folder", () => {
     expect(fresh.accountKey.get()).toBeNull();
     expect(await readdir(path.join(folder, "Tavora", "pairing"))).toEqual([]);
     fresh.pairing.dispose();
+  });
+
+  it("turns a request down when what it answered changes on the way", async () => {
+    const { root } = await pc();
+    const folder = path.join(root, "OneDrive");
+    const dir = path.join(folder, "Tavora", "pairing");
+    await mkdir(path.join(folder, "Tavora"), { recursive: true });
+    const old = await onPc(fetch, null, new FolderPairing(folder, "Desk"));
+    await old.accountKey.setUpHere(false);
+    const fresh = await onPc(fetch, null, new FolderPairing(folder, "Laptop"));
+    const step = async (name: string) => JSON.parse(await readFile(path.join(dir, name), "utf8")) as Record<string, unknown>;
+    const other = newPairingKey().publicKey.toString("base64url");
+
+    // Its own answer swapped for another key: turned down at the next look.
+    await fresh.pairing.start();
+    await old.pairing.lookForRequests();
+    let [id] = (await readdir(dir)).map((name) => name.split(".")[0]!);
+    await writeFile(path.join(dir, `${id}.answer.json`), JSON.stringify({ ...(await step(`${id}.answer.json`)), publicKey: other }));
+    await old.pairing.lookForRequests();
+    expect(await readdir(dir)).toContain(`${id}.declined.json`);
+    await fresh.pairing.cancel();
+    await rm(path.join(dir, `${id}.declined.json`), { force: true });
+
+    // The new PC's key changed while "Add Laptop?" shows: the question goes away and nothing is sent.
+    await fresh.pairing.start();
+    await old.pairing.lookForRequests();
+    [id] = (await readdir(dir)).map((name) => name.split(".")[0]!);
+    await fresh.pairing.lookForAnswer();
+    await old.pairing.lookForRequests();
+    expect(old.pairing.view().approve).toMatchObject({ id, name: "Laptop" });
+    await writeFile(path.join(dir, `${id}.reveal.json`), JSON.stringify({ v: 1, publicKey: other }));
+    await old.pairing.lookForRequests();
+    expect(old.pairing.view().approve).toBeNull();
+    await expect(old.pairing.decide(id!, true)).rejects.toMatchObject({ key: "pairing.error.gone" });
+    expect(await readdir(dir)).not.toContain(`${id}.key.json`);
+    await fresh.pairing.lookForAnswer();
+    expect(fresh.pairing.view().asking).toMatchObject({ step: "declined" });
+    fresh.pairing.dispose();
+    old.pairing.dispose();
+  });
+
+  it("waits for a file a sync app hasn't finished instead of turning the request down", async () => {
+    const { root } = await pc();
+    const folder = path.join(root, "OneDrive");
+    const dir = path.join(folder, "Tavora", "pairing");
+    await mkdir(path.join(folder, "Tavora"), { recursive: true });
+    const old = await onPc(fetch, null, new FolderPairing(folder, "Desk"));
+    await old.accountKey.setUpHere(false);
+    const fresh = await onPc(fetch, null, new FolderPairing(folder, "Laptop"));
+    const halfway = async (file: string, look: () => Promise<void>) => {
+      const whole = await readFile(path.join(dir, file), "utf8");
+      await writeFile(path.join(dir, file), whole.slice(0, 5));
+      await look();
+      await writeFile(path.join(dir, file), whole);
+    };
+
+    await fresh.pairing.start();
+    await old.pairing.lookForRequests();
+    const [id] = (await readdir(dir)).map((name) => name.split(".")[0]!);
+    await fresh.pairing.lookForAnswer();
+    // The old PC's answer, then the new PC's key, half there for a look: nothing is turned down.
+    await halfway(`${id}.answer.json`, () => old.pairing.lookForRequests());
+    expect(old.pairing.view().approve).toBeNull();
+    await halfway(`${id}.reveal.json`, () => old.pairing.lookForRequests());
+    expect(old.pairing.view().approve).toBeNull();
+    expect(await readdir(dir)).not.toContain(`${id}.declined.json`);
+    await old.pairing.lookForRequests();
+    expect(old.pairing.view().approve).toMatchObject({ id, code: fresh.pairing.view().asking!.code });
+    // The same while "Add Laptop?" shows.
+    await halfway(`${id}.reveal.json`, () => old.pairing.lookForRequests());
+    await halfway(`${id}.answer.json`, () => old.pairing.lookForRequests());
+    expect(old.pairing.view().approve).toMatchObject({ id });
+    await old.pairing.decide(id!, true);
+    await fresh.pairing.lookForAnswer();
+    await fresh.pairing.confirm();
+    expect(fresh.accountKey.get()?.equals(old.accountKey.get()!)).toBe(true);
+    fresh.pairing.dispose();
+    old.pairing.dispose();
+  });
+
+  it("waits for a request file a sync app hasn't finished, and leaves other PCs' files alone", async () => {
+    const { root } = await pc();
+    const folder = path.join(root, "OneDrive");
+    const dir = path.join(folder, "Tavora", "pairing");
+    await mkdir(path.join(folder, "Tavora"), { recursive: true });
+    const old = await onPc(fetch, null, new FolderPairing(folder, "Desk"));
+    await old.accountKey.setUpHere(false);
+    // A third PC with the key, which didn't answer.
+    const other = new FolderPairing(folder, "Tower");
+    const fresh = await onPc(fetch, null, new FolderPairing(folder, "Laptop"));
+    const halfway = async (file: string, look: () => Promise<unknown>) => {
+      const whole = await readFile(path.join(dir, file), "utf8");
+      await writeFile(path.join(dir, file), whole.slice(0, 5));
+      await look();
+      await writeFile(path.join(dir, file), whole);
+    };
+
+    await fresh.pairing.start();
+    const [id] = (await readdir(dir)).map((name) => name.split(".")[0]!);
+    // Half there before anyone answered: nobody answers it, and nobody deletes it.
+    await halfway(`${id}.request.json`, async () => {
+      await old.pairing.lookForRequests();
+      expect(await other.read()).toBeNull();
+    });
+    expect(await readdir(dir)).toEqual([`${id}.request.json`]);
+    await old.pairing.lookForRequests();
+    // Half there while both PCs are at it: each looks again, nothing is deleted or turned down.
+    await halfway(`${id}.request.json`, async () => {
+      await fresh.pairing.lookForAnswer();
+      await old.pairing.lookForRequests();
+      await other.read();
+    });
+    expect(fresh.pairing.view().asking).toMatchObject({ step: "waiting" });
+    expect((await readdir(dir)).sort()).toEqual([`${id}.answer.json`, `${id}.request.json`]);
+    await fresh.pairing.lookForAnswer();
+    expect(fresh.pairing.view().asking).toMatchObject({ step: "code" });
+    await halfway(`${id}.request.json`, () => old.pairing.lookForRequests());
+    await old.pairing.lookForRequests();
+    expect(old.pairing.view().approve).toMatchObject({ id, code: fresh.pairing.view().asking!.code });
+    // An answer that isn't readable yet is someone's: the third PC doesn't answer over it.
+    await halfway(`${id}.answer.json`, async () => {
+      expect(await other.read()).toBeNull();
+      expect(await other.answer(id!, newPairingKey().publicKey.toString("base64url"))).toBe(false);
+    });
+    await old.pairing.decide(id!, true);
+    await fresh.pairing.lookForAnswer();
+    await fresh.pairing.confirm();
+    expect(fresh.accountKey.get()?.equals(old.accountKey.get()!)).toBe(true);
+    fresh.pairing.dispose();
+    old.pairing.dispose();
+  });
+
+  it("cleans up a request file that is still unreadable once it is older than any request lasts", async () => {
+    const { root } = await pc();
+    let now = Date.now();
+    await mkdir(path.join(root, "Tavora", "pairing"), { recursive: true });
+    const dir = path.join(root, "Tavora", "pairing");
+    await writeFile(path.join(dir, "0123456789abcdef.request.json"), "{\"v\":1,");
+    await writeFile(path.join(dir, "0123456789abcdef.answer.json"), "{}");
+    const pcWithKey = new FolderPairing(root, "Desk", () => now);
+    expect(await pcWithKey.read()).toBeNull();
+    expect(await readdir(dir)).toHaveLength(2);
+    now += FOLDER_PAIRING_MS + 60_000;
+    expect(await pcWithKey.read()).toBeNull();
+    expect(await readdir(dir)).toEqual([]);
+  });
+
+  it("stops answering, also after a restart, when request after request ends without a click", async () => {
+    const { root, userData } = await pc();
+    const folder = path.join(root, "OneDrive");
+    const dir = path.join(folder, "Tavora", "pairing");
+    await mkdir(path.join(folder, "Tavora"), { recursive: true });
+    let now = Date.now();
+    const answersFile = path.join(userData, "pairing-answers.json");
+    const transport = new FolderPairing(folder, "Desk");
+    const old = await onPc(fetch, null, transport, { answersFile, now: () => now });
+    await old.accountKey.setUpHere(false);
+    // Whoever can write the folder asks as a "new PC" with a key of its own, sees which code the old PC would show,
+    // and asks again with a fresh request when it isn't the one it needs, so the old PC never shows a question.
+    const rogue = new FolderPairing(folder, "Laptop");
+    const theirs = newPairingKey();
+    const tryOnce = async () => {
+      const { id } = await rogue.ask(pairingCommit(theirs.publicKey).toString("base64url"));
+      await old.pairing.lookForRequests();
+      const answer = (await rogue.read())?.answer;
+      if (answer) pairingCode(theirs.publicKey, Buffer.from(answer.publicKey, "base64url"));
+      await old.pairing.lookForRequests();
+      await rogue.end(id, false);
+      await old.pairing.lookForRequests();
+      return answer !== undefined;
+    };
+    const tries: boolean[] = [];
+    for (let i = 0; i < MAX_OPEN_ANSWERS + 2; i++) tries.push(await tryOnce());
+    expect(tries).toEqual([...Array(MAX_OPEN_ANSWERS).fill(true), false, false]);
+    expect(old.pairing.view().approve).toBeNull();
+
+    // Started again, it still counts them.
+    old.pairing.dispose();
+    const restarted = new Pairing({
+      copySync: { accountKey: old.accountKey, place: "a folder", keyArrived: async () => undefined, shareableKey: () => old.accountKey.copyKey() },
+      account: { token: () => null },
+      serviceUrl: "http://tavora.test/v1/account",
+      deviceName: "Desk",
+      folderTransport: () => new FolderPairing(folder, "Desk"),
+      onChange: () => undefined,
+      focus: () => undefined,
+      answersFile,
+      now: () => now,
+    });
+    const fresh = await onPc(fetch, null, new FolderPairing(folder, "Laptop"));
+    await fresh.pairing.start();
+    await restarted.lookForRequests();
+    expect((await readdir(dir)).some((name) => name.endsWith(".answer.json"))).toBe(false);
+
+    // An hour on, a real new PC is answered again and gets the key.
+    now += OPEN_ANSWER_MS;
+    await restarted.lookForRequests();
+    await fresh.pairing.lookForAnswer();
+    await restarted.lookForRequests();
+    expect(restarted.view().approve).toMatchObject({ name: "Laptop", code: fresh.pairing.view().asking!.code });
+    await restarted.decide(restarted.view().approve!.id, true);
+    await fresh.pairing.lookForAnswer();
+    await fresh.pairing.confirm();
+    expect(fresh.accountKey.get()?.equals(old.accountKey.get()!)).toBe(true);
+    // Answered with a click: it doesn't count.
+    expect(JSON.parse(await readFile(answersFile, "utf8"))).toMatchObject({ at: expect.any(Array) });
+    expect((JSON.parse(await readFile(answersFile, "utf8")) as { at: number[] }).at.filter((at) => now - at < OPEN_ANSWER_MS)).toHaveLength(0);
+    fresh.pairing.dispose();
+    restarted.dispose();
   });
 
   it("lasts a day, then is gone", async () => {

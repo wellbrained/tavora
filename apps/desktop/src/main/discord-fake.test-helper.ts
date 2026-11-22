@@ -23,8 +23,18 @@ export interface FakeDiscord {
   clientId: string | null;
 }
 
+/**
+ * A unix socket's path may be at most 103 characters on macOS (107 on Linux). The run's temp folder on a Mac is
+ * longer than that once the socket's name is added, so connecting hung until the test timed out: such a socket goes
+ * in /tmp instead.
+ */
+function socketBase(): string {
+  const base = os.tmpdir();
+  return process.platform === "win32" || path.join(base, "tavora-discord-XXXXXX", "discord-ipc-0").length <= 100 ? base : "/tmp";
+}
+
 export async function fakeDiscord(): Promise<FakeDiscord> {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "tavora-discord-"));
+  const dir = await mkdtemp(path.join(socketBase(), "tavora-discord-"));
   const where = process.platform === "win32" ? `\\\\?\\pipe\\tavora-test-${path.basename(dir)}` : path.join(dir, "discord-ipc-0");
   const sockets = new Set<net.Socket>();
   const fake: FakeDiscord = {

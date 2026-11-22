@@ -13,7 +13,8 @@
 #   hello                     prints the banner and the setup's file hashes (/etc/tavora-deploy/installed.sha256)
 #   publish <id> <sha256>     reads a tar from stdin, checks its SHA-256 and every entry, then publishes it;
 #                             <id> is the version (updates) or the release name yyyymmddhhmmss-<12 hex> (others)
-# Nothing that is uploaded is ever run.
+# Nothing that is uploaded is ever run. An update is published only when Tavora's update key signed it
+# (tavora-update-signature, against the keys pinned in /etc/tavora-deploy/update-keys.ts).
 set -euo pipefail
 umask 022
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
@@ -48,7 +49,7 @@ fi
 id="${BASH_REMATCH[1]}"
 sum="${BASH_REMATCH[2]}"
 if [[ "$job" == updates ]]; then
-  [[ "$id" =~ ^[0-9]{1,6}\.[0-9]{1,6}\.[0-9]{1,6}$ ]] || die "not a version: $id"
+  [[ "$id" =~ ^(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})$ ]] || die "not a version: $id"
 else
   [[ "$id" =~ ^[0-9]{14}-[0-9a-f]{12}$ ]] || die "not a release name: $id"
 fi
@@ -150,6 +151,9 @@ case "$job" in
     digest="$(openssl dgst -sha512 -binary "$unpacked/$installer" | base64 -w0)"
     grep -qxF "sha512: $digest" "$unpacked/latest.yml" || die "latest.yml's sha512 is not the installer's"
     grep -qxF "    sha512: $digest" "$unpacked/latest.yml" || die "latest.yml's files list has another sha512 than the installer's"
+    # Tavora's own signature, under one of the keys the setup pinned: an upload the update key didn't sign never goes live.
+    /usr/local/sbin/tavora-update-signature verify /etc/tavora-deploy/update-keys.ts "$unpacked/latest.yml" "$id" "$installer" "$digest" >/dev/null ||
+      die "latest.yml didn't pass the update check (see above); nothing was published"
     # Only forward: a version that is not newer than the live one is refused (a bad release is fixed by a newer one).
     previous="$(grep -m1 '^version: ' "$root/latest.yml" 2>/dev/null | cut -d' ' -f2 || true)"
     if [[ -n "$previous" ]]; then

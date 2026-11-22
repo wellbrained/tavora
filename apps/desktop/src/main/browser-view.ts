@@ -9,6 +9,7 @@ import { addressToUrl, displayHost, isPrivateUrl, isWebUrl, parseUrl, siteOfUrl 
 import { shortcutIn } from "../shared/shortcuts";
 import { BROWSER_MODULE_ID } from "./registry";
 import { stillOf } from "./panel-still";
+import { lockDevices } from "./devices";
 import type { PanelViewAdapter } from "./panel-views";
 
 /** Logins in a workspace's own session, or in the one shared by every workspace. */
@@ -121,22 +122,9 @@ export function browserSession(partition: string, hooks: BrowserSessionHooks): S
   });
   ses.setPermissionRequestHandler((_contents, permission, callback) => callback(ALLOWED_PERMISSIONS.has(permission)));
   ses.setPermissionCheckHandler((_contents, permission) => ALLOWED_PERMISSIONS.has(permission));
-  ses.setDevicePermissionHandler(() => false);
-  // Electron asks this on Windows and Linux only.
-  ses.setBluetoothPairingHandler?.((_details, callback) => callback({ confirmed: false }));
+  // Every session gets this when it is made (index.ts); again here, so a Browser session never goes without it.
+  lockDevices(ses);
   ses.setDisplayMediaRequestHandler((_request, callback) => callback({}));
-  ses.on("select-hid-device", (event, _details, callback) => {
-    event.preventDefault();
-    callback();
-  });
-  ses.on("select-serial-port", (event, _ports, _contents, callback) => {
-    event.preventDefault();
-    callback("");
-  });
-  ses.on("select-usb-device", (event, _details, callback) => {
-    event.preventDefault();
-    callback();
-  });
   ses.on("will-download", (event, _item, contents) => {
     event.preventDefault();
     hooks.onDownloadRefused(contents ?? null);

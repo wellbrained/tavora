@@ -67,8 +67,10 @@ describe("host.ts", () => {
     expect(host).toMatch(/onRefused: \(info\) => removeRefusedInstaller\(info, app\.isPackaged\)/);
   });
 
-  it("forgets a saved official key that is no longer trusted, and publishes built-in modules only from a development build", () => {
-    expect(host).toMatch(/await loadTrustedSavedKey\(this\.officialKeys,/);
-    expect(host).toMatch(/if \(!officialPublishAllowed\(app\.isPackaged, officialOn\(OFFICIAL_PINS\)\)\) return null;/);
+  // The rule itself is OfficialPublishing's (official-publishing.test.ts); this holds host.ts to telling it what build this is.
+  it("tells built-in module publishing whether this is a packaged build and whether the pins are set", () => {
+    const made = body(/this\.officialPublishing = new OfficialPublishing\(\{/);
+    expect(made).toContain("packaged: app.isPackaged,");
+    expect(made).toContain("pinsOn: officialOn(OFFICIAL_PINS),");
   });
 });

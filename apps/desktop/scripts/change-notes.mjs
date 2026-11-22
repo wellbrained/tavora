@@ -30,6 +30,7 @@ import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "no
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { compareVersions } from "./release-guards.mjs";
+import { feedNoteProblem } from "./release-notes.mjs";
 import { CATALOG_VERSION } from "../src/shared/release-catalog.ts";
 
 export const LABEL = "feature-complete";
@@ -74,6 +75,11 @@ export function parseChangeNote(text, file) {
   if (!title) problems.push(`${file}: starts without a "# Title" line.`);
   if (notes.length === 0) problems.push(`${file}: has no "- note" lines.`);
   if (notes.some((note) => note === "")) problems.push(`${file}: has an empty note.`);
+  // Each note goes into the update feed when it is released: one it can't take would stop that release at the very end.
+  for (const note of notes) {
+    const problem = feedNoteProblem(note);
+    if (problem) problems.push(`${file}: ${problem}.`);
+  }
   return problems.length ? { problems } : { note: { bump, title, notes, tags }, problems };
 }
 

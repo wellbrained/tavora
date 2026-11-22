@@ -1,6 +1,8 @@
 // The rules `pnpm release` checks before it builds or publishes anything. Kept
 // apart from the script so they can be tested.
 
+import { feedNoteProblem } from "./release-notes.mjs";
+
 const SEMVER = /^(\d+)\.(\d+)\.(\d+)$/;
 
 /** -1, 0 or 1; both must be major.minor.patch. */
@@ -20,8 +22,10 @@ export function lastReleased(tags) {
 
 /**
  * What stands in the way of releasing `version`. Empty means go.
- * state: { branch, dirty, ahead, behind, tags, noteVersions }
+ * state: { branch, dirty, ahead, behind, tags, noteVersions, notes? }
  *   noteVersions: every version in the patch notes, newest first.
+ *   notes: the notes of this version's entry, which go into the update feed: one it can't take would stop the release
+ *   only at the upload, after the build and the hand checks.
  * Patch versions are released like minor ones (decided 2026-10-30); CI, e2e and the start check gate them.
  */
 export function checkRelease(version, state) {
@@ -44,6 +48,10 @@ export function checkRelease(version, state) {
   const unfolded = state.noteVersions.filter(
     (v) => v !== version && compareVersions(v, version) < 0 && (previous === null || compareVersions(v, previous) > 0),
   );
+  for (const note of state.notes ?? []) {
+    const problem = feedNoteProblem(note);
+    if (problem) problems.push(`Patch note ${problem}.`);
+  }
   if (unfolded.length) {
     problems.push(`Fold the patch-notes entries ${unfolded.join(", ")} into the ${version} entry: pnpm release:fold, go over the wording, merge it as a pull request.`);
   }

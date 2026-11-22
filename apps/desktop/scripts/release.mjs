@@ -30,7 +30,7 @@ import { AFTER_RELEASE, CHECKLIST, asksHandChecks, checkCi, checkDownload, check
 import { hello, publish } from "../../../scripts/deploy-client.mjs";
 import { installedVersion } from "./installed-version.mjs";
 import { lockPath, mainCheckoutOf, takeLock } from "./release-lock.mjs";
-import { checkPinChange, describeSigned, loadUpdateSigningKey, readPinsFromSource, signLatestYml } from "./update-feed.mjs";
+import { checkPinChange, describeSigned, feedProblem, loadUpdateSigningKey, readPinsFromSource, signLatestYml } from "./update-feed.mjs";
 import { PINNED_UPDATE_KEYS } from "../src/main/update-keys.ts";
 import { rawUpdatePublicKey, readPinnedUpdateKeys } from "../src/main/update-signature.ts";
 
@@ -131,6 +131,7 @@ const step = (text) => console.log(`\n== ${text}`);
 const version = JSON.parse(readFileSync(path.join(desktop, "package.json"), "utf8")).version;
 const notes = readFileSync(path.join(desktop, "src", "shared", "patch-notes.ts"), "utf8");
 const noteVersions = [...notes.matchAll(/^\s*version: "(\d+\.\d+\.\d+)"/gm)].map((m) => m[1]);
+const { PATCH_NOTES: patchNotes } = await import(pathToFileURL(path.join(desktop, "src", "shared", "patch-notes.ts")).href);
 
 step(`Checking that ${version} can be released`);
 git("fetch", "origin", "--tags", "--prune", "--quiet");
@@ -141,6 +142,7 @@ const problems = checkRelease(version, {
   behind: Number(git("rev-list", "--count", "HEAD..origin/main")),
   tags: git("tag", "--list", "v*").split(/\r?\n/).filter(Boolean),
   noteVersions,
+  notes: patchNotes.find((entry) => entry.version === version)?.notes ?? [],
 });
 if (problems.length) {
   console.error(`\nNot releasing ${version}:`);
@@ -281,6 +283,9 @@ console.log(`The files match what the Release build made from ${built.slice(0, 7
 // Only now, on files that passed every check above: Tavora's signature into latest.yml (src/main/update-signature.ts).
 step("Signing the update");
 const signed = { version, file: installer, sha512: downloaded.get(installer).sha512 };
+// The update server takes only electron-builder's exact feed for this installer: find out now, not at the upload.
+const feedLayout = feedProblem(latestYml, signed, { signed: false });
+if (feedLayout) fail(`The update server would refuse this latest.yml: ${feedLayout}. Nothing was signed, published or tagged.`);
 console.log(describeSigned(signed).map((line) => `  ${line}`).join("\n"));
 if (signing.problem) {
   console.log(`\nDry run: this is what a release signs. A real release would stop before building: ${signing.problem}`);

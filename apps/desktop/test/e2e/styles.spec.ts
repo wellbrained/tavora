@@ -81,8 +81,18 @@ test("New style copies the style in use into the styles folder, and it can be pi
   await expect.poll(() => onHost(page, STYLE)).toBe("tavora.hardware");
 
   await page.getByTestId("create-starter-style").click();
-  const manifest = JSON.parse(await readFile(path.join(userData, "styles", "my-hardware", "tavora.style.json"), "utf8")) as { id: string; name: string; looks: Record<string, string> };
-  expect([manifest.id, manifest.name, manifest.looks.tabs]).toEqual(["local.my-hardware", "My Hardware", "keycap"]);
+  // The file is written after the click returns: wait for it, don't read it once.
+  const manifestPath = path.join(userData, "styles", "my-hardware", "tavora.style.json");
+  await expect
+    .poll(async () => {
+      try {
+        const m = JSON.parse(await readFile(manifestPath, "utf8")) as { id: string; name: string; looks: Record<string, string> };
+        return [m.id, m.name, m.looks.tabs];
+      } catch {
+        return null;
+      }
+    })
+    .toEqual(["local.my-hardware", "My Hardware", "keycap"]);
   await page.getByTestId("style-select").click();
   await expect(page.getByTestId("style-local.my-hardware")).toContainText("My Hardware");
   await expect(page.getByTestId("style-local.my-hardware")).toContainText("Local");

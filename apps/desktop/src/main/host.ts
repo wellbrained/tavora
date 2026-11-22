@@ -2,10 +2,10 @@ import { ReadOnlyFiles } from './read-only-files';
 import { ChosenFolders, folderHost, type FolderHost, type FolderPlaces } from './folder-access';
 import { showInBackground, windowLook, type WindowStart } from "./background-window";
 import { saveDialogDirectory } from './save-dialog-folder';
-import { randomUUID, type KeyObject } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { existsSync, watch, type FSWatcher } from "node:fs";
 import os from "node:os";
-import { appendFile, mkdir, readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readdir, readFile, realpath, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { Worker } from "node:worker_threads";
 import { allowsPersonalWorkspaces, continuingPanelType, folderKey, isModuleId, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER, OFFICIAL_PINS, officialOn, panelTypes, translateManifest, withGamePanelType, type Connector, type ModuleManifest, type ResolvedPanelType } from "@tavora/module-schema";
@@ -25,19 +25,17 @@ import {
   shell,
   type IpcMainEvent,
   type IpcMainInvokeEvent,
-  type OpenDialogOptions,
   type Referrer,
   type WebContents,
   type WebContentsView,
 } from "electron";
-import { styleMarks, type TavoraTheme, type TavoraWorkspace } from "@tavora/sdk/protocol";
-import type { IconTone } from "../shared/icon-tone";
+import type { TavoraWorkspace } from "@tavora/sdk/protocol";
 import type { PanelDialogSize } from "./bridge";
-import type { AccountView, ActionResult, AiUsageView, AppearanceView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, InstalledGameView, LegalPage, LicenceList, ModulePageResult, OfficialPublishRun, OfficialPublishView, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, PanelDialog, PanelPlacement, ProfileRanksView, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, SteamShareView, UnlistedGame } from "../shared/host-api";
+import type { AccountView, ActionResult, AiUsageView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, InstalledGameView, LegalPage, LicenceList, ModulePageResult, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, PanelDialog, PanelPlacement, ProfileRanksView, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, UnlistedGame } from "../shared/host-api";
 import { MAX_PICKER_COVERS } from "../shared/host-api";
-import { addOrRestoreWorkspace, gameCopyFinder } from "./game-copy";
+import { addOrRestoreWorkspace } from "./game-copy";
 import { isForWorkspaceGame, learnGameIds, withOnlineId, workspaceGameIds, type ListedGame } from "./workspace-game";
-import { resolveLanguage, translate, type Language, type MessageKey } from "../shared/i18n";
+import { resolveLanguage, translate, type Language } from "../shared/i18n";
 import { suggestPrefix } from "../shared/id-prefix";
 import { isVoicePaused } from "../shared/discord-voice";
 import { compareModuleVersions } from "../shared/module-version";
@@ -66,7 +64,6 @@ import { ModuleLifecycle } from "./module-lifecycle";
 import type { TestHosts } from "./network";
 import { holdOwnPort } from "./own-ports";
 import { shortcutFor } from "./shortcuts";
-import { importIcon, removeIcon } from "./icons";
 import { INSTANCE_ID } from "./ids";
 import { panelOverflow, type PanelOverflow } from "./panel-overflow";
 import { recordCrash } from "./crash-log";
@@ -78,7 +75,6 @@ import {
   placeOf,
   undeleteFolder,
   untrashWorkspaces,
-  iconFileShared,
   deleteTrashedWorkspace,
   cleanDevelopmentFolders,
   setDevelopmentFolderCollapsed,
@@ -103,24 +99,15 @@ import {
   restoreWorkspace,
   searchCatalog,
   setFolderLabel,
-  setWorkspaceImage,
-  markIconOffered,
-  markIconShared,
-  setWorkspaceLabel,
   setRail,
-  switchStyle,
   sortedRoot,
   trashedWorkspaces,
   trashWorkspace,
-  useOriginalWorkspaceIcon,
-  type DialogPlace,
   type WorkspaceEntry,
-  type WorkspaceIcon,
   type Library,
 } from "./library";
 import { fontStylesheet } from "./module-fonts";
 import { setOverlayFont } from "./overlay-font";
-import { themeFont } from "../shared/ui-fonts";
 import { moduleBaseCss } from "./module-style";
 import { backupData, backupsDir } from "./backup";
 import { hasLibrary, loadLibrary, SavedData, WORKSPACE_FILE } from "./saved-data";
@@ -136,20 +123,15 @@ import { PublisherNames } from "./publisher-names";
 import { PreviewUpdater, previewCheck, UpdateManager, type UpdaterLike } from "./updates";
 import { PINNED_UPDATE_KEYS } from "./update-keys";
 import { checkDownloadedUpdate } from "./update-signature";
-import { fetchHostedList, type HostedList } from "./hosted-icons";
-import { OfficialPublisher, PublishCancelled } from "./official-publish";
+import { OfficialPublisher } from "./official-publish";
+import { OfficialPublishing } from "./official-publishing";
 import { OfficialKeyStore } from "./official-key-store";
-import { isHostSender, officialPublishAllowed } from "./host-sender";
-import { loadTrustedSavedKey } from "./official-saved-key";
+import { isHostSender } from "./host-sender";
 import { removeRefusedInstaller } from "./refused-update";
-import { fingerprint, loadExistingKey } from "@tavora/pack";
 import { OfficialUpdates, resolveOfficialPins } from "./official-updates";
 import { CATALOGUE_PUBLIC_KEY, SAFETY_REFRESH_MS, SafetyLists } from "./safety-lists";
-import { createToneReader, iconVersions } from "./icon-tone";
-import { syncIcons } from "./icon-sync";
-import { fetchSteamLibrary, importSteamGames, MAX_IMPORT_GAMES, steamGameStatus, steamLibraryView } from "./steam-import";
-import { icoFrameNear, isShareCandidate, largestIcoFrame, shareableIconFile, shareSource, steamShareGames, submitIcon } from "./share-icons";
-import { AppInfoError, readClientIcons, readSteamKinds } from "./steam-appinfo";
+import { fetchSteamLibrary, importSteamGames, MAX_IMPORT_GAMES, steamLibraryView } from "./steam-import";
+import { readSteamKinds } from "./steam-appinfo";
 import { GameOverlays, layerBinding, toggleBinding, type PanelInfo } from "./game-overlay-service";
 import { scopeForKind } from "./game-overlays";
 import { OverlayLayout, type SourcePanel } from "./overlay-layout";
@@ -163,16 +145,13 @@ import { Streaming } from "./streaming";
 import { unpackedPath } from "./unpacked";
 import { findInstalledGames, type InstalledGame } from "./launcher-games";
 import { GamesSeen } from "./games-seen";
-import { gameKey, pickGames, withInstallDates } from "./installed-list";
-import { readSteamLastPlayed } from "./steam-played";
-import { readIcoFromFile } from "./pe-icon";
-import { coverReader, findSteamDir, isSteamAppId, loadAppInfo, readLibraryCover, readSteamClientIcon, removeSteamIcon } from "./steam-icons";
-import { readShortcutIcons, shortcutFolders } from "./steam-shortcuts";
+import { gameKey } from "./installed-list";
+import { findSteamDir, isSteamAppId, loadAppInfo } from "./steam-icons";
 import { CLOSE_CAP_MS, documentsFolder, exportsFolder, ModuleView, picturesFolder, REVEAL_CAP_MS } from "./module-view";
-import { readJsonText } from "./json-file-http";
-import { kindOfName, readTableFile } from "./table-file-http";
-import { freeFileName } from "./picture-save-http";
 import { HostError } from "./errors";
+import { Appearance } from "./appearance";
+import { FileDialogs } from "./file-dialogs";
+import { GameIcons } from "./game-icons";
 import { loadAdBlocker, type AdBlocker } from "./browser-filter";
 import { isPrivateUrl, isWebUrl, siteOfUrl } from "./browser-url";
 import { supportTarget } from "./module-support";
@@ -214,24 +193,15 @@ import { discordLogin } from "./discord-login";
 import { loadDiscordSecrets, saveDiscordSecrets, type Encryptor } from "./discord-store";
 import { PurgeCount, viewsInSession } from "./storage-purge";
 import {
-  DEFAULT_THEME,
   discoverThemes,
-  resolveTheme,
-  variationForMode,
-  STARTER_README,
-  starterTheme,
-  THEME_MANIFEST,
-  themeManifest,
   veiled,
   type InstalledTheme,
   type ThemeHint,
   type ThemeProblem,
 } from "./themes";
-import { appearanceThemes, discoverStyles, resolveStyle, starterStyle, STYLE_MANIFEST, STYLE_README, styleManifest, tavoraStyle, type InstalledStyle, type StyleHint, type StyleProblem } from "./styles";
-import { panelCorners, type PanelCorners } from "./panel-corners";
-import { CLASSIC_STYLE_ID, resolveFontId, resolveRadius } from "../shared/styles";
+import { discoverStyles } from "./styles";
 import { copyExample, slugOf } from "./example-copy";
-import { SerialQueue, writeFileAtomic } from "./fsutil";
+import { SerialQueue, sweepWriteLeftovers, writeFileAtomic } from "./fsutil";
 import {
   emptyWorkspace,
   Workspaces,
@@ -242,7 +212,7 @@ import {
   type WorkspaceState,
 } from "./workspace";
 import type { PanelContent, PanelLaunch } from "./panel-content";
-import type { FileKind, PanelOpenManyResult, PanelOpenResult } from "@tavora/sdk/protocol";
+import type { PanelOpenManyResult, PanelOpenResult } from "@tavora/sdk/protocol";
 import { openManySlots } from "../shared/panel-layout";
 import { initialBounds, MIN_SIZE, type WindowState } from "./window-state";
 import { layoutKey, OpenTimes, PanelCover } from "./panel-cover";
@@ -374,30 +344,12 @@ export interface HostOptions {
 /** The same for every module page; the font and the colours come in stylesheets of their own. */
 const MODULE_CSS = moduleBaseCss();
 
-/**
- * Writes `data` to the file a save dialog gave, adding `.extension` when the name lacks it. The dialog asked before
- * replacing the file the user chose; a name with the extension added was never asked about, so that one is not replaced.
- */
-async function writeWithExtension(picked: string, extension: string, data: Buffer | string, mode?: number): Promise<string> {
-  const chosen = path.resolve(picked);
-  const file = chosen.toLowerCase().endsWith(`.${extension}`) ? chosen : `${chosen}.${extension}`;
-  try {
-    await writeFile(file, data, { flag: file === chosen ? "w" : "wx", ...(mode === undefined ? {} : { mode }) });
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new UserError("error.file.taken", { name: path.basename(file) });
-    throw error;
-  }
-  return file;
-}
-
-const ICON_URL = `${HOST_SCHEME}://app/game-icons/`;
 /** A saved icon as a 32 px bitmap (blue, green, red, alpha), or null when it cannot be read. */
 function loadSmallBitmap(file: string): Uint8Array | null {
   const image = nativeImage.createFromPath(file);
   return image.isEmpty() ? null : image.resize({ width: 32, height: 32, quality: "good" }).toBitmap();
 }
 
-const STEAM_ICON_URL = `${HOST_SCHEME}://app/steam-icons/`;
 const PROFILE_URL = `${HOST_SCHEME}://app/profile/`;
 
 /**
@@ -538,12 +490,8 @@ export class Host {
   private readonly safetyLists: SafetyLists;
   /** Tavora's own modules downloaded from the catalogue (official-updates.ts); off while the pins are empty. */
   private readonly official: OfficialUpdates;
-  /** Publishing built-in modules from a dev build (official-publish.ts): made on first use, kept for the preview in between. */
-  private officialPublisher: OfficialPublisher | null = null;
-  /** The Tavora key when the developer chose to keep it on this PC (dev builds only). */
-  private readonly officialKeys: OfficialKeyStore;
-  /** Settings > Development's Built-in modules list (state.officialPublish); the publish in progress is the publisher's. */
-  private officialPublish: Pick<OfficialPublishView, "check" | "overview"> = { check: { phase: "idle" }, overview: null };
+  /** Publishing built-in modules from a dev build (official-publishing.ts). */
+  private readonly officialPublishing: OfficialPublishing;
   /** Stream overlays and hotkeys for module actions (streaming.ts); made by Host.create once the Host is there, before any module panel opens. */
   private streaming!: Streaming;
   /** Module overlay pages shown over the game in front (game-overlay-service.ts). */
@@ -623,6 +571,10 @@ export class Host {
   });
   /** Where modules keep their pictures. */
   private readonly files: ModuleFilesFolder;
+  /** The system's file dialogs, opening where the user last picked from (file-dialogs.ts). */
+  private readonly fileDialogs: FileDialogs;
+  /** The library's game icons, the Add a game list's icons and covers, and offering icons (game-icons.ts). */
+  private readonly gameIcons: GameIcons;
   /** True while a dialog backdrop dims the host page, so the window buttons are dimmed too. */
   private dimmed = false;
   /** The page colour behind the window buttons, as the page reports it (the workspace canvas is darker than the theme). */
@@ -654,13 +606,6 @@ export class Host {
   private readonly gameLookup: OnlineSearch;
   /** When each installed game was last seen running; local only, it orders the Add a game list. */
   private readonly gamesSeen: GamesSeen;
-  /** The icons the Add a game list read, by game key, so the PC's programs are opened once. */
-  private readonly pickerIcons = new Map<string, string | null>();
-  /** The Add a game covers, by Steam app id: Steam's own cover art from this PC's library cache, read once each. */
-  private readonly pickerCovers = coverReader(async (appids) => {
-    const steamDir = this.options.testInstalled ? null : await findSteamDir();
-    return Promise.all(appids.map((appid) => (steamDir ? readLibraryCover(steamDir, appid) : null)));
-  });
   /** Tavora's module catalog (catalog-client.ts). */
   private readonly catalog: CatalogClient;
   /** Every workspace's panels, layout and snapshots (workspace.ts). */
@@ -670,14 +615,8 @@ export class Host {
   private catalogTimer: ReturnType<typeof setInterval> | undefined;
   /** Looks for new versions; only in an installed (packaged) app. */
   private updates: UpdateManager | null = null;
-  /** The active theme as the host page, its windows and Browser pages show it; rebuilt when the theme or style changes. */
-  private currentTheme: TavoraTheme;
-  /** The theme module panels get: the host's, except for an inset style in a light variation (styles.ts appearanceThemes). */
-  private panelTheme: TavoraTheme;
-  /** The design styles Tavora has (styles.ts), and the style folders that could not be used. */
-  private styles: Map<string, InstalledStyle>;
-  private styleProblems: StyleProblem[];
-  private styleHints: StyleHint[];
+  /** The themes and styles, the user's pick and the themes the host and the panels get from it (appearance.ts). */
+  private readonly appearance: Appearance;
   private windowSaveTimer: ReturnType<typeof setTimeout> | undefined;
   readonly window: BrowserWindow;
   private tooltips:TooltipWindow;
@@ -694,9 +633,9 @@ export class Host {
     workspaces: WorkspaceState,
     private readonly profile: Profile,
     windowState: WindowState,
-    private themes: Map<string, InstalledTheme>,
-    private themeProblems: ThemeProblem[],
-    private themeHints: ThemeHint[],
+    themes: Map<string, InstalledTheme>,
+    themeProblems: ThemeProblem[],
+    themeHints: ThemeHint[],
     /** Reads and writes library.json and the other data files (saved-data.ts). */
     private readonly savedData: SavedData,
   ) {
@@ -713,13 +652,30 @@ export class Host {
     this.systemInfo = prepared.systemInfo;
     this.openTimes = prepared.openTimes;
     this.emblem = prepared.emblem;
-    this.styles = prepared.styles.styles;
-    this.styleProblems = prepared.styles.problems;
-    this.styleHints = prepared.styles.hints;
-    const appearance = appearanceThemes(resolveTheme(themes, library.theme, library.followSystem ? Host.systemMode(options) : undefined), resolveStyle(this.styles, library.styleId), library);
-    this.currentTheme = appearance.host;
-    this.panelTheme = appearance.panel;
-    setOverlayFont(this.currentTheme.font);
+    this.appearance = new Appearance({
+      library,
+      userData: options.userData,
+      sources: { themes: Host.themeSources(options), styles: Host.styleSources(options) },
+      appVersion: app.getVersion(),
+      installed: { themes, themeProblems, themeHints, styles: prepared.styles.styles, styleProblems: prepared.styles.problems, styleHints: prepared.styles.hints },
+      systemMode: () => Host.systemMode(options),
+      openPath: (folder) => shell.openPath(folder),
+      // Test runs keep the window hidden and open no file manager.
+      hidden: options.hidden === true,
+      applied: (changed) => this.showTheme(changed),
+    });
+    setOverlayFont(this.appearance.host.font);
+    this.fileDialogs = new FileDialogs({
+      dialogs: {
+        open: (dialogOptions) => dialog.showOpenDialog(this.window, dialogOptions),
+        save: (dialogOptions) => dialog.showSaveDialog(this.window, dialogOptions),
+      },
+      library,
+      saveLibrary: () => this.saveLibrary(),
+      language: () => this.language,
+      documents: documentsFolder,
+      pictures: picturesFolder,
+    });
     this.files = new ModuleFilesFolder({
       userData: options.userData,
       defaultFolder: options.picturesFolder ?? defaultFilesRoot(options.userData),
@@ -729,8 +685,8 @@ export class Host {
         this.library.moduleFilesFolder = folder;
         this.saveLibrary();
       },
-      pick: (options) => this.pickPath("module-files", options),
-      remember: (picked) => this.rememberPicked("module-files", picked),
+      pick: (options) => this.fileDialogs.pick("module-files", options),
+      remember: (picked) => this.fileDialogs.remember("module-files", picked),
       notify: (message) => (this.notice = message),
       changed: () => this.pushState(),
       writesDone: (timeoutMs) => this.data.blobWrites.idle(timeoutMs),
@@ -785,7 +741,38 @@ export class Host {
       introduce: (owner) => this.publisherNames.refresh([owner]),
       log: (line) => console.warn(`[tavora] ${line}`),
     });
-    this.officialKeys = new OfficialKeyStore(options.userData, prepared.encryptor);
+    this.officialPublishing = new OfficialPublishing({
+      packaged: app.isPackaged,
+      pinsOn: officialOn(OFFICIAL_PINS),
+      trust: () => new OfficialUpdates({ userData: this.options.userData, pins: { ...OFFICIAL_PINS }, safety: this.safetyLists }),
+      publisher: (trust) =>
+        new OfficialPublisher({
+          repo: path.resolve(__dirname, "../../../.."),
+          userData: this.options.userData,
+          listed: async (id) => {
+            try {
+              return { version: (await this.catalog.details(id)).entry.version };
+            } catch (error) {
+              if (error instanceof UserError && error.key === "error.catalogNotListed") return null;
+              throw error;
+            }
+          },
+          trusted: (fingerprint, sha256) => trust.signerTrusted(fingerprint, sha256),
+          upload: (key, zip) => this.account.uploadModule(key, zip),
+          // A run that ends while the app quits (its cancel there) has no window left to tell.
+          onChange: () => {
+            if (!this.window.isDestroyed()) this.pushState();
+          },
+        }),
+      keys: new OfficialKeyStore(options.userData, prepared.encryptor),
+      pickKeyFile: async () => {
+        const picked = await dialog.showOpenDialog(this.window, { title: translate(this.language, "dialog.tavoraKey"), properties: ["openFile"] });
+        const keyFile = picked.filePaths[0];
+        return picked.canceled || !keyFile ? undefined : keyFile;
+      },
+      language: () => this.language,
+      changed: () => this.pushState(),
+    });
     this.discord = Host.discordConnector(options, prepared.encryptor, (view) => {
       if (!this.window.isDestroyed()) this.window.webContents.send("host:discord", view);
     });
@@ -803,6 +790,29 @@ export class Host {
       const accountId = view.account !== null ? prepared.signIn.id() : null;
       this.developerKeys?.accountChanged(accountId);
       this.copySync.accountChanged(accountId);
+    });
+    this.gameIcons = new GameIcons({
+      userData: options.userData,
+      library,
+      saveLibrary: () => this.saveLibrary(),
+      pushState: () => this.pushState(),
+      language: () => this.language,
+      steamIcons: options.steamIcons,
+      apiUrl: options.apiUrl,
+      testInstalled: options.testInstalled,
+      token: () => this.account.token(),
+      signedOut: () => void this.account.refresh().catch(() => undefined),
+      seen: () => this.gamesSeen.all(),
+      shouldRun: () => !this.window.isDestroyed(),
+      desktop: () => {
+        try {
+          return app.getPath("desktop");
+        } catch {
+          // Windows can't say: the usual places are still looked at.
+          return undefined;
+        }
+      },
+      smallBitmap: loadSmallBitmap,
     });
     this.inbox = new Inbox({
       baseUrl: serviceUrl(options.apiUrl),
@@ -836,7 +846,7 @@ export class Host {
       minHeight: MIN_SIZE.height,
       title: "Tavora",
       icon: options.icon,
-      backgroundColor: this.currentTheme.colors.background,
+      backgroundColor: this.appearance.host.colors.background,
       titleBarStyle: "hidden",
       titleBarOverlay: this.titleBarOverlay(),
       autoHideMenuBar: true,
@@ -868,7 +878,7 @@ export class Host {
     } else {
       this.window.once("ready-to-show", () => this.window.show());
     }
-    this.tooltips=new TooltipWindow({parent:this.window,preload:path.join(path.dirname(options.modulePreload),"tooltip.cjs"),hidden:!!options.hidden,theme:()=>this.currentTheme,language:()=>this.language,
+    this.tooltips=new TooltipWindow({parent:this.window,preload:path.join(path.dirname(options.modulePreload),"tooltip.cjs"),hidden:!!options.hidden,theme:()=>this.appearance.host,language:()=>this.language,
       closed:(owner,id)=>{this.moduleView(owner)?.tooltipClosed(id);},
       source:owner=>{
         const view=this.moduleView(owner),bounds=this.panels.placeOf(owner);
@@ -877,14 +887,14 @@ export class Host {
         return{root:module.root,module:view.moduleId,name:this.shown(module.manifest).name,bounds};
       }});
     this.watchShortcuts(this.window.webContents);
-    this.cover = new PanelCover({ parent: this.window.contentView, emblem: () => this.emblem, fontCss: (theme) => fontStylesheet(theme.font), radius: () => this.corners().cover });
+    this.cover = new PanelCover({ parent: this.window.contentView, emblem: () => this.emblem, fontCss: (theme) => fontStylesheet(theme.font), radius: () => this.appearance.corners().cover });
     // Whatever is added to the window later (panels, the opening cover, the Overlay page) goes below the toasts.
     this.toastView = new ToastView({
       window: this.window,
       preload: path.join(path.dirname(options.hostPreload), "toasts.cjs"),
       address: options.devServer ? new URL("toasts.html", options.devServer).href : `${HOST_SCHEME}://app/toasts.html`,
       devTools: options.devTools,
-      theme: () => this.currentTheme,
+      theme: () => this.appearance.host,
       language: () => this.language,
       event: (event) => {
         if (!this.window.isDestroyed()) this.window.webContents.send("host:toast-event", event);
@@ -916,6 +926,7 @@ export class Host {
         if (!this.window.isDestroyed()) this.window.webContents.send("host:pairing", view);
       },
       focus: () => this.bringToFront(),
+      answersFile: path.join(this.options.userData, "pairing-answers.json"),
       log: (line) => console.log(`[tavora] ${line}`),
     });
     // The cloud copy started before there was a window: from here it flushes the saved data and tells the page.
@@ -941,6 +952,10 @@ export class Host {
     let loaded: Library | undefined;
     const copySync = Host.cloudCopy(options, encryptor, signIn, { root: () => (loaded ? (loaded.moduleFilesFolder ?? null) : savedFolder) ?? defaultFolder, defaultRoot: () => defaultFolder });
     await copySync.beforeLoad();
+    // Temps of writes a crash or a forced quit cut off; in the background, as nothing reads them.
+    void sweepWriteLeftovers(userData)
+      .then((removed) => removed.length && console.warn(`[tavora] removed ${removed.length} temp file(s) left by an interrupted save`))
+      .catch((error: unknown) => console.error("[tavora] removing leftover temp files failed", error));
     const savedData = new SavedData(userData);
     // A file saved by a newer Tavora (a cloud copy taken just now included) is copied aside before this one, or a move
     // below, can overwrite it.
@@ -1099,7 +1114,7 @@ export class Host {
     host.gameOverlays.start();
     void host.files.check();
     // Icons of games of game workspaces that have none yet are looked for quietly in the background.
-    host.fetchIconsSoon();
+    host.gameIcons.lookSoon();
     host.backupSoon();
     host.checkCatalogSoon();
     if (options.accounts === true) void host.inbox.init();
@@ -1432,11 +1447,11 @@ export class Host {
 
   /** The user picks a module project folder, or a folder of them; Tavora loads the modules from it from now on. Answers with the folder, or nothing when cancelled. */
   private async addDevelopmentFolder(): Promise<string | void> {
-    const folder = await this.pickPath("development-folder", { title: translate(this.language, "dialog.developmentFolder"), properties: ["openDirectory"] });
+    const folder = await this.fileDialogs.pick("development-folder", { title: translate(this.language, "dialog.developmentFolder"), properties: ["openDirectory"] });
     if (!folder) return;
     if (this.library.developmentFolders.length >= MAX_DEVELOPMENT_FOLDERS) throw new LibraryError("error.tooManyDevelopmentFolders");
     this.library.developmentFolders = cleanDevelopmentFolders([...this.library.developmentFolders, folder]);
-    this.rememberPicked("development-folder", folder);
+    this.fileDialogs.remember("development-folder", folder);
     await this.reloadModules();
     return path.resolve(folder);
   }
@@ -1460,9 +1475,9 @@ export class Host {
       parent = this.developmentFolder(folder);
       if (!parent) throw new LibraryError("error.copyNoFolder");
     } else {
-      parent = await this.pickPath("development-folder", { title: translate(this.language, "dialog.copyExample"), properties: ["openDirectory", "createDirectory"] });
+      parent = await this.fileDialogs.pick("development-folder", { title: translate(this.language, "dialog.copyExample"), properties: ["openDirectory", "createDirectory"] });
       if (!parent) return;
-      this.rememberPicked("development-folder", parent);
+      this.fileDialogs.remember("development-folder", parent);
     }
     if (!existsSync(parent)) throw new LibraryError("error.copyNoFolder");
     // A project can't hold another one: Tavora only looks for projects directly inside a folder without a manifest.
@@ -1710,14 +1725,14 @@ export class Host {
 
   /** Installs a module from a zip the user picks. Answers with the module's id, or nothing when the user cancelled. */
   private async installModule(): Promise<string | void> {
-    const file = await this.pickPath("install-module", {
+    const file = await this.fileDialogs.pick("install-module", {
       title: translate(this.language, "dialog.installModule"),
       properties: ["openFile"],
       filters: [{ name: translate(this.language, "dialog.moduleZip"), extensions: ["zip"] }],
     });
     if (!file) return;
     const id = await this.lifecycle.installFile(file);
-    this.rememberPicked("install-module", file);
+    this.fileDialogs.remember("install-module", file);
     return id;
   }
 
@@ -1954,7 +1969,7 @@ export class Host {
 
   /** The window buttons, in the theme's colours; under a dialog backdrop dimmed like the page around them. */
   private titleBarOverlay() {
-    const { background: themeBackground, text } = this.currentTheme.colors;
+    const { background: themeBackground, text } = this.appearance.host.colors;
     const background = this.buttonsBackground ?? themeBackground;
     const veil = this.dimmed ? DIALOG_BACKDROP_OPACITY : 0;
     return { color: veiled(background, veil), symbolColor: veiled(text, veil), height: TITLE_BAR_HEIGHT };
@@ -1977,26 +1992,21 @@ export class Host {
     return nativeTheme.shouldUseDarkColors ? "dark" : "light";
   }
 
-  /** The theme and variation in use now: the user's pick, in the mode of the system when following it. */
-  private currentChoice() {
-    return resolveTheme(this.themes, this.library.theme, this.library.followSystem ? Host.systemMode(this.options) : undefined);
-  }
-
   /** Native menus, dialogs and scrollbars: left to the system while following it, else in the theme's mode. */
   private syncNativeTheme(): void {
-    nativeTheme.themeSource = this.library.followSystem && !this.options.systemTheme ? "system" : this.currentTheme.mode;
+    nativeTheme.themeSource = this.library.followSystem && !this.options.systemTheme ? "system" : this.appearance.host.mode;
   }
 
   /** Shows the theme the library names, in the host window, native controls and every open module. */
   private applyTheme(): void {
-    const { host: next, panel } = appearanceThemes(this.currentChoice(), this.currentStyle(), this.library);
-    if (JSON.stringify(next) === JSON.stringify(this.currentTheme) && JSON.stringify(panel) === JSON.stringify(this.panelTheme)) {
-      this.syncNativeTheme();
-      return;
-    }
-    this.currentTheme = next;
-    this.panelTheme = panel;
+    this.appearance.refresh();
+  }
+
+  /** The appearance was worked out again (Appearance `applied`): a new theme goes to the window, its native views and every open panel. */
+  private showTheme(changed: boolean): void {
     this.syncNativeTheme();
+    if (!changed) return;
+    const { host: next, panel } = this.appearance;
     this.window.setBackgroundColor(next.colors.background);
     this.applyTitleBarOverlay();
     this.toastView.refresh();
@@ -2009,83 +2019,10 @@ export class Host {
     this.previews?.refreshFonts();
   }
 
-  private async reloadThemes(): Promise<void> {
-    const { themes, problems, hints } = await discoverThemes(Host.themeSources(this.options), app.getVersion());
-    this.themes = themes;
-    this.themeProblems = problems;
-    this.themeHints = hints;
-    const styles = await discoverStyles(Host.styleSources(this.options));
-    this.styles = styles.styles;
-    this.styleProblems = styles.problems;
-    this.styleHints = styles.hints;
-    this.applyTheme();
-  }
-
-  /** The style the library names; Classic while it is not installed. */
-  private currentStyle() {
-    return resolveStyle(this.styles, this.library.styleId);
-  }
-
-  /** The corners of the native views now (panel-corners.ts): style, panel style and the radius in use. */
-  private corners(): PanelCorners {
-    return panelCorners(this.currentStyle(), this.library.panelStyle, this.currentTheme.radius);
-  }
-
   /** Rounds every open panel's view, and the cover, to the corners of the style now. */
   private applyCorners(): void {
-    const corners = this.corners();
+    const corners = this.appearance.corners();
     for (const view of this.nativePanels()) view.setCorners(corners);
-  }
-
-  /** Writes a copy of the Tavora theme into the themes folder, loads it and shows the folder. */
-  private async createStarterTheme(): Promise<string> {
-    const root = path.join(this.options.userData, "themes");
-    await mkdir(root, { recursive: true });
-    let suffix = 1;
-    const folder = (n: number) => path.join(root, n > 1 ? `my-theme-${n}` : "my-theme");
-    const taken = (n: number) => this.themes.has(starterTheme(this.themes, n).id) || existsSync(folder(n));
-    while (taken(suffix)) suffix++;
-    const theme = starterTheme(this.themes, suffix);
-    await mkdir(folder(suffix));
-    await writeFileAtomic(path.join(folder(suffix), THEME_MANIFEST), themeManifest(theme));
-    await writeFileAtomic(path.join(folder(suffix), "README.txt"), STARTER_README);
-    await this.reloadThemes();
-    // Test runs keep the window hidden and open no file manager.
-    if (!this.options.hidden) void shell.openPath(folder(suffix));
-    return theme.id;
-  }
-
-  /** Writes a copy of the style in use into the styles folder, loads it and shows the folder. Answers with its id. */
-  private async createStarterStyle(): Promise<string> {
-    const root = path.join(this.options.userData, "styles");
-    await mkdir(root, { recursive: true });
-    const base = this.currentStyle();
-    let suffix = 1;
-    const folder = (n: number) => path.join(root, starterStyle(base, n).id.replace(/^local\./, ""));
-    const taken = (n: number) => this.styles.has(starterStyle(base, n).id) || existsSync(folder(n));
-    while (taken(suffix)) suffix++;
-    const style = starterStyle(base, suffix);
-    await mkdir(folder(suffix));
-    await writeFileAtomic(path.join(folder(suffix), STYLE_MANIFEST), styleManifest(style));
-    await writeFileAtomic(path.join(folder(suffix), "README.txt"), STYLE_README);
-    await this.reloadThemes();
-    // Test runs keep the window hidden and open no file manager.
-    if (!this.options.hidden) void shell.openPath(folder(suffix));
-    return style.id;
-  }
-
-  private async openStylesFolder(): Promise<void> {
-    const dir = path.join(this.options.userData, "styles");
-    await mkdir(dir, { recursive: true });
-    const error = await shell.openPath(dir);
-    if (error) throw new LibraryError("error.openStylesFolder", { problem: error });
-  }
-
-  private async openThemesFolder(): Promise<void> {
-    const dir = path.join(this.options.userData, "themes");
-    await mkdir(dir, { recursive: true });
-    const error = await shell.openPath(dir);
-    if (error) throw new LibraryError("error.openThemesFolder", { problem: error });
   }
 
   /** The text of Settings > Copy diagnostic info. */
@@ -2223,9 +2160,9 @@ export class Host {
         ? searchCatalog(this.library, query).map(({ id, name }) => ({ id, name }))
         : [],
     );
-    ipcMain.handle("host:installed-games", async (event): Promise<InstalledGameView[]> => (fromHost(event) ? this.installedGames().catch(() => []) : []));
+    ipcMain.handle("host:installed-games", async (event): Promise<InstalledGameView[]> => (fromHost(event) ? this.gameIcons.installedGames().catch(() => []) : []));
     ipcMain.handle("host:game-covers", async (event, appids: unknown): Promise<Record<number, string | null>> =>
-      fromHost(event) && Array.isArray(appids) && appids.length <= MAX_PICKER_COVERS && appids.every(isSteamAppId) ? this.pickerCovers(appids).catch(() => ({})) : {},
+      fromHost(event) && Array.isArray(appids) && appids.length <= MAX_PICKER_COVERS && appids.every(isSteamAppId) ? this.gameIcons.covers(appids).catch(() => ({})) : {},
     );
     ipcMain.handle("host:licences", (event): LicenceList | null => (fromHost(event) ? this.licences() : null));
     // The first-run welcome's tiles: popular games the user does not have yet (one in Trash comes back when added).
@@ -2283,15 +2220,14 @@ export class Host {
       const result = await fetchSteamLibrary({ baseUrl: serviceUrl(this.options.apiUrl), language: this.language }, profile);
       if (result.status !== "ok") return result;
       // Kept for sharing icons without adding the games: only games the service listed can be offered.
-      this.steamLookup = result.games;
-      this.steamOffers.clear();
+      this.gameIcons.steamLookedUp(result.games);
       return steamLibraryView(this.library, result.games);
     });
     ipcMain.handle("host:steam-share-icons", async (event, appids: unknown): Promise<SteamShareResult> => {
       if (!fromHost(event) || !Array.isArray(appids) || appids.length > MAX_IMPORT_GAMES || !appids.every(isSteamAppId)) {
         return { status: "error", error: translate(this.language, "error.notUnderstood") };
       }
-      return this.steamShareIcons(appids);
+      return this.gameIcons.steamShareIcons(appids);
     });
     ipcMain.on("host:panel-bounds", (event, bounds: unknown) => {
       if (fromHost(event)) {
@@ -2445,8 +2381,7 @@ export class Host {
       this.pairing.dispose();
       clearInterval(this.catalogTimer);
       this.inbox.dispose();
-      // A worktree a cancel can't remove in time is swept on the next publish.
-      void this.officialPublisher?.cancel();
+      this.officialPublishing.quit();
     });
   }
 
@@ -2481,129 +2416,6 @@ export class Host {
     });
   }
 
-  /** The one publisher for built-in modules (dev builds with the pins set). */
-  private officialPublisherFor(trust: OfficialUpdates): OfficialPublisher {
-    this.officialPublisher ??= new OfficialPublisher({
-      repo: path.resolve(__dirname, "../../../.."),
-      userData: this.options.userData,
-      listed: async (id) => {
-        try {
-          return { version: (await this.catalog.details(id)).entry.version };
-        } catch (error) {
-          if (error instanceof UserError && error.key === "error.catalogNotListed") return null;
-          throw error;
-        }
-      },
-      trusted: (fingerprint, sha256) => trust.signerTrusted(fingerprint, sha256),
-      upload: (key, zip) => this.account.uploadModule(key, zip),
-      // A run that ends while the app quits (its cancel there) has no window left to tell.
-      onChange: () => {
-        if (!this.window.isDestroyed()) this.pushState();
-      },
-    });
-    return this.officialPublisher;
-  }
-
-  /** The publish of a built-in module in progress, as state.officialPublish shows it. */
-  private officialRun(): OfficialPublishRun {
-    return this.officialPublisher?.view() ?? { phase: "idle" };
-  }
-
-  /** Dev builds only: works out which built-in modules have something to publish (Settings > Development). */
-  private async checkOfficialPublish(): Promise<void> {
-    const trust = this.officialPublishTrust();
-    // Not while a build runs: both fetch in the same checkout.
-    if (!trust || this.officialPublish.check.phase === "checking" || this.officialRun().phase === "building") return;
-    this.officialPublish = { ...this.officialPublish, check: { phase: "checking" } };
-    this.pushState();
-    try {
-      this.officialPublish = { check: { phase: "idle" }, overview: await this.officialPublisherFor(trust).check() };
-    } catch (error) {
-      const message = error instanceof UserError ? translate(this.language, error.key, error.params) : (error as Error).message;
-      this.officialPublish = { ...this.officialPublish, check: { phase: "failed", error: message } };
-    } finally {
-      this.pushState();
-    }
-  }
-
-  /**
-   * Dev builds only: builds a built-in module's update from origin/main and packs it for the preview, showing each
-   * step. Nothing is signed here; the key is needed only for Sign and upload (confirmOfficialPublish).
-   */
-  private async publishOfficialModule(moduleId: string): Promise<void> {
-    const trust = this.officialPublishTrust();
-    if (!trust) throw new UserError("officialPublish.error.notBuiltIn");
-    if (this.officialRun().phase !== "idle" || this.officialPublish.check.phase === "checking") throw new UserError("officialPublish.error.busy");
-    const name = this.officialPublish.overview?.rows.find((row) => row.id === moduleId)?.name ?? moduleId;
-    try {
-      await this.officialPublisherFor(trust).prepare(moduleId, undefined, name);
-    } catch (error) {
-      if (error instanceof PublishCancelled) return;
-      throw error;
-    }
-  }
-
-  /**
-   * Dev builds only: signs the previewed build and uploads it. The key is the one saved on this PC, while it may still
-   * sign Tavora's modules, or a key file the developer picks now; it is held only for this call. A picked key is saved
-   * (sealed by the system) only when the developer asked for it and only once it is known to be Tavora's key.
-   */
-  private async confirmOfficialPublish(remember: boolean): Promise<string | void> {
-    const trust = this.officialPublishTrust();
-    const publisher = this.officialPublisher;
-    if (!trust || !publisher) throw new UserError("officialPublish.error.notPrepared");
-    const published = await publisher.confirm(() => this.officialKey(trust, remember));
-    if (!published) return;
-    void this.checkOfficialPublish();
-    return `${published.id} ${published.version}`;
-  }
-
-  /** The key for Sign and upload: the saved one, or a key file picked now (null when none is picked). */
-  private async officialKey(trust: OfficialUpdates, remember: boolean): Promise<KeyObject | null> {
-    // A saved key that may no longer sign (revoked, or the pins moved on) is not kept.
-    let key = await loadTrustedSavedKey(this.officialKeys, (saved) => trust.keyTrusted(fingerprint(saved)), () => this.pushState());
-    if (!key) {
-      const picked = await dialog.showOpenDialog(this.window, { title: translate(this.language, "dialog.tavoraKey"), properties: ["openFile"] });
-      const keyFile = picked.filePaths[0];
-      if (picked.canceled || !keyFile) return null;
-      key = await loadExistingKey(path.resolve(keyFile)).then(
-        ({ key: loaded }) => loaded,
-        (error: unknown) => {
-          throw new UserError("officialPublish.error.key", { message: (error as Error).message.replace(/There is no publisher key at .*/, "there is no key file there") });
-        },
-      );
-      if (!trust.keyTrusted(fingerprint(key))) throw new UserError("officialPublish.error.wrongKey");
-      if (remember && this.officialKeys.canRemember()) {
-        await this.officialKeys.save(key).catch(() => {
-          throw new UserError("officialPublish.error.remember");
-        });
-      }
-    }
-    return key;
-  }
-
-  /** Stops the build in progress (its own catch ends the run) or throws the preview away. */
-  private async cancelOfficialPublish(): Promise<void> {
-    // Sign and upload, once pressed, can't be stopped; the dialog stays until it is done (OfficialPublisher.cancel).
-    await this.officialPublisher?.cancel();
-    this.pushState();
-  }
-
-  private async forgetOfficialKey(): Promise<void> {
-    await this.officialKeys.forget();
-    this.pushState();
-  }
-
-  /**
-   * Who may sign Tavora's own modules, for publishing from a dev build: the built-in pins. A dev build never loads
-   * downloaded copies (resolveOfficialPins), but it publishes under the same key and account as the catalogue checks.
-   * Null in a packaged build or while the pins are empty.
-   */
-  private officialPublishTrust(): OfficialUpdates | null {
-    if (!officialPublishAllowed(app.isPackaged, officialOn(OFFICIAL_PINS))) return null;
-    return new OfficialUpdates({ userData: this.options.userData, pins: { ...OFFICIAL_PINS }, safety: this.safetyLists });
-  }
-
   /** The project folder a dev module was loaded from, for Publish and Save as zip. */
   private projectOf(moduleId: string): string {
     const project = this.modules.get(moduleId)?.developmentProject;
@@ -2611,25 +2423,10 @@ export class Host {
     return project;
   }
 
-  /** Packs a dev module signed with a kept key and saves the zip where the developer picks. */
-  /**
-   * The system's save dialog with the zip's name suggested (numbered when taken), opening where the user last
-   * saved a module zip while that folder is still there, else Documents\Tavora.
-   */
+  /** Packs a dev module signed with a kept key and saves the zip where the developer picks, its name suggested. */
   private async saveModuleZip(moduleId: string): Promise<string | undefined> {
     const { manifest, zip } = await this.publisher.pack(this.projectOf(moduleId));
-    const folder = await this.ownFileFolder("module-zip");
-    const german = this.language.startsWith("de");
-    const picked = await dialog.showSaveDialog(this.window, {
-      title: german ? "Modul als ZIP speichern" : "Save module as zip",
-      defaultPath: path.join(folder, freeFileName(`${manifest.id}-${manifest.version}`, (fileName) => existsSync(path.join(folder, fileName)), "zip")),
-      filters: [{ name: german ? "ZIP-Dateien" : "Zip files", extensions: ["zip"] }],
-      properties: ["showOverwriteConfirmation"],
-    });
-    if (picked.canceled || !picked.filePath) return undefined;
-    const file = await writeWithExtension(picked.filePath, "zip", zip);
-    this.rememberPicked("module-zip", file);
-    return path.basename(file);
+    return this.fileDialogs.saveOwn("module-zip", { kind: "zip", name: `${manifest.id}-${manifest.version}`, data: zip });
   }
 
   /** How the window is now, so a restart under `pnpm dev` brings it back the same way. */
@@ -2731,24 +2528,18 @@ export class Host {
           this.startWorkspace(id);
         }
         this.saveLibrary();
-        this.fetchIconsSoon();
+        this.gameIcons.lookSoon();
         // A game running now (the rail offered to add it) shows as running at once, and the game may have been installed
         // since the last look.
         if (this.gameWatcher.active) void this.gameWatcher.libraryChanged(id);
         return restored ? { ok: true, id, restored } : id;
       },
       "rename-workspace": saved((action) => renameWorkspace(this.library, action.workspaceId, action.name)),
-      "set-workspace-label": saved(async (action) => {
-        const previous = setWorkspaceLabel(this.library, action.workspaceId, action.label);
-        await this.dropIconFile(previous);
-      }),
+      "set-workspace-label": saved((action) => this.gameIcons.choose(action.workspaceId, { kind: "label", label: action.label })),
       "choose-workspace-image": saved((action) => this.chooseWorkspaceImage(action.workspaceId)),
-      "use-original-icon": saved(async (action) => {
-        const previous = useOriginalWorkspaceIcon(this.library, action.workspaceId);
-        await this.dropIconFile(previous);
-      }),
-      "share-icons": (action) => this.shareIcons(action.workspaceIds),
-      "share-steam-icons": (action) => this.shareSteamIcons(action.appids),
+      "use-original-icon": saved((action) => this.gameIcons.choose(action.workspaceId, { kind: "original" })),
+      "share-icons": (action) => this.gameIcons.share(action.workspaceIds),
+      "share-steam-icons": (action) => this.gameIcons.shareSteam(action.appids),
       "import-steam-games": (action) => this.importSteam(action.games),
       // Answers with the token that puts it back (undo-delete).
       "trash-workspace": (action) => this.trashWorkspaces([action.workspaceId], true),
@@ -2826,7 +2617,7 @@ export class Host {
       "set-online-search": saved((action) => {
         this.library.onlineSearch = action.enabled;
         // Turned on: games without an icon may find one on the service, and the share list can be built.
-        if (action.enabled) this.fetchIconsSoon();
+        if (action.enabled) this.gameIcons.lookSoon();
         if (action.enabled) void this.refreshSafetyLists();
       }),
       "set-auto-update": saved((action) => {
@@ -2840,7 +2631,7 @@ export class Host {
       }),
       "set-steam-icons": saved((action) => {
         this.library.steamIcons = action.enabled;
-        if (action.enabled) this.fetchIconsSoon();
+        if (action.enabled) this.gameIcons.lookSoon();
       }),
       "set-module-icons": saved((action) => {
         this.library.moduleIcons = action.enabled;
@@ -2940,68 +2731,19 @@ export class Host {
       "set-rail": saved((action) => setRail(this.library, action)),
 
       // Appearance
-      "set-theme": saved((action) => {
-        if (!this.themes.get(action.themeId)?.theme.variations.some((variation) => variation.id === action.variationId)) {
-          throw new LibraryError("error.themeGone");
-        }
-        this.library.theme = { id: action.themeId, variation: action.variationId };
-        if (action.fixed) this.library.followSystem = false;
-        this.applyTheme();
-      }),
-      "set-appearance-mode": saved((action) => {
-        if (action.mode === "system") {
-          this.library.followSystem = true;
-        } else {
-          const { theme } = resolveTheme(this.themes, this.library.theme);
-          const variation = variationForMode(theme, this.library.theme.variation, action.mode);
-          if (variation.mode !== action.mode) throw new LibraryError("error.themeNoMode", { mode: translate("en", action.mode === "dark" ? "common.dark" : "common.light") });
-          this.library.theme = { id: theme.id, variation: variation.id };
-          this.library.followSystem = false;
-        }
-        this.applyTheme();
-      }),
-      "set-radius": saved((action) => {
-        this.library.radius = action.radius;
-        this.applyTheme();
-      }),
-      // null is "Style default"; any font, Inter too, is the user's own over the style's.
-      "set-font": saved((action) => {
-        if (action.font === null) delete this.library.font;
-        else this.library.font = action.font;
-        this.applyTheme();
-      }),
-      // A style that is not installed is kept, like a theme, and shows Classic until it is back.
-      // Each style keeps its own theme: one never used starts with its own first theme (Classic: Tavora's), in the mode
-      // shown now.
-      "set-style": saved((action) => {
-        const picked = this.styles.get(action.styleId)?.style;
-        const firstId = picked?.themes.find((id) => this.themes.has(id)) ?? DEFAULT_THEME.id;
-        const first = this.themes.get(firstId)?.theme;
-        const variation = first ? variationForMode(first, "", this.currentChoice().variation.mode).id : DEFAULT_THEME.variation;
-        switchStyle(this.library, {
-          from: resolveStyle(this.styles, this.library.styleId).id,
-          to: action.styleId,
-          first: { id: firstId, variation },
-          hasTheme: (id) => this.themes.has(id),
-        });
-        this.applyTheme();
-      }),
-      "reset-theme": saved(() => {
-        this.library.theme = { ...DEFAULT_THEME };
-        this.library.followSystem = true;
-        this.library.radius = null;
-        delete this.library.font;
-        delete this.library.styleId;
-        delete this.library.styleThemes;
-        this.applyTheme();
-      }),
-      "reload-themes": () => this.reloadThemes(),
-      "open-themes-folder": () => this.openThemesFolder(),
-      "create-starter-theme": () => this.createStarterTheme(),
+      "set-theme": saved((action) => this.appearance.choose(action)),
+      "set-appearance-mode": saved((action) => this.appearance.choose(action)),
+      "set-radius": saved((action) => this.appearance.choose(action)),
+      "set-font": saved((action) => this.appearance.choose(action)),
+      "set-style": saved((action) => this.appearance.choose(action)),
+      "reset-theme": saved((action) => this.appearance.choose(action)),
+      "reload-themes": () => this.appearance.reload(),
+      "open-themes-folder": () => this.appearance.openFolder("theme"),
+      "create-starter-theme": () => this.appearance.createStarter("theme"),
       // Themes and styles load together, so one Reload finds both.
-      "reload-styles": () => this.reloadThemes(),
-      "open-styles-folder": () => this.openStylesFolder(),
-      "create-starter-style": () => this.createStarterStyle(),
+      "reload-styles": () => this.appearance.reload(),
+      "open-styles-folder": () => this.appearance.openFolder("style"),
+      "create-starter-style": () => this.appearance.createStarter("style"),
 
       // Profile
       "save-profile": async (action) => {
@@ -3024,11 +2766,11 @@ export class Host {
       "collapse-development-folder": saved((action) => setDevelopmentFolderCollapsed(this.library, action.folder, action.collapsed)),
       "copy-example": (action) => this.copyExampleModule(action.moduleId, action.name, action.folder),
       "open-example-folder": (action) => this.openExampleFolder(action.moduleId),
-      "official-publish-check": () => this.checkOfficialPublish(),
-      "publish-official-module": (action) => this.publishOfficialModule(action.moduleId),
-      "official-publish-confirm": (action) => this.confirmOfficialPublish(action.remember),
-      "official-publish-cancel": () => this.cancelOfficialPublish(),
-      "official-publish-forget-key": () => this.forgetOfficialKey(),
+      "official-publish-check": () => this.officialPublishing.check(),
+      "publish-official-module": (action) => this.officialPublishing.prepare(action.moduleId),
+      "official-publish-confirm": (action) => this.officialPublishing.confirm(action.remember),
+      "official-publish-cancel": () => this.officialPublishing.cancel(),
+      "official-publish-forget-key": () => this.officialPublishing.forgetKey(),
       "open-development-project": (action) => this.openDevelopmentProject(action.project),
       "open-developer-link": (action) => this.openDeveloperLink(action.link),
       "open-legal-page": (action) => this.openLegalPage(action.page),
@@ -3221,37 +2963,15 @@ export class Host {
       "developer-key-create": async () => {
         await this.developerKeys.create();
       },
-      "developer-key-add": async () => {
-        const german = this.language.startsWith("de");
-        const picked = await dialog.showOpenDialog(this.window, {
-          title: german ? "Schlüsseldatei öffnen" : "Open key file",
-          defaultPath: await this.ownFileFolder("publisher-key"),
-          properties: ["openFile"],
-          filters: [
-            { name: german ? "Schlüsseldateien" : "Key files", extensions: ["pem", "key"] },
-            { name: "*", extensions: ["*"] },
-          ],
-        });
-        const file = picked.filePaths[0];
-        if (picked.canceled || !file) return;
-        const text = await readFile(file, "utf8").catch(() => null);
-        if (text === null || text.length > 10_000) throw new UserError("developerKeys.error.notKey");
-        await this.developerKeys.add(text);
-        this.rememberPicked("publisher-key", file);
-      },
+      "developer-key-add": () =>
+        this.fileDialogs.openKeyFile(async (file) => {
+          const text = await readFile(file, "utf8").catch(() => null);
+          if (text === null || text.length > 10_000) throw new UserError("developerKeys.error.notKey");
+          await this.developerKeys.add(text);
+        }),
       "developer-key-export": async (action) => {
         const pem = this.developerKeys.exportKey(action.fingerprint);
-        const folder = await this.ownFileFolder("publisher-key");
-        const german = this.language.startsWith("de");
-        const picked = await dialog.showSaveDialog(this.window, {
-          title: german ? "Schlüsseldatei speichern" : "Save key file",
-          defaultPath: path.join(folder, freeFileName(`publisher-key-${action.fingerprint.slice(0, 8)}`, (fileName) => existsSync(path.join(folder, fileName)), "pem")),
-          filters: [{ name: german ? "Schlüsseldateien" : "Key files", extensions: ["pem"] }],
-          properties: ["showOverwriteConfirmation"],
-        });
-        if (picked.canceled || !picked.filePath) return;
-        const file = await writeWithExtension(picked.filePath, "pem", pem, 0o600);
-        this.rememberPicked("publisher-key", file);
+        await this.fileDialogs.saveOwn("publisher-key", { kind: "pem", name: `publisher-key-${action.fingerprint.slice(0, 8)}`, data: pem });
       },
       "developer-key-link": (action) => this.developerKeys.link(action.fingerprint),
       "developer-recovery-key": (action) => this.developerKeys.enterKey(action.key),
@@ -3280,17 +3000,17 @@ export class Host {
       // Cloud copy
       "cloud-copy-on": () => this.copySync.turnOn(),
       "cloud-copy-on-folder": async () => {
-        const folder = await this.pickPath("cloud-copy", { properties: ["openDirectory", "createDirectory"] });
+        const folder = await this.fileDialogs.pick("cloud-copy", { properties: ["openDirectory", "createDirectory"] });
         if (!folder) return;
         await this.copySync.turnOn(folder);
-        this.rememberPicked("cloud-copy", folder);
+        this.fileDialogs.remember("cloud-copy", folder);
       },
       "cloud-copy-move": async (action) => {
         if (action.to === "server") return this.copySync.move(null);
-        const folder = await this.pickPath("cloud-copy", { properties: ["openDirectory", "createDirectory"] });
+        const folder = await this.fileDialogs.pick("cloud-copy", { properties: ["openDirectory", "createDirectory"] });
         if (!folder) return;
         await this.copySync.move(folder);
-        this.rememberPicked("cloud-copy", folder);
+        this.fileDialogs.remember("cloud-copy", folder);
       },
       "cloud-copy-key": (action) => this.copySync.enterKey(action.key),
       "cloud-copy-cancel": () => this.copySync.cancelKey(),
@@ -3457,16 +3177,15 @@ export class Host {
 
   private async chooseWorkspaceImage(workspaceId: string): Promise<void> {
     if (!isLive(this.library, workspaceId)) throw new LibraryError("error.workspaceGone");
-    const source = await this.pickPath("workspace-image", {
+    const source = await this.fileDialogs.pick("workspace-image", {
       title: translate(this.language, "dialog.chooseIcon"),
       properties: ["openFile"],
       filters: [{ name: translate(this.language, "dialog.images"), extensions: ["png", "jpg", "jpeg"] }],
     });
     if (!source) return;
-    const file = await importIcon(this.iconDir, workspaceId, source);
-    this.rememberPicked("workspace-image", source);
-    const previous = setWorkspaceImage(this.library, workspaceId, file);
-    await this.dropIconFile(previous);
+    const file = await this.gameIcons.importImage(workspaceId, source);
+    this.fileDialogs.remember("workspace-image", source);
+    await this.gameIcons.choose(workspaceId, { kind: "image", file });
   }
 
   private get profileDir(): string {
@@ -3501,314 +3220,14 @@ export class Host {
     this.pushState();
   }
 
-  private get iconDir(): string {
-    return path.join(this.options.userData, "game-icons");
-  }
-
-  private get steamIconDir(): string {
-    return path.join(this.options.userData, "steam-icons");
-  }
-
-  private iconsRunning = false;
-  private iconsAgain = false;
-
-  /** Looks for game icons unless that is already going on, off, or switched off for this run. */
-  private fetchIconsSoon(): void {
-    if (!this.library.steamIcons || this.options.steamIcons === "off") return;
-    if (this.iconsRunning) {
-      // A game was added just as the last run was ending: go round once more.
-      this.iconsAgain = true;
-      return;
-    }
-    this.iconsRunning = true;
-    void this.findIcons().finally(() => {
-      this.iconsRunning = false;
-      if (this.iconsAgain) {
-        this.iconsAgain = false;
-        this.fetchIconsSoon();
-      }
-    });
-  }
-
-  /**
-   * Finds, one game at a time, the icon of every game that has none yet: from
-   * the installed game itself, then from the Steam client on this PC (or Steam's
-   * public address), then the icons the Tavora service hosts, then Steam's small
-   * public icon. This app does it itself. Quiet on purpose: a failure is tried
-   * again at the next start or the next added game, and nothing is shown.
-   */
-  private async findIcons(): Promise<void> {
-    try {
-      await syncIcons({
-        library: this.library,
-        iconDir: this.steamIconDir,
-        steamDir: await findSteamDir(),
-        baseUrl: this.options.steamIcons,
-        serviceUrl: this.options.apiUrl,
-        shortcutDirs: this.steamShortcutDirs(),
-        loadHostedList: () => this.loadHostedList(),
-        shouldRun: () => !this.window.isDestroyed(),
-        onChange: () => {
-          this.iconFileVersions?.forget();
-          this.saveLibrary();
-          this.pushState();
-        },
-      });
-      // Games that have their own icon never reached the list: look at it now, to know which ones the service lacks.
-      if (this.shareCandidates().length > 0) await this.loadHostedList();
-    } catch (error) {
-      console.error("[tavora] finding game icons failed", error);
-    }
-  }
-
-  /** Where Steam's shortcuts are, with the Desktop where Windows says it is (OneDrive can move it). */
-  private steamShortcutDirs(): string[] {
-    let desktop: string | undefined;
-    try {
-      desktop = app.getPath("desktop");
-    } catch {
-      // Windows can't say: the usual places are still looked at.
-    }
-    return shortcutFolders(process.env, desktop);
-  }
-
-  // ── Offering icons to the Tavora service ─────────────────────────────
-
-  /** The service's list of hosted icons, asked for once per run, or null (off, or it did not answer). */
-  private hostedList: HostedList | null = null;
-  private hostedListLoading: Promise<HostedList | null> | null = null;
-
-  private loadHostedList(): Promise<HostedList | null> {
-    if (!this.library.onlineSearch || this.options.steamIcons === "off") return Promise.resolve(null);
-    if (this.hostedList) return Promise.resolve(this.hostedList);
-    this.hostedListLoading ??= fetchHostedList({ baseUrl: serviceUrl(this.options.apiUrl) }).then((list) => {
-      this.hostedList = list;
-      this.hostedListLoading = null;
-      if (list) this.pushState();
-      return list;
-    });
-    return this.hostedListLoading;
-  }
-
-  /**
-   * The icon file of a game that could be offered: the game's own icon found on
-   * this PC (never a picture the user chose, a hosted icon or Steam's small one),
-   * for a game with an id the service knows, that the service has no icon for and
-   * that was not offered before. Null otherwise.
-   */
-  private shareableFile(game: WorkspaceEntry): string | null {
-    return shareableIconFile(game, this.library, this.hostedList);
-  }
-
-  /** Games that have an icon of their own and an id the service knows: the ones worth asking the list about. */
-  private shareCandidates(): WorkspaceEntry[] {
-    const library = this.library;
-    if (!library.steamIcons || !library.onlineSearch) return [];
-    return Object.values(library.workspaces).filter(isShareCandidate);
-  }
-
   /** Adds the games of a Steam import that are not in the library yet. Answers with how many. */
   private importSteam(games: SteamImportGame[]): ActionResult {
     const added = importSteamGames(this.library, games, new Date());
     this.workspaces.addWorkspaces(added);
     // Saved even with nothing added: a game already here may have learned its game's id from the import.
     this.saveLibrary();
-    if (added.length > 0) this.fetchIconsSoon();
+    if (added.length > 0) this.gameIcons.lookSoon();
     return { ok: true, added: added.length };
-  }
-
-  /** Offers these games' icons to the service, one at a time. Returns how many it took. */
-  private shareIcons(workspaceIds: string[]): Promise<ActionResult> {
-    const offers = workspaceIds.flatMap((id) => {
-      const workspace = this.library.workspaces[id];
-      const file = workspace ? this.shareableFile(workspace) : null;
-      if (!workspace || !file) return [];
-      return [
-        {
-          id: workspace.id,
-          name: workspace.name,
-          source: shareSource(file),
-          read: async () => largestIcoFrame(new Uint8Array(await readFile(path.join(this.steamIconDir, file)))),
-          done: () => markIconShared(this.library, workspace.id, new Date()),
-        },
-      ];
-    });
-    return this.sendOffers(offers);
-  }
-
-  /** Offers the icons of games from the Steam import that are not in the library, as steamShareIcons found them. */
-  private shareSteamIcons(appids: number[]): Promise<ActionResult> {
-    const offers = appids.flatMap((appid) => {
-      const offer = this.steamOffers.get(appid);
-      // Added or offered since the dialog asked: the library flow or nobody offers it now.
-      if (!offer || this.library.iconsOffered.includes(offer.id) || this.library.workspaces[offer.id]) return [];
-      return [
-        {
-          id: offer.id,
-          name: offer.name,
-          source: "steam" as const,
-          read: async () => offer.ico,
-          done: () => {
-            markIconOffered(this.library, offer.id);
-            this.steamOffers.delete(appid);
-          },
-        },
-      ];
-    });
-    return this.sendOffers(offers);
-  }
-
-  private async sendOffers(
-    offers: { id: string; name: string; source: "installed" | "steam"; read: () => Promise<Uint8Array | null>; done: () => void }[],
-  ): Promise<ActionResult> {
-    // Only signed-in users can share: the service keeps the account with an offer until it is checked.
-    const token = this.account.token();
-    if (offers.length > 0 && token === null) return { ok: false, error: translate(this.language, "error.share.signIn") };
-    let tried = 0;
-    let shared = 0;
-    let unreachable = false;
-    let limited = false;
-    let signedOut = false;
-    for (const offer of offers) {
-      tried += 1;
-      const ico = await offer.read().catch(() => null);
-      if (!ico) continue;
-      const outcome = await submitIcon({ baseUrl: serviceUrl(this.options.apiUrl), token: token! }, { id: offer.id, name: offer.name, source: offer.source, ico });
-      if (outcome === "signed-out") {
-        signedOut = true;
-        break;
-      }
-      if (outcome === "failed") {
-        unreachable = true;
-        break;
-      }
-      if (outcome === "busy") {
-        limited = true;
-        break;
-      }
-      // Sent, or refused for good: either way it is not offered again.
-      offer.done();
-      if (outcome === "sent") shared += 1;
-      this.saveLibrary();
-      this.pushState();
-      await new Promise((resolve) => setTimeout(resolve, 300));
-    }
-    if (tried === 0) return { ok: false, error: translate(this.language, "error.nothingToShare") };
-    if (signedOut) {
-      // Signed out on another PC, or the account is gone: the account side finds out and forgets the sign-in.
-      void this.account.refresh().catch(() => undefined);
-      if (shared === 0) return { ok: false, error: translate(this.language, "error.share.signIn") };
-    }
-    if (limited && shared === 0) return { ok: false, error: translate(this.language, "error.share.limited") };
-    if (unreachable && shared === 0) return { ok: false, error: translate(this.language, "error.unreachable") };
-    return limited ? { ok: true, shared, limited: true } : { ok: true, shared };
-  }
-
-  /**
-   * The games installed on this PC for the Add a game list: recently played first, with their icons. Steam's own
-   * last-played times, the times Tavora saw a game running and the install dates are only read here and go nowhere.
-   */
-  private async installedGames(): Promise<InstalledGameView[]> {
-    const steamDir = this.options.testInstalled ? null : await findSteamDir();
-    const [found, steamPlayed, seen] = await Promise.all([
-      (this.options.testInstalled ? Promise.resolve(this.options.testInstalled) : findInstalledGames({ steamDir })).then(withInstallDates),
-      steamDir ? readSteamLastPlayed(steamDir) : Promise.resolve(new Map<number, number>()),
-      this.gamesSeen.all(),
-    ]);
-    const picks = pickGames(found, { steamPlayed, seen });
-    // A game whose only copy is in Trash counts as not added: picking it brings that copy back.
-    const copyOf = gameCopyFinder(this.library);
-    const clientIcons = await this.pickerClientIcons(steamDir, picks.map((pick) => pick.steamAppId).filter((id): id is number => id !== null));
-    const views: InstalledGameView[] = [];
-    for (let at = 0; at < picks.length; at += 8) {
-      views.push(
-        ...(await Promise.all(
-          picks.slice(at, at + 8).map(async (pick) => {
-            if (!this.pickerIcons.has(pick.key)) {
-              let icon: string | null = null;
-              try {
-                const hash = pick.steamAppId === null ? undefined : clientIcons.get(pick.steamAppId);
-                const fromSteam = steamDir && hash ? await readSteamClientIcon(steamDir, hash) : null;
-                const ico = fromSteam ?? (await readIcoFromFile(pick.source.file, pick.source.index));
-                const frame = ico && icoFrameNear(ico, 48);
-                if (frame) icon = `data:image/x-icon;base64,${Buffer.from(frame).toString("base64")}`;
-              } catch {
-                // No icon is fine: the list draws the initials tile.
-              }
-              this.pickerIcons.set(pick.key, icon);
-            }
-            const copy = copyOf({ id: pick.catalogId, steamAppId: pick.steamAppId, name: pick.name });
-            const workspaceId = copy && copy.trashedAt === null ? copy.id : null;
-            return { key: pick.key, name: pick.name, steamAppId: pick.steamAppId, catalogId: pick.catalogId, icon: this.pickerIcons.get(pick.key) ?? null, activity: pick.activity, workspaceId };
-          }),
-        )),
-      );
-    }
-    return views;
-  }
-
-  /** Steam's own icon file names for these games, from the client's appinfo; empty when it cannot be read. */
-  private async pickerClientIcons(steamDir: string | null, appids: number[]): Promise<Map<number, string>> {
-    if (!steamDir || !appids.length) return new Map();
-    try {
-      const appInfo = await loadAppInfo(steamDir);
-      return appInfo ? readClientIcons(appInfo, new Set(appids)) : new Map();
-    } catch {
-      return new Map();
-    }
-  }
-
-  /** The games of the last Steam look-up, kept so their icons can be offered without adding them. */
-  private steamLookup: SteamImportGame[] = [];
-  /** The icons steamShareIcons found on this PC, by Steam appid, ready to be sent as they were shown. */
-  private steamOffers = new Map<number, { id: string; name: string; ico: Uint8Array }>();
-
-  /**
-   * Of these games from the last Steam look-up, the ones the user does not have whose icon Tavora
-   * lacks and the Steam client on this PC keeps (named by its appinfo or the game's Steam shortcut).
-   * Only files already on this PC are read; nothing is downloaded and nothing is added to the library.
-   */
-  private async steamShareIcons(appids: number[]): Promise<SteamShareResult> {
-    const say = (key: MessageKey) => ({ status: "error" as const, error: translate(this.language, key) });
-    if (!this.library.onlineSearch) return say("error.onlineOff");
-    if (!this.library.steamIcons || this.options.steamIcons === "off") return say("error.steam.iconsOff");
-    const list = await this.loadHostedList();
-    if (!list) return say("error.unreachable");
-    const steamDir = await findSteamDir();
-    if (steamDir === null) return say("error.steam.notInstalled");
-    const wanted = new Set(appids);
-    const copyOf = gameCopyFinder(this.library);
-    const games = steamShareGames(
-      this.steamLookup.filter((game) => wanted.has(game.appid)),
-      (game) => steamGameStatus(this.library, game, copyOf) === "new",
-      this.library.iconsOffered,
-      list,
-    );
-    const appInfo = await loadAppInfo(steamDir);
-    let clientIcons = new Map<number, string>();
-    try {
-      if (appInfo) clientIcons = readClientIcons(appInfo, new Set(games.map((game) => game.appid)));
-    } catch (error) {
-      if (!(error instanceof AppInfoError)) throw error;
-    }
-    const shortcuts = await readShortcutIcons(this.steamShortcutDirs()).catch(() => new Map<number, string[]>());
-    const views: SteamShareView[] = [];
-    for (const game of games) {
-      const hashes = [clientIcons.get(game.appid), ...(shortcuts.get(game.appid) ?? [])].filter((hash): hash is string => hash !== undefined);
-      for (const hash of hashes) {
-        const ico = await readSteamClientIcon(steamDir, hash);
-        const preview = ico && icoFrameNear(ico, 48);
-        if (!ico || !preview) continue;
-        this.steamOffers.set(game.appid, { id: game.id, name: game.name, ico });
-        views.push({ appid: game.appid, name: game.name, icon: `data:image/x-icon;base64,${Buffer.from(preview).toString("base64")}` });
-        break;
-      }
-    }
-    return { status: "ok", games: views.sort((a, b) => a.name.localeCompare(b.name)) };
-  }
-
-  private async dropIconFile(icon: WorkspaceIcon | null): Promise<void> {
-    if (icon?.kind === "image") await removeIcon(this.iconDir, icon.file);
   }
 
   /** Deletes everything stored for a workspace that left the library for good. */
@@ -3830,8 +3249,7 @@ export class Host {
     this.layout.forgetWorkspace(workspace.id);
     // A folder the user chose can be gone (an unplugged drive): the workspace still goes, and they are told where its pictures may remain.
     await this.files.noteWorkspaceDeleted(workspace.name, (root) => deleteModuleData(this.options.userData, workspace.id, root));
-    await this.dropIconFile(workspace.icon);
-    if (workspace.iconFile && !iconFileShared(this.library, workspace.iconFile, workspace.id)) await removeSteamIcon(this.steamIconDir, workspace.iconFile);
+    await this.gameIcons.forget(workspace);
   }
 
   private async clearSessionsOf(workspaceIds: string[]): Promise<void> {
@@ -4294,7 +3712,7 @@ export class Host {
     if (this.records(workspace.id).some((record) => this.moduleView(record.instanceId) && !this.panels.isLent(record.instanceId))) {
       const layout = layoutKey(workspace.id, this.records(workspace.id));
       this.panels.startOpening(OPENING_CAP_MS, layout);
-      this.cover.start(this.currentTheme, translate(this.language, "panel.loading", { name: workspace.displayName }), this.openTimes.estimate(layout));
+      this.cover.start(this.appearance.host, translate(this.language, "panel.loading", { name: workspace.displayName }), this.openTimes.estimate(layout));
       // The host UI covers the panels from now on, not each panel with its own loader.
       this.pushStateSoon();
     }
@@ -4345,8 +3763,8 @@ export class Host {
       hostVersion: app.getVersion(),
       preload: this.options.modulePreload,
       devTools: this.options.devTools,
-      getTheme: () => this.panelTheme,
-      cornerRadius: () => this.corners().module,
+      getTheme: () => this.appearance.panel,
+      cornerRadius: () => this.appearance.corners().module,
       getLanguage: () => this.language,
       baseCss: MODULE_CSS,
       fontCss: (theme) => fontStylesheet(theme.font),
@@ -4378,11 +3796,7 @@ export class Host {
         this.pushState();
       },
       showMenu: (menu) => this.showModuleMenu(record.instanceId, menu),
-      savePicture: (png, name) => this.savePictureAs(png, name),
-      saveJson: (data, name) => this.saveJsonAs(module, data, name),
-      openJson: () => this.openJsonFrom(module),
-      saveFile: (data, name, kind) => this.saveFileAs(module, data, name, kind),
-      openFile: (kinds) => this.openFileFrom(module, kinds),
+      ...this.fileDialogs.forModule(Host.notesKey(module)),
       pickReadOnlyFile: async (extensions, multiple, near) => {
         const files=new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,workspace.id);
         const defaultPath=(near ? await files.directoryNear(near.file,near.up ?? 0) : undefined) ?? await saveDialogDirectory(files,this.library.workspaces[workspace.id]?.catalogId ?? workspace.id);
@@ -4707,8 +4121,8 @@ export class Host {
     const panel: BrowserPanel = new BrowserPanel({
       instanceId,
       devTools: this.options.devTools,
-      background: () => this.currentTheme.tokens.background,
-      cornerRadius: () => this.corners().page,
+      background: () => this.appearance.host.tokens.background,
+      cornerRadius: () => this.appearance.corners().page,
       sessionFor: (kind) => this.browserSessionFor(kind, workspace.id),
       isSharedSite: (url) => this.isSiteListed("sharedSites", url),
       adblockOn: (url) => !this.isSiteListed("adblockOff", url),
@@ -5123,30 +4537,12 @@ export class Host {
     return isForWorkspaceGame(games, entry);
   }
 
-  /** A game workspace's own icon (its game's) as an address, with the version of its file so a replaced file shows at once, and how it sits in its tile. */
-  private ownIcon(workspace: WorkspaceEntry): { steamIcon: string | null; steamIconTone: IconTone | null } {
-    if (!(this.library.steamIcons && workspace.useOriginalIcon && workspace.iconFile)) return { steamIcon: null, steamIconTone: null };
-    const dir = this.steamIconDir;
-    const version = (this.iconFileVersions ??= iconVersions(dir)).of(workspace.iconFile);
-    return {
-      steamIcon: `${STEAM_ICON_URL}${workspace.iconFile}?v=${version}`,
-      steamIconTone: (this.toneReader ??= createToneReader(dir, loadSmallBitmap))(workspace.iconFile, version),
-    };
-  }
-
-  private toneReader: ((file: string, version?: string) => IconTone) | undefined;
-  /** The saved icons' versions: this state is sent often, so the disk isn't asked for each game every time. */
-  private iconFileVersions: ReturnType<typeof iconVersions> | undefined;
-
   private workspaceView(workspace: WorkspaceEntry): WorkspaceView {
     return {
       id: workspace.id,
       kind: workspace.kind,
       name: workspace.name,
-      icon: workspace.icon.kind === "image" ? { kind: "image", url: ICON_URL + workspace.icon.file } : workspace.icon,
-      ...this.ownIcon(workspace),
-      iconChoice: workspace.icon.kind === "image" ? "image" : workspace.useOriginalIcon ? "original" : "letters",
-      shareIcon: ((file) => (file ? STEAM_ICON_URL + file : null))(this.shareableFile(workspace)),
+      ...this.gameIcons.view(workspace),
       builtIn: workspace.catalogId !== null,
       steamAppId: workspace.steamAppId,
       addedAt: workspace.addedAt,
@@ -5250,12 +4646,7 @@ export class Host {
       })),
       moduleProblems: this.moduleProblems.filter((problem) => !problem.developmentFolder && !problem.official).map(({ folder, path: full, message, kind, values }) => ({ folder, path: full, message, ...(kind ? { kind } : {}), ...(values ? { values } : {}) })),
       devBuild: !app.isPackaged,
-      officialPublish: ((available) => ({
-        available,
-        ...this.officialPublish,
-        run: this.officialRun(),
-        key: { saved: available && this.officialKeys.hasKey(), canRemember: available && this.officialKeys.canRemember() },
-      }))(!app.isPackaged && officialOn(OFFICIAL_PINS)),
+      officialPublish: this.officialPublishing.view(),
       developmentFolders: this.library.developmentFolders.map((folder) => {
         const own = this.moduleProblems.find((item) => item.developmentFolder === folder && !item.developmentProject);
         const projects = new Map<string, HostViewState["developmentFolders"][number]["projects"][number]>();
@@ -5370,7 +4761,7 @@ export class Host {
         banner: library.profileBanner ?? (this.profile.picture ? "picture" : "stripes"),
       },
       restartPending: library.grayscaleText !== this.options.grayscaleText,
-      appearance: this.appearanceView(),
+      appearance: this.appearance.view(),
       language: { setting: library.language, resolved: this.language },
       appVersion: app.getVersion(),
       update: this.updates?.state ?? { status: "idle", checkedAt: null, failed: false },
@@ -5389,56 +4780,6 @@ export class Host {
   /** A module's manifest with its name, description, panel and action names in Tavora's language now. */
   shown(manifest: ModuleManifest): ModuleManifest {
     return translateManifest(manifest, this.language);
-  }
-
-  private appearanceView(): AppearanceView {
-    const { theme, variation } = this.currentChoice();
-    const style = this.currentStyle();
-    const fontId = resolveFontId(this.library.font, style);
-    // Classic first, then Tavora's other styles by name, then the user's own by name.
-    const styleOrder = (entry: InstalledStyle) => (entry.style.id === CLASSIC_STYLE_ID ? 0 : entry.provenance === "official" ? 1 : 2);
-    const styles = [...this.styles.values()].sort((a, b) => styleOrder(a) - styleOrder(b) || a.style.name.localeCompare(b.style.name));
-    // Official themes first, the default leading, then the user's own by name.
-    const order = (entry: InstalledTheme) => (entry.theme.id === DEFAULT_THEME.id ? 0 : entry.provenance === "official" ? 1 : 2);
-    const themes = [...this.themes.values()].sort((a, b) => order(a) - order(b) || a.theme.name.localeCompare(b.theme.name));
-    return {
-      themeId: theme.id,
-      variationId: variation.id,
-      isDefault: theme.id === DEFAULT_THEME.id && this.library.followSystem && this.library.radius === null && this.library.font === undefined && style.id === CLASSIC_STYLE_ID,
-      followSystem: this.library.followSystem,
-      radius: this.library.radius,
-      resolvedRadius: resolveRadius(this.library.radius, style, variation.radius),
-      // The id as it is: a saved one this Tavora doesn't know shows Inter, and picking Inter still changes it.
-      font: { id: fontId, family: themeFont(fontId).family },
-      fontOverride: this.library.font ?? null,
-      styleId: style.id,
-      styles: styles.map(({ style: item, provenance }) => ({
-        id: item.id,
-        name: item.name,
-        description: item.description,
-        author: item.author,
-        provenance,
-        radius: item.radius,
-        font: item.font,
-        themes: [...item.themes],
-        looks: { ...item.looks },
-        values: { ...item.values },
-      })),
-      // The style as the theme sends it: with glass opacity raised where a theme needs it for contrast.
-      styleMarks: styleMarks(this.currentTheme.style ?? tavoraStyle(style)),
-      styleProblems: this.styleProblems.map((problem) => ({ ...problem })),
-      styleHints: this.styleHints.map((hint) => ({ ...hint })),
-      themes: themes.map(({ theme: item, provenance }) => ({
-        id: item.id,
-        name: item.name,
-        description: item.description,
-        author: item.author,
-        provenance,
-        variations: item.variations.map(({ id, name, mode, radius, colors }) => ({ id, name, mode, radius, colors: { ...colors } })),
-      })),
-      problems: this.themeProblems.map((problem) => ({ ...problem, ...(problem.values ? { values: { ...problem.values } } : {}) })),
-      hints: this.themeHints.map((hint) => ({ ...hint })),
-    };
   }
 
   private pushState(): void {
@@ -5472,176 +4813,6 @@ export class Host {
   /** Pushes the state once for a burst of changes, such as every panel of a workspace that just opened loading at once. */
   private pushStateSoon(): void {
     this.statePush ??= setImmediate(() => this.pushState());
-  }
-
-  /**
-   * The system's open dialog, opening in the folder the user last picked from in this `place` while
-   * that folder is still there. Answers with what was picked, or nothing when cancelled; the caller
-   * remembers it (rememberPicked) only once it worked, so a zip that failed to install is not where it opens next.
-   */
-  private async pickPath(place: DialogPlace, options: OpenDialogOptions, parent: BrowserWindow = this.window): Promise<string | undefined> {
-    const folder = this.library.dialogFolders[place];
-    const picked = await dialog.showOpenDialog(parent, { ...options, ...(folder && existsSync(folder) ? { defaultPath: folder } : {}) });
-    const file = picked.filePaths[0];
-    return picked.canceled || !file ? undefined : file;
-  }
-
-  /**
-   * pictures.save: the system's save dialog with the module's name suggested (numbered when taken), opening in the
-   * folder the user last saved a picture to while it is still there, else Pictures\Tavora. Answers with the name
-   * the file was saved under, or null when the user closed the dialog.
-   */
-  private async savePictureAs(png: Buffer, name: string): Promise<string | null> {
-    const last = this.library.dialogFolders["save-picture"];
-    const folder = last && existsSync(last) ? last : picturesFolder();
-    await mkdir(folder, { recursive: true });
-    const german = this.language.startsWith("de");
-    const picked = await dialog.showSaveDialog(this.window, {
-      title: german ? "Bild speichern" : "Save picture",
-      defaultPath: path.join(folder, freeFileName(name, (fileName) => existsSync(path.join(folder, fileName)))),
-      filters: [{ name: german ? "PNG-Bild" : "PNG picture", extensions: ["png"] }],
-      properties: ["showOverwriteConfirmation"],
-    });
-    if (picked.canceled || !picked.filePath) return null;
-    const chosen = path.resolve(picked.filePath);
-    const file = /\.png$/i.test(chosen) ? chosen : `${chosen}.png`;
-    // The dialog asked before replacing the file the user chose; with .png added, it was never asked about.
-    try {
-      await writeFile(file, png, { flag: file === chosen ? "w" : "wx" });
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new HostError("CONFLICT", `${path.basename(file)} already exists`);
-      throw error;
-    }
-    this.rememberPicked("save-picture", file);
-    return path.basename(file);
-  }
-
-  /** The folder a module's file dialogs open in: where the user last saved or opened a file for it while that is still there, else Documents\Tavora (made when needed). */
-  private async fileFolderOf(module: InstalledModule): Promise<string> {
-    const last = this.library.moduleFolders[Host.notesKey(module)];
-    const folder = last && existsSync(last) ? last : documentsFolder();
-    await mkdir(folder, { recursive: true });
-    return folder;
-  }
-
-  private rememberFileFolder(module: InstalledModule, picked: string): void {
-    this.library.moduleFolders[Host.notesKey(module)] = path.dirname(path.resolve(picked));
-    this.saveLibrary();
-  }
-
-  /**
-   * files.saveJson: the system's save dialog with the module's name suggested (numbered when taken), opening in the
-   * module's remembered folder, else Documents\Tavora. Answers with the name the file was saved under, or null when
-   * the user closed the dialog.
-   */
-  private async saveJsonAs(module: InstalledModule, data: Buffer, name: string): Promise<string | null> {
-    const folder = await this.fileFolderOf(module);
-    const german = this.language.startsWith("de");
-    const picked = await dialog.showSaveDialog(this.window, {
-      title: german ? "Datei speichern" : "Save file",
-      defaultPath: path.join(folder, freeFileName(name, (fileName) => existsSync(path.join(folder, fileName)), "json")),
-      filters: [{ name: german ? "JSON-Dateien" : "JSON files", extensions: ["json"] }],
-      properties: ["showOverwriteConfirmation"],
-    });
-    if (picked.canceled || !picked.filePath) return null;
-    const chosen = path.resolve(picked.filePath);
-    const file = /\.json$/i.test(chosen) ? chosen : `${chosen}.json`;
-    // The dialog asked before replacing the file the user chose; with .json added, it was never asked about.
-    try {
-      await writeFile(file, data, { flag: file === chosen ? "w" : "wx" });
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new HostError("CONFLICT", `${path.basename(file)} already exists`);
-      throw error;
-    }
-    this.rememberFileFolder(module, file);
-    return path.basename(file);
-  }
-
-  /**
-   * files.openJson: the system's open dialog in the module's remembered folder, else Documents\Tavora. Answers with
-   * the chosen file's name and text (at most 8 MiB), or null when the user closed the dialog. The folder is
-   * remembered once the file was read.
-   */
-  private async openJsonFrom(module: InstalledModule): Promise<{ fileName: string; text: string } | null> {
-    const folder = await this.fileFolderOf(module);
-    const german = this.language.startsWith("de");
-    const picked = await dialog.showOpenDialog(this.window, {
-      title: german ? "Datei öffnen" : "Open file",
-      defaultPath: folder,
-      filters: [{ name: german ? "JSON-Dateien" : "JSON files", extensions: ["json"] }],
-      properties: ["openFile"],
-    });
-    const file = picked.filePaths[0];
-    if (picked.canceled || !file) return null;
-    const text = await readJsonText(file);
-    this.rememberFileFolder(module, file);
-    return { fileName: path.basename(file), text };
-  }
-
-  /**
-   * files.save: the same dialog as files.saveJson for a .csv or .xlsx; only that extension can be chosen. The data was
-   * checked already. Answers with the name the file was saved under, or null when the user closed the dialog.
-   */
-  private async saveFileAs(module: InstalledModule, data: Buffer, name: string, kind: FileKind): Promise<string | null> {
-    const folder = await this.fileFolderOf(module);
-    const german = this.language.startsWith("de");
-    const label = kind === "csv" ? (german ? "CSV-Dateien" : "CSV files") : german ? "Excel-Dateien" : "Excel files";
-    const picked = await dialog.showSaveDialog(this.window, {
-      title: german ? "Datei speichern" : "Save file",
-      defaultPath: path.join(folder, freeFileName(name, (fileName) => existsSync(path.join(folder, fileName)), kind)),
-      filters: [{ name: label, extensions: [kind] }],
-      properties: ["showOverwriteConfirmation"],
-    });
-    if (picked.canceled || !picked.filePath) return null;
-    const chosen = path.resolve(picked.filePath);
-    const file = new RegExp(`\\.${kind}$`, "i").test(chosen) ? chosen : `${chosen}.${kind}`;
-    // The dialog asked before replacing the file the user chose; with the extension added, it was never asked about.
-    try {
-      await writeFile(file, data, { flag: file === chosen ? "w" : "wx" });
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new HostError("CONFLICT", `${path.basename(file)} already exists`);
-      throw error;
-    }
-    this.rememberFileFolder(module, file);
-    return path.basename(file);
-  }
-
-  /**
-   * files.open: the open dialog in the module's remembered folder, else Documents\Tavora, offering only the asked
-   * kinds. Answers with the file's name, kind and bytes (at most 8 MiB), or null when the user closed the dialog.
-   */
-  private async openFileFrom(module: InstalledModule, kinds: FileKind[]): Promise<{ fileName: string; kind: FileKind; bytes: Buffer } | null> {
-    const folder = await this.fileFolderOf(module);
-    const german = this.language.startsWith("de");
-    const names: Record<FileKind, string> = { csv: german ? "CSV-Dateien" : "CSV files", xlsx: german ? "Excel-Dateien" : "Excel files" };
-    const picked = await dialog.showOpenDialog(this.window, {
-      title: german ? "Datei öffnen" : "Open file",
-      defaultPath: folder,
-      filters: kinds.map((kind) => ({ name: names[kind], extensions: [kind] })),
-      properties: ["openFile"],
-    });
-    const file = picked.filePaths[0];
-    if (picked.canceled || !file) return null;
-    // The dialog's filter can be set to all files by the user; only these extensions go on.
-    const kind = kindOfName(file);
-    if (!kind || !kinds.includes(kind)) throw new HostError("INVALID_PARAMS", "only a .csv or .xlsx file can be opened");
-    const bytes = await readTableFile(file);
-    this.rememberFileFolder(module, file);
-    return { fileName: path.basename(file), kind, bytes };
-  }
-
-  /** Where the dialog for one of Tavora's own files (a module zip, a key file) opens: the folder last used for `place` while it is still there, else Documents\Tavora. */
-  private async ownFileFolder(place: DialogPlace): Promise<string> {
-    const last = this.library.dialogFolders[place];
-    const folder = last && existsSync(last) ? last : documentsFolder();
-    await mkdir(folder, { recursive: true });
-    return folder;
-  }
-
-  /** The dialog for `place` opens next time in the folder `picked` is in (for a picked folder, its parent), and the library is saved. */
-  private rememberPicked(place: DialogPlace, picked: string): void {
-    this.library.dialogFolders[place] = path.dirname(path.resolve(picked));
-    this.saveLibrary();
   }
 
   private saveLibrary(): void {
@@ -5843,14 +5014,14 @@ export class Host {
           },
         },
         language: () => this.language,
-        theme: () => this.currentTheme,
+        theme: () => this.appearance.host,
         changed: () => this.pushStateSoon(),
         overlaysChanged: () => {
           this.syncGameWatcher();
           this.pushStateSoon();
         },
         overGameChanged: (changed) => this.tellOverGameChanged(changed),
-        fontCss: () => fontStylesheet(this.currentTheme.font),
+        fontCss: () => fontStylesheet(this.appearance.host.font),
         saveLibrary: () => this.saveLibrary(),
         workspaceId: () => this.workspaceId,
         askConnector: (moduleId, connector) => this.askConnector(moduleId, connector),
@@ -5861,16 +5032,15 @@ export class Host {
           leave: () => this.leaveOverlayPage(),
           openSettings: (target) => this.openSettingsOverOverlayPage(target),
           choosePicture: () =>
-            this.pickPath(
+            this.fileDialogs.pick(
               "layout-picture",
               {
                 title: translate(this.language, "overlays.layout.chooseTitle"),
                 properties: ["openFile"],
                 filters: [{ name: translate(this.language, "dialog.images"), extensions: ["png", "jpg", "jpeg", "webp"] }],
               },
-              this.window,
             ),
-          rememberPicture: (file) => this.rememberPicked("layout-picture", file),
+          rememberPicture: (file) => this.fileDialogs.remember("layout-picture", file),
         },
       },
     });
