@@ -25,7 +25,7 @@ async function run(action: HostAction) {
   <div class="flex flex-col items-start gap-2" data-testid="pairing">
     <Button v-if="!asking" type="button" :disabled="busy" data-testid="pairing-start" @click="run({ type: 'pairing-start' })">{{ t("pairing.start") }}</Button>
     <template v-else-if="asking.step === 'waiting'">
-      <p class="text-sm" role="status" data-testid="pairing-waiting">{{ t(asking.via === "folder" ? "pairing.waitingFolder" : "pairing.waiting") }}</p>
+      <p class="text-sm" role="status" data-testid="pairing-waiting">{{ t(asking.slow ? "pairing.waitingSlow" : asking.via === "folder" ? "pairing.waitingFolder" : "pairing.waiting") }}</p>
       <Button type="button" variant="ghost" size="sm" :disabled="busy" @click="run({ type: 'pairing-cancel' })">{{ t("common.cancel") }}</Button>
     </template>
     <template v-else-if="asking.step === 'code'">

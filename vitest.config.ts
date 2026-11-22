@@ -14,6 +14,8 @@ export default defineConfig({
     // compile those instead of Node loading them as they are.
     server: { deps: { inline: ["reka-ui", /@internationalized/] } },
     // Every run gets its own temp folder, removed when the run ends (scripts/test-temp.ts).
+    // No real disk flush in tests (scripts/vitest-no-fsync.ts).
+    setupFiles: ["scripts/vitest-no-fsync.ts"],
     globalSetup: ["scripts/vitest-global-setup.ts"],
     include: ["packages/*/src/**/*.test.ts", "apps/*/src/**/*.test.ts", "apps/*/scripts/**/*.test.ts", "modules/*/src/**/*.test.ts", "scripts/**/*.test.ts"],
   },

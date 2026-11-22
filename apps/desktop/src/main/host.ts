@@ -918,6 +918,7 @@ export class Host {
         if (!this.window.isDestroyed()) this.window.webContents.send("host:pairing", view);
       },
       focus: () => this.bringToFront(),
+      answersFile: path.join(this.options.userData, "pairing-answers.json"),
       log: (line) => console.log(`[tavora] ${line}`),
     });
     // The cloud copy started before there was a window: from here it flushes the saved data and tells the page.
