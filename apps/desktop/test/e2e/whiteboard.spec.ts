@@ -57,6 +57,27 @@ async function movePointer(app: ElectronApplication, to: { x: number; y: number 
   );
 }
 
+/**
+ * Gets the board ready for a synthetic paste and answers with the drawing area. Excalidraw drops a paste without a word
+ * unless the editor has focus and the last pointer position it saw is over the canvas (it starts at 0,0), so this
+ * waits for the canvas to have its size, moves the pointer over it, and waits until a pointer move has arrived.
+ */
+async function aimPaste(app: ElectronApplication) {
+  const area = await drawingArea(app);
+  const middle = { x: area.x + area.width / 2, y: area.y + area.height / 2 };
+  await inModule(app, WHITEBOARD, `window.__pointerSeen = false; document.addEventListener("pointermove", () => { window.__pointerSeen = true; }, { capture: true, once: true })`);
+  let wiggle = 0;
+  await expect
+    .poll(async () => {
+      // A move to where the pointer already is sends nothing, so each try is a pixel off the last.
+      await movePointer(app, { x: middle.x + (wiggle++ % 2), y: middle.y });
+      return inModule(app, WHITEBOARD, `window.__pointerSeen`);
+    })
+    .toBe(true);
+  await expect.poll(() => inModule(app, WHITEBOARD, `document.elementFromPoint(${Math.round(middle.x)}, ${Math.round(middle.y)}) instanceof HTMLCanvasElement`)).toBe(true);
+  return area;
+}
+
 /** The elements stored in every board document, by board name. */
 async function storedBoards(userData: string): Promise<Record<string, { type: string }[]>> {
   const files = (await readdir(path.join(userData, "module-data", "official", WHITEBOARD), { recursive: true })).filter((name) => /board-[a-z0-9-]+\.json$/.test(name));
@@ -163,8 +184,7 @@ test("whiteboard: a pasted picture can be dragged into place, is then locked, ke
   await expect.poll(() => inModule(app, WHITEBOARD, `!!document.querySelector(".excalidraw canvas.interactive")`), { timeout: 20_000 }).toBe(true);
 
   // Paste a screenshot over the board, the way Ctrl+V does.
-  const area = await inModule<{ x: number; y: number; width: number; height: number }>(app, WHITEBOARD, `(() => { const r = document.querySelector(".excalidraw canvas.interactive").getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })()`);
-  await movePointer(app, { x: area.x + area.width / 2, y: area.y + area.height / 2 });
+  const area = await aimPaste(app);
   await inModule(
     app,
     WHITEBOARD,
@@ -243,8 +263,7 @@ test("whiteboard: after a restart the board opens just as it was left, pictures 
   try {
     await openModule(page, WHITEBOARD);
     await expect.poll(() => inModule(app, WHITEBOARD, `${q("board-name")}?.textContent ?? ""`).catch(() => ""), { timeout: 20_000 }).toBe("Board 1");
-    const area = await drawingArea(app);
-    await movePointer(app, { x: area.x + area.width / 2, y: area.y + area.height / 2 });
+    const area = await aimPaste(app);
     await inModule(
       app,
       WHITEBOARD,
@@ -305,8 +324,7 @@ test("whiteboard: Copy and Save as picture, and Clear board with Undo", async ()
   expect(await inModule(app, WHITEBOARD, off(q("copy-picture")))).toBe(true);
 
   // A screenshot-sized picture (the largest Excalidraw keeps) with a rectangle drawn over it.
-  const area = await inModule<{ x: number; y: number; width: number; height: number }>(app, WHITEBOARD, `(() => { const r = document.querySelector(".excalidraw canvas.interactive").getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })()`);
-  await movePointer(app, { x: area.x + area.width / 2, y: area.y + area.height / 2 });
+  const area = await aimPaste(app);
   await inModule(
     app,
     WHITEBOARD,
