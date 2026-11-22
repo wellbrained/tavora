@@ -20,6 +20,7 @@ import { t, templateName } from "../i18n";
 import { LAYOUT_TEMPLATES } from "../../shared/layout-templates";
 import { fromDockview, groupConstraints, guardDrop, layoutAround, maximizedPanel, panelInfo, placePanel, placeTab, toDockview, type PanelInfo } from "../dock";
 import { DockPreview } from "../dock-preview";
+import { fitDelta, moveSash, sashSides } from "../dock-fit";
 import DockPreviewLayer from "../components/workspace/DockPreview.vue";
 import WorkspaceIcon from "../components/WorkspaceIcon.vue";
 import EmptySlot from "../components/workspace/EmptySlot.vue";
@@ -387,9 +388,38 @@ addEventListener("pointercancel", endResize, true);
 addEventListener("resize", reportSoon);
 preview.attach();
 
+/** True while a double-click moves a line itself: that is no drag, so the module views stay. */
+let fitting = false;
+
 function onPointerDown(event: PointerEvent) {
-  if (!(event.target as Element | null)?.closest(".dv-sash")) return;
+  if (fitting || !(event.target as Element | null)?.closest(".dv-sash")) return;
   dragging.value = "resize";
+}
+
+/** The panels shown in a part of the dock (their tab is the open one). */
+function shownIn(area: HTMLElement): string[] {
+  return [...elements].filter(([id, element]) => area.contains(element) && dock?.getPanel(id)?.api.isVisible).map(([id]) => id);
+}
+
+/** A double-click on the line between two panels gives the one that scrolls the room it needs (dock-fit.ts). */
+async function onDoubleClick(event: MouseEvent) {
+  const sash = (event.target as Element | null)?.closest<HTMLElement>(".dv-sash");
+  if (!sash || sash.classList.contains("dv-disabled") || dock?.hasMaximizedGroup()) return;
+  const sides = sashSides(sash);
+  if (!sides) return;
+  const before = shownIn(sides.before);
+  const after = shownIn(sides.after);
+  if (!before.length && !after.length) return;
+  const overflow = await host.panelOverflow([...before, ...after]);
+  const most = (ids: string[]) => Math.max(0, ...ids.map((id) => overflow[id]?.[sides.axis] ?? 0));
+  const delta = fitDelta(most(before), most(after));
+  if (!delta || !sash.isConnected) return;
+  fitting = true;
+  try {
+    moveSash(sash, sides.axis, delta);
+  } finally {
+    fitting = false;
+  }
 }
 
 function onReady({ api }: DockviewReadyEvent) {
@@ -484,7 +514,7 @@ const emptySlot = EmptySlot as unknown as VueComponent;
       <HeaderTools @add-module="dialog = { kind: 'add-module' }" />
     </header>
 
-    <div ref="root" class="relative min-h-0 flex-1" @pointerdown.capture="onPointerDown">
+    <div ref="root" class="relative min-h-0 flex-1" @pointerdown.capture="onPointerDown" @dblclick="onDoubleClick">
       <div ref="area" class="absolute inset-x-2 top-0 bottom-2 flex gap-2" data-workspace-area>
         <Button
           v-if="leftColumn"

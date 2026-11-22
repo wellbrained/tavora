@@ -1321,6 +1321,8 @@ export interface TavoraHostApi {
   setPanelBounds(bounds: PanelBounds[]): void;
   /** Where the workspace is (the card that covers it while a workspace opens), or null when it is not on screen. */
   setWorkspaceBounds(bounds: { x: number; y: number; width: number; height: number } | null): void;
+  /** How much each of these panels' pages scrolls across (x) and down (y), in px; 0 for a panel that is not open. */
+  panelOverflow(instanceIds: string[]): Promise<Record<string, { x: number; y: number }>>;
   /**
    * Hides module panels while a menu, dialog or drag would be drawn under
    * them: `only` these (the ones a menu or hint lies over, added to those
