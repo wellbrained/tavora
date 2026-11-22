@@ -31,14 +31,13 @@ import {
 } from "electron";
 import type { TavoraWorkspace } from "@tavora/sdk/protocol";
 import type { PanelDialogSize } from "./bridge";
-import type { AccountView, ActionResult, AiUsageView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, InstalledGameView, LegalPage, LicenceList, ModulePageResult, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, PanelDialog, PanelPlacement, ProfileRanksView, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, UnlistedGame } from "../shared/host-api";
+import type { AccountView, ActionResult, AiUsageView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviewsResult, DeveloperLink, InstalledGameView, LegalPage, LicenceList, ModulePageResult, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, PanelDialog, PanelPlacement, ProfileRanksView, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, UnlistedGame } from "../shared/host-api";
 import { MAX_PICKER_COVERS } from "../shared/host-api";
 import { addOrRestoreWorkspace } from "./game-copy";
-import { isForWorkspaceGame, learnGameIds, withOnlineId, workspaceGameIds, type ListedGame } from "./workspace-game";
+import { isForWorkspaceGame, withOnlineId } from "./workspace-game";
 import { resolveLanguage, translate, type Language } from "../shared/i18n";
 import { suggestPrefix } from "../shared/id-prefix";
 import { isVoicePaused } from "../shared/discord-voice";
-import { compareModuleVersions } from "../shared/module-version";
 import { UserError } from "./messages";
 import { UndoGoneError, UndoShelf } from "./undo-shelf";
 import { buildReport, errorLog, timings } from "./diagnostics";
@@ -50,12 +49,11 @@ import { parseAction, runAction, type ActionHandlers } from "./actions";
 import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
 import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, holdLeftovers, orphanedPartitions, partitionsOf, partitionWorkspace, queueLocalDataMove } from "./module-data";
 import { AI_USAGE_MODULE_ID, DISCORD_MODULE_ID, movedModule, MOVED_MODULES_OWNER, moveOfficialModules } from "./moved-modules";
-import { checkZipData, readOwnerRecords, recoverInstalls } from "./installer";
+import { checkZipData, recoverInstalls } from "./installer";
 import { Installed, loadInstalledModules, type InstalledModules } from "./installed-modules";
 import { sameOwner, settlePanelOwner } from "./module-owner";
 import { PendingQuestions } from "./pending-questions";
 import { createOverlayServices } from "./overlay-wiring";
-import { readModulePage } from "./module-page";
 import { hasUnseenNotes, installedNotes } from "./module-notes";
 import { GrantStore } from "./grants";
 import { boardsModuleId, ModuleLeaderboards, type LeaderboardQuestion } from "./leaderboards";
@@ -63,6 +61,7 @@ import { profileRanks, type ProfileRankSource } from "./profile-ranks";
 import { ModuleLifecycle } from "./module-lifecycle";
 import { ModulePanels, panelTypesOf } from "./module-panels";
 import { DevelopmentFolders } from "./development-folders";
+import { ModuleCatalog } from "./module-catalog";
 import type { TestHosts } from "./network";
 import { holdOwnPort } from "./own-ports";
 import { shortcutFor } from "./shortcuts";
@@ -81,7 +80,6 @@ import {
   isLive,
   LibraryError,
   liveWorkspaces,
-  MAX_ASKED_MODULES,
   markOpened,
   openedTimes,
   moveFolder,
@@ -109,14 +107,10 @@ import { setOverlayFont } from "./overlay-font";
 import { moduleBaseCss } from "./module-style";
 import { backupData, backupsDir } from "./backup";
 import { hasLibrary, loadLibrary, SavedData, WORKSPACE_FILE } from "./saved-data";
-import { CatalogClient, catalogView, type CatalogScope } from "./catalog-client";
-import { parseReadme, readmeAllowsLink } from "./catalog-readme";
-import { CHECK_INTERVAL_MS } from "./catalog-updates";
-import { isReleaseCopies, releaseStatuses } from "./release-pending";
+import { CatalogClient } from "./catalog-client";
 import { OnlineSearch } from "./online";
 import { countAppUpdate } from "./usage-counts";
-import { askedName, newInstallId, sendModuleRequest } from "./module-request";
-import { askKey, type AskedGame } from "../shared/module-request";
+import { askedName, sendModuleRequest } from "./module-request";
 import { PublisherNames } from "./publisher-names";
 import { PreviewUpdater, previewCheck, UpdateManager, type UpdaterLike } from "./updates";
 import { PINNED_UPDATE_KEYS } from "./update-keys";
@@ -152,7 +146,6 @@ import { FileDialogs } from "./file-dialogs";
 import { GameIcons } from "./game-icons";
 import { loadAdBlocker, type AdBlocker } from "./browser-filter";
 import { isPrivateUrl, isWebUrl, siteOfUrl } from "./browser-url";
-import { supportTarget } from "./module-support";
 import { defaultFilesRoot } from "./module-files";
 import { ModuleFilesFolder } from "./module-files-folder";
 import { BrowserPanel, browserPartition, browserSession, browserUserAgent, type BrowserKind, type BrowserSessionHooks } from "./browser-view";
@@ -608,7 +601,8 @@ export class Host {
   private readonly modulePanels: ModulePanels;
   /** Settings > Development's folders, watched for new builds, and the examples copied into projects (development-folders.ts). */
   private readonly developmentFolders: DevelopmentFolders;
-  private catalogTimer: ReturnType<typeof setInterval> | undefined;
+  /** The catalog's pages, reviews, reports and the update checks of modules installed from it (module-catalog.ts). */
+  private readonly moduleCatalog: ModuleCatalog;
   /** Looks for new versions; only in an installed (packaged) app. */
   private updates: UpdateManager | null = null;
   /** The themes and styles, the user's pick and the themes the host and the panels get from it (appearance.ts). */
@@ -691,7 +685,7 @@ export class Host {
     this.onlineSearch = new OnlineSearch(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl });
     this.gameLookup = new OnlineSearch(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl });
     this.gamesSeen = new GamesSeen(path.join(options.userData, "games-seen.json"));
-    this.catalog = new CatalogClient({ ...(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl }), onGames: (games) => this.learnFromCatalog(games) });
+    this.catalog = new CatalogClient({ ...(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl }), onGames: (games) => this.moduleCatalog.learn(games) });
     this.workspaces = new Workspaces(workspaces, {
       save: (state) => this.savedData.saveWorkspace(state),
       // A workspace added back gets the panels it had, as a start would read them.
@@ -785,6 +779,26 @@ export class Host {
       reload: () => this.modulePanels.reload(),
       introduce: (owner) => this.publisherNames.refresh([owner]),
       log: (line) => console.warn(`[tavora] ${line}`),
+    });
+    this.moduleCatalog = new ModuleCatalog({
+      library,
+      saveLibrary: () => this.saveLibrary(),
+      installed: this.installed,
+      catalog: this.catalog,
+      userData: options.userData,
+      token: () => this.account.token(),
+      waitingVersions: () => this.account.waitingVersions(),
+      updates: this.lifecycle.updates,
+      language: () => this.language,
+      shownWorkspace: () => this.workspaceId,
+      openLink: (url) => this.openLinkFromModule(url),
+      // Test runs keep the window hidden and open no mail app.
+      openExternal: options.hidden ? null : (url) => void shell.openExternal(url).catch((error: unknown) => console.error("[tavora]", error)),
+      sendRequest: (game, installId) => sendModuleRequest({ baseUrl: serviceUrl(options.apiUrl) }, game, installId),
+      notify: (message) => (this.notice = message),
+      changed: () => this.pushState(),
+      changedSoon: () => this.pushStateSoon(),
+      checks: !options.hidden,
     });
     this.officialPublishing = new OfficialPublishing({
       packaged: app.isPackaged,
@@ -1161,7 +1175,7 @@ export class Host {
     // Icons of games of game workspaces that have none yet are looked for quietly in the background.
     host.gameIcons.lookSoon();
     host.backupSoon();
-    host.checkCatalogSoon();
+    host.moduleCatalog.startChecks();
     if (options.accounts === true) void host.inbox.init();
     host.copySync.start();
     if (options.accounts === true) {
@@ -1448,226 +1462,11 @@ export class Host {
     return id;
   }
 
-  /** Where the Browse tab of the module library looks: the current game workspace's game, or a personal workspace. */
-  /** The scope a host page asked for (a workspace, or a game), else the open workspace's. */
-  private catalogScopeOf(target: unknown): CatalogScope | null {
-    const asked = typeof target === "object" && target !== null ? (target as Record<string, unknown>) : {};
-    if (typeof asked.game === "string" && asked.game.length <= 80) return { games: [asked.game] };
-    if (typeof asked.workspaceId === "string") return this.catalogScope(asked.workspaceId);
-    return this.catalogScope();
-  }
-
-  private catalogScope(id: string | null = this.workspaceId): CatalogScope | null {
-    const workspace = id ? this.library.workspaces[id] : undefined;
-    if (!workspace) return null;
-    return workspace.kind === "personal" ? { personal: true } : { games: workspaceGameIds(workspace) };
-  }
-
-  /** A game added by name learns its game's id from a catalog listing (workspace-game.ts); saved, and the rail sees what now fits. */
-  private learnFromCatalog(games: ListedGame[]): void {
-    if (!learnGameIds(this.library, games).length) return;
-    this.saveLibrary();
-    this.pushStateSoon();
-  }
-
-  /**
-   * One anonymous vote for a module for a game that has none, because the user pressed Ask for a module.
-   * Remembered on this PC, so the button stays a thanks; a vote that can't be sent (offline, or the service
-   * has no such address yet) says so and can be tried again. Never blocks adding the game.
-   */
-  private async askModule(game: AskedGame): Promise<void> {
-    if (!game.name || [...game.name].length > 80) throw new UserError("error.askModuleFailed");
-    const key = askKey(game);
-    if (this.library.askedModules.includes(key)) return;
-    if (!this.library.onlineSearch) throw new UserError("error.askModuleOff");
-    if (!this.library.installId) {
-      this.library.installId = newInstallId();
-      this.saveLibrary();
-    }
-    if (!(await sendModuleRequest({ baseUrl: serviceUrl(this.options.apiUrl) }, game, this.library.installId))) throw new UserError("error.askModuleFailed");
-    this.library.askedModules = [...this.library.askedModules.filter((other) => other !== key), key].slice(-MAX_ASKED_MODULES);
-    this.saveLibrary();
-  }
-
-  /**
-   * Reports a module to Tavora (C12). A module installed from the catalog is reported as the zip that
-   * is installed, the one the user has seen; any other id as the version the catalog lists now.
-   * Only the id, the key and the zip's hash are sent, and only because the user pressed Report.
-   */
-  private async reportCatalogModule(moduleId: string, why: { reason: string; note: string | null }): Promise<void> {
-    if (!this.library.onlineSearch) throw new UserError("error.reportOff");
-    const token = this.account.token();
-    if (!token) throw new UserError("error.reportSignIn");
-    const module = this.catalogModules.has(moduleId) ? (this.modules.get(moduleId) ?? this.blockedModules.get(moduleId)) : undefined;
-    const record = module ? (await readOwnerRecords(this.options.userData))[path.basename(module.root)] : undefined;
-    if (module && record?.id === moduleId && record.sha256) {
-      await this.catalog.report({ id: moduleId, owner: module.owner, sha256: record.sha256 }, token, why);
-      return;
-    }
-    const entry = await this.catalog.module(moduleId);
-    await this.catalog.report({ id: entry.id, owner: entry.owner, sha256: entry.zip.sha256 }, token, why);
-  }
-
-  /**
-   * Opens a catalog module's homepage like a link from a module (C10): only http or https, in the
-   * workspace's Browser panel or where the user picks. The address comes from the listing, asked for again here.
-   */
-  private async openCatalogHomepage(moduleId: string): Promise<void> {
-    if (!this.library.onlineSearch) throw new UserError("error.catalogOff");
-    const { homepage } = await this.catalog.module(moduleId);
-    if (homepage && isWebUrl(homepage)) this.openLinkFromModule(homepage);
-  }
-
-  /**
-   * Opens a module's support link after a click. The link is read again here, from the installed module's own
-   * manifest or the catalog listing, never taken from the page: a web address opens like the homepage, an
-   * email address in the user's mail app.
-   */
-  private async openModuleSupport(moduleId: string, source: "catalog" | "installed"): Promise<void> {
-    let link: string | null | undefined;
-    if (source === "installed") link = this.modules.get(moduleId)?.manifest.support;
-    else {
-      if (!this.library.onlineSearch) throw new UserError("error.catalogOff");
-      link = (await this.catalog.module(moduleId)).support;
-    }
-    const target = link ? supportTarget(link) : null;
-    if (!target) return;
-    if (target.kind === "web") this.openLinkFromModule(target.url);
-    else if (!this.options.hidden) void shell.openExternal(target.url).catch((error: unknown) => console.error("[tavora]", error));
-  }
-
-  /**
-   * Opens a link from a catalog module's readme in a Browser panel. The readme is read again here and
-   * the address must be one of its http or https links, so the page can't ask for any other address.
-   */
-  private async openReadmeLink(moduleId: string, url: string): Promise<void> {
-    if (!this.library.onlineSearch) throw new UserError("error.catalogOff");
-    const { readme } = await this.catalog.details(moduleId);
-    if (!readmeAllowsLink(readme, url)) throw new UserError("error.readmeLink");
-    this.openLinkFromModule(url);
-  }
-
-  /**
-   * A catalog module's page: the listing asked for again, its readme as plain text blocks and its
-   * screenshots, each checked on its own (catalog-client.ts); a screenshot that fails is left out.
-   */
-  private async catalogPage(moduleId: string): Promise<CatalogPageResult> {
-    if (!this.library.onlineSearch) return { status: "off" };
-    let details;
-    try {
-      details = await this.catalog.details(moduleId);
-    } catch (error) {
-      const key = error instanceof UserError ? error.key : "";
-      if (key === "error.catalogNotListed") return { status: "gone" };
-      if (key === "error.catalogUnavailable") return { status: "unavailable" };
-      if (key === "error.catalogBusy") return { status: "busy" };
-      return { status: "unreachable" };
-    }
-    const shots = await Promise.all(details.entry.shots.map((shot) => this.catalog.picture(shot)));
-    return {
-      status: "ok",
-      module: catalogView(details.entry, this.language, this.catalogScope() ?? undefined),
-      screenshots: shots.filter((url): url is string => url !== null),
-      readme: details.readme === null ? [] : parseReadme(details.readme),
-      versions: details.versions,
-    };
-  }
-
-  /** An installed module's page from its own folder (module-page.ts), so it works offline. */
-  private async modulePage(moduleId: string): Promise<ModulePageResult> {
-    const module = this.modules.get(moduleId);
-    if (!module) return { status: "gone" };
-    return { status: "ok", ...(await readModulePage(module.root, module.manifest)) };
-  }
-
-  /**
-   * A catalog module's ratings and reviews (decided 2026-10-21), with the user's own rating and what
-   * they can do. Rating needs a sign-in, not the module installed: someone who removed a bad module can
-   * still rate it (decided 2026-10-27). Each reviewer's picture is fetched by its hash and checked like a listed picture.
-   */
-  private async catalogReviews(moduleId: string): Promise<CatalogReviewsResult> {
-    if (!this.library.onlineSearch) return { status: "off" };
-    const token = this.account.token();
-    let listed;
-    let own: { mine: CatalogReviews["mine"]; own: boolean } = { mine: null, own: false };
-    try {
-      listed = await this.catalog.reviews(moduleId);
-      if (token) own = await this.catalog.ownReview(moduleId, token).catch(() => own);
-    } catch (error) {
-      const key = error instanceof UserError ? error.key : "";
-      if (key === "error.catalogNotListed") return { status: "gone" };
-      if (key === "error.catalogUnavailable" || key === "error.reviewsUnavailable") return { status: "unavailable" };
-      if (key === "error.catalogBusy") return { status: "busy" };
-      return { status: "unreachable" };
-    }
-    const pictures = await Promise.all(listed.reviews.map((review) => (review.author.picture ? this.catalog.reviewerPicture(review.id, review.author.picture) : null)));
-    const installedVersion = this.modules.get(moduleId)?.manifest.version ?? null;
-    return {
-      status: "ok",
-      rating: listed.rating,
-      reviews: listed.reviews.map((review, index) => ({ ...review, author: { ...review.author, picture: pictures[index] ?? null } })),
-      mine: own.mine,
-      can: own.own ? "own" : !token ? "sign-in" : "rate",
-      installedVersion,
-    };
-  }
-
-  /**
-   * Rates a catalog module on its installed version, which must be one the catalog published, or on its
-   * newest published version when it isn't installed.
-   */
-  private async rateCatalogModule(moduleId: string, stars: number, text: string | null): Promise<void> {
-    if (!this.library.onlineSearch) throw new UserError("error.catalogOff");
-    const token = this.account.token();
-    if (!token) throw new UserError("account.error.signedOut");
-    const installed = this.modules.get(moduleId)?.manifest.version;
-    const { versions } = await this.catalog.details(moduleId);
-    const version = installed ?? versions.map((published) => published.version).sort(compareModuleVersions).at(-1);
-    if (!version || !versions.some((published) => published.version === version)) throw new UserError("error.reviewVersion");
-    await this.catalog.rate(moduleId, token, { stars, text: text?.trim() || null, version });
-  }
-
   /** A messages action: online features must be on, and the user needs a sign-in. */
   private async inboxAction<T>(run: () => Promise<T>): Promise<T> {
     if (!this.library.onlineSearch) throw new UserError("error.catalogOff");
     if (!this.account.token()) throw new UserError("account.error.signedOut");
     return run();
-  }
-
-  private async catalogReviewAction(run: (token: string) => Promise<void>): Promise<void> {
-    if (!this.library.onlineSearch) throw new UserError("error.catalogOff");
-    const token = this.account.token();
-    if (!token) throw new UserError("account.error.signedOut");
-    await run(token);
-  }
-
-  /**
-   * Looks for updates of modules installed from the catalog a little after start and then every few
-   * hours, only while online features are on. Test runs check only when asked.
-   */
-  private checkCatalogSoon(): void {
-    if (this.options.hidden) return;
-    setTimeout(() => void this.checkCatalogUpdates(), 30_000).unref?.();
-    this.catalogTimer = setInterval(() => void this.checkCatalogUpdates(), CHECK_INTERVAL_MS);
-    this.catalogTimer.unref?.();
-  }
-
-  /**
-   * One update check (catalog-updates.ts). Updates that ask for nothing new are installed and their
-   * panels reload; the others wait for the user, shown in Settings > Modules and on their panels.
-   * Answers with how many modules were updated or are waiting.
-   */
-  private async checkCatalogUpdates(): Promise<{ updated: number; waiting: number; unreachable?: true; failed?: number }> {
-    if (!this.library.onlineSearch) return { updated: 0, waiting: 0 };
-    const { updated, waiting, unreachable, failed } = await this.lifecycle.updates.check();
-    if (updated.length === 1) {
-      const { manifest } = updated[0]!;
-      this.notice = translate(this.language, "modules.catalogUpdated", { name: this.shown(manifest).name, version: manifest.version });
-    } else if (updated.length > 1) {
-      this.notice = translate(this.language, "modules.catalogUpdatedMany", { count: String(updated.length) });
-    }
-    this.pushState();
-    return { updated: updated.length, waiting: waiting.length, ...(unreachable ? { unreachable } : {}), ...(failed ? { failed } : {}) };
   }
 
   private static themeSources(options: HostOptions) {
@@ -1892,40 +1691,19 @@ export class Host {
       // Games the user already has are not offered again; one in Trash is, and adding it brings that copy back.
       return { ...result, games: result.games.filter((game) => !isLive(this.library, game.id)) };
     });
-    ipcMain.handle("host:browse-catalog", async (event, target?: unknown): Promise<CatalogListResult> => {
-      if (!fromHost(event)) return { status: "unreachable" };
-      if (!this.library.onlineSearch) return { status: "off" };
-      if (!this.catalogScopeOf(target)) {
-        // A named workspace it can't find is "can't tell", never an empty list: the empty page would read that as "no modules
-        // for this game". With no workspace open at all, there is simply nothing that fits.
-        const named = typeof target === "object" && target !== null && "workspaceId" in target;
-        return named ? { status: "unavailable" } : { status: "ok", modules: [] };
-      }
-      // Asked again once the listing was read: a game added by name may just have learned its game's id from it.
-      return this.catalog.list(() => this.catalogScopeOf(target) ?? { games: [] }, this.language);
-    });
-    ipcMain.handle("host:catalog-for-games", async (event): Promise<CatalogListResult> => {
-      if (!fromHost(event)) return { status: "unreachable" };
-      if (!this.library.onlineSearch) return { status: "off" };
-      return this.catalog.list({ games: [] }, this.language);
-    });
+    ipcMain.handle("host:browse-catalog", async (event, target?: unknown): Promise<CatalogListResult> => (fromHost(event) ? this.moduleCatalog.browse(target) : { status: "unreachable" }));
+    ipcMain.handle("host:catalog-for-games", async (event): Promise<CatalogListResult> => (fromHost(event) ? this.moduleCatalog.forGames() : { status: "unreachable" }));
     ipcMain.handle("host:catalog-page", async (event, moduleId: unknown): Promise<CatalogPageResult> =>
-      fromHost(event) && isModuleId(moduleId) ? this.catalogPage(moduleId) : { status: "gone" },
+      fromHost(event) && isModuleId(moduleId) ? this.moduleCatalog.page(moduleId) : { status: "gone" },
     );
     ipcMain.handle("host:module-page", async (event, moduleId: unknown): Promise<ModulePageResult> =>
-      fromHost(event) && isModuleId(moduleId) ? this.modulePage(moduleId) : { status: "gone" },
+      fromHost(event) && isModuleId(moduleId) ? this.moduleCatalog.installedPage(moduleId) : { status: "gone" },
     );
     ipcMain.handle("host:catalog-reviews", async (event, moduleId: unknown): Promise<CatalogReviewsResult> =>
-      fromHost(event) && isModuleId(moduleId) ? this.catalogReviews(moduleId) : { status: "gone" },
+      fromHost(event) && isModuleId(moduleId) ? this.moduleCatalog.reviews(moduleId) : { status: "gone" },
     );
-    ipcMain.handle("host:release-statuses", async (event, copies: unknown): Promise<Record<string, ReleaseStatus> | null> => {
-      if (!fromHost(event) || !this.library.onlineSearch || !isReleaseCopies(copies)) return null;
-      const [index, waiting] = await Promise.all([this.catalog.index(), this.account.waitingVersions()]);
-      return releaseStatuses(index, copies, waiting);
-    });
-    ipcMain.handle("host:catalog-icon", async (event, moduleId: unknown): Promise<string | null> =>
-      fromHost(event) && isModuleId(moduleId) && this.library.onlineSearch ? this.catalog.icon(moduleId) : null,
-    );
+    ipcMain.handle("host:release-statuses", async (event, copies: unknown): Promise<Record<string, ReleaseStatus> | null> => (fromHost(event) ? this.moduleCatalog.releaseStatuses(copies) : null));
+    ipcMain.handle("host:catalog-icon", async (event, moduleId: unknown): Promise<string | null> => (fromHost(event) && isModuleId(moduleId) ? this.moduleCatalog.icon(moduleId) : null));
     ipcMain.handle("host:steam-library", async (event, profile: unknown): Promise<SteamLibraryResult> => {
       if (!fromHost(event) || typeof profile !== "string") return { status: "error", error: translate(this.language, "error.notUnderstood") };
       if (!this.library.onlineSearch) return { status: "error", error: translate(this.language, "error.onlineOff") };
@@ -2091,7 +1869,7 @@ export class Host {
       this.gameWatcher.stop();
       this.copySync.dispose();
       this.pairing.dispose();
-      clearInterval(this.catalogTimer);
+      this.moduleCatalog.stopChecks();
       this.inbox.dispose();
       this.officialPublishing.quit();
     });
@@ -2331,7 +2109,7 @@ export class Host {
       "set-auto-update-modules": saved((action) => {
         this.library.autoUpdateModules = action.enabled;
         // Turned on: updates that were only found so far install now.
-        if (action.enabled) void this.checkCatalogUpdates();
+        if (action.enabled) void this.moduleCatalog.checkUpdates();
       }),
       "set-steam-icons": saved((action) => {
         this.library.steamIcons = action.enabled;
@@ -2492,16 +2270,9 @@ export class Host {
       "leaderboards-hide": (action) => this.leaveLeaderboards(action.moduleId),
       "install-module": () => this.installModule(),
       "install-catalog-module": (action) => this.lifecycle.installFromCatalog(action.moduleId),
-      "check-module-updates": async () => {
-        if (!this.library.onlineSearch) throw new UserError("error.catalogOff");
-        const { updated, waiting, unreachable, failed } = await this.checkCatalogUpdates();
-        // Never "up to date" when the catalog could not be asked or an update would not download.
-        if (unreachable) throw new UserError("error.updatesUnreachable");
-        if (failed && updated + waiting === 0) throw new UserError("error.updatesFailed");
-        return { ok: true, updated, waiting };
-      },
-      "ask-module": (action) => this.askModule({ name: askedName(action.name), steamAppId: action.steamAppId, gameId: action.gameId }),
-      "report-catalog-module": (action) => this.reportCatalogModule(action.moduleId, { reason: action.reason, note: action.note }),
+      "check-module-updates": () => this.moduleCatalog.checkUpdatesNow(),
+      "ask-module": (action) => this.moduleCatalog.ask({ name: askedName(action.name), steamAppId: action.steamAppId, gameId: action.gameId }),
+      "report-catalog-module": (action) => this.moduleCatalog.report(action.moduleId, { reason: action.reason, note: action.note }),
       "inbox-send-request": (action) => this.inboxAction(() => this.inbox.sendRequest(action.moduleId, action.requestType, action.text, action.previousId)),
       "inbox-reply": (action) => this.inboxAction(() => this.inbox.reply(action.id, action.text)),
       "inbox-close": (action) => this.inboxAction(() => this.inbox.close(action.id, action.outcome)),
@@ -2518,18 +2289,13 @@ export class Host {
         await this.inbox.refresh();
         await this.inbox.loadContacts();
       },
-      "open-catalog-homepage": (action) => this.openCatalogHomepage(action.moduleId),
-      "open-module-support": (action) => this.openModuleSupport(action.moduleId, action.source),
-      "open-readme-link": (action) => this.openReadmeLink(action.moduleId, action.url),
-      "rate-catalog-module": (action) => this.rateCatalogModule(action.moduleId, action.stars, action.text),
-      "unrate-catalog-module": (action) => this.catalogReviewAction((token) => this.catalog.unrate(action.moduleId, token)),
-      "reply-catalog-review": (action) => this.catalogReviewAction((token) => this.catalog.reply(action.reviewId, token, action.text?.trim() || null)),
-      "report-catalog-review": (action) => {
-        if (!this.library.onlineSearch) throw new UserError("error.reportOff");
-        const token = this.account.token();
-        if (!token) throw new UserError("error.reportSignIn");
-        return this.catalog.reportReview(action.reviewId, token);
-      },
+      "open-catalog-homepage": (action) => this.moduleCatalog.openHomepage(action.moduleId),
+      "open-module-support": (action) => this.moduleCatalog.openSupport(action.moduleId, action.source),
+      "open-readme-link": (action) => this.moduleCatalog.openReadmeLink(action.moduleId, action.url),
+      "rate-catalog-module": (action) => this.moduleCatalog.rate(action.moduleId, action.stars, action.text),
+      "unrate-catalog-module": (action) => this.moduleCatalog.unrate(action.moduleId),
+      "reply-catalog-review": (action) => this.moduleCatalog.reply(action.reviewId, action.text),
+      "report-catalog-review": (action) => this.moduleCatalog.reportReview(action.reviewId),
       "apply-module-update": (action) => this.lifecycle.applyUpdate(action.moduleId, action.version),
       "delete-module-data": (action) => this.deleteLeftoverData(action.owner, action.moduleId),
       "move-local-data": (action) => this.moveLocalData(action.moduleId),
