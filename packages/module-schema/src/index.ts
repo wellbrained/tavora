@@ -1,6 +1,8 @@
 // Manifest v1 for tavora.module.json (apps/docs/reference/manifest.md). The JSON Schema
 // in schema/ describes the same rules for editors; tests keep the two in step.
 
+import { isWindowsDeviceName } from "@tavora/sdk/protocol";
+
 export interface ModuleViewport {
   /** The smallest size; with `wide`, the smallest while the panel is taller than wide or square. */
   minWidth: number;
@@ -545,17 +547,11 @@ export const KEY_EXTENSIONS: readonly string[] = ["pem", "key", "p12", "pfx", "p
  */
 export const TAVORA_DOCUMENTS_FOLDER = "Tavora";
 const FOLDER_EXTENSION = /^[a-z0-9]{1,16}$/;
-const WINDOWS_DEVICE = /^(?:con|prn|aux|nul|conin\$|conout\$|com[0-9¹²³]|lpt[0-9¹²³]) *(?:\..*)?$/i;
-
 /**
- * Whether Windows keeps `name` for a device (CON, PRN, AUX, NUL, CONIN$, CONOUT$, COM0-9, LPT0-9, and COM and LPT with
- * a superscript ¹ ² ³), also with an extension or spaces after it (`NUL.txt`, `com1.x`, `CON .json`): Windows may open
- * the device for such a name instead of a file. Compared without regard to case. One rule for every name Tavora makes
- * or checks: folder names in manifests, file names in module zips, names of files a module saves.
+ * Whether Windows keeps `name` for a device (CON, NUL, COM1, also `NUL.txt`): the SDK's one rule for every name Tavora
+ * makes or checks, passed on here.
  */
-export function isWindowsDeviceName(name: string): boolean {
-  return WINDOWS_DEVICE.test(name);
-}
+export { isWindowsDeviceName };
 
 /**
  * One folder name a path may hold: 1 to `max` (64) characters that Windows allows in a name, not `.` or `..`, not starting or

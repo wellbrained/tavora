@@ -143,6 +143,10 @@ export const en = {
   // Labels inside the Foundations examples.
   "demo.do": "Do",
   "demo.dont": "Don't",
+  "demo.tabsList": "List",
+  "demo.tabsArrows": "Arrows",
+  "demo.tabsInList": "Plans in a list",
+  "demo.tabsWithArrows": "Plans with arrows",
   "demo.on": "On",
   "demo.off": "Off",
   "demo.colours.surfaces": "Surfaces",
@@ -421,7 +425,9 @@ export const en = {
   "ex.tabs.TabStrip.note": "TabStrip keeps its line still.",
   "ex.tabs.TabIcon": "A tab with an icon before its name",
   "ex.tabs.TabsCrowded": "Too many for the width",
-  "ex.tabs.TabsCrowded.note": "The wheel scrolls, the edges fade.",
+  "ex.tabs.TabsCrowded.note": "The wheel scrolls, the edges fade. Hidden tabs follow Settings > Appearance > Too many tabs.",
+  "ex.tabs.TabOverflow": "Hidden tabs in a list or behind arrows",
+  "ex.tabs.TabOverflow.note": "A strip can pick one for itself; otherwise your setting decides.",
 
   "ex.navlist.Grouped": "Grouped, with counts",
   "ex.navlist.Grouped.note": "Arrow keys, Home and End move through it.",
@@ -611,6 +617,10 @@ export const de: Record<TextKey, string> = {
   // Labels inside the Foundations examples.
   "demo.do": "So geht's",
   "demo.dont": "Besser nicht",
+  "demo.tabsList": "Liste",
+  "demo.tabsArrows": "Pfeile",
+  "demo.tabsInList": "Pläne in einer Liste",
+  "demo.tabsWithArrows": "Pläne mit Pfeilen",
   "demo.on": "An",
   "demo.off": "Aus",
   "demo.colours.surfaces": "Flächen",
@@ -889,7 +899,9 @@ export const de: Record<TextKey, string> = {
   "ex.tabs.TabStrip.note": "TabStrip hält seine Linie still.",
   "ex.tabs.TabIcon": "Ein Tab mit Icon vor dem Namen",
   "ex.tabs.TabsCrowded": "Zu viele für die Breite",
-  "ex.tabs.TabsCrowded.note": "Das Mausrad scrollt, die Ränder blenden aus.",
+  "ex.tabs.TabsCrowded.note": "Das Mausrad scrollt, die Ränder blenden aus. Versteckte Tabs folgen Einstellungen > Aussehen > Zu viele Tabs.",
+  "ex.tabs.TabOverflow": "Versteckte Tabs in einer Liste oder hinter Pfeilen",
+  "ex.tabs.TabOverflow.note": "Eine Leiste kann es selbst festlegen, sonst entscheidet deine Einstellung.",
 
   "ex.navlist.Grouped": "Gruppiert, mit Anzahlen",
   "ex.navlist.Grouped.note": "Pfeiltasten, Pos1 und Ende bewegen sich darin.",

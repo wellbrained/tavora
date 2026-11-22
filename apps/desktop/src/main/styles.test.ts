@@ -254,6 +254,15 @@ describe("appearanceThemes", () => {
     // Only the colours change: the style, corner, font and toasts stay the host's.
     expect({ ...panel, mode: host.mode, colors: host.colors, tokens: host.tokens }).toEqual(host);
   });
+
+  it("sends how tabs that don't fit are reached, the list unless the user picked arrows", () => {
+    const choice = { theme: themeOf(dark, light), variation: light };
+    expect(appearanceThemes(choice, FALLBACK_STYLE, settings).host.tabOverflow).toBe("list");
+    const { host, panel } = appearanceThemes(choice, HARDWARE, { ...settings, tabOverflow: "arrows" });
+    // Module panels get it too, also in an inset style's own colours.
+    expect([host.tabOverflow, panel.tabOverflow]).toEqual(["arrows", "arrows"]);
+    expect(panel).not.toBe(host);
+  });
 });
 
 describe("insetPanelTheme", () => {

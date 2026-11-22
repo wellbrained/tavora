@@ -9,6 +9,7 @@ import { connectModule } from "./connect-module";
 import { onFontChange } from "./theme";
 import { installTitleTooltips } from "./title-tooltips";
 import { toastPosition } from "./components/ui/toast/toast";
+import { tabOverflow } from "./components/ui/tabs/tab-overflow";
 import { toastsPaused } from "./components/ui/toast/visibility";
 
 const texts = {
@@ -62,6 +63,16 @@ describe("connectModule({ texts })", () => {
     host.changeTheme({ mode: "light", toasts: "top-center" });
     expect(root.attributes.get("data-mode")).toBe("light");
     expect(toastPosition.value).toBe("top-center");
+  });
+
+  it("tells every TabStrip how the user reaches tabs that don't fit, the list when the theme doesn't say", async () => {
+    const { sdk, host } = createMemoryHost();
+    await connectModule({ sdk });
+    expect(tabOverflow.value).toBe("list");
+    host.changeTheme({ tabOverflow: "arrows" });
+    expect(tabOverflow.value).toBe("arrows");
+    host.changeTheme({ tabOverflow: undefined });
+    expect(tabOverflow.value).toBe("list");
   });
 
   it("writes the font the user picked, and tells measuring components when it changes, not for any other theme change", async () => {

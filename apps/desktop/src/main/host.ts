@@ -2846,8 +2846,10 @@ export class Host {
       "set-module-icons": saved((action) => {
         this.library.moduleIcons = action.enabled;
       }),
+      // The kit's TabStrip in every open panel follows it: the setting goes out with the theme.
       "set-tab-overflow": saved((action) => {
         this.library.tabOverflow = action.mode;
+        this.applyTheme();
       }),
       "set-panel-style": saved((action) => {
         this.library.panelStyle = action.style;
