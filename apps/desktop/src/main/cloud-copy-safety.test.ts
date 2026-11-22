@@ -260,7 +260,7 @@ describe("the folder and the size of a copy", () => {
     await mkdir(path.join(folder, "Tavora"), { recursive: true });
     // Reading the manifests folder fails with something other than "not there".
     await writeFile(path.join(folder, "Tavora", "manifests"), "not a folder");
-    await expect(new FolderStorage(folder).remote()).rejects.toMatchObject({ code: expect.stringMatching(/ENOTDIR|EPERM|EACCES/) });
+    await expect(new FolderStorage(folder).remote()).rejects.toMatchObject({ reason: "folder-locked" });
   });
 
   it("never sends more in one upload than the service takes", async () => {

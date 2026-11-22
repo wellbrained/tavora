@@ -10,6 +10,7 @@ import { isModuleId, isOwnerId, LOCAL_OWNER, manifestFiles, needsNewerTavora, OF
 import { MANIFEST_FILE, readZip, SIGNATURE_FILE, signedHash, verifyFiles, ZIP_LIMITS, ZipError, type ZipFile } from "@tavora/pack";
 import { compareModuleVersions } from "../shared/module-version";
 import { SerialQueue, writeFileAtomic } from "./fsutil";
+import { COPY_STATUS_FILE } from "./cloud-copy-swap";
 import { HeldError, isDamaged, look, lookJson, lookNames, lookStat, unlessHeld } from "./file-look";
 import { renameHeld } from "./rename-held";
 import { readSavedFile } from "./json";
@@ -371,8 +372,6 @@ const isOldCopy = (name: string) => name.startsWith("old-") && !name.endsWith(DO
 
 /** A note in the staging folder: this module was removed, though a copy of it couldn't be told apart at the time. */
 const REMOVED = "removed-";
-/** A cloud copy going in (cloud-copy-swap.ts): it may have moved the records, so nothing here decides from them. */
-const COPY_STATUS_FILE = "cloud-copy-status.json";
 
 /** What a previous copy must match to come back. */
 type CopyRecord = { signer: string; signedSha256?: string; version?: string };
@@ -499,6 +498,7 @@ export async function recoverInstalls({ userData, userModules, officialDir, log 
   // A mark whose folder never moved: the update stopped before it began.
   for (const name of names.filter((item) => item.startsWith("old-") && item.endsWith(UPDATING) && !names.includes(item.slice(0, -UPDATING.length)))) await rm(path.join(stagingRoot, name), { force: true }).catch(() => undefined);
   const leftovers = names.filter((item) => isOldCopy(item) && !names.includes(`${item}${DONE}`));
+  // A cloud copy going in may have moved the records, so nothing here decides from them.
   if (leftovers.length > 0 && (await lookStat(path.join(userData, COPY_STATUS_FILE))).status !== "missing") {
     log("a cloud copy is still going in; cut-off module updates wait for it");
     return unsure(stagingRoot);

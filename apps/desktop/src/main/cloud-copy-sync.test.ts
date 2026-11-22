@@ -133,14 +133,14 @@ describe("the cloud copy, as Tavora runs it", () => {
 
   it("doesn't take an older copy the service hands out as a newer version without asking", async () => {
     const cloud = await service();
-    const a = await pc({ "library.json": '{"tag":"a1"}' });
+    const a = await pc({ "library.json": "a1" });
     const { key, sync: atA } = await startCopy(cloud, a);
     const manifest = "http://tavora.test/v1/account/copy/manifest";
     const old = Buffer.from(await (await cloud.fetch(manifest, { headers: { authorization: `Bearer ${cloud.token}` } })).arrayBuffer());
     // The first version's parts stay in the copy: only a file is added.
     await writeFile(path.join(a.userData, "workspace.json"), "w2");
     await atA.sync();
-    const b = await pc({ "library.json": '{"tag":"b0"}' });
+    const b = await pc({ "library.json": "b0" });
     const setup = tavora(cloud, b);
     await setup.sync.turnOn();
     await setup.sync.enterKey(key);
@@ -174,7 +174,7 @@ describe("the cloud copy, as Tavora runs it", () => {
 
   it("asks instead of taking a copy without a sealed version once this PC saw sealed ones, and takes it as before otherwise", async () => {
     const cloud = await service();
-    const a = await pc({ "library.json": '{"tag":"a1"}' });
+    const a = await pc({ "library.json": "a1" });
     const { key } = await startCopy(cloud, a);
     // An old Tavora's list (no sealed version) with nothing in it, served as version 9.
     const legacy = seal(copyKeys(parseRecoveryKey(key)!), Buffer.from(JSON.stringify({ v: 1, pictures: true, files: [] })));
@@ -194,7 +194,7 @@ describe("the cloud copy, as Tavora runs it", () => {
 
     const atA = tavora({ ...cloud, fetch: replay }, a);
     await atA.sync.beforeLoad();
-    expect(await read(a.userData, "library.json")).toBe('{"tag":"a1"}');
+    expect(await read(a.userData, "library.json")).toBe("a1");
     expect(atA.sync.view()).toMatchObject({ conflict: true, restartToTake: false });
     expect(atA.events.restarts).toBe(0);
 
@@ -210,9 +210,9 @@ describe("the cloud copy, as Tavora runs it", () => {
 
   it("asks a PC that missed a delete, and keeping its side sends it up although it didn't change", async () => {
     const cloud = await service();
-    const a = await pc({ "library.json": '{"tag":"a1"}' });
+    const a = await pc({ "library.json": "a1" });
     const { key } = await startCopy(cloud, a);
-    const b = await pc({ "library.json": '{"tag":"b0"}' });
+    const b = await pc({ "library.json": "b0" });
     const atB = tavora(cloud, b);
     await atB.sync.turnOn();
     await atB.sync.enterKey(key);
@@ -228,14 +228,14 @@ describe("the cloud copy, as Tavora runs it", () => {
     expect(atA.sync.view()).toMatchObject({ conflict: false, problem: null });
     // B, unchanged since, gets A's side at its next start.
     await tavora(cloud, b).sync.beforeLoad();
-    expect(await read(b.userData, "library.json")).toBe('{"tag":"a1"}');
+    expect(await read(b.userData, "library.json")).toBe("a1");
   });
 
   it("still sends this PC's side up after a restart when the upload after Keep this PC failed", async () => {
     const cloud = await service();
-    const a = await pc({ "library.json": '{"tag":"a1"}' });
+    const a = await pc({ "library.json": "a1" });
     const { key } = await startCopy(cloud, a);
-    const b = await pc({ "library.json": '{"tag":"b0"}' });
+    const b = await pc({ "library.json": "b0" });
     const atB = tavora(cloud, b);
     await atB.sync.turnOn();
     await atB.sync.enterKey(key);
@@ -269,17 +269,17 @@ describe("the cloud copy, as Tavora runs it", () => {
     expect(cloud.routes).toContain("PUT /v1/account/copy");
     expect(again.sync.view().problem).toBeNull();
     await tavora(cloud, b).sync.beforeLoad();
-    expect(await read(b.userData, "library.json")).toBe('{"tag":"a1"}');
+    expect(await read(b.userData, "library.json")).toBe("a1");
   });
 
   it("asks a PC that missed a delete before it takes the copy made after it", async () => {
     const cloud = await service();
-    const a = await pc({ "library.json": '{"tag":"a1"}' });
+    const a = await pc({ "library.json": "a1" });
     const { key } = await startCopy(cloud, a);
-    await writeFile(path.join(a.userData, "library.json"), '{"tag":"a2"}');
+    await writeFile(path.join(a.userData, "library.json"), "a2");
     await tavora(cloud, a).sync.sync();
     // While A is off, B deletes the copy and starts a new one from its own data.
-    const b = await pc({ "library.json": '{"tag":"b0"}' });
+    const b = await pc({ "library.json": "b0" });
     const atB = tavora(cloud, b);
     await atB.sync.turnOn();
     await atB.sync.enterKey(key);
@@ -290,33 +290,33 @@ describe("the cloud copy, as Tavora runs it", () => {
 
     const atA = tavora(cloud, a);
     await atA.sync.beforeLoad();
-    expect(await read(a.userData, "library.json")).toBe('{"tag":"a2"}');
+    expect(await read(a.userData, "library.json")).toBe("a2");
     expect(atA.sync.view()).toMatchObject({ on: true, conflict: true });
     // Taking the cloud side works: the user chose it.
     await atA.sync.keep("cloud");
     expect(atA.events.restarts).toBe(1);
     await tavora(cloud, a).sync.beforeLoad();
-    expect(await read(a.userData, "library.json")).toBe('{"tag":"b0"}');
+    expect(await read(a.userData, "library.json")).toBe("b0");
   });
 
   it("asks which side to keep when both changed, and keeps the other as a local backup", async () => {
     const cloud = await service();
-    const a = await pc({ "library.json": '{"tag":"a1"}' });
+    const a = await pc({ "library.json": "a1" });
     const { key, sync: atA } = await startCopy(cloud, a);
-    const b = await pc({ "library.json": '{"tag":"b0"}' });
+    const b = await pc({ "library.json": "b0" });
     const setup = tavora(cloud, b);
     await setup.sync.turnOn();
     await setup.sync.enterKey(key);
     await setup.sync.keep("cloud");
     await tavora(cloud, b).sync.beforeLoad();
 
-    await writeFile(path.join(a.userData, "library.json"), '{"tag":"a2"}');
+    await writeFile(path.join(a.userData, "library.json"), "a2");
     await atA.sync();
-    await writeFile(path.join(b.userData, "library.json"), '{"tag":"b2!"}');
+    await writeFile(path.join(b.userData, "library.json"), "b2!");
     const atB = tavora(cloud, b);
     await atB.sync.beforeLoad();
     // Neither side is lost: B's change stays until the user picks.
-    expect(await read(b.userData, "library.json")).toBe('{"tag":"b2!"}');
+    expect(await read(b.userData, "library.json")).toBe("b2!");
     expect(atB.sync.view().conflict).toBe(true);
     // Nothing goes up while the question is open.
     await atB.sync.sync();
@@ -326,40 +326,40 @@ describe("the cloud copy, as Tavora runs it", () => {
     expect(atB.sync.view().conflict).toBe(false);
     const backups = await readdir(path.join(b.userData, "backups"));
     const cloudSide = backups.find((name) => name.endsWith("-cloud"))!;
-    expect(await read(path.join(b.userData, "backups", cloudSide), "library.json")).toBe('{"tag":"a2"}');
+    expect(await read(path.join(b.userData, "backups", cloudSide), "library.json")).toBe("a2");
     // A gets B's side at its next start.
     await tavora(cloud, a).sync.beforeLoad();
-    expect(await read(a.userData, "library.json")).toBe('{"tag":"b2!"}');
+    expect(await read(a.userData, "library.json")).toBe("b2!");
   });
 
   it("finishes a slow download in the background and waits for a restart", async () => {
     const cloud = await service();
-    const a = await pc({ "library.json": '{"tag":"a1"}' });
+    const a = await pc({ "library.json": "a1" });
     const { key, sync: atA } = await startCopy(cloud, a);
-    const b = await pc({ "library.json": '{"tag":"b0"}' });
+    const b = await pc({ "library.json": "b0" });
     const setup = tavora(cloud, b);
     await setup.sync.turnOn();
     await setup.sync.enterKey(key);
     await setup.sync.keep("cloud");
     await tavora(cloud, b).sync.beforeLoad();
-    await writeFile(path.join(a.userData, "library.json"), '{"tag":"a2"}');
+    await writeFile(path.join(a.userData, "library.json"), "a2");
     await atA.sync();
 
     const atB = tavora(cloud, b);
     await atB.sync.beforeLoad(0);
     await until(() => atB.sync.view().restartToTake);
-    expect(await read(b.userData, "library.json")).toBe('{"tag":"a1"}');
+    expect(await read(b.userData, "library.json")).toBe("a1");
     atB.sync.restart();
     expect(atB.events.restarts).toBe(1);
     await tavora(cloud, b).sync.beforeLoad();
-    expect(await read(b.userData, "library.json")).toBe('{"tag":"a2"}');
+    expect(await read(b.userData, "library.json")).toBe("a2");
   });
 
   it("uploads the last changes before the window closes", async () => {
     const cloud = await service();
-    const a = await pc({ "library.json": '{"tag":"a1"}' });
+    const a = await pc({ "library.json": "a1" });
     const { sync } = await startCopy(cloud, a);
-    await writeFile(path.join(a.userData, "library.json"), '{"tag":"a2 changed"}');
+    await writeFile(path.join(a.userData, "library.json"), "a2 changed");
     let closed = 0;
     expect(sync.holdClose(() => void closed++)).toBe(true);
     // A second close while it uploads still waits.
@@ -379,9 +379,9 @@ describe("the cloud copy, as Tavora runs it", () => {
 
   it("turns off on every PC when the copy is deleted", async () => {
     const cloud = await service();
-    const a = await pc({ "library.json": '{"tag":"a1"}' });
+    const a = await pc({ "library.json": "a1" });
     const { key } = await startCopy(cloud, a);
-    const b = await pc({ "library.json": '{"tag":"b0"}' });
+    const b = await pc({ "library.json": "b0" });
     const atB = tavora(cloud, b);
     await atB.sync.turnOn();
     await atB.sync.enterKey(key);
@@ -393,12 +393,12 @@ describe("the cloud copy, as Tavora runs it", () => {
     await atA.sync.beforeLoad();
     expect(atA.sync.view()).toMatchObject({ on: false, problem: "deleted" });
     // The data on the PCs stays.
-    expect(await read(a.userData, "library.json")).toBe('{"tag":"a1"}');
+    expect(await read(a.userData, "library.json")).toBe("a1");
   });
 
   it("moves from our server to a folder and back, keeping the recovery key", async () => {
     const cloud = await service();
-    const a = await pc({ "library.json": '{"tag":"a"}' });
+    const a = await pc({ "library.json": "a" });
     const { sync, key } = await startCopy(cloud, a);
     sync.keySaved();
     const onedrive = await mkdtemp(path.join(os.tmpdir(), "tavora-onedrive-"));
@@ -419,7 +419,7 @@ describe("the cloud copy, as Tavora runs it", () => {
 
   it("says whether a picked folder is missing or can't be written to, instead of turning on", async () => {
     const cloud = await service();
-    const a = await pc({ "library.json": '{"tag":"a"}' });
+    const a = await pc({ "library.json": "a" });
     const { sync } = tavora(cloud, a);
     await sync.beforeLoad();
     const onedrive = await mkdtemp(path.join(os.tmpdir(), "tavora-onedrive-"));
@@ -436,7 +436,7 @@ describe("the cloud copy, as Tavora runs it", () => {
 
   it("keeps the account's key when the copy is turned off, and forgets it when signed out", async () => {
     const cloud = await service();
-    const a = await pc({ "library.json": '{"tag":"a1"}' });
+    const a = await pc({ "library.json": "a1" });
     const { sync } = await startCopy(cloud, a);
     await sync.turnOff();
     expect(sync.view().on).toBe(false);
@@ -453,7 +453,7 @@ describe("the cloud copy, as Tavora runs it", () => {
 
   it("signed out with the copy in a folder: the key stays for it, the account's vault as last read goes", async () => {
     const cloud = await service();
-    const a = await pc({ "library.json": '{"tag":"a1"}' });
+    const a = await pc({ "library.json": "a1" });
     const { sync } = await startCopy(cloud, a);
     const folder = await mkdtemp(path.join(os.tmpdir(), "tavora-signed-out-"));
     await sync.move(folder);
@@ -469,9 +469,9 @@ describe("the cloud copy, as Tavora runs it", () => {
 
   it("starts over with a new key when the old one is lost, and other PCs then ask for it", async () => {
     const cloud = await service();
-    const a = await pc({ "library.json": '{"tag":"a1"}' });
+    const a = await pc({ "library.json": "a1" });
     const { key, sync: running } = await startCopy(cloud, a);
-    const b = await pc({ "library.json": '{"tag":"b0"}' });
+    const b = await pc({ "library.json": "b0" });
     const atB = tavora(cloud, b);
     await atB.sync.turnOn();
     expect(atB.sync.view().askKey).toBe(true);
@@ -487,23 +487,23 @@ describe("the cloud copy, as Tavora runs it", () => {
     await atA.sync.beforeLoad();
     expect(atA.sync.view()).toMatchObject({ on: false, problem: "new-key" });
     // A, had it still been running with the old key, never overwrites the new copy: it can't open it, and stops.
-    await writeFile(path.join(a.userData, "library.json"), '{"tag":"a2"}');
+    await writeFile(path.join(a.userData, "library.json"), "a2");
     await running.sync();
     expect(running.view().conflict).toBe(true);
     await expect(running.keep("pc")).rejects.toMatchObject({ key: "cloudCopy.error.new-key" });
     expect(running.view()).toMatchObject({ on: false, problem: "new-key" });
-    await writeFile(path.join(a.userData, "library.json"), '{"tag":"a1"}');
+    await writeFile(path.join(a.userData, "library.json"), "a1");
     await atA.sync.turnOn();
     expect(atA.sync.view().askKey).toBe(true);
     await expect(atA.sync.enterKey(key)).rejects.toMatchObject({ key: "cloudCopy.error.wrongKey" });
     await atA.sync.enterKey(newKey!);
     expect(atA.sync.view()).toMatchObject({ on: true, conflict: true });
-    expect(await read(a.userData, "library.json")).toBe('{"tag":"a1"}');
+    expect(await read(a.userData, "library.json")).toBe("a1");
   });
 
   it("starts as usual offline or signed out, and says why it did not sync", async () => {
     const cloud = await service();
-    const a = await pc({ "library.json": '{"tag":"a1"}' });
+    const a = await pc({ "library.json": "a1" });
     await startCopy(cloud, a);
     const signedOut = tavora(cloud, a, { signedIn: false });
     await signedOut.sync.beforeLoad();
@@ -615,10 +615,10 @@ describe("what the copy is doing, and closing while it uploads", () => {
 
   it("start, progress, done: uploading with how far it got, then idle again", async () => {
     const cloud = await service();
-    const a = await pc({ "library.json": '{"tag":"a1"}' });
+    const a = await pc({ "library.json": "a1" });
     await startCopy(cloud, a);
     const { sync, views } = await running(cloud, a);
-    await writeFile(path.join(a.userData, "library.json"), '{"tag":"a2 changed"}');
+    await writeFile(path.join(a.userData, "library.json"), "a2 changed");
     views.length = 0;
     await sync.sync(true);
     expect(views[0]).toMatchObject({ busy: "uploading", progress: null });
@@ -630,10 +630,10 @@ describe("what the copy is doing, and closing while it uploads", () => {
 
   it("start, error, retry: offline says so and ends idle; the retry goes up", async () => {
     const cloud = await service();
-    const a = await pc({ "library.json": '{"tag":"a1"}' });
+    const a = await pc({ "library.json": "a1" });
     await startCopy(cloud, a);
     const { sync, views, net } = await running(cloud, a);
-    await writeFile(path.join(a.userData, "library.json"), '{"tag":"a2 changed"}');
+    await writeFile(path.join(a.userData, "library.json"), "a2 changed");
     net.offline = true;
     await expect(sync.sync(true)).rejects.toMatchObject({ key: "cloudCopy.error.offline" });
     expect(sync.view()).toMatchObject({ busy: null, progress: null, problem: "offline" });
@@ -646,10 +646,10 @@ describe("what the copy is doing, and closing while it uploads", () => {
 
   it("a second start while one runs waits for it, then runs on its own", async () => {
     const cloud = await service();
-    const a = await pc({ "library.json": '{"tag":"a1"}' });
+    const a = await pc({ "library.json": "a1" });
     await startCopy(cloud, a);
     const { sync, views, hold } = await running(cloud, a);
-    await writeFile(path.join(a.userData, "library.json"), '{"tag":"a2 changed"}');
+    await writeFile(path.join(a.userData, "library.json"), "a2 changed");
     const release = hold();
     views.length = 0;
     const first = sync.sync(true);
@@ -669,10 +669,10 @@ describe("what the copy is doing, and closing while it uploads", () => {
 
   it("turned off while it uploads: it stays off, after the upload and after a restart", async () => {
     const cloud = await service();
-    const a = await pc({ "library.json": '{"tag":"a1"}' });
+    const a = await pc({ "library.json": "a1" });
     await startCopy(cloud, a);
     const { sync, net, holdNet } = await running(cloud, a);
-    await writeFile(path.join(a.userData, "library.json"), '{"tag":"a2 changed"}');
+    await writeFile(path.join(a.userData, "library.json"), "a2 changed");
     const release = holdNet();
     const upload = sync.sync(true);
     // On its way to the service.
@@ -687,15 +687,15 @@ describe("what the copy is doing, and closing while it uploads", () => {
     expect(restarted.sync.view().on).toBe(false);
     // What was already on its way arrives (it can't be called back); nothing goes up after it.
     expect(await remoteVersion(cloud)).toBe(2);
-    await writeFile(path.join(a.userData, "library.json"), '{"tag":"a3 changed"}');
+    await writeFile(path.join(a.userData, "library.json"), "a3 changed");
     await sync.sync(true);
     expect(await remoteVersion(cloud)).toBe(2);
   });
 
   it("signed out while it turns on: it stays off, also after a restart", async () => {
     const cloud = await service();
-    const { key } = await startCopy(cloud, await pc({ "library.json": '{"tag":"a1"}' }));
-    const b = await pc({ "library.json": '{"tag":"b1"}' });
+    const { key } = await startCopy(cloud, await pc({ "library.json": "a1" }));
+    const b = await pc({ "library.json": "b1" });
     const { sync, net, holdNet } = gated(cloud, b);
     await sync.beforeLoad();
     await sync.turnOn();
@@ -715,7 +715,7 @@ describe("what the copy is doing, and closing while it uploads", () => {
 
   it("signed out during Start over: it stays off, and the new key isn't kept", async () => {
     const cloud = await service();
-    const a = await pc({ "library.json": '{"tag":"a1"}' });
+    const a = await pc({ "library.json": "a1" });
     await startCopy(cloud, a);
     const { sync, net, holdNet } = await running(cloud, a);
     // Held while the new key's vault goes up.
@@ -734,7 +734,7 @@ describe("what the copy is doing, and closing while it uploads", () => {
 
   it("turned off while it moves to the service: the copy stays in the folder, and nothing is left on the service", async () => {
     const cloud = await service();
-    const a = await pc({ "library.json": '{"tag":"a1"}' });
+    const a = await pc({ "library.json": "a1" });
     const folder = await mkdtemp(path.join(os.tmpdir(), "tavora-move-"));
     const first = tavora(cloud, a);
     await first.sync.beforeLoad();
@@ -759,10 +759,10 @@ describe("what the copy is doing, and closing while it uploads", () => {
 
   it("turned off while a newer copy comes down after the start: nothing waits for a restart", async () => {
     const cloud = await service();
-    const a = await pc({ "library.json": '{"tag":"a1"}' });
+    const a = await pc({ "library.json": "a1" });
     const { key } = await startCopy(cloud, a);
     // Another PC saves a newer copy.
-    const b = await pc({ "library.json": '{"tag":"b1"}' });
+    const b = await pc({ "library.json": "b1" });
     const atB = tavora(cloud, b);
     await atB.sync.beforeLoad();
     await atB.sync.turnOn();
@@ -782,7 +782,7 @@ describe("what the copy is doing, and closing while it uploads", () => {
 
   it("signed out while it moves to a folder: the copy stays where it was, and off here", async () => {
     const cloud = await service();
-    const a = await pc({ "library.json": '{"tag":"a1"}' });
+    const a = await pc({ "library.json": "a1" });
     await startCopy(cloud, a);
     const { sync, hold } = await running(cloud, a);
     const folder = await mkdtemp(path.join(os.tmpdir(), "tavora-move-"));
@@ -804,10 +804,10 @@ describe("what the copy is doing, and closing while it uploads", () => {
 
   it("quit mid-sync: the close waits, says so after a few seconds, and closes once the upload is done", async () => {
     const cloud = await service();
-    const a = await pc({ "library.json": '{"tag":"a1"}' });
+    const a = await pc({ "library.json": "a1" });
     await startCopy(cloud, a);
     const { sync, hold } = await running(cloud, a);
-    await writeFile(path.join(a.userData, "library.json"), '{"tag":"a2 changed"}');
+    await writeFile(path.join(a.userData, "library.json"), "a2 changed");
     const release = hold();
     let closed = 0;
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
@@ -829,10 +829,10 @@ describe("what the copy is doing, and closing while it uploads", () => {
 
   it("quit mid-sync, then Close anyway: closes once, and the notice never shows after", async () => {
     const cloud = await service();
-    const a = await pc({ "library.json": '{"tag":"a1"}' });
+    const a = await pc({ "library.json": "a1" });
     await startCopy(cloud, a);
     const { sync, views, hold } = await running(cloud, a);
-    await writeFile(path.join(a.userData, "library.json"), '{"tag":"a2 changed"}');
+    await writeFile(path.join(a.userData, "library.json"), "a2 changed");
     const release = hold();
     let closed = 0;
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
@@ -857,10 +857,10 @@ describe("what the copy is doing, and closing while it uploads", () => {
 
   it("quit mid-sync, and the copy turns off meanwhile: the next close goes on, and the upload ending doesn't close again", async () => {
     const cloud = await service();
-    const a = await pc({ "library.json": '{"tag":"a1"}' });
+    const a = await pc({ "library.json": "a1" });
     await startCopy(cloud, a);
     const { sync, hold } = await running(cloud, a);
-    await writeFile(path.join(a.userData, "library.json"), '{"tag":"a2 changed"}');
+    await writeFile(path.join(a.userData, "library.json"), "a2 changed");
     const release = hold();
     let closed = 0;
     expect(sync.holdClose(() => void closed++)).toBe(true);
@@ -884,7 +884,7 @@ describe("the questions syncing waits on", () => {
   /** Opens `questions` on a copy that is on, the way the sync would. */
   async function withQuestions(questions: Question[]) {
     const cloud = await service();
-    const a = await pc({ "library.json": '{"tag":"a1"}' });
+    const a = await pc({ "library.json": "a1" });
     const started = await startCopy(cloud, a);
     for (const question of questions) (started.sync as unknown as { ask(question: Question): void }).ask(question);
     return { ...started, a, cloud };
@@ -897,7 +897,7 @@ describe("the questions syncing waits on", () => {
   it.each(mixes.filter((mix) => mix.length > 0).map((mix) => [mix.join("+"), mix] as const))("while %s is open the quiet sync waits and a pressed one stops at a conflict only", async (_name, mix) => {
     const { sync, a, cloud } = await withQuestions(mix);
     expect(sync.view()).toMatchObject(questionsView(new Set(mix)));
-    await writeFile(path.join(a.userData, "library.json"), '{"tag":"a2 changed"}');
+    await writeFile(path.join(a.userData, "library.json"), "a2 changed");
     // Quiet: nothing goes up.
     await sync.sync();
     expect((await new CloudCopy(new ServiceStorage({ baseUrl: "http://tavora.test/v1/account", fetch: cloud.fetch, token: () => cloud.token })).remote())?.version).toBe(1);

@@ -230,8 +230,8 @@ describe("what the app wrote while a swap waited", () => {
     expect(await read(at.userData, "library.json")).toBe("this PC's");
     expect(await read(at.userData, "profile.json")).toBe("this PC's, already back");
     expect(await there(path.join(at.userData, "modules"))).toBe(false);
-    expect(await read(kept, "written-since/library.json")).toBe("from the copy");
-    expect(await read(kept, "written-since/modules/dice/m.json")).toBe("came with the copy");
+    expect(await read(kept, "written-since/library.json.undone")).toBe("from the copy");
+    expect(await read(kept, "written-since/modules.undone/dice/m.json")).toBe("came with the copy");
   });
 
   it("Use the cloud copy tries again with a restart", async () => {

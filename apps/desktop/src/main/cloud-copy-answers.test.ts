@@ -1,0 +1,331 @@
+// What a held, damaged or interrupted state must not do: each case came from a review that found it doing so.
+import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { CopySync } from "./cloud-copy-sync";
+import { cleanUp, pc, service } from "./cloud-copy.test-helper";
+import { readSavedFile } from "./json";
+
+vi.mock("node:fs/promises", async (original) => {
+  const real = await original<typeof import("node:fs/promises")>();
+  return { ...real, rename: vi.fn(real.rename), stat: vi.fn(real.stat), readFile: vi.fn(real.readFile) };
+});
+const realRename = vi.mocked(rename).getMockImplementation()!;
+const realStat = vi.mocked(stat).getMockImplementation()!;
+const realRead = vi.mocked(readFile).getMockImplementation()!;
+let held: (from: string, to: string) => boolean = () => false;
+let busyStat: (file: string) => boolean = () => false;
+let busyRead: (file: string) => boolean = () => false;
+let offline = false;
+let who = "me";
+
+beforeEach(() => {
+  held = () => false;
+  busyStat = () => false;
+  busyRead = () => false;
+  offline = false;
+  who = "me";
+  vi.mocked(rename).mockImplementation(async (from, to) => {
+    if (held(String(from), String(to))) throw Object.assign(new Error("held"), { code: "EPERM" });
+    return realRename(from, to);
+  });
+  vi.mocked(stat).mockImplementation(((file: string, options: never) => (busyStat(String(file)) ? Promise.reject(Object.assign(new Error("busy"), { code: "EBUSY" })) : realStat(file, options))) as never);
+  vi.mocked(readFile).mockImplementation(((file: string, options: never) => (busyRead(String(file)) ? Promise.reject(Object.assign(new Error("busy"), { code: "EBUSY" })) : realRead(file, options))) as never);
+});
+afterEach(async () => {
+  held = () => false;
+  busyStat = () => false;
+  busyRead = () => false;
+  await cleanUp();
+});
+
+const encryptor = { isAvailable: () => true, encrypt: (text: string) => Buffer.from(`sealed:${text}`), decrypt: (data: Buffer) => data.toString().replace(/^sealed:/, "") };
+type Service = Awaited<ReturnType<typeof service>>;
+type Pc = Awaited<ReturnType<typeof pc>>;
+function tavora(cloud: Service, at: Pc) {
+  const events = { restarts: 0 };
+  const sync = new CopySync({
+    userData: at.userData,
+    enabled: true,
+    files: { root: () => at.moduleFiles },
+    account: { token: () => cloud.token, id: () => who },
+    serviceUrl: "http://tavora.test/v1/account",
+    fetch: ((input: never, init: never) => (offline ? Promise.reject(new Error("offline")) : cloud.fetch(input, init))) as typeof fetch,
+    encryptor,
+    restart: () => void events.restarts++,
+  });
+  sync.attach({ flush: async () => undefined, onChange: () => undefined });
+  return { sync, events };
+}
+const lib = (...ids: string[]) => JSON.stringify({ version: 2, workspaces: Object.fromEntries(ids.map((id) => [id, {}])) });
+const read = (at: Pc, name: string) => realRead(path.join(at.userData, name), "utf8") as Promise<string>;
+const there = (file: string) => realStat(file).then(() => true, () => false);
+const ends = (file: string, ...names: string[]) => file.endsWith(path.join(...names));
+const remoteVersion = async (cloud: Service) => (await cloud.client().remote())?.version;
+const status = (at: Pc) => path.join(at.userData, "cloud-copy-status.json");
+const state = (at: Pc) => path.join(at.userData, "cloud-copy.json");
+
+const A = { "library.json": lib("elden-ring"), "workspace.json": '{"from":"copy"}', "modules/dice/m.json": "dice copy" };
+const B = { "library.json": lib("hollow-knight"), "workspace.json": '{"from":"pc"}', "modules/dice/m.json": "dice pc" };
+
+async function chosen() {
+  const cloud = await service();
+  const a = await pc(A);
+  const first = tavora(cloud, a);
+  await first.sync.beforeLoad();
+  await first.sync.turnOn();
+  const key = first.sync.view().recoveryKey!;
+  const b = await pc(B);
+  const at = tavora(cloud, b);
+  await at.sync.beforeLoad();
+  await at.sync.turnOn();
+  await at.sync.enterKey(key);
+  await at.sync.keep("cloud");
+  return { cloud, a, b };
+}
+const isPlace = (file: string, at: Pc, name: string) => file === path.join(at.userData, name);
+
+describe("answering, settling and holding", () => {
+  it("damaged state: Use the cloud copy actually takes it", async () => {
+    const cloud = await service();
+    const a = await pc(A);
+    const first = tavora(cloud, a);
+    await first.sync.beforeLoad();
+    await first.sync.turnOn();
+    await writeFile(path.join(a.userData, "workspace.json"), '{"from":"local edit"}');
+    await writeFile(state(a), "{ broken");
+    const one = tavora(cloud, a);
+    await one.sync.beforeLoad();
+    expect(one.sync.view()).toMatchObject({ conflict: true, swapUnfinished: true });
+    await one.sync.keep("cloud");
+    expect(one.events.restarts).toBe(1);
+    const two = tavora(cloud, a);
+    await two.sync.beforeLoad();
+    expect(two.sync.view().swapUnfinished).toBe(false);
+    expect(await read(a, "workspace.json")).toBe('{"from":"copy"}');
+  }, 60_000);
+
+  it("damaged state during a stuck swap: going back gets out", async () => {
+    const { cloud, b } = await chosen();
+    held = (from) => ends(from, "data", "modules") && from.includes("cloud-copy-staging");
+    const stuck = tavora(cloud, b);
+    await stuck.sync.beforeLoad();
+    expect(stuck.sync.view().swapUnfinished).toBe(true);
+    held = () => false;
+    await writeFile(state(b), "{ broken");
+    const one = tavora(cloud, b);
+    await one.sync.beforeLoad();
+    await one.sync.keep("pc");
+    const two = tavora(cloud, b);
+    await two.sync.beforeLoad();
+    expect(two.sync.view().swapUnfinished).toBe(false);
+    expect(await read(b, "workspace.json")).toBe(B["workspace.json"]);
+  }, 60_000);
+
+  it("damaged status mid-swap: Keep this PC must not send half-swapped data up", async () => {
+    const { cloud, b } = await chosen();
+    held = (from) => ends(from, "data", "modules") && from.includes("cloud-copy-staging");
+    const stuck = tavora(cloud, b);
+    await stuck.sync.beforeLoad();
+    held = () => false;
+    const version = await remoteVersion(cloud);
+    await writeFile(status(b), "");
+    const next = tavora(cloud, b);
+    await next.sync.beforeLoad();
+    await next.sync.keep("pc").catch(() => undefined);
+    // The answer restarts Tavora, and that start settles it.
+    expect(next.events.restarts).toBe(1);
+    await tavora(cloud, b).sync.beforeLoad();
+    expect(await read(b, "workspace.json")).toBe(B["workspace.json"]);
+    const mixed = (await read(b, "library.json")).includes("elden-ring") && !(await there(path.join(b.userData, "modules", "dice", "m.json")));
+    expect({ uploaded: (await remoteVersion(cloud)) !== version, mixedHere: mixed }).toEqual({ uploaded: false, mixedHere: false });
+  }, 60_000);
+
+  it("two interruptions, then going back restores every file", async () => {
+    const { cloud, b } = await chosen();
+    // First run stops at workspace.json, before it moved.
+    held = (from) => isPlace(from, b, "workspace.json");
+    const one = tavora(cloud, b);
+    await one.sync.beforeLoad();
+    expect(one.sync.view().swapUnfinished).toBe(true);
+    // Second run gets past it and stops later, at modules.
+    held = (from) => ends(from, "data", "modules") && from.includes("cloud-copy-staging");
+    const two = tavora(cloud, b);
+    await two.sync.beforeLoad();
+    expect(two.sync.view().swapUnfinished).toBe(true);
+    held = () => false;
+    await two.sync.keep("pc");
+    const three = tavora(cloud, b);
+    await three.sync.beforeLoad();
+    expect(await read(b, "library.json")).toBe(B["library.json"]);
+    expect(await read(b, "workspace.json")).toBe(B["workspace.json"]);
+    expect(await read(b, "modules/dice/m.json")).toBe(B["modules/dice/m.json"]);
+  }, 60_000);
+
+  it("a busy synced folder at start is not reported as an unfinished swap", async () => {
+    const cloud = await service();
+    const a = await pc(A);
+    const folder = path.join(a.root, "OneDrive");
+    await mkdir(folder);
+    const first = tavora(cloud, a);
+    await first.sync.beforeLoad();
+    await first.sync.turnOn(folder);
+    expect(first.sync.view().on).toBe(true);
+    busyStat = (file) => file === folder;
+    const next = tavora(cloud, a);
+    await next.sync.beforeLoad();
+    await next.sync.checkDataFiles();
+    expect({ unfinished: next.sync.view().swapUnfinished, held: next.sync.dataHeld }).toEqual({ unfinished: false, held: false });
+  }, 60_000);
+
+  it("a failed answer keeps the hold", async () => {
+    const { cloud, b } = await chosen();
+    held = (from) => ends(from, "data", "modules") && from.includes("cloud-copy-staging");
+    await tavora(cloud, b).sync.beforeLoad();
+    held = () => false;
+    await writeFile(status(b), "");
+    const next = tavora(cloud, b);
+    await next.sync.beforeLoad();
+    expect(next.sync.dataHeld).toBe(true);
+    offline = true;
+    await next.sync.keep("pc").catch(() => undefined);
+    expect(next.sync.dataHeld).toBe(true);
+  }, 60_000);
+
+  it("an older Tavora's chosen copy that is broken still holds uploads", async () => {
+    const cloud = await service();
+    const a = await pc(A);
+    const first = tavora(cloud, a);
+    await first.sync.beforeLoad();
+    await first.sync.turnOn();
+    const saved = JSON.parse((await realRead(state(a), "utf8")) as string) as { version: number };
+    await mkdir(path.join(a.userData, "cloud-copy-staging", "data"), { recursive: true });
+    await writeFile(path.join(a.userData, "cloud-copy-staging", "staged.json"), JSON.stringify({ v: 1, version: saved.version, pictures: true, take: true, files: { "library.json": { size: 5, sha256: "0".repeat(64), parts: [] } } }));
+    await writeFile(path.join(a.userData, "workspace.json"), '{"from":"bad local"}');
+    const next = tavora(cloud, a);
+    await next.sync.beforeLoad();
+    expect(next.sync.view().conflict || next.sync.dataHeld).toBe(true);
+  }, 60_000);
+
+  it("signing out during a held swap still removes the account's key", async () => {
+    const { cloud, b } = await chosen();
+    held = (from) => ends(from, "data", "modules") && from.includes("cloud-copy-staging");
+    await tavora(cloud, b).sync.beforeLoad();
+    held = () => false;
+    busyRead = (file) => file === status(b);
+    const next = tavora(cloud, b);
+    await next.sync.beforeLoad();
+    expect(next.sync.dataHeld).toBe(true);
+    expect(await there(path.join(b.userData, "account-key.json"))).toBe(true);
+    await next.sync.signedOut("me").catch(() => undefined);
+    expect(await there(path.join(b.userData, "account-key.json"))).toBe(false);
+  }, 60_000);
+
+  it("a lost-data question can be answered while another account is signed in", async () => {
+    const cloud = await service();
+    const a = await pc(A);
+    const first = tavora(cloud, a);
+    await first.sync.beforeLoad();
+    await first.sync.turnOn();
+    await writeFile(path.join(a.userData, "library.json"), "{ broken");
+    const one = tavora(cloud, a);
+    await readSavedFile(path.join(a.userData, "library.json"), { version: 2 });
+    await one.sync.beforeLoad();
+    await one.sync.checkDataFiles();
+    expect(one.sync.view().lostData).toBe(true);
+    who = "someone-else";
+    const two = tavora(cloud, a);
+    await two.sync.beforeLoad();
+    const asked = two.sync.view().conflict;
+    await two.sync.keep("pc").catch(() => undefined);
+    expect(asked).toBe(true);
+    expect(two.sync.dataHeld).toBe(false);
+    expect(two.sync.view().conflict).toBe(false);
+  }, 60_000);
+
+  it("a copy whose library isn't JSON can still be taken (as on main)", async () => {
+    const cloud = await service();
+    const a = await pc({ ...A, "library.json": "not json" });
+    const first = tavora(cloud, a);
+    await first.sync.beforeLoad();
+    await first.sync.turnOn();
+    const key = first.sync.view().recoveryKey!;
+    const b = await pc(B);
+    const at = tavora(cloud, b);
+    await at.sync.beforeLoad();
+    await at.sync.turnOn();
+    await at.sync.enterKey(key);
+    await at.sync.keep("cloud");
+    const next = tavora(cloud, b);
+    await next.sync.beforeLoad();
+    expect({ unfinished: next.sync.view().swapUnfinished, ws: await read(b, "workspace.json") }).toEqual({ unfinished: false, ws: A["workspace.json"] });
+  }, 60_000);
+
+  it("a library lost during a held start must not go up as empty at the next start", async () => {
+    const cloud = await service();
+    const a = await pc(A);
+    const first = tavora(cloud, a);
+    await first.sync.beforeLoad();
+    await first.sync.turnOn();
+    const version = await remoteVersion(cloud);
+    const libFile = path.join(a.userData, "library.json");
+    await writeFile(libFile, "{ broken");
+    busyRead = (file) => file === state(a);
+    const one = tavora(cloud, a);
+    await one.sync.beforeLoad();
+    expect(one.sync.dataHeld).toBe(true);
+    busyRead = () => false;
+    // What Host.create does next: the damaged library is set aside, checked, and a fresh one saved (seenVersion).
+    await readSavedFile(libFile, { version: 2 });
+    await one.sync.checkDataFiles();
+    await writeFile(libFile, lib());
+    const two = tavora(cloud, a);
+    await two.sync.beforeLoad();
+    await two.sync.checkDataFiles();
+    await two.sync.sync().catch(() => undefined);
+    expect({ uploaded: (await remoteVersion(cloud)) !== version, asks: two.sync.view().conflict }).toEqual({ uploaded: false, asks: true });
+  }, 60_000);
+
+  it("the way out of R2 is turning the copy off", async () => {
+    const { cloud, b } = await chosen();
+    held = (from) => ends(from, "data", "modules") && from.includes("cloud-copy-staging");
+    await tavora(cloud, b).sync.beforeLoad();
+    held = () => false;
+    await writeFile(state(b), "{ broken");
+    const one = tavora(cloud, b);
+    await one.sync.beforeLoad();
+    await one.sync.turnOff();
+    const two = tavora(cloud, b);
+    await two.sync.beforeLoad();
+    expect(await read(b, "workspace.json")).toBe(B["workspace.json"]);
+    expect(two.sync.view().swapUnfinished).toBe(false);
+  }, 60_000);
+
+  it("the real start after a damaged library in the copy: what goes up", async () => {
+    const cloud = await service();
+    const a = await pc({ ...A, "library.json": "not json" });
+    const first = tavora(cloud, a);
+    await first.sync.beforeLoad();
+    await first.sync.turnOn();
+    const key = first.sync.view().recoveryKey!;
+    const b = await pc(B);
+    const at = tavora(cloud, b);
+    await at.sync.beforeLoad();
+    await at.sync.turnOn();
+    await at.sync.enterKey(key);
+    await at.sync.keep("cloud");
+    const one = tavora(cloud, b);
+    await one.sync.beforeLoad();
+    const libFile = path.join(b.userData, "library.json");
+    await readSavedFile(libFile, { version: 2 });
+    await one.sync.checkDataFiles();
+    await writeFile(libFile, lib());
+    const version = await remoteVersion(cloud);
+    const two = tavora(cloud, b);
+    await two.sync.beforeLoad();
+    await two.sync.checkDataFiles();
+    await two.sync.sync().catch(() => undefined);
+    expect(two.sync.view().lostData).toBe(true);
+    expect((await remoteVersion(cloud)) === version).toBe(true);
+  }, 60_000);
+});

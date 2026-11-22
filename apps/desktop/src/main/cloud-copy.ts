@@ -623,6 +623,9 @@ async function freePath(target: string): Promise<string> {
 /** Where a swap's backup keeps what was written in a place after the swap began (the app ran on a swap that failed). */
 export const WRITTEN_SINCE = "written-since";
 
+/** After a name in `written-since`: what the copy or the app had put in a place when a swap was taken back. */
+const UNDONE = ".undone";
+
 /** The date of a synced file that was changed after it arrived: no real file has it, so it counts as changed. */
 const CHANGED_SINCE = -1;
 
@@ -689,7 +692,9 @@ export async function sortWrittenSince(keepIn: string, copy: DownloadedCopy, bef
     if (names.status !== "present") return;
     for (const entry of names.value) {
       const file = path.join(dir, entry);
-      const inCopy = name ? `${name}/${entry}` : entry;
+      // A place's own name may carry what freePath or a swap taken back added to it; below that, names are as they were.
+      const plain = name.split("/").length < 2 ? entry.replace(/(\.undone)?(\.\d+)?$/, "") : entry;
+      const inCopy = name ? `${name}/${plain}` : plain;
       const info = await lookStat(file);
       if (info.status !== "present") continue;
       if (info.value.isDirectory()) {
@@ -725,19 +730,22 @@ export async function emptyPlaces(staging: string, roots: CopyRoot[], keepIn: st
 }
 
 /**
- * Takes back a swap that didn't finish, when the user would rather have this PC's data: what was kept goes back in its
- * place, and what the copy or the app put there goes aside in the backup, also in a place that was `empty` before. Safe
- * to run again. The caller clears the staging.
+ * Takes back a swap that didn't finish, when the user would rather have this PC's data. What was here goes back in its
+ * place: from the backup, or from `written-since` when a later start moved it there. What the copy or the app put in the
+ * place goes aside as `.undone`, which is never taken for the original, so running this again changes nothing. A place
+ * that was `empty` before is emptied again. The caller clears the staging.
  */
 export async function undoSwap(staging: string, roots: CopyRoot[], keepIn: string, copy: DownloadedCopy, empty: readonly string[]): Promise<void> {
   for (const { place, kept, since } of await swapPlaces(staging, roots, keepIn, copy)) {
     await rm(`${place}.moved`, { recursive: true, force: true });
     const isThere = await exists(place);
-    if (await exists(kept)) {
-      if (isThere) await move(place, await freePath(since));
-      await move(kept, place);
-    } else if (isThere && empty.includes(place)) {
-      await move(place, await freePath(since));
+    const wasEmpty = empty.includes(place);
+    const original = (await exists(kept)) ? kept : !wasEmpty && (await exists(since)) ? since : null;
+    if (original) {
+      if (isThere) await move(place, await freePath(`${since}${UNDONE}`));
+      await move(original, place);
+    } else if (isThere && wasEmpty) {
+      await move(place, await freePath(`${since}${UNDONE}`));
     }
   }
 }

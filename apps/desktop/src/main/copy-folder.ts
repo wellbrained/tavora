@@ -2,7 +2,7 @@ import { randomInt } from "node:crypto";
 import { mkdir, rm, rmdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { CopyError, type CopyStorage, type RemoteCopy, type SwapAnswer } from "./cloud-copy";
-import { lookBytes, lookNames, lookStat, unlessHeld } from "./file-look";
+import { lookBytes, lookNames, lookStat, type Looked } from "./file-look";
 import { PART_ID_BYTES } from "./copy-crypto";
 import { writeFileAtomic } from "./fsutil";
 
@@ -50,6 +50,15 @@ interface ManifestFile {
 
 const pad = (value: number) => String(value).padStart(16, "0");
 
+/**
+ * What a read of the folder found. One that is held (a sync app busy with the file) is a problem with the folder, shown
+ * in Settings and tried again: it says nothing about this PC's data, so it never holds it.
+ */
+function readable<T>(looked: Looked<T>): T | null {
+  if (looked.status === "held") throw new CopyError("folder-locked", "something in the cloud copy folder can't be read right now");
+  return looked.status === "present" ? looked.value : null;
+}
+
 export interface FolderStorageOptions {
   now?: () => number;
 }
@@ -82,7 +91,7 @@ export class FolderStorage implements CopyStorage {
 
   /** The picked folder must be there: an unplugged drive or a folder renamed away is not "no copy". */
   private async reachable(): Promise<void> {
-    const info = unlessHeld(await lookStat(this.folder));
+    const info = readable(await lookStat(this.folder));
     if (!info?.isDirectory()) throw new CopyError("no-folder", "the cloud copy folder is not there");
   }
 
@@ -91,7 +100,7 @@ export class FolderStorage implements CopyStorage {
     await this.reachable();
     // Only a folder that isn't there means no copy. One that is held says nothing about the copy, and "no copy" would
     // turn it off on this PC.
-    const names = unlessHeld(await lookNames(this.manifestsDir)) ?? [];
+    const names = readable(await lookNames(this.manifestsDir)) ?? [];
     const found: ManifestFile[] = [];
     for (const name of names) {
       const match = MANIFEST_NAME.exec(name);
@@ -104,7 +113,7 @@ export class FolderStorage implements CopyStorage {
   }
 
   private async readManifest(file: ManifestFile): Promise<{ size: number; ids: string[]; sealed: Uint8Array }> {
-    const body = unlessHeld(await lookBytes(path.join(this.manifestsDir, file.name)));
+    const body = readable(await lookBytes(path.join(this.manifestsDir, file.name)));
     if (body === null) throw new CopyError("failed", "a manifest in the folder went away");
     if (body.length < HEADER_BYTES || !body.subarray(0, MAGIC.length).equals(MAGIC)) throw new CopyError("damaged", "a manifest in the folder is off");
     const size = Number(body.readBigUInt64BE(MAGIC.length));
@@ -120,7 +129,7 @@ export class FolderStorage implements CopyStorage {
     const all = await this.manifests();
     const current = all[0];
     if (!current) return null;
-    const info = unlessHeld(await lookStat(path.join(this.manifestsDir, current.name)));
+    const info = readable(await lookStat(path.join(this.manifestsDir, current.name)));
     if (info === null) throw new CopyError("failed", "a manifest in the folder went away");
     const { size } = await this.readManifest(current);
     return { version: current.version, size, updatedAt: info.mtime.toISOString(), follows: follows(all, known) };
@@ -137,7 +146,7 @@ export class FolderStorage implements CopyStorage {
     for (const part of parts) {
       const file = this.partFile(part.id.toString("hex"));
       // Named by content: one that is there already holds the same.
-      if (unlessHeld(await lookStat(file))) continue;
+      if (readable(await lookStat(file))) continue;
       await writeFileAtomic(file, part.data);
     }
   }
@@ -148,7 +157,7 @@ export class FolderStorage implements CopyStorage {
     let total = 0;
     for (const id of ids) {
       if (!PART_NAME.test(id)) continue;
-      const data = unlessHeld(await lookBytes(this.partFile(id)));
+      const data = readable(await lookBytes(this.partFile(id)));
       if (!data) continue;
       found.push({ id, data });
       total += data.length;
@@ -168,7 +177,7 @@ export class FolderStorage implements CopyStorage {
     if (current !== base) return { status: "conflict", version: current };
     let size = sealed.length;
     for (const id of ids) {
-      const info = unlessHeld(await lookStat(this.partFile(id)));
+      const info = readable(await lookStat(this.partFile(id)));
       if (!info) return { status: "missing-parts" };
       size += info.size;
     }
@@ -242,7 +251,7 @@ export function follows(newestFirst: { version: number; base: number }[], known:
 
 /** Writes a file in the picked folder to see that Tavora may; throws "no-folder" when it is not there and "folder-locked" when Tavora may not write in it. */
 export async function checkFolder(folder: string): Promise<void> {
-  const info = unlessHeld(await lookStat(folder));
+  const info = readable(await lookStat(folder));
   if (!info?.isDirectory()) throw new CopyError("no-folder", "the folder is not there");
   const probe = path.join(folder, FOLDER_NAME, `.tavora-check-${process.pid}`);
   try {

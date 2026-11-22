@@ -20,7 +20,7 @@ const swapping: SwapStatus = { phase: "swapping", plan };
 const undoing: SwapStatus = { phase: "undoing", plan };
 const lost: SwapStatus = { phase: "asking", why: "lost", files: ["library.json"] };
 const wentBack: SwapStatus = { phase: "asking", why: "went-back", files: [] };
-const held: SwapStatus = { phase: "held" };
+const held: SwapStatus = { phase: "held", open: true };
 
 describe("stepSwap", () => {
   const steps: [SwapStatus, SwapEvent, SwapStatus][] = [
@@ -34,7 +34,8 @@ describe("stepSwap", () => {
     [swapping, { type: "finished" }, idle],
     [undoing, { type: "finished" }, undoing],
     [swapping, { type: "go-back" }, undoing],
-    [undoing, { type: "try-again" }, swapping],
+    [swapping, { type: "try-again" }, swapping],
+    [undoing, { type: "try-again" }, undoing],
     [chosen, { type: "go-back" }, chosen],
     [undoing, { type: "went-back", copyOn: true }, wentBack],
     [undoing, { type: "went-back", copyOn: false }, idle],

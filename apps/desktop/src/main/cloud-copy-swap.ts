@@ -1,10 +1,9 @@
 // Where putting a cloud copy in place stands: one value, kept in its own file, written before any step that depends on
 // it. Older Tavoras don't know the file, so it can't mislead them. Transitions are the pure stepSwap below.
-import { randomBytes } from "node:crypto";
-import { open, rm } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import path from "node:path";
 import { DamagedFile, lookJson, type Looked } from "./file-look";
-import { renameHeld } from "./rename-held";
+import { writeFileAtomic } from "./fsutil";
 
 export const COPY_STATUS_FILE = "cloud-copy-status.json";
 
@@ -26,7 +25,8 @@ export interface SwapPlan {
  * - `swapping`: files are moving, or stopped halfway. The next start finishes.
  * - `undoing`: the user went back to this PC's data, or turned the copy off. The next start takes the swap back.
  * - `asking`: the user has to choose a side: data was `lost` here, or they `went-back` from a copy.
- * - `held`: in memory only. This start couldn't read or settle what is there, so it does nothing until the next.
+ * - `held`: in memory only. This start couldn't read or settle what is there, so it does nothing until the next. `open`
+ *   when a swap may be half done or the user has to answer, which the dialog then asks; otherwise it is only a problem note.
  */
 export type SwapStatus =
   | { phase: "idle" }
@@ -34,7 +34,7 @@ export type SwapStatus =
   | { phase: "swapping"; plan: SwapPlan }
   | { phase: "undoing"; plan: SwapPlan }
   | { phase: "asking"; why: "lost" | "went-back"; files: string[] }
-  | { phase: "held" };
+  | { phase: "held"; open: boolean };
 
 export type SwapEvent =
   /** The user chose the staged copy. */
@@ -45,7 +45,7 @@ export type SwapEvent =
   | { type: "finished" }
   /** The user chose this PC's data during a swap. */
   | { type: "go-back" }
-  /** The user chose to try the copy again during a swap. */
+  /** The user chose the copy during a swap: it stays as it is. A swap being taken back finishes that first, then asks. */
   | { type: "try-again" }
   /** The swap was taken back. With the copy on, the question stands until it is answered. */
   | { type: "went-back"; copyOn: boolean }
@@ -72,7 +72,7 @@ export function stepSwap(status: SwapStatus, event: SwapEvent): SwapStatus {
     case "go-back":
       return status.phase === "swapping" || status.phase === "undoing" ? { phase: "undoing", plan: status.plan } : status;
     case "try-again":
-      return status.phase === "swapping" || status.phase === "undoing" ? { phase: "swapping", plan: status.plan } : status;
+      return status;
     case "went-back":
       if (status.phase !== "undoing") return status;
       return event.copyOn ? { phase: "asking", why: "went-back", files: [] } : SWAP_IDLE;
@@ -115,6 +115,14 @@ function parseStatus(saved: Record<string, unknown>, backups: string): SwapStatu
   }
 }
 
+/** The plan kept next to the staged copy: it says a swap began, also when the status can't be read. */
+export async function lookSwapPlan(file: string, backups: string): Promise<Looked<SwapPlan>> {
+  const looked = await lookJson(file);
+  if (looked.status !== "present") return looked;
+  const plan = parsePlan(looked.value, backups);
+  return plan ? { status: "present", value: plan } : { status: "held", error: new DamagedFile(`${file} is damaged`) };
+}
+
 /** The status on disk: no file is `idle`, and one that is busy or damaged is held. `backups` is the folder a plan's backup must be in. */
 export async function lookSwapStatus(file: string, backups: string): Promise<Looked<SwapStatus>> {
   const looked = await lookJson(file);
@@ -124,22 +132,14 @@ export async function lookSwapStatus(file: string, backups: string): Promise<Loo
   return status ? { status: "present", value: status } : { status: "held", error: new DamagedFile(`${file} is damaged`) };
 }
 
-/** Writes the status whole and on the disk before anything goes on; `idle` removes the file. */
+/** Writes the status before anything goes on; `idle` removes the file. */
 export async function writeSwapStatus(file: string, status: SwapStatus): Promise<void> {
   if (status.phase === "held") throw new Error("a held status is never written");
   if (status.phase === "idle") return rm(file, { force: true });
-  const temp = `${file}.${randomBytes(6).toString("hex")}.tmp`;
-  try {
-    const handle = await open(temp, "wx");
-    try {
-      await handle.writeFile(JSON.stringify({ v: 1, ...status }));
-      await handle.sync();
-    } finally {
-      await handle.close();
-    }
-    await renameHeld(temp, file);
-  } catch (error) {
-    await rm(temp, { force: true }).catch(() => undefined);
-    throw error;
-  }
+  return writeFlushed(file, { v: 1, ...status });
+}
+
+/** Writes JSON whole and on the disk (writeFileAtomic flushes it before the rename). */
+export function writeFlushed(file: string, value: unknown): Promise<void> {
+  return writeFileAtomic(file, JSON.stringify(value));
 }
