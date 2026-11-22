@@ -18,6 +18,14 @@ describe("quitOnUnsafeSwitches", () => {
     expect(show).toHaveBeenCalledWith(expect.stringContaining("--remote-debugging-port"));
   });
 
+  it("quits on any switch it doesn't take, a bare -- too", () => {
+    for (const argv of [["--enable-logging=file"], ["--updated", "--"]]) {
+      const { quitted, quit } = run(true, argv);
+      expect(quitted, argv.join(" ")).toBe(true);
+      expect(quit).toHaveBeenCalledTimes(1);
+    }
+  });
+
   it("goes on for a packaged Tavora with clean arguments", () => {
     const { quitted, show, quit } = run(true, ["--updated"]);
     expect(quitted).toBe(false);

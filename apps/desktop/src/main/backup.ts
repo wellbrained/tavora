@@ -1,4 +1,4 @@
-import { copyFile, cp, mkdir, readdir, rename, rm, stat } from "node:fs/promises";
+import { copyFile, cp, lstat, mkdir, readdir, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { isOwnerId } from "@tavora/module-schema";
 import { FILES_DIR } from "./module-files";
@@ -26,10 +26,14 @@ export function dayName(now: Date): string {
   return `${now.getFullYear()}-${two(now.getMonth() + 1)}-${two(now.getDate())}`;
 }
 
+/**
+ * How many bytes `target` holds. A link (a symlink, or a junction on Windows) counts as itself and is never followed,
+ * as `cp` copies it as a link too: a link back up the tree would otherwise be counted over and over.
+ */
 async function sizeOf(target: string): Promise<number> {
   let info;
   try {
-    info = await stat(target);
+    info = await lstat(target);
   } catch {
     return 0;
   }

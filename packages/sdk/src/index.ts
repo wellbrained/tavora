@@ -647,7 +647,8 @@ export interface TavoraSDK {
       onChange(fn: (state: MediaState) => void): Unsubscribe;
       /**
        * Asks a session's app to play or pause, skip or go back. Call it from a click or key press in the panel, or
-       * from one of the module's hotkeys; one press allows one call. True when the app took it.
+       * from the module's hotkey for that control (manifest action id `play-pause`, `next` or `previous`); one press
+       * allows one call. True when the app took it.
        */
       control(session: string, action: MediaAction): Promise<boolean>;
     };

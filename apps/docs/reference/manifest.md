@@ -147,6 +147,8 @@ The page loads only its own files: bundle your fonts, and give it colours and te
 | `id` | yes | Stable identity: lowercase letters, digits and `-`, starting with a letter, at most 32 characters, unique in the module. Saved hotkeys keep it, so never change it after release. |
 | `name` | yes | What Tavora shows next to the key, 1 to 40 characters on one line. |
 
+With the `media` connector, the actions with the ids `play-pause`, `next` and `previous` are your media keys: a press of one lets your panel make that one `media.control` call (`playPause`, `next` or `previous`) without a click. A press of any other action's key allows none.
+
 ## Translations
 
 `translations` gives your module's name, description, panel, action and leaderboard names in other languages, so users see them in the language they picked in Tavora. Key each language by its lowercase code, such as `de` or `pt-br`:

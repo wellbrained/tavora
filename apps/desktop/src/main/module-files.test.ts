@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -9,6 +9,8 @@ const ID = (letter: string) => letter.repeat(32);
 let base: string;
 let userData: string;
 let root: string;
+/** A folder link: a junction on Windows (no rights needed, and what a user would make there), a symlink elsewhere. */
+const link = (to: string, at: string) => symlink(to, at, process.platform === "win32" ? "junction" : "dir");
 
 async function put(rootDir: string, module: string, game: string, name: string, text: string) {
   const file = path.join(rootDir, module, game, name);
@@ -47,6 +49,28 @@ describe("filesTarget", () => {
     expect(await filesTarget(custom, custom, userData)).toEqual({ problem: "same" });
     expect(await filesTarget(path.join(custom, "sub"), custom, userData)).toEqual({ problem: "nested" });
     expect(await filesTarget(path.dirname(custom), custom, userData)).toEqual({ problem: "same" });
+  });
+
+  it("refuses a link onto the folder in use, above it or into it, like the folder itself", async () => {
+    const custom = path.join(base, "elsewhere", FILES_FOLDER_NAME);
+    await mkdir(path.join(custom, "official"), { recursive: true });
+    // Named like the files folder, so it is used as it is: it is the folder in use.
+    await mkdir(path.join(base, "other"));
+    await link(custom, path.join(base, "other", FILES_FOLDER_NAME));
+    expect(await filesTarget(path.join(base, "other", FILES_FOLDER_NAME), custom, userData)).toEqual({ problem: "same" });
+    // Onto the folder above: the files folder in it is the one in use.
+    await link(path.dirname(custom), path.join(base, "up"));
+    expect(await filesTarget(path.join(base, "up"), custom, userData)).toEqual({ problem: "same" });
+    // Into the folder in use.
+    await link(path.join(custom, "official"), path.join(base, "inner"));
+    expect(await filesTarget(path.join(base, "inner"), custom, userData)).toEqual({ problem: "nested" });
+    expect(await readdir(path.join(custom, "official"))).toEqual([]);
+  });
+
+  it("refuses a link into Tavora's own data folder", async () => {
+    await mkdir(path.join(userData, "module-data"), { recursive: true });
+    await link(path.join(userData, "module-data"), path.join(base, "data-link"));
+    expect(await filesTarget(path.join(base, "data-link"), path.join(base, "elsewhere", FILES_FOLDER_NAME), userData)).toEqual({ problem: "inside-data" });
   });
 
   it("refuses places inside Tavora's own data folder", async () => {
@@ -95,6 +119,16 @@ describe("moving the files", () => {
     await put(to, path.join("official", "tavora.notes"), "poe2", `${files[1]!.name}.part`, "cut off");
     await copyStoredFiles(root, to, files);
     expect(await listStoredFiles(to)).toHaveLength(2);
+  });
+
+  it("refuses to copy through a link in the new folder that leads back into the old one", async () => {
+    await put(root, path.join("official", "tavora.notes"), "poe2", `${ID("a")}.png`, "one");
+    const to = path.join(base, "new", FILES_FOLDER_NAME);
+    await mkdir(path.join(to, "official"), { recursive: true });
+    await link(path.join(root, "official", "tavora.notes"), path.join(to, "official", "tavora.notes"));
+    const files = await listStoredFiles(root);
+    await expect(copyStoredFiles(root, to, files)).rejects.toThrow(/leads back/);
+    expect(await readFile(path.join(root, "official", "tavora.notes", "poe2", `${ID("a")}.png`), "utf8")).toBe("one");
   });
 
   it("stops with an error when a file cannot be copied, leaving the old files alone", async () => {
