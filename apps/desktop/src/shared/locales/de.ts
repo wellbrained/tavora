@@ -295,7 +295,7 @@ export const de: Record<keyof typeof en, string> = {
   "account.devices.entry": "{device} · angemeldet seit {date}",
   "account.devices.thisPc": "Dieser PC",
   "account.devices.signOutTitle": "Dieses Gerät abmelden?",
-  "account.devices.signOutMessage": "{device} (seit {date}) wird von deinem Konto abgemeldet. Seine Daten bleiben darauf. Veröffentlichungs-Tokens von dort funktionieren nicht mehr, und Schlüssel, die es verknüpft hat, werden pausiert.",
+  "account.devices.signOutMessage": "{device} (seit {date}) wird von deinem Konto abgemeldet. Seine Daten bleiben darauf, aber Veröffentlichungs-Tokens von dort funktionieren nicht mehr und Schlüssel, die es verknüpft hat, werden pausiert.",
   "account.os.windows": "Windows",
   "account.os.linux": "Linux",
   "account.os.macos": "macOS",

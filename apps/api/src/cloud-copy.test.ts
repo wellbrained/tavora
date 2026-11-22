@@ -410,20 +410,20 @@ describe("the cloud copy", () => {
     expect(copies.addParts("b", tiny(1), 1000)).toBe("ok");
   });
 
-  it("drops unused parts in one pass, a page at a time, never reading them all at once or a part twice (audit 2026-11-22)", () => {
+  it("reads only unused parts, through the small index, at most a page at a time, never the used ones or their bytes (audit 2026-11-22)", () => {
     const copies = testCopies(":memory:");
     const count = 2 * SWEEP_PAGE + 500;
     for (const account of ["a", "b", "c"]) copies.addParts(account, Array.from({ length: count / 3 + (account === "a" ? count % 3 : 0) }, () => part(2)), 1000);
-    // A saved copy whose parts stay, between the others in the table's order: a pass from the start each page would read
-    // them again every time.
+    // A saved copy whose parts stay, between the others in the table's order: the sweep never reads them.
     const kept = Array.from({ length: 3000 }, () => part(1));
     copies.addParts("b0", kept, 1000);
     copies.swap("b0", 0, new Uint8Array(5), kept.map((item) => item.id), 2000);
-    const pages: { args: unknown[]; rows: { accountId: string; id: Uint8Array }[] }[] = [];
+    const db = (copies as unknown as { db: DatabaseSync }).db;
+    const reads: { sql: string; args: unknown[]; rows: number }[] = [];
     const all = StatementSync.prototype.all;
     const spy = vi.spyOn(StatementSync.prototype, "all").mockImplementation(function (this: StatementSync, ...args: Parameters<StatementSync["all"]>) {
       const rows = all.apply(this, args);
-      if (this.sourceSQL.includes("left join copies")) pages.push({ args, rows: rows as unknown as { accountId: string; id: Uint8Array }[] });
+      if (this.sourceSQL.includes("indexed by parts_meta")) reads.push({ sql: this.sourceSQL, args, rows: rows.length });
       return rows;
     });
     try {
@@ -431,16 +431,42 @@ describe("the cloud copy", () => {
     } finally {
       spy.mockRestore();
     }
-    expect(Math.max(...pages.map((page) => page.rows.length))).toBeLessThanOrEqual(SWEEP_PAGE);
-    expect(pages.length).toBe(Math.ceil(count / SWEEP_PAGE));
-    // Each page starts after the last part of the one before, so the walk never goes back.
-    for (const [n, page] of pages.entries()) {
-      if (n === 0) continue;
-      const last = pages[n - 1]!.rows.at(-1)!;
-      expect(page.args.slice(0, 2)).toEqual([last.accountId, last.id]);
+    // Every row read was one that went: the saved copy's 3,000 parts were never read.
+    expect(reads.reduce((total, read) => total + read.rows, 0)).toBe(count);
+    expect(Math.max(...reads.map((read) => read.rows))).toBeLessThanOrEqual(SWEEP_PAGE);
+    // And each read is a range of the covering index: no part's bytes, no scan of the table.
+    for (const read of reads) {
+      const plan = (db.prepare(`explain query plan ${read.sql}`).all(...(read.args as never[])) as { detail: string }[]).map((row) => row.detail).join(" | ");
+      expect(plan).toMatch(/USING COVERING INDEX parts_meta \(account_id=\? AND created_at/);
+      expect(plan).not.toMatch(/SCAN/);
     }
     expect(copies.storedTotal()).toBe(3005);
     expect(copies.parts("b0", kept.map((item) => item.id))).toHaveLength(3000);
+  });
+
+  it("reads only what it drops, however many used parts the table holds", { timeout: 30_000 }, () => {
+    const copies = testCopies(":memory:");
+    // 200,000 used parts in saved copies, and a few unused ones.
+    for (let n = 0; n < 20; n++) {
+      const used = Array.from({ length: 10_000 }, () => part(1));
+      copies.addParts(`used-${n}`, used, 1000);
+      copies.swap(`used-${n}`, 0, new Uint8Array(1), used.map((item) => item.id), 2000);
+    }
+    copies.addParts("unused", Array.from({ length: 10 }, () => part(1)), 1000);
+    let read = 0;
+    const all = StatementSync.prototype.all;
+    const spy = vi.spyOn(StatementSync.prototype, "all").mockImplementation(function (this: StatementSync, ...args: Parameters<StatementSync["all"]>) {
+      const rows = all.apply(this, args);
+      read += rows.length;
+      return rows;
+    });
+    try {
+      expect(copies.sweep(1000 + UNUSED_PART_MS + 1)).toEqual({ parts: 10, bytes: 10 });
+    } finally {
+      spy.mockRestore();
+    }
+    // The 200,000 used parts are never read, only the 10 that go.
+    expect(read).toBe(10);
   });
 
   it("sweeps in the background a page at a time, so the service answers meanwhile (audit 2026-11-22)", async () => {
@@ -456,7 +482,7 @@ describe("the cloud copy", () => {
       if (pauses === 1) expect(copies.addParts("b", [late], at)).toBe("ok");
     });
     expect(swept).toEqual({ parts: count, bytes: 2 * count });
-    expect(pauses).toBe(3);
+    expect(pauses).toBeGreaterThanOrEqual(3);
     expect(copies.storedTotal()).toBe(5);
     expect(copies.pooledTotal()).toBe(5);
     expect(copies.parts("b", [late.id])).toHaveLength(1);

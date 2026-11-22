@@ -96,6 +96,28 @@ describe("paused publisher keys", () => {
     expect(host.act).toHaveBeenLastCalledWith({ type: "account-link-code" });
   });
 
+  it("offers Lost it? for a paused key whose file is gone", async () => {
+    await mount({ pausedKeys: [{ fingerprint: FILE, linkedAt: LINKED_AT }] }, []);
+    $$("account-key-replace")[0]!.click();
+    await tick();
+    (root.querySelector('[data-testid="account-key-lost"]') as HTMLElement).click();
+    await tick();
+    expect(host.act).toHaveBeenLastCalledWith({ type: "account-replace-key", fingerprint: FILE, leaked: false });
+  });
+
+  it("says so while a paused key's replacement waits, and keeps the key meanwhile", async () => {
+    await mount(
+      {
+        pausedKeys: [{ fingerprint: FILE, linkedAt: LINKED_AT }],
+        keyRequests: [{ old: FILE, new: KEPT, leaked: false, requestedAt: LINKED_AT, status: "waiting" }],
+      },
+      [],
+    );
+    expect($$("account-key-waiting")).toHaveLength(1);
+    expect($$("account-key-replace")).toEqual([]);
+    expect([...root.querySelectorAll("button")].some((button) => button.textContent?.trim() === "Unlink")).toBe(false);
+  });
+
   it("lists the emails the service couldn't send", async () => {
     await mount({ unsentNotices: [{ kind: "published", id: "example.timer", name: "Timer", version: "1.0.3", at: LINKED_AT }, { kind: "withdrawn", id: "example.timer", name: "Timer", version: "1.0.2", at: LINKED_AT }] });
     const items = $$("developer-unsent-item").map((item) => item.textContent?.trim());

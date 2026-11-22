@@ -449,6 +449,10 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     if (barredAfter) return afterScan(barredAfter);
     const keyAfter = keyRefused();
     if (keyAfter) return afterScan(keyAfter);
+    // The token or sign-in it came with may have ended while the zip came in and was checked (the token removed, its
+    // device signed out, the email changed): nothing is published for it (audit 2026-11-22).
+    const stillBy = uploader(store, context, now());
+    if (!stillBy || stillBy.accountId !== by.accountId) return afterScan(refuse(context, 401, "sign-in-needed", by.token !== null ? TOKEN_GONE : "Sign in again to publish."));
     // The first try of a retry may have finished during this scan.
     const sentMeanwhile = answerBefore();
     if (sentMeanwhile) return sentMeanwhile;

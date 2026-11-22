@@ -3209,8 +3209,10 @@ export class Host {
       },
       "account-unlink-key": (action) => this.account.unlinkKey(action.fingerprint),
       "account-replace-key": async (action) => {
+        // The old key may be a paused one whose file is lost (audit 2026-11-22); the new one is a key linked and working,
+        // or one made for it.
+        if (!ownKeys(this.account.view()).includes(action.fingerprint)) throw new UserError("account.error.keyGone");
         const linked = (this.account.view().publisherKeys ?? []).map((key) => key.fingerprint);
-        if (!linked.includes(action.fingerprint)) throw new UserError("account.error.keyGone");
         const next = await this.developerKeys.replacementFor(action.fingerprint, linked);
         return this.account.replaceKey(action.fingerprint, next, action.leaked);
       },

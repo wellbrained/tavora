@@ -100,12 +100,14 @@ async function readBody(context: Context, max: number): Promise<boolean> {
 /**
  * Only signed in: 401 otherwise. Answers are the account's own, so nothing caches them.
  *
- * The body is read first, at most `maxBody` bytes (413 past it), and only then is the sign-in checked (audit 2026-11-22):
- * a body sent slowly can't hold a sign-in that was ended meanwhile (the email changed, the device was removed) past that
- * point. What a route writes after its own awaits checks again with stillSignedIn().
+ * The sign-in is checked, then the body read, at most `maxBody` bytes (413 past it), then the sign-in checked again (audit
+ * 2026-11-22): a body sent slowly can't hold a sign-in that was ended meanwhile (the email changed, the device was
+ * removed) past that point, and a request without one is refused before anything is read. What a route writes after its own awaits checks again with stillSignedIn().
  */
 export function requireSignIn(store: SignInStore, now: () => number = Date.now, maxBody = SIGNED_IN_BODY): MiddlewareHandler<SignedInEnv> {
   return async (context, next) => {
+    // Checked before the body too, so a request without a working sign-in is answered at once, nothing read or held.
+    if (!signedInAs(store, context, now())) return signedOut(context);
     if (!(await readBody(context, maxBody))) return fail(context, 413, "too-big", "Too big.");
     const signedIn = signedInAs(store, context, now());
     if (!signedIn) return signedOut(context);

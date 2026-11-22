@@ -151,8 +151,14 @@ export function copyLimitsFromEnv(env: Record<string, string | undefined>, dir: 
 /** Where a sweep goes on from: the last part of the page before. */
 interface SweepCursor {
   accountId: string;
+  /** Where in that account: its parts without a time (by id), then those with one (by time and id), then the next account. */
+  phase: "undated" | "dated" | "next";
+  createdAt: number;
   id: Uint8Array;
 }
+
+/** Where a sweep starts: before the first account. */
+const SWEEP_START: SweepCursor = { accountId: "", phase: "next", createdAt: 0, id: new Uint8Array(0) };
 
 /** Why parts were not stored: this account's copy is full, or the copies of all accounts have no room. */
 export type AddPartsResult = "ok" | "copy-full" | "no-room";
@@ -403,17 +409,20 @@ export class CopyStore {
    * Drops the parts no saved version uses that are older than UNUSED_PART_MS: those of an account without a copy, and those
    * stored after its copy was last saved (a save drops every part it doesn't use, so what came after it is unused). Parts
    * from before created_at count as old; with a copy they stay until its next save, as they did. Answers what went.
-   * `maxPages`: at most so many pages (SWEEP_PAGE parts each), for a sweep a request waits for (ROOM_SWEEP_PAGES).
+   * `maxPages`: at most so many pages that drop parts (SWEEP_PAGE each), and a hundred times as many steps in all, for a
+   * sweep a request waits for (ROOM_SWEEP_PAGES).
    */
   sweep(now: number = Date.now(), maxPages = Number.POSITIVE_INFINITY): { parts: number; bytes: number } {
     this.lastSweep = now;
     let parts = 0;
     let bytes = 0;
-    let after: SweepCursor = { accountId: "", id: new Uint8Array(0) };
-    for (let pages = 0; pages < maxPages; pages++) {
+    let after: SweepCursor = SWEEP_START;
+    // Steps that drop nothing (an account with none unused) are a lookup in the index each; they are capped too.
+    for (let pages = 0, steps = 0; pages < maxPages && steps < maxPages * 100; steps++) {
       const page = this.sweepPage(now, after);
       parts += page.parts;
       bytes += page.bytes;
+      if (page.parts > 0) pages++;
       if (!page.next) break;
       after = page.next;
     }
@@ -430,7 +439,7 @@ export class CopyStore {
     this.lastSweep = now;
     let parts = 0;
     let bytes = 0;
-    let after: SweepCursor = { accountId: "", id: new Uint8Array(0) };
+    let after: SweepCursor = SWEEP_START;
     for (;;) {
       const page = this.sweepPage(now, after);
       parts += page.parts;
@@ -444,28 +453,57 @@ export class CopyStore {
   }
 
   /**
-   * One page of the sweep: up to SWEEP_PAGE unused parts after `after` in the parts' own order (account, then id), read and
-   * dropped in one transaction, with the totals kept right for exactly what went. No part is read twice, so millions take
-   * one walk through the table. `next`: where the next page starts, null at the end.
+   * One step of the sweep, dropped in one transaction with the totals kept right for exactly what went. It reads only
+   * unused parts, through the parts' own small index (parts_meta: account, time, size, id), never their bytes nor the used
+   * ones: per account, its parts without a time (old ones, unused only without a copy), then those stored before the cutoff
+   * (and, with a copy, after it was saved), SWEEP_PAGE at a time, from where the last step ended. So a step costs about what
+   * it drops however many used parts the table holds, and no part is read twice. A step that ends an account moves on to the
+   * next one. `next`: where the next step starts, null at the end.
    */
   private sweepPage(now: number, after: SweepCursor): { parts: number; bytes: number; next: SweepCursor | null } {
-    const unused = this.db
-      .prepare(
-        `select p.account_id as accountId, p.id as id, p.size as size, p.charged as charged from parts p left join copies c on c.account_id = p.account_id
-         where (p.account_id, p.id) > (?, ?) and coalesce(p.created_at, 0) < ? and (c.account_id is null or (p.created_at is not null and p.created_at > c.updated_at))
-         order by p.account_id, p.id limit ?`,
-      )
-      .all(after.accountId, after.id, now - UNUSED_PART_MS, SWEEP_PAGE) as unknown as { accountId: string; id: Uint8Array; size: number; charged: number | null }[];
-    if (unused.length === 0) return { parts: 0, bytes: 0, next: null };
-    const drop = this.db.prepare("delete from parts where account_id = ? and id = ?");
+    let at = after;
+    if (at.phase === "next") {
+      const next = this.db.prepare("select account_id as accountId from parts indexed by parts_meta where account_id > ? order by account_id limit 1").get(at.accountId) as { accountId: string } | undefined;
+      if (!next) return { parts: 0, bytes: 0, next: null };
+      at = { accountId: next.accountId, phase: "undated", createdAt: 0, id: new Uint8Array(0) };
+    }
+    const copy = this.db.prepare("select updated_at as savedAt from copies where account_id = ?").get(at.accountId) as { savedAt: number } | undefined;
+    const cutoff = now - UNUSED_PART_MS;
+    let unused: { id: Uint8Array; createdAt: number | null }[];
+    let following: SweepCursor;
+    if (at.phase === "undated") {
+      // Parts from before their time was kept count as old: unused only for an account without a copy.
+      unused = copy
+        ? []
+        : (this.db
+            .prepare("select id, created_at as createdAt from parts indexed by parts_meta where account_id = ? and created_at is null and id > ? order by id limit ?")
+            .all(at.accountId, at.id, SWEEP_PAGE) as unknown as { id: Uint8Array; createdAt: null }[]);
+      following = unused.length < SWEEP_PAGE ? { accountId: at.accountId, phase: "dated", createdAt: Number.MIN_SAFE_INTEGER, id: new Uint8Array(0) } : { ...at, id: unused.at(-1)!.id };
+    } else {
+      // Stored before the cutoff, and with a copy only after it was saved (a save drops every part it doesn't use).
+      unused = this.db
+        .prepare(
+          `select id, created_at as createdAt from parts indexed by parts_meta where account_id = ? and created_at is not null and created_at < ? and created_at > ?
+           and (created_at, id) > (?, ?) order by created_at, id limit ?`,
+        )
+        .all(at.accountId, cutoff, copy ? copy.savedAt : Number.MIN_SAFE_INTEGER, at.createdAt, at.id, SWEEP_PAGE) as unknown as { id: Uint8Array; createdAt: number }[];
+      const last = unused.at(-1);
+      following = unused.length < SWEEP_PAGE || !last ? { ...at, phase: "next" } : { accountId: at.accountId, phase: "dated", createdAt: last.createdAt!, id: last.id };
+    }
+    if (unused.length === 0) return { parts: 0, bytes: 0, next: following };
+    // A delete walks a part's pages anyway; it hands back what the totals need.
+    const drop = this.db.prepare("delete from parts where account_id = ? and id = ? returning size, charged");
+    let parts = 0;
     let bytes = 0;
     let onTop = 0;
     this.db.exec("begin");
     try {
       for (const part of unused) {
-        if (Number(drop.run(part.accountId, part.id).changes) === 0) continue;
-        bytes += part.size;
-        if (part.charged !== null) onTop += part.size - part.charged;
+        const gone = drop.get(at.accountId, part.id) as { size: number; charged: number | null } | undefined;
+        if (!gone) continue;
+        parts += 1;
+        bytes += gone.size;
+        if (gone.charged !== null) onTop += gone.size - gone.charged;
       }
       this.db.exec("commit");
     } catch (error) {
@@ -474,7 +512,7 @@ export class CopyStore {
     }
     this.total -= bytes;
     this.onTop -= onTop;
-    return { parts: unused.length, bytes, next: unused.length < SWEEP_PAGE ? null : unused.at(-1)! };
+    return { parts, bytes, next: following };
   }
 
   /** Parts stored for the account, used by a version or not. */

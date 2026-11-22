@@ -230,18 +230,25 @@ function removeToken(token: AccountPublishToken) {
           <li v-for="row in rows" :key="row.fingerprint" :data-testid="`developer-key-${row.fingerprint}`">
             <div class="flex min-h-10 items-center gap-3">
               <span class="flex-1 font-mono text-sm" :title="row.fingerprint">{{ row.fingerprint.slice(0, 16) }}…</span>
+              <!-- Paused: linked again with the key itself, or, when it is lost, replaced like a linked key. -->
               <template v-if="row.paused">
                 <span class="text-sm" :data-testid="`account-key-paused-${row.fingerprint}`">{{ t("account.developer.paused") }}</span>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  :disabled="busy || !view?.developer"
-                  data-testid="account-key-relink"
-                  @click="run(row.kept ? { type: 'developer-key-link', fingerprint: row.fingerprint } : { type: 'account-link-code' })"
-                >
-                  {{ t("account.developer.linkAgain") }}
-                </Button>
-                <Button variant="ghost" size="sm" :disabled="busy" :aria-label="t('account.developer.unlinkLabel', { key: row.fingerprint.slice(0, 16) })" @click="unlinkKey(row.fingerprint)">
+                <span v-if="requests.get(row.fingerprint)?.status === 'waiting'" class="text-sm" data-testid="account-key-waiting">{{ t("account.developer.replaceWaiting") }}</span>
+                <template v-else>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    :disabled="busy || !view?.developer"
+                    data-testid="account-key-relink"
+                    @click="run(row.kept ? { type: 'developer-key-link', fingerprint: row.fingerprint } : { type: 'account-link-code' })"
+                  >
+                    {{ t("account.developer.linkAgain") }}
+                  </Button>
+                  <Button variant="ghost" size="sm" :disabled="busy" :aria-label="t('account.developer.replaceLabel', { key: row.fingerprint.slice(0, 16) })" data-testid="account-key-replace" @click="replacing = replacing === row.fingerprint ? null : row.fingerprint">
+                    {{ t("account.developer.replace") }}
+                  </Button>
+                </template>
+                <Button v-if="!waiting.has(row.fingerprint)" variant="ghost" size="sm" :disabled="busy" :aria-label="t('account.developer.unlinkLabel', { key: row.fingerprint.slice(0, 16) })" @click="unlinkKey(row.fingerprint)">
                   {{ t("account.developer.unlink") }}
                 </Button>
               </template>

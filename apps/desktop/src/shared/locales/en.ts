@@ -293,7 +293,7 @@ export const en = {
   "account.devices.entry": "{device} · signed in since {date}",
   "account.devices.thisPc": "This PC",
   "account.devices.signOutTitle": "Sign out this device?",
-  "account.devices.signOutMessage": "{device} (since {date}) is signed out of your account. Its data stays on it. Publish tokens it made stop working, and keys it linked pause.",
+  "account.devices.signOutMessage": "{device} (since {date}) is signed out of your account. Its data stays on it, but publish tokens it made stop working and keys it linked pause.",
   "account.os.windows": "Windows",
   "account.os.linux": "Linux",
   "account.os.macos": "macOS",

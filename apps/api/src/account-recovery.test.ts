@@ -153,6 +153,12 @@ describe("taking an account back by changing its email", () => {
     // Nothing moves onto a paused key.
     expect(await reason(await call("POST", `/v1/account/keys/${fingerprintOf(ownerKey)}/replace`, { new: fingerprintOf(thiefKey), leaked: false }, renewed))).toBe("not-found");
 
+    // A paused key whose file is lost can still be replaced by a working one.
+    const newKey = generateKeyPairSync("ed25519").privateKey;
+    expect((await link(renewed, newKey)).status).toBe(200);
+    expect((await call("POST", `/v1/account/keys/${fingerprintOf(thiefKey)}/replace`, { new: fingerprintOf(newKey), leaked: true }, renewed)).status).toBe(200);
+    expect(store.keyRequest(fingerprintOf(thiefKey))).toMatchObject({ new: fingerprintOf(newKey), leaked: true });
+
     // The owner links their own key again, which takes its private half, and publishes.
     expect((await link(renewed, ownerKey)).status).toBe(200);
     expect(store.publisherKey(fingerprintOf(ownerKey))).toMatchObject({ paused: false });
@@ -209,6 +215,74 @@ describe("taking an account back by changing its email", () => {
   });
 });
 
+describe("an upload under way when its token or sign-in ends", () => {
+  /** A scanner that holds the upload until release(), once it started. */
+  const held = () => {
+    let release!: () => void;
+    let started!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const running = new Promise<void>((resolve) => (started = resolve));
+    const scanner: Scanner = {
+      scan: async () => {
+        started();
+        await gate;
+        return { clean: true };
+      },
+    };
+    return { scanner, running, release };
+  };
+
+  it("publishes nothing once its token was removed meanwhile", async () => {
+    const scan = held();
+    const { store, catalog, call, link, newToken, publish, account } = setup(scan.scanner);
+    const { id, owner } = await account();
+    const key = generateKeyPairSync("ed25519").privateKey;
+    await link(owner, key);
+    const token = await newToken(owner, "CI");
+    const upload = publish(key, "1.0.0", token);
+    await scan.running;
+    const tokenId = store.publishTokens(id, Date.now())[0]!.id;
+    expect((await call("DELETE", `/v1/account/publish-tokens/${tokenId}`, undefined, owner)).status).toBe(200);
+    scan.release();
+    const answer = await upload;
+    expect(answer.status).toBe(401);
+    expect(await answer.json()).toMatchObject({ reason: "sign-in-needed", error: expect.stringMatching(/token doesn't work any more/) });
+    expect(catalog.index()).toEqual([]);
+  });
+
+  it("publishes nothing once the device its token was made on was removed meanwhile", async () => {
+    const scan = held();
+    const { catalog, call, link, newToken, publish, account } = setup(scan.scanner);
+    const { owner, stolen } = await account();
+    // The key is the owner's; only the token came from the other device.
+    const key = generateKeyPairSync("ed25519").privateKey;
+    await link(owner, key);
+    const token = await newToken(stolen, "Leaked CI");
+    const upload = publish(key, "1.0.0", token);
+    await scan.running;
+    const { devices } = (await (await call("GET", "/v1/account", undefined, owner)).json()) as { devices: { id: string; current: boolean }[] };
+    expect((await call("DELETE", `/v1/account/devices/${devices.find((device) => !device.current)!.id}`, undefined, owner)).status).toBe(204);
+    scan.release();
+    expect((await upload).status).toBe(401);
+    expect(catalog.index()).toEqual([]);
+  });
+
+  it("publishes nothing once its own sign-in ended meanwhile", async () => {
+    const scan = held();
+    const { catalog, call, link, publish, account } = setup(scan.scanner);
+    const { owner, stolen } = await account();
+    const key = generateKeyPairSync("ed25519").privateKey;
+    await link(owner, key);
+    const upload = publish(key, "1.0.0", stolen);
+    await scan.running;
+    const { devices } = (await (await call("GET", "/v1/account", undefined, owner)).json()) as { devices: { id: string; current: boolean }[] };
+    await call("DELETE", `/v1/account/devices/${devices.find((device) => !device.current)!.id}`, undefined, owner);
+    scan.release();
+    expect((await upload).status).toBe(401);
+    expect(catalog.index()).toEqual([]);
+  });
+});
+
 describe("a body that arrives after the sign-in ended", () => {
   const tokenBody = new TextEncoder().encode(JSON.stringify({ name: "Late" }));
 
@@ -233,6 +307,13 @@ describe("a body that arrives after the sign-in ended", () => {
     late.release();
     expect((await late.response).status).toBe(401);
     expect(store.publishTokens(id, clock.now)).toEqual([]);
+  });
+
+  it("answers a request without a working sign-in at once, without waiting for its body", async () => {
+    const { slow } = setup();
+    const late = slow("POST", "/v1/account/publish-tokens", "x".repeat(43), "application/json", tokenBody);
+    // Never released: the answer comes anyway.
+    expect((await late.response).status).toBe(401);
   });
 
   it("writes no key vault once the email changed meanwhile", async () => {

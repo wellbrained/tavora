@@ -764,6 +764,9 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     } else {
       const who = await identify(context, discordProof!);
       if (who instanceof Response) return who;
+      // Discord answered after a wait: the sign-in may have ended meanwhile.
+      const ended = gone(context);
+      if (ended) return ended;
       if (!account.discord || account.discord.id !== who.id) return context.json({ error: "That is not the Discord login of this account.", reason: "discord-mismatch" }, 400);
     }
     if (!store.checkCode(email, "change-email", account.id, input.code, now(), true)) return wrongCode(context);
@@ -930,6 +933,8 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     if (!store.checkCode(account.email, "connect-discord", account.id, input.emailCode, now(), false)) return wrongCode(context);
     const who = await identify(context, input);
     if (who instanceof Response) return who;
+    const ended = gone(context);
+    if (ended) return ended;
     if (!store.checkCode(account.email, "connect-discord", account.id, input.emailCode, now(), true)) return wrongCode(context);
     if (store.setDiscord(account.id, who) === "taken") {
       return context.json({ error: "That Discord login belongs to another Tavora account.", reason: "discord-taken" }, 409);
@@ -974,6 +979,8 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     if (wait > 0) return tooMany(context, wait);
     const who = await identify(context, await body(context));
     if (who instanceof Response) return who;
+    const ended = gone(context);
+    if (ended) return ended;
     const account = context.get("account");
     if (!account.discord || account.discord.id !== who.id) {
       return context.json({ error: "That is not the Discord login of this account.", reason: "discord-mismatch" }, 400);
