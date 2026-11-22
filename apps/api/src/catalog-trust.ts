@@ -70,8 +70,11 @@ export function publisherNameOf(store: AccountStore, successions: () => readonly
   }
 }
 
-/** Why a publisher key may not bring a zip into the catalog now: unlinked from the account, revoked, or reported as leaked. */
-export type KeyRefusal = "key-not-linked" | "key-revoked" | "key-leaked";
+/**
+ * Why a publisher key may not bring a zip into the catalog now: unlinked from the account, paused when the account's email
+ * changed (account-store.ts revokeMinted), revoked, or reported as leaked.
+ */
+export type KeyRefusal = "key-not-linked" | "key-paused" | "key-revoked" | "key-leaked";
 
 /**
  * The key's own state, the same for an upload and for Approve on the review page: the key must still be linked to the
@@ -83,6 +86,8 @@ export function keyRefusal(store: AccountStore, trust: CatalogTrust, fingerprint
   // A leaked key whose account unlinked it or was deleted says so, rather than asking to link it (which is refused).
   if (!linked) return store.isLeakedKey(fingerprint) ? "key-leaked" : "key-not-linked";
   if (accountId !== null && linked.accountId !== accountId) return "key-not-linked";
+  // A version a stolen sign-in's key uploaded before the owner took the account back never goes live, waiting or mid-scan.
+  if (linked.paused) return "key-paused";
   if (trust.revoked(fingerprint, sha256)) return "key-revoked";
   if (store.isLeakedKey(fingerprint)) return "key-leaked";
   return null;

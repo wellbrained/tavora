@@ -243,7 +243,7 @@ describe("Tavora's own modules in the catalogue", () => {
     const other = account("other@example.com", null);
     expect(store.unlinkKey(tavora.id, fingerprint(pinnedKey))).toBe(true);
     const link = async (accountId: string) => {
-      const { code } = store.linkCode(accountId, clock.now);
+      const { code } = store.linkCode(accountId, clock.now)!;
       const signature = sign(null, Buffer.from(`${LINK_STATEMENT}\n${code}`, "utf8"), pinnedKey).toString("base64");
       return call("POST", "/v1/publishers/link", null, { code, publicKey: rawKey(pinnedKey).toString("base64"), signature });
     };

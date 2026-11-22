@@ -11,7 +11,7 @@ import { keyRequestStatus } from "./key-requests.ts";
 import { codeMail, confirmEmailChangeMail, emailChangedMail, keyRequestMail, MailLimitError, mailLanguage, type Mail, type Mailer } from "./mail.ts";
 import { inspectPng } from "./png.ts";
 import { checkAll, createRateLimiter, networkOf, type RateLimiter } from "./rate-limit.ts";
-import { requireSignIn, tooMany, type SignedInEnv } from "./sign-in.ts";
+import { requireSignIn, signedOut, stillSignedIn, tooMany, type SignedInEnv } from "./sign-in.ts";
 import type { ReviewStore } from "./reviews.ts";
 import type { ConversationStore } from "./conversations.ts";
 import type { LeaderboardStore } from "./leaderboards.ts";
@@ -106,6 +106,22 @@ export const MAIL_RESERVED = 20;
  * accounts, so new addresses get codes until 187 went out.
  */
 export const MAIL_FOR_ACCOUNTS_SHARE = 1 / 3;
+/**
+ * Notices about publishing (published, waiting, withdrawn, and the maintainer's "waiting" notice) have their own share of
+ * the day (audit 2026-11-22): at most this share of the sign-in emails (rounded down) for all accounts together, and
+ * NOTICES_PER_ACCOUNT for one account, counted against the account that published. They also stop where codes to new
+ * addresses stop, so they never take the emails kept for accounts' sign-ins (MAIL_FOR_ACCOUNTS_SHARE) or for deletes
+ * (MAIL_RESERVED). At Brevo's 300: 56 notices a day, and new addresses still get at least 131 codes.
+ */
+export const NOTICE_SHARE = 1 / 5;
+/** A notice for each of the 10 versions an account may publish a day (catalog-publish.ts PUBLISH_LIMITS). */
+export const NOTICES_PER_ACCOUNT = 10;
+
+/** The publishing notices' room on a day with `mailDailyLimit` emails: how many in all, and the day's count they stop at. */
+export function noticeRoom(mailDailyLimit: number): { perDay: number; ceiling: number } {
+  const signIn = Math.max(0, mailDailyLimit - MAIL_RESERVED);
+  return { perDay: Math.floor(signIn * NOTICE_SHARE), ceiling: signIn - Math.floor(signIn * MAIL_FOR_ACCOUNTS_SHARE) };
+}
 /** New accounts a day by default, by email and Discord together. */
 export const ACCOUNTS_PER_DAY = 500;
 /**
@@ -384,8 +400,10 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const at = now();
     const existing = store.accountByEmail(email);
     const create = input.create === true;
-    // A new address keeps its code until the user said yes to an account and there is room for it today.
-    if (!store.checkCode(email, "sign-in", null, input.code, at, Boolean(existing))) return wrongCode(context);
+    // A new address keeps its code until the user said yes to an account and there is room for it today. Wrong tries from
+    // another network than the one that asked for the code count apart (account-store.ts CODE_OTHER_TRIES).
+    const from = networkOf(clientKey(context.req.raw));
+    if (!store.checkCode(email, "sign-in", null, input.code, at, Boolean(existing), undefined, from)) return wrongCode(context);
     if (!existing && !create) return context.json({ status: "no-account" });
     // Said only after the code was right, so the answer never tells whether an address has an account.
     if (existing && store.isSuspended(existing.id)) return suspended(context);
@@ -394,7 +412,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
       const full = accountsFull(context) ?? networkAccountsFull(context);
       if (full) return full;
       // Right a moment ago, so this spends it.
-      if (!store.checkCode(email, "sign-in", null, input.code, at, true)) return wrongCode(context);
+      if (!store.checkCode(email, "sign-in", null, input.code, at, true, undefined, from)) return wrongCode(context);
       try {
         account = store.createAccount({ email }, at);
       } catch {
@@ -453,7 +471,8 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const email = normalizeEmail(input.email);
     if (!email || typeof input.code !== "string" || !CODE.test(input.code)) return context.json({ error: "Send { email, code }.", reason: "bad-request" }, 400);
     const account = store.accountByEmail(email);
-    if (!account || !store.isSuspended(account.id) || !store.checkCode(email, "delete", account.id, input.code, now(), true)) return wrongCode(context);
+    const from = networkOf(clientKey(context.req.raw));
+    if (!account || !store.isSuspended(account.id) || !store.checkCode(email, "delete", account.id, input.code, now(), true, undefined, from)) return wrongCode(context);
     deleteAccount(account.id);
     return context.body(null, 204);
   });
@@ -461,7 +480,10 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   // ── Signed in ─────────────────────────────────────────────────────────
 
   const signedIn = new Hono<Env>();
-  signedIn.use("*", requireSignIn(store, now));
+  // The sign-in, then the body (a profile with its picture at most), then the sign-in again (sign-in.ts requireSignIn); a
+  // route that writes after an await checks once more (stillSignedIn).
+  signedIn.use("*", requireSignIn(store, now, PROFILE_BODY));
+  const gone = (context: Context<SignedInEnv>) => (stillSignedIn(store, context) ? null : signedOut(context));
 
   signedIn.get("/", (context) => {
     const account = context.get("account");
@@ -481,8 +503,11 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     return context.body(null, 204);
   });
 
+  // A device signed out from another one takes what it made for publishing with it (account-store.ts revokeMinted): someone
+  // removing a device they don't know shouldn't leave its tokens and keys behind.
   signedIn.delete("/devices/:id", (context) => {
-    if (!store.deleteSession(context.get("account").id, context.req.param("id") ?? "")) return context.json({ error: "Not found.", reason: "not-found" }, 404);
+    const id = context.req.param("id") ?? "";
+    if (!store.deleteSession(context.get("account").id, id, id !== context.get("session").id, now())) return context.json({ error: "Not found.", reason: "not-found" }, 404);
     return context.body(null, 204);
   });
 
@@ -493,6 +518,8 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   signedIn.put("/profile", async (context) => {
     const profile = parseProfile(await body(context), now());
     if (!profile) return context.json({ error: "Send { name, initials, picture, updatedAt }.", reason: "bad-request" }, 400);
+    const ended = gone(context);
+    if (ended) return ended;
     return context.json({ profile: profileAnswer(store.setProfile(context.get("account").id, profile)) });
   });
 
@@ -500,9 +527,15 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   // public half of a key ever reaches the service (publishers.ts links it with a code from here).
   const developerAnswer = (accountId: string) => {
     const developer = store.developer(accountId);
+    // A paused key (account-store.ts revokeMinted) is left out of `keys`, so the app offers to link it again, which wakes it.
+    const paused = store.pausedKeys(accountId);
+    const keys = store.keys(accountId);
     return {
       developer: developer ? { name: developer.name, changedAt: new Date(developer.changedAt).toISOString(), nextChangeAt: new Date(developer.changedAt + NAME_HOLD_MS).toISOString() } : null,
-      keys: store.keys(accountId),
+      keys: keys.filter((key) => !paused.has(key.fingerprint)),
+      pausedKeys: keys.filter((key) => paused.has(key.fingerprint)),
+      // Mails about this account's publishing that couldn't go out (catalog-publish.ts tellAccount), for Publishing to show.
+      unsentNotices: store.unsentNotices(accountId, now()).map((item) => ({ ...item, at: new Date(item.at).toISOString() })),
       requests: store.keyRequests(accountId).map((request) => ({
         old: request.old,
         new: request.new,
@@ -529,6 +562,8 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const name = cleanDeveloperName((await body(context)).name);
     if (!name) return context.json({ error: "A name is 3 to 32 letters, digits, spaces, dots, dashes or underscores.", reason: "bad-name" }, 400);
     const account = context.get("account");
+    const ended = gone(context);
+    if (ended) return ended;
     const result = store.setDeveloperName(account.id, name, now());
     if (!result.ok) {
       const messages = { "name-taken": "That name is taken.", "name-reserved": "That name cannot be used.", "name-too-soon": "The name can change once in 30 days." } as const;
@@ -541,8 +576,9 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   signedIn.post("/keys/code", (context) => {
     const account = context.get("account");
     if (!store.developer(account.id)) return context.json({ error: "Choose a developer name first.", reason: "no-developer-name" }, 409);
-    const { code, expiresAt } = store.linkCode(account.id, now());
-    return context.json({ code, expiresAt: new Date(expiresAt).toISOString() });
+    const made = store.linkCode(account.id, now(), context.get("session").id);
+    if (!made) return signedOut(context);
+    return context.json({ code: made.code, expiresAt: new Date(made.expiresAt).toISOString() });
   });
 
   // Module id prefixes: checked and claimed before the first publish, so the app can show whether an id
@@ -573,6 +609,8 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     if (state === "taken") return context.json({ error: `The id prefix "${prefix}" belongs to another developer.`, reason: "prefix-taken" }, 403);
     if (state === "reserved") return context.json({ error: `The id prefix "${prefix}" is reserved.`, reason: "prefix-reserved" }, 403);
     if (state === "too-many") return context.json({ error: `Your account holds ${MAX_PREFIXES} id prefixes, as many as it can.`, reason: "too-many-prefixes" }, 403);
+    const ended = gone(context);
+    if (ended) return ended;
     if (state === "free") store.reservePrefix(account.id, prefix, now());
     return context.json({ prefix, state: "held" });
   });
@@ -610,6 +648,8 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const notice = changes && account.email !== null && !usedUp("sign-in");
     const ownWait = notice ? Math.max(0, ...own.map(([limiter, key]) => limiter.peek(key))) : 0;
     if (ownWait > 0 && !input.leaked) return tooMany(context, ownWait, "Too many emails to your address today. Try again tomorrow.");
+    const ended = gone(context);
+    if (ended) return ended;
     const result = store.requestReplacement(account.id, old, input.new, input.leaked, now(), options.officialPins ?? OFFICIAL_PINS, options.trust?.signed("successions")?.successions ?? []);
     if (result === "same") return context.json({ error: "Pick another key to replace it with.", reason: "bad-request" }, 400);
     if (result === "not-linked") return context.json({ error: "Both keys must be linked to this account.", reason: "not-found" }, 404);
@@ -633,7 +673,11 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const name = typeof raw === "string" ? raw.trim() : "";
     if (!name || name.length > 40 || /[\u0000-\u001f\u007f]/.test(name)) return context.json({ error: "A token's name is 1 to 40 characters.", reason: "bad-name" }, 400);
     if (!store.developer(account.id)) return context.json({ error: "Choose a developer name first.", reason: "no-developer-name" }, 409);
-    const created = store.createPublishToken(account.id, name, now());
+    // The store makes it only while this sign-in still exists (account-store.ts createPublishToken).
+    const ended = gone(context);
+    if (ended) return ended;
+    const created = store.createPublishToken(account.id, name, now(), context.get("session").id);
+    if (!created && !stillSignedIn(store, context)) return signedOut(context);
     if (!created) return context.json({ error: "This account has as many publish tokens as it can. Remove one first.", reason: "too-many-tokens" }, 409);
     return context.json({ token: created.token, ...developerAnswer(account.id) }, 201);
   });
@@ -720,11 +764,19 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     } else {
       const who = await identify(context, discordProof!);
       if (who instanceof Response) return who;
-      if (!account.discord || account.discord.id !== who.id) return context.json({ error: "That is not the Discord login of this account.", reason: "discord-mismatch" }, 400);
+      // Discord answered after a wait: the sign-in may have ended meanwhile.
+      const ended = gone(context);
+      if (ended) return ended;
+      // Read again: the Discord login may have been removed or changed while Discord answered.
+      const current = store.account(account.id);
+      if (!current?.discord || current.discord.id !== who.id) return context.json({ error: "That is not the Discord login of this account.", reason: "discord-mismatch" }, 400);
     }
     if (!store.checkCode(email, "change-email", account.id, input.code, now(), true)) return wrongCode(context);
     if (account.email && !store.checkCode(account.email, "confirm-email-change", account.id, input.currentCode as string, now(), true, email)) return wrongCurrentCode(context);
-    if (store.changeEmail(account.id, email, context.get("session").id) === "taken") {
+    // Every sign-in ends, this one too, which gets a new token in the answer (account-store.ts changeEmail). A Tavora from
+    // before this doesn't read it and is signed out: it signs in again with the new address.
+    const changed = store.changeEmail(account.id, email, context.get("session").id, now());
+    if (changed.status === "taken") {
       return context.json({ error: "That address already has a Tavora account.", reason: "email-taken" }, 409);
     }
     // The old address hears about it as well. Its share was counted with the codes (POST /email/code), and it never
@@ -732,7 +784,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     if (account.email && !usedUp("sign-in")) await send(context, emailChangedMail(account.email, email, language));
     // The new address just proved itself from this network.
     store.rememberNetwork(email, networkOf(clientKey(context.req.raw)), now());
-    return context.json({ account: accountAnswer({ ...account, email }) });
+    return context.json({ account: accountAnswer({ ...account, email }), ...(changed.token ? { token: changed.token, device: changed.session!.id } : {}) });
   });
 
   // Remove the email address: only while a Discord login remains, so the account can still be reached,
@@ -883,6 +935,10 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     if (!store.checkCode(account.email, "connect-discord", account.id, input.emailCode, now(), false)) return wrongCode(context);
     const who = await identify(context, input);
     if (who instanceof Response) return who;
+    const ended = gone(context);
+    if (ended) return ended;
+    // Read again: another login may have been connected while Discord answered; it is never replaced.
+    if (store.account(account.id)?.discord) return discordConnected(context);
     if (!store.checkCode(account.email, "connect-discord", account.id, input.emailCode, now(), true)) return wrongCode(context);
     if (store.setDiscord(account.id, who) === "taken") {
       return context.json({ error: "That Discord login belongs to another Tavora account.", reason: "discord-taken" }, 409);
@@ -927,8 +983,11 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     if (wait > 0) return tooMany(context, wait);
     const who = await identify(context, await body(context));
     if (who instanceof Response) return who;
-    const account = context.get("account");
-    if (!account.discord || account.discord.id !== who.id) {
+    const ended = gone(context);
+    if (ended) return ended;
+    // Read again: a Discord login removed while Discord answered (a stolen one, say) deletes nothing.
+    const account = store.account(context.get("account").id);
+    if (!account?.discord || account.discord.id !== who.id) {
       return context.json({ error: "That is not the Discord login of this account.", reason: "discord-mismatch" }, 400);
     }
     deleteAccount(account.id);

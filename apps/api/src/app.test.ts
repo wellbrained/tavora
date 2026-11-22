@@ -120,6 +120,25 @@ describe("steam library endpoint", () => {
     expect(await reason(await post(limited, { profile: "76561197960287930" }))).toMatchObject({ status: 429, body: { error: "Too many requests. Try again later.", reason: "too-many" } });
   });
 
+  it("limits imports per network too, so many /64s of one connection don't multiply the limit (audit 2026-11-22)", async () => {
+    let asked = 0;
+    const counting: SteamClient = { ownedGames: async () => ((asked += 1), []) };
+    const app = createApp({
+      db: steamDb,
+      steam: counting,
+      clientKey: (request) => request.headers.get("x-client") ?? "local",
+      steamRateLimiter: createRateLimiter({ limit: 6, windowMs: 60_000 }),
+      steamNetworkRateLimiter: createRateLimiter({ limit: 10, windowMs: 3_600_000 }),
+    });
+    const statuses: number[] = [];
+    // Each request from another /64 of the same /48.
+    for (let n = 1; n <= 12; n++) statuses.push((await post(app, { profile: "76561197960287930" }, { "content-type": "application/json", "x-client": `2001:db8:1:${n.toString(16)}::/64` })).status);
+    expect(statuses).toEqual([...Array<number>(10).fill(200), 429, 429]);
+    expect(asked).toBe(10);
+    // Another network still gets in.
+    expect((await post(app, { profile: "76561197960287930" }, { "content-type": "application/json", "x-client": "2001:db8:2:1::/64" })).status).toBe(200);
+  });
+
   it("refuses anything that is not JSON with a profile text", async () => {
     const app = createApp({ db: steamDb, steam: client, steamRateLimiter: createRateLimiter({ limit: 100, windowMs: 60_000 }) });
     expect((await post(app, { profile: "x" }, { "content-type": "text/plain" })).status).toBe(415);

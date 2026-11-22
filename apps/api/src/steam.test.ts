@@ -87,6 +87,35 @@ describe("createSteamClient", () => {
     expect(calls[0]!.url).toContain(`steamid=${ID}`);
   });
 
+  it("keeps a budget of Steam calls for everyone together, asking Steam nothing past it (audit 2026-11-22)", async () => {
+    const { fetcher, calls } = fakeSteam({
+      "ISteamUser/ResolveVanityURL": { response: { success: 1, steamid: ID } },
+      "IPlayerService/GetOwnedGames": { response: { game_count: 0 } },
+    });
+    const clock = { now: 0 };
+    const client = createSteamClient({ key: "k", fetch: fetcher, budget: { perHour: 3, perDay: 5 }, now: () => clock.now });
+    // An id takes one call, a custom name two.
+    expect(await client.ownedGames(ID)).toEqual([]);
+    expect(await client.ownedGames("https://steamcommunity.com/id/someone")).toEqual([]);
+    expect(calls).toHaveLength(3);
+    await expect(client.ownedGames(ID)).rejects.toMatchObject({ status: 503, code: "unavailable" });
+    expect(calls).toHaveLength(3);
+    // A bad link costs nothing.
+    await expect(client.ownedGames("hello")).rejects.toMatchObject({ status: 400 });
+    // Over any hour, not per clock hour: right after the hour turns, the last one still counts in full.
+    clock.now += 3_600_000;
+    await expect(client.ownedGames(ID)).rejects.toMatchObject({ status: 503, code: "unavailable" });
+    // Half an hour on, half of it does: room for one call, not for two.
+    clock.now += 1_800_000;
+    expect(await client.ownedGames(ID)).toEqual([]);
+    await expect(client.ownedGames("https://steamcommunity.com/id/someone")).rejects.toMatchObject({ status: 503, code: "unavailable" });
+    // The day's budget holds as well.
+    clock.now += 3_600_000;
+    expect(await client.ownedGames(ID)).toEqual([]);
+    await expect(client.ownedGames(ID)).rejects.toMatchObject({ status: 503, code: "unavailable" });
+    expect(calls).toHaveLength(5);
+  });
+
   it("resolves a custom profile name first", async () => {
     const { fetcher, calls } = fakeSteam({
       "ISteamUser/ResolveVanityURL": { response: { success: 1, steamid: ID } },

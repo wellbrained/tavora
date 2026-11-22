@@ -57,6 +57,41 @@ export function createRateLimiter(options: { limit: number; windowMs: number; ma
 }
 
 /**
+ * A limit over a sliding window (audit 2026-11-22), for a budget that must hold at every moment, not only per clock window:
+ * a fixed window lets twice the limit through around its end. It keeps two counts per key, this window's and the last
+ * one's, and counts the last one for the part of it that still lies within `windowMs` of now. Same interface as
+ * createRateLimiter.
+ */
+export function createSlidingRateLimiter(options: { limit: number; windowMs: number; maxClients?: number }): RateLimiter {
+  const hits = new Map<string, { start: number; current: number; previous: number }>();
+  const maxClients = options.maxClients ?? MAX_CLIENTS;
+  const { limit, windowMs } = options;
+  /** The key's counts as they stand at `now`, its windows moved on; not stored. */
+  const at = (key: string, now: number) => {
+    const entry = hits.get(key);
+    if (!entry) return { start: now, current: 0, previous: 0 };
+    const passed = Math.floor((now - entry.start) / windowMs);
+    if (passed <= 0) return { ...entry };
+    return { start: entry.start + passed * windowMs, current: 0, previous: passed === 1 ? entry.current : 0 };
+  };
+  const counted = (state: { start: number; current: number; previous: number }, now: number) => state.current + state.previous * (1 - (now - state.start) / windowMs);
+  const wait = (state: { start: number }, now: number) => Math.max(1, Math.ceil((state.start + windowMs - now) / 1000));
+  return {
+    check(key, now = Date.now(), cost = 1) {
+      const state = at(key, now);
+      if (counted(state, now) + cost > limit) return wait(state, now);
+      if (!hits.has(key) && hits.size >= maxClients) hits.delete(hits.keys().next().value!);
+      hits.set(key, { ...state, current: state.current + cost });
+      return 0;
+    },
+    peek(key, now = Date.now(), cost = 1) {
+      const state = at(key, now);
+      return counted(state, now) + cost > limit ? wait(state, now) : 0;
+    },
+  };
+}
+
+/**
  * Who a request counts as for the limits: an IPv4 address as it is, an IPv6 address by its /64
  * network, since one connection gets a whole /64 and could otherwise use a new address per request.
  * IPv4 written inside IPv6 (::ffff:a.b.c.d) counts as that IPv4 address.

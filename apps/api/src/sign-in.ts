@@ -12,7 +12,7 @@ import type { Account, AccountStore, Session } from "./account-store.ts";
 const BEARER = /^Bearer ([A-Za-z0-9_-]{20,100})$/;
 
 /** What the gate needs from the accounts. */
-export type SignInStore = Pick<AccountStore, "sessionByToken" | "account">;
+export type SignInStore = Pick<AccountStore, "sessionByToken" | "account" | "sessionAlive">;
 
 export interface SignedIn {
   session: Session;
@@ -58,9 +58,57 @@ export function signedInAs(store: SignInStore, context: Context, now: number): S
   return session && account ? { session, account } : null;
 }
 
-/** Only signed in: 401 otherwise. Answers are the account's own, so nothing caches them. */
-export function requireSignIn(store: SignInStore, now: () => number = Date.now): MiddlewareHandler<SignedInEnv> {
+/** The most requireSignIn reads of a body by default: every signed-in route but the big ones sends less. */
+export const SIGNED_IN_BODY = 64 * 1024;
+
+/**
+ * Reads the whole body, at most `max` bytes, and puts a request with those bytes in place of the one that streams in (as
+ * Hono's bodyLimit does), so the route reads it as usual. False when it is bigger, or broke off.
+ */
+async function readBody(context: Context, max: number): Promise<boolean> {
+  const raw = context.req.raw;
+  if (raw.body === null) return true;
+  const declared = Number(raw.headers.get("content-length") ?? "NaN");
+  if (Number.isFinite(declared) && declared > max) return false;
+  const reader = raw.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > max) {
+        await reader.cancel().catch(() => undefined);
+        return false;
+      }
+      chunks.push(value);
+    }
+  } catch {
+    return false;
+  }
+  const bytes = new Uint8Array(size);
+  let at = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, at);
+    at += chunk.byteLength;
+  }
+  context.req.raw = new Request(raw.url, { method: raw.method, headers: raw.headers, body: bytes });
+  return true;
+}
+
+/**
+ * Only signed in: 401 otherwise. Answers are the account's own, so nothing caches them.
+ *
+ * The sign-in is checked, then the body read, at most `maxBody` bytes (413 past it), then the sign-in checked again (audit
+ * 2026-11-22): a body sent slowly can't hold a sign-in that was ended meanwhile (the email changed, the device was
+ * removed) past that point, and a request without one is refused before anything is read. What a route writes after its own awaits checks again with stillSignedIn().
+ */
+export function requireSignIn(store: SignInStore, now: () => number = Date.now, maxBody = SIGNED_IN_BODY): MiddlewareHandler<SignedInEnv> {
   return async (context, next) => {
+    // Checked before the body too, so a request without a working sign-in is answered at once, nothing read or held.
+    if (!signedInAs(store, context, now())) return signedOut(context);
+    if (!(await readBody(context, maxBody))) return fail(context, 413, "too-big", "Too big.");
     const signedIn = signedInAs(store, context, now());
     if (!signedIn) return signedOut(context);
     context.set("session", signedIn.session);
@@ -68,6 +116,14 @@ export function requireSignIn(store: SignInStore, now: () => number = Date.now):
     context.header("Cache-Control", "no-store");
     await next();
   };
+}
+
+/**
+ * Whether the request's sign-in still exists, checked right before a write, in the same synchronous step: after an await
+ * (a body, a mail, another service) it may have ended meanwhile.
+ */
+export function stillSignedIn(store: Pick<AccountStore, "sessionAlive">, context: Context<SignedInEnv>): boolean {
+  return store.sessionAlive(context.get("session").id);
 }
 
 /** Signed in or a guest: no Authorization header is a guest, a token that doesn't work is still a 401. */

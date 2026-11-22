@@ -71,13 +71,23 @@ async function saveName() {
   await run({ type: "account-developer-name", name: developerName.value.trim() });
 }
 
+/** Keys paused when the account was taken back (a new email, a device removed): linked again, never replaced. */
+const paused = computed(() => new Set((view.value?.pausedKeys ?? []).map((key) => key.fingerprint)));
+/** A kept key that was paused: Tavora links it again itself. */
+const pausedKept = computed(() => keys.value?.keys.find((key) => paused.value.has(key.fingerprint)) ?? null);
+/** Only key files were paused (Tavora keeps none of them): they are linked again with `tavora-pack link`. */
+const pausedFile = computed(() => !pausedKept.value && paused.value.size > 0);
 /** A kept key that isn't linked yet (linking failed when it was made). */
 const unlinked = computed(() => {
   const linked = new Set((view.value?.publisherKeys ?? []).map((key) => key.fingerprint));
-  return keys.value?.keys.find((key) => !linked.has(key.fingerprint)) ?? null;
+  return keys.value?.keys.find((key) => !linked.has(key.fingerprint) && !paused.value.has(key.fingerprint)) ?? null;
 });
 /** The account has a linked key Tavora doesn't keep: a key file linked with `tavora-pack link`. */
 const linkedElsewhere = computed(() => !keys.value?.keys.length && (view.value?.publisherKeys?.length ?? 0) > 0);
+const linkCommandText = computed(() => {
+  const code = view.value?.linkCode?.code ?? "";
+  return `npx @tavora/pack link ${code.slice(0, 4)}-${code.slice(4)} --key <key file>`;
+});
 async function makeKey() {
   if (await run({ type: "developer-key-create" })) keyReminder.value = true;
 }
@@ -152,6 +162,19 @@ watch(
         <p class="flex items-center gap-2 text-sm"><CircleCheck class="text-success size-4 flex-none" /> {{ t("devStart.key.ready") }}</p>
         <div class="flex justify-end">
           <Button data-testid="developer-start-next" @click="keyReminder = false">{{ t("common.next") }}</Button>
+        </div>
+      </div>
+      <div v-else-if="pausedKept" class="flex flex-col gap-3" data-testid="developer-start-paused">
+        <p class="text-sm">{{ t("devStart.key.paused") }}</p>
+        <div>
+          <Button :disabled="busy" data-testid="developer-start-relink" @click="run({ type: 'developer-key-link', fingerprint: pausedKept.fingerprint })">{{ t("account.developer.linkAgain") }}</Button>
+        </div>
+      </div>
+      <div v-else-if="pausedFile" class="flex flex-col gap-3" data-testid="developer-start-paused-file">
+        <p class="text-sm">{{ t("devStart.key.pausedFile") }}</p>
+        <code v-if="view?.linkCode" class="bg-muted rounded px-2 py-1 font-mono text-sm select-all" data-testid="developer-start-link-command">{{ linkCommandText }}</code>
+        <div v-else>
+          <Button :disabled="busy" data-testid="developer-start-link-code" @click="run({ type: 'account-link-code' })">{{ t("account.developer.link") }}</Button>
         </div>
       </div>
       <div v-else-if="unlinked" class="flex flex-col gap-3">

@@ -55,7 +55,9 @@ jobs:
   # dockview, @vueuse) is listed as a devDependency because it is bundled, so `--prod` would miss it. package.json's
   # pnpm.overrides lift the ones a compatible fix exists for, and pnpm.auditConfig.ignoreGhsas lists the rest with the
   # reason beside it: picomatch (GHSA-fc5q-39xc-vjpf), which Excalidraw's sass dependency pulls in for its file watcher; it is not in the
-  # Whiteboard's built bundle.
+  # Whiteboard's built bundle; and minimatch (GHSA-g3hv-75wg-m249) under typedoc, which still calls an API that
+  # minimatch 11 removed (typedoc 0.28.20 is the latest), so it stays on 10.x; it only runs in the docs build, on
+  # our own file patterns. The same fix is applied to electron-builder's copies by override.
   # gitleaks scans the history of the checked-out commit only (not other branches); .gitleaks.toml allows the reviewed
   # test fixtures and public values by path or pattern, so a squash merge or another branch can't turn it red.
   supply-chain:

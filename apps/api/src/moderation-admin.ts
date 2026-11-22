@@ -44,6 +44,8 @@ export interface ModerationAdminOptions {
 /** Why Approve refuses a version because of its key (keyRefusal), for the maintainer. */
 const KEY_REFUSED: Record<KeyRefusal, string> = {
   "key-not-linked": "Its publisher key isn't linked to the developer's account any more. Decline the version.",
+  // Never "wait until it is linked again": a thief's upload would then go live once the owner links their keys.
+  "key-paused": "Its publisher key was paused when the developer took the account back (a new email, or a device removed), so a stolen sign-in may have uploaded it. Decline the version; the developer can publish it again once they link the key again.",
   "key-revoked": "Its publisher key was revoked. Decline the version.",
   "key-leaked": "The developer reported its publisher key as leaked. Decline the version.",
 };
