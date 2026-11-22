@@ -29,7 +29,11 @@ case "${1:-}" in
   status)
     systemctl is-active clamav-daemon || true
     if [[ -S "$clamd" ]]; then answers "$clamd" && echo 'clamd answers' || echo 'clamd did not answer'; else echo "No clamd socket at $clamd"; fi
+    # The socket as it is (made by clamav-daemon.socket, or by clamd without it), not what a config says it should be.
     if [[ "$(socket_mode)" == '660 clamav' ]]; then echo "clamd's socket is open to the clamav group only."; else echo "Warning: clamd's socket is $(socket_mode), not 660 clamav: run tavora-api-clamav again."; fi
+    if systemctl cat clamav-daemon.socket >/dev/null 2>&1; then
+      echo "clamav-daemon.socket: $(systemctl show -P SocketMode clamav-daemon.socket) $(systemctl show -P SocketGroup clamav-daemon.socket), listens on $(systemctl show -P Listen clamav-daemon.socket | tr '\n' ' ')"
+    fi
     systemctl is-active tavora-clamd-filter || true
     if [[ -S "$filter" ]]; then answers "$filter" && echo 'The filter answers' || echo 'The filter did not answer'; else echo "No filter socket at $filter"; fi
     if id -nG tavora-api 2>/dev/null | tr ' ' '\n' | grep -qx clamav; then echo 'Warning: tavora-api is still in the clamav group; run tavora-api-clamav again.'; fi
@@ -50,31 +54,77 @@ esac
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y -qq clamav-daemon clamav-freshclam socat
-# clamd on a TCP port would be open to the service (it may reach the network) and to every other program here.
-if grep -qiE '^[[:space:]]*TCPSocket[[:space:]]' /etc/clamav/clamd.conf 2>/dev/null; then
-  echo 'clamd listens on a TCP port (TCPSocket in /etc/clamav/clamd.conf). Turn that off first: the service must reach clamd only through the filter.'
+[[ -f "$conf" ]] || { echo "No $conf after installing clamav-daemon; check the package (apt-get install --reinstall clamav-daemon)."; exit 1; }
+# Debian and Ubuntu start clamd through socket activation: clamav-daemon.socket makes clamd.ctl and hands it over, so its
+# mode and group come from that unit, never from clamd.conf. Without the socket unit, clamd makes it from clamd.conf.
+socket_unit=0
+if systemctl cat clamav-daemon.socket >/dev/null 2>&1; then socket_unit=1; fi
+# clamd on a TCP port would be open to the service (it may reach the network) and to every other program here:
+# neither clamd.conf nor the socket unit may listen anywhere but a path.
+if grep -qiE '^[[:space:]]*TCPSocket[[:space:]]' "$conf"; then
+  echo "clamd listens on a TCP port (TCPSocket in $conf). Turn that off first: the service must reach clamd only through the filter."
   exit 1
+fi
+if [[ "$socket_unit" == 1 ]]; then
+  while read -r address _; do
+    if [[ -n "$address" && "$address" != /* ]]; then
+      echo "clamav-daemon.socket listens on $address. Take that ListenStream out first: the service must reach clamd only through the filter."
+      exit 1
+    fi
+  done < <(systemctl show -P Listen clamav-daemon.socket)
 fi
 # The first signature download; freshclam keeps them up to date from then on.
 systemctl stop clamav-freshclam || true
 freshclam --quiet || echo 'freshclam could not download the signatures yet; the updater service will retry.'
 systemctl enable --now clamav-freshclam
-# clamd's socket for the clamav group only. Debian writes clamd.conf from debconf (and again on upgrades), so both are set.
+
+# clamd's socket for the clamav group only, mode 660 (Debian makes it 666). The socket unit gets a drop-in of its own (it
+# sorts after the package's extend.conf, so it wins); clamd.conf and debconf get the same for hosts without socket
+# activation and for the package's next rewrite of clamd.conf. The first run keeps the original as clamd.conf.tavora-old.
+changed=0
+[[ -e "$conf.tavora-old" ]] || cp -p "$conf" "$conf.tavora-old"
 printf '%s\n' 'clamav-daemon clamav-daemon/LocalSocketGroup string clamav' 'clamav-daemon clamav-daemon/LocalSocketMode string 660' | debconf-set-selections 2>/dev/null || true
 set_conf() { # <name> <value>: the one line for <name> in clamd.conf, replaced or added
-  if grep -qE "^[[:space:]]*$1[[:space:]]" "$conf"; then sed -i -E "s|^[[:space:]]*$1[[:space:]].*|$1 $2|" "$conf"; else printf '%s %s\n' "$1" "$2" >> "$conf"; fi
+  if grep -qE "^[[:space:]]*$1[[:space:]]" "$conf"; then
+    sed -i -E "s|^[[:space:]]*$1[[:space:]].*|$1 $2|" "$conf"
+  else
+    # A file whose last line has no line break gets one first, so the new line stays a line of its own.
+    if [[ -s "$conf" && -n "$(tail -c 1 "$conf")" ]]; then printf '\n' >> "$conf"; fi
+    printf '%s %s\n' "$1" "$2" >> "$conf"
+  fi
 }
-before_conf="$(sha256sum "$conf")"
+before_conf="$(sha256sum < "$conf")"
 set_conf LocalSocketGroup clamav
 set_conf LocalSocketMode 660
-systemctl enable --now clamav-daemon
-if [[ "$(sha256sum "$conf")" != "$before_conf" ]]; then systemctl restart clamav-daemon; echo "clamd's socket is now for the clamav group only."; fi
+[[ "$(sha256sum < "$conf")" == "$before_conf" ]] || changed=1
+if [[ "$socket_unit" == 1 ]]; then
+  dropin=/etc/systemd/system/clamav-daemon.socket.d/tavora.conf
+  wanted=$'# Written by tavora-api-clamav (Tavora): clamd\'s socket for the clamav group only.\n[Socket]\nSocketGroup=clamav\nSocketMode=0660\n'
+  if [[ "$(cat "$dropin" 2>/dev/null; printf x)" != "${wanted}x" ]]; then
+    install -d -m 755 "$(dirname "$dropin")"
+    printf '%s' "$wanted" > "$dropin.new" && chmod 644 "$dropin.new" && mv -f "$dropin.new" "$dropin"
+    systemctl daemon-reload
+    changed=1
+  fi
+fi
+restart_failed() { echo "clamd did not start again with its socket for the clamav group; check: journalctl -u clamav-daemon -u clamav-daemon.socket"; exit 1; }
+if [[ "$changed" == 1 ]] && systemctl is-active --quiet clamav-daemon; then
+  # Running with the old socket: the socket is made again only when both stop.
+  if [[ "$socket_unit" == 1 ]]; then
+    systemctl stop clamav-daemon.service clamav-daemon.socket && systemctl start clamav-daemon.socket clamav-daemon.service || restart_failed
+  else
+    systemctl restart clamav-daemon || restart_failed
+  fi
+  echo "clamd's socket is now for the clamav group only."
+fi
+# Starts it (once, with the settings above) if it isn't running yet.
+if [[ "$socket_unit" == 1 ]]; then systemctl enable --now clamav-daemon.socket clamav-daemon.service || restart_failed; else systemctl enable --now clamav-daemon || restart_failed; fi
 # Earlier versions of this script put the service's user in the clamav group, for clamd's socket. It needs the filter only.
 if id -nG tavora-api 2>/dev/null | tr ' ' '\n' | grep -qx clamav; then gpasswd -d tavora-api clamav >/dev/null; echo 'Took tavora-api out of the clamav group.'; fi
 # clamd needs a moment to load its signatures before it answers.
 for _ in $(seq 1 60); do [[ -S "$clamd" ]] && answers "$clamd" && break; sleep 2; done
 answers "$clamd" || { echo 'clamd is not answering yet; check: journalctl -u clamav-daemon'; exit 1; }
-[[ "$(socket_mode)" == '660 clamav' ]] || { echo "clamd's socket is $(socket_mode), not 660 clamav; check LocalSocketMode and LocalSocketGroup in $conf."; exit 1; }
+[[ "$(socket_mode)" == '660 clamav' ]] || { echo "clamd's socket is $(socket_mode), not 660 clamav; check: systemctl cat clamav-daemon.socket (SocketMode, SocketGroup), and LocalSocketMode and LocalSocketGroup in $conf."; exit 1; }
 systemctl enable tavora-clamd-filter >/dev/null
 systemctl restart tavora-clamd-filter
 for _ in $(seq 1 10); do [[ -S "$filter" ]] && answers "$filter" && break; sleep 1; done

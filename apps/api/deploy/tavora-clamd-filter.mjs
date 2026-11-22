@@ -14,7 +14,10 @@ import { pathToFileURL } from "node:url";
 const ALLOWED = new Set(["INSTREAM", "PING", "VERSION"]);
 /** The longest command read before the terminator ("zINSTREAM\0" is 10 bytes). */
 const MAX_COMMAND = 32;
-/** clamd's own default StreamMaxLength; the service never sends more than 20 MB as one stream. */
+/**
+ * The limit when clamd.conf names none: the 25M Debian and Ubuntu write there (upstream clamd's own default is 100M).
+ * Lower is the safe side: the service never sends more than 20 MB as one stream.
+ */
 export const DEFAULT_STREAM_MAX = 25 * 1024 * 1024;
 /** Connections at once; the service scans a few files at a time. */
 const MAX_CONNECTIONS = 16;
@@ -60,11 +63,16 @@ function handle(client, upstreamPath, maxStream, onClose) {
       buffered = Buffer.alloc(0);
       client.write(data);
     });
-    upstream.on("end", () => {
+    // Gone, after an answer or not: the client may have been paused waiting for clamd to drain, so it reads again (and its
+    // bytes are dropped) and gets the end.
+    const gone = () => {
       state = "done";
+      buffered = Buffer.alloc(0);
+      client.resume();
       client.end();
-    });
-    upstream.on("close", () => client.end());
+    };
+    upstream.on("end", gone);
+    upstream.on("close", gone);
     upstream.write(command);
   };
 
@@ -110,13 +118,14 @@ function handle(client, upstreamPath, maxStream, onClose) {
 }
 
 /**
- * clamd's StreamMaxLength from its config ("25M", "100K", a number of bytes), so the filter never takes a longer stream
- * than clamd would; its default when the config doesn't say.
+ * clamd's StreamMaxLength from its config ("25M", "100K", "1G", a number of bytes), so the filter never takes a longer
+ * stream than clamd would. Like clamd, the last line naming it counts; DEFAULT_STREAM_MAX when none does.
  */
 export function streamLimit(config) {
-  const match = /^[ \t]*StreamMaxLength[ \t]+(\d+)([KkMm]?)[ \t]*$/m.exec(config ?? "");
+  const lines = [...(config ?? "").matchAll(/^[ \t]*StreamMaxLength[ \t]+(\d+)([KkMmGg]?)[ \t]*\r?$/gm)];
+  const match = lines.at(-1);
   if (!match) return DEFAULT_STREAM_MAX;
-  const unit = { "": 1, k: 1024, m: 1024 * 1024 }[match[2].toLowerCase()];
+  const unit = { "": 1, k: 1024, m: 1024 ** 2, g: 1024 ** 3 }[match[2].toLowerCase()];
   const bytes = Number(match[1]) * unit;
   return bytes > 0 ? bytes : DEFAULT_STREAM_MAX;
 }
