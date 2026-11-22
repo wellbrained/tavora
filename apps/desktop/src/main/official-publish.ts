@@ -77,6 +77,8 @@ export const HOST_ONLY: ReadonlySet<string> = new Set(
     "main/module-page.ts",
     "main/publisher-names.ts",
     "main/account.ts",
+    // The profile card and what of it goes to the account (user-profile.ts).
+    "main/user-profile.ts",
     "main/account-key.ts",
     "main/sign-in.ts",
     "main/pairing.ts",

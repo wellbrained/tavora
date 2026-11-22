@@ -8,7 +8,7 @@ import os from "node:os";
 import { appendFile, mkdir, readdir, readFile, realpath, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { Worker } from "node:worker_threads";
-import { allowsPersonalWorkspaces, continuingPanelType, folderKey, isModuleId, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER, OFFICIAL_PINS, officialOn, panelTypes, translateManifest, withGamePanelType, type Connector, type ModuleManifest } from "@tavora/module-schema";
+import { allowsPersonalWorkspaces, continuingPanelType, folderKey, isModuleId, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER, OFFICIAL_PINS, officialOn, panelTypes, translateManifest, withGamePanelType, type ModuleManifest } from "@tavora/module-schema";
 import {
   app,
   BrowserWindow,
@@ -30,7 +30,7 @@ import {
   type WebContentsView,
 } from "electron";
 import type { TavoraWorkspace } from "@tavora/sdk/protocol";
-import type { AccountView, ActionResult, AiUsageView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviewsResult, DeveloperLink, InstalledGameView, LegalPage, LicenceList, ModulePageResult, WorkspaceView, HostViewState, OnlineSearchResult, PanelPlacement, ProfileRanksView, ReleaseStatus, Screen, SteamLibraryResult, SteamShareResult, UnlistedGame } from "../shared/host-api";
+import type { AccountView, ActionResult, AiUsageView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviewsResult, DeveloperLink, InstalledGameView, LegalPage, LicenceList, ModulePageResult, WorkspaceView, HostViewState, OnlineSearchResult, PanelPlacement, ReleaseStatus, Screen, SteamLibraryResult, SteamShareResult, UnlistedGame } from "../shared/host-api";
 import { MAX_PICKER_COVERS } from "../shared/host-api";
 import { isForWorkspaceGame } from "./workspace-game";
 import { resolveLanguage, translate, type Language } from "../shared/i18n";
@@ -41,6 +41,9 @@ import { UserError } from "./messages";
 import { UndoGoneError, UndoShelf } from "./undo-shelf";
 import { WorkspaceLibrary } from "./workspace-library";
 import { PanelDialogs } from "./panel-dialogs";
+import { PanelQuestions } from "./panel-questions";
+import { UserProfile } from "./user-profile";
+import { ModuleBoards } from "./module-boards";
 import { buildReport, errorLog, timings } from "./diagnostics";
 import { popularGames } from "./catalog";
 import { readLicences } from "./licences";
@@ -57,8 +60,6 @@ import { PendingQuestions } from "./pending-questions";
 import { createOverlayServices } from "./overlay-wiring";
 import { hasUnseenNotes, installedNotes } from "./module-notes";
 import { GrantStore } from "./grants";
-import { boardsModuleId, ModuleLeaderboards, type LeaderboardQuestion } from "./leaderboards";
-import { profileRanks, type ProfileRankSource } from "./profile-ranks";
 import { ModuleLifecycle } from "./module-lifecycle";
 import { ModulePanels, panelTypesOf } from "./module-panels";
 import { DevelopmentFolders } from "./development-folders";
@@ -70,7 +71,7 @@ import { INSTANCE_ID } from "./ids";
 import { panelOverflow, type PanelOverflow } from "./panel-overflow";
 import { recordCrash } from "./crash-log";
 import { LAYOUT_LIMITS } from "./layout";
-import { clipInitials, clipName, type Profile, removePicture, savePicture } from "./profile";
+import type { Profile } from "./profile";
 import {
   createFolder,
   deleteFolder,
@@ -174,7 +175,7 @@ import { LibraryWorkspaces } from "./workspace-lookup";
 import { CopySync, type CopySyncOptions } from "./cloud-copy-sync";
 import { Inbox } from "./inbox";
 import { thisDeviceName } from "./device-name";
-import { AccountClient, deviceOs, linkCommand, loadAccount, saveAccount, type AccountClientOptions, type ProfileData } from "./account";
+import { AccountClient, deviceOs, linkCommand, loadAccount, saveAccount, type AccountClientOptions } from "./account";
 import { discordLogin } from "./discord-login";
 import { loadDiscordSecrets, saveDiscordSecrets, type Encryptor } from "./discord-store";
 import { PurgeCount, viewsInSession } from "./storage-purge";
@@ -358,7 +359,7 @@ export class Host {
     unmount: (adapter) => this.window.contentView.removeChildView(adapter.view as WebContentsView),
     windowSize: () => this.window.getContentBounds(),
     windowHidden: () => this.windowHidden,
-    asking: (instanceId) => this.askingIn(instanceId),
+    asking: (instanceId) => this.panelQuestions.asking(instanceId),
     releasing: (instanceId, forget) => {
       this.tooltips.close(instanceId);
       this.panelDialogs.closeMenu(instanceId);
@@ -566,6 +567,12 @@ export class Host {
   private readonly fileDialogs: FileDialogs;
   /** The library's game icons, the Add a game list's icons and covers, and offering icons (game-icons.ts). */
   private readonly gameIcons: GameIcons;
+  /** The user's name, initials and picture, and what goes to the account (user-profile.ts). */
+  private readonly userProfile: UserProfile;
+  /** The leaderboards of installed modules, and the profile card's ranks (module-boards.ts). */
+  private readonly moduleBoards: ModuleBoards;
+  /** The questions shown in a panel's place: access, a connector on request, leaderboards (panel-questions.ts). */
+  private readonly panelQuestions: PanelQuestions;
   /** Adding, trashing, restoring and deleting workspaces with what they keep, and snapshots that change open panels (workspace-library.ts). */
   private readonly workspaceLibrary: WorkspaceLibrary;
   /** True while a dialog backdrop dims the host page, so the window buttons are dimmed too. */
@@ -840,6 +847,23 @@ export class Host {
       language: () => this.language,
       changed: () => this.pushState(),
     });
+    this.panelQuestions = new PanelQuestions({
+      questions: this.questions,
+      installed: this.installed,
+      grants: this.grants,
+      panels: this.panels,
+      shownPanels: () => (this.workspaceId ? this.records(this.workspaceId) : []),
+      pushState: () => this.pushState(),
+    });
+    this.userProfile = new UserProfile({
+      profile,
+      dir: path.join(options.userData, "profile"),
+      pictureUrl: PROFILE_URL,
+      library,
+      save: () => this.saveProfile(),
+      changed: () => void this.account.profileChanged(),
+      pushState: () => this.pushState(),
+    });
     this.discord = Host.discordConnector(options, prepared.encryptor, (view) => {
       if (!this.window.isDestroyed()) this.window.webContents.send("host:discord", view);
     });
@@ -847,7 +871,7 @@ export class Host {
       if (!this.window.isDestroyed()) this.window.webContents.send("host:ai-usage", view);
       for (const panel of this.moduleViews()) panel.notifyAiUsageAccounts();
     });
-    this.account = Host.accountClient(options, prepared.signIn, prepared.encryptor, () => this.language, { get: () => this.profileData(), apply: (remote) => this.applyProfile(remote) }, (view) => {
+    this.account = Host.accountClient(options, prepared.signIn, prepared.encryptor, () => this.language, { get: () => this.userProfile.data(), apply: (remote) => this.userProfile.apply(remote) }, (view) => {
       if (!this.window.isDestroyed()) this.window.webContents.send("host:account", view);
       if (this.inbox && this.inboxSignedIn !== (view.account !== null)) {
         this.inboxSignedIn = view.account !== null;
@@ -858,6 +882,7 @@ export class Host {
       this.developerKeys?.accountChanged(accountId);
       this.copySync.accountChanged(accountId);
     });
+    this.moduleBoards = new ModuleBoards({ installed: this.installed, account: this.account, language: () => this.language });
     this.gameIcons = new GameIcons({
       userData: options.userData,
       library,
@@ -1462,25 +1487,6 @@ export class Host {
     if (error) throw new LibraryError("error.openFolder", { problem: error });
   }
 
-  /**
-   * Permission questions live in the panel that asks (decision of 2026-10-28). Panels added while their module still
-   * misses access it needs: the first of them asks, the others wait, and none starts its page until the user allows.
-   * A running module that asks for a connector on request: its first panel shows the question over its page, which is
-   * hidden meanwhile; its other panels go on. A panel that already runs while its module asks for more (a local update)
-   * keeps running with what was granted and offers a review instead. `records` are the panels of the panel's workspace.
-   */
-  private questionOf(record: InstanceRecord, records: readonly InstanceRecord[]): "ask" | "wait" | null {
-    if (this.panels.isAwaiting(record.instanceId)) {
-      const asking = records.find((item) => item.moduleId === record.moduleId && this.panels.isAwaiting(item.instanceId));
-      return asking?.instanceId === record.instanceId ? "ask" : "wait";
-    }
-    // The leaderboards' question shows in the panel that asked for it.
-    const board = this.questions.peek("leaderboard");
-    if (board && "panel" in board.scope && board.scope.panel === record.instanceId) return "ask";
-    const first = records.find((item) => item.moduleId === record.moduleId)?.instanceId === record.instanceId;
-    return first && this.questions.peek("connector")?.payload.moduleId === record.moduleId ? "ask" : null;
-  }
-
   /** The workspaces, by id in the library, with a panel of this module. */
   private workspacesUsing(moduleId: string): string[] {
     return this.workspaces.workspacesUsing(moduleId).filter((workspaceId) => workspaceId in this.library.workspaces);
@@ -1702,7 +1708,7 @@ export class Host {
     ipcMain.handle("host:get-discord", (event) => (fromHost(event) ? this.discord.view() : null));
     ipcMain.handle("host:get-ai-usage", (event) => (fromHost(event) ? this.aiUsage.view() : null));
     ipcMain.handle("host:get-account", (event) => (fromHost(event) ? this.account.view() : null));
-    ipcMain.handle("host:profile-ranks", (event) => (fromHost(event) ? this.profileRanks() : null));
+    ipcMain.handle("host:profile-ranks", (event) => (fromHost(event) ? this.moduleBoards.ranks() : null));
     ipcMain.handle("host:get-cloud-copy", (event) => (fromHost(event) ? this.copySync.view() : null));
     ipcMain.handle("host:get-developer-keys", (event) => (fromHost(event) ? this.developerKeys.view() : null));
     ipcMain.handle("host:get-publish", (event) => (fromHost(event) ? this.publisher.view() : null));
@@ -2192,8 +2198,8 @@ export class Host {
       "reset-overlay-links": () => this.streaming.resetLinks(),
       "hotkey-answer": (action) => this.streaming.answer(action.id, action.choice, action.accelerator),
       "remove-hotkey": (action) => this.streaming.removeHotkey(action),
-      "connector-answer": (action) => this.answerConnector(action.id, action.allow),
-      "leaderboard-answer": (action) => this.answerLeaderboard(action.id, action.allow),
+      "connector-answer": (action) => this.panelQuestions.answerConnector(action.id, action.allow),
+      "leaderboard-answer": (action) => this.panelQuestions.answerLeaderboard(action.id, action.allow),
       "set-language": saved((action) => {
         this.library.language = action.language;
         this.toastView.refresh();
@@ -2236,16 +2242,10 @@ export class Host {
       "create-starter-style": () => this.appearance.createStarter("style"),
 
       // Profile
-      "save-profile": async (action) => {
-        this.profile.name = clipName(action.name);
-        this.profile.initials = clipInitials(action.initials);
-        this.profile.updatedAt = new Date().toISOString();
-        // Resolves once it is on disk, so the host UI can say "Saved"; the account gets it after.
-        await this.saveProfile();
-        void this.account.profileChanged();
-      },
-      "set-profile-picture": async (action) => this.setProfilePicture(await savePicture(this.profileDir, action.png)),
-      "remove-profile-picture": () => this.setProfilePicture(null),
+      // Resolves once it is on disk, so the host UI can say "Saved"; the account gets it after.
+      "save-profile": (action) => this.userProfile.rename(action.name, action.initials),
+      "set-profile-picture": (action) => this.userProfile.setPicture(action.png),
+      "remove-profile-picture": () => this.userProfile.setPicture(null),
 
       // Modules
       "open-modules-folder": () => this.openModulesFolder(),
@@ -2275,7 +2275,7 @@ export class Host {
         if (await this.folderHostOf(module).choose(action.folder)) this.modulePanels.reloadViews(action.moduleId);
       },
       "revoke-module": (action) => this.lifecycle.revoke(action.moduleId),
-      "leaderboards-hide": (action) => this.leaveLeaderboards(action.moduleId),
+      "leaderboards-hide": (action) => this.moduleBoards.leave(action.moduleId),
       "install-module": () => this.installModule(),
       "install-catalog-module": (action) => this.lifecycle.installFromCatalog(action.moduleId),
       "check-module-updates": () => this.moduleCatalog.checkUpdatesNow(),
@@ -2628,38 +2628,6 @@ export class Host {
     markOpened(this.library, workspaceId, new Date());
     this.saveLibrary();
     this.openCurrentWorkspace();
-  }
-
-  private get profileDir(): string {
-    return path.join(this.options.userData, "profile");
-  }
-
-  private async setProfilePicture(file: string | null): Promise<void> {
-    const previous = this.profile.picture;
-    this.profile.picture = file;
-    this.profile.updatedAt = new Date().toISOString();
-    await this.saveProfile();
-    await removePicture(this.profileDir, previous);
-    void this.account.profileChanged();
-  }
-
-  /** The profile as it goes to the account: the picture as a base64 PNG. */
-  private async profileData(): Promise<ProfileData> {
-    const picture = this.profile.picture ? await readFile(path.join(this.profileDir, this.profile.picture)).then((bytes) => bytes.toString("base64"), () => null) : null;
-    return { name: this.profile.name, initials: this.profile.initials, picture, updatedAt: this.profile.updatedAt };
-  }
-
-  /** Puts the account's profile in place of this PC's (checked like a picture the user picked). */
-  private async applyProfile(remote: ProfileData & { updatedAt: string }): Promise<void> {
-    const previous = this.profile.picture;
-    const picture = remote.picture ? await savePicture(this.profileDir, remote.picture) : null;
-    this.profile.name = clipName(remote.name);
-    this.profile.initials = clipInitials(remote.initials);
-    this.profile.picture = picture;
-    this.profile.updatedAt = remote.updatedAt;
-    await this.saveProfile();
-    if (previous !== picture) await removePicture(this.profileDir, previous);
-    this.pushState();
   }
 
   /**
@@ -3116,7 +3084,7 @@ export class Host {
     // Its panel is in the in-game layer and kept running there while another workspace was shown: it comes back when the layer closes.
     if (this.panels.has(record.instanceId)) return;
     if (record.moduleId === BROWSER_MODULE_ID) return this.createBrowser(record, workspace);
-    // It was added while its module still asks (questionOf); the page starts once the user allows (reloadModuleViews).
+    // It was added while its module still asks (PanelQuestions.of); the page starts once the user allows (reloadModuleViews).
     if (this.panels.isAwaiting(record.instanceId)) return;
     const panelType = this.modulePanels.typeOf(record);
     // Its type is gone: the slot says so and offers another type; nothing runs.
@@ -3191,7 +3159,7 @@ export class Host {
       folders: this.folderHostOf(module),
       appSettings: this.data.appSettings(module.owner, module.manifest.id),
       appBlobs: this.data.appBlobs(module.owner, module.manifest.id),
-      leaderboards: this.leaderboardsOf(module, (question) => this.askLeaderboard(record.instanceId, record.moduleId, question)),
+      leaderboards: this.moduleBoards.of(module, (question) => this.panelQuestions.askLeaderboard(record.instanceId, record.moduleId, question)),
       aiUsage: { accounts: () => this.aiUsage.accountInfos(), read: (accountId) => this.aiUsage.read(accountId) },
       discord: this.discord,
       systemInfo: this.systemInfo,
@@ -3597,13 +3565,6 @@ export class Host {
     this.panels.closeAll();
   }
 
-  /** Whether the panel shows a question in its place now (questionOf): its page waits, hidden, until it is answered. */
-  private askingIn(instanceId: string): boolean {
-    const shown = this.workspaceId ? this.records(this.workspaceId) : [];
-    const record = shown.find((item) => item.instanceId === instanceId);
-    return !!record && this.questionOf(record, shown) === "ask";
-  }
-
   /** A panel's module view; undefined for a Browser panel or when it has none. */
   private moduleView(instanceId: string): ModuleView | undefined {
     const view = this.panels.get(instanceId);
@@ -3930,7 +3891,7 @@ export class Host {
           // Hidden until its page has its data.
           const overGame = this.panels.isLent(record.instanceId);
           // A new page is also waiting until it has drawn once: its loader stays under the see-through view until then.
-          const question = this.questionOf(record, workspace.instances);
+          const question = this.panelQuestions.of(record, workspace.instances);
           const phase = view?.phase ?? "loading";
           const waiting = !question && !overGame && (phase === "loading" || phase === "settling" || phase === "revealed");
           const inGame = this.gameOverlays.hasPanel(record.instanceId);
@@ -3972,13 +3933,7 @@ export class Host {
       snapshots: workspace.snapshots.map(({ id, name, savedAt }) => ({ id, name, savedAt })),
       notice: this.notice,
       keptAside: unreadableFilesKept(),
-      profile: {
-        name: this.profile.name,
-        initials: this.profile.initials,
-        pictureUrl: this.profile.picture ? PROFILE_URL + this.profile.picture : null,
-        ranks: { ...library.profileRanks },
-        banner: library.profileBanner ?? (this.profile.picture ? "picture" : "stripes"),
-      },
+      profile: this.userProfile.view(),
       restartPending: library.grayscaleText !== this.options.grayscaleText,
       appearance: this.appearance.view(),
       language: { setting: library.language, resolved: this.language },
@@ -4053,90 +4008,6 @@ export class Host {
     if (this.window.isDestroyed()) return;
     const state: WindowState = { bounds: this.window.getNormalBounds(), maximized: this.window.isMaximized() };
     this.savedData.saveWindow(state);
-  }
-
-  /**
-   * Shows Tavora's consent dialog for one connector a module asks for on request, after a click in its panel; resolves
-   * with whether the user allowed it. A newer request closes an older one as not allowed, and so does closing the module's last panel.
-   */
-  private askConnector(moduleId: string, connector: Connector): Promise<boolean> {
-    const { answer } = this.questions.ask("connector", { module: moduleId }, { moduleId, connector });
-    this.pushState();
-    this.panels.applyBounds();
-    return answer;
-  }
-
-  /** The user's answer; allowing grants that connector alone, and the module's panels go on running with it. */
-  private async answerConnector(id: number, allow: boolean): Promise<void> {
-    const pending = this.questions.peek("connector");
-    if (!pending || pending.id !== id) return;
-    const { moduleId, connector } = pending.payload;
-    const module = this.modules.get(moduleId);
-    const grant = async (): Promise<boolean> => {
-      const granted = allow && module !== undefined && (module.manifest.permissions.onRequest ?? []).includes(connector);
-      if (granted) await this.grants.grant(module, { network: [], connectors: [connector], folders: [] });
-      return granted;
-    };
-    // The question is gone now; the module hears the answer once the grant is stored.
-    const result = grant();
-    this.questions.answer(id, result);
-    await result;
-    this.pushState();
-    this.panels.applyBounds();
-  }
-
-  /** A module's leaderboards (leaderboards.ts); `ask` shows Tavora's question in the panel that asks. */
-  private leaderboardsOf(module: InstalledModule, ask: (question: LeaderboardQuestion) => Promise<boolean>): ModuleLeaderboards {
-    return new ModuleLeaderboards({
-      moduleId: boardsModuleId(module.manifest.id, module.owner === OFFICIAL_OWNER || this.catalogModules.has(module.manifest.id)),
-      boards: translateManifest(module.manifest, this.language).leaderboards?.boards ?? [],
-      account: this.account,
-      pseudonym: (label) => (label ? translate(this.language, "leaderboards.pseudonym", { label }) : translate(this.language, "leaderboards.someone")),
-      ask,
-    });
-  }
-
-  /** The profile card's ranks: the catalog modules with boards the user agreed to be shown on (profile-ranks.ts). */
-  private async profileRanks(): Promise<ProfileRanksView> {
-    const sources: ProfileRankSource[] = [...this.modules.values()]
-      .filter((module) => (module.owner === OFFICIAL_OWNER || this.catalogModules.has(module.manifest.id)) && (module.manifest.leaderboards?.boards.length ?? 0) > 0)
-      .map((module) => ({
-        id: module.manifest.id,
-        name: translateManifest(module.manifest, this.language).name,
-        boards: module.manifest.leaderboards?.boards ?? [],
-        leaderboards: this.leaderboardsOf(module, async () => false),
-      }));
-    return profileRanks(this.account, sources);
-  }
-
-  /** Settings > Integrations > Leaderboards: takes the user off a module's boards, whatever the module offers. */
-  private async leaveLeaderboards(moduleId: string): Promise<void> {
-    const module = this.modules.get(moduleId);
-    if (!module) return;
-    try {
-      await this.leaderboardsOf(module, async () => false).hide();
-    } catch {
-      throw new UserError("account.error.unreachable");
-    }
-  }
-
-  /**
-   * Shows Tavora's question about a module's leaderboards in the panel that asked (leaderboards.show, after a click
-   * there); resolves with the user's answer. A newer question closes an older one as no.
-   */
-  private askLeaderboard(instanceId: string, moduleId: string, question: LeaderboardQuestion): Promise<boolean> {
-    const { answer } = this.questions.ask("leaderboard", { panel: instanceId }, { moduleId, question });
-    this.pushState();
-    this.panels.applyBounds();
-    return answer;
-  }
-
-  /** The user's answer; the panel's page comes back either way. */
-  private answerLeaderboard(id: number, yes: boolean): void {
-    if (this.questions.peek("leaderboard")?.id !== id) return;
-    this.questions.answer(id, yes);
-    this.pushState();
-    this.panels.applyBounds();
   }
 
   /**
@@ -4243,7 +4114,7 @@ export class Host {
         fontCss: () => fontStylesheet(this.appearance.host.font),
         saveLibrary: () => this.saveLibrary(),
         workspaceId: () => this.workspaceId,
-        askConnector: (moduleId, connector) => this.askConnector(moduleId, connector),
+        askConnector: (moduleId, connector) => this.panelQuestions.askConnector(moduleId, connector),
         panelInfo: (instanceId, workspaceId) => this.panelInfo(instanceId, workspaceId),
         page: {
           sources: () => this.overlaySources(),
