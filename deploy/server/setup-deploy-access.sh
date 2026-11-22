@@ -270,7 +270,7 @@ put apps/api/deploy/tavora-api.service /etc/systemd/system/tavora-api.service 64
 put apps/api/deploy/tavora-api-backup.service /etc/systemd/system/tavora-api-backup.service 644
 put apps/api/deploy/tavora-api-backup.timer /etc/systemd/system/tavora-api-backup.timer 644
 # The clamd filter (tavora-api-clamav starts it once ClamAV is there): root's file, run as clamav, never a deploy's code.
-before_filter="$(cat /etc/systemd/system/tavora-clamd-filter.service /usr/local/lib/tavora/tavora-clamd-filter.mjs 2>/dev/null | sha256sum)"
+before_filter="$({ cat /etc/systemd/system/tavora-clamd-filter.service /usr/local/lib/tavora/tavora-clamd-filter.mjs 2>/dev/null || true; } | sha256sum)"
 install -d -m 755 -o root -g root /usr/local/lib/tavora
 put apps/api/deploy/tavora-clamd-filter.service /etc/systemd/system/tavora-clamd-filter.service 644
 put apps/api/deploy/tavora-clamd-filter.mjs /usr/local/lib/tavora/tavora-clamd-filter.mjs 644

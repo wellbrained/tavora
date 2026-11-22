@@ -317,7 +317,6 @@ describe("the clamd filter", () => {
     const scan = await exchange(filter, Buffer.concat([stream, Buffer.from("zSHUTDOWN\0", "latin1")]));
     expect(scan.reply).toBe("stream: OK\0");
     expect(clamd.received[0]).toEqual(stream);
-    // Split over several writes, the way the service sends it, a stream still passes whole.
     const ping = await exchange(filter, Buffer.from("nPING\n", "latin1"));
     expect(ping.reply).toBe("PONG\n");
     expect(clamd.received).toHaveLength(2);

@@ -18,14 +18,14 @@ set -euo pipefail
 clamd=/run/clamav/clamd.ctl
 filter=/run/tavora-clamd/clamd.sock
 
-ping() { printf 'PING\n' | timeout 5 socat - "UNIX-CONNECT:$1" 2>/dev/null | grep -q PONG; }
+answers() { printf 'PING\n' | timeout 5 socat - "UNIX-CONNECT:$1" 2>/dev/null | grep -q PONG; }
 
 case "${1:-}" in
   status)
     systemctl is-active clamav-daemon || true
-    if [[ -S "$clamd" ]]; then ping "$clamd" && echo 'clamd answers' || echo 'clamd did not answer'; else echo "No clamd socket at $clamd"; fi
+    if [[ -S "$clamd" ]]; then answers "$clamd" && echo 'clamd answers' || echo 'clamd did not answer'; else echo "No clamd socket at $clamd"; fi
     systemctl is-active tavora-clamd-filter || true
-    if [[ -S "$filter" ]]; then ping "$filter" && echo 'The filter answers' || echo 'The filter did not answer'; else echo "No filter socket at $filter"; fi
+    if [[ -S "$filter" ]]; then answers "$filter" && echo 'The filter answers' || echo 'The filter did not answer'; else echo "No filter socket at $filter"; fi
     if id -nG tavora-api 2>/dev/null | tr ' ' '\n' | grep -qx clamav; then echo 'Warning: tavora-api is still in the clamav group; run tavora-api-clamav again.'; fi
     pid="$(systemctl show -P MainPID tavora-api 2>/dev/null || echo 0)"
     if [[ "$pid" =~ ^[1-9][0-9]*$ ]]; then
@@ -57,12 +57,12 @@ systemctl enable --now clamav-daemon
 # Earlier versions of this script put the service's user in the clamav group, for clamd's socket. It needs the filter only.
 if id -nG tavora-api 2>/dev/null | tr ' ' '\n' | grep -qx clamav; then gpasswd -d tavora-api clamav >/dev/null; echo 'Took tavora-api out of the clamav group.'; fi
 # clamd needs a moment to load its signatures before it answers.
-for _ in $(seq 1 60); do [[ -S "$clamd" ]] && ping "$clamd" && break; sleep 2; done
-ping "$clamd" || { echo 'clamd is not answering yet; check: journalctl -u clamav-daemon'; exit 1; }
-systemctl enable tavora-clamd-filter >/dev/null 2>&1
+for _ in $(seq 1 60); do [[ -S "$clamd" ]] && answers "$clamd" && break; sleep 2; done
+answers "$clamd" || { echo 'clamd is not answering yet; check: journalctl -u clamav-daemon'; exit 1; }
+systemctl enable tavora-clamd-filter >/dev/null
 systemctl restart tavora-clamd-filter
-for _ in $(seq 1 10); do [[ -S "$filter" ]] && ping "$filter" && break; sleep 1; done
-ping "$filter" || { echo 'The clamd filter is not answering; check: journalctl -u tavora-clamd-filter'; exit 1; }
+for _ in $(seq 1 10); do [[ -S "$filter" ]] && answers "$filter" && break; sleep 1; done
+answers "$filter" || { echo 'The clamd filter is not answering; check: journalctl -u tavora-clamd-filter'; exit 1; }
 
 # Tell the service where it is (the other settings in the file stay); this restarts it, so its unit hides clamd's socket again.
 /usr/local/sbin/tavora-api-set-setting clamav
