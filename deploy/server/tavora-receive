@@ -49,7 +49,7 @@ fi
 id="${BASH_REMATCH[1]}"
 sum="${BASH_REMATCH[2]}"
 if [[ "$job" == updates ]]; then
-  [[ "$id" =~ ^[0-9]{1,6}\.[0-9]{1,6}\.[0-9]{1,6}$ ]] || die "not a version: $id"
+  [[ "$id" =~ ^(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})$ ]] || die "not a version: $id"
 else
   [[ "$id" =~ ^[0-9]{14}-[0-9a-f]{12}$ ]] || die "not a release name: $id"
 fi
@@ -153,7 +153,7 @@ case "$job" in
     grep -qxF "    sha512: $digest" "$unpacked/latest.yml" || die "latest.yml's files list has another sha512 than the installer's"
     # Tavora's own signature, under one of the keys the setup pinned: an upload the update key didn't sign never goes live.
     /usr/local/sbin/tavora-update-signature verify /etc/tavora-deploy/update-keys.ts "$unpacked/latest.yml" "$id" "$installer" "$digest" >/dev/null ||
-      die "latest.yml is not signed by Tavora's update key for this installer; nothing was published"
+      die "latest.yml didn't pass the update check (see above); nothing was published"
     # Only forward: a version that is not newer than the live one is refused (a bad release is fixed by a newer one).
     previous="$(grep -m1 '^version: ' "$root/latest.yml" 2>/dev/null | cut -d' ' -f2 || true)"
     if [[ -n "$previous" ]]; then

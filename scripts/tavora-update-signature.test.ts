@@ -5,9 +5,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { makeUpdateKey } from "../apps/desktop/src/main/update-signature";
+import { createRequire } from "node:module";
+import { makeUpdateKey, signUpdate } from "../apps/desktop/src/main/update-signature";
 // @ts-expect-error - plain JavaScript module shared with apps/desktop/scripts/release.mjs
-import { signLatestYml } from "../apps/desktop/scripts/update-feed.mjs";
+import { addSignatureToLatestYml, feedProblem, signLatestYml } from "../apps/desktop/scripts/update-feed.mjs";
+// @ts-expect-error - plain JavaScript module shared with apps/desktop/scripts/release.mjs
+import { feedNoteProblem } from "../apps/desktop/scripts/release-notes.mjs";
 
 // The server's check (deploy/server/tavora-update-signature) against what `pnpm release` really signs. It needs
 // OpenSSL 3, as the server does: CI (Ubuntu) has it and must run this; a PC without it skips.
@@ -47,7 +50,75 @@ function run(...args: string[]) {
 }
 const verify = (feed: string, { keys = pins, version = "1.0.1", file = installer, digest = sha512 } = {}) => run("verify", keys, write(feed), version, file, digest);
 
-describe.skipIf(!capable)("tavora-update-signature", () => {
+// latest.yml exactly as electron-builder writes it (app-builder-lib's updateInfoBuilder, builder-util's serializeToYaml).
+const desktopRequire = createRequire(path.join(repo, "apps/desktop/package.json"));
+const yaml = createRequire(createRequire(desktopRequire.resolve("electron-builder")).resolve("builder-util"))("js-yaml") as { dump: (value: unknown, options: object) => string };
+function built(notes: string[] | null): string {
+  const info = { version: "1.0.1", files: [{ url: installer, sha512, size: 123456 }], path: installer, sha512, ...(notes ? { releaseNotes: notes.map((note) => `- ${note}`).join("\n") + "\n" } : {}), releaseDate: "2026-11-14T10:00:00.000Z" };
+  return yaml.dump(info, { lineWidth: 8000, skipInvalid: false, noRefs: true });
+}
+const signature = signUpdate({ version: "1.0.1", file: installer, sha512 }, release.privateKey);
+const fields = { version: "1.0.1", file: installer, sha512 };
+
+/** Notes electron-builder keeps as a plain block, and ones it quotes or folds; the early check must tell them apart. */
+const NOTES: Record<string, string[] | null> = {
+  none: null,
+  plain: ["Faster start", "Ümlaut für dich 🎉, „Anführung“ und — Strich"],
+  links: ["See https://docs.mytavora.app and url: here", "# not a comment", "key: value", "'quotes' and \"more\""],
+  tab: ["a\tb"],
+  nbsp: ["z.\u00a0B."],
+  lineSeparator: ["a\u2028b"],
+  nextLine: ["a\u0085b"],
+  bom: ["\ufeffa"],
+  long: ["word ".repeat(1700)],
+};
+
+describe("the update server's feed check, and the same check in pnpm release", () => {
+  it("takes a feed exactly when electron-builder keeps the notes plain, and the early note check says so first", () => {
+    for (const [name, notes] of Object.entries(NOTES)) {
+      const feed = built(notes);
+      const early = (notes ?? []).map(feedNoteProblem).filter(Boolean);
+      const unsigned = feedProblem(feed, fields, { signed: false });
+      expect({ name, early: early.length === 0 }).toEqual({ name, early: unsigned === null });
+      expect({ name, signed: feedProblem(addSignatureToLatestYml(feed, signature), fields) }).toEqual({ name, signed: unsigned });
+    }
+  });
+
+  it("refuses a built feed that is signed already, or isn't for this installer", () => {
+    const feed = built(NOTES.plain!);
+    expect(feedProblem(addSignatureToLatestYml(feed, signature), fields, { signed: false })).toContain("already has a tavoraSignature");
+    expect(feedProblem(feed, { ...fields, sha512: otherSha512 }, { signed: false })).toContain("files list must hold exactly this installer");
+    expect(feedProblem(feed, fields)).toContain("exactly one tavoraSignature");
+  });
+});
+
+describe.skipIf(!capable)("the update server and pnpm release agree", () => {
+  it("on every feed: the ones electron-builder writes, and ones made to slip past", () => {
+    const made = [
+      ...Object.values(NOTES).map(built),
+      LATEST.replace("path:", `  - url: https://evil.example/Tavora-Setup-1.0.1-x64.exe\n    sha512: ${otherSha512}\n    size: 1\npath:`),
+      LATEST.replace("path:", `  - url: Tavora-Setup-1.0.1-x64.exe\n    sha512: ${otherSha512}\n    size: 1\npath:`),
+      LATEST.replace("releaseDate:", "packages:\n  x64:\n    path: x.7z\nreleaseDate:"),
+      LATEST.replace("releaseDate:", "isAdminRightsRequired: true\nreleaseDate:"),
+      LATEST.replace("releaseDate:", "releaseNotes: |\n  - fine\n  - url: https://evil.example/x.exe\nreleaseDate:"),
+      LATEST.replace("releaseDate:", "releaseNotes: |\n  - fine\nurl: https://evil.example/x.exe\nreleaseDate:"),
+      LATEST.replace("releaseDate:", "releaseNotes: |\n    deeper\nreleaseDate:"),
+      LATEST.replace("releaseDate:", "releaseNotes: >\n  folded\nreleaseDate:"),
+      LATEST.replace("releaseDate:", 'releaseNotes: "- a\\tb\\n"\nreleaseDate:'),
+      `${LATEST}path: ${installer}\n`,
+      LATEST.replace(/\n/g, "\r\n"),
+    ];
+    for (const unsigned of made) {
+      const feed = addSignatureToLatestYml(unsigned, signature);
+      const js = feedProblem(feed, fields);
+      const server = verify(feed);
+      expect({ feed, ok: server.ok }).toEqual({ feed, ok: js === null });
+      if (js !== null) expect(server.err).toContain(js.trim());
+    }
+  }, 60_000);
+});
+
+describe.skipIf(!capable)("tavora-update-signature", { timeout: 30_000 }, () => {
   it("takes an update signed by the release or the backup key", () => {
     expect(verify(signed())).toMatchObject({ ok: true, out: "signed by the release update key" });
     expect(verify(signed(backup.privateKey))).toMatchObject({ ok: true, out: "signed by the backup update key" });
@@ -91,6 +162,11 @@ describe.skipIf(!capable)("tavora-update-signature", () => {
     expect(verify(feed.replace(`  - url: ${installer}`, "  - url: Other.exe")).err).toContain("files list must hold exactly this installer");
   });
 
+  it("takes links in the release notes, which can never be keys there", () => {
+    const notes = signed().replace("releaseDate:", "releaseNotes: |\n  - See https://docs.mytavora.app\n  - url: is just text here\nreleaseDate:");
+    expect(verify(notes).ok).toBe(true);
+  });
+
   it("refuses anything else the signature doesn't cover", () => {
     const feed = signed();
     expect(verify(feed.replace("releaseDate:", "isAdminRightsRequired: true\nreleaseDate:")).err).toContain("never has: isAdminRightsRequired");
@@ -99,7 +175,6 @@ describe.skipIf(!capable)("tavora-update-signature", () => {
     expect(verify(feed.replace(`path: ${installer}`, "path: Other.exe")).err).toContain("never has: path: Other.exe");
     expect(verify(`${feed}path: ${installer}\n`).err).toContain("exactly one path");
     expect(verify(feed.replace(`path: ${installer}\n`, "")).err).toContain("exactly one path");
-    expect(verify(feed.replace("releaseDate:", "releaseNotes: |\n  see url: x\nreleaseDate:")).err).toContain("more than one url");
     expect(verify(feed.replace("releaseDate:", "releaseNotes: |\n    indented more\nreleaseDate:")).err).toContain("never has");
     expect(verify(feed.replace("version: 1.0.1", "version: 1.0.1\nversion: 1.0.1")).err).toContain("exactly one version");
     expect(verify(feed.replace(/\n/g, "\r\n")).ok).toBe(false);

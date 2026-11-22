@@ -97,10 +97,66 @@ export function signLatestYml({ latestYml, version, file, sha512, privateKey, pi
   const text = addSignatureToLatestYml(latestYml, signUpdate(update, privateKey));
   const keys = readPinnedUpdateKeys(pinned);
   if (!keys.ok) throw new Error(keys.problem);
+  const layout = feedProblem(text, update);
+  if (layout) throw new Error(`the update server would refuse it: ${layout}`);
   const back = readLatestYml(text);
   const check = verifyUpdateSignature(update, back.signature, keys.keys);
   if (!check.ok) throw new Error(`the signed latest.yml does not check out: ${check.reason}`);
   return { text, key: check.key };
+}
+
+/**
+ * Why latest.yml is not exactly electron-builder's feed for this one installer, or null: the update server's own check
+ * (feed_problem in deploy/server/tavora-update-signature), line for line, so `pnpm release` finds out before it signs and
+ * uploads. `signed`: whether the tavoraSignature line must be there (after signing) or must not (as built).
+ */
+export function feedProblem(text, { version, file, sha512 }, { signed = true } = {}) {
+  const lines = String(text).split("\n");
+  if (lines.at(-1) === "") lines.pop();
+  const seen = {};
+  const count = (key) => (seen[key] = (seen[key] ?? 0) + 1);
+  let state = "";
+  let entry = 0;
+  let urls = 0;
+  for (const line of lines) {
+    if (state === "notes") {
+      if (line === "" || /^ {2}[^ ]/.test(line)) continue;
+      state = "";
+    }
+    if (line.includes("://")) return "latest.yml names an address (://); the feed only ever names the installer next to it";
+    if (line.includes("url:") && ++urls > 1) return "latest.yml names more than one url";
+    if (state === "files") {
+      entry++;
+      if (entry === 1 && line === `  - url: ${file}`) continue;
+      if (entry === 2 && line === `    sha512: ${sha512}`) continue;
+      if (entry === 3 && /^ {4}size: [1-9][0-9]*$/.test(line)) {
+        state = "";
+        continue;
+      }
+      return "latest.yml's files list must hold exactly this installer: its url, sha512 and size";
+    }
+    if (line === `version: ${version}`) count("version");
+    else if (line.startsWith("tavoraSignature: ")) count("tavoraSignature");
+    else if (line === "files:") {
+      count("files");
+      state = "files";
+      entry = 0;
+    } else if (line === `path: ${file}`) count("path");
+    else if (line === `sha512: ${sha512}`) count("sha512");
+    else if (line === "releaseNotes: |") {
+      count("releaseNotes");
+      state = "notes";
+    } else if (/^releaseDate: '[0-9TZ:.-]+'$/.test(line)) count("releaseDate");
+    else return `latest.yml has a line electron-builder's feed for ${file} never has: ${line.slice(0, 80)}`;
+  }
+  if (state === "files") return "latest.yml's files list is cut off";
+  if (urls !== 1) return "latest.yml must name the installer in exactly one url";
+  for (const key of ["version", ...(signed ? ["tavoraSignature"] : []), "files", "path", "sha512", "releaseDate"]) {
+    if (seen[key] !== 1) return `latest.yml must have exactly one ${key} line for this installer`;
+  }
+  if (!signed && seen.tavoraSignature) return "latest.yml already has a tavoraSignature line; it must come unsigned from the Release build";
+  if ((seen.releaseNotes ?? 0) > 1) return "latest.yml has more than one releaseNotes";
+  return null;
 }
 
 /** What a release signs, as lines to show (the dry run's "would sign"). */

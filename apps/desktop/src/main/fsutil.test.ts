@@ -86,11 +86,12 @@ describe("sweepWriteLeftovers", () => {
   });
 
   it("sweeps only Tavora's own data folders, never module code, the user's files, Chromium's or a new one", async () => {
-    for (const dir of ["panel-state", "game-icons", "steam-icons", "profile", "backups/before-x"]) {
+    const own = ["panel-state", "game-icons", "steam-icons", "profile", "overlay-pictures", "read-only-files/local.dev/local.x/9-kings", "backups/before-x"];
+    for (const dir of own) {
       await put(`${dir}/f.json`);
       await put(`${dir}/f.json.0123456789ab.tmp`);
     }
-    expect(await sweepWriteLeftovers(root, () => now)).toHaveLength(5);
+    expect(await sweepWriteLeftovers(root, () => now)).toHaveLength(own.length);
     for (const dir of ["modules/local.x", "module-staging", "module-blobs/_app", "official-updates/x", "cloud-copy-staging", "Partitions/x", "Local Storage", "blob_storage", "some-new-folder", "logs"]) {
       await put(`${dir}/f.json`);
       await put(`${dir}/f.json.0123456789ab.tmp`);

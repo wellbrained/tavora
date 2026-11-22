@@ -38,11 +38,13 @@ read_keys() { # file
 
 # Why latest.yml is not exactly electron-builder's feed for this one installer (plus the signature line), or nothing.
 # Each key once, each line exactly as written for <version>, <installer> and <sha512>; `files` holds one entry (url,
-# sha512, size); `releaseNotes` is a plain `|` block of lines indented by two spaces. No address (://) anywhere, and one
-# `url:` line in all, so nothing can point an updater at another file.
+# sha512, size); `releaseNotes` is a plain `|` block whose lines are all indented by exactly two spaces, so none of
+# them can be a key (it is text, and may name links). Outside it no address (://) and one `url:` line in all, so
+# nothing can point an updater at another file. Keep in step with feedProblem in apps/desktop/scripts/update-feed.mjs.
 feed_problem() { # latest.yml version installer sha512
   awk -v version="$2" -v installer="$3" -v sha512="$4" '
     function fail(why) { print why; bad = 1; exit }
+    state == "notes" { if ($0 == "" || $0 ~ /^  [^ ]/) next; state = "" }
     index($0, "://") { fail("latest.yml names an address (://); the feed only ever names the installer next to it") }
     /url:/ { if (++urls > 1) fail("latest.yml names more than one url") }
     state == "files" {
@@ -52,7 +54,6 @@ feed_problem() { # latest.yml version installer sha512
       if (entry == 3 && $0 ~ /^    size: [1-9][0-9]*$/) { state = ""; next }
       fail("latest.yml'"'"'s files list must hold exactly this installer: its url, sha512 and size")
     }
-    state == "notes" { if ($0 == "" || $0 ~ /^  [^ ]/) next; state = "" }
     $0 == "version: " version { seen["version"]++; next }
     $0 ~ /^tavoraSignature: / { seen["tavoraSignature"]++; next }
     $0 == "files:" { seen["files"]++; state = "files"; entry = 0; next }

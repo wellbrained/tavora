@@ -34,11 +34,12 @@ export async function writeFileAtomic(file: string, body: string | Uint8Array): 
 export const LEFTOVER_TEMP_AGE_MS = 60 * 60 * 1000;
 /**
  * The folders in the data folder that hold Tavora's own saved data, written with writeFileAtomic: module storage and
- * documents, panel state, game and Steam icons, the profile picture, backups. Only these are swept (and the files at the
- * top of the data folder); a folder added later is left alone until it is named here. Never module code, installs in
- * progress, the files the user saves from modules, or Chromium's own folders.
+ * documents, panel state, game and Steam icons, the profile picture, the pictures of overlay layouts, the files a
+ * module was allowed to read, backups. Only these are swept (and the files at the top of the data folder); a folder
+ * added later is left alone until it is named here. Never module code, installs in progress, the files the user saves
+ * from modules, or Chromium's own folders.
  */
-const SWEPT_FOLDERS = new Set(["module-data", "panel-state", "game-icons", "steam-icons", "profile", "backups"]);
+const SWEPT_FOLDERS = new Set(["module-data", "panel-state", "game-icons", "steam-icons", "profile", "overlay-pictures", "read-only-files", "backups"]);
 const SWEEP_DEPTH = 8;
 
 /**

@@ -34,6 +34,10 @@ describe("checkRelease", () => {
     // The other guards still apply: not newer, wrong notes.
     expect(checkRelease("0.4.0", { ...state, noteVersions: ["0.4.0"] }).join(" ")).toContain("already released");
     expect(checkRelease("0.4.1", { ...state, noteVersions: ["0.4.0"] }).join(" ")).toContain("newest patch-notes entry");
+    // A note the update feed can't take would stop the release only at the upload; it stops here instead.
+    expect(checkRelease("0.4.1", { ...state, notes: ["Fine", "With a\u2028line separator"] }).join(" ")).toContain("invisible character (U+2028)");
+    expect(checkRelease("0.4.1", { ...state, notes: ["x".repeat(5000)] }).join(" ")).toContain("keep a note under 4000");
+    expect(checkRelease("0.4.1", { ...state, notes: ["See https://docs.mytavora.app"] })).toEqual([]);
   });
 
   it("wants main, clean and level with origin/main", () => {
