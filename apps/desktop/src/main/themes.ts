@@ -7,7 +7,7 @@
 import { readdir, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { isModuleId, isReleaseVersion, needsNewerTavora } from "@tavora/module-schema";
-import { DEFAULT_THEME_FONT, OPTIONAL_THEME_TOKENS, THEME_TOKENS, type TavoraStyle, type TavoraTheme, type ThemeFont, type ThemeToken, type ToastPosition } from "@tavora/sdk/protocol";
+import { DEFAULT_THEME_FONT, OPTIONAL_THEME_TOKENS, THEME_TOKENS, type TabOverflow, type TavoraStyle, type TavoraTheme, type ThemeFont, type ThemeToken, type ToastPosition } from "@tavora/sdk/protocol";
 import { THEME } from "./games";
 import { compareModuleVersions } from "../shared/module-version";
 import { OFFICIAL_PREFIX, type Provenance } from "./registry";
@@ -522,7 +522,13 @@ export function resolveTheme(
  * What modules get through ui.getTheme and the ui.theme event, with where the user wants toasts, the font in use and the
  * design style (styles.ts; left out, the theme has none, as from a Tavora before styles).
  */
-export function moduleTheme(variation: ThemeVariation, toasts: ToastPosition = "bottom-center", font: ThemeFont = DEFAULT_THEME_FONT, style?: TavoraStyle): TavoraTheme {
+export function moduleTheme(
+  variation: ThemeVariation,
+  toasts: ToastPosition = "bottom-center",
+  font: ThemeFont = DEFAULT_THEME_FONT,
+  style?: TavoraStyle,
+  tabOverflow: TabOverflow = "list",
+): TavoraTheme {
   const { colors } = variation;
   return {
     mode: variation.mode,
@@ -532,6 +538,7 @@ export function moduleTheme(variation: ThemeVariation, toasts: ToastPosition = "
     toasts,
     font: { ...font },
     ...(style ? { style: { ...style, looks: { ...style.looks }, values: { ...style.values } } } : {}),
+    tabOverflow,
   };
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { LIMITS, MIN_TAVORA, TavoraError } from "./index.js";
+import { LIMITS, MIN_TAVORA, TAB_OVERFLOW_TAVORA, TAB_OVERFLOWS, tabOverflowOf, TavoraError } from "./index.js";
 import { METHOD_INFO, versionAtLeast } from "./protocol.js";
 import { ADD_DIALOG_MS, createMemoryHost, GESTURE_MS, LATEST_TAVORA } from "./testing.js";
 
@@ -906,5 +906,34 @@ describe("an older Tavora", () => {
     const { sdk } = createMemoryHost({ version: LATEST_TAVORA });
     expect(await sdk.storage.compareAndSet("k", null, 1)).toBe(true);
     expect(await sdk.leaderboards.mine()).toEqual({ boards: [] });
+  });
+});
+
+describe("tabOverflow in the theme", () => {
+  it("comes as the list by default, follows the host's changes and goes with an older Tavora", async () => {
+    const { sdk, host } = createMemoryHost();
+    expect((await sdk.ui.getTheme()).tabOverflow).toBe("list");
+    const themes = vi.fn();
+    sdk.ui.onThemeChange(themes);
+    host.changeTheme({ tabOverflow: "arrows" });
+    expect(themes.mock.calls.at(-1)![0]).toMatchObject({ tabOverflow: "arrows" });
+    expect((await sdk.ui.getTheme()).tabOverflow).toBe("arrows");
+    host.changeTheme({ tabOverflow: undefined });
+    expect("tabOverflow" in (await sdk.ui.getTheme())).toBe(false);
+
+    expect(versionAtLeast(TAB_OVERFLOW_TAVORA, "0.24.135")).toBe(true);
+    expect(versionAtLeast(LATEST_TAVORA, TAB_OVERFLOW_TAVORA)).toBe(true);
+    const older = createMemoryHost({ version: "0.24.134", theme: { tabOverflow: "arrows" } });
+    expect((await older.sdk.ui.getTheme()).tabOverflow).toBeUndefined();
+    older.host.changeTheme({ tabOverflow: "arrows" });
+    expect(tabOverflowOf(await older.sdk.ui.getTheme())).toBe("list");
+  });
+
+  it("reads as the list when it is missing or unknown", () => {
+    expect(tabOverflowOf(undefined)).toBe("list");
+    expect(tabOverflowOf({})).toBe("list");
+    expect(tabOverflowOf({ tabOverflow: "arrows" })).toBe("arrows");
+    expect(tabOverflowOf({ tabOverflow: "wheel" as never })).toBe("list");
+    expect(TAB_OVERFLOWS).toEqual(["list", "arrows"]);
   });
 });

@@ -1,4 +1,5 @@
-// The pure parts of TabStrip: where a dragged tab lands, which tab to open when one closes, and what a rename accepts.
+// The pure parts of TabStrip: where a dragged tab lands, which tab to open when one closes, what a rename accepts, and
+// which tabs don't fit the row. The dock's panel tabs use the last ones too, so both count hidden tabs alike.
 import { checkName, DEFAULT_NAME_LIMIT, type NameProblem } from "../../name-check";
 
 export interface StripTab {
@@ -51,4 +52,46 @@ export function checkRename(before: string, text: string, max = DEFAULT_NAME_LIM
   if (problem) return { kind: "invalid", problem };
   const label = text.trim();
   return label === before ? { kind: "unchanged" } : { kind: "rename", label };
+}
+
+/** A box across the row: a tab, or the row itself. */
+export interface RowSpan {
+  left: number;
+  right: number;
+}
+
+/** How far a tab may stick out of the row and still count as in view: a pixel, so rounding never shows a control. */
+const SLACK = 1;
+
+/**
+ * The tabs not entirely in the row, in tab order, and whether some are hidden before it (scrolled away to the left) or
+ * after it.
+ */
+export function tabsOutOfView(row: RowSpan, tabs: readonly (RowSpan & { id: string })[]): { hidden: string[]; before: boolean; after: boolean } {
+  let before = false;
+  let after = false;
+  const hidden: string[] = [];
+  for (const tab of tabs) {
+    const left = tab.left < row.left - SLACK;
+    const right = tab.right > row.right + SLACK;
+    if (!left && !right) continue;
+    hidden.push(tab.id);
+    if (left) before = true;
+    if (right) after = true;
+  }
+  return { hidden, before, after };
+}
+
+/** How far to scroll the row (added to `scrollLeft`) so the tab is in it; 0 when it is. A tab wider than the row shows its start. */
+export function revealBy(row: RowSpan, tab: RowSpan): number {
+  if (tab.right > row.right + SLACK) return Math.min(tab.right - row.right, tab.left - row.left);
+  if (tab.left < row.left - SLACK) return tab.left - row.left;
+  return 0;
+}
+
+/** The tab before (-1) or after (1) `id`; null at either end or for an unknown id. */
+export function neighbourTab(ids: readonly string[], id: string | undefined, step: -1 | 1): string | null {
+  const index = id === undefined ? -1 : ids.indexOf(id);
+  if (index < 0) return null;
+  return ids[index + step] ?? null;
 }

@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.45
+
+- New projects start on `@tavora/sdk` 0.4.7: the theme says how the user reaches tabs that don't fit (`theme.tabOverflow`).
+
 ## 0.1.44
 
 - New projects start on `@tavora/sdk` 0.4.6: the memory host in `@tavora/sdk/testing` refuses the document ids Tavora refuses (`index`, `con`, `nul`, an id that differs from a saved one only by case).

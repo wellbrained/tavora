@@ -42,4 +42,5 @@ export const THEME: TavoraTheme = {
   radius: 8,
   toasts: "bottom-center",
   font: { ...DEFAULT_THEME_FONT },
+  tabOverflow: "list",
 };
