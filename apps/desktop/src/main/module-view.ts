@@ -8,7 +8,7 @@ import { app, BrowserWindow, clipboard, ClipboardItem, MessageChannelMain, sessi
 import type { CallName, Capability, GameOverlayResult, ReadOnlyFile, SystemApps, SystemInfo, SystemTraffic, HotkeyBinding, HotkeySetResult, JsonValue, OverlayLinkResult, OverlaySource, TavoraTheme, TavoraViewport, TavoraWorkspace } from "@tavora/sdk/protocol";
 import type { ResolvedPanelType } from "@tavora/module-schema";
 import { modulePartition } from "./module-data";
-import { gestureCounts, type Opacity } from "./game-overlays";
+import { gestureCounts, type OverGame } from "./game-overlays";
 import { moduleThemeCss } from "./module-style";
 import type { PanelCorners } from "./panel-corners";
 import { InsertedCss } from "./inserted-css";
@@ -668,8 +668,8 @@ export class ModuleView implements PanelViewAdapter {
   noteGesture(): void {
     // A closed panel's last click opens nothing more (see letGo).
     if (this.disposed) return;
-    // Over the game the window takes input only while the layer is open; any report at another time is not the user's.
-    if (!gestureCounts(this.overGame !== null, this.overGame?.layerOpen() ?? false)) return;
+    // Over the game the window takes input only while the layer is open (OverGame.takesInput); any report at another time is not the user's.
+    if (!gestureCounts(this.overGame !== null, this.overGame?.takesInput ?? false)) return;
     this.press = { at: Date.now(), used: false };
     this.usedAt = this.press.at;
     const page = this.contents();
@@ -1408,11 +1408,11 @@ export class ModuleView implements PanelViewAdapter {
   }
 
   /**
-   * The panel is over its game, in a window of Tavora's own (game-overlay-window.ts). It is this same view and page,
-   * with the same bridge; only the look changes (see through, as the user set it) and clicks and keys count as the
-   * user's while `layerOpen()` is true (the layer is open, in Use or Arrange).
+   * The panel is over its game, in a window of Tavora's own (game-overlay-window.ts), which says how with `setOverGame`.
+   * It is this same view and page, with the same bridge; only the look changes (see through and zoomed, as the window
+   * says) and clicks and keys count as the user's only while the window takes input (`OverGame.takesInput`).
    */
-  private overGame: { layerOpen(): boolean; opacity: Opacity; zoom: number } | null = null;
+  private overGame: OverGame | null = null;
   /**
    * The style of Tavora's own on the page while over the game (opacity, zoom). Kept here, not with one stay over the game,
    * so it is always taken off again: a style left behind kept the panel zoomed in its workspace.
@@ -1423,42 +1423,35 @@ export class ModuleView implements PanelViewAdapter {
     return this.overGame !== null;
   }
 
-  enterGame(layerOpen: () => boolean): void {
-    const was = this.overGame !== null;
-    this.overGame = { layerOpen, opacity: 100, zoom: 1 };
-    // A stay that never ended (the panel lent again) leaves no style of its own behind.
-    if (was) void this.applyGameOpacity();
+  /**
+   * How the panel is over the game now, or null: back in its workspace slot. The window that holds the panel is the
+   * only one that calls this: once when it takes the view, again whenever its mode, opacity or zoom changes, and null
+   * when it lets the view go. The page hears `panel.overGame` only when it goes over the game or comes back.
+   */
+  setOverGame(next: OverGame | null): void {
+    const was = this.overGame;
+    if (!next) {
+      if (!was) return;
+      this.overGame = null;
+      this.refreshBehind();
+      this.bridge?.emit("panel.overGame", { over: false });
+      this.view.setBackgroundColor(this.options.getTheme().tokens.background);
+      // After any style being set or removed, so the style it inserts last isn't left behind.
+      void this.applyGameOpacity();
+      return;
+    }
+    this.overGame = { ...next };
+    if (was) {
+      // Faded or zoomed differently (or a new stay over the game, the panel lent again, with a style of its own).
+      if (was.opacity !== next.opacity || was.zoom !== next.zoom) void this.applyGameOpacity();
+      return;
+    }
     // Without a colour of its own, so the opacity the user chose lets the game show through.
     this.view.setBackgroundColor("#00000000");
     this.refreshBehind();
     // The page may draw a lighter look of itself there (panel.isOverGame asks the same).
-    if (!was) this.bridge?.emit("panel.overGame", { over: true });
-  }
-
-  leaveGame(): void {
-    if (!this.overGame) return;
-    this.overGame = null;
-    this.refreshBehind();
-    this.bridge?.emit("panel.overGame", { over: false });
-    this.view.setBackgroundColor(this.options.getTheme().tokens.background);
-    // After any style being set or removed, so the style it inserts last isn't left behind.
-    void this.applyGameOpacity();
-  }
-
-  /** How much of the panel shows through over the game: a style of Tavora's own on the page, as for overlay pages. */
-  setGameOpacity(opacity: Opacity): void {
-    const away = this.overGame;
-    if (!away) return;
-    away.opacity = opacity;
-    void this.applyGameOpacity();
-  }
-
-  /** Scales the panel with the game window's height. A style, not the page's zoom: that is shared with the module's other panels of this workspace. */
-  setGameZoom(factor: number): void {
-    const away = this.overGame;
-    if (!away || away.zoom === factor) return;
-    away.zoom = factor;
-    void this.applyGameOpacity();
+    this.bridge?.emit("panel.overGame", { over: true });
+    if (next.opacity !== 100 || next.zoom !== 1) void this.applyGameOpacity();
   }
 
   private gameOpacityQueue: Promise<void> = Promise.resolve();
