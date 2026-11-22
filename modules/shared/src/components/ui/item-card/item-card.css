@@ -94,10 +94,10 @@
 .tavora-item-card-unit-value,.tavora-item-card-unit-suffix{color:var(--ic-accent);font-variant-numeric:tabular-nums}
 .tavora-item-card-unit-value{text-align:right;white-space:nowrap}
 .tavora-item-card-unit-suffix{margin-left:-8px;white-space:pre}
-.tavora-item-card-icons{display:flex;flex-wrap:wrap;gap:12px}
-.tavora-item-card-unit-icon{position:relative;box-sizing:border-box;display:grid;place-items:center;flex:none;width:34px;height:26px;border:2px solid var(--ic-unit-line);border-radius:4px;background:var(--ic-bar)}
-.tavora-item-card-unit-icon img{display:block;width:24px;height:22px;object-fit:cover;border-radius:2px}
-.tavora-item-card-count{position:absolute;right:-6px;bottom:-7px;padding:0 3px;border-radius:6px;background:var(--ic-surface);color:var(--ic-text);font-size:var(--ic-small-size);line-height:13px;white-space:nowrap}
+.tavora-item-card-icons{display:flex;flex-wrap:wrap;gap:12px 18px}
+.tavora-item-card-unit-icon{position:relative;box-sizing:border-box;display:grid;place-items:center;flex:none;width:46px;height:38px;border:2px solid var(--ic-unit-line);border-radius:4px;background:var(--ic-bar)}
+.tavora-item-card-unit-icon img{display:block;width:38px;height:34px;object-fit:cover;border-radius:2px}
+.tavora-item-card-count{position:absolute;right:-10px;bottom:-10px;padding:0 4px;border:2px solid var(--ic-unit-line);border-radius:7px;background:var(--ic-surface);color:var(--ic-text);font-size:var(--ic-text-size);line-height:16px;white-space:nowrap}
 /* The pips sit on the body's bottom edge, the extra label under them. */
 .tavora-item-card-pips{position:absolute;left:50%;bottom:-9px;transform:translateX(-50%);display:flex;gap:14px}
 .tavora-item-card-pip{box-sizing:border-box;display:grid;place-items:center;width:12px;height:12px;transform:rotate(45deg);background:var(--ic-surface);border:2px solid var(--ic-unit-line)}

@@ -42,8 +42,8 @@ export interface TooltipContent {
     /**
      * The unit layout's row of small framed pictures under the stats (spells, buffs, items it carries), up to 12. Each
      * `image` is a bundle-relative PNG or WebP (up to 64 KB; for the kit's `ItemCard`, a URL the page can load), shown in
-     * full colour, 24 × 22 px (cut to fill); `label` (up to 100 characters) is its name for screen readers; `count` (up to 8 characters,
-     * e.g. "95") is a small badge at its bottom right. A picture that can't be read leaves an empty frame. Only the unit
+     * full colour, 38 × 34 px (cut to fill); `label` (up to 100 characters) is its name for screen readers; `count` (up to 8 characters,
+     * e.g. "95") is a badge at its bottom right, in the card's text size. A picture that can't be read leaves an empty frame. Only the unit
      * layout shows it.
      */
     icons?: TooltipIcon[];
@@ -111,7 +111,7 @@ export interface TooltipIcon {
     image: string;
     /** Its name for screen readers ("Steel Coat"). */
     label: string;
-    /** A small badge at its bottom right, e.g. how many stacks ("95"). */
+    /** A badge at its bottom right, e.g. how many stacks ("95"). */
     count?: string;
 }
 /** A run of the card's effect text. */

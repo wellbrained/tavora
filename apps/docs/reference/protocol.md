@@ -731,8 +731,8 @@ These need a Tavora with `sdk.supports("ui.tooltip.unit")` (`UNIT_CARD_TAVORA` i
   `"E+12"`, or `"99.999"` with `" (MAX)"`, keep their numbers in line. 4 px between rows. In the card and rich layouts a
   suffix is part of the value; the SDK puts it there, and so does Tavora for a raw caller.
 - `content.icons` is up to 12 `{ image, label, count? }`: small framed pictures (spells, buffs, items), each `image` a
-  `dist/` PNG or WebP up to 64 KB shown in full colour at 24 × 22 px (cut to fill), `label` (up to 100 characters) its
-  name for screen readers, `count` (up to 8 characters, e.g. `"95"`) a small badge at its bottom right. A picture that
+  `dist/` PNG or WebP up to 64 KB shown in full colour at 38 × 34 px (cut to fill), `label` (up to 100 characters) its
+  name for screen readers, `count` (up to 8 characters, e.g. `"95"`) a badge at its bottom right, in the card's text size. A picture that
   can't be read leaves an empty frame. The row wraps when it is wider than the card can be.
 - `content.pips` is `{ filled, total, extra? }`: `total` diamonds (1 to 10, whole) centred on the body's bottom edge,
   the first `filled` (0 to `total`, whole) of them filled, and `extra` (up to 12 characters, e.g. `"+67"` for a level

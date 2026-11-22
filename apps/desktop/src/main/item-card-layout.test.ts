@@ -40,7 +40,10 @@ describe("tooltip page and the kit's card: a unit", () => {
             ["body.unit .u-stats{display:grid;grid-template-columns:auto auto 1fr;gap:4px 8px}", ".tavora-item-card-unit-stats{display:grid;grid-template-columns:auto auto 1fr;gap:4px 8px}"],
             ["body.unit .u-value{text-align:right;white-space:nowrap}", ".tavora-item-card-unit-value{text-align:right;white-space:nowrap}"],
             ["body.unit .u-suffix{margin-left:-8px;white-space:pre}", ".tavora-item-card-unit-suffix{margin-left:-8px;white-space:pre}"],
-            ["width:34px;height:26px;border:2px solid var(--u-line);border-radius:4px;", "width:34px;height:26px;border:2px solid var(--ic-unit-line);border-radius:4px;"],
+            ["width:46px;height:38px;border:2px solid var(--u-line);border-radius:4px;", "width:46px;height:38px;border:2px solid var(--ic-unit-line);border-radius:4px;"],
+            ["body.unit .u-icons{display:flex;flex-wrap:wrap;gap:12px 18px}", ".tavora-item-card-icons{display:flex;flex-wrap:wrap;gap:12px 18px}"],
+            ["body.unit .u-icon img{display:block;width:38px;height:34px;", ".tavora-item-card-unit-icon img{display:block;width:38px;height:34px;"],
+            ["position:absolute;right:-10px;bottom:-10px;padding:0 4px;border:2px solid var(--u-line);border-radius:7px;", "position:absolute;right:-10px;bottom:-10px;padding:0 4px;border:2px solid var(--ic-unit-line);border-radius:7px;"],
             ["body.unit .u-pips{position:absolute;left:50%;bottom:-9px;transform:translateX(-50%);display:flex;gap:14px}", ".tavora-item-card-pips{position:absolute;left:50%;bottom:-9px;transform:translateX(-50%);display:flex;gap:14px}"],
             ["body.unit .u-extra{position:absolute;left:50%;bottom:-24px;", ".tavora-item-card-extra{position:absolute;left:50%;bottom:-24px;"],
         ];
