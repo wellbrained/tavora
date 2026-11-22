@@ -14,6 +14,12 @@ export const CODE_TTL_MS = 10 * 60_000;
 /** Wrong tries that spend a code. */
 export const CODE_MAX_TRIES = 5;
 /**
+ * Of CODE_MAX_TRIES, the wrong tries that may come from other networks than the one that asked for a code (audit
+ * 2026-11-22): once they are used, others are refused without a check, so a stranger can't spend someone's code by
+ * guessing, and the network that asked keeps at least 2 tries. A code still takes at most CODE_MAX_TRIES wrong tries in all.
+ */
+export const CODE_OTHER_TRIES = 3;
+/**
  * Codes one address can be sent, in three groups that never use up each other's room:
  * - the account's own sign-in asking for its own address (changing it, deleting the account, connecting or removing
  *   Discord): 3 every 15 minutes and 10 a day;
@@ -45,6 +51,18 @@ export const SESSION_IDLE_MS = 365 * DAY_MS;
 /** A publish token is good this long (decided 2026-10-20). */
 export const PUBLISH_TOKEN_TTL_MS = 365 * DAY_MS;
 export const MAX_PUBLISH_TOKENS = 10;
+/** How long, and how many, notices that couldn't go out the app is told of (unsentNotices). */
+export const UNSENT_NOTICE_MS = 30 * DAY_MS;
+export const MAX_UNSENT_NOTICES = 50;
+
+/** A notice about an account's publishing that couldn't go out: a version published, sent for review, or taken back. */
+export interface UnsentNotice {
+  kind: "published" | "waiting" | "withdrawn";
+  id: string;
+  name: string;
+  version: string;
+  at: number;
+}
 /** Publish tokens start like this, so they are told apart from sign-ins (and found by secret scanners). */
 export const PUBLISH_TOKEN_PREFIX = "tvp_";
 /** How often a session's last use is written, so every request is not a write. */
@@ -369,6 +387,37 @@ export class AccountStore {
     const leakedColumns = (this.db.prepare("pragma table_info(leaked_keys)").all() as unknown as { name: string }[]).map((column) => column.name);
     if (!leakedColumns.includes("asked_at")) this.db.exec("alter table leaked_keys add column asked_at integer");
     if (!leakedColumns.includes("reported_at")) this.db.exec("alter table leaked_keys add column reported_at integer");
+    // The sign-in that made a publish token, a link code or (through its link code) linked a key, so changing the address
+    // can take back what other sign-ins made (changeEmail); null for those from before it, which count as made elsewhere.
+    // A paused key (paused_at) stays the account's but signs nothing until it is linked again. An older service leaves
+    // these alone (and would let a paused key sign again).
+    const addColumn = (table: string, column: string, type: string) => {
+      const present = (this.db.prepare(`pragma table_info(${table})`).all() as unknown as { name: string }[]).some((row) => row.name === column);
+      if (!present) this.db.exec(`alter table ${table} add column ${column} ${type}`);
+    };
+    addColumn("publish_tokens", "session_id", "text");
+    addColumn("link_codes", "session_id", "text");
+    addColumn("publisher_keys", "session_id", "text");
+    addColumn("publisher_keys", "paused_at", "integer");
+    // Who asked for a code (a hash of their network and the address; null for the account's own sign-in and older codes),
+    // and the wrong tries from everyone else (CODE_OTHER_TRIES).
+    addColumn("codes", "asker", "text");
+    addColumn("codes", "other_tries", "integer not null default 0");
+    addColumn("codes", "known", "integer");
+    // A code someone else asked for, kept beside the newest (requestCode): the same fields again. An older service
+    // replaces the row without them, which drops the kept one, as it always did.
+    addColumn("codes", "prev_hash", "text");
+    addColumn("codes", "prev_asker", "text");
+    addColumn("codes", "prev_known", "integer");
+    addColumn("codes", "prev_expires_at", "integer");
+    addColumn("codes", "prev_tries", "integer not null default 0");
+    addColumn("codes", "prev_other_tries", "integer not null default 0");
+    // Notices about publishing sent for an account on a day (takeNotice): their own share of the day's emails.
+    this.db.exec("create table if not exists notice_days (day text not null, account_id text not null, sent integer not null, primary key (day, account_id))");
+    // Notices about the account's publishing that couldn't go out (a busy day, a failed send), so the app can say so: the
+    // developer then checks that those versions were theirs. Kept for UNSENT_NOTICE_MS.
+    this.db.exec("create table if not exists unsent_notices (account_id text not null, kind text not null, module_id text not null, name text not null, version text not null, at integer not null)");
+    this.db.exec("create index if not exists unsent_notices_account on unsent_notices (account_id, at)");
     const columns = (this.db.prepare("pragma table_info(accounts)").all() as unknown as { name: string }[]).map((column) => column.name);
     if (columns.includes("discord_id")) return;
     const before = (this.db.prepare("select count(*) as n from accounts").get() as { n: number }).n;
@@ -434,24 +483,50 @@ export class AccountStore {
   /**
    * Sets or changes the email address (a Discord-only account gets its first one this way). Every other sign-in of the
    * account ends, and every code still waiting for it or for the old address goes (decided 2026-11-13), so what a
-   * stolen sign-in or an old mailbox started can't finish afterwards. `keepSession`: the sign-in that made the change.
+   * stolen sign-in or an old mailbox started can't finish afterwards.
+   *
+   * Taking an account back (audit 2026-11-22): every sign-in ends, the one that made the change too, which gets a new one
+   * in its place (`rotate`: its id), so a copy of its token is no use either. Everything made for publishing goes with them
+   * (revokeMinted): every publish token and link code, and every key pauses until it is linked again.
    */
-  changeEmail(id: string, email: string, keepSession: string | null): "ok" | "taken" {
-    if (this.accountByEmail(email)) return "taken";
+  changeEmail(id: string, email: string, rotate: string | null, now: number = Date.now()): { status: "taken" } | { status: "ok"; token: string | null; session: Session | null } {
+    if (this.accountByEmail(email)) return { status: "taken" };
+    let renewed: { token: string; session: Session } | null = null;
     this.db.exec("begin");
     try {
       const old = this.account(id)?.email ?? null;
+      const current = rotate === null ? undefined : (this.db.prepare("select os, name from sessions where id = ? and account_id = ?").get(rotate, id) as { os: DeviceOs; name: string | null } | undefined);
       this.db.prepare("update accounts set email = ? where id = ?").run(email, id);
-      this.db.prepare("delete from sessions where account_id = ? and id is not ?").run(id, keepSession);
+      this.db.prepare("delete from sessions where account_id = ?").run(id);
       this.db.prepare("delete from codes where account_id = ?").run(id);
       // Sign-in codes wait under the old address with no account id.
       if (old) this.db.prepare("delete from codes where address = ?").run(addressKey(old));
+      this.revokeMinted(id, "all", now);
+      if (current) renewed = this.createSession(id, current.os, now, current.name);
       this.db.exec("commit");
     } catch (error) {
       this.db.exec("rollback");
       throw error;
     }
-    return "ok";
+    return { status: "ok", token: renewed?.token ?? null, session: renewed?.session ?? null };
+  }
+
+  /**
+   * Takes back what was made for publishing (audit 2026-11-22), inside the caller's transaction: by every sign-in of the
+   * account (`"all"`, tokens and keys from before sign-ins were kept with them too), or by one (`{ session }`). Their publish
+   * tokens and link codes are deleted, and the keys linked through them are paused. A paused key stays the account's, so
+   * nobody else can link it and its modules stay where they are, but it signs no upload until the owner links it again
+   * (which takes its private half); a request to move a key onto a paused one goes too, a leaked report staying.
+   */
+  private revokeMinted(accountId: string, scope: "all" | { session: string }, now: number): void {
+    const which = scope === "all" ? "" : " and session_id = ?";
+    const values = scope === "all" ? [accountId] : [accountId, scope.session];
+    this.db.prepare(`delete from publish_tokens where account_id = ?${which}`).run(...values);
+    this.db.prepare(`delete from link_codes where account_id = ?${which}`).run(...values);
+    this.db.prepare(`update publisher_keys set paused_at = ? where account_id = ? and paused_at is null${which}`).run(now, ...values);
+    const ontoPaused = "account_id = ? and declined_at is null and new in (select fingerprint from publisher_keys where account_id = ? and paused_at is not null)";
+    this.keepLeaked(ontoPaused, accountId, accountId);
+    this.db.prepare(`delete from key_requests where ${ontoPaused}`).run(accountId, accountId);
   }
 
   /** Removes the email address, only while a Discord login remains. */
@@ -513,6 +588,8 @@ export class AccountStore {
       this.db.prepare("delete from vaults where account_id = ?").run(id);
       this.db.prepare("delete from key_requests where account_id = ?").run(id);
       this.db.prepare("delete from publish_tokens where account_id = ?").run(id);
+      this.db.prepare("delete from notice_days where account_id = ?").run(id);
+      this.db.prepare("delete from unsent_notices where account_id = ?").run(id);
       this.db.prepare("delete from link_codes where account_id = ?").run(id);
       this.db.prepare("delete from publisher_keys where account_id = ?").run(id);
       this.db.prepare("delete from developers where account_id = ?").run(id);
@@ -573,44 +650,69 @@ export class AccountStore {
     this.db.prepare("insert or replace into released_names (name_key, account_id, released_at) values (?, ?, ?)").run(key, accountId, now);
   }
 
-  /** A new one-time code to link a publisher key; any earlier one of the account stops working. Only its hash is kept. */
-  linkCode(accountId: string, now: number): { code: string; expiresAt: number } {
+  /**
+   * A new one-time code to link a publisher key; any earlier one of the account stops working. Only its hash is kept, with
+   * the sign-in that asked for it (`sessionId`), which the key it links is kept with.
+   */
+  linkCode(accountId: string, now: number, sessionId: string | null = null): { code: string; expiresAt: number } | null {
     this.sweep(now);
     this.db.prepare("delete from link_codes where account_id = ?").run(accountId);
     const code = Array.from({ length: 8 }, () => LINK_ALPHABET[randomInt(0, LINK_ALPHABET.length)]).join("");
     const expiresAt = now + LINK_CODE_TTL_MS;
-    this.db.prepare("insert into link_codes (code_hash, account_id, expires_at) values (?, ?, ?)").run(sha256(`link:${code}`), accountId, expiresAt);
-    return { code, expiresAt };
+    // Only while the sign-in that asks still exists, as for publish tokens; null otherwise.
+    const made = this.db
+      .prepare("insert into link_codes (code_hash, account_id, expires_at, session_id) select ?, ?, ?, ? where ? is null or exists (select 1 from sessions where id = ? and account_id = ?)")
+      .run(sha256(`link:${code}`), accountId, expiresAt, sessionId, sessionId, sessionId, accountId);
+    return Number(made.changes) > 0 ? { code, expiresAt } : null;
   }
 
   /** The account a link code was made for, used up by taking it; null when unknown or expired. */
   takeLinkCode(code: string, now: number): string | null {
+    return this.takeLink(code, now)?.accountId ?? null;
+  }
+
+  /** The account a link code was made for and the sign-in that asked for it, used up by taking it; null when unknown or expired. */
+  takeLink(code: string, now: number): { accountId: string; sessionId: string | null } | null {
     const hash = sha256(`link:${code}`);
-    const row = this.db.prepare("select account_id, expires_at from link_codes where code_hash = ?").get(hash) as { account_id: string; expires_at: number } | undefined;
+    const row = this.db.prepare("select account_id, expires_at, session_id from link_codes where code_hash = ?").get(hash) as
+      | { account_id: string; expires_at: number; session_id: string | null }
+      | undefined;
     this.db.prepare("delete from link_codes where code_hash = ?").run(hash);
-    return row && row.expires_at > now ? row.account_id : null;
+    return row && row.expires_at > now ? { accountId: row.account_id, sessionId: row.session_id } : null;
   }
 
   /**
-   * Links a publisher key (its public half only) to an account. A key belongs to one account; linking it again is fine.
-   * "leaked": reported as leaked, so no account links it (the caller also refuses a key the signed lists revoke).
+   * Links a publisher key (its public half only) to an account. A key belongs to one account; linking it again is fine,
+   * and wakes it when it was paused (revokeMinted). "leaked": reported as leaked, so no account links it (the caller also
+   * refuses a key the signed lists revoke). `sessionId`: the sign-in whose link code this is.
    */
-  linkKey(accountId: string, fingerprint: string, publicKey: string, now: number): "ok" | "taken" | "leaked" | "too-many" {
+  linkKey(accountId: string, fingerprint: string, publicKey: string, now: number, sessionId: string | null = null): "ok" | "taken" | "leaked" | "too-many" {
     const owner = this.db.prepare("select account_id from publisher_keys where fingerprint = ?").get(fingerprint) as { account_id: string } | undefined;
-    if (owner) return owner.account_id === accountId ? "ok" : "taken";
+    if (owner) {
+      if (owner.account_id !== accountId) return "taken";
+      this.db.prepare("update publisher_keys set paused_at = null, session_id = ? where fingerprint = ? and paused_at is not null").run(sessionId, fingerprint);
+      return "ok";
+    }
     // A key of a banned developer is never linked again, not even after the account is deleted.
     if (this.isBannedKey(fingerprint)) return "taken";
     // Nor is a key reported as leaked, by any account, deleted or not: whoever has it now isn't its developer.
     if (this.isLeakedKey(fingerprint)) return "leaked";
     if (this.keys(accountId).length >= MAX_KEYS) return "too-many";
-    this.db.prepare("insert into publisher_keys (fingerprint, account_id, public_key, linked_at) values (?, ?, ?, ?)").run(fingerprint, accountId, publicKey, now);
+    this.db.prepare("insert into publisher_keys (fingerprint, account_id, public_key, linked_at, session_id) values (?, ?, ?, ?, ?)").run(fingerprint, accountId, publicKey, now, sessionId);
     return "ok";
   }
 
+  /** The account's keys, paused ones too: they are still its own (revokeMinted). */
   keys(accountId: string): LinkedKey[] {
     return (
       this.db.prepare("select fingerprint, linked_at from publisher_keys where account_id = ? order by linked_at, rowid").all(accountId) as unknown as { fingerprint: string; linked_at: number }[]
     ).map((row) => ({ fingerprint: row.fingerprint, linkedAt: new Date(row.linked_at).toISOString() }));
+  }
+
+  /** The fingerprints of the account's paused keys (revokeMinted): they sign nothing until linked again. */
+  pausedKeys(accountId: string): Set<string> {
+    const rows = this.db.prepare("select fingerprint from publisher_keys where account_id = ? and paused_at is not null").all(accountId) as unknown as { fingerprint: string }[];
+    return new Set(rows.map((row) => row.fingerprint));
   }
 
   // ── Bans (decided 2026-10-26) ──────────────────────────────────────────
@@ -870,8 +972,9 @@ export class AccountStore {
         if (chain.has(old) || chain.has(next)) return "pinned";
       }
     }
+    // A paused key may still be replaced (its owner may have lost it), but nothing moves onto one.
     const linked = new Set(this.keys(accountId).map((key) => key.fingerprint));
-    if (!linked.has(old) || !linked.has(next)) return "not-linked";
+    if (!linked.has(old) || !linked.has(next) || this.pausedKeys(accountId).has(next)) return "not-linked";
     const current = this.keyRequest(old);
     if (current && current.declinedAt === null) {
       if (current.new !== next) return "open";
@@ -936,10 +1039,12 @@ export class AccountStore {
     return (this.db.prepare("select linked_at from publisher_keys where fingerprint = ?").get(fingerprint) as { linked_at: number } | undefined)?.linked_at ?? null;
   }
 
-  /** The account a publisher key is linked to, with the key's public half (base64), or null. */
-  publisherKey(fingerprint: string): { accountId: string; publicKey: string } | null {
-    const row = this.db.prepare("select account_id, public_key from publisher_keys where fingerprint = ?").get(fingerprint) as { account_id: string; public_key: string } | undefined;
-    return row ? { accountId: row.account_id, publicKey: row.public_key } : null;
+  /** The account a publisher key is linked to, with the key's public half (base64) and whether it is paused (revokeMinted), or null. */
+  publisherKey(fingerprint: string): { accountId: string; publicKey: string; paused: boolean } | null {
+    const row = this.db.prepare("select account_id, public_key, paused_at from publisher_keys where fingerprint = ?").get(fingerprint) as
+      | { account_id: string; public_key: string; paused_at: number | null }
+      | undefined;
+    return row ? { accountId: row.account_id, publicKey: row.public_key, paused: row.paused_at !== null } : null;
   }
 
   // ── Module id prefixes ─────────────────────────────────────────────────
@@ -1036,6 +1141,34 @@ export class AccountStore {
     this.db.prepare("delete from mail_days where day < ?").run(new Date(Date.parse(`${day}T00:00:00Z`) - 7 * DAY_MS).toISOString().slice(0, 10));
   }
 
+  /**
+   * Takes one of the day's notices about an account's publishing (catalog-publish.ts): false, counting nothing, when the
+   * account had `perAccount` today or all accounts together `perDay`.
+   */
+  takeNotice(day: string, accountId: string, perAccount: number, perDay: number): boolean {
+    const own = (this.db.prepare("select sent from notice_days where day = ? and account_id = ?").get(day, accountId) as { sent: number } | undefined)?.sent ?? 0;
+    if (own >= perAccount) return false;
+    const all = (this.db.prepare("select coalesce(sum(sent), 0) as n from notice_days where day = ?").get(day) as { n: number }).n;
+    if (all >= perDay) return false;
+    this.db.prepare("insert into notice_days (day, account_id, sent) values (?, ?, 1) on conflict (day, account_id) do update set sent = sent + 1").run(day, accountId);
+    this.db.prepare("delete from notice_days where day < ?").run(day);
+    return true;
+  }
+
+  /** Keeps that a notice about the account's publishing couldn't go out (unsentNotices). */
+  recordUnsentNotice(accountId: string, kind: UnsentNotice["kind"], module: { id: string; name: string; version: string }, at: number): void {
+    this.db.prepare("insert into unsent_notices (account_id, kind, module_id, name, version, at) values (?, ?, ?, ?, ?, ?)").run(accountId, kind, module.id, module.name, module.version, at);
+  }
+
+  /** The account's notices that couldn't go out in the last UNSENT_NOTICE_MS, newest first, at most MAX_UNSENT_NOTICES. */
+  unsentNotices(accountId: string, now: number): UnsentNotice[] {
+    this.db.prepare("delete from unsent_notices where at <= ?").run(now - UNSENT_NOTICE_MS);
+    const rows = this.db
+      .prepare("select kind, module_id, name, version, at from unsent_notices where account_id = ? order by at desc, rowid desc limit ?")
+      .all(accountId, MAX_UNSENT_NOTICES) as unknown as { kind: UnsentNotice["kind"]; module_id: string; name: string; version: string; at: number }[];
+    return rows.map((row) => ({ kind: row.kind, id: row.module_id, name: row.name, version: row.version, at: row.at }));
+  }
+
   // ── Key vault ──────────────────────────────────────────────────────────
 
   /** The account's sealed key vault (vault.ts): bytes only the user's recovery key opens. */
@@ -1063,14 +1196,22 @@ export class AccountStore {
   /**
    * A token for publishing from CI (decided 2026-10-20): shown once, kept here only as a hash, good for a
    * year. It publishes under the account's prefixes, never a new one, and only together with the key's
-   * signature. Null when the account has as many as it may.
+   * signature. Null when the account has as many as it may, or `sessionId` ended. `sessionId`: the sign-in that made it, which changing the
+   * address keeps it with (revokeMinted).
    */
-  createPublishToken(accountId: string, name: string, now: number): { token: string; publishToken: PublishToken } | null {
+  createPublishToken(accountId: string, name: string, now: number, sessionId: string | null = null): { token: string; publishToken: PublishToken } | null {
     if (this.publishTokens(accountId, now).length >= MAX_PUBLISH_TOKENS) return null;
     const token = `${PUBLISH_TOKEN_PREFIX}${randomBytes(32).toString("base64url")}`;
     const id = randomBytes(12).toString("base64url");
     const expiresAt = now + PUBLISH_TOKEN_TTL_MS;
-    this.db.prepare("insert into publish_tokens (id, account_id, token_hash, name, created_at, expires_at) values (?, ?, ?, ?, ?, ?)").run(id, accountId, sha256(`publish:${token}`), name, now, expiresAt);
+    // Only while the sign-in that asks still exists, checked in the same statement (audit 2026-11-22): one ended meanwhile
+    // (the email changed, the device was removed) makes no token that nothing would take back.
+    const made = this.db
+      .prepare(
+        "insert into publish_tokens (id, account_id, token_hash, name, created_at, expires_at, session_id) select ?, ?, ?, ?, ?, ?, ? where ? is null or exists (select 1 from sessions where id = ? and account_id = ?)",
+      )
+      .run(id, accountId, sha256(`publish:${token}`), name, now, expiresAt, sessionId, sessionId, sessionId, accountId);
+    if (Number(made.changes) === 0) return null;
     return { token, publishToken: { id, name, createdAt: now, expiresAt, lastUsedAt: null } };
   }
 
@@ -1192,37 +1333,109 @@ export class AccountStore {
    * Makes a new code for an address, replacing one still waiting for the same purpose, unless the address was sent
    * too many lately (codeWait). The limits count the purposes together (the owner's own apart from everyone else's),
    * so nobody can flood an inbox by switching between them.
+   *
+   * A code someone else asked for (another network) still waiting is kept beside the new one (audit 2026-11-22), so a
+   * stranger asking for a code doesn't take away the owner's: two at most, and of two others the one from a network the
+   * address signed in from stays, else the newer. A request by the account's own sign-in replaces them all.
    */
   requestCode(email: string, purpose: CodePurpose, accountId: string | null, now: number, asker: CodeAsker, bind?: string): CodeRequest {
     const address = addressKey(email);
     const wait = this.countCodeRequest(email, now, asker);
     if (wait > 0) return { ok: false, retryAfter: wait };
     const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
-    this.db
-      .prepare("insert or replace into codes (address, purpose, account_id, code_hash, expires_at, tries) values (?, ?, ?, ?, ?, 0)")
-      .run(address, purpose, accountId, codeHash(address, purpose, bound(code, bind)), now + CODE_TTL_MS);
+    const from = "from" in asker ? codeAskerKey(asker.from, email) : null;
+    const fresh: CodeSlot = {
+      hash: codeHash(address, purpose, bound(code, bind)),
+      asker: from,
+      known: from !== null && this.askedBy(email, now, asker) === ASKED_BY.known,
+      expiresAt: now + CODE_TTL_MS,
+      tries: 0,
+      otherTries: 0,
+    };
+    let others: CodeSlot[] = [];
+    if (from !== null) {
+      const row = this.codeRow(address, purpose);
+      if (row && row.accountId === accountId) others = row.slots.filter((slot) => slot.expiresAt > now && slot.asker !== null && slot.asker !== from);
+      // Two others: the one from a network the address signed in from stays, else the newer (listed first).
+      if (others.length > 1) others = [others.find((slot) => slot.known) ?? others[0]!];
+    }
+    this.writeCode(address, purpose, accountId, [fresh, ...others]);
     return { ok: true, code };
+  }
+
+  /** The codes waiting for an address and purpose: the newest first, then the one kept beside it (requestCode). */
+  private codeRow(address: string, purpose: CodePurpose): { accountId: string | null; slots: CodeSlot[] } | null {
+    const row = this.db.prepare("select * from codes where address = ? and purpose = ?").get(address, purpose) as CodeRowSql | undefined;
+    if (!row) return null;
+    const slots: CodeSlot[] = [{ hash: row.code_hash, asker: row.asker, known: row.known === 1, expiresAt: row.expires_at, tries: row.tries, otherTries: row.other_tries }];
+    if (row.prev_hash !== null && row.prev_expires_at !== null) {
+      slots.push({ hash: row.prev_hash, asker: row.prev_asker, known: row.prev_known === 1, expiresAt: row.prev_expires_at, tries: row.prev_tries, otherTries: row.prev_other_tries });
+    }
+    return { accountId: row.account_id, slots };
+  }
+
+  /** Keeps up to two codes for an address and purpose (codeRow); none deletes the row. */
+  private writeCode(address: string, purpose: CodePurpose, accountId: string | null, slots: CodeSlot[]): void {
+    const [first, second] = slots;
+    if (!first) {
+      this.db.prepare("delete from codes where address = ? and purpose = ?").run(address, purpose);
+      return;
+    }
+    this.db
+      .prepare(
+        `insert or replace into codes (address, purpose, account_id, code_hash, expires_at, tries, asker, other_tries, known,
+         prev_hash, prev_asker, prev_known, prev_expires_at, prev_tries, prev_other_tries) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        address,
+        purpose,
+        accountId,
+        first.hash,
+        first.expiresAt,
+        first.tries,
+        first.asker,
+        first.otherTries,
+        first.known ? 1 : 0,
+        second?.hash ?? null,
+        second?.asker ?? null,
+        second ? (second.known ? 1 : 0) : null,
+        second?.expiresAt ?? null,
+        second?.tries ?? 0,
+        second?.otherTries ?? 0,
+      );
   }
 
   /**
    * Checks a code. A wrong one counts a try, and the last allowed try spends it.
    * A right one is spent only when asked, so the app can learn that an address
    * has no account yet and ask the user before it creates one.
+   * `from`: the network that types it in, for a code anyone may type (a sign-in code). Each waiting code (requestCode keeps
+   * up to two) counts the wrong tries of the network that asked for it apart from everyone else's (CODE_OTHER_TRIES): others
+   * get at most 3 and never the last, so only the network that asked can spend it, and no code takes more than
+   * CODE_MAX_TRIES wrong tries in all.
    */
-  checkCode(email: string, purpose: CodePurpose, accountId: string | null, code: string, now: number, spend: boolean, bind?: string): boolean {
+  checkCode(email: string, purpose: CodePurpose, accountId: string | null, code: string, now: number, spend: boolean, bind?: string, from?: string): boolean {
     const address = addressKey(email);
-    const row = this.db.prepare("select account_id, code_hash, expires_at, tries from codes where address = ? and purpose = ?").get(address, purpose) as
-      | { account_id: string | null; code_hash: string; expires_at: number; tries: number }
-      | undefined;
-    if (!row || row.expires_at <= now || row.account_id !== accountId) return false;
-    const right = timingSafeEqual(Buffer.from(row.code_hash, "hex"), Buffer.from(codeHash(address, purpose, bound(code, bind)), "hex"));
-    if (!right) {
-      if (row.tries + 1 >= CODE_MAX_TRIES) this.db.prepare("delete from codes where address = ? and purpose = ?").run(address, purpose);
-      else this.db.prepare("update codes set tries = tries + 1 where address = ? and purpose = ?").run(address, purpose);
-      return false;
+    const row = this.codeRow(address, purpose);
+    if (!row || row.accountId !== accountId) return false;
+    const typed = Buffer.from(codeHash(address, purpose, bound(code, bind)), "hex");
+    const by = from === undefined ? null : codeAskerKey(from, email);
+    const live = row.slots.filter((slot) => slot.expiresAt > now);
+    // Someone else than who asked for a code: once others' tries on it are used, or a wrong one would be its last, it isn't
+    // checked for them at all.
+    const isOther = (slot: CodeSlot) => by !== null && slot.asker !== null && slot.asker !== by;
+    const checked = live.filter((slot) => !isOther(slot) || (slot.otherTries < CODE_OTHER_TRIES && slot.tries + slot.otherTries + 1 < CODE_MAX_TRIES));
+    if (checked.some((slot) => timingSafeEqual(Buffer.from(slot.hash, "hex"), typed))) {
+      if (spend) this.writeCode(address, purpose, accountId, []);
+      return true;
     }
-    if (spend) this.db.prepare("delete from codes where address = ? and purpose = ?").run(address, purpose);
-    return true;
+    if (checked.length === 0) return false;
+    // A wrong try counts on every code it was checked against; one with CODE_MAX_TRIES wrong tries goes.
+    const after = live
+      .map((slot) => (checked.includes(slot) ? (isOther(slot) ? { ...slot, otherTries: slot.otherTries + 1 } : { ...slot, tries: slot.tries + 1 }) : slot))
+      .filter((slot) => slot.tries + slot.otherTries < CODE_MAX_TRIES);
+    this.writeCode(address, purpose, accountId, after);
+    return false;
   }
 
   // ── Sessions ───────────────────────────────────────────────────────────
@@ -1270,9 +1483,27 @@ export class AccountStore {
     return Number(this.db.prepare("update sessions set name = ? where id = ? and account_id = ?").run(name, id, accountId).changes) > 0;
   }
 
-  /** Signs out one device of an account; false when the account has no such device. */
-  deleteSession(accountId: string, id: string): boolean {
-    return Number(this.db.prepare("delete from sessions where id = ? and account_id = ?").run(id, accountId).changes) > 0;
+  /** Whether a sign-in still exists (sign-in.ts stillSignedIn). */
+  sessionAlive(id: string): boolean {
+    return this.db.prepare("select 1 from sessions where id = ?").get(id) !== undefined;
+  }
+
+  /**
+   * Signs out one device of an account; false when the account has no such device. `revoke`: it was signed out from another
+   * device, so what it made for publishing goes too (revokeMinted): its publish tokens stop working and the keys it linked
+   * pause. Signing yourself out keeps them.
+   */
+  deleteSession(accountId: string, id: string, revoke = false, now: number = Date.now()): boolean {
+    this.db.exec("begin");
+    try {
+      const deleted = Number(this.db.prepare("delete from sessions where id = ? and account_id = ?").run(id, accountId).changes) > 0;
+      if (deleted && revoke) this.revokeMinted(accountId, { session: id }, now);
+      this.db.exec("commit");
+      return deleted;
+    } catch (error) {
+      this.db.exec("rollback");
+      throw error;
+    }
   }
 
   /** Plain numbers for the daily snapshot: all accounts, and those with a sign-in used in the last 7 and 30 days. Nobody is named. */
@@ -1320,7 +1551,38 @@ function limitWait(times: number[], now: number, ...limits: [count: number, wind
   return wait;
 }
 
+/** One code waiting for an address and purpose (AccountStore.codeRow). */
+interface CodeSlot {
+  hash: string;
+  /** Who asked for it (codeAskerKey); null for the account's own sign-in and codes from before it was kept. */
+  asker: string | null;
+  /** Whether it was asked for from a network the address signed in from. */
+  known: boolean;
+  expiresAt: number;
+  /** Wrong tries by whoever asked for it, and by everyone else (CODE_OTHER_TRIES). */
+  tries: number;
+  otherTries: number;
+}
+
+interface CodeRowSql {
+  account_id: string | null;
+  code_hash: string;
+  expires_at: number;
+  tries: number;
+  asker: string | null;
+  other_tries: number;
+  known: number | null;
+  prev_hash: string | null;
+  prev_asker: string | null;
+  prev_known: number | null;
+  prev_expires_at: number | null;
+  prev_tries: number;
+  prev_other_tries: number;
+}
+
 /** One network asking for codes to one address, as a hash, so memory holds no address. */
 const askerKey = (from: string, email: string) => sha256(`asker:${from}:${email}`);
+/** Who asked for a code, as the code keeps it: a hash of their network and the address. */
+const codeAskerKey = (from: string, email: string) => sha256(`code-asker:${from}:${email}`);
 /** A network an address signed in from, as known_networks keeps it. */
 const knownKey = (from: string, email: string) => sha256(`known:${from}:${email}`);

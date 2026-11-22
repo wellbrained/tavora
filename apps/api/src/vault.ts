@@ -2,7 +2,7 @@ import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type { AccountStore } from "./account-store.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
-import { requireSignIn, tooMany, type SignedInEnv } from "./sign-in.ts";
+import { requireSignIn, signedOut, stillSignedIn, tooMany, type SignedInEnv } from "./sign-in.ts";
 
 /**
  * The key vault (decided 2026-10-20, "one recovery key"): one small sealed blob per account, which only the
@@ -38,7 +38,8 @@ export function vaultRoutes({ accounts, clientKey, rateLimiter, now = Date.now }
     }
     await next();
   });
-  app.use("*", requireSignIn(accounts, now));
+  // The sign-in, then the body, then the sign-in again (sign-in.ts requireSignIn), and once more right before the write.
+  app.use("*", requireSignIn(accounts, now, MAX_VAULT_BYTES + 4));
   app.use("*", bodyLimit({ maxSize: MAX_VAULT_BYTES + 4, onError: (context) => context.json({ error: "Too big.", reason: "too-big" }, 413) }));
 
   app.get("/", (context: Context<Env>) => {
@@ -54,6 +55,7 @@ export function vaultRoutes({ accounts, clientKey, rateLimiter, now = Date.now }
     const body = new Uint8Array(await context.req.arrayBuffer());
     if (body.length <= 4 || body.length > MAX_VAULT_BYTES + 4) return context.json({ error: `Send the version it started from and a sealed vault of at most ${MAX_VAULT_BYTES} bytes.`, reason: "bad-request" }, 400);
     const base = new DataView(body.buffer, body.byteOffset, body.byteLength).getUint32(0);
+    if (!stillSignedIn(accounts, context)) return signedOut(context);
     const result = accounts.putVault(context.get("account").id, base, body.subarray(4), now());
     if (!result.ok) return context.json({ error: "The key vault changed on another PC.", reason: "vault-changed", version: result.version }, 409);
     return context.json({ version: result.version });

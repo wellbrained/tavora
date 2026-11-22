@@ -97,14 +97,15 @@ export function publisherRoutes(options: PublisherOptions, limiter: RateLimiter,
     if (!raw || !LINK_CODE.test(code)) return context.json({ error: "Send { code, publicKey, signature }.", reason: "bad-request" }, 400);
     // The signature first: a code is only used up by whoever holds a key.
     if (!signedCode(raw, code, input.signature)) return context.json({ error: "The signature does not match the key.", reason: "bad-signature" }, 400);
-    const accountId = store.takeLinkCode(code, now());
-    if (!accountId) return context.json({ error: "That code is wrong or has expired. Get a new one in Tavora.", reason: "wrong-code" }, 400);
+    const link = store.takeLink(code, now());
+    if (!link) return context.json({ error: "That code is wrong or has expired. Get a new one in Tavora.", reason: "wrong-code" }, 400);
+    const { accountId, sessionId } = link;
     const fingerprint = keyFingerprint(raw);
     // Tavora's publisher key belongs to Tavora's account alone; anyone else gets the answer for a key that is taken.
     if (pins.key !== "" && fingerprint === pins.key && accountId !== pins.account) return context.json({ error: "This key is linked to another Tavora account.", reason: "key-taken" }, 409);
     // A leaked or revoked key is never linked again, by any account: whoever has it now isn't its developer. Old apps
     // know only key-taken, so it answers with that code and says why in `error`.
-    const result = signedRevoked(fingerprint, options.trust ?? null) ? "leaked" : store.linkKey(accountId, fingerprint, raw.toString("base64"), now());
+    const result = signedRevoked(fingerprint, options.trust ?? null) ? "leaked" : store.linkKey(accountId, fingerprint, raw.toString("base64"), now(), sessionId);
     if (result === "leaked") return context.json({ error: "This key was reported as leaked or revoked, so it can't be linked. Use a new key.", reason: "key-taken" }, 409);
     if (result === "taken") return context.json({ error: "This key is linked to another Tavora account.", reason: "key-taken" }, 409);
     if (result === "too-many") return context.json({ error: "This account has as many keys as it can link. Unlink one in Tavora first.", reason: "too-many-keys" }, 409);

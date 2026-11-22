@@ -59,19 +59,26 @@ async function saveContactDefault(contact: Contact): Promise<string | null> {
 // in the account's vault but couldn't link yet. Tavora signs modules with a key it keeps; a linked key
 // it doesn't keep is a key file, linked with `tavora-pack link`.
 const keys = computed(() => developerKeys.value);
+// A paused key (the account's email changed, or a device was removed) is still the account's, but signs nothing until
+// it is linked again: Tavora links a key it keeps itself, a key file goes through `tavora-pack link`.
 const rows = computed(() => {
   const kept = new Set((keys.value?.keys ?? []).map((key) => key.fingerprint));
   const linked = view.value?.publisherKeys ?? [];
-  const linkedSet = new Set(linked.map((key) => key.fingerprint));
+  const paused = view.value?.pausedKeys ?? [];
+  const known = new Set([...linked, ...paused].map((key) => key.fingerprint));
   return [
-    ...linked.map((key) => ({ fingerprint: key.fingerprint, linkedAt: key.linkedAt, kept: kept.has(key.fingerprint) })),
-    ...[...kept].filter((fingerprint) => !linkedSet.has(fingerprint)).map((fingerprint) => ({ fingerprint, linkedAt: null, kept: true })),
+    ...linked.map((key) => ({ fingerprint: key.fingerprint, linkedAt: key.linkedAt, kept: kept.has(key.fingerprint), paused: false })),
+    ...paused.map((key) => ({ fingerprint: key.fingerprint, linkedAt: key.linkedAt, kept: kept.has(key.fingerprint), paused: true })),
+    ...[...kept].filter((fingerprint) => !known.has(fingerprint)).map((fingerprint) => ({ fingerprint, linkedAt: null, kept: true, paused: false })),
   ];
 });
+/** Emails about your publishing the service couldn't send lately: you check those versions were yours. */
+const unsent = computed(() => view.value?.unsentNotices ?? []);
+const UNSENT_TEXT = { published: "account.developer.unsentPublished", waiting: "account.developer.unsentWaiting", withdrawn: "account.developer.unsentWithdrawn" } as const;
 /** The key a build server gets as a file: the newest linked key Tavora keeps, the one it signs with. */
 /** Tavora can make or add a key here: it keeps keys for this account on this PC, or makes the account's recovery key first. */
 const canKeep = computed(() => keys.value?.status === "ready" || keys.value?.status === "none");
-const exportable = computed(() => rows.value.filter((row) => row.kept && row.linkedAt).at(-1)?.fingerprint ?? null);
+const exportable = computed(() => rows.value.filter((row) => row.kept && row.linkedAt && !row.paused).at(-1)?.fingerprint ?? null);
 async function makeKey() {
   if (await run({ type: "developer-key-create" })) showToast(t("account.developer.created"));
 }
@@ -117,6 +124,14 @@ const namePrefix = computed(() => (prefixes.value?.held.length === 0 && develope
 
 // Publish from CI: folded away until opened.
 const ciOpen = ref(false);
+// Paused keys need you: the keys open by themselves to show them.
+watch(
+  () => (view.value?.pausedKeys?.length ?? 0) > 0,
+  (paused) => {
+    if (paused) ciOpen.value = true;
+  },
+  { immediate: true },
+);
 const linkCommandText = computed(() => {
   const code = view.value?.linkCode?.code ?? "";
   return `npx @tavora/pack link ${code.slice(0, 4)}-${code.slice(4)} --key <key file>`;
@@ -187,6 +202,17 @@ function removeToken(token: AccountPublishToken) {
     </div>
   </SettingGroup>
 
+  <SettingGroup v-if="unsent.length" :title="t('account.developer.unsent')">
+    <div class="py-4" data-testid="developer-unsent">
+      <p class="text-muted-foreground text-sm">{{ t("account.developer.unsentHint") }}</p>
+      <ul class="mt-2 flex flex-col gap-1">
+        <li v-for="item in unsent" :key="`${item.kind}-${item.id}-${item.version}-${item.at}`" class="text-sm" data-testid="developer-unsent-item">
+          {{ t(UNSENT_TEXT[item.kind], { name: item.name, version: item.version, date: formatDate(item.at) }) }}
+        </li>
+      </ul>
+    </div>
+  </SettingGroup>
+
   <SettingGroup>
     <SettingRow :label="t('settings.publish-ci.label')" :description="t('settings.publish-ci.description')" setting="publish-ci" :highlighted="highlight === 'publish-ci'">
       <Button variant="ghost" :aria-expanded="ciOpen" data-testid="developer-ci-toggle" @click="ciOpen = !ciOpen">
@@ -204,7 +230,31 @@ function removeToken(token: AccountPublishToken) {
           <li v-for="row in rows" :key="row.fingerprint" :data-testid="`developer-key-${row.fingerprint}`">
             <div class="flex min-h-10 items-center gap-3">
               <span class="flex-1 font-mono text-sm" :title="row.fingerprint">{{ row.fingerprint.slice(0, 16) }}…</span>
-              <template v-if="row.linkedAt">
+              <!-- Paused: linked again with the key itself, or, when it is lost, replaced like a linked key. -->
+              <template v-if="row.paused">
+                <span class="text-sm" :data-testid="`account-key-paused-${row.fingerprint}`">{{ t("account.developer.paused") }}</span>
+                <span v-if="requests.get(row.fingerprint)?.status === 'waiting'" class="text-sm" data-testid="account-key-waiting">{{ t("account.developer.replaceWaiting") }}</span>
+                <span v-else-if="requests.get(row.fingerprint)?.status === 'done'" class="text-sm" data-testid="account-key-replaced">{{ t("account.developer.replaceDone") }}</span>
+                <template v-else>
+                  <span v-if="requests.get(row.fingerprint)?.status === 'declined'" class="text-muted-foreground text-sm">{{ t("account.developer.replaceDeclined") }}</span>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    :disabled="busy || !view?.developer"
+                    data-testid="account-key-relink"
+                    @click="run(row.kept ? { type: 'developer-key-link', fingerprint: row.fingerprint } : { type: 'account-link-code' })"
+                  >
+                    {{ t("account.developer.linkAgain") }}
+                  </Button>
+                  <Button variant="ghost" size="sm" :disabled="busy" :aria-label="t('account.developer.replaceLabel', { key: row.fingerprint.slice(0, 16) })" data-testid="account-key-replace" @click="replacing = replacing === row.fingerprint ? null : row.fingerprint">
+                    {{ t("account.developer.replace") }}
+                  </Button>
+                </template>
+                <Button v-if="!waiting.has(row.fingerprint)" variant="ghost" size="sm" :disabled="busy" :aria-label="t('account.developer.unlinkLabel', { key: row.fingerprint.slice(0, 16) })" @click="unlinkKey(row.fingerprint)">
+                  {{ t("account.developer.unlink") }}
+                </Button>
+              </template>
+              <template v-else-if="row.linkedAt">
                 <span class="text-muted-foreground text-sm" :data-testid="`account-key-${row.fingerprint}`">
                   {{ t("account.developer.keyLinked", { date: formatDate(row.linkedAt) }) }}<template v-if="!row.kept && keys?.status === 'ready'"> · {{ t("account.developer.fileOnly") }}</template>
                 </span>

@@ -3,10 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 import { AccountStore } from "./account-store.ts";
 import { createApp } from "./app.ts";
 import { mkdtempSync } from "node:fs";
-import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync, StatementSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { COPY_LIMIT, copyLimitsFromEnv, CopyStore, FREE_FLOOR, MAX_MANIFEST_BYTES, MAX_PART_BYTES, NETWORK_DAY_LIMIT, NETWORK_SHARE, NEW_ACCOUNT_MS, NEW_ACCOUNT_SHARE, readParts, readSwap, STORED_LIMIT, TOTAL_LIMIT, UNUSED_PART_MS, writeParts, type CopyHolder, type CopyStoreOptions } from "./cloud-copy.ts";
+import { COPY_LIMIT, copyLimitsFromEnv, CopyStore, FREE_FLOOR, MAX_MANIFEST_BYTES, MAX_PART_BYTES, MAX_STORED_PARTS, MIN_PART_BYTES, NETWORK_DAY_LIMIT, NETWORK_SHARE, NEW_ACCOUNT_MS, NEW_ACCOUNT_SHARE, readParts, readSwap, ROOM_SWEEP_PAGES, STORED_LIMIT, SWEEP_PAGE, TOTAL_LIMIT, UNUSED_PART_MS, writeParts, type CopyHolder, type CopyStoreOptions } from "./cloud-copy.ts";
 import { buildDataset, writeDatabase } from "./dataset.ts";
 import { createTestInbox } from "./mail.ts";
 import { createRateLimiter } from "./rate-limit.ts";
@@ -16,7 +16,7 @@ const roomy = () => createRateLimiter({ limit: 1000, windowMs: 60_000 });
 
 function setup(options: CopyStoreOptions = {}) {
   const store = new AccountStore(":memory:");
-  const copies = new CopyStore(":memory:", options);
+  const copies = testCopies(":memory:", options);
   const inbox = createTestInbox();
   const clock = { now: Date.parse("2026-10-19T12:00:00Z") };
   const app = createApp({ db, rateLimiter: roomy(), accounts: { store, mailer: inbox, codeRateLimiter: roomy(), verifyRateLimiter: roomy(), now: () => clock.now, copies } });
@@ -41,6 +41,8 @@ function setup(options: CopyStoreOptions = {}) {
   return { store, copies, clock, app, json, copy, signIn, inbox };
 }
 
+/** A store that counts parts at their bytes, for the tests of exact byte sums (the floor has its own test). */
+const testCopies = (file: string, options: CopyStoreOptions = {}) => new CopyStore(file, { minPartBytes: 0, ...options });
 const part = (size = 100) => ({ id: new Uint8Array(randomBytes(32)), data: new Uint8Array(randomBytes(size)) });
 /** A new version's body: base, part count, ids, manifest. */
 function swapBody(base: number, ids: Uint8Array[], manifest: Uint8Array) {
@@ -173,7 +175,7 @@ describe("the cloud copy", () => {
   });
 
   it("keeps a copy within 100 MB, and stored parts within twice that", async () => {
-    const copies = new CopyStore(":memory:");
+    const copies = testCopies(":memory:");
     const big = (n: number) => ({ id: new Uint8Array(randomBytes(32)), data: new Uint8Array(n) });
     const parts = Array.from({ length: 26 }, () => big(4 * 1024 * 1024));
     expect(copies.addParts("acc", parts)).toBe("ok");
@@ -189,7 +191,7 @@ describe("the cloud copy", () => {
   });
 
   it("keeps the copies of every account within a total, counted through every change", () => {
-    const copies = new CopyStore(":memory:", { totalLimit: 1000 });
+    const copies = testCopies(":memory:", { totalLimit: 1000 });
     const a = [part(300), part(300)];
     expect(copies.addParts("a", a)).toBe("ok");
     expect(copies.addParts("b", [part(300)])).toBe("ok");
@@ -214,7 +216,7 @@ describe("the cloud copy", () => {
 
   it("keeps room for accounts with a copy to replace their own version when saved versions fill the total (audit)", () => {
     // As the audit planned it, at a smaller scale: saved versions fill the total, and nothing ages out.
-    const copies = new CopyStore(":memory:", { totalLimit: 1604 });
+    const copies = testCopies(":memory:", { totalLimit: 1604 });
     const saved = new Map<string, ReturnType<typeof part>>();
     for (const id of ["a1", "a2", "a3", "a4"]) {
       const kept = part(400);
@@ -244,7 +246,7 @@ describe("the cloud copy", () => {
   it("lets accounts younger than a week hold only a quarter of the total together", () => {
     const now = Date.parse("2026-11-20T12:00:00Z");
     const day = 24 * 60 * 60_000;
-    const copies = new CopyStore(":memory:", { totalLimit: 1000 });
+    const copies = testCopies(":memory:", { totalLimit: 1000 });
     const young = { since: now - day };
     expect(copies.addParts("y1", [part(200)], now, young)).toBe("ok");
     const kept = part(30);
@@ -291,20 +293,20 @@ describe("the cloud copy", () => {
       return copies.info("a")!.size;
     };
     // The total: 1 + 100, 200, 400, 800, then 1600 doesn't fit in 1000.
-    const total = new CopyStore(":memory:", { totalLimit: 1000 });
+    const total = testCopies(":memory:", { totalLimit: 1000 });
     expect(grow(total, undefined, 100)).toBe(801);
     total.sweep(now + 2 * day);
     expect(total.storedTotal()).toBe(801);
     // The young accounts' slice: a quarter of 100 000.
-    expect(grow(new CopyStore(":memory:", { totalLimit: 100_000 }), { since: now - day }, 1000)).toBe(16_001);
+    expect(grow(testCopies(":memory:", { totalLimit: 100_000 }), { since: now - day }, 1000)).toBe(16_001);
     // The network's day: 1000 counted at the upload, then 1000, 2000 when saved; 4000 more doesn't fit in 5000.
-    expect(grow(new CopyStore(":memory:", { networkDayLimit: 5000 }), { since: now - 30 * day, network: "198.51.100.0/24" }, 1000)).toBe(4001);
+    expect(grow(testCopies(":memory:", { networkDayLimit: 5000 }), { since: now - 30 * day, network: "198.51.100.0/24" }, 1000)).toBe(4001);
   });
 
   it("counts bytes against the network's day once, at the upload or at the save", () => {
     const now = Date.parse("2026-11-20T12:00:00Z");
     const who = { since: now - 30 * 24 * 60 * 60_000, network: "198.51.100.0/24" };
-    const copies = new CopyStore(":memory:", { networkDayLimit: 1000 });
+    const copies = testCopies(":memory:", { networkDayLimit: 1000 });
     const kept = part(600);
     expect(copies.addParts("a", [kept], now, who)).toBe("ok");
     expect(copies.swap("a", 0, new Uint8Array(1), [kept.id], now, who)).toMatchObject({ ok: true });
@@ -316,7 +318,7 @@ describe("the cloud copy", () => {
   it("lets one network add at most its bytes a day to the total, but never stops a version that replaces one", () => {
     const now = Date.parse("2026-11-20T12:00:00Z");
     const old = (network: string) => ({ since: now - 30 * 24 * 60 * 60_000, network });
-    const copies = new CopyStore(":memory:", { networkDayLimit: 1000 });
+    const copies = testCopies(":memory:", { networkDayLimit: 1000 });
     const kept = part(600);
     expect(copies.addParts("a", [kept], now, old("198.51.100.0/24"))).toBe("ok");
     expect(copies.swap("a", 0, new Uint8Array(1), [kept.id], now, old("198.51.100.0/24"))).toMatchObject({ ok: true });
@@ -331,16 +333,16 @@ describe("the cloud copy", () => {
 
   it("counts what is stored already when it starts, manifests too", () => {
     const file = path.join(mkdtempSync(path.join(tmpdir(), "tavora-copies-")), "copies.sqlite");
-    const first = new CopyStore(file);
+    const first = testCopies(file);
     const kept = part(400);
     first.addParts("a", [kept, part(100)]);
     first.swap("a", 0, new Uint8Array(50), [kept.id], 1);
-    expect(new CopyStore(file).storedTotal()).toBe(450);
-    expect(new CopyStore(file, { totalLimit: 600 }).addParts("b", [part(200)])).toBe("no-room");
+    expect(testCopies(file).storedTotal()).toBe(450);
+    expect(testCopies(file, { totalLimit: 600 }).addParts("b", [part(200)])).toBe("no-room");
   });
 
   it("needs room for a bigger manifest as for parts", async () => {
-    const copies = new CopyStore(":memory:", { totalLimit: 1000 });
+    const copies = testCopies(":memory:", { totalLimit: 1000 });
     const a = part(500);
     copies.addParts("a", [a]);
     expect(copies.swap("a", 0, new Uint8Array(400), [a.id], 1)).toMatchObject({ ok: true });
@@ -353,7 +355,7 @@ describe("the cloud copy", () => {
     expect(copies.storedTotal()).toBe(600);
     // The free-space floor holds for a manifest too.
     let free = 10_000;
-    const tight = new CopyStore(":memory:", { freeBytes: () => free, freeFloor: 9_000 });
+    const tight = testCopies(":memory:", { freeBytes: () => free, freeFloor: 9_000 });
     expect(tight.swap("x", 0, new Uint8Array(500), [], 1)).toMatchObject({ ok: true });
     free = 9_200;
     expect(tight.swap("x", 1, new Uint8Array(800), [], 2)).toEqual({ ok: false, reason: "unavailable" });
@@ -369,7 +371,7 @@ describe("the cloud copy", () => {
   });
 
   it("drops parts no saved version uses once they are a day old, and keeps the total right", () => {
-    const copies = new CopyStore(":memory:");
+    const copies = testCopies(":memory:");
     const day = UNUSED_PART_MS;
     const used = part(100);
     const unusedOld = part(200);
@@ -396,8 +398,153 @@ describe("the cloud copy", () => {
     expect(copies.storedTotal()).toBe(105);
   });
 
+  it("caps how many parts an account stores, not only their bytes (audit 2026-11-22)", () => {
+    const copies = testCopies(":memory:");
+    // Tiny parts: their bytes are far below STORED_LIMIT, their number is not.
+    const tiny = (count: number) => Array.from({ length: count }, () => part(1));
+    expect(copies.addParts("a", tiny(MAX_STORED_PARTS - 1), 1000)).toBe("ok");
+    expect(copies.addParts("a", tiny(2), 1000)).toBe("copy-full");
+    expect(copies.addParts("a", tiny(1), 1000)).toBe("ok");
+    expect(copies.addParts("a", tiny(1), 1000)).toBe("copy-full");
+    // Another account has its own.
+    expect(copies.addParts("b", tiny(1), 1000)).toBe("ok");
+  });
+
+  it("reads only unused parts, through the small index, at most a page at a time, never the used ones or their bytes (audit 2026-11-22)", () => {
+    const copies = testCopies(":memory:");
+    const count = 2 * SWEEP_PAGE + 500;
+    for (const account of ["a", "b", "c"]) copies.addParts(account, Array.from({ length: count / 3 + (account === "a" ? count % 3 : 0) }, () => part(2)), 1000);
+    // A saved copy whose parts stay, between the others in the table's order: the sweep never reads them.
+    const kept = Array.from({ length: 3000 }, () => part(1));
+    copies.addParts("b0", kept, 1000);
+    copies.swap("b0", 0, new Uint8Array(5), kept.map((item) => item.id), 2000);
+    const db = (copies as unknown as { db: DatabaseSync }).db;
+    const reads: { sql: string; args: unknown[]; rows: number }[] = [];
+    const all = StatementSync.prototype.all;
+    const spy = vi.spyOn(StatementSync.prototype, "all").mockImplementation(function (this: StatementSync, ...args: Parameters<StatementSync["all"]>) {
+      const rows = all.apply(this, args);
+      if (this.sourceSQL.includes("indexed by parts_meta")) reads.push({ sql: this.sourceSQL, args, rows: rows.length });
+      return rows;
+    });
+    try {
+      expect(copies.sweep(1000 + UNUSED_PART_MS + 1)).toEqual({ parts: count, bytes: 2 * count });
+    } finally {
+      spy.mockRestore();
+    }
+    // Every row read was one that went: the saved copy's 3,000 parts were never read.
+    expect(reads.reduce((total, read) => total + read.rows, 0)).toBe(count);
+    expect(Math.max(...reads.map((read) => read.rows))).toBeLessThanOrEqual(SWEEP_PAGE);
+    // And each read is a range of the covering index: no part's bytes, no scan of the table.
+    for (const read of reads) {
+      const plan = (db.prepare(`explain query plan ${read.sql}`).all(...(read.args as never[])) as { detail: string }[]).map((row) => row.detail).join(" | ");
+      // Entered at the cursor: a step reads on from where the last one ended, not from the start of the range.
+      expect(plan).toMatch(/USING COVERING INDEX parts_meta \(account_id=\? AND (created_at=\? AND \(size,id\)>|\(created_at,size,id\)>)/);
+      expect(plan).not.toMatch(/SCAN/);
+      // In the index's own order: no sort of everything left in the range at every step.
+      expect(plan).not.toMatch(/TEMP B-TREE/);
+    }
+    expect(copies.storedTotal()).toBe(3005);
+    expect(copies.parts("b0", kept.map((item) => item.id))).toHaveLength(3000);
+  });
+
+  it("pages straight through parts that share a time, and through parts without one", () => {
+    const copies = testCopies(":memory:");
+    const db = (copies as unknown as { db: DatabaseSync }).db;
+    // One account whose parts all came in the same millisecond, in many sizes; another with parts from before times were kept.
+    copies.addParts("same", Array.from({ length: 2 * SWEEP_PAGE + 300 }, (_, n) => part(1 + (n % 7))), 1000);
+    copies.addParts("old", Array.from({ length: SWEEP_PAGE + 200 }, (_, n) => part(1 + (n % 5))), 1000);
+    db.exec("update parts set created_at = null where account_id = 'old'");
+    const stored = copies.storedTotal();
+    const swept = copies.sweep(1000 + UNUSED_PART_MS + 1);
+    expect(swept.parts).toBe(3 * SWEEP_PAGE + 500);
+    expect(swept.bytes).toBe(stored);
+    expect(copies.storedTotal()).toBe(0);
+    expect(db.prepare("select count(*) as n from parts").get()).toEqual({ n: 0 });
+  });
+
+  it("goes on where the last sweep stopped when a request waits, so unused parts past many other accounts are reached", () => {
+    const copies = testCopies(":memory:");
+    const at = 1000 + UNUSED_PART_MS + 1;
+    // 600 accounts with nothing unused (their parts are fresh), then one with old unused parts.
+    for (let n = 0; n < 600; n++) copies.addParts(`a${String(n).padStart(4, "0")}`, [part(1)], at);
+    copies.addParts("zzz", [part(3), part(3)], 1000);
+    // A sweep a request waits for looks at a few hundred accounts at most; the next one goes on from there.
+    const first = copies.sweep(at, ROOM_SWEEP_PAGES);
+    expect(first).toEqual({ parts: 0, bytes: 0 });
+    const second = copies.sweep(at, ROOM_SWEEP_PAGES);
+    expect(second).toEqual({ parts: 2, bytes: 6 });
+    // Past the last account it starts again at the first.
+    copies.addParts("a0000", [part(4)], 1000);
+    expect(copies.sweep(at, ROOM_SWEEP_PAGES)).toEqual({ parts: 1, bytes: 4 });
+  });
+
+  it("reads only what it drops, however many used parts the table holds", { timeout: 30_000 }, () => {
+    const copies = testCopies(":memory:");
+    // 200,000 used parts in saved copies, and a few unused ones.
+    for (let n = 0; n < 20; n++) {
+      const used = Array.from({ length: 10_000 }, () => part(1));
+      copies.addParts(`used-${n}`, used, 1000);
+      copies.swap(`used-${n}`, 0, new Uint8Array(1), used.map((item) => item.id), 2000);
+    }
+    copies.addParts("unused", Array.from({ length: 10 }, () => part(1)), 1000);
+    let read = 0;
+    const all = StatementSync.prototype.all;
+    const spy = vi.spyOn(StatementSync.prototype, "all").mockImplementation(function (this: StatementSync, ...args: Parameters<StatementSync["all"]>) {
+      const rows = all.apply(this, args);
+      read += rows.length;
+      return rows;
+    });
+    try {
+      expect(copies.sweep(1000 + UNUSED_PART_MS + 1)).toEqual({ parts: 10, bytes: 10 });
+    } finally {
+      spy.mockRestore();
+    }
+    // The 200,000 used parts are never read, only the 10 that go.
+    expect(read).toBe(10);
+  });
+
+  it("sweeps in the background a page at a time, so the service answers meanwhile (audit 2026-11-22)", async () => {
+    const copies = testCopies(":memory:");
+    const count = 3 * SWEEP_PAGE + 10;
+    copies.addParts("a", Array.from({ length: count }, () => part(2)), 1000);
+    const at = 1000 + UNUSED_PART_MS + 1;
+    const late = part(5);
+    let pauses = 0;
+    const swept = await copies.sweepInBackground(at, async () => {
+      pauses += 1;
+      // An upload between two pages goes in, and the totals stay right.
+      if (pauses === 1) expect(copies.addParts("b", [late], at)).toBe("ok");
+    });
+    expect(swept).toEqual({ parts: count, bytes: 2 * count });
+    expect(pauses).toBeGreaterThanOrEqual(3);
+    expect(copies.storedTotal()).toBe(5);
+    expect(copies.pooledTotal()).toBe(5);
+    expect(copies.parts("b", [late.id])).toHaveLength(1);
+  });
+
+  it("drops at most ROOM_SWEEP_PAGES pages while an upload waits for room, and leaves the rest to the hourly round", () => {
+    const count = ROOM_SWEEP_PAGES * SWEEP_PAGE + 500;
+    const copies = testCopies(":memory:", { totalLimit: count });
+    copies.addParts("a", Array.from({ length: count }, () => part(1)), 1000);
+    expect(copies.addParts("b", [part(1)], 1000 + UNUSED_PART_MS + 1)).toBe("ok");
+    expect(copies.storedTotal()).toBe(500 + 1);
+  });
+
+  it("counts every part as at least 1 KiB in the limits, so tiny parts can't fill the service for free (audit 2026-11-22)", () => {
+    const copies = new CopyStore(":memory:", { totalLimit: 100 * MIN_PART_BYTES });
+    expect(MIN_PART_BYTES).toBe(1024);
+    // 100 one-byte parts take the whole total.
+    expect(copies.addParts("a", Array.from({ length: 100 }, () => part(1)), 1000)).toBe("ok");
+    expect(copies.storedTotal()).toBe(100 * MIN_PART_BYTES);
+    expect(copies.addParts("b", [part(1)], 1000)).toBe("no-room");
+    // A part bigger than the floor counts at its bytes.
+    const big = new CopyStore(":memory:");
+    big.addParts("a", [part(5000)], 1000);
+    expect(big.stored("a")).toBe(5000);
+  });
+
   it("counts parts from before their time as old: kept with a copy until its next save, dropped without one", () => {
-    const copies = new CopyStore(":memory:");
+    const copies = testCopies(":memory:");
     const db = (copies as unknown as { db: { exec(sql: string): void } }).db;
     const used = part(100);
     copies.addParts("a", [used], 1000);
@@ -410,7 +557,7 @@ describe("the cloud copy", () => {
   });
 
   it("never drops a part a version uses, even when the clock went back before saving it", () => {
-    const copies = new CopyStore(":memory:");
+    const copies = testCopies(":memory:");
     const used = part(100);
     copies.addParts("a", [used], 50_000);
     copies.swap("a", 0, new Uint8Array(5), [used.id], 10_000);
@@ -419,7 +566,7 @@ describe("the cloud copy", () => {
   });
 
   it("sweeps for room before it refuses, at most once a minute", () => {
-    const copies = new CopyStore(":memory:", { totalLimit: 1000 });
+    const copies = testCopies(":memory:", { totalLimit: 1000 });
     copies.addParts("idle", [part(900)], 0);
     // A day later the idle upload goes to make room.
     expect(copies.addParts("a", [part(200)], UNUSED_PART_MS + 1)).toBe("ok");
@@ -435,7 +582,7 @@ describe("the cloud copy", () => {
   });
 
   it("leaves the total as it was when a save or a delete fails part way", () => {
-    const copies = new CopyStore(":memory:");
+    const copies = testCopies(":memory:");
     const a = part(100);
     const b = part(200);
     copies.addParts("acc", [a, b], 1);
@@ -462,12 +609,12 @@ describe("the cloud copy", () => {
 
   it("leaves free space on the disk", () => {
     let free = 10_000;
-    const copies = new CopyStore(":memory:", { freeBytes: () => free, freeFloor: 9_000 });
+    const copies = testCopies(":memory:", { freeBytes: () => free, freeFloor: 9_000 });
     expect(copies.addParts("a", [part(1000)])).toBe("ok");
     free = 9_500;
     expect(copies.addParts("a", [part(1000)])).toBe("no-room");
     // A disk it can't read doesn't stop uploads.
-    const unknown = new CopyStore(":memory:", { freeBytes: () => null, freeFloor: 9_000 });
+    const unknown = testCopies(":memory:", { freeBytes: () => null, freeFloor: 9_000 });
     expect(unknown.addParts("a", [part(1000)])).toBe("ok");
   });
 
@@ -539,7 +686,7 @@ describe("the cloud copy", () => {
   });
 
   it("gives back parts up to about 8 MB per answer, at least one", () => {
-    const copies = new CopyStore(":memory:");
+    const copies = testCopies(":memory:");
     const parts = Array.from({ length: 4 }, () => ({ id: new Uint8Array(randomBytes(32)), data: new Uint8Array(3 * 1024 * 1024) }));
     copies.addParts("acc", parts);
     expect(copies.parts("acc", parts.map((p) => p.id))).toHaveLength(2);
@@ -607,7 +754,7 @@ describe("the cloud copy's shares of the total (audit)", () => {
 
   it("never lets the bytes on top of a copy take room in the total or the network's day from anyone else (audit)", () => {
     // As the audit planned it, without the networks' shares of the total, which it didn't know.
-    const copies = new CopyStore(":memory:", { totalLimit: 1000, networkDayLimit: 600, networkShare: 0 });
+    const copies = testCopies(":memory:", { totalLimit: 1000, networkDayLimit: 600, networkShare: 0 });
     for (const id of ["a1", "a2"]) save(copies, id, 250, aged("n1"));
     expect([copies.storedTotal(), copies.pooledTotal()]).toEqual([502, 502]);
     // Each uploads its next version, as big as its copy: on top of it, counted nowhere.
@@ -630,7 +777,7 @@ describe("the cloud copy's shares of the total (audit)", () => {
   });
 
   it("counts what is saved of the bytes on top once a version keeps them, and drops them with the account", () => {
-    const copies = new CopyStore(":memory:", { totalLimit: 1000, networkShare: 0 });
+    const copies = testCopies(":memory:", { totalLimit: 1000, networkShare: 0 });
     save(copies, "a", 300, aged());
     const next = part(300);
     expect(copies.addParts("a", [next], now + minute)).toBe("ok");
@@ -645,7 +792,7 @@ describe("the cloud copy's shares of the total (audit)", () => {
 
   it("still keeps the disk's free space from the bytes on top", () => {
     let free = 1000;
-    const copies = new CopyStore(":memory:", { totalLimit: 1000, networkShare: 0, freeBytes: () => free, freeFloor: 600 });
+    const copies = testCopies(":memory:", { totalLimit: 1000, networkShare: 0, freeBytes: () => free, freeFloor: 600 });
     save(copies, "a", 300, aged());
     free = 800;
     expect(copies.addParts("a", [part(250)], now + minute)).toBe("no-room");
@@ -654,7 +801,7 @@ describe("the cloud copy's shares of the total (audit)", () => {
 
   it("keeps the bytes on top of young accounts' copies out of their slice", () => {
     // A quarter of 1000 for young accounts: one saves 200 and uploads as much again on top; another still has 49.
-    const copies = new CopyStore(":memory:", { totalLimit: 1000, networkShare: 0 });
+    const copies = testCopies(":memory:", { totalLimit: 1000, networkShare: 0 });
     const young = { since: now - day };
     save(copies, "y1", 200, young);
     expect(copies.addParts("y1", [part(200)], now + minute, young)).toBe("ok");
@@ -664,17 +811,17 @@ describe("the cloud copy's shares of the total (audit)", () => {
 
   it("counts the bytes on top again when it starts", () => {
     const file = path.join(mkdtempSync(path.join(tmpdir(), "tavora-copies-")), "copies.sqlite");
-    const first = new CopyStore(file, { totalLimit: 1000, networkShare: 0 });
+    const first = testCopies(file, { totalLimit: 1000, networkShare: 0 });
     save(first, "a", 400, aged());
     expect(first.addParts("a", [part(400)], now + minute)).toBe("ok");
-    const again = new CopyStore(file, { totalLimit: 1000, networkShare: 0 });
+    const again = testCopies(file, { totalLimit: 1000, networkShare: 0 });
     expect([again.storedTotal(), again.pooledTotal()]).toEqual([801, 401]);
     expect(again.addParts("b", [part(599)], now + minute)).toBe("ok");
   });
 
   it("lets the accounts of one network hold only their share of the total, so aged accounts can't fill it (audit)", () => {
     // As the audit planned it: aged accounts on three networks try to fill all 1000 bytes. Each network may hold 300.
-    const copies = new CopyStore(":memory:", { totalLimit: 1000, networkDayLimit: 400, networkShare: 0.3 });
+    const copies = testCopies(":memory:", { totalLimit: 1000, networkDayLimit: 400, networkShare: 0.3 });
     const saved = new Map<string, ReturnType<typeof part>>();
     for (const network of ["n1", "n2", "n3"]) {
       saved.set(network, save(copies, `${network}-a`, 199, aged(network)));
@@ -701,7 +848,7 @@ describe("the cloud copy's shares of the total (audit)", () => {
 
   it("counts an account for the network it last added bytes from, and one from before networks for none", () => {
     // 300 a network.
-    const copies = new CopyStore(":memory:", { totalLimit: 2000, networkShare: 0.15 });
+    const copies = testCopies(":memory:", { totalLimit: 2000, networkShare: 0.15 });
     save(copies, "a", 150, aged("n1"));
     save(copies, "b", 200, aged("n2"));
     // Growing from a network that can't take the whole copy is refused there ...
@@ -729,7 +876,7 @@ describe("the cloud copy's shares of the total (audit)", () => {
   });
 
   it("lets someone who moved networks (a café, a new carrier) go on growing from where they are (review)", () => {
-    const copies = new CopyStore(":memory:", { totalLimit: 2000, networkShare: 0.15 });
+    const copies = testCopies(":memory:", { totalLimit: 2000, networkShare: 0.15 });
     // At the café, others hold most of its share; the user's copy started there.
     save(copies, "user", 50, aged("cafe"));
     save(copies, "regular", 240, aged("cafe"));
@@ -743,7 +890,7 @@ describe("the cloud copy's shares of the total (audit)", () => {
 
   it("doesn't let tiny uploads from a network charge bytes stored from elsewhere to it (review)", () => {
     // Five accounts store a byte from the target network, then fill their copies from their own networks.
-    const copies = new CopyStore(":memory:", { totalLimit: 2000, networkShare: 0.15 });
+    const copies = testCopies(":memory:", { totalLimit: 2000, networkShare: 0.15 });
     for (let n = 0; n < 5; n++) {
       expect(copies.addParts(`x${n}`, [part(1)], now, aged("target"))).toBe("ok");
       expect(copies.addParts(`x${n}`, [part(250)], now + minute, aged(`own${n}`))).toBe("ok");
@@ -755,7 +902,7 @@ describe("the cloud copy's shares of the total (audit)", () => {
 
   it("forgets the network with the copy", () => {
     const file = path.join(mkdtempSync(path.join(tmpdir(), "tavora-copies-")), "copies.sqlite");
-    const copies = new CopyStore(file, { totalLimit: 2000, networkShare: 0.15 });
+    const copies = testCopies(file, { totalLimit: 2000, networkShare: 0.15 });
     save(copies, "a", 290, aged("n1"));
     const network = () => (new DatabaseSync(file).prepare("select network from holders where account_id = ?").get("a") as { network: string | null }).network;
     expect(network()).toMatch(/^[0-9a-f]{16}$/);
@@ -769,10 +916,10 @@ describe("the cloud copy's shares of the total (audit)", () => {
 
   it("starts the networks' shares afresh with a new secret, until each account adds bytes again", () => {
     const file = path.join(mkdtempSync(path.join(tmpdir(), "tavora-copies-")), "copies.sqlite");
-    const before = new CopyStore(file, { totalLimit: 2000, networkShare: 0.15, networkSalt: "a".repeat(32) });
+    const before = testCopies(file, { totalLimit: 2000, networkShare: 0.15, networkSalt: "a".repeat(32) });
     save(before, "a", 100, aged("n1"));
     expect(before.addParts("b", [part(200)], now, aged("n1"))).toBe("no-room");
-    const after = new CopyStore(file, { totalLimit: 2000, networkShare: 0.15, networkSalt: "b".repeat(32) });
+    const after = testCopies(file, { totalLimit: 2000, networkShare: 0.15, networkSalt: "b".repeat(32) });
     // a's mark under the old secret is no network now: n1 has room ...
     expect(after.addParts("b", [part(200)], now, aged("n1"))).toBe("ok");
     // ... and a, adding bytes from n1 again, counts for it under the new one.
@@ -784,7 +931,7 @@ describe("the cloud copy's shares of the total (audit)", () => {
   });
 
   it("counts what a save keeps of the bytes on top, and drops the rest from both totals", () => {
-    const copies = new CopyStore(":memory:", { totalLimit: 1000, networkShare: 0 });
+    const copies = testCopies(":memory:", { totalLimit: 1000, networkShare: 0 });
     const first = save(copies, "a", 300, aged());
     const [big, small] = [part(200), part(100)];
     expect(copies.addParts("a", [big, small], now + minute)).toBe("ok");
@@ -804,7 +951,7 @@ describe("the cloud copy's shares of the total (audit)", () => {
 
   it("checks a save that grows its manifest with the copy as it will be, not with the parts it drops (review)", () => {
     // The network's share: 300. The copy holds 251; its next version is a 100-byte part with a 60-byte manifest.
-    const shared = new CopyStore(":memory:", { totalLimit: 2000, networkShare: 0.15 });
+    const shared = testCopies(":memory:", { totalLimit: 2000, networkShare: 0.15 });
     save(shared, "a", 250, aged("n1"));
     const next = part(100);
     expect(shared.addParts("a", [next], now + minute, aged("n1"))).toBe("ok");
@@ -814,7 +961,7 @@ describe("the cloud copy's shares of the total (audit)", () => {
     expect(shared.addParts("a", [more], now + 2 * minute, aged("n1"))).toBe("ok");
     expect(shared.swap("a", 2, new Uint8Array(200), [next.id, more.id], now + 2 * minute, aged("n1"))).toEqual({ ok: false, reason: "unavailable" });
     // The total too: 951 of 1000 held, a save that drops 900 of them has room for its 59 more manifest bytes.
-    const total = new CopyStore(":memory:", { totalLimit: 1000, networkShare: 0 });
+    const total = testCopies(":memory:", { totalLimit: 1000, networkShare: 0 });
     save(total, "a", 900, aged());
     save(total, "b", 49, aged());
     const small = part(100);
@@ -829,7 +976,7 @@ describe("the cloud copy's shares of the total (audit)", () => {
     old.exec("create table holders (account_id text primary key, since integer not null)");
     old.prepare("insert into holders (account_id, since) values (?, ?)").run("legacy", now - 30 * day);
     old.close();
-    const copies = new CopyStore(file, { totalLimit: 1000, networkShare: 0.3, networkSalt: "s".repeat(32) });
+    const copies = testCopies(file, { totalLimit: 1000, networkShare: 0.3, networkSalt: "s".repeat(32) });
     save(copies, "legacy", 200, aged("198.51.100.0/24"));
     save(copies, "other", 50, aged("198.51.100.0/24"));
     expect(copies.addParts("third", [part(50)], now, aged("198.51.100.0/24"))).toBe("no-room");
@@ -838,7 +985,7 @@ describe("the cloud copy's shares of the total (audit)", () => {
     expect(marks.map((row) => row.network)).toEqual([expect.stringMatching(/^[0-9a-f]{16}$/), expect.stringMatching(/^[0-9a-f]{16}$/)]);
     expect(marks[0]!.network).toBe(marks[1]!.network);
     // The same secret after a restart finds the same network.
-    expect(new CopyStore(file, { totalLimit: 1000, networkShare: 0.3, networkSalt: "s".repeat(32) }).addParts("third", [part(50)], now, aged("198.51.100.0/24"))).toBe("no-room");
+    expect(testCopies(file, { totalLimit: 1000, networkShare: 0.3, networkSalt: "s".repeat(32) }).addParts("third", [part(50)], now, aged("198.51.100.0/24"))).toBe("no-room");
     // What the older service writes still goes in.
     const older = new DatabaseSync(file);
     older.prepare("insert into holders (account_id, since) values (?, ?) on conflict (account_id) do nothing").run("newer", now);

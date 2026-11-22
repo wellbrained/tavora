@@ -69,6 +69,8 @@ export const HOST_ONLY: ReadonlySet<string> = new Set(
     // The library's game icons and the Add a game list's (game-icons.ts gathers them for host.ts).
     "main/game-icons.ts",
     "main/catalog-client.ts",
+    // The catalog's pages, reviews, reports and update checks as the host window uses them (module-catalog.ts).
+    "main/module-catalog.ts",
     "main/catalog-readme.ts",
     "main/module-page.ts",
     "main/publisher-names.ts",
@@ -80,6 +82,8 @@ export const HOST_ONLY: ReadonlySet<string> = new Set(
     "main/device-name.ts",
     "main/inbox.ts",
     "main/example-copy.ts",
+    // Settings > Development's folders and the examples copied from them (development-folders.ts gathers them for host.ts).
+    "main/development-folders.ts",
     "main/cloud-copy.ts",
     "main/cloud-copy-sync.ts",
     "main/copy-crypto.ts",

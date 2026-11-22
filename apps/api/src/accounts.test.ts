@@ -115,6 +115,61 @@ describe("signing in with a code", () => {
     expect((await call("POST", "/verify", { email: "me@example.com", code, create: true })).status).toBe(400);
   });
 
+  it("never lets wrong tries from another network spend someone's code, and still takes five wrong tries at most (audit 2026-11-22)", async () => {
+    const { call, lastCode } = setup();
+    const owner = "203.0.113.5";
+    const stranger = "198.51.100.7";
+    await call("POST", "/code", { email: "me@example.com" }, undefined, owner);
+    const code = lastCode();
+    const wrong = code === "000000" ? "000001" : "000000";
+    // A stranger who knows the address guesses as long as their own limit lets them.
+    for (let i = 0; i < 10; i++) expect((await call("POST", "/verify", { email: "me@example.com", code: wrong }, undefined, stranger)).status).toBe(400);
+    // Three of those were checked; the rest weren't, so even the right code from there is refused now.
+    expect((await call("POST", "/verify", { email: "me@example.com", code, create: true }, undefined, stranger)).status).toBe(400);
+    // The owner still has their tries: one wrong, then the right one.
+    expect((await call("POST", "/verify", { email: "me@example.com", code: wrong }, undefined, owner)).status).toBe(400);
+    expect(await (await call("POST", "/verify", { email: "me@example.com", code, create: true }, undefined, owner)).json()).toMatchObject({ status: "created" });
+  });
+
+  it("keeps the owner's code when a stranger asks for one too, in either order, and spends neither by the stranger's tries", async () => {
+    const owner = "203.0.113.5";
+    const stranger = "198.51.100.7";
+    for (const strangerFirst of [true, false]) {
+      const { call, lastCode } = setup();
+      const ask = async (client: string) => (await call("POST", "/code", { email: "me@example.com" }, undefined, client), lastCode());
+      const first = await ask(strangerFirst ? stranger : owner);
+      const second = await ask(strangerFirst ? owner : stranger);
+      const ownerCode = strangerFirst ? second : first;
+      const wrong = [first, second].includes("000000") ? ([first, second].includes("000001") ? "000002" : "000001") : "000000";
+      // The stranger who asked is the asker of their own code: their 4 wrong tries spend only that one.
+      for (let i = 0; i < 4; i++) expect((await call("POST", "/verify", { email: "me@example.com", code: wrong }, undefined, stranger)).status).toBe(400);
+      expect(await (await call("POST", "/verify", { email: "me@example.com", code: ownerCode, create: true }, undefined, owner)).json()).toMatchObject({ status: "created" });
+    }
+  });
+
+  it("keeps the code an address asked for from a network it signed in from, however many strangers ask after it", async () => {
+    const { call, lastCode, inbox } = setup();
+    const owner = "203.0.113.5";
+    await call("POST", "/code", { email: "me@example.com" }, undefined, owner);
+    await call("POST", "/verify", { email: "me@example.com", code: lastCode(), create: true }, undefined, owner);
+    inbox.clear();
+    await call("POST", "/code", { email: "me@example.com" }, undefined, owner);
+    const ownerCode = lastCode();
+    for (const client of ["198.51.100.7", "192.0.2.9", "198.18.0.1"]) await call("POST", "/code", { email: "me@example.com" }, undefined, client);
+    expect(inbox.mails()).toHaveLength(4);
+    expect(await (await call("POST", "/verify", { email: "me@example.com", code: ownerCode }, undefined, owner)).json()).toMatchObject({ status: "signed-in" });
+  });
+
+  it("spends a code after five wrong tries from everyone together", async () => {
+    const { call, lastCode } = setup();
+    await call("POST", "/code", { email: "me@example.com" }, undefined, "203.0.113.5");
+    const code = lastCode();
+    const wrong = code === "000000" ? "000001" : "000000";
+    for (let i = 0; i < 3; i++) await call("POST", "/verify", { email: "me@example.com", code: wrong }, undefined, "198.51.100.7");
+    for (let i = 0; i < 2; i++) await call("POST", "/verify", { email: "me@example.com", code: wrong }, undefined, "203.0.113.5");
+    expect((await call("POST", "/verify", { email: "me@example.com", code, create: true }, undefined, "203.0.113.5")).status).toBe(400);
+  });
+
   it("lets a code expire after ten minutes, and a new code replaces the old one", async () => {
     const { call, lastCode, clock } = setup();
     await call("POST", "/code", { email: "me@example.com" });
@@ -273,12 +328,14 @@ describe("signed in", () => {
     // Each code is checked on its own, and a wrong one says which.
     expect(await (await call("POST", "/email", { email: "new@example.com", code: newCode, currentCode: other(currentCode) }, token)).json()).toMatchObject({ reason: "wrong-current-code" });
     expect(await (await call("POST", "/email", { email: "new@example.com", code: other(newCode), currentCode }, token)).json()).toMatchObject({ reason: "wrong-code" });
-    const changed = await call("POST", "/email", { email: "new@example.com", code: newCode, currentCode }, token);
-    expect(await changed.json()).toMatchObject({ account: { email: "new@example.com" } });
+    const changed = (await (await call("POST", "/email", { email: "new@example.com", code: newCode, currentCode }, token)).json()) as { token: string };
+    expect(changed).toMatchObject({ account: { email: "new@example.com" }, token: expect.any(String), device: expect.any(String) });
     expect(inbox.mails()[0]).toMatchObject({ to: "old@example.com", subject: "The email of your Tavora account was changed" });
     expect(inbox.mails()[0]!.text).toContain("n•••@example.com");
-    // The device that changed it stays signed in; every other one is signed out.
-    expect((await (await call("GET", "", undefined, token)).json()) as unknown).toMatchObject({ account: { email: "new@example.com" }, devices: [{ current: true }] });
+    // Every sign-in ends, this one too: the device that changed it goes on with the new token in the answer, so a copy of
+    // the old one is no use (audit 2026-11-22).
+    expect((await (await call("GET", "", undefined, changed.token)).json()) as unknown).toMatchObject({ account: { email: "new@example.com" }, devices: [{ current: true, os: "windows" }] });
+    expect((await call("GET", "", undefined, token)).status).toBe(401);
     expect((await call("GET", "", undefined, laptop)).status).toBe(401);
   });
 
@@ -321,8 +378,10 @@ describe("signed in", () => {
     const currentCode = codeTo(inbox, "old@example.com");
     await call("POST", "/code", { email: "old@example.com" });
     const signInCode = codeTo(inbox, "old@example.com");
-    expect((await call("POST", "/email", { email: "new@example.com", code: codeTo(inbox, "new@example.com"), currentCode }, token)).status).toBe(200);
-    expect(await (await call("POST", "/delete", { code: deleteCode }, token)).json()).toMatchObject({ reason: "wrong-code" });
+    const changed = await call("POST", "/email", { email: "new@example.com", code: codeTo(inbox, "new@example.com"), currentCode }, token);
+    expect(changed.status).toBe(200);
+    const renewed = ((await changed.json()) as { token: string }).token;
+    expect(await (await call("POST", "/delete", { code: deleteCode }, renewed)).json()).toMatchObject({ reason: "wrong-code" });
     expect(await (await call("POST", "/verify", { email: "old@example.com", code: signInCode, create: true })).json()).toMatchObject({ reason: "wrong-code" });
   });
 
@@ -802,6 +861,28 @@ describe("Discord login", () => {
     return { ...context, connect };
   };
 
+  it("reads the account again once Discord answered, so a login removed meanwhile deletes nothing", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const slowDiscord: DiscordClient = {
+      identify: async () => {
+        await gate;
+        return ALEX;
+      },
+    };
+    const { call, signIn, store } = setup({ discord: slowDiscord });
+    const token = await signIn("me@example.com");
+    const id = store.accountByEmail("me@example.com")!.id;
+    store.setDiscord(id, ALEX);
+    const deleting = call("POST", "/delete/discord", { code: "codewellbrained", verifier: VERIFIER }, token);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    // The owner removes the Discord login (a stolen one, say) while Discord still answers.
+    expect(store.removeDiscord(id)).toBe("ok");
+    release();
+    expect(await (await deleting).json()).toMatchObject({ reason: "discord-mismatch" });
+    expect(store.account(id)).not.toBeNull();
+  });
+
   it("asks before creating a Discord-only account, then signs the same login in again", async () => {
     const { call } = setupDiscord();
     const first = (await (await call("POST", "/discord/sign-in", { code: "codewellbrained", verifier: VERIFIER, os: "windows" })).json()) as { status: string; ticket: string };
@@ -946,12 +1027,12 @@ describe("Discord login", () => {
     const code = lastCode();
     expect(await (await call("POST", "/email", { email: "me@example.com", code }, token)).json()).toMatchObject({ reason: "invalid" });
     expect(await (await call("POST", "/email", { email: "me@example.com", code, discord: { code: "codeother000", verifier: VERIFIER } }, token)).json()).toMatchObject({ reason: "discord-mismatch" });
-    expect(await (await call("POST", "/email", { email: "me@example.com", code, discord: { code: "codewellbrained", verifier: VERIFIER } }, token)).json()).toMatchObject({
-      account: { email: "me@example.com", discord: { name: "alex" } },
-    });
+    const changed = (await (await call("POST", "/email", { email: "me@example.com", code, discord: { code: "codewellbrained", verifier: VERIFIER } }, token)).json()) as { token: string };
+    expect(changed).toMatchObject({ account: { email: "me@example.com", discord: { name: "alex" } } });
     expect(inbox.mails()).toHaveLength(1);
     expect((await call("GET", "", undefined, laptop)).status).toBe(401);
-    expect((await call("GET", "", undefined, token)).status).toBe(200);
+    expect((await call("GET", "", undefined, token)).status).toBe(401);
+    expect((await call("GET", "", undefined, changed.token)).status).toBe(200);
   });
 
   it("deletes a Discord-only account by a fresh Discord sign-in with its own login", async () => {
@@ -1094,6 +1175,7 @@ describe("emails that follow a request (audit)", () => {
         if (asked.status !== 202) continue;
         const changed = await call("POST", "/email", { email: next, code: codeTo(inbox, next), currentCode: codeTo(inbox, current[n]!) }, token, client);
         expect(changed.status).toBe(200);
+        tokens[n] = ((await changed.json()) as { token: string }).token;
         current[n] = next;
       }
       clock.now += 15 * 60_000;

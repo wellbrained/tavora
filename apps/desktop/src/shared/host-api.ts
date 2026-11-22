@@ -293,6 +293,13 @@ export interface AccountView {
   developer: { name: string; nextChangeAt: string } | null;
   /** Publisher keys linked to the account (fingerprints only); null until read from the service. */
   publisherKeys: { fingerprint: string; linkedAt: string }[] | null;
+  /**
+   * Keys of the account paused when its email changed or a device was removed: still the account's, but they sign nothing
+   * until linked again. Absent or null until read, and from a service from before them.
+   */
+  pausedKeys?: { fingerprint: string; linkedAt: string }[] | null;
+  /** Emails about the account's publishing that the service couldn't send lately (a busy day), newest first. */
+  unsentNotices?: AccountUnsentNotice[] | null;
   /** "I lost this key": requests to replace a linked key, and where each stands; null until read from the service. */
   keyRequests: KeyRequestView[] | null;
   /** A one-time code for `tavora-pack link`, while it is valid. */
@@ -322,6 +329,15 @@ export interface AccountPrefix {
  * may, and "invalid" isn't a prefix at all.
  */
 export type PrefixState = "held" | "free" | "taken" | "reserved" | "too-many" | "invalid";
+
+/** An email about the account's publishing that couldn't go out: a version published, sent for review, or taken back. */
+export interface AccountUnsentNotice {
+  kind: "published" | "waiting" | "withdrawn";
+  id: string;
+  name: string;
+  version: string;
+  at: string;
+}
 
 export interface AccountPublishToken {
   id: string;

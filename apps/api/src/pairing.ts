@@ -3,7 +3,7 @@ import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type { AccountStore, Session } from "./account-store.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
-import { requireSignIn, tooMany, type SignedInEnv } from "./sign-in.ts";
+import { requireSignIn, signedOut, stillSignedIn, tooMany, type SignedInEnv } from "./sign-in.ts";
 
 /**
  * Approving a new PC from an old one (decided 2026-10-20, "one recovery key", step 4). The new PC asks; a
@@ -71,7 +71,8 @@ export function pairingRoutes({ accounts, clientKey, rateLimiter, now = Date.now
     if (wait > 0) return tooMany(context, wait);
     await next();
   });
-  app.use("*", requireSignIn(accounts, now));
+  // The sign-in, then the body, then the sign-in again (sign-in.ts requireSignIn), and once more after each step's body.
+  app.use("*", requireSignIn(accounts, now, 1024));
   app.use("*", bodyLimit({ maxSize: 1024, onError: (context) => context.json({ error: "Too big.", reason: "too-big" }, 413) }));
 
   const body = async (context: Context<Env>): Promise<Record<string, unknown> | null> => {
@@ -91,6 +92,7 @@ export function pairingRoutes({ accounts, clientKey, rateLimiter, now = Date.now
   // 1. The new PC asks. A newer request replaces an older one of the account.
   app.post("/", async (context) => {
     const sent = await body(context);
+    if (!stillSignedIn(accounts, context)) return signedOut(context);
     if (!sent || typeof sent.commit !== "string" || !KEY_TEXT.test(sent.commit)) return bad(context);
     const session = context.get("session");
     if (!pairings.has(session.accountId) && pairings.size >= MAX_ACCOUNTS) {
@@ -134,6 +136,7 @@ export function pairingRoutes({ accounts, clientKey, rateLimiter, now = Date.now
     const session = context.get("session");
     if (pairing.from === session.id || pairing.answer) return turn(context);
     const sent = await body(context);
+    if (!stillSignedIn(accounts, context)) return signedOut(context);
     if (!sent || typeof sent.publicKey !== "string" || !KEY_TEXT.test(sent.publicKey)) return bad(context);
     pairing.answer = { by: session.id, name: nameOf(session), publicKey: sent.publicKey };
     return context.body(null, 204);
@@ -145,6 +148,7 @@ export function pairingRoutes({ accounts, clientKey, rateLimiter, now = Date.now
     if (!pairing || pairing.declined) return gone(context);
     if (pairing.from !== context.get("session").id || !pairing.answer || pairing.reveal) return turn(context);
     const sent = await body(context);
+    if (!stillSignedIn(accounts, context)) return signedOut(context);
     if (!sent || typeof sent.publicKey !== "string" || !KEY_TEXT.test(sent.publicKey)) return bad(context);
     pairing.reveal = sent.publicKey;
     return context.body(null, 204);
@@ -156,6 +160,7 @@ export function pairingRoutes({ accounts, clientKey, rateLimiter, now = Date.now
     if (!pairing || pairing.declined) return gone(context);
     if (pairing.answer?.by !== context.get("session").id || !pairing.reveal || pairing.sealed) return turn(context);
     const sent = await body(context);
+    if (!stillSignedIn(accounts, context)) return signedOut(context);
     if (!sent || typeof sent.sealed !== "string" || !SEALED_TEXT.test(sent.sealed)) return bad(context);
     pairing.sealed = sent.sealed;
     return context.body(null, 204);

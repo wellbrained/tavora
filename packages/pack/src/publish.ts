@@ -58,7 +58,7 @@ export function publishSignature(key: KeyObject, zip: Buffer): string {
 /** The API's reasons, and "token-not-working", which tavora-pack words for a refused publish token. */
 const MESSAGES: Partial<Record<ApiReason | "token-not-working", string>> = {
   "sign-in-needed": "Publishing needs your Tavora account. Publish from Tavora (Settings > Your modules), or from CI with a publish token in TAVORA_PUBLISH_TOKEN (Settings > Publishing > Publisher keys and CI).",
-  "token-not-working": "This publish token doesn't work any more: it was removed or ran out. Make a new one in Tavora (Settings > Publishing > Publisher keys and CI).",
+  "token-not-working": "This publish token doesn't work any more: it was removed, ran out, or your account's email changed. Make a new one in Tavora (Settings > Publishing > Publisher keys and CI).",
   "wrong-account": "This publisher key is linked to another Tavora account than the one publishing.",
   "token-new-prefix": "A publish token publishes only under id prefixes your account has. Publish this module's first version from Tavora.",
   "key-not-linked": "Your publisher key is not linked to a Tavora account yet. Get a link code in Tavora (Settings > Publishing > Publisher keys and CI) and run tavora-pack link <code> --key <file>",

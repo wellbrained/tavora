@@ -1,13 +1,13 @@
 import { createHash } from "node:crypto";
 import type { Context } from "hono";
 import { PUBLISH_STATEMENT, ZIP_LIMITS } from "@tavora/pack";
-import type { AccountStore } from "./account-store.ts";
+import { PUBLISH_TOKEN_PREFIX, type AccountStore, type UnsentNotice } from "./account-store.ts";
 import { bearerToken, fail as refuse, tooMany } from "./sign-in.ts";
-import { MAIL_RESERVED } from "./accounts.ts";
+import { MAIL_RESERVED, NOTICES_PER_ACCOUNT, noticeRoom } from "./accounts.ts";
 import { CatalogError, checkCatalogZip, checkReleaseVersion, isOfficialId, type CatalogStore, type CheckedZip, type ReviewReason } from "./catalog.ts";
 import { catalogTrust, keyRefusal, OFFICIAL_PINS, officialOn, type OfficialPins } from "./catalog-trust.ts";
 import { mailLanguage, publishedMail, withdrawnMail, type Mail, type MailLanguage, type Mailer } from "./mail.ts";
-import { createNotifier, waitingMail, waitingNoticeMail } from "./moderation-mail.ts";
+import { waitingMail, waitingNoticeMail } from "./moderation-mail.ts";
 import { reviewUpload, runChecks } from "./moderation.ts";
 import { signedStatement } from "./publishers.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
@@ -108,6 +108,12 @@ interface CatalogFull {
 /** What a limit check says: a refusal, a full catalog, or null when there is room. */
 type LimitCheck = Response | CatalogFull | null;
 
+/** A publish token that doesn't work (any more): said as such, so CI doesn't read it as a client to update. */
+const TOKEN_GONE = "This publish token doesn't work any more: it was removed, ran out, or your account's email changed. Make a new one in Tavora (Settings > Publishing > Publisher keys and CI).";
+/** Whether the request came with something shaped like a publish token. */
+const sentToken = (context: Context) => bearerToken(context)?.startsWith(PUBLISH_TOKEN_PREFIX) ?? false;
+const PAUSED_KEY = "This publisher key was paused when your account's email changed. Link it again to publish with it.";
+
 /** The middleware and handler for POST /v1/catalog/publish. */
 export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits = {}, now = Date.now, catalogueKey, officialPins = OFFICIAL_PINS, maintainer, mail, scanner, memory = uploadMemory, readLimits = {}, scanLimitMs }: PublishOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 30, windowMs: 3_600_000 });
@@ -152,6 +158,9 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
       return refuse(context, 403, "bad-signature", "The upload is not signed by the key that signed the zip.");
     }
     if (accountId !== key.accountId) return refuse(context, 403, "wrong-account", "This publisher key is linked to another Tavora account than the one publishing.");
+    // Paused when the account's address changed (account-store.ts revokeMinted). Apps know to link a key that isn't linked,
+    // and linking it again wakes it, so it answers with that reason.
+    if (key.paused) return refuse(context, 403, "key-not-linked", PAUSED_KEY);
     return key;
   };
 
@@ -165,34 +174,59 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     return session ? { accountId: session.accountId, token: null } : null;
   };
 
-  // The developer hears of every publish and every withdraw; best effort, and never with the emails kept for sign-in codes.
-  const tellAccount = async (store: AccountStore, context: Context, accountId: string, write: (to: string, language: MailLanguage) => Mail, at: number) => {
-    const to = store.account(accountId)?.email;
-    if (!mail || !to) return;
+  /**
+   * Sends a notice about `accountId`'s publishing, best effort: out of the notices' own share of the day's emails
+   * (accounts.ts NOTICE_SHARE), the account's NOTICES_PER_ACCOUNT, and never once codes to new addresses stopped, so
+   * publishing can't use up the emails for signing in. False when it didn't go out.
+   */
+  const notice = async (store: AccountStore, accountId: string, via: { mailer: Mailer; mailDailyLimit?: number }, message: Mail, at: number) => {
     const day = new Date(at).toISOString().slice(0, 10);
-    if (mail.mailDailyLimit !== undefined && store.mailsSent(day) >= Math.max(0, mail.mailDailyLimit - MAIL_RESERVED)) return;
+    const room = via.mailDailyLimit === undefined ? null : noticeRoom(via.mailDailyLimit);
+    if (room && store.mailsSent(day) + 1 > room.ceiling) return false;
+    if (!store.takeNotice(day, accountId, NOTICES_PER_ACCOUNT, room?.perDay ?? Number.POSITIVE_INFINITY)) return false;
     try {
-      await mail.mailer.send(write(to, languageOf(context)));
+      await via.mailer.send(message);
       store.countMail(day);
+      return true;
     } catch {
       // Done all the same; the email is best effort.
+      return false;
     }
   };
 
+  /**
+   * The developer hears of every publish, review and withdraw, within the notices' share (notice()). One that can't go out
+   * is kept (AccountStore.recordUnsentNotice) and the app shows it in Publishing: on a busy day a mail can be skipped, and
+   * the owner still sees what a stolen sign-in did.
+   */
+  const tellAccount = async (store: AccountStore, context: Context, accountId: string, kind: UnsentNotice["kind"], module: { id: string; name: string; version: string }, write: (to: string, language: MailLanguage) => Mail, at: number) => {
+    const to = store.account(accountId)?.email;
+    // An account without an address (Discord only) hears of nothing by mail: Publishing lists all of it instead.
+    if (!to) {
+      store.recordUnsentNotice(accountId, kind, module, at);
+      return;
+    }
+    if (!mail) return;
+    if (!(await notice(store, accountId, mail, write(to, languageOf(context)), at))) store.recordUnsentNotice(accountId, kind, module, at);
+  };
+
+  const moduleOf = (checked: CheckedZip) => ({ id: checked.manifest.id, name: checked.manifest.name, version: checked.manifest.version });
+
   const tellPublished = (store: AccountStore, context: Context, accountId: string, checked: CheckedZip, token: string | null, at: number) =>
-    tellAccount(store, context, accountId, (to, language) => publishedMail(to, { id: checked.manifest.id, name: checked.manifest.name, version: checked.manifest.version }, checked.owner, token, language), at);
+    tellAccount(store, context, accountId, "published", moduleOf(checked), (to, language) => publishedMail(to, moduleOf(checked), checked.owner, token, language), at);
 
   const languageOf = (context: Context): MailLanguage => mailLanguage((context.req.header("accept-language") ?? "").slice(0, 2).toLowerCase());
 
   // A version that waits: the developer hears of it, and so does the maintainer. Best effort, like the published email.
   const tellWaiting = async (store: AccountStore, context: Context, accountId: string, checked: CheckedZip, reasons: ReviewReason[], at: number) => {
     if (!mail && !maintainer) return;
-    const module = { id: checked.manifest.id, name: checked.manifest.name, version: checked.manifest.version };
+    const module = moduleOf(checked);
     const to = store.account(accountId)?.email;
-    if (mail && to) await createNotifier({ store, mailer: mail.mailer, mailDailyLimit: mail.mailDailyLimit, now: () => at }).send(waitingMail(to, module, reasons, languageOf(context)));
+    await tellAccount(store, context, accountId, "waiting", module, (address, language) => waitingMail(address, module, reasons, language), at);
+    // The maintainer's notice counts against the account that uploaded, so it can't fill the maintainer's inbox either.
     if (maintainer) {
       const developer = store.developer(accountId)?.name ?? to ?? accountId;
-      await createNotifier({ store, mailer: maintainer.mailer, mailDailyLimit: maintainer.mailDailyLimit, now: () => at }).send(waitingNoticeMail(maintainer.email, module, developer, reasons));
+      await notice(store, accountId, maintainer, waitingNoticeMail(maintainer.email, module, developer, reasons), at);
     }
   };
 
@@ -216,6 +250,7 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     if ((context.req.header("content-type") ?? "").toLowerCase() !== "application/zip") return refuse(context, 415, "bad-request", "Send the zip as application/zip.");
     const by = signedIn;
     if (!by) {
+      if (sentToken(context)) return refuse(context, 401, "sign-in-needed", TOKEN_GONE);
       return refuse(context, 401, "sign-in-needed", "Publishing needs your Tavora sign-in now: update tavora-pack and publish with Tavora open, or from CI with a publish token.");
     }
     // Nothing is read for an account that can't publish: without a linked key no upload of its can pass. A key it reported as
@@ -291,6 +326,8 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     const keyRefused = () => {
       const state = keyRefusal(store, trust, checked.owner, checked.sha256, key.accountId);
       if (state === "key-not-linked") return refuse(context, 403, "key-not-linked", "This publisher key is not linked to a Tavora account.");
+      // Apps know to link a key that isn't linked, and linking it again wakes it, so it answers with that reason.
+      if (state === "key-paused") return refuse(context, 403, "key-not-linked", PAUSED_KEY);
       if (state === "key-revoked") return refuse(context, 403, "key-revoked", "This publisher key was revoked and publishes nothing new. Link a new key to your account.");
       // Reported as leaked in the app: nothing new from it while the revocation waits to be signed.
       if (state === "key-leaked") return refuse(context, 403, "key-leaked", "You reported this publisher key as leaked, so it publishes nothing new. Publish with your new key.");
@@ -412,6 +449,10 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     if (barredAfter) return afterScan(barredAfter);
     const keyAfter = keyRefused();
     if (keyAfter) return afterScan(keyAfter);
+    // The token or sign-in it came with may have ended while the zip came in and was checked (the token removed, its
+    // device signed out, the email changed): nothing is published for it (audit 2026-11-22).
+    const stillBy = uploader(store, context, now());
+    if (!stillBy || stillBy.accountId !== by.accountId) return afterScan(refuse(context, 401, "sign-in-needed", by.token !== null ? TOKEN_GONE : "Sign in again to publish."));
     // The first try of a retry may have finished during this scan.
     const sentMeanwhile = answerBefore();
     if (sentMeanwhile) return sentMeanwhile;
@@ -456,7 +497,7 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     if (wait > 0) return tooMany(context, wait, "Too many requests. Wait a while and try again.");
     if (!catalog || !store) return refuse(context, 503, "unavailable", "Publishing is not available right now.");
     const by = uploader(store, context, now());
-    if (!by) return refuse(context, 401, "sign-in-needed", "Sign in to see your versions.");
+    if (!by) return refuse(context, 401, "sign-in-needed", sentToken(context) ? TOKEN_GONE : "Sign in to see your versions.");
     const stopped = stoppedAccount(store, by.accountId, context);
     if (stopped) return stopped;
     return context.json({
@@ -473,7 +514,7 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     if (wait > 0) return tooMany(context, wait, "Too many requests. Wait a while and try again.");
     if (!catalog || !store) return refuse(context, 503, "unavailable", "Publishing is not available right now.");
     const by = uploader(store, context, now());
-    if (!by) return refuse(context, 401, "sign-in-needed", "Sign in to withdraw a version.");
+    if (!by) return refuse(context, 401, "sign-in-needed", sentToken(context) ? TOKEN_GONE : "Sign in to withdraw a version.");
     // A banned or suspended developer can't take a waiting version back and so remove what the maintainer is about to judge.
     const stopped = stoppedAccount(store, by.accountId, context);
     if (stopped) return stopped;
@@ -482,7 +523,8 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     if (!version || version.accountId !== by.accountId) return refuse(context, 404, "not-waiting", "No version of yours with this hash is waiting for review.");
     catalog.removeWaiting(sha256);
     // Like a publish, the account hears of it, so a withdraw with a stolen publish token doesn't go unnoticed.
-    await tellAccount(store, context, by.accountId, (to, language) => withdrawnMail(to, { id: version.id, name: version.manifest.name, version: version.version }, by.token, language), now());
+    const module = { id: version.id, name: version.manifest.name, version: version.version };
+    await tellAccount(store, context, by.accountId, "withdrawn", module, (to, language) => withdrawnMail(to, module, by.token, language), now());
     return context.json({ status: "withdrawn", id: version.id, version: version.version, sha256 });
   };
 

@@ -733,7 +733,7 @@ export function conversationRoutes({ conversations, catalog, accounts, clientKey
   const notFound = (context: Context) => context.json({ error: "Not found.", reason: "not-found" }, 404);
   const hoursUntil = (time: number) => Math.max(1, Math.ceil((time - now()) / 3_600_000));
 
-  const signedIn = requireSignIn(accounts, now);
+  const signedIn = requireSignIn(accounts, now, 16_000);
   const writes = async (context: Context<Env>, next: () => Promise<void>) => {
     if (context.req.method === "GET") return next();
     const wait = writeLimiter.check(clientKey(context.req.raw));

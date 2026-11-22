@@ -40,4 +40,14 @@ describe("developerSetup", () => {
     expect(developerSetup(signedIn(), keys("none", []))).toBe("missing");
     expect(developerSetup(signedIn({ publisherKeys: [] }), keys("ready"))).toBe("missing");
   });
+
+  it("is paused, never missing, when the account's keys were paused (a new email, a device removed), kept or key files", () => {
+    const pausedKeys = [{ ...KEY, linkedAt: "2026-10-01T00:00:00.000Z" }];
+    expect(developerSetup(signedIn({ publisherKeys: [], pausedKeys }), keys("ready"))).toBe("paused");
+    // A key file only: Tavora keeps none.
+    expect(developerSetup(signedIn({ publisherKeys: [], pausedKeys }), keys("none", []))).toBe("paused");
+    // Another key still linked and kept: ready.
+    const other = { fingerprint: "ef:01" };
+    expect(developerSetup(signedIn({ publisherKeys: [{ ...other, linkedAt: "2026-10-01T00:00:00.000Z" }], pausedKeys }), keys("ready", [KEY, other]))).toBe("ready");
+  });
 });

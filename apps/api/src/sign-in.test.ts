@@ -16,6 +16,34 @@ function setup() {
 }
 
 describe("the sign-in gate", () => {
+  it("checks the sign-in again once the body is in, so one that ended while it came in lets nothing through (audit 2026-11-22)", async () => {
+    const store = new AccountStore(":memory:");
+    const account = store.createAccount({ email: "mara@example.com" }, NOW);
+    const { token, session } = store.createSession(account.id, "windows", NOW);
+    let reached = false;
+    // A route with no check of its own: only the gate stands between the body and the write.
+    const app = new Hono<SignedInEnv>().use("*", requireSignIn(store, () => NOW)).post("/", async (context) => {
+      reached = true;
+      return context.json({ body: await context.req.text() });
+    });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const body = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        await gate;
+        controller.enqueue(new TextEncoder().encode("late"));
+        controller.close();
+      },
+    });
+    const answer = app.request("http://tavora.test/", { method: "POST", headers: { authorization: `Bearer ${token}`, "content-length": "4" }, body, duplex: "half" } as RequestInit);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    store.deleteSession(account.id, session.id);
+    release();
+    expect((await answer).status).toBe(401);
+    expect(reached).toBe(false);
+  });
+
+
   it("lets a signed-in account through, keeps its answers out of caches, and refuses everything else the same way", async () => {
     const { account, token, required, ask } = setup();
     const ok = await ask(required, `Bearer ${token}`);

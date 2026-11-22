@@ -5,7 +5,7 @@ import { statfsSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import type { AccountStore } from "./account-store.ts";
 import { createRateLimiter, networkOf, type RateLimiter } from "./rate-limit.ts";
-import { requireSignIn, tooMany, type SignedInEnv } from "./sign-in.ts";
+import { requireSignIn, signedOut, stillSignedIn, tooMany, type SignedInEnv } from "./sign-in.ts";
 
 /**
  * The cloud copy (decided 2026-10-19): one copy of a user's Tavora data per account, which only the
@@ -50,6 +50,20 @@ export const BATCH_BYTES = 8 * 1024 * 1024;
 export const MAX_MANIFEST_BYTES = 4 * 1024 * 1024;
 /** Parts one copy may use. */
 export const MAX_PARTS = 50_000;
+/**
+ * Parts one account may store at once, used or not (audit 2026-11-22): a saved copy's and a new version's, as STORED_LIMIT
+ * is for bytes. The bytes alone would let tiny parts make millions of rows.
+ */
+export const MAX_STORED_PARTS = 2 * MAX_PARTS;
+/** Unused parts sweep() reads and drops at once, so dropping millions never holds them all in memory. */
+export const SWEEP_PAGE = 1000;
+/**
+ * The least a part counts for in every limit (audit 2026-11-22): a row costs the service more than its bytes, so tiny parts
+ * can't fill it for free. Its `size` is kept as this much; a real part of user data is far bigger anyway.
+ */
+export const MIN_PART_BYTES = 1024;
+/** Pages a sweep for room may drop while a request waits for it; the hourly round in the background takes the rest. */
+export const ROOM_SWEEP_PAGES = 10;
 /** Parts one download may ask for. */
 export const MAX_ASK = 2048;
 const ID_BYTES = 32;
@@ -87,6 +101,8 @@ export interface CopyStoreOptions {
   networkShare?: number;
   /** The secret for the networks' marks (networkMark()); a new random one when absent, as for a test. */
   networkSalt?: string;
+  /** The least one part counts for (MIN_PART_BYTES by default); a test of exact byte sums sets 0. */
+  minPartBytes?: number;
 }
 
 /** Who adds bytes, for the shares of the total: when their account was made (ms) and their network. Absent: an account of long ago, on no network. */
@@ -104,7 +120,7 @@ const GIB = 1024 * 1024 * 1024;
  * COPY_NETWORK_SHARE (0.1 by default, 0 to 1, 0 turns it off). A value that is not a number in its range keeps the
  * default. The free space is read from the disk that holds `dir`.
  */
-export function copyLimitsFromEnv(env: Record<string, string | undefined>, dir: string, warn: (message: string) => void = console.warn): Required<Omit<CopyStoreOptions, "networkSalt">> {
+export function copyLimitsFromEnv(env: Record<string, string | undefined>, dir: string, warn: (message: string) => void = console.warn): Required<Omit<CopyStoreOptions, "networkSalt" | "minPartBytes">> {
   const number = (name: string, fallback: number, scale: number, max = Number.POSITIVE_INFINITY, unit = "GiB") => {
     const text = env[name]?.trim();
     if (!text) return fallback;
@@ -132,6 +148,22 @@ export function copyLimitsFromEnv(env: Record<string, string | undefined>, dir: 
   };
 }
 
+/** Where a sweep goes on from: the last part of the page before. */
+interface SweepCursor {
+  accountId: string;
+  /** Where in that account: its parts without a time (by id), then those with one (by time and id), then the next account. */
+  phase: "undated" | "dated" | "next";
+  /** The last part looked at, in parts_meta's own order (time, size, id), so a step reads straight on in the index. */
+  createdAt: number;
+  size: number;
+  id: Uint8Array;
+}
+
+/** Where a sweep starts: before the first account. */
+const SWEEP_START: SweepCursor = { accountId: "", phase: "next", createdAt: 0, size: 0, id: new Uint8Array(0) };
+/** The start of an account's parts in a phase: before every part. */
+const ACCOUNT_START = { createdAt: Number.MIN_SAFE_INTEGER, size: Number.MIN_SAFE_INTEGER, id: new Uint8Array(0) };
+
 /** Why parts were not stored: this account's copy is full, or the copies of all accounts have no room. */
 export type AddPartsResult = "ok" | "copy-full" | "no-room";
 
@@ -145,6 +177,7 @@ export class CopyStore {
   private readonly networkDayLimit: number;
   private readonly networkShare: number;
   private readonly networkSalt: string;
+  private readonly minPartBytes: number;
   /** Bytes of parts and manifests of every account, counted once at the start and kept up to date by every change. */
   private total: number;
   /**
@@ -157,6 +190,8 @@ export class CopyStore {
   private readonly networkBytes = new Map<string, { bytes: number; resetAt: number }>();
   private warned = false;
   private lastSweep = Number.NEGATIVE_INFINITY;
+  /** Where the last sweep stopped, so a sweep a request waits for goes on from there instead of the first accounts again. */
+  private sweepAt: SweepCursor = SWEEP_START;
 
   constructor(
     path: string,
@@ -169,8 +204,10 @@ export class CopyStore {
       networkDayLimit = NETWORK_DAY_LIMIT,
       networkShare = NETWORK_SHARE,
       networkSalt = randomBytes(32).toString("hex"),
+      minPartBytes = MIN_PART_BYTES,
     }: CopyStoreOptions = {},
   ) {
+    this.minPartBytes = minPartBytes;
     this.totalLimit = totalLimit;
     this.freeBytes = freeBytes;
     this.freeFloor = freeFloor;
@@ -317,7 +354,7 @@ export class CopyStore {
    * checks again.
    */
   private room(accountId: string, adding: number, pooled: () => number, who: CopyHolder | undefined, now: number): boolean {
-    if (this.fits(accountId, adding, pooled(), who, now) !== "ok" && now - this.lastSweep >= SWEEP_GAP_MS) this.sweep(now);
+    if (this.fits(accountId, adding, pooled(), who, now) !== "ok" && now - this.lastSweep >= SWEEP_GAP_MS) this.sweep(now, ROOM_SWEEP_PAGES);
     return !this.refused(this.fits(accountId, adding, pooled(), who, now));
   }
 
@@ -378,23 +415,122 @@ export class CopyStore {
    * Drops the parts no saved version uses that are older than UNUSED_PART_MS: those of an account without a copy, and those
    * stored after its copy was last saved (a save drops every part it doesn't use, so what came after it is unused). Parts
    * from before created_at count as old; with a copy they stay until its next save, as they did. Answers what went.
+   * `maxPages`: at most so many pages that drop parts (SWEEP_PAGE each), and a hundred times as many steps in all, for a
+   * sweep a request waits for (ROOM_SWEEP_PAGES).
    */
-  sweep(now: number = Date.now()): { parts: number; bytes: number } {
+  sweep(now: number = Date.now(), maxPages = Number.POSITIVE_INFINITY): { parts: number; bytes: number } {
     this.lastSweep = now;
-    const unused = this.db
-      .prepare(
-        `select p.account_id as accountId, p.id as id, p.size as size from parts p left join copies c on c.account_id = p.account_id
-         where coalesce(p.created_at, 0) < ? and (c.account_id is null or (p.created_at is not null and p.created_at > c.updated_at))`,
-      )
-      .all(now - UNUSED_PART_MS) as unknown as { accountId: string; id: Uint8Array; size: number }[];
-    if (unused.length === 0) return { parts: 0, bytes: 0 };
+    let parts = 0;
     let bytes = 0;
-    const drop = this.db.prepare("delete from parts where account_id = ? and id = ?");
+    // A whole sweep starts at the first account; a limited one goes on from where the last one stopped, and past the
+    // last account starts again at the first, so unused parts anywhere are reached in turn.
+    const limited = Number.isFinite(maxPages);
+    let after: SweepCursor = limited ? this.sweepAt : SWEEP_START;
+    let wrapped = after === SWEEP_START;
+    // Steps that drop nothing (an account with none unused) are a lookup in the index each; they are capped too.
+    for (let pages = 0, steps = 0; pages < maxPages && steps < maxPages * 100; steps++) {
+      const page = this.sweepPage(now, after);
+      parts += page.parts;
+      bytes += page.bytes;
+      if (page.parts > 0) pages++;
+      if (!page.next) {
+        this.sweepAt = SWEEP_START;
+        if (wrapped) break;
+        wrapped = true;
+        after = SWEEP_START;
+        continue;
+      }
+      after = page.next;
+      this.sweepAt = after;
+    }
+    if (parts > 0) this.db.exec("pragma incremental_vacuum");
+    return { parts, bytes };
+  }
+
+  /**
+   * sweep() for the start and the hourly round (audit 2026-11-22): the same pass, but it gives the event loop back between
+   * pages (`pause`), so the service answers while millions of parts go. Uploads and saves meanwhile are safe: each page is
+   * read and dropped in one step, and the next one looks again at what is unused then.
+   */
+  async sweepInBackground(now: number = Date.now(), pause: () => Promise<void> = () => new Promise((resolve) => setImmediate(resolve))): Promise<{ parts: number; bytes: number }> {
+    this.lastSweep = now;
+    let parts = 0;
+    let bytes = 0;
+    let after: SweepCursor = SWEEP_START;
+    for (;;) {
+      const page = this.sweepPage(now, after);
+      parts += page.parts;
+      bytes += page.bytes;
+      if (!page.next) {
+        this.sweepAt = SWEEP_START;
+        break;
+      }
+      after = page.next;
+      this.sweepAt = after;
+      await pause();
+    }
+    if (parts > 0) this.db.exec("pragma incremental_vacuum");
+    return { parts, bytes };
+  }
+
+  /**
+   * One step of the sweep, dropped in one transaction with the totals kept right for exactly what went. It reads only
+   * unused parts, through the parts' own small index (parts_meta: account, time, size, id), never their bytes nor the used
+   * ones: per account, its parts without a time (old ones, unused only without a copy), then those stored before the cutoff
+   * (and, with a copy, after it was saved), SWEEP_PAGE at a time, from where the last step ended. So a step costs about what
+   * it drops however many used parts the table holds, and no part is read twice. A step that ends an account moves on to the
+   * next one. `next`: where the next step starts, null at the end.
+   */
+  private sweepPage(now: number, after: SweepCursor): { parts: number; bytes: number; next: SweepCursor | null } {
+    let at = after;
+    if (at.phase === "next") {
+      const next = this.db.prepare("select account_id as accountId from parts indexed by parts_meta where account_id > ? order by account_id limit 1").get(at.accountId) as { accountId: string } | undefined;
+      if (!next) return { parts: 0, bytes: 0, next: null };
+      at = { accountId: next.accountId, phase: "undated", ...ACCOUNT_START };
+    }
+    const copy = this.db.prepare("select updated_at as savedAt from copies where account_id = ?").get(at.accountId) as { savedAt: number } | undefined;
+    const cutoff = now - UNUSED_PART_MS;
+    let unused: { id: Uint8Array; createdAt: number | null; size: number }[];
+    let following: SweepCursor;
+    if (at.phase === "undated") {
+      // Parts from before their time was kept count as old: unused only for an account without a copy.
+      unused = copy
+        ? []
+        : (this.db
+            .prepare(
+              "select id, created_at as createdAt, size from parts indexed by parts_meta where account_id = ? and created_at is null and (size, id) > (?, ?) order by size, id limit ?",
+            )
+            .all(at.accountId, at.size, at.id, SWEEP_PAGE) as unknown as { id: Uint8Array; createdAt: null; size: number }[]);
+      const last = unused.at(-1);
+      following = unused.length < SWEEP_PAGE || !last ? { accountId: at.accountId, phase: "dated", ...ACCOUNT_START } : { ...at, size: last.size, id: last.id };
+    } else {
+      // Stored before the cutoff, and with a copy only after it was saved (a save drops every part it doesn't use): the
+      // copy's time is where the walk starts, so the cursor alone is where the index is entered.
+      const saved = copy ? { createdAt: copy.savedAt, size: Number.MAX_SAFE_INTEGER } : null;
+      const from = saved && (at.createdAt < saved.createdAt || (at.createdAt === saved.createdAt && at.size < saved.size)) ? { ...saved, id: new Uint8Array(0) } : at;
+      unused = this.db
+        .prepare(
+          `select id, created_at as createdAt, size from parts indexed by parts_meta where account_id = ? and created_at is not null and created_at < ?
+           and (created_at, size, id) > (?, ?, ?) order by created_at, size, id limit ?`,
+        )
+        .all(at.accountId, cutoff, from.createdAt, from.size, from.id, SWEEP_PAGE) as unknown as { id: Uint8Array; createdAt: number; size: number }[];
+      const last = unused.at(-1);
+      following = unused.length < SWEEP_PAGE || !last ? { ...at, phase: "next" } : { accountId: at.accountId, phase: "dated", createdAt: last.createdAt!, size: last.size, id: last.id };
+    }
+    if (unused.length === 0) return { parts: 0, bytes: 0, next: following };
+    // A delete walks a part's pages anyway; it hands back what the totals need.
+    const drop = this.db.prepare("delete from parts where account_id = ? and id = ? returning size, charged");
+    let parts = 0;
+    let bytes = 0;
+    let onTop = 0;
     this.db.exec("begin");
     try {
       for (const part of unused) {
-        drop.run(part.accountId, part.id);
-        bytes += part.size;
+        const gone = drop.get(at.accountId, part.id) as { size: number; charged: number | null } | undefined;
+        if (!gone) continue;
+        parts += 1;
+        bytes += gone.size;
+        if (gone.charged !== null) onTop += gone.size - gone.charged;
       }
       this.db.exec("commit");
     } catch (error) {
@@ -402,9 +538,13 @@ export class CopyStore {
       throw error;
     }
     this.total -= bytes;
-    this.onTop = this.countOnTop();
-    this.db.exec("pragma incremental_vacuum");
-    return { parts: unused.length, bytes };
+    this.onTop -= onTop;
+    return { parts, bytes, next: following };
+  }
+
+  /** Parts stored for the account, used by a version or not. */
+  partCount(accountId: string): number {
+    return (this.db.prepare("select count(*) as n from parts where account_id = ?").get(accountId) as { n: number }).n;
   }
 
   info(accountId: string): CopyInfo | null {
@@ -439,16 +579,18 @@ export class CopyStore {
         return !has.get(accountId, part.id);
       });
     };
-    const bytesOf = (list: { data: Uint8Array }[]) => list.reduce((total, part) => total + part.data.length, 0);
+    // What a part counts for: its bytes, but at least minPartBytes.
+    const weight = (part: { data: Uint8Array }) => Math.max(part.data.length, this.minPartBytes);
+    const bytesOf = (list: { data: Uint8Array }[]) => list.reduce((total, part) => total + weight(part), 0);
     let fresh = freshOf();
     if (bytesOf(fresh) === 0) return "ok";
-    if (this.stored(accountId) + bytesOf(fresh) > STORED_LIMIT) return "copy-full";
+    if (this.stored(accountId) + bytesOf(fresh) > STORED_LIMIT || this.partCount(accountId) + fresh.length > MAX_STORED_PARTS) return "copy-full";
     const pooled = (bytes: number) => Math.max(0, bytes - this.replacing(accountId));
     if (!this.room(accountId, bytesOf(fresh), () => pooled(bytesOf(fresh)), who, now)) return "no-room";
     // A sweep for room may have dropped old unused parts of this account too: those are stored again.
     fresh = freshOf();
     const adding = bytesOf(fresh);
-    if (this.stored(accountId) + adding > STORED_LIMIT) return "copy-full";
+    if (this.stored(accountId) + adding > STORED_LIMIT || this.partCount(accountId) + fresh.length > MAX_STORED_PARTS) return "copy-full";
     const drawn = pooled(adding);
     if (this.fits(accountId, adding, drawn, who, now) !== "ok") return "no-room";
     const insert = this.db.prepare("insert into parts (account_id, id, data, size, created_at, charged) values (?, ?, ?, ?, ?, ?)");
@@ -457,9 +599,10 @@ export class CopyStore {
     this.db.exec("begin");
     try {
       for (const part of fresh) {
-        const uncounted = Math.min(free, part.data.length);
+        const size = weight(part);
+        const uncounted = Math.min(free, size);
         free -= uncounted;
-        insert.run(accountId, part.id, part.data, part.data.length, now, part.data.length - uncounted);
+        insert.run(accountId, part.id, part.data, size, now, size - uncounted);
       }
       this.remember(accountId, who, drawn > 0);
       this.db.exec("commit");
@@ -535,7 +678,7 @@ export class CopyStore {
     // No room: unused parts are swept first (at most once a minute), then it is looked at again; a part the sweep dropped
     // is then missing.
     if (planned.fits !== null && planned.fits !== "ok" && now - this.lastSweep >= SWEEP_GAP_MS) {
-      this.sweep(now);
+      this.sweep(now, ROOM_SWEEP_PAGES);
       planned = plan();
     }
     const { size, missing, savedAt, adding, accountOnTop, fits } = planned;
@@ -703,7 +846,8 @@ export function copyRoutes({ copies, accounts, clientKey, rateLimiter, now = Dat
     }
     await next();
   });
-  app.use("*", requireSignIn(accounts, now));
+  // The sign-in, then the body, then the sign-in again (sign-in.ts requireSignIn), and once more right before a write.
+  app.use("*", requireSignIn(accounts, now, MAX_BODY));
   app.use("*", bodyLimit({ maxSize: MAX_BODY, onError: (context) => context.json({ error: "Too big.", reason: "too-big" }, 413) }));
   const bytes = async (context: Context) => new Uint8Array(await context.req.arrayBuffer());
   /** Who adds bytes, for the shares of the total: when the account was made, and the request's network. */
@@ -726,6 +870,7 @@ export function copyRoutes({ copies, accounts, clientKey, rateLimiter, now = Dat
     const parts = readParts(await bytes(context));
     if (!parts) return bad(context, "Send parts: a 32-byte id, a 4-byte length and the bytes, one after another.");
     const account = context.get("account");
+    if (!stillSignedIn(accounts, context)) return signedOut(context);
     const added = copies.addParts(account.id, parts, now(), holder(context));
     if (added === "copy-full") return context.json({ error: "The cloud copy is full.", reason: "copy-full", limit: COPY_LIMIT }, 413);
     // The service's own room, not this account's: the app keeps its data and tries again later, as for any 503.
@@ -749,6 +894,7 @@ export function copyRoutes({ copies, accounts, clientKey, rateLimiter, now = Dat
     if (swapManifestTooBig(body)) return context.json({ error: "The cloud copy's file list is too long.", reason: "too-big" }, 413);
     const swap = readSwap(body);
     if (!swap) return bad(context, "Send the version it started from, the part ids and the manifest.");
+    if (!stillSignedIn(accounts, context)) return signedOut(context);
     const result = copies.swap(context.get("account").id, swap.base, swap.manifest, swap.parts, now(), holder(context));
     if (result.ok) return context.json({ version: result.version, size: result.size });
     if (result.reason === "copy-changed") return context.json({ error: "The cloud copy changed on another PC.", reason: result.reason, version: result.version }, 409);

@@ -3,12 +3,12 @@ import { ChosenFolders, folderHost, type FolderHost, type FolderPlaces } from '.
 import { showInBackground, windowLook, type WindowStart } from "./background-window";
 import { saveDialogDirectory } from './save-dialog-folder';
 import { randomUUID } from "node:crypto";
-import { existsSync, watch, type FSWatcher } from "node:fs";
+import { existsSync } from "node:fs";
 import os from "node:os";
 import { appendFile, mkdir, readdir, readFile, realpath, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { Worker } from "node:worker_threads";
-import { allowsPersonalWorkspaces, continuingPanelType, folderKey, isModuleId, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER, OFFICIAL_PINS, officialOn, panelTypes, translateManifest, withGamePanelType, type Connector, type ModuleManifest, type ResolvedPanelType } from "@tavora/module-schema";
+import { allowsPersonalWorkspaces, continuingPanelType, folderKey, isModuleId, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER, OFFICIAL_PINS, officialOn, panelTypes, translateManifest, withGamePanelType, type Connector, type ModuleManifest } from "@tavora/module-schema";
 import {
   app,
   BrowserWindow,
@@ -31,14 +31,14 @@ import {
 } from "electron";
 import type { TavoraWorkspace } from "@tavora/sdk/protocol";
 import type { PanelDialogSize } from "./bridge";
-import type { AccountView, ActionResult, AiUsageView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, DeveloperLink, InstalledGameView, LegalPage, LicenceList, ModulePageResult, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, PanelDialog, PanelPlacement, ProfileRanksView, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, UnlistedGame } from "../shared/host-api";
+import type { AccountView, ActionResult, AiUsageView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviewsResult, DeveloperLink, InstalledGameView, LegalPage, LicenceList, ModulePageResult, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, PanelDialog, PanelPlacement, ProfileRanksView, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, UnlistedGame } from "../shared/host-api";
 import { MAX_PICKER_COVERS } from "../shared/host-api";
 import { addOrRestoreWorkspace } from "./game-copy";
-import { isForWorkspaceGame, learnGameIds, withOnlineId, workspaceGameIds, type ListedGame } from "./workspace-game";
+import { isForWorkspaceGame, withOnlineId } from "./workspace-game";
 import { resolveLanguage, translate, type Language } from "../shared/i18n";
+import { ownKeys } from "./own-keys";
 import { suggestPrefix } from "../shared/id-prefix";
 import { isVoicePaused } from "../shared/discord-voice";
-import { compareModuleVersions } from "../shared/module-version";
 import { UserError } from "./messages";
 import { UndoGoneError, UndoShelf } from "./undo-shelf";
 import { buildReport, errorLog, timings } from "./diagnostics";
@@ -50,17 +50,19 @@ import { parseAction, runAction, type ActionHandlers } from "./actions";
 import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
 import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, holdLeftovers, orphanedPartitions, partitionsOf, partitionWorkspace, queueLocalDataMove } from "./module-data";
 import { AI_USAGE_MODULE_ID, DISCORD_MODULE_ID, movedModule, MOVED_MODULES_OWNER, moveOfficialModules } from "./moved-modules";
-import { checkZipData, readOwnerRecords, recoverInstalls } from "./installer";
+import { checkZipData, recoverInstalls } from "./installer";
 import { Installed, loadInstalledModules, type InstalledModules } from "./installed-modules";
-import { sameOwner, settlePanelOwner, viewsOfAnotherOwner } from "./module-owner";
+import { sameOwner, settlePanelOwner } from "./module-owner";
 import { PendingQuestions } from "./pending-questions";
 import { createOverlayServices } from "./overlay-wiring";
-import { readModulePage } from "./module-page";
 import { hasUnseenNotes, installedNotes } from "./module-notes";
 import { GrantStore } from "./grants";
 import { boardsModuleId, ModuleLeaderboards, type LeaderboardQuestion } from "./leaderboards";
 import { profileRanks, type ProfileRankSource } from "./profile-ranks";
 import { ModuleLifecycle } from "./module-lifecycle";
+import { ModulePanels, panelTypesOf } from "./module-panels";
+import { DevelopmentFolders } from "./development-folders";
+import { ModuleCatalog } from "./module-catalog";
 import type { TestHosts } from "./network";
 import { holdOwnPort } from "./own-ports";
 import { shortcutFor } from "./shortcuts";
@@ -76,16 +78,11 @@ import {
   undeleteFolder,
   untrashWorkspaces,
   deleteTrashedWorkspace,
-  cleanDevelopmentFolders,
-  setDevelopmentFolderCollapsed,
   isLive,
   LibraryError,
   liveWorkspaces,
-  MAX_ASKED_MODULES,
-  MAX_DEVELOPMENT_FOLDERS,
   markOpened,
   openedTimes,
-  moveDevelopmentFolder,
   moveFolder,
   moveWorkspace,
   placeFavorite,
@@ -111,14 +108,10 @@ import { setOverlayFont } from "./overlay-font";
 import { moduleBaseCss } from "./module-style";
 import { backupData, backupsDir } from "./backup";
 import { hasLibrary, loadLibrary, SavedData, WORKSPACE_FILE } from "./saved-data";
-import { CatalogClient, catalogView, type CatalogScope } from "./catalog-client";
-import { parseReadme, readmeAllowsLink } from "./catalog-readme";
-import { CHECK_INTERVAL_MS } from "./catalog-updates";
-import { isReleaseCopies, releaseStatuses } from "./release-pending";
+import { CatalogClient } from "./catalog-client";
 import { OnlineSearch } from "./online";
 import { countAppUpdate } from "./usage-counts";
-import { askedName, newInstallId, sendModuleRequest } from "./module-request";
-import { askKey, type AskedGame } from "../shared/module-request";
+import { askedName, sendModuleRequest } from "./module-request";
 import { PublisherNames } from "./publisher-names";
 import { PreviewUpdater, previewCheck, UpdateManager, type UpdaterLike } from "./updates";
 import { PINNED_UPDATE_KEYS } from "./update-keys";
@@ -154,11 +147,10 @@ import { FileDialogs } from "./file-dialogs";
 import { GameIcons } from "./game-icons";
 import { loadAdBlocker, type AdBlocker } from "./browser-filter";
 import { isPrivateUrl, isWebUrl, siteOfUrl } from "./browser-url";
-import { supportTarget } from "./module-support";
 import { defaultFilesRoot } from "./module-files";
 import { ModuleFilesFolder } from "./module-files-folder";
 import { BrowserPanel, browserPartition, browserSession, browserUserAgent, type BrowserKind, type BrowserSessionHooks } from "./browser-view";
-import { BROWSER_MODULE_ID, developmentProjects, isExampleModule, buildFolderName, MANIFEST, mayHoldProject, panelsWait, projectEntry, waitingModules, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
+import { BROWSER_MODULE_ID, isExampleModule, panelsWait, waitingModules, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
 import { DataRegistry, PanelStateStore } from "./storage";
 import type { CheckedMenu } from "./module-menu";
 import {TooltipWindow} from "./tooltip-window";
@@ -200,8 +192,7 @@ import {
   type ThemeProblem,
 } from "./themes";
 import { discoverStyles } from "./styles";
-import { copyExample, slugOf } from "./example-copy";
-import { SerialQueue, sweepWriteLeftovers, writeFileAtomic } from "./fsutil";
+import { sweepWriteLeftovers, writeFileAtomic } from "./fsutil";
 import {
   emptyWorkspace,
   Workspaces,
@@ -233,8 +224,6 @@ const FROZEN_SHOWN_CAP_MS = 300;
 const PAGE_SAVE_CAP_MS = 1000;
 /** How long after the last move of the window's edge the panels come back, when the system never says the resize ended. */
 const WINDOW_RESIZE_END_MS = 1000;
-/** How long a development folder's build must be quiet before its panels reload. */
-const DEVELOPMENT_RELOAD_MS = 300;
 /** The pages Settings > Development links to. */
 const DEVELOPER_LINKS: Record<DeveloperLink, string> = {
   docs: "https://docs.mytavora.app/guide/getting-started",
@@ -244,9 +233,6 @@ const DEVELOPER_LINKS: Record<DeveloperLink, string> = {
 
 /** The command that starts a module project, which the developer onboarding copies. */
 const CREATE_MODULE_COMMAND = "npm create @tavora/module";
-
-/** Folders watched in one development folder for a new project, at most. */
-const MAX_DEVELOPMENT_SUBFOLDERS = 100;
 
 /** The user's own modules, next to the themes folder in their data folder. */
 function userModulesDir(options: HostOptions): string {
@@ -612,7 +598,12 @@ export class Host {
   private readonly workspaces: Workspaces;
   /** Installs, updates and removes modules, and grants or takes back what they ask for (module-lifecycle.ts). */
   private readonly lifecycle: ModuleLifecycle;
-  private catalogTimer: ReturnType<typeof setInterval> | undefined;
+  /** The panel types panels show, the panels that must ask first, and what a new look at the modules does to open panels (module-panels.ts). */
+  private readonly modulePanels: ModulePanels;
+  /** Settings > Development's folders, watched for new builds, and the examples copied into projects (development-folders.ts). */
+  private readonly developmentFolders: DevelopmentFolders;
+  /** The catalog's pages, reviews, reports and the update checks of modules installed from it (module-catalog.ts). */
+  private readonly moduleCatalog: ModuleCatalog;
   /** Looks for new versions; only in an installed (packaged) app. */
   private updates: UpdateManager | null = null;
   /** The themes and styles, the user's pick and the themes the host and the panels get from it (appearance.ts). */
@@ -695,11 +686,60 @@ export class Host {
     this.onlineSearch = new OnlineSearch(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl });
     this.gameLookup = new OnlineSearch(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl });
     this.gamesSeen = new GamesSeen(path.join(options.userData, "games-seen.json"));
-    this.catalog = new CatalogClient({ ...(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl }), onGames: (games) => this.learnFromCatalog(games) });
+    this.catalog = new CatalogClient({ ...(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl }), onGames: (games) => this.moduleCatalog.learn(games) });
     this.workspaces = new Workspaces(workspaces, {
       save: (state) => this.savedData.saveWorkspace(state),
       // A workspace added back gets the panels it had, as a start would read them.
-      isInstalled: (moduleId) => this.modules.has(moduleId) || panelsWait(this.moduleProblems)(moduleId) || movedModule(moduleId) !== undefined,
+      isInstalled: (moduleId) => this.modulePanels.keepsPanels(moduleId),
+    });
+    this.modulePanels = new ModulePanels({
+      installed: this.installed,
+      load: async () => {
+        const found = await Host.loadModules(this.options, this.library.developmentFolders, this.safetyLists, this.official);
+        if (this.copySync.dataHeld) found.problems.push(Host.heldProblem(this.options));
+        this.moduleData = await listModuleData(this.options.userData, this.files.root());
+        return found;
+      },
+      grants: this.grants,
+      workspaces: this.workspaces,
+      panels: this.panels,
+      views: () => this.moduleViews(),
+      panelState: this.data.panelState,
+      shownWorkspace: () => this.workspace,
+      start: (record, workspace, openedAt) => this.createView(record, workspace, openedAt),
+      close: (instanceId) => this.closeView(instanceId),
+      forgetTooltips: (moduleId) => this.tooltips?.forgetModule(moduleId),
+      modulesChanged: async (restarted) => {
+        // A module removed, blocked, replaced by another publisher's or updated without the connector ends its open OBS pages now.
+        this.streaming?.recheckStreams();
+        this.noteModuleVersions();
+        // Panels restarted as another owner's that run behind an overlay start again now.
+        if (restarted) this.syncOverlayPanels();
+        // A module that came, went or changed may run with its game (or no longer): the watcher and those panels follow. A
+        // version that dropped it forgets the answer first, so bringing it back asks again however it was installed.
+        await this.forgetDroppedWithGame();
+        this.syncGameWatcher();
+        this.syncWithGame();
+      },
+      looked: async () => {
+        await this.developmentFolders.watch();
+        void this.refreshPublisherNames();
+      },
+      pushState: () => this.pushState(),
+    });
+    this.developmentFolders = new DevelopmentFolders({
+      library,
+      saveLibrary: () => this.saveLibrary(),
+      installed: this.installed,
+      dialogs: this.fileDialogs,
+      language: () => this.language,
+      ownPrefix: () => this.publisher.ownPrefix(),
+      reload: () => this.modulePanels.reload(),
+      reloadViews: (moduleId) => this.modulePanels.reloadViews(moduleId),
+      changed: () => this.pushState(),
+      gone: (module) => this.gameOverlays.forgetModule(module.manifest.id, module.owner),
+      // Test runs keep the window hidden and open no file manager.
+      openPath: options.hidden ? null : (folder) => shell.openPath(folder),
     });
     this.lifecycle = new ModuleLifecycle({
       userData: options.userData,
@@ -718,7 +758,7 @@ export class Host {
       autoUpdateModules: () => this.library.autoUpdateModules,
       firstKey: (key) => this.safetyLists.firstKey(key),
       official: this.official,
-      panels: { reload: (moduleId) => this.reloadModuleViews(moduleId), close: (moduleId) => this.removeModulePanels(moduleId) },
+      panels: { reload: (moduleId) => this.modulePanels.reloadViews(moduleId), close: (moduleId) => this.removeModulePanels(moduleId) },
       grantsChanged: () => {
         this.syncConnection();
         // A panel allowed to run with its game starts (or stops) now, and the game watcher runs while one may.
@@ -737,9 +777,29 @@ export class Host {
       },
       // Test runs keep the window hidden and have no recycle bin to rely on.
       trash: (dir) => (options.hidden ? rm(dir, { recursive: true, force: true }) : shell.trashItem(dir)),
-      reload: () => this.reloadModules(),
+      reload: () => this.modulePanels.reload(),
       introduce: (owner) => this.publisherNames.refresh([owner]),
       log: (line) => console.warn(`[tavora] ${line}`),
+    });
+    this.moduleCatalog = new ModuleCatalog({
+      library,
+      saveLibrary: () => this.saveLibrary(),
+      installed: this.installed,
+      catalog: this.catalog,
+      userData: options.userData,
+      token: () => this.account.token(),
+      waitingVersions: () => this.account.waitingVersions(),
+      updates: this.lifecycle.updates,
+      language: () => this.language,
+      shownWorkspace: () => this.workspaceId,
+      openLink: (url) => this.openLinkFromModule(url),
+      // Test runs keep the window hidden and open no mail app.
+      openExternal: options.hidden ? null : (url) => void shell.openExternal(url).catch((error: unknown) => console.error("[tavora]", error)),
+      sendRequest: (game, installId) => sendModuleRequest({ baseUrl: serviceUrl(options.apiUrl) }, game, installId),
+      notify: (message) => (this.notice = message),
+      changed: () => this.pushState(),
+      changedSoon: () => this.pushStateSoon(),
+      checks: !options.hidden,
     });
     this.officialPublishing = new OfficialPublishing({
       packaged: app.isPackaged,
@@ -824,7 +884,8 @@ export class Host {
       installedVersion: (moduleId) => this.modules.get(moduleId)?.manifest.version,
       isDeveloper: () => this.account.view().developer !== null,
       ownModules: async () => {
-        const linked = new Set((this.account.view().publisherKeys ?? []).map((key) => key.fingerprint));
+        // A paused key is still the account's: its modules stay its own.
+        const linked = new Set(ownKeys(this.account.view()));
         return ((await this.catalog.index()) ?? []).filter((entry) => linked.has(entry.owner)).map((entry) => ({ id: entry.id, name: entry.name }));
       },
       onChange: (view) => {
@@ -1099,7 +1160,7 @@ export class Host {
 
     host.screen = library.startup === "last-workspace" && library.lastWorkspaceId ? "workspace" : "welcome";
     host.registerIpc();
-    await host.watchDevelopmentFolders();
+    await host.developmentFolders.watch();
     host.registerWindowEvents();
     host.window.once("ready-to-show", () => timings.record("startup", process.uptime() * 1000));
     // The last workspace's pages start loading with the window, and its first look already has the one loading cover.
@@ -1116,7 +1177,7 @@ export class Host {
     // Icons of games of game workspaces that have none yet are looked for quietly in the background.
     host.gameIcons.lookSoon();
     host.backupSoon();
-    host.checkCatalogSoon();
+    host.moduleCatalog.startChecks();
     if (options.accounts === true) void host.inbox.init();
     host.copySync.start();
     if (options.accounts === true) {
@@ -1230,290 +1291,12 @@ export class Host {
     return { folder: path.basename(userModulesDir(options)), path: userModulesDir(options), message: "a cloud copy is still being put in place", kind: "missing", official: true };
   }
 
-  /**
-   * Looks for modules again; panels of modules that are gone are closed, and panels of a module now loaded
-   * from another folder start again from it (a blocked built-in update falls back to the shipped copy at once).
-   * Answers with the modules whose panels started again. One at a time: a look that finished later with an older view
-   * of the folders would close the panels of a module the newer one just found.
-   */
-  private reloadModules(): Promise<ReadonlySet<string>> {
-    return this.moduleReloads.run(() => this.reloadModulesNow());
-  }
-
-  private readonly moduleReloads = new SerialQueue();
-
-  private async reloadModulesNow(): Promise<ReadonlySet<string>> {
-    const roots = new Map([...this.modules].map(([id, module]) => [id, module.root]));
-    this.installed.replace(await Host.loadModules(this.options, this.library.developmentFolders, this.safetyLists, this.official));
-    const { modules } = this.installed;
-    if (this.copySync.dataHeld) this.installed.problems.push(Host.heldProblem(this.options));
-    this.moduleData = await listModuleData(this.options.userData, this.files.root());
-    this.dropPanelsOfMissingModules();
-    // A module id now loaded for another owner (a development folder over an installed copy, or back): its open panels
-    // end, so no page runs as one owner with another's grants. What the old page left in the panel stays its owner's:
-    // its panel state is kept apart (the new owner reads none of it, and the closing page's last writes are dropped),
-    // and the content its tab named goes. The panels keep their place and start again as the new owner's below
-    // (syncPanelTypes, syncOverlayPanels), or ask first when that copy still misses access.
-    const restarted = new Set<string>();
-    let contentDropped = false;
-    for (const view of viewsOfAnotherOwner(this.moduleViews(), modules)) {
-      restarted.add(view.moduleId);
-      this.tooltips?.forgetModule(view.moduleId);
-      const owner = modules.get(view.moduleId)!.owner;
-      void this.data.panelState.handOver(view.instanceId, view.owner, owner).catch((error: unknown) => console.error("[tavora]", error));
-      const record = this.records(view.workspaceId).find((item) => item.instanceId === view.instanceId);
-      if (record) {
-        delete record.content;
-        record.owner = owner;
-        contentDropped = true;
-      }
-      this.panels.restart(view.instanceId);
-      if (this.needsAnswer(view.moduleId)) this.panels.setAwaiting(view.instanceId);
-    }
-    if (contentDropped) this.workspaces.saveSoon();
-    // Panels that are not open (another workspace, or waiting) are handed over when they start (settleOwner); those
-    // of a module that wasn't loaded before get its owner now.
-    this.workspaces.noteOwners((moduleId) => modules.get(moduleId)?.owner);
-    // A module removed, blocked, replaced by another publisher's or updated without the connector ends its open OBS pages now.
-    this.streaming?.recheckStreams();
-    this.noteModuleVersions();
-    this.workspaces.settlePanelTypes(panelTypesOf(modules));
-    this.syncPanelTypes();
-    if (restarted.size > 0) this.syncOverlayPanels();
-    // A module that came, went or changed may run with its game (or no longer): the watcher and those panels follow. A
-    // version that dropped it forgets the answer first, so bringing it back asks again however it was installed.
-    await this.forgetDroppedWithGame();
-    this.syncGameWatcher();
-    this.syncWithGame();
-    const moved = new Set([...modules].filter(([id, module]) => roots.has(id) && roots.get(id) !== module.root).map(([id]) => id));
-    // Panels started anew just now load the new copy already; panels that waited for the old copy's question start
-    // now if the new copy asks nothing.
-    for (const id of restarted) this.startWaitingPanels(id);
-    for (const id of moved) if (!restarted.has(id)) this.reloadModuleViews(id);
-    // Their places didn't change, so the host UI sends none: the new views go where the old ones were.
-    if (restarted.size > 0) this.panels.applyBounds();
-    await this.watchDevelopmentFolders();
-    void this.refreshPublisherNames();
-    return moved;
-  }
-
-  /**
-   * After modules were looked for again: a panel whose type an update removed stops and its slot says
-   * so (the decision log, named panels round 4); one whose type came back starts again.
-   */
-  private syncPanelTypes(): void {
-    const workspace = this.workspace;
-    if (!workspace) return;
-    for (const record of this.records(workspace.id)) {
-      const open = this.panels.has(record.instanceId);
-      const missing = this.panelTypeOf(record) === undefined;
-      if (open && missing) this.panels.close(record.instanceId);
-      else if (!open && !missing) this.createView(record, workspace);
-    }
-    this.workspaces.save();
-  }
-
-  /**
-   * The panel type a panel shows, with the module's entry, icon and sizes filled in; null for a module
-   * without types, undefined when the module no longer offers the panel's type.
-   */
   /** The panel may be shown in the game: its type says `inGame`, or the module without types does. */
   private canShowInGame(record: InstanceRecord): boolean {
-    const type = this.panelTypeOf(record);
+    const type = this.modulePanels.typeOf(record);
     if (type) return type.inGame === true;
     const module = this.modules.get(record.moduleId);
     return type === null && module !== undefined && this.shown(module.manifest).inGame === true;
-  }
-
-  private panelTypeOf(record: InstanceRecord): ResolvedPanelType | null | undefined {
-    const module = this.modules.get(record.moduleId);
-    // Discord voice is paused (shared/discord-voice.ts): its panels never start, and their slot says so.
-    if (!module || isVoicePaused(record.moduleId)) return undefined;
-    const types = panelTypes(this.shown(module.manifest));
-    if (types.length === 0) return null;
-    return types.find((type) => type.id === record.panelType);
-  }
-
-  // ── Development folders ──────────────────────────────────────────────
-
-  /** The watchers of each development folder, and its pending reload. */
-  private readonly developmentWatchers = new Map<string, { watchers: FSWatcher[]; timer: ReturnType<typeof setTimeout> | undefined; rediscover: boolean }>();
-
-  /**
-   * Watches each module project in the development folders, whether or not its module loaded. Only
-   * the project folder itself and its build folder are watched, never node_modules or .git. A change
-   * to the build reloads the module's open panels; a change to the manifest, the build folder
-   * appearing or being replaced, or any change while the module did not load looks for modules
-   * again, so a project added before its first build or a broken manifest that was fixed loads by
-   * itself. A development folder that holds projects is watched too, with each folder directly in
-   * it, so a new project made there later is found. Changes come in bursts while a build writes, so
-   * it waits for a quiet moment.
-   */
-  private async watchDevelopmentFolders(): Promise<void> {
-    // Read everything first, so two calls at once cannot leave watchers of the older one behind.
-    const folders = await Promise.all(
-      this.library.developmentFolders.map(async (folder) => {
-        const found = await developmentProjects(folder);
-        const projects = found === "missing" ? [] : found;
-        const holder = !(projects.length === 1 && projects[0] === folder);
-        let others: string[] = [];
-        if (holder) {
-          try {
-            others = (await readdir(folder, { withFileTypes: true }))
-              .filter((entry) => entry.isDirectory() && mayHoldProject(entry.name))
-              .map((entry) => path.join(folder, entry.name))
-              .filter((dir) => !projects.includes(dir))
-              .slice(0, MAX_DEVELOPMENT_SUBFOLDERS);
-          } catch {
-            // Gone: Settings says so, and there is nothing to watch.
-          }
-        }
-        return {
-          folder,
-          holder,
-          others,
-          projects: await Promise.all(
-            projects.map(async (project) => {
-              const module = [...this.modules.values()].find((item) => item.developmentProject === project);
-              return { project, module, entry: module?.manifest.entry ?? (await projectEntry(project)) };
-            }),
-          ),
-        };
-      }),
-    );
-    for (const { watchers, timer } of this.developmentWatchers.values()) {
-      clearTimeout(timer);
-      for (const watcher of watchers) watcher.close();
-    }
-    this.developmentWatchers.clear();
-    const watched = (key: string) => {
-      const state = { watchers: [] as FSWatcher[], timer: undefined as ReturnType<typeof setTimeout> | undefined, rediscover: false };
-      const changed = (rediscover: boolean) => {
-        state.rediscover ||= rediscover;
-        clearTimeout(state.timer);
-        state.timer = setTimeout(() => {
-          state.timer = undefined;
-          const again = state.rediscover;
-          state.rediscover = false;
-          void this.developmentChanged(key, again).catch((error: unknown) => console.error("[tavora] reloading a development module failed", error));
-        }, DEVELOPMENT_RELOAD_MS);
-      };
-      const watchFolder = (dir: string, recursive: boolean, listener: (name: string | null) => void) => {
-        try {
-          const watcher = watch(dir, { recursive, persistent: false }, (_event, name) => listener(name?.toString() ?? null));
-          watcher.on("error", () => watcher.close());
-          state.watchers.push(watcher);
-        } catch (error) {
-          if ((error as NodeJS.ErrnoException).code !== "ENOENT") console.warn(`[tavora] cannot watch the development folder ${dir}`, error);
-        }
-      };
-      this.developmentWatchers.set(key, state);
-      return { changed, watchFolder };
-    };
-    for (const { folder, holder, others, projects } of folders) {
-      if (holder) {
-        // A project appearing in the folder, or a manifest in one of its folders, is a new module.
-        const { changed, watchFolder } = watched(folder);
-        watchFolder(folder, false, () => changed(true));
-        for (const dir of others) {
-          watchFolder(dir, false, (name) => {
-            if (name === null || name === MANIFEST) changed(true);
-          });
-        }
-      }
-      for (const { project, module, entry } of projects) {
-        const { changed, watchFolder } = watched(project);
-        const root = module?.root ?? project;
-        const built = entry === undefined ? undefined : buildFolderName(entry);
-        watchFolder(root, false, (name) => {
-          if (!module || name === null || name === MANIFEST || name === built) changed(true);
-          else if (built === undefined) changed(false);
-        });
-        // A rebuild that empties the build folder takes the entry away: look again, so the panels wait for the next build.
-        if (built !== undefined) watchFolder(path.join(root, built), true, () => changed(!module || !existsSync(path.join(root, entry!))));
-      }
-    }
-  }
-
-  /** A development project's files changed: its module's panels load the new build, after looking for modules again when asked. */
-  private async developmentChanged(project: string, rediscover: boolean): Promise<void> {
-    if (rediscover) {
-      await this.reloadModules();
-      this.pushState();
-    }
-    const moduleId = [...this.modules.values()].find((item) => item.developmentProject === project)?.manifest.id;
-    if (moduleId !== undefined) this.reloadModuleViews(moduleId);
-  }
-
-  /** The user picks a module project folder, or a folder of them; Tavora loads the modules from it from now on. Answers with the folder, or nothing when cancelled. */
-  private async addDevelopmentFolder(): Promise<string | void> {
-    const folder = await this.fileDialogs.pick("development-folder", { title: translate(this.language, "dialog.developmentFolder"), properties: ["openDirectory"] });
-    if (!folder) return;
-    if (this.library.developmentFolders.length >= MAX_DEVELOPMENT_FOLDERS) throw new LibraryError("error.tooManyDevelopmentFolders");
-    this.library.developmentFolders = cleanDevelopmentFolders([...this.library.developmentFolders, folder]);
-    this.fileDialogs.remember("development-folder", folder);
-    await this.reloadModules();
-    return path.resolve(folder);
-  }
-
-  /** The development folder the user added that is `folder`, as it is kept in the library. */
-  private developmentFolder(folder: string): string | undefined {
-    const key = (value: string) => (process.platform === "win32" ? path.resolve(value).toLowerCase() : path.resolve(value));
-    return this.library.developmentFolders.find((item) => key(item) === key(folder));
-  }
-
-  /**
-   * Copies an example that ships with Tavora into a new project, named after the module, in a development
-   * folder that holds projects or in a folder the user picks (`folder` null). A picked folder outside the
-   * development folders gets the new project added as one. Answers with the new project, or nothing when cancelled.
-   */
-  private async copyExampleModule(moduleId: string, name: string, folder: string | null): Promise<string | void> {
-    const example = this.modules.get(moduleId);
-    if (!example || !isExampleModule(moduleId)) throw new LibraryError("error.copyNoExample");
-    let parent: string | undefined;
-    if (folder !== null) {
-      parent = this.developmentFolder(folder);
-      if (!parent) throw new LibraryError("error.copyNoFolder");
-    } else {
-      parent = await this.fileDialogs.pick("development-folder", { title: translate(this.language, "dialog.copyExample"), properties: ["openDirectory", "createDirectory"] });
-      if (!parent) return;
-      this.fileDialogs.remember("development-folder", parent);
-    }
-    if (!existsSync(parent)) throw new LibraryError("error.copyNoFolder");
-    // A project can't hold another one: Tavora only looks for projects directly inside a folder without a manifest.
-    if (existsSync(path.join(parent, MANIFEST))) throw new LibraryError("error.copyIntoProject", { folder: path.basename(parent) });
-    const known = this.developmentFolder(parent) !== undefined;
-    if (!known && this.library.developmentFolders.length >= MAX_DEVELOPMENT_FOLDERS) throw new LibraryError("error.tooManyDevelopmentFolders");
-    const slug = slugOf(name);
-    const id = `${this.publisher.ownPrefix() ?? "local"}.${slug}`;
-    if (this.modules.has(id)) throw new LibraryError("error.copyIdTaken", { id });
-    const project = path.join(path.resolve(parent), slug);
-    await copyExample(example.root, project, { id, name: name.trim() });
-    if (!known) {
-      this.library.developmentFolders = cleanDevelopmentFolders([...this.library.developmentFolders, project]);
-      this.saveLibrary();
-    }
-    await this.reloadModules();
-    return project;
-  }
-
-  /** Opens a module project of a development folder in the file manager; only those, so the host UI cannot open any path. */
-  private async openDevelopmentProject(project: string): Promise<void> {
-    const known =
-      [...this.modules.values()].some((module) => module.developmentProject === project) ||
-      this.moduleProblems.some((problem) => problem.developmentProject === project);
-    if (!known || this.options.hidden) return;
-    const error = await shell.openPath(project);
-    if (error) throw new LibraryError("error.openFolder", { problem: error });
-  }
-
-  /** Opens the folder of an example that ships with Tavora, to look at its sources; only an example's. */
-  private async openExampleFolder(moduleId: string): Promise<void> {
-    const example = this.modules.get(moduleId);
-    if (!example || !isExampleModule(moduleId)) return;
-    if (this.options.hidden) return;
-    const error = await shell.openPath(example.root);
-    if (error) throw new LibraryError("error.openFolder", { problem: error });
   }
 
   /** Opens one of Tavora's pages for module developers in the user's browser. The renderer names the page, never an address. */
@@ -1530,20 +1313,6 @@ export class Host {
   /** The third-party licences that ship with the app (scripts/licences.mjs writes them next to the main bundle at build time); null when missing. */
   private licences(): LicenceList | null {
     return (this.licenceList ??= readLicences(path.join(__dirname, "../licences/licences.json")));
-  }
-
-  /** Forgets a development folder; its modules' panels close like a removed module's, and their data stays. */
-  private async removeDevelopmentFolder(folder: string): Promise<void> {
-    const key = (value: string) => (process.platform === "win32" ? path.resolve(value).toLowerCase() : path.resolve(value));
-    this.library.developmentFolders = this.library.developmentFolders.filter((item) => key(item) !== key(folder));
-    setDevelopmentFolderCollapsed(this.library, folder, false);
-    this.saveLibrary();
-    const projects = [...this.modules.values()].filter((module) => module.developmentProject !== undefined);
-    await this.reloadModules();
-    // A module of that folder that is gone now takes its game overlays with it, as a removed module does.
-    for (const module of projects) {
-      if (this.modules.get(module.manifest.id)?.developmentProject !== module.developmentProject) this.gameOverlays.forgetModule(module.manifest.id, module.owner);
-    }
   }
 
   /**
@@ -1586,7 +1355,7 @@ export class Host {
    */
   private async refreshSafetyLists(): Promise<void> {
     try {
-      if (await this.safetyLists.refresh()) await this.reloadModules();
+      if (await this.safetyLists.refresh()) await this.modulePanels.reload();
     } catch (error) {
       console.warn("[tavora] safety lists", error);
     }
@@ -1629,16 +1398,6 @@ export class Host {
     return { latest: notes[0]?.version ?? null, unseen: hasUnseenNotes(notes, module.manifest.version, this.library.moduleNotesSeen[Host.notesKey(module)]) };
   }
 
-  /**
-   * Closes and forgets every panel whose module is not installed any more, in every workspace. Module data stays. A module
-   * that is there but cannot load right now (being rebuilt, not built, needing a newer Tavora) keeps its panels; they
-   * start again once it loads (syncPanelTypes). While a development folder or a manifest can't be read, none go (panelsWait).
-   */
-  private dropPanelsOfMissingModules(): void {
-    const waits = panelsWait(this.moduleProblems);
-    for (const instanceId of this.workspaces.dropMissingModules((moduleId) => this.modules.has(moduleId) || waits(moduleId) || movedModule(moduleId) !== undefined)) this.closeView(instanceId);
-  }
-
   // ── Pictures of modules ──────────────────────────────────────────────
 
   private async openModulesFolder(): Promise<void> {
@@ -1653,37 +1412,6 @@ export class Host {
     if (!this.moduleProblems.some((problem) => !problem.developmentFolder && problem.path === dir)) return;
     const error = await shell.openPath(dir);
     if (error) throw new LibraryError("error.openFolder", { problem: error });
-  }
-
-  /** Starts a module's open panels again, so they load a new version or connect with a new grant. */
-  private reloadModuleViews(moduleId: string): void {
-    // Its pages start again and define their skins anew (a new version may have other files).
-    this.tooltips?.forgetModule(moduleId);
-    const current = this.modules.get(moduleId);
-    for (const view of this.moduleViews()) if (view.moduleId === moduleId) view.reload(current);
-    this.startWaitingPanels(moduleId);
-  }
-
-  /** Panels of a module that asked before they could run start now, in the workspace shown (the others start when it opens). */
-  private startWaitingPanels(moduleId: string): void {
-    const workspace = this.workspace;
-    if (!workspace) return;
-    if (this.needsAnswer(moduleId)) return;
-    for (const record of this.records(workspace.id)) {
-      if (record.moduleId !== moduleId || !this.panels.stopAwaiting(record.instanceId)) continue;
-      this.createView(record, workspace, performance.now());
-    }
-    // The window already said where these panels are; put the new pages there now, so they load and show.
-    this.panels.applyBounds();
-    this.pushState();
-  }
-
-  /** A module that still misses access it needs: its panels ask before its page may run (questionOf). */
-  private needsAnswer(moduleId: string): boolean {
-    const module = this.modules.get(moduleId);
-    if (!module || module.builtIn) return false;
-    const missing = this.grants.missing(module);
-    return missing.network.length > 0 || missing.connectors.length > 0 || missing.folders.length > 0 || missing.withGame === true;
   }
 
   /**
@@ -1736,226 +1464,11 @@ export class Host {
     return id;
   }
 
-  /** Where the Browse tab of the module library looks: the current game workspace's game, or a personal workspace. */
-  /** The scope a host page asked for (a workspace, or a game), else the open workspace's. */
-  private catalogScopeOf(target: unknown): CatalogScope | null {
-    const asked = typeof target === "object" && target !== null ? (target as Record<string, unknown>) : {};
-    if (typeof asked.game === "string" && asked.game.length <= 80) return { games: [asked.game] };
-    if (typeof asked.workspaceId === "string") return this.catalogScope(asked.workspaceId);
-    return this.catalogScope();
-  }
-
-  private catalogScope(id: string | null = this.workspaceId): CatalogScope | null {
-    const workspace = id ? this.library.workspaces[id] : undefined;
-    if (!workspace) return null;
-    return workspace.kind === "personal" ? { personal: true } : { games: workspaceGameIds(workspace) };
-  }
-
-  /** A game added by name learns its game's id from a catalog listing (workspace-game.ts); saved, and the rail sees what now fits. */
-  private learnFromCatalog(games: ListedGame[]): void {
-    if (!learnGameIds(this.library, games).length) return;
-    this.saveLibrary();
-    this.pushStateSoon();
-  }
-
-  /**
-   * One anonymous vote for a module for a game that has none, because the user pressed Ask for a module.
-   * Remembered on this PC, so the button stays a thanks; a vote that can't be sent (offline, or the service
-   * has no such address yet) says so and can be tried again. Never blocks adding the game.
-   */
-  private async askModule(game: AskedGame): Promise<void> {
-    if (!game.name || [...game.name].length > 80) throw new UserError("error.askModuleFailed");
-    const key = askKey(game);
-    if (this.library.askedModules.includes(key)) return;
-    if (!this.library.onlineSearch) throw new UserError("error.askModuleOff");
-    if (!this.library.installId) {
-      this.library.installId = newInstallId();
-      this.saveLibrary();
-    }
-    if (!(await sendModuleRequest({ baseUrl: serviceUrl(this.options.apiUrl) }, game, this.library.installId))) throw new UserError("error.askModuleFailed");
-    this.library.askedModules = [...this.library.askedModules.filter((other) => other !== key), key].slice(-MAX_ASKED_MODULES);
-    this.saveLibrary();
-  }
-
-  /**
-   * Reports a module to Tavora (C12). A module installed from the catalog is reported as the zip that
-   * is installed, the one the user has seen; any other id as the version the catalog lists now.
-   * Only the id, the key and the zip's hash are sent, and only because the user pressed Report.
-   */
-  private async reportCatalogModule(moduleId: string, why: { reason: string; note: string | null }): Promise<void> {
-    if (!this.library.onlineSearch) throw new UserError("error.reportOff");
-    const token = this.account.token();
-    if (!token) throw new UserError("error.reportSignIn");
-    const module = this.catalogModules.has(moduleId) ? (this.modules.get(moduleId) ?? this.blockedModules.get(moduleId)) : undefined;
-    const record = module ? (await readOwnerRecords(this.options.userData))[path.basename(module.root)] : undefined;
-    if (module && record?.id === moduleId && record.sha256) {
-      await this.catalog.report({ id: moduleId, owner: module.owner, sha256: record.sha256 }, token, why);
-      return;
-    }
-    const entry = await this.catalog.module(moduleId);
-    await this.catalog.report({ id: entry.id, owner: entry.owner, sha256: entry.zip.sha256 }, token, why);
-  }
-
-  /**
-   * Opens a catalog module's homepage like a link from a module (C10): only http or https, in the
-   * workspace's Browser panel or where the user picks. The address comes from the listing, asked for again here.
-   */
-  private async openCatalogHomepage(moduleId: string): Promise<void> {
-    if (!this.library.onlineSearch) throw new UserError("error.catalogOff");
-    const { homepage } = await this.catalog.module(moduleId);
-    if (homepage && isWebUrl(homepage)) this.openLinkFromModule(homepage);
-  }
-
-  /**
-   * Opens a module's support link after a click. The link is read again here, from the installed module's own
-   * manifest or the catalog listing, never taken from the page: a web address opens like the homepage, an
-   * email address in the user's mail app.
-   */
-  private async openModuleSupport(moduleId: string, source: "catalog" | "installed"): Promise<void> {
-    let link: string | null | undefined;
-    if (source === "installed") link = this.modules.get(moduleId)?.manifest.support;
-    else {
-      if (!this.library.onlineSearch) throw new UserError("error.catalogOff");
-      link = (await this.catalog.module(moduleId)).support;
-    }
-    const target = link ? supportTarget(link) : null;
-    if (!target) return;
-    if (target.kind === "web") this.openLinkFromModule(target.url);
-    else if (!this.options.hidden) void shell.openExternal(target.url).catch((error: unknown) => console.error("[tavora]", error));
-  }
-
-  /**
-   * Opens a link from a catalog module's readme in a Browser panel. The readme is read again here and
-   * the address must be one of its http or https links, so the page can't ask for any other address.
-   */
-  private async openReadmeLink(moduleId: string, url: string): Promise<void> {
-    if (!this.library.onlineSearch) throw new UserError("error.catalogOff");
-    const { readme } = await this.catalog.details(moduleId);
-    if (!readmeAllowsLink(readme, url)) throw new UserError("error.readmeLink");
-    this.openLinkFromModule(url);
-  }
-
-  /**
-   * A catalog module's page: the listing asked for again, its readme as plain text blocks and its
-   * screenshots, each checked on its own (catalog-client.ts); a screenshot that fails is left out.
-   */
-  private async catalogPage(moduleId: string): Promise<CatalogPageResult> {
-    if (!this.library.onlineSearch) return { status: "off" };
-    let details;
-    try {
-      details = await this.catalog.details(moduleId);
-    } catch (error) {
-      const key = error instanceof UserError ? error.key : "";
-      if (key === "error.catalogNotListed") return { status: "gone" };
-      if (key === "error.catalogUnavailable") return { status: "unavailable" };
-      if (key === "error.catalogBusy") return { status: "busy" };
-      return { status: "unreachable" };
-    }
-    const shots = await Promise.all(details.entry.shots.map((shot) => this.catalog.picture(shot)));
-    return {
-      status: "ok",
-      module: catalogView(details.entry, this.language, this.catalogScope() ?? undefined),
-      screenshots: shots.filter((url): url is string => url !== null),
-      readme: details.readme === null ? [] : parseReadme(details.readme),
-      versions: details.versions,
-    };
-  }
-
-  /** An installed module's page from its own folder (module-page.ts), so it works offline. */
-  private async modulePage(moduleId: string): Promise<ModulePageResult> {
-    const module = this.modules.get(moduleId);
-    if (!module) return { status: "gone" };
-    return { status: "ok", ...(await readModulePage(module.root, module.manifest)) };
-  }
-
-  /**
-   * A catalog module's ratings and reviews (decided 2026-10-21), with the user's own rating and what
-   * they can do. Rating needs a sign-in, not the module installed: someone who removed a bad module can
-   * still rate it (decided 2026-10-27). Each reviewer's picture is fetched by its hash and checked like a listed picture.
-   */
-  private async catalogReviews(moduleId: string): Promise<CatalogReviewsResult> {
-    if (!this.library.onlineSearch) return { status: "off" };
-    const token = this.account.token();
-    let listed;
-    let own: { mine: CatalogReviews["mine"]; own: boolean } = { mine: null, own: false };
-    try {
-      listed = await this.catalog.reviews(moduleId);
-      if (token) own = await this.catalog.ownReview(moduleId, token).catch(() => own);
-    } catch (error) {
-      const key = error instanceof UserError ? error.key : "";
-      if (key === "error.catalogNotListed") return { status: "gone" };
-      if (key === "error.catalogUnavailable" || key === "error.reviewsUnavailable") return { status: "unavailable" };
-      if (key === "error.catalogBusy") return { status: "busy" };
-      return { status: "unreachable" };
-    }
-    const pictures = await Promise.all(listed.reviews.map((review) => (review.author.picture ? this.catalog.reviewerPicture(review.id, review.author.picture) : null)));
-    const installedVersion = this.modules.get(moduleId)?.manifest.version ?? null;
-    return {
-      status: "ok",
-      rating: listed.rating,
-      reviews: listed.reviews.map((review, index) => ({ ...review, author: { ...review.author, picture: pictures[index] ?? null } })),
-      mine: own.mine,
-      can: own.own ? "own" : !token ? "sign-in" : "rate",
-      installedVersion,
-    };
-  }
-
-  /**
-   * Rates a catalog module on its installed version, which must be one the catalog published, or on its
-   * newest published version when it isn't installed.
-   */
-  private async rateCatalogModule(moduleId: string, stars: number, text: string | null): Promise<void> {
-    if (!this.library.onlineSearch) throw new UserError("error.catalogOff");
-    const token = this.account.token();
-    if (!token) throw new UserError("account.error.signedOut");
-    const installed = this.modules.get(moduleId)?.manifest.version;
-    const { versions } = await this.catalog.details(moduleId);
-    const version = installed ?? versions.map((published) => published.version).sort(compareModuleVersions).at(-1);
-    if (!version || !versions.some((published) => published.version === version)) throw new UserError("error.reviewVersion");
-    await this.catalog.rate(moduleId, token, { stars, text: text?.trim() || null, version });
-  }
-
   /** A messages action: online features must be on, and the user needs a sign-in. */
   private async inboxAction<T>(run: () => Promise<T>): Promise<T> {
     if (!this.library.onlineSearch) throw new UserError("error.catalogOff");
     if (!this.account.token()) throw new UserError("account.error.signedOut");
     return run();
-  }
-
-  private async catalogReviewAction(run: (token: string) => Promise<void>): Promise<void> {
-    if (!this.library.onlineSearch) throw new UserError("error.catalogOff");
-    const token = this.account.token();
-    if (!token) throw new UserError("account.error.signedOut");
-    await run(token);
-  }
-
-  /**
-   * Looks for updates of modules installed from the catalog a little after start and then every few
-   * hours, only while online features are on. Test runs check only when asked.
-   */
-  private checkCatalogSoon(): void {
-    if (this.options.hidden) return;
-    setTimeout(() => void this.checkCatalogUpdates(), 30_000).unref?.();
-    this.catalogTimer = setInterval(() => void this.checkCatalogUpdates(), CHECK_INTERVAL_MS);
-    this.catalogTimer.unref?.();
-  }
-
-  /**
-   * One update check (catalog-updates.ts). Updates that ask for nothing new are installed and their
-   * panels reload; the others wait for the user, shown in Settings > Modules and on their panels.
-   * Answers with how many modules were updated or are waiting.
-   */
-  private async checkCatalogUpdates(): Promise<{ updated: number; waiting: number; unreachable?: true; failed?: number }> {
-    if (!this.library.onlineSearch) return { updated: 0, waiting: 0 };
-    const { updated, waiting, unreachable, failed } = await this.lifecycle.updates.check();
-    if (updated.length === 1) {
-      const { manifest } = updated[0]!;
-      this.notice = translate(this.language, "modules.catalogUpdated", { name: this.shown(manifest).name, version: manifest.version });
-    } else if (updated.length > 1) {
-      this.notice = translate(this.language, "modules.catalogUpdatedMany", { count: String(updated.length) });
-    }
-    this.pushState();
-    return { updated: updated.length, waiting: waiting.length, ...(unreachable ? { unreachable } : {}), ...(failed ? { failed } : {}) };
   }
 
   private static themeSources(options: HostOptions) {
@@ -2180,40 +1693,19 @@ export class Host {
       // Games the user already has are not offered again; one in Trash is, and adding it brings that copy back.
       return { ...result, games: result.games.filter((game) => !isLive(this.library, game.id)) };
     });
-    ipcMain.handle("host:browse-catalog", async (event, target?: unknown): Promise<CatalogListResult> => {
-      if (!fromHost(event)) return { status: "unreachable" };
-      if (!this.library.onlineSearch) return { status: "off" };
-      if (!this.catalogScopeOf(target)) {
-        // A named workspace it can't find is "can't tell", never an empty list: the empty page would read that as "no modules
-        // for this game". With no workspace open at all, there is simply nothing that fits.
-        const named = typeof target === "object" && target !== null && "workspaceId" in target;
-        return named ? { status: "unavailable" } : { status: "ok", modules: [] };
-      }
-      // Asked again once the listing was read: a game added by name may just have learned its game's id from it.
-      return this.catalog.list(() => this.catalogScopeOf(target) ?? { games: [] }, this.language);
-    });
-    ipcMain.handle("host:catalog-for-games", async (event): Promise<CatalogListResult> => {
-      if (!fromHost(event)) return { status: "unreachable" };
-      if (!this.library.onlineSearch) return { status: "off" };
-      return this.catalog.list({ games: [] }, this.language);
-    });
+    ipcMain.handle("host:browse-catalog", async (event, target?: unknown): Promise<CatalogListResult> => (fromHost(event) ? this.moduleCatalog.browse(target) : { status: "unreachable" }));
+    ipcMain.handle("host:catalog-for-games", async (event): Promise<CatalogListResult> => (fromHost(event) ? this.moduleCatalog.forGames() : { status: "unreachable" }));
     ipcMain.handle("host:catalog-page", async (event, moduleId: unknown): Promise<CatalogPageResult> =>
-      fromHost(event) && isModuleId(moduleId) ? this.catalogPage(moduleId) : { status: "gone" },
+      fromHost(event) && isModuleId(moduleId) ? this.moduleCatalog.page(moduleId) : { status: "gone" },
     );
     ipcMain.handle("host:module-page", async (event, moduleId: unknown): Promise<ModulePageResult> =>
-      fromHost(event) && isModuleId(moduleId) ? this.modulePage(moduleId) : { status: "gone" },
+      fromHost(event) && isModuleId(moduleId) ? this.moduleCatalog.installedPage(moduleId) : { status: "gone" },
     );
     ipcMain.handle("host:catalog-reviews", async (event, moduleId: unknown): Promise<CatalogReviewsResult> =>
-      fromHost(event) && isModuleId(moduleId) ? this.catalogReviews(moduleId) : { status: "gone" },
+      fromHost(event) && isModuleId(moduleId) ? this.moduleCatalog.reviews(moduleId) : { status: "gone" },
     );
-    ipcMain.handle("host:release-statuses", async (event, copies: unknown): Promise<Record<string, ReleaseStatus> | null> => {
-      if (!fromHost(event) || !this.library.onlineSearch || !isReleaseCopies(copies)) return null;
-      const [index, waiting] = await Promise.all([this.catalog.index(), this.account.waitingVersions()]);
-      return releaseStatuses(index, copies, waiting);
-    });
-    ipcMain.handle("host:catalog-icon", async (event, moduleId: unknown): Promise<string | null> =>
-      fromHost(event) && isModuleId(moduleId) && this.library.onlineSearch ? this.catalog.icon(moduleId) : null,
-    );
+    ipcMain.handle("host:release-statuses", async (event, copies: unknown): Promise<Record<string, ReleaseStatus> | null> => (fromHost(event) ? this.moduleCatalog.releaseStatuses(copies) : null));
+    ipcMain.handle("host:catalog-icon", async (event, moduleId: unknown): Promise<string | null> => (fromHost(event) && isModuleId(moduleId) ? this.moduleCatalog.icon(moduleId) : null));
     ipcMain.handle("host:steam-library", async (event, profile: unknown): Promise<SteamLibraryResult> => {
       if (!fromHost(event) || typeof profile !== "string") return { status: "error", error: translate(this.language, "error.notUnderstood") };
       if (!this.library.onlineSearch) return { status: "error", error: translate(this.language, "error.onlineOff") };
@@ -2379,7 +1871,7 @@ export class Host {
       this.gameWatcher.stop();
       this.copySync.dispose();
       this.pairing.dispose();
-      clearInterval(this.catalogTimer);
+      this.moduleCatalog.stopChecks();
       this.inbox.dispose();
       this.officialPublishing.quit();
     });
@@ -2439,15 +1931,7 @@ export class Host {
    * development folder's do, instead of Tavora restarting. A module that had not loaded is looked for again.
    */
   async moduleBuilt(dir: string): Promise<void> {
-    const real = await realpath(dir).catch(() => dir);
-    const same = (root: string) => path.relative(root, real) === "";
-    let module = [...this.modules.values()].find((item) => same(item.root));
-    if (!module) {
-      await this.reloadModules();
-      this.pushState();
-      module = [...this.modules.values()].find((item) => same(item.root));
-    }
-    if (module) this.reloadModuleViews(module.manifest.id);
+    await this.developmentFolders.built(dir);
   }
 
   /** Shows the window in front, for a question that came from outside it (the pack command's sign request). */
@@ -2627,7 +2111,7 @@ export class Host {
       "set-auto-update-modules": saved((action) => {
         this.library.autoUpdateModules = action.enabled;
         // Turned on: updates that were only found so far install now.
-        if (action.enabled) void this.checkCatalogUpdates();
+        if (action.enabled) void this.moduleCatalog.checkUpdates();
       }),
       "set-steam-icons": saved((action) => {
         this.library.steamIcons = action.enabled;
@@ -2760,21 +2244,21 @@ export class Host {
       // Modules
       "open-modules-folder": () => this.openModulesFolder(),
       "open-module-problem-folder": (action) => this.openModuleProblemFolder(action.path),
-      "add-development-folder": () => this.addDevelopmentFolder(),
-      "remove-development-folder": (action) => this.removeDevelopmentFolder(action.folder),
-      "move-development-folder": saved((action) => moveDevelopmentFolder(this.library, action.folder, action.index)),
-      "collapse-development-folder": saved((action) => setDevelopmentFolderCollapsed(this.library, action.folder, action.collapsed)),
-      "copy-example": (action) => this.copyExampleModule(action.moduleId, action.name, action.folder),
-      "open-example-folder": (action) => this.openExampleFolder(action.moduleId),
+      "add-development-folder": () => this.developmentFolders.add(),
+      "remove-development-folder": (action) => this.developmentFolders.remove(action.folder),
+      "move-development-folder": (action) => this.developmentFolders.move(action.folder, action.index),
+      "collapse-development-folder": (action) => this.developmentFolders.collapse(action.folder, action.collapsed),
+      "copy-example": (action) => this.developmentFolders.copyExample(action.moduleId, action.name, action.folder),
+      "open-example-folder": (action) => this.developmentFolders.openExample(action.moduleId),
       "official-publish-check": () => this.officialPublishing.check(),
       "publish-official-module": (action) => this.officialPublishing.prepare(action.moduleId),
       "official-publish-confirm": (action) => this.officialPublishing.confirm(action.remember),
       "official-publish-cancel": () => this.officialPublishing.cancel(),
       "official-publish-forget-key": () => this.officialPublishing.forgetKey(),
-      "open-development-project": (action) => this.openDevelopmentProject(action.project),
+      "open-development-project": (action) => this.developmentFolders.openProject(action.project),
       "open-developer-link": (action) => this.openDeveloperLink(action.link),
       "open-legal-page": (action) => this.openLegalPage(action.page),
-      "reload-modules": async () => void (await this.reloadModules()),
+      "reload-modules": async () => void (await this.modulePanels.reload()),
       "remove-module": (action) => this.lifecycle.remove(action.moduleId),
       "grant-module": (action) => this.lifecycle.grant(action.moduleId, action.network, action.connectors, action.folders ?? [], action.withGame === true),
       "set-module-with-game": (action) => this.lifecycle.setWithGame(action.moduleId, action.on),
@@ -2782,22 +2266,15 @@ export class Host {
         const module = this.modules.get(action.moduleId);
         if (!module) throw new LibraryError("error.moduleMissing");
         // The module's pages start again, so they find the folder where the user said.
-        if (await this.folderHostOf(module).choose(action.folder)) this.reloadModuleViews(action.moduleId);
+        if (await this.folderHostOf(module).choose(action.folder)) this.modulePanels.reloadViews(action.moduleId);
       },
       "revoke-module": (action) => this.lifecycle.revoke(action.moduleId),
       "leaderboards-hide": (action) => this.leaveLeaderboards(action.moduleId),
       "install-module": () => this.installModule(),
       "install-catalog-module": (action) => this.lifecycle.installFromCatalog(action.moduleId),
-      "check-module-updates": async () => {
-        if (!this.library.onlineSearch) throw new UserError("error.catalogOff");
-        const { updated, waiting, unreachable, failed } = await this.checkCatalogUpdates();
-        // Never "up to date" when the catalog could not be asked or an update would not download.
-        if (unreachable) throw new UserError("error.updatesUnreachable");
-        if (failed && updated + waiting === 0) throw new UserError("error.updatesFailed");
-        return { ok: true, updated, waiting };
-      },
-      "ask-module": (action) => this.askModule({ name: askedName(action.name), steamAppId: action.steamAppId, gameId: action.gameId }),
-      "report-catalog-module": (action) => this.reportCatalogModule(action.moduleId, { reason: action.reason, note: action.note }),
+      "check-module-updates": () => this.moduleCatalog.checkUpdatesNow(),
+      "ask-module": (action) => this.moduleCatalog.ask({ name: askedName(action.name), steamAppId: action.steamAppId, gameId: action.gameId }),
+      "report-catalog-module": (action) => this.moduleCatalog.report(action.moduleId, { reason: action.reason, note: action.note }),
       "inbox-send-request": (action) => this.inboxAction(() => this.inbox.sendRequest(action.moduleId, action.requestType, action.text, action.previousId)),
       "inbox-reply": (action) => this.inboxAction(() => this.inbox.reply(action.id, action.text)),
       "inbox-close": (action) => this.inboxAction(() => this.inbox.close(action.id, action.outcome)),
@@ -2814,18 +2291,13 @@ export class Host {
         await this.inbox.refresh();
         await this.inbox.loadContacts();
       },
-      "open-catalog-homepage": (action) => this.openCatalogHomepage(action.moduleId),
-      "open-module-support": (action) => this.openModuleSupport(action.moduleId, action.source),
-      "open-readme-link": (action) => this.openReadmeLink(action.moduleId, action.url),
-      "rate-catalog-module": (action) => this.rateCatalogModule(action.moduleId, action.stars, action.text),
-      "unrate-catalog-module": (action) => this.catalogReviewAction((token) => this.catalog.unrate(action.moduleId, token)),
-      "reply-catalog-review": (action) => this.catalogReviewAction((token) => this.catalog.reply(action.reviewId, token, action.text?.trim() || null)),
-      "report-catalog-review": (action) => {
-        if (!this.library.onlineSearch) throw new UserError("error.reportOff");
-        const token = this.account.token();
-        if (!token) throw new UserError("error.reportSignIn");
-        return this.catalog.reportReview(action.reviewId, token);
-      },
+      "open-catalog-homepage": (action) => this.moduleCatalog.openHomepage(action.moduleId),
+      "open-module-support": (action) => this.moduleCatalog.openSupport(action.moduleId, action.source),
+      "open-readme-link": (action) => this.moduleCatalog.openReadmeLink(action.moduleId, action.url),
+      "rate-catalog-module": (action) => this.moduleCatalog.rate(action.moduleId, action.stars, action.text),
+      "unrate-catalog-module": (action) => this.moduleCatalog.unrate(action.moduleId),
+      "reply-catalog-review": (action) => this.moduleCatalog.reply(action.reviewId, action.text),
+      "report-catalog-review": (action) => this.moduleCatalog.reportReview(action.reviewId),
       "apply-module-update": (action) => this.lifecycle.applyUpdate(action.moduleId, action.version),
       "delete-module-data": (action) => this.deleteLeftoverData(action.owner, action.moduleId),
       "move-local-data": (action) => this.moveLocalData(action.moduleId),
@@ -2934,7 +2406,8 @@ export class Host {
         // And a publisher key: Tavora makes, keeps and links it, and the recovery key is shown. One with
         // a key already (kept, or a linked key file) gets none.
         const keys = this.developerKeys.view();
-        if ((keys.status === "ready" || keys.status === "none") && !keys.keys.length && !this.account.view().publisherKeys?.length) {
+        // Paused keys count as keys: they are linked again, never replaced by a new one.
+        if ((keys.status === "ready" || keys.status === "none") && !keys.keys.length && ownKeys(this.account.view()).length === 0) {
           // Another PC keeps the account's key: its recovery key is asked for on screen, then a key is made there.
           await this.developerKeys.create().catch(() => undefined);
         }
@@ -2947,8 +2420,10 @@ export class Host {
       },
       "account-unlink-key": (action) => this.account.unlinkKey(action.fingerprint),
       "account-replace-key": async (action) => {
+        // The old key may be a paused one whose file is lost (audit 2026-11-22); the new one is a key linked and working,
+        // or one made for it.
+        if (!ownKeys(this.account.view()).includes(action.fingerprint)) throw new UserError("account.error.keyGone");
         const linked = (this.account.view().publisherKeys ?? []).map((key) => key.fingerprint);
-        if (!linked.includes(action.fingerprint)) throw new UserError("account.error.keyGone");
         const next = await this.developerKeys.replacementFor(action.fingerprint, linked);
         return this.account.replaceKey(action.fingerprint, next, action.leaked);
       },
@@ -3055,7 +2530,7 @@ export class Host {
       if (!entry || entry.trashedAt) return false;
       const record = this.records(entry.id).find((item) => (panel.instanceId ? item.instanceId === panel.instanceId : item.moduleId === panel.moduleId));
       if (!record) return false;
-      if (this.screen === "overlay" && !this.panels.has(record.instanceId) && this.panelTypeOf(record) !== undefined) {
+      if (this.screen === "overlay" && !this.panels.has(record.instanceId) && this.modulePanels.typeOf(record) !== undefined) {
         this.createView(record, { id: entry.id, displayName: entry.name, kind: entry.kind });
       }
       return this.panels.has(record.instanceId);
@@ -3072,7 +2547,7 @@ export class Host {
           const entry = this.library.workspaces[info.keyTarget.workspaceId];
           if (!entry || entry.trashedAt) continue;
           const record = this.records(entry.id).find((item) => (info.ref.kind === "panel" ? item.instanceId === info.ref.instanceId : item.moduleId === info.moduleId));
-          if (!record || this.panelTypeOf(record) === undefined || record.moduleId === BROWSER_MODULE_ID) continue;
+          if (!record || this.modulePanels.typeOf(record) === undefined || record.moduleId === BROWSER_MODULE_ID) continue;
           wanted.add(record.instanceId);
           this.panels.keepRunning(record.instanceId);
           if (!this.panels.has(record.instanceId)) this.createView(record, { id: entry.id, displayName: entry.name, kind: entry.kind });
@@ -3128,7 +2603,7 @@ export class Host {
           workspaceId: entry.id,
           workspaceName: entry.name,
           scope: scopeForKind(entry.kind),
-          inGame: this.panelTypeOf(record) !== undefined && this.canShowInGame(record),
+          inGame: this.modulePanels.typeOf(record) !== undefined && this.canShowInGame(record),
           sources: this.gameOverlays.sourcesOf(record.instanceId, module.owner),
         });
       }
@@ -3302,7 +2777,7 @@ export class Host {
     }
     const record: InstanceRecord = { instanceId: options.instanceId ?? randomUUID(), moduleId, ...(panelType ? { panelType } : {}) };
     this.workspaces.openPanel(workspace.id, record);
-    if (this.needsAnswer(moduleId)) this.panels.setAwaiting(record.instanceId);
+    if (this.modulePanels.needsAnswer(moduleId)) this.panels.setAwaiting(record.instanceId);
     if (openedFrom) this.panels.setOpenedFrom(record.instanceId, openedFrom);
     if (options.placement) this.panels.setPlacement(record.instanceId, options.placement);
     this.panels.setLaunch(record.instanceId, options.launch ?? { reason: "add" });
@@ -3416,7 +2891,7 @@ export class Host {
     const modules: WithGameModule[] = [];
     for (const module of this.modules.values()) {
       const panelType = withGamePanelType(module.manifest);
-      if (!panelType || isVoicePaused(module.manifest.id) || !this.grants.allowed(module).withGame || this.needsAnswer(module.manifest.id)) continue;
+      if (!panelType || isVoicePaused(module.manifest.id) || !this.grants.allowed(module).withGame || this.modulePanels.needsAnswer(module.manifest.id)) continue;
       modules.push({ moduleId: module.manifest.id, owner: module.owner, panelType });
     }
     return modules;
@@ -3478,7 +2953,7 @@ export class Host {
     const workspace = this.workspace;
     const record = workspace && this.records(workspace.id).find((item) => item.instanceId === instanceId);
     if (!workspace || !record) throw new WorkspaceError("error.panelClosed");
-    if (this.panelTypeOf(record) !== undefined || isVoicePaused(record.moduleId)) return;
+    if (this.modulePanels.typeOf(record) !== undefined || isVoicePaused(record.moduleId)) return;
     const module = this.modules.get(record.moduleId);
     if (!module || !panelTypes(module.manifest).some((type) => type.id === panelType)) throw new WorkspaceError("error.panelTypeGone");
     record.panelType = panelType;
@@ -3747,7 +3222,7 @@ export class Host {
     if (record.moduleId === BROWSER_MODULE_ID) return this.createBrowser(record, workspace);
     // It was added while its module still asks (questionOf); the page starts once the user allows (reloadModuleViews).
     if (this.panels.isAwaiting(record.instanceId)) return;
-    const panelType = this.panelTypeOf(record);
+    const panelType = this.modulePanels.typeOf(record);
     // Its type is gone: the slot says so and offers another type; nothing runs.
     if (panelType === undefined) return;
     let measured = openedAt === undefined;
@@ -3866,7 +3341,7 @@ export class Host {
 
   /**
    * A panel whose module id loads for another owner than the one its page last ran as (changed while the panel was
-   * closed, in a workspace not shown, or while Tavora was closed): what that owner left stays its own, as reloadModules
+   * closed, in a workspace not shown, or while Tavora was closed): what that owner left stays its own, as ModulePanels.reload
    * does for open panels. The content its tab named goes, and its panel state is kept apart (a file from before owners
    * were noted counts as the old owner's).
    */
@@ -4291,7 +3766,7 @@ export class Host {
     const module = record && this.modules.get(record.moduleId);
     if (!workspace || !record || !module || !this.moduleView(instanceId)) throw new WorkspaceError("error.panelClosed");
     if (!this.canShowInGame(record)) throw new WorkspaceError("error.panelNotInGame");
-    const viewport = this.panelTypeOf(record)?.viewport ?? this.shown(module.manifest).viewport;
+    const viewport = this.modulePanels.typeOf(record)?.viewport ?? this.shown(module.manifest).viewport;
     const result = this.gameOverlays.showPanel(
       { owner: module.owner, moduleId: module.manifest.id, workspaceId: workspace.id, instanceId },
       { width: viewport.preferredWidth, height: viewport.preferredHeight },
@@ -4310,7 +3785,7 @@ export class Host {
     const record = this.recordOf(instanceId);
     const module = record && this.modules.get(record.moduleId);
     if (!record || !module) return null;
-    return this.panelTypeOf(record)?.name ?? this.shown(module.manifest).name;
+    return this.modulePanels.typeOf(record)?.name ?? this.shown(module.manifest).name;
   }
 
   /** A panel's record, in whichever workspace it is. */
@@ -4329,8 +3804,8 @@ export class Host {
     if (!record) return null;
     // Unknown (module not loaded yet) counts as allowed: a panel is dropped only when its type is known to say no. A module without panel types says it at the top (`inGame`), as To-Dos does.
     // A Browser panel can never be lent to the layer, so it doesn't stay in a setup.
-    const allowed = record.moduleId !== BROWSER_MODULE_ID && (this.panelTypeOf(record) === undefined || this.canShowInGame(record));
-    const viewport = module && (this.panelTypeOf(record)?.viewport ?? this.shown(module.manifest).viewport);
+    const allowed = record.moduleId !== BROWSER_MODULE_ID && (this.modulePanels.typeOf(record) === undefined || this.canShowInGame(record));
+    const viewport = module && (this.modulePanels.typeOf(record)?.viewport ?? this.shown(module.manifest).viewport);
     return {
       name: this.panelName(instanceId),
       allowed,
@@ -4647,41 +4122,13 @@ export class Host {
       moduleProblems: this.moduleProblems.filter((problem) => !problem.developmentFolder && !problem.official).map(({ folder, path: full, message, kind, values }) => ({ folder, path: full, message, ...(kind ? { kind } : {}), ...(values ? { values } : {}) })),
       devBuild: !app.isPackaged,
       officialPublish: this.officialPublishing.view(),
-      developmentFolders: this.library.developmentFolders.map((folder) => {
-        const own = this.moduleProblems.find((item) => item.developmentFolder === folder && !item.developmentProject);
-        const projects = new Map<string, HostViewState["developmentFolders"][number]["projects"][number]>();
-        for (const module of this.modules.values()) {
-          if (module.developmentFolder === folder && module.developmentProject) {
-            projects.set(module.developmentProject, { project: module.developmentProject, moduleId: module.manifest.id, problem: null, kind: null, name: null, version: null });
-          }
-        }
-        for (const item of this.moduleProblems) {
-          if (item.developmentFolder !== folder || !item.developmentProject || projects.has(item.developmentProject)) continue;
-          projects.set(item.developmentProject, {
-            project: item.developmentProject,
-            moduleId: null,
-            problem: item.message,
-            kind: item.kind ?? null,
-            ...(item.values ? { values: item.values } : {}),
-            name: item.about?.name ?? null,
-            version: item.about?.version ?? null,
-          });
-        }
-        return {
-          folder,
-          collapsed: this.library.collapsedDevelopmentFolders.includes(folder),
-          problem: own?.message ?? null,
-          kind: own?.kind ?? null,
-          ...(own?.values ? { values: own.values } : {}),
-          projects: [...projects.values()].sort((a, b) => a.project.localeCompare(b.project)),
-        };
-      }),
+      developmentFolders: this.developmentFolders.view(),
       leftoverModuleData: this.moduleData
         .filter((entry) => this.modules.get(entry.moduleId)?.owner !== entry.owner)
         .map((entry) => ({ ...entry, publisher: entry.owner === LOCAL_OWNER || entry.owner === OFFICIAL_OWNER ? null : entry.owner })),
       panels: workspace.instances.map((record) => {
         const view = this.nativePanel(record.instanceId);
-        const type = this.panelTypeOf(record);
+        const type = this.modulePanels.typeOf(record);
         const module = this.modules.get(record.moduleId);
         // A development module that cannot load right now is named from its manifest until it loads.
         const name = type?.name ?? (module ? this.shown(module.manifest).name : (waitingModules(this.moduleProblems).get(record.moduleId) ?? movedModule(record.moduleId)?.name ?? record.moduleId));
@@ -5112,13 +4559,4 @@ function devCsp(server: URL): string {
     "form-action 'none'",
     "frame-ancestors 'none'",
   ].join("; ");
-}
-
-/** What settlePanelTypes needs to know about the installed modules. */
-function panelTypesOf(modules: ReadonlyMap<string, InstalledModule>) {
-  return (moduleId: string) => {
-    const module = modules.get(moduleId);
-    if (!module) return undefined;
-    return { ids: panelTypes(module.manifest).map((type) => type.id), continuing: continuingPanelType(module.manifest) };
-  };
 }
