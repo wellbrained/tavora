@@ -47,7 +47,7 @@ If something blocks the upload, the screen says what and offers the fix:
 
 Press **Publish** on the review screen to sign the zip with your key and upload it with your sign-in. That press is your yes; nothing else asks. Your secret key never leaves Tavora, and the key alone can't publish: the service also checks that the account signed in is the one the key is linked to.
 
-Every upload sends an email to your account's address (up to 10 a day), naming the module, the version and whether it came from Tavora or which publish token. If you didn't publish it, write to [tavora.app@gmail.com](mailto:tavora.app@gmail.com) right away.
+Every upload sends an email to your account's address (up to 10 a day), naming the module, the version and whether it came from Tavora or which publish token. On a busy day a mail can be skipped; **Settings > Developer > Publishing** then lists it under **Emails not sent**. If you didn't publish it, write to [tavora.app@gmail.com](mailto:tavora.app@gmail.com) right away, and change your email: that signs every device out, stops every publish token and pauses your publisher keys until you link them again.
 
 The service checks the zip the way Tavora's installer does: the size and compression limits, the manifest and every file it names, that each screenshot really is a PNG or WebP within the limits, the changelog and the signature over every file. A zip that passes is checked automatically (see [Waiting for review](#waiting-for-review)) and, if all is well, listed at once. Read [what's not allowed in the catalog](./catalog-rules.md) before you publish.
 

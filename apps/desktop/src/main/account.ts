@@ -2,7 +2,7 @@ import type { KeyObject } from "node:crypto";
 import { apiReason, type ApiReason } from "@tavora/module-schema";
 import { linkRequest, publishSignature, publishTimeoutMs, publishZip, type Published } from "@tavora/pack";
 import { assertNever } from "../shared/assert-never";
-import type { AccountDevice, AccountPending, AccountPrefix, AccountPublishToken, AccountView, ChangeEmailProof, DeviceOs, KeyRequestView, PrefixState } from "../shared/host-api";
+import type { AccountDevice, AccountPending, AccountPrefix, AccountPublishToken, AccountUnsentNotice, AccountView, ChangeEmailProof, DeviceOs, KeyRequestView, PrefixState } from "../shared/host-api";
 import type { Language, MessageKey } from "../shared/i18n";
 import { isIdPrefix } from "../shared/id-prefix";
 import type { Encryptor } from "./discord-store";
@@ -184,14 +184,30 @@ function heldPrefixes(value: unknown): { held: AccountPrefix[]; max: number } | 
 }
 
 /** The account's developer side as the service answers it; null for anything off. */
-function developerSide(value: unknown): { developer: { name: string; nextChangeAt: string } | null; keys: { fingerprint: string; linkedAt: string }[]; tokens: AccountPublishToken[]; requests: KeyRequestView[] } | null {
+function developerSide(value: unknown): {
+  developer: { name: string; nextChangeAt: string } | null;
+  keys: { fingerprint: string; linkedAt: string }[];
+  pausedKeys: { fingerprint: string; linkedAt: string }[];
+  unsentNotices: AccountUnsentNotice[];
+  tokens: AccountPublishToken[];
+  requests: KeyRequestView[];
+} | null {
   const raw = (typeof value === "object" && value !== null ? value : {}) as Record<string, unknown>;
   if (!Array.isArray(raw.keys)) return null;
   const developer = (typeof raw.developer === "object" && raw.developer !== null ? raw.developer : null) as Record<string, unknown> | null;
-  const keys = raw.keys
+  const keyList = (list: unknown) =>
+    (Array.isArray(list) ? list : [])
+      .map((item) => (typeof item === "object" && item !== null ? (item as Record<string, unknown>) : {}))
+      .filter((item) => typeof item.fingerprint === "string" && /^[0-9a-f]{32}$/.test(item.fingerprint) && isText(item.linkedAt, 40))
+      .map((item) => ({ fingerprint: item.fingerprint as string, linkedAt: item.linkedAt as string }));
+  const keys = keyList(raw.keys);
+  // Older services pause no keys and keep no unsent emails: there are none then.
+  const pausedKeys = keyList(raw.pausedKeys);
+  const unsentNotices = (Array.isArray(raw.unsentNotices) ? raw.unsentNotices : [])
     .map((item) => (typeof item === "object" && item !== null ? (item as Record<string, unknown>) : {}))
-    .filter((item) => typeof item.fingerprint === "string" && /^[0-9a-f]{32}$/.test(item.fingerprint) && isText(item.linkedAt, 40))
-    .map((item) => ({ fingerprint: item.fingerprint as string, linkedAt: item.linkedAt as string }));
+    .filter((item) => (item.kind === "published" || item.kind === "waiting" || item.kind === "withdrawn") && isText(item.id, 100) && isText(item.name, 100) && isText(item.version, 40) && isText(item.at, 40))
+    .slice(0, 50)
+    .map((item) => ({ kind: item.kind as AccountUnsentNotice["kind"], id: item.id as string, name: item.name as string, version: item.version as string, at: item.at as string }));
   // Older services send no requests: there are none then.
   const requests = (Array.isArray(raw.requests) ? raw.requests : [])
     .map((item) => (typeof item === "object" && item !== null ? (item as Record<string, unknown>) : {}))
@@ -213,6 +229,8 @@ function developerSide(value: unknown): { developer: { name: string; nextChangeA
   return {
     developer: developer && isText(developer.name, 32) && isText(developer.nextChangeAt, 40) ? { name: developer.name, nextChangeAt: developer.nextChangeAt } : null,
     keys,
+    pausedKeys,
+    unsentNotices,
     tokens,
     requests,
   };
@@ -271,6 +289,8 @@ export class AccountClient {
   /** The developer side as last read: the public name and the linked publisher keys. */
   private developer: AccountView["developer"] = null;
   private publisherKeys: AccountView["publisherKeys"] = null;
+  private pausedKeys: AccountView["publisherKeys"] = null;
+  private unsentNotices: AccountUnsentNotice[] | null = null;
   private keyRequests: AccountView["keyRequests"] = null;
   /** The code for `tavora-pack link` the user asked for, until it runs out. */
   private linkCode: AccountView["linkCode"] = null;
@@ -339,6 +359,8 @@ export class AccountClient {
       profileChoice: this.saved && this.profileChoice ? { name: this.profileChoice.name, initials: this.profileChoice.initials, picture: this.profileChoice.picture !== null } : null,
       developer: this.saved ? this.developer : null,
       publisherKeys: this.saved ? this.publisherKeys : null,
+      pausedKeys: this.saved ? this.pausedKeys : null,
+      unsentNotices: this.saved ? this.unsentNotices : null,
       keyRequests: this.saved ? this.keyRequests : null,
       linkCode: this.saved && this.linkCode && Date.parse(this.linkCode.expiresAt) > Date.now() ? this.linkCode : null,
       publishTokens: this.saved ? this.publishTokens : null,
@@ -678,6 +700,8 @@ export class AccountClient {
     // A key linked meanwhile used the code up.
     if (this.publisherKeys && side.keys.length > this.publisherKeys.length) this.linkCode = null;
     this.publisherKeys = side.keys;
+    this.pausedKeys = side.pausedKeys;
+    this.unsentNotices = side.unsentNotices;
     this.keyRequests = side.requests;
     this.publishTokens = side.tokens;
     this.changed();
@@ -737,8 +761,14 @@ export class AccountClient {
     const proof = pending.proof === "code" ? { currentCode } : pending.proof === "discord" ? { discord: await this.discord() } : {};
     const answer = await this.call("POST", "/email", { email: pending.email, code, ...proof, language: this.options.language() }, true);
     this.pending = null;
+    // The change ends every sign-in, this one too, and the answer brings this PC its new one (audit 2026-11-22). A service
+    // from before that sends none and keeps this one.
+    if (this.saved && isToken(answer.token) && answer.token !== this.saved.token) {
+      this.saved = { ...this.saved, token: answer.token };
+      await this.keep();
+    }
     await this.updated({ account: { email: pending.email, ...(answer.account as Record<string, unknown> | undefined) } });
-    // Every other device was signed out by the change.
+    // Every other device was signed out by the change, and the keys paused: read them again.
     await this.refresh().catch(() => undefined);
   }
 
@@ -838,6 +868,8 @@ export class AccountClient {
     this.profileChoice = null;
     this.developer = null;
     this.publisherKeys = null;
+    this.pausedKeys = null;
+    this.unsentNotices = null;
     this.keyRequests = null;
     this.linkCode = null;
     this.publishTokens = null;

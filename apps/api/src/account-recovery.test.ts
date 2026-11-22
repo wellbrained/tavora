@@ -5,10 +5,12 @@ import path from "node:path";
 import { catalogPublicKey, publishSignature, signFiles, writeZip, type ZipFile } from "@tavora/pack";
 import { describe, expect, it } from "vitest";
 import { AccountStore } from "./account-store.ts";
+import { accountsAdminRoutes } from "./accounts-admin.ts";
 import { createApp } from "./app.ts";
 import { CatalogStore } from "./catalog.ts";
 import { buildDataset, writeDatabase } from "./dataset.ts";
 import { createTestInbox } from "./mail.ts";
+import { moderationRoutes } from "./moderation-admin.ts";
 import { keyFingerprint, LINK_STATEMENT } from "./publishers.ts";
 import { createRateLimiter } from "./rate-limit.ts";
 import type { Scanner } from "./virus-scan.ts";
@@ -27,7 +29,8 @@ function moduleZip(key: KeyObject, version: string, id: string): Buffer {
   return writeZip([...files, signFiles(files, key)]);
 }
 
-function setup() {
+/** `scanner`: undefined makes every version wait for review. */
+function setup(scanner: Scanner | undefined = cleanScanner) {
   const store = new AccountStore(":memory:");
   const catalog = new CatalogStore(mkdtempSync(path.join(tmpdir(), "tavora-recovery-")));
   const inbox = createTestInbox();
@@ -37,7 +40,7 @@ function setup() {
     catalog,
     rateLimiter: roomy(),
     publishRateLimiter: roomy(),
-    scanner: cleanScanner,
+    ...(scanner ? { scanner } : {}),
     catalogueKey: catalogPublicKey(generateKeyPairSync("ed25519").privateKey),
     accounts: { store, mailer: inbox, codeRateLimiter: roomy(), verifyRateLimiter: roomy(), now: () => clock.now },
   });
@@ -54,6 +57,7 @@ function setup() {
     const signature = sign(null, Buffer.from(`${LINK_STATEMENT}\n${code}`, "utf8"), key).toString("base64");
     return call("POST", "/v1/publishers/link", { code, publicKey: rawKey(key).toString("base64"), signature });
   };
+  const newToken = async (token: string, name: string) => ((await (await call("POST", "/v1/account/publish-tokens", { name }, token)).json()) as { token: string }).token;
   /** Each key publishes its own module under the account's prefix: a module's versions all come from one key. */
   const publish = (key: KeyObject, version: string, auth: string, id = "wellbrained.timer") => {
     const zip = moduleZip(key, version, id);
@@ -64,78 +68,147 @@ function setup() {
     });
   };
   const reason = async (response: Response) => ((await response.json()) as { reason?: string }).reason;
-  return { store, catalog, clock, call, codeTo, link, publish, reason };
+  /**
+   * An account with a developer name and its prefix, and two sign-ins: the owner's and a stolen one. `trusted`: it had a
+   * version approved before, so its new modules list without review.
+   */
+  const account = async (trusted = true) => {
+    const created = store.createAccount({ email: "owner@example.com" }, clock.now - 86_400_000);
+    if (trusted) catalog.trustAccount(created.id, new Date(clock.now));
+    store.reservePrefix(created.id, "wellbrained", clock.now);
+    const owner = store.createSession(created.id, "windows", clock.now, "Desk").token;
+    const stolen = store.createSession(created.id, "windows", clock.now, "Desk").token;
+    expect((await call("PUT", "/v1/account/developer", { name: "wellbrained" }, owner)).status).toBe(200);
+    return { id: created.id, owner, stolen };
+  };
+  /** The owner moves the account to a new address, proving the current one; the new sign-in token. */
+  const changeEmail = async (token: string) => {
+    clock.now += 15 * 60_000;
+    expect((await call("POST", "/v1/account/email/code", { email: "fresh@example.com", confirmCurrent: true }, token)).status).toBe(202);
+    const changed = await call("POST", "/v1/account/email", { email: "fresh@example.com", code: codeTo("fresh@example.com"), currentCode: codeTo("owner@example.com") }, token);
+    expect(changed.status).toBe(200);
+    return ((await changed.json()) as { token: string }).token;
+  };
+  return { store, catalog, clock, call, link, newToken, publish, reason, account, changeEmail, inbox };
 }
 
 describe("taking an account back by changing its email", () => {
-  it("ends what other sign-ins made for publishing: their tokens go and their keys pause until linked again", async () => {
-    const { store, catalog, clock, call, codeTo, link, publish, reason } = setup();
-    const account = store.createAccount({ email: "owner@example.com" }, clock.now - 86_400_000);
-    catalog.trustAccount(account.id, new Date(clock.now));
-    const owner = store.createSession(account.id, "windows", clock.now, "Desk").token;
-    const stolen = store.createSession(account.id, "windows", clock.now, "Desk").token;
-    expect((await call("PUT", "/v1/account/developer", { name: "wellbrained" }, owner)).status).toBe(200);
-
-    // The owner's key and CI token, made from the sign-in that will change the address.
+  it("ends every sign-in, this one too, and everything made for publishing: every token goes and every key pauses", async () => {
+    const { store, clock, call, link, newToken, publish, reason, account, changeEmail } = setup();
+    const { id, owner, stolen } = await account();
+    // The owner's own key and CI token, a token from before tokens were kept with their sign-in, and what a thief made with
+    // the stolen sign-in alone: a key, a token and a request to move the owner's key onto theirs.
     const ownerKey = generateKeyPairSync("ed25519").privateKey;
     expect((await link(owner, ownerKey)).status).toBe(200);
-    const ownerToken = ((await (await call("POST", "/v1/account/publish-tokens", { name: "My CI" }, owner)).json()) as { token: string }).token;
-    expect((await publish(ownerKey, "1.0.0", owner)).status).toBe(201);
-    // A token from before tokens were kept with their sign-in: nobody can tell who made it.
-    const unknownToken = store.createPublishToken(account.id, "Old CI", clock.now)!.token;
-
-    // The thief's own key and token, made with the stolen sign-in alone, and a request to move the owner's key onto theirs.
+    const ownerToken = await newToken(owner, "My CI");
+    const unknownToken = store.createPublishToken(id, "Old CI", clock.now)!.token;
     const thiefKey = generateKeyPairSync("ed25519").privateKey;
     expect((await link(stolen, thiefKey)).status).toBe(200);
-    const thiefToken = ((await (await call("POST", "/v1/account/publish-tokens", { name: "Thief" }, stolen)).json()) as { token: string }).token;
+    const thiefToken = await newToken(stolen, "Thief");
     expect((await call("POST", `/v1/account/keys/${fingerprintOf(ownerKey)}/replace`, { new: fingerprintOf(thiefKey), leaked: false }, stolen)).status).toBe(200);
     expect((await publish(thiefKey, "1.0.0", thiefToken, "wellbrained.other")).status).toBe(201);
-    expect(store.keyRequest(fingerprintOf(ownerKey))).not.toBeNull();
 
-    // The owner proves the mailbox and moves the account to a new address.
-    clock.now += 15 * 60_000;
-    expect((await call("POST", "/v1/account/email/code", { email: "fresh@example.com", confirmCurrent: true }, owner)).status).toBe(202);
-    const changed = await call("POST", "/v1/account/email", { email: "fresh@example.com", code: codeTo("fresh@example.com"), currentCode: codeTo("owner@example.com") }, owner);
-    expect(changed.status).toBe(200);
+    const renewed = await changeEmail(owner);
 
-    // The stolen sign-in is gone, and so is everything it made: its token publishes nothing, its key signs nothing, and the
-    // request onto its key is gone. A token nobody can vouch for goes too.
+    // Every sign-in ends: the stolen one, and the owner's old token too (a copy of it would be no use); the owner goes on
+    // with the new one from the answer.
     expect((await call("GET", "/v1/account", undefined, stolen)).status).toBe(401);
-    expect(store.publishTokenAccount(thiefToken, clock.now)).toBeNull();
-    expect(store.publishTokenAccount(unknownToken, clock.now)).toBeNull();
+    expect((await call("GET", "/v1/account", undefined, owner)).status).toBe(401);
+    expect((await call("GET", "/v1/account", undefined, renewed)).status).toBe(200);
+    // Every token goes, whoever made it.
+    for (const token of [thiefToken, ownerToken, unknownToken]) expect(store.publishTokenAccount(token, clock.now)).toBeNull();
     expect(await reason(await publish(thiefKey, "1.0.1", thiefToken, "wellbrained.other"))).toBe("sign-in-needed");
-    expect(await reason(await publish(thiefKey, "1.0.1", owner, "wellbrained.other"))).toBe("key-not-linked");
+    // Every key pauses: it stays the account's (nobody else can link it, its modules stay), but signs nothing.
+    expect(await reason(await publish(thiefKey, "1.0.1", renewed, "wellbrained.other"))).toBe("key-not-linked");
+    expect(await reason(await publish(ownerKey, "1.0.0", renewed))).toBe("key-not-linked");
+    expect(store.publisherKey(fingerprintOf(thiefKey))).toMatchObject({ accountId: id, paused: true });
     expect(store.keyRequest(fingerprintOf(ownerKey))).toBeNull();
-    // The key stays the account's: nobody else can link it, and its modules stay where they are.
-    expect(store.publisherKey(fingerprintOf(thiefKey))).toMatchObject({ accountId: account.id, paused: true });
-
-    // What the owner made from this sign-in still works, and the app sees the paused key apart.
-    expect(store.publishTokenAccount(ownerToken, clock.now)).toMatchObject({ accountId: account.id });
-    expect((await publish(ownerKey, "1.0.2", ownerToken)).status).toBe(201);
-    const developer = (await (await call("GET", "/v1/account/developer", undefined, owner)).json()) as { keys: { fingerprint: string }[]; pausedKeys: { fingerprint: string }[]; publishTokens: { name: string }[] };
-    expect(developer.keys.map((key) => key.fingerprint)).toEqual([fingerprintOf(ownerKey)]);
-    expect(developer.pausedKeys.map((key) => key.fingerprint)).toEqual([fingerprintOf(thiefKey)]);
-    expect(developer.publishTokens.map((token) => token.name)).toEqual(["My CI"]);
+    const developer = (await (await call("GET", "/v1/account/developer", undefined, renewed)).json()) as { keys: unknown[]; pausedKeys: { fingerprint: string }[]; publishTokens: unknown[] };
+    expect(developer.keys).toEqual([]);
+    expect(developer.pausedKeys.map((key) => key.fingerprint).sort()).toEqual([fingerprintOf(ownerKey), fingerprintOf(thiefKey)].sort());
+    expect(developer.publishTokens).toEqual([]);
     // Nothing moves onto a paused key.
-    expect(await reason(await call("POST", `/v1/account/keys/${fingerprintOf(ownerKey)}/replace`, { new: fingerprintOf(thiefKey), leaked: false }, owner))).toBe("not-found");
+    expect(await reason(await call("POST", `/v1/account/keys/${fingerprintOf(ownerKey)}/replace`, { new: fingerprintOf(thiefKey), leaked: false }, renewed))).toBe("not-found");
+
+    // The owner links their own key again, which takes its private half, and publishes.
+    expect((await link(renewed, ownerKey)).status).toBe(200);
+    expect(store.publisherKey(fingerprintOf(ownerKey))).toMatchObject({ paused: false });
+    expect((await publish(ownerKey, "1.0.0", renewed)).status).toBe(201);
+    // A CI token tells CI why it stopped.
+    const refused = (await (await publish(ownerKey, "1.0.1", ownerToken)).json()) as { reason: string; error: string };
+    expect(refused).toMatchObject({ reason: "sign-in-needed", error: expect.stringMatching(/token doesn't work any more/) });
   });
 
-  it("wakes a paused key when the owner links it again, which takes its private half", async () => {
-    const { store, catalog, clock, call, codeTo, link, publish } = setup();
-    const account = store.createAccount({ email: "owner@example.com" }, clock.now - 86_400_000);
-    catalog.trustAccount(account.id, new Date(clock.now));
-    const laptop = store.createSession(account.id, "windows", clock.now, "Laptop").token;
-    const desk = store.createSession(account.id, "windows", clock.now, "Desk").token;
-    await call("PUT", "/v1/account/developer", { name: "wellbrained" }, desk);
-    // The owner's own key, linked from the laptop, which the change signs out.
-    const key = generateKeyPairSync("ed25519").privateKey;
-    await link(laptop, key);
-    clock.now += 15 * 60_000;
-    await call("POST", "/v1/account/email/code", { email: "fresh@example.com", confirmCurrent: true }, desk);
-    await call("POST", "/v1/account/email", { email: "fresh@example.com", code: codeTo("fresh@example.com"), currentCode: codeTo("owner@example.com") }, desk);
-    expect((await publish(key, "1.0.0", desk)).status).toBe(403);
-    expect((await link(desk, key)).status).toBe(200);
-    expect(store.publisherKey(fingerprintOf(key))).toMatchObject({ paused: false });
-    expect((await publish(key, "1.0.0", desk)).status).toBe(201);
+  it("never lists a version a paused key uploaded: not by Approve, and not once its scan ends (B1)", async () => {
+    const { store, catalog, clock, link, publish, account, changeEmail } = setup(undefined);
+    // A first module waits for review.
+    const { id, owner, stolen } = await account(false);
+    const thiefKey = generateKeyPairSync("ed25519").privateKey;
+    await link(stolen, thiefKey);
+    // Without a scanner every version waits for review.
+    expect((await publish(thiefKey, "1.0.0", stolen, "wellbrained.other")).status).toBe(202);
+    const waiting = catalog.waitingVersions()[0]!;
+    await changeEmail(owner);
+    const admin = moderationRoutes({ catalog, accounts: store, now: () => clock.now });
+    const page = (await (await admin.request("http://admin.test/waiting")).json()) as { waiting: { signer: { refused: string | null } }[] };
+    expect(page.waiting[0]!.signer.refused).toBe("key-paused");
+    const approved = await admin.request("http://admin.test/approve", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sha256: waiting.sha256 }) });
+    expect(approved.status).toBe(409);
+    expect(await approved.json()).toMatchObject({ reason: "key-paused" });
+    expect(catalog.index().map((entry) => entry.id)).toEqual([]);
+    // The account page says the key is paused.
+    const details = (await (await accountsAdminRoutes({ accounts: store, catalog, now: () => clock.now }).request(`http://admin.test/${id}`)).json()) as { keys: { fingerprint: string; paused: boolean }[] };
+    expect(details.keys).toEqual([expect.objectContaining({ fingerprint: fingerprintOf(thiefKey), paused: true })]);
+  });
+
+  it("refuses an upload whose key paused while its scan ran", async () => {
+    let release!: () => void;
+    let started!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const running = new Promise<void>((resolve) => (started = resolve));
+    const held: Scanner = {
+      scan: async () => {
+        started();
+        await gate;
+        return { clean: true };
+      },
+    };
+    const { link, publish, reason, account, changeEmail, catalog } = setup(held);
+    const { owner, stolen } = await account();
+    const thiefKey = generateKeyPairSync("ed25519").privateKey;
+    await link(stolen, thiefKey);
+    const upload = publish(thiefKey, "1.0.0", stolen, "wellbrained.other");
+    await running;
+    await changeEmail(owner);
+    release();
+    expect(await reason(await upload)).toBe("key-not-linked");
+    expect(catalog.index()).toEqual([]);
+  });
+});
+
+describe("removing a device from another one", () => {
+  it("takes what that device made for publishing with it, but signing yourself out keeps yours", async () => {
+    const { store, clock, call, link, newToken, publish, reason, account } = setup();
+    const { id, owner, stolen } = await account();
+    const ownerKey = generateKeyPairSync("ed25519").privateKey;
+    await link(owner, ownerKey);
+    const ownerToken = await newToken(owner, "My CI");
+    const thiefKey = generateKeyPairSync("ed25519").privateKey;
+    await link(stolen, thiefKey);
+    const thiefToken = await newToken(stolen, "Thief");
+    // The owner sees a device they don't know and removes it.
+    const { devices } = (await (await call("GET", "/v1/account", undefined, owner)).json()) as { devices: { id: string; current: boolean }[] };
+    const other = devices.find((device) => !device.current)!;
+    expect((await call("DELETE", `/v1/account/devices/${other.id}`, undefined, owner)).status).toBe(204);
+    expect(store.publishTokenAccount(thiefToken, clock.now)).toBeNull();
+    expect(await reason(await publish(thiefKey, "1.0.0", owner, "wellbrained.other"))).toBe("key-not-linked");
+    // What the owner's device made stays.
+    expect(store.publishTokenAccount(ownerToken, clock.now)).toMatchObject({ accountId: id });
+    expect((await publish(ownerKey, "1.0.0", ownerToken)).status).toBe(201);
+    // Signing out of your own device keeps what it made.
+    const laptop = store.createSession(id, "linux", clock.now, "Laptop").token;
+    const laptopToken = await newToken(laptop, "Laptop CI");
+    expect((await call("POST", "/v1/account/sign-out", {}, laptop)).status).toBe(204);
+    expect(store.publishTokenAccount(laptopToken, clock.now)).toMatchObject({ accountId: id });
   });
 });

@@ -57,6 +57,11 @@ export const MAX_PARTS = 50_000;
 export const MAX_STORED_PARTS = 2 * MAX_PARTS;
 /** Unused parts sweep() reads and drops at once, so dropping millions never holds them all in memory. */
 export const SWEEP_PAGE = 1000;
+/**
+ * The least a part counts for in every limit (audit 2026-11-22): a row costs the service more than its bytes, so tiny parts
+ * can't fill it for free. Its `size` is kept as this much; a real part of user data is far bigger anyway.
+ */
+export const MIN_PART_BYTES = 1024;
 /** Parts one download may ask for. */
 export const MAX_ASK = 2048;
 const ID_BYTES = 32;
@@ -94,6 +99,8 @@ export interface CopyStoreOptions {
   networkShare?: number;
   /** The secret for the networks' marks (networkMark()); a new random one when absent, as for a test. */
   networkSalt?: string;
+  /** The least one part counts for (MIN_PART_BYTES by default); a test of exact byte sums sets 0. */
+  minPartBytes?: number;
 }
 
 /** Who adds bytes, for the shares of the total: when their account was made (ms) and their network. Absent: an account of long ago, on no network. */
@@ -111,7 +118,7 @@ const GIB = 1024 * 1024 * 1024;
  * COPY_NETWORK_SHARE (0.1 by default, 0 to 1, 0 turns it off). A value that is not a number in its range keeps the
  * default. The free space is read from the disk that holds `dir`.
  */
-export function copyLimitsFromEnv(env: Record<string, string | undefined>, dir: string, warn: (message: string) => void = console.warn): Required<Omit<CopyStoreOptions, "networkSalt">> {
+export function copyLimitsFromEnv(env: Record<string, string | undefined>, dir: string, warn: (message: string) => void = console.warn): Required<Omit<CopyStoreOptions, "networkSalt" | "minPartBytes">> {
   const number = (name: string, fallback: number, scale: number, max = Number.POSITIVE_INFINITY, unit = "GiB") => {
     const text = env[name]?.trim();
     if (!text) return fallback;
@@ -152,6 +159,7 @@ export class CopyStore {
   private readonly networkDayLimit: number;
   private readonly networkShare: number;
   private readonly networkSalt: string;
+  private readonly minPartBytes: number;
   /** Bytes of parts and manifests of every account, counted once at the start and kept up to date by every change. */
   private total: number;
   /**
@@ -176,8 +184,10 @@ export class CopyStore {
       networkDayLimit = NETWORK_DAY_LIMIT,
       networkShare = NETWORK_SHARE,
       networkSalt = randomBytes(32).toString("hex"),
+      minPartBytes = MIN_PART_BYTES,
     }: CopyStoreOptions = {},
   ) {
+    this.minPartBytes = minPartBytes;
     this.totalLimit = totalLimit;
     this.freeBytes = freeBytes;
     this.freeFloor = freeFloor;
@@ -388,18 +398,22 @@ export class CopyStore {
    */
   sweep(now: number = Date.now()): { parts: number; bytes: number } {
     this.lastSweep = now;
-    // A page at a time, each in its own transaction: what a page dropped no longer matches, so the next one reads on.
+    // One pass in the parts' own order (account, then id), a page at a time from where the last one ended, each dropped in
+    // its own transaction: no part is read twice, so millions take one walk through the table and little memory.
     const page = this.db.prepare(
       `select p.account_id as accountId, p.id as id, p.size as size from parts p left join copies c on c.account_id = p.account_id
-       where coalesce(p.created_at, 0) < ? and (c.account_id is null or (p.created_at is not null and p.created_at > c.updated_at)) limit ?`,
+       where (p.account_id, p.id) > (?, ?) and coalesce(p.created_at, 0) < ? and (c.account_id is null or (p.created_at is not null and p.created_at > c.updated_at))
+       order by p.account_id, p.id limit ?`,
     );
+    let after: { accountId: string; id: Uint8Array } = { accountId: "", id: new Uint8Array(0) };
     const drop = this.db.prepare("delete from parts where account_id = ? and id = ?");
     let parts = 0;
     let bytes = 0;
     try {
       for (;;) {
-        const unused = page.all(now - UNUSED_PART_MS, SWEEP_PAGE) as unknown as { accountId: string; id: Uint8Array; size: number }[];
+        const unused = page.all(after.accountId, after.id, now - UNUSED_PART_MS, SWEEP_PAGE) as unknown as { accountId: string; id: Uint8Array; size: number }[];
         if (unused.length === 0) break;
+        after = unused.at(-1)!;
         this.db.exec("begin");
         try {
           for (const part of unused) drop.run(part.accountId, part.id);
@@ -460,7 +474,9 @@ export class CopyStore {
         return !has.get(accountId, part.id);
       });
     };
-    const bytesOf = (list: { data: Uint8Array }[]) => list.reduce((total, part) => total + part.data.length, 0);
+    // What a part counts for: its bytes, but at least minPartBytes.
+    const weight = (part: { data: Uint8Array }) => Math.max(part.data.length, this.minPartBytes);
+    const bytesOf = (list: { data: Uint8Array }[]) => list.reduce((total, part) => total + weight(part), 0);
     let fresh = freshOf();
     if (bytesOf(fresh) === 0) return "ok";
     if (this.stored(accountId) + bytesOf(fresh) > STORED_LIMIT || this.partCount(accountId) + fresh.length > MAX_STORED_PARTS) return "copy-full";
@@ -478,9 +494,10 @@ export class CopyStore {
     this.db.exec("begin");
     try {
       for (const part of fresh) {
-        const uncounted = Math.min(free, part.data.length);
+        const size = weight(part);
+        const uncounted = Math.min(free, size);
         free -= uncounted;
-        insert.run(accountId, part.id, part.data, part.data.length, now, part.data.length - uncounted);
+        insert.run(accountId, part.id, part.data, size, now, size - uncounted);
       }
       this.remember(accountId, who, drawn > 0);
       this.db.exec("commit");

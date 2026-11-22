@@ -40,7 +40,7 @@ function moduleZip(key: KeyObject, id = "wellbrained.timer", version = "1.0.0"):
 function setup(ownerEmail?: string) {
   const store = new AccountStore(":memory:");
   const reviews = new ReviewStore(":memory:");
-  const copies = new CopyStore(":memory:");
+  const copies = new CopyStore(":memory:", { minPartBytes: 0 });
   const catalog = new CatalogStore(mkdtempSync(path.join(tmpdir(), "tavora-accounts-admin-")));
   const inbox = createTestInbox();
   const clock = { now: Date.parse("2026-10-26T12:00:00Z") };
@@ -228,7 +228,7 @@ describe("one account's details", () => {
       suspension: null,
     });
     expect(body.devices).toEqual([{ os: "windows", name: "Dev PC", createdAt: "2026-10-26T11:00:00.000Z", lastUsedAt: "2026-10-26T11:00:00.000Z" }]);
-    expect(body.keys).toEqual([{ fingerprint: store.keys(developer.id)[0]!.fingerprint, linkedAt: "2026-10-22T12:00:00.000Z" }]);
+    expect(body.keys).toEqual([{ fingerprint: store.keys(developer.id)[0]!.fingerprint, linkedAt: "2026-10-22T12:00:00.000Z", paused: false }]);
     expect(body.cloudCopy).toEqual({ size: 12, updatedAt: "2026-10-26T12:00:00.000Z" });
     const text = JSON.stringify(body);
     for (const word of SECRET_WORDS) expect(text).not.toContain(word);

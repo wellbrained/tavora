@@ -118,7 +118,9 @@ export function accountsAdminRoutes({ accounts, catalog, reviews, copies, mailer
     const row = accounts.accountRows().find((candidate) => candidate.id === id)!;
     const profile = accounts.profile(id);
     const developer = accounts.developer(id);
-    const keys = accounts.keys(id);
+    // A paused key (account-store.ts revokeMinted) says so: it signs nothing until the developer links it again.
+    const paused = accounts.pausedKeys(id);
+    const keys = accounts.keys(id).map((key) => ({ ...key, paused: paused.has(key.fingerprint) }));
     const fingerprints = keys.map((key) => key.fingerprint);
     const listed = new Map((catalog?.adminModules() ?? []).map((module) => [module.id, module]));
     const moduleIds = catalog ? catalog.modulesOfAccount(id, fingerprints) : [];

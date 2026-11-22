@@ -500,8 +500,11 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     return context.body(null, 204);
   });
 
+  // A device signed out from another one takes what it made for publishing with it (account-store.ts revokeMinted): someone
+  // removing a device they don't know shouldn't leave its tokens and keys behind.
   signedIn.delete("/devices/:id", (context) => {
-    if (!store.deleteSession(context.get("account").id, context.req.param("id") ?? "")) return context.json({ error: "Not found.", reason: "not-found" }, 404);
+    const id = context.req.param("id") ?? "";
+    if (!store.deleteSession(context.get("account").id, id, id !== context.get("session").id, now())) return context.json({ error: "Not found.", reason: "not-found" }, 404);
     return context.body(null, 204);
   });
 
@@ -526,6 +529,8 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
       developer: developer ? { name: developer.name, changedAt: new Date(developer.changedAt).toISOString(), nextChangeAt: new Date(developer.changedAt + NAME_HOLD_MS).toISOString() } : null,
       keys: keys.filter((key) => !paused.has(key.fingerprint)),
       pausedKeys: keys.filter((key) => paused.has(key.fingerprint)),
+      // Mails about this account's publishing that couldn't go out (catalog-publish.ts tellAccount), for Publishing to show.
+      unsentNotices: store.unsentNotices(accountId, now()).map((item) => ({ ...item, at: new Date(item.at).toISOString() })),
       requests: store.keyRequests(accountId).map((request) => ({
         old: request.old,
         new: request.new,
@@ -747,7 +752,10 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     }
     if (!store.checkCode(email, "change-email", account.id, input.code, now(), true)) return wrongCode(context);
     if (account.email && !store.checkCode(account.email, "confirm-email-change", account.id, input.currentCode as string, now(), true, email)) return wrongCurrentCode(context);
-    if (store.changeEmail(account.id, email, context.get("session").id, now()) === "taken") {
+    // Every sign-in ends, this one too, which gets a new token in the answer (account-store.ts changeEmail). A Tavora from
+    // before this doesn't read it and is signed out: it signs in again with the new address.
+    const changed = store.changeEmail(account.id, email, context.get("session").id, now());
+    if (changed.status === "taken") {
       return context.json({ error: "That address already has a Tavora account.", reason: "email-taken" }, 409);
     }
     // The old address hears about it as well. Its share was counted with the codes (POST /email/code), and it never
@@ -755,7 +763,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     if (account.email && !usedUp("sign-in")) await send(context, emailChangedMail(account.email, email, language));
     // The new address just proved itself from this network.
     store.rememberNetwork(email, networkOf(clientKey(context.req.raw)), now());
-    return context.json({ account: accountAnswer({ ...account, email }) });
+    return context.json({ account: accountAnswer({ ...account, email }), ...(changed.token ? { token: changed.token, device: changed.session!.id } : {}) });
   });
 
   // Remove the email address: only while a Discord login remains, so the account can still be reached,

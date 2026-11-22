@@ -1,4 +1,4 @@
-import { checkAll, createRateLimiter } from "./rate-limit.ts";
+import { checkAll, createSlidingRateLimiter } from "./rate-limit.ts";
 
 // Steam import: turns a profile link or SteamID64 into the list of games that
 // account owns, using Steam's Web API with the service's key. Nothing is kept:
@@ -83,9 +83,9 @@ export interface SteamClient {
 }
 
 /**
- * Calls to Steam's Web API the service makes with its key, for every user together (audit 2026-11-22): half of the 100,000
- * a day Steam allows a key, and a tenth of that an hour, so no number of addresses can use the key up or get it blocked.
- * Past them the import answers "try again later".
+ * Calls to Steam's Web API the service makes with its key, for every user together (audit 2026-11-22), over any hour and any
+ * 24 hours: half of the 100,000 calls a day Steam's Web API terms allow a key, and a tenth of that an hour, so no number of
+ * addresses can use the key up. Past them the import answers "try again later".
  */
 export const STEAM_CALLS_PER_DAY = 50_000;
 export const STEAM_CALLS_PER_HOUR = 5_000;
@@ -99,8 +99,9 @@ export interface SteamClientOptions {
 }
 
 export function createSteamClient({ key, fetch: fetcher = globalThis.fetch, budget = {}, now = Date.now }: SteamClientOptions): SteamClient {
-  const hourly = createRateLimiter({ limit: budget.perHour ?? STEAM_CALLS_PER_HOUR, windowMs: 3_600_000 });
-  const daily = createRateLimiter({ limit: budget.perDay ?? STEAM_CALLS_PER_DAY, windowMs: 86_400_000 });
+  // Sliding windows, so the budget holds over any hour and any 24 hours, not only per clock window.
+  const hourly = createSlidingRateLimiter({ limit: budget.perHour ?? STEAM_CALLS_PER_HOUR, windowMs: 3_600_000 });
+  const daily = createSlidingRateLimiter({ limit: budget.perDay ?? STEAM_CALLS_PER_DAY, windowMs: 86_400_000 });
   /** Takes the calls an import makes out of the budget before the first, all or none. */
   const spend = (calls: number) => {
     if (checkAll([[hourly, "steam", calls], [daily, "steam", calls]], now()) > 0) {

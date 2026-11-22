@@ -62,7 +62,9 @@ function setup(mailDailyLimit: number | undefined, uploadsPerDay = 10) {
     });
   const askCode = (email: string, client: string) =>
     app.request("http://tavora.test/v1/account/code", { method: "POST", headers: { "content-type": "application/json", "x-client": client }, body: JSON.stringify({ email }) });
-  return { store, inbox, clock, developer, askCode };
+  const developerSide = async (token: string) =>
+    (await (await app.request("http://tavora.test/v1/account/developer", { headers: { authorization: `Bearer ${token}` } })).json()) as { unsentNotices: { kind: string; id: string; version: string }[] };
+  return { store, inbox, clock, developer, askCode, developerSide, app };
 }
 
 describe("notices about publishing", () => {
@@ -79,6 +81,22 @@ describe("notices about publishing", () => {
     const asked = await askCode("player@example.com", "203.0.113.9");
     expect(asked.status).toBe(202);
     expect(inbox.mails()[0]).toMatchObject({ to: "player@example.com" });
+  });
+
+  it("keeps every notice that couldn't go out, so Publishing can show it (S5)", async () => {
+    const { developer, developerSide, inbox } = setup(50);
+    const alpha = developer("alpha");
+    for (let patch = 0; patch < 6; patch++) await alpha.publish(`1.0.${patch}`);
+    const bravo = developer("bravo");
+    for (let patch = 0; patch < 3; patch++) await bravo.publish(`1.0.${patch}`);
+    expect(inbox.mails()).toHaveLength(6);
+    expect((await developerSide(alpha.token)).unsentNotices).toEqual([]);
+    // Newest first.
+    expect((await developerSide(bravo.token)).unsentNotices.map(({ kind, id, version }) => ({ kind, id, version }))).toEqual([
+      { kind: "published", id: "bravo.timer", version: "1.0.2" },
+      { kind: "published", id: "bravo.timer", version: "1.0.1" },
+      { kind: "published", id: "bravo.timer", version: "1.0.0" },
+    ]);
   });
 
   it("sends one account at most its own share a day", async () => {

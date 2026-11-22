@@ -102,10 +102,15 @@ describe("createSteamClient", () => {
     expect(calls).toHaveLength(3);
     // A bad link costs nothing.
     await expect(client.ownedGames("hello")).rejects.toMatchObject({ status: 400 });
-    // The next hour has room again, until the day's budget is used.
+    // Over any hour, not per clock hour: right after the hour turns, the last one still counts in full.
     clock.now += 3_600_000;
+    await expect(client.ownedGames(ID)).rejects.toMatchObject({ status: 503, code: "unavailable" });
+    // Half an hour on, half of it does: room for one call, not for two.
+    clock.now += 1_800_000;
     expect(await client.ownedGames(ID)).toEqual([]);
     await expect(client.ownedGames("https://steamcommunity.com/id/someone")).rejects.toMatchObject({ status: 503, code: "unavailable" });
+    // The day's budget holds as well.
+    clock.now += 3_600_000;
     expect(await client.ownedGames(ID)).toEqual([]);
     await expect(client.ownedGames(ID)).rejects.toMatchObject({ status: 503, code: "unavailable" });
     expect(calls).toHaveLength(5);

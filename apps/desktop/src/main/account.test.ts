@@ -111,7 +111,7 @@ describe("signing in", () => {
     // The token never reaches the host UI; a malformed device is dropped.
     const view = account.view();
     expect(JSON.stringify(view)).not.toContain(TOKEN);
-    expect(view).toEqual({ enabled: true, canKeepSignIn: true, account: { email: "me@example.com", discord: null, createdAt: SAVED.createdAt }, discordLogin: false, devices: [DEVICE], pending: null, profileChoice: null, developer: null, publisherKeys: [], keyRequests: [], linkCode: null, publishTokens: [], newPublishToken: null, prefixes: { held: [], max: 3 }, prefixCheck: null });
+    expect(view).toEqual({ enabled: true, canKeepSignIn: true, account: { email: "me@example.com", discord: null, createdAt: SAVED.createdAt }, discordLogin: false, devices: [DEVICE], pending: null, profileChoice: null, developer: null, publisherKeys: [], pausedKeys: [], unsentNotices: [], keyRequests: [], linkCode: null, publishTokens: [], newPublishToken: null, prefixes: { held: [], max: 3 }, prefixCheck: null });
   });
 
   it("asks before creating an account for a new address, then creates it with the same code", async () => {
@@ -350,6 +350,23 @@ describe("signed in", () => {
     expect(calls[1]!.body).toEqual({ email: "new@example.com", code: "111111", currentCode: "222222", language: "de" });
     expect(account.view()).toMatchObject({ account: { email: "new@example.com" }, pending: null, devices: [DEVICE] });
     expect(kept).toEqual([{ ...SAVED, email: "new@example.com" }]);
+  });
+
+  it("goes on with the new sign-in the change hands back, as every sign-in ended, this one too (audit 2026-11-22)", async () => {
+    const renewed = "n".repeat(43);
+    const { calls, fetchImpl } = service({
+      "POST /email/code": () => json({ status: "sent", current: "email" }, 202),
+      "POST /email": () => json({ account: { email: "new@example.com", createdAt: SAVED.createdAt }, token: renewed, device: "dev2" }),
+      "GET /": () => json({ account: { email: "new@example.com" }, devices: [{ ...DEVICE, id: "dev2" }] }),
+    });
+    const { account, kept } = client(fetchImpl, { saved: SAVED });
+    await account.init();
+    await account.sendEmailCode("new@example.com");
+    await account.changeEmail("111111", "222222");
+    // Kept on disk, and every call from now on goes with it.
+    expect(kept.at(-1)).toEqual({ ...SAVED, token: renewed, email: "new@example.com" });
+    expect(account.token()).toBe(renewed);
+    expect(calls.at(-1)).toMatchObject({ method: "GET", auth: `Bearer ${renewed}` });
   });
 
   it("says which code was wrong and keeps the step", async () => {
@@ -720,6 +737,29 @@ describe("the developer side", () => {
     await account.init();
     await expect.poll(() => account.view().developer?.name).toBe("example-dev");
     expect(account.view().publisherKeys).toEqual([{ fingerprint: FINGERPRINT, linkedAt: "2026-10-17T12:01:00.000Z" }]);
+  });
+
+  it("reads paused keys and the emails the service couldn't send, and none from an older service", async () => {
+    const paused = { fingerprint: FINGERPRINT, linkedAt: "2026-10-17T12:01:00.000Z" };
+    const notice = { kind: "published", id: "example.timer", name: "Timer", version: "1.0.3", at: "2026-11-22T12:00:00.000Z" };
+    const { fetchImpl } = service({
+      "GET /developer": () =>
+        json({
+          developer: null,
+          keys: [],
+          pausedKeys: [paused, { fingerprint: "not-a-key", linkedAt: "x" }],
+          unsentNotices: [notice, { ...notice, kind: "deleted" }],
+        }),
+    });
+    const { account } = client(fetchImpl, { saved: SAVED });
+    await account.init();
+    await expect.poll(() => account.view().pausedKeys).toEqual([paused]);
+    expect(account.view().unsentNotices).toEqual([notice]);
+    // An older service sends neither.
+    const older = client(service({}).fetchImpl, { saved: SAVED }).account;
+    await older.init();
+    await expect.poll(() => older.view().publisherKeys).toEqual([]);
+    expect(older.view()).toMatchObject({ pausedKeys: [], unsentNotices: [] });
   });
 
   it("says when the name can change again, in the user's own words", async () => {

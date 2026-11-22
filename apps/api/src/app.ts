@@ -21,7 +21,7 @@ import { gameKey, gameListKnows, parseRequest, type ModuleRequestStore } from ".
 import { catalogTrust, OFFICIAL_PINS, publisherNameOf, type OfficialPins } from "./catalog-trust.ts";
 import { publisherRoutes } from "./publishers.ts";
 import { ICON_NOTICE, isIconId, NO_ICONS, type IconStore } from "./icons.ts";
-import { checkAll, createRateLimiter, networkOf, type RateLimiter } from "./rate-limit.ts";
+import { checkAll, createRateLimiter, createSlidingRateLimiter, networkOf, type RateLimiter } from "./rate-limit.ts";
 import { fail, signedInAs, signedOut, tooMany } from "./sign-in.ts";
 import { MAX_UPLOAD_BODY, type Submissions } from "./submissions.ts";
 import { DEFAULT_LIMIT, MAX_LIMIT, MAX_QUERY_LENGTH, searchGames } from "./search.ts";
@@ -106,7 +106,8 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
   const steamLimiter = steamRateLimiter ?? createRateLimiter({ limit: 6, windowMs: 60_000 });
   // Per network too (an IPv4 /24, an IPv6 /48), as one connection can get many /64s: a household imports a few times an
   // hour at most. The Steam client keeps a budget for everyone together (steam.ts STEAM_CALLS_PER_DAY).
-  const steamNetworkLimiter = steamNetworkRateLimiter ?? createRateLimiter({ limit: 60, windowMs: 3_600_000 });
+  // A sliding hour, so a network can't take two hours' worth around the turn of one.
+  const steamNetworkLimiter = steamNetworkRateLimiter ?? createSlidingRateLimiter({ limit: 60, windowMs: 3_600_000 });
   const siteLimiter = siteRateLimiter ?? createRateLimiter({ limit: 30, windowMs: 60_000 });
   // A person asks for a handful of games at most; the vote of one install and game counts once anyway.
   const requestLimiter = moduleRequestRateLimiter ?? createRateLimiter({ limit: 20, windowMs: 3_600_000 });
