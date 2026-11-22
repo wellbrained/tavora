@@ -32,6 +32,13 @@ export const FOLDER_PAIRING_MS = 24 * 60 * 60_000;
 const ASK_EVERY_MS = { service: 3_000, folder: 5_000 };
 /** How often a PC with the key looks for a PC that asks. */
 const WATCH_EVERY_MS = 15_000;
+/**
+ * Answers that end with neither Add nor No count for an hour; with this many, the PC answers no more until one is an
+ * hour old. Otherwise whoever carries the messages could ask again and again, without anyone seeing a question, until
+ * the code this PC would show matches the one a new PC shows.
+ */
+export const MAX_OPEN_ANSWERS = 3;
+export const OPEN_ANSWER_MS = 60 * 60_000;
 
 /** One request, as this PC may see it. */
 export interface PairingRequest {
@@ -79,6 +86,8 @@ export interface PairingOptions {
   onChange: (view: PairingView) => void;
   /** Brings Tavora to the front: another PC asks. */
   focus: () => void;
+  /** Where the open answers are kept, so a restart doesn't reset the count; in memory only without it. */
+  answersFile?: string;
   now?: () => number;
   log?: (line: string) => void;
 }
@@ -117,6 +126,8 @@ export class Pairing {
   private answering: Answering | null = null;
   /** Requests this PC's user turned down or that didn't check out: not answered again. */
   private refused = new Set<string>();
+  /** When this PC answered each request that ended (or may end) with neither Add nor No; see MAX_OPEN_ANSWERS. */
+  private openAnswers: Map<string, number> | null = null;
   private askTimer: ReturnType<typeof setTimeout> | undefined;
   private watchTimer: ReturnType<typeof setInterval> | undefined;
   private followTimer: ReturnType<typeof setTimeout> | undefined;
@@ -378,7 +389,8 @@ export class Pairing {
     }
     const answering = this.answering;
     if (answering && answering.transport.via === transport.via && (!request || request.id !== answering.id || request.declined)) {
-      // Done, given up or answered by another PC.
+      // Done, given up or answered by another PC: not answered again.
+      this.refused.add(answering.id);
       this.answering = null;
       this.changed();
       return;
@@ -389,17 +401,24 @@ export class Pairing {
         if (request.answer) return;
         const commit = unb64(request.commit);
         if (commit.length !== COMMIT_BYTES) return;
+        const open = await this.loadOpenAnswers();
+        for (const [id, at] of open) if (this.now() - at >= OPEN_ANSWER_MS) open.delete(id);
+        if (open.size >= MAX_OPEN_ANSWERS) return;
         const key = newPairingKey();
         if (!(await transport.answer(request.id, b64(key.publicKey)))) return;
         this.answering = { transport, id: request.id, key, name: request.name, commit, reveal: null, code: null };
+        open.set(request.id, this.now());
+        await this.saveOpenAnswers();
         return;
       }
       if (answering.id !== request.id) return;
-      // What this PC answered to changed on the way: the promise, its own key, or a key already checked.
-      if (!unb64(request.commit).equals(answering.commit) || request.answer?.publicKey !== b64(answering.key.publicKey) || (answering.reveal && request.reveal !== b64(answering.reveal))) {
+      // What this PC answered to changed on the way: the promise, its own key, or a key already checked. Something
+      // missing (a file a sync app hasn't finished) is looked at again.
+      const changed = (seen: string | undefined, kept: Buffer) => seen !== undefined && seen !== "" && !unb64(seen).equals(kept);
+      if (changed(request.commit, answering.commit) || changed(request.answer?.publicKey, answering.key.publicKey) || (answering.reveal && changed(request.reveal, answering.reveal))) {
         return this.refuse(answering, "pairing: a PC's request changed after this PC answered it");
       }
-      if (answering.reveal || !request.reveal) return;
+      if (!request.commit || !request.answer || answering.reveal || !request.reveal) return;
       const reveal = unb64(request.reveal);
       if (!timingSafeEqual(pairingCommit(reveal), answering.commit)) {
         // Its key isn't the one it promised: something on the way is off.
@@ -412,6 +431,28 @@ export class Pairing {
     } catch (error) {
       this.options.log?.(`pairing: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+
+  private async loadOpenAnswers(): Promise<Map<string, number>> {
+    if (this.openAnswers) return this.openAnswers;
+    const open = new Map<string, number>();
+    const file = this.options.answersFile;
+    if (file) {
+      try {
+        const saved = JSON.parse(await readFile(file, "utf8")) as { at?: unknown };
+        if (Array.isArray(saved.at)) saved.at.forEach((at, index) => typeof at === "number" && Number.isFinite(at) && open.set(`saved-${index}`, at));
+      } catch {
+        // None yet, or unreadable: none counted.
+      }
+    }
+    // Another look may have loaded them meanwhile.
+    return (this.openAnswers ??= open);
+  }
+
+  private async saveOpenAnswers(): Promise<void> {
+    const file = this.options.answersFile;
+    if (!file || !this.openAnswers) return;
+    await writeFileAtomic(file, JSON.stringify({ v: 1, at: [...this.openAnswers.values()] })).catch((error: unknown) => this.options.log?.(`pairing: ${error instanceof Error ? error.message : String(error)}`));
   }
 
   /** Something on the way is off: the request is turned down and not answered again. */
@@ -429,6 +470,8 @@ export class Pairing {
     if (!answering || answering.id !== id || !answering.reveal) throw new UserError("pairing.error.gone");
     this.answering = null;
     this.refused.add(id);
+    // The user saw the question and clicked: no longer an open answer.
+    if ((await this.loadOpenAnswers()).delete(id)) await this.saveOpenAnswers();
     this.changed();
     const key = this.hasKey ? this.key() : null;
     try {
