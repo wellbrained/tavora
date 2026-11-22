@@ -182,6 +182,66 @@ const KNOWN_DATA = new Set([
   "28898156df2fa67a6ed6cb5901658b9ed1bc8d71adb6d45190a91a5366275a4b",
 ]);
 
+// Pieces of the regex sources below: a quoted string's quote, a name, and a dotted name such as `e.document`.
+const Q = "[\"'`]";
+const ID = "[\\w$]+";
+const PATH = "[\\w$]+(?:\\.[\\w$]+)*";
+/** One statement in the empty script's handler below: run the queue, then unhook and drop the element. Nothing else. */
+const CLEANUP = `(?:(?!(?:eval|Function|setTimeout|setInterval|setImmediate|importScripts)\\b)${ID}\\((?:${ID})?\\)|\\1\\.onreadystatechange\\s*=\\s*null|(?:${PATH}|\\1\\.parentNode)\\.removeChild\\(\\1\\)|\\1\\s*=\\s*null)`;
+
+/**
+ * Exact pieces of popular libraries that look like warning signs but run no code of anyone's choosing. They're blanked out
+ * before the check, so the same words anywhere else, or written even slightly differently, are still held. Add one only
+ * after reading where it comes from, with a test, and after trying to hide something inside or next to it.
+ *
+ * The setImmediate and script element ones are safe only next to the module page's policy, `script-src 'self'` without
+ * 'unsafe-eval' or 'unsafe-inline' (apps/desktop/src/main/assets.ts): there `Function(text)` throws, and a script element
+ * added at run time can only run the module's own, checked files. Someone could copy their shape; it gets them nothing.
+ */
+const KNOWN_SNIPPETS: { why: string; pattern: RegExp }[] = [
+  {
+    // lodash, core-js, regenerator, setimmediate, …: finds the global object. Only this fixed text runs, and its answer
+    // isn't used right there (`Function('return this')().eval(x)` still holds).
+    why: "Function('return this')()",
+    pattern: new RegExp(`(?<![\\w$.])(?:new\\s+)?Function\\(\\s*(${Q})return this\\1\\s*\\)\\(\\)(?!\\s*[.[(])`, "g"),
+  },
+  {
+    // regenerator-runtime: sets a global when strict mode forbids it. Only this fixed text runs.
+    why: "Function('r', 'regeneratorRuntime = r')(r)",
+    pattern: new RegExp(`(?<![\\w$.])Function\\(\\s*(${Q})r\\1\\s*,\\s*(${Q})regeneratorRuntime = r\\2\\s*\\)\\(r\\)`, "g"),
+  },
+  {
+    // setimmediate, minified: setImmediate("code") would run the text, like setTimeout("code"). Only at the start of
+    // setImmediate itself, so it can't turn other strings into code; a string given to setImmediate is held (below).
+    why: "setImmediate turning a string callback into a function",
+    pattern: new RegExp(
+      `(?:\\.setImmediate\\s*=\\s*function|function\\s+setImmediate)\\s*\\(\\s*(${ID})\\s*\\)\\s*\\{\\s*` +
+        `typeof\\s+\\1\\s*!==?\\s*(${Q})function\\2\\s*&&\\s*\\(\\s*\\1\\s*=\\s*(?:new\\s+)?Function\\(\\s*(${Q})\\3\\s*\\+\\s*\\1\\s*\\)\\s*\\)`,
+      "g",
+    ),
+  },
+  {
+    // immediate (JSZip), setimmediate: checks whether old Internet Explorer fires onreadystatechange on a script element.
+    why: "'onreadystatechange' in document.createElement('script')",
+    pattern: new RegExp(`(${Q})onreadystatechange\\1\\s*in\\s*${PATH}\\.createElement\\(\\s*(${Q})script\\2\\s*\\)`, "g"),
+  },
+  {
+    // immediate (JSZip), setimmediate: an empty script element as a timer, as the whole body of a function so nothing
+    // else there can reach it. Its handler only runs the queue and drops it; it never gets a src or any text.
+    why: "an empty script element used as a timer",
+    pattern: new RegExp(
+      `function\\s*\\(\\s*(?:${ID})?\\s*\\)\\s*\\{\\s*` +
+        `(?:var|let|const)\\s+(${ID})\\s*=\\s*${PATH}\\.createElement\\(\\s*(${Q})script\\2\\s*\\)\\s*;\\s*` +
+        `\\1\\.onreadystatechange\\s*=\\s*function\\s*\\(\\)\\s*\\{\\s*${CLEANUP}(?:\\s*[,;]\\s*${CLEANUP})*\\s*;?\\s*\\}\\s*[,;]?\\s*` +
+        `${PATH}\\.appendChild\\(\\1\\)\\s*;?\\s*\\}`,
+      "g",
+    ),
+  },
+];
+
+/** The text with every known snippet replaced by spaces, so positions stay where they were. */
+const withoutKnownSnippets = (text: string) => KNOWN_SNIPPETS.reduce((rest, { pattern }) => rest.replace(pattern, (match) => " ".repeat(match.length)), text);
+
 /** The first match the filter keeps; `pattern` needs the g flag. */
 function firstWhere(pattern: RegExp, text: string, keep: (match: RegExpExecArray) => boolean): RegExpExecArray | null {
   for (const match of text.matchAll(pattern)) if (keep(match)) return match;
@@ -191,7 +251,8 @@ function firstWhere(pattern: RegExp, text: string, keep: (match: RegExpExecArray
 /** Whether the match sits on a line that is only a // comment, which never runs. */
 const onCommentLine = (text: string, index: number) => text.slice(text.lastIndexOf("\n", index) + 1, index).trimStart().startsWith("//");
 
-function signsIn(name: string, text: string): { sign: Sign; detail: string }[] {
+function signsIn(name: string, source: string): { sign: Sign; detail: string }[] {
+  const text = withoutKnownSnippets(source);
   const found: { sign: Sign; detail: string }[] = [];
   const add = (sign: Sign, match: RegExpExecArray | null | undefined) => {
     if (match) found.push({ sign, detail: `${name}: ${around(text, match.index)}` });
@@ -200,7 +261,7 @@ function signsIn(name: string, text: string): { sign: Sign; detail: string }[] {
 
   add("eval", /(?<![\w$.])eval\s*\(|(?:window|globalThis|self)\s*\.\s*eval\s*\(/.exec(text));
   add("eval", /(?<![\w$])(?:new\s+)?Function\s*\(/.exec(text));
-  add("eval", /\bset(?:Timeout|Interval)\s*\(\s*["'`]/.exec(text));
+  add("eval", /\bset(?:Timeout|Interval|Immediate)\s*\(\s*["'`]/.exec(text));
 
   add("wasm", /\bWebAssembly\b/.exec(text));
   add("wasm", /\bwasm-unsafe-eval\b/.exec(text));
