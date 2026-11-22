@@ -5,7 +5,7 @@ import { saveDialogDirectory } from './save-dialog-folder';
 import { randomUUID, type KeyObject } from "node:crypto";
 import { existsSync, watch, type FSWatcher } from "node:fs";
 import os from "node:os";
-import { appendFile, mkdir, readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readdir, readFile, realpath, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { Worker } from "node:worker_threads";
 import { allowsPersonalWorkspaces, continuingPanelType, folderKey, isModuleId, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER, OFFICIAL_PINS, officialOn, panelTypes, translateManifest, withGamePanelType, type Connector, type ModuleManifest, type ResolvedPanelType } from "@tavora/module-schema";
@@ -25,7 +25,6 @@ import {
   shell,
   type IpcMainEvent,
   type IpcMainInvokeEvent,
-  type OpenDialogOptions,
   type Referrer,
   type WebContents,
   type WebContentsView,
@@ -113,7 +112,6 @@ import {
   trashedWorkspaces,
   trashWorkspace,
   useOriginalWorkspaceIcon,
-  type DialogPlace,
   type WorkspaceEntry,
   type WorkspaceIcon,
   type Library,
@@ -169,10 +167,8 @@ import { readIcoFromFile } from "./pe-icon";
 import { coverReader, findSteamDir, isSteamAppId, loadAppInfo, readLibraryCover, readSteamClientIcon, removeSteamIcon } from "./steam-icons";
 import { readShortcutIcons, shortcutFolders } from "./steam-shortcuts";
 import { CLOSE_CAP_MS, documentsFolder, exportsFolder, ModuleView, picturesFolder, REVEAL_CAP_MS } from "./module-view";
-import { readJsonText } from "./json-file-http";
-import { kindOfName, readTableFile } from "./table-file-http";
-import { freeFileName } from "./picture-save-http";
 import { HostError } from "./errors";
+import { FileDialogs } from "./file-dialogs";
 import { loadAdBlocker, type AdBlocker } from "./browser-filter";
 import { isPrivateUrl, isWebUrl, siteOfUrl } from "./browser-url";
 import { supportTarget } from "./module-support";
@@ -242,7 +238,7 @@ import {
   type WorkspaceState,
 } from "./workspace";
 import type { PanelContent, PanelLaunch } from "./panel-content";
-import type { FileKind, PanelOpenManyResult, PanelOpenResult } from "@tavora/sdk/protocol";
+import type { PanelOpenManyResult, PanelOpenResult } from "@tavora/sdk/protocol";
 import { openManySlots } from "../shared/panel-layout";
 import { initialBounds, MIN_SIZE, type WindowState } from "./window-state";
 import { layoutKey, OpenTimes, PanelCover } from "./panel-cover";
@@ -373,22 +369,6 @@ export interface HostOptions {
 
 /** The same for every module page; the font and the colours come in stylesheets of their own. */
 const MODULE_CSS = moduleBaseCss();
-
-/**
- * Writes `data` to the file a save dialog gave, adding `.extension` when the name lacks it. The dialog asked before
- * replacing the file the user chose; a name with the extension added was never asked about, so that one is not replaced.
- */
-async function writeWithExtension(picked: string, extension: string, data: Buffer | string, mode?: number): Promise<string> {
-  const chosen = path.resolve(picked);
-  const file = chosen.toLowerCase().endsWith(`.${extension}`) ? chosen : `${chosen}.${extension}`;
-  try {
-    await writeFile(file, data, { flag: file === chosen ? "w" : "wx", ...(mode === undefined ? {} : { mode }) });
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new UserError("error.file.taken", { name: path.basename(file) });
-    throw error;
-  }
-  return file;
-}
 
 const ICON_URL = `${HOST_SCHEME}://app/game-icons/`;
 /** A saved icon as a 32 px bitmap (blue, green, red, alpha), or null when it cannot be read. */
@@ -623,6 +603,8 @@ export class Host {
   });
   /** Where modules keep their pictures. */
   private readonly files: ModuleFilesFolder;
+  /** The system's file dialogs, opening where the user last picked from (file-dialogs.ts). */
+  private readonly fileDialogs: FileDialogs;
   /** True while a dialog backdrop dims the host page, so the window buttons are dimmed too. */
   private dimmed = false;
   /** The page colour behind the window buttons, as the page reports it (the workspace canvas is darker than the theme). */
@@ -720,6 +702,17 @@ export class Host {
     this.currentTheme = appearance.host;
     this.panelTheme = appearance.panel;
     setOverlayFont(this.currentTheme.font);
+    this.fileDialogs = new FileDialogs({
+      dialogs: {
+        open: (dialogOptions) => dialog.showOpenDialog(this.window, dialogOptions),
+        save: (dialogOptions) => dialog.showSaveDialog(this.window, dialogOptions),
+      },
+      library,
+      saveLibrary: () => this.saveLibrary(),
+      language: () => this.language,
+      documents: documentsFolder,
+      pictures: picturesFolder,
+    });
     this.files = new ModuleFilesFolder({
       userData: options.userData,
       defaultFolder: options.picturesFolder ?? defaultFilesRoot(options.userData),
@@ -729,8 +722,8 @@ export class Host {
         this.library.moduleFilesFolder = folder;
         this.saveLibrary();
       },
-      pick: (options) => this.pickPath("module-files", options),
-      remember: (picked) => this.rememberPicked("module-files", picked),
+      pick: (options) => this.fileDialogs.pick("module-files", options),
+      remember: (picked) => this.fileDialogs.remember("module-files", picked),
       notify: (message) => (this.notice = message),
       changed: () => this.pushState(),
       writesDone: (timeoutMs) => this.data.blobWrites.idle(timeoutMs),
@@ -1433,11 +1426,11 @@ export class Host {
 
   /** The user picks a module project folder, or a folder of them; Tavora loads the modules from it from now on. Answers with the folder, or nothing when cancelled. */
   private async addDevelopmentFolder(): Promise<string | void> {
-    const folder = await this.pickPath("development-folder", { title: translate(this.language, "dialog.developmentFolder"), properties: ["openDirectory"] });
+    const folder = await this.fileDialogs.pick("development-folder", { title: translate(this.language, "dialog.developmentFolder"), properties: ["openDirectory"] });
     if (!folder) return;
     if (this.library.developmentFolders.length >= MAX_DEVELOPMENT_FOLDERS) throw new LibraryError("error.tooManyDevelopmentFolders");
     this.library.developmentFolders = cleanDevelopmentFolders([...this.library.developmentFolders, folder]);
-    this.rememberPicked("development-folder", folder);
+    this.fileDialogs.remember("development-folder", folder);
     await this.reloadModules();
     return path.resolve(folder);
   }
@@ -1461,9 +1454,9 @@ export class Host {
       parent = this.developmentFolder(folder);
       if (!parent) throw new LibraryError("error.copyNoFolder");
     } else {
-      parent = await this.pickPath("development-folder", { title: translate(this.language, "dialog.copyExample"), properties: ["openDirectory", "createDirectory"] });
+      parent = await this.fileDialogs.pick("development-folder", { title: translate(this.language, "dialog.copyExample"), properties: ["openDirectory", "createDirectory"] });
       if (!parent) return;
-      this.rememberPicked("development-folder", parent);
+      this.fileDialogs.remember("development-folder", parent);
     }
     if (!existsSync(parent)) throw new LibraryError("error.copyNoFolder");
     // A project can't hold another one: Tavora only looks for projects directly inside a folder without a manifest.
@@ -1711,14 +1704,14 @@ export class Host {
 
   /** Installs a module from a zip the user picks. Answers with the module's id, or nothing when the user cancelled. */
   private async installModule(): Promise<string | void> {
-    const file = await this.pickPath("install-module", {
+    const file = await this.fileDialogs.pick("install-module", {
       title: translate(this.language, "dialog.installModule"),
       properties: ["openFile"],
       filters: [{ name: translate(this.language, "dialog.moduleZip"), extensions: ["zip"] }],
     });
     if (!file) return;
     const id = await this.lifecycle.installFile(file);
-    this.rememberPicked("install-module", file);
+    this.fileDialogs.remember("install-module", file);
     return id;
   }
 
@@ -2612,25 +2605,10 @@ export class Host {
     return project;
   }
 
-  /** Packs a dev module signed with a kept key and saves the zip where the developer picks. */
-  /**
-   * The system's save dialog with the zip's name suggested (numbered when taken), opening where the user last
-   * saved a module zip while that folder is still there, else Documents\Tavora.
-   */
+  /** Packs a dev module signed with a kept key and saves the zip where the developer picks, its name suggested. */
   private async saveModuleZip(moduleId: string): Promise<string | undefined> {
     const { manifest, zip } = await this.publisher.pack(this.projectOf(moduleId));
-    const folder = await this.ownFileFolder("module-zip");
-    const german = this.language.startsWith("de");
-    const picked = await dialog.showSaveDialog(this.window, {
-      title: german ? "Modul als ZIP speichern" : "Save module as zip",
-      defaultPath: path.join(folder, freeFileName(`${manifest.id}-${manifest.version}`, (fileName) => existsSync(path.join(folder, fileName)), "zip")),
-      filters: [{ name: german ? "ZIP-Dateien" : "Zip files", extensions: ["zip"] }],
-      properties: ["showOverwriteConfirmation"],
-    });
-    if (picked.canceled || !picked.filePath) return undefined;
-    const file = await writeWithExtension(picked.filePath, "zip", zip);
-    this.rememberPicked("module-zip", file);
-    return path.basename(file);
+    return this.fileDialogs.saveOwn("module-zip", { kind: "zip", name: `${manifest.id}-${manifest.version}`, data: zip });
   }
 
   /** How the window is now, so a restart under `pnpm dev` brings it back the same way. */
@@ -3222,37 +3200,15 @@ export class Host {
       "developer-key-create": async () => {
         await this.developerKeys.create();
       },
-      "developer-key-add": async () => {
-        const german = this.language.startsWith("de");
-        const picked = await dialog.showOpenDialog(this.window, {
-          title: german ? "Schlüsseldatei öffnen" : "Open key file",
-          defaultPath: await this.ownFileFolder("publisher-key"),
-          properties: ["openFile"],
-          filters: [
-            { name: german ? "Schlüsseldateien" : "Key files", extensions: ["pem", "key"] },
-            { name: "*", extensions: ["*"] },
-          ],
-        });
-        const file = picked.filePaths[0];
-        if (picked.canceled || !file) return;
-        const text = await readFile(file, "utf8").catch(() => null);
-        if (text === null || text.length > 10_000) throw new UserError("developerKeys.error.notKey");
-        await this.developerKeys.add(text);
-        this.rememberPicked("publisher-key", file);
-      },
+      "developer-key-add": () =>
+        this.fileDialogs.openKeyFile(async (file) => {
+          const text = await readFile(file, "utf8").catch(() => null);
+          if (text === null || text.length > 10_000) throw new UserError("developerKeys.error.notKey");
+          await this.developerKeys.add(text);
+        }),
       "developer-key-export": async (action) => {
         const pem = this.developerKeys.exportKey(action.fingerprint);
-        const folder = await this.ownFileFolder("publisher-key");
-        const german = this.language.startsWith("de");
-        const picked = await dialog.showSaveDialog(this.window, {
-          title: german ? "Schlüsseldatei speichern" : "Save key file",
-          defaultPath: path.join(folder, freeFileName(`publisher-key-${action.fingerprint.slice(0, 8)}`, (fileName) => existsSync(path.join(folder, fileName)), "pem")),
-          filters: [{ name: german ? "Schlüsseldateien" : "Key files", extensions: ["pem"] }],
-          properties: ["showOverwriteConfirmation"],
-        });
-        if (picked.canceled || !picked.filePath) return;
-        const file = await writeWithExtension(picked.filePath, "pem", pem, 0o600);
-        this.rememberPicked("publisher-key", file);
+        await this.fileDialogs.saveOwn("publisher-key", { kind: "pem", name: `publisher-key-${action.fingerprint.slice(0, 8)}`, data: pem });
       },
       "developer-key-link": (action) => this.developerKeys.link(action.fingerprint),
       "developer-recovery-key": (action) => this.developerKeys.enterKey(action.key),
@@ -3281,17 +3237,17 @@ export class Host {
       // Cloud copy
       "cloud-copy-on": () => this.copySync.turnOn(),
       "cloud-copy-on-folder": async () => {
-        const folder = await this.pickPath("cloud-copy", { properties: ["openDirectory", "createDirectory"] });
+        const folder = await this.fileDialogs.pick("cloud-copy", { properties: ["openDirectory", "createDirectory"] });
         if (!folder) return;
         await this.copySync.turnOn(folder);
-        this.rememberPicked("cloud-copy", folder);
+        this.fileDialogs.remember("cloud-copy", folder);
       },
       "cloud-copy-move": async (action) => {
         if (action.to === "server") return this.copySync.move(null);
-        const folder = await this.pickPath("cloud-copy", { properties: ["openDirectory", "createDirectory"] });
+        const folder = await this.fileDialogs.pick("cloud-copy", { properties: ["openDirectory", "createDirectory"] });
         if (!folder) return;
         await this.copySync.move(folder);
-        this.rememberPicked("cloud-copy", folder);
+        this.fileDialogs.remember("cloud-copy", folder);
       },
       "cloud-copy-key": (action) => this.copySync.enterKey(action.key),
       "cloud-copy-cancel": () => this.copySync.cancelKey(),
@@ -3458,14 +3414,14 @@ export class Host {
 
   private async chooseWorkspaceImage(workspaceId: string): Promise<void> {
     if (!isLive(this.library, workspaceId)) throw new LibraryError("error.workspaceGone");
-    const source = await this.pickPath("workspace-image", {
+    const source = await this.fileDialogs.pick("workspace-image", {
       title: translate(this.language, "dialog.chooseIcon"),
       properties: ["openFile"],
       filters: [{ name: translate(this.language, "dialog.images"), extensions: ["png", "jpg", "jpeg"] }],
     });
     if (!source) return;
     const file = await importIcon(this.iconDir, workspaceId, source);
-    this.rememberPicked("workspace-image", source);
+    this.fileDialogs.remember("workspace-image", source);
     const previous = setWorkspaceImage(this.library, workspaceId, file);
     await this.dropIconFile(previous);
   }
@@ -4379,11 +4335,7 @@ export class Host {
         this.pushState();
       },
       showMenu: (menu) => this.showModuleMenu(record.instanceId, menu),
-      savePicture: (png, name) => this.savePictureAs(png, name),
-      saveJson: (data, name) => this.saveJsonAs(module, data, name),
-      openJson: () => this.openJsonFrom(module),
-      saveFile: (data, name, kind) => this.saveFileAs(module, data, name, kind),
-      openFile: (kinds) => this.openFileFrom(module, kinds),
+      ...this.fileDialogs.forModule(Host.notesKey(module)),
       pickReadOnlyFile: async (extensions, multiple, near) => {
         const files=new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,workspace.id);
         const defaultPath=(near ? await files.directoryNear(near.file,near.up ?? 0) : undefined) ?? await saveDialogDirectory(files,this.library.workspaces[workspace.id]?.catalogId ?? workspace.id);
@@ -5475,176 +5427,6 @@ export class Host {
     this.statePush ??= setImmediate(() => this.pushState());
   }
 
-  /**
-   * The system's open dialog, opening in the folder the user last picked from in this `place` while
-   * that folder is still there. Answers with what was picked, or nothing when cancelled; the caller
-   * remembers it (rememberPicked) only once it worked, so a zip that failed to install is not where it opens next.
-   */
-  private async pickPath(place: DialogPlace, options: OpenDialogOptions, parent: BrowserWindow = this.window): Promise<string | undefined> {
-    const folder = this.library.dialogFolders[place];
-    const picked = await dialog.showOpenDialog(parent, { ...options, ...(folder && existsSync(folder) ? { defaultPath: folder } : {}) });
-    const file = picked.filePaths[0];
-    return picked.canceled || !file ? undefined : file;
-  }
-
-  /**
-   * pictures.save: the system's save dialog with the module's name suggested (numbered when taken), opening in the
-   * folder the user last saved a picture to while it is still there, else Pictures\Tavora. Answers with the name
-   * the file was saved under, or null when the user closed the dialog.
-   */
-  private async savePictureAs(png: Buffer, name: string): Promise<string | null> {
-    const last = this.library.dialogFolders["save-picture"];
-    const folder = last && existsSync(last) ? last : picturesFolder();
-    await mkdir(folder, { recursive: true });
-    const german = this.language.startsWith("de");
-    const picked = await dialog.showSaveDialog(this.window, {
-      title: german ? "Bild speichern" : "Save picture",
-      defaultPath: path.join(folder, freeFileName(name, (fileName) => existsSync(path.join(folder, fileName)))),
-      filters: [{ name: german ? "PNG-Bild" : "PNG picture", extensions: ["png"] }],
-      properties: ["showOverwriteConfirmation"],
-    });
-    if (picked.canceled || !picked.filePath) return null;
-    const chosen = path.resolve(picked.filePath);
-    const file = /\.png$/i.test(chosen) ? chosen : `${chosen}.png`;
-    // The dialog asked before replacing the file the user chose; with .png added, it was never asked about.
-    try {
-      await writeFile(file, png, { flag: file === chosen ? "w" : "wx" });
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new HostError("CONFLICT", `${path.basename(file)} already exists`);
-      throw error;
-    }
-    this.rememberPicked("save-picture", file);
-    return path.basename(file);
-  }
-
-  /** The folder a module's file dialogs open in: where the user last saved or opened a file for it while that is still there, else Documents\Tavora (made when needed). */
-  private async fileFolderOf(module: InstalledModule): Promise<string> {
-    const last = this.library.moduleFolders[Host.notesKey(module)];
-    const folder = last && existsSync(last) ? last : documentsFolder();
-    await mkdir(folder, { recursive: true });
-    return folder;
-  }
-
-  private rememberFileFolder(module: InstalledModule, picked: string): void {
-    this.library.moduleFolders[Host.notesKey(module)] = path.dirname(path.resolve(picked));
-    this.saveLibrary();
-  }
-
-  /**
-   * files.saveJson: the system's save dialog with the module's name suggested (numbered when taken), opening in the
-   * module's remembered folder, else Documents\Tavora. Answers with the name the file was saved under, or null when
-   * the user closed the dialog.
-   */
-  private async saveJsonAs(module: InstalledModule, data: Buffer, name: string): Promise<string | null> {
-    const folder = await this.fileFolderOf(module);
-    const german = this.language.startsWith("de");
-    const picked = await dialog.showSaveDialog(this.window, {
-      title: german ? "Datei speichern" : "Save file",
-      defaultPath: path.join(folder, freeFileName(name, (fileName) => existsSync(path.join(folder, fileName)), "json")),
-      filters: [{ name: german ? "JSON-Dateien" : "JSON files", extensions: ["json"] }],
-      properties: ["showOverwriteConfirmation"],
-    });
-    if (picked.canceled || !picked.filePath) return null;
-    const chosen = path.resolve(picked.filePath);
-    const file = /\.json$/i.test(chosen) ? chosen : `${chosen}.json`;
-    // The dialog asked before replacing the file the user chose; with .json added, it was never asked about.
-    try {
-      await writeFile(file, data, { flag: file === chosen ? "w" : "wx" });
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new HostError("CONFLICT", `${path.basename(file)} already exists`);
-      throw error;
-    }
-    this.rememberFileFolder(module, file);
-    return path.basename(file);
-  }
-
-  /**
-   * files.openJson: the system's open dialog in the module's remembered folder, else Documents\Tavora. Answers with
-   * the chosen file's name and text (at most 8 MiB), or null when the user closed the dialog. The folder is
-   * remembered once the file was read.
-   */
-  private async openJsonFrom(module: InstalledModule): Promise<{ fileName: string; text: string } | null> {
-    const folder = await this.fileFolderOf(module);
-    const german = this.language.startsWith("de");
-    const picked = await dialog.showOpenDialog(this.window, {
-      title: german ? "Datei öffnen" : "Open file",
-      defaultPath: folder,
-      filters: [{ name: german ? "JSON-Dateien" : "JSON files", extensions: ["json"] }],
-      properties: ["openFile"],
-    });
-    const file = picked.filePaths[0];
-    if (picked.canceled || !file) return null;
-    const text = await readJsonText(file);
-    this.rememberFileFolder(module, file);
-    return { fileName: path.basename(file), text };
-  }
-
-  /**
-   * files.save: the same dialog as files.saveJson for a .csv or .xlsx; only that extension can be chosen. The data was
-   * checked already. Answers with the name the file was saved under, or null when the user closed the dialog.
-   */
-  private async saveFileAs(module: InstalledModule, data: Buffer, name: string, kind: FileKind): Promise<string | null> {
-    const folder = await this.fileFolderOf(module);
-    const german = this.language.startsWith("de");
-    const label = kind === "csv" ? (german ? "CSV-Dateien" : "CSV files") : german ? "Excel-Dateien" : "Excel files";
-    const picked = await dialog.showSaveDialog(this.window, {
-      title: german ? "Datei speichern" : "Save file",
-      defaultPath: path.join(folder, freeFileName(name, (fileName) => existsSync(path.join(folder, fileName)), kind)),
-      filters: [{ name: label, extensions: [kind] }],
-      properties: ["showOverwriteConfirmation"],
-    });
-    if (picked.canceled || !picked.filePath) return null;
-    const chosen = path.resolve(picked.filePath);
-    const file = new RegExp(`\\.${kind}$`, "i").test(chosen) ? chosen : `${chosen}.${kind}`;
-    // The dialog asked before replacing the file the user chose; with the extension added, it was never asked about.
-    try {
-      await writeFile(file, data, { flag: file === chosen ? "w" : "wx" });
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new HostError("CONFLICT", `${path.basename(file)} already exists`);
-      throw error;
-    }
-    this.rememberFileFolder(module, file);
-    return path.basename(file);
-  }
-
-  /**
-   * files.open: the open dialog in the module's remembered folder, else Documents\Tavora, offering only the asked
-   * kinds. Answers with the file's name, kind and bytes (at most 8 MiB), or null when the user closed the dialog.
-   */
-  private async openFileFrom(module: InstalledModule, kinds: FileKind[]): Promise<{ fileName: string; kind: FileKind; bytes: Buffer } | null> {
-    const folder = await this.fileFolderOf(module);
-    const german = this.language.startsWith("de");
-    const names: Record<FileKind, string> = { csv: german ? "CSV-Dateien" : "CSV files", xlsx: german ? "Excel-Dateien" : "Excel files" };
-    const picked = await dialog.showOpenDialog(this.window, {
-      title: german ? "Datei öffnen" : "Open file",
-      defaultPath: folder,
-      filters: kinds.map((kind) => ({ name: names[kind], extensions: [kind] })),
-      properties: ["openFile"],
-    });
-    const file = picked.filePaths[0];
-    if (picked.canceled || !file) return null;
-    // The dialog's filter can be set to all files by the user; only these extensions go on.
-    const kind = kindOfName(file);
-    if (!kind || !kinds.includes(kind)) throw new HostError("INVALID_PARAMS", "only a .csv or .xlsx file can be opened");
-    const bytes = await readTableFile(file);
-    this.rememberFileFolder(module, file);
-    return { fileName: path.basename(file), kind, bytes };
-  }
-
-  /** Where the dialog for one of Tavora's own files (a module zip, a key file) opens: the folder last used for `place` while it is still there, else Documents\Tavora. */
-  private async ownFileFolder(place: DialogPlace): Promise<string> {
-    const last = this.library.dialogFolders[place];
-    const folder = last && existsSync(last) ? last : documentsFolder();
-    await mkdir(folder, { recursive: true });
-    return folder;
-  }
-
-  /** The dialog for `place` opens next time in the folder `picked` is in (for a picked folder, its parent), and the library is saved. */
-  private rememberPicked(place: DialogPlace, picked: string): void {
-    this.library.dialogFolders[place] = path.dirname(path.resolve(picked));
-    this.saveLibrary();
-  }
-
   private saveLibrary(): void {
     this.savedData.saveLibrary(this.library);
   }
@@ -5862,16 +5644,15 @@ export class Host {
           leave: () => this.leaveOverlayPage(),
           openSettings: (target) => this.openSettingsOverOverlayPage(target),
           choosePicture: () =>
-            this.pickPath(
+            this.fileDialogs.pick(
               "layout-picture",
               {
                 title: translate(this.language, "overlays.layout.chooseTitle"),
                 properties: ["openFile"],
                 filters: [{ name: translate(this.language, "dialog.images"), extensions: ["png", "jpg", "jpeg", "webp"] }],
               },
-              this.window,
             ),
-          rememberPicture: (file) => this.rememberPicked("layout-picture", file),
+          rememberPicture: (file) => this.fileDialogs.remember("layout-picture", file),
         },
       },
     });
