@@ -735,6 +735,20 @@ export async function emptyPlaces(staging: string, roots: CopyRoot[], keepIn: st
 }
 
 /**
+ * The same, told afterwards when the swap's plan is lost: a place the copy holds that has nothing in the backup, in
+ * `written-since` or still waiting in the staging folder held nothing before the swap.
+ */
+export async function filledPlaces(staging: string, roots: CopyRoot[], keepIn: string, copy: DownloadedCopy): Promise<string[]> {
+  const empty: string[] = [];
+  for (const { place, staged, kept, since, inCopy } of await swapPlaces(staging, roots, keepIn, copy)) {
+    if (!inCopy || (await exists(staged)) || (await exists(kept))) continue;
+    if ((await namesIn(path.dirname(since))).some((name) => plainName(name) === path.basename(since))) continue;
+    empty.push(place);
+  }
+  return empty;
+}
+
+/**
  * Takes back a swap that didn't finish, when the user would rather have this PC's data. What was here goes back in its
  * place: from the backup, or from `written-since` when a later start moved it there. What the copy or the app put in the
  * place goes aside as `.undone`, which is never taken for the original, so running this again changes nothing. Going back

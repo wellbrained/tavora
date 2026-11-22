@@ -206,7 +206,7 @@ import { accountServiceUrl, serviceUrl } from "./service-url";
 import { LibraryWorkspaces } from "./workspace-lookup";
 
 
-import { CopySync } from "./cloud-copy-sync";
+import { CopySync, type CopySyncOptions } from "./cloud-copy-sync";
 import { Inbox } from "./inbox";
 import { thisDeviceName } from "./device-name";
 import { AccountClient, deviceOs, linkCommand, loadAccount, saveAccount, type AccountClientOptions, type ProfileData } from "./account";
@@ -901,7 +901,7 @@ export class Host {
     const savedFolder = (await loadLibrary(userData)).moduleFilesFolder ?? null;
     const defaultFolder = options.picturesFolder ?? defaultFilesRoot(userData);
     let loaded: Library | undefined;
-    const copySync = Host.cloudCopy(options, encryptor, signIn, { root: () => (loaded ? (loaded.moduleFilesFolder ?? null) : savedFolder) ?? defaultFolder });
+    const copySync = Host.cloudCopy(options, encryptor, signIn, { root: () => (loaded ? (loaded.moduleFilesFolder ?? null) : savedFolder) ?? defaultFolder, defaultRoot: () => defaultFolder });
     await copySync.beforeLoad();
     const savedData = new SavedData(userData);
     // A file saved by a newer Tavora (a cloud copy taken just now included) is copied aside before this one, or a move
@@ -998,8 +998,10 @@ export class Host {
 
     const host = new Host(options, { encryptor, signIn, copySync, installed, safetyLists, official, grants, connection, systemInfo, openTimes, emblem, styles }, library, workspaces, profile, windowState, themes, themeProblems, themeHints, savedData);
     if (ownersNoted) host.workspaces.saveSoon();
-    // What the user did while a cloud copy waited is safe in a backup: they hear where.
+    // What the user did while a cloud copy waited is safe in a backup, or this PC's data from before an older Tavora took
+    // the copy up again: they hear where.
     if (copySync.changesKeptIn) host.notice = translate(host.language, "cloudCopy.notice.keptAside", { folder: copySync.changesKeptIn });
+    else if (copySync.dataKeptIn) host.notice = translate(host.language, "cloudCopy.notice.dataKeptAside", { folder: copySync.dataKeptIn });
     host.openedAtStart = openedTimes(library);
     // Before any module opens, so none sees the pictures half moved.
     await host.files.moveFromOldDefault((line) => console.warn(`[tavora] ${line}`));
@@ -4098,7 +4100,7 @@ export class Host {
    * taken first. It holds the account's sign-in and the module files folder, which are the saved ones until the
    * library is read (`moduleFilesFolder`) and the live ones after.
    */
-  private static cloudCopy(options: HostOptions, encryptor: Encryptor, signIn: SignIn, files: { root(): string }): CopySync {
+  private static cloudCopy(options: HostOptions, encryptor: Encryptor, signIn: SignIn, files: CopySyncOptions["files"]): CopySync {
     return new CopySync({
       userData: options.userData,
       enabled: options.accounts === true,

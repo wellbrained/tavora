@@ -493,6 +493,19 @@ async function olderKeepsThisPc({ folder, key }: Setup, at: Pc): Promise<void> {
   if (result.status === "uploaded") await writeFile(file, JSON.stringify({ v: 1, ...result.state }));
 }
 
+/**
+ * Turning the copy on in 0.24.108 and 0.24.122, before the user answers which side to keep: the staging folder goes, the
+ * copy comes down as `staged.json`, and the state is the empty one.
+ */
+async function olderTurnsOn({ folder, key }: Setup, at: Pc): Promise<void> {
+  const staging = path.join(at.userData, "cloud-copy-staging");
+  await rm(staging, { recursive: true, force: true });
+  const copy = (await new CloudCopy(new FolderStorage(folder)).download(key, at.roots, path.join(staging, "data")))!;
+  await writeFile(path.join(staging, "staged.json"), JSON.stringify({ v: 1, ...copy, take: false }));
+  await writeFile(path.join(at.userData, "cloud-copy.json"), JSON.stringify({ v: 1, ...EMPTY_STATE }));
+  await writeFile(path.join(at.userData, "cloud-copy-place.json"), JSON.stringify({ v: 1, folder }));
+}
+
 describe("a power cut around what the user and the app do", () => {
   it("Keep this PC's on a stopped swap: this PC's data comes back whole", async () => {
     const setup = await chosen();
@@ -641,6 +654,56 @@ describe("a power cut around what the user and the app do", () => {
     });
     expect(bad.join("\n")).toBe("");
   }, 1_800_000);
+
+  it("an older Tavora only turning the copy on during a swap: this PC's data comes back, and Keep this PC's uploads it whole", async () => {
+    const setup = await chosen();
+    const { cloud, b, folder, remote } = setup;
+    const bad: string[] = [];
+    const checked = new Set<string>();
+    const copyBefore = `${folder}-before`;
+    await snapshotOf(folder, copyBefore);
+    await eachStop(setup, async (n, stop) => {
+      await restore(b, stop);
+      await olderTurnsOn(setup, b);
+      const older = `${b.root}-turned-on`;
+      await rm(older, { recursive: true, force: true });
+      await snapshotOf(b.root, older);
+      await everyCut(b, older, () => tavora(cloud, b).beforeLoad(), (m) => pcIsBack(setup, `stop ${n}, cut ${m}`, bad), checked);
+      await restore(b, older);
+      await pcIsBack(setup, `stop ${n}`, bad);
+      const at = tavora(cloud, b);
+      await at.beforeLoad();
+      await at.keep("pc").catch((error: unknown) => bad.push(`stop ${n}: Keep this PC's failed: ${String(error)}`));
+      if ((await remote()) === setup.version) bad.push(`stop ${n}: nothing went up`);
+      else if (!same(await remoteFiles(setup), await localFiles(b))) bad.push(`stop ${n}: what went up isn't this PC's side`);
+      for (const name of NAMES) if ((await read(b, name)) !== B[name]) bad.push(`stop ${n}: ${name} is ${await read(b, name)}`);
+      // The next stop starts from the chosen copy again.
+      await rm(folder, { recursive: true, force: true });
+      await snapshotOf(copyBefore, folder);
+    });
+    expect(bad.join("\n")).toBe("");
+  }, 600_000);
+
+  it("an older Tavora started while a lost library is asked about finds the copy off", async () => {
+    const setup = await copyTaken();
+    const { cloud, b, taken, version, remote } = setup;
+    await restore(b, taken);
+    await replaceFile(path.join(b.userData, "library.json"), "{ broken");
+    const broken = `${b.root}-broken`;
+    await snapshotOf(b.root, broken);
+    const bad: string[] = [];
+    // Whatever the start that found it lost got onto the disk, the next one asks: then the older Tavora sees nothing on.
+    const check = async (label: string) => {
+      await appRuns(cloud, b);
+      if (!(await asksAboutLibrary(b))) bad.push(`${label}: doesn't ask about the lost library`);
+      if ((await olderStart(setup, b)) !== "off") bad.push(`${label}: an older Tavora finds the copy on`);
+      if ((await remote()) !== version) bad.push(`${label}: uploaded`);
+    };
+    await everyCut(b, broken, () => appRuns(cloud, b), (n) => check(`cut ${n}`));
+    await restore(b, broken);
+    await check("uncut");
+    expect(bad.join("\n")).toBe("");
+  }, 600_000);
 
   it("an older Tavora starting during a swap uploads nothing, and this one settles after it", async () => {
     const setup = await chosen();

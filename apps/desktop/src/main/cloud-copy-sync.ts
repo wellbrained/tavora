@@ -13,6 +13,7 @@ import {
   saveCopyState,
   emptyPlaces,
   fileSha256,
+  filledPlaces,
   lookCopyState,
   sortWrittenSince,
   swapInCopy,
@@ -76,8 +77,11 @@ export interface CopySyncOptions {
   enabled: boolean;
   /** A development run in its own desktop-dev folder: the UI asks before turning the copy on. */
   devData?: boolean;
-  /** The folder modules keep pictures in, which may be anywhere. */
-  files: { root(): string };
+  /**
+   * The folder modules keep pictures in, which may be anywhere: the one the library on disk names. `defaultRoot` is the
+   * one a library without a folder of its own uses.
+   */
+  files: { root(): string; defaultRoot?(): string };
   /** The account: its sign-in token seals nothing, but lets the copy and the key reach Tavora's service. */
   account: {
     token(): string | null;
@@ -157,6 +161,8 @@ export class CopySync {
   private swap: SwapStatus = SWAP_IDLE;
   /** The backup holding what was written while a swap waited, when this start settled one: the user is told. */
   private keptAside: string | null = null;
+  /** The backup holding this PC's data from before a swap an older Tavora settled, when this start found one: the user is told. */
+  private dataAside: string | null = null;
   /** One thing at a time: an upload, a download, a check. */
   private running: Promise<unknown> = Promise.resolve();
   /**
@@ -492,6 +498,11 @@ export class CopySync {
     return this.keptAside;
   }
 
+  /** The backup folder with this PC's data from before a swap that an older Tavora settled, when this start found one. */
+  get dataKeptIn(): string | null {
+    return this.dataAside;
+  }
+
   /**
    * The data here can't be trusted yet: a file was lost, a chosen copy is still to go in, a swap stopped halfway, or this
    * start couldn't read what is there. Nothing uploads, and the host holds what would act on the data as if it were
@@ -523,6 +534,7 @@ export class CopySync {
       if (this.swap.phase === "held" || !this.on) return await this.noteLostWhileHeld(setAside, missing);
       const lost = [...setAside, ...missing.filter((name) => this.state.files[name] !== undefined)];
       if (lost.length === 0) return;
+      await this.parkForQuestion();
       await this.moveTo({ type: "lost", files: lost });
       this.log(`cloud copy: ${lost.join(", ")} can't be read here; nothing goes up until the user chooses a side`);
       this.ask("conflict");
@@ -559,7 +571,10 @@ export class CopySync {
     if (note.status === "held" && !isDamaged(note)) throw new HeldError(note.error);
     if (!taken && (this.swap.phase === "idle" || this.swap.phase === "asking")) {
       const files = note.status === "present" ? [...namesIn(note.value.setAside), ...namesIn(note.value.missing).filter((name) => this.state.files[name] !== undefined)] : [LIBRARY_FILE];
-      if (files.length > 0) await this.moveTo({ type: "lost", files });
+      if (files.length > 0) {
+        await this.parkForQuestion();
+        await this.moveTo({ type: "lost", files });
+      }
     }
     await rm(this.lostNoteFile, { force: true });
   }
@@ -697,11 +712,15 @@ export class CopySync {
   /** Settles what an earlier start left, by its status. True when a copy went in. */
   private async settleSwap(): Promise<boolean> {
     const disk = unlessHeld(await lookSwapStatus(this.statusFile, backupsDir(this.options.userData))) ?? SWAP_IDLE;
-    this.swap = await this.unlessOlderSettled(disk);
-    if (this.swap !== disk) {
-      await writeSwapStatus(this.statusFile, this.swap);
-      await rm(this.listFile, { force: true });
-      this.log("cloud copy: an older Tavora took the copy up again during a swap; what it did stands");
+    const swap = await this.afterOlder(disk);
+    this.swap = disk;
+    if (swap !== disk) {
+      await writeSwapStatus(this.statusFile, swap);
+      this.swap = swap;
+      if (swap.phase === "idle") {
+        await rm(this.listFile, { force: true });
+        this.log("cloud copy: an older Tavora took the copy up again during a swap; what it did stands");
+      } else this.log("cloud copy: an older Tavora turned the copy on during a swap and uploaded nothing; the swap is taken back");
     }
     if (this.swap.phase !== "swapping" && this.swap.phase !== "undoing") await this.dropSwapLeftovers();
     let taken = false;
@@ -731,25 +750,49 @@ export class CopySync {
   }
 
   /**
-   * A swap's status, or idle when an older Tavora settled it: one that doesn't know the status found the copy off (the
-   * state is parked) and the user turned it on again there, which wrote cloud-copy.json. This Tavora never has that file
-   * while a swap goes on, so what the older one did stands; taking the swap back or finishing it would undo that work.
-   * One that can't be read says nothing of who wrote it: the swap stays.
+   * A swap's status after what an older Tavora did. One that doesn't know the status found the copy off (the state is
+   * parked), and the user turned it on again there, which wrote cloud-copy.json: this Tavora never has that file while a
+   * swap goes on. With only that done (the empty state a turn-on writes, and no copy chosen there), nothing went up: the
+   * swap is taken back, so this PC's data is in place when the user is asked. Once the older one went on from there
+   * (uploaded, or took a copy), what it did stands and the status is idle; finishing or taking the swap back would undo
+   * that work. This PC's data from before the swap may then be only in the swap's backup: it is kept whole, and the user
+   * is told. A state that can't be read says nothing of who wrote it: the swap stays.
    */
-  private async unlessOlderSettled(status: SwapStatus): Promise<SwapStatus> {
+  private async afterOlder(status: SwapStatus): Promise<SwapStatus> {
     if (status.phase !== "swapping" && status.phase !== "undoing") return status;
     const saved = await lookCopyState(this.stateFile);
     if (saved.status === "held" && !isDamaged(saved)) throw new HeldError(saved.error);
-    return saved.status === "present" ? SWAP_IDLE : status;
+    if (saved.status !== "present") return status;
+    if (await this.olderOnlyTurnedOn(saved.value)) return status.phase === "undoing" ? status : stepSwap(status, { type: "go-back" });
+    if (await this.keepWhole(status.plan.keepIn)) this.dataAside = status.plan.keepIn;
+    return SWAP_IDLE;
+  }
+
+  /** The state an older Tavora writes when the copy is turned on there, with the question which side to keep not answered. */
+  private async olderOnlyTurnedOn(state: CopyState): Promise<boolean> {
+    if (state.version !== 0 || Object.keys(state.files).length > 0 || state.kept === true) return false;
+    // The user chose the copy there: it goes in at this start.
+    const list = await lookJson(this.oldListFile);
+    if (list.status === "held" && !isDamaged(list)) throw new HeldError(list.error);
+    return !(list.status === "present" && list.value.take === true);
+  }
+
+  /** Marks one of this PC's backups so pruning leaves it whole (backupFolder). False when it isn't there. */
+  private async keepWhole(dir: string): Promise<boolean> {
+    if (unlessHeld(await lookStat(dir)) === null) return false;
+    await writeFileAtomic(path.join(dir, KEEP_WHOLE), "");
+    return true;
   }
 
   /**
    * With no swap going on, what one leaves behind goes: its plan, which a status that can't be read would otherwise be
    * taken for, and the parked state, which goes back to cloud-copy.json unless that is there (then that one is newer).
+   * While the user is asked about lost data, the state stays parked.
    */
   private async dropSwapLeftovers(): Promise<void> {
     await rm(this.planFile, { force: true });
-    await this.unparkState(null);
+    if (parksState(this.swap)) await this.parkForQuestion();
+    else await this.unparkState(null);
   }
 
   /** The state where it is: cloud-copy.json, or the parked one during a swap. */
@@ -761,6 +804,14 @@ export class CopySync {
   /** Whether the state is on disk, also when it can't be read now. */
   private async stateOnDisk(): Promise<boolean> {
     return (await lookStat(this.stateFile)).status !== "missing" || (await lookStat(this.parkedFile)).status !== "missing";
+  }
+
+  /**
+   * Before the user is asked about lost data: the state is parked as during a swap, or an older Tavora would find the copy
+   * on and upload the fresh files the app saves in place of what was lost. A cloud-copy.json that is there is the newest.
+   */
+  private async parkForQuestion(): Promise<void> {
+    if (unlessHeld(await lookStat(this.stateFile)) !== null) await renameHeld(this.stateFile, this.parkedFile);
   }
 
   /** Before a swap begins: the state goes where older Tavoras don't look, written there before cloud-copy.json goes. */
@@ -871,6 +922,7 @@ export class CopySync {
     const whole: string[] = [];
     for (const name of (unlessHeld(await lookNames(root)) ?? []).filter((item) => item.startsWith("cloud-copy-")).sort()) {
       const inside = await lookNames(path.join(root, name));
+      if (inside.status === "present" && inside.value.includes(KEEP_WHOLE)) continue;
       if (inside.status !== "present" || inside.value.some((item) => item !== WRITTEN_SINCE)) whole.push(name);
     }
     for (const name of whole.slice(0, Math.max(0, whole.length - (KEEP_BACKUPS - 1)))) await this.pruneBackup(path.join(root, name));
@@ -1198,7 +1250,7 @@ export class CopySync {
     const status = await lookSwapStatus(this.statusFile, backups);
     let swap: SwapStatus;
     try {
-      if (status.status === "present") swap = await this.unlessOlderSettled(status.value);
+      if (status.status === "present") swap = await this.afterOlder(status.value);
       else {
         const plan = await lookSwapPlan(this.planFile, backups);
         if (plan.status === "present") swap = { phase: "swapping", plan: plan.value };
@@ -1234,17 +1286,29 @@ export class CopySync {
     const newest = near.at(-1);
     if (!newest) return SWAP_IDLE;
     const keepIn = path.join(backups, newest.name);
-    const own = pcSettingsOf((await libraryIfReadable(path.join(keepIn, LIBRARY_FILE))) ?? (await libraryIfReadable(libraryFile(this.options.userData))));
-    return { phase: "swapping", plan: { keepIn, moduleFiles: this.options.files.root(), own, empty: [] } };
+    const kept = await libraryIfReadable(path.join(keepIn, LIBRARY_FILE));
+    const own = pcSettingsOf(kept ?? (await libraryIfReadable(libraryFile(this.options.userData))));
+    // With this PC's library in the backup, the one in place is the copy's, which may name another PC's module files folder.
+    const named = kept?.moduleFilesFolder;
+    const moduleFiles = !kept ? this.options.files.root() : typeof named === "string" && path.isAbsolute(named) ? named : (this.options.files.defaultRoot?.() ?? this.options.files.root());
+    // The places the copy filled that held nothing before are told from what is left, so going back empties them again.
+    const list = await this.lookList();
+    if (list.status === "held" && !isDamaged(list)) throw new HeldError(list.error);
+    const empty = list.status === "present" ? await filledPlaces(this.stagedData, copyRoots(this.options.userData, moduleFiles), keepIn, list.value) : [];
+    return { phase: "swapping", plan: { keepIn, moduleFiles, own, empty } };
   }
 
   /**
    * The user answered with a damaged state file: it starts over, so the next start can settle what they chose. During a
-   * swap the state is parked, and a cloud-copy.json beside it is no one's.
+   * swap the state is parked, and a cloud-copy.json beside it is no one's. Otherwise a state parked for the question about
+   * lost data goes back to cloud-copy.json, unless that question still stands.
    */
   private async repairState(duringSwap: boolean): Promise<void> {
     if (!duringSwap) {
-      if (isDamaged(await lookCopyState(this.stateFile))) await saveCopyState(this.stateFile, EMPTY_STATE);
+      const parked = parksState(this.swap);
+      if (!parked) await this.unparkState(null);
+      const file = parked ? this.parkedFile : this.stateFile;
+      if (isDamaged(await lookCopyState(file))) await saveCopyState(file, EMPTY_STATE);
       return;
     }
     const parked = await lookCopyState(this.parkedFile);
@@ -1301,6 +1365,7 @@ export class CopySync {
         await this.keepState(turn);
         // Choosing this PC's side also answers for data it lost: what is here now is what the user wants up.
         await this.moveFrom(swap, { type: "answered" });
+        await this.unparkState(null);
       } catch (error) {
         throw CopySync.userError(this.noteProblem(error));
       }
@@ -1507,6 +1572,14 @@ function activityView(activity: CloudCopyActivity): Pick<CloudCopyView, "busy" |
 function namesIn(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((name): name is string => typeof name === "string") : [];
 }
+
+/** Whether the state is parked while the swap has this status: during a swap, and while the user is asked about lost data. */
+function parksState(status: SwapStatus): boolean {
+  return status.phase === "swapping" || status.phase === "undoing" || (status.phase === "asking" && status.why === "lost");
+}
+
+/** In one of this PC's backups: pruning leaves it whole (it holds this PC's data from before a swap an older Tavora settled). */
+const KEEP_WHOLE = "keep-whole";
 
 /** How far apart a swap's plan and the backup it names are written, at most (the plan follows right after). */
 const PLAN_AFTER_BACKUP_MS = 60_000;
