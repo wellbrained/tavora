@@ -17,6 +17,11 @@ export interface SwapPlan {
   own: Record<string, unknown> | null;
   /** Places the copy fills that held nothing before it: taking the swap back empties them again. */
   empty: string[];
+  /**
+   * Where the copy was kept when it began: a folder, or null for the service. Missing in a plan of 0.24.133 and older, and
+   * in one made again from a backup: then it can't be told.
+   */
+  place?: string | null;
 }
 
 /**
@@ -91,10 +96,13 @@ export function stepSwap(status: SwapStatus, event: SwapEvent): SwapStatus {
 
 function parsePlan(value: unknown, backups: string): SwapPlan | null {
   if (typeof value !== "object" || value === null) return null;
-  const { keepIn, moduleFiles, own, empty } = value as Record<string, unknown>;
+  const { keepIn, moduleFiles, own, empty, place } = value as Record<string, unknown>;
   if (typeof keepIn !== "string" || path.dirname(keepIn) !== backups || typeof moduleFiles !== "string" || !path.isAbsolute(moduleFiles)) return null;
-  if (!Array.isArray(empty) || !empty.every((place) => typeof place === "string")) return null;
-  return { keepIn, moduleFiles, own: typeof own === "object" && own !== null && !Array.isArray(own) ? (own as Record<string, unknown>) : null, empty: empty as string[] };
+  if (!Array.isArray(empty) || !empty.every((item) => typeof item === "string")) return null;
+  const plan: SwapPlan = { keepIn, moduleFiles, own: typeof own === "object" && own !== null && !Array.isArray(own) ? (own as Record<string, unknown>) : null, empty: empty as string[] };
+  // A place that makes no sense is one that can't be told, not a damaged plan.
+  if (place === null || (typeof place === "string" && path.isAbsolute(place))) plan.place = place;
+  return plan;
 }
 
 function parseStatus(saved: Record<string, unknown>, backups: string): SwapStatus | null {

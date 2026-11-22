@@ -630,6 +630,7 @@ export const en = {
   "cloudCopy.unfinished.off": "Restart Tavora to settle it before you turn your cloud copy on.",
   "cloudCopy.notice.keptAside": "What you changed while your cloud copy waited is saved in {folder}.",
   "cloudCopy.notice.dataKeptAside": "Your data from before the restore is saved in {folder}.",
+  "cloudCopy.notice.bothKeptAside": "Your data from before the restore is saved in {data}, and what you changed while your cloud copy waited is in {changes}.",
   "cloudCopy.error.restartFirst": "Restart Tavora first, then turn your cloud copy on.",
   "cloudCopy.later": "Later",
   "cloudCopy.newer.title": "Newer data from your other PC",

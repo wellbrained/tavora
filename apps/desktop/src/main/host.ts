@@ -1028,10 +1028,10 @@ export class Host {
 
     const host = new Host(options, { encryptor, signIn, copySync, installed, safetyLists, official, grants, connection, systemInfo, openTimes, emblem, styles }, library, workspaces, profile, windowState, themes, themeProblems, themeHints, savedData);
     if (ownersNoted) host.workspaces.saveSoon();
-    // What the user did while a cloud copy waited is safe in a backup, or this PC's data from before an older Tavora took
-    // the copy up again: they hear where.
-    if (copySync.changesKeptIn) host.notice = translate(host.language, "cloudCopy.notice.keptAside", { folder: copySync.changesKeptIn });
-    else if (copySync.dataKeptIn) host.notice = translate(host.language, "cloudCopy.notice.dataKeptAside", { folder: copySync.dataKeptIn });
+    // What the user did while a cloud copy waited is safe in a backup, and this PC's data from before an older Tavora took
+    // the copy up again: they hear where, in one message when it is both.
+    const copyNotice = copySync.notice;
+    if (copyNotice) host.notice = translate(host.language, copyNotice.key, copyNotice.params);
     host.openedAtStart = openedTimes(library);
     // Before any module opens, so none sees the pictures half moved.
     await host.files.moveFromOldDefault((line) => console.warn(`[tavora] ${line}`));

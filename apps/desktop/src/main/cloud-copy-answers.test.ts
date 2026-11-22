@@ -2,7 +2,8 @@
 import { mkdir, readdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CopySync } from "./cloud-copy-sync";
+import { CopySync, startNotice } from "./cloud-copy-sync";
+import { translate } from "../shared/i18n";
 import { cleanUp, pc, service } from "./cloud-copy.test-helper";
 import { readSavedFile } from "./json";
 
@@ -242,6 +243,37 @@ describe("answering, settling and holding", () => {
     expect(two.sync.dataHeld).toBe(false);
     expect(two.sync.view().conflict).toBe(false);
   }, 60_000);
+
+  it("a chosen copy waiting while another account is signed in asks, and Keep this PC's lets go of it", async () => {
+    const { cloud, b } = await chosen();
+    who = "someone-else";
+    const next = tavora(cloud, b);
+    await next.sync.beforeLoad();
+    // The backups and the Trash purge wait: the user hears why, and how to get out.
+    expect(next.sync.dataHeld).toBe(true);
+    expect(next.sync.view().conflict).toBe(true);
+    await expect(next.sync.keep("cloud")).rejects.toThrow();
+    await next.sync.keep("pc");
+    expect(next.sync.dataHeld).toBe(false);
+    expect(next.sync.view().conflict).toBe(false);
+    expect(await read(b, "workspace.json")).toBe(B["workspace.json"]);
+    const after = tavora(cloud, b);
+    await after.sync.beforeLoad();
+    expect(after.sync.dataHeld).toBe(false);
+    expect(after.sync.view().conflict).toBe(false);
+  }, 60_000);
+
+  it("a start that kept both kinds of backup names both in one message", () => {
+    expect(startNotice(null, null)).toBeNull();
+    expect(startNotice("C:/b/1", null)).toEqual({ key: "cloudCopy.notice.keptAside", params: { folder: "C:/b/1" } });
+    expect(startNotice(null, "C:/b/2")).toEqual({ key: "cloudCopy.notice.dataKeptAside", params: { folder: "C:/b/2" } });
+    const both = startNotice("C:/b/1", "C:/b/2")!;
+    for (const language of ["en", "de"] as const) {
+      const text = translate(language, both.key, both.params);
+      expect(text).toContain("C:/b/1");
+      expect(text).toContain("C:/b/2");
+    }
+  });
 
   it("a copy whose library isn't JSON can still be taken (as on main)", async () => {
     const cloud = await service();
