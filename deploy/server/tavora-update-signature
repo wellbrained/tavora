@@ -3,18 +3,26 @@
 # (apps/desktop/src/main/update-signature.ts): latest.yml's tavoraSignature must be an Ed25519 signature, by one
 # of the two keys pinned in update-keys.ts, over
 #   tavora-update-v1\n<version>\n<installer file name>\n<sha512 base64>
-# so a stolen deploy key can't put an installer on the feed that Tavora's update key didn't sign.
+# so a stolen deploy key can't put an installer on the feed that Tavora's update key didn't sign. The signature
+# doesn't cover the rest of latest.yml, so that must be exactly what electron-builder writes for this one installer
+# (feed_problem): an older Tavora would also follow an extra `files` entry, an address, `packages` or
+# `isAdminRightsRequired`.
 # Installed by the maintainer as root:root 0755 in /usr/local/sbin, with the pins as /etc/tavora-deploy/update-keys.ts
 # (both by setup-deploy-access.sh); a deploy never uploads or replaces either.
 #
 #   tavora-update-signature keys <update-keys.ts>
 #       checks that the file pins two different keys (the setup runs this)
 #   tavora-update-signature verify <update-keys.ts> <latest.yml> <version> <installer> <sha512>
-#       exits 0 and prints which key signed it, or says why not and exits 1
+#       exits 0 and prints which key signed it, or says why not (the layout or the signature) and exits 1
 set -euo pipefail
 export LC_ALL=C
 
 die() { echo "tavora-update-signature: $*" >&2; exit 1; }
+
+# Canonical base64 of exactly 32 or 64 bytes, like the app's isBase64Of: the last character before the padding
+# carries no stray bits, so one value has one spelling.
+readonly B64_32='[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]='
+readonly B64_64='[A-Za-z0-9+/]{85}[AQgw]=='
 
 # The two pinned keys, each 32 bytes of base64 (43 characters and one =), from update-keys.ts. Prints "release <key>"
 # and "backup <key>".
@@ -22,10 +30,46 @@ read_keys() { # file
   local file="$1" name key
   [[ -f "$1" && -r "$1" ]] || die "no pinned update keys at $file (run the server setup again)"
   for name in release backup; do
-    key="$(sed -nE "s|^  $name: \"([A-Za-z0-9+/]{43}=)\",?\$|\\1|p" "$file")"
+    key="$(sed -nE "s|^  $name: \"($B64_32)\",?\$|\\1|p" "$file")"
     [[ "$(grep -cE "^  $name:" "$file")" == 1 && -n "$key" && "$key" != *$'\n'* ]] || die "update-keys.ts does not pin one $name key"
     echo "$name $key"
   done
+}
+
+# Why latest.yml is not exactly electron-builder's feed for this one installer (plus the signature line), or nothing.
+# Each key once, each line exactly as written for <version>, <installer> and <sha512>; `files` holds one entry (url,
+# sha512, size); `releaseNotes` is a plain `|` block of lines indented by two spaces. No address (://) anywhere, and one
+# `url:` line in all, so nothing can point an updater at another file.
+feed_problem() { # latest.yml version installer sha512
+  awk -v version="$2" -v installer="$3" -v sha512="$4" '
+    function fail(why) { print why; bad = 1; exit }
+    index($0, "://") { fail("latest.yml names an address (://); the feed only ever names the installer next to it") }
+    /url:/ { if (++urls > 1) fail("latest.yml names more than one url") }
+    state == "files" {
+      entry++
+      if (entry == 1 && $0 == "  - url: " installer) next
+      if (entry == 2 && $0 == "    sha512: " sha512) next
+      if (entry == 3 && $0 ~ /^    size: [1-9][0-9]*$/) { state = ""; next }
+      fail("latest.yml'"'"'s files list must hold exactly this installer: its url, sha512 and size")
+    }
+    state == "notes" { if ($0 == "" || $0 ~ /^  [^ ]/) next; state = "" }
+    $0 == "version: " version { seen["version"]++; next }
+    $0 ~ /^tavoraSignature: / { seen["tavoraSignature"]++; next }
+    $0 == "files:" { seen["files"]++; state = "files"; entry = 0; next }
+    $0 == "path: " installer { seen["path"]++; next }
+    $0 == "sha512: " sha512 { seen["sha512"]++; next }
+    $0 == "releaseNotes: |" { seen["releaseNotes"]++; state = "notes"; next }
+    $0 ~ /^releaseDate: '"'"'[0-9TZ:.-]+'"'"'$/ { seen["releaseDate"]++; next }
+    { fail("latest.yml has a line electron-builder'"'"'s feed for " installer " never has: " substr($0, 1, 80)) }
+    END {
+      if (bad) exit 1
+      if (state == "files") { print "latest.yml'"'"'s files list is cut off"; exit 1 }
+      if (urls != 1) { print "latest.yml must name the installer in exactly one url"; exit 1 }
+      n = split("version tavoraSignature files path sha512 releaseDate", once, " ")
+      for (i = 1; i <= n; i++) if (seen[once[i]] != 1) { print "latest.yml must have exactly one " once[i] " line for this installer"; exit 1 }
+      if (seen["releaseNotes"] > 1) { print "latest.yml has more than one releaseNotes"; exit 1 }
+    }
+  ' "$1"
 }
 
 # An Ed25519 public key in PEM form: the 12-byte SubjectPublicKeyInfo prefix (16 base64 characters, no padding) and the raw 32 bytes.
@@ -59,9 +103,10 @@ case "${1:-}" in
     # The same plain one-line fields the app accepts, so the signed text can't be read two ways.
     [[ "$version" =~ ^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$ ]] || die "not a plain x.y.z version: $version"
     [[ "$installer" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$ ]] || die "not a plain file name: $installer"
-    [[ "$sha512" =~ ^[A-Za-z0-9+/]{86}==$ ]] || die 'the SHA-512 is not 64 bytes of base64'
+    [[ "$sha512" =~ ^$B64_64$ ]] || die 'the SHA-512 is not 64 bytes of base64'
     [[ "$(grep -c '^tavoraSignature:' "$feed" || true)" == 1 ]] || die 'latest.yml has no Tavora signature (or more than one)'
-    signature="$(sed -nE "s|^tavoraSignature: '([A-Za-z0-9+/]{86}==)'\$|\\1|p" "$feed")"
+    problem="$(feed_problem "$feed" "$version" "$installer" "$sha512")" || die "${problem:-latest.yml is unreadable}"
+    signature="$(sed -nE "s|^tavoraSignature: '($B64_64)'\$|\\1|p" "$feed")"
     [[ -n "$signature" ]] || die "latest.yml's Tavora signature is not 64 bytes of base64"
     work="$(mktemp -d)"
     trap 'rm -rf "$work"' EXIT

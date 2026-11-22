@@ -1,4 +1,12 @@
 # Changes here need the maintainer's review (GitHub asks for it on every pull request that touches them).
 
-# The two update keys every app build pins: whoever changes them decides which updates installed apps take.
+# What decides which updates installed apps take: the pinned update keys, the check of the signature, the updater.
 /apps/desktop/src/main/update-keys.ts @wellbrained
+/apps/desktop/src/main/update-signature.ts @wellbrained
+/apps/desktop/src/main/updates.ts @wellbrained
+
+# The server's receiver and setup: what a deploy key may publish.
+/deploy/server/ @wellbrained
+
+# This file itself.
+/.github/CODEOWNERS @wellbrained

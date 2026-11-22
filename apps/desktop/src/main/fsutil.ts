@@ -33,22 +33,22 @@ export async function writeFileAtomic(file: string, body: string | Uint8Array): 
 /** How old a temp must be to count as left over: a write takes moments, so no running write still owns one this old. */
 export const LEFTOVER_TEMP_AGE_MS = 60 * 60 * 1000;
 /**
- * Folders in the data folder that are not Tavora's own saved data, never swept: module code and installs in progress,
- * the files the user saves from modules, copies on their way in, Chromium's own folders that look like Tavora's.
- * Every other folder at the top must be named like Tavora's own (lower-case words with hyphens), which keeps out
- * Chromium's (`Partitions`, `Local Storage`, `blob_storage` and so on).
+ * The folders in the data folder that hold Tavora's own saved data, written with writeFileAtomic: module storage and
+ * documents, panel state, game and Steam icons, the profile picture, backups. Only these are swept (and the files at the
+ * top of the data folder); a folder added later is left alone until it is named here. Never module code, installs in
+ * progress, the files the user saves from modules, or Chromium's own folders.
  */
-const NOT_SWEPT = new Set(["modules", "module-staging", "module-blobs", "read-only-files", "official-updates", "cloud-copy-staging", "temp", "databases"]);
-const OWN_FOLDER = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+const SWEPT_FOLDERS = new Set(["module-data", "panel-state", "game-icons", "steam-icons", "profile", "backups"]);
 const SWEEP_DEPTH = 8;
 
 /**
  * Removes the temps writeFileAtomic left when Tavora was stopped in the middle of a write, at a start. Only in the data
- * folder (never the cloud copy's folder, where another PC may be writing), only `<file>.<12 hex>.tmp` files older than
- * an hour, and only next to their file: then that file is whole (the old content or the new), so nothing is lost. A temp
- * whose file is missing stays, as it may be the only copy. Links are never followed or removed. Answers what it removed.
+ * folder (never the cloud copy's folder, where another PC may be writing), only `<file>.<12 hex>.tmp` files more than an
+ * hour old by the clock as each is looked at (a temp dated in the future stays), and only next to their file: then that
+ * file is whole (the old content or the new), so nothing is lost. A temp whose file is missing stays, as it may be the
+ * only copy. Links are never followed or removed. Answers what it removed.
  */
-export async function sweepWriteLeftovers(userData: string, now = Date.now()): Promise<string[]> {
+export async function sweepWriteLeftovers(userData: string, clock: () => number = Date.now): Promise<string[]> {
   const removed: string[] = [];
   const walk = async (dir: string, depth: number): Promise<void> => {
     const entries = await readdir(dir, { withFileTypes: true }).catch(() => null);
@@ -56,7 +56,7 @@ export async function sweepWriteLeftovers(userData: string, now = Date.now()): P
     const files = new Set(entries.filter((entry) => entry.isFile()).map((entry) => entry.name));
     for (const entry of entries) {
       if (entry.isDirectory()) {
-        const swept = depth > 0 || (OWN_FOLDER.test(entry.name) && !NOT_SWEPT.has(entry.name));
+        const swept = depth > 0 || SWEPT_FOLDERS.has(entry.name);
         if (swept && depth < SWEEP_DEPTH) await walk(path.join(dir, entry.name), depth + 1);
         continue;
       }
@@ -65,7 +65,7 @@ export async function sweepWriteLeftovers(userData: string, now = Date.now()): P
       const temp = path.join(dir, entry.name);
       try {
         const info = await lstat(temp);
-        const age = now - info.mtimeMs;
+        const age = clock() - info.mtimeMs;
         if (!info.isFile() || age < LEFTOVER_TEMP_AGE_MS) continue;
         await rm(temp);
         removed.push(temp);

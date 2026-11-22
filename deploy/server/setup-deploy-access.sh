@@ -90,6 +90,10 @@ for user in "${USERS[@]}"; do
 done
 # One key per job: the same key twice would let one job's key run another job.
 [[ "$(for u in "${USERS[@]}"; do cut -d' ' -f2 "$src/keys/$u.pub"; done | sort -u | wc -l)" == "${#USERS[@]}" ]] || die 'two users got the same key; make one key per job'
+# The update keys the app pins, and an openssl that can check them, before anything is installed: a receiver that
+# requires the signature but can't check it would refuse every update.
+for f in deploy/server/tavora-update-signature apps/desktop/src/main/update-keys.ts; do [[ -f "$src/$f" ]] || die "missing in the upload: $f"; done
+bash "$src/deploy/server/tavora-update-signature" keys "$src/apps/desktop/src/main/update-keys.ts" >/dev/null || die 'update-keys.ts does not pin two usable update keys, or openssl cannot check them'
 
 
 echo 'Users'
@@ -138,9 +142,8 @@ put deploy/server/tavora-receive /usr/local/sbin/tavora-receive 755
 put deploy/server/tavora-api-switch /usr/local/sbin/tavora-api-switch 755
 put deploy/server/tavora-admin-switch /usr/local/sbin/tavora-admin-switch 755
 put deploy/server/tavora-update-signature /usr/local/sbin/tavora-update-signature 755
-# The update keys the app pins: tavora-receive publishes only an update one of them signed. A deploy can't change them.
+# The update keys the app pins (checked above): tavora-receive publishes only an update one of them signed. A deploy can't change them.
 install -d -m 755 -o root -g root /etc/tavora-deploy
-/usr/local/sbin/tavora-update-signature keys "$src/apps/desktop/src/main/update-keys.ts" >/dev/null || die 'update-keys.ts does not pin two usable update keys'
 put apps/desktop/src/main/update-keys.ts /etc/tavora-deploy/update-keys.ts 644
 installed+=(deploy/server/setup-deploy-access.sh)
 

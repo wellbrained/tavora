@@ -76,6 +76,48 @@ describe.skipIf(!capable)("tavora-update-signature", () => {
     expect(verify(feed.replace(line, "tavoraSignature: 'AAAA'")).err).toContain("not 64 bytes");
   });
 
+  it("takes the feed as electron-builder writes it, release notes included", () => {
+    const notes = signed().replace("releaseDate:", "releaseNotes: |\n  - Faster start\n\n  - Fewer clicks: the menu opens at once\nreleaseDate:");
+    expect(verify(notes)).toMatchObject({ ok: true, out: "signed by the release update key" });
+  });
+
+  it("refuses a second installer in the files list, also one at an address", () => {
+    const feed = signed();
+    const second = feed.replace("path:", `  - url: Tavora-Setup-1.0.1-x64.exe\n    sha512: ${otherSha512}\n    size: 1\npath:`);
+    expect(verify(second)).toMatchObject({ ok: false, err: expect.stringContaining("more than one url") });
+    const away = feed.replace("path:", `  - url: https://evil.example/Tavora-Setup-1.0.1-x64.exe\n    sha512: ${otherSha512}\n    size: 1\npath:`);
+    expect(verify(away)).toMatchObject({ ok: false, err: expect.stringContaining("names an address") });
+    expect(verify(feed.replace(`  - url: ${installer}`, `  - url: https://evil.example/${installer}`)).err).toContain("names an address");
+    expect(verify(feed.replace(`  - url: ${installer}`, "  - url: Other.exe")).err).toContain("files list must hold exactly this installer");
+  });
+
+  it("refuses anything else the signature doesn't cover", () => {
+    const feed = signed();
+    expect(verify(feed.replace("releaseDate:", "isAdminRightsRequired: true\nreleaseDate:")).err).toContain("never has: isAdminRightsRequired");
+    expect(verify(feed.replace("releaseDate:", "packages:\n  x64:\n    path: x.7z\nreleaseDate:")).err).toContain("never has: packages:");
+    expect(verify(feed.replace("    size: 123456\n", "    size: 123456\n    isAdminRightsRequired: true\n")).err).toContain("never has");
+    expect(verify(feed.replace(`path: ${installer}`, "path: Other.exe")).err).toContain("never has: path: Other.exe");
+    expect(verify(`${feed}path: ${installer}\n`).err).toContain("exactly one path");
+    expect(verify(feed.replace(`path: ${installer}\n`, "")).err).toContain("exactly one path");
+    expect(verify(feed.replace("releaseDate:", "releaseNotes: |\n  see url: x\nreleaseDate:")).err).toContain("more than one url");
+    expect(verify(feed.replace("releaseDate:", "releaseNotes: |\n    indented more\nreleaseDate:")).err).toContain("never has");
+    expect(verify(feed.replace("version: 1.0.1", "version: 1.0.1\nversion: 1.0.1")).err).toContain("exactly one version");
+    expect(verify(feed.replace(/\n/g, "\r\n")).ok).toBe(false);
+  });
+
+  it("refuses base64 the app wouldn't take, even when it decodes to the same bytes", () => {
+    const feed = signed();
+    const line = feed.split("\n").find((l: string) => l.startsWith("tavoraSignature:"))!;
+    const signature = line.slice("tavoraSignature: '".length, -1);
+    const loose = (value: string) => value.slice(0, -3) + String.fromCharCode(value.charCodeAt(value.length - 3) + 1) + value.slice(-2);
+    expect(Buffer.from(loose(signature), "base64")).toEqual(Buffer.from(signature, "base64"));
+    expect(verify(feed.replace(signature, loose(signature))).err).toContain("not 64 bytes of base64");
+    expect(verify(feed, { digest: loose(sha512) }).err).toContain("not 64 bytes of base64");
+    const key = release.publicKey;
+    const looseKey = key.slice(0, -2) + String.fromCharCode(key.charCodeAt(key.length - 2) + 1) + "=";
+    expect(verify(feed, { keys: pinned({ release: looseKey, backup: backup.publicKey }) }).err).toContain("does not pin one release key");
+  });
+
   it("refuses fields the app would refuse", () => {
     const feed = signed();
     expect(verify(feed, { version: "1.0.1\nx" }).err).toContain("not a plain x.y.z version");
