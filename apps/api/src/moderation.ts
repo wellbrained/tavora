@@ -187,18 +187,23 @@ const Q = "[\"'`]";
 const ID = "[\\w$]+";
 const PATH = "[\\w$]+(?:\\.[\\w$]+)*";
 /** One statement in the empty script's handler below: run the queue, then unhook and drop the element. Nothing else. */
-const CLEANUP = `(?:${ID}\\((?:${ID})?\\)|\\1\\.onreadystatechange\\s*=\\s*null|(?:${PATH}|\\1\\.parentNode)\\.removeChild\\(\\1\\)|\\1\\s*=\\s*null)`;
+const CLEANUP = `(?:(?!(?:eval|Function|setTimeout|setInterval|setImmediate|importScripts)\\b)${ID}\\((?:${ID})?\\)|\\1\\.onreadystatechange\\s*=\\s*null|(?:${PATH}|\\1\\.parentNode)\\.removeChild\\(\\1\\)|\\1\\s*=\\s*null)`;
 
 /**
  * Exact pieces of popular libraries that look like warning signs but run no code of anyone's choosing. They're blanked out
  * before the check, so the same words anywhere else, or written even slightly differently, are still held. Add one only
- * after reading where it comes from, with a test.
+ * after reading where it comes from, with a test, and after trying to hide something inside or next to it.
+ *
+ * The setImmediate and script element ones are safe only next to the module page's policy, `script-src 'self'` without
+ * 'unsafe-eval' or 'unsafe-inline' (apps/desktop/src/main/assets.ts): there `Function(text)` throws, and a script element
+ * added at run time can only run the module's own, checked files. Someone could copy their shape; it gets them nothing.
  */
 const KNOWN_SNIPPETS: { why: string; pattern: RegExp }[] = [
   {
-    // lodash, core-js, regenerator, setimmediate, …: finds the global object. Only this fixed text runs.
+    // lodash, core-js, regenerator, setimmediate, …: finds the global object. Only this fixed text runs, and its answer
+    // isn't used right there (`Function('return this')().eval(x)` still holds).
     why: "Function('return this')()",
-    pattern: new RegExp(`(?<![\\w$.])(?:new\\s+)?Function\\(\\s*(${Q})return this\\1\\s*\\)\\(\\)`, "g"),
+    pattern: new RegExp(`(?<![\\w$.])(?:new\\s+)?Function\\(\\s*(${Q})return this\\1\\s*\\)\\(\\)(?!\\s*[.[(])`, "g"),
   },
   {
     // regenerator-runtime: sets a global when strict mode forbids it. Only this fixed text runs.
@@ -221,12 +226,14 @@ const KNOWN_SNIPPETS: { why: string; pattern: RegExp }[] = [
     pattern: new RegExp(`(${Q})onreadystatechange\\1\\s*in\\s*${PATH}\\.createElement\\(\\s*(${Q})script\\2\\s*\\)`, "g"),
   },
   {
-    // immediate (JSZip), setimmediate: an empty script element as a timer. It never gets a src or any text.
+    // immediate (JSZip), setimmediate: an empty script element as a timer, as the whole body of a function so nothing
+    // else there can reach it. Its handler only runs the queue and drops it; it never gets a src or any text.
     why: "an empty script element used as a timer",
     pattern: new RegExp(
-      `(?:var|let|const)\\s+(${ID})\\s*=\\s*${PATH}\\.createElement\\(\\s*(${Q})script\\2\\s*\\)\\s*;\\s*` +
+      `function\\s*\\(\\s*(?:${ID})?\\s*\\)\\s*\\{\\s*` +
+        `(?:var|let|const)\\s+(${ID})\\s*=\\s*${PATH}\\.createElement\\(\\s*(${Q})script\\2\\s*\\)\\s*;\\s*` +
         `\\1\\.onreadystatechange\\s*=\\s*function\\s*\\(\\)\\s*\\{\\s*${CLEANUP}(?:\\s*[,;]\\s*${CLEANUP})*\\s*;?\\s*\\}\\s*[,;]?\\s*` +
-        `${PATH}\\.appendChild\\(\\1\\)`,
+        `${PATH}\\.appendChild\\(\\1\\)\\s*;?\\s*\\}`,
       "g",
     ),
   },
