@@ -11,8 +11,8 @@ vi.mock("electron", () => {
 
 const { Host } = await import("./host");
 const { ModuleView } = await import("./module-view");
-const { THEME } = await import("./games");
-const { FALLBACK_STYLE } = await import("./styles");
+const { Appearance } = await import("./appearance");
+const { emptyLibrary } = await import("./library");
 
 /** A module panel whose bridge records what it hears. */
 function modulePanel() {
@@ -22,17 +22,12 @@ function modulePanel() {
   return { view, emit };
 }
 
-/** A Host with only what changing an appearance setting touches. */
+/** A Host with only what changing an appearance setting touches, its Appearance a real one over no installed themes. */
 function host(panels: InstanceType<typeof ModuleView>[]) {
-  const variation = { id: "dark", name: "Dark", mode: "dark" as const, contrast: "normal" as const, radius: 6, colors: { ...THEME.tokens } };
-  const theme = { id: "community.test", name: "Test", description: null, author: null, version: "1.0.0", minTavora: null, variations: [variation] };
+  const library = { ...emptyLibrary(), tabOverflow: "list" as const };
   const subject = Object.create(Host.prototype) as Record<string, unknown>;
   Object.assign(subject, {
-    library: { tabOverflow: "list", toasts: "bottom-center", radius: null },
-    currentTheme: undefined,
-    panelTheme: undefined,
-    currentChoice: () => ({ theme, variation }),
-    currentStyle: () => FALLBACK_STYLE,
+    library,
     syncNativeTheme: () => {},
     applyTitleBarOverlay: () => {},
     applyCorners: () => {},
@@ -41,6 +36,17 @@ function host(panels: InstanceType<typeof ModuleView>[]) {
     toastView: { refresh: () => {} },
     panels: { forgetStandIns: () => {} },
     nativePanels: () => panels,
+  });
+  subject.appearance = new Appearance({
+    library,
+    userData: "",
+    sources: { themes: {}, styles: {} },
+    appVersion: "0.0.0",
+    installed: { themes: new Map(), themeProblems: [], themeHints: [], styles: new Map(), styleProblems: [], styleHints: [] },
+    systemMode: () => "dark",
+    openPath: async () => "",
+    hidden: true,
+    applied: (changed) => (subject.showTheme as (changed: boolean) => void).call(subject, changed),
   });
   const handlers = (subject.actionHandlers as () => Record<string, (action: unknown) => Promise<void>>).call(subject);
   return { subject, handlers };
