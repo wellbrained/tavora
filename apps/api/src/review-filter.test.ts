@@ -85,6 +85,45 @@ describe("the review word filter", () => {
     }
   });
 
+  it("leaves model and part codes alone", () => {
+    for (const text of [
+      "BMW F46",
+      "BMW X1 F49",
+      "My F46 got repaired",
+      "#f49",
+      "FA6",
+      "FA9",
+      "FA6 got fixed",
+      "RTX 4090",
+      "i9",
+      "Core i9 14900K",
+      "X1",
+      "A4",
+      "B2",
+      "v1.9.9",
+      "x64 and x86",
+      "PS4",
+      "R6",
+    ]) {
+      expect(checkReviewText(text), text).toBe("ok");
+    }
+  });
+
+  it("reads digits between letters however many there are, and short spelled-out pieces", () => {
+    for (const text of ["f4990t", "fa990t", "ni999a", "n1999a", "n1 gg a", "n1g g4", "f4g"]) {
+      expect(checkReviewText(text), text).toBe("words");
+    }
+  });
+
+  it("reads Japanese and Chinese full stops as dots only with a Latin letter right behind them", () => {
+    for (const text of ["free。com", "free｡com", "free。com now"]) {
+      expect(checkReviewText(text), text).toBe("link");
+    }
+    for (const text of ["いいゲーム。", "いいゲーム。 とても楽しい", "良いゲーム。次も遊ぶ", "Great game。", "Great game。 Thanks", "好玩。再来一次"]) {
+      expect(checkReviewText(text), text).toBe("ok");
+    }
+  });
+
   it("never reads a year as a letter, right after or joined to a short word", () => {
     for (const word of ["in", "on", "an", "en", "un", "uni", "ani", "ini", "ni"]) {
       for (let year = 1900; year < 2100; year++) {

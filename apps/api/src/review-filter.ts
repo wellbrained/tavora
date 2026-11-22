@@ -51,8 +51,9 @@ const WORD_CHAR = /[\p{L}\p{N}-]/u;
 
 /** "link" for what reads as an address, "hold" when only a person can tell, null when there is neither. */
 function linkIn(original: string): "link" | "hold" | null {
-  // A full-width dot opens the same address in a browser.
-  const text = original.replace(/．/g, ".");
+  // A full-width dot opens the same address in a browser. So do the Japanese and Chinese full stops, but those also end
+  // sentences, so they only count with a Latin letter right behind them.
+  const text = original.replace(/．/g, ".").replace(/[。｡](?=[a-z])/gi, ".");
   let found: "hold" | null = null;
   for (const match of text.matchAll(LINK_GLOBAL)) {
     if (!/^[ \t]+\p{L}/u.test(text.slice(match.index + match[0].length))) return "link";
@@ -90,13 +91,23 @@ function latinWord(word: string): string {
 
 const readDigit = (digit: string) => LOOKALIKE[digit] ?? digit;
 
+/** A model or part code: one or two letters, then one or two digits, three or four characters in all ("F46", "FA6", "X64"). */
+const PART_CODE = /^\p{L}{1,2}\d{1,2}$/u;
+
 /**
- * Digits read as letters only inside a word that has letters too ("ni99a", "f4ggot"), and only one or two in a row (one at its
- * start), so a number stays a number: "in 1994", "on1994" and "1994er" hold no letters to join up with the word before them.
+ * Digits read as letters only inside a word that has letters too, so a number stays a number: "in 1994", "on1994" and "1994er"
+ * hold no letters to join up with the word before them. Digits with letters on both sides are always read ("ni99a", "f4990t").
+ * At the end of a word at most two are, and none of a part code ("BMW F46"); at its start only a single one ("5lut").
  */
 function readDigits(token: string): string {
   if (!/\p{L}/u.test(token)) return token;
-  return token.replace(/\d+/g, (run: string, at: number) => (run.length > 2 || (at === 0 && run.length > 1) ? run : run.replace(/\d/g, readDigit)));
+  const code = token.length >= 3 && PART_CODE.test(token);
+  return token.replace(/\d+/g, (run: string, at: number) => {
+    const lettersBefore = at > 0;
+    const lettersAfter = at + run.length < token.length;
+    const read = lettersBefore && lettersAfter ? true : lettersBefore ? run.length <= 2 && !code : run.length === 1;
+    return read ? run.replace(/\d/g, readDigit) : run;
+  });
 }
 
 /** Single characters in a row ("n 1 g g a"), with at least two letters among them, so a lone number isn't read as a letter. */
