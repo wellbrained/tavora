@@ -14,9 +14,18 @@ import { fileURLToPath } from "node:url";
 
 export const PROTOCOL = 1;
 
-/** Each job's server user, its key setting, and the setup files whose server copy must match the repo. */
+/**
+ * Each job's server user, its key setting, the setup files whose server copy must match the repo (`needs`), and the
+ * ones the server must have at all (`requires`; the receiver always).
+ */
 export const JOBS = {
-  updates: { user: "tavora-updates", keyVar: "TAVORA_UPDATES_SSH_KEY", needs: [/^deploy\/server\/tavora-receive$/] },
+  updates: {
+    user: "tavora-updates",
+    keyVar: "TAVORA_UPDATES_SSH_KEY",
+    // The feed checks the update signature against the pins the setup installed, so new pins need the setup again.
+    needs: [/^deploy\/server\/tavora-receive$/, /^deploy\/server\/tavora-update-signature$/, /^apps\/desktop\/src\/main\/update-keys\.ts$/],
+    requires: ["deploy/server/tavora-update-signature", "apps/desktop/src/main/update-keys.ts"],
+  },
   docs: { user: "tavora-docs", keyVar: "TAVORA_DOCS_SSH_KEY", needs: [/^deploy\/server\/tavora-receive$/] },
   api: {
     user: "tavora-api-deploy",
@@ -72,6 +81,7 @@ export function staleSetup(job, installed, repoHash) {
   const stale = [];
   for (const [file, sha] of installed) if (relevant(file) && repoHash(file) !== sha) stale.push(file);
   if (![...installed.keys()].some((file) => /tavora-receive$/.test(file))) stale.push("deploy/server/tavora-receive");
+  for (const file of JOBS[job].requires ?? []) if (!installed.has(file)) stale.push(file);
   return stale.sort();
 }
 

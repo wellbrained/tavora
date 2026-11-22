@@ -1,6 +1,6 @@
-// For the maintainer: sends the server setup (deploy/server/setup-deploy-access.sh and every file it installs)
-// to the server and runs it there as root, with the root admin key. Only committed files go (HEAD), plus the
-// four deploy keys' public halves and this PC's tailnet address. See deploy/README.md.
+// For the maintainer: sends the server setup (deploy/server/setup-deploy-access.sh and every file it installs,
+// the update keys the app pins included) to the server and runs it there as root, with the root admin key. Only
+// committed files go (HEAD), plus the four deploy keys' public halves and this PC's tailnet address. See deploy/README.md.
 //
 //   node deploy/send-server-setup.mjs --admin-key <path to the root admin key> [--pc-address 100.x.y.z]
 import { spawnSync } from "node:child_process";
@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { JOBS } from "../scripts/deploy-client.mjs";
 
 const repo = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const PATHS = ["deploy/server", "apps/api/deploy"];
+const PATHS = ["deploy/server", "apps/api/deploy", "apps/desktop/src/main/update-keys.ts"];
 
 function option(name, fallback) {
   const index = process.argv.indexOf(name);

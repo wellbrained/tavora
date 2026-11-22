@@ -12,6 +12,7 @@
 #  - one sudo rule each for the API and Admin switch helpers;
 #  - the API service's root-level files the deploy used to install: the systemd unit, the Caddy site,
 #    the maintainer's helper commands and the backup timer;
+#  - the update keys the app pins (/etc/tavora-deploy/update-keys.ts), so the feed takes only signed updates;
 #  - /etc/tavora-deploy/installed.sha256, which deploys compare with the repo to say when this needs a rerun.
 set -euo pipefail
 umask 022
@@ -136,6 +137,11 @@ put() { # repo-path destination mode [owner group]
 put deploy/server/tavora-receive /usr/local/sbin/tavora-receive 755
 put deploy/server/tavora-api-switch /usr/local/sbin/tavora-api-switch 755
 put deploy/server/tavora-admin-switch /usr/local/sbin/tavora-admin-switch 755
+put deploy/server/tavora-update-signature /usr/local/sbin/tavora-update-signature 755
+# The update keys the app pins: tavora-receive publishes only an update one of them signed. A deploy can't change them.
+install -d -m 755 -o root -g root /etc/tavora-deploy
+/usr/local/sbin/tavora-update-signature keys "$src/apps/desktop/src/main/update-keys.ts" >/dev/null || die 'update-keys.ts does not pin two usable update keys'
+put apps/desktop/src/main/update-keys.ts /etc/tavora-deploy/update-keys.ts 644
 installed+=(deploy/server/setup-deploy-access.sh)
 
 echo 'sudo'

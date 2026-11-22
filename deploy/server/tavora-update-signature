@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# Checks Tavora's own signature on an app update before tavora-receive publishes it, the way the app does
+# (apps/desktop/src/main/update-signature.ts): latest.yml's tavoraSignature must be an Ed25519 signature, by one
+# of the two keys pinned in update-keys.ts, over
+#   tavora-update-v1\n<version>\n<installer file name>\n<sha512 base64>
+# so a stolen deploy key can't put an installer on the feed that Tavora's update key didn't sign.
+# Installed by the maintainer as root:root 0755 in /usr/local/sbin, with the pins as /etc/tavora-deploy/update-keys.ts
+# (both by setup-deploy-access.sh); a deploy never uploads or replaces either.
+#
+#   tavora-update-signature keys <update-keys.ts>
+#       checks that the file pins two different keys (the setup runs this)
+#   tavora-update-signature verify <update-keys.ts> <latest.yml> <version> <installer> <sha512>
+#       exits 0 and prints which key signed it, or says why not and exits 1
+set -euo pipefail
+export LC_ALL=C
+
+die() { echo "tavora-update-signature: $*" >&2; exit 1; }
+
+# The two pinned keys, each 32 bytes of base64 (43 characters and one =), from update-keys.ts. Prints "release <key>"
+# and "backup <key>".
+read_keys() { # file
+  local file="$1" name key
+  [[ -f "$1" && -r "$1" ]] || die "no pinned update keys at $file (run the server setup again)"
+  for name in release backup; do
+    key="$(sed -nE "s|^  $name: \"([A-Za-z0-9+/]{43}=)\",?\$|\\1|p" "$file")"
+    [[ "$(grep -cE "^  $name:" "$file")" == 1 && -n "$key" && "$key" != *$'\n'* ]] || die "update-keys.ts does not pin one $name key"
+    echo "$name $key"
+  done
+}
+
+# An Ed25519 public key in PEM form: the 12-byte SubjectPublicKeyInfo prefix (16 base64 characters, no padding) and the raw 32 bytes.
+pem() { printf -- '-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA%s\n-----END PUBLIC KEY-----\n' "$1"; }
+
+command -v openssl >/dev/null || die 'openssl is missing'
+case "${1:-}" in
+  keys)
+    [[ $# == 2 ]] || die 'usage: tavora-update-signature keys <update-keys.ts>'
+    keys="$(read_keys "$2")"
+    (( $(cut -d' ' -f2 <<< "$keys" | sort -u | wc -l) == 2 )) || die 'the release and backup update keys are the same key'
+    work="$(mktemp -d)"
+    trap 'rm -rf "$work"' EXIT
+    while read -r name key; do
+      pem "$key" > "$work/$name.pem"
+      openssl pkey -pubin -in "$work/$name.pem" -noout 2>/dev/null || die "the $name update key is not an Ed25519 public key"
+    done <<< "$keys"
+    # This openssl must check Ed25519 signatures over raw bytes (OpenSSL 3), or every publish would be refused.
+    printf 'self-test' > "$work/signed"
+    openssl genpkey -algorithm ed25519 -out "$work/test.key" 2>/dev/null &&
+      openssl pkey -in "$work/test.key" -pubout -out "$work/test.pem" 2>/dev/null &&
+      openssl pkeyutl -sign -inkey "$work/test.key" -rawin -in "$work/signed" -out "$work/test.sig" 2>/dev/null &&
+      openssl pkeyutl -verify -pubin -inkey "$work/test.pem" -rawin -in "$work/signed" -sigfile "$work/test.sig" >/dev/null 2>&1 ||
+      die "this openssl ($(openssl version)) can't check Ed25519 signatures; it needs OpenSSL 3"
+    echo 'two pinned update keys'
+    ;;
+  verify)
+    [[ $# == 6 ]] || die 'usage: tavora-update-signature verify <update-keys.ts> <latest.yml> <version> <installer> <sha512>'
+    keys="$(read_keys "$2")"
+    feed="$3" version="$4" installer="$5" sha512="$6"
+    # The same plain one-line fields the app accepts, so the signed text can't be read two ways.
+    [[ "$version" =~ ^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$ ]] || die "not a plain x.y.z version: $version"
+    [[ "$installer" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$ ]] || die "not a plain file name: $installer"
+    [[ "$sha512" =~ ^[A-Za-z0-9+/]{86}==$ ]] || die 'the SHA-512 is not 64 bytes of base64'
+    [[ "$(grep -c '^tavoraSignature:' "$feed" || true)" == 1 ]] || die 'latest.yml has no Tavora signature (or more than one)'
+    signature="$(sed -nE "s|^tavoraSignature: '([A-Za-z0-9+/]{86}==)'\$|\\1|p" "$feed")"
+    [[ -n "$signature" ]] || die "latest.yml's Tavora signature is not 64 bytes of base64"
+    work="$(mktemp -d)"
+    trap 'rm -rf "$work"' EXIT
+    printf 'tavora-update-v1\n%s\n%s\n%s' "$version" "$installer" "$sha512" > "$work/signed"
+    printf '%s' "$signature" | openssl base64 -d -A > "$work/signature"
+    (( $(wc -c < "$work/signature") == 64 )) || die "latest.yml's Tavora signature is not 64 bytes"
+    while read -r name key; do
+      pem "$key" > "$work/$name.pem"
+      if openssl pkeyutl -verify -pubin -inkey "$work/$name.pem" -rawin -in "$work/signed" -sigfile "$work/signature" >/dev/null 2>&1; then
+        echo "signed by the $name update key"
+        exit 0
+      fi
+    done <<< "$keys"
+    die "the Tavora signature does not match $version, $installer and its SHA-512 under either pinned update key"
+    ;;
+  *) die 'usage: tavora-update-signature keys <update-keys.ts> | verify <update-keys.ts> <latest.yml> <version> <installer> <sha512>' ;;
+esac

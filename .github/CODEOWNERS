@@ -1,0 +1,4 @@
+# Changes here need the maintainer's review (GitHub asks for it on every pull request that touches them).
+
+# The two update keys every app build pins: whoever changes them decides which updates installed apps take.
+/apps/desktop/src/main/update-keys.ts @wellbrained
