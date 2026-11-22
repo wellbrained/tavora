@@ -182,16 +182,16 @@ describe("the cloud copy", () => {
     expect(taken?.sealed).toBeUndefined();
     // Once this PC has seen a sealed one, a list without a sealed version is an old one served again: older, at any version.
     for (const version of [9, 1000]) {
-      await expect(replaying(legacy, version).download(key, b.roots, path.join(b.root, "staging"), second.state.version, true)).rejects.toMatchObject({ reason: "older" });
+      await expect(replaying(legacy, version).download(key, b.roots, path.join(b.root, "staging"), second.state.version, { sealed: true })).rejects.toMatchObject({ reason: "older" });
     }
     // The user's own choices (no version to compare with) still take it.
-    expect(await replaying(legacy, 9).download(key, b.roots, path.join(b.root, "staging"), 0, true)).toMatchObject({ version: 9 });
+    expect(await replaying(legacy, 9).download(key, b.roots, path.join(b.root, "staging"), 0, { sealed: true })).toMatchObject({ version: 9 });
     // A sealed copy says so, and so does the state it becomes.
-    const real = await client().download(key, b.roots, path.join(b.root, "staging"), first.state.version, true);
-    expect(real).toMatchObject({ version: second.state.version, sealed: true });
-    expect(second.state.sealed).toBe(true);
+    const real = await client().download(key, b.roots, path.join(b.root, "staging"), first.state.version, { sealed: true });
+    expect(real).toMatchObject({ version: second.state.version, sealed: true, marked: true });
+    expect(second.state).toMatchObject({ sealed: true, marked: true });
     const swapped = await swapInCopy(path.join(b.root, "staging"), b.roots, path.join(b.root, "kept"), real!);
-    expect(swapped.sealed).toBe(true);
+    expect(swapped).toMatchObject({ sealed: true, marked: true });
     const file = path.join(b.root, "cloud-copy.json");
     await saveCopyState(file, swapped);
     expect(await loadCopyState(file)).toEqual(swapped);

@@ -1,11 +1,11 @@
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, expect, it } from "vitest";
 import { AccountKey } from "./account-key";
 import { cleanUp, pc } from "./cloud-copy.test-helper";
 import { newPairingKey, pairingCommit } from "./copy-crypto";
 import type { PairingKey } from "./copy-crypto";
-import { ANSWER_WAIT_MS, FolderPairing, MAX_OPEN_ANSWERS, OPEN_ANSWER_MS, Pairing, ServicePairing, SLOW_ANSWER_MS, type PairingOptions, type PairingTransport } from "./pairing";
+import { ANSWER_WAIT_MS, CLOCK_AHEAD_MS, FOLDER_PAIRING_MS, FolderPairing, MAX_OPEN_ANSWERS, OPEN_ANSWER_MS, Pairing, ServicePairing, SLOW_ANSWER_MS, type PairingOptions, type PairingTransport } from "./pairing";
 
 // An old PC asked again and again by whoever carries the messages: each answer counts, however it ends.
 
@@ -243,4 +243,102 @@ it("doesn't answer when it can't note the answer down", async () => {
   await look(old.pairing, 3);
   expect(answered).toEqual([]);
   old.pairing.dispose();
+});
+
+// Anyone who can write the folder can plant a request. It may make adding a PC fail for a while, but not for good.
+
+/** A request as only someone writing the folder would plant it, lasting until `expiresAt`. */
+async function plant(dir: string, id: string, expiresAt: number) {
+  await mkdir(dir, { recursive: true });
+  await writeFile(path.join(dir, `${id}.request.json`), JSON.stringify({ v: 1, name: "Laptop", commit: commit(), expiresAt }));
+}
+
+it("never answers a request that says it lasts longer than any request does, and removes it", async () => {
+  const { root } = await pc();
+  const folder = path.join(root, "OneDrive");
+  const dir = path.join(folder, "Tavora", "pairing");
+  const now = Date.now();
+  const old = await oldPc(new FolderPairing(folder, "Desk", () => now), { now: () => now });
+  await plant(dir, "0123456789abcdef", now + 10 * 365 * 24 * 60 * 60_000);
+  await old.pairing.lookForRequests();
+  expect(await readdir(dir)).toEqual([]);
+  // One made by a PC whose clock is a little ahead is still answered.
+  await plant(dir, "fedcba9876543210", now + FOLDER_PAIRING_MS + CLOCK_AHEAD_MS);
+  await old.pairing.lookForRequests();
+  expect((await readdir(dir)).sort()).toEqual(["fedcba9876543210.answer.json", "fedcba9876543210.request.json"]);
+  old.pairing.dispose();
+});
+
+it("answers a real new PC once it let go of a planted request, though the planted one stays and looks newer", async () => {
+  const { root } = await pc();
+  const folder = path.join(root, "OneDrive");
+  const dir = path.join(folder, "Tavora", "pairing");
+  await mkdir(path.dirname(dir), { recursive: true });
+  let now = Date.now();
+  const old = await oldPc(new FolderPairing(folder, "Desk", () => now), { now: () => now });
+  const fresh = await onPc(new FolderPairing(folder, "Laptop", () => now), { now: () => now });
+  await fresh.pairing.start();
+  await plant(dir, "0123456789abcdef", now + FOLDER_PAIRING_MS + CLOCK_AHEAD_MS);
+  await old.pairing.lookForRequests();
+  expect(await readdir(dir)).toContain("0123456789abcdef.answer.json");
+  // Whoever planted it takes the answer away, so it looks unanswered, and never shows a key: let go of, and the real
+  // one is answered.
+  await rm(path.join(dir, "0123456789abcdef.answer.json"));
+  now += ANSWER_WAIT_MS.folder;
+  await old.pairing.lookForRequests();
+  await fresh.pairing.lookForAnswer();
+  await old.pairing.lookForRequests();
+  expect(old.pairing.view().approve).toMatchObject({ name: "Laptop", code: fresh.pairing.view().asking!.code });
+  fresh.pairing.dispose();
+  old.pairing.dispose();
+});
+
+it("lets go of a request it answered once the request runs out, also when its key came and nobody clicked", async () => {
+  const start = Date.now();
+  let now = start;
+  const theirs = newPairingKey();
+  let sent: string | null = null;
+  // A carrier that answers with the new PC's key, and keeps showing the request after it ran out.
+  const transport: PairingTransport = {
+    via: "folder",
+    read: async () => ({
+      id: "planted",
+      own: false,
+      name: "Laptop",
+      commit: pairingCommit(theirs.publicKey).toString("base64url"),
+      expiresAt: start + 60_000,
+      ...(sent ? { answer: { name: "Desk", publicKey: sent }, reveal: theirs.publicKey.toString("base64url") } : {}),
+    }),
+    ask: async () => ({ id: "x", expiresAt: 0 }),
+    answer: async (_id, publicKey) => {
+      sent = publicKey;
+      return true;
+    },
+    reveal: async () => undefined,
+    sendKey: async () => undefined,
+    end: async () => undefined,
+  };
+  const old = await oldPc(transport, { now: () => now });
+  await look(old.pairing, 2);
+  expect(old.pairing.view().approve).toMatchObject({ id: "planted", name: "Laptop" });
+  now = start + 60_000;
+  await old.pairing.lookForRequests();
+  expect(old.pairing.view().approve).toBeNull();
+  old.pairing.dispose();
+});
+
+it("reads, writes and cleans up nothing through a link in place of the pairing folder", async () => {
+  const { root } = await pc();
+  const folder = path.join(root, "OneDrive");
+  const elsewhere = path.join(root, "elsewhere");
+  await mkdir(path.join(folder, "Tavora"), { recursive: true });
+  const now = Date.now();
+  // Out there: a request run out long ago, which a look would clean up.
+  await plant(elsewhere, "0123456789abcdef", now - 1);
+  await symlink(elsewhere, path.join(folder, "Tavora", "pairing"), "junction");
+  const transport = new FolderPairing(folder, "Desk", () => now);
+  expect(await transport.read()).toBeNull();
+  expect(await readdir(elsewhere)).toEqual(["0123456789abcdef.request.json"]);
+  await expect(transport.ask(commit())).rejects.toMatchObject({ reason: "folder-locked" });
+  expect(await readdir(elsewhere)).toEqual(["0123456789abcdef.request.json"]);
 });

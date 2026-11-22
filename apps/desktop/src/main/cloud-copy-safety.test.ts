@@ -251,7 +251,7 @@ describe("the folder and the size of a copy", () => {
     await engine.upload(key, at.roots, EMPTY_STATE);
     const b = await pc({});
     const staging = path.join(b.root, "staging");
-    expect(await engine.download(key, b.roots, staging, 0, false, () => false)).toBeNull();
+    expect(await engine.download(key, b.roots, staging, 0, {}, () => false)).toBeNull();
     expect(await readdir(b.root)).not.toContain("staging");
     expect(await readdir(b.root)).not.toContain("staging.parts");
   });

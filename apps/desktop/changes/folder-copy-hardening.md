@@ -1,0 +1,7 @@
+tags: cloud-copy
+
+# Safer cloud copy in a folder
+
+- Whoever can write your cloud copy's folder can't make Tavora delete what your copy still needs.
+- Approving a new PC through the folder can't be blocked for good by a request someone planted there.
+- When a PC with an older Tavora saves the copy, your other PCs ask which side to keep. Update Tavora there.

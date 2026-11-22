@@ -198,9 +198,11 @@ describe("the cloud copy, as Tavora runs it", () => {
     expect(atA.sync.view()).toMatchObject({ conflict: true, restartToTake: false });
     expect(atA.events.restarts).toBe(0);
 
-    // A PC that never saw a sealed copy (its state is from an older Tavora) takes it, as before.
+    // A PC that never saw a sealed copy (its state is from an older Tavora, which drops `sealed` and `marked`) takes it, as before.
     const saved = JSON.parse(await read(a.userData, "cloud-copy.json")) as Record<string, unknown>;
+    expect(saved).toMatchObject({ sealed: true, marked: true });
     delete saved.sealed;
+    delete saved.marked;
     await writeFile(state, JSON.stringify(saved));
     const before = tavora({ ...cloud, fetch: replay }, a);
     await before.sync.beforeLoad();

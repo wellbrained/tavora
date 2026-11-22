@@ -13,20 +13,37 @@ export const COPY_KEY_BYTES = 32;
 export const PART_ID_BYTES = 32;
 const NONCE_BYTES = 12;
 const TAG_BYTES = 16;
-/** Bound into every seal, so a sealed thing from another purpose or version never opens as a copy. */
+/** What sealing adds at most: the nonce, the tag and one byte saying whether it is compressed (never when that is bigger). */
+export const SEAL_OVERHEAD = NONCE_BYTES + TAG_BYTES + 1;
+/**
+ * Bound into every seal of the copy, parts and manifests alike, so a sealed thing from another purpose never opens as a
+ * copy. It stays the same for both: Tavora 0.24.133 and newer open only this, and take anything else for a copy made with
+ * another key (they turn it off and ask for the key), which is no way to tell them to update. What tells the two apart is
+ * below: a part is checked against its name (`partId`), and a manifest carries a mark (`manifestMark`).
+ */
 const AAD = Buffer.from("tavora-copy-1");
 
 export interface CopyKeys {
   seal: Buffer;
   id: Buffer;
+  /** For manifests only: no part is ever marked with it. */
+  mark: Buffer;
 }
 
 export const newCopyKey = (): Buffer => randomBytes(COPY_KEY_BYTES);
 
 export function copyKeys(copyKey: Uint8Array): CopyKeys {
   const derive = (info: string) => Buffer.from(hkdfSync("sha256", copyKey, Buffer.alloc(0), info, 32));
-  return { seal: derive("tavora-copy-seal"), id: derive("tavora-copy-part-id") };
+  return { seal: derive("tavora-copy-seal"), id: derive("tavora-copy-part-id"), mark: derive("tavora-copy-manifest-mark") };
 }
+
+/**
+ * A manifest's mark, sealed inside it: a keyed hash of what it says, under a key of its own. A part is sealed the same way
+ * and may hold anything a module saved, even text shaped like a manifest, but it can't hold a mark: that needs the key.
+ * So a part put in a manifest's place (or a manifest under another version's or parent's name) is caught. The text starts
+ * with the mark's form, so a later form never matches this one. `fields` is the manifest's content, in a fixed order.
+ */
+export const manifestMark = (keys: CopyKeys, fields: string): string => createHmac("sha256", keys.mark).update("tavora-copy-manifest-2\n").update(fields).digest("base64url");
 
 /** A part's name: the HMAC of its plain content, so it says nothing to anyone without the key. */
 export const partId = (keys: CopyKeys, plain: Uint8Array): Buffer => createHmac("sha256", keys.id).update(plain).digest();
