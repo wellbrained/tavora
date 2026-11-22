@@ -150,8 +150,7 @@ import { syncIcons } from "./icon-sync";
 import { fetchSteamLibrary, importSteamGames, MAX_IMPORT_GAMES, steamGameStatus, steamLibraryView } from "./steam-import";
 import { icoFrameNear, isShareCandidate, largestIcoFrame, shareableIconFile, shareSource, steamShareGames, submitIcon } from "./share-icons";
 import { AppInfoError, readClientIcons, readSteamKinds } from "./steam-appinfo";
-import { GameOverlayWindow, type OverlayPanel } from "./game-overlay-window";
-import { GameOverlays, layerBinding, toggleBinding, type OverlayWindowRequest, type PanelInfo, type PanelLoan } from "./game-overlay-service";
+import { GameOverlays, layerBinding, toggleBinding, type PanelInfo } from "./game-overlay-service";
 import { scopeForKind } from "./game-overlays";
 import { OverlayLayout, type SourcePanel } from "./overlay-layout";
 import { OverlayCanvas } from "./overlay-canvas";
@@ -247,7 +246,6 @@ import type { FileKind, PanelOpenManyResult, PanelOpenResult } from "@tavora/sdk
 import { openManySlots } from "../shared/panel-layout";
 import { initialBounds, MIN_SIZE, type WindowState } from "./window-state";
 import { layoutKey, OpenTimes, PanelCover } from "./panel-cover";
-import { BrowserPanelView, ModulePanelView } from "./panel-view-adapters";
 import { clampRect, PanelViews, type PanelViewAdapter } from "./panel-views";
 import { withGameInstanceId, WithGamePanels, type WithGameModule } from "./with-game";
 
@@ -454,6 +452,16 @@ export class Host {
       });
     },
     shownHere: (instanceId) => !!this.workspaceId && this.records(this.workspaceId).some((record) => record.instanceId === instanceId),
+    // The in-game layer shows a panel of a workspace that isn't shown in a view made for it (no Browser panel goes there).
+    openForGame: (instanceId, workspaceId) => {
+      const record = this.recordOf(instanceId, workspaceId);
+      const entry = this.library.workspaces[workspaceId];
+      if (record && entry && record.moduleId !== BROWSER_MODULE_ID) this.createView(record, { id: entry.id, displayName: entry.name, kind: entry.kind });
+    },
+    lending: (instanceId) => {
+      this.tooltips.close(instanceId);
+      this.closeModuleMenu(instanceId);
+    },
     returned: () => {
       this.pushStateSoon();
       this.openPendingDialog();
@@ -3349,13 +3357,8 @@ export class Host {
         }
       }
     }
-    for (const instanceId of this.panels.keptIds()) {
-      if (wanted.has(instanceId)) continue;
-      this.panels.stopKeeping(instanceId);
-      const shownHere = this.workspace && this.records(this.workspace.id).some((record) => record.instanceId === instanceId);
-      // Still running with its game: it stays.
-      if (!shownHere && !this.panels.isLent(instanceId) && !this.panels.isKept(instanceId)) this.panels.release(instanceId);
-    }
+    // One still running with its game, shown in its workspace or over the game stays.
+    for (const instanceId of this.panels.keptIds()) if (!wanted.has(instanceId)) this.panels.letGo(instanceId);
   }
 
   /** Back from the Overlay page to the workspace it was opened from, else Home. */
@@ -3912,7 +3915,7 @@ export class Host {
       const browserId = this.records(workspace.id)
         .map((record) => record.instanceId)
         .reverse()
-        .find((id) => this.panels.get(id) instanceof BrowserPanelView);
+        .find((id) => this.panels.get(id) instanceof BrowserPanel);
       if (browserId) {
         const panel = this.browser(browserId);
         if (panel.blank) panel.restore(url);
@@ -4433,13 +4436,12 @@ export class Host {
       runsOnlyWithGame: () => this.withGame.runsOnlyWithGame(record.instanceId, workspace.id),
     });
     view.setWindowBehind(this.windowBehind);
-    const adapter = new ModulePanelView(view);
     this.panels.open(record, () => ({
-      adapter,
+      adapter: view,
       start: () => {
         const contentsId = view.webContentsId;
-        this.panels.bindContents(adapter, contentsId);
-        view.view.webContents.once("destroyed", () => this.panels.unbindContents(adapter, contentsId));
+        this.panels.bindContents(view, contentsId);
+        view.view.webContents.once("destroyed", () => this.panels.unbindContents(view, contentsId));
         this.watchShortcuts(view.view.webContents);
         this.window.contentView.addChildView(view.view);
       },
@@ -4710,18 +4712,18 @@ export class Host {
       adblockOn: (url) => !this.isSiteListed("adblockOff", url),
       swap: (previous, next) => {
         if (previous) {
-          this.panels.unbindContents(adapter, previous.webContents.id);
+          this.panels.unbindContents(panel, previous.webContents.id);
           this.window.contentView.removeChildView(previous);
         }
         const id = next.webContents.id;
-        this.panels.bindContents(adapter, id);
-        next.webContents.once("destroyed", () => this.panels.unbindContents(adapter, id));
+        this.panels.bindContents(panel, id);
+        next.webContents.once("destroyed", () => this.panels.unbindContents(panel, id));
         this.watchShortcuts(next.webContents);
         this.window.contentView.addChildView(next);
         if (previous) this.panels.applyBounds();
       },
       onAddress: (url) => {
-        if (this.panels.get(instanceId) !== adapter) return;
+        if (this.panels.get(instanceId) !== panel) return;
         void this.data.panelState.set(instanceId, { url }).catch((error: unknown) => console.error("[tavora]", error));
       },
       onOpenTab: (url, background, referrer) => {
@@ -4744,11 +4746,10 @@ export class Host {
       },
       onChange: () => this.pushState(),
     });
-    const adapter = new BrowserPanelView(panel);
-    this.panels.open(record, () => ({ adapter, start: () => panel.attach() }));
+    this.panels.open(record, () => ({ adapter: panel, start: () => panel.attach() }));
     // The page the panel showed last time opens again.
     void this.data.panelState.get(instanceId).then(
-      (saved) => this.panels.get(instanceId) === adapter && panel.reopen((saved as { url?: unknown } | null)?.url),
+      (saved) => this.panels.get(instanceId) === panel && panel.reopen((saved as { url?: unknown } | null)?.url),
       () => undefined,
     );
   }
@@ -4819,37 +4820,37 @@ export class Host {
   /** A panel's module view; undefined for a Browser panel or when it has none. */
   private moduleView(instanceId: string): ModuleView | undefined {
     const view = this.panels.get(instanceId);
-    return view instanceof ModulePanelView ? view.panel : undefined;
+    return view instanceof ModuleView ? view : undefined;
   }
 
   private moduleViews(): ModuleView[] {
-    return this.panels.adapters().flatMap((view) => (view instanceof ModulePanelView ? [view.panel] : []));
+    return this.panels.adapters().flatMap((view) => (view instanceof ModuleView ? [view] : []));
   }
 
   /** The module view whose page has these contents (what a page's own requests are judged by). */
   private moduleByContents(contentsId: number): ModuleView | undefined {
     const view = this.panels.byWebContents(contentsId);
-    return view instanceof ModulePanelView ? view.panel : undefined;
+    return view instanceof ModuleView ? view : undefined;
   }
 
   private browserPanel(instanceId: string): BrowserPanel | undefined {
     const view = this.panels.get(instanceId);
-    return view instanceof BrowserPanelView ? view.panel : undefined;
+    return view instanceof BrowserPanel ? view : undefined;
   }
 
   private browserPanels(): BrowserPanel[] {
-    return this.panels.adapters().flatMap((view) => (view instanceof BrowserPanelView ? [view.panel] : []));
+    return this.panels.adapters().flatMap((view) => (view instanceof BrowserPanel ? [view] : []));
   }
 
   /** The Browser panel whose page has these contents (what the page's requests are judged by). */
   private browserByContents(contentsId: number): BrowserPanel | undefined {
     const view = this.panels.byWebContents(contentsId);
-    return view instanceof BrowserPanelView ? view.panel : undefined;
+    return view instanceof BrowserPanel ? view : undefined;
   }
 
   private nativePanel(instanceId: string): ModuleView | BrowserPanel | undefined {
     const view = this.panels.get(instanceId);
-    return view instanceof ModulePanelView || view instanceof BrowserPanelView ? view.panel : undefined;
+    return view instanceof ModuleView || view instanceof BrowserPanel ? view : undefined;
   }
 
   /** The GPU process went and Chromium started a new one: every page is asked to draw again and the panels are placed again, so none stays blank. */
@@ -4861,7 +4862,7 @@ export class Host {
   }
 
   private nativePanels(): (ModuleView | BrowserPanel)[] {
-    return this.panels.adapters().flatMap((view) => (view instanceof ModulePanelView || view instanceof BrowserPanelView ? [view.panel] : []));
+    return this.panels.adapters().flatMap((view) => (view instanceof ModuleView || view instanceof BrowserPanel ? [view] : []));
   }
 
   /**
@@ -4922,43 +4923,6 @@ export class Host {
     };
   }
 
-  /** Lends a panel's view to the in-game layer: its own when its workspace is shown, else one made for the layer. */
-  private lendPanel(instanceId: string, workspaceId: string, revoked: () => void): PanelLoan | null {
-    if (this.window.isDestroyed()) return null;
-    const existing = this.panels.get(instanceId);
-    if (existing && !(existing instanceof ModulePanelView)) return null;
-    if (!existing) {
-      const record = this.recordOf(instanceId, workspaceId);
-      const entry = this.library.workspaces[workspaceId];
-      if (!record || !entry || record.moduleId === BROWSER_MODULE_ID) return null;
-      this.createView(record, { id: entry.id, displayName: entry.name, kind: entry.kind });
-    }
-    const view = this.moduleView(instanceId);
-    if (!view || view.view.webContents.isDestroyed()) return null;
-    this.tooltips.close(instanceId);
-    this.closeModuleMenu(instanceId);
-    const lease = this.panels.lend(instanceId, revoked);
-    return lease ? { panel: view, return: () => lease.return() } : null;
-  }
-
-  /** The window for an overlay's page, or (with `panel`) for a panel over its game: the panel's own view goes into it, and no copy is made. */
-  private overlayWindow(request: OverlayWindowRequest, panel?: OverlayPanel): GameOverlayWindow {
-    return new GameOverlayWindow({
-      preload: path.join(path.dirname(this.options.modulePreload), "game-overlay.cjs"),
-      hidden: !!this.options.hidden,
-      id: request.id,
-      source: { page: request.page, state: request.state, watch: request.watch },
-      gameBounds: request.gameBounds,
-      moved: request.moved,
-      closeRequested: request.closeRequested,
-      layoutRequested: request.layoutRequested,
-      ended: request.ended,
-      activated: request.activated,
-      frameText: request.frameText,
-      ...(panel ? { panel } : {}),
-    });
-  }
-
   private frozenShown: (() => void) | null = null;
 
   /** Resolves once the host UI says the panels' still images are on screen, or after FROZEN_SHOWN_CAP_MS. */
@@ -4979,7 +4943,7 @@ export class Host {
   private logDraws(views: PanelViewAdapter[], what: string): void {
     if (!timingLog) return;
     const shownAt = performance.now();
-    for (const { panel: view } of views.filter((item): item is ModulePanelView => item instanceof ModulePanelView)) {
+    for (const view of views.filter((item): item is ModuleView => item instanceof ModuleView)) {
       void view.drawn.then(() => timingLog?.(`${what}: ${view.moduleId}${view.typeName ? ` (${view.typeName})` : ""} drew ${Math.round(performance.now() - shownAt)} ms after it was shown`));
     }
   }
@@ -5888,10 +5852,7 @@ export class Host {
         saveLibrary: () => this.saveLibrary(),
         workspaceId: () => this.workspaceId,
         askConnector: (moduleId, connector) => this.askConnector(moduleId, connector),
-        panelsInGame: {
-          info: (instanceId, workspaceId) => this.panelInfo(instanceId, workspaceId),
-          lend: (instanceId, workspaceId, revoked) => this.lendPanel(instanceId, workspaceId, revoked),
-        },
+        panelInfo: (instanceId, workspaceId) => this.panelInfo(instanceId, workspaceId),
         page: {
           sources: () => this.overlaySources(),
           keepRunning: (panels) => this.runForOverlayPage(panels),

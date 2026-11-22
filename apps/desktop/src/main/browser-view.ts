@@ -8,6 +8,8 @@ import { judgedTopUrl, judgeRequest, type AdBlocker } from "./browser-filter";
 import { addressToUrl, displayHost, isPrivateUrl, isWebUrl, parseUrl, siteOfUrl } from "./browser-url";
 import { shortcutIn } from "../shared/shortcuts";
 import { BROWSER_MODULE_ID } from "./registry";
+import { stillOf } from "./panel-still";
+import type { PanelViewAdapter } from "./panel-views";
 
 /** Logins in a workspace's own session, or in the one shared by every workspace. */
 export type BrowserKind = "workspace" | "shared";
@@ -175,11 +177,17 @@ const MAX_REDIRECT_SWITCHES = 5;
 const PAGE_RADIUS = 9;
 
 /** One Browser panel. Its page view is replaced when it moves between a workspace's and the shared session. */
-export class BrowserPanel {
+export class BrowserPanel implements PanelViewAdapter {
   readonly moduleId = BROWSER_MODULE_ID;
+  /** As Panel views sees it (panel-views.ts): always revealed, never paused, no dialog and no maximized state of its own. */
+  readonly kind = "browser";
+  readonly revealed = true;
+  readonly firstDrawn = true;
+  readonly drawn = Promise.resolve();
+  readonly settled = Promise.resolve();
   view: WebContentsView;
   status: InstanceStatus = "ready";
-  private kind: BrowserKind = "workspace";
+  private sessionKind: BrowserKind = "workspace";
   private bounds: { x: number; y: number; width: number; height: number } | null = null;
   private visible = false;
   /** The page's address once it committed; requests of the page are judged against it, unless a public page is on its way (hopUrl). */
@@ -261,7 +269,7 @@ export class BrowserPanel {
   private createView(): WebContentsView {
     const view = new WebContentsView({
       webPreferences: {
-        session: this.options.sessionFor(this.kind),
+        session: this.options.sessionFor(this.sessionKind),
         sandbox: true,
         contextIsolation: true,
         nodeIntegration: false,
@@ -311,7 +319,7 @@ export class BrowserPanel {
     contents.on("will-navigate", (event) => {
       if (!this.mayFollow(event.url)) return event.preventDefault();
       const kind = this.kindFor(event.url);
-      if (kind === this.kind) return;
+      if (kind === this.sessionKind) return;
       event.preventDefault();
       if (!current()) return;
       this.crossSession(event.url, kind, { by: "page", gesture: this.pageGesture(event.url), referrer: pageReferrer(this.committedUrl) });
@@ -345,7 +353,7 @@ export class BrowserPanel {
       // A redirect to a site of the other session goes there as the navigation it belongs to would (will-navigate): only
       // shared sites sit in the shared session.
       const kind = this.kindFor(event.url);
-      if (kind !== this.kind) {
+      if (kind !== this.sessionKind) {
         event.preventDefault();
         // While the panel asks, the page behind it gets nowhere in the other session, and nothing it does there counts.
         if (!current() || this.asking) return;
@@ -522,9 +530,9 @@ export class BrowserPanel {
 
   /** Loads an address, first moving to the other session's view when the site needs it; `start` says who chose it. */
   private open(url: string, kind: BrowserKind, start: NavigationStart = { by: "user" }): void {
-    if (kind !== this.kind) {
+    if (kind !== this.sessionKind) {
       const previous = this.view;
-      this.kind = kind;
+      this.sessionKind = kind;
       this.view = this.createView();
       this.committedUrl = null;
       this.fullscreen = false;
@@ -556,8 +564,8 @@ export class BrowserPanel {
    */
   siteSettingsChanged(): void {
     const url = this.asking ? null : (this.committedUrl ?? this.requestedUrl);
-    const kind = url && isWebUrl(url) ? this.kindFor(url) : this.kind;
-    if (!url || kind === this.kind) return this.changed();
+    const kind = url && isWebUrl(url) ? this.kindFor(url) : this.sessionKind;
+    if (!url || kind === this.sessionKind) return this.changed();
     const chosen = url === this.committedUrl && this.committedChosen;
     this.redirectSwitches = 0;
     this.open(chosen ? url : siteHome(url), kind);
@@ -628,7 +636,7 @@ export class BrowserPanel {
       canGoForward: history?.canGoForward() ?? false,
       site: siteOfUrl(url),
       // From the site list, not the session the page is in: while the panel asks they differ.
-      shared: parsed ? this.options.isSharedSite(url) : this.kind === "shared",
+      shared: parsed ? this.options.isSharedSite(url) : this.sessionKind === "shared",
       adblock: parsed ? this.options.adblockOn(url) : true,
       blocked: this.blocked,
       error: this.status === "crashed" ? { kind: "crashed", detail: "" } : this.error,
@@ -701,7 +709,7 @@ export class BrowserPanel {
       // there, asks first.
       this.redirectSwitches = 0;
       const kind = this.kindFor(url);
-      if (kind === this.kind) this.open(url, kind, RESTORED);
+      if (kind === this.sessionKind) this.open(url, kind, RESTORED);
       else this.crossSession(url, kind, RESTORED);
       return;
     }
@@ -715,9 +723,21 @@ export class BrowserPanel {
     if (!contents.isDestroyed()) contents.forcefullyCrashRenderer();
   }
 
-  dispose(): void {
+  setInDialog(): void {}
+  focus(): void {}
+  setMaximized(): void {}
+  capture(): Promise<string | null> {
+    return stillOf(this.view);
+  }
+  /** A Browser panel never goes over the game. */
+  inGame(): null {
+    return null;
+  }
+
+  dispose(): Promise<void> {
     clearTimeout(this.changeTimer);
     if (!this.view.webContents.isDestroyed()) this.view.webContents.close();
+    return Promise.resolve();
   }
 
   private setStatus(status: InstanceStatus): void {
