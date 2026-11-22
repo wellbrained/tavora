@@ -10,6 +10,7 @@ import {
   BLOB_PATH,
   BLOB_TYPES,
   DOCUMENT_ID,
+  DOCUMENT_ID_RULE_TAVORA,
   CLASSIC_STYLE,
   FIELD_SINCE,
   STYLE_TAVORA,
@@ -17,6 +18,7 @@ import {
   LIMITS,
   METHOD_INFO,
   needsGesture,
+  newDocumentIdProblem,
   OVERLAY_KEY,
   supportsCall,
   PROTOCOL_VERSION,
@@ -471,6 +473,10 @@ function putDocument(shared: Shared, params: unknown, origin: Panel | null): Doc
 
   const existing = shared.documents.get(docId);
   checkRevision(existing, ifRevision);
+  if (!existing && versionAtLeast(shared.version, DOCUMENT_ID_RULE_TAVORA)) {
+    const problem = newDocumentIdProblem(docId, shared.documents.keys());
+    if (problem !== null) fail("INVALID_PARAMS", problem);
+  }
   if (!existing && shared.documents.size >= shared.limits.maxDocuments) {
     fail("QUOTA_EXCEEDED", `a module may keep at most ${shared.limits.maxDocuments} documents per workspace`);
   }

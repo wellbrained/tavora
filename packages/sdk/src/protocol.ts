@@ -1547,6 +1547,36 @@ export const PICTURES_PATH = "/_pictures/";
 /** Document ids: host-generated UUIDs or module-chosen slugs. */
 export const DOCUMENT_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 
+const WINDOWS_DEVICE = /^(?:con|prn|aux|nul|conin\$|conout\$|com[0-9¹²³]|lpt[0-9¹²³]) *(?:\..*)?$/i;
+
+/**
+ * Whether Windows keeps `name` for a device (CON, PRN, AUX, NUL, CONIN$, CONOUT$, COM0-9, LPT0-9, and COM and LPT with
+ * a superscript ¹ ² ³), also with an extension or spaces after it (`NUL.txt`, `com1.x`, `CON .json`): Windows may open
+ * the device for such a name instead of a file. Compared without regard to case. One rule for every name Tavora makes
+ * or checks: document ids, folder names in manifests, file names in module zips, names of files a module saves
+ * (`@tavora/module-schema` passes it on).
+ */
+export function isWindowsDeviceName(name: string): boolean {
+  return WINDOWS_DEVICE.test(name);
+}
+
+/** The first Tavora that refuses the document ids `newDocumentIdProblem` names; an older one takes them. */
+export const DOCUMENT_ID_RULE_TAVORA = "0.24.73";
+
+/**
+ * Why `documents.put` refuses `id` for a new document, or null. Ids are saved as file names, so a new document can't be
+ * called `index` (the store's own file) or a name Windows keeps for devices (`con`, `nul`, `com1`, …), in any case, and
+ * can't differ from a saved document's id (`saved`) only by case, as Windows doesn't tell `Notes.json` from `notes.json`.
+ * A document already saved under such an id stays readable and writable. Tavora `DOCUMENT_ID_RULE_TAVORA` and newer;
+ * the memory host of `@tavora/sdk/testing` applies the same rule.
+ */
+export function newDocumentIdProblem(id: string, saved: Iterable<string>): string | null {
+  if (id.toLowerCase() === "index" || isWindowsDeviceName(id)) return `"${id}" can't be a document id: Windows or Tavora keeps that name for itself`;
+  const lower = id.toLowerCase();
+  for (const other of saved) if (other.toLowerCase() === lower) return `document id "${id}" differs from "${other}" only by case`;
+  return null;
+}
+
 /**
  * POST a JSON document here, from the module's own page, to save it as a file where the user picks in Tavora's save
  * dialog (see files.saveJson). `?name=` suggests the file name; the answer is `{ fileName }`, or `{ fileName: null }`

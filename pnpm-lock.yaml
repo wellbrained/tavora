@@ -692,6 +692,10 @@ importers:
   packages/media-helper: {}
 
   packages/module-schema:
+    dependencies:
+      '@tavora/sdk':
+        specifier: workspace:^
+        version: link:../sdk
     devDependencies:
       '@types/node':
         specifier: ^22.20.5

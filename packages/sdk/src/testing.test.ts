@@ -126,6 +126,27 @@ describe("documents", () => {
     expect(await sdk.documents.list()).toEqual([]);
   });
 
+  it("refuses the ids Tavora refuses for a new document, as Tavora does", async () => {
+    const { sdk, host } = createMemoryHost();
+    for (const id of ["index", "INDEX", "con", "Nul", "com1", "LPT9"]) {
+      expect(await failure(sdk.documents.put({ id, title: "T", data: 1 }))).toMatchObject({ code: "INVALID_PARAMS", message: `"${id}" can't be a document id: Windows or Tavora keeps that name for itself` });
+    }
+    await sdk.documents.put({ id: "notes", title: "N", data: 1 });
+    expect(await failure(sdk.documents.put({ id: "Notes", title: "N", data: 2 }))).toMatchObject({ code: "INVALID_PARAMS", message: 'document id "Notes" differs from "notes" only by case' });
+    expect(() => host.documents.put({ id: "aux", title: "A", data: 1 })).toThrow("Windows or Tavora keeps that name");
+    // Fine: the same id again, and names that only start like a device name.
+    await sdk.documents.put({ id: "notes", title: "N", data: 3 });
+    for (const id of ["console", "com10", "indexes", "nul_list"]) await sdk.documents.put({ id, title: "T", data: 1 });
+    expect((await sdk.documents.list()).map((doc) => doc.id).sort()).toEqual(["com10", "console", "indexes", "notes", "nul_list"]);
+  });
+
+  it("takes those ids on a Tavora from before the rule", async () => {
+    const { sdk } = createMemoryHost({ version: "0.24.72" });
+    await sdk.documents.put({ id: "index", title: "I", data: 1 });
+    await sdk.documents.put({ id: "Index", title: "I", data: 1 });
+    expect((await sdk.documents.list()).map((doc) => doc.id).sort()).toEqual(["Index", "index"]);
+  });
+
   it("checks ids, titles, data and quotas", async () => {
     const { sdk } = createMemoryHost({ limits: { maxDocumentBytes: 20, maxDocuments: 2, maxDocumentsBytes: 30 } });
     expect(await failure(sdk.documents.put({ id: "bad id", title: "T", data: 1 }))).toMatchObject({ code: "INVALID_PARAMS" });
