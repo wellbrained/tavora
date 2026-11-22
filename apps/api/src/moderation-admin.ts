@@ -1,4 +1,4 @@
-import { readZipEntry, zipDirectory } from "@tavora/pack";
+import { readZipEntry } from "@tavora/pack";
 import { Hono } from "hono";
 import { catalogListingProblem } from "@tavora/module-schema";
 import { accountLifecycle, type AccountLifecycle } from "./account-lifecycle.ts";
@@ -9,7 +9,7 @@ import { catalogTrust, keyRefusal, type CatalogTrust, type KeyRefusal } from "./
 import { mailLanguage, publishedMail, type Mailer } from "./mail.ts";
 import { bannedMail, createNotifier, declinedMail, DECLINE_REASONS, isDeclineReason, type Notifier } from "./moderation-mail.ts";
 import { runChecks } from "./moderation.ts";
-import { uploadMemory, type UploadMemory, zipMemory } from "./upload-memory.ts";
+import { FREE_AFTER_BYTES, freeMemory, type MemoryTicket, uploadMemory, type UploadMemory } from "./upload-memory.ts";
 import type { Scanner } from "./virus-scan.ts";
 
 /**
@@ -59,16 +59,8 @@ const LIVE_CHECK = "live_check";
 /** What the review page shows of one waiting version. */
 function describe(waiting: WaitingVersion, catalog: CatalogStore, accounts: AccountStore, trust: CatalogTrust) {
   const { manifest } = waiting;
-  let files: { name: string; size: number }[] = [];
-  const bytes = catalog.zipBytes(waiting.sha256);
-  if (bytes) {
-    try {
-      // From the zip's directory: this list is read for every waiting version, and needs nothing unpacked.
-      files = zipDirectory(bytes);
-    } catch {
-      files = [];
-    }
-  }
+  // Only the zip's directory, read from disk: this list is made for every waiting version each time the page opens.
+  const files = catalog.zipListing(waiting.sha256)?.files ?? [];
   const id = waiting.accountId;
   const keys = id ? accounts.keys(id).map((key) => key.fingerprint) : [];
   return {
@@ -145,18 +137,32 @@ export function moderationRoutes({ catalog, accounts, scanner, mailer, mailDaily
   app.get("/waiting/:sha256/file", (context) => {
     const waiting = catalog.waitingVersion(context.req.param("sha256"));
     const name = context.req.query("name") ?? "";
-    const bytes = waiting ? catalog.zipBytes(waiting.sha256) : null;
-    if (!waiting || !bytes) return context.json({ error: "Not waiting." }, 404);
+    const listing = waiting ? catalog.zipListing(waiting.sha256) : null;
+    if (!waiting || !listing) return context.json({ error: "Not waiting." }, 404);
+    const entry = listing.files.find((file) => file.name === name);
+    if (!entry) return context.json({ error: "No such file." }, 404);
+    if (entry.size > MAX_UNPACK_TO_SHOW) return context.json({ error: "This file is too big to show here." }, 413);
+    // The zip is read whole to find the file, so it waits its turn in the memory uploads share.
+    const ticket = memory.take(listing.size + entry.size);
+    if (!ticket) {
+      context.header("Retry-After", "60");
+      return context.json({ error: "Tavora is checking uploads. Try again in a minute." }, 429);
+    }
     let data: Buffer | null = null;
     try {
-      const entry = zipDirectory(bytes).find((file) => file.name === name);
-      if (entry && entry.size > MAX_UNPACK_TO_SHOW) return context.json({ error: "This file is too big to show here." }, 413);
-      data = entry ? readZipEntry(bytes, name) : null;
+      const bytes = catalog.zipBytes(waiting.sha256);
+      data = bytes ? readZipEntry(bytes, name) : null;
+      // A copy: the answer mustn't keep the whole unpacked file alive.
+      if (data) data = Buffer.from(data.subarray(0, MAX_FILE_BYTES));
     } catch {
       data = null;
+    } finally {
+      const big = ticket.held >= FREE_AFTER_BYTES;
+      ticket.release();
+      if (big) setImmediate(freeMemory);
     }
     if (!data) return context.json({ error: "No such file." }, 404);
-    return new Response(new Uint8Array(data.subarray(0, MAX_FILE_BYTES)), { headers: { "Content-Type": "text/plain; charset=utf-8", "Content-Disposition": "inline", "X-Content-Type-Options": "nosniff" } });
+    return new Response(new Uint8Array(data), { headers: { "Content-Type": "text/plain; charset=utf-8", "Content-Disposition": "inline", "X-Content-Type-Options": "nosniff" } });
   });
 
   // An icon or screenshot of a waiting version, as the picture it is.
@@ -252,6 +258,25 @@ export function moderationRoutes({ catalog, accounts, scanner, mailer, mailDaily
     return context.json({ result: saved === null ? null : (JSON.parse(saved) as unknown), running });
   });
 
+  /** Checks one live zip under its ticket, which it gives back; null when the zip turned out to be gone. */
+  const checkLive = async (live: ReturnType<CatalogStore["liveVersions"]>[number], developer: string | null, ticket: MemoryTicket): Promise<{ reasons: ReviewReason[]; error?: string } | null> => {
+    // A scan that was told to stop keeps the memory counted until it has.
+    const scans: Promise<void>[] = [];
+    try {
+      const bytes = catalog.zipBytes(live.sha256);
+      if (!bytes) return null;
+      const checked = checkCatalogZip(bytes, { official: isOfficialId(live.id) });
+      const fingerprints = developer ? accounts.keys(developer).map((key) => key.fingerprint) : [live.owner];
+      return { reasons: await runChecks({ catalog, scanner, scanLimitMs, holdWhileScanning: (stopped) => scans.push(stopped) }, checked, bytes, { accountId: developer, fingerprints }, live.sha256) };
+    } catch (error) {
+      // A zip that can't be checked is a result too, not a pass.
+      return { reasons: [], error: error instanceof CatalogError ? error.message : "The checks could not run." };
+    } finally {
+      if (scans.length === 0) ticket.release();
+      else void Promise.all(scans).then(() => ticket.release());
+    }
+  };
+
   app.post("/live-check", async (context) => {
     const { again } = await json(context.req.raw);
     if (running) return context.json({ error: "It is running already." }, 409);
@@ -262,37 +287,38 @@ export function moderationRoutes({ catalog, accounts, scanner, mailer, mailDaily
       const results: { id: string; version: string; name: string; owner: string; developer: string | null; reasons: ReviewReason[]; error?: string }[] = [];
       let skipped = 0;
       for (const live of catalog.liveVersions()) {
-        const bytes = catalog.zipBytes(live.sha256);
         const developer = (live.accountId ?? accounts.publisherKey(live.owner)?.accountId ?? null);
         const base = { id: live.id, version: live.version, name: live.manifest.name, owner: live.owner, developer: developer ? (accounts.developer(developer)?.name ?? null) : null };
-        if (!bytes) {
+        // What it will take comes from the zip's directory on disk, so nothing is read before there is room for it.
+        const size = catalog.keptZipSize(live.sha256);
+        if (size === null) {
           skipped++;
           continue;
         }
-        // It unpacks in the memory uploads use, so it waits its turn like them: a zip that doesn't fit now is a result, not a crash.
-        const needed = zipMemory(bytes) ?? bytes.length;
+        const listing = catalog.zipListing(live.sha256);
+        // Without its directory there is no telling what it would take, so it isn't unpacked.
+        if (!listing) {
+          results.push({ ...base, reasons: [], error: "Its zip can't be read." });
+          continue;
+        }
+        const needed = listing.files.reduce((sum, file) => sum + file.size, size);
         if (needed > memory.budget) {
           results.push({ ...base, reasons: [], error: "It's too big to check here." });
           continue;
         }
+        // It unpacks in the memory uploads use, so it waits its turn like them: a zip that doesn't fit now is a result, not a crash.
         const ticket = memory.take(needed);
         if (!ticket) {
           results.push({ ...base, reasons: [], error: "There wasn't enough memory free to check it. Run this again." });
           continue;
         }
-        // A scan that was told to stop keeps the memory counted until it has.
-        const scans: Promise<void>[] = [];
-        try {
-          const checked = checkCatalogZip(bytes, { official: isOfficialId(live.id) });
-          const fingerprints = developer ? accounts.keys(developer).map((key) => key.fingerprint) : [live.owner];
-          const reasons = await runChecks({ catalog, scanner, scanLimitMs, holdWhileScanning: (stopped) => scans.push(stopped) }, checked, bytes, { accountId: developer, fingerprints }, live.sha256);
-          results.push({ ...base, reasons });
-        } catch (error) {
-          // A zip that can't be checked is a result too, not a pass.
-          results.push({ ...base, reasons: [], error: error instanceof CatalogError ? error.message : "The checks could not run." });
-        } finally {
-          if (scans.length === 0) ticket.release();
-          else void Promise.all(scans).then(() => ticket.release());
+        const outcome = await checkLive(live, developer, ticket);
+        if (outcome === null) skipped++;
+        else results.push({ ...base, ...outcome });
+        // Between zips, once nothing refers to this one any more.
+        if (needed >= FREE_AFTER_BYTES) {
+          await new Promise((resolve) => setImmediate(resolve));
+          freeMemory();
         }
       }
       const result = {

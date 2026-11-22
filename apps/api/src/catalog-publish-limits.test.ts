@@ -1,15 +1,15 @@
 import { createHash, createPublicKey, generateKeyPairSync, randomBytes, type KeyObject } from "node:crypto";
-import { existsSync, mkdtempSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { catalogPublicKey, nextCatalogList, PUBLISH_TIMEOUT_MS, publishReadMs, publishSignature, publishTimeoutMs, signCatalogList, signFiles, writeZip, ZIP_LIMITS, zipFiles, type ZipFile } from "@tavora/pack";
+import { catalogPublicKey, nextCatalogList, PUBLISH_TIMEOUT_MS, publishReadMs, publishSignature, publishTimeoutMs, signCatalogList, signFiles, writeZip, ZIP_LIMITS, zipDirectory, zipFiles, type ZipFile } from "@tavora/pack";
 import { Hono } from "hono";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { AccountStore } from "./account-store.ts";
 import { createApp } from "./app.ts";
 import { publishHandlers, type PublishLimits, type PublishOptions } from "./catalog-publish.ts";
-import { CatalogStore, checkCatalogZip, copyHashes } from "./catalog.ts";
+import { CatalogStore, checkCatalogZip, copyHashes, REMOVED_ZIP } from "./catalog.ts";
 import { buildDataset, writeDatabase } from "./dataset.ts";
 import { createTestInbox } from "./mail.ts";
 import { moderationRoutes } from "./moderation-admin.ts";
@@ -441,6 +441,160 @@ describe("comparing with versions that have no stored hashes", () => {
     raw.exec("update versions set file_hashes = null");
     raw.close();
     expect((await send(dev, moduleZip(dev.key, { version: "1.0.1", extra: [shared] }))).status).toBe(201);
+  });
+});
+
+describe("what the review page reads", () => {
+  const big = () => [{ name: "big.bin", data: randomBytes(200_000) }];
+  const waitingZip = async () => {
+    const context = setup();
+    const dev = context.developer("dev@example.com", false);
+    const zip = moduleZip(dev.key, { extra: big() });
+    expect((await context.send(dev, zip)).status).toBe(202);
+    return { ...context, zip };
+  };
+  const fileUrl = (zip: Buffer, name: string) => `http://admin.test/waiting/${sha(zip)}/file?name=${encodeURIComponent(name)}`;
+
+  it("reads a zip's file list from its directory on disk, also with a zip comment", async () => {
+    const { catalog, dir, zip } = await waitingZip();
+    expect(catalog.zipListing(sha(zip))).toEqual({ size: zip.length, files: zipDirectory(zip) });
+    const commented = Buffer.concat([zip, Buffer.from("hello")]);
+    commented.writeUInt16LE(5, zip.length - 2);
+    writeFileSync(path.join(dir, "zips", `${sha(zip)}.zip`), commented);
+    expect(catalog.zipListing(sha(zip))!.files).toEqual(zipDirectory(zip));
+    writeFileSync(path.join(dir, "zips", `${sha(zip)}.zip`), "not a zip");
+    expect(catalog.zipListing(sha(zip))).toBeNull();
+  });
+
+  it("lists waiting versions without reading any of them whole", async () => {
+    const { catalog, store, zip } = await waitingZip();
+    const read = vi.spyOn(catalog, "zipBytes");
+    const admin = moderationRoutes({ catalog, accounts: store });
+    const answer = (await (await admin.request("http://admin.test/waiting")).json()) as { waiting: { module: { files: { name: string; size: number }[] } }[] };
+    expect(answer.waiting[0]!.module.files).toEqual(zipDirectory(zip));
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it("approves without reading the zip, and still refuses one that's gone", async () => {
+    const { catalog, approve, zip, dir, developer, send } = await waitingZip();
+    const read = vi.spyOn(catalog, "zipBytes");
+    expect((await approve(zip)).status).toBe(200);
+    expect(read).not.toHaveBeenCalled();
+
+    const other = developer("other@example.com", false);
+    const gone = moduleZip(other.key, { id: "other.clock", name: "Clock" });
+    expect((await send(other, gone)).status).toBe(202);
+    rmSync(path.join(dir, "zips", `${sha(gone)}.zip`));
+    expect((await approve(gone)).status).toBe(409);
+  });
+
+  it("waits for room before reading a zip to show one of its files", async () => {
+    const { catalog, store, zip } = await waitingZip();
+    const memory = createUploadMemory(zip.length + 300_000);
+    const admin = moderationRoutes({ catalog, accounts: store, memory });
+    const read = vi.spyOn(catalog, "zipBytes");
+    const held = memory.take(memory.budget)!;
+    const busy = await admin.request(fileUrl(zip, "index.html"));
+    expect(busy.status).toBe(429);
+    expect(busy.headers.get("retry-after")).toBe("60");
+    expect(read).not.toHaveBeenCalled();
+    held.release();
+
+    const shown = await admin.request(fileUrl(zip, "index.html"));
+    expect(shown.status).toBe(200);
+    expect(await shown.text()).toBe("<p>timer</p>");
+    expect(memory.take(memory.budget)).not.toBeNull();
+  });
+
+  it("doesn't unpack a live zip whose directory can't be read, as nothing says what it would take", async () => {
+    const { catalog, store, developer, send, dir } = setup();
+    const dev = developer("dev@example.com");
+    const zip = moduleZip(dev.key, { extra: big() });
+    await send(dev, zip);
+    writeFileSync(path.join(dir, "zips", `${sha(zip)}.zip`), Buffer.alloc(zip.length, 1));
+    const admin = moderationRoutes({ catalog, accounts: store, scanner: clean, memory: createUploadMemory() });
+    const read = vi.spyOn(catalog, "zipBytes");
+    const response = await admin.request("http://admin.test/live-check", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    const { result } = (await response.json()) as { result: { flagged: number; results: { error?: string }[] } };
+    expect(result.results[0]!.error).toBe("Its zip can't be read.");
+    expect(result.flagged).toBe(1);
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it("waits for room before reading a live zip in the check of what is live", async () => {
+    const { catalog, store, developer, send } = setup();
+    const dev = developer("dev@example.com");
+    const zip = moduleZip(dev.key, { extra: big() });
+    await send(dev, zip);
+    const memory = createUploadMemory(zip.length + 400_000);
+    const admin = moderationRoutes({ catalog, accounts: store, scanner: clean, memory });
+    const read = vi.spyOn(catalog, "zipBytes");
+    const held = memory.take(memory.budget)!;
+    const response = await admin.request("http://admin.test/live-check", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    const { result } = (await response.json()) as { result: { results: { error?: string }[] } };
+    expect(result.results[0]!.error).toMatch(/enough memory/);
+    expect(read).not.toHaveBeenCalled();
+    held.release();
+  });
+});
+
+describe("a zip that's gone", () => {
+  const shared = { name: "shared.bin", data: randomBytes(4096) };
+  const twoPublishers = async () => {
+    const context = setup();
+    const original = context.developer("original@example.com");
+    const other = context.developer("other@example.com");
+    const kept = moduleZip(original.key, { extra: [shared] });
+    expect((await context.send(original, kept)).status).toBe(201);
+    const raw = new DatabaseSync(path.join(context.dir, "catalog.sqlite"));
+    raw.exec("update versions set file_hashes = null");
+    raw.close();
+    const copy = (version: string) => moduleZip(other.key, { id: "other.clock", name: "Clock", version, extra: [{ name: "own.bin", data: randomBytes(4096) }] });
+    return { ...context, other, kept, copy, file: path.join(context.dir, "zips", `${sha(kept)}.zip`) };
+  };
+  const self = { moduleId: "other.clock", accountId: "someone", fingerprints: [] };
+
+  it("stops holding other uploads back once a backfill has seen it, and comes back with its file", async () => {
+    const { catalog, send, other, kept, copy, file } = await twoPublishers();
+    rmSync(file);
+    const held = await send(other, copy("1.0.0"));
+    expect(held.status).toBe(202);
+    expect(await held.json()).toMatchObject({ reasons: [expect.objectContaining({ check: "compare" })] });
+
+    catalog.backfillSignedHashes();
+    expect(catalog.uncomparedVersions(self)).toEqual([]);
+    expect((await send(other, copy("1.0.1"))).status).toBe(201);
+    expect(await catalog.openZip(sha(kept))).toBeNull();
+
+    writeFileSync(file, kept);
+    expect(catalog.backfillSignedHashes().filled).toBe(1);
+    expect(await catalog.openZip(sha(kept))).not.toBeNull();
+    expect(catalog.mostSimilar(self, copyHashes([shared]))).toMatchObject({ id: "wellbrained.timer" });
+  });
+
+  it("treats a file that isn't what its name says the same way", async () => {
+    const { catalog, file } = await twoPublishers();
+    writeFileSync(file, "something else");
+    catalog.backfillSignedHashes();
+    expect(catalog.uncomparedVersions(self)).toEqual([]);
+  });
+
+  it("keeps waiting for a zip it only couldn't read right now", async () => {
+    const { catalog, file } = await twoPublishers();
+    rmSync(file);
+    mkdirSync(file);
+    catalog.backfillSignedHashes();
+    expect(catalog.uncomparedVersions(self)).toEqual([{ id: "wellbrained.timer", version: "1.0.0" }]);
+  });
+
+  it("never brings back a zip that was pruned on purpose", async () => {
+    const { catalog, dir, kept, file } = await twoPublishers();
+    const raw = new DatabaseSync(path.join(dir, "catalog.sqlite"));
+    raw.prepare("update versions set zip_removed = ?, signed_sha256 = null").run(new Date().toISOString());
+    raw.close();
+    expect(existsSync(file)).toBe(true);
+    expect(catalog.backfillSignedHashes().skipped).toEqual([expect.objectContaining({ reason: REMOVED_ZIP })]);
+    expect(await catalog.openZip(sha(kept))).toBeNull();
   });
 });
 

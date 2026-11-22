@@ -3,7 +3,8 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { serve } from "@hono/node-server";
 import { AccountStore } from "./account-store.ts";
-import { CatalogStore, REMOVED_ZIP } from "./catalog.ts";
+import { CatalogStore } from "./catalog.ts";
+import { backfillAtStart, setServerTimeouts } from "./server-start.ts";
 import { copyLimitsFromEnv, CopyStore } from "./cloud-copy.ts";
 import { createAdminApp } from "./admin-app.ts";
 import { ActivityLog } from "./activity-log.ts";
@@ -115,15 +116,8 @@ if (copies) {
 }
 // The module catalog, read-only here: modules are added by hand with catalog.mjs (scripts/catalog.ts).
 const catalog = new CatalogStore(path.join(stateDir, "catalog"));
-// The signed hash of each version from before it was kept (S7), so a block can name it too. Only rows still without one
-// are read, so after the first start this is quick; a zip it can't use is named here and the start goes on.
-{
-  const { filled, skipped } = catalog.backfillSignedHashes({ skipStalled: true });
-  if (filled > 0) console.log(`[tavora-api] Filled the signed hash of ${filled} catalog versions.`);
-  const removed = skipped.filter((version) => version.reason === REMOVED_ZIP).length;
-  if (removed > 0) console.log(`[tavora-api] ${removed} catalog versions have no signed hash: their zip was removed to make room.`);
-  for (const version of skipped.filter((version) => version.reason !== REMOVED_ZIP)) console.warn(`[tavora-api] Hashes not filled for ${version.id} ${version.version} (${version.sha256}): ${version.reason}.`);
-}
+// The signed hash of each version from before it was kept (S7), so a block can name it too, and its file hashes for the copy check.
+backfillAtStart(catalog);
 // Ratings and reviews of catalog modules, keyed by account: their own file, in the daily backup.
 const reviews = accountStore ? new ReviewStore(path.join(stateDir, "reviews.sqlite")) : undefined;
 // Conversations between users and developers, and with Tavora (conversations.ts): their own file, in the daily backup.
@@ -210,9 +204,10 @@ const app = createApp({
   clientKey: testInbox ? () => `test-${testRequests++}` : (request) => (behindProxy ? clientOf(request.headers.get("x-forwarded-for")?.split(",")[0]) : null) ?? "shared",
 });
 
-serve({ fetch: app.fetch, port, hostname: "127.0.0.1" }, (info) => {
+const publicServer = serve({ fetch: app.fetch, port, hostname: "127.0.0.1" }, (info) => {
   console.log(`[tavora-api] listening on http://127.0.0.1:${info.port}`);
 });
+setServerTimeouts(publicServer as unknown as { requestTimeout: number; headersTimeout: number });
 
 // Tavora Admin (the review page and more): its own port of 127.0.0.1 that the web server never forwards, and a token.
 const adminToken = process.env.ADMIN_TOKEN?.trim();

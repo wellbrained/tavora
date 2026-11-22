@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
-import { createReadStream, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, createReadStream, fstatSync, mkdirSync, openSync, readFileSync, readSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { open, stat, type FileHandle } from "node:fs/promises";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { allowsPersonalWorkspaces, catalogListingProblem, folderKey, isGameId, isReleaseVersion, LOCAL_OWNER, manifestFiles, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, validateChangelog, validateManifest, type LeaderboardBoard, type ModuleManifest } from "@tavora/module-schema";
-import { MANIFEST_FILE, privateKeyFile, readZip, SIGNATURE_FILE, signedHash, verifyFiles, ZIP_LIMITS, zipDirectory, ZipError, zipFiles, type ZipFile } from "@tavora/pack";
+import { MANIFEST_FILE, privateKeyFile, readZip, SIGNATURE_FILE, signedHash, verifyFiles, ZIP_LIMITS, zipDirectory, zipDirectoryAt, ZipError, zipFiles, type ZipFile } from "@tavora/pack";
 import { inspectPng, isWebp } from "./png.ts";
 import { FREE_AFTER_BYTES, freeMemory, MAX_MANIFEST_BYTES, MAX_SIGNATURE_BYTES, metadataProblem, UPLOAD_MEMORY_BYTES } from "./upload-memory.ts";
 
@@ -25,6 +25,8 @@ const BACKFILL_READING = "signed_backfill_reading";
 const BACKFILL_STALLED = "signed_backfill_stalled";
 /** A zip a start died reading this many times in a row is left alone for BACKFILL_RETRY_MS. */
 const BACKFILL_DEATHS = 2;
+/** How zip_removed starts for a zip the backfill found gone: unlike one pruned on purpose, it can come back. */
+const MISSING_ZIP = "missing:";
 const BACKFILL_RETRY_MS = 86_400_000;
 
 type StalledZips = Record<string, { deaths: number; at: number }>;
@@ -770,9 +772,54 @@ export class CatalogStore {
   /** A stored zip by its hash, whatever its status; null when it is gone or is not what its name says. Private: only the maintainer's review reads it. */
   zipBytes(sha256: string): Buffer | null {
     if (!SHA256.test(sha256)) return null;
+    const stored = this.storedZip(sha256);
+    return typeof stored === "string" ? null : stored;
+  }
+
+  /** A stored zip; "gone" when there is no such file or it isn't what its name says, "unreadable" when reading it failed for now. */
+  private storedZip(sha256: string): Buffer | "gone" | "unreadable" {
     try {
       const bytes = readFileSync(this.zipPath(sha256));
-      return createHash("sha256").update(bytes).digest("hex") === sha256 ? bytes : null;
+      return createHash("sha256").update(bytes).digest("hex") === sha256 ? bytes : "gone";
+    } catch (error) {
+      return (error as NodeJS.ErrnoException).code === "ENOENT" ? "gone" : "unreadable";
+    }
+  }
+
+  /**
+   * A stored zip's size and file list, from its directory on disk: nothing of the zip stays in memory, so the review page can
+   * list every waiting version however big. Null when it's gone or its directory can't be read.
+   */
+  zipListing(sha256: string): { size: number; files: { name: string; size: number }[] } | null {
+    if (!SHA256.test(sha256)) return null;
+    let file: number | undefined;
+    try {
+      file = openSync(this.zipPath(sha256), "r");
+      const opened = file;
+      const size = fstatSync(opened).size;
+      const read = (at: number, length: number) => {
+        const out = Buffer.allocUnsafe(length);
+        for (let done = 0; done < length; ) {
+          const got = readSync(opened, out, done, length - done, at + done);
+          if (got === 0) throw new ZipError("the zip is damaged");
+          done += got;
+        }
+        return out;
+      };
+      return { size, files: zipDirectoryAt(size, read) };
+    } catch {
+      return null;
+    } finally {
+      if (file !== undefined) closeSync(file);
+    }
+  }
+
+  /** The size of a version's kept zip on disk when it is the size the version says, without reading it; null otherwise. */
+  keptZipSize(sha256: string): number | null {
+    const row = this.db.prepare("select size from versions where sha256 = ? and zip_removed is null").get(sha256) as { size: number } | undefined;
+    if (!row) return null;
+    try {
+      return statSync(this.zipPath(sha256)).size === row.size ? row.size : null;
     } catch {
       return null;
     }
@@ -826,7 +873,8 @@ export class CatalogStore {
    */
   approve(sha256: string, now: Date = new Date(), { relist = false }: { relist?: boolean } = {}): WaitingVersion | null {
     const waiting = this.waitingVersion(sha256);
-    if (!waiting || this.zipBytes(sha256) === null) return null;
+    // Checked on disk, not read: approving holds no zip in memory. A download still checks the file against its hash.
+    if (!waiting || this.keptZipSize(sha256) === null) return null;
     this.db.exec("begin");
     try {
       this.db.prepare("update versions set status = 'listed', listed_at = ? where sha256 = ? and status = 'waiting'").run(now.toISOString(), sha256);
@@ -1044,6 +1092,10 @@ export class CatalogStore {
    * two deaths in a row is left alone for a day, then tried again; a clean read forgets it. Without it (the command, which has
    * no such limit) it is always tried. With `skipStalled` a zip whose biggest file doesn't fit `memoryLimit` next to the zip is
    * skipped too, unread, so the server's start never goes near its memory limit for one.
+   *
+   * A zip that's gone (no such file, or not what its name says) is marked as removed, so one lost file doesn't make every
+   * other publisher's upload wait in the copy check. The mark says so (`missing:`), and a run that finds the right file back
+   * takes it off again. A zip that only couldn't be read right now keeps counting as not compared.
    */
   backfillSignedHashes({ skipStalled = false, memoryLimit = UPLOAD_MEMORY_BYTES, now = Date.now() }: { skipStalled?: boolean; memoryLimit?: number; now?: number } = {}): { filled: number; skipped: { sha256: string; id: string; version: string; reason: string }[] } {
     const stalled = stalledZips(this.getState(BACKFILL_STALLED));
@@ -1054,7 +1106,9 @@ export class CatalogStore {
       saveStalled();
       this.setState(BACKFILL_READING, "");
     }
-    const rows = this.db.prepare("select sha256, module_id, version, zip_removed from versions where signed_sha256 is null or (file_hashes is null and zip_removed is null) order by seq").all() as unknown as {
+    const rows = this.db
+      .prepare("select sha256, module_id, version, zip_removed from versions where signed_sha256 is null or (file_hashes is null and (zip_removed is null or zip_removed like ?)) order by seq")
+      .all(`${MISSING_ZIP}%`) as unknown as {
       sha256: string;
       module_id: string;
       version: string;
@@ -1062,11 +1116,13 @@ export class CatalogStore {
     }[];
     const fill = this.db.prepare("update versions set signed_sha256 = ? where sha256 = ? and signed_sha256 is null");
     const fillCopies = this.db.prepare("update versions set file_hashes = ? where sha256 = ? and file_hashes is null");
+    const markGone = this.db.prepare("update versions set zip_removed = ? where sha256 = ? and zip_removed is null");
+    const markBack = this.db.prepare("update versions set zip_removed = null where sha256 = ? and zip_removed like ?");
     let filled = 0;
     const skipped: { sha256: string; id: string; version: string; reason: string }[] = [];
     for (const row of rows) {
       const skip = (reason: string) => skipped.push({ sha256: row.sha256, id: row.module_id, version: row.version, reason });
-      if (row.zip_removed !== null) {
+      if (row.zip_removed !== null && !row.zip_removed.startsWith(MISSING_ZIP)) {
         skip(REMOVED_ZIP);
         continue;
       }
@@ -1084,6 +1140,7 @@ export class CatalogStore {
         // The zip is exactly what was uploaded and can't be read: nothing can install it, so there is nothing to compare with.
         try {
           if (read.unreadable) fillCopies.run("[]", row.sha256);
+          if (read.gone) markGone.run(`${MISSING_ZIP}${new Date(now).toISOString()}`, row.sha256);
         } catch {
           // Tried again at the next start; the zip is named below either way.
         }
@@ -1091,6 +1148,8 @@ export class CatalogStore {
         continue;
       }
       const { hash, copies } = read;
+      // The right file is back (from a backup, say).
+      if (row.zip_removed !== null) markBack.run(row.sha256, `${MISSING_ZIP}%`);
       if (mark) {
         delete stalled[row.sha256];
         saveStalled();
@@ -1110,9 +1169,9 @@ export class CatalogStore {
   }
 
   /** A stored zip's signed hash and file hashes, unpacking one file at a time; or why it can't give them. */
-  private hashesFromZip(sha256: string, memoryLimit: number): ({ hash: string | null; copies: string } | { refused: string; unreadable?: boolean }) & { heldBytes: number } {
-    const bytes = this.zipBytes(sha256);
-    if (!bytes) return { refused: "its zip is missing or not what its name says", heldBytes: 0 };
+  private hashesFromZip(sha256: string, memoryLimit: number): ({ hash: string | null; copies: string } | { refused: string; unreadable?: boolean; gone?: boolean }) & { heldBytes: number } {
+    const bytes = this.storedZip(sha256);
+    if (typeof bytes === "string") return { refused: "its zip is missing or not what its name says", gone: bytes === "gone", heldBytes: 0 };
     if (largestHold(bytes) > memoryLimit) return { refused: "its zip is too big to read while the server starts; try `catalog backfill-signed`", heldBytes: bytes.length };
     let heldBytes = bytes.length;
     try {
