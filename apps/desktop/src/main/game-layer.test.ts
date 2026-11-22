@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_RECT } from "../shared/overlay-anchor";
-import { LAYER_CLOSED, layerScene, layerStep, type LayerEvent, type LayerLook, type LayerState, type SceneInput } from "./game-layer";
+import { LAYER_CLOSED, WATCH_START, awayOf, frontOf, layerScene, layerStep, watchStep, type FrontGame, type LayerEvent, type LayerLook, type LayerState, type SceneInput, type Watch, type WatchEvent } from "./game-layer";
 import { ALL_GAMES, EVERYWHERE, liveWindowId, overlayId, panelWindowId, type GameOverlay, type InGamePanel, type Rect } from "./game-overlays";
 
 const GAME: Rect = { x: 0, y: 0, width: 1920, height: 1080 };
@@ -98,6 +98,73 @@ function input(setups: Record<string, { overlays?: GameOverlay[]; panels?: InGam
 }
 
 const shownIds = (scene: ReturnType<typeof layerScene>) => scene.items.filter((item) => item.look !== null).map((item) => item.id);
+
+describe("watchStep", () => {
+  const FRONT: FrontGame = { game: "elden", bounds: GAME, window: "w1", notification: 2 };
+  const KEPT: Rect = { x: 100, y: 100, width: 1280, height: 720 };
+  const watch = (change: Partial<Watch> = {}): Watch => ({ ...WATCH_START, hidden: false, ...change });
+  const at = (front: FrontGame = FRONT): Watch => watch({ seen: { status: "front", ...front }, foregroundWindow: "w1", lastGame: front.bounds });
+  const looked = (change: Partial<Extract<WatchEvent, { type: "look" }>> = {}): WatchEvent => ({ type: "look", front: null, foregroundWindow: "w9", tavoraFront: false, stay: true, kept: () => KEPT, ...change });
+  const cases: { name: string; watch: Watch; event: WatchEvent; next: Watch }[] = [
+    { name: "starts hidden, with nothing seen", watch: WATCH_START, event: { type: "hide", hidden: false }, next: watch() },
+    { name: "hiding keeps what was seen", watch: at(), event: { type: "hide", hidden: true }, next: { ...at(), hidden: true } },
+    { name: "a game in front is seen with its window, and its window is remembered", watch: watch(), event: looked({ front: FRONT, foregroundWindow: "w1" }), next: at() },
+    {
+      name: "leaving the game, overlays stay over its window while it is open",
+      watch: at(),
+      event: looked(),
+      next: { ...at(), seen: { status: "away", game: "elden", bounds: KEPT }, foregroundWindow: "w9" },
+    },
+    { name: "its window gone (closed or minimized), the game is forgotten", watch: at(), event: looked({ kept: () => null }), next: { ...at(), seen: { status: "none", left: null }, foregroundWindow: "w9" } },
+    {
+      name: "without the stay setting the game is still remembered, so overlays stay once it is on",
+      watch: at(),
+      event: looked({ stay: false, kept: () => KEPT }),
+      next: { ...at(), seen: { status: "none", left: "elden" }, foregroundWindow: "w9" },
+    },
+    {
+      name: "a game remembered without the setting is stayed over once it is on",
+      watch: watch({ seen: { status: "none", left: "elden" } }),
+      event: looked(),
+      next: watch({ seen: { status: "away", game: "elden", bounds: KEPT }, foregroundWindow: "w9" }),
+    },
+    { name: "with no game seen yet nothing stays", watch: watch(), event: looked(), next: watch({ foregroundWindow: "w9" }) },
+    { name: "Tavora's own window in front is noted", watch: at(), event: looked({ front: FRONT, foregroundWindow: "w1", tavoraFront: true }), next: { ...at(), tavoraFront: true } },
+    { name: "off (or nothing to show): no game, none left to stay over", watch: at(), event: { type: "off" }, next: { ...at(), seen: { status: "none", left: null } } },
+    { name: "the probe failing: no game in front from now on, the one seen last remembered", watch: at(), event: { type: "failed" }, next: { ...at(), failed: true, seen: { status: "none", left: "elden" } } },
+    {
+      name: "the probe failing while overlays stay keeps where they were",
+      watch: watch({ seen: { status: "away", game: "elden", bounds: KEPT } }),
+      event: { type: "failed" },
+      next: watch({ failed: true, seen: { status: "away", game: "elden", bounds: KEPT } }),
+    },
+    { name: "quitting: no game in front or stayed over, and Tavora's window in front", watch: watch({ seen: { status: "away", game: "elden", bounds: KEPT } }), event: { type: "quit" }, next: watch({ tavoraFront: true, seen: { status: "none", left: "elden" } }) },
+  ];
+  for (const one of cases) {
+    it(one.name, () => {
+      expect(watchStep(one.watch, one.event)).toEqual(one.next);
+    });
+  }
+
+  it("asks for the window left only when overlays may stay over it", () => {
+    let asked = 0;
+    const kept = () => (asked++, KEPT);
+    watchStep(at(), looked({ front: FRONT, kept }));
+    watchStep(at(), looked({ stay: false, kept }));
+    watchStep(watch(), looked({ kept }));
+    expect(asked).toBe(0);
+    watchStep(at(), looked({ kept }));
+    expect(asked).toBe(1);
+  });
+
+  it("finds the game in front and the one stayed over", () => {
+    expect(frontOf(at())).toMatchObject({ game: "elden", bounds: GAME, window: "w1" });
+    expect(awayOf(at())).toBeNull();
+    const away = watchStep(at(), looked());
+    expect(frontOf(away)).toBeNull();
+    expect(awayOf(away)).toEqual({ status: "away", game: "elden", bounds: KEPT });
+  });
+});
 
 describe("layerScene", () => {
   it("shows an Always overlay of the game in front, click-through, zoomed to the game's height", () => {

@@ -82,6 +82,94 @@ export function layerStep(state: LayerState, event: LayerEvent): { state: LayerS
   }
 }
 
+// ── What the service watches ─────────────────────────────────────────
+
+/** The game in front that has something to show: its window (DIPs), the window's handle when known, and its notification state (looksExclusive). */
+export interface FrontGame {
+  game: string;
+  bounds: Rect;
+  window: string | null;
+  notification: number | null;
+}
+
+/**
+ * Which game the items sit over, as of the last look: a game in `front`; one `away`, the game seen in front last, whose
+ * window is still open while the user is in another one and overlays stay; or `none`, with the game seen in front last
+ * (`left`), which overlays stay over again once its window is open and the setting is on.
+ */
+export type Seen = ({ status: "front" } & FrontGame) | { status: "away"; game: string; bounds: Rect } | { status: "none"; left: string | null };
+
+/**
+ * What the service watches (game-overlay-service.ts), one value changed only by `watchStep`. `hidden`: the user hid the
+ * overlays for now ("Hide all for now", and at every start until the header button). `failed`: Windows' functions could
+ * not be loaded; nothing is looked at until Tavora starts again. `foregroundWindow`: the handle of whatever window is
+ * in front. `tavoraFront`: one of Tavora's own windows (not an overlay's) is in front, so Everywhere hides. `lastGame`:
+ * the last game window seen in front, which a panel shown in the game while Tavora is in front is sized against.
+ */
+export interface Watch {
+  hidden: boolean;
+  failed: boolean;
+  seen: Seen;
+  foregroundWindow: string | null;
+  tavoraFront: boolean;
+  lastGame: Rect | null;
+}
+
+export const WATCH_START: Watch = { hidden: true, failed: false, seen: { status: "none", left: null }, foregroundWindow: null, tavoraFront: false, lastGame: null };
+
+export type WatchEvent =
+  /** "Hide all for now", or the header button that starts the overlays. */
+  | { type: "hide"; hidden: boolean }
+  /**
+   * A look at the windows in front. `stay`: overlays stay over a game the user left; `kept` is that game's window while
+   * it is still open and not minimized (asked only when they may stay).
+   */
+  | { type: "look"; front: FrontGame | null; foregroundWindow: string | null; tavoraFront: boolean; stay: boolean; kept(): Rect | null }
+  /** Overlays may not show now, or there is nothing to show: no game in front, and none to stay over. */
+  | { type: "off" }
+  /** Windows' functions could not be loaded: no game is in front from now on. */
+  | { type: "failed" }
+  /** Quitting: nothing in front but Tavora's own window, so the keys go back to the system. */
+  | { type: "quit" };
+
+/** The game seen in front last. */
+const leftOf = (seen: Seen): string | null => (seen.status === "none" ? seen.left : seen.game);
+
+/** No game in front any more; the one seen last is remembered. */
+const noFront = (seen: Seen): Seen => (seen.status === "front" ? { status: "none", left: seen.game } : seen);
+
+/** One step of what the service watches. Deterministic over its input (`kept` is asked at most once). */
+export function watchStep(watch: Watch, event: WatchEvent): Watch {
+  switch (event.type) {
+    case "hide":
+      return { ...watch, hidden: event.hidden };
+    case "look": {
+      const { front } = event;
+      const look = { foregroundWindow: event.foregroundWindow, tavoraFront: event.tavoraFront };
+      if (front) return { ...watch, ...look, seen: { status: "front", ...front }, lastGame: front.bounds };
+      const left = leftOf(watch.seen);
+      if (left === null || !event.stay) return { ...watch, ...look, seen: { status: "none", left } };
+      const kept = event.kept();
+      return { ...watch, ...look, seen: kept ? { status: "away", game: left, bounds: kept } : { status: "none", left: null } };
+    }
+    case "off":
+      return { ...watch, seen: { status: "none", left: null } };
+    case "failed":
+      // What overlays stayed over is kept (as it was): nothing is shown or looked at again anyway.
+      return { ...watch, failed: true, seen: noFront(watch.seen) };
+    case "quit": {
+      const left = leftOf(watch.seen);
+      return { ...watch, tavoraFront: true, seen: { status: "none", left } };
+    }
+  }
+}
+
+/** The game in front, or null. */
+export const frontOf = (watch: Watch): FrontGame | null => (watch.seen.status === "front" ? watch.seen : null);
+
+/** The game whose window the items stay over while the user is in another one, or null. */
+export const awayOf = (watch: Watch): { game: string; bounds: Rect } | null => (watch.seen.status === "away" ? watch.seen : null);
+
 // ── What shows ───────────────────────────────────────────────────────
 
 /** An item on screen: the setup it shows from, with its settings there. */
