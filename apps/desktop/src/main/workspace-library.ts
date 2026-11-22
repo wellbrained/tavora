@@ -38,6 +38,8 @@ export interface WorkspaceLibraryOptions {
   dialogs: Pick<FileDialogs, "pick" | "remember">;
   /** A game the library has now (added, back from Trash, or one that learned its Steam id) may be running: the rail looks. */
   gameListed: (workspaceId: string) => void;
+  /** Workspaces went to Trash or came back: the panels kept running for overlays are looked at again. */
+  overlaysChanged: () => void;
   /** The screens: which workspace is shown, whether Home is, and going to either. */
   screen: {
     /** The workspace shown now; null on Home or another page. */
@@ -123,7 +125,7 @@ export class WorkspaceLibrary {
    */
   trash(ids: readonly string[], strict: boolean): string {
     const { library, saveLibrary, screen } = this.options;
-    const live = strict ? [...ids] : ids.filter((id) => isLive(library, id));
+    const live = strict ? [...new Set(ids)] : [...new Set(ids)].filter((id) => isLive(library, id));
     const places = live.map((id) => placeOf(library, id));
     const shown = screen.shown();
     const wasOpen = shown !== null && live.includes(shown) ? shown : null;
@@ -131,10 +133,13 @@ export class WorkspaceLibrary {
     const now = new Date();
     for (const id of live) trashWorkspace(library, id, now);
     saveLibrary();
+    // Panels kept running for overlays of a workspace in Trash stop now.
+    this.options.overlaysChanged();
     return this.options.undos.keep(() => {
       const back = untrashWorkspaces(library, places);
       if (!back.length) throw new UndoGoneError();
       saveLibrary();
+      this.options.overlaysChanged();
       if (wasOpen && back.includes(wasOpen) && screen.onHome()) screen.open(wasOpen);
     });
   }
@@ -148,6 +153,7 @@ export class WorkspaceLibrary {
       // A game running now comes back as running, not as one that just started (no switch or question).
       this.options.gameListed(id);
     }
+    this.options.overlaysChanged();
   }
 
   /** Deletes workspaces in Trash for good, with everything stored for them. `strict`: each must be in Trash; else others are skipped. */

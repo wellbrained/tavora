@@ -900,7 +900,8 @@ export class Host {
     this.account = Host.accountClient(options, prepared.signIn, prepared.encryptor, () => this.language, { get: () => this.userProfile.data(), apply: (remote) => this.userProfile.apply(remote) }, (view) => {
       if (!this.window.isDestroyed()) this.window.webContents.send("host:account", view);
       // Made once the messages and publisher keys are: the account says nothing before init().
-      this.accountFlows?.changed(view);
+      if (this.accountFlows) this.accountFlows.changed(view);
+      else console.warn("The account changed before its flows were made; the change was not passed on.");
     });
     this.moduleBoards = new ModuleBoards({ installed: this.installed, account: this.account, language: () => this.language });
     this.gameIcons = new GameIcons({
@@ -941,6 +942,7 @@ export class Host {
       gameListed: (workspaceId) => {
         if (this.gameWatcher.active) void this.gameWatcher.libraryChanged(workspaceId);
       },
+      overlaysChanged: () => this.syncOverlayPanels(),
       screen: {
         shown: () => this.workspaceId,
         onHome: () => this.screen === "welcome" && this.workspaceId === null,

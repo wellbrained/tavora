@@ -31,6 +31,7 @@ interface Setup {
 
 async function setup(options: Setup = {}) {
   const calls: string[] = [];
+  const synced = { count: 0 };
   const library = options.library ?? emptyLibrary();
   const workspaces = new Workspaces(emptyWorkspaces(Object.keys(library.workspaces)), { save: () => undefined });
   const modules = options.modules ?? STARTER_MODULES.map(module);
@@ -63,6 +64,7 @@ async function setup(options: Setup = {}) {
       remember: (place, picked) => void calls.push(`remember ${place} ${picked}`),
     },
     gameListed: (workspaceId) => void calls.push(`listed ${workspaceId}`),
+    overlaysChanged: () => void synced.count++,
     screen: {
       shown,
       onHome: () => screen.on === "home",
@@ -89,7 +91,7 @@ async function setup(options: Setup = {}) {
     forgotten: (workspaceId) => void calls.push(`forgotten ${workspaceId}`),
     clearSession: async (partition) => void calls.push(`clear ${partition}`),
   });
-  return { shelf, calls, library, workspaces, undos, userData, screen, questions };
+  return { shelf, calls, synced, library, workspaces, undos, userData, screen, questions };
 }
 
 const valheim = { online: { id: "valheim", name: "Valheim" } };
@@ -163,7 +165,45 @@ describe("WorkspaceLibrary", () => {
     expect(calls).toEqual(["library saved", "library saved"]);
     await expect(undos.undo(token)).rejects.toMatchObject({ key: "error.undoGone" });
     // Strict: every one must be there.
+    calls.length = 0;
     expect(() => shelf.trash(["gone"], true)).toThrow();
+    expect(calls).toEqual([]);
+  });
+
+  it("trashes an open workspace in a bulk list once: one trip Home", async () => {
+    const library = emptyLibrary();
+    addWorkspace(library, valheim, new Date());
+    addWorkspace(library, { online: { id: "satisfactory", name: "Satisfactory" } }, new Date());
+    const { shelf, calls } = await setup({ library, open: "valheim" });
+    shelf.trash(["valheim", "satisfactory"], false);
+    expect(calls.filter((call) => call.startsWith("home from"))).toEqual(["home from valheim"]);
+    expect(isLive(library, "valheim") || isLive(library, "satisfactory")).toBe(false);
+  });
+
+  it("trashes a workspace named twice once, so nothing is left half done", async () => {
+    const library = emptyLibrary();
+    addWorkspace(library, valheim, new Date());
+    const { shelf, calls, undos } = await setup({ library });
+    for (const strict of [true, false]) {
+      const token = shelf.trash(["valheim", "valheim"], strict);
+      expect(isLive(library, "valheim")).toBe(false);
+      await undos.undo(token);
+      expect(isLive(library, "valheim")).toBe(true);
+    }
+    expect(calls).toEqual(["library saved", "library saved", "library saved", "library saved"]);
+  });
+
+  it("looks at the overlay panels again when workspaces go to Trash, when Undo puts them back, and when they are restored", async () => {
+    const library = emptyLibrary();
+    addWorkspace(library, valheim, new Date());
+    const { shelf, synced, undos } = await setup({ library });
+    const token = shelf.trash(["valheim"], true);
+    expect(synced.count).toBe(1);
+    await undos.undo(token);
+    expect(synced.count).toBe(2);
+    shelf.trash(["valheim"], true);
+    shelf.restore(["valheim"], true);
+    expect(synced.count).toBe(4);
   });
 
   it("leaves the open workspace for Home before trashing it: its questions end, its views close, and Undo opens it again", async () => {
