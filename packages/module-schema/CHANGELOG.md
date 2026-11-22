@@ -2,6 +2,10 @@
 
 What changed in `@tavora/module-schema`, newest first.
 
+## 0.2.3
+
+- `isWindowsDeviceName` now comes from `@tavora/sdk/protocol` (0.4.6), which Tavora's document ids use too, so there is one rule for every name; it works as before. The package depends on `@tavora/sdk` for it.
+
 ## 0.2.2
 
 - A panel type may set `withGame: true`: with the user's yes, Tavora runs that panel out of sight while one of the module's games runs. At most one type per module, only for a module whose `games` names its games, and it needs a `minTavora` newer than `LAST_TAVORA_WITHOUT_WITH_GAME_PANELS` (0.24.130). Tavora's built-in modules (`tavora.*`) can't set it. `panelTypes` passes it on (`ResolvedPanelType.withGame`), and `withGamePanelType(manifest)` names that type. The JSON Schema knows the field.
