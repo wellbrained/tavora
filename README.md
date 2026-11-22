@@ -21,7 +21,7 @@ Tavora is a local-first gaming companion for your second monitor. Keep notes, to
 - **Sketch on a Whiteboard.** Multiple boards per workspace, drawing tools, pictures, and Copy as picture. Built on [Excalidraw](https://github.com/excalidraw/excalidraw).
 - **Keep guides nearby.** The built-in Browser has per-workspace tabs and sign-ins, ad blocking, and a choice to share a site's sign-in across workspaces.
 - **Add more tools.** Notes, To-Dos, a Whiteboard and a few more come with Tavora; everything else, such as AI Usage, you install from the catalog or a ZIP file. Modules ask before using capabilities such as named websites or host connectors.
-- **Make it comfortable.** Nine built-in themes, light/dark modes that can follow the system, custom themes, English and German, keyboard shortcuts, and Ctrl+K search.
+- **Make it comfortable.** Three styles (Classic, Hardware, Liquid Glass), twelve built-in themes, light/dark modes that can follow the system, custom themes, English and German, keyboard shortcuts, and Ctrl+K search.
 
 **Discord voice is paused for now.** Discord limits voice to a few approved testers until it approves Tavora's app, so the Discord connector and module are switched off until then. Signing in to your Tavora account with Discord still works. AI Usage reads supported Claude and Codex accounts on this PC through the host; modules do not receive their credentials.
 
@@ -115,7 +115,8 @@ The SDK and packaging tools are developed in this repository and published on np
 | `packages/pack` | Module ZIP packing, signatures and archive validation |
 | `modules/` | Calculator, Clock & Counter, Notes, PDF Viewer, System Monitor, To-Dos, Whiteboard, UI Playground and shared UI code |
 | `examples/` | Vanilla, React and Vue module examples, plus a theme starter |
-| `themes/` | The nine built-in theme packages |
+| `themes/` | The twelve built-in theme packages |
+| `styles/` | The three built-in styles (Classic, Hardware, Liquid Glass) |
 | `docs/screenshots` | Screenshots used in this README |
 | `brand/` | Tavora logo sources and exported brand assets |
 
