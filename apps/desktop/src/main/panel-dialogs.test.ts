@@ -40,6 +40,8 @@ function setup(options: Setup = {}) {
       inDialog: (id) => inDialog === id,
       openDialogMenu: async (id) => void calls.push(`dialog menu ${id}`),
       closeDialogMenu: () => void calls.push("dialog menu closed"),
+      freeze: async (open, only, seq) => void calls.push(`popups ${open ? (only ? only.join(",") || "none" : "all") : "closed"} ${seq ?? 0}`),
+      prepareFreeze: (near) => void calls.push(`prepare ${near ? "near" : "all"}`),
       isLent: (id) => lent.has(id),
       isPlaced: (id) => placed.has(id),
       openDialog: (id, dialogSize, unplaced) => {
@@ -216,5 +218,18 @@ describe("PanelDialogs", () => {
     expect(behind.calls).toEqual(["tooltips"]);
     behind.dialogs.drawn("map");
     expect(behind.sent.at(-1)).toEqual(["host:panel-dialog-drawn", "map"]);
+  });
+});
+
+describe("the host page's popups over the panels", () => {
+  it("passes each request on to the panels, and takes pictures ahead near a place or everywhere", () => {
+    const { dialogs, calls } = setup();
+    dialogs.preparePopups({ x: 1, y: 2, width: 3, height: 4 });
+    dialogs.popups(true, [], 1);
+    dialogs.popups(true, ["map"], 2);
+    dialogs.preparePopups();
+    dialogs.popups(true, undefined, 3);
+    dialogs.popups(false, undefined, 0);
+    expect(calls).toEqual(["prepare near", "popups none 1", "popups map 2", "prepare all", "popups all 3", "popups closed 0"]);
   });
 });

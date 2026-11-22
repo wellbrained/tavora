@@ -16,6 +16,7 @@ import type { LayoutFrame, LayoutWindow } from "./overlay-layout";
 import type { Rect } from "./game-overlays";
 import type { LayoutStills, LayoutView } from "../shared/layout-view";
 import { pageZoom } from "../shared/overlay-anchor";
+import { isOpen, noPopups, panelStep, popupsStep, type PopupsEvent, type PopupsOverPanels } from "../shared/popups-over-panels";
 
 export interface OverlayCanvasOptions {
   /** Tavora's main window: the page is its host UI, and the views are added to it. */
@@ -34,6 +35,8 @@ const STILLS_SHOWN_CAP_MS = 300;
 /** How long the stills stay under the pages when they come back, so a page that has not drawn yet never shows empty. */
 const STILLS_LINGER_MS = 80;
 const NO_STILLS: LayoutStills = { items: [], layer: null };
+/** The canvas's pages and its layer step aside together, as one panel of the shared state. */
+const CANVAS = "canvas";
 
 interface ItemView {
   view: WebContentsView;
@@ -54,12 +57,12 @@ export class OverlayCanvas implements LayoutWindow {
   private readonly layer: WebContentsView;
   private readonly items = new Map<string, ItemView>();
   private destroyed = false;
-  /** A list or menu of the page is open over the canvas. */
-  private covered = false;
-  /** The live pages and the layer are out of the way because the page shows still pictures of them. */
-  private frozen = false;
-  /** Counts the opening and closing of lists, so a slow freeze never hides the pages after the list closed. */
-  private coverChanges = 0;
+  /**
+   * A list or menu of the page over the canvas (overlay `all` while one is open), and how the pages step aside for it
+   * behind their stills (shared/popups-over-panels.ts). Its session counts the opening and closing of lists, so a slow
+   * freeze never hides the pages after the list closed.
+   */
+  private popups: PopupsOverPanels<LayoutStills> = noPopups();
   private stillsOnScreen: (() => void) | null = null;
   private layerWanted = false;
 
@@ -145,11 +148,24 @@ export class OverlayCanvas implements LayoutWindow {
    * before the shell shows a still picture of each where it is (the host's frozen-image way): nothing on the canvas changes.
    */
   private cover(covered: boolean): void {
-    if (covered === this.covered) return;
-    this.covered = covered;
-    const change = ++this.coverChanges;
-    if (covered) void this.freeze(change);
-    else this.thaw(change);
+    if (covered === isOpen(this.popups)) return;
+    if (covered) {
+      this.step({ type: "ask" });
+      this.step({ type: "picturing", ids: [CANVAS] });
+      void this.freeze(this.popups.session);
+    } else {
+      this.step({ type: "close" });
+      this.thaw(this.popups.session);
+    }
+  }
+
+  private step(event: PopupsEvent<LayoutStills>): void {
+    this.popups = popupsStep(this.popups, event);
+  }
+
+  /** The live pages and the layer are out of the way because the page shows still pictures of them. */
+  private get frozen(): boolean {
+    return panelStep(this.popups, CANVAS).step === "out";
   }
 
   private async freeze(change: number): Promise<void> {
@@ -165,22 +181,27 @@ export class OverlayCanvas implements LayoutWindow {
         return shot && { id, ...shot };
       }),
     ]);
-    if (change !== this.coverChanges || this.isDestroyed) return;
+    if (change !== this.popups.session || this.isDestroyed) return;
     const stills: LayoutStills = { items: itemShots.filter((shot) => shot !== null), layer: layerShot };
     this.sendStills(stills);
+    const shown = stills.items.length > 0 || stills.layer !== null;
+    if (shown) this.step({ type: "pictured", id: CANVAS, picture: stills });
     // Hidden before their pictures are on screen, the canvas would show empty for a frame.
-    if (stills.items.length || stills.layer) await this.stillsAreShown();
-    if (change !== this.coverChanges || this.isDestroyed) return;
-    this.frozen = true;
+    if (shown) await this.stillsAreShown();
+    if (change !== this.popups.session || this.isDestroyed) return;
+    this.step({ type: "out", id: CANVAS });
     this.showViews();
   }
 
   private thaw(change: number): void {
-    this.frozen = false;
+    // Closed: the pages are back (settling on their stills, if they had any).
     this.showViews();
     // The stills go once the pages are back and have had a moment to draw.
     setTimeout(() => {
-      if (change === this.coverChanges && !this.isDestroyed) this.sendStills(NO_STILLS);
+      if (change !== this.popups.session || this.isDestroyed) return;
+      this.sendStills(NO_STILLS);
+      const settling = panelStep(this.popups, CANVAS);
+      if (settling.step === "settling") this.step({ type: "settled", id: CANVAS, picture: settling.picture });
     }, STILLS_LINGER_MS);
   }
 
@@ -276,7 +297,7 @@ export class OverlayCanvas implements LayoutWindow {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
-    this.coverChanges++;
+    this.step({ type: "close" });
     this.stillsOnScreen?.();
     const alive = !this.window.isDestroyed();
     for (const entry of this.items.values()) {

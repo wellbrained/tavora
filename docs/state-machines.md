@@ -48,6 +48,7 @@ Update this page in the pull request that adds, removes or changes a flow.
 
 | Flow | File | States | Seen as |
 | --- | --- | --- | --- |
+| Popups over panels | `shared/popups-over-panels.ts` (`popupsStep`, with tests), stepped by main `panel-views.ts` (`PanelViews.popups`) and `overlay-canvas.ts` (the Overlay page's canvas, as one panel), and by renderer `host.ts` with each request it sends (`overPanels`); the host page's requests reach main through `PanelDialogs.popups` | one value: the overlay as `closed \| partial(panels) \| all` (a menu or hint asks only for the panels it lies over, added up; a dialog, a drag or the window being resized asks for every one; a `session` counts each one opened and closed, so the work of one that ended never touches the next) and each panel as `live \| picturing \| out \| settling`: `picturing` stays in sight until its picture is on screen, then `out` behind it (with none under a dialog or drag; a picture that came to nothing under a menu leaves it in sight); closing the overlay settles each panel on its picture until it has drawn and turned solid. A panel back from another tab is `settling` on its last picture too (`after: away`; the last pictures themselves stay in `standIns`, at most `STAND_INS_KEPT`), and lets go of it when it leaves again first. A picture from away never counts as the overlay's. The menu of a panel in its own dialog is its own value (`dialogMenu`, below) | `data-status` on `<html>` (the overlay as the host page asked for it); `overlay` in `PanelViews.snapshot` |
 | Module page | `main/module-view.ts` (`PagePhase`) | `loading → settling → revealed → drawn`, or `failed \| unresponsive \| crashed \| unavailable` | the panel's `InstanceStatus` in the view state |
 | Closing a module page | `main/module-view.ts` (`end`, `dispose`) | `open → saving → closed`: `saving` hides the page and sends `lifecycle.dispose`; its port stays, answering only saves (`servedWhileClosing` in `bridge.ts`), until the page answered a ping (the preload answers once it passed the event on) and its calls and file writes have been quiet for 150 ms, at most 1 s. Nothing it does reaches the host as the panel's any more. `PanelViews` keeps such pages (`closing`) so quitting waits for them and deleting their workspace closes them at once; a closed panel's saved UI state is removed only after `PanelViews.closed(id)` resolves, so the page's last save can't bring the file back | |
 | Panels when the window closes or Tavora quits | `main/host.ts` (`panelPages`) | `running → closing → closed`: closing the window or quitting waits for every page to save and close, those closed a moment before included (at most about 1.5 s); no page starts after `running` | |
@@ -91,13 +92,10 @@ the pull request that makes it explicit.
 - **The overlays' crash breaker** (`main/game-overlay-service.ts` `crashes`, `stopped`, and the card's `cardCrashes` in
   `main/game-layer-windows.ts`) → `healthy | crashed | stopped` per window.
 
-- **Host overlays over panels** (renderer `host.ts` `overlayOpen`, `panelsOut`, `heldPopups`, timers, with the
-  requests in `overlay-area.ts`'s `PopupWatch` (`measureStep`, `answerStep`, `askAllStep`, tested), which also decides
-  which panels a popup covers and how long a closing dialog holds; main `panel-views.ts` `overlayOpen`,
-  `overlaySession`, `wanted`, `out`, `picturing`, `overlayPictures`, `standIns`, `inSight`, `prepared`;
-  `overlay-canvas.ts`) → the overlay as `closed | partial(panels) | all`, each panel as
-  `live | picturing | out | settling` (its picture stays until it has drawn and turned solid; a panel back from another
-  tab goes through `settling` on its last picture too), with a step function, and `data-status` on `<html>`.
+- **When popups and dialogs show over panels** (renderer `host.ts`: `panelsOut` with its cap timer, `heldPopups`, the
+  one-tick `overlayRelease`) → one phase for the host page's side (`waiting | shown` per popup and for the page), read
+  from the overlay in `shared/popups-over-panels.ts`. The requests are already one value (`PopupWatch` in
+  `overlay-area.ts`, with `measureStep`, `answerStep`, `askAllStep`).
 
 - **Workspace opening cover** (`main/host.ts` `openings`, `panel-views.ts` `openingState`, `panel-cover.ts`) → one
   opening with its own token: `waiting-for-data | covering | idle`.

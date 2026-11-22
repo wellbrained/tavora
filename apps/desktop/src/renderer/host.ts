@@ -15,6 +15,7 @@ import { CLASSIC_STYLE_ID as CLASSIC_STYLE } from "../shared/styles";
 import { developerSetup } from "./developer-setup";
 import { createDialogQueue } from "./dialog-queue";
 import { answerStep, askAllStep, dialogsHolding, measureStep, NO_WATCH, openWatch, POPUPS, type PopupRequest, type PopupWatch } from "./overlay-area";
+import { noPopups, popupsStep, type PopupsEvent, type PopupsOverPanels } from "../shared/popups-over-panels";
 import { DISCORD_VOICE_PAUSED } from "../shared/discord-voice";
 
 export const api = window.tavoraHost;
@@ -967,6 +968,17 @@ let panelsOutCap: ReturnType<typeof setTimeout> | undefined;
 /** What has been asked of the host for the overlay open now, and answered (overlay-area.ts). */
 let watchState: PopupWatch = NO_WATCH;
 /**
+ * The overlay as the host has it (shared/popups-over-panels.ts): stepped here with each request sent, by the same function
+ * the host steps with them, and seen as `data-status` on <html>. The panels' own steps are the host's alone.
+ */
+const overPanels = shallowRef<PopupsOverPanels<never>>(noPopups());
+function stepPopups(event: PopupsEvent<never>): void {
+  overPanels.value = popupsStep(overPanels.value, event);
+}
+watch(() => overPanels.value.overlay.status, (status) => (document.documentElement.dataset.status = status), { immediate: true, flush: "sync" });
+/** Every panel is asked to step aside (a dialog, a drag, the window being resized, or a menu that was not found). */
+const askedAll = () => overPanels.value.overlay.status === "all";
+/**
  * While only a menu or hint is open, each popup stays unseen until it has been measured and the panels under it are out
  * (styles.css: html.overlay-partial, data-panels-clear). These wait for the answer to the request that asked for theirs.
  */
@@ -976,6 +988,7 @@ let measureFrame = 0;
 /** Sends a request; the first one (or one for every panel) keeps popups and dialogs unseen until it is answered. */
 function sendRequest(request: PopupRequest | null): void {
   if (!request) return;
+  stepPopups(request.only ? { type: "ask", only: request.only } : { type: "ask" });
   api.setOverlay(true, request.only, request.seq);
   if (request.seq === watchState.awaited) waitFor();
 }
@@ -1016,13 +1029,13 @@ api.onOverlayReady((seq) => {
 /** Each frame while only menus or hints are open: measures their popups and acts on measureStep (overlay-area.ts). */
 function measurePopups(): void {
   measureFrame = 0;
-  if (!overlayOpen.value || overlayWhole.value || watchState.asked === "all") return;
+  if (!overlayOpen.value || overlayWhole.value || askedAll()) return;
   // A hint measures itself unseen (its own inline style) before it is placed.
   const popups = [...document.querySelectorAll<HTMLElement>(POPUPS)].map((popup) => ({ popup, box: popup.getBoundingClientRect(), hidden: popup.style.visibility === "hidden" }));
   const { watch, request, hold, show } = measureStep(watchState, popups, placedPanels, { width: innerWidth, height: innerHeight });
   watchState = watch;
   sendRequest(request);
-  if (watch.asked === "all") return setPartial(false);
+  if (askedAll()) return setPartial(false);
   for (const { popup, seq } of hold) if ((heldPopups.get(popup) ?? 0) < seq) holdPopup(popup, seq);
   for (const popup of show) if (!heldPopups.has(popup) && !popup.hasAttribute("data-panels-clear")) clearPopup(popup);
   measureFrame = requestAnimationFrame(measurePopups);
@@ -1050,6 +1063,7 @@ watch(overlayOpen, (open) => {
   if (!open) {
     overlayRelease = setTimeout(() => {
       overlayRelease = undefined;
+      stepPopups({ type: "close" });
       api.setOverlay(false);
       stopMeasuring();
       watchState = { ...watchState, asked: null };
@@ -1066,6 +1080,7 @@ watch(overlayOpen, (open) => {
     return;
   }
   watchState = openWatch(watchState);
+  stepPopups({ type: "open" });
   if (overlayWhole.value) return askAll();
   // Popups stay unseen until the first request is answered; measuring waits for them to be placed. After that each new
   // one waits on its own until it is measured (setPartial).
@@ -1075,7 +1090,7 @@ watch(overlayOpen, (open) => {
 });
 // A dialog or drag while a menu is open (a menu entry that opens a dialog): every panel steps aside now.
 watch(overlayWhole, (whole) => {
-  if (whole && overlayOpen.value && watchState.asked !== "all") askAll();
+  if (whole && overlayOpen.value && !askedAll()) askAll();
 });
 watch(overlayPending, (waiting) => document.documentElement.classList.toggle("overlay-pending", waiting), { immediate: true, flush: "sync" });
 
