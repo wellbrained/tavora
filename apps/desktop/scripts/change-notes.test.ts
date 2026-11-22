@@ -13,6 +13,13 @@ describe("parseChangeNote", () => {
     expect(note).toEqual({ bump: "patch", title: "Lost a key?", notes: ["Press Lost it?", "Your modules move to your newest key."], tags: [] });
   });
 
+  it("refuses a note the update feed can't take as it is, before it is ever released", () => {
+    const { problems } = parseChangeNote("# Notes\n\n- Pick z.\u00a0B. a style\n- Tabs\tinside\n- Fine: see https://docs.mytavora.app\n", "a.md");
+    expect(problems).toHaveLength(2);
+    expect(problems[0]).toContain("a non-breaking space; write a plain space instead");
+    expect(problems[1]).toContain("a tab");
+  });
+
   it("reads a bump on the first line, with Windows line ends", () => {
     expect(parseChangeNote("bump: minor\r\n# The catalog\r\n- Browse modules\r\n", "a.md").note?.bump).toBe("minor");
   });

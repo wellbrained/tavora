@@ -1,6 +1,6 @@
-// For the maintainer: sends the server setup (deploy/server/setup-deploy-access.sh and every file it installs)
-// to the server and runs it there as root, with the root admin key. Only committed files go (HEAD), plus the
-// four deploy keys' public halves and this PC's tailnet address. See deploy/README.md.
+// For the maintainer: sends the server setup (deploy/server/setup-deploy-access.sh and every file it installs,
+// the update keys the app pins included) to the server and runs it there as root, with the root admin key. Only
+// committed files go (HEAD), plus the four deploy keys' public halves and this PC's tailnet address. See deploy/README.md.
 //
 //   node deploy/send-server-setup.mjs --admin-key <path to the root admin key> [--pc-address 100.x.y.z]
 import { spawnSync } from "node:child_process";
@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { JOBS } from "../scripts/deploy-client.mjs";
 
 const repo = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const PATHS = ["deploy/server", "apps/api/deploy"];
+const PATHS = ["deploy/server", "apps/api/deploy", "apps/desktop/src/main/update-keys.ts"];
 
 function option(name, fallback) {
   const index = process.argv.indexOf(name);
@@ -34,7 +34,7 @@ const host = (process.env.TAVORA_DEPLOY_HOST ?? "").trim();
 if (!adminKey || !existsSync(adminKey)) fail("Usage: node deploy/send-server-setup.mjs --admin-key <path to the root admin key>");
 if (!/^[A-Za-z0-9.-]+$/.test(host)) fail("Set TAVORA_DEPLOY_HOST to the server's tailnet name (no user) first.");
 if (!/^100\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(pc)) fail(`Not a tailnet address: ${pc}`);
-if (run("git", ["status", "--porcelain", "--", ...PATHS]).trim()) fail(`Commit the changes in ${PATHS.join(" and ")} first: only committed files are sent.`);
+if (run("git", ["status", "--porcelain", "--", ...PATHS]).trim()) fail(`Commit the changes in ${PATHS.slice(0, -1).join(", ")} and ${PATHS.at(-1)} first: only committed files are sent.`);
 
 const work = mkdtempSync(path.join(tmpdir(), "tavora-server-setup-"));
 try {

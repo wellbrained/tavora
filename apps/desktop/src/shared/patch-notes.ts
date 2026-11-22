@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.137",
+    date: "2026-11-22",
+    title: "Tidier data folder",
+    notes: [
+      "Leftovers from a save that was cut off are cleared away at the next start.",
+    ],
+    prs: [
+      { number: 891, title: "Clear interrupted saves at start, require the update signature on the server, CODEOWNERS for the update keys" },
+    ],
+    tags: ["privacy", "website"],
+  },
+  {
     version: "0.24.136",
     date: "2026-11-22",
     title: "Safer adding a PC",

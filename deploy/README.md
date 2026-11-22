@@ -34,9 +34,13 @@ admin work and is never in a `TAVORA_*` setting.
 
 What a stolen deploy key can still do (accepted 2026-10-31): the API key runs code as the `tavora-api` service
 (that is what a deploy is), the docs key can change the docs, the Admin key can change the panel, and the
-updates key can hold updates back (a bogus newer version that apps refuse), but no longer ship a bad installer: apps that
-check Tavora's update signature (see [The update key](#the-update-key-maintainer-once)) refuse any installer it
-didn't sign. The tailnet-only rule and the passphrases below make using a stolen key harder.
+updates key can stall releases (it can hold the job's publish lock while an upload of its own hangs), but can't put
+anything on the feed that Tavora's update key didn't sign. The receiver publishes an update only when its `latest.yml`
+is exactly electron-builder's for that one installer (one `files` entry, no address outside the plain release notes,
+no `packages` or `isAdminRightsRequired`; `pnpm release` runs the same check before it signs) and carries Tavora's signature for that version, installer name and SHA-512, under the keys
+pinned in `apps/desktop/src/main/update-keys.ts` (`server/tavora-update-signature`; the setup installs the pins as
+`/etc/tavora-deploy/update-keys.ts`, a deploy can't change them). Apps that check the signature themselves (see
+[The update key](#the-update-key-maintainer-once)) refuse any installer it didn't sign. The tailnet-only rule and the passphrases below make using a stolen key harder.
 
 **Caddy's admin API** listens only on the Unix socket `/run/caddy-admin/admin.sock`, which only root, Caddy
 and CoreHub (the `corehub` group) can open (CoreHub #422, decided 2026-10-31). Before, it listened on
@@ -148,6 +152,8 @@ build refuse to ship, because such an app could install no update at all.
    ```powershell
    pnpm tavora-update-key check
    ```
+   Once it is merged, run the server setup again ([Change the server setup](#change-the-server-setup)): the update
+   feed takes only updates signed by the keys pinned there, and `pnpm release` stops until the server has them.
 3. **Tell `pnpm release` where the release key is** (then open a new terminal):
    ```powershell
    setx TAVORA_UPDATE_KEY "$HOME\.tavora\update-release.pem"
@@ -158,7 +164,8 @@ build refuse to ship, because such an app could install no update at all.
 
 **Lost or leaked release key:** sign the next release with the backup key (`TAVORA_UPDATE_KEY` pointing at it; the
 release says so), and in that same release pin a new key pair: the backup becomes `release`, a fresh key `backup`.
-Installed apps take that release because the backup key signed it, and from then on trust only the new pair. A
+Installed apps take that release because the backup key signed it, and from then on trust only the new pair. Run the
+server setup again with the new pins before you publish it (the old backup key is pinned in both, so the feed takes it). A
 leaked key stays trusted by every app that has not updated past the release that dropped it.
 
 `pnpm release` checks the keys against the **last release's** `update-keys.ts`, since that is what installed apps pin:

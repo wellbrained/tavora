@@ -202,7 +202,7 @@ import {
 } from "./themes";
 import { discoverStyles } from "./styles";
 import { copyExample, slugOf } from "./example-copy";
-import { SerialQueue, writeFileAtomic } from "./fsutil";
+import { SerialQueue, sweepWriteLeftovers, writeFileAtomic } from "./fsutil";
 import {
   emptyWorkspace,
   Workspaces,
@@ -954,6 +954,10 @@ export class Host {
     let loaded: Library | undefined;
     const copySync = Host.cloudCopy(options, encryptor, signIn, { root: () => (loaded ? (loaded.moduleFilesFolder ?? null) : savedFolder) ?? defaultFolder, defaultRoot: () => defaultFolder });
     await copySync.beforeLoad();
+    // Temps of writes a crash or a forced quit cut off; in the background, as nothing reads them.
+    void sweepWriteLeftovers(userData)
+      .then((removed) => removed.length && console.warn(`[tavora] removed ${removed.length} temp file(s) left by an interrupted save`))
+      .catch((error: unknown) => console.error("[tavora] removing leftover temp files failed", error));
     const savedData = new SavedData(userData);
     // A file saved by a newer Tavora (a cloud copy taken just now included) is copied aside before this one, or a move
     // below, can overwrite it.

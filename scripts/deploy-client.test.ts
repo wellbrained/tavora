@@ -49,6 +49,8 @@ describe("staleSetup", () => {
     ["deploy/server/tavora-api-switch", sha("b")],
     ["apps/api/deploy/tavora-api.service", sha("c")],
     ["deploy/server/setup-deploy-access.sh", sha("d")],
+    ["deploy/server/tavora-update-signature", sha("e")],
+    ["apps/desktop/src/main/update-keys.ts", sha("9")],
   ]);
   const same = (file: string) => installed.get(file) ?? null;
 
@@ -69,5 +71,16 @@ describe("staleSetup", () => {
 
   it("wants the receiver listed at all", () => {
     expect(staleSetup("docs", new Map(), same)).toEqual(["deploy/server/tavora-receive"]);
+  });
+
+  it("wants the update signature check and the pinned keys on the server before an update goes up", () => {
+    const keys = "apps/desktop/src/main/update-keys.ts";
+    const check = "deploy/server/tavora-update-signature";
+    const before = new Map([...installed].filter(([file]) => file !== keys && file !== check));
+    expect(staleSetup("updates", before, same)).toEqual([keys, check]);
+    expect(staleSetup("docs", before, same)).toEqual([]);
+    // New pins in the repo: the server must take them first.
+    expect(staleSetup("updates", installed, (file) => (file === keys ? sha("1") : same(file)))).toEqual([keys]);
+    expect(staleSetup("docs", installed, (file) => (file === keys ? sha("1") : same(file)))).toEqual([]);
   });
 });
