@@ -1,6 +1,6 @@
 // A power cut at every file operation of settling a cloud copy, and a second one at every operation after that, on the
 // real code. Whatever happens, nothing uploads a mix of two sides, and neither side's data is lost.
-import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { link, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { CopySync } from "./cloud-copy-sync";
@@ -84,9 +84,28 @@ async function everything(dir: string): Promise<string[]> {
   return out;
 }
 
+/**
+ * A snapshot of a folder, its files hard-linked. A power cut leaves file dates alone, and the copy tells a change by size
+ * and date, so a snapshot has to keep them to the last digit: `cp` gives new ones on Linux, which reads as a local edit.
+ * Tavora replaces files by renaming, so a link keeps what it held; a test changing a file uses replaceFile.
+ */
+async function snapshotOf(from: string, to: string): Promise<void> {
+  await mkdir(to, { recursive: true });
+  for (const entry of await readdir(from, { withFileTypes: true })) {
+    if (entry.isDirectory()) await snapshotOf(path.join(from, entry.name), path.join(to, entry.name));
+    else await link(path.join(from, entry.name), path.join(to, entry.name));
+  }
+}
+
+/** Writes a file without touching the snapshots that link to it. */
+async function replaceFile(file: string, text: string): Promise<void> {
+  await rm(file, { force: true });
+  await writeFile(file, text);
+}
+
 const restore = async (at: Pc, from: string) => {
   await rm(at.root, { recursive: true, force: true });
-  await cp(from, at.root, { recursive: true });
+  await snapshotOf(from, at.root);
 };
 
 /** Runs `work` with the power going off before its operation number `at`. False when it finished before that. */
@@ -145,7 +164,7 @@ async function chosen() {
   await at.enterKey(first.view().recoveryKey!);
   await at.keep("cloud");
   const snapshot = `${b.root}-chosen`;
-  await cp(b.root, snapshot, { recursive: true });
+  await snapshotOf(b.root, snapshot);
   const storage = new FolderStorage(folder);
   const remote = async () => (await storage.remote())?.version;
   return { cloud, b, snapshot, version: await remote(), remote };
@@ -225,6 +244,17 @@ describe("every status the swap can reach", () => {
 });
 
 describe("a power cut, and a second one", () => {
+  it("works on snapshots that keep every file's date and content", async () => {
+    const { b, snapshot } = await chosen();
+    const file = path.join(b.userData, "workspace.json");
+    const before = (await stat(file)).mtimeMs;
+    await restore(b, snapshot);
+    expect((await stat(file)).mtimeMs).toBe(before);
+    await replaceFile(file, "changed");
+    await restore(b, snapshot);
+    expect(await readFile(file, "utf8")).toBe(B["workspace.json"]);
+  });
+
   it("while the chosen copy goes in: the next start finishes it", async () => {
     const setup = await chosen();
     const { cloud, b, snapshot } = setup;
@@ -234,7 +264,7 @@ describe("a power cut, and a second one", () => {
     const steps = await everyCut(b, snapshot, () => tavora(cloud, b).beforeLoad(), async (n) => {
       if (skipFirstCut(n)) return;
       await rm(first, { recursive: true, force: true });
-      await cp(b.root, first, { recursive: true });
+      await snapshotOf(b.root, first);
       await copyIsIn(setup, `cut ${n}`, bad);
       await everyCut(b, first, () => tavora(cloud, b).beforeLoad(), (m) => copyIsIn(setup, `cut ${n}, then ${m}`, bad), checked);
     });
@@ -254,9 +284,9 @@ describe("a power cut, and a second one", () => {
       if ((await phaseOf(b)) !== "swapping") return;
       swaps++;
       const status = JSON.parse(await readFile(statusFile(b), "utf8")) as object;
-      await writeFile(statusFile(b), JSON.stringify({ ...status, phase: "undoing" }));
+      await replaceFile(statusFile(b), JSON.stringify({ ...status, phase: "undoing" }));
       await rm(first, { recursive: true, force: true });
-      await cp(b.root, first, { recursive: true });
+      await snapshotOf(b.root, first);
       await pcIsBack(setup, `cut ${n}`, bad);
       await everyCut(b, first, () => tavora(cloud, b).beforeLoad(), (m) => pcIsBack(setup, `cut ${n}, then ${m}`, bad), checked);
     });
@@ -274,11 +304,11 @@ describe("a power cut, and a second one", () => {
       if (skipFirstCut(n)) return;
       if ((await phaseOf(b)) !== "swapping") return;
       await rm(first, { recursive: true, force: true });
-      await cp(b.root, first, { recursive: true });
+      await snapshotOf(b.root, first);
       await everyCut(b, first, () => tavora(cloud, b).beforeLoad(), async (m) => {
         if ((await phaseOf(b)) !== "swapping") return;
         const status = JSON.parse(await readFile(statusFile(b), "utf8")) as object;
-        await writeFile(statusFile(b), JSON.stringify({ ...status, phase: "undoing" }));
+        await replaceFile(statusFile(b), JSON.stringify({ ...status, phase: "undoing" }));
         await pcIsBack(setup, `cut ${n}, then ${m}`, bad);
       }, checked);
     });
@@ -290,15 +320,15 @@ describe("a power cut, and a second one", () => {
     const { cloud, b, snapshot, version, remote } = setup;
     await restore(b, snapshot);
     if (why === "went-back") {
-      await writeFile(statusFile(b), JSON.stringify({ v: 1, phase: "asking", why, files: [] }));
+      await replaceFile(statusFile(b), JSON.stringify({ v: 1, phase: "asking", why, files: [] }));
     } else {
-      await writeFile(path.join(b.userData, "library.json"), "{ broken");
+      await replaceFile(path.join(b.userData, "library.json"), "{ broken");
       await readSavedFile(path.join(b.userData, "library.json"), { version: 2 });
-      await writeFile(statusFile(b), JSON.stringify({ v: 1, phase: "asking", why, files: ["library.json"] }));
+      await replaceFile(statusFile(b), JSON.stringify({ v: 1, phase: "asking", why, files: ["library.json"] }));
     }
     const asking = `${b.root}-asking`;
     await rm(asking, { recursive: true, force: true });
-    await cp(b.root, asking, { recursive: true });
+    await snapshotOf(b.root, asking);
     const before = why === "lost" ? NAMES.filter((name) => name !== "library.json") : NAMES;
     const bad: string[] = [];
     const answer = async () => {
