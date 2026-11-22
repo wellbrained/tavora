@@ -319,7 +319,7 @@ describe("with the copy off", () => {
     const { b, stuck } = await stuckOnModules();
     let stateThere: boolean | undefined;
     onRename = async (_from, to) => {
-      if (to === statusFile(b)) stateThere = await there(path.join(b.userData, "cloud-copy.json"));
+      if (to === statusFile(b)) stateThere = await there(path.join(b.userData, "cloud-copy-swapping.json"));
     };
     await stuck.sync.turnOff();
     expect(stateThere).toBe(true);

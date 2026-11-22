@@ -626,6 +626,9 @@ export const WRITTEN_SINCE = "written-since";
 /** After a name in `written-since`: what the copy or the app had put in a place when a swap was taken back. */
 const UNDONE = ".undone";
 
+/** A place's name in `written-since` without what freePath or a swap taken back added to it. */
+const plainName = (name: string) => name.replace(/(\.undone)?(\.\d+)?$/, "");
+
 /** The date of a synced file that was changed after it arrived: no real file has it, so it counts as changed. */
 const CHANGED_SINCE = -1;
 
@@ -657,9 +660,11 @@ async function swapPlaces(staging: string, roots: CopyRoot[], keepIn: string, co
       places.push({ place: root.path, staged, kept, since, inCopy: held.has(root.name) });
       continue;
     }
-    // Only Tavora's own entries of a folder the user may share (the module files folder).
+    // Only Tavora's own entries of a folder the user may share (the module files folder). One a later start moved into
+    // `written-since` may be nowhere else.
     const here = (await namesIn(root.path)).filter(root.keep);
-    const names = new Set([...here, ...(await namesIn(staged)), ...(await namesIn(kept))]);
+    const movedSince = (await namesIn(since)).map(plainName).filter(root.keep);
+    const names = new Set([...here, ...(await namesIn(staged)), ...(await namesIn(kept)), ...movedSince]);
     for (const name of names) places.push({ place: path.join(root.path, name), staged: path.join(staged, name), kept: path.join(kept, name), since: path.join(since, name), inCopy: held.has(`${root.name}/${name}`) });
   }
   return places;
@@ -693,7 +698,7 @@ export async function sortWrittenSince(keepIn: string, copy: DownloadedCopy, bef
     for (const entry of names.value) {
       const file = path.join(dir, entry);
       // A place's own name may carry what freePath or a swap taken back added to it; below that, names are as they were.
-      const plain = name.split("/").length < 2 ? entry.replace(/(\.undone)?(\.\d+)?$/, "") : entry;
+      const plain = name.split("/").length < 2 ? plainName(entry) : entry;
       const inCopy = name ? `${name}/${plain}` : plain;
       const info = await lookStat(file);
       if (info.status !== "present") continue;
@@ -732,8 +737,9 @@ export async function emptyPlaces(staging: string, roots: CopyRoot[], keepIn: st
 /**
  * Takes back a swap that didn't finish, when the user would rather have this PC's data. What was here goes back in its
  * place: from the backup, or from `written-since` when a later start moved it there. What the copy or the app put in the
- * place goes aside as `.undone`, which is never taken for the original, so running this again changes nothing. A place
- * that was `empty` before is emptied again. The caller clears the staging.
+ * place goes aside as `.undone`, which is never taken for the original, so running this again changes nothing. Going back
+ * to the backup sets what `written-since` holds for the place aside first, so a second run can't take that for the
+ * original either. A place that was `empty` before is emptied again. The caller clears the staging.
  */
 export async function undoSwap(staging: string, roots: CopyRoot[], keepIn: string, copy: DownloadedCopy, empty: readonly string[]): Promise<void> {
   for (const { place, kept, since } of await swapPlaces(staging, roots, keepIn, copy)) {
@@ -742,6 +748,7 @@ export async function undoSwap(staging: string, roots: CopyRoot[], keepIn: strin
     const wasEmpty = empty.includes(place);
     const original = (await exists(kept)) ? kept : !wasEmpty && (await exists(since)) ? since : null;
     if (original) {
+      if (original === kept && (await exists(since))) await move(since, await freePath(`${since}${UNDONE}`));
       if (isThere) await move(place, await freePath(`${since}${UNDONE}`));
       await move(original, place);
     } else if (isThere && wasEmpty) {
@@ -791,10 +798,8 @@ export async function lookCopyState(file: string): Promise<Looked<CopyState>> {
   if (saved === null) return damaged;
   if (typeof saved.v === "number" && saved.v > STORE_VERSIONS.cloudCopy) return { status: "present", value: EMPTY_STATE };
   if (saved.v !== STORE_VERSIONS.cloudCopy) return damaged;
-  // During a swap the state sits inside `duringSwap`, where an older Tavora doesn't find it.
-  const body = typeof saved.duringSwap === "object" && saved.duringSwap !== null ? (saved.duringSwap as Record<string, unknown>) : saved;
-  if (typeof body.version !== "number" || typeof body.files !== "object" || body.files === null) return damaged;
-  return { status: "present", value: { version: body.version, pictures: body.pictures !== false, files: body.files as Record<string, SyncedFile>, ...(body.kept === true ? { kept: true } : {}), ...(body.sealed === true ? { sealed: true } : {}) } };
+  if (typeof saved.version !== "number" || typeof saved.files !== "object" || saved.files === null) return damaged;
+  return { status: "present", value: { version: saved.version, pictures: saved.pictures !== false, files: saved.files as Record<string, SyncedFile>, ...(saved.kept === true ? { kept: true } : {}), ...(saved.sealed === true ? { sealed: true } : {}) } };
 }
 
 /** The state as saved, or the empty one when it can't be used. */
@@ -803,11 +808,7 @@ export async function loadCopyState(file: string): Promise<CopyState> {
   return looked.status === "present" ? looked.value : EMPTY_STATE;
 }
 
-/**
- * Writes the state. `duringSwap` puts it where an older Tavora doesn't read it: gone back to one halfway through a swap,
- * it sees no state, so it asks instead of uploading what is half in place.
- */
-export async function saveCopyState(file: string, state: CopyState, duringSwap = false): Promise<void> {
-  const body = { version: state.version, pictures: state.pictures, files: state.files, ...(state.kept ? { kept: true } : {}), ...(state.sealed ? { sealed: true } : {}) };
-  await writeFileAtomic(file, JSON.stringify(duringSwap ? { v: STORE_VERSIONS.cloudCopy, duringSwap: body } : { v: STORE_VERSIONS.cloudCopy, ...body }));
+/** Writes the state. During a swap it goes to another file than cloud-copy.json (CopySync.parkState). */
+export async function saveCopyState(file: string, state: CopyState): Promise<void> {
+  await writeFileAtomic(file, JSON.stringify({ v: STORE_VERSIONS.cloudCopy, version: state.version, pictures: state.pictures, files: state.files, ...(state.kept ? { kept: true } : {}), ...(state.sealed ? { sealed: true } : {}) }));
 }

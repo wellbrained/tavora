@@ -143,7 +143,8 @@ describe("sequences across starts", () => {
     await expect(stuck.sync.turnOff()).rejects.toBeTruthy();
     held = () => false;
     expect(await realRead(statusFile(b), "utf8")).toBe(before);
-    expect(await there(stateFile(b))).toBe(true);
+    // During a swap the state is parked.
+    expect(await there(path.join(b.userData, "cloud-copy-swapping.json"))).toBe(true);
     await stuck.sync.turnOff();
     const next = tavora(cloud, b);
     await next.sync.beforeLoad();

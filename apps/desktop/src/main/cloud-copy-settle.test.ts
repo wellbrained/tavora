@@ -208,18 +208,18 @@ describe("D4: turning off during a stuck swap", () => {
     held = (_from, to) => to === path.join(b.userData, "cloud-copy-status.json");
     await expect(stuck.sync.turnOff()).rejects.toMatchObject({ key: "cloudCopy.error.failed" });
     held = () => false;
-    expect(await there(path.join(b.userData, "cloud-copy.json"))).toBe(true);
+    expect(await there(path.join(b.userData, "cloud-copy-swapping.json"))).toBe(true);
     expect(stuck.sync.view().on).toBe(true);
   });
 });
 
 describe("D5: going back to an older Tavora during a swap", () => {
-  it("leaves it nothing it would act on: no staged list by the old name, no state it can use", async () => {
+  it("leaves it nothing it would act on: no staged list by the old name, and the copy looks off", async () => {
     const { b } = await stuckOnModules();
     expect(await there(staging(b, "staged.json"))).toBe(false);
-    // What 0.24.122 reads: a state with a numeric version.
-    const saved = JSON.parse(await read(b.userData, "cloud-copy.json"));
-    expect(saved.v === 1 && typeof saved.version === "number").toBe(false);
+    // 0.24.122 takes the copy for on when cloud-copy.json is there.
+    expect(await there(path.join(b.userData, "cloud-copy.json"))).toBe(false);
+    expect(JSON.parse(await read(b.userData, "cloud-copy-swapping.json")).version).toBeTypeOf("number");
   });
 
   it("gets the state back in the ordinary form once the swap is done", async () => {
