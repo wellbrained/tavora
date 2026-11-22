@@ -16,9 +16,22 @@
 # makes it 666), the service's user is not in that group, and the service's unit hides /run/clamav from it too: so neither
 # the service nor anything else that runs as its user (tavora-api-catalog, the backup) can reach clamd itself.
 set -euo pipefail
-clamd=/run/clamav/clamd.ctl
 filter=/run/tavora-clamd/clamd.sock
 conf=/etc/clamav/clamd.conf
+# Where the filter (its unit) and the service's unit (InaccessiblePaths) expect clamd's socket.
+expected=/run/clamav/clamd.ctl
+
+# clamd's socket as clamd is set up: the socket unit's first path, else clamd.conf's LocalSocket, else the usual place.
+clamd_socket() {
+  local address=""
+  if systemctl cat clamav-daemon.socket >/dev/null 2>&1; then
+    address="$(systemctl show -P Listen clamav-daemon.socket 2>/dev/null | awk '$1 ~ /^\// { print $1; exit }')"
+  fi
+  if [[ -z "$address" ]]; then address="$(awk '$1 == "LocalSocket" { found = $2 } END { print found }' "$conf" 2>/dev/null)"; fi
+  address="${address:-$expected}"
+  printf '%s' "${address/#\/var\/run\//\/run\/}"
+}
+clamd="$(clamd_socket)"
 
 # One PING in clamd's newline form (nPING), which both clamd and the filter take; the filter refuses a bare PING.
 answers() { printf 'nPING\n' | timeout 5 socat - "UNIX-CONNECT:$1" 2>/dev/null | grep -q PONG; }
@@ -66,12 +79,18 @@ if grep -qiE '^[[:space:]]*TCPSocket[[:space:]]' "$conf"; then
   exit 1
 fi
 if [[ "$socket_unit" == 1 ]]; then
+  listens="$(systemctl show -P Listen clamav-daemon.socket)" || { echo "Can't read where clamav-daemon.socket listens (systemctl show failed); nothing was changed."; exit 1; }
   while read -r address _; do
     if [[ -n "$address" && "$address" != /* ]]; then
       echo "clamav-daemon.socket listens on $address. Take that ListenStream out first: the service must reach clamd only through the filter."
       exit 1
     fi
-  done < <(systemctl show -P Listen clamav-daemon.socket)
+  done <<< "$listens"
+fi
+clamd="$(clamd_socket)"
+if [[ "$clamd" != "$expected" ]]; then
+  echo "clamd's socket is at $clamd, but the clamd filter and the service's unit expect $expected. Move it back there first."
+  exit 1
 fi
 # The first signature download; freshclam keeps them up to date from then on.
 systemctl stop clamav-freshclam || true
@@ -108,7 +127,12 @@ if [[ "$socket_unit" == 1 ]]; then
   fi
 fi
 restart_failed() { echo "clamd did not start again with its socket for the clamav group; check: journalctl -u clamav-daemon -u clamav-daemon.socket"; exit 1; }
-if [[ "$changed" == 1 ]] && systemctl is-active --quiet clamav-daemon; then
+# Remade when the settings just changed, or when the socket isn't 660 clamav yet (a run cut off after the drop-in was
+# written, or a socket unit left listening while clamd was stopped): only while something holds the old socket.
+running=0
+systemctl is-active --quiet clamav-daemon.service && running=1
+if [[ "$socket_unit" == 1 ]] && systemctl is-active --quiet clamav-daemon.socket; then running=1; fi
+if [[ "$running" == 1 ]] && { [[ "$changed" == 1 ]] || [[ "$(socket_mode)" != '660 clamav' ]]; }; then
   # Running with the old socket: the socket is made again only when both stop.
   if [[ "$socket_unit" == 1 ]]; then
     systemctl stop clamav-daemon.service clamav-daemon.socket && systemctl start clamav-daemon.socket clamav-daemon.service || restart_failed

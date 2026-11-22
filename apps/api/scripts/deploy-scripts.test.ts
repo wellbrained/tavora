@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import net from "node:net";
 import { tmpdir } from "node:os";
@@ -295,20 +295,33 @@ describe("tavora-api-clamav", () => {
   /**
    * The setup with every system command faked. systemctl logs its calls; `cat clamav-daemon.socket` succeeds when the test
    * says there is a socket unit, `show -P Listen` answers what it says, and `is-active` is true for the units it marks.
+   * stat reports the socket as FAKE_STAT until clamd's socket was started again, then as FAKE_STAT_AFTER (both 660 clamav
+   * unless set). `@SOCK@` stands for clamd's socket path inside the tree.
    */
-  function setup({ socketUnit = true, listen = "/run/clamav/clamd.ctl (Stream)", active = ["clamav-daemon"], conf = "LocalSocket /run/clamav/clamd.ctl\nLocalSocketMode 666" } = {}) {
+  function setup({
+    socketUnit = true,
+    listen = "@SOCK@ (Stream)",
+    active = ["clamav-daemon.service", "clamav-daemon.socket"],
+    conf = "LocalSocket @SOCK@\nLocalSocketMode 666" as string | null,
+    dropin = null as string | null,
+  } = {}) {
     const t = tree();
-    for (const folder of ["srv/tavora-api/shared", "usr/local/lib/tavora", "etc/systemd/system", "etc/clamav"]) mkdirSync(path.join(t.root, folder), { recursive: true });
+    const sock = `${bashPath(t.root)}/run/clamav/clamd.ctl`;
+    const place = (text: string) => text.replaceAll("@SOCK@", sock);
+    for (const folder of ["srv/tavora-api/shared", "usr/local/lib/tavora", "etc/systemd/system/clamav-daemon.socket.d", "etc/clamav"]) mkdirSync(path.join(t.root, folder), { recursive: true });
     writeFileSync(path.join(t.root, "usr/local/lib/tavora/tavora-clamd-filter.mjs"), "");
     writeFileSync(path.join(t.root, "etc/systemd/system/tavora-clamd-filter.service"), "");
-    if (conf !== null) writeFileSync(path.join(t.root, "etc/clamav/clamd.conf"), conf);
+    const confFile = path.join(t.root, "etc/clamav/clamd.conf");
+    const dropinFile = path.join(t.root, "etc/systemd/system/clamav-daemon.socket.d/tavora.conf");
+    if (conf !== null) writeFileSync(confFile, place(conf));
+    if (dropin !== null) writeFileSync(dropinFile, dropin);
     if (socketUnit) writeFileSync(path.join(t.log, "socket-unit"), "");
-    writeFileSync(path.join(t.log, "listen"), `${listen}\n`);
+    writeFileSync(path.join(t.log, "listen"), `${place(listen)}\n`);
     for (const unit of active) writeFileSync(path.join(t.log, `active-${unit}`), "");
     fake(t, "systemctl", `echo "$*" >> "$LOG/systemctl"
 case "$1" in
   cat) [[ "$2" == clamav-daemon.socket && -e "$LOG/socket-unit" ]]; exit ;;
-  show) [[ "$*" == *Listen* ]] && cat "$LOG/listen"; exit 0 ;;
+  show) [[ "$*" == *Listen* ]] && cat "$LOG/listen"; [[ ! -e "$LOG/show-fails" ]]; exit ;;
   is-active) [[ -e "$LOG/active-\${!#}" ]]; exit ;;
 esac
 exit 0`);
@@ -317,25 +330,33 @@ exit 0`);
     fake(t, "id", `echo tavora-api`);
     fake(t, "timeout", `shift; exec "$@"`);
     fake(t, "socat", `cat > /dev/null; echo PONG`);
-    fake(t, "stat", `echo "\${FAKE_STAT:-660 clamav}"`);
+    fake(t, "stat", `if grep -qE '^(start clamav-daemon|restart clamav-daemon)' "$LOG/systemctl" 2>/dev/null; then echo "\${FAKE_STAT_AFTER:-660 clamav}"; else echo "\${FAKE_STAT:-660 clamav}"; fi`);
     fake(t, "tavora-api-set-setting", `echo "$*" >> "$LOG/set-setting"`);
-    return { t, script: t.script("apps/api/deploy/tavora-api-clamav.sh"), conf: path.join(t.root, "etc/clamav/clamd.conf"), dropin: path.join(t.root, "etc/systemd/system/clamav-daemon.socket.d/tavora.conf") };
+    return {
+      t,
+      script: t.script("apps/api/deploy/tavora-api-clamav.sh"),
+      conf: () => readFileSync(confFile, "utf8").replaceAll(sock, "@SOCK@"),
+      old: () => readFileSync(`${confFile}.tavora-old`, "utf8").replaceAll(sock, "@SOCK@"),
+      dropin: dropinFile,
+    };
   }
   const calls = (t: Tree) => t.read("systemctl").trim().split("\n");
+  const restarts = (t: Tree) => calls(t).filter((call) => /^(restart|stop|start) clamav-daemon/.test(call));
+  const WANTED_DROPIN = "# Written by tavora-api-clamav (Tavora): clamd's socket for the clamav group only.\n[Socket]\nSocketGroup=clamav\nSocketMode=0660\n";
 
   it("gives clamd's socket unit a 660 clamav drop-in, edits clamd.conf too, and makes the socket again once", { timeout: 30_000 }, () => {
-    const { t, script, conf, dropin } = setup();
+    const { t, script, conf, old, dropin } = setup();
     const result = t.run(script);
     expect(result.status, result.out).toBe(0);
-    expect(readFileSync(dropin, "utf8")).toMatch(/^# .*\n\[Socket\]\nSocketGroup=clamav\nSocketMode=0660\n$/);
+    expect(readFileSync(dropin, "utf8")).toBe(WANTED_DROPIN);
     // The file had no line break at its end: the new line is still a line of its own.
-    expect(readFileSync(conf, "utf8")).toBe("LocalSocket /run/clamav/clamd.ctl\nLocalSocketMode 660\nLocalSocketGroup clamav\n");
-    expect(readFileSync(`${conf}.tavora-old`, "utf8")).toBe("LocalSocket /run/clamav/clamd.ctl\nLocalSocketMode 666");
+    expect(conf()).toBe("LocalSocket @SOCK@\nLocalSocketMode 660\nLocalSocketGroup clamav\n");
+    expect(old()).toBe("LocalSocket @SOCK@\nLocalSocketMode 666");
     expect(t.read("debconf")).toContain("clamav-daemon/LocalSocketMode string 660");
     const log = calls(t);
     const order = ["daemon-reload", "stop clamav-daemon.service clamav-daemon.socket", "start clamav-daemon.socket clamav-daemon.service"].map((call) => log.indexOf(call));
     expect(order.every((at, index) => at >= 0 && (index === 0 || at > order[index - 1]!)), log.join("\n")).toBe(true);
-    expect(log.filter((call) => /^(restart|stop|start) clamav-daemon/.test(call))).toHaveLength(2);
+    expect(restarts(t)).toHaveLength(2);
     expect(t.read("set-setting")).toBe("clamav\n");
 
     // Again: all in place, so clamd isn't stopped (no second load of its signatures), and the original stays as it was.
@@ -343,46 +364,64 @@ exit 0`);
     const again = t.run(script);
     expect(again.status, again.out).toBe(0);
     expect(calls(t).filter((call) => /^(restart|stop|start|daemon-reload)( |$)/.test(call) && call.includes("clamav-daemon"))).toEqual([]);
-    expect(readFileSync(`${conf}.tavora-old`, "utf8")).toBe("LocalSocket /run/clamav/clamd.ctl\nLocalSocketMode 666");
+    expect(old()).toBe("LocalSocket @SOCK@\nLocalSocketMode 666");
+  });
+
+  it("remakes a 666 socket on a rerun after a cut-off run, also with only the socket unit listening", { timeout: 30_000 }, () => {
+    // The settings are all in place (an earlier run got that far), but the socket is still the old one.
+    const { t, script } = setup({ active: ["clamav-daemon.socket"], conf: "LocalSocket @SOCK@\nLocalSocketMode 660\nLocalSocketGroup clamav\n", dropin: WANTED_DROPIN });
+    const result = t.run(script, [], { env: { FAKE_STAT: "666 clamav" } });
+    expect(result.status, result.out).toBe(0);
+    expect(restarts(t)).toEqual(["stop clamav-daemon.service clamav-daemon.socket", "start clamav-daemon.socket clamav-daemon.service"]);
+    expect(calls(t)).not.toContain("daemon-reload");
+    expect(t.read("set-setting")).toBe("clamav\n");
   });
 
   it("starts a clamd that isn't running only once, with the new settings", { timeout: 30_000 }, () => {
     const { t, script } = setup({ active: [] });
     const result = t.run(script);
     expect(result.status, result.out).toBe(0);
-    const log = calls(t);
-    expect(log.filter((call) => /^(restart|stop|start) clamav-daemon/.test(call))).toEqual([]);
-    expect(log).toContain("enable --now clamav-daemon.socket clamav-daemon.service");
+    expect(restarts(t)).toEqual([]);
+    expect(calls(t)).toContain("enable --now clamav-daemon.socket clamav-daemon.service");
   });
 
   it("without a socket unit, sets clamd.conf only and restarts clamd", { timeout: 30_000 }, () => {
-    const { t, script, dropin } = setup({ socketUnit: false });
+    const { t, script, dropin } = setup({ socketUnit: false, active: ["clamav-daemon.service"] });
+    rmSync(dropin, { force: true });
     const result = t.run(script);
     expect(result.status, result.out).toBe(0);
     expect(existsSync(dropin)).toBe(false);
     expect(calls(t)).toContain("restart clamav-daemon");
   });
 
-  it("refuses clamd on a TCP port, in clamd.conf or in the socket unit, and a missing clamd.conf", { timeout: 30_000 }, () => {
-    const cases = [
-      { listen: "127.0.0.1:3310 (Stream)" },
-      { listen: "/run/clamav/clamd.ctl (Stream)\n[::]:3310 (Stream)" },
-      { listen: "@clamd (Stream)" },
-      { conf: "TCPSocket 3310\n" },
-      { conf: null },
+  it("refuses clamd on a TCP port, a socket elsewhere, an unreadable socket unit, and a missing clamd.conf", { timeout: 30_000 }, () => {
+    const cases: [Parameters<typeof setup>[0], RegExp][] = [
+      [{ listen: "127.0.0.1:3310 (Stream)" }, /listens on 127/],
+      [{ listen: "@SOCK@ (Stream)\n[::]:3310 (Stream)" }, /listens on \[::\]/],
+      [{ listen: "@clamd (Stream)" }, /listens on @clamd/],
+      [{ conf: "TCPSocket 3310\n" }, /TCP port/],
+      [{ conf: null }, /No .*clamd\.conf/],
+      [{ listen: "/srv/elsewhere/clamd.ctl (Stream)" }, /expect/],
+      [{ socketUnit: false, conf: "LocalSocket /srv/elsewhere/clamd.ctl\n" }, /expect/],
     ];
-    for (const options of cases) {
-      const { t, script } = setup(options as Parameters<typeof setup>[0]);
+    for (const [options, message] of cases) {
+      const { t, script } = setup(options);
       const result = t.run(script);
       expect(result.status, JSON.stringify(options)).not.toBe(0);
       expect(t.read("set-setting"), JSON.stringify(options)).toBe("");
-      expect(result.out, JSON.stringify(options)).toMatch(/TCP port|listens on|No .*clamd\.conf/);
+      expect(result.out, JSON.stringify(options)).toMatch(message);
     }
+    const { t, script } = setup();
+    writeFileSync(path.join(t.log, "show-fails"), "");
+    const result = t.run(script);
+    expect(result.status).not.toBe(0);
+    expect(result.out).toContain("Can't read where clamav-daemon.socket listens");
+    expect(restarts(t)).toEqual([]);
   });
 
   it("stops before switching the service when the socket still isn't 660 clamav", { timeout: 30_000 }, () => {
     const { t, script } = setup();
-    const result = t.run(script, [], { env: { FAKE_STAT: "666 root" } });
+    const result = t.run(script, [], { env: { FAKE_STAT: "666 root", FAKE_STAT_AFTER: "666 root" } });
     expect(result.status).not.toBe(0);
     expect(result.out).toContain("not 660 clamav");
     expect(t.read("set-setting")).toBe("");
