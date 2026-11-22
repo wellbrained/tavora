@@ -77,7 +77,7 @@ import type { Shell } from "./shell";
 
 /** The part of a game overlay's window the service drives (a test stands in for Electron). */
 export type OverlayWindow = Pick<GameOverlayWindow, "setRect" | "setShown" | "setMode" | "setHideFromCapture" | "setOpacity" | "destroy" | "dragging"> &
-  Partial<Pick<GameOverlayWindow, "focused" | "focusPanel" | "raise" | "setZoom" | "refreshFont" | "placed" | "setVeiled">>;
+  Partial<Pick<GameOverlayWindow, "focused" | "focusPanel" | "raise" | "setZoom" | "refreshFont" | "placed" | "setVeiled" | "setTopmost" | "handle">>;
 
 /** Which overlay or panel an item of the Overlay layout is. */
 export type LayoutItemRef = ItemRef;
@@ -221,6 +221,13 @@ export interface OverlayPlatform {
   screen?(): Rect;
   /** Whether one of Tavora's windows has the keyboard (its main window, a dialog); the service tells its own overlay windows apart. Everywhere hides then. */
   tavoraInFront?(): boolean;
+  /**
+   * Stacks windows (their handles, top first) right above the game's window (its handle) in Windows' order of windows
+   * (window-order.ts). Windows only; left out, overlays stay above every window while the user is elsewhere.
+   */
+  stackAboveGame?(game: number, windows: readonly number[]): boolean;
+  /** Whether the game's window (its handle) is always on top itself, as some borderless games are: nothing can cover it then. */
+  gameOnTop?(game: number): boolean;
   /** A window for an overlay's page, or for the lent view of a panel (`panel`). */
   openWindow(request: OverlayWindowRequest, panel?: OverlayPanel): OverlayWindow;
   /** The veil over the game window (or the screen) while the layer is open. */
@@ -265,6 +272,11 @@ export interface GameOverlayServiceOptions {
 export type LayoutPort = Pick<OverlayLayout, "open" | "refresh">;
 
 export const LOOK_MS = 400;
+/**
+ * How often the front window is looked at while overlays sit right above the game (the user is elsewhere): back in the
+ * game, Windows raises it over them until the next look puts them on top again, so that look comes sooner.
+ */
+export const STACKED_LOOK_MS = 100;
 /** A window whose setup is not on screen is closed after this long (it is made again when the setup is back). */
 export const IDLE_CLOSE_MS = 30_000;
 /** A page that crashed this many times within CRASH_SPAN_MS is not made again until the user shows or toggles it. */
@@ -318,6 +330,8 @@ export class GameOverlays {
   /** The windows shown and their stacking places at the last look; they are raised again when it changes. */
   private stackKey = "";
   private timer: ReturnType<typeof setInterval> | undefined;
+  /** The quicker look while overlays are stacked above the game (STACKED_LOOK_MS). */
+  private stackedTimer: ReturnType<typeof setInterval> | undefined;
   private probe: ForegroundProbe | null = null;
   /** Windows' functions could not be loaded: nothing is looked at or shown until Tavora starts again. */
   private probeFailed = false;
@@ -930,6 +944,7 @@ export class GameOverlays {
         this.probeFailed = true;
         clearInterval(this.timer);
         this.timer = undefined;
+        this.lookQuickly(false);
       }
     }
     if (this.probeFailed) {
@@ -1024,6 +1039,12 @@ export class GameOverlays {
     const arranging = layerOpen && this.layer?.mode === "arrange";
     /** Whether a window came up in this look: it is drawn above the card, which goes on top again. */
     let shownNow = false;
+    // Overlays stay while the user is in another window: the game's sit right above its window instead of above every
+    // window, so a window brought over the game (a browser) covers them as it covers the game. Everywhere's stay on top,
+    // and so does everything over a game that is always on top itself (nothing can cover it).
+    const handle = this.front === null && this.away !== null ? Number(this.probe?.keptHandle?.() ?? 0) : 0;
+    const awayGame = handle !== 0 && this.options.platform.stackAboveGame && !this.options.platform.gameOnTop?.(handle) ? handle : 0;
+    const onTop = (setup: string) => awayGame === 0 || setup === EVERYWHERE;
     const setups = this.onScreen();
     const overlays = this.placedOverlays(setups);
     const panels = this.placedPanels(setups);
@@ -1087,6 +1108,8 @@ export class GameOverlays {
       if (entry.hideFromCapture !== settings.hideFromCapture) entry.window.setHideFromCapture((entry.hideFromCapture = settings.hideFromCapture));
       if (!entry.window.dragging) entry.window.setRect(placeItem(settings, area!));
       this.zoomTo(entry, area!);
+      // Where it goes before it shows, so it never comes up over a window that covers the game.
+      entry.window.setTopmost?.(onTop(placed!.setup));
       if (!entry.shown) {
         entry.window.setShown((entry.shown = true));
         entry.shownOrder = ++this.shownCount;
@@ -1169,6 +1192,7 @@ export class GameOverlays {
       entry.window.setRect(placeItem(settings, area!));
       this.zoomTo(entry, area!);
       if ((entry.veiled ?? false) !== veiled) entry.window.setVeiled?.((entry.veiled = veiled));
+      entry.window.setTopmost?.(onTop(placed!.setup));
       if (!entry.shown) {
         entry.window.setShown((entry.shown = true));
         entry.shownOrder = ++this.shownCount;
@@ -1190,6 +1214,17 @@ export class GameOverlays {
     const restack = veilNew || stackKey !== this.stackKey;
     if (restack) for (const one of stack) one.entry.window.raise?.();
     this.stackKey = stackKey;
+    for (const one of stack) one.entry.window.setTopmost?.(onTop(one.entry.setup));
+    let stacked = false;
+    if (awayGame !== 0) {
+      const overGame = stack.filter((one) => one.entry.setup !== EVERYWHERE);
+      // Top first: the last in the stack is the highest.
+      const handles = overGame.flatMap((one) => (one.entry.window.handle ? [one.entry.window.handle] : [])).reverse();
+      stacked = handles.length > 0 && this.options.platform.stackAboveGame!(awayGame, handles);
+      // Windows wouldn't stack them: above every window, as before, rather than lost under the game.
+      if (handles.length > 0 && !stacked) for (const one of overGame) one.entry.window.setTopmost?.(true);
+    }
+    this.lookQuickly(stacked);
     // One window takes the keyboard, the panel used last; not each in turn.
     let focused = false;
     if (started.length > 0) {
@@ -1202,6 +1237,18 @@ export class GameOverlays {
     if (restack || cardNew || shownNow || focused) this.card?.raise();
     this.keysFollow();
     this.updateShowing();
+  }
+
+  /** Looks at the front window every STACKED_LOOK_MS while overlays are stacked above the game, else only at the usual pace. */
+  private lookQuickly(on: boolean): void {
+    if (on === (this.stackedTimer !== undefined)) return;
+    if (!on || !this.timer) {
+      clearInterval(this.stackedTimer);
+      this.stackedTimer = undefined;
+      return;
+    }
+    this.stackedTimer = setInterval(() => this.tick(), STACKED_LOOK_MS);
+    this.stackedTimer.unref?.();
   }
 
   /** Tells the renderer when whether any window shows over a game or the screen changed (the header button's Live look). */
@@ -1421,6 +1468,7 @@ export class GameOverlays {
     this.liveTick = undefined;
     clearInterval(this.timer);
     this.timer = undefined;
+    this.lookQuickly(false);
     try {
       this.closeAll();
     } catch (error) {

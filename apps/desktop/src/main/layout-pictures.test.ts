@@ -2,7 +2,7 @@ import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { LayoutPictures, MAX_PICTURE_BYTES, MAX_PICTURE_WIDTH, captureSize, isPng, pictureName, picturePixels, sourceForHandle } from "./layout-pictures";
+import { clientArea, LayoutPictures, MAX_PICTURE_BYTES, MAX_PICTURE_WIDTH, captureSize, isPng, pictureName, picturePixels, sourceForHandle } from "./layout-pictures";
 
 let dir: string;
 beforeEach(async () => {
@@ -115,5 +115,21 @@ describe("picturePixels", () => {
   it("stays within the widest picture, and never shrinks the window's size", () => {
     expect(picturePixels({ width: 2560, height: 1440 }, 2)).toEqual({ width: MAX_PICTURE_WIDTH, height: 2160 });
     expect(picturePixels({ width: 1280, height: 720 }, 0.5)).toEqual({ width: 1280, height: 720 });
+  });
+});
+
+describe("clientArea", () => {
+  it("cuts a windowed game's title bar off the top, keeping the client's shape", () => {
+    // A 1920 × 1200 client (16:10) in a window with a 32 px title bar, taken at 1920 wide.
+    expect(clientArea({ width: 1920, height: 1232 }, { width: 1920, height: 1200 })).toEqual({ x: 0, y: 32, width: 1920, height: 1200 });
+    // The same window taken smaller: the client's size in the picture's scale.
+    expect(clientArea({ width: 960, height: 616 }, { width: 1920, height: 1200 })).toEqual({ x: 0, y: 16, width: 960, height: 600 });
+  });
+
+  it("keeps a full-screen or borderless picture whole, and the middle of one that is wider", () => {
+    expect(clientArea({ width: 2560, height: 1440 }, { width: 2560, height: 1440 })).toEqual({ x: 0, y: 0, width: 2560, height: 1440 });
+    expect(clientArea({ width: 1921, height: 1080 }, { width: 1920, height: 1080 })).toEqual({ x: 0, y: 0, width: 1921, height: 1080 });
+    expect(clientArea({ width: 2000, height: 1080 }, { width: 1920, height: 1080 })).toEqual({ x: 40, y: 0, width: 1920, height: 1080 });
+    expect(clientArea({ width: 0, height: 0 }, { width: 1920, height: 1080 })).toEqual({ x: 0, y: 0, width: 0, height: 0 });
   });
 });

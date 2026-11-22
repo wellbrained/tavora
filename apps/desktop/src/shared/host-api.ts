@@ -968,7 +968,7 @@ export interface OverlayKeyView {
 export interface GameOverlaysView {
   supported: boolean;
   enabled: boolean;
-  /** Overlays stay over the game's spot when the user switches to another window. */
+  /** Overlays stay on the game's window (right above it, not above every window) when the user switches to another window. */
   stay: boolean;
   /** Which side of the Overlay page the sidebar with the panels sits on. */
   sidebar: "left" | "right";
