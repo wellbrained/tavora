@@ -67,6 +67,8 @@ afterAll(cleanUp);
  */
 const EVERY_FIRST_CUT = Boolean(process.env.CI || process.env.TAVORA_CRASH_ALL);
 const skipFirstCut = (n: number) => !EVERY_FIRST_CUT && n % 5 !== 0;
+/** A cut deeper down, where a test cuts three starts in a row: every fifth one, and all of them with TAVORA_CRASH_ALL. */
+const skipDeeperCut = (n: number) => !process.env.TAVORA_CRASH_ALL && n % 5 !== 0;
 
 const encryptor = { isAvailable: () => true, encrypt: (text: string) => Buffer.from(`sealed:${text}`), decrypt: (data: Buffer) => data.toString().replace(/^sealed:/, "") };
 type Service = Awaited<ReturnType<typeof service>>;
@@ -626,7 +628,7 @@ describe("a power cut around what the user and the app do", () => {
         held,
         () => tavora(cloud, b).beforeLoad(),
         async (m) => {
-          if (skipFirstCut(m) || (await phaseOf(b)) !== "swapping") return;
+          if (skipDeeperCut(m) || (await phaseOf(b)) !== "swapping") return;
           const status = JSON.parse(await readFile(statusFile(b), "utf8")) as object;
           await replaceFile(statusFile(b), JSON.stringify({ ...status, phase: "undoing" }));
           await rm(back, { recursive: true, force: true });
@@ -642,10 +644,12 @@ describe("a power cut around what the user and the app do", () => {
 
   it("an older Tavora starting during a swap uploads nothing, and this one settles after it", async () => {
     const setup = await chosen();
-    const { cloud, b, version, remote } = setup;
+    const { cloud, b, remote } = setup;
     const bad: string[] = [];
     await eachStop(setup, async (n, stop) => {
       await restore(b, stop);
+      // The copy is in the folder, which no snapshot holds: what an earlier stop put up there stays.
+      const version = await remote();
       if ((await olderStart(setup, b)) === "asks") await olderKeepsThisPc(setup, b);
       if ((await remote()) !== version) bad.push(`stop ${n}: the older Tavora uploaded the half-moved files`);
       // Shown the copy as off, the user turns it on again there and keeps this PC's side, then works on. That upload
