@@ -1,5 +1,7 @@
+import { isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER } from "@tavora/module-schema";
 import { writeFileAtomic } from "./fsutil";
 import { readJsonOrSetAside } from "./json";
+import type { InstalledModule } from "./registry";
 
 
 // The developer names users see for publisher keys ("by wellbrained" instead of a fingerprint).
@@ -17,6 +19,11 @@ const NAME = /^[A-Za-z0-9][A-Za-z0-9 ._-]{1,30}[A-Za-z0-9]$/;
 /** A developer name in the only form the service allows: plain ASCII, no links or direction marks. */
 export function isPublisherName(value: unknown): value is string {
   return typeof value === "string" && NAME.test(value);
+}
+
+/** The key fingerprint of a module from a signed zip, or null (Tavora's own modules and unsigned local copies). */
+export function publisherOf(module: InstalledModule): string | null {
+  return isOwnerId(module.owner) && module.owner !== OFFICIAL_OWNER && module.owner !== LOCAL_OWNER ? module.owner : null;
 }
 
 /** A publisher key fingerprint, the owner id of a signed module. */

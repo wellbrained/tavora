@@ -88,6 +88,10 @@ export const HOST_ONLY: ReadonlySet<string> = new Set(
     "main/device-name.ts",
     "main/inbox.ts",
     "main/example-copy.ts",
+    // Settings > Modules' leftover data, patch notes read, and its modules folder (installing a zip, opening a folder).
+    "main/module-leftovers.ts",
+    "main/module-notes-seen.ts",
+    "main/modules-folder.ts",
     // Settings > Development's folders and the examples copied from them (development-folders.ts gathers them for host.ts).
     "main/development-folders.ts",
     "main/cloud-copy.ts",
