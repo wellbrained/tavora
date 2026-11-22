@@ -5,7 +5,7 @@
  * up to a cap and redirects are followed only on the same host, so none of these hosts can make the service read
  * without end or ask somewhere else.
  */
-import { fetchSameOrigin, readCapped, readCappedJson } from "./capped-fetch.ts";
+import { fetchSameOrigin, isUnfollowedRedirect, readCapped, readCappedJson } from "./capped-fetch.ts";
 
 export interface FeedInfo {
   version: string;
@@ -17,6 +17,8 @@ export interface SiteState {
   ok: boolean;
   /** The HTTP status, or null when nothing answered. */
   status: number | null;
+  /** The site answered, but by sending the visitor to another host (or round in circles): it is up, yet not itself. */
+  redirectsElsewhere?: true;
 }
 
 export interface Probes {
@@ -81,6 +83,7 @@ export function createProbes(fetchFn: typeof fetch = fetch, now: () => number = 
         try {
           const response = await get(url, { method: "GET" });
           await response.body?.cancel();
+          if (isUnfollowedRedirect(response)) return { ok: false, status: response.status, redirectsElsewhere: true };
           return { ok: response.ok, status: response.status };
         } catch {
           return { ok: false, status: null };

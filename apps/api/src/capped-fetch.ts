@@ -43,20 +43,24 @@ export async function readCappedJson(response: Response, maxBytes: number): Prom
 /** Most same-origin redirects followed before the answer counts as the last one. */
 const MAX_REDIRECTS = 3;
 
+/** A redirect fetchSameOrigin didn't follow: to another origin, or past its last hop. Its body was never read. */
+export function isUnfollowedRedirect(response: Response): boolean {
+  return response.status >= 300 && response.status <= 399 && response.headers.has("location");
+}
+
 /**
  * fetch, following a redirect only to the same origin (scheme, host and port), at most three times. A redirect to
- * anywhere else is not followed: its 3xx answer is what comes back.
+ * anywhere else, or one more, is not followed: its 3xx answer comes back with its body cancelled (isUnfollowedRedirect).
  */
 export async function fetchSameOrigin(fetchFn: typeof fetch, url: string, init: RequestInit = {}): Promise<Response> {
   const origin = new URL(url).origin;
   let current = url;
   for (let hop = 0; ; hop++) {
     const response = await fetchFn(current, { ...init, redirect: "manual" });
-    const location = response.headers.get("location");
-    if (response.status < 300 || response.status > 399 || !location || hop >= MAX_REDIRECTS) return response;
-    const next = new URL(location, current);
-    if (next.origin !== origin) return response;
+    if (!isUnfollowedRedirect(response)) return response;
     await response.body?.cancel().catch(() => {});
+    const next = new URL(response.headers.get("location")!, current);
+    if (next.origin !== origin || hop >= MAX_REDIRECTS) return response;
     current = next.href;
   }
 }

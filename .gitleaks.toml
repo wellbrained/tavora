@@ -15,6 +15,7 @@ paths = [
   '''^apps/desktop/src/main/publisher-names\.test\.ts$''',
   '''^apps/desktop/src/main/saved-samples\.test\.ts$''',
   '''^packages/pack/src/pack\.test\.ts$''',
+  '''^apps/api/scripts/deploy-scripts\.test\.ts$''',
   '''^apps/desktop/src/main/saved-samples/''',
   '''^modules/poe2-builds/src/item-art\.json$''',
 ]

@@ -1,12 +1,13 @@
 import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import net from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
 // @ts-expect-error - plain JavaScript run by node on the server, no types
-import { startFilter } from "../deploy/tavora-clamd-filter.mjs";
+import { startFilter, streamLimit } from "../deploy/tavora-clamd-filter.mjs";
 
 // The server's helper scripts (apps/api/deploy, and the update feed's DNS step), run here with bash against a temporary
 // tree and fake commands, never against a server: the paths in each script are moved into the tree, and the commands
@@ -81,7 +82,9 @@ shift 3
 touch "$LOG/inside"; "$@"; rc=$?; rm -f "$LOG/inside"; exit $rc`);
 }
 
-describe("the daily backup", () => {
+// The server has GNU tar and coreutils: macOS's bsdtar pads its gzip (which gzip -t then calls trailing garbage) and its
+// stat takes other flags, so the backup is checked on Linux (CI) and in Git Bash on Windows, never on a Mac.
+describe.skipIf(process.platform === "darwin")("the daily backup", () => {
   function setup() {
     const t = tree();
     fakeRunuser(t);
@@ -94,12 +97,16 @@ cp "$1" "$target"`);
     const state = path.join(t.root, "var/lib/tavora-api");
     mkdirSync(path.join(state, "catalog/zips"), { recursive: true });
     mkdirSync(path.join(state, "catalog/lists"), { recursive: true });
+    mkdirSync(path.join(state, "catalog/pictures"), { recursive: true });
     mkdirSync(path.join(t.root, "tmp"));
     writeFileSync(path.join(state, "accounts.sqlite"), "accounts");
     writeFileSync(path.join(state, "icons.sqlite"), "icons");
+    writeFileSync(path.join(state, "activity.sqlite"), "activity");
+    writeFileSync(path.join(state, "module-requests.salt"), "a secret");
     writeFileSync(path.join(state, "catalog/catalog.sqlite"), "catalog");
     writeFileSync(path.join(state, "catalog/zips/abc.zip"), "zip");
     writeFileSync(path.join(state, "catalog/lists/revocations.json"), "{}");
+    writeFileSync(path.join(state, "catalog/pictures/shot.webp"), "picture");
     const backups = path.join(t.root, "srv/tavora-api/backups");
     mkdirSync(backups, { recursive: true });
     const old = path.join(backups, "tavora-api-20260101T031500Z.tar.gz");
@@ -125,10 +132,11 @@ cp "$1" "$target"`);
     }
     const result = t.run(script);
     expect(result.status, result.out).toBe(0);
-    expect(t.read("runuser").trim().split("\n")).toEqual(["-u tavora-api -- env -i", "-u tavora-api -- env -i"]);
+    // The packing, the gzip check and the time stamp: all three as the service's user.
+    expect(t.read("runuser").trim().split("\n")).toEqual(Array(3).fill("-u tavora-api -- env -i"));
     const sqlite = t.read("sqlite3").trim().split("\n");
     expect(sqlite.every((line) => line.startsWith("inside "))).toBe(true);
-    expect(sqlite.map((line) => path.basename(line.split(" ")[1]!)).sort()).toEqual(["accounts.sqlite", "catalog.sqlite", "icons.sqlite"]);
+    expect(sqlite.map((line) => path.basename(line.split(" ")[1]!)).sort()).toEqual(["accounts.sqlite", "activity.sqlite", "catalog.sqlite", "icons.sqlite"]);
     if (linked) expect(t.read("sqlite3")).not.toContain("reviews");
 
     const kept = readdirSync(backups).sort();
@@ -137,10 +145,11 @@ cp "$1" "$target"`);
     expect(kept.filter((name) => name.endsWith(".part"))).toEqual([]);
     const made = kept.find((name) => name !== "tavora-api-20260102T031500Z.tar.gz")!;
     const listing = spawnSync("tar", ["-tzf", bashPath(path.join(backups, made))], { encoding: "utf8" }).stdout.split(/\r?\n/).filter(Boolean);
-    for (const entry of ["./accounts.sqlite", "./icons.sqlite", "./catalog/catalog.sqlite", "./catalog/zips/abc.zip", "./catalog/lists/revocations.json"]) {
+    for (const entry of ["./accounts.sqlite", "./icons.sqlite", "./catalog/catalog.sqlite", "./catalog/zips/abc.zip", "./catalog/lists/revocations.json", "./catalog/pictures/shot.webp", "./activity.sqlite"]) {
       expect(listing).toContain(entry);
     }
     expect(listing.some((entry) => entry.includes("reviews"))).toBe(false);
+    expect(listing.some((entry) => entry.includes("salt"))).toBe(false);
     expect(readFileSync(path.join(state, "last-backup.txt"), "utf8")).toMatch(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ\n$/);
     // The service's copies were made in a folder of its own, gone afterwards.
     expect(readdirSync(path.join(t.root, "tmp"))).toEqual([]);
@@ -155,6 +164,25 @@ cp "$1" "$target"`);
     writeFileSync(path.join(t.log, "fail-sqlite"), "");
     const result = t.run(script);
     expect(result.status).not.toBe(0);
+    expect(readdirSync(backups).sort()).toEqual(["tavora-api-20260101T031500Z.tar.gz", "tavora-api-20260102T031500Z.tar.gz"]);
+  });
+
+  it("keeps the day's backup when tar only says a file changed while it was read", () => {
+    const { t, backups, script } = setup();
+    fake(t, "tar", `/usr/bin/tar "$@" || exit $?; exit 1`);
+    const result = t.run(script);
+    expect(result.status, result.out).toBe(0);
+    expect(readdirSync(backups).filter((name) => !name.startsWith("tavora-api-2026010"))).toHaveLength(1);
+  });
+
+  it("keeps nothing bigger than half the free space", () => {
+    const { t, state, backups, script } = setup();
+    writeFileSync(path.join(state, "catalog/zips/big.zip"), randomBytes(8192));
+    // 1 KB free: at most 512 bytes may be written.
+    fake(t, "df", `printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\\nfake 100 99 1 99%% /\\n'`);
+    const result = t.run(script);
+    expect(result.status).not.toBe(0);
+    expect(result.out).toContain("half the free space");
     expect(readdirSync(backups).sort()).toEqual(["tavora-api-20260101T031500Z.tar.gz", "tavora-api-20260102T031500Z.tar.gz"]);
   });
 });
@@ -227,7 +255,8 @@ printf 200`);
     }
   });
 
-  it("refuses a file someone else could have written, a link, or a token that is code", () => {
+  // Twenty bash runs: slow on a Mac's bash, so more time than vitest's 5 s.
+  it("refuses a file someone else could have written, a link, or a token that is code", { timeout: 30_000 }, () => {
     const cases: [string, Record<string, string>][] = [
       ["HETZNER_API_TOKEN=tok", { FAKE_STAT: "1000 600" }],
       ["HETZNER_API_TOKEN=tok", { FAKE_STAT: "0 664" }],
@@ -331,5 +360,72 @@ describe("the clamd filter", () => {
       expect(result, JSON.stringify(command)).toEqual({ reply: "", closed: true });
     }
     expect(clamd.received).toHaveLength(0);
+  });
+
+  it("answers the PING tavora-api-clamav sends (setup and status)", async () => {
+    const clamd = await fakeClamd();
+    const filter = socketPath();
+    servers.push(await startFilter({ listen: filter, upstream: clamd.listen }));
+    // The script's own answers(), with socat and timeout faked: what it would send is kept, and what the filter answers to
+    // exactly those bytes is fed back to it.
+    const t = tree();
+    fake(t, "timeout", `shift; exec "$@"`);
+    fake(t, "socat", `cat > "$LOG/sent"; cat "$LOG/reply" 2>/dev/null; true`);
+    const text = readFileSync(path.join(deploy, "tavora-api-clamav.sh"), "utf8").replace(/\r\n/g, "\n");
+    const line = /^answers\(\) \{.*\}$/m.exec(text)?.[0];
+    expect(line).toBeDefined();
+    const probe = path.join(t.root, "probe.sh");
+    writeFileSync(probe, `${line}\nanswers /run/tavora-clamd/clamd.sock\n`);
+    expect(t.run(probe).status).not.toBe(0);
+    const reply = await exchange(filter, Buffer.from(t.read("sent"), "latin1"));
+    expect(reply.reply).toBe("PONG\n");
+    writeFileSync(path.join(t.log, "reply"), reply.reply);
+    expect(t.run(probe).status).toBe(0);
+  });
+
+  it("passes nothing more once clamd has answered", async () => {
+    // A clamd that answers after the first chunk (as with "size limit exceeded") and keeps the connection open.
+    const received: Buffer[] = [];
+    const listen = socketPath();
+    const clamd = net.createServer({ allowHalfOpen: true }, (socket) => {
+      const index = received.push(Buffer.alloc(0)) - 1;
+      socket.on("data", (data) => {
+        received[index] = Buffer.concat([received[index]!, data]);
+        if (received[index]!.length >= 10 + 4 + 5) socket.write("INSTREAM size limit exceeded. ERROR\0");
+      });
+    });
+    await new Promise<void>((resolve) => clamd.listen(listen, resolve));
+    servers.push(clamd);
+    const filter = socketPath();
+    servers.push(await startFilter({ listen: filter, upstream: listen }));
+    const first = Buffer.concat([Buffer.from("zINSTREAM\0", "latin1"), chunk("first")]);
+    const reply = await new Promise<string>((resolve) => {
+      const socket = net.createConnection({ path: filter });
+      socket.on("error", () => {});
+      socket.once("data", (data) => {
+        socket.write(Buffer.concat([chunk("second"), Buffer.alloc(4)]));
+        setTimeout(() => {
+          socket.destroy();
+          resolve(data.toString("latin1"));
+        }, 300);
+      });
+      socket.write(first);
+    });
+    expect(reply).toContain("size limit exceeded");
+    expect(received[0]).toEqual(first);
+  });
+
+  it("refuses a stream longer than clamd's StreamMaxLength", async () => {
+    expect(streamLimit("LocalSocket /run/clamav/clamd.ctl\nStreamMaxLength 100M\n")).toBe(100 * 1024 * 1024);
+    expect(streamLimit("StreamMaxLength 512K")).toBe(512 * 1024);
+    expect(streamLimit("StreamMaxLength 4096")).toBe(4096);
+    expect(streamLimit("#StreamMaxLength 1M\n")).toBe(25 * 1024 * 1024);
+    expect(streamLimit("")).toBe(25 * 1024 * 1024);
+    const clamd = await fakeClamd();
+    const filter = socketPath();
+    servers.push(await startFilter({ listen: filter, upstream: clamd.listen, maxStream: 8 }));
+    const result = await exchange(filter, Buffer.concat([Buffer.from("zINSTREAM\0", "latin1"), chunk("12345"), chunk("67890"), Buffer.alloc(4)]));
+    expect(result).toEqual({ reply: "", closed: true });
+    expect(Buffer.concat(clamd.received).toString("latin1")).not.toContain("67890");
   });
 });

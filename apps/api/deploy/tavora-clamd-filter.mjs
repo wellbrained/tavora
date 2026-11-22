@@ -5,8 +5,8 @@
 // Installed by the server setup as /usr/local/lib/tavora/tavora-clamd-filter.mjs (root's, never a deploy's) and run by
 // tavora-clamd-filter.service as clamav, the user that may reach clamd's own socket; the service only reaches this one.
 //
-//   node tavora-clamd-filter.mjs <listen socket> <clamd socket>
-import { chmodSync, rmSync } from "node:fs";
+//   node tavora-clamd-filter.mjs <listen socket> <clamd socket> [clamd.conf]
+import { chmodSync, readFileSync, rmSync } from "node:fs";
 import net from "node:net";
 import { pathToFileURL } from "node:url";
 
@@ -14,8 +14,8 @@ import { pathToFileURL } from "node:url";
 const ALLOWED = new Set(["INSTREAM", "PING", "VERSION"]);
 /** The longest command read before the terminator ("zINSTREAM\0" is 10 bytes). */
 const MAX_COMMAND = 32;
-/** More than the service ever sends as one stream (20 MB) with its chunk headers; clamd's StreamMaxLength is lower anyway. */
-const MAX_STREAM = 64 * 1024 * 1024;
+/** clamd's own default StreamMaxLength; the service never sends more than 20 MB as one stream. */
+export const DEFAULT_STREAM_MAX = 25 * 1024 * 1024;
 /** Connections at once; the service scans a few files at a time. */
 const MAX_CONNECTIONS = 16;
 /** A connection with no bytes either way for this long is closed (clamd took 53 s for a 13.6 MB zip). */
@@ -25,7 +25,7 @@ const IDLE_MS = 10 * 60 * 1000;
  * Reads a connection's command, then passes on exactly one allowed command and, for INSTREAM, its chunks up to the
  * closing zero-length one. Anything after that, or any other command, is never sent to clamd.
  */
-function handle(client, upstreamPath, onClose) {
+function handle(client, upstreamPath, maxStream, onClose) {
   client.setTimeout(IDLE_MS, () => client.destroy());
   let buffered = Buffer.alloc(0);
   let upstream = null;
@@ -54,8 +54,16 @@ function handle(client, upstreamPath, onClose) {
     upstream = net.createConnection({ path: upstreamPath });
     upstream.setTimeout(IDLE_MS, close);
     upstream.on("error", close);
-    upstream.on("data", (data) => client.write(data));
-    upstream.on("end", () => client.end());
+    // Once clamd answers (a verdict, or "size limit exceeded"), it reads nothing more: neither does it get anything more.
+    upstream.on("data", (data) => {
+      state = "done";
+      buffered = Buffer.alloc(0);
+      client.write(data);
+    });
+    upstream.on("end", () => {
+      state = "done";
+      client.end();
+    });
     upstream.on("close", () => client.end());
     upstream.write(command);
   };
@@ -85,7 +93,7 @@ function handle(client, upstreamPath, onClose) {
         if (buffered.length < 4) return;
         chunkLeft = buffered.readUInt32BE(0);
         streamed += chunkLeft;
-        if (streamed > MAX_STREAM) return close();
+        if (streamed > maxStream) return close();
         forward(buffered.subarray(0, 4));
         buffered = buffered.subarray(4);
         state = chunkLeft === 0 ? "done" : "chunk";
@@ -101,8 +109,20 @@ function handle(client, upstreamPath, onClose) {
   });
 }
 
+/**
+ * clamd's StreamMaxLength from its config ("25M", "100K", a number of bytes), so the filter never takes a longer stream
+ * than clamd would; its default when the config doesn't say.
+ */
+export function streamLimit(config) {
+  const match = /^[ \t]*StreamMaxLength[ \t]+(\d+)([KkMm]?)[ \t]*$/m.exec(config ?? "");
+  if (!match) return DEFAULT_STREAM_MAX;
+  const unit = { "": 1, k: 1024, m: 1024 * 1024 }[match[2].toLowerCase()];
+  const bytes = Number(match[1]) * unit;
+  return bytes > 0 ? bytes : DEFAULT_STREAM_MAX;
+}
+
 /** Starts the filter; resolves with the listening server. */
-export function startFilter({ listen, upstream }) {
+export function startFilter({ listen, upstream, maxStream = DEFAULT_STREAM_MAX }) {
   let open = 0;
   // Half-open: a client that ends its side after the command (socat in tavora-api-clamav status) still gets clamd's reply.
   const server = net.createServer({ allowHalfOpen: true }, (client) => {
@@ -111,7 +131,7 @@ export function startFilter({ listen, upstream }) {
       return;
     }
     open++;
-    handle(client, upstream, () => open--);
+    handle(client, upstream, maxStream, () => open--);
   });
   if (process.platform !== "win32") rmSync(listen, { force: true });
   return new Promise((resolve, reject) => {
@@ -125,11 +145,18 @@ export function startFilter({ listen, upstream }) {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
-  const [listen, upstream] = process.argv.slice(2);
+  const [listen, upstream, conf] = process.argv.slice(2);
   if (!listen || !upstream) {
-    console.error("Usage: node tavora-clamd-filter.mjs <listen socket> <clamd socket>");
+    console.error("Usage: node tavora-clamd-filter.mjs <listen socket> <clamd socket> [clamd.conf]");
     process.exit(2);
   }
-  await startFilter({ listen, upstream });
-  console.log(`clamd filter: ${listen} -> ${upstream} (INSTREAM, PING and VERSION only)`);
+  let config = "";
+  try {
+    config = conf ? readFileSync(conf, "utf8") : "";
+  } catch {
+    console.log(`clamd filter: can't read ${conf}, using clamd's default stream limit`);
+  }
+  const maxStream = streamLimit(config);
+  await startFilter({ listen, upstream, maxStream });
+  console.log(`clamd filter: ${listen} -> ${upstream} (INSTREAM up to ${maxStream} bytes, PING and VERSION only)`);
 }

@@ -57,6 +57,15 @@ describe("reading an outside answer with a cap", () => {
   });
 });
 
+describe("a redirect to another host", () => {
+  it("comes back with its body cancelled, never read", async () => {
+    const { body, pulled } = endless();
+    const response = await fetchSameOrigin((async () => new Response(body, { status: 302, headers: { location: "https://elsewhere.test/" } })) as typeof fetch, "https://host.test/");
+    expect(response.status).toBe(302);
+    expect(pulled()).toBeLessThanOrEqual(2 * 64 * 1024);
+  });
+});
+
 describe("the admin probes and the GitHub totals", () => {
   it("answer null for an endless or redirected answer instead of reading it", async () => {
     const { body, pulled } = endless();
@@ -70,7 +79,7 @@ describe("the admin probes and the GitHub totals", () => {
     }) as typeof fetch);
     expect(await away.feed()).toBeNull();
     expect(await away.npmVersion("@tavora/sdk")).toBeNull();
-    expect(await away.site("https://mytavora.app")).toEqual({ ok: false, status: 302 });
+    expect(await away.site("https://mytavora.app")).toEqual({ ok: false, status: 302, redirectsElsewhere: true });
     expect(asked.some((url) => url.includes("evil.test"))).toBe(false);
   });
 
