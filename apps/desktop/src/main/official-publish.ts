@@ -52,6 +52,8 @@ export const HOST_ONLY: ReadonlySet<string> = new Set(
     "main/index.ts",
     "main/host.ts",
     "main/startup-failure.ts",
+    // Tavora's window frame: its buttons' colours and its saved place (window-frame.ts).
+    "main/window-frame.ts",
     "main/actions.ts",
     "main/game-copy.ts",
     "main/games-seen.ts",

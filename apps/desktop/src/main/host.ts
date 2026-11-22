@@ -181,7 +181,6 @@ import { loadDiscordSecrets, saveDiscordSecrets, type Encryptor } from "./discor
 import { PurgeCount, viewsInSession } from "./storage-purge";
 import {
   discoverThemes,
-  veiled,
   type InstalledTheme,
   type ThemeHint,
   type ThemeProblem,
@@ -201,6 +200,7 @@ import type { PanelContent, PanelLaunch } from "./panel-content";
 import type { PanelOpenManyResult, PanelOpenResult } from "@tavora/sdk/protocol";
 import { openManySlots } from "../shared/panel-layout";
 import { initialBounds, MIN_SIZE, type WindowState } from "./window-state";
+import { WindowFrame } from "./window-frame";
 import { layoutKey, OpenTimes, PanelCover } from "./panel-cover";
 import { clampRect, PanelViews, type PanelViewAdapter } from "./panel-views";
 import { withGameInstanceId, WithGamePanels, type WithGameModule } from "./with-game";
@@ -239,10 +239,6 @@ async function realUserModulesDir(options: HostOptions): Promise<string> {
   return realpath(userModulesDir(options)).catch(() => path.resolve(userModulesDir(options)));
 }
 
-/** Leaves the workspace header's bottom border visible below the window controls. */
-const TITLE_BAR_HEIGHT = 47;
-/** How dark the kit's dialog backdrop is (bg-black/80 in DialogOverlay). */
-const DIALOG_BACKDROP_OPACITY = 0.8;
 
 export interface HostOptions {
   userData: string;
@@ -575,10 +571,12 @@ export class Host {
   private readonly panelQuestions: PanelQuestions;
   /** Adding, trashing, restoring and deleting workspaces with what they keep, and snapshots that change open panels (workspace-library.ts). */
   private readonly workspaceLibrary: WorkspaceLibrary;
-  /** True while a dialog backdrop dims the host page, so the window buttons are dimmed too. */
-  private dimmed = false;
-  /** The page colour behind the window buttons, as the page reports it (the workspace canvas is darker than the theme). */
-  private buttonsBackground?: string;
+  /** The window buttons in the theme's colours, dimmed with the page, and the window's place saved (window-frame.ts). */
+  private readonly frame = new WindowFrame({
+    window: () => this.window,
+    colors: () => this.appearance.host.colors,
+    save: (state) => this.savedData.saveWindow(state),
+  });
   /** True once the window has closed. */
   private windowClosed = false;
   /** Saves the host page was asked for and has not answered yet, by number (pageSaved). */
@@ -622,7 +620,6 @@ export class Host {
   private updates: UpdateManager | null = null;
   /** The themes and styles, the user's pick and the themes the host and the panels get from it (appearance.ts). */
   private readonly appearance: Appearance;
-  private windowSaveTimer: ReturnType<typeof setTimeout> | undefined;
   readonly window: BrowserWindow;
   private tooltips:TooltipWindow;
   /** Tavora's own toasts, drawn above the panels (toast-view.ts). */
@@ -982,7 +979,7 @@ export class Host {
       icon: options.icon,
       backgroundColor: this.appearance.host.colors.background,
       titleBarStyle: "hidden",
-      titleBarOverlay: this.titleBarOverlay(),
+      titleBarOverlay: this.frame.titleBar(),
       autoHideMenuBar: true,
       show: false,
       webPreferences: {
@@ -1534,23 +1531,6 @@ export class Host {
     return { official: options.officialStyleDirs ?? [], local: [path.join(options.userData, "styles")] };
   }
 
-  /** The window buttons, in the theme's colours; under a dialog backdrop dimmed like the page around them. */
-  private titleBarOverlay() {
-    const { background: themeBackground, text } = this.appearance.host.colors;
-    const background = this.buttonsBackground ?? themeBackground;
-    const veil = this.dimmed ? DIALOG_BACKDROP_OPACITY : 0;
-    return { color: veiled(background, veil), symbolColor: veiled(text, veil), height: TITLE_BAR_HEIGHT };
-  }
-
-  private applyTitleBarOverlay(): void {
-    if (this.window.isDestroyed()) return;
-    try {
-      this.window.setTitleBarOverlay(this.titleBarOverlay());
-    } catch {
-      // Platforms without a window controls overlay have nothing to recolour.
-    }
-  }
-
   /** The system's light or dark setting. */
   private static systemMode(options: HostOptions): "dark" | "light" {
     if (options.systemTheme) return options.systemTheme;
@@ -1575,7 +1555,7 @@ export class Host {
     if (!changed) return;
     const { host: next, panel } = this.appearance;
     this.window.setBackgroundColor(next.colors.background);
-    this.applyTitleBarOverlay();
+    this.frame.recolour();
     this.toastView.refresh();
     for (const view of this.nativePanels()) view.applyTheme(view instanceof ModuleView ? panel : next);
     this.applyCorners();
@@ -1819,16 +1799,10 @@ export class Host {
       if (fromHost(event) && typeof covered === "boolean") this.panels.coverDialog(covered);
     });
     ipcMain.on("host:dimmed", (event, dimmed: unknown) => {
-      if (fromHost(event) && typeof dimmed === "boolean" && dimmed !== this.dimmed) {
-        this.dimmed = dimmed;
-        this.applyTitleBarOverlay();
-      }
+      if (fromHost(event) && typeof dimmed === "boolean") this.frame.dim(dimmed);
     });
     ipcMain.on("host:buttons-background", (event, color: unknown) => {
-      if (fromHost(event) && typeof color === "string" && /^#[0-9a-f]{6}$/i.test(color) && color !== this.buttonsBackground) {
-        this.buttonsBackground = color;
-        this.applyTitleBarOverlay();
-      }
+      if (fromHost(event)) this.frame.setButtonsBackground(color);
     });
     ipcMain.on("host:module-menu-answer", (event, answer: unknown) => {
       if (fromHost(event)) this.panelDialogs.answerMenu(answer);
@@ -1854,10 +1828,10 @@ export class Host {
   }
 
   private registerWindowEvents(): void {
-    this.window.on("resize", () => this.saveWindowSoon());
-    this.window.on("move", () => this.saveWindowSoon());
+    this.window.on("resize", () => this.frame.saveSoon());
+    this.window.on("move", () => this.frame.saveSoon());
     this.window.on("close", (event) => {
-      this.saveWindow();
+      this.frame.save();
       // The panels write what was typed just before first (Alt+F4 right after typing); the window closes once their pages have.
       if (this.panelPages.step !== "closed") {
         event.preventDefault();
@@ -3996,18 +3970,6 @@ export class Host {
   /** Also tells the caller whether the write landed. */
   private saveProfile(): Promise<void> {
     return this.savedData.saveProfile(this.profile);
-  }
-
-  private saveWindowSoon(): void {
-    clearTimeout(this.windowSaveTimer);
-    this.windowSaveTimer = setTimeout(() => this.saveWindow(), 1000);
-  }
-
-  private saveWindow(): void {
-    clearTimeout(this.windowSaveTimer);
-    if (this.window.isDestroyed()) return;
-    const state: WindowState = { bounds: this.window.getNormalBounds(), maximized: this.window.isMaximized() };
-    this.savedData.saveWindow(state);
   }
 
   /**
