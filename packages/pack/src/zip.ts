@@ -235,7 +235,7 @@ export function zipDirectoryAt(size: number, read: (at: number, length: number) 
   const start = tail.readUInt32LE(endAt + 16);
   const end = start + tail.readUInt32LE(endAt + 12);
   if (count > limits.maxFiles || end > tailAt + endAt) throw new ZipError("the zip is damaged");
-  let window = Buffer.alloc(0);
+  let window: Buffer = Buffer.alloc(0);
   let windowAt = 0;
   const bytes = (at: number, length: number) => {
     if (at + length > end) throw new ZipError("the zip is damaged");
