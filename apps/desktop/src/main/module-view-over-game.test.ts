@@ -370,7 +370,7 @@ describe("links.open", () => {
 });
 
 describe("a panel over the game", () => {
-  it("counts a click or key press over the game only while its window takes input (the layer open), and always in the workspace", () => {
+  it("counts a click or key press over the game only while it takes input (in Use), and always in the workspace", () => {
     const view = make();
     const taken = () => {
       view.usedAt = 0;

@@ -266,10 +266,10 @@ describe("a game overlay window holding a panel", () => {
     expect(raw.ignoring).toBe(false);
     expect(raw.focusable).toBe(true);
     expect(frame.visible).toBe(false);
-    // Its clicks count as the user's while the layer is open, in Use and in Arrange; not before.
+    // Its clicks count as the user's in Use only: not in Arrange (the frame covers it), not before.
     expect(state.overGame?.takesInput).toBe(true);
     window.setMode("arrange");
-    expect(state.overGame?.takesInput).toBe(true);
+    expect(state.overGame?.takesInput).toBe(false);
     window.setMode("off");
     expect(state.overGame?.takesInput).toBe(false);
   });
@@ -309,15 +309,15 @@ describe("a game overlay window holding a panel", () => {
       { takesInput: false, opacity: 100, zoom: 1 },
       { takesInput: true, opacity: 100, zoom: 1 },
       { takesInput: true, opacity: 100, zoom: 1.5 },
-      { takesInput: true, opacity: 100, zoom: 1.5 },
-      { takesInput: true, opacity: 50, zoom: 1.5 },
+      { takesInput: false, opacity: 100, zoom: 1.5 },
+      { takesInput: false, opacity: 50, zoom: 1.5 },
       { takesInput: false, opacity: 50, zoom: 1.5 },
       null,
     ]);
   });
 
   it("lets the user's clicks and keys reach the panel in Use only: none while off, and in Arrange the frame over the panel takes them", () => {
-    const { window, raw, state, frame, panel } = make({ x: 0, y: 0, width: 2560, height: 1440 });
+    const { window, raw, state, frame } = make({ x: 0, y: 0, width: 2560, height: 1440 });
     // What ModuleView.noteGesture asks of the value the window pushed.
     const counts = () => gestureCounts(state.overGame !== null, state.overGame?.takesInput ?? false);
     window.setRect({ x: 100, y: 100, width: 400, height: 300 });
@@ -331,11 +331,12 @@ describe("a game overlay window holding a panel", () => {
     expect(frame.visible).toBe(false);
     expect(state.bounds).toEqual({ x: 0, y: 0, width: 400, height: 300 });
     expect(counts()).toBe(true);
-    // Arrange: the window still takes input, but the frame covers all of it, above the panel, and has the keys: nothing
-    // the user does reaches the panel.
+    // Arrange: the window takes the mouse for the frame, which covers all of it, above the panel, and has the keys;
+    // nothing the panel reports counts either.
     window.focusPanel();
     window.setMode("arrange");
-    expect(state.overGame?.takesInput).toBe(true);
+    expect(raw.ignoring).toBe(false);
+    expect(counts()).toBe(false);
     expect(frame.visible).toBe(true);
     expect(raw.children.at(-1)).toBe(frame);
     expect(frame.bounds).toEqual({ x: 0, y: 0, width: raw.bounds.width, height: raw.bounds.height });
@@ -344,11 +345,23 @@ describe("a game overlay window holding a panel", () => {
     state.focused = false;
     window.focusPanel();
     expect(state.focused).toBe(false);
-    void panel;
     // Off again: nothing counts.
     window.setMode("off");
     expect(raw.ignoring).toBe(true);
     expect(counts()).toBe(false);
+  });
+
+  it("tells the panel nothing more once the system closed its window: it stays back in its slot", () => {
+    const { window, raw, state } = make({ x: 0, y: 0, width: 2560, height: 1440 });
+    window.setMode("use");
+    raw.emit("closed");
+    expect(state.told.at(-1)).toBeNull();
+    // The service keeps the dead entry until the next look, which may still zoom, fade or switch it.
+    window.setZoom(1.5);
+    window.setOpacity(50);
+    window.setMode("arrange");
+    expect(state.told.at(-1)).toBeNull();
+    expect(state.overGame).toBeNull();
   });
 
   it("is placed and shown on top before the panel takes the keyboard", () => {

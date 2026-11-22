@@ -213,11 +213,13 @@ export class GameOverlayWindow {
   }
 
   /**
-   * Tells the panel it holds how it is over the game, as one value: it takes input while the window does (in Use and
-   * Arrange, where the frame over it takes the clicks and keys), and is faded and zoomed as the window is.
+   * Tells the panel it holds how it is over the game, as one value: it takes input only in Use (in Arrange the frame over
+   * it takes the clicks and keys), and is faded and zoomed as the window is. Nothing once the window is gone: the panel
+   * was let go (null) and is back in its slot.
    */
   private tellPanel(): void {
-    this.options.panel?.setOverGame({ takesInput: this.mode !== "off", opacity: this.opacity, zoom: this.zoom });
+    if (this.destroyed) return;
+    this.options.panel?.setOverGame({ takesInput: this.mode === "use", opacity: this.opacity, zoom: this.zoom });
   }
 
   /** Puts the interface font the user has now into the frame; the same font again changes nothing. */

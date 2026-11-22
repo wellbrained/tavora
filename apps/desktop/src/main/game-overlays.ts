@@ -299,8 +299,8 @@ export function panelBounds(size: { width: number; height: number }, arranging: 
 
 /**
  * A panel over the game, as the window that holds it says (game-overlay-window.ts pushes it to ModuleView `setOverGame`;
- * null while the panel is in its workspace). `takesInput`: the window takes the mouse and keys, while the layer is open
- * (in Use the panel gets them; in Arrange the frame lies over the panel and gets them instead). `opacity` and `zoom`:
+ * null while the panel is in its workspace). `takesInput`: the panel gets the mouse and keys, in Use only (in Arrange the
+ * frame lies over the panel and gets them instead; off, the window lets them through). `opacity` and `zoom`:
  * how see-through the page is and how big it is drawn, as a style of Tavora's own on the page.
  */
 export interface OverGame {
@@ -311,8 +311,8 @@ export interface OverGame {
 
 /**
  * Whether a click or key press in a panel counts as the user's (links.open, pictures.save and the like need one).
- * A panel in the game takes input only while its window does (`OverGame.takesInput`: the layer is open; in Arrange its
- * frame covers the panel, so nothing reaches it), so nothing else is the user's.
+ * A panel in the game takes input only in Use (`OverGame.takesInput`); in Arrange the frame covers it and nothing it
+ * reports counts, so nothing else is the user's.
  */
 export const gestureCounts = (overGame: boolean, takesInput: boolean) => !overGame || takesInput;
 

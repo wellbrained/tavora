@@ -668,7 +668,7 @@ export class ModuleView implements PanelViewAdapter {
   noteGesture(): void {
     // A closed panel's last click opens nothing more (see letGo).
     if (this.disposed) return;
-    // Over the game the window takes input only while the layer is open (OverGame.takesInput); any report at another time is not the user's.
+    // Over the game the panel takes input only in Use (OverGame.takesInput); any report at another time is not the user's.
     if (!gestureCounts(this.overGame !== null, this.overGame?.takesInput ?? false)) return;
     this.press = { at: Date.now(), used: false };
     this.usedAt = this.press.at;
@@ -1410,7 +1410,7 @@ export class ModuleView implements PanelViewAdapter {
   /**
    * The panel is over its game, in a window of Tavora's own (game-overlay-window.ts), which says how with `setOverGame`.
    * It is this same view and page, with the same bridge; only the look changes (see through and zoomed, as the window
-   * says) and clicks and keys count as the user's only while the window takes input (`OverGame.takesInput`).
+   * says) and clicks and keys count as the user's only in Use (`OverGame.takesInput`).
    */
   private overGame: OverGame | null = null;
   /**
