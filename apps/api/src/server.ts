@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync } from "node:fs";
+import type { Server } from "node:http";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { serve } from "@hono/node-server";
@@ -207,7 +208,7 @@ const app = createApp({
 const publicServer = serve({ fetch: app.fetch, port, hostname: "127.0.0.1" }, (info) => {
   console.log(`[tavora-api] listening on http://127.0.0.1:${info.port}`);
 });
-setServerTimeouts(publicServer as unknown as { requestTimeout: number; headersTimeout: number });
+setServerTimeouts(publicServer as Server);
 
 // Tavora Admin (the review page and more): its own port of 127.0.0.1 that the web server never forwards, and a token.
 const adminToken = process.env.ADMIN_TOKEN?.trim();

@@ -1,3 +1,4 @@
+import type { IncomingMessage, Server } from "node:http";
 import { ZIP_LIMITS, publishReadMs } from "@tavora/pack";
 import { REMOVED_ZIP, type CatalogStore } from "./catalog.ts";
 
@@ -8,10 +9,40 @@ import { REMOVED_ZIP, type CatalogStore } from "./catalog.ts";
 export const REQUEST_TIMEOUT_MS = 600_000;
 /** Headers still have to arrive within Node's default minute, so a slow request can't hold a connection before it is known. */
 export const HEADERS_TIMEOUT_MS = 60_000;
+/** How long any other request may take to send its body. The biggest is a cloud copy's 8 MB, and the app gives that 60 s. */
+export const BODY_TIMEOUT_MS = 120_000;
+/** How long a request may go on sending after it was answered: time for the client to read the answer before the line is cut. */
+export const ANSWERED_BODY_MS = 15_000;
 
-export function setServerTimeouts(server: { requestTimeout: number; headersTimeout: number }): void {
+const isPublish = (request: IncomingMessage) => request.method === "POST" && (request.url ?? "").split("?")[0] === "/v1/catalog/publish";
+const hasBody = (request: IncomingMessage) => request.headers["transfer-encoding"] !== undefined || Number(request.headers["content-length"] ?? 0) > 0;
+
+/**
+ * Sets the server's limits. Node's request limit is one number for every route, so it is the long one publish needs, and each
+ * other request with a body is cut off here if it hasn't finished sending in time. Any request still sending after it was
+ * answered, publish too, is cut off shortly after: a stalled client holds a connection for nothing.
+ */
+export function setServerTimeouts(server: Server, { bodyMs = BODY_TIMEOUT_MS, answeredMs = ANSWERED_BODY_MS }: { bodyMs?: number; answeredMs?: number } = {}): void {
   server.requestTimeout = Math.max(REQUEST_TIMEOUT_MS, publishReadMs(ZIP_LIMITS.maxArchiveBytes) + 60_000);
   server.headersTimeout = HEADERS_TIMEOUT_MS;
+  server.on("request", (request, response) => {
+    if (!hasBody(request)) return;
+    let timer: NodeJS.Timeout | undefined;
+    const cutIn = (ms: number) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (!request.complete) request.socket.destroy();
+      }, ms);
+      timer.unref();
+    };
+    const finished = () => clearTimeout(timer);
+    request.once("end", finished);
+    request.once("close", finished);
+    if (!isPublish(request)) cutIn(bodyMs);
+    response.once("finish", () => {
+      if (!request.complete) cutIn(answeredMs);
+    });
+  });
 }
 
 /**

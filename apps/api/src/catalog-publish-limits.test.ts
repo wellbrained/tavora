@@ -475,7 +475,31 @@ describe("what the review page reads", () => {
     expect(read).not.toHaveBeenCalled();
   });
 
-  it("approves without reading the zip, and still refuses one that's gone", async () => {
+  it("says the file list is unavailable instead of showing no files", async () => {
+    const { catalog, store, zip, dir } = await waitingZip();
+    writeFileSync(path.join(dir, "zips", `${sha(zip)}.zip`), Buffer.alloc(zip.length, 1));
+    const admin = moderationRoutes({ catalog, accounts: store });
+    const answer = (await (await admin.request("http://admin.test/waiting")).json()) as { waiting: { module: { files: unknown[]; filesUnavailable?: boolean } }[] };
+    expect(answer.waiting[0]!.module).toMatchObject({ files: [], filesUnavailable: true });
+    const file = await admin.request(fileUrl(zip, "index.html"));
+    expect(file.status).toBe(404);
+    expect(await file.json()).toMatchObject({ error: "The file list is unavailable." });
+  });
+
+  it("lists every file of a signed zip whose end record gives no directory size", async () => {
+    const { catalog, store, developer, send } = setup();
+    const dev = developer("other@example.com", false);
+    const zip = Buffer.from(moduleZip(dev.key, { id: "other.clock", name: "Clock", extra: big() }));
+    zip.writeUInt32LE(0, zip.length - 22 + 12);
+    expect((await send(dev, zip)).status).toBe(202);
+    const admin = moderationRoutes({ catalog, accounts: store });
+    const answer = (await (await admin.request("http://admin.test/waiting")).json()) as { waiting: { module: { files: unknown[]; filesUnavailable?: boolean } }[] };
+    expect(answer.waiting[0]!.module.files).toEqual(zipDirectory(zip));
+    expect(answer.waiting[0]!.module.filesUnavailable).toBeUndefined();
+    expect((await admin.request(fileUrl(zip, "index.html"))).status).toBe(200);
+  });
+
+  it("approves without loading the zip into memory, and still refuses one that's gone", async () => {
     const { catalog, approve, zip, dir, developer, send } = await waitingZip();
     const read = vi.spyOn(catalog, "zipBytes");
     expect((await approve(zip)).status).toBe(200);
@@ -486,6 +510,41 @@ describe("what the review page reads", () => {
     expect((await send(other, gone)).status).toBe(202);
     rmSync(path.join(dir, "zips", `${sha(gone)}.zip`));
     expect((await approve(gone)).status).toBe(409);
+  });
+
+  it("refuses a waiting zip damaged by one byte, and keeps the good zips it would have pushed out", async () => {
+    const { developer, send, approve, catalog, dir, reason } = setup({ keepVersions: 1 });
+    const dev = developer("dev@example.com");
+    const good = moduleZip(dev.key);
+    expect((await send(dev, good)).status).toBe(201);
+    const next = moduleZip(dev.key, { version: "1.0.1", network: ["example.org"] });
+    expect((await send(dev, next)).status).toBe(202);
+    const file = path.join(dir, "zips", `${sha(next)}.zip`);
+    const damaged = Buffer.from(next);
+    damaged[40] = damaged[40]! ^ 0xff;
+    writeFileSync(file, damaged);
+
+    const answer = await approve(next);
+    expect(answer.status).toBe(409);
+    expect(await reason(answer)).toBeUndefined();
+    expect(catalog.waitingVersion(sha(next))).not.toBeNull();
+    expect(catalog.index()).toEqual([expect.objectContaining({ version: "1.0.0" })]);
+    expect(await catalog.openZip(sha(good))).not.toBeNull();
+  });
+
+  it("checks the zip before the ban and key checks, so a ban during that read still stops the approval", async () => {
+    const { developer, send, approve, catalog, store, clock } = setup();
+    const dev = developer("dev@example.com", false);
+    const zip = moduleZip(dev.key);
+    await send(dev, zip);
+    const state = catalog.waitingZipState.bind(catalog);
+    catalog.waitingZipState = async (hash) => {
+      const answer = await state(hash);
+      store.ban(dev.accountId, "spam", null, [], clock.now);
+      return answer;
+    };
+    expect((await approve(zip)).status).toBe(409);
+    expect(catalog.waitingVersion(sha(zip))).not.toBeNull();
   });
 
   it("waits for room before reading a zip to show one of its files", async () => {
@@ -570,6 +629,37 @@ describe("a zip that's gone", () => {
     expect(catalog.backfillSignedHashes().filled).toBe(1);
     expect(await catalog.openZip(sha(kept))).not.toBeNull();
     expect(catalog.mostSimilar(self, copyHashes([shared]))).toMatchObject({ id: "wellbrained.timer" });
+  });
+
+  it("comes back as soon as a download finds the right file, with its hashes, without a restart", async () => {
+    const { catalog, kept, file } = await twoPublishers();
+    rmSync(file);
+    catalog.backfillSignedHashes();
+    expect(await catalog.openZip(sha(kept))).toBeNull();
+
+    writeFileSync(file, kept);
+    expect(await catalog.openZip(sha(kept))).not.toBeNull();
+    expect(catalog.keptZipSize(sha(kept))).toBe(kept.length);
+    expect(catalog.uncomparedVersions(self)).toEqual([]);
+    expect(catalog.mostSimilar(self, copyHashes([shared]))).toMatchObject({ id: "wellbrained.timer" });
+  });
+
+  it("lets a waiting version be approved once its right file is back", async () => {
+    const { developer, send, approve, catalog, dir } = setup();
+    const dev = developer("dev@example.com", false);
+    const zip = moduleZip(dev.key);
+    await send(dev, zip);
+    const target = path.join(dir, "zips", `${sha(zip)}.zip`);
+    const raw = new DatabaseSync(path.join(dir, "catalog.sqlite"));
+    raw.exec("update versions set file_hashes = null");
+    raw.close();
+    rmSync(target);
+    catalog.backfillSignedHashes();
+    expect((await approve(zip)).status).toBe(409);
+
+    writeFileSync(target, zip);
+    expect((await approve(zip)).status).toBe(200);
+    expect(catalog.index()).toEqual([expect.objectContaining({ version: "1.0.0" })]);
   });
 
   it("treats a file that isn't what its name says the same way", async () => {
@@ -916,6 +1006,25 @@ describe("a taken-down module", () => {
     expect((await approveAndList(fixed)).status).toBe(200);
     expect(catalog.index()).toEqual([expect.objectContaining({ version: "1.0.1" })]);
     expect(catalog.isTakenDown("wellbrained.timer")).toBe(false);
+  });
+
+  it("won't approve and list a version while a newer one is listed, which would go live instead", async () => {
+    const { developer, send, approve, approveAndList, catalog, reason } = setup();
+    const dev = developer("dev@example.com");
+    await send(dev, moduleZip(dev.key));
+    const waiting = moduleZip(dev.key, { version: "1.1.0", network: ["example.org"] });
+    expect((await send(dev, waiting)).status).toBe(202);
+    expect((await send(dev, moduleZip(dev.key, { version: "1.2.0", network: [] }))).status).toBe(201);
+    catalog.setListed("wellbrained.timer", false);
+
+    for (const answer of [await approve(waiting), await approveAndList(waiting)]) {
+      expect(answer.status).toBe(409);
+      expect(await reason(answer)).toBe("newer-version-listed");
+    }
+    expect(catalog.isTakenDown("wellbrained.timer")).toBe(true);
+    expect(catalog.waitingVersion(sha(waiting))).not.toBeNull();
+    // It isn't a replacement either, so it doesn't stop the maintainer from deciding about the module.
+    expect(catalog.replacementWaits("wellbrained.timer")).toBe(false);
   });
 
   it("stays taken down when its only waiting version is withdrawn, so a new upload can't list by itself", async () => {

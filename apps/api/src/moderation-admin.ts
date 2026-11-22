@@ -60,7 +60,7 @@ const LIVE_CHECK = "live_check";
 function describe(waiting: WaitingVersion, catalog: CatalogStore, accounts: AccountStore, trust: CatalogTrust) {
   const { manifest } = waiting;
   // Only the zip's directory, read from disk: this list is made for every waiting version each time the page opens.
-  const files = catalog.zipListing(waiting.sha256)?.files ?? [];
+  const listing = catalog.zipListing(waiting.sha256);
   const id = waiting.accountId;
   const keys = id ? accounts.keys(id).map((key) => key.fingerprint) : [];
   return {
@@ -97,7 +97,9 @@ function describe(waiting: WaitingVersion, catalog: CatalogStore, accounts: Acco
         ...(waiting.icon ? [{ ...waiting.icon, kind: "icon" as const }] : []),
         ...waiting.screenshots.map((shot) => ({ ...shot, kind: "screenshot" as const })),
       ],
-      files,
+      files: listing?.files ?? [],
+      // So the page never reads an unreadable list as a zip with no files in it.
+      ...(listing ? {} : { filesUnavailable: true }),
     },
     language: waiting.review.language,
     token: waiting.review.token,
@@ -137,8 +139,9 @@ export function moderationRoutes({ catalog, accounts, scanner, mailer, mailDaily
   app.get("/waiting/:sha256/file", (context) => {
     const waiting = catalog.waitingVersion(context.req.param("sha256"));
     const name = context.req.query("name") ?? "";
-    const listing = waiting ? catalog.zipListing(waiting.sha256) : null;
-    if (!waiting || !listing) return context.json({ error: "Not waiting." }, 404);
+    if (!waiting) return context.json({ error: "Not waiting." }, 404);
+    const listing = catalog.zipListing(waiting.sha256);
+    if (!listing) return context.json({ error: "The file list is unavailable." }, 404);
     const entry = listing.files.find((file) => file.name === name);
     if (!entry) return context.json({ error: "No such file." }, 404);
     if (entry.size > MAX_UNPACK_TO_SHOW) return context.json({ error: "This file is too big to show here." }, 413);
@@ -175,6 +178,14 @@ export function moderationRoutes({ catalog, accounts, scanner, mailer, mailDaily
   app.post("/approve", async (context) => {
     const { sha256, relist } = await json(context.req.raw);
     if (typeof sha256 !== "string") return context.json({ error: "Send { sha256 }." }, 400);
+    if (!catalog.waitingVersion(sha256)) return context.json({ error: "Nothing with this hash is waiting." }, 404);
+    // The zip against its hash first: this is the only wait, so nothing can change between the checks below and approve().
+    const zip = await catalog.waitingZipState(sha256);
+    if (zip === "gone") return context.json({ error: "Its zip is gone or damaged, so it can't be listed. Decline it." }, 409);
+    if (zip === "busy") {
+      context.header("Retry-After", "60");
+      return context.json({ error: "Tavora is checking uploads. Try again in a minute." }, 429);
+    }
     const waiting = catalog.waitingVersion(sha256);
     if (!waiting) return context.json({ error: "Nothing with this hash is waiting." }, 404);
     // A version that waited since before the listing limits: listed, the app would leave it out of its list.
@@ -185,6 +196,9 @@ export function moderationRoutes({ catalog, accounts, scanner, mailer, mailDaily
     // Approving alone wouldn't list it, and the developer would be told it's live. Listing the module first would serve the
     // version it was taken down for until this one is approved, so `relist` does both in one step.
     const takenDown = catalog.isTakenDown(waiting.id);
+    // Listing the module would serve that newer version, which may be the one it was taken down for, and not this one.
+    const newer = takenDown ? catalog.newerListedVersion(sha256) : null;
+    if (newer) return context.json({ error: `${newer} is newer and would go live instead of this version. Decline this one.`, reason: "newer-version-listed" }, 409);
     if (takenDown && relist !== true) return context.json({ error: "This module was taken down. Approve and list it, or decline the version.", reason: "taken-down" }, 409);
     // The key's state as an upload checks it: a key unlinked, revoked or reported as leaked since the upload lists nothing new.
     // Nothing is awaited from here to approve(), so the state can't change in between.

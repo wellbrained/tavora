@@ -6,7 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 import { allowsPersonalWorkspaces, catalogListingProblem, folderKey, isGameId, isReleaseVersion, LOCAL_OWNER, manifestFiles, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, validateChangelog, validateManifest, type LeaderboardBoard, type ModuleManifest } from "@tavora/module-schema";
 import { MANIFEST_FILE, privateKeyFile, readZip, SIGNATURE_FILE, signedHash, verifyFiles, ZIP_LIMITS, zipDirectory, zipDirectoryAt, ZipError, zipFiles, type ZipFile } from "@tavora/pack";
 import { inspectPng, isWebp } from "./png.ts";
-import { FREE_AFTER_BYTES, freeMemory, MAX_MANIFEST_BYTES, MAX_SIGNATURE_BYTES, metadataProblem, UPLOAD_MEMORY_BYTES } from "./upload-memory.ts";
+import { FREE_AFTER_BYTES, freeMemory, MAX_MANIFEST_BYTES, MAX_SIGNATURE_BYTES, metadataProblem, UPLOAD_MEMORY_BYTES, uploadMemory } from "./upload-memory.ts";
 
 /**
  * The module catalog (Milestone E, docs/catalog-threat-model.md): community modules, each with the
@@ -1022,7 +1022,16 @@ export class CatalogStore {
 
   /** A taken-down module with a version waiting: listing it alone would serve the old version again, so that version goes first. */
   replacementWaits(id: string): boolean {
-    return this.isTakenDown(id) && this.waitingCountOfModule(id) > 0;
+    if (!this.isTakenDown(id)) return false;
+    return this.db.prepare("select 1 from versions where module_id = ? and status = 'waiting' and seq > (select coalesce(max(seq), 0) from versions where module_id = ? and status = 'listed') limit 1").get(id, id) !== undefined;
+  }
+
+  /** The newest listed version that came after this one, or null. Approving and listing this one would serve that one, not it. */
+  newerListedVersion(sha256: string): string | null {
+    const row = this.db
+      .prepare("select newer.version from versions this join versions newer on newer.module_id = this.module_id and newer.seq > this.seq and newer.status = 'listed' where this.sha256 = ? order by newer.seq desc limit 1")
+      .get(sha256) as { version: string } | undefined;
+    return row?.version ?? null;
   }
 
   /** The ids of every module an account's keys or uploads made, listed or not. */
@@ -1470,29 +1479,77 @@ export class CatalogStore {
    */
   async openZip(sha256: string): Promise<{ size: number; stream: () => ReadableStream<Uint8Array> } | null> {
     if (!SHA256.test(sha256)) return null;
-    const row = this.db.prepare("select v.size from versions v join modules m on m.id = v.module_id where v.sha256 = ? and m.listed = 1 and v.zip_removed is null and v.status = 'listed'").get(sha256) as { size: number } | undefined;
-    if (!row) return null;
+    const servable = () =>
+      this.db
+        .prepare("select v.size, v.zip_removed from versions v join modules m on m.id = v.module_id where v.sha256 = ? and m.listed = 1 and (v.zip_removed is null or v.zip_removed like ?) and v.status = 'listed'")
+        .get(sha256, `${MISSING_ZIP}%`) as { size: number; zip_removed: string | null } | undefined;
+    const row = servable();
+    if (!row || !(await this.fileIsIntact(sha256, row.size))) return null;
+    // Taken down, or pruned, while the file was being checked.
+    const now = servable();
+    if (!now) return null;
+    // A zip found gone earlier whose right file is back: it is served, and takes its place again as soon as there's room.
+    if (now.zip_removed !== null) this.restoreMarkedZip(sha256, now.size);
+    return { size: now.size, stream: () => fileStream(this.zipPath(sha256), now.size) };
+  }
+
+  /** Whether a zip's file has this size and its hash, read through a small buffer, once per version of the file on disk. */
+  private async fileIsIntact(sha256: string, size: number): Promise<boolean> {
     const target = this.zipPath(sha256);
     let stamp: string;
     try {
       const info = await stat(target);
-      if (info.size !== row.size) return null;
+      if (info.size !== size) return false;
       stamp = `${info.size}:${info.mtimeMs}`;
     } catch {
-      return null;
+      return false;
     }
-    if (this.checkedZips.get(sha256) !== stamp) {
-      // Clients asking at once share one read of the file.
-      let check = this.checkingZips.get(`${sha256}:${stamp}`);
-      if (!check) {
-        check = fileSha256(target).then((hash) => hash === sha256, () => false);
-        this.checkingZips.set(`${sha256}:${stamp}`, check);
-        void check.finally(() => this.checkingZips.delete(`${sha256}:${stamp}`));
-      }
-      if (!(await check)) return null;
-      this.checkedZips.set(sha256, stamp);
+    if (this.checkedZips.get(sha256) === stamp) return true;
+    // Clients asking at once share one read of the file.
+    let check = this.checkingZips.get(`${sha256}:${stamp}`);
+    if (!check) {
+      check = fileSha256(target).then((hash) => hash === sha256, () => false);
+      this.checkingZips.set(`${sha256}:${stamp}`, check);
+      void check.finally(() => this.checkingZips.delete(`${sha256}:${stamp}`));
     }
-    return { size: row.size, stream: () => fileStream(target, row.size) };
+    if (!(await check)) return false;
+    this.checkedZips.set(sha256, stamp);
+    return true;
+  }
+
+  /**
+   * Whether a waiting version's zip can be approved, by its hash: "ok", "gone" (missing or damaged), or "busy" when its right
+   * file is back but there's no memory right now to read its hashes. Awaited before Approve's other checks, so nothing is
+   * awaited between those and approve().
+   */
+  async waitingZipState(sha256: string): Promise<"ok" | "gone" | "busy"> {
+    const row = this.db.prepare("select size, zip_removed from versions where sha256 = ? and status = 'waiting'").get(sha256) as { size: number; zip_removed: string | null } | undefined;
+    if (!row || (row.zip_removed !== null && !row.zip_removed.startsWith(MISSING_ZIP))) return "gone";
+    if (!(await this.fileIsIntact(sha256, row.size))) return "gone";
+    if (row.zip_removed === null) return "ok";
+    return this.restoreMarkedZip(sha256, row.size) ? "ok" : "busy";
+  }
+
+  /**
+   * Takes the "gone" mark off a zip whose right file is back, and fills the hashes it lacks, in one step, so it counts in the
+   * copy check again. It unpacks in the memory uploads share; false when there's no room now, and it stays marked.
+   */
+  private restoreMarkedZip(sha256: string, size: number): boolean {
+    const files = this.zipListing(sha256)?.files ?? [];
+    const needed = size + Math.max(0, ...files.map((file) => file.size));
+    const ticket = uploadMemory.take(needed);
+    if (!ticket) return false;
+    try {
+      const read = this.hashesFromZip(sha256, Infinity);
+      if ("refused" in read && !read.unreadable) return false;
+      // Unreadable by any installer: there's nothing to compare with, as in the backfill.
+      const [copies, hash] = "refused" in read ? ["[]", null] : [read.copies, read.hash];
+      this.db.prepare("update versions set file_hashes = coalesce(file_hashes, ?), signed_sha256 = coalesce(signed_sha256, ?), zip_removed = null where sha256 = ? and zip_removed like ?").run(copies, hash, sha256, `${MISSING_ZIP}%`);
+      return true;
+    } finally {
+      ticket.release();
+      if (needed >= FREE_AFTER_BYTES) setImmediate(freeMemory);
+    }
   }
 
   /** A zip of a listed module by its hash, or null. A delisted module's zips are not handed out. */

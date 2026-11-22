@@ -222,8 +222,9 @@ const DIRECTORY_WINDOW_BYTES = 64 * 1024;
 /**
  * The files of a zip that was already checked, with their unpacked sizes, reading only its end and its directory through
  * `read`, so a list of big zips on disk holds none of them in memory. The directory is read a small window at a time and the
- * extra fields and comments in it are skipped, so padding them can neither cost memory nor hide a file from the list. Throws
- * a ZipError when that can't be read.
+ * extra fields and comments in it are skipped, so padding them can neither cost memory nor hide a file from the list. Like the
+ * installer's reader it walks up to the end record and doesn't trust the size that record gives, so a zip the installer takes
+ * lists the same files here. Throws a ZipError when that can't be read.
  */
 export function zipDirectoryAt(size: number, read: (at: number, length: number) => Buffer, limits: Readonly<ZipLimits> = ZIP_LIMITS): { name: string; size: number }[] {
   if (size > limits.maxArchiveBytes) throw new ZipError("the zip is too big");
@@ -233,8 +234,8 @@ export function zipDirectoryAt(size: number, read: (at: number, length: number) 
   const endAt = findEnd(tail);
   const count = tail.readUInt16LE(endAt + 10);
   const start = tail.readUInt32LE(endAt + 16);
-  const end = start + tail.readUInt32LE(endAt + 12);
-  if (count > limits.maxFiles || end > tailAt + endAt) throw new ZipError("the zip is damaged");
+  const end = tailAt + endAt;
+  if (count > limits.maxFiles || start + tail.readUInt32LE(endAt + 12) > end) throw new ZipError("the zip is damaged");
   let window: Buffer = Buffer.alloc(0);
   let windowAt = 0;
   const bytes = (at: number, length: number) => {

@@ -42,6 +42,36 @@ describe("zipDirectoryAt", () => {
     expect(longest).toBeLessThanOrEqual(22 + 0xffff);
   });
 
+  it("ignores the directory size in the end record, as the installer's reader does", () => {
+    const zip = Buffer.from(writeZip(files));
+    zip.writeUInt32LE(0, zip.length - 22 + 12);
+    expect(zipDirectory(zip)).toHaveLength(80);
+    expect(zipDirectoryAt(zip.length, (at, length) => zip.subarray(at, at + length))).toEqual(zipDirectory(zip));
+  });
+
+  it("lists exactly what the installer's reader lists, for every mutation of the directory and end record it accepts", () => {
+    const original = writeZip(files.slice(0, 6));
+    const endAt = original.length - 22;
+    const start = original.readUInt32LE(endAt + 16);
+    const read = (zip: Buffer) => (at: number, length: number) => zip.subarray(at, at + length);
+    let accepted = 0;
+    for (let at = start; at < original.length; at++) {
+      for (const value of [0x00, 0x01, 0x2f, 0x7f, 0x80, 0xff, original[at]! ^ 0x01]) {
+        const zip = Buffer.from(original);
+        zip[at] = value;
+        let expected: { name: string; size: number }[];
+        try {
+          expected = zipDirectory(zip);
+        } catch {
+          continue;
+        }
+        accepted += 1;
+        expect(zipDirectoryAt(zip.length, read(zip)), `byte ${at} = ${value}`).toEqual(expected);
+      }
+    }
+    expect(accepted).toBeGreaterThan(100);
+  });
+
   it("refuses a directory that runs past its end", () => {
     const zip = Buffer.from(writeZip(files));
     zip.writeUInt16LE(81, zip.length - 22 + 10);

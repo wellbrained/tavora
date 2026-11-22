@@ -79,6 +79,7 @@ export const API_REASONS = [
   "suspended",
   "taken-down",
   "replacement-waiting",
+  "newer-version-listed",
   "tavora-only",
   "time",
   "token-new-prefix",
