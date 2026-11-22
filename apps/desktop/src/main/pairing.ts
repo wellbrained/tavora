@@ -21,6 +21,10 @@ import { UserError } from "./messages";
 // Both users check the codes: the old PC sends nothing before Add, and the new PC keeps nothing before its
 // own user says the codes match. Without that second check, whoever carries the messages (the service, or
 // anyone who can write the folder) could answer as an "old PC" and plant a key of their own on the new PC.
+//
+// Each PC keeps what it saw when it took its step: the old PC the new PC's promise (commit) and its own answer,
+// the new PC the old PC's key. Were the old PC to read the promise again later, whoever carries the messages could
+// swap in a key of their own after seeing both real ones and search for one that gives the same code.
 
 /** How long a request through the folder lasts: a sync app can be slow. */
 export const FOLDER_PAIRING_MS = 24 * 60 * 60_000;
@@ -97,10 +101,14 @@ interface Answering {
   id: string;
   key: PairingKey;
   name: string | null;
+  /** The new PC's promise as it was when this PC answered: its key has to be the one in it. */
+  commit: Buffer;
   reveal: Buffer | null;
   code: string | null;
 }
 
+/** A promise is a sha256 hash. */
+const COMMIT_BYTES = 32;
 const b64 = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64url");
 const unb64 = (text: string) => Buffer.from(text, "base64url");
 
@@ -379,22 +387,23 @@ export class Pairing {
     try {
       if (!answering) {
         if (request.answer) return;
+        const commit = unb64(request.commit);
+        if (commit.length !== COMMIT_BYTES) return;
         const key = newPairingKey();
         if (!(await transport.answer(request.id, b64(key.publicKey)))) return;
-        this.answering = { transport, id: request.id, key, name: request.name, reveal: null, code: null };
+        this.answering = { transport, id: request.id, key, name: request.name, commit, reveal: null, code: null };
         return;
       }
-      if (answering.id !== request.id || answering.reveal || !request.reveal) return;
+      if (answering.id !== request.id) return;
+      // What this PC answered to changed on the way: the promise, its own key, or a key already checked.
+      if (!unb64(request.commit).equals(answering.commit) || request.answer?.publicKey !== b64(answering.key.publicKey) || (answering.reveal && request.reveal !== b64(answering.reveal))) {
+        return this.refuse(answering, "pairing: a PC's request changed after this PC answered it");
+      }
+      if (answering.reveal || !request.reveal) return;
       const reveal = unb64(request.reveal);
-      const commit = unb64(request.commit);
-      const expected = pairingCommit(reveal);
-      if (commit.length !== expected.length || !timingSafeEqual(commit, expected)) {
+      if (!timingSafeEqual(pairingCommit(reveal), answering.commit)) {
         // Its key isn't the one it promised: something on the way is off.
-        this.options.log?.("pairing: a PC's key did not match what it promised");
-        this.refused.add(request.id);
-        this.answering = null;
-        await transport.end(request.id, true).catch(() => undefined);
-        return;
+        return this.refuse(answering, "pairing: a PC's key did not match what it promised");
       }
       answering.reveal = reveal;
       answering.code = pairingCode(reveal, answering.key.publicKey);
@@ -403,6 +412,15 @@ export class Pairing {
     } catch (error) {
       this.options.log?.(`pairing: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+
+  /** Something on the way is off: the request is turned down and not answered again. */
+  private async refuse(answering: Answering, why: string): Promise<void> {
+    this.options.log?.(why);
+    this.refused.add(answering.id);
+    if (this.answering === answering) this.answering = null;
+    this.changed();
+    await answering.transport.end(answering.id, true).catch(() => undefined);
   }
 
   /** The user's click on "Add <PC>?": the key goes to it sealed, or the request is turned down. */

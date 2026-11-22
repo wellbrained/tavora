@@ -1,4 +1,4 @@
-import { mkdir, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { PairingView } from "../shared/host-api";
@@ -356,6 +356,45 @@ describe("approving a new PC through the copy's folder", () => {
     expect(fresh.accountKey.get()).toBeNull();
     expect(await readdir(path.join(folder, "Tavora", "pairing"))).toEqual([]);
     fresh.pairing.dispose();
+  });
+
+  it("turns a request down when what it answered changes on the way", async () => {
+    const { root } = await pc();
+    const folder = path.join(root, "OneDrive");
+    const dir = path.join(folder, "Tavora", "pairing");
+    await mkdir(path.join(folder, "Tavora"), { recursive: true });
+    const old = await onPc(fetch, null, new FolderPairing(folder, "Desk"));
+    await old.accountKey.setUpHere(false);
+    const fresh = await onPc(fetch, null, new FolderPairing(folder, "Laptop"));
+    const step = async (name: string) => JSON.parse(await readFile(path.join(dir, name), "utf8")) as Record<string, unknown>;
+    const other = newPairingKey().publicKey.toString("base64url");
+
+    // Its own answer swapped for another key: turned down at the next look.
+    await fresh.pairing.start();
+    await old.pairing.lookForRequests();
+    let [id] = (await readdir(dir)).map((name) => name.split(".")[0]!);
+    await writeFile(path.join(dir, `${id}.answer.json`), JSON.stringify({ ...(await step(`${id}.answer.json`)), publicKey: other }));
+    await old.pairing.lookForRequests();
+    expect(await readdir(dir)).toContain(`${id}.declined.json`);
+    await fresh.pairing.cancel();
+    await rm(path.join(dir, `${id}.declined.json`), { force: true });
+
+    // The new PC's key changed while "Add Laptop?" shows: the question goes away and nothing is sent.
+    await fresh.pairing.start();
+    await old.pairing.lookForRequests();
+    [id] = (await readdir(dir)).map((name) => name.split(".")[0]!);
+    await fresh.pairing.lookForAnswer();
+    await old.pairing.lookForRequests();
+    expect(old.pairing.view().approve).toMatchObject({ id, name: "Laptop" });
+    await writeFile(path.join(dir, `${id}.reveal.json`), JSON.stringify({ v: 1, publicKey: other }));
+    await old.pairing.lookForRequests();
+    expect(old.pairing.view().approve).toBeNull();
+    await expect(old.pairing.decide(id!, true)).rejects.toMatchObject({ key: "pairing.error.gone" });
+    expect(await readdir(dir)).not.toContain(`${id}.key.json`);
+    await fresh.pairing.lookForAnswer();
+    expect(fresh.pairing.view().asking).toMatchObject({ step: "declined" });
+    fresh.pairing.dispose();
+    old.pairing.dispose();
   });
 
   it("lasts a day, then is gone", async () => {
