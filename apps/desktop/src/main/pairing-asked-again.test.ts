@@ -205,10 +205,12 @@ it("answers a second new PC after the first one is done, whatever its old files 
   const dir = path.join(folder, "Tavora", "pairing");
   await mkdir(path.join(folder, "Tavora"), { recursive: true });
   const old = await oldPc(new FolderPairing(folder, "Desk"));
+  const done = new Set<string>();
   const pairOnce = async (name: string, end: "add" | "cancel") => {
     const fresh = await onPc(new FolderPairing(folder, name));
     await fresh.pairing.start();
-    const id = (await readdir(dir)).find((file) => file.endsWith(".request.json"))!.split(".")[0]!;
+    const id = (await readdir(dir)).map((file) => file.split(".")[0]!).find((name) => !done.has(name))!;
+    done.add(id);
     await old.pairing.lookForRequests();
     await fresh.pairing.lookForAnswer();
     await old.pairing.lookForRequests();
