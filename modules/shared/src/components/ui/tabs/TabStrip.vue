@@ -20,7 +20,7 @@ import { useResizeObserver } from "@vueuse/core";
 import { ChevronDown, ChevronLeft, ChevronRight, X } from "@lucide/vue";
 import { TabsRoot } from "reka-ui";
 import { Button } from "../button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "../dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "../dropdown-menu";
 import { isComposing } from "../../../lib/keys";
 import { cn } from "../../../lib/utils";
 import { Input } from "../input";
@@ -394,10 +394,13 @@ function endDrag(settled: boolean) {
         </DropdownMenuTrigger>
         <DropdownMenuContent side="bottom" align="end" class="max-w-72 min-w-52" data-testid="strip-hidden-menu">
           <DropdownMenuLabel class="text-muted-foreground truncate text-xs font-normal">{{ moreLabel }}</DropdownMenuLabel>
-          <DropdownMenuItem v-for="tab in hiddenTabs" :key="tab.id" :data-tab-id="tab.id" data-testid="strip-hidden-tab" @select="pickHidden(tab.id)">
-            <span v-if="$slots.icon" class="flex flex-none items-center empty:hidden"><slot name="icon" :tab="tab" /></span>
-            <span class="min-w-0 truncate">{{ tab.label }}</span>
-          </DropdownMenuItem>
+          <!-- The open tab is in the list when it was scrolled away; the kit marks it as the chosen row. -->
+          <DropdownMenuRadioGroup :model-value="modelValue">
+            <DropdownMenuRadioItem v-for="tab in hiddenTabs" :key="tab.id" :value="tab.id" class="pl-2" :data-tab-id="tab.id" data-testid="strip-hidden-tab" @select="pickHidden(tab.id)">
+              <span v-if="$slots.icon" class="flex flex-none items-center empty:hidden"><slot name="icon" :tab="tab" /></span>
+              <span class="min-w-0 truncate">{{ tab.label }}</span>
+            </DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

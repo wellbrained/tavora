@@ -3,22 +3,25 @@
 // Without `overflow` a strip follows the user's Settings > Appearance > Too many tabs, like Tavora's own panel tabs.
 import { TabStrip, type StripTab } from "@tavora/official-ui/components/ui/tabs";
 import { ref } from "vue";
+import { t } from "../../i18n";
 
 const tabs = ref<StripTab[]>(Array.from({ length: 9 }, (_, i) => ({ id: `plan-${i + 1}`, label: `Production plan ${i + 1}`, closable: true })));
 const listOpen = ref("plan-1");
 const arrowsOpen = ref("plan-5");
+// The strips' names for screen readers, in the page's language.
+const names = () => ({ list: t("demo.tabsInList"), arrows: t("demo.tabsWithArrows") });
 const close = (id: string) => (tabs.value = tabs.value.filter((tab) => tab.id !== id));
 </script>
 
 <template>
   <div class="flex w-full max-w-80 flex-col gap-4">
     <div class="flex flex-col gap-1">
-      <span class="text-muted-foreground text-xs">List</span>
-      <TabStrip v-model="listOpen" :tabs="tabs" overflow="list" aria-label="Plans in a list" data-testid="tab-strip-overflow-list" @close="close" />
+      <span class="text-muted-foreground text-xs">{{ t("demo.tabsList") }}</span>
+      <TabStrip v-model="listOpen" :tabs="tabs" overflow="list" :aria-label="names().list" data-testid="tab-strip-overflow-list" @close="close" />
     </div>
     <div class="flex flex-col gap-1">
-      <span class="text-muted-foreground text-xs">Arrows</span>
-      <TabStrip v-model="arrowsOpen" :tabs="tabs" overflow="arrows" aria-label="Plans with arrows" data-testid="tab-strip-overflow-arrows" @close="close" />
+      <span class="text-muted-foreground text-xs">{{ t("demo.tabsArrows") }}</span>
+      <TabStrip v-model="arrowsOpen" :tabs="tabs" overflow="arrows" :aria-label="names().arrows" data-testid="tab-strip-overflow-arrows" @close="close" />
     </div>
   </div>
 </template>

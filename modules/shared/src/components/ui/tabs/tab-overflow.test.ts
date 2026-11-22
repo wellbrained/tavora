@@ -121,6 +121,20 @@ describe("TabStrip: the list", () => {
   })
 })
 
+describe("TabStrip: the open tab in the list", () => {
+  it("is marked as the chosen row when it was scrolled away", async () => {
+    const { root, scrollTo } = await mount("list", "a")
+    await scrollTo(300)
+    const list = byTestid(root, "strip-hidden-tabs")!
+    list.focus()
+    press(list, "Enter")
+    await wait()
+    const items = [...document.querySelectorAll<HTMLElement>("[data-testid=strip-hidden-tab]")]
+    expect(items.map((item) => item.dataset.tabId)).toEqual(["a", "b", "c"])
+    expect(items.map((item) => item.getAttribute("aria-checked"))).toEqual(["true", "false", "false"])
+  })
+})
+
 describe("TabStrip: the arrows", () => {
   it("shows an arrow only on a side with hidden tabs, out of the Tab order, and steps to the next or previous tab", async () => {
     const { root, picked, scrollTo, at } = await mount("arrows")

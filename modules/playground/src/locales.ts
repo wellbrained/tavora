@@ -143,6 +143,10 @@ export const en = {
   // Labels inside the Foundations examples.
   "demo.do": "Do",
   "demo.dont": "Don't",
+  "demo.tabsList": "List",
+  "demo.tabsArrows": "Arrows",
+  "demo.tabsInList": "Plans in a list",
+  "demo.tabsWithArrows": "Plans with arrows",
   "demo.on": "On",
   "demo.off": "Off",
   "demo.colours.surfaces": "Surfaces",
@@ -613,6 +617,10 @@ export const de: Record<TextKey, string> = {
   // Labels inside the Foundations examples.
   "demo.do": "So geht's",
   "demo.dont": "Besser nicht",
+  "demo.tabsList": "Liste",
+  "demo.tabsArrows": "Pfeile",
+  "demo.tabsInList": "Pläne in einer Liste",
+  "demo.tabsWithArrows": "Pläne mit Pfeilen",
   "demo.on": "An",
   "demo.off": "Aus",
   "demo.colours.surfaces": "Flächen",
