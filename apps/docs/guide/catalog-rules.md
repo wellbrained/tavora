@@ -22,7 +22,7 @@ A version waits when:
 - **Words.** Its name, descriptions, patch notes or readme have words that aren't allowed, including adult terms.
 - **Permissions.** A first version asks for network access or connectors, or an update asks for more than the last version did.
 - **A copy.** It looks like another developer's module: a name that is nearly the same, or files that are mostly the same.
-- **Code that needs a closer look.** `eval`, `new Function`, WebAssembly, code loaded from the internet or added to the page while it runs, or packed and obfuscated code. Build your module without these, and leave your code readable (a normal minified build is fine).
+- **Code that needs a closer look.** `eval`, `new Function`, WebAssembly, code loaded from the internet or added to the page while it runs, or packed and obfuscated code. Build your module without these, and leave your code readable (a normal minified build is fine). Well-known libraries such as ExcelJS or JSZip are fine too.
 - **The virus scan.** It found something, or couldn't run.
 - **New pictures.** The icon or screenshots are new or changed since the last version.
 
