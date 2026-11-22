@@ -323,7 +323,8 @@ describe("at start", () => {
     const stagingDir = path.join(b.userData, "cloud-copy-staging");
     const keepIn = path.join(b.userData, "backups", "cloud-copy-2026-11-21T00-00-00-000Z-this-pc");
     await mkdir(keepIn, { recursive: true });
-    await realRename(path.join(b.userData, "cloud-copy.json"), path.join(b.userData, "cloud-copy-swapping.json"));
+    // Choosing the copy parked the state already, as during a swap.
+    expect(await realStat(path.join(b.userData, "cloud-copy-swapping.json")).then(() => true, () => false)).toBe(true);
     await writeFile(path.join(b.userData, "cloud-copy-status.json"), JSON.stringify({ v: 1, phase: "swapping", plan: { keepIn, moduleFiles: b.moduleFiles, own: null, empty: [] } }));
     await realRename(path.join(b.userData, "library.json"), path.join(keepIn, "library.json"));
     await realRename(path.join(stagingDir, "data", "library.json"), path.join(b.userData, "library.json"));

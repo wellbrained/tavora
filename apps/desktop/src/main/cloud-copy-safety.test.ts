@@ -1,6 +1,6 @@
 // The cloud copy when something goes wrong: data lost on this PC, a swap cut off, a folder that can't be read.
 import { randomBytes } from "node:crypto";
-import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BATCH_BYTES, CloudCopy, EMPTY_STATE, swapInCopy, type CopyStorage, type RemoteCopy, type SwapAnswer } from "./cloud-copy";
@@ -184,7 +184,8 @@ describe("a swap that was cut off", () => {
     const stagingDir = path.join(b.userData, "cloud-copy-staging");
     const keepIn = path.join(b.userData, "backups", "cloud-copy-2026-11-21T00-00-00-000Z-this-pc");
     await mkdir(keepIn, { recursive: true });
-    await rename(path.join(b.userData, "cloud-copy.json"), path.join(b.userData, "cloud-copy-swapping.json"));
+    // Choosing the copy parked the state already, as during a swap.
+    expect(await stat(path.join(b.userData, "cloud-copy-swapping.json")).then(() => true, () => false)).toBe(true);
     await writeFile(path.join(b.userData, "cloud-copy-status.json"), JSON.stringify({ v: 1, phase: "swapping", plan: { keepIn, moduleFiles: b.moduleFiles, own: { developmentFolders: ["D:\\mine"] }, empty: [] } }));
     await rename(path.join(b.userData, "library.json"), path.join(keepIn, "library.json"));
     await rename(path.join(stagingDir, "data", "library.json"), path.join(b.userData, "library.json"));

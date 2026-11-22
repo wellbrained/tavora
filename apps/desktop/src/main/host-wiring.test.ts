@@ -17,7 +17,8 @@ function body(start: RegExp): string {
 
 describe("host.ts", () => {
   it("tells the user where work done while a cloud copy waited is kept", () => {
-    expect(body(/static async create\(/)).toMatch(/copySync\.changesKeptIn\) host\.notice = translate\(host\.language, "cloudCopy\.notice\.keptAside"/);
+    // Both backups of one start in one message: startNotice (cloud-copy-sync.ts) picks the text.
+    expect(body(/static async create\(/)).toMatch(/const copyNotice = copySync\.notice;\s+if \(copyNotice\) host\.notice = translate\(host\.language, copyNotice\.key, copyNotice\.params\)/);
   });
 
   it("ends open OBS pages when grants change and whenever modules are looked for again", () => {
