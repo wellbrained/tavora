@@ -1,10 +1,11 @@
 // A previous module copy that is busy during recovery, an unsigned copy an older Tavora left, and flushing an install.
-import { mkdir, mkdtemp, open, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, open, readdir, readFile, realpath, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { writeZip, type ZipFile } from "@tavora/pack";
+import { signFiles, writeZip, type ZipFile } from "@tavora/pack";
+import { generateKeyPairSync } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { installZip, recoverInstalls, strandedModules } from "./installer";
+import { dropOldCopies, installZip, recoverInstalls, strandedModules } from "./installer";
 import { loadInstalledModules } from "./installed-modules";
 import { panelsWait, type InstalledModule } from "./registry";
 
@@ -79,7 +80,7 @@ async function put(dir: string, content: ZipFile[]): Promise<string> {
 
 async function oldCopy(): Promise<string> {
   const old = await put(path.join(staging, "old-1"), files("1.0.0"));
-  await writeFile(`${old}.updating`, "");
+  await writeFile(`${old}.updating`, JSON.stringify({ id: ID }));
   return old;
 }
 
@@ -167,5 +168,96 @@ describe("an install", () => {
     expect(moduleFiles.map((file) => path.basename(file)).sort()).toEqual(["index.html", "tavora.module.json"]);
     const record = flushes.findIndex((file) => path.basename(file).startsWith("module-owners.json"));
     if (record >= 0) expect(Math.max(...moduleFiles.map((file) => flushes.indexOf(file)))).toBeLessThan(record);
+  });
+});
+
+describe("records that can't be trusted (D9)", () => {
+  const SIGNED = "wellbrained.tracker";
+  const key = generateKeyPairSync("ed25519").privateKey;
+  const signedFiles = () => {
+    const content = files("1.0.0").map((file) => (file.name === "tavora.module.json" ? { ...file, data: Buffer.from(manifest("1.0.0").replace(ID, SIGNED)) } : file));
+    return [...content, signFiles(content, key)];
+  };
+
+  it("a damaged records file keeps a signed module's only copy, and its panels wait", async () => {
+    const old = await put(path.join(staging, "old-1"), signedFiles());
+    await writeFile(`${old}.updating`, JSON.stringify({ id: SIGNED }));
+    await writeFile(path.join(userData, "module-owners.json"), "{ damaged");
+    await recover();
+    expect(await there(path.join(old, "tavora.module.json"))).toBe(true);
+    expect(await there(target(userModules, SIGNED))).toBe(false);
+    expect(strandedModules(userData).map((problem) => problem.about?.id)).toEqual([SIGNED]);
+    expect(await realReadFile(path.join(userData, "module-owners.json"), "utf8")).toBe("{ damaged");
+  });
+
+  it("a records file that is gone keeps it too", async () => {
+    const old = await put(path.join(staging, "old-1"), signedFiles());
+    await recover();
+    expect(await there(path.join(old, "tavora.module.json"))).toBe(true);
+    expect(strandedModules(userData).map((problem) => problem.about?.id)).toEqual([SIGNED]);
+  });
+
+  it("does nothing while a cloud copy is being put in place, as it may have moved the records", async () => {
+    const old = await put(path.join(staging, "old-1"), signedFiles());
+    await writeFile(path.join(userData, "module-owners.json"), JSON.stringify({ version: 1, folders: {} }));
+    await writeFile(path.join(userData, "cloud-copy-status.json"), JSON.stringify({ v: 1, phase: "chosen" }));
+    await recover();
+    expect(await there(path.join(old, "tavora.module.json"))).toBe(true);
+    expect(panelsWait([...strandedModules(userData)])("some.module")).toBe(true);
+  });
+});
+
+describe("a marked copy that can't be verified (D10)", () => {
+  it("moves to left-*, instead of being deleted", async () => {
+    const old = await oldCopy();
+    await mkdir(path.join(userData, "elsewhere"));
+    await symlink(path.join(userData, "elsewhere"), path.join(old, "link"), "junction");
+    await recover();
+    expect(await there(target(userModules, ID))).toBe(false);
+    const left = (await readdir(staging)).filter((name) => name.startsWith("left-"));
+    expect(left).toHaveLength(1);
+    expect(await page(path.join(staging, left[0]!))).toBe("<p>1.0.0</p>");
+  });
+});
+
+describe("an install whose rollback fails too (D11)", () => {
+  it("leaves the module waiting, with its panels", async () => {
+    await installZip(await zip(files("1.0.0")), { userData, userModules, tavoraVersion: "0.17.0", modules: new Map() });
+    const installed: InstalledModule = { manifest: JSON.parse(manifest("1.0.0")), root: target(userModules, ID), provenance: "local", owner: "local" };
+    heldRename = (_from, to) => to === target(userModules, ID);
+    await expect(installZip(await zip(files("2.0.0")), { userData, userModules, tavoraVersion: "0.17.0", modules: new Map([[ID, installed]]) })).rejects.toThrow();
+    heldRename = () => false;
+    expect(await there(target(userModules, ID))).toBe(false);
+    expect(strandedModules(userData).map((problem) => problem.about?.id)).toEqual([ID]);
+    expect((await waitingNow())(ID)).toBe(true);
+  });
+});
+
+describe("removing a module whose copy is busy (D12)", () => {
+  it("goes by the mark when the manifest is busy", async () => {
+    const old = await oldCopy();
+    busyRead = (file) => file === path.join(old, "tavora.module.json");
+    await dropOldCopies(userData, ID);
+    busyRead = () => false;
+    await recover();
+    expect(await there(target(userModules, ID))).toBe(false);
+  });
+
+  it("can't come back either when the mark is busy too", async () => {
+    const old = await oldCopy();
+    busyRead = (file) => file === path.join(old, "tavora.module.json") || file === `${old}.updating`;
+    await dropOldCopies(userData, ID);
+    busyRead = () => false;
+    await recover();
+    expect(await there(target(userModules, ID))).toBe(false);
+    expect(await readdir(staging)).toEqual([]);
+  });
+
+  it("doesn't touch another module's copy", async () => {
+    const old = await oldCopy();
+    await dropOldCopies(userData, "wellbrained.other");
+    await recover();
+    expect(await page(target(userModules, ID))).toBe("<p>1.0.0</p>");
+    expect(await there(old)).toBe(false);
   });
 });
