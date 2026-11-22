@@ -11,7 +11,7 @@ import { Picker } from "@tavora/official-ui/components/ui/picker";
 import { SegmentedControl } from "@tavora/official-ui/components/ui/segmented-control";
 import { GRID_SETTINGS, type GridSetting } from "../../shared/layout-math";
 import { LAYOUT_ALL_GAMES } from "../../shared/layout-view";
-import { deleteWithUndo, state } from "../host";
+import { act, deleteWithUndo, state } from "../host";
 import { t } from "../i18n";
 import HeaderTools from "../components/workspace/HeaderTools.vue";
 import OverlayCopied from "../components/layout/OverlayCopied.vue";
@@ -152,6 +152,19 @@ const previewChoice = computed({
   set: (choice: string) => send({ type: "preview", choice }),
 });
 const picture = computed(() => (view.value?.picture ? `${PICTURE_ORIGIN}${view.value.picture}` : null));
+/**
+ * What overlays do when you alt-tab out of the game: Settings > Overlays' "Keep overlays on the game when you alt-tab", here where it
+ * is noticed. One setting for every overlay, not this setup's own.
+ */
+const stay = computed({
+  get: () => (state.value?.gameOverlays.stay ? "stay" : "hide"),
+  set: (value: string) => void act({ type: "set-overlays-stay", enabled: value === "stay" }),
+});
+const stayOptions = computed(() => [
+  { value: "stay", label: t("overlays.layout.stay.on") },
+  { value: "hide", label: t("overlays.layout.stay.off") },
+]);
+const stayDetails = computed<Record<string, string>>(() => ({ stay: t("overlays.layout.stay.onDetails"), hide: t("overlays.layout.stay.offDetails") }));
 </script>
 
 <template>
@@ -188,6 +201,18 @@ const picture = computed(() => (view.value?.picture ? `${PICTURE_ORIGIN}${view.v
             <Button variant="ghost" size="icon-sm" :disabled="!view.canRedo" :aria-label="t('overlays.layout.redo')" :title="t('overlays.layout.redo')" :aria-keyshortcuts="keyshortcuts('layout.redo')" data-testid="layout-redo" @click="send({ type: 'redo' })"><Redo2 /></Button>
           </div>
           <div class="ml-auto flex flex-wrap items-center gap-2">
+            <label class="flex items-center gap-2 text-sm">
+              <span class="text-muted-foreground">{{ t("overlays.layout.stay") }}</span>
+              <!-- The choice says what happens; its title says when they go, or, while overlays are off, why it is off. -->
+              <Picker
+                v-model="stay"
+                :options="stayOptions"
+                :label="t('overlays.layout.stayLabel')"
+                :disabled="!state?.gameOverlays.enabled"
+                :title="state?.gameOverlays.enabled ? stayDetails[stay] : t('overlays.stayOff')"
+                testid="layout-stay"
+              />
+            </label>
             <!-- Off, it still shows why: a disabled button with a title keeps its hint (see the kit's Button). Everywhere and All games have no one window to take. -->
             <Button v-if="isGame" variant="secondary" size="sm" :disabled="!view.canTakePicture" :title="pictureHint ?? undefined" :aria-description="pictureHint ?? undefined" data-testid="layout-take-picture" @click="send({ type: 'take-picture' })">{{ t("overlays.layout.takePicture") }}</Button>
             <Button variant="secondary" size="sm" data-testid="layout-choose-picture" @click="send({ type: 'choose-picture' })"><ImageIcon />{{ t("overlays.layout.choosePicture") }}</Button>

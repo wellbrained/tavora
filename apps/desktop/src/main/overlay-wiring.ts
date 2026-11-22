@@ -15,7 +15,7 @@ import { GameVeilWindow } from "./game-veil-window";
 import type { GameWatcher } from "./game-watch";
 import type { GrantStore } from "./grants";
 import type { Installed } from "./installed-modules";
-import { LayoutPictures, MAX_PICTURE_BYTES, MAX_PICTURE_WIDTH, PICTURES_FOLDER, picturePixels, sourceForHandle } from "./layout-pictures";
+import { clientArea, LayoutPictures, MAX_PICTURE_BYTES, MAX_PICTURE_WIDTH, PICTURES_FOLDER, picturePixels, sourceForHandle } from "./layout-pictures";
 import type { Library } from "./library";
 import { windowsForegroundProbe } from "./foreground";
 import { OverlayCanvas } from "./overlay-canvas";
@@ -26,6 +26,10 @@ import type { PanelViews } from "./panel-views";
 import type { Shell } from "./shell";
 import { Streaming } from "./streaming";
 import type { WorkspaceNames } from "./workspace-lookup";
+import { stackAbove, windowsOrder } from "./window-order";
+
+/** Stacking the overlays above the game failed (Windows' calls couldn't be loaded): said once only. */
+let stackFailed = false;
 
 /** What the overlay services ask of the host around them; the host answers (host.ts). */
 export interface OverlayHostPorts {
@@ -132,6 +136,27 @@ export async function createOverlayServices(wiring: OverlayWiring): Promise<Over
       tavoraInFront: () => BrowserWindow.getFocusedWindow() !== null,
       openWindow: (request, panel) => overlayWindow(options, ports.fontCss, request, panel),
       openVeil: () => new GameVeilWindow({ hidden: options.hidden }),
+      // Overlays that stay while the user is elsewhere sit right above the game's window, not above every window.
+      stackAboveGame: (game, windows) => {
+        if (process.platform !== "win32") return false;
+        try {
+          stackAbove(windowsOrder(), game, windows);
+          return true;
+        } catch (error) {
+          // Said once: the service then keeps them above every window, as before, and tries again on each look.
+          if (!stackFailed) console.warn("[tavora] cannot stack the overlays above the game", error);
+          stackFailed = true;
+          return false;
+        }
+      },
+      gameOnTop: (game) => {
+        if (process.platform !== "win32") return false;
+        try {
+          return windowsOrder().topmost(game);
+        } catch {
+          return false;
+        }
+      },
       // The card is a page of the host UI (layer-card.html), with a preload of its own.
       openCard: (request) =>
         new GameLayerCard({
@@ -230,7 +255,9 @@ function overlayLayout(wiring: OverlayWiring, gameOverlays: GameOverlays): Overl
       const thumbnailSize = picturePixels(size, display.scaleFactor);
       const sources = await desktopCapturer.getSources({ types: ["window"], thumbnailSize, fetchWindowIcons: false });
       const found = sources.find((source) => source.id === wanted.id);
-      return found && !found.thumbnail.isEmpty() ? found.thumbnail.toPNG() : null;
+      if (!found || found.thumbnail.isEmpty()) return null;
+      // Only the game itself: the window's title bar is cut off, so the picture has the canvas's shape (`size`).
+      return found.thumbnail.crop(clientArea(found.thumbnail.getSize(), size)).toPNG();
     },
     choose: async () => {
       const file = await ports.page.choosePicture();

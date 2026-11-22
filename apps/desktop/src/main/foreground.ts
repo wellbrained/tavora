@@ -32,6 +32,8 @@ export interface ForegroundProbe {
   keep?(): void;
   /** Where the kept game window is now (client area, physical pixels), or null once it is closed or minimized. */
   kept?(): Rect | null;
+  /** The kept game window's handle, as a text of its number, or null when none is kept. */
+  keptHandle?(): string | null;
 }
 
 interface User32 {
@@ -118,6 +120,9 @@ export function windowsForegroundProbe(): ForegroundProbe {
       const pid = [0];
       user32.getWindowThreadProcessId(last, pid);
       game = { window: last, pid: pid[0]! };
+    },
+    keptHandle() {
+      return user32 && game ? user32.handleOf(game.window) : null;
     },
     kept() {
       if (!user32 || !game) return null;

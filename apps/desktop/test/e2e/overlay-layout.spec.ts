@@ -155,6 +155,24 @@ test("Reset position and Reset size work from the page, Take picture says why it
     await expect(page.locator("[role=tooltip] kbd")).toHaveText([/^(Ctrl|Cmd)$/, "Z"]);
     expect((await state(page)).pictureHint).toBe("start");
 
+    // Alt-tab: the toolbar shows Settings > Overlays' "Keep overlays on the game when you alt-tab" (on at first) and changes it.
+    const saved = async () => (JSON.parse(await readFile(path.join(userData, "library.json"), "utf8")) as { overlaysStay?: boolean }).overlaysStay;
+    const stay = page.getByRole("button", { name: "When you alt-tab out of the game", exact: true });
+    await expect(stay).toContainText("Stay on the game");
+    await stay.hover();
+    await expect(page.locator("[role=tooltip]")).toHaveText("They stay on the game's window, under any window you put over it.");
+    await stay.click();
+    await shot(page, "00-alt-tab-menu");
+    await page.getByTestId("layout-stay-option-hide").click();
+    await expect(stay).toContainText("Hide");
+    await stay.hover();
+    await expect(page.locator("[role=tooltip]")).toHaveText("They show only while the game is in front.");
+    await shot(page, "00-alt-tab-hint");
+    await expect.poll(saved).toBe(false);
+    await stay.click();
+    await page.getByTestId("layout-stay-option-stay").click();
+    await expect.poll(saved).toBe(true);
+
     // The sidebar is on the right until Settings says otherwise, and the Overlay button stays in the header, lit.
     const canvasBox = (await page.getByTestId("layout-canvas").boundingBox())!;
     expect((await page.getByTestId("layout-sources").boundingBox())!.x).toBeGreaterThan(canvasBox.x);

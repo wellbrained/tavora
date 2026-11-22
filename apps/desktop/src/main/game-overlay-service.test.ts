@@ -43,6 +43,8 @@ const SCREEN: Rect = { x: 0, y: 0, width: 1920, height: 1080 };
 /** What was raised or given the keyboard, across every fake window and card, in order (cleared by each setup). */
 const stacking: string[] = [];
 
+let handles = 100;
+
 class FakeWindow implements OverlayWindow {
   rect: Rect | null = null;
   shown = false;
@@ -57,6 +59,12 @@ class FakeWindow implements OverlayWindow {
   /** What the service asked of it, in order. */
   log: string[] = [];
   focusedPanel = 0;
+  /** Above every window, or among the usual ones (stacked over the game while the user is elsewhere). */
+  topmost = true;
+  readonly handle = ++handles;
+  setTopmost(on: boolean) {
+    this.topmost = on;
+  }
   constructor(
     readonly request: OverlayWindowRequest,
     /** The lent view of a panel, for the window of a panel. */
@@ -184,7 +192,7 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
     enabled,
     /** One of Tavora's own windows has the keyboard. */
     tavora: false,
-    /** Settings > Overlays: Keep when you switch windows. */
+    /** Settings > Overlays: Keep overlays on the game when you alt-tab. */
     stay: false,
     /** The game window kept by the probe, where it is now; null once it is minimized or closed. */
     kept: null as Rect | null,
@@ -222,6 +230,12 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
     views: new FakePanelViews(),
     /** How often the Overlay layout was asked to look at the games' windows again. */
     windowsChanged: 0,
+    /** What was stacked right above the game's window: its handle and the windows, top first. */
+    stackedAboveGame: [] as { game: number; windows: number[] }[],
+    /** The game's window is always on top itself (some borderless games). */
+    gameOnTop: false,
+    /** Windows' calls to stack windows can't be made. */
+    stackFails: false,
   };
   const probe: ForegroundProbe = {
     look: () => {
@@ -232,6 +246,7 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
     focus: () => void world.focused++,
     keep: () => void (world.kept = world.foreground ? { ...world.foreground.bounds } : null),
     kept: () => world.kept,
+    keptHandle: () => (world.kept ? "4242" : null),
   };
   const shortcuts: ShortcutRegistry = {
     register: (accelerator, callback) => (world.registered.set(accelerator, callback), true),
@@ -280,6 +295,8 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
         world.windows.push(window);
         return window;
       },
+      stackAboveGame: (game, windows) => (world.stackedAboveGame.push({ game, windows: [...windows] }), !world.stackFails),
+      gameOnTop: () => world.gameOnTop,
       openVeil: () => {
         const veil = new FakeVeil();
         world.veils.push(veil);
@@ -451,6 +468,9 @@ describe("which window is in front", () => {
     expect(window.shown).toBe(true);
     // Where it was over the game, not over the browser.
     expect(window.rect!.x).toBeLessThan(100);
+    // Right above the game's window, not above every window: the browser over the game covers it too.
+    expect(window.topmost).toBe(false);
+    expect(world.stackedAboveGame.at(-1)).toEqual({ game: 4242, windows: [window.handle] });
     expect(service.frontGame()).toBeNull();
     // The keys are the browser's: the layer key is neither taken nor opens anything there.
     const layer = layerKey(key);
@@ -466,6 +486,8 @@ describe("which window is in front", () => {
     world.foreground = { program: GAME_EXE, bounds: { ...SCREEN }, notification: 0 };
     service.tick();
     expect(window.shown).toBe(true);
+    // In the game it is above every window again.
+    expect(window.topmost).toBe(true);
     world.foreground = null;
     service.tick();
     expect(window.shown).toBe(true);
@@ -2222,6 +2244,40 @@ describe("setups on screen", () => {
     expect(panelWindows(world)).toHaveLength(0);
     world.registered.get("Escape")!();
     expect(service.layerOpen).toBe(false);
+  });
+
+  it("while you are elsewhere and overlays stay, the game's sit right above its window and Everywhere's stay above every window", async () => {
+    const { service, world } = await setup({ file: file([{ id: "$everywhere", overlays: [item("clock")] }, { id: "elden", overlays: [item("own", "elden")] }]) });
+    world.stay = true;
+    service.tick();
+    const byKey = (key: string) => world.windows.find((window) => window.request.id.endsWith(key) && !window.destroyed)!;
+    expect(byKey("own").topmost).toBe(true);
+    world.foreground = { program: NOTEPAD, handle: "0x1", bounds: { x: 300, y: 200, width: 800, height: 600 }, notification: 0 };
+    service.tick();
+    expect(byKey("own").shown).toBe(true);
+    expect(byKey("own").topmost).toBe(false);
+    expect(byKey("clock").topmost).toBe(true);
+    expect(world.stackedAboveGame.at(-1)).toEqual({ game: 4242, windows: [byKey("own").handle] });
+    // A game that is always on top itself can't be covered: its overlays stay above every window, as before.
+    world.gameOnTop = true;
+    const before = world.stackedAboveGame.length;
+    service.tick();
+    expect(byKey("own").topmost).toBe(true);
+    expect(world.stackedAboveGame).toHaveLength(before);
+    world.gameOnTop = false;
+    // Windows won't stack them: above every window rather than lost under the game.
+    world.stackFails = true;
+    service.tick();
+    expect(byKey("own").topmost).toBe(true);
+    world.stackFails = false;
+    service.tick();
+    expect(byKey("own").topmost).toBe(false);
+    // Keep off: nothing stays, so nothing is stacked over the game.
+    world.stay = false;
+    const stacked = world.stackedAboveGame.length;
+    service.tick();
+    expect(byKey("own").shown).toBe(false);
+    expect(world.stackedAboveGame).toHaveLength(stacked);
   });
 
   it("closes the layer over the screen when another window, a game or Tavora's own comes in front", async () => {
