@@ -7,6 +7,7 @@ const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")
 const A = id(1);
 const B = id(2);
 const C = id(3);
+const D = id(4);
 const place = (instanceId: string, x = 0, y = 0, width = 400, height = 300, extra: object = {}) => ({ instanceId, x, y, width, height, ...extra });
 
 beforeEach(() => vi.useFakeTimers());
@@ -184,6 +185,28 @@ describe("visibility", () => {
     expect(rig.calls).not.toContain(`returned ${A}`);
     // Its place stays for when its workspace comes back.
     expect(rig.views.isPlaced(A)).toBe(true);
+  });
+
+  it("keeps a returned panel running, hidden, when its workspace is not shown but it is kept for the overlays or with its game", () => {
+    for (const why of ["overlay", "game"] as const) {
+      const rig = panelViewsRig();
+      const a = rig.add(A);
+      rig.views.keepRunning(A, why);
+      const lease = rig.lend(A);
+      rig.world.away.add(A);
+      lease.end();
+      expect(rig.views.has(A)).toBe(true);
+      expect(a.disposed).toBe(false);
+      expect(rig.calls).not.toContain(`releasing ${A} false`);
+      // Back in the window, out of sight and still running.
+      expect(rig.mounted.has(a.view)).toBe(true);
+      expect(a.visible).toBe(false);
+      expect(a.suspended).toBe(false);
+      expect(a.overGame).toBe(false);
+      // Once nothing holds it, it goes as usual.
+      rig.views.letGo(A, why);
+      expect(rig.views.has(A)).toBe(false);
+    }
   });
 
   it("closing a lent panel tells the layer and leaves nothing lent", () => {
@@ -1485,6 +1508,7 @@ describe("snapshot", () => {
     // Only a module panel can be lent to the in-game layer.
     rig.add(B);
     rig.lend(B);
+    rig.add(D, "browser");
     rig.views.setAwaiting(C);
     rig.views.setOpenedFrom(B, { instanceId: A, background: false });
     rig.views.keepRunning(A);
@@ -1498,6 +1522,7 @@ describe("snapshot", () => {
       panels: {
         [A]: { kind: "module", status: "ready", revealed: true, firstDrawn: false, lent: false, placed: true, awaiting: false, kept: true, openedFrom: null },
         [B]: { kind: "module", status: "ready", revealed: true, firstDrawn: true, lent: true, placed: false, awaiting: false, kept: false, openedFrom: { instanceId: A, background: false } },
+        [D]: { kind: "browser", status: "ready", revealed: true, firstDrawn: true, lent: false, placed: false, awaiting: false, kept: false, openedFrom: null },
       },
     });
     rig.views.endOpening(false);

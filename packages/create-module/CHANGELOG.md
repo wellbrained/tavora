@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.44
+
+- New projects start on `@tavora/sdk` 0.4.6: the memory host in `@tavora/sdk/testing` refuses the document ids Tavora refuses (`index`, `con`, `nul`, an id that differs from a saved one only by case).
+
 ## 0.1.43
 
 - New projects start on `@tavora/sdk` 0.4.5: the shared tooltip can show a game unit as games show it (`layout: "unit"`).
