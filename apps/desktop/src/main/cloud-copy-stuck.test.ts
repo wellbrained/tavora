@@ -212,7 +212,7 @@ describe("what the app wrote while a swap waited", () => {
     expect(JSON.parse(await read(b.userData, "library.json")).workspaces).toEqual({ hades: {} });
     expect(await read(b.userData, "profile.json")).toBe("good profile");
     expect(await read(b.userData, "module-data/old.json")).toBe("good data");
-    expect(await there(path.join(b.userData, "cloud-copy-staging", "swap.json"))).toBe(false);
+    expect(await there(path.join(b.userData, "cloud-copy-staging"))).toBe(false);
     expect(next.sync.view().swapUnfinished).toBe(false);
   });
 
@@ -283,7 +283,7 @@ describe("choosing a side", () => {
 
   it("Keep this PC's drops the staged list before it moves the staged files", async () => {
     const { b, at } = await bothChanged();
-    const staged = path.join(b.userData, "cloud-copy-staging", "staged.json");
+    const staged = path.join(b.userData, "cloud-copy-staging", "copy-list.json");
     let listThere: boolean | undefined;
     const look = vi.mocked(rename).getMockImplementation()!;
     vi.mocked(rename).mockImplementation(async (from, to) => {
@@ -323,7 +323,7 @@ describe("at start", () => {
     const stagingDir = path.join(b.userData, "cloud-copy-staging");
     const keepIn = path.join(b.userData, "backups", "cloud-copy-2026-11-21T00-00-00-000Z-this-pc");
     await mkdir(keepIn, { recursive: true });
-    await writeFile(path.join(stagingDir, "swap.json"), JSON.stringify({ v: 1, keepIn, moduleFiles: b.moduleFiles, own: null }));
+    await writeFile(path.join(b.userData, "cloud-copy-status.json"), JSON.stringify({ v: 1, phase: "swapping", plan: { keepIn, moduleFiles: b.moduleFiles, own: null, empty: [] } }));
     await realRename(path.join(b.userData, "library.json"), path.join(keepIn, "library.json"));
     await realRename(path.join(stagingDir, "data", "library.json"), path.join(b.userData, "library.json"));
     await writeFile(path.join(b.userData, "cloud-copy-place.json"), "{ broken");
@@ -331,7 +331,7 @@ describe("at start", () => {
     const next = tavora(cloud, b);
     await next.sync.beforeLoad();
     expect(await read(b.userData, "workspace.json")).toBe('"from a"');
-    expect(await there(path.join(stagingDir, "swap.json"))).toBe(false);
+    expect(await there(path.join(b.userData, "cloud-copy-status.json"))).toBe(false);
     expect(next.sync.view().on).toBe(false);
   });
 

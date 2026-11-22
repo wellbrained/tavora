@@ -68,15 +68,15 @@ describe("the cloud copy in a folder", () => {
   it("tells the PC whose save lost when two PCs saved at once", async () => {
     const key = newCopyKey();
     const [atA, atB] = [await folder(), await folder()];
-    const a = await pc({ "library.json": "start" });
+    const a = await pc({ "library.json": '{"tag":"start"}' });
     const first = await new CloudCopy(new FolderStorage(atA)).upload(key, a.roots, EMPTY_STATE);
     if (first.status !== "uploaded") throw new Error(first.status);
     await syncApp(atA, atB);
 
     // Both PCs save on top of the same version before the sync app moves anything.
-    await writeFile(path.join(a.userData, "library.json"), "changed on a");
+    await writeFile(path.join(a.userData, "library.json"), '{"tag":"changed on a"}');
     const fromA = await new CloudCopy(new FolderStorage(atA)).upload(key, a.roots, first.state);
-    const b = await pc({ "library.json": "changed on b" });
+    const b = await pc({ "library.json": '{"tag":"changed on b"}' });
     const fromB = await new CloudCopy(new FolderStorage(atB)).upload(key, b.roots, first.state);
     if (fromA.status !== "uploaded" || fromB.status !== "uploaded") throw new Error("not uploaded");
     expect(fromA.state.version).not.toBe(fromB.state.version);
@@ -92,14 +92,14 @@ describe("the cloud copy in a folder", () => {
     expect([remoteA?.follows, remoteB?.follows].sort()).toEqual([false, true]);
     // And the loser can't save on top either.
     const loser = fromA.state.version === winner ? { at: atB, pc: b, state: fromB.state } : { at: atA, pc: a, state: fromA.state };
-    await writeFile(path.join(loser.pc.userData, "library.json"), "again");
+    await writeFile(path.join(loser.pc.userData, "library.json"), '{"tag":"again"}');
     expect(await new CloudCopy(new FolderStorage(loser.at)).upload(key, loser.pc.roots, loser.state)).toEqual({ status: "conflict", version: winner });
   });
 
   it("waits for parts that are not synced yet instead of calling the copy damaged", async () => {
     const key = newCopyKey();
     const [atA, atB] = [await folder(), await folder()];
-    const a = await pc({ "library.json": "from a" });
+    const a = await pc({ "library.json": '{"tag":"from a"}' });
     await new CloudCopy(new FolderStorage(atA)).upload(key, a.roots, EMPTY_STATE);
     await syncApp(atA, atB, "manifests");
     const b = await pc();
@@ -111,7 +111,7 @@ describe("the cloud copy in a folder", () => {
   it("refuses a manifest that poses as another version", async () => {
     const key = newCopyKey();
     const onedrive = await folder();
-    const a = await pc({ "library.json": "a" });
+    const a = await pc({ "library.json": '{"tag":"a"}' });
     await new CloudCopy(new FolderStorage(onedrive)).upload(key, a.roots, EMPTY_STATE);
     const [name] = await manifests(onedrive);
     const dir = path.join(onedrive, "Tavora", "manifests");
@@ -123,7 +123,7 @@ describe("the cloud copy in a folder", () => {
   it("leaves copies a sync app made alone", async () => {
     const key = newCopyKey();
     const onedrive = await folder();
-    const a = await pc({ "library.json": "a" });
+    const a = await pc({ "library.json": '{"tag":"a"}' });
     const up = await new CloudCopy(new FolderStorage(onedrive)).upload(key, a.roots, EMPTY_STATE);
     if (up.status !== "uploaded") throw new Error(up.status);
     const [name] = await manifests(onedrive);
@@ -136,7 +136,7 @@ describe("the cloud copy in a folder", () => {
     const onedrive = await folder();
     let now = Date.now();
     const storage = new FolderStorage(onedrive, { now: () => now });
-    const a = await pc({ "library.json": "v1" });
+    const a = await pc({ "library.json": '{"tag":"v1"}' });
     let state = EMPTY_STATE;
     for (let round = 1; round <= 8; round++) {
       await writeFile(path.join(a.userData, "library.json"), `v${round}`);
@@ -153,21 +153,21 @@ describe("the cloud copy in a folder", () => {
     now += 40 * 24 * 60 * 60_000;
     const old = new Date(now - 35 * 24 * 60 * 60_000);
     for (const file of await readdir(path.join(onedrive, "Tavora"), { recursive: true })) await utimes(path.join(onedrive, "Tavora", file), old, old);
-    await writeFile(path.join(a.userData, "library.json"), "v9");
+    await writeFile(path.join(a.userData, "library.json"), '{"tag":"v9"}');
     const up = await new CloudCopy(storage).upload(key, a.roots, state);
     if (up.status !== "uploaded") throw new Error(up.status);
     expect(await manifests(onedrive)).toHaveLength(5);
     expect(await parts()).toHaveLength(5);
     const b = await pc();
     await new CloudCopy(storage).download(key, b.roots, path.join(b.root, "staging"));
-    expect(await read(path.join(b.root, "staging"), "library.json")).toBe("v9");
+    expect(await read(path.join(b.root, "staging"), "library.json")).toBe('{"tag":"v9"}');
   });
 
   it("deletes only its own files, and says so when the folder is gone", async () => {
     const onedrive = await folder();
     await writeFile(path.join(onedrive, "holiday.jpg"), "mine");
     const storage = new FolderStorage(onedrive);
-    await new CloudCopy(storage).upload(newCopyKey(), (await pc({ "library.json": "a" })).roots, EMPTY_STATE);
+    await new CloudCopy(storage).upload(newCopyKey(), (await pc({ "library.json": '{"tag":"a"}' })).roots, EMPTY_STATE);
     await storage.remove();
     expect(await readdir(onedrive)).toEqual(["holiday.jpg"]);
     expect(await storage.remote()).toBeNull();
@@ -246,14 +246,14 @@ describe("the cloud copy in a folder, as Tavora runs it", () => {
 
   it("moves to another folder with the same key, and the other PCs turn off until turned on there", async () => {
     const [first, second] = [await folder(), await folder()];
-    const a = await pc({ "library.json": "from a" });
+    const a = await pc({ "library.json": '{"tag":"from a"}' });
     const atA = tavora(a);
     await atA.sync.beforeLoad();
     await atA.sync.turnOn(first);
     const key = atA.sync.view().recoveryKey!;
     atA.sync.keySaved();
 
-    const b = await pc({ "library.json": "from a" });
+    const b = await pc({ "library.json": '{"tag":"from a"}' });
     const atB = tavora(b);
     await atB.sync.beforeLoad();
     await atB.sync.turnOn(first);
@@ -284,10 +284,10 @@ describe("the cloud copy in a folder, as Tavora runs it", () => {
 
   it("won't move onto a copy that is there already", async () => {
     const [first, second] = [await folder(), await folder()];
-    const other = tavora(await pc({ "library.json": "other" }));
+    const other = tavora(await pc({ "library.json": '{"tag":"other"}' }));
     await other.sync.beforeLoad();
     await other.sync.turnOn(second);
-    const atA = tavora(await pc({ "library.json": "a" }));
+    const atA = tavora(await pc({ "library.json": '{"tag":"a"}' }));
     await atA.sync.beforeLoad();
     await atA.sync.turnOn(first);
     await expect(atA.sync.move(second)).rejects.toMatchObject({ key: "cloudCopy.error.moveTaken" });

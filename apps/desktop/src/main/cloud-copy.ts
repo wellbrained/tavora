@@ -1,14 +1,15 @@
 import { apiReason } from "@tavora/module-schema";
 import { createHash } from "node:crypto";
-import { createReadStream, type Stats } from "node:fs";
-import { cp, mkdir, open as openFile, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { cp, mkdir, open as openFile, rm, rmdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isOwnerId } from "@tavora/module-schema";
 import { DATA_DIRS, PICTURE_DIRS } from "./backup";
 import { copyKeys, open, PART_ID_BYTES, partId, seal } from "./copy-crypto";
 import { writeFileAtomic } from "./fsutil";
+import { DamagedFile, look, lookBytes, lookNames, lookStat, unlessHeld, type Looked } from "./file-look";
 import { renameHeld } from "./rename-held";
-import { readSavedFile } from "./json";
+import { checkSavedFile } from "./json";
 import { STORE_VERSIONS } from "./saved-versions";
 import { OWNER_RECORDS_FILE } from "./installer";
 import { FILES_DIR } from "./module-files";
@@ -91,16 +92,6 @@ export interface CopyState {
    * start treats it as older. An older Tavora ignores it (and drops it when it saves; then the check is as before).
    */
   sealed?: boolean;
-  /**
-   * The user went back to this PC's data from a copy that didn't finish: a newer copy isn't taken by itself, and the
-   * keep-which-side question stands until it is answered, also across restarts. An older Tavora ignores it.
-   */
-  wentBack?: boolean;
-  /**
-   * Data files this PC lost (unreadable, or gone though it synced them). Until the user chooses a side nothing goes up,
-   * also across restarts, as what is here now would replace the good copy. An older Tavora ignores it.
-   */
-  lost?: string[];
 }
 
 export const EMPTY_STATE: CopyState = { version: 0, pictures: true, files: {} };
@@ -158,29 +149,14 @@ interface Found {
   picture: boolean;
 }
 
-/** Only this means a file isn't there. Any other error (a virus scan holding it) says nothing about whether it is. */
-export function isGone(error: unknown): boolean {
-  const code = (error as NodeJS.ErrnoException | undefined)?.code;
-  return code === "ENOENT" || code === "ENOTDIR";
-}
-
-/** Whether a file is there; one that can't be looked at right now throws, so nothing acts as if it were gone. */
+/** Whether a file is there. One that is held stops the work (file-look.ts). */
 async function exists(target: string): Promise<boolean> {
-  return stat(target).then(
-    () => true,
-    (error: unknown) => {
-      if (isGone(error)) return false;
-      throw error;
-    },
-  );
+  return unlessHeld(await lookStat(target)) !== null;
 }
 
-/** A folder's names; empty when it isn't there, and one that can't be read right now throws. */
+/** A folder's names; empty when it isn't there. One that is held stops the work. */
 async function namesIn(dir: string): Promise<string[]> {
-  return readdir(dir).catch((error: unknown) => {
-    if (isGone(error)) return [] as string[];
-    throw error;
-  });
+  return unlessHeld(await lookNames(dir)) ?? [];
 }
 
 /** A file's SHA-256, read a piece at a time. */
@@ -188,15 +164,6 @@ export async function fileSha256(file: string): Promise<string> {
   const hash = createHash("sha256");
   for await (const chunk of createReadStream(file)) hash.update(chunk as Buffer);
   return hash.digest("hex");
-}
-
-async function statIfThere(file: string): Promise<Stats | null> {
-  try {
-    return await stat(file);
-  } catch (error) {
-    if (isGone(error)) return null;
-    throw error;
-  }
 }
 
 /** Every file the copy would hold right now, by its path in the copy. Temp files of a write in progress are left out. */
@@ -208,7 +175,7 @@ export async function scanCopy(roots: CopyRoot[]): Promise<Found[]> {
       if (name.endsWith(".tmp") || !SAFE_SEGMENT.test(name)) continue;
       if (top && root.keep && !root.keep(name)) continue;
       const file = path.join(dir, name);
-      const info = await statIfThere(file);
+      const info = unlessHeld(await lookStat(file));
       if (!info) continue;
       if (info.isDirectory()) await walk(root, file, `${prefix}/${name}`, false);
       else if (info.isFile()) found.push({ path: `${prefix}/${name}`, file, size: info.size, mtimeMs: info.mtimeMs, picture: root.picture });
@@ -217,7 +184,7 @@ export async function scanCopy(roots: CopyRoot[]): Promise<Found[]> {
   for (const root of roots) {
     if (root.dir) await walk(root, root.path, root.name, true);
     else {
-      const info = await statIfThere(root.path);
+      const info = unlessHeld(await lookStat(root.path));
       if (info?.isFile()) found.push({ path: root.name, file: root.path, size: info.size, mtimeMs: info.mtimeMs, picture: false });
     }
   }
@@ -460,13 +427,8 @@ export class CloudCopy {
           files[file.path] = state.files[file.path]!;
           continue;
         }
-        let content: Buffer;
-        try {
-          content = await readFile(file.file);
-        } catch (error) {
-          if (!isGone(error)) throw error;
-          continue; // gone since the scan; the next sync sees it
-        }
+        const content = unlessHeld(await lookBytes(file.file));
+        if (content === null) continue; // gone since the scan; the next sync sees it
         const parts: string[] = [];
         // An empty file is one empty part.
         for (let index = 0; index < Math.max(1, Math.ceil(content.length / PART_BYTES)); index++) {
@@ -603,7 +565,8 @@ async function joinParts(partsDir: string, file: { size: number; sha256: string;
   const out = await openFile(target, "w");
   try {
     for (const id of file.parts) {
-      const content = await readFile(path.join(partsDir, id));
+      const content = unlessHeld(await lookBytes(path.join(partsDir, id)));
+      if (content === null) throw new CopyError("damaged", "a part of the copy is gone");
       size += content.length;
       if (size > file.size) break;
       hash.update(content);
@@ -704,12 +667,54 @@ async function swapPlaces(staging: string, roots: CopyRoot[], keepIn: string, co
  * something the copy holds whose staged side is gone is in place already and stays. Once what was here is kept, whatever
  * is here now (a half-finished arrival, or what the app wrote after a swap failed) goes aside, never over the backup.
  */
-async function swapOne({ place, staged, kept, since, inCopy }: SwapPlace): Promise<void> {
+async function swapOne({ place, staged, kept, since, inCopy }: SwapPlace, resumed: boolean): Promise<void> {
   await rm(`${place}.moved`, { recursive: true, force: true });
   const waiting = await exists(staged);
   if (!waiting && inCopy) return;
-  if (await exists(place)) await move(place, (await exists(kept)) ? await freePath(since) : kept);
+  // A swap going on from an earlier start: the app may have run on this place since, so it counts as written since
+  // until sortWrittenSince has told what really changed.
+  if (await exists(place)) await move(place, resumed || (await exists(kept)) ? await freePath(since) : kept);
   if (waiting) await move(staged, place);
+}
+
+/**
+ * Sorts what a settled swap put in `written-since`, so only real work stays there. A file with the copy's content is no
+ * one's work and goes; one as this PC last synced it (`before`) is an ordinary backup and joins the rest. What can't be
+ * read stays, as it may be work. True when anything is left: the user is told, and pruning keeps it.
+ */
+export async function sortWrittenSince(keepIn: string, copy: DownloadedCopy, before: CopyState): Promise<boolean> {
+  const root = path.join(keepIn, WRITTEN_SINCE);
+  const walk = async (dir: string, name: string): Promise<void> => {
+    const names = await lookNames(dir);
+    if (names.status !== "present") return;
+    for (const entry of names.value) {
+      const file = path.join(dir, entry);
+      const inCopy = name ? `${name}/${entry}` : entry;
+      const info = await lookStat(file);
+      if (info.status !== "present") continue;
+      if (info.value.isDirectory()) {
+        await walk(file, inCopy);
+        await rmdir(file).catch(() => undefined);
+        continue;
+      }
+      const sha = await look(() => fileSha256(file));
+      if (sha.status !== "present") continue;
+      if (copy.files[inCopy]?.sha256 === sha.value) {
+        await rm(file, { force: true }).catch(() => undefined);
+      } else if (before.files[inCopy]?.sha256 === sha.value) {
+        const kept = path.join(keepIn, ...inCopy.split("/"));
+        const there = await lookStat(kept);
+        if (there.status === "missing") await move(file, kept).catch(() => undefined);
+        else if (there.status === "present") {
+          const same = await look(() => fileSha256(kept));
+          if (same.status === "present" && same.value === sha.value) await rm(file, { force: true }).catch(() => undefined);
+        }
+      }
+    }
+  };
+  await walk(root, "");
+  await rmdir(root).catch(() => undefined);
+  return (await lookStat(root)).status !== "missing";
 }
 
 /** The places a copy will fill that hold nothing now, noted before a swap so taking it back can empty them again. */
@@ -748,7 +753,7 @@ export async function undoSwap(staging: string, roots: CopyRoot[], keepIn: strin
 export async function swapInCopy(staging: string, roots: CopyRoot[], keepIn: string, copy: DownloadedCopy, resumed = false): Promise<CopyState> {
   const taking = roots.filter((root) => copy.pictures || !root.picture);
   await mkdir(keepIn, { recursive: true });
-  for (const place of await swapPlaces(staging, roots, keepIn, copy)) await swapOne(place);
+  for (const place of await swapPlaces(staging, roots, keepIn, copy)) await swapOne(place, resumed);
   await rm(staging, { recursive: true, force: true });
   const files: Record<string, SyncedFile> = {};
   for (const found of await scanCopy(taking)) {
@@ -764,21 +769,37 @@ export async function swapInCopy(staging: string, roots: CopyRoot[], keepIn: str
 // nothing of the content). The key is the account's (account-key.ts).
 
 /**
- * The state as saved. One a newer Tavora wrote is copied aside, and one that is damaged copied aside and left where it
- * is, as its being there says the copy is on (readSavedFile; the user isn't told, as nothing of theirs is in it). Both
- * start from the empty state, as a missing one does.
+ * The state as saved, or held when it is busy or damaged (a damaged one is also copied aside and left where it is, as
+ * its being there says the copy is on; the user isn't told, as nothing of theirs is in it). One a newer Tavora wrote is
+ * copied aside and counts as empty.
  */
-export async function loadCopyState(file: string): Promise<CopyState> {
-  try {
-    const saved = await readSavedFile(file, { version: STORE_VERSIONS.cloudCopy, versionKey: "v", notice: false, leaveInPlace: true });
-    if (saved?.v !== STORE_VERSIONS.cloudCopy || typeof saved.version !== "number" || typeof saved.files !== "object" || saved.files === null) return EMPTY_STATE;
-    const lost = Array.isArray(saved.lost) ? saved.lost.filter((name): name is string => typeof name === "string") : [];
-    return { version: saved.version, pictures: saved.pictures !== false, files: saved.files as Record<string, SyncedFile>, ...(saved.kept === true ? { kept: true } : {}), ...(saved.sealed === true ? { sealed: true } : {}), ...(lost.length ? { lost } : {}), ...(saved.wentBack === true ? { wentBack: true } : {}) };
-  } catch {
-    return EMPTY_STATE;
-  }
+export async function lookCopyState(file: string): Promise<Looked<CopyState>> {
+  const bytes = await lookBytes(file);
+  if (bytes.status !== "present") return bytes;
+  const read = await look(() => checkSavedFile(file, bytes.value, { version: STORE_VERSIONS.cloudCopy, versionKey: "v", notice: false, leaveInPlace: true }));
+  if (read.status === "held") return read;
+  const saved = read.status === "present" ? read.value : null;
+  const damaged: Looked<CopyState> = { status: "held", error: new DamagedFile(`${file} is damaged`) };
+  if (saved === null) return damaged;
+  if (typeof saved.v === "number" && saved.v > STORE_VERSIONS.cloudCopy) return { status: "present", value: EMPTY_STATE };
+  if (saved.v !== STORE_VERSIONS.cloudCopy) return damaged;
+  // During a swap the state sits inside `duringSwap`, where an older Tavora doesn't find it.
+  const body = typeof saved.duringSwap === "object" && saved.duringSwap !== null ? (saved.duringSwap as Record<string, unknown>) : saved;
+  if (typeof body.version !== "number" || typeof body.files !== "object" || body.files === null) return damaged;
+  return { status: "present", value: { version: body.version, pictures: body.pictures !== false, files: body.files as Record<string, SyncedFile>, ...(body.kept === true ? { kept: true } : {}), ...(body.sealed === true ? { sealed: true } : {}) } };
 }
 
-export async function saveCopyState(file: string, state: CopyState): Promise<void> {
-  await writeFileAtomic(file, JSON.stringify({ v: STORE_VERSIONS.cloudCopy, version: state.version, pictures: state.pictures, files: state.files, ...(state.kept ? { kept: true } : {}), ...(state.sealed ? { sealed: true } : {}), ...(state.lost?.length ? { lost: state.lost } : {}), ...(state.wentBack ? { wentBack: true } : {}) }));
+/** The state as saved, or the empty one when it can't be used. */
+export async function loadCopyState(file: string): Promise<CopyState> {
+  const looked = await lookCopyState(file);
+  return looked.status === "present" ? looked.value : EMPTY_STATE;
+}
+
+/**
+ * Writes the state. `duringSwap` puts it where an older Tavora doesn't read it: gone back to one halfway through a swap,
+ * it sees no state, so it asks instead of uploading what is half in place.
+ */
+export async function saveCopyState(file: string, state: CopyState, duringSwap = false): Promise<void> {
+  const body = { version: state.version, pictures: state.pictures, files: state.files, ...(state.kept ? { kept: true } : {}), ...(state.sealed ? { sealed: true } : {}) };
+  await writeFileAtomic(file, JSON.stringify(duringSwap ? { v: STORE_VERSIONS.cloudCopy, duringSwap: body } : { v: STORE_VERSIONS.cloudCopy, ...body }));
 }

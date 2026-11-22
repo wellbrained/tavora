@@ -83,6 +83,7 @@ const library = (...ids: string[]) => JSON.stringify({ version: 2, workspaces: O
 const remoteVersion = async (cloud: Service) => (await cloud.client().remote())?.version;
 const workspaces = async (at: Pc) => Object.keys(JSON.parse(await read(at.userData, "library.json")).workspaces as object);
 const staging = (at: Pc, ...rest: string[]) => path.join(at.userData, "cloud-copy-staging", ...rest);
+const statusFile = (at: Pc) => path.join(at.userData, "cloud-copy-status.json");
 
 async function startCopy(cloud: Service, a: Pc) {
   const first = tavora(cloud, a);
@@ -122,11 +123,12 @@ async function stuckOnModules() {
 }
 
 describe("a swap's own files busy for a moment", () => {
-  it.each(["swap.json", "staged.json"])("%s busy at start: the swap stays held, nothing is deleted or uploaded", async (name) => {
+  it.each(["status", "list"])("the swap's %s busy at start: it stays held, nothing is deleted or uploaded", async (which) => {
     const { cloud, b, stuck } = await stuckOnModules();
     const version = await remoteVersion(cloud);
     void stuck;
-    busyRead = (file) => file === staging(b, name);
+    const busyFile = which === "status" ? statusFile(b) : staging(b, "copy-list.json");
+    busyRead = (file) => file === busyFile;
     const next = tavora(cloud, b);
     await next.sync.beforeLoad();
     await next.sync.checkDataFiles();
@@ -136,7 +138,7 @@ describe("a swap's own files busy for a moment", () => {
     await expect(next.sync.sync(true)).rejects.toMatchObject({ key: "cloudCopy.error.conflict" });
     busyRead = () => false;
     expect(await remoteVersion(cloud)).toBe(version);
-    expect(await there(staging(b, "swap.json"))).toBe(true);
+    expect(await there(statusFile(b))).toBe(true);
     expect(await there(staging(b, "data", "modules"))).toBe(true);
 
     await tavora(cloud, b).sync.beforeLoad();
@@ -144,12 +146,18 @@ describe("a swap's own files busy for a moment", () => {
     expect(await there(staging(b))).toBe(false);
   });
 
-  it("a journal that can't be understood doesn't drop the swap: it finishes with a new backup", async () => {
+  it("a status that is damaged holds too, and using the cloud copy gets out of it", async () => {
     const { cloud, b } = await stuckOnModules();
-    await writeFile(staging(b, "swap.json"), "");
+    const version = await remoteVersion(cloud);
+    await writeFile(statusFile(b), "");
     const next = tavora(cloud, b);
     await next.sync.beforeLoad();
-    expect(next.sync.view().swapUnfinished).toBe(false);
+    expect(next.sync.view()).toMatchObject({ conflict: true, swapUnfinished: true });
+    await next.sync.sync();
+    expect(await remoteVersion(cloud)).toBe(version);
+    await next.sync.keep("cloud");
+    expect(next.events.restarts).toBe(1);
+    await tavora(cloud, b).sync.beforeLoad();
     expect(await read(b.userData, "modules/dice/m.json")).toBe("dice 2");
     expect(await workspaces(b)).toEqual(["elden-ring", "hollow-knight"]);
   });
@@ -311,10 +319,10 @@ describe("with the copy off", () => {
     const { b, stuck } = await stuckOnModules();
     let stateThere: boolean | undefined;
     onRename = async (_from, to) => {
-      if (to === staging(b, "swap.json")) stateThere = await there(path.join(b.userData, "cloud-copy.json"));
+      if (to === statusFile(b)) stateThere = await there(path.join(b.userData, "cloud-copy.json"));
     };
     await stuck.sync.turnOff();
     expect(stateThere).toBe(true);
-    expect(JSON.parse(await read(staging(b), "swap.json")).undo).toBe(true);
+    expect(JSON.parse(await read(b.userData, "cloud-copy-status.json")).phase).toBe("undoing");
   });
 });

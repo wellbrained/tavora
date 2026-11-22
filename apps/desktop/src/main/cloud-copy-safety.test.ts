@@ -184,7 +184,7 @@ describe("a swap that was cut off", () => {
     const stagingDir = path.join(b.userData, "cloud-copy-staging");
     const keepIn = path.join(b.userData, "backups", "cloud-copy-2026-11-21T00-00-00-000Z-this-pc");
     await mkdir(keepIn, { recursive: true });
-    await writeFile(path.join(stagingDir, "swap.json"), JSON.stringify({ v: 1, keepIn, moduleFiles: b.moduleFiles, own: { developmentFolders: ["D:\\mine"] } }));
+    await writeFile(path.join(b.userData, "cloud-copy-status.json"), JSON.stringify({ v: 1, phase: "swapping", plan: { keepIn, moduleFiles: b.moduleFiles, own: { developmentFolders: ["D:\\mine"] }, empty: [] } }));
     await rename(path.join(b.userData, "library.json"), path.join(keepIn, "library.json"));
     await rename(path.join(stagingDir, "data", "library.json"), path.join(b.userData, "library.json"));
 
@@ -195,7 +195,8 @@ describe("a swap that was cut off", () => {
     expect(taken.workspaces).toEqual({ "elden-ring": {} });
     expect(taken.developmentFolders).toEqual(["D:\\mine"]);
     expect(await read(b.userData, "workspace.json")).toBe('"from a"');
-    expect(await read(keepIn, "workspace.json")).toBe('"from b"');
+    // Picked up at a later start, what it moves counts as written since: this PC never synced it.
+    expect(await read(keepIn, "written-since/workspace.json")).toBe('"from b"');
     expect(JSON.parse(await read(keepIn, "library.json")).developmentFolders).toEqual(["D:\\mine"]);
     expect(await readdir(path.join(b.userData, "backups"))).toEqual([path.basename(keepIn)]);
     expect(await readdir(b.userData)).not.toContain("cloud-copy-staging");
