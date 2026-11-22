@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ItemLook, LayerScene, SceneItem } from "./game-layer";
-import { IDLE_CLOSE_MS, LayerWindows, MAX_CRASHES, type LayerWindowsPlatform, type OverlayWindow, type OverlayWindowRequest, type WindowMaker } from "./game-layer-windows";
+import type { LayerScene, LiveItem, LiveLook, OverlayItem, PanelItem, SceneItem } from "./game-layer";
+import { IDLE_CLOSE_MS, LayerWindows, MAX_CRASHES, type LayerWindowsPlatform, type OverlayWindow, type OverlayWindowRequest, type PanelWindowMaker } from "./game-layer-windows";
 import type { LayerCard, LayerCardRequest } from "./game-layer-card";
 import type { VeilWindow } from "./game-veil-window";
 import type { OverlayPanel } from "./game-overlay-window";
@@ -97,11 +97,18 @@ function rig() {
 }
 
 const request = (id: string) => ({ id }) as OverlayWindowRequest;
-const look = (change: Partial<ItemLook> = {}): ItemLook => ({ rect: { x: 10, y: 10, width: 100, height: 50 }, zoom: 1, mode: "off", z: null, opacity: 100, hideFromCapture: false, ...change });
-const overlay = (id: string, change: Partial<SceneItem> = {}): SceneItem => ({ id, kind: "overlay", setup: "elden", look: look(), make: () => ({ request: request(id) }), ...change });
+const look = (change: Partial<LiveLook> = {}): LiveLook => ({ rect: { x: 10, y: 10, width: 100, height: 50 }, zoom: 1, mode: "off", z: null, opacity: 100, hideFromCapture: false, veiled: false, ...change });
+/** Shown from "elden" as `look()` says, unless `change` says otherwise (`look` null: hidden). */
+type Change = { setup?: string | null; look?: LiveLook | null };
+function placement(id: string, change: Change) {
+  const setup = change.setup === undefined ? "elden" : change.setup;
+  const shown = change.look === undefined ? look() : change.look;
+  return shown && setup !== null ? { setup, look: shown, make: () => ({ request: request(id) }) } : { setup, look: null };
+}
+const overlay = (id: string, change: Change = {}): OverlayItem => ({ id, kind: "overlay", ...placement(id, change) });
 /** A panel lent into its window; `lent` counts the lends and returns. */
-function panel(id: string, lent: string[], change: Partial<SceneItem> = {}): SceneItem {
-  const make = (): WindowMaker => ({
+function panel(id: string, lent: string[], change: Partial<Pick<PanelItem, "look" | "make">> = {}): PanelItem {
+  const make = (): PanelWindowMaker => ({
     request: request(id),
     lend: (open) => {
       lent.push(`lend ${id}`);
@@ -117,7 +124,7 @@ function panel(id: string, lent: string[], change: Partial<SceneItem> = {}): Sce
       return loan;
     },
   });
-  const { opacity: _opacity, hideFromCapture: _capture, ...panelLook } = look({ mode: "use" });
+  const { opacity: _opacity, hideFromCapture: _capture, veiled: _veiled, ...panelLook } = look({ mode: "use" });
   return { id, kind: "panel", instanceId: id, setup: "elden", look: panelLook, make, ...change };
 }
 const scene = (items: SceneItem[], change: Partial<LayerScene> = {}): LayerScene => ({ layer: null, awayHandle: 0, items, ...change });
@@ -236,7 +243,7 @@ describe("panels", () => {
 });
 
 describe("live views", () => {
-  const live = (id: string, change: Partial<SceneItem> = {}): SceneItem => ({ id, kind: "live", instanceId: id, setup: "elden", look: look(), make: () => ({ request: request(id) }), ...change });
+  const live = (id: string, change: Change = {}): LiveItem => ({ id, kind: "live", instanceId: id, ...placement(id, change) });
 
   it("stay see-through behind their panel while the layer is open, only when already on screen", () => {
     const { layer } = rig();

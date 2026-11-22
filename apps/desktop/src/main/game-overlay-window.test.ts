@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { gestureCounts, type OverGame } from "./game-overlays";
 
 // The window needs a little of Electron: a window with handlers, views, and a session to lock.
 const world = vi.hoisted(() => ({ windows: [] as unknown[], quit: [] as (() => void)[], focusedContents: null as unknown }));
@@ -115,7 +116,10 @@ vi.mock("electron", () => {
     setVisible(visible: boolean) {
       this.visible = visible;
     }
-    setBounds() {}
+    bounds: { x: number; y: number; width: number; height: number } | null = null;
+    setBounds(rect: { x: number; y: number; width: number; height: number }) {
+      this.bounds = rect;
+    }
   }
   return {
     BrowserWindow,
@@ -147,7 +151,7 @@ function make(game: Rect | null = null, options: { overlay?: boolean; hidden?: b
   const calls: string[] = [];
   /** Answers the frame requests, oldest first (the page has drawn). */
   const frames: (() => void)[] = [];
-  const state = { bounds: null as Rect | null, layerOpen: (() => false) as () => boolean, focused: false };
+  const state = { bounds: null as Rect | null, overGame: null as OverGame | null, told: [] as (OverGame | null)[], focused: false };
   const panel = {
     view: {
       webContents: {
@@ -156,15 +160,16 @@ function make(game: Rect | null = null, options: { overlay?: boolean; hidden?: b
         isDestroyed: () => false,
       },
     },
-    enterGame: (layerOpen: () => boolean) => {
-      state.layerOpen = layerOpen;
-      calls.push("enter");
+    setOverGame: (next: OverGame | null) => {
+      const was = state.overGame;
+      state.overGame = next;
+      state.told.push(next);
+      if (!next) calls.push("leave");
+      else if (!was) calls.push("enter");
+      else if (was.zoom !== next.zoom) calls.push(`zoom ${next.zoom}`);
     },
-    leaveGame: () => calls.push("leave"),
     setBounds: (rect: Rect) => void (state.bounds = rect),
     setVisible: () => undefined,
-    setGameOpacity: () => undefined,
-    setGameZoom: (factor: number) => calls.push(`zoom ${factor}`),
     suspend: () => calls.push("suspend"),
     resume: () => calls.push("resume"),
     nextFrame: () => {
@@ -188,7 +193,7 @@ function make(game: Rect | null = null, options: { overlay?: boolean; hidden?: b
   });
   const raw = world.windows.at(-1) as RawWindow;
   // The frame is Tavora's own view in the window; a panel's view is the other one.
-  const frame = raw.children.find((child) => child !== panel.view) as { visible: boolean; webContents: unknown };
+  const frame = raw.children.find((child) => child !== panel.view) as { visible: boolean; webContents: unknown; bounds: Rect | null };
   return { window, raw, calls, panel, state, frame, frames };
 }
 
@@ -261,12 +266,12 @@ describe("a game overlay window holding a panel", () => {
     expect(raw.ignoring).toBe(false);
     expect(raw.focusable).toBe(true);
     expect(frame.visible).toBe(false);
-    // Its clicks count as the user's while the layer is open, in Use and in Arrange; not before.
-    expect(state.layerOpen()).toBe(true);
+    // Its clicks count as the user's in Use only: not in Arrange (the frame covers it), not before.
+    expect(state.overGame?.takesInput).toBe(true);
     window.setMode("arrange");
-    expect(state.layerOpen()).toBe(true);
+    expect(state.overGame?.takesInput).toBe(false);
     window.setMode("off");
-    expect(state.layerOpen()).toBe(false);
+    expect(state.overGame?.takesInput).toBe(false);
   });
 
   it("in Arrange, grows by the frame, which lies over the panel and takes the mouse and the keys, so a drag never reaches the panel", () => {
@@ -290,6 +295,73 @@ describe("a game overlay window holding a panel", () => {
     state.focused = false;
     window.focusPanel();
     expect(state.focused).toBe(false);
+  });
+
+  it("tells the panel how it is over the game as one value: when it takes the view, on each mode, zoom and opacity, and null when it lets go", () => {
+    const { window, state } = make({ x: 0, y: 0, width: 2560, height: 1440 });
+    window.setMode("use");
+    window.setZoom(1.5);
+    window.setMode("arrange");
+    window.setOpacity(50);
+    window.setMode("off");
+    window.destroy();
+    expect(state.told).toEqual([
+      { takesInput: false, opacity: 100, zoom: 1 },
+      { takesInput: true, opacity: 100, zoom: 1 },
+      { takesInput: true, opacity: 100, zoom: 1.5 },
+      { takesInput: false, opacity: 100, zoom: 1.5 },
+      { takesInput: false, opacity: 50, zoom: 1.5 },
+      { takesInput: false, opacity: 50, zoom: 1.5 },
+      null,
+    ]);
+  });
+
+  it("lets the user's clicks and keys reach the panel in Use only: none while off, and in Arrange the frame over the panel takes them", () => {
+    const { window, raw, state, frame } = make({ x: 0, y: 0, width: 2560, height: 1440 });
+    // What ModuleView.noteGesture asks of the value the window pushed.
+    const counts = () => gestureCounts(state.overGame !== null, state.overGame?.takesInput ?? false);
+    window.setRect({ x: 100, y: 100, width: 400, height: 300 });
+    // Off (the layer closed): click-through, and a report from the page is not the user's.
+    expect(raw.ignoring).toBe(true);
+    expect(raw.focusable).toBe(false);
+    expect(counts()).toBe(false);
+    // Use: the panel is the whole window, with no frame, and its presses count.
+    window.setMode("use");
+    expect(raw.ignoring).toBe(false);
+    expect(frame.visible).toBe(false);
+    expect(state.bounds).toEqual({ x: 0, y: 0, width: 400, height: 300 });
+    expect(counts()).toBe(true);
+    // Arrange: the window takes the mouse for the frame, which covers all of it, above the panel, and has the keys;
+    // nothing the panel reports counts either.
+    window.focusPanel();
+    window.setMode("arrange");
+    expect(raw.ignoring).toBe(false);
+    expect(counts()).toBe(false);
+    expect(frame.visible).toBe(true);
+    expect(raw.children.at(-1)).toBe(frame);
+    expect(frame.bounds).toEqual({ x: 0, y: 0, width: raw.bounds.width, height: raw.bounds.height });
+    expect(state.bounds).toMatchObject({ x: 8, y: 30 });
+    expect(world.focusedContents).toBe(frame.webContents);
+    state.focused = false;
+    window.focusPanel();
+    expect(state.focused).toBe(false);
+    // Off again: nothing counts.
+    window.setMode("off");
+    expect(raw.ignoring).toBe(true);
+    expect(counts()).toBe(false);
+  });
+
+  it("tells the panel nothing more once the system closed its window: it stays back in its slot", () => {
+    const { window, raw, state } = make({ x: 0, y: 0, width: 2560, height: 1440 });
+    window.setMode("use");
+    raw.emit("closed");
+    expect(state.told.at(-1)).toBeNull();
+    // The service keeps the dead entry until the next look, which may still zoom, fade or switch it.
+    window.setZoom(1.5);
+    window.setOpacity(50);
+    window.setMode("arrange");
+    expect(state.told.at(-1)).toBeNull();
+    expect(state.overGame).toBeNull();
   });
 
   it("is placed and shown on top before the panel takes the keyboard", () => {
