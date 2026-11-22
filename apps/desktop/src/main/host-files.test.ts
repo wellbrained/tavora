@@ -1,10 +1,25 @@
 import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, modulePartition, orphanedPartitions, holdLeftovers, partitionsOf, partitionWorkspace, queueLocalDataMove, SWEEP_HOLD_FILE } from "./module-data";
 import { IconError, imageType, importIcon, MAX_ICON_BYTES } from "./icons";
 import { initialBounds } from "./window-state";
+
+// writeFileAtomic flushes every file to the disk (fsync). That is the point in the app, but on a busy CI disk one flush
+// takes seconds, and these tests write several files each. They check what is kept, not that a power cut is survived
+// so the flush is skipped here.
+vi.mock("node:fs/promises", async (original) => {
+  const actual = await original<typeof import("node:fs/promises")>();
+  return {
+    ...actual,
+    open: (async (...args: Parameters<typeof actual.open>) => {
+      const handle = await actual.open(...args);
+      handle.sync = async () => undefined;
+      return handle;
+    }) as typeof actual.open,
+  };
+});
 
 const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
 
