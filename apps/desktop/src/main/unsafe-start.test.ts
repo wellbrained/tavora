@@ -27,7 +27,7 @@ describe("quitOnUnsafeSwitches", () => {
   });
 
   it("goes on for a packaged Tavora with clean arguments", () => {
-    const { quitted, show, quit } = run(true, ["--updated"]);
+    const { quitted, show, quit } = run(true, ["--updated", "--disable-gpu"]);
     expect(quitted).toBe(false);
     expect(quit).not.toHaveBeenCalled();
     expect(show).not.toHaveBeenCalled();

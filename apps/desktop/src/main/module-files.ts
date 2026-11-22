@@ -2,7 +2,7 @@
 // picks the place in a system dialog; everything is copied and checked first, the setting is
 // switched next, and only then are the old files removed, so a failure never loses a picture.
 
-import { copyFile, mkdir, readdir, realpath, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
+import { copyFile, lstat, mkdir, readdir, realpath, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isGameId, isModuleId, isOwnerId } from "@tavora/module-schema";
 import { parseBlobFileName } from "./blobs";
@@ -138,12 +138,15 @@ export async function copyStoredFiles(from: string, to: string, files: readonly 
   for (const file of files) {
     const target = fileAt(to, file);
     await mkdir(path.dirname(target), { recursive: true });
-    // A link inside the new folder (to a module's or a workspace's folder) may lead back into the old one: the "copy"
-    // would be the original, deleted once the move is done.
+    // A link inside the new folder (to a module's or a workspace's folder, or to the file itself) may lead back into
+    // the old one: the "copy" would be the original, deleted once the move is done. A file there is never a link.
     if (insideOrSame(await realPlace(path.dirname(target)), source)) throw new Error(`${path.dirname(target)} leads back into ${from}`);
-    const existing = await stat(target).then((info) => info.size, () => -1);
-    if (existing !== file.bytes) {
+    const there = await lstat(target).catch(() => null);
+    if (there && !there.isFile()) throw new Error(`${target} is no plain file`);
+    if (there?.size !== file.bytes) {
       const part = `${target}.part`;
+      // A .part left over (or put there as a link) goes first: copyFile writes through a link.
+      await rm(part, { force: true });
       await copyFile(fileAt(from, file), part);
       if ((await stat(part)).size !== file.bytes) throw new Error(`copy of ${file.name} is not the same size`);
       await rename(part, target);

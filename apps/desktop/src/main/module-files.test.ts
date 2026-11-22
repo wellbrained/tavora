@@ -131,6 +131,32 @@ describe("moving the files", () => {
     expect(await readFile(path.join(root, "official", "tavora.notes", "poe2", `${ID("a")}.png`), "utf8")).toBe("one");
   });
 
+  it("refuses a link to a single file in the new folder, which would be the original", async () => {
+    await put(root, path.join("official", "tavora.notes"), "poe2", `${ID("a")}.png`, "one");
+    const original = path.join(root, "official", "tavora.notes", "poe2", `${ID("a")}.png`);
+    const to = path.join(base, "new", FILES_FOLDER_NAME);
+    const linked = path.join(to, "official", "tavora.notes", "poe2", `${ID("a")}.png`);
+    await mkdir(path.dirname(linked), { recursive: true });
+    // A file symlink needs Developer Mode or admin rights on Windows; without them nobody could plant one either.
+    if (!(await symlink(original, linked, "file").then(() => true, () => false))) return;
+    const files = await listStoredFiles(root);
+    await expect(copyStoredFiles(root, to, files)).rejects.toThrow(/no plain file/);
+    expect(await readFile(original, "utf8")).toBe("one");
+  });
+
+  it("replaces a .part left in the new folder instead of writing through it", async () => {
+    await put(root, path.join("official", "tavora.notes"), "poe2", `${ID("a")}.png`, "one");
+    const elsewhere = path.join(base, "elsewhere.txt");
+    await writeFile(elsewhere, "keep");
+    const to = path.join(base, "new", FILES_FOLDER_NAME);
+    const part = path.join(to, "official", "tavora.notes", "poe2", `${ID("a")}.png.part`);
+    await mkdir(path.dirname(part), { recursive: true });
+    if (!(await symlink(elsewhere, part, "file").then(() => true, () => false))) return;
+    await copyStoredFiles(root, to, await listStoredFiles(root));
+    expect(await readFile(path.join(to, "official", "tavora.notes", "poe2", `${ID("a")}.png`), "utf8")).toBe("one");
+    expect(await readFile(elsewhere, "utf8")).toBe("keep");
+  });
+
   it("stops with an error when a file cannot be copied, leaving the old files alone", async () => {
     await put(root, path.join("official", "tavora.notes"), "poe2", `${ID("a")}.png`, "one");
     const files = await listStoredFiles(root);
