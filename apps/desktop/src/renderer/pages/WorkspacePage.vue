@@ -12,7 +12,7 @@ import {
   type VueComponent,
 } from "dockview-vue";
 import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from "vue";
-import type { PanelBounds, SavedLayout } from "../../shared/host-api";
+import type { PanelBounds, PanelOverflow, SavedLayout } from "../../shared/host-api";
 import { keepSlots } from "../../shared/panel-layout";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { act, api as host, dialog, dragging, nextPanelSlot, panelsToFront, panelToMaximize, panelToShow, reportPanelBounds, saveBeforeQuit, state, tabStep } from "../host";
@@ -20,7 +20,7 @@ import { t, templateName } from "../i18n";
 import { LAYOUT_TEMPLATES } from "../../shared/layout-templates";
 import { fromDockview, groupConstraints, guardDrop, layoutAround, maximizedPanel, panelInfo, placePanel, placeTab, toDockview, type PanelInfo } from "../dock";
 import { DockPreview } from "../dock-preview";
-import { backOff, fitDelta, moveSash, sashSides } from "../dock-fit";
+import { backOff, fitDelta, moveSash, sashSides, type Axis, type FitPhase } from "../dock-fit";
 import DockPreviewLayer from "../components/workspace/DockPreview.vue";
 import WorkspaceIcon from "../components/WorkspaceIcon.vue";
 import EmptySlot from "../components/workspace/EmptySlot.vue";
@@ -388,58 +388,81 @@ addEventListener("pointercancel", endResize, true);
 addEventListener("resize", reportSoon);
 preview.attach();
 
-/** True while a double-click moves a line itself: that is no drag, so the module views stay. */
-let fitting = false;
+/** How a double-click on a line goes (dock-fit.ts); while it is `moving` the line moves itself, no drag, so the module views stay. */
+const fit = ref<FitPhase>("idle");
 
 function onPointerDown(event: PointerEvent) {
-  if (fitting || !(event.target as Element | null)?.closest(".dv-sash")) return;
+  if (fit.value === "moving" || !(event.target as Element | null)?.closest(".dv-sash")) return;
   dragging.value = "resize";
 }
 
-/** The panels shown in a part of the dock (their tab is the open one). */
-function shownIn(area: HTMLElement): string[] {
-  return [...elements].filter(([id, element]) => area.contains(element) && dock?.getPanel(id)?.api.isVisible).map(([id]) => id);
+/** The panels shown in these parts of the dock (their tab is the open one). */
+function shownIn(areas: HTMLElement[]): string[] {
+  return [...elements].filter(([id, element]) => areas.some((area) => area.contains(element)) && dock?.getPanel(id)?.api.isVisible).map(([id]) => id);
 }
 
-/** How long the panels' pages get to take their new size before they are measured again. */
-const FIT_SETTLE_MS = 150;
-/** True from a double-click on a line until its fit is done: another one waits for that. */
-let fitBusy = false;
+function sizesOf(ids: string[]): Map<string, string> {
+  return new Map(ids.map((id) => {
+    const rect = elements.get(id)?.getBoundingClientRect();
+    return [id, rect ? `${Math.round(rect.width)}x${Math.round(rect.height)}` : ""];
+  }));
+}
 
-function moveQuietly(sash: HTMLElement, axis: "x" | "y", delta: number) {
-  fitting = true;
+function moveLine(sash: HTMLElement, axis: Axis, delta: number) {
+  fit.value = "moving";
   try {
     moveSash(sash, axis, delta);
   } finally {
-    fitting = false;
+    fit.value = "settling";
   }
 }
 
-/** A double-click on the line between two panels gives the one that scrolls the room it needs (dock-fit.ts). */
+/** How many times the line may go back after it moved: by what the giving side needs, then all the way. */
+const FIT_CHECKS = 2;
+
+/**
+ * A double-click on the line between two panels gives the one that scrolls the room it needs (dock-fit.ts), then
+ * checks that the panels that gave it don't start to scroll.
+ */
 async function onDoubleClick(event: MouseEvent) {
   const sash = (event.target as Element | null)?.closest<HTMLElement>(".dv-sash");
-  if (fitBusy || !sash || sash.classList.contains("dv-disabled") || dock?.hasMaximizedGroup()) return;
+  if (fit.value !== "idle" || !sash || sash.classList.contains("dv-disabled") || dock?.hasMaximizedGroup()) return;
   const sides = sashSides(sash);
   if (!sides) return;
-  const before = shownIn(sides.before);
-  const after = shownIn(sides.after);
-  if (!before.length && !after.length) return;
-  fitBusy = true;
+  const nextBefore = shownIn(sides.before.slice(0, 1));
+  const nextAfter = shownIn(sides.after.slice(0, 1));
+  if (!nextBefore.length && !nextAfter.length) return;
+  const { axis } = sides;
+  const across: Axis = axis === "x" ? "y" : "x";
+  fit.value = "settling";
   try {
-    const most = (overflow: Record<string, { x: number; y: number }>, ids: string[]) => Math.max(0, ...ids.map((id) => overflow[id]?.[sides.axis] ?? 0));
+    const most = (overflow: Record<string, PanelOverflow>, ids: string[], side: Axis) => Math.max(0, ...ids.map((id) => overflow[id]?.[side] ?? 0));
+    const before = shownIn(sides.before);
+    const after = shownIn(sides.after);
+    // Every panel is measured now, so a later check knows which of its parts scrolled already.
     const overflow = await host.panelOverflow([...before, ...after]);
-    const delta = fitDelta(most(overflow, before), most(overflow, after));
+    const delta = fitDelta(most(overflow, nextBefore, axis), most(overflow, nextAfter, axis));
     if (!delta || !sash.isConnected) return;
-    moveQuietly(sash, sides.axis, delta);
-    // The side that gave the room must not start to scroll: once its pages have their new size, the line goes back
-    // by however much more they scroll now.
     const giving = delta > 0 ? after : before;
-    if (!giving.length) return;
-    await new Promise((resolve) => setTimeout(resolve, FIT_SETTLE_MS));
-    const back = backOff(delta, most(await host.panelOverflow(giving, true), giving));
-    if (back && sash.isConnected) moveQuietly(sash, sides.axis, back);
+    let sizes = sizesOf(giving);
+    moveLine(sash, axis, delta);
+    let moved = delta;
+    for (let check = 1; check <= FIT_CHECKS && moved !== 0; check++) {
+      // The new sizes reach the main process first (reportSoon), then the pages, which measure once they have them.
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      const now = sizesOf(giving);
+      const changed = giving.filter((id) => now.get(id) !== sizes.get(id));
+      sizes = now;
+      if (!changed.length || !sash.isConnected) break;
+      const squeezed = await host.panelOverflow(changed, true);
+      const known = changed.every((id) => squeezed[id]);
+      const back = backOff(moved, known ? { along: most(squeezed, changed, axis), across: most(squeezed, changed, across) } : null, check === FIT_CHECKS);
+      if (!back || !sash.isConnected) break;
+      moveLine(sash, axis, back);
+      moved += back;
+    }
   } finally {
-    fitBusy = false;
+    fit.value = "idle";
   }
 }
 
@@ -535,7 +558,7 @@ const emptySlot = EmptySlot as unknown as VueComponent;
       <HeaderTools @add-module="dialog = { kind: 'add-module' }" />
     </header>
 
-    <div ref="root" class="relative min-h-0 flex-1" @pointerdown.capture="onPointerDown" @dblclick="onDoubleClick">
+    <div ref="root" class="relative min-h-0 flex-1" @pointerdown.capture="onPointerDown" @dblclick="onDoubleClick" :data-fit="fit">
       <div ref="area" class="absolute inset-x-2 top-0 bottom-2 flex gap-2" data-workspace-area>
         <Button
           v-if="leftColumn"

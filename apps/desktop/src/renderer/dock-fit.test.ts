@@ -55,28 +55,37 @@ describe("fitDelta", () => {
 
 describe("backOff", () => {
   it("moves the line back just as far as the giving side now scrolls", () => {
-    expect(backOff(1300, 450)).toBe(-450);
-    expect(backOff(-200, 30)).toBe(30);
+    expect(backOff(1300, { along: 450, across: 0 })).toBe(-450);
+    expect(backOff(-200, { along: 30, across: 0 })).toBe(30);
   });
   it("never moves it back past where it started", () => {
-    expect(backOff(100, 400)).toBe(-100);
-    expect(backOff(-100, 400)).toBe(100);
+    expect(backOff(100, { along: 400, across: 0 })).toBe(-100);
+    expect(backOff(-100, { along: 400, across: 0 })).toBe(100);
   });
   it("leaves it when the giving side still fits", () => {
-    expect(backOff(300, 0)).toBe(0);
+    expect(backOff(300, { along: 0, across: 0 })).toBe(0);
+    expect(backOff(300, { along: 0, across: 0 }, true)).toBe(0);
+  });
+  it("goes all the way back when the room lost can't be told", () => {
+    expect(backOff(300, null)).toBe(-300);
+    expect(backOff(-300, { along: 0, across: 40 })).toBe(300);
+    expect(backOff(300, { along: 10, across: 0 }, true)).toBe(-300);
+  });
+  it("does nothing once the line is back where it started", () => {
+    expect(backOff(0, null)).toBe(0);
   });
 });
 
 describe("sashSides", () => {
-  it("finds the areas next to the line by where they are", () => {
+  it("finds the areas on each side of the line, nearest first", () => {
     const { lines, parts } = stack([100, 200, 150]);
-    expect(sashSides(lines[1]!)).toEqual({ axis: "y", before: parts[1], after: parts[2] });
-    expect(sashSides(lines[0]!)).toEqual({ axis: "y", before: parts[0], after: parts[1] });
+    expect(sashSides(lines[1]!)).toEqual({ axis: "y", before: [parts[1], parts[0]], after: [parts[2]] });
+    expect(sashSides(lines[0]!)).toEqual({ axis: "y", before: [parts[0]], after: [parts[1], parts[2]] });
   });
 
   it("skips a hidden area", () => {
     const { lines, parts } = stack([100, 0, 150]);
-    expect(sashSides(lines[1]!)?.before).toBe(parts[0]);
+    expect(sashSides(lines[1]!)?.before).toEqual([parts[0]]);
   });
 
   it("reads panels side by side across", () => {

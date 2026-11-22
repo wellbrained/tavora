@@ -11,6 +11,7 @@ To report a problem, see [Security policy](https://github.com/wellbrained/tavora
 - The **main process** is the only part with access to the operating system. It checks every message a module sends.
 - The **host UI** (library, docking, Settings) is trusted code, but it is still sandboxed and has no Node access.
 - Every **module** is untrusted. Each module gets, per workspace, its own browser session, its own origin (`tavora-module://<module id>/`) and its own renderer process, separate from the host and from other modules. It runs with `sandbox` and `contextIsolation` on, without Node and without `<webview>`.
+- When you double-click the line between two panels, the main process measures how far each panel's page scrolls, to fit it. The script runs in an isolated world of its own, so the page's scripts can't change it, only reads sizes, and passes back two numbers (0 to 4000 px). It is the same for module pages and Browser panel pages.
 
 ## What a module cannot do
 
@@ -318,7 +319,7 @@ The Browser panel shows any website, so here the attacker is any page:
 - A public page cannot reach the user's PC or local network: requests to loopback, private and link-local addresses, local name endings and common router names are cancelled. This holds from the moment the panel starts going to a public page, also when it leaves a local one, not only once the page has loaded.
 - Bad certificates are refused, with no way to click through. The address field shows the address as Chromium reports it, so a name with letters outside ASCII shows as punycode (`xn--…`); hovering it shows the name, readable for Latin letters and still as punycode for any other script, so `аpple.com` (Cyrillic а) can't pass for `apple.com`.
 - A site that asks for a client certificate gets none, so no page learns who you are from one.
-- Ads and trackers are blocked in the main process, with EasyList and EasyPrivacy rules. No script is added to pages; the one call Tavora makes in a page is `document.exitFullscreen()` when you leave fullscreen with Esc or the toolbar.
+- Ads and trackers are blocked in the main process, with EasyList and EasyPrivacy rules. No script is added to pages. Tavora calls into a page only for `document.exitFullscreen()` when you leave fullscreen with Esc or the toolbar, and to [fit a panel](#how-a-module-runs) when you double-click the line next to it.
 
 ## Accounts and modules
 
