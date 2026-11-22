@@ -480,8 +480,8 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   // ── Signed in ─────────────────────────────────────────────────────────
 
   const signedIn = new Hono<Env>();
-  // The body first (a profile with its picture at most), then the sign-in (sign-in.ts requireSignIn); a route that writes
-  // after an await checks again (stillSignedIn).
+  // The sign-in, then the body (a profile with its picture at most), then the sign-in again (sign-in.ts requireSignIn); a
+  // route that writes after an await checks once more (stillSignedIn).
   signedIn.use("*", requireSignIn(store, now, PROFILE_BODY));
   const gone = (context: Context<SignedInEnv>) => (stillSignedIn(store, context) ? null : signedOut(context));
 
@@ -767,7 +767,9 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
       // Discord answered after a wait: the sign-in may have ended meanwhile.
       const ended = gone(context);
       if (ended) return ended;
-      if (!account.discord || account.discord.id !== who.id) return context.json({ error: "That is not the Discord login of this account.", reason: "discord-mismatch" }, 400);
+      // Read again: the Discord login may have been removed or changed while Discord answered.
+      const current = store.account(account.id);
+      if (!current?.discord || current.discord.id !== who.id) return context.json({ error: "That is not the Discord login of this account.", reason: "discord-mismatch" }, 400);
     }
     if (!store.checkCode(email, "change-email", account.id, input.code, now(), true)) return wrongCode(context);
     if (account.email && !store.checkCode(account.email, "confirm-email-change", account.id, input.currentCode as string, now(), true, email)) return wrongCurrentCode(context);
@@ -935,6 +937,8 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     if (who instanceof Response) return who;
     const ended = gone(context);
     if (ended) return ended;
+    // Read again: another login may have been connected while Discord answered; it is never replaced.
+    if (store.account(account.id)?.discord) return discordConnected(context);
     if (!store.checkCode(account.email, "connect-discord", account.id, input.emailCode, now(), true)) return wrongCode(context);
     if (store.setDiscord(account.id, who) === "taken") {
       return context.json({ error: "That Discord login belongs to another Tavora account.", reason: "discord-taken" }, 409);
@@ -981,8 +985,9 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     if (who instanceof Response) return who;
     const ended = gone(context);
     if (ended) return ended;
-    const account = context.get("account");
-    if (!account.discord || account.discord.id !== who.id) {
+    // Read again: a Discord login removed while Discord answered (a stolen one, say) deletes nothing.
+    const account = store.account(context.get("account").id);
+    if (!account?.discord || account.discord.id !== who.id) {
       return context.json({ error: "That is not the Discord login of this account.", reason: "discord-mismatch" }, 400);
     }
     deleteAccount(account.id);

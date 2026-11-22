@@ -437,11 +437,45 @@ describe("the cloud copy", () => {
     // And each read is a range of the covering index: no part's bytes, no scan of the table.
     for (const read of reads) {
       const plan = (db.prepare(`explain query plan ${read.sql}`).all(...(read.args as never[])) as { detail: string }[]).map((row) => row.detail).join(" | ");
-      expect(plan).toMatch(/USING COVERING INDEX parts_meta \(account_id=\? AND created_at/);
+      // Entered at the cursor: a step reads on from where the last one ended, not from the start of the range.
+      expect(plan).toMatch(/USING COVERING INDEX parts_meta \(account_id=\? AND (created_at=\? AND \(size,id\)>|\(created_at,size,id\)>)/);
       expect(plan).not.toMatch(/SCAN/);
+      // In the index's own order: no sort of everything left in the range at every step.
+      expect(plan).not.toMatch(/TEMP B-TREE/);
     }
     expect(copies.storedTotal()).toBe(3005);
     expect(copies.parts("b0", kept.map((item) => item.id))).toHaveLength(3000);
+  });
+
+  it("pages straight through parts that share a time, and through parts without one", () => {
+    const copies = testCopies(":memory:");
+    const db = (copies as unknown as { db: DatabaseSync }).db;
+    // One account whose parts all came in the same millisecond, in many sizes; another with parts from before times were kept.
+    copies.addParts("same", Array.from({ length: 2 * SWEEP_PAGE + 300 }, (_, n) => part(1 + (n % 7))), 1000);
+    copies.addParts("old", Array.from({ length: SWEEP_PAGE + 200 }, (_, n) => part(1 + (n % 5))), 1000);
+    db.exec("update parts set created_at = null where account_id = 'old'");
+    const stored = copies.storedTotal();
+    const swept = copies.sweep(1000 + UNUSED_PART_MS + 1);
+    expect(swept.parts).toBe(3 * SWEEP_PAGE + 500);
+    expect(swept.bytes).toBe(stored);
+    expect(copies.storedTotal()).toBe(0);
+    expect(db.prepare("select count(*) as n from parts").get()).toEqual({ n: 0 });
+  });
+
+  it("goes on where the last sweep stopped when a request waits, so unused parts past many other accounts are reached", () => {
+    const copies = testCopies(":memory:");
+    const at = 1000 + UNUSED_PART_MS + 1;
+    // 600 accounts with nothing unused (their parts are fresh), then one with old unused parts.
+    for (let n = 0; n < 600; n++) copies.addParts(`a${String(n).padStart(4, "0")}`, [part(1)], at);
+    copies.addParts("zzz", [part(3), part(3)], 1000);
+    // A sweep a request waits for looks at a few hundred accounts at most; the next one goes on from there.
+    const first = copies.sweep(at, ROOM_SWEEP_PAGES);
+    expect(first).toEqual({ parts: 0, bytes: 0 });
+    const second = copies.sweep(at, ROOM_SWEEP_PAGES);
+    expect(second).toEqual({ parts: 2, bytes: 6 });
+    // Past the last account it starts again at the first.
+    copies.addParts("a0000", [part(4)], 1000);
+    expect(copies.sweep(at, ROOM_SWEEP_PAGES)).toEqual({ parts: 1, bytes: 4 });
   });
 
   it("reads only what it drops, however many used parts the table holds", { timeout: 30_000 }, () => {

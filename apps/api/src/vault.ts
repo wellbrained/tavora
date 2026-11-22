@@ -38,7 +38,7 @@ export function vaultRoutes({ accounts, clientKey, rateLimiter, now = Date.now }
     }
     await next();
   });
-  // The body first, then the sign-in (sign-in.ts requireSignIn), and again right before the write.
+  // The sign-in, then the body, then the sign-in again (sign-in.ts requireSignIn), and once more right before the write.
   app.use("*", requireSignIn(accounts, now, MAX_VAULT_BYTES + 4));
   app.use("*", bodyLimit({ maxSize: MAX_VAULT_BYTES + 4, onError: (context) => context.json({ error: "Too big.", reason: "too-big" }, 413) }));
 

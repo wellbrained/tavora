@@ -153,12 +153,16 @@ interface SweepCursor {
   accountId: string;
   /** Where in that account: its parts without a time (by id), then those with one (by time and id), then the next account. */
   phase: "undated" | "dated" | "next";
+  /** The last part looked at, in parts_meta's own order (time, size, id), so a step reads straight on in the index. */
   createdAt: number;
+  size: number;
   id: Uint8Array;
 }
 
 /** Where a sweep starts: before the first account. */
-const SWEEP_START: SweepCursor = { accountId: "", phase: "next", createdAt: 0, id: new Uint8Array(0) };
+const SWEEP_START: SweepCursor = { accountId: "", phase: "next", createdAt: 0, size: 0, id: new Uint8Array(0) };
+/** The start of an account's parts in a phase: before every part. */
+const ACCOUNT_START = { createdAt: Number.MIN_SAFE_INTEGER, size: Number.MIN_SAFE_INTEGER, id: new Uint8Array(0) };
 
 /** Why parts were not stored: this account's copy is full, or the copies of all accounts have no room. */
 export type AddPartsResult = "ok" | "copy-full" | "no-room";
@@ -186,6 +190,8 @@ export class CopyStore {
   private readonly networkBytes = new Map<string, { bytes: number; resetAt: number }>();
   private warned = false;
   private lastSweep = Number.NEGATIVE_INFINITY;
+  /** Where the last sweep stopped, so a sweep a request waits for goes on from there instead of the first accounts again. */
+  private sweepAt: SweepCursor = SWEEP_START;
 
   constructor(
     path: string,
@@ -416,15 +422,26 @@ export class CopyStore {
     this.lastSweep = now;
     let parts = 0;
     let bytes = 0;
-    let after: SweepCursor = SWEEP_START;
+    // A whole sweep starts at the first account; a limited one goes on from where the last one stopped, and past the
+    // last account starts again at the first, so unused parts anywhere are reached in turn.
+    const limited = Number.isFinite(maxPages);
+    let after: SweepCursor = limited ? this.sweepAt : SWEEP_START;
+    let wrapped = after === SWEEP_START;
     // Steps that drop nothing (an account with none unused) are a lookup in the index each; they are capped too.
     for (let pages = 0, steps = 0; pages < maxPages && steps < maxPages * 100; steps++) {
       const page = this.sweepPage(now, after);
       parts += page.parts;
       bytes += page.bytes;
       if (page.parts > 0) pages++;
-      if (!page.next) break;
+      if (!page.next) {
+        this.sweepAt = SWEEP_START;
+        if (wrapped) break;
+        wrapped = true;
+        after = SWEEP_START;
+        continue;
+      }
       after = page.next;
+      this.sweepAt = after;
     }
     if (parts > 0) this.db.exec("pragma incremental_vacuum");
     return { parts, bytes };
@@ -444,8 +461,12 @@ export class CopyStore {
       const page = this.sweepPage(now, after);
       parts += page.parts;
       bytes += page.bytes;
-      if (!page.next) break;
+      if (!page.next) {
+        this.sweepAt = SWEEP_START;
+        break;
+      }
       after = page.next;
+      this.sweepAt = after;
       await pause();
     }
     if (parts > 0) this.db.exec("pragma incremental_vacuum");
@@ -465,30 +486,36 @@ export class CopyStore {
     if (at.phase === "next") {
       const next = this.db.prepare("select account_id as accountId from parts indexed by parts_meta where account_id > ? order by account_id limit 1").get(at.accountId) as { accountId: string } | undefined;
       if (!next) return { parts: 0, bytes: 0, next: null };
-      at = { accountId: next.accountId, phase: "undated", createdAt: 0, id: new Uint8Array(0) };
+      at = { accountId: next.accountId, phase: "undated", ...ACCOUNT_START };
     }
     const copy = this.db.prepare("select updated_at as savedAt from copies where account_id = ?").get(at.accountId) as { savedAt: number } | undefined;
     const cutoff = now - UNUSED_PART_MS;
-    let unused: { id: Uint8Array; createdAt: number | null }[];
+    let unused: { id: Uint8Array; createdAt: number | null; size: number }[];
     let following: SweepCursor;
     if (at.phase === "undated") {
       // Parts from before their time was kept count as old: unused only for an account without a copy.
       unused = copy
         ? []
         : (this.db
-            .prepare("select id, created_at as createdAt from parts indexed by parts_meta where account_id = ? and created_at is null and id > ? order by id limit ?")
-            .all(at.accountId, at.id, SWEEP_PAGE) as unknown as { id: Uint8Array; createdAt: null }[]);
-      following = unused.length < SWEEP_PAGE ? { accountId: at.accountId, phase: "dated", createdAt: Number.MIN_SAFE_INTEGER, id: new Uint8Array(0) } : { ...at, id: unused.at(-1)!.id };
+            .prepare(
+              "select id, created_at as createdAt, size from parts indexed by parts_meta where account_id = ? and created_at is null and (size, id) > (?, ?) order by size, id limit ?",
+            )
+            .all(at.accountId, at.size, at.id, SWEEP_PAGE) as unknown as { id: Uint8Array; createdAt: null; size: number }[]);
+      const last = unused.at(-1);
+      following = unused.length < SWEEP_PAGE || !last ? { accountId: at.accountId, phase: "dated", ...ACCOUNT_START } : { ...at, size: last.size, id: last.id };
     } else {
-      // Stored before the cutoff, and with a copy only after it was saved (a save drops every part it doesn't use).
+      // Stored before the cutoff, and with a copy only after it was saved (a save drops every part it doesn't use): the
+      // copy's time is where the walk starts, so the cursor alone is where the index is entered.
+      const saved = copy ? { createdAt: copy.savedAt, size: Number.MAX_SAFE_INTEGER } : null;
+      const from = saved && (at.createdAt < saved.createdAt || (at.createdAt === saved.createdAt && at.size < saved.size)) ? { ...saved, id: new Uint8Array(0) } : at;
       unused = this.db
         .prepare(
-          `select id, created_at as createdAt from parts indexed by parts_meta where account_id = ? and created_at is not null and created_at < ? and created_at > ?
-           and (created_at, id) > (?, ?) order by created_at, id limit ?`,
+          `select id, created_at as createdAt, size from parts indexed by parts_meta where account_id = ? and created_at is not null and created_at < ?
+           and (created_at, size, id) > (?, ?, ?) order by created_at, size, id limit ?`,
         )
-        .all(at.accountId, cutoff, copy ? copy.savedAt : Number.MIN_SAFE_INTEGER, at.createdAt, at.id, SWEEP_PAGE) as unknown as { id: Uint8Array; createdAt: number }[];
+        .all(at.accountId, cutoff, from.createdAt, from.size, from.id, SWEEP_PAGE) as unknown as { id: Uint8Array; createdAt: number; size: number }[];
       const last = unused.at(-1);
-      following = unused.length < SWEEP_PAGE || !last ? { ...at, phase: "next" } : { accountId: at.accountId, phase: "dated", createdAt: last.createdAt!, id: last.id };
+      following = unused.length < SWEEP_PAGE || !last ? { ...at, phase: "next" } : { accountId: at.accountId, phase: "dated", createdAt: last.createdAt!, size: last.size, id: last.id };
     }
     if (unused.length === 0) return { parts: 0, bytes: 0, next: following };
     // A delete walks a part's pages anyway; it hands back what the totals need.
@@ -819,7 +846,7 @@ export function copyRoutes({ copies, accounts, clientKey, rateLimiter, now = Dat
     }
     await next();
   });
-  // The body first, then the sign-in (sign-in.ts requireSignIn), and again right before a write.
+  // The sign-in, then the body, then the sign-in again (sign-in.ts requireSignIn), and once more right before a write.
   app.use("*", requireSignIn(accounts, now, MAX_BODY));
   app.use("*", bodyLimit({ maxSize: MAX_BODY, onError: (context) => context.json({ error: "Too big.", reason: "too-big" }, 413) }));
   const bytes = async (context: Context) => new Uint8Array(await context.req.arrayBuffer());

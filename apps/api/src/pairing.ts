@@ -71,7 +71,7 @@ export function pairingRoutes({ accounts, clientKey, rateLimiter, now = Date.now
     if (wait > 0) return tooMany(context, wait);
     await next();
   });
-  // The body first, then the sign-in (sign-in.ts requireSignIn), and again after each step's body.
+  // The sign-in, then the body, then the sign-in again (sign-in.ts requireSignIn), and once more after each step's body.
   app.use("*", requireSignIn(accounts, now, 1024));
   app.use("*", bodyLimit({ maxSize: 1024, onError: (context) => context.json({ error: "Too big.", reason: "too-big" }, 413) }));
 

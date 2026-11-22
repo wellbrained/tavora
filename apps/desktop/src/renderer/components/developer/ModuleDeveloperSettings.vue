@@ -234,7 +234,9 @@ function removeToken(token: AccountPublishToken) {
               <template v-if="row.paused">
                 <span class="text-sm" :data-testid="`account-key-paused-${row.fingerprint}`">{{ t("account.developer.paused") }}</span>
                 <span v-if="requests.get(row.fingerprint)?.status === 'waiting'" class="text-sm" data-testid="account-key-waiting">{{ t("account.developer.replaceWaiting") }}</span>
+                <span v-else-if="requests.get(row.fingerprint)?.status === 'done'" class="text-sm" data-testid="account-key-replaced">{{ t("account.developer.replaceDone") }}</span>
                 <template v-else>
+                  <span v-if="requests.get(row.fingerprint)?.status === 'declined'" class="text-muted-foreground text-sm">{{ t("account.developer.replaceDeclined") }}</span>
                   <Button
                     variant="secondary"
                     size="sm"

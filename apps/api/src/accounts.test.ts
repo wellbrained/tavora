@@ -861,6 +861,28 @@ describe("Discord login", () => {
     return { ...context, connect };
   };
 
+  it("reads the account again once Discord answered, so a login removed meanwhile deletes nothing", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const slowDiscord: DiscordClient = {
+      identify: async () => {
+        await gate;
+        return ALEX;
+      },
+    };
+    const { call, signIn, store } = setup({ discord: slowDiscord });
+    const token = await signIn("me@example.com");
+    const id = store.accountByEmail("me@example.com")!.id;
+    store.setDiscord(id, ALEX);
+    const deleting = call("POST", "/delete/discord", { code: "codewellbrained", verifier: VERIFIER }, token);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    // The owner removes the Discord login (a stolen one, say) while Discord still answers.
+    expect(store.removeDiscord(id)).toBe("ok");
+    release();
+    expect(await (await deleting).json()).toMatchObject({ reason: "discord-mismatch" });
+    expect(store.account(id)).not.toBeNull();
+  });
+
   it("asks before creating a Discord-only account, then signs the same login in again", async () => {
     const { call } = setupDiscord();
     const first = (await (await call("POST", "/discord/sign-in", { code: "codewellbrained", verifier: VERIFIER, os: "windows" })).json()) as { status: string; ticket: string };

@@ -118,6 +118,17 @@ describe("paused publisher keys", () => {
     expect([...root.querySelectorAll("button")].some((button) => button.textContent?.trim() === "Unlink")).toBe(false);
   });
 
+  it("says a paused key's replacement is done or was turned down, as for a linked key", async () => {
+    await mount({ pausedKeys: [{ fingerprint: FILE, linkedAt: LINKED_AT }], keyRequests: [{ old: FILE, new: KEPT, leaked: false, requestedAt: LINKED_AT, status: "done" }] }, []);
+    expect($$("account-key-replaced")).toHaveLength(1);
+    expect($$("account-key-relink")).toEqual([]);
+    app?.unmount();
+    app = undefined;
+    await mount({ pausedKeys: [{ fingerprint: FILE, linkedAt: LINKED_AT }], keyRequests: [{ old: FILE, new: KEPT, leaked: false, requestedAt: LINKED_AT, status: "declined" }] }, []);
+    expect(root.textContent).toContain("Turned down");
+    expect($$("account-key-replace")).toHaveLength(1);
+  });
+
   it("lists the emails the service couldn't send", async () => {
     await mount({ unsentNotices: [{ kind: "published", id: "example.timer", name: "Timer", version: "1.0.3", at: LINKED_AT }, { kind: "withdrawn", id: "example.timer", name: "Timer", version: "1.0.2", at: LINKED_AT }] });
     const items = $$("developer-unsent-item").map((item) => item.textContent?.trim());
