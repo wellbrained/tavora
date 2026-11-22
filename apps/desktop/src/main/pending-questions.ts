@@ -60,6 +60,11 @@ export interface PendingQuestionsOptions {
    * replaces the older one, which counts as not answered.
    */
   queued?: readonly QuestionKind[];
+  /**
+   * The owner installed under a module id now. A connector question shows (`pendingConnector`) only while it is the
+   * owner whose page asked, so the host UI never asks about one copy for another. Left out (tests), it always shows.
+   */
+  installedOwner?: (moduleId: string) => string | undefined;
 }
 
 interface Entry {
@@ -87,9 +92,11 @@ export class PendingQuestions {
   /** Open questions per kind, the one shown first; a kind that is not queued holds at most one. */
   private readonly open = new Map<QuestionKind, Entry[]>();
   private readonly queued: ReadonlySet<QuestionKind>;
+  private readonly installedOwner: ((moduleId: string) => string | undefined) | undefined;
 
   constructor(options: PendingQuestionsOptions = {}) {
     this.queued = new Set(options.queued ?? []);
+    this.installedOwner = options.installedOwner;
   }
 
   /** Opens a question. `answer` settles with the user's answer, or with the no-answer of its kind when it is cancelled or replaced. */
@@ -136,7 +143,9 @@ export class PendingQuestions {
   /** What the host UI shows now. */
   snapshot(): PendingQuestionsView {
     const navigation = this.peek("navigation")?.payload;
-    const connector = this.peek("connector");
+    const asked = this.peek("connector");
+    // Matched by owner and id: a question another owner's copy asked under this id is not shown for this one.
+    const connector = asked && (!this.installedOwner || this.installedOwner(asked.payload.moduleId) === asked.payload.owner) ? asked : undefined;
     const board = this.peek("leaderboard");
     return {
       pendingLink: this.peek("link")?.payload.url ?? null,

@@ -3,13 +3,18 @@
  * key press, Tavora's own window, the panel in sight or Tavora's own System Monitor says so once, in GATED_CALLS; the
  * bridge checks the grant (`checkGrant`) and each panel's PanelGate the rest, in one order for every call. What a
  * connector tells a panel reaches its page through the gate too (`send`): only the panel's live page, and only while
- * the grant lasts.
+ * the grant lasts. A connector a module asks for on request is asked, matched and answered here as well
+ * (ConnectorQuestions): only the owner whose page asked is ever granted it.
  *
  * The press itself (one click or key press allows one call) is shared with the addresses the module's session answers
  * (module-view.ts `SessionGesture`), so a press used here is used there too.
  */
+import type { Connector } from "@tavora/module-schema";
 import type { CallName, Capability, EventName, Events, MediaAction } from "@tavora/sdk/protocol";
 import { HostError } from "./errors";
+import type { GrantStore, GrantSubject } from "./grants";
+import { sameOwner } from "./module-owner";
+import type { PendingQuestions } from "./pending-questions";
 import { onlySystemMonitor } from "./system-apps";
 
 /** How long after a click or key press a gated call may be made. */
@@ -306,5 +311,87 @@ export class PanelGate {
     if (!this.live(page, grant)) return false;
     page.emit(event, data);
     return true;
+  }
+}
+
+/** The module a connector question is for: the owner whose page asked, and what its manifest asks for on request. */
+export interface AskingModule {
+  owner: string;
+  manifest: { id: string; permissions: { onRequest?: readonly Connector[] } };
+}
+
+/** Who an open connector question is for: a module id and the owner whose page asked. */
+export interface QuestionOwner {
+  moduleId: string;
+  owner?: string;
+}
+
+export interface ConnectorQuestionsOptions {
+  /** Every open question; the connector question is one kind of them (pending-questions.ts). */
+  questions: Pick<PendingQuestions, "ask" | "peek" | "answer" | "cancel">;
+  /** The modules installed now, by id: an answer grants only the copy that is still the asking owner's. */
+  installed: { readonly modules: ReadonlyMap<string, GrantSubject & { owner: string }> };
+  grants: Pick<GrantStore, "grant">;
+  /** A question showed or went: the host UI shows it, and the panels' views step aside or come back. */
+  changed(): void;
+}
+
+/**
+ * Connector questions (decision of 2026-10-28): Tavora's consent question for one connector a module asks for on
+ * request (permissions.onRequest), after a press in its panel. Asking, matching and answering live here, keyed by the
+ * owner whose page asked and the module id (#910): a copy of another owner that took the id over meanwhile is never
+ * granted it, never shown the question and never hears it answered.
+ */
+export class ConnectorQuestions {
+  constructor(private readonly options: ConnectorQuestionsOptions) {}
+
+  /**
+   * Asks the user for `connector` for the module whose page made `call` (after the gate let the call through); resolves
+   * with whether they allowed it. A module that does not ask for it on request is refused as without the grant. A newer
+   * question closes an older one as not allowed, and so does closing the module's last panel or its panels starting as
+   * another owner's (ownerChanged).
+   */
+  ask(module: AskingModule, connector: Connector, call: { name: CallName; capability: Capability }): Promise<boolean> {
+    if (!(module.manifest.permissions.onRequest ?? []).includes(connector)) {
+      throw new HostError("PERMISSION_DENIED", `${call.name} needs the "${call.capability}" permission`, { capability: call.capability });
+    }
+    const moduleId = module.manifest.id;
+    const { answer } = this.options.questions.ask("connector", { module: moduleId }, { moduleId, owner: module.owner, connector });
+    this.options.changed();
+    return answer;
+  }
+
+  /** Whether the question shown now is for `panel`: its module id and the owner its page runs as, both. */
+  isFor(panel: QuestionOwner): boolean {
+    const pending = this.options.questions.peek("connector")?.payload;
+    return pending !== undefined && pending.moduleId === panel.moduleId && pending.owner === panel.owner;
+  }
+
+  /**
+   * The user's answer; allowing grants that connector alone, and its panels go on with it. Only while the copy installed
+   * now is the asking owner's and asks for it: when the id changed hands meanwhile, nobody is granted anything and the
+   * asker hears no. An answer to a question that is no longer shown does nothing.
+   */
+  async answer(id: number, allow: boolean): Promise<void> {
+    const { questions, installed, grants } = this.options;
+    const pending = questions.peek("connector");
+    if (!pending || pending.id !== id) return;
+    const { moduleId, owner, connector } = pending.payload;
+    const module = sameOwner({ owner, manifest: { id: moduleId } }, installed.modules);
+    const grant = async (): Promise<boolean> => {
+      const granted = allow && module !== undefined && (module.manifest.permissions.onRequest ?? []).includes(connector);
+      if (granted) await grants.grant(module, { network: [], connectors: [connector], folders: [] });
+      return granted;
+    };
+    // The question is gone now; the module hears the answer once the grant is stored.
+    const result = grant();
+    questions.answer(id, result);
+    await result;
+    this.options.changed();
+  }
+
+  /** A module's panels start again as another owner's (ModulePanels): a connector question its old page asked ends as not allowed. */
+  ownerChanged(moduleId: string): void {
+    if (this.options.questions.cancel({ module: moduleId }, "connector") > 0) this.options.changed();
   }
 }

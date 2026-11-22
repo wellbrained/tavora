@@ -12,6 +12,7 @@ import { HotkeyRegistrar, HotkeyStore, sameBinding, type HotkeyRecord, type Shor
 import { OverlayServer, OverlayStore, overlayUrl, type OverlayLink, type OverlaySubject } from "./overlays";
 import type { GrantSubject } from "./grants";
 import type { GrantStore } from "./grants";
+import type { ConnectorQuestions } from "./panel-gate";
 import type { Shell } from "./shell";
 import type { WorkspaceNames } from "./workspace-lookup";
 
@@ -41,8 +42,8 @@ export interface StreamingOptions {
   installed: { shown(moduleId: string): StreamingModule | undefined; get(moduleId: string): GrantedModule | undefined };
   /** What the user granted each module (the stream-overlay connector is checked here). */
   grants: Pick<GrantStore, "allowed">;
-  /** Asks the user in Tavora's consent dialog for a connector the module asks for on request; whether they allowed it. */
-  askConnector(module: { owner: string; id: string }, connector: "stream-overlay"): Promise<boolean>;
+  /** Asks the user in Tavora's consent dialog for a connector the module asks for on request; whether they allowed it (ConnectorQuestions.ask). */
+  askConnector: ConnectorQuestions["ask"];
   /** The workspace shown now, or null. */
   workspaceId(): string | null;
   workspaces: Pick<WorkspaceNames, "name">;
@@ -146,10 +147,8 @@ export class Streaming {
     const subject = (key: string): OverlaySubject => ({ owner: module.owner, moduleId: module.manifest.id, workspaceId, key });
     const granted = async (): Promise<boolean> => {
       if (this.overlayGranted(module.manifest.id, module.owner)) return true;
-      if (!(module.manifest.permissions.onRequest ?? []).includes("stream-overlay")) {
-        throw new HostError("PERMISSION_DENIED", 'overlay.copyLink needs the "overlay" permission', { capability: "overlay" });
-      }
-      return this.options.askConnector({ owner: module.owner, id: module.manifest.id }, "stream-overlay");
+      // Refused as without the grant unless the module asks for it on request; then Tavora asks the user.
+      return this.options.askConnector(module, "stream-overlay", { name: "overlay.copyLink", capability: "overlay" });
     };
     return {
       publish: (key: string, state: JsonValue) => {

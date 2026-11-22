@@ -5,6 +5,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { HotkeyBinding } from "@tavora/sdk/protocol";
 import type { ShortcutRegistry } from "./hotkeys";
+import { ConnectorQuestions } from "./panel-gate";
 import { Streaming, type GrantedModule, type HotkeyListener } from "./streaming";
 
 let dir: string;
@@ -51,11 +52,23 @@ async function setup({ held = [] as string[] } = {}) {
     saveSettings: (next) => Object.assign(world.settings, next),
     installed: { shown: (id) => (id === world.module?.manifest.id ? world.module : undefined), get: (id) => (id === world.module?.manifest.id ? world.module : undefined) },
     grants: { allowed: () => ({ network: [], connectors: world.granted ? ["stream-overlay"] : [], folders: [] }) },
-    askConnector: async () => {
-      world.asked++;
-      world.granted = world.answer;
-      return world.answer;
-    },
+    // The gate's connector questions, with a user who answers at once (`world.answer`).
+    askConnector: (module, connector, call) =>
+      new ConnectorQuestions({
+        questions: {
+          ask: () => {
+            world.asked++;
+            world.granted = world.answer;
+            return { id: world.asked, answer: Promise.resolve(world.answer) };
+          },
+          peek: () => undefined,
+          answer: () => false,
+          cancel: () => 0,
+        } as never,
+        installed: { modules: new Map() },
+        grants: { grant: async () => undefined },
+        changed: () => undefined,
+      }).ask(module, connector, call),
     workspaceId: () => world.workspaceId,
     workspaces: { name: (id) => (id === "poe2" ? "Path of Exile 2" : null) },
     panels: { adapters: () => world.panels.map((hotkeys) => ({ hotkeys })) },

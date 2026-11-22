@@ -1,6 +1,7 @@
 // Wires the services behind Stream overlays, game overlays, overlay previews and the Overlay page from the objects
 // that own what they read (the library, the installed modules, the grants, Panel views, the game watcher) plus the few
 // things only the host around them can do (OverlayHostPorts). None of them is handed the Host.
+import type { ConnectorQuestions } from "./panel-gate";
 import { clipboard, desktopCapturer, globalShortcut, nativeImage, screen, type BrowserWindow } from "electron";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
@@ -42,7 +43,7 @@ export interface OverlayHostPorts {
   /** The workspace shown now, or null. */
   workspaceId(): string | null;
   /** Asks the user in Tavora's consent dialog for a connector the module asks for on request. */
-  askConnector(module: { owner: string; id: string }, connector: "stream-overlay"): Promise<boolean>;
+  askConnector: ConnectorQuestions["ask"];
   /** What the in-game layer knows of a panel (its view is lent by Panel views itself). */
   panelInfo(instanceId: string, workspaceId?: string): PanelInfo | null;
   /** The Overlay page's side of the host: every panel, which ones run, leaving the page, and the system's picture dialog. */

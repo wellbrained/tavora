@@ -201,6 +201,19 @@ describe("snapshot", () => {
     });
   });
 
+  it("shows a connector question only while the copy installed under its id is the owner's that asked", () => {
+    const installed = new Map([["m", "local"]]);
+    const questions = new PendingQuestions({ installedOwner: (moduleId) => installed.get(moduleId) });
+    const asked = questions.ask("connector", { module: "m" }, connector);
+    expect(questions.snapshot().pendingConnector).toEqual({ id: asked.id, moduleId: "m", connectors: ["stream-overlay"] });
+    // Another owner's copy took the id over: the host UI is not asked about it for that copy, and the question stays open.
+    installed.set("m", "abcd1234");
+    expect(questions.snapshot().pendingConnector).toBeNull();
+    expect(questions.peek("connector")?.id).toBe(asked.id);
+    installed.delete("m");
+    expect(questions.snapshot().pendingConnector).toBeNull();
+  });
+
   it("leaves menus and waiting dialogs out: the host UI gets them another way", () => {
     const questions = new PendingQuestions();
     questions.ask("menu", { panel: "p" }, { choices: new Set(["a"]) });

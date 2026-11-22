@@ -40,6 +40,7 @@ import { UserError } from "./messages";
 import { UndoGoneError, UndoShelf } from "./undo-shelf";
 import { WorkspaceLibrary } from "./workspace-library";
 import { PanelDialogs } from "./panel-dialogs";
+import { ConnectorQuestions } from "./panel-gate";
 import { PanelQuestions } from "./panel-questions";
 import { UserProfile } from "./user-profile";
 import { ModuleBoards } from "./module-boards";
@@ -409,7 +410,7 @@ export class Host {
     ...(timingLog ? { log: timingLog } : {}),
   });
   /** Every open question to the user: link, navigation, game switch, connector, leaderboard, waiting panel dialog and module menu (pending-questions.ts). */
-  private readonly questions = new PendingQuestions();
+  private readonly questions = new PendingQuestions({ installedOwner: (moduleId) => this.modules.get(moduleId)?.owner });
   /** A module's menus and a panel shown big in its dialog, drawn by the host page over the panels (panel-dialogs.ts). */
   private readonly panelDialogs = new PanelDialogs({
     questions: this.questions,
@@ -577,6 +578,8 @@ export class Host {
   private readonly moduleBoards: ModuleBoards;
   /** The questions shown in a panel's place: access, a connector on request, leaderboards (panel-questions.ts). */
   private readonly panelQuestions: PanelQuestions;
+  /** A connector a module asks for on request: asked, matched by owner and id, and answered (panel-gate.ts). */
+  private readonly connectorQuestions: ConnectorQuestions;
   /** Adding, trashing, restoring and deleting workspaces with what they keep, and snapshots that change open panels (workspace-library.ts). */
   private readonly workspaceLibrary: WorkspaceLibrary;
   /** The window buttons in the theme's colours, dimmed with the page, and the window's place saved (window-frame.ts). */
@@ -728,7 +731,7 @@ export class Host {
       start: (record, workspace, openedAt) => this.createView(record, workspace, openedAt),
       close: (instanceId) => this.closeView(instanceId),
       forgetTooltips: (moduleId) => this.tooltips?.forgetModule(moduleId),
-      ownerChanged: (moduleId) => this.panelQuestions.ownerChanged(moduleId),
+      ownerChanged: (moduleId) => this.connectorQuestions.ownerChanged(moduleId),
       modulesChanged: async (restarted) => {
         // A module removed, blocked, replaced by another publisher's or updated without the connector ends its open OBS pages now.
         this.streaming?.recheckStreams();
@@ -874,10 +877,18 @@ export class Host {
       language: () => this.language,
       changed: () => this.pushState(),
     });
-    this.panelQuestions = new PanelQuestions({
+    this.connectorQuestions = new ConnectorQuestions({
       questions: this.questions,
       installed: this.installed,
       grants: this.grants,
+      changed: () => {
+        this.pushState();
+        this.panels.applyBounds();
+      },
+    });
+    this.panelQuestions = new PanelQuestions({
+      questions: this.questions,
+      connectors: this.connectorQuestions,
       panels: this.panels,
       shownPanels: () => (this.workspaceId ? this.records(this.workspaceId) : []),
       pushState: () => this.pushState(),
@@ -2106,7 +2117,7 @@ export class Host {
       "reset-overlay-links": () => this.streaming.resetLinks(),
       "hotkey-answer": (action) => this.streaming.answer(action.id, action.choice, action.accelerator),
       "remove-hotkey": (action) => this.streaming.removeHotkey(action),
-      "connector-answer": (action) => this.panelQuestions.answerConnector(action.id, action.allow),
+      "connector-answer": (action) => this.connectorQuestions.answer(action.id, action.allow),
       "leaderboard-answer": (action) => this.panelQuestions.answerLeaderboard(action.id, action.allow),
       "set-language": saved((action) => {
         this.library.language = action.language;
@@ -3959,7 +3970,7 @@ export class Host {
         fontCss: () => fontStylesheet(this.appearance.host.font),
         saveLibrary: () => this.saveLibrary(),
         workspaceId: () => this.workspaceId,
-        askConnector: (module, connector) => this.panelQuestions.askConnector(module, connector),
+        askConnector: (module, connector, call) => this.connectorQuestions.ask(module, connector, call),
         panelInfo: (instanceId, workspaceId) => this.panelInfo(instanceId, workspaceId),
         page: {
           sources: () => this.overlaySources(),
