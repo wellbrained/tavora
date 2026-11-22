@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { createApp, h, nextTick, type App } from "vue"
 import type { TooltipContent } from "@tavora/sdk"
 import { ItemCard, type ItemCardSkin } from "."
-import { ITEM_CARD_TYPE } from "../../tooltip/typography"
+import { ITEM_CARD_TYPE, UNIT_CARD_TYPE } from "../../tooltip/typography"
 import { heldSkinFonts } from "./skin-font"
 
 let app: App | undefined
@@ -134,6 +134,53 @@ describe("ItemCard", () => {
       vi.unstubAllGlobals()
       delete (document as { fonts?: unknown }).fonts
     }
+  })
+
+  const unit: TooltipContent = {
+    title: "Soldier",
+    layout: "unit",
+    image: "soldier.webp",
+    badges: ["Rare"],
+    corner: { text: "1800", icon: "icons/person.png" },
+    effect: [{ text: "Gains " }, { text: "+1%", accent: true }, { text: " damage per unit." }],
+    properties: [{ label: "Health:", value: "3.95", suffix: "E+12" }, { label: "Hits/Second:", value: "99.999", suffix: " (MAX)" }, { label: "Crit Chance:", value: "5%" }],
+    icons: [{ image: "steel-coat.webp", label: "Steel Coat", count: "95" }, { image: "static.webp", label: "Static" }],
+    pips: { filled: 2, total: 3, extra: "+67" },
+  }
+
+  it("lays a unit out like the tooltip: portrait, title bar with its corner value, effect, stats, icon row and pips", () => {
+    const el = mount(unit)
+    expect(el.dataset.layout).toBe("unit")
+    for (const flag of ["data-portrait", "data-pips", "data-extra"]) expect(el.hasAttribute(flag)).toBe(true)
+    expect([...el.children].map((c) => c.className)).toEqual(["tavora-item-card-portrait", "tavora-item-card-bar", "tavora-item-card-unit-body"])
+    expect(el.querySelector(".tavora-item-card-bar h3")!.textContent).toBe("Soldier")
+    expect(el.querySelector(".tavora-item-card-corner")!.textContent).toBe("1800")
+    expect((el.querySelector(".tavora-item-card-corner-icon") as HTMLElement).style.getPropertyValue("--ic-icon")).toContain("icons/person.png")
+    const body = el.querySelector(".tavora-item-card-unit-body")!
+    expect([...body.children].map((c) => c.className)).toEqual(["tavora-item-card-unit-effect", "tavora-item-card-unit-stats", "tavora-item-card-icons", "tavora-item-card-pips", "tavora-item-card-extra"])
+    expect([...body.querySelector(".tavora-item-card-unit-stats")!.children].map((c) => c.textContent)).toEqual(["Health:", "3.95", "E+12", "Hits/Second:", "99.999", " (MAX)", "Crit Chance:", "5%", ""])
+    expect([...body.querySelectorAll(".tavora-item-card-unit-icon")].map((i) => i.getAttribute("aria-label"))).toEqual(["Steel Coat (95)", "Static"])
+    expect([...body.querySelectorAll(".tavora-item-card-pip")].map((p) => p.hasAttribute("data-on"))).toEqual([true, true, false])
+    expect(body.querySelector(".tavora-item-card-extra")!.textContent).toBe("+67")
+    expect(el.querySelector(".tavora-item-card-badge")).toBeNull()
+    expect(el.style.getPropertyValue("--ic-title-size")).toBe(`${UNIT_CARD_TYPE.title}px`)
+    expect(el.style.getPropertyValue("--ic-text-size")).toBe(`${UNIT_CARD_TYPE.text}px`)
+  })
+
+  it("dresses a unit in its skin's colours and bar but no frame, and leaves out what it doesn't have", () => {
+    const el = mount({ title: "Thief", layout: "unit", properties: [{ label: "Health:", value: "18.8" }] }, { ...skin, colors: { ...skin.colors, bar: "#776538" } })
+    expect(el.style.getPropertyValue("--skin-bar")).toBe("#776538")
+    expect(el.hasAttribute("data-framed")).toBe(false)
+    expect(el.style.borderImageSource).toBe("")
+    for (const flag of ["data-portrait", "data-pips", "data-extra"]) expect(el.hasAttribute(flag)).toBe(false)
+    expect(el.querySelector(".tavora-item-card-portrait, .tavora-item-card-corner, .tavora-item-card-icons, .tavora-item-card-pips")).toBeNull()
+  })
+
+  it("puts a suffix into the value in the card and rich layouts", () => {
+    const properties = [{ label: "Health", value: "3.95", suffix: "E+12" }]
+    expect(mount({ title: "A", layout: "card", properties }).querySelector(".tavora-item-card-value")!.textContent).toBe("3.95E+12")
+    app!.unmount()
+    expect(mount({ title: "A", properties }).querySelector("dd")!.textContent).toBe("3.95E+12")
   })
 
   it("keeps text as text, and a plain-text effect as one run", () => {

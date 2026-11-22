@@ -29,3 +29,29 @@ describe("tooltip page and the kit's card: a stat's icon", () => {
         expect(KIT_CSS).toContain(".tavora-item-card[data-pixel] .tavora-item-card-icon");
     });
 });
+
+describe("tooltip page and the kit's card: a unit", () => {
+    it("lay it out alike: portrait, title bar, indented body, three stats columns, framed icons and pips on the edge", () => {
+        const both: [string, string][] = [
+            ["body.unit .u-card{position:relative;min-width:316px;width:max-content;max-width:520px;padding-top:19px;", ".tavora-item-card[data-layout=unit][data-portrait]{padding-top:19px}"],
+            ["width:44px;height:67px;border:2px solid var(--u-line);", "width:44px;height:67px;border:2px solid var(--ic-unit-line);"],
+            ["height:34px;margin-left:44px;padding:0 9px 0 6px;", ".tavora-item-card[data-portrait] .tavora-item-card-bar{margin-left:44px;padding-left:6px;border-left:0;border-top-left-radius:0}"],
+            ["body.unit .u-body{position:relative;margin-left:24px;padding:12px 14px 24px 31px;", ".tavora-item-card[data-portrait] .tavora-item-card-unit-body{margin-left:24px;padding-left:31px}"],
+            ["body.unit .u-stats{display:grid;grid-template-columns:auto auto 1fr;gap:4px 8px}", ".tavora-item-card-unit-stats{display:grid;grid-template-columns:auto auto 1fr;gap:4px 8px}"],
+            ["body.unit .u-value{text-align:right;white-space:nowrap}", ".tavora-item-card-unit-value{text-align:right;white-space:nowrap}"],
+            ["body.unit .u-suffix{margin-left:-8px;white-space:pre}", ".tavora-item-card-unit-suffix{margin-left:-8px;white-space:pre}"],
+            ["width:34px;height:26px;border:2px solid var(--u-line);border-radius:4px;", "width:34px;height:26px;border:2px solid var(--ic-unit-line);border-radius:4px;"],
+            ["body.unit .u-pips{position:absolute;left:50%;bottom:-9px;transform:translateX(-50%);display:flex;gap:14px}", ".tavora-item-card-pips{position:absolute;left:50%;bottom:-9px;transform:translateX(-50%);display:flex;gap:14px}"],
+            ["body.unit .u-extra{position:absolute;left:50%;bottom:-24px;", ".tavora-item-card-extra{position:absolute;left:50%;bottom:-24px;"],
+        ];
+        for (const [page, kit] of both) {
+            expect(TOOLTIP_DOCUMENT).toContain(page);
+            expect(KIT_CSS).toContain(kit);
+        }
+    });
+
+    it("take the skin's bar, or its surface, for the title bar, and its text for the lines", () => {
+        expect(TOOLTIP_DOCUMENT).toContain("--u-bar:var(--skin-bar,var(--skin-surface));--u-line:var(--skin-text)");
+        expect(KIT_CSS).toContain("--ic-bar:var(--skin-bar,var(--skin-surface));--ic-unit-line:var(--skin-text)");
+    });
+});

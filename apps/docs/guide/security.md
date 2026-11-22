@@ -469,7 +469,8 @@ font are read only from the module's own bundle under `dist/`, by the same path 
 no link or junction out of the bundle), and must be a PNG or WebP picture or a WOFF2 font by their first bytes, up to
 512 KB each (checked on the open file; the read stops one byte past the limit).
 Tavora inlines them as `data:` URLs; the window's content policy gains only `font-src data:`, so nothing is loaded from
-anywhere else. The font is used for the card's title and effect box only, and Tavora sets every size. At most 32 skins
+anywhere else. The font is used for the card's title and effect box only (on a unit card, for the whole card but its
+footer), and Tavora sets every size. At most 32 skins
 per module and 16 MB of skin files for all modules together are kept, in memory, until the module reloads, updates, is
 turned off or removed.
 The surface has its own sandboxed renderer and session, no administrative host

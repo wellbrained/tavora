@@ -113,6 +113,16 @@ effect box's text and the accent in the box 4.5:1, the accent on the surface 3:1
 and refuses a skin that fails with `INVALID_PARAMS` and the reason. `colors.boxBorder` gives the effect box a 2 px edge;
 a plain card's box has a thin line in the theme's line colour. On a Tavora without `sdk.supports("ui.tooltip.boxBorder")`
 the SDK leaves `boxBorder` out of `defineSkin`, so the skin is still taken (without the edge). Every size stays Tavora's, and a skin's colours stay the same in every theme. A skin name that isn't defined shows the plain card.
+
+`content.layout: 'unit'` shows a game unit as games show it on the board: the `image` as a small framed portrait
+sticking out at the top left, a title bar with the title and `content.corner` (`{ text: '27', icon }`, the icon a
+pictogram like a stat's), then the effect, the stats, `content.icons` (up to 12 small framed pictures, each with a
+`label` for screen readers and an optional `count` badge) and `content.pips` (`{ filled, total, extra }`, diamonds on the
+bottom edge, `extra` like '+67' under them). The stats line their values up on the right, and a stat's `suffix`
+('E+12', ' (MAX)') hangs past that edge; in the other layouts the SDK puts it after the value. A skin dresses a unit
+too, with `colors.bar` for its title bar (the text needs 4.5:1 on it) and its font for the whole card. On a Tavora
+without `sdk.supports("ui.tooltip.unit")` the SDK shows it as a card, without the corner, icons and pips, and leaves
+`colors.bar` out of `defineSkin`.
 It needs a Tavora with `sdk.supports("ui.tooltip.skin")`; on an older one the SDK leaves `layout` and `skin` out and
 puts the effect text into a section row (the card shows in the rich layout), and `defineSkin` does nothing. In a panel, the kit's
 `ItemCard` shows the same card.

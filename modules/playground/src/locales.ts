@@ -232,6 +232,9 @@ export const en = {
   "ex.tooltips.ItemCards": "Item cards",
   "ex.tooltips.ItemCards.note": "The tooltip's card in a panel: plain, with stats per level and their icons, and in a module's skin.",
   "ex.tooltips.ItemCards.rule": "A skin may give the title and the effect its own font and colours; the rest keeps the theme font.",
+  "ex.tooltips.UnitCards": "Unit cards",
+  "ex.tooltips.UnitCards.note": "A game unit as games show it: plain, and in two skins, one with huge values, three spells and a level over the most.",
+  "ex.tooltips.UnitCards.rule": "Values line up on their right edge; a suffix like E+12 hangs past it.",
 
   "ex.popovers.WithField": "Popover with a field",
   "ex.popovers.WithField.note": "Escape or a click outside closes it.",
@@ -697,6 +700,9 @@ export const de: Record<TextKey, string> = {
   "ex.tooltips.ItemCards": "Gegenstandskarten",
   "ex.tooltips.ItemCards.note": "Die Karte des Tooltips in einem Panel: schlicht, mit Werten pro Stufe und ihren Symbolen und im Look eines Moduls.",
   "ex.tooltips.ItemCards.rule": "Ein Look darf Titel und Effekt eine eigene Schrift und Farben geben; der Rest bleibt in der Schrift des Themes.",
+  "ex.tooltips.UnitCards": "Einheitenkarten",
+  "ex.tooltips.UnitCards.note": "Eine Einheit, wie Spiele sie zeigen: schlicht und in zwei Looks, einer mit riesigen Werten, drei Zaubern und einer Stufe über dem Maximum.",
+  "ex.tooltips.UnitCards.rule": "Werte stehen rechtsbündig untereinander; ein Zusatz wie E+12 ragt darüber hinaus.",
 
   "ex.popovers.WithField": "Popover mit einem Feld",
   "ex.popovers.WithField.note": "Escape oder ein Klick daneben schließt es.",

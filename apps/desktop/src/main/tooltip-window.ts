@@ -35,6 +35,8 @@ interface Options {
     source(owner: string): Source | undefined;
     closed(owner: string, id: string): void;
 }
+/** The layouts a module's skin dresses. */
+const skinned = (layout: string | undefined) => layout === "card" || layout === "unit";
 /** A small, host-owned surface; never the module's renderer or the host's administrative preload. */
 export class TooltipWindow {
     readonly state = new TooltipState();
@@ -119,7 +121,7 @@ export class TooltipWindow {
             this.dropSkins([done.replaced]);
         // A card of this skin already shown (plain, or in the skin's older form) is drawn again in it.
         const open = this.state.current, c = open?.request.content;
-        if (open && this.ready && c?.layout === "card" && c.skin === name && this.options.source(open.owner)?.module === module)
+        if (open && this.ready && skinned(c?.layout) && c?.skin === name && this.options.source(open.owner)?.module === module)
             this.render(open);
     }
     /** A module reloads, updates, is turned off or removed: its skins go, here and in the tooltip window's page. */
@@ -241,9 +243,9 @@ export class TooltipWindow {
             this.close();
             return;
         }
-        // A skin only dresses the card layout; a name the module hasn't defined (yet) shows the plain card. Its data goes
-        // over once per page, then the card names it by id.
-        const c = open.request.content, skin = c.layout === "card" && c.skin ? this.skins.get(source.module, c.skin) : undefined;
+        // A skin only dresses the card and unit layouts; a name the module hasn't defined (yet) shows the plain card. Its
+        // data goes over once per page, then the card names it by id.
+        const c = open.request.content, skin = skinned(c.layout) && c.skin ? this.skins.get(source.module, c.skin) : undefined;
         if (skin && !this.sentSkins.has(skin.id)) {
             this.window!.webContents.send("tooltip:skin", skin.id, skin.skin);
             this.sentSkins.add(skin.id);

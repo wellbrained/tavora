@@ -1,3 +1,12 @@
+## 0.4.5
+
+Unit cards. The shared tooltip gets a layout for a game unit as games show it on the board. It comes with the next Tavora (`UNIT_CARD_TAVORA` in `protocol.ts`; the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.21.43).
+
+- `content.layout: "unit"`: the picture as a small framed portrait sticking out at the top left, a title bar with the title and `content.corner` (`{ text, icon? }`, up to 20 characters and a pictogram drawn from its shape), then the type line, the effect, the stats, the sections, `content.icons` (up to 12 `{ image, label, count? }`, type `TooltipIcon`) and `content.pips` (`{ filled, total, extra? }`, 1 to 10 diamonds on the bottom edge). It leaves out badges, requirements, `perHeading` and a stat's `per` and `icon`.
+- A property takes `suffix` (up to 40 characters, kept as given): the unit layout lines the values up on their right edge and hangs the suffix past it ("3.95" + "E+12"). In the other layouts the SDK puts it at the end of the value.
+- A skin takes `colors.bar`, the unit's title bar; the text needs a contrast of 4.5:1 on it. A skin dresses a unit with its colours, its font for the whole card and `pixelArt`, never its frame.
+- An older Tavora refuses the new keys, and with them the whole tooltip or skin, so the SDK shows a unit there as a card, without `corner`, `icons` and `pips`, with each suffix in its value, and leaves `colors.bar` out of `defineSkin`. `sdk.supports("ui.tooltip.unit")` tells which case you are in; the memory host does the same.
+
 ## 0.4.4
 
 Design styles. Tavora will let users pick a design style besides the theme: how surfaces, tabs, buttons, inputs, lists and labels are drawn, and a few sizes. It comes with the next Tavora (`STYLE_TAVORA` in `protocol.ts`; the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.21.43).

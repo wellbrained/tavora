@@ -4,7 +4,7 @@ import { footerTexts } from "../shared/tooltip-footer";
 /** A module's skin as the host checked it, its files read in as data: URLs (main/tooltip-skin.ts). */
 interface Skin {
     frame?: { image: string; slice: [number, number, number, number] };
-    colors?: { surface: string; text: string; muted: string; accent: string; box: string; boxText: string; boxBorder?: string };
+    colors?: { surface: string; text: string; muted: string; accent: string; box: string; boxText: string; boxBorder?: string; bar?: string };
     font?: string;
     pixelArt: boolean;
     titleCaps: boolean;
@@ -36,7 +36,7 @@ let drawn: Data | undefined;
 const HEX = /^#[0-9a-f]{6}$/i, FRAME = /^data:image\/(?:png|webp);base64,[A-Za-z0-9+/]+={0,2}$/, FONT = /^data:font\/woff2;base64,[A-Za-z0-9+/]+={0,2}$/;
 // A stat's icon, read in by the host (main/tooltip-images.ts) and checked again before it reaches a style.
 const ICON = /^data:image\/(?:png|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
-const SKIN_VARS = { surface: "--skin-surface", text: "--skin-text", muted: "--skin-muted", accent: "--skin-accent", box: "--skin-box", boxText: "--skin-box-text", boxBorder: "--skin-box-border" } as const;
+const SKIN_VARS = { surface: "--skin-surface", text: "--skin-text", muted: "--skin-muted", accent: "--skin-accent", box: "--skin-box", boxText: "--skin-box-text", boxBorder: "--skin-box-border", bar: "--skin-bar" } as const;
 let face: FontFace | undefined, faceSource: string | undefined;
 // FontFaceSet is a set of FontFaces; the DOM types here leave out its add and delete.
 const fonts = () => document.fonts as unknown as Set<FontFace>;
@@ -86,8 +86,8 @@ function applySkin(card: HTMLElement, skin: Skin | undefined) {
     return frame;
 }
 /** The effect box: plain text runs, the accent ones in a span of their own. */
-function effectBox(effect: NonNullable<TooltipContent["effect"]>) {
-    const box = node("div", undefined, "effect");
+function effectBox(effect: NonNullable<TooltipContent["effect"]>, className = "effect") {
+    const box = node("div", undefined, className);
     if (typeof effect === "string")
         box.textContent = effect;
     else
@@ -122,15 +122,19 @@ function draw(data: Data) {
     if (/^#[a-f0-9]{3,8}$/i.test(bg))
         card.style.setProperty("--bg", bg);
     const de = data.language === "de";
-    const cardLayout = c.layout === "card";
+    const cardLayout = c.layout === "card", unitLayout = c.layout === "unit";
     document.body.classList.toggle("card", cardLayout);
-    // A skin's colours ignore the theme, like the PoE look; a skinned card isn't PoE.
-    const skin = cardLayout && data.skin !== undefined ? skins.get(data.skin) : undefined;
+    document.body.classList.toggle("unit", unitLayout);
+    // A skin's colours ignore the theme, like the PoE look; a skinned card isn't PoE, and neither is a unit. A unit card
+    // has a shape of its own, so it wears no frame.
+    const worn = (cardLayout || unitLayout) && data.skin !== undefined ? skins.get(data.skin) : undefined;
+    const skin = unitLayout && worn ? (({ frame: _frame, ...rest }) => rest)(worn) : worn;
     const frame = applySkin(card, skin);
-    if (skin)
+    if (skin || unitLayout)
         document.body.classList.remove("poe");
+    let close: HTMLButtonElement | undefined;
     if (data.pinned) {
-        const close = node("button", "\u00d7");
+        close = node("button", "\u00d7");
         close.id = "close";
         close.setAttribute("aria-label", de ? "Details schlie\u00dfen" : "Close item details");
         close.onclick = () => ipcRenderer.send("tooltip:close", data.serial);
@@ -138,7 +142,17 @@ function draw(data: Data) {
             close.style.top = frame.slice[0] + 2 + "px";
             close.style.right = frame.slice[1] + 4 + "px";
         }
-        card.append(close);
+        // A unit card has it at the end of its title bar.
+        if (!unitLayout)
+            card.append(close);
+    }
+    if (unitLayout) {
+        renderUnit(card, c, close);
+        const footer = node("div", undefined, "footer");
+        footer.append(...footerTexts(data.source, data, de).map(t => node("span", t)));
+        card.append(footer);
+        fit(data);
+        return;
     }
     if (cardLayout) {
         renderCard(card, c, de);
@@ -265,7 +279,7 @@ function renderCard(card: HTMLElement, c: TooltipContent, de: boolean) {
  * with its heading over it. No colons: the columns line the values up. Long values wrap; the label keeps its room.
  * When a row has an icon, every label keeps room for one, so the labels still line up.
  */
-function stats(rows: { label: string; value: string; per?: string; icon?: string }[], heading?: string) {
+function stats(rows: { label: string; value: string; per?: string; icon?: string; suffix?: string }[], heading?: string) {
     const per = rows.some(r => r.per !== undefined), icons = rows.some(r => r.icon !== undefined);
     const grid = node("div", undefined, "stats" + (per ? " has-per" : "") + (icons ? " has-icons" : ""));
     if (per && heading)
@@ -274,7 +288,8 @@ function stats(rows: { label: string; value: string; per?: string; icon?: string
         const label = node("span", icons ? undefined : r.label, "stats-label");
         if (icons)
             label.append(statIcon(r.icon), document.createTextNode(r.label));
-        grid.append(label, node("span", r.value, "value"));
+        // Only the unit layout hangs a suffix past the value; here it is part of it.
+        grid.append(label, node("span", r.value + (r.suffix ?? ""), "value"));
         if (per)
             grid.append(node("span", r.per ?? "", "per"));
     }
@@ -293,14 +308,101 @@ function statIcon(src: string | undefined) {
     }
     return icon;
 }
+/**
+ * A game unit as games show it on the board: the portrait sticking out at the top left, the title bar with the title
+ * and the corner value, then the body: type line, effect, stats, sections, the icon row and the pips on its bottom edge.
+ * Badges, requirements and a stat's `per` and `icon` aren't part of it.
+ */
+function renderUnit(card: HTMLElement, c: TooltipContent, close: HTMLButtonElement | undefined) {
+    const unit = node("div", undefined, "u-card" + (c.image ? "" : " no-portrait") + (c.pips ? " has-pips" : "") + (c.pips?.extra ? " has-extra" : ""));
+    card.append(unit);
+    if (c.image) {
+        const portrait = node("div", undefined, "u-portrait"), image = node("img");
+        image.src = c.image;
+        image.alt = "";
+        image.onload = measure;
+        portrait.append(image);
+        unit.append(portrait);
+    }
+    const bar = node("div", undefined, "u-bar");
+    bar.append(node("h2", c.title));
+    if (c.corner) {
+        const corner = node("span", undefined, "u-corner");
+        corner.append(node("span", c.corner.text));
+        // Only its shape counts, like a stat's icon: a mask in the title's colour, checked before it reaches the style.
+        if (c.corner.icon && ICON.test(c.corner.icon)) {
+            const icon = node("span", undefined, "u-corner-icon");
+            icon.setAttribute("aria-hidden", "true");
+            icon.style.setProperty("--u-icon", `url("${c.corner.icon}")`);
+            corner.append(icon);
+        }
+        bar.append(corner);
+    }
+    if (close)
+        bar.append(close);
+    unit.append(bar);
+    const body = node("div", undefined, "u-body");
+    unit.append(body);
+    if (c.subtitle)
+        body.append(node("div", c.subtitle, "subtitle"));
+    if (c.effect)
+        body.append(effectBox(c.effect, "u-effect"));
+    if (c.properties?.length) {
+        // Label, value and suffix: the labels as wide as the longest, the values lined up on their right edge and the
+        // suffix hanging past it, so the numbers of "3.95E+12" and "99.999 (MAX)" stay in line.
+        const grid = node("div", undefined, "u-stats");
+        for (const p of c.properties)
+            grid.append(node("span", p.label, "u-label"), node("span", p.value, "u-value"), node("span", p.suffix ?? "", "u-suffix"));
+        body.append(grid);
+    }
+    if (c.sections?.length)
+        appendRows(body, { title: c.title, sections: c.sections });
+    if (c.icons?.length) {
+        const row = node("div", undefined, "u-icons");
+        for (const i of c.icons) {
+            const frame = node("span", undefined, "u-icon");
+            frame.setAttribute("role", "img");
+            frame.setAttribute("aria-label", i.count ? `${i.label} (${i.count})` : i.label);
+            // A picture the host couldn't read leaves the frame empty.
+            if (ICON.test(i.image)) {
+                const image = node("img");
+                image.src = i.image;
+                image.alt = "";
+                image.onload = measure;
+                frame.append(image);
+            }
+            if (i.count) {
+                const count = node("span", i.count, "u-count");
+                count.setAttribute("aria-hidden", "true");
+                frame.append(count);
+            }
+            row.append(frame);
+        }
+        body.append(row);
+    }
+    if (c.pips) {
+        const pips = node("div", undefined, "u-pips");
+        pips.setAttribute("role", "img");
+        pips.setAttribute("aria-label", `${c.pips.filled} / ${c.pips.total}${c.pips.extra ? " " + c.pips.extra : ""}`);
+        for (let i = 0; i < c.pips.total; i++)
+            pips.append(node("span", undefined, i < c.pips.filled ? "u-pip on" : "u-pip"));
+        body.append(pips);
+        if (c.pips.extra) {
+            const extra = node("div", c.pips.extra, "u-extra");
+            extra.setAttribute("aria-hidden", "true");
+            body.append(extra);
+        }
+    }
+}
 /** Properties and sections, the same in both layouts. */
 function appendRows(details: HTMLElement, c: TooltipContent) {
     if (c.properties?.length) {
         const props = node("div", undefined, "properties");
         for (const p of c.properties) {
             const row = node("div");
-            // The rich layout has no third column: what a stat grows by follows its value.
-            const value = p.per === undefined ? p.value : p.value.trim() ? p.value + " \u00b7 " + p.per : p.per;
+            // The rich layout has no third column: what a stat grows by follows its value, and so does its suffix.
+            const own = p.value + (p.suffix ?? "");
+            const value = p.per === undefined ? own : own.trim() ? own + " \u00b7 " + p.per : p.per;
             row.append(node("span", p.label ? p.label + ": " : ""), node("span", value, "value"));
             props.append(row);
         }

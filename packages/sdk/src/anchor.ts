@@ -44,11 +44,14 @@ function point(target: AnchorTarget): TooltipAnchor["at"] {
  * older Tavora than `ui.tooltip.pinnable` would reject the unknown key, so it is left out there (the card still shows,
  * with the old hint). The same goes for the card's `layout`, `effect` and `skin` on a Tavora older than
  * `ui.tooltip.skin`: the card shows in the rich layout there; and for a stat's `icon` before `ui.tooltip.propertyIcon`.
+ * A unit card (`layout: "unit"`) becomes a plain card before `ui.tooltip.unit`, and a stat's `suffix` goes into its
+ * value wherever the unit layout doesn't show it.
  */
 export function tooltipShowParams(request: TooltipShowOptions, hostVersion: string): Omit<TooltipShowOptions, "anchor" | "at"> & Pick<TooltipAnchor, "at" | "box"> {
   if (request.pinnable === false && request.pinned === true) throw new TavoraError({ code: "INVALID_PARAMS", message: "A card that is not pinnable can't be pinned" });
   const params = tooltipParams(request, hostVersion);
   if (params.pinnable !== undefined && !supportsCall(hostVersion, "ui.tooltip.pinnable")) delete params.pinnable;
+  if (params.content) params.content = unitFallback(params.content, supportsCall(hostVersion, "ui.tooltip.unit"));
   if (params.content && !supportsCall(hostVersion, "ui.tooltip.propertyIcon")) params.content = withoutIcons(params.content);
   if (params.content && !supportsCall(hostVersion, "ui.tooltip.per")) params.content = withoutPer(params.content);
   const content = params.content as TooltipContent | undefined;
@@ -57,6 +60,24 @@ export function tooltipShowParams(request: TooltipShowOptions, hostVersion: stri
     params.content = effect === undefined ? older : { ...older, sections: withEffectRow(older.sections, effect) };
   }
   return params;
+}
+
+/**
+ * The unit layout's own keys for a Tavora without it (`unit` false): the card layout instead, without the corner, the
+ * icon row and the pips. A stat's `suffix` shows only in the unit layout; anywhere else it goes at the end of its value,
+ * cut to the 300 characters a value may have.
+ */
+function unitFallback(content: TooltipContent, unit: boolean): TooltipContent {
+  const isUnit = content.layout === "unit";
+  if (unit && isUnit) return content;
+  const strip = !unit && (isUnit || content.corner !== undefined || content.icons !== undefined || content.pips !== undefined);
+  const suffixed = !!content.properties?.some((p) => p.suffix !== undefined);
+  if (!strip && !suffixed) return content;
+  const { corner: _corner, icons: _icons, pips: _pips, ...rest } = content;
+  const out: TooltipContent = strip ? rest : { ...content };
+  if (!unit && isUnit) out.layout = "card";
+  if (suffixed) out.properties = content.properties!.map(({ suffix, ...p }) => (suffix === undefined ? p : { ...p, value: (p.value + suffix).slice(0, 300) }));
+  return out;
 }
 
 /** For a Tavora without stat icons: they go, the labels stay. */
@@ -91,11 +112,16 @@ function withEffectRow(sections: TooltipContent["sections"], effect: NonNullable
 
 /**
  * The wire form of `ui.tooltip.defineSkin`. An older Tavora refuses a colour it doesn't know, and with it the whole
- * skin, so `colors.boxBorder` is left out before `ui.tooltip.boxBorder` (the box then has no edge there).
+ * skin, so `colors.boxBorder` is left out before `ui.tooltip.boxBorder` (the box then has no edge there), and
+ * `colors.bar` before `ui.tooltip.unit` (no unit cards there).
  */
 export function skinParams(name: string, skin: TooltipSkin, hostVersion: string): { name: string; skin: TooltipSkin } {
-  if (skin.colors?.boxBorder === undefined || supportsCall(hostVersion, "ui.tooltip.boxBorder")) return { name, skin };
-  const { boxBorder: _edge, ...colors } = skin.colors;
+  const dropEdge = skin.colors?.boxBorder !== undefined && !supportsCall(hostVersion, "ui.tooltip.boxBorder");
+  const dropBar = skin.colors?.bar !== undefined && !supportsCall(hostVersion, "ui.tooltip.unit");
+  if (!dropEdge && !dropBar) return { name, skin };
+  const colors = { ...skin.colors };
+  if (dropEdge) delete colors.boxBorder;
+  if (dropBar) delete colors.bar;
   return { name, skin: { ...skin, colors } };
 }
 

@@ -20,20 +20,26 @@ export async function bundleImage(root: string, path: string, max: number): Prom
     return undefined;
 }
 /**
- * The card's pictures read in, since the tooltip page loads nothing but data: URLs: the item picture, and on the card
- * layout each stat's icon (each file once). One that can't be read is left out and the text stays; the rich layout
- * shows no icons, so they go there unread.
+ * The card's pictures read in, since the tooltip page loads nothing but data: URLs: the item picture, on the card
+ * layout each stat's icon, and on the unit layout the corner's icon and the icon row's pictures (each file once). One
+ * that can't be read is left out and the text stays (an icon row's picture leaves an empty frame, `image: ""`); a
+ * layout that doesn't show a picture gets it unread, and no icon row.
  */
 export async function withBundleImages(root: string, content: TooltipContent): Promise<TooltipContent> {
-    const { image: path, ...rest } = content;
+    const { image: path, corner, icons: row, ...rest } = content;
     const image = path ? await bundleImage(root, path, IMAGE_BYTES) : undefined;
     const out: TooltipContent = { ...rest, ...(image ? { image } : {}) };
-    if (!content.properties?.some(p => p.icon !== undefined))
-        return out;
-    const icons = new Map<string, Promise<string | undefined>>();
-    const icon = (path: string) => { let read = icons.get(path); if (!read)
-        icons.set(path, read = bundleImage(root, path, ICON_BYTES)); return read; };
-    const card = content.layout === "card";
-    out.properties = await Promise.all(content.properties.map(async ({ icon: path, ...p }) => { const url = card && path !== undefined ? await icon(path) : undefined; return url ? { ...p, icon: url } : p; }));
+    const card = content.layout === "card", unit = content.layout === "unit";
+    const read = new Map<string, Promise<string | undefined>>();
+    const icon = (path: string) => { let url = read.get(path); if (!url)
+        read.set(path, url = bundleImage(root, path, ICON_BYTES)); return url; };
+    if (content.properties?.some(p => p.icon !== undefined))
+        out.properties = await Promise.all(content.properties.map(async ({ icon: path, ...p }) => { const url = card && path !== undefined ? await icon(path) : undefined; return url ? { ...p, icon: url } : p; }));
+    if (corner) {
+        const { icon: path, ...text } = corner, url = unit && path !== undefined ? await icon(path) : undefined;
+        out.corner = url ? { ...text, icon: url } : text;
+    }
+    if (row && unit)
+        out.icons = await Promise.all(row.map(async ({ image: path, ...i }) => ({ ...i, image: (await icon(path)) ?? "" })));
     return out;
 }

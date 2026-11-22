@@ -57,6 +57,8 @@ describe("supports", () => {
     expect(latest.supports("ui.tooltip.propertyIcon")).toBe(true);
     expect(old.supports("ui.tooltip.anchorBox")).toBe(false);
     expect(latest.supports("ui.tooltip.anchorBox")).toBe(true);
+    expect(old.supports("ui.tooltip.unit")).toBe(false);
+    expect(latest.supports("ui.tooltip.unit")).toBe(true);
     await expect(old.storage.compareAndSet("k", null, 1)).rejects.toMatchObject({ code: "UNKNOWN_METHOD" });
   });
 });

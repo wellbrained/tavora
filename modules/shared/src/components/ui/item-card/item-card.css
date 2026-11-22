@@ -58,3 +58,48 @@
 .tavora-item-card-rich>img{display:block;width:77px;flex:0 0 77px;height:auto;aspect-ratio:58/80;object-fit:contain;border:1px solid var(--ic-line);border-radius:var(--radius-sm);padding:3px;box-sizing:border-box}
 .tavora-item-card-rich>div{display:flex;flex-direction:column;gap:8px;min-width:0;flex:1}
 .tavora-item-card-heading{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+
+/* The unit card (`layout: "unit"`): a game unit as the game shows it, like the tooltip page's (shared/tooltip-document.ts
+   in the app). The portrait sticks out at the top left over the title bar and the body. The bar takes the skin's `bar`
+   (or its surface), the lines its text; without a skin, the theme's. A skin's font is for the whole card; a unit wears
+   no frame. It is at least 316 px wide and grows to fit its stats and icons; the effect and the rows wrap. */
+.tavora-item-card[data-layout=unit]{--ic-bar:color-mix(in srgb,var(--foreground) 16%,var(--popover));--ic-unit-line:color-mix(in srgb,var(--foreground) 55%,var(--popover));
+  position:relative;display:block;width:max-content;min-width:316px;max-width:min(520px,100%);padding:0;border:0;border-radius:0;background:none;line-height:1.25}
+.tavora-item-card[data-layout=unit][data-colors]{--ic-bar:var(--skin-bar,var(--skin-surface));--ic-unit-line:var(--skin-text)}
+.tavora-item-card[data-layout=unit][data-font]{font-family:var(--skin-font),var(--font-sans);line-height:1}
+.tavora-item-card[data-layout=unit][data-pixel]{-webkit-font-smoothing:none}
+.tavora-item-card[data-layout=unit][data-portrait]{padding-top:19px}
+.tavora-item-card[data-layout=unit][data-pips]{padding-bottom:10px}
+.tavora-item-card[data-layout=unit][data-extra]{padding-bottom:24px}
+.tavora-item-card-portrait{position:absolute;left:0;top:0;z-index:2;box-sizing:border-box;width:44px;height:67px;border:2px solid var(--ic-unit-line);background:color-mix(in srgb,var(--ic-bar) 45%,var(--ic-surface));overflow:hidden}
+.tavora-item-card-portrait img{display:block;width:100%;height:100%;object-fit:cover;object-position:50% 10%}
+.tavora-item-card-bar{box-sizing:border-box;display:flex;align-items:center;gap:8px;height:34px;padding:0 9px 0 12px;background:var(--ic-bar);border:2px solid var(--ic-unit-line);border-bottom:0;border-radius:5px 5px 0 0}
+.tavora-item-card[data-portrait] .tavora-item-card-bar{margin-left:44px;padding-left:6px;border-left:0;border-top-left-radius:0}
+.tavora-item-card[data-layout=unit][data-colors] .tavora-item-card-bar{text-shadow:2px 2px 0 color-mix(in srgb,var(--ic-bar) 35%,var(--ic-surface))}
+.tavora-item-card-bar h3{flex:1 1 auto;min-width:0;padding-right:2px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tavora-item-card[data-layout=unit][data-font] .tavora-item-card-bar h3{font-weight:400}
+.tavora-item-card-corner{display:flex;align-items:center;gap:3px;flex:none;font-size:var(--ic-title-size);white-space:nowrap}
+.tavora-item-card-corner-icon{width:16px;height:16px;background-color:currentColor;-webkit-mask:var(--ic-icon) center/contain no-repeat;mask:var(--ic-icon) center/contain no-repeat}
+.tavora-item-card-unit-body{position:relative;box-sizing:border-box;display:flex;flex-direction:column;gap:8px;padding:12px 14px 12px;background:var(--ic-surface);border:2px solid var(--ic-unit-line);border-top:0;border-radius:0 0 5px 5px}
+.tavora-item-card[data-portrait] .tavora-item-card-unit-body{margin-left:24px;padding-left:31px}
+.tavora-item-card[data-pips] .tavora-item-card-unit-body{padding-bottom:24px}
+.tavora-item-card-unit-effect+*{margin-top:2px}
+/* The effect, the type line and the rows wrap to the card; they never widen it. */
+.tavora-item-card-unit-effect,.tavora-item-card-unit-body>.tavora-item-card-type,.tavora-item-card-unit-body>.tavora-item-card-section{width:0;min-width:100%;overflow-wrap:anywhere}
+.tavora-item-card-unit-effect{white-space:pre-wrap}
+.tavora-item-card-unit-effect [data-accent]{color:var(--ic-accent)}
+/* Label, value and suffix: the labels as wide as the longest, the values lined up on their right edge, never wrapped,
+   and the suffix ("E+12", " (MAX)") hanging past that edge with no gap. */
+.tavora-item-card-unit-stats{display:grid;grid-template-columns:auto auto 1fr;gap:4px 8px}
+.tavora-item-card-unit-value,.tavora-item-card-unit-suffix{color:var(--ic-accent);font-variant-numeric:tabular-nums}
+.tavora-item-card-unit-value{text-align:right;white-space:nowrap}
+.tavora-item-card-unit-suffix{margin-left:-8px;white-space:pre}
+.tavora-item-card-icons{display:flex;flex-wrap:wrap;gap:12px}
+.tavora-item-card-unit-icon{position:relative;box-sizing:border-box;display:grid;place-items:center;flex:none;width:34px;height:26px;border:2px solid var(--ic-unit-line);border-radius:4px;background:var(--ic-bar)}
+.tavora-item-card-unit-icon img{display:block;width:24px;height:22px;object-fit:cover;border-radius:2px}
+.tavora-item-card-count{position:absolute;right:-6px;bottom:-7px;padding:0 3px;border-radius:6px;background:var(--ic-surface);color:var(--ic-text);font-size:var(--ic-small-size);line-height:13px;white-space:nowrap}
+/* The pips sit on the body's bottom edge, the extra label under them. */
+.tavora-item-card-pips{position:absolute;left:50%;bottom:-9px;transform:translateX(-50%);display:flex;gap:14px}
+.tavora-item-card-pip{box-sizing:border-box;display:grid;place-items:center;width:12px;height:12px;transform:rotate(45deg);background:var(--ic-surface);border:2px solid var(--ic-unit-line)}
+.tavora-item-card-pip[data-on]::after{content:"";width:4px;height:4px;background:var(--ic-unit-line)}
+.tavora-item-card-extra{position:absolute;left:50%;bottom:-24px;transform:translateX(-50%);font-size:var(--ic-small-size);line-height:13px;white-space:nowrap}

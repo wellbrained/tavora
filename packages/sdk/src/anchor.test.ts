@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { skinParams, tooltipParams, tooltipShowParams } from "./anchor.js";
-import { ITEM_CARD_BOX_BORDER_TAVORA, ITEM_CARD_ICON_TAVORA, ITEM_CARD_PER_TAVORA, ITEM_CARD_TAVORA, TOOLTIP_ANCHOR_BOX_TAVORA } from "./protocol.js";
+import { ITEM_CARD_BOX_BORDER_TAVORA, ITEM_CARD_ICON_TAVORA, ITEM_CARD_PER_TAVORA, ITEM_CARD_TAVORA, TOOLTIP_ANCHOR_BOX_TAVORA, UNIT_CARD_TAVORA, type TooltipContent } from "./protocol.js";
 
 const at = { x: 1, y: 2 };
 const OLD = "0.24.0";
@@ -73,6 +73,72 @@ describe("tooltipShowParams and the stats' icons", () => {
     expect(sdk.supports("ui.tooltip.propertyIcon")).toBe(false);
     const shown = (host.calls["ui.tooltip.show"] as { content: { properties: object[] } }[])[0]!.content;
     expect(shown.properties.some((p) => "icon" in p)).toBe(false);
+  });
+});
+
+describe("tooltipShowParams and the unit layout", () => {
+  const BEFORE = TOOLTIP_ANCHOR_BOX_TAVORA;
+  const unit: TooltipContent = {
+    title: "Soldier",
+    layout: "unit",
+    skin: "nothing",
+    image: "dist/cards/soldier.webp",
+    corner: { text: "1800", icon: "dist/icons/person.png" },
+    effect: [{ text: "Gains " }, { text: "+1%", accent: true }, { text: " damage per unit." }],
+    properties: [{ label: "Health:", value: "3.95", suffix: "E+12" }, { label: "Hits/Second:", value: "99.999", suffix: " (MAX)" }, { label: "Crit Chance:", value: "5%" }],
+    icons: [{ image: "dist/cards/steel-coat.webp", label: "Steel Coat", count: "95" }],
+    pips: { filled: 3, total: 3, extra: "+67" },
+  };
+
+  it("sends a unit card as it is to a Tavora that knows it", () => {
+    expect(tooltipShowParams({ id: "a", at, content: unit }, UNIT_CARD_TAVORA).content).toBe(unit);
+  });
+
+  it("shows it as a plain card on an older Tavora: no corner, icons or pips, each suffix after its value", () => {
+    const { corner: _c, icons: _i, pips: _p, ...rest } = unit;
+    expect(tooltipShowParams({ id: "a", at, content: unit }, BEFORE).content).toEqual({ ...rest, layout: "card", properties: [{ label: "Health:", value: "3.95E+12" }, { label: "Hits/Second:", value: "99.999 (MAX)" }, { label: "Crit Chance:", value: "5%" }] });
+    expect(unit.layout).toBe("unit");
+    expect(unit.properties![0]!.suffix).toBe("E+12");
+    // Older still, without item cards: the rich layout, with the effect as a row.
+    const rich = tooltipShowParams({ id: "a", at, content: unit }, OLD).content;
+    expect(rich).not.toHaveProperty("layout");
+    expect(rich.properties![1]!.value).toBe("99.999 (MAX)");
+  });
+
+  it("puts a suffix into the value in the other layouts, on every Tavora, cut to 300 characters", () => {
+    const card: TooltipContent = { title: "A", layout: "card", properties: [{ label: "Health", value: "3.95", suffix: "E+12" }, { label: "Range", value: "3" }] };
+    expect(tooltipShowParams({ id: "a", at, content: card }, UNIT_CARD_TAVORA).content.properties).toEqual([{ label: "Health", value: "3.95E+12" }, { label: "Range", value: "3" }]);
+    const long: TooltipContent = { title: "A", properties: [{ label: "Long", value: "x".repeat(290), suffix: "y".repeat(20) }] };
+    expect(tooltipShowParams({ id: "a", at, content: long }, UNIT_CARD_TAVORA).content.properties![0]!.value).toHaveLength(300);
+  });
+
+  it("leaves the unit's keys out of another layout for an older Tavora, and keeps them for a newer one", () => {
+    const card: TooltipContent = { title: "A", layout: "card", corner: { text: "3" }, pips: { filled: 1, total: 3 } };
+    expect(tooltipShowParams({ id: "a", at, content: card }, BEFORE).content).toEqual({ title: "A", layout: "card" });
+    expect(tooltipShowParams({ id: "a", at, content: card }, UNIT_CARD_TAVORA).content).toBe(card);
+  });
+
+  it("is used by the memory host's show", async () => {
+    const { createMemoryHost } = await import("./testing.js");
+    const old = createMemoryHost({ version: BEFORE });
+    expect(old.sdk.supports("ui.tooltip.unit")).toBe(false);
+    await old.sdk.ui.tooltip.show({ id: "a", at, content: unit });
+    expect((old.host.calls["ui.tooltip.show"] as { content: TooltipContent }[])[0]!.content.layout).toBe("card");
+    const latest = createMemoryHost();
+    expect(latest.sdk.supports("ui.tooltip.unit")).toBe(true);
+    await latest.sdk.ui.tooltip.show({ id: "a", at, content: unit });
+    expect((latest.host.calls["ui.tooltip.show"] as { content: TooltipContent }[])[0]!.content).toEqual(unit);
+  });
+});
+
+describe("skinParams and the unit layout's bar", () => {
+  const skin = { colors: { surface: "#1a150f", text: "#ececec", accent: "#f2c94c", bar: "#776538", boxBorder: "#a07c40" } };
+
+  it("leaves bar out for a Tavora that would refuse the whole skin for it, and sends it to one that knows it", () => {
+    expect(skinParams("greed", skin, TOOLTIP_ANCHOR_BOX_TAVORA).skin).toEqual({ colors: { surface: "#1a150f", text: "#ececec", accent: "#f2c94c", boxBorder: "#a07c40" } });
+    expect(skinParams("greed", skin, ITEM_CARD_TAVORA).skin).toEqual({ colors: { surface: "#1a150f", text: "#ececec", accent: "#f2c94c" } });
+    expect(skin.colors.bar).toBe("#776538");
+    expect(skinParams("greed", skin, UNIT_CARD_TAVORA).skin).toBe(skin);
   });
 });
 

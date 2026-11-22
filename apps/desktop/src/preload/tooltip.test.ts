@@ -150,6 +150,89 @@ describe("tooltip preload", () => {
         expect(rich.querySelector(".properties")!.textContent).toBe("HP: 40");
     });
 
+    const PNG = "data:image/png;base64,iVBORw0KGgo=";
+    const unit: TooltipContent = {
+        title: "Soldier",
+        layout: "unit",
+        image: PNG,
+        badges: ["Rare"],
+        requirements: [{ label: "Level", value: "3" }],
+        corner: { text: "1800", icon: PNG },
+        effect: [{ text: "Gains " }, { text: "+1%", accent: true }, { text: " damage per unit." }],
+        properties: [{ label: "Health:", value: "3.95", suffix: "E+12" }, { label: "Hits/Second:", value: "99.999", suffix: " (MAX)" }, { label: "Crit Chance:", value: "5%", per: "+1", icon: PNG }],
+        icons: [{ image: PNG, label: "Steel Coat", count: "95" }, { image: "", label: "Static" }],
+        pips: { filled: 2, total: 3, extra: "+67" },
+    };
+
+    it("lays a unit out: the portrait, the title bar with its corner value, then effect, stats, icon row and pips", () => {
+        const el = render(unit);
+        expect(document.body.classList.contains("unit")).toBe(true);
+        expect(document.body.classList.contains("card")).toBe(false);
+        const u = el.querySelector(".u-card")!;
+        expect(u.className).toBe("u-card has-pips has-extra");
+        expect(Array.from(u.children).map(c => c.className)).toEqual(["u-portrait", "u-bar", "u-body"]);
+        expect(u.querySelector(".u-portrait img")!.getAttribute("src")).toBe(PNG);
+        expect(u.querySelector(".u-bar h2")!.textContent).toBe("Soldier");
+        expect(u.querySelector(".u-corner")!.textContent).toBe("1800");
+        const icon = u.querySelector<HTMLElement>(".u-corner-icon")!;
+        expect(icon.getAttribute("aria-hidden")).toBe("true");
+        expect(icon.style.getPropertyValue("--u-icon")).toBe(`url("${PNG}")`);
+        const body = u.querySelector(".u-body")!;
+        expect(Array.from(body.children).map(c => c.className)).toEqual(["u-effect", "u-stats", "u-icons", "u-pips", "u-extra"]);
+        expect(Array.from(body.querySelectorAll(".u-effect .accent")).map(a => a.textContent)).toEqual(["+1%"]);
+        // Three columns: label, value, and the suffix kept as given (a leading space too); no per or icon here.
+        expect(Array.from(body.querySelector(".u-stats")!.children).map(c => c.className + "=" + c.textContent)).toEqual(["u-label=Health:", "u-value=3.95", "u-suffix=E+12", "u-label=Hits/Second:", "u-value=99.999", "u-suffix= (MAX)", "u-label=Crit Chance:", "u-value=5%", "u-suffix="]);
+        expect(body.querySelector(".stat-icon, .per")).toBeNull();
+        // Each picture has its name (with its count) for screen readers; one the host couldn't read leaves an empty frame.
+        const frames = Array.from(body.querySelectorAll(".u-icon"));
+        expect(frames.map(f => f.getAttribute("role") + ":" + f.getAttribute("aria-label"))).toEqual(["img:Steel Coat (95)", "img:Static"]);
+        expect(frames[0]!.querySelector("img")!.getAttribute("src")).toBe(PNG);
+        expect(frames[0]!.querySelector(".u-count")!.textContent).toBe("95");
+        expect(frames[1]!.children).toHaveLength(0);
+        const pips = body.querySelector(".u-pips")!;
+        expect(Array.from(pips.children).map(p => p.className)).toEqual(["u-pip on", "u-pip on", "u-pip"]);
+        expect(pips.getAttribute("aria-label")).toBe("2 / 3 +67");
+        expect(body.querySelector(".u-extra")!.textContent).toBe("+67");
+        // Badges and requirements aren't part of a unit; the footer still says whose card it is.
+        expect(el.querySelector(".badge, .card-requirements, .requirements")).toBeNull();
+        expect(el.querySelector(".footer")!.textContent).toContain("9 Kings");
+    });
+
+    it("leaves out what a unit doesn't have, and puts the close button of a pinned one in its title bar", () => {
+        const el = render({ title: "Thief", layout: "unit", properties: [{ label: "Health:", value: "18.8" }] }, { pinned: true });
+        const u = el.querySelector(".u-card")!;
+        expect(u.className).toBe("u-card no-portrait");
+        expect(u.querySelector(".u-portrait, .u-corner, .u-icons, .u-pips, .u-extra, .u-effect")).toBeNull();
+        expect(Array.from(u.querySelector(".u-bar")!.children).map(c => c.tagName.toLowerCase() + (c.id ? "#" + c.id : ""))).toEqual(["h2", "button#close"]);
+        expect(el.querySelector(":scope > #close")).toBeNull();
+    });
+
+    it("dresses a unit in its skin's colours, bar, font and hard pixels, but no frame", () => {
+        const el = render(unit, { skin: { ...skin, colors: { ...skin.colors, bar: "#776538" } } });
+        expect(document.body.classList.contains("unit")).toBe(true);
+        expect(document.body.classList.contains("skin-colors")).toBe(true);
+        expect(document.body.classList.contains("pixel")).toBe(true);
+        expect(document.body.classList.contains("framed")).toBe(false);
+        expect(el.style.getPropertyValue("--skin-bar")).toBe("#776538");
+        expect(el.style.getPropertyValue("border-image-source")).toBe("");
+        render(unit, { skin });
+        expect(el.style.getPropertyValue("--skin-bar")).toBe("");
+    });
+
+    it("never puts anything but a checked picture into a unit's styles or pictures, and never takes the PoE look", () => {
+        const bad = 'data:image/png;base64,AA=="),url(https://example.org/x';
+        const el = render({ ...unit, look: "poe", corner: { text: "3", icon: bad }, icons: [{ image: "https://example.org/x.png", label: "A" }, { image: "data:image/svg+xml;base64,PHN2Zz4=", label: "B" }] });
+        expect(document.body.classList.contains("poe")).toBe(false);
+        expect(el.querySelector(".u-corner-icon")).toBeNull();
+        expect(el.querySelectorAll(".u-icon img")).toHaveLength(0);
+    });
+
+    it("puts a suffix into the value in the card and rich layouts", () => {
+        const properties = [{ label: "Health", value: "3.95", suffix: "E+12" }];
+        expect(Array.from(render({ ...card, properties }).querySelector(".stats")!.children).map(c => c.textContent)).toEqual(["Health", "3.95E+12"]);
+        expect(render({ title: "A", properties }).querySelector(".properties")!.textContent).toBe("Health: 3.95E+12");
+    });
+
     it("shows the rich layout as before, with no skin even when one is sent", () => {
         const el = render({ ...card, layout: "rich" }, { skin });
         expect(document.body.classList.contains("card")).toBe(false);

@@ -20,16 +20,51 @@ export interface TooltipContent {
      * the badges, the `effect` box, then properties and sections. Needs `sdk.supports("ui.tooltip.skin")`: on an older
      * Tavora the SDK leaves `layout` and `skin` out and puts `effect` into a section row, so the card shows in the rich
      * layout.
+     * `"unit"` is a game unit as games show it on the board: the picture (`image`) as a small framed portrait sticking out
+     * at the top left, a title bar with the title and the `corner` value, and below it the `subtitle`, the `effect`, the
+     * stats (label, value and `suffix`), the sections, the `icons` row and the `pips` on the bottom edge. It leaves out
+     * `badges`, `requirements`, `perHeading` and a stat's `per` and `icon`. It is at least 316 px wide and grows to fit the
+     * stats and the icons, up to 520 px; the effect and the rows wrap. Needs `sdk.supports("ui.tooltip.unit")`: on an
+     * older Tavora the SDK shows it in the `"card"` layout, without `corner`, `icons` and `pips`, with each `suffix` after
+     * its value.
      */
-    layout?: "rich" | "card";
+    layout?: "rich" | "card" | "unit";
+    /**
+     * The unit layout's corner value, at the right of its title bar: a short text (up to 20 characters, e.g. "27" units)
+     * and an optional pictogram after it (e.g. a person), given like a stat's `icon`: a bundle-relative PNG or WebP (up to
+     * 64 KB; for the kit's `ItemCard`, a URL the page can load), drawn from its shape alone in the title's colour, 16 px
+     * high, and left out when it can't be read. Only the unit layout shows it.
+     */
+    corner?: {
+        text: string;
+        icon?: string;
+    };
+    /**
+     * The unit layout's row of small framed pictures under the stats (spells, buffs, items it carries), up to 12. Each
+     * `image` is a bundle-relative PNG or WebP (up to 64 KB; for the kit's `ItemCard`, a URL the page can load), shown in
+     * full colour, 24 × 22 px (cut to fill); `label` (up to 100 characters) is its name for screen readers; `count` (up to 8 characters,
+     * e.g. "95") is a small badge at its bottom right. A picture that can't be read leaves an empty frame. Only the unit
+     * layout shows it.
+     */
+    icons?: TooltipIcon[];
+    /**
+     * The unit layout's pips: `total` diamonds (1 to 10) centred on the bottom edge, the first `filled` of them filled
+     * (0 to `total`, whole numbers), e.g. a level or stars. `extra` (up to 12 characters, e.g. "+67" for a level over the
+     * most) is shown under them. Only the unit layout shows them.
+     */
+    pips?: {
+        filled: number;
+        total: number;
+        extra?: string;
+    };
     /**
      * The card's effect text, in a box of its own: one plain text, or runs of text where `accent: true` ones take the
      * accent colour (numbers, keywords). Up to 1,000 characters and 40 runs.
      */
     effect?: string | TooltipEffectRun[];
     /**
-     * The name of a skin this module defined with `ui.tooltip.defineSkin`; only the `"card"` layout uses it. A name
-     * that isn't defined (yet) shows the plain card, without an error.
+     * The name of a skin this module defined with `ui.tooltip.defineSkin`; only the `"card"` and `"unit"` layouts use
+     * it. A name that isn't defined (yet) shows the plain card, without an error.
      */
     skin?: string;
     badges?: string[];
@@ -47,12 +82,17 @@ export interface TooltipContent {
      * can load). Only its shape counts: the card draws it in the label's colour, so give it a transparent background; it
      * is the label's height, and left out when it can't be read. Only the card layout shows it. Needs `sdk.supports("ui.tooltip.propertyIcon")`: on
      * an older Tavora the SDK leaves it out.
+     * A row's `suffix` (up to 40 characters, kept as given, a leading space too) follows the value in the unit layout:
+     * the values line up on their right edge and the suffix hangs past it in the accent colour, never wrapped, e.g.
+     * "3.95" with "E+12", or "99.999" with " (MAX)". In the other layouts, and on a Tavora without
+     * `sdk.supports("ui.tooltip.unit")`, the SDK puts it at the end of the value.
      */
     properties?: {
         label: string;
         value: string;
         per?: string;
         icon?: string;
+        suffix?: string;
     }[];
     /** The heading over the `per` column ("Per level"), in the user's language, up to 60 characters; shown only with a `per`. */
     perHeading?: string;
@@ -66,6 +106,14 @@ export interface TooltipContent {
         }[];
     }[];
 }
+/** A picture in the unit layout's icon row. */
+export interface TooltipIcon {
+    image: string;
+    /** Its name for screen readers ("Steel Coat"). */
+    label: string;
+    /** A small badge at its bottom right, e.g. how many stacks ("95"). */
+    count?: string;
+}
 /** A run of the card's effect text. */
 export interface TooltipEffectRun {
     text: string;
@@ -75,7 +123,9 @@ export interface TooltipEffectRun {
 /**
  * A module's own look for its item cards (`ui.tooltip.defineSkin`): checked values, never CSS. Files are
  * bundle-relative paths in the module's own `dist/`, like `image`. Tavora sets every size, keeps the theme font for the
- * type line, properties, sections and footer, and refuses a skin whose colours are hard to read.
+ * type line, properties, sections and footer (the unit layout takes the skin's font everywhere but the footer), and
+ * refuses a skin whose colours are hard to read. The unit layout takes `surface` for its body, `text` for its text and
+ * lines, `muted`, `accent` for the values and the effect's accent runs, `bar`, the font and `pixelArt`.
  */
 export interface TooltipSkin {
     /**
@@ -103,8 +153,17 @@ export interface TooltipSkin {
          * Needs `sdk.supports("ui.tooltip.boxBorder")`: on an older Tavora the SDK leaves it out of `defineSkin`.
          */
         boxBorder?: string;
+        /**
+         * The unit layout's title bar; the title and the corner value (`text`) need a contrast of 4.5:1 with it. Left
+         * out, the bar is `surface`. Needs `sdk.supports("ui.tooltip.unit")`: on an older Tavora the SDK leaves it out of
+         * `defineSkin`.
+         */
+        bar?: string;
     };
-    /** A WOFF2 font (up to 512 KB) for the title and the effect box only; letters it lacks come from the theme font. */
+    /**
+     * A WOFF2 font (up to 512 KB) for the title and the effect box only (on the unit layout, for the whole card); letters
+     * it lacks come from the theme font.
+     */
     font?: string;
     /** Draws the picture and the frame with hard pixels instead of smoothing them (pixel art). */
     pixelArt?: boolean;

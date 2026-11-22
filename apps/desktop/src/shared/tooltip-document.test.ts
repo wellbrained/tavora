@@ -35,3 +35,21 @@ describe("tooltip page: a stat's icon", () => {
         expect(TOOLTIP_DOCUMENT).toContain("img-src data:;");
     });
 });
+
+describe("tooltip page: a unit", () => {
+    it("lets only the stats and icons widen the card: the effect, type line and rows wrap to it", () => {
+        expect(TOOLTIP_DOCUMENT).toContain("body.unit .u-effect,body.unit .u-body>.subtitle,body.unit .u-body>section{width:0;min-width:100%;");
+        expect(TOOLTIP_DOCUMENT).toContain("body.unit .footer{width:0;min-width:calc(100% - 24px);");
+    });
+
+    it("keeps room under the body for the pips and their extra label, so the window measures them", () => {
+        expect(TOOLTIP_DOCUMENT).toContain("body.unit .u-card.has-pips{padding-bottom:10px}body.unit .u-card.has-extra{padding-bottom:24px}");
+    });
+
+    it("has the unit's sizes, the skin's font for the whole unit and no named or raw colours of its own", () => {
+        expect(TOOLTIP_DOCUMENT).toContain("--tavora-unit-title-size:19px;--tavora-unit-text-size:16px;--tavora-unit-small-size:12px");
+        expect(TOOLTIP_DOCUMENT).toContain('body.unit.skin-font .u-card{font-family:"tavora-skin"');
+        const unit = TOOLTIP_DOCUMENT.split("\n").filter(line => line.startsWith("body.unit")).join("");
+        expect(unit).not.toMatch(/#[0-9a-f]{3,6}\b(?!\))/i);
+    });
+});

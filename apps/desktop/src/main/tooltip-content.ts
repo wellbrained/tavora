@@ -62,7 +62,7 @@ export function checkTooltip(v: unknown): TooltipRequest {
     // A card that says it can't be pinned never pins: asking for both is a mistake, not something to guess at.
     if (o.pinnable === false && o.pinned === true)
         fail();
-    const c = obj(o.content, ["title", "subtitle", "look", "tone", "image", "layout", "effect", "skin", "badges", "requirements", "properties", "perHeading", "sections"]);
+    const c = obj(o.content, ["title", "subtitle", "look", "tone", "image", "layout", "effect", "skin", "badges", "requirements", "properties", "perHeading", "sections", "corner", "icons", "pips"]);
     const content: TooltipContent = { title: text(c.title, 200) };
     if (c.subtitle !== undefined)
         content.subtitle = text(c.subtitle, 300);
@@ -79,7 +79,7 @@ export function checkTooltip(v: unknown): TooltipRequest {
     if (c.image !== undefined)
         content.image = bundleImage(c.image);
     if (c.layout !== undefined) {
-        if (!["rich", "card"].includes(c.layout as string))
+        if (!["rich", "card", "unit"].includes(c.layout as string))
             fail();
         content.layout = c.layout as NonNullable<TooltipContent["layout"]>;
     }
@@ -97,13 +97,16 @@ export function checkTooltip(v: unknown): TooltipRequest {
         content.requirements = list(c.requirements, 8, property);
     // A stat may grow by `per` (a third column on the card); with it, its value may be empty (it only grows). Its `icon`
     // is a picture in the module's bundle, by the same rules as `image`.
+    // The unit layout hangs a `suffix` past the value ("E+12", " (MAX)"): kept as given, a leading space too.
     const stat = (v: unknown) => {
-        const p = obj(v, ["label", "value", "per", "icon"]);
+        const p = obj(v, ["label", "value", "per", "icon", "suffix"]);
         if (p.per !== undefined && (typeof p.value !== "string" || p.value.length > 300))
             fail();
         const row: NonNullable<TooltipContent["properties"]>[number] = p.per === undefined ? property({ label: p.label, value: p.value }) : { label: text(p.label, 100), value: p.value as string, per: text(p.per, 40) };
         if (p.icon !== undefined)
             row.icon = bundleImage(p.icon, true);
+        if (p.suffix !== undefined)
+            row.suffix = text(p.suffix, 40);
         return row;
     };
     if (c.properties !== undefined)
@@ -115,6 +118,23 @@ export function checkTooltip(v: unknown): TooltipRequest {
         content.sections = list(c.sections, 12, v => { const s = obj(v, ["title", "rows"]); return { ...(s.title === undefined ? {} : { title: text(s.title, 100) }), rows: list(s.rows, 60, v => { if (++rows > 100)
                 fail(); const r = obj(v, ["text", "badges", "status", "connected"]); if (r.connected !== undefined && typeof r.connected !== "boolean")
                 fail(); return { text: text(r.text, 2000), ...(r.badges === undefined ? {} : { badges: list(r.badges, 5, v => text(v, 40)) }), ...(r.status === undefined ? {} : { status: text(r.status, 60) }), ...(r.connected === undefined ? {} : { connected: r.connected as boolean }) }; }) }; });
+    // The unit layout's corner value, icon row and pips. Their pictures are masks or small pictures in the bundle, by the
+    // rules of a stat's icon.
+    if (c.corner !== undefined) {
+        const k = obj(c.corner, ["text", "icon"]);
+        content.corner = { text: text(k.text, 20), ...(k.icon === undefined ? {} : { icon: bundleImage(k.icon, true) }) };
+    }
+    if (c.icons !== undefined)
+        content.icons = list(c.icons, 12, v => { const i = obj(v, ["image", "label", "count"]); return { image: bundleImage(i.image, true), label: text(i.label, 100), ...(i.count === undefined ? {} : { count: text(i.count, 8) }) }; });
+    if (c.pips !== undefined) {
+        const k = obj(c.pips, ["filled", "total", "extra"]);
+        const whole = (n: unknown, max: number) => { if (typeof n !== "number" || !Number.isInteger(n) || n < 0 || n > max)
+            fail(); return n; };
+        const total = whole(k.total, 10);
+        if (total < 1)
+            fail();
+        content.pips = { filled: whole(k.filled, total), total, ...(k.extra === undefined ? {} : { extra: text(k.extra, 12) }) };
+    }
     if (JSON.stringify(content).length > 40000)
         fail();
     return { ...anchor, content, pinned: o.pinned === true, ...(o.pinnable === false ? { pinnable: false } : {}) };

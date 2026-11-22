@@ -668,7 +668,7 @@ assets are capped at 512 KB. See the SDK's exported types for individual bounds.
 These need a Tavora with `ui.tooltip.defineSkin` (its version is in the table above; `sdk.supports("ui.tooltip.skin")`).
 
 
-- `content.layout` is `"rich"` (the default, the layout above) or `"card"`: the picture large on top, the title with
+- `content.layout` is `"rich"` (the default, the layout above), `"card"` or `"unit"` ([Unit cards](#unit-cards)). `"card"` is the picture large on top, the title with
   the badges right-aligned beside it (under it when they don't fit), the subtitle as the type line, the effect box,
   the stats (properties, label and value in columns, no colon) and sections.
 - A property may have `per` (up to 40 characters, e.g. `"×1.2"`): how much the stat grows, say per level. With it,
@@ -688,11 +688,12 @@ These need a Tavora with `ui.tooltip.defineSkin` (its version is in the table ab
   the SDK leaves it out there (a raw caller does that itself).
 - `content.effect` is a text (up to 1,000 characters) or up to 40 runs `{ text, accent? }` (1,000 characters in all);
   `accent: true` runs take the accent colour.
-- `content.skin` names one of the module's skins; only the card layout wears it. A name that isn't defined shows the
+- `content.skin` names one of the module's skins; only the card and unit layouts wear it. A name that isn't defined shows the
   plain card, without an error.
 - `ui.tooltip.defineSkin({ name, skin })` defines or replaces a skin for every panel of the module, until Tavora
   restarts. Names are 1 to 32 of `a-z`, `0-9` and `-`; at most 32 skins per module. `skin` is
-  `{ frame?: { image, slice }, colors?: { surface, text, muted?, accent?, box?, boxText?, boxBorder? }, font?, pixelArt?, titleCaps? }`.
+  `{ frame?: { image, slice }, colors?: { surface, text, muted?, accent?, box?, boxText?, boxBorder?, bar? }, font?, pixelArt?, titleCaps? }`
+  (`bar` is the unit layout's title bar, see [Unit cards](#unit-cards)).
   `frame.image` is a `dist/` path to a PNG or WebP, `font` to a WOFF2, each judged by its first bytes and up to 512 KB,
   read only from the module's own bundle. `slice` is four whole numbers from 0 to 64 (top, right, bottom, left): the
   nine-slice insets and the frame's width. Colours are `#rrggbb`; with `colors`, `surface` and `text` are needed,
@@ -708,6 +709,44 @@ These need a Tavora with `ui.tooltip.defineSkin` (its version is in the table ab
 - Tavora sets every size: on a skinned card the title is 17 px and the effect 15 px, on a plain card 15 and 13 px;
   badges and the footer 12 px (the kit's small size), the rest 13 px. The skin's font is used for the title and the effect box only, with the theme font for letters it lacks;
   a skin's colours ignore the theme.
+
+### Unit cards
+
+These need a Tavora with `sdk.supports("ui.tooltip.unit")` (`UNIT_CARD_TAVORA` in `@tavora/sdk/protocol`).
+
+- `content.layout: "unit"` is a game unit as games show it on the board: the `image` as a small framed portrait
+  (44 × 67 px, cut to fill) sticking out at the top left, a title bar from the portrait to the right edge with the
+  title and the corner value, and below it the body, indented under the portrait: the `subtitle`, the `effect` (plain
+  text, accent runs in the accent colour), the stats, the sections, the icon row and the pips on the body's bottom
+  edge. It leaves out `badges`, `requirements`, `perHeading` and a property's `per` and `icon`. Without an `image` the
+  bar and body start at the left edge. The card is at least 316 px wide and grows to fit the stats and the icon row, up
+  to 520 px; the effect, the type line and the rows wrap to it and never widen it. The footer with the module's name
+  stays, under the body.
+- `content.corner` is `{ text, icon? }`: `text` up to 20 characters (e.g. `"27"` units), `icon` a pictogram after it
+  by the rules of a property's `icon` (a `dist/` PNG or WebP, up to 64 KB, only its shape counts), drawn 16 px in the
+  title's colour, and left out when it can't be read.
+- The stats are three columns: the labels, as wide as the longest; the values, right-aligned in a column as wide as the
+  widest, never wrapped, in the accent colour; and a property's `suffix` (up to 40 characters, kept as given, a leading
+  space too) hanging past the values' right edge with no gap, in the accent colour, never wrapped: `"3.95"` with
+  `"E+12"`, or `"99.999"` with `" (MAX)"`, keep their numbers in line. 4 px between rows. In the card and rich layouts a
+  suffix is part of the value; the SDK puts it there, and so does Tavora for a raw caller.
+- `content.icons` is up to 12 `{ image, label, count? }`: small framed pictures (spells, buffs, items), each `image` a
+  `dist/` PNG or WebP up to 64 KB shown in full colour at 24 × 22 px (cut to fill), `label` (up to 100 characters) its
+  name for screen readers, `count` (up to 8 characters, e.g. `"95"`) a small badge at its bottom right. A picture that
+  can't be read leaves an empty frame. The row wraps when it is wider than the card can be.
+- `content.pips` is `{ filled, total, extra? }`: `total` diamonds (1 to 10, whole) centred on the body's bottom edge,
+  the first `filled` (0 to `total`, whole) of them filled, and `extra` (up to 12 characters, e.g. `"+67"` for a level
+  over the most) under them.
+- A skin (`content.skin`) dresses a unit too: `surface` for the body, `text` for the text and the lines (borders,
+  pips), `muted` for the type line, `accent` for the values, the suffixes and the effect's accent runs, and the new
+  `colors.bar` for the title bar (without it, the surface). The title and the corner value need a contrast of 4.5:1 with
+  `bar`, or the skin is refused. The skin's font is for the whole unit card (not the footer), and `pixelArt` draws the
+  pictures with hard pixels; a unit wears no frame. Without a skin the unit takes the theme's colours.
+- Sizes are the game's: the title and the corner value 19 px, the body 16 px, the icon counts and the pips' extra
+  label 12 px.
+- On a Tavora without the unit layout the SDK shows it as a `"card"` (and older still, as described above), without
+  `corner`, `icons` and `pips`, each `suffix` after its value, and leaves `colors.bar` out of `defineSkin`: such a
+  Tavora refuses the unknown keys, and with them the whole tooltip or skin (a raw caller leaves them out itself).
 - A card shown before its skin is defined is plain; when the define lands while it is still shown, it is drawn again
   in the skin.
 - On an older Tavora the SDK leaves `layout` and `skin` out of `ui.tooltip.show`, puts the `effect` text into a

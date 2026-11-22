@@ -33,4 +33,20 @@ describe("withBundleImages", () => {
         const content = await withBundleImages(root, { title: "A", properties: [{ label: "HP", value: "40", icon: "dist/icons/heart.png" }] });
         expect(content.properties).toEqual([{ label: "HP", value: "40" }]);
     });
+
+    it("reads a unit card's portrait, corner icon and icon row, each file once, and keeps an empty frame for one it can't read", async () => {
+        const content = await withBundleImages(root, { title: "Soldier", layout: "unit", image: "dist/art.png", corner: { text: "1800", icon: "dist/icons/heart.png" }, icons: [{ image: "dist/icons/sword.webp", label: "Steel Coat", count: "95" }, { image: "dist/icons/huge.png", label: "Static" }, { image: "dist/icons/heart.png", label: "Combustion" }], properties: [{ label: "HP", value: "40", icon: "dist/icons/heart.png" }] });
+        expect(content.image).toBe(url(PNG));
+        expect(content.corner).toEqual({ text: "1800", icon: url(PNG) });
+        expect(content.icons).toEqual([{ image: url(PNG, "image/webp"), label: "Steel Coat", count: "95" }, { image: "", label: "Static" }, { image: url(PNG), label: "Combustion" }]);
+        // The unit layout shows no stat icons.
+        expect(content.properties).toEqual([{ label: "HP", value: "40" }]);
+    });
+
+    it("leaves a missing corner icon out, and gives other layouts no unit pictures", async () => {
+        expect((await withBundleImages(root, { title: "A", layout: "unit", corner: { text: "27", icon: "dist/icons/gone.png" } })).corner).toEqual({ text: "27" });
+        const card = await withBundleImages(root, { title: "A", layout: "card", corner: { text: "27", icon: "dist/icons/heart.png" }, icons: [{ image: "dist/icons/heart.png", label: "A" }] });
+        expect(card.corner).toEqual({ text: "27" });
+        expect("icons" in card).toBe(false);
+    });
 });

@@ -7,3 +7,9 @@ export const TOOLTIP_TOKENS=Object.entries(TOOLTIP_TYPE).map(([key,value])=>'--t
  */
 export const ITEM_CARD_TYPE={title:15,effect:13,text:13,small:12,skinTitle:17,skinEffect:15} as const;
 export const ITEM_CARD_TOKENS=Object.entries(ITEM_CARD_TYPE).map(([key,value])=>'--tavora-card-'+key.replace(/[A-Z]/g,c=>'-'+c.toLowerCase())+'-size:'+value+'px').join(';');
+/**
+ * Unit cards (`layout: "unit"`, the kit's `ItemCard`): a game unit as the game shows it, so its sizes are the game's: the
+ * title and the corner value, the body's text, and the icon badges and the pips' extra label.
+ */
+export const UNIT_CARD_TYPE={title:19,text:16,small:12} as const;
+export const UNIT_CARD_TOKENS=Object.entries(UNIT_CARD_TYPE).map(([key,value])=>'--tavora-unit-'+key+'-size:'+value+'px').join(';');

@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.43
+
+- New projects start on `@tavora/sdk` 0.4.5: the shared tooltip can show a game unit as games show it (`layout: "unit"`).
+
 ## 0.1.42
 
 - New projects start on `@tavora/sdk` 0.4.4: the theme carries the design style the user picked (`theme.style`).

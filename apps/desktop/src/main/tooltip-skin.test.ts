@@ -60,6 +60,14 @@ describe("item-card skins", () => {
         expect(() => checkSkinRequest({ name: "a", skin: { colors: { ...colors, boxBorder: "#abc" } } })).toThrow(/colors.boxBorder/);
     });
 
+    it("takes a unit card's title bar that the text reads on by 4.5:1, and refuses one it doesn't", async () => {
+        const colors = { surface: "#1a150f", text: "#ececec", accent: "#f2c94c" };
+        expect((await define({ colors: { ...colors, bar: "#776538" } })).colors!.bar).toBe("#776538");
+        expect("bar" in (await define({ colors })).colors!).toBe(false);
+        await expect(define({ colors: { ...colors, bar: "#739a96" } })).rejects.toMatchObject({ code: "INVALID_PARAMS", message: expect.stringMatching(/colors.text on colors.bar is too hard to read .*needs 4.5:1/) });
+        expect(() => checkSkinRequest({ name: "a", skin: { colors: { ...colors, bar: "gold" } } })).toThrow(/colors.bar/);
+    });
+
     it("refuses a colour that isn't #rrggbb", async () => {
         for (const surface of ["#fff", "red", "rgb(0,0,0)", "#12345g", "#1234567", "#000000;x:y", 0])
             expect(() => checkSkinRequest({ name: "a", skin: { colors: { surface, text: "#ffffff" } } })).toThrow(/colors.surface/);
