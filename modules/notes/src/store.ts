@@ -53,6 +53,13 @@ export interface NoteChange {
 
 const isConflict = (error: unknown): boolean => error instanceof TavoraError && error.code === "CONFLICT";
 
+/**
+ * A save the host refused for its size: the note (4 MB) or all notes together (50 MB) are full, or the message
+ * carrying it is bigger than the host takes. What was saved before stays as it was.
+ */
+export const isTooBigToSave = (error: unknown): boolean =>
+  error instanceof TavoraError && (error.code === "QUOTA_EXCEEDED" || (error.code === "BAD_REQUEST" && /too large/i.test(error.message)));
+
 export async function createNotesStore(sdk: TavoraSDK, options: { debounceMs?: number } = {}) {
   const entries = ref(new Map<string, NoteEntry>());
   const appearance = ref<Appearance>(parseAppearance(null));

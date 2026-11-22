@@ -1,8 +1,8 @@
-import type { JsonValue } from "@tavora/sdk";
+import { TavoraError, type JsonValue } from "@tavora/sdk";
 import { createMemoryHost, type MemoryHost, type MemoryHostOptions } from "@tavora/sdk/testing";
 import { describe, expect, it, vi } from "vitest";
 import { collectImageIds, emptyContent, ORDER_ID, parseNote, SCRATCHPAD_ID, type NoteData, type RichText } from "./notes";
-import { createNotesStore, type NoteChange } from "./store";
+import { createNotesStore, isTooBigToSave, type NoteChange } from "./store";
 
 const TWO_HOURS = 2 * 60 * 60 * 1000;
 
@@ -264,5 +264,30 @@ describe("two panels", () => {
     const second = await open(b.sdk);
     await first.setOrder(["x", "y"]);
     await vi.waitFor(() => expect(second.order.value).toEqual(["x", "y"]));
+  });
+});
+
+describe("a note too big to save", () => {
+  it("is refused as too big, and what was saved before stays", async () => {
+    const { sdk, host } = createMemoryHost({ limits: { maxDocumentBytes: 2_000 } });
+    const store = await open(sdk);
+    store.scratchpad.update((draft) => void ((draft.text = "kept"), (draft.content = textContent("kept"))));
+    await store.scratchpad.flush();
+    const errors: unknown[] = [];
+    store.scratchpad.onError((error, kind) => kind === "save" && errors.push(error));
+
+    const huge = "x".repeat(5_000);
+    store.scratchpad.update((draft) => void ((draft.text = huge), (draft.content = textContent(huge))));
+    await store.scratchpad.flush();
+
+    expect(errors).toHaveLength(1);
+    expect(isTooBigToSave(errors[0])).toBe(true);
+    expect(stored(host, SCRATCHPAD_ID)?.text).toBe("kept");
+  });
+
+  it("is told apart from other failed saves", () => {
+    expect(isTooBigToSave(new TavoraError({ code: "BAD_REQUEST", message: "message is too large" }))).toBe(true);
+    expect(isTooBigToSave(new TavoraError({ code: "CONFLICT", message: "changed" }))).toBe(false);
+    expect(isTooBigToSave(new Error("a document is limited"))).toBe(false);
   });
 });

@@ -35,16 +35,13 @@ import {
   DropdownMenuTrigger,
 } from "@tavora/official-ui/components/ui/dropdown-menu";
 import type { JSONContent } from "@tiptap/core";
-import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { Placeholder } from "@tiptap/extensions";
-import StarterKit from "@tiptap/starter-kit";
 import { EditorContent, useEditor } from "@tiptap/vue-3";
 import type { DocumentHandle } from "@tavora/sdk/store";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import ImageBar from "./ImageBar.vue";
 import ImageLightbox from "./ImageLightbox.vue";
 import { ImageNode } from "./ImageNode";
-import { clipboardHasText } from "./images";
 import LinkDialog from "./LinkDialog.vue";
 import LinkPopover from "./LinkPopover.vue";
 import { t } from "./i18n";
@@ -67,7 +64,9 @@ import {
   type TextStyle,
 } from "./notes";
 import { useNoteImages } from "./noteImages";
-import type { NotesStore } from "./store";
+import { handleNotePaste } from "./paste";
+import { isTooBigToSave, type NotesStore } from "./store";
+import { textExtensions } from "./textExtensions";
 
 const props = defineProps<{ store: NotesStore; noteId: string; entry: NoteEntry | undefined; narrow: boolean; look: TextStyle }>();
 const emit = defineEmits<{ back: []; togglePin: []; clear: []; saveAsNote: []; setStyle: [patch: Partial<TextStyle>]; openLink: [href: string]; notice: [message: string] }>();
@@ -96,7 +95,7 @@ let timer: ReturnType<typeof setTimeout> | undefined;
 /** The editor has typing of its own that another panel's copy must not replace: waiting for the store, or being saved. */
 const busy = () => contentDirty || titleDirty || saveState.value === "pending" || saveState.value === "saving";
 
-const { adding, lightbox, fileInput, imageUsage, imageBar, onFiles, onFilePicked, refreshImageUsage, updateImageBar, setImage, openSelectedImage, removeSelectedImage } = useNoteImages({
+const { adding, lightbox, fileInput, imageUsage, imageBar, addImages, onFiles, onFilePicked, refreshImageUsage, updateImageBar, setImage, openSelectedImage, removeSelectedImage } = useNoteImages({
   store: () => props.store,
   editor: () => editor.value,
   loadedNote: () => loadedNote.value,
@@ -105,13 +104,7 @@ const { adding, lightbox, fileInput, imageUsage, imageBar, onFiles, onFilePicked
 
 const editor = useEditor({
   extensions: [
-    StarterKit.configure({
-      heading: { levels: [1, 2, 3] },
-      // Links are kept and shown; clicking one shows a bar, and Ctrl+click opens it in the Browser.
-      link: { openOnClick: false, autolink: true, defaultProtocol: "https", protocols: ["mailto"] },
-    }),
-    TaskList,
-    TaskItem.configure({ nested: true }),
+    ...textExtensions(),
     ImageNode.configure({ url: (id) => props.store.blobUrl(id), onOpen: (id) => (lightbox.value = id) }),
     Placeholder.configure({
       placeholder: () =>
@@ -124,8 +117,13 @@ const editor = useEditor({
   ],
   editorProps: {
     handleClick: (_view, _pos, event) => onEditorClick(event),
-    // Excel and Word also put a picture of the selection on the clipboard: the text is what was copied.
-    handlePaste: (_view, event) => !clipboardHasText(event.clipboardData) && onFiles(event.clipboardData?.files, event),
+    handlePaste: (view, event) =>
+      handleNotePaste(view, event, {
+        files: (list) => onFiles(list, event),
+        addImages: (files) => void addImages(files),
+        notice: (message) => emit("notice", message),
+        texts: { tooLong: t("paste.tooLong"), drawingOnly: t("paste.drawingOnly") },
+      }),
     handleDrop: (view, event) => onFiles(event.dataTransfer?.files, event, view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos),
     attributes: { class: "note-content", "data-testid": "editor", "aria-label": t("editor.text"), spellcheck: "true" },
   },
@@ -191,6 +189,7 @@ function bind(next: DocumentHandle<NoteData> | null) {
   boundId = next ? props.store.selectedId.value : null;
   loadedNote.value = null;
   saveState.value = "idle";
+  saveError.value = "";
   const instance = editor.value;
   if (!next || !instance) return;
   showContent(instance, next.data);
@@ -200,11 +199,18 @@ function bind(next: DocumentHandle<NoteData> | null) {
   unbind.push(
     next.onStatus((status) => {
       if (status === "error") saveState.value = "error";
-      else if (status === "idle") saveState.value = saveState.value === "saving" || saveState.value === "error" ? "saved" : saveState.value;
-      else if (saveState.value !== "pending") saveState.value = "saving";
+      else if (status === "idle") {
+        if (saveState.value === "saving") saveError.value = "";
+        saveState.value = saveState.value === "saving" || saveState.value === "error" ? "saved" : saveState.value;
+      } else if (saveState.value !== "pending") saveState.value = "saving";
     }),
     next.onError((error, kind) => {
-      if (kind === "save") saveError.value = errorMessage(error);
+      if (kind !== "save") return;
+      const tooBig = isTooBigToSave(error);
+      const message = tooBig ? t("save.tooBig") : errorMessage(error);
+      // Said once until a save works again; each new keystroke tries again and would say it every time.
+      if (tooBig && saveError.value !== message) emit("notice", message);
+      saveError.value = message;
     }),
   );
 }

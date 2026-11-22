@@ -124,5 +124,5 @@ export function useNoteImages(host: NoteImagesHost) {
     host.editor()?.chain().focus().deleteSelection().run();
   }
 
-  return { adding, lightbox, fileInput, imageUsage, imageBar, onFiles, onFilePicked, refreshImageUsage, updateImageBar, setImage, openSelectedImage, removeSelectedImage };
+  return { adding, lightbox, fileInput, imageUsage, imageBar, addImages, onFiles, onFilePicked, refreshImageUsage, updateImageBar, setImage, openSelectedImage, removeSelectedImage };
 }

@@ -92,6 +92,14 @@ describe("DocumentStore", () => {
     await store.put({ id: "a", title: "a", data: "y".repeat(15) });
   });
 
+  it("keeps what was saved when a save is too big", async () => {
+    const store = new DocumentStore(dir, { maxDocumentBytes: 20, maxDocumentsBytes: 1000, maxDocuments: 10 });
+    await store.put({ id: "note", title: "note", data: "kept" });
+    await expect(store.put({ id: "note", title: "note", data: "x".repeat(30) })).rejects.toMatchObject({ code: "QUOTA_EXCEEDED" });
+    expect(await store.get("note")).toMatchObject({ revision: 1, data: "kept" });
+    expect(await new DocumentStore(dir).get("note")).toMatchObject({ revision: 1, data: "kept" });
+  });
+
   it.each([
     [{ id: "../escape", title: "x", data: 1 }],
     [{ id: "", title: "x", data: 1 }],

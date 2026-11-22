@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.6.29",
+    "date": "2026-11-22",
+    "notes": [
+      "Pasting something you copied on the whiteboard adds its pictures, instead of a wall of code.",
+      "Very long text pastes at once, and a note with a lot of text no longer freezes while you type.",
+      "When a note gets too big to save, it says so, and keeps what was saved before."
+    ]
+  },
+  {
     "version": "0.6.28",
     "date": "2026-11-21",
     "notes": [

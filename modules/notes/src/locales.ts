@@ -115,6 +115,9 @@ export const en = {
   "save.saving": "Saving…",
   "save.saved": "Saved",
   "save.error": "Could not save",
+  "save.tooBig": "Too much to save. Make this note shorter, or delete notes you don't need.",
+  "paste.tooLong": "That's too much text for one note.",
+  "paste.drawingOnly": "To paste a drawing, use Copy as image on the whiteboard first.",
 
   "time.justNow": "Just now",
   "time.minutes.one": "{count} min ago",
@@ -238,6 +241,9 @@ export const de: Record<keyof typeof en, string> = {
   "save.saving": "Speichere…",
   "save.saved": "Gespeichert",
   "save.error": "Konnte nicht gespeichert werden",
+  "save.tooBig": "Zu viel zum Speichern. Mach diese Notiz kürzer oder lösch Notizen, die du nicht brauchst.",
+  "paste.tooLong": "Das ist zu viel Text für eine Notiz.",
+  "paste.drawingOnly": "Um eine Zeichnung einzufügen, nimm im Whiteboard zuerst „Als Bild kopieren“.",
 
   "time.justNow": "Gerade eben",
   "time.minutes.one": "vor {count} Min.",
