@@ -1,4 +1,4 @@
-// Game overlays as a whole (game-overlays.ts has the setups, game-overlay-window.ts the windows): looks every moment at
+// Game overlays as a whole (game-overlays.ts has the setups, game-overlay-window.ts one window): looks every moment at
 // which window is in front, shows the items of the setups on screen, and runs the in-game layer.
 //
 // Setups (docs/features/overlay-setups.md): Everywhere shows over any app, also over the desktop, except while
@@ -14,6 +14,10 @@
 // workspace slots, overlays are click-through again, and the game gets the keyboard back.
 //
 // Tavora only reads which window is in front (foreground.ts) and draws its own windows above it.
+//
+// This service keeps the setups, the keys, the live states and the Overlay layout's source, and looks. What the layer
+// shows is decided in game-layer.ts (`layerStep` for the layer, `layerScene` for every window), and the windows are made
+// to do it by game-layer-windows.ts (`LayerWindows`), over Electron's windows (game-layer-electron.ts) or a test's.
 import type { GameOverlayResult, JsonValue, OverlaySource } from "@tavora/sdk/protocol";
 import type { GameOverlaysView } from "../shared/host-api";
 import { translate, type Language } from "../shared/i18n";

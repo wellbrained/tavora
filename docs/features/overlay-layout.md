@@ -73,7 +73,7 @@ The list keeps its order whatever is added, removed or searched: workspaces, the
 
 ## Checks
 
-- Unit coverage: `game-overlays.test.ts`, `game-overlay-service.test.ts`, `game-overlay-window.test.ts`, `game-layer-card.test.ts`, `shared/layer-card.test.ts`, `overlay-layout.test.ts`, `layout-history.test.ts`, `layout-math.test.ts` and `layout-view.test.ts`.
+- Unit coverage: `game-overlays.test.ts`, `game-overlay-service.test.ts`, `game-layer.test.ts`, `game-layer-windows.test.ts`, `game-overlay-window.test.ts`, `game-layer-card.test.ts`, `shared/layer-card.test.ts`, `overlay-layout.test.ts`, `layout-history.test.ts`, `layout-math.test.ts` and `layout-view.test.ts`.
 - The in-game layer itself (Use, Arrange, the card) needs a real game window; hidden Electron tests can't open it.
 - Electron coverage: `pnpm --filter @tavora/desktop exec playwright test overlay-layout.spec.ts` exercises the move from a version-4 file, Del, the item toolbar, Settings over the page, per-setup places and opacity, opacity stills, mouse dragging/resizing, reset buttons, selecting several (Ctrl+click, a box), Del of several and undo, the Sources list, Add overlay / Delete overlay (rail and page, with Undo), Copy to… and Back; `overlay-button.spec.ts` the header button.
 - Real-game screenshot capture still needs a live-game check; hidden Electron tests cannot verify it.
