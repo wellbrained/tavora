@@ -20,8 +20,10 @@ import {
   swapInCopy,
   undoSwap,
   WRITTEN_SINCE,
+  placesPutIn,
   type CopyRoot,
   type CopyState,
+  type EarlierCopies,
   type CopyStorage,
   type SyncedFile,
 } from "./cloud-copy";
@@ -323,12 +325,30 @@ export class CopySync {
       pictures: this.state.pictures,
       recoveryKey: this.shownKey,
       ...questionsView(this.questions),
-      lostData: this.swap.phase === "asking" && this.swap.why === "lost",
-      copyWaiting: this.swap.phase === "chosen" && !this.on,
-      swapUnfinished: this.swap.phase === "swapping" || this.swap.phase === "undoing" || (this.swap.phase === "held" && this.swap.open),
+      conflictKind: this.conflictKind(),
       closing: this.closing.phase === "holding" && this.closing.shown,
       problem: this.problem,
     };
+  }
+
+  /** Why the question which side to keep stands, when it isn't that both changed (CloudCopyView). */
+  private conflictKind(): CloudCopyView["conflictKind"] {
+    switch (this.swap.phase) {
+      case "swapping":
+      case "undoing":
+        return "unfinished";
+      case "held":
+        return this.swap.open ? "unfinished" : null;
+      case "asking":
+        return this.swap.why === "lost" ? "lost" : null;
+      case "chosen":
+        // Only when another account is signed in: that is what the question says.
+        return !this.on && this.accountKeys.signedIn && !this.accountKeys.copyIsOf(this.options.account.id()) ? "waiting" : null;
+      case "idle":
+        return null;
+      default:
+        return assertNever(this.swap);
+    }
   }
 
   private changed(): void {
@@ -377,8 +397,16 @@ export class CopySync {
     if (error instanceof KeyChanged) return (this.problem = "new-key");
     // A folder that turned read-only (or full) after it was picked fails as a plain file error.
     const code = (error as NodeJS.ErrnoException | undefined)?.code;
+    // Full: the folder's drive (or one that can't be told) is the folder's problem, where another folder can be picked.
+    const inFolder = (where: string | undefined) => this.folder !== null && (where === undefined || isInside(where, this.folder));
     const reason =
-      error instanceof CopyError ? error.reason : code === "ENOSPC" ? "disk-full" : this.folder !== null && (code === "EACCES" || code === "EPERM" || code === "EROFS") ? "folder-locked" : "failed";
+      error instanceof CopyError
+        ? error.reason
+        : code === "ENOSPC"
+          ? inFolder((error as NodeJS.ErrnoException).path) ? "folder-locked" : "disk-full"
+          : this.folder !== null && (code === "EACCES" || code === "EPERM" || code === "EROFS")
+            ? "folder-locked"
+            : "failed";
     this.problem =
       reason === "unreachable" || reason === "unavailable" || reason === "too-many"
         ? "offline"
@@ -852,7 +880,7 @@ export class CopySync {
     if (list.status === "held" && !isDamaged(list)) throw new HeldError(list.error);
     const copy = list.status === "present" ? list.value : { version: 0, pictures: true, files: {} };
     await undoSwap(this.stagedData, copyRoots(this.options.userData, plan.moduleFiles), plan.keepIn, copy, plan.empty);
-    if (await sortWrittenSince(plan.keepIn, copy, this.state, await this.earlierLists(plan.keepIn))) this.keptAside = plan.keepIn;
+    if (await sortWrittenSince(plan.keepIn, copy, this.state, await this.earlier(plan))) this.keptAside = plan.keepIn;
     // Written before the status moves on: once it says the swap went back, the parked state is no longer read.
     const state = await this.sealedBeside(plan);
     if (state) {
@@ -879,6 +907,11 @@ export class CopySync {
     const beside = await lookCopyState(this.stateFile);
     if (parked.status !== "present" || parked.value.sealed !== true || beside.status !== "present" || beside.value.sealed === true) return null;
     return { ...beside.value, sealed: true };
+  }
+
+  /** What earlier copies of this swap put in (sortWrittenSince): their lists, and only the places the plan says they put in. */
+  private async earlier(plan: SwapPlan): Promise<EarlierCopies> {
+    return { lists: plan.earlierIn?.length ? await this.earlierLists(plan.keepIn) : [], places: plan.earlierIn ?? [] };
   }
 
   /** The lists of every copy this swap has put in so far (INCOMING_LISTS); none when they can't be read. */
@@ -931,11 +964,12 @@ export class CopySync {
     const place = await loadPlace(this.placeFile);
     const plan: SwapPlan = { keepIn, moduleFiles, own, empty, ...(place === undefined ? {} : { place, account: this.options.account.id() }) };
     await writeFlushed(this.planFile, plan);
-    // A second copy of the list, with the backup: if the staged one is lost, what this copy put in place is still known.
-    await mkdir(keepIn, { recursive: true });
-    await writeFlushed(path.join(keepIn, INCOMING_LISTS), { v: 1, lists: [staged] });
     await this.parkState();
     await this.moveTo({ type: "begin", plan });
+    // A second copy of the list, with the backup: if the staged one is lost, what this copy put in place is still known.
+    // Once the swap has begun, so a start that stops before leaves no backup folder with nothing else in it.
+    await mkdir(keepIn, { recursive: true });
+    await writeFlushed(path.join(keepIn, INCOMING_LISTS), { v: 1, lists: [staged] });
     await this.putIn(staged, plan, false);
     return true;
   }
@@ -951,7 +985,7 @@ export class CopySync {
     // Once seen, a sealed copy stays seen, also after taking an older Tavora's copy.
     const state = before.sealed === true ? { ...taken, sealed: true } : taken;
     await keepPcSettings(libraryFile(this.options.userData), plan.own, state);
-    if (await sortWrittenSince(plan.keepIn, staged, before, await this.earlierLists(plan.keepIn))) this.keptAside = plan.keepIn;
+    if (await sortWrittenSince(plan.keepIn, staged, before, await this.earlier(plan))) this.keptAside = plan.keepIn;
     // Turned off before the cut: the files are finished, and the copy stays off.
     if (this.copyOn) {
       this.state = state;
@@ -1392,7 +1426,11 @@ export class CopySync {
       // state that is damaged is written again as it was read, or the next start would hold once more.
       if (swap.phase === "asking" || swap.phase === "chosen") {
         if (side === "cloud") throw this.offError();
+        // This PC's side over a chosen copy: marked as kept first, so a start with its account doesn't take the copy
+        // without asking; then the copy goes into a backup, as when this PC's side is kept with the copy on.
+        if (swap.phase === "chosen") await this.markKept();
         await this.moveFrom(swap, { type: "answered" });
+        if (swap.phase === "chosen") await this.setStagedAside();
       } else if (this.swap.phase === "held") {
         await writeSwapStatus(this.statusFile, swap);
         this.swap = swap;
@@ -1436,13 +1474,36 @@ export class CopySync {
     await this.sync(true);
   }
 
+  /** This PC's side counts as changed until an upload succeeds (CopyState `kept`), wherever the state is now. */
+  private async markKept(): Promise<void> {
+    for (const file of [this.parkedFile, this.stateFile]) {
+      const saved = await lookCopyState(file);
+      if (saved.status === "present" && saved.value.kept !== true) await saveCopyState(file, { ...saved.value, kept: true });
+    }
+  }
+
+  /** The staged copy goes into a backup, its list first, so a crash can't leave the list naming files that moved. */
+  private async setStagedAside(): Promise<void> {
+    if (unlessHeld(await lookStat(this.stagedData)) !== null) {
+      const backup = await this.backupFolder("cloud");
+      await this.dropList();
+      await renameHeld(this.stagedData, backup);
+    }
+    await this.dropList();
+    await rm(this.stagingDir, { recursive: true, force: true });
+  }
+
   private async takeCopy(swap: SwapStatus): Promise<void> {
     if (swap.phase === "swapping" || swap.phase === "undoing") {
+      const turn = this.turn;
       const from = swap.phase === "swapping" ? await this.restageForSwap(swap) : swap;
-      // Turned off while the copy came down again: the forgetting stands.
+      // Turned off while the copy came down again (or at any point here): the forgetting stands, and nothing restarts.
       if (!from) return;
-      await this.moveFrom(from, { type: "try-again" });
+      const next = stepSwap(from, { type: "try-again" });
+      if (!(await this.writeStatusFor(turn, next))) return;
+      this.swap = next;
       await this.repairState(true);
+      if (turn !== this.turn) return;
       return this.restart();
     }
     const turn = this.turn;
@@ -1465,6 +1526,21 @@ export class CopySync {
     // Turned off while it downloaded: no restart; the start drops what was staged, as the copy is off.
     if (turn !== this.turn) return;
     this.restart();
+  }
+
+  /**
+   * Writes a status for work started under `turn`, unless the copy was forgotten since: forgotten while it wrote, the
+   * status is written again as forgetting leaves it (stepSwap's `forgotten`), so the next start doesn't finish a swap with
+   * the copy off. False when it was forgotten.
+   */
+  private async writeStatusFor(turn: number, status: SwapStatus): Promise<boolean> {
+    if (turn !== this.turn) return false;
+    await writeSwapStatus(this.statusFile, status);
+    if (turn === this.turn) return true;
+    const forgotten = stepSwap(status, { type: "forgotten" });
+    await writeSwapStatus(this.statusFile, forgotten);
+    this.swap = forgotten;
+    return false;
   }
 
   /** Why the copy can't be reached from here right now, for an answer that needs it. */
@@ -1508,11 +1584,18 @@ export class CopySync {
       if (!copy) throw new UserError("cloudCopy.error.noCopy");
       const staged: Staged = { v: 1, ...copy };
       try {
-        const next: SwapStatus = { phase: "swapping", plan: { ...plan, empty: await emptyPlacesSince(incoming, roots, plan.keepIn, copy, plan.empty) } };
+        // What the copies before put in, told from what is staged of them before it goes: only there do their files count
+        // as no one's work.
+        const lists = await this.earlierLists(plan.keepIn);
+        const putIn = new Set(plan.earlierIn ?? []);
+        for (const list of lists) for (const name of await placesPutIn(this.stagedData, roots, plan.keepIn, list, plan.empty)) putIn.add(name);
+        const next: SwapStatus = { phase: "swapping", plan: { ...plan, empty: await emptyPlacesSince(incoming, roots, plan.keepIn, copy, plan.empty), earlierIn: [...putIn] } };
         await mkdir(plan.keepIn, { recursive: true });
-        await writeFlushed(path.join(plan.keepIn, INCOMING_LISTS), { v: 1, lists: [...(await this.earlierLists(plan.keepIn)), staged] });
+        await writeFlushed(path.join(plan.keepIn, INCOMING_LISTS), { v: 1, lists: [...lists, staged] });
+        // Turned off meanwhile: the status says undoing now, and stays so.
+        if (turn !== this.turn) return null;
         await writeFlushed(this.planFile, next.plan);
-        await writeSwapStatus(this.statusFile, next);
+        if (!(await this.writeStatusFor(turn, next))) return null;
         await rm(this.stagedData, { recursive: true, force: true });
         await renameHeld(incoming, this.stagedData);
         await rm(this.oldListFile, { force: true });
@@ -1706,6 +1789,12 @@ function activityView(activity: CloudCopyActivity): Pick<CloudCopyView, "busy" |
     default:
       return assertNever(activity);
   }
+}
+
+/** Whether `file` is `folder` or in it. */
+function isInside(file: string, folder: string): boolean {
+  const relative = path.relative(folder, file);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
 /** The names in a note's list. */

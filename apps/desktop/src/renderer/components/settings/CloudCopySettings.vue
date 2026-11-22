@@ -181,7 +181,7 @@ function startOver() {
 
     <template v-else-if="!view.on">
       <Notice v-if="view.canKeepKey && view.problem" variant="warning" class="my-4" :title="t('cloudCopy.problem.title')" data-testid="cloud-copy-problem">{{ t(`cloudCopy.error.${view.problem}`) }}</Notice>
-      <Notice v-if="view.swapUnfinished" variant="warning" class="my-4" :title="t('cloudCopy.unfinished.title')" data-testid="cloud-copy-unfinished">
+      <Notice v-if="view.conflictKind === 'unfinished'" variant="warning" class="my-4" :title="t('cloudCopy.unfinished.title')" data-testid="cloud-copy-unfinished">
         {{ t("cloudCopy.unfinished.off") }}
         <template #action>
           <Button v-if="view.conflict" size="sm" variant="secondary" :disabled="busy" @click="decide">{{ t("cloudCopy.conflict.title") }}</Button>

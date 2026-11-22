@@ -113,7 +113,7 @@ describe("D1: work done while a swap was stuck", () => {
     const stuck = tavora(cloud, b);
     await stuck.sync.beforeLoad();
     held = () => false;
-    expect(stuck.sync.view()).toMatchObject({ conflict: true, swapUnfinished: true });
+    expect(stuck.sync.view()).toMatchObject({ conflict: true, conflictKind: "unfinished" });
     // Later: the user keeps working there.
     await writeFile(path.join(place, "notes.json"), "my work");
 
@@ -198,7 +198,7 @@ async function stuckOnModules() {
   const stuck = tavora(cloud, b);
   await stuck.sync.beforeLoad();
   held = () => false;
-  expect(stuck.sync.view()).toMatchObject({ conflict: true, swapUnfinished: true });
+  expect(stuck.sync.view()).toMatchObject({ conflict: true, conflictKind: "unfinished" });
   return { ...setup, stuck };
 }
 
@@ -290,7 +290,7 @@ describe("D8: a crash while cleaning up after going back", () => {
     const stuck = tavora(cloud, b);
     await stuck.sync.beforeLoad();
     held = () => false;
-    expect(stuck.sync.view().swapUnfinished).toBe(true);
+    expect(stuck.sync.view().conflictKind === "unfinished").toBe(true);
     await stuck.sync.keep("pc");
     // The cleanup is cut off before the staging folder goes.
     onRm = async (target) => {

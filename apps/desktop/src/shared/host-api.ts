@@ -555,12 +555,13 @@ export interface CloudCopyView {
   askKey: boolean;
   /** This PC and the copy both changed since they last matched: the user keeps one side. */
   conflict: boolean;
-  /** Part of this PC's data couldn't be opened: nothing goes up until the user chooses, and `conflict` asks them. */
-  lostData: boolean;
-  /** A copy the user chose waits for the account it belongs to: `conflict` asks them to sign in with it or keep this PC's data. */
-  copyWaiting: boolean;
-  /** A copy stopped halfway going in: nothing goes up, and `conflict` asks to try again or go back to this PC's data. */
-  swapUnfinished: boolean;
+  /**
+   * Why `conflict` asks, when it isn't that both changed; nothing goes up until the user chooses. `unfinished`: a copy
+   * stopped halfway going in (try again, or go back to this PC's data). `lost`: part of this PC's data couldn't be opened.
+   * `waiting`: a copy the user chose belongs to another account than the one signed in (sign in with it, or keep this
+   * PC's data). Null otherwise.
+   */
+  conflictKind: "unfinished" | "lost" | "waiting" | null;
   /** A newer copy from another PC is downloaded; a restart takes it. */
   restartToTake: boolean;
   /** Closing waits for the last upload. */

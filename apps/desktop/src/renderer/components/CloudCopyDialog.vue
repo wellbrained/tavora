@@ -11,10 +11,11 @@ import ModalDialog from "./ModalDialog.vue";
 const busy = ref(false);
 const megabytes = (bytes: number) => Math.max(0, Math.ceil(bytes / (1024 * 1024)));
 
-const unfinished = computed(() => copyQuestion.value === "conflict" && cloudCopy.value?.swapUnfinished === true);
-const lost = computed(() => copyQuestion.value === "conflict" && cloudCopy.value?.lostData === true);
+const kind = computed(() => (copyQuestion.value === "conflict" ? (cloudCopy.value?.conflictKind ?? null) : null));
+const unfinished = computed(() => kind.value === "unfinished");
+const lost = computed(() => kind.value === "lost");
 // A chosen copy waiting for its account: only this PC's side can be the answer here.
-const waiting = computed(() => copyQuestion.value === "conflict" && cloudCopy.value?.copyWaiting === true);
+const waiting = computed(() => kind.value === "waiting");
 const title = computed(() => t(unfinished.value ? "cloudCopy.unfinished.title" : lost.value ? "cloudCopy.lost.title" : waiting.value ? "cloudCopy.waiting.title" : copyQuestion.value === "closing" ? "cloudCopy.closing.title" : copyQuestion.value === "conflict" ? "cloudCopy.conflict.title" : "cloudCopy.newer.title"));
 const text = computed(() => {
   if (unfinished.value) return t("cloudCopy.unfinished.text");

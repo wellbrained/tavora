@@ -24,6 +24,11 @@ export interface SwapPlan {
   place?: string | null;
   /** The account signed in when it began, or null signed out; missing where `place` is. Both say where the copy was. */
   account?: string | null;
+  /**
+   * Places (by name in the copy) that an earlier copy of this swap surely put in, when its list was lost and a newer copy
+   * came down: only there do files with that copy's content count as no one's work.
+   */
+  earlierIn?: string[];
 }
 
 /**
@@ -98,13 +103,15 @@ export function stepSwap(status: SwapStatus, event: SwapEvent): SwapStatus {
 
 function parsePlan(value: unknown, backups: string): SwapPlan | null {
   if (typeof value !== "object" || value === null) return null;
-  const { keepIn, moduleFiles, own, empty, place, account } = value as Record<string, unknown>;
+  const { keepIn, moduleFiles, own, empty, place, account, earlierIn } = value as Record<string, unknown>;
   if (typeof keepIn !== "string" || path.dirname(keepIn) !== backups || typeof moduleFiles !== "string" || !path.isAbsolute(moduleFiles)) return null;
   if (!Array.isArray(empty) || !empty.every((item) => typeof item === "string")) return null;
   const plan: SwapPlan = { keepIn, moduleFiles, own: typeof own === "object" && own !== null && !Array.isArray(own) ? (own as Record<string, unknown>) : null, empty: empty as string[] };
   // A place that makes no sense is one that can't be told, not a damaged plan.
   if (place === null || (typeof place === "string" && path.isAbsolute(place))) plan.place = place;
   if (account === null || (typeof account === "string" && account.length > 0 && account.length <= 200)) plan.account = account;
+  // Something odd here counts as none: then nothing is taken for an earlier copy's.
+  if (Array.isArray(earlierIn) && earlierIn.every((name) => typeof name === "string")) plan.earlierIn = earlierIn as string[];
   return plan;
 }
 

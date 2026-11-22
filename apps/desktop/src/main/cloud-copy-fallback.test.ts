@@ -18,20 +18,25 @@ const realRename = vi.mocked(rename).getMockImplementation()!;
 let held: (from: string) => boolean = () => false;
 /** A rename that fails with this code (a full disk), or none. */
 let failing: (from: string) => string | null = () => null;
+/** Runs before a rename onto `to` goes on: what happens meanwhile (the user turning the copy off). */
+let meanwhile: (to: string) => Promise<void> = async () => undefined;
 
 beforeEach(() => {
   held = () => false;
   failing = () => null;
+  meanwhile = async () => undefined;
   vi.mocked(rename).mockImplementation(async (from, to) => {
     if (held(String(from))) throw Object.assign(new Error("held"), { code: "EPERM" });
     const code = failing(String(from));
-    if (code) throw Object.assign(new Error(code), { code });
+    if (code) throw Object.assign(new Error(code), { code, path: String(from) });
+    await meanwhile(String(to));
     return realRename(from, to);
   });
 });
 afterEach(async () => {
   held = () => false;
   failing = () => null;
+  meanwhile = async () => undefined;
   await cleanUp();
 });
 
@@ -159,6 +164,17 @@ async function olderKeepsThisPc(s: Setup, at: Pc) {
   if (result.status === "uploaded") await writeFile(stateFile(at), JSON.stringify({ v: 1, ...result.state }));
 }
 
+/** Every file's content under a folder. */
+async function filesUnder(dir: string): Promise<string[]> {
+  const out: string[] = [];
+  for (const entry of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...(await filesUnder(full)));
+    else out.push(await readFile(full, "utf8"));
+  }
+  return out;
+}
+
 const thisPcBackup = async (b: Pc) => {
   const names = (await readdir(path.join(b.userData, "backups"))).filter((name) => name.endsWith("-this-pc")).sort();
   return path.join(b.userData, "backups", names[0]!);
@@ -173,7 +189,7 @@ describe("an older Tavora only turned the copy on during a stopped swap", () => 
     const back = await appStart(s.cloud, b);
     expect(await bHasAll(b)).toEqual(B);
     expect(await read(b, "module-data/x/y.json")).toBe("<gone>");
-    expect(back.sync.view()).toMatchObject({ conflict: true, swapUnfinished: false });
+    expect(back.sync.view()).toMatchObject({ conflict: true, conflictKind: null });
     await back.sync.keep("pc");
     const up = await remoteFiles(s);
     expect(Object.fromEntries(Object.keys(B).map((name) => [name, up[name]]))).toEqual(B);
@@ -256,7 +272,7 @@ describe("going back to an older Tavora while lost data is asked about", () => {
     await appStart(s.cloud, a);
     await writeFile(path.join(a.userData, "library.json"), "{ broken");
     const one = await appStart(s.cloud, a);
-    expect(one.sync.view().lostData).toBe(true);
+    expect(one.sync.view().conflictKind === "lost").toBe(true);
     return { s, one };
   }
 
@@ -266,13 +282,13 @@ describe("going back to an older Tavora while lost data is asked about", () => {
     expect(await olderStart(s, s.a)).toBe("off");
     expect(await s.remote()).toBe(version);
     // The next start still asks.
-    expect((await appStart(s.cloud, s.a)).sync.view().lostData).toBe(true);
+    expect((await appStart(s.cloud, s.a)).sync.view().conflictKind === "lost").toBe(true);
   }, 60_000);
 
   it("parks a state the last version left in place", async () => {
     const { s } = await lost();
     await realRename(parkedFile(s.a), stateFile(s.a));
-    expect((await appStart(s.cloud, s.a)).sync.view().lostData).toBe(true);
+    expect((await appStart(s.cloud, s.a)).sync.view().conflictKind === "lost").toBe(true);
     expect(await there(stateFile(s.a))).toBe(false);
     expect(await olderStart(s, s.a)).toBe("off");
   }, 60_000);
@@ -392,11 +408,11 @@ describe("a stopped swap whose list of the incoming copy is gone", () => {
     if (how === "gone") await rm(list);
     else await writeFile(list, "{ broken");
     const one = await appStart(s.cloud, b);
-    expect(one.sync.view()).toMatchObject({ conflict: true, swapUnfinished: true });
+    expect(one.sync.view()).toMatchObject({ conflict: true, conflictKind: "unfinished" });
     await one.sync.keep("cloud");
     expect(one.events.restarts).toBe(1);
     const two = await appStart(s.cloud, b);
-    expect(two.sync.view()).toMatchObject({ conflict: false, swapUnfinished: false });
+    expect(two.sync.view()).toMatchObject({ conflict: false, conflictKind: null });
     expect(two.sync.dataHeld).toBe(false);
     for (const name of ["workspace.json", "profile.json", "module-data/x/y.json", "module-blobs/official/pic.txt"] as const) expect(await read(b, name)).toBe(A[name]);
     const keepIn = await thisPcBackup(b);
@@ -430,7 +446,7 @@ describe("a stopped swap whose list of the incoming copy is gone", () => {
     const one = await appStart(s.cloud, b);
     await one.sync.keep("cloud");
     const two = await appStart(s.cloud, b);
-    expect(two.sync.view()).toMatchObject({ conflict: false, swapUnfinished: false });
+    expect(two.sync.view()).toMatchObject({ conflict: false, conflictKind: null });
     expect(await read(b, "workspace.json")).toBe('{"from":"copy, later"}');
     expect(await read(b, "module-blobs/official/pic.txt")).toBe(B["module-blobs/official/pic.txt"]);
     expect(await read(b, "module-blobs/local/own.txt")).toBe(B["module-blobs/local/own.txt"]);
@@ -452,7 +468,7 @@ describe("a stopped swap whose list of the incoming copy is gone", () => {
     const stopped = await appStart(s.cloud, b);
     held = () => false;
     expect(await read(b, "module-owners.json")).toBe('{"from":"copy, later"}');
-    expect(stopped.sync.view().swapUnfinished).toBe(true);
+    expect(stopped.sync.view().conflictKind === "unfinished").toBe(true);
     await stopped.sync.keep("pc");
     await appStart(s.cloud, b);
     expect(await bHasAll(b)).toEqual(B);
@@ -483,6 +499,64 @@ describe("a stopped swap whose list of the incoming copy is gone", () => {
     expect(JSON.parse(await readFile(path.join(b.userData, "cloud-copy-status.json"), "utf8"))).toMatchObject({ phase: "undoing" });
     await appStart(s.cloud, b);
     expect(await bHasAll(b)).toEqual(B);
+  }, 60_000);
+
+  it("keeps this PC's own file that looks like the first copy's, in a place that copy never reached (T1)", async () => {
+    const s = await setup();
+    const { b } = s;
+    // This PC's picture has the same content as the first copy's.
+    await writeFile(path.join(b.moduleFiles, "official", "pic.txt"), A["module-blobs/official/pic.txt"]);
+    const at = tavora(s.cloud, b);
+    await at.sync.beforeLoad();
+    await at.sync.turnOn(s.folder);
+    await at.sync.enterKey(s.recovery);
+    await at.sync.keep("cloud");
+    // The swap stops before this PC's official pictures move: they are still in place.
+    held = (from) => from === path.join(b.moduleFiles, "official");
+    await tavora(s.cloud, b).sync.beforeLoad();
+    held = () => false;
+    expect(await read(b, "workspace.json")).toBe(A["workspace.json"]);
+    await rm(path.join(b.userData, "cloud-copy-staging", "copy-list.json"));
+    expect(await newerFromA(s, { "module-blobs/official/pic.txt": "pic copy, later" })).toMatchObject({ status: "uploaded" });
+    const one = await appStart(s.cloud, b);
+    await one.sync.keep("cloud");
+    const two = await appStart(s.cloud, b);
+    expect(two.sync.view()).toMatchObject({ conflict: false, conflictKind: null });
+    expect(await read(b, "module-blobs/official/pic.txt")).toBe("pic copy, later");
+    // This PC's own picture from before the swap is kept, and the user hears where.
+    expect(await filesUnder(path.join(b.userData, "backups"))).toContain(A["module-blobs/official/pic.txt"]);
+    expect(two.sync.changesKeptIn).not.toBeNull();
+  }, 60_000);
+
+  it.each(["incoming-lists.json", "cloud-copy-status.json"])("turned off just after the copy came down again (at %s): nothing restarts, and the next start goes back (T2)", async (at) => {
+    const s = await setup();
+    const { b } = s;
+    await stoppedSwap(s);
+    await rm(path.join(b.userData, "cloud-copy-staging", "copy-list.json"));
+    const one = await appStart(s.cloud, b);
+    let off: Promise<void> | null = null;
+    meanwhile = async (to) => {
+      if (off || !to.endsWith(at)) return;
+      off = one.sync.turnOff();
+      await off;
+    };
+    await expect(one.sync.keep("cloud")).resolves.toBeUndefined();
+    expect(off).not.toBeNull();
+    expect(one.events.restarts).toBe(0);
+    expect(JSON.parse(await readFile(path.join(b.userData, "cloud-copy-status.json"), "utf8"))).toMatchObject({ phase: "undoing" });
+    const next = await appStart(s.cloud, b);
+    expect(await bHasAll(b)).toEqual(B);
+    expect(next.sync.view()).toMatchObject({ on: false, conflictKind: null });
+  }, 60_000);
+
+  it("a full drive under the copy's folder is the folder's problem, where another folder can be picked", async () => {
+    const s = await setup();
+    const t = tavora(s.cloud, s.a);
+    await t.sync.beforeLoad();
+    await writeFile(path.join(s.a.userData, "workspace.json"), '{"from":"copy, later"}');
+    failing = (from) => (from.startsWith(s.folder) ? "ENOSPC" : null);
+    await expect(t.sync.sync(true)).rejects.toMatchObject({ key: "cloudCopy.error.folder-locked" });
+    expect(t.sync.view().problem).toBe("folder-locked");
   }, 60_000);
 
   it("can't be downloaded again with the copy off: Keep this PC's is the way out", async () => {

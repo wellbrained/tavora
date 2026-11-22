@@ -118,7 +118,7 @@ async function stuckOnModules() {
   const stuck = tavora(cloud, b);
   await stuck.sync.beforeLoad();
   held = () => false;
-  expect(stuck.sync.view()).toMatchObject({ conflict: true, swapUnfinished: true });
+  expect(stuck.sync.view()).toMatchObject({ conflict: true, conflictKind: "unfinished" });
   return { cloud, a, b, stuck };
 }
 
@@ -132,7 +132,7 @@ describe("a swap's own files busy for a moment", () => {
     const next = tavora(cloud, b);
     await next.sync.beforeLoad();
     await next.sync.checkDataFiles();
-    expect(next.sync.view()).toMatchObject({ conflict: true, swapUnfinished: true });
+    expect(next.sync.view()).toMatchObject({ conflict: true, conflictKind: "unfinished" });
     expect(next.sync.dataHeld).toBe(true);
     await next.sync.sync();
     await expect(next.sync.sync(true)).rejects.toMatchObject({ key: "cloudCopy.error.conflict" });
@@ -152,7 +152,7 @@ describe("a swap's own files busy for a moment", () => {
     await writeFile(statusFile(b), "");
     const next = tavora(cloud, b);
     await next.sync.beforeLoad();
-    expect(next.sync.view()).toMatchObject({ conflict: true, swapUnfinished: true });
+    expect(next.sync.view()).toMatchObject({ conflict: true, conflictKind: "unfinished" });
     await next.sync.sync();
     expect(await remoteVersion(cloud)).toBe(version);
     await next.sync.keep("cloud");
@@ -200,7 +200,7 @@ describe("going back to this PC's data", () => {
     await back.sync.beforeLoad();
     expect(await workspaces(b)).toEqual(["elden-ring"]);
     expect(await read(b.userData, "workspace.json")).toBe('"a1"');
-    expect(back.sync.view()).toMatchObject({ conflict: true, swapUnfinished: false, restartToTake: false });
+    expect(back.sync.view()).toMatchObject({ conflict: true, conflictKind: null, restartToTake: false });
     await back.sync.sync();
     expect(await remoteVersion(cloud)).toBe(version);
 
@@ -299,20 +299,20 @@ describe("with the copy off", () => {
   it("a swap that can't be taken back still asks, and the answer settles it", async () => {
     const { cloud, b, stuck } = await stuckOnModules();
     await stuck.sync.turnOff();
-    expect(stuck.sync.view()).toMatchObject({ on: false, swapUnfinished: true });
+    expect(stuck.sync.view()).toMatchObject({ on: false, conflictKind: "unfinished" });
 
     held = (from) => from.includes(path.join("backups", "cloud-copy-"));
     const failed = tavora(cloud, b);
     await failed.sync.beforeLoad();
     held = () => false;
-    expect(failed.sync.view()).toMatchObject({ on: false, conflict: true, swapUnfinished: true });
+    expect(failed.sync.view()).toMatchObject({ on: false, conflict: true, conflictKind: "unfinished" });
 
     await failed.sync.keep("pc");
     expect(failed.events.restarts).toBe(1);
     const next = tavora(cloud, b);
     await next.sync.beforeLoad();
     expect(await workspaces(b)).toEqual(["elden-ring"]);
-    expect(next.sync.view()).toMatchObject({ on: false, conflict: false, swapUnfinished: false });
+    expect(next.sync.view()).toMatchObject({ on: false, conflict: false, conflictKind: null });
   });
 
   it("turning off writes the undo mark before it forgets the copy", async () => {

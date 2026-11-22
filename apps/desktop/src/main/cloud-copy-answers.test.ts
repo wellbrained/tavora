@@ -1,5 +1,5 @@
 // What a held, damaged or interrupted state must not do: each case came from a review that found it doing so.
-import { mkdir, readdir, readFile, rename, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CopySync, startNotice } from "./cloud-copy-sync";
@@ -97,12 +97,12 @@ describe("answering, settling and holding", () => {
     await writeFile(state(a), "{ broken");
     const one = tavora(cloud, a);
     await one.sync.beforeLoad();
-    expect(one.sync.view()).toMatchObject({ conflict: true, swapUnfinished: true });
+    expect(one.sync.view()).toMatchObject({ conflict: true, conflictKind: "unfinished" });
     await one.sync.keep("cloud");
     expect(one.events.restarts).toBe(1);
     const two = tavora(cloud, a);
     await two.sync.beforeLoad();
-    expect(two.sync.view().swapUnfinished).toBe(false);
+    expect(two.sync.view().conflictKind === "unfinished").toBe(false);
     expect(await read(a, "workspace.json")).toBe('{"from":"copy"}');
   }, 60_000);
 
@@ -111,7 +111,7 @@ describe("answering, settling and holding", () => {
     held = (from) => ends(from, "data", "modules") && from.includes("cloud-copy-staging");
     const stuck = tavora(cloud, b);
     await stuck.sync.beforeLoad();
-    expect(stuck.sync.view().swapUnfinished).toBe(true);
+    expect(stuck.sync.view().conflictKind === "unfinished").toBe(true);
     held = () => false;
     await writeFile(state(b), "{ broken");
     const one = tavora(cloud, b);
@@ -119,7 +119,7 @@ describe("answering, settling and holding", () => {
     await one.sync.keep("pc");
     const two = tavora(cloud, b);
     await two.sync.beforeLoad();
-    expect(two.sync.view().swapUnfinished).toBe(false);
+    expect(two.sync.view().conflictKind === "unfinished").toBe(false);
     expect(await read(b, "workspace.json")).toBe(B["workspace.json"]);
   }, 60_000);
 
@@ -148,12 +148,12 @@ describe("answering, settling and holding", () => {
     held = (from) => isPlace(from, b, "workspace.json");
     const one = tavora(cloud, b);
     await one.sync.beforeLoad();
-    expect(one.sync.view().swapUnfinished).toBe(true);
+    expect(one.sync.view().conflictKind === "unfinished").toBe(true);
     // Second run gets past it and stops later, at modules.
     held = (from) => ends(from, "data", "modules") && from.includes("cloud-copy-staging");
     const two = tavora(cloud, b);
     await two.sync.beforeLoad();
-    expect(two.sync.view().swapUnfinished).toBe(true);
+    expect(two.sync.view().conflictKind === "unfinished").toBe(true);
     held = () => false;
     await two.sync.keep("pc");
     const three = tavora(cloud, b);
@@ -176,7 +176,7 @@ describe("answering, settling and holding", () => {
     const next = tavora(cloud, a);
     await next.sync.beforeLoad();
     await next.sync.checkDataFiles();
-    expect({ unfinished: next.sync.view().swapUnfinished, held: next.sync.dataHeld }).toEqual({ unfinished: false, held: false });
+    expect({ unfinished: next.sync.view().conflictKind === "unfinished", held: next.sync.dataHeld }).toEqual({ unfinished: false, held: false });
   }, 60_000);
 
   it("a failed answer keeps the hold", async () => {
@@ -233,7 +233,7 @@ describe("answering, settling and holding", () => {
     await readSavedFile(path.join(a.userData, "library.json"), { version: 2 });
     await one.sync.beforeLoad();
     await one.sync.checkDataFiles();
-    expect(one.sync.view().lostData).toBe(true);
+    expect(one.sync.view().conflictKind === "lost").toBe(true);
     who = "someone-else";
     const two = tavora(cloud, a);
     await two.sync.beforeLoad();
@@ -251,17 +251,53 @@ describe("answering, settling and holding", () => {
     await next.sync.beforeLoad();
     // The backups and the Trash purge wait: the user hears why, and how to get out.
     expect(next.sync.dataHeld).toBe(true);
-    expect(next.sync.view()).toMatchObject({ conflict: true, copyWaiting: true });
+    expect(next.sync.view()).toMatchObject({ conflict: true, conflictKind: "waiting" });
     // Not "signed out": another account is signed in.
     await expect(next.sync.keep("cloud")).rejects.toMatchObject({ key: "cloudCopy.error.otherAccount" });
     await next.sync.keep("pc");
     expect(next.sync.dataHeld).toBe(false);
-    expect(next.sync.view()).toMatchObject({ conflict: false, copyWaiting: false });
+    expect(next.sync.view()).toMatchObject({ conflict: false, conflictKind: null });
     expect(await read(b, "workspace.json")).toBe(B["workspace.json"]);
     const after = tavora(cloud, b);
     await after.sync.beforeLoad();
     expect(after.sync.dataHeld).toBe(false);
     expect(after.sync.view().conflict).toBe(false);
+  }, 60_000);
+
+  it("Keep this PC's over a copy chosen under another account sticks once that account is back", async () => {
+    const { cloud, a, b } = await chosen();
+    // The chosen copy goes in: B is in step with A's version.
+    await tavora(cloud, b).sync.beforeLoad();
+    const running = tavora(cloud, b);
+    await running.sync.beforeLoad();
+    // A saves a newer version, and B chooses it in Settings.
+    const atA = tavora(cloud, a);
+    await atA.sync.beforeLoad();
+    await writeFile(path.join(a.userData, "workspace.json"), '{"from":"copy, later"}');
+    await atA.sync.sync(true);
+    await running.sync.restore();
+    expect(running.events.restarts).toBe(1);
+    // Another account is signed in at the restart: the user keeps this PC's data.
+    who = "someone-else";
+    const other = tavora(cloud, b);
+    await other.sync.beforeLoad();
+    expect(other.sync.view().conflictKind).toBe("waiting");
+    await other.sync.keep("pc");
+    // Back with the copy's account and nothing changed here: the copy isn't taken without asking.
+    who = "me";
+    const back = tavora(cloud, b);
+    await back.sync.beforeLoad();
+    expect(await read(b, "workspace.json")).toBe(A["workspace.json"]);
+    expect(back.sync.view().conflict).toBe(true);
+  }, 60_000);
+
+  it("a chosen copy waiting with its key gone doesn't say it is another account's", async () => {
+    const { cloud, b } = await chosen();
+    await rm(path.join(b.userData, "account-key.json"));
+    const next = tavora(cloud, b);
+    await next.sync.beforeLoad();
+    expect(next.sync.dataHeld).toBe(true);
+    expect(next.sync.view()).toMatchObject({ conflict: true, conflictKind: null });
   }, 60_000);
 
   it("a start that kept both kinds of backup names both in one message", () => {
@@ -291,7 +327,7 @@ describe("answering, settling and holding", () => {
     await at.sync.keep("cloud");
     const next = tavora(cloud, b);
     await next.sync.beforeLoad();
-    expect({ unfinished: next.sync.view().swapUnfinished, ws: await read(b, "workspace.json") }).toEqual({ unfinished: false, ws: A["workspace.json"] });
+    expect({ unfinished: next.sync.view().conflictKind === "unfinished", ws: await read(b, "workspace.json") }).toEqual({ unfinished: false, ws: A["workspace.json"] });
   }, 60_000);
 
   it("a library lost during a held start must not go up as empty at the next start", async () => {
@@ -331,7 +367,7 @@ describe("answering, settling and holding", () => {
     const two = tavora(cloud, b);
     await two.sync.beforeLoad();
     expect(await read(b, "workspace.json")).toBe(B["workspace.json"]);
-    expect(two.sync.view().swapUnfinished).toBe(false);
+    expect(two.sync.view().conflictKind === "unfinished").toBe(false);
   }, 60_000);
 
   it("the real start after a damaged library in the copy: what goes up", async () => {
@@ -358,7 +394,7 @@ describe("answering, settling and holding", () => {
     await two.sync.beforeLoad();
     await two.sync.checkDataFiles();
     await two.sync.sync().catch(() => undefined);
-    expect(two.sync.view().lostData).toBe(true);
+    expect(two.sync.view().conflictKind === "lost").toBe(true);
     expect((await remoteVersion(cloud)) === version).toBe(true);
   }, 60_000);
 });
@@ -439,13 +475,13 @@ describe("the fifth review", () => {
     await writeFile(plan(b), "{ broken");
     const one = tavora(cloud, b);
     await one.sync.beforeLoad();
-    expect(one.sync.view().swapUnfinished).toBe(true);
+    expect(one.sync.view().conflictKind === "unfinished").toBe(true);
     if (answer === "off") await one.sync.turnOff();
     else await one.sync.keep(answer);
     const two = tavora(cloud, b);
     await two.sync.beforeLoad();
     const side = answer === "cloud" ? A : B;
-    expect({ unfinished: two.sync.view().swapUnfinished, held: two.sync.dataHeld }).toEqual({ unfinished: false, held: false });
+    expect({ unfinished: two.sync.view().conflictKind === "unfinished", held: two.sync.dataHeld }).toEqual({ unfinished: false, held: false });
     for (const name of Object.keys(side) as (keyof typeof side)[]) expect(await read(b, name)).toBe(side[name]);
   }, 60_000);
 });

@@ -89,7 +89,7 @@ async function lostAndChoseCloud(cloud: Service, a: Pc) {
   await readSavedFile(path.join(a.userData, "library.json"), { version: 2 });
   await damaged.sync.beforeLoad();
   await damaged.sync.checkDataFiles();
-  expect(damaged.sync.view()).toMatchObject({ conflict: true, lostData: true });
+  expect(damaged.sync.view()).toMatchObject({ conflict: true, conflictKind: "lost" });
   await damaged.sync.keep("cloud");
 }
 
@@ -105,7 +105,7 @@ describe("a file held while the copy goes in", () => {
     const stuck = tavora(cloud, a);
     await stuck.sync.beforeLoad();
     await stuck.sync.checkDataFiles();
-    expect(stuck.sync.view()).toMatchObject({ conflict: true, swapUnfinished: true });
+    expect(stuck.sync.view()).toMatchObject({ conflict: true, conflictKind: "unfinished" });
     expect(stuck.sync.dataHeld).toBe(true);
 
     // The app goes on and saves an empty library.
@@ -122,7 +122,7 @@ describe("a file held while the copy goes in", () => {
     const next = tavora(cloud, a);
     await next.sync.beforeLoad();
     expect(JSON.parse(await read(a.userData, "library.json")).workspaces).toEqual({ "elden-ring": {} });
-    expect(next.sync.view()).toMatchObject({ conflict: false, lostData: false, swapUnfinished: false });
+    expect(next.sync.view()).toMatchObject({ conflict: false, conflictKind: null });
     expect(next.sync.dataHeld).toBe(false);
   });
 
@@ -135,7 +135,7 @@ describe("a file held while the copy goes in", () => {
     held = (from) => ends(from, "data", "library.json") && from.includes("cloud-copy-staging") && ++tries < 3;
     const next = tavora(cloud, a);
     await next.sync.beforeLoad();
-    expect(next.sync.view().swapUnfinished).toBe(false);
+    expect(next.sync.view().conflictKind === "unfinished").toBe(false);
     expect(JSON.parse(await read(a.userData, "library.json")).workspaces).toEqual({ "elden-ring": {} });
   });
 });
@@ -178,7 +178,7 @@ describe("what the app wrote while a swap waited", () => {
     held = (from) => from.includes("cloud-copy-staging") && ends(from, "data", "modules");
     const stuck = tavora(cloud, b);
     await stuck.sync.beforeLoad();
-    expect(stuck.sync.view()).toMatchObject({ conflict: true, swapUnfinished: true });
+    expect(stuck.sync.view()).toMatchObject({ conflict: true, conflictKind: "unfinished" });
     held = () => false;
     // The app runs on and makes what the swap moved away anew.
     await writeFile(path.join(b.userData, "profile.json"), "new and empty");
@@ -191,7 +191,7 @@ describe("what the app wrote while a swap waited", () => {
     const { cloud, b } = await halfSwapped();
     const next = tavora(cloud, b);
     await next.sync.beforeLoad();
-    expect(next.sync.view()).toMatchObject({ swapUnfinished: false, conflict: false });
+    expect(next.sync.view()).toMatchObject({ conflictKind: null, conflict: false });
     expect(await read(b.userData, "modules/dice/manifest.json")).toBe("dice");
     const [backup] = await backups(b);
     const keepIn = path.join(b.userData, "backups", backup!);
@@ -213,7 +213,7 @@ describe("what the app wrote while a swap waited", () => {
     expect(await read(b.userData, "profile.json")).toBe("good profile");
     expect(await read(b.userData, "module-data/old.json")).toBe("good data");
     expect(await there(path.join(b.userData, "cloud-copy-staging"))).toBe(false);
-    expect(next.sync.view().swapUnfinished).toBe(false);
+    expect(next.sync.view().conflictKind === "unfinished").toBe(false);
   });
 
   it("taking a swap back can run twice, and empties only what was empty before", async () => {
@@ -346,6 +346,6 @@ describe("at start", () => {
     busyStat = (file) => ends(file, "workspace.json");
     await next.sync.checkDataFiles();
     busyStat = () => false;
-    expect(next.sync.view()).toMatchObject({ conflict: false, lostData: false });
+    expect(next.sync.view()).toMatchObject({ conflict: false, conflictKind: null });
   });
 });

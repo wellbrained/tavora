@@ -211,7 +211,7 @@ async function pcIsBack({ cloud, b, version, remote }: Setup, label: string, bad
   const next = tavora(cloud, b);
   await next.beforeLoad();
   for (const name of NAMES) if ((await read(b, name)) !== B[name]) bad.push(`${label}: ${name} is ${await read(b, name)}`);
-  if (next.view().swapUnfinished) bad.push(`${label}: still unfinished`);
+  if (next.view().conflictKind === "unfinished") bad.push(`${label}: still unfinished`);
   if (!next.view().conflict) bad.push(`${label}: doesn't ask`);
   await next.sync().catch(() => undefined);
   if ((await remote()) !== version) bad.push(`${label}: uploaded`);
@@ -557,7 +557,7 @@ describe("a power cut around what the user and the app do", () => {
           const next = tavora(cloud, b);
           await next.beforeLoad();
           for (const name of NAMES) if ((await read(b, name)) !== B[name]) bad.push(`${label}: ${name} is ${await read(b, name)}`);
-          if (next.view().on || next.view().swapUnfinished || next.dataHeld) bad.push(`${label}: not settled as off`);
+          if (next.view().on || next.view().conflictKind === "unfinished" || next.dataHeld) bad.push(`${label}: not settled as off`);
           if ((await remote()) !== version) bad.push(`${label}: uploaded`);
         },
         checked,
@@ -782,20 +782,20 @@ describe("a power cut around what the user and the app do", () => {
       const now = tavora(cloud, b);
       await now.beforeLoad();
       if (!same(await localFiles(b), left)) bad.push(`stop ${n}: what was done in the older Tavora was replaced`);
-      if (now.dataHeld || now.view().swapUnfinished) bad.push(`stop ${n}: still held after the older Tavora`);
+      if (now.dataHeld || now.view().conflictKind === "unfinished") bad.push(`stop ${n}: still held after the older Tavora`);
       // Or Use the cloud copy: it is in after one restart.
       await restore(b, older);
       restarts = 0;
       for (let start = 0; start < 3; start++) {
         const at = tavora(cloud, b);
         await at.beforeLoad();
-        if (at.view().conflict || at.view().swapUnfinished) await at.keep("cloud").catch(() => undefined);
+        if (at.view().conflict || at.view().conflictKind === "unfinished") await at.keep("cloud").catch(() => undefined);
         else if (start === 0) await at.restore().catch(() => undefined);
       }
       const last = tavora(cloud, b);
       await last.beforeLoad();
       if (restarts > 1) bad.push(`stop ${n}: Use the cloud copy restarted ${restarts} times`);
-      if (last.dataHeld || last.view().swapUnfinished || !same(await localFiles(b), await remoteFiles(setup))) bad.push(`stop ${n}: the cloud copy isn't in`);
+      if (last.dataHeld || last.view().conflictKind === "unfinished" || !same(await localFiles(b), await remoteFiles(setup))) bad.push(`stop ${n}: the cloud copy isn't in`);
     });
     expect(bad.join("\n")).toBe("");
   }, 600_000);

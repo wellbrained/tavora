@@ -124,7 +124,7 @@ const SHELLS: { name: string; testid: string; open(app: ElectronApplication, pag
 ];
 
 function copyView(conflict: boolean): CloudCopyView {
-  return { canKeepKey: true, devData: false, on: true, busy: null, progress: null, copy: null, folder: null, limit: null, pictures: false, recoveryKey: null, askKey: false, conflict, lostData: false, copyWaiting: false, swapUnfinished: false, restartToTake: false, closing: false, problem: null };
+  return { canKeepKey: true, devData: false, on: true, busy: null, progress: null, copy: null, folder: null, limit: null, pictures: false, recoveryKey: null, askKey: false, conflict, conflictKind: null, restartToTake: false, closing: false, problem: null };
 }
 
 function publishView(): PublishView {

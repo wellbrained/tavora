@@ -79,7 +79,7 @@ describe("sequences across starts", () => {
     held = stuckAt("module-data");
     const stuck = tavora(cloud, b);
     await stuck.sync.beforeLoad();
-    expect(stuck.sync.view().swapUnfinished).toBe(true);
+    expect(stuck.sync.view().conflictKind === "unfinished").toBe(true);
     held = () => false;
     await mkdir(path.join(b.userData, "module-data", "x"), { recursive: true });
     await writeFile(path.join(b.userData, "module-data", "x", "work.json"), "my work after later");
@@ -178,7 +178,7 @@ describe("sequences across starts", () => {
     const lost = tavora(cloud, a);
     await lost.sync.beforeLoad();
     await lost.sync.checkDataFiles();
-    expect(lost.sync.view().lostData).toBe(true);
+    expect(lost.sync.view().conflictKind === "lost").toBe(true);
     busyRead = (file) => file === stateFile(a);
     const busy = tavora(cloud, a);
     await busy.sync.beforeLoad();
@@ -186,7 +186,7 @@ describe("sequences across starts", () => {
     busyRead = () => false;
     const after = tavora(cloud, a);
     await after.sync.beforeLoad();
-    expect(after.sync.view().lostData).toBe(true);
+    expect(after.sync.view().conflictKind === "lost").toBe(true);
     await after.sync.sync().catch(() => undefined);
     expect(await remoteVersion(cloud)).toBe(version);
   }, 60_000);
