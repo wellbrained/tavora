@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -129,11 +129,15 @@ describe("today", () => {
   });
 });
 
+// A bare "git" is looked up on PATH on every spawn, which costs ~185 ms each under vitest on macOS (each test runs
+// about ten of them, so ~3 s, and a loaded run hits the 5 s limit). The full path skips that lookup.
+const GIT = ["/usr/bin/git", "/usr/local/bin/git", "/opt/homebrew/bin/git"].find((candidate) => existsSync(candidate)) ?? "git";
+
 describe("collectPullRequest", () => {
   /** A throwaway repo shaped like Tavora's: both package.json files and apps/desktop/changes. */
   function repo() {
     const dir = mkdtempSync(path.join(tmpdir(), "change-notes-"));
-    const git = (...args: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", ...args], { cwd: dir, encoding: "utf8" }).trim();
+    const git = (...args: string[]) => execFileSync(GIT, ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", ...args], { cwd: dir, encoding: "utf8" }).trim();
     const write = (file: string, text: string) => {
       mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
       writeFileSync(path.join(dir, file), text);
