@@ -13,7 +13,7 @@
 import { BrowserWindow, WebContentsView, app, screen, session, type Session, type WebContents } from "electron";
 import { createHash } from "node:crypto";
 import { GAME_OVERLAY_SCHEME } from "./assets";
-import { dragRect, panelBounds, panelWindowRect, type Opacity, type Rect, type WindowMode } from "./game-overlays";
+import { dragRect, panelBounds, panelWindowRect, type Opacity, type OverGame, type Rect, type WindowMode } from "./game-overlays";
 import { GAME_OVERLAY_FRAME_URL, GAME_OVERLAY_ORIGIN, serveGameOverlay, type GameOverlaySource } from "./game-overlay-page";
 import { GAME_OVERLAY_FRAME_DOCUMENT } from "../shared/game-overlay-frame";
 import { InsertedCss } from "./inserted-css";
@@ -21,15 +21,13 @@ import { InsertedCss } from "./inserted-css";
 /** What the window needs of a panel it holds (implemented by ModuleView). */
 export interface OverlayPanel {
   readonly view: WebContentsView;
-  /** The panel is over the game now; its clicks and keys count as the user's only while `layerOpen()` says so. */
-  enterGame(layerOpen: () => boolean): void;
-  /** The panel is in its workspace slot again. */
-  leaveGame(): void;
+  /**
+   * How the panel is over the game now (its clicks and keys count as the user's only while `takesInput`), or null: it is
+   * in its workspace slot again. Only the window holding the panel calls it, with the whole value each time.
+   */
+  setOverGame(overGame: OverGame | null): void;
   setBounds(rect: Rect): void;
   setVisible(visible: boolean): void;
-  setGameOpacity(opacity: Opacity): void;
-  /** Content scales with the game window's height while the panel is over the game (1 is its natural size). */
-  setGameZoom(factor: number): void;
   suspend(): void;
   resume(): void;
   /** Asks the page for a frame; resolves once it has drawn one, or after a cap when it never does. */
@@ -197,7 +195,7 @@ export class GameOverlayWindow {
     if (options.panel) {
       options.panel.setVisible(true);
       window.contentView.addChildView(options.panel.view);
-      options.panel.enterGame(() => this.mode !== "off");
+      this.tellPanel();
       options.panel.suspend();
     }
     window.contentView.addChildView(this.frame);
@@ -212,6 +210,16 @@ export class GameOverlayWindow {
     frame.ipc.on("game-overlay:close", () => this.mode === "arrange" && options.closeRequested());
     frame.ipc.on("game-overlay:layout", () => this.mode === "arrange" && options.layoutRequested());
     frame.ipc.on("game-overlay:drag", (_event, phase: unknown, edge: unknown) => this.onDrag(phase, edge));
+  }
+
+  /**
+   * Tells the panel it holds how it is over the game, as one value: it takes input only in Use (in Arrange the frame over
+   * it takes the clicks and keys), and is faded and zoomed as the window is. Nothing once the window is gone: the panel
+   * was let go (null) and is back in its slot.
+   */
+  private tellPanel(): void {
+    if (this.destroyed) return;
+    this.options.panel?.setOverGame({ takesInput: this.mode === "use", opacity: this.opacity, zoom: this.zoom });
   }
 
   /** Puts the interface font the user has now into the frame; the same font again changes nothing. */
@@ -370,6 +378,7 @@ export class GameOverlayWindow {
     this.mode = mode;
     this.drag = null;
     const panel = this.options.panel;
+    this.tellPanel();
     this.applyMouse();
     this.frame.setVisible(mode === "arrange");
     if (mode === "arrange") this.sendFrameText();
@@ -391,7 +400,7 @@ export class GameOverlayWindow {
 
   setOpacity(opacity: Opacity): void {
     this.opacity = opacity;
-    if (this.options.panel) this.options.panel.setGameOpacity(opacity);
+    if (this.options.panel) this.tellPanel();
     else void this.applyOpacity();
   }
 
@@ -401,7 +410,7 @@ export class GameOverlayWindow {
    */
   setZoom(factor: number): void {
     this.zoom = factor;
-    if (this.options.panel) return this.options.panel.setGameZoom(factor);
+    if (this.options.panel) return this.tellPanel();
     if (!this.isDestroyed && !this.window.webContents.isDestroyed()) this.window.webContents.setZoomFactor(factor);
   }
 
@@ -440,7 +449,7 @@ export class GameOverlayWindow {
     const panel = this.options.panel;
     if (!panel) return;
     if (!this.window.isDestroyed()) this.window.contentView.removeChildView(panel.view);
-    panel.leaveGame();
+    panel.setOverGame(null);
   }
 
   destroy(): void {

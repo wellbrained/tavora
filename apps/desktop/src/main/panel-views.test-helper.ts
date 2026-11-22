@@ -1,5 +1,5 @@
 import type { WebContentsView } from "electron";
-import type { Opacity } from "./game-overlays";
+import type { OverGame } from "./game-overlays";
 import type { InstanceStatus } from "../shared/host-api";
 import type { OverlayPanel } from "./game-overlay-window";
 import { PanelViews, type PanelInGame, type PanelRect, type PanelViewAdapter, type PanelViewsDeps } from "./panel-views";
@@ -59,14 +59,9 @@ export class MemoryPanelView implements PanelViewAdapter, OverlayPanel {
   inGame(): OverlayPanel | null {
     return this.kind === "module" && !this.gone ? this : null;
   }
-  enterGame(): void {
-    this.overGame = true;
+  setOverGame(overGame: OverGame | null): void {
+    this.overGame = overGame !== null;
   }
-  leaveGame(): void {
-    this.overGame = false;
-  }
-  setGameOpacity(_opacity: Opacity): void {}
-  setGameZoom(_factor: number): void {}
   nextFrame(): Promise<void> {
     return Promise.resolve();
   }
@@ -83,12 +78,12 @@ export class MemoryPanelView implements PanelViewAdapter, OverlayPanel {
 export class MemoryLayerWindow {
   destroyed = false;
   constructor(readonly panel: OverlayPanel) {
-    panel.enterGame(() => true);
+    panel.setOverGame({ takesInput: false, opacity: 100, zoom: 1 });
   }
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
-    this.panel.leaveGame();
+    this.panel.setOverGame(null);
   }
 }
 
