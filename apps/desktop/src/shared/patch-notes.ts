@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.134",
+    date: "2026-11-22",
+    title: "Panels stay on after the in-game layer",
+    notes: [
+      "A panel that runs with your game, or feeds an overlay, keeps running when you close the in-game layer while its workspace isn't open.",
+    ],
+    prs: [
+      { number: 892, title: "Deepen the in-game layer: decide what shows, hide the window mechanics" },
+    ],
+    tags: ["overlays", "workspace"],
+  },
+  {
     version: "0.24.133",
     date: "2026-11-22",
     title: "Styles and safer saves",
