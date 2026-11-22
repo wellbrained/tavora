@@ -1,24 +1,20 @@
 // Wires the services behind Stream overlays, game overlays, overlay previews and the Overlay page from the objects
 // that own what they read (the library, the installed modules, the grants, Panel views, the game watcher) plus the few
 // things only the host around them can do (OverlayHostPorts). None of them is handed the Host.
-import { clipboard, desktopCapturer, globalShortcut, nativeImage, screen, BrowserWindow } from "electron";
+import { clipboard, desktopCapturer, globalShortcut, nativeImage, screen, type BrowserWindow } from "electron";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { isVoicePaused } from "../shared/discord-voice";
 import { translate, type Language } from "../shared/i18n";
 import { HOST_SCHEME } from "./assets";
 import type { TavoraTheme } from "@tavora/sdk/protocol";
-import { GameLayerCard } from "./game-layer-card";
-import { GameOverlayWindow, type OverlayPanel } from "./game-overlay-window";
+import { electronLayerPlatform } from "./game-layer-electron";
 import { GameOverlays, type PanelInfo } from "./game-overlay-service";
-import type { OverlayWindowRequest } from "./game-layer-windows";
-import { GameVeilWindow } from "./game-veil-window";
 import type { GameWatcher } from "./game-watch";
 import type { GrantStore } from "./grants";
 import type { Installed } from "./installed-modules";
 import { clientArea, LayoutPictures, MAX_PICTURE_BYTES, MAX_PICTURE_WIDTH, PICTURES_FOLDER, picturePixels, sourceForHandle } from "./layout-pictures";
 import type { Library } from "./library";
-import { windowsForegroundProbe } from "./foreground";
 import { OverlayCanvas } from "./overlay-canvas";
 import { OverlayLayout, type SourcePanel } from "./overlay-layout";
 import { OverlayPreviewWindow } from "./overlay-preview-window";
@@ -27,10 +23,6 @@ import type { PanelViews } from "./panel-views";
 import type { Shell } from "./shell";
 import { Streaming } from "./streaming";
 import type { WorkspaceNames } from "./workspace-lookup";
-import { stackAbove, windowsOrder } from "./window-order";
-
-/** Stacking the overlays above the game failed (Windows' calls couldn't be loaded): said once only. */
-let stackFailed = false;
 
 /** What the overlay services ask of the host around them; the host answers (host.ts). */
 export interface OverlayHostPorts {
@@ -124,50 +116,16 @@ export async function createOverlayServices(wiring: OverlayWiring): Promise<Over
     workspaces: wiring.workspaces,
     settings: library,
     watcher: wiring.watcher,
-    platform: {
-      supported: process.platform === "win32",
-      probe: () => windowsForegroundProbe(),
-      // Windows reports pixels; windows are placed in DIPs.
-      toDip: (rect) => screen.screenToDipRect(null, rect),
-      screen: () => screen.getPrimaryDisplay().bounds,
-      // Any of Tavora's windows with the keyboard; the service tells its own overlay windows apart.
-      tavoraInFront: () => BrowserWindow.getFocusedWindow() !== null,
-      openWindow: (request, panel) => overlayWindow(options, ports.fontCss, request, panel),
-      openVeil: () => new GameVeilWindow({ hidden: options.hidden }),
-      // Overlays that stay while the user is elsewhere sit right above the game's window, not above every window.
-      stackAboveGame: (game, windows) => {
-        if (process.platform !== "win32") return false;
-        try {
-          stackAbove(windowsOrder(), game, windows);
-          return true;
-        } catch (error) {
-          // Said once: the service then keeps them above every window, as before, and tries again on each look.
-          if (!stackFailed) console.warn("[tavora] cannot stack the overlays above the game", error);
-          stackFailed = true;
-          return false;
-        }
-      },
-      gameOnTop: (game) => {
-        if (process.platform !== "win32") return false;
-        try {
-          return windowsOrder().topmost(game);
-        } catch {
-          return false;
-        }
-      },
-      // The card is a page of the host UI (layer-card.html), with a preload of its own.
-      openCard: (request) =>
-        new GameLayerCard({
-          ...request,
-          preload: path.join(path.dirname(options.hostPreload), "layer-card.cjs"),
-          address: options.devServer ? new URL("layer-card.html", options.devServer).href : `${HOST_SCHEME}://app/layer-card.html`,
-          hidden: options.hidden,
-          devTools: options.devTools,
-          theme: ports.theme,
-          language: ports.language,
-        }),
-      shortcuts: globalShortcut,
-    },
+    platform: electronLayerPlatform({
+      hidden: options.hidden,
+      devServer: options.devServer,
+      devTools: options.devTools,
+      hostPreload: options.hostPreload,
+      modulePreload: options.modulePreload,
+      theme: ports.theme,
+      language: ports.language,
+      fontCss: ports.fontCss,
+    }),
     panels: { info: ports.panelInfo, lend: (instanceId, workspaceId, open, revoked) => wiring.panels.lend(instanceId, workspaceId, open, revoked) },
     shell: ports.shell,
     language: ports.language,
@@ -189,26 +147,6 @@ export async function createOverlayServices(wiring: OverlayWiring): Promise<Over
   // The layer's frames open the Overlay page, and the page looks again when a game's window is seen: both need the page, which needs the layer.
   gameOverlays.useLayout(layout);
   return { streaming, gameOverlays, previews, layout };
-}
-
-/** The window for an overlay's page, or (with `panel`) for a panel over its game: the panel's own view goes into it, and no copy is made. */
-function overlayWindow(options: OverlayWiringOptions, fontCss: (() => string) | undefined, request: OverlayWindowRequest, panel?: OverlayPanel): GameOverlayWindow {
-  return new GameOverlayWindow({
-    preload: path.join(path.dirname(options.modulePreload), "game-overlay.cjs"),
-    hidden: options.hidden,
-    id: request.id,
-    source: { page: request.page, state: request.state, watch: request.watch },
-    gameBounds: request.gameBounds,
-    moved: request.moved,
-    closeRequested: request.closeRequested,
-    layoutRequested: request.layoutRequested,
-    ended: request.ended,
-    activated: request.activated,
-    frameText: request.frameText,
-    // The frame is Tavora's own chrome, in the font the user picked.
-    ...(fontCss ? { fontCss } : {}),
-    ...(panel ? { panel } : {}),
-  });
 }
 
 /** The Overlay layout (overlay-layout.ts): the window where the user arranges the overlays and panels in game. */
