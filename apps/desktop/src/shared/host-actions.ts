@@ -392,12 +392,15 @@ export function hostActionTable(c: HostChecks) {
     "reload-modules": {},
     /** Moves a module from the user's modules folder to the recycle bin, after removing its panels in every workspace; its data stays. */
     "remove-module": { moduleId: c.moduleId },
-    /** The user's yes in the consent dialog: exactly what it showed (only what the module still asks for is granted). */
-    "grant-module": { moduleId: c.moduleId, network: c.networkHosts, connectors: list(c.connector, { max: Infinity, unique: true }), folders: optional(c.folderKeys), withGame: optional(bool) },
+    /**
+     * The user's yes in the consent dialog: exactly what it showed, for the owner it showed (only what the module still
+     * asks for is granted, and nothing while another owner's copy holds the id).
+     */
+    "grant-module": { owner: c.ownerId, moduleId: c.moduleId, network: c.networkHosts, connectors: list(c.connector, { max: Infinity, unique: true }), folders: optional(c.folderKeys), withGame: optional(bool) },
     /** Settings > Connections: whether a module's panel runs while its game runs (only for one that asks for it). */
-    "set-module-with-game": { moduleId: c.moduleId, on: bool },
-    /** Settings: shows the system's folder dialog so the user can say where one of a module's granted folders is. */
-    "choose-module-folder": { moduleId: c.moduleId, folder: c.folderPath },
+    "set-module-with-game": { owner: c.ownerId, moduleId: c.moduleId, on: bool },
+    /** Settings: shows the system's folder dialog so the user can say where one of a module's granted folders is (for the owner Settings showed). */
+    "choose-module-folder": { owner: c.ownerId, moduleId: c.moduleId, folder: c.folderPath },
     /** Takes back everything granted to a module, after removing its panels in every workspace; its data stays. */
     "revoke-module": { moduleId: c.moduleId },
     /** Settings > Integrations > Leaderboards: takes the user off a module's boards; the service deletes their results there. */

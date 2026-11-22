@@ -68,7 +68,7 @@ const signedIn = computed(() => account.value?.account != null);
 const withGame = computed(() => modules.value.filter((module) => module.permissions.asks.withGame));
 const withGameOn = computed(() => withGame.value.filter((module) => module.permissions.granted.withGame).length);
 function setWithGame(module: ModuleView, on: boolean) {
-  void act({ type: "set-module-with-game", moduleId: module.id, on });
+  void act({ type: "set-module-with-game", owner: module.owner, moduleId: module.id, on });
 }
 
 function leaveBoards(module: ModuleView) {
@@ -115,7 +115,7 @@ function leaveBoards(module: ModuleView) {
             size="sm"
             :aria-label="t('integrations.folders.changeLabel', { folder: folderLabel(folder), name: module.name })"
             :data-testid="`folder-grant-change-${module.id}`"
-            @click="act({ type: 'choose-module-folder', moduleId: module.id, folder: folder.path })"
+            @click="act({ type: 'choose-module-folder', owner: module.owner, moduleId: module.id, folder: folder.path })"
           >
             {{ t("integrations.folders.change") }}
           </Button>

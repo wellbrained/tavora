@@ -48,9 +48,10 @@ function deferred<T>() {
 const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 const MODULE = "community.notes";
+const PUBLISHER = "0123456789abcdef0123456789abcdef";
 /** Just enough of the host's state for these dialogs: one module that asks for a site, and one example to copy. */
-function hostState(): HostViewState {
-  const module = (id: string) => ({ id, name: "Notes", version: "1.0.0", provenance: "local", origin: { kind: "catalog" }, publisher: null, permissions: { asks: { network: ["example.com"], connectors: [], folders: [] }, missing: { network: ["example.com"], connectors: [], folders: [] } } });
+function hostState(owner = PUBLISHER): HostViewState {
+  const module = (id: string) => ({ id, owner, name: "Notes", version: "1.0.0", provenance: "local", origin: { kind: "catalog" }, publisher: null, permissions: { asks: { network: ["example.com"], connectors: [], folders: [] }, missing: { network: ["example.com"], connectors: [], folders: [] } } });
   return {
     language: { resolved: "en" },
     appearance: { themes: [], themeId: "", variationId: "" },
@@ -288,5 +289,35 @@ describe("the consent dialog answers only the question it showed", () => {
     button("grant-allow").click();
     await settle();
     expect(dialog.value).toBeNull();
+  });
+});
+
+describe("the consent dialog grants only the owner it showed", () => {
+  const grant: GrantRequest = { kind: "grant", moduleId: MODULE, slot: null, review: true };
+
+  it("sends the owner with the id, and closes, unanswered, when it's another owner's when the answer is back", async () => {
+    const saved = holdAct("grant-module");
+    dialog.value = grant;
+    mount(GrantDialog, () => ({ request: grant }));
+    await settle();
+    button("grant-allow").click();
+    await settle();
+    expect(bridge.act.mock.calls.map(([action]) => action)).toEqual([expect.objectContaining({ type: "grant-module", owner: PUBLISHER, moduleId: MODULE })]);
+    // A development folder takes the id while the answer is on its way; main grants nothing and says the module went.
+    state.value = hostState("local");
+    await nextTick();
+    saved.resolve({ ok: false, error: "That module is no longer installed." });
+    await settle();
+    expect(dialog.value).toBeNull();
+  });
+
+  it("closes, without asking for the new copy, when another owner's copy takes the id while it is open", async () => {
+    dialog.value = grant;
+    mount(GrantDialog, () => ({ request: grant }));
+    await settle();
+    state.value = hostState("local");
+    await settle();
+    expect(dialog.value).toBeNull();
+    expect(bridge.act).not.toHaveBeenCalled();
   });
 });

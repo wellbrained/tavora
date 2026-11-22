@@ -836,6 +836,8 @@ export interface HostViewState {
   };
   modules: {
     id: string;
+    /** Whose copy this is (a publisher key's fingerprint, local or official): a grant from a dialog names it with the id. */
+    owner: string;
     name: string;
     description: string | null;
     available: boolean;

@@ -40,6 +40,7 @@ import ConnectionsSection from "./settings/ConnectionsSection.vue";
 
 const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 const KINGS = "wellbrained.nine-kings";
+const OWNER = "0123456789abcdef0123456789abcdef";
 const none = { network: [], connectors: [], folders: [] };
 
 /** One module that runs with its game: asked, granted and still missing as given. */
@@ -51,6 +52,7 @@ function hostState(module: { granted?: boolean; missing?: boolean; gameName?: st
     modules: [
       {
         id: KINGS,
+        owner: OWNER,
         name: "9 Kings Companion",
         version: "1.0.0",
         provenance: "local",
@@ -96,7 +98,7 @@ describe("the consent dialog", () => {
     expect(find("grant-with-game")?.textContent).toContain("It keeps working out of sight while you play.");
     find("grant-allow")!.click();
     await settle();
-    expect(bridge.act.mock.calls[0]![0]).toEqual({ type: "grant-module", moduleId: KINGS, network: [], connectors: [], folders: [], withGame: true });
+    expect(bridge.act.mock.calls[0]![0]).toEqual({ type: "grant-module", owner: OWNER, moduleId: KINGS, network: [], connectors: [], folders: [], withGame: true });
   });
 
   it("says its game without a name when the module isn't for one game in the library", async () => {
@@ -134,7 +136,7 @@ describe("Settings > Connections", () => {
     expect(sw.getAttribute("data-state")).toBe("checked");
     sw.click();
     await settle();
-    expect(bridge.act.mock.calls.map(([action]) => action)).toEqual([{ type: "set-module-with-game", moduleId: KINGS, on: false }]);
+    expect(bridge.act.mock.calls.map(([action]) => action)).toEqual([{ type: "set-module-with-game", owner: OWNER, moduleId: KINGS, on: false }]);
   });
 
   it("shows the switch off for a module switched off, and on asks to turn it on", async () => {
@@ -144,7 +146,7 @@ describe("Settings > Connections", () => {
     expect(sw.getAttribute("data-state")).toBe("unchecked");
     sw.click();
     await settle();
-    expect(bridge.act.mock.calls.map(([action]) => action)).toEqual([{ type: "set-module-with-game", moduleId: KINGS, on: true }]);
+    expect(bridge.act.mock.calls.map(([action]) => action)).toEqual([{ type: "set-module-with-game", owner: OWNER, moduleId: KINGS, on: true }]);
   });
 
   it("is hidden until an installed module asks for it", () => {

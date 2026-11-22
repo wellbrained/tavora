@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { LOCAL_OWNER } from "@tavora/module-schema";
 import { fingerprint, signFiles, writeZip, type ZipFile } from "@tavora/pack";
 import { describe, expect, it } from "vitest";
 import type { CatalogEntry } from "./catalog-client";
@@ -70,7 +71,8 @@ async function setup() {
   const counted: string[] = [];
   // movedByReload: modules whose folder the next look moves (a built-in module's first update), so it restarts their panels itself.
   const progress: Array<number | null> = [];
-  const state = { online: true, binFails: false, onClose: (_moduleId: string) => {}, grantChanges: 0, movedByReload: new Set<string>(), autoUpdate: true };
+  // afterLook: runs when a look for modules ends, as a development folder taking the id then would.
+  const state = { online: true, binFails: false, onClose: (_moduleId: string) => {}, grantChanges: 0, movedByReload: new Set<string>(), autoUpdate: true, afterLook: () => {} };
   const publish = (entry: CatalogEntry, zip: Buffer) => {
     catalog.index = [entry];
     catalog.zips.set(entry.zip.sha256, zip);
@@ -130,6 +132,7 @@ async function setup() {
       const moved = new Set(state.movedByReload);
       for (const id of moved) steps.push(`reload panels ${id}`);
       state.movedByReload.clear();
+      state.afterLook();
       return moved;
     },
     introduce: async (owner) => void steps.push(`introduce ${owner}`),
@@ -223,17 +226,38 @@ describe("ModuleLifecycle", () => {
     const key = generateKeyPairSync("ed25519").privateKey;
     await lifecycle.installFile(await zipFile(zipOf("1.0.0", key, ["api.example.com"])));
     steps.length = 0;
-    await lifecycle.grant(ID, ["api.example.com", "evil.example.com"], []);
+    await lifecycle.grant({ owner: fingerprint(key), id: ID }, ["api.example.com", "evil.example.com"], []);
     expect(grants.get(fingerprint(key), ID)).toMatchObject({ network: ["api.example.com"], connectors: [] });
     expect(steps).toEqual([`reload panels ${ID}`]);
-    await expect(lifecycle.grant("someone.else", [], [])).rejects.toMatchObject({ key: "error.moduleMissing" });
+    await expect(lifecycle.grant({ owner: fingerprint(key), id: "someone.else" }, [], [])).rejects.toMatchObject({ key: "error.moduleMissing" });
+  });
+
+  it("grants nothing when another owner's copy took the id after the dialog showed the module", async () => {
+    const { lifecycle, steps, grants, state, zipFile, modules } = await setup();
+    const key = generateKeyPairSync("ed25519").privateKey;
+    const shown = fingerprint(key);
+    await lifecycle.installFile(await zipFile(zipOf("1.0.0", key, ["api.example.com"])));
+    // A development folder takes the id while the click is on its way; it asks for the same host.
+    modules().set(ID, { ...modules().get(ID)!, owner: LOCAL_OWNER });
+    steps.length = 0;
+    state.grantChanges = 0;
+    await expect(lifecycle.grant({ owner: shown, id: ID }, ["api.example.com"], [])).rejects.toMatchObject({ key: "error.moduleMissing" });
+    expect(grants.get(LOCAL_OWNER, ID)).toBeUndefined();
+    expect(grants.get(shown, ID)).toBeUndefined();
+    expect([steps, state.grantChanges]).toEqual([[], 0]);
+    // The Settings switch for running with the game asks the same.
+    await expect(lifecycle.setWithGame({ owner: shown, id: ID }, true)).rejects.toMatchObject({ key: "error.moduleMissing" });
+    expect(grants.get(LOCAL_OWNER, ID)).toBeUndefined();
+    // The copy the dialog showed is granted as before.
+    await lifecycle.grant({ owner: LOCAL_OWNER, id: ID }, ["api.example.com"], []);
+    expect(grants.get(LOCAL_OWNER, ID)).toMatchObject({ network: ["api.example.com"] });
   });
 
   it("closes a module's panels before taking back its grant", async () => {
     const { lifecycle, steps, grants, state, zipFile } = await setup();
     const key = generateKeyPairSync("ed25519").privateKey;
     await lifecycle.installFile(await zipFile(zipOf("1.0.0", key, ["api.example.com"])));
-    await lifecycle.grant(ID, ["api.example.com"], []);
+    await lifecycle.grant({ owner: fingerprint(key), id: ID }, ["api.example.com"], []);
     steps.length = 0;
     let grantWhenClosed: unknown;
     state.onClose = () => (grantWhenClosed = grants.get(fingerprint(key), ID));
@@ -248,7 +272,7 @@ describe("ModuleLifecycle", () => {
     const key = generateKeyPairSync("ed25519").privateKey;
     await lifecycle.installFile(await zipFile(zipOf("1.0.0", key, ["api.example.com"])));
     state.grantChanges = 0;
-    await lifecycle.grant(ID, ["api.example.com"], []);
+    await lifecycle.grant({ owner: fingerprint(key), id: ID }, ["api.example.com"], []);
     expect(state.grantChanges).toBe(1);
     await lifecycle.revoke(ID);
     expect(state.grantChanges).toBe(2);
@@ -328,6 +352,22 @@ describe("ModuleLifecycle", () => {
     expect(grants.get(owner, ID)).toMatchObject({ version: "2.0.0", network: ["api.example.com"] });
     expect(steps).toEqual([`introduce ${owner}`, "look for modules", `reload panels ${ID}`, `reload panels ${ID}`]);
     expect(lifecycle.updates.pending(ID)).toBeUndefined();
+  });
+
+  it("grants a waiting update's asks to nobody when another owner's copy holds the id once it is installed", async () => {
+    const { lifecycle, publish, grants, state, modules } = await setup();
+    const key = generateKeyPairSync("ed25519").privateKey;
+    const owner = fingerprint(key);
+    publish(listing("1.0.0", zipOf("1.0.0", key), owner), zipOf("1.0.0", key));
+    await lifecycle.installFromCatalog(ID);
+    const update = zipOf("2.0.0", key, ["api.example.com"]);
+    publish(listing("2.0.0", update, owner), update);
+    expect((await lifecycle.updates.check()).waiting).toHaveLength(1);
+    // A development folder takes the id as the update goes in.
+    state.afterLook = () => void modules().set(ID, { ...modules().get(ID)!, owner: LOCAL_OWNER });
+    await lifecycle.applyUpdate(ID, "2.0.0");
+    expect(grants.get(LOCAL_OWNER, ID)).toBeUndefined();
+    expect(grants.get(owner, ID)).toBeUndefined();
   });
 
   it("starts the panels once for a waiting update that asks for nothing new", async () => {

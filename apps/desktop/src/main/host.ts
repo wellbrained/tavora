@@ -2174,10 +2174,11 @@ export class Host {
       "open-legal-page": (action) => this.openLegalPage(action.page),
       "reload-modules": async () => void (await this.modulePanels.reload()),
       "remove-module": (action) => this.lifecycle.remove(action.moduleId),
-      "grant-module": (action) => this.lifecycle.grant(action.moduleId, action.network, action.connectors, action.folders ?? [], action.withGame === true),
-      "set-module-with-game": (action) => this.lifecycle.setWithGame(action.moduleId, action.on),
+      "grant-module": (action) => this.lifecycle.grant({ owner: action.owner, id: action.moduleId }, action.network, action.connectors, action.folders ?? [], action.withGame === true),
+      "set-module-with-game": (action) => this.lifecycle.setWithGame({ owner: action.owner, id: action.moduleId }, action.on),
       "choose-module-folder": async (action) => {
-        const module = this.modules.get(action.moduleId);
+        // Only for the owner Settings showed; another owner's copy under the id answers as a module that went.
+        const module = sameOwner({ owner: action.owner, manifest: { id: action.moduleId } }, this.modules);
         if (!module) throw new LibraryError("error.moduleMissing");
         // The module's pages start again, so they find the folder where the user said.
         if (await this.folderHostOf(module).choose(action.folder)) this.modulePanels.reloadViews(action.moduleId);
@@ -3662,6 +3663,7 @@ export class Host {
       },
       modules: [...this.modules.values()].map((module) => ({
         id: module.manifest.id,
+        owner: module.owner,
         name: this.shown(module.manifest).name,
         description: this.shown(module.manifest).description ?? null,
         available: current !== null && this.supportsWorkspace(module, current.id),

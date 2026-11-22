@@ -11,6 +11,7 @@ import { asksWithGame, type GrantStore } from "./grants";
 import { checkZipData, dropOldCopies, forgetOwner, installZip, installZipData, type InstallOptions, type Installed } from "./installer";
 import { LibraryError } from "./library";
 import { UserError } from "./messages";
+import { sameOwner } from "./module-owner";
 import type { OfficialUpdates } from "./official-updates";
 import { OFFICIAL_PREFIX, type InstalledModule } from "./registry";
 import type { SafetyCheck } from "./safety-lists";
@@ -31,6 +32,12 @@ export interface ModulePanels {
   reload(moduleId: string): void;
   /** Closes a module's panels in every workspace, leaving their slots empty. */
   close(moduleId: string): void;
+}
+
+/** A module as a dialog or Settings showed it: its id and whose copy it was. */
+export interface ShownModule {
+  owner: string;
+  id: string;
 }
 
 export interface ModuleLifecycleOptions {
@@ -167,7 +174,8 @@ export class ModuleLifecycle {
     const pending = this.updates.pending(moduleId);
     if (!module || !pending || pending.version !== version) throw new LibraryError("error.updateGone");
     const { installed, asks } = await this.updates.apply(moduleId, version);
-    const updated = this.options.modules().get(moduleId);
+    // Only the copy just installed: when another owner's copy (a development folder) holds the id now, it gets nothing.
+    const updated = sameOwner(installed, this.options.modules());
     if (updated) {
       await this.options.grants().grant(updated, asks);
       if (!asksNothing(asks)) this.options.panels.reload(moduleId);
@@ -208,27 +216,33 @@ export class ModuleLifecycle {
   }
 
   /**
-   * The user allowed what the consent dialog showed. Only hosts the module asks for are granted
-   * (grants.ts), so a module updated while the dialog was open gets nothing it did not show. Open
-   * panels of the module start again, so they connect with the new grant.
+   * The user allowed what the consent dialog showed. `module` is the owner it showed and the module id: only while the
+   * copy installed now is that owner's, so a copy that took the id meanwhile (a development folder) gets nothing, and the
+   * answer is as for a module that went. Only hosts the module asks for are granted (grants.ts), so a module updated
+   * while the dialog was open gets nothing it did not show. Open panels of the module start again, so they connect with
+   * the new grant.
    */
-  async grant(moduleId: string, network: string[], connectors: Connector[], folders: string[] = [], withGame = false): Promise<void> {
-    const module = this.options.modules().get(moduleId);
-    if (!module || module.builtIn) throw new LibraryError("error.moduleMissing");
-    await this.options.grants().grant(module, { network, connectors, folders, ...(withGame ? { withGame: true } : {}) });
+  async grant(module: ShownModule, network: string[], connectors: Connector[], folders: string[] = [], withGame = false): Promise<void> {
+    await this.options.grants().grant(this.shownCopy(module), { network, connectors, folders, ...(withGame ? { withGame: true } : {}) });
     this.options.grantsChanged?.();
-    this.options.panels.reload(moduleId);
+    this.options.panels.reload(module.id);
   }
 
   /**
-   * Settings > Connections: whether the module's panel runs while its game runs. Only for a module that asks for it;
-   * the host starts or stops that panel at once (grantsChanged).
+   * Settings > Connections: whether the module's panel runs while its game runs. Only for a module that asks for it,
+   * and only while the copy installed now is the owner Settings showed; the host starts or stops that panel at once
+   * (grantsChanged).
    */
-  async setWithGame(moduleId: string, on: boolean): Promise<void> {
-    const module = this.options.modules().get(moduleId);
-    if (!module || module.builtIn) throw new LibraryError("error.moduleMissing");
-    await this.options.grants().setWithGame(module, on);
+  async setWithGame(module: ShownModule, on: boolean): Promise<void> {
+    await this.options.grants().setWithGame(this.shownCopy(module), on);
     this.options.grantsChanged?.();
+  }
+
+  /** The copy installed now under `module.id`, only while it is the shown owner's and not built in. */
+  private shownCopy(module: ShownModule): InstalledModule {
+    const found = sameOwner({ owner: module.owner, manifest: { id: module.id } }, this.options.modules());
+    if (!found || found.builtIn) throw new LibraryError("error.moduleMissing");
+    return found;
   }
 
   /** Takes back everything granted to a module, after its panels are removed in every workspace. Its data stays. */

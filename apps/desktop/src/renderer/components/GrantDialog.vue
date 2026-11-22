@@ -34,7 +34,21 @@ watch(
 );
 const busy = ref(false);
 
-const module = computed(() => state.value?.modules.find((item) => item.id === props.request.moduleId) ?? null);
+const installed = computed(() => state.value?.modules.find((item) => item.id === props.request.moduleId) ?? null);
+/**
+ * Whose copy the question shows: the owner first seen for it. When another owner's copy takes the id while it is open (a
+ * development folder over a catalog copy), that is a module that went, never a question for the new copy.
+ */
+const shownOwner = ref<string | null>(null);
+watch(
+  [() => props.request, installed],
+  ([request], [previous]) => {
+    if (request !== previous) shownOwner.value = null;
+    shownOwner.value ??= installed.value?.owner ?? null;
+  },
+  { immediate: true },
+);
+const module = computed(() => (installed.value && installed.value.owner === shownOwner.value ? installed.value : null));
 const update = computed(() => (props.request.update ? (module.value?.update ?? null) : null));
 const asks = computed(() =>
   props.request.onRequest ? { network: [], connectors: props.request.onRequest.connectors, folders: [] } : props.request.update ? update.value?.asks : module.value?.permissions.missing,
@@ -68,9 +82,9 @@ function close(request: GrantRequest = props.request) {
   dialog.value = request.backToLibrary ? { kind: "add-module" } : null;
 }
 
-// The module went away, or has nothing left to ask: nothing to answer.
+// The module went away, or has nothing left to ask: nothing to answer (also once an answer that came too late is back).
 watch(
-  [module, hosts, connectors, folders, withGame],
+  [module, hosts, connectors, folders, withGame, busy],
   () => {
     if (!props.inPanel && !busy.value && (!module.value || (hosts.value.length + connectors.value.length + folders.value.length === 0 && !withGame.value))) closeDialog(props.request);
   },
@@ -145,7 +159,7 @@ async function allow() {
   }
   // Exactly what this dialog shows: the main process grants only what the module still asks for.
   const result = await act(
-    { type: "grant-module", moduleId: current.id, network: [...hosts.value], connectors: [...connectors.value], folders: folders.value.map((folder) => folder.key), ...(withGame.value ? { withGame: true } : {}) },
+    { type: "grant-module", owner: current.owner, moduleId: current.id, network: [...hosts.value], connectors: [...connectors.value], folders: folders.value.map((folder) => folder.key), ...(withGame.value ? { withGame: true } : {}) },
     { quiet: true },
   );
   busy.value = false;
