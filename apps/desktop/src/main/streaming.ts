@@ -42,7 +42,7 @@ export interface StreamingOptions {
   /** What the user granted each module (the stream-overlay connector is checked here). */
   grants: Pick<GrantStore, "allowed">;
   /** Asks the user in Tavora's consent dialog for a connector the module asks for on request; whether they allowed it. */
-  askConnector(moduleId: string, connector: "stream-overlay"): Promise<boolean>;
+  askConnector(module: { owner: string; id: string }, connector: "stream-overlay"): Promise<boolean>;
   /** The workspace shown now, or null. */
   workspaceId(): string | null;
   workspaces: Pick<WorkspaceNames, "name">;
@@ -149,7 +149,7 @@ export class Streaming {
       if (!(module.manifest.permissions.onRequest ?? []).includes("stream-overlay")) {
         throw new HostError("PERMISSION_DENIED", 'overlay.copyLink needs the "overlay" permission', { capability: "overlay" });
       }
-      return this.options.askConnector(module.manifest.id, "stream-overlay");
+      return this.options.askConnector({ owner: module.owner, id: module.manifest.id }, "stream-overlay");
     };
     return {
       publish: (key: string, state: JsonValue) => {

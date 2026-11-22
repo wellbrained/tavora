@@ -76,6 +76,7 @@ function setup(options: { before: InstalledModule[]; records: InstanceRecord[]; 
     start: (record, _workspace, openedAt) => void (open.add(record.instanceId), calls.push(`start ${record.instanceId}${openedAt === undefined ? "" : " now"}`)),
     close: (id) => void (open.delete(id), calls.push(`close for good ${id}`)),
     forgetTooltips: (id) => void calls.push(`forget tooltips ${id}`),
+    ownerChanged: (id) => void calls.push(`owner changed ${id}`),
     modulesChanged: async (restarted) => void calls.push(`modules changed${restarted ? ", restarted" : ""}`),
     looked: async () => void calls.push("looked"),
     pushState: () => void calls.push("push"),
@@ -97,6 +98,8 @@ describe("ModulePanels", () => {
     expect(calls).not.toContain("close map");
     expect(calls).not.toContain("close for good map");
     expect(calls).toContain("forget tooltips wellbrained.map");
+    // A connector question the old page asked ends with it.
+    expect(calls).toContain("owner changed wellbrained.map");
     // The content the old page named goes, and the record names the new owner.
     expect(records[0]).toEqual({ instanceId: "map", moduleId: "wellbrained.map", owner: "local" });
     expect(calls).toContain("workspace saved soon");

@@ -42,7 +42,7 @@ export interface OverlayHostPorts {
   /** The workspace shown now, or null. */
   workspaceId(): string | null;
   /** Asks the user in Tavora's consent dialog for a connector the module asks for on request. */
-  askConnector(moduleId: string, connector: "stream-overlay"): Promise<boolean>;
+  askConnector(module: { owner: string; id: string }, connector: "stream-overlay"): Promise<boolean>;
   /** What the in-game layer knows of a panel (its view is lent by Panel views itself). */
   panelInfo(instanceId: string, workspaceId?: string): PanelInfo | null;
   /** The Overlay page's side of the host: every panel, which ones run, leaving the page, and the system's picture dialog. */

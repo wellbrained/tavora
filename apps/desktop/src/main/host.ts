@@ -728,6 +728,7 @@ export class Host {
       start: (record, workspace, openedAt) => this.createView(record, workspace, openedAt),
       close: (instanceId) => this.closeView(instanceId),
       forgetTooltips: (moduleId) => this.tooltips?.forgetModule(moduleId),
+      ownerChanged: (moduleId) => this.panelQuestions.ownerChanged(moduleId),
       modulesChanged: async (restarted) => {
         // A module removed, blocked, replaced by another publisher's or updated without the connector ends its open OBS pages now.
         this.streaming?.recheckStreams();
@@ -3956,7 +3957,7 @@ export class Host {
         fontCss: () => fontStylesheet(this.appearance.host.font),
         saveLibrary: () => this.saveLibrary(),
         workspaceId: () => this.workspaceId,
-        askConnector: (moduleId, connector) => this.panelQuestions.askConnector(moduleId, connector),
+        askConnector: (module, connector) => this.panelQuestions.askConnector(module, connector),
         panelInfo: (instanceId, workspaceId) => this.panelInfo(instanceId, workspaceId),
         page: {
           sources: () => this.overlaySources(),

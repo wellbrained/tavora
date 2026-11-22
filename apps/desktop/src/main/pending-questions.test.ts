@@ -5,7 +5,7 @@ const content = { id: "c1", title: "Build" } as never;
 const navigation = { workspaceId: "w1", moduleId: "m", panelType: "t", panelName: "Viewer", content };
 const dialog = { module: {} as never, size: {} as never, until: 0, byClick: true };
 const consent = { kind: "consent", name: "Ann" } as const;
-const connector = { moduleId: "m", connector: "stream-overlay" } as const;
+const connector = { moduleId: "m", owner: "local", connector: "stream-overlay" } as const;
 
 describe("ask, answer and cancel", () => {
   it("resolves the asker with the answer and clears the slice", async () => {
@@ -143,7 +143,7 @@ describe("a newer question of the same kind", () => {
 
 describe("queued kinds", () => {
   const queued = () => new PendingQuestions({ queued: ["connector"] });
-  const ask = (questions: PendingQuestions, moduleId: string) => questions.ask("connector", { module: moduleId }, { moduleId, connector: "stream-overlay" });
+  const ask = (questions: PendingQuestions, moduleId: string) => questions.ask("connector", { module: moduleId }, { moduleId, owner: "local", connector: "stream-overlay" });
 
   it("makes the second ask wait until the first is answered", async () => {
     const questions = queued();
@@ -161,7 +161,7 @@ describe("queued kinds", () => {
   it("moves on when the first one is cancelled, and cancels waiting ones by scope too", async () => {
     const questions = queued();
     const first = ask(questions, "a");
-    const second = questions.ask("connector", { workspace: "w" }, { moduleId: "b", connector: "stream-overlay" });
+    const second = questions.ask("connector", { workspace: "w" }, { moduleId: "b", owner: "local", connector: "stream-overlay" });
     const third = ask(questions, "c");
     questions.cancel(first.id);
     expect(questions.peek("connector")?.id).toBe(second.id);

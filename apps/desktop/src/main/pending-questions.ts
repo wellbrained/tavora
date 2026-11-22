@@ -16,8 +16,8 @@ interface QuestionKinds {
   navigation: { payload: { workspaceId: string; moduleId: string; panelType: string; panelName: string; content: PanelContent }; answer: "new-panel" | "cancel" };
   /** A game started while the user chose to be asked. */
   gameSwitch: { payload: { gameId: string }; answer: "switch" | "cancel" };
-  /** A connector a module asks for on request; allowed or not. */
-  connector: { payload: { moduleId: string; connector: Connector }; answer: boolean };
+  /** A connector a module asks for on request; allowed or not. `owner`: whose page asked; only that owner's copy is granted it. */
+  connector: { payload: { moduleId: string; owner: string; connector: Connector }; answer: boolean };
   /** A module's question about its leaderboards, shown in the panel that asked; yes or no. */
   leaderboard: { payload: { moduleId: string; question: LeaderboardQuestion }; answer: boolean };
   /**

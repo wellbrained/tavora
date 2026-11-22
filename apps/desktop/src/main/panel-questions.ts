@@ -2,6 +2,7 @@ import type { Connector } from "@tavora/module-schema";
 import type { GrantStore } from "./grants";
 import type { Installed } from "./installed-modules";
 import type { LeaderboardQuestion } from "./leaderboards";
+import { sameOwner } from "./module-owner";
 import type { PanelViews } from "./panel-views";
 import type { PendingQuestions } from "./pending-questions";
 import type { InstanceRecord } from "./workspace";
@@ -56,22 +57,26 @@ export class PanelQuestions {
 
   /**
    * Shows Tavora's consent question for one connector a module asks for on request, after a click in its panel; resolves
-   * with whether the user allowed it. A newer request closes an older one as not allowed, and so does closing the
-   * module's last panel.
+   * with whether the user allowed it. `module` is the owner whose page asked and the module id. A newer request closes
+   * an older one as not allowed, and so does closing the module's last panel or its panels starting as another owner's.
    */
-  askConnector(moduleId: string, connector: Connector): Promise<boolean> {
-    const { answer } = this.options.questions.ask("connector", { module: moduleId }, { moduleId, connector });
+  askConnector(module: { owner: string; id: string }, connector: Connector): Promise<boolean> {
+    const { answer } = this.options.questions.ask("connector", { module: module.id }, { moduleId: module.id, owner: module.owner, connector });
     this.changed();
     return answer;
   }
 
-  /** The user's answer; allowing grants that connector alone (if the module installed now asks for it), and its panels go on with it. */
+  /**
+   * The user's answer; allowing grants that connector alone, and its panels go on with it. Only while the copy installed
+   * now is the asking owner's and asks for it: when the id changed hands meanwhile, nobody is granted anything and the
+   * asker hears no.
+   */
   async answerConnector(id: number, allow: boolean): Promise<void> {
     const { questions, installed, grants } = this.options;
     const pending = questions.peek("connector");
     if (!pending || pending.id !== id) return;
-    const { moduleId, connector } = pending.payload;
-    const module = installed.get(moduleId);
+    const { moduleId, owner, connector } = pending.payload;
+    const module = sameOwner({ owner, manifest: { id: moduleId } }, installed.modules);
     const grant = async (): Promise<boolean> => {
       const granted = allow && module !== undefined && (module.manifest.permissions.onRequest ?? []).includes(connector);
       if (granted) await grants.grant(module, { network: [], connectors: [connector], folders: [] });
@@ -92,6 +97,11 @@ export class PanelQuestions {
     const { answer } = this.options.questions.ask("leaderboard", { panel: instanceId }, { moduleId, question });
     this.changed();
     return answer;
+  }
+
+  /** A module's panels start again as another owner's (ModulePanels): a connector question its old page asked ends as not allowed. */
+  ownerChanged(moduleId: string): void {
+    if (this.options.questions.cancel({ module: moduleId }, "connector") > 0) this.changed();
   }
 
   /** The user's answer; the panel's page comes back either way. */

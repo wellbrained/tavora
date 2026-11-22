@@ -41,6 +41,8 @@ export interface ModulePanelsOptions {
   close: (instanceId: string) => void;
   /** A module's pages start again: its tooltips' skins go with them. */
   forgetTooltips: (moduleId: string) => void;
+  /** A module's open panels start again as another owner's: what their old pages asked the user ends (PanelQuestions.ownerChanged). */
+  ownerChanged: (moduleId: string) => void;
   /** After a look, once the panels have their types: what else follows the modules (streams, notes, overlays, panels with their game). */
   modulesChanged: (restarted: boolean) => Promise<void>;
   /** The last step of a look (development folders watched again, publisher names). */
@@ -122,6 +124,7 @@ export class ModulePanels {
     const restarted = new Set<string>();
     let contentDropped = false;
     for (const view of viewsOfAnotherOwner(this.options.views(), modules)) {
+      if (!restarted.has(view.moduleId)) this.options.ownerChanged(view.moduleId);
       restarted.add(view.moduleId);
       this.options.forgetTooltips(view.moduleId);
       const owner = modules.get(view.moduleId)!.owner;
