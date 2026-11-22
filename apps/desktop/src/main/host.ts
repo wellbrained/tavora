@@ -31,16 +31,16 @@ import {
 } from "electron";
 import type { TavoraWorkspace } from "@tavora/sdk/protocol";
 import type { PanelDialogSize } from "./bridge";
-import type { AccountView, ActionResult, AiUsageView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviewsResult, DeveloperLink, InstalledGameView, LegalPage, LicenceList, ModulePageResult, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, PanelDialog, PanelPlacement, ProfileRanksView, ReleaseStatus, Screen, SteamImportGame, SteamLibraryResult, SteamShareResult, UnlistedGame } from "../shared/host-api";
+import type { AccountView, ActionResult, AiUsageView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviewsResult, DeveloperLink, InstalledGameView, LegalPage, LicenceList, ModulePageResult, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, PanelDialog, PanelPlacement, ProfileRanksView, ReleaseStatus, Screen, SteamLibraryResult, SteamShareResult, UnlistedGame } from "../shared/host-api";
 import { MAX_PICKER_COVERS } from "../shared/host-api";
-import { addOrRestoreWorkspace } from "./game-copy";
-import { isForWorkspaceGame, withOnlineId } from "./workspace-game";
+import { isForWorkspaceGame } from "./workspace-game";
 import { resolveLanguage, translate, type Language } from "../shared/i18n";
 import { ownKeys } from "./own-keys";
 import { suggestPrefix } from "../shared/id-prefix";
 import { isVoicePaused } from "../shared/discord-voice";
 import { UserError } from "./messages";
 import { UndoGoneError, UndoShelf } from "./undo-shelf";
+import { WorkspaceLibrary } from "./workspace-library";
 import { buildReport, errorLog, timings } from "./diagnostics";
 import { popularGames } from "./catalog";
 import { readLicences } from "./licences";
@@ -48,7 +48,7 @@ import { legalPageUrl } from "../shared/legal-links";
 import { gridTemplate, layoutTemplate } from "../shared/layout-templates";
 import { parseAction, runAction, type ActionHandlers } from "./actions";
 import { contentTypeFor, HOST_CSP, HOST_SCHEME, resolveAsset } from "./assets";
-import { deleteModuleData, deleteModuleDataOf, listModuleData, migrateModuleData, holdLeftovers, orphanedPartitions, partitionsOf, partitionWorkspace, queueLocalDataMove } from "./module-data";
+import { deleteModuleDataOf, listModuleData, migrateModuleData, holdLeftovers, orphanedPartitions, partitionWorkspace, queueLocalDataMove } from "./module-data";
 import { AI_USAGE_MODULE_ID, DISCORD_MODULE_ID, movedModule, MOVED_MODULES_OWNER, moveOfficialModules } from "./moved-modules";
 import { checkZipData, recoverInstalls } from "./installer";
 import { Installed, loadInstalledModules, type InstalledModules } from "./installed-modules";
@@ -74,10 +74,7 @@ import { clipInitials, clipName, type Profile, removePicture, savePicture } from
 import {
   createFolder,
   deleteFolder,
-  placeOf,
   undeleteFolder,
-  untrashWorkspaces,
-  deleteTrashedWorkspace,
   isLive,
   LibraryError,
   liveWorkspaces,
@@ -93,13 +90,11 @@ import {
   setSiteListed,
   renameFolder,
   renameWorkspace,
-  restoreWorkspace,
   searchCatalog,
   setFolderLabel,
   setRail,
   sortedRoot,
   trashedWorkspaces,
-  trashWorkspace,
   type WorkspaceEntry,
   type Library,
 } from "./library";
@@ -123,7 +118,7 @@ import { isHostSender } from "./host-sender";
 import { removeRefusedInstaller } from "./refused-update";
 import { OfficialUpdates, resolveOfficialPins } from "./official-updates";
 import { CATALOGUE_PUBLIC_KEY, SAFETY_REFRESH_MS, SafetyLists } from "./safety-lists";
-import { fetchSteamLibrary, importSteamGames, MAX_IMPORT_GAMES, steamLibraryView } from "./steam-import";
+import { fetchSteamLibrary, MAX_IMPORT_GAMES, steamLibraryView } from "./steam-import";
 import { readSteamKinds } from "./steam-appinfo";
 import { GameOverlays, layerBinding, toggleBinding, type PanelInfo } from "./game-overlay-service";
 import { scopeForKind } from "./game-overlays";
@@ -252,8 +247,6 @@ const DIALOG_BACKDROP_OPACITY = 0.8;
 const PENDING_DIALOG_MS = 5000;
 /** How big the dialog is that Settings on an overlay's frame opens over the Overlay page (a module sets its own size when it opens its dialog itself). */
 const OVERLAY_SETTINGS_DIALOG = { width: 960, height: 680 } as const;
-/** What a game workspace the user adds starts with, side by side in this order (startWorkspace). */
-const STARTER_MODULES = ["tavora.notes", "tavora.todos"] as const;
 
 export interface HostOptions {
   userData: string;
@@ -561,6 +554,8 @@ export class Host {
   private readonly fileDialogs: FileDialogs;
   /** The library's game icons, the Add a game list's icons and covers, and offering icons (game-icons.ts). */
   private readonly gameIcons: GameIcons;
+  /** Adding, trashing, restoring and deleting workspaces with what they keep, and snapshots that change open panels (workspace-library.ts). */
+  private readonly workspaceLibrary: WorkspaceLibrary;
   /** True while a dialog backdrop dims the host page, so the window buttons are dimmed too. */
   private dimmed = false;
   /** The page colour behind the window buttons, as the page reports it (the workspace canvas is darker than the theme). */
@@ -874,6 +869,47 @@ export class Host {
       },
       smallBitmap: loadSmallBitmap,
     });
+    this.workspaceLibrary = new WorkspaceLibrary({
+      library,
+      saveLibrary: () => this.saveLibrary(),
+      workspaces: this.workspaces,
+      installed: this.installed,
+      fits: (module, workspaceId) => this.supportsWorkspace(module, workspaceId),
+      undos: this.undos,
+      userData: options.userData,
+      language: () => this.language,
+      lookUp: (query) => this.gameLookup.search(query),
+      icons: this.gameIcons,
+      dialogs: this.fileDialogs,
+      gameListed: (workspaceId) => {
+        if (this.gameWatcher.active) void this.gameWatcher.libraryChanged(workspaceId);
+      },
+      screen: {
+        shown: () => this.workspaceId,
+        onHome: () => this.screen === "welcome" && this.workspaceId === null,
+        goHome: () => this.showScreen("welcome"),
+        open: (workspaceId) => this.openWorkspace(workspaceId),
+      },
+      views: {
+        start: (record, welcome) => {
+          this.panels.setLaunch(record.instanceId, { reason: "add" });
+          if (!welcome) this.panels.withholdWelcome(record.instanceId);
+          this.createView(record, this.workspace!);
+        },
+        close: (instanceId) => this.closeView(instanceId),
+        // Its data goes, so its pages don't get the moment to save that a closed panel gets.
+        drop: (instanceId) => this.panels.close(instanceId, true),
+      },
+      panelState: this.data.panelState,
+      files: this.files,
+      forgotten: (workspaceId) => {
+        this.data.forgetWorkspace(workspaceId);
+        this.streaming.forgetWorkspace(workspaceId);
+        this.gameOverlays.forgetWorkspace(workspaceId);
+        this.layout.forgetWorkspace(workspaceId);
+      },
+      clearSession: (partition) => clearSession(session.fromPartition(partition)),
+    });
     this.inbox = new Inbox({
       baseUrl: serviceUrl(options.apiUrl),
       fetch: (input, init) => fetch(input, init),
@@ -1153,7 +1189,7 @@ export class Host {
     const held = await holdLeftovers(userData, libraryRead && workspaceRead && !copySync.dataHeld, leftovers).catch(() => leftovers);
     for (const dir of orphaned) if (!held.workspaces.has(partitionWorkspace(dir)!)) await rm(dir, { recursive: true, force: true });
     await host.data.panelState.prune(new Set([...livePanels, ...held.panels]));
-    for (const workspace of expired) await host.deleteWorkspaceData(workspace);
+    for (const workspace of expired) await host.workspaceLibrary.deleteData(workspace);
     // Version 0.2.0 saved Steam covers here; they were replaced by Steam's own icons.
     await rm(path.join(userData, "steam-art"), { recursive: true, force: true });
     if (expired.length) host.saveLibrary();
@@ -1993,65 +2029,23 @@ export class Host {
 
       // Library
       "open-workspace": (action) => this.openWorkspace(action.workspaceId),
-      "add-workspace": async (action) => {
-        // Whoever adds a game (Add a game, the welcome, Ctrl+K, the running game's Add button): one the user has is
-        // answered as it is, and one whose only copy is in Trash comes back with its panels. A game known only by its name
-        // and Steam id is looked up online first, so it gets the id modules are made for (workspace-game.ts).
-        const input = await withOnlineId(action, this.library.onlineSearch ? (query) => this.gameLookup.search(query) : null);
-        const { id, restored, existing, learned } = addOrRestoreWorkspace(this.library, input, new Date());
-        if (existing) {
-          // The copy took the game's Steam id: saved, and the rail may now see it running.
-          if (learned) {
-            this.saveLibrary();
-            if (this.gameWatcher.active) void this.gameWatcher.libraryChanged(id);
-          }
-          return { ok: true, id, existing };
-        }
-        if (!restored) {
-          this.workspaces.addWorkspaces([id]);
-          this.startWorkspace(id);
-        }
-        this.saveLibrary();
-        this.gameIcons.lookSoon();
-        // A game running now (the rail offered to add it) shows as running at once, and the game may have been installed
-        // since the last look.
-        if (this.gameWatcher.active) void this.gameWatcher.libraryChanged(id);
-        return restored ? { ok: true, id, restored } : id;
-      },
+      // Answers with the new workspace's id, or says it was there already or came back from Trash.
+      "add-workspace": (action) => this.workspaceLibrary.add(action),
       "rename-workspace": saved((action) => renameWorkspace(this.library, action.workspaceId, action.name)),
       "set-workspace-label": saved((action) => this.gameIcons.choose(action.workspaceId, { kind: "label", label: action.label })),
-      "choose-workspace-image": saved((action) => this.chooseWorkspaceImage(action.workspaceId)),
+      "choose-workspace-image": saved((action) => this.workspaceLibrary.chooseImage(action.workspaceId)),
       "use-original-icon": saved((action) => this.gameIcons.choose(action.workspaceId, { kind: "original" })),
       "share-icons": (action) => this.gameIcons.share(action.workspaceIds),
       "share-steam-icons": (action) => this.gameIcons.shareSteam(action.appids),
-      "import-steam-games": (action) => this.importSteam(action.games),
+      "import-steam-games": (action) => this.workspaceLibrary.importSteam(action.games),
       // Answers with the token that puts it back (undo-delete).
-      "trash-workspace": (action) => this.trashWorkspaces([action.workspaceId], true),
-      "restore-workspace": saved((action) => {
-        restoreWorkspace(this.library, action.workspaceId);
-        // A game running now comes back as running, not as one that just started (no switch or question).
-        if (this.gameWatcher.active) void this.gameWatcher.libraryChanged(action.workspaceId);
-      }),
-      "delete-workspace": saved(async (action) => {
-        const workspace = deleteTrashedWorkspace(this.library, action.workspaceId);
-        this.saveLibrary();
-        await this.deleteWorkspaceData(workspace);
-      }),
+      "trash-workspace": (action) => this.workspaceLibrary.trash([action.workspaceId], true),
+      "restore-workspace": saved((action) => this.workspaceLibrary.restore([action.workspaceId], true)),
+      "delete-workspace": saved((action) => this.workspaceLibrary.delete([action.workspaceId], true)),
       // Many at once: workspaces already gone are skipped, so a list the screen showed a moment ago still works.
-      "trash-workspaces": (action) => this.trashWorkspaces(action.workspaceIds, false),
-      "restore-workspaces": saved((action) => {
-        for (const id of action.workspaceIds) {
-          if (!this.library.workspaces[id]?.trashedAt) continue;
-          restoreWorkspace(this.library, id);
-          if (this.gameWatcher.active) void this.gameWatcher.libraryChanged(id);
-        }
-      }),
-      "delete-workspaces": saved(async (action) => {
-        const workspaces = action.workspaceIds.filter((id) => this.library.workspaces[id]?.trashedAt).map((id) => deleteTrashedWorkspace(this.library, id));
-        this.saveLibrary();
-        for (const workspace of workspaces) await this.forgetWorkspaceData(workspace);
-        await this.clearSessionsOf(workspaces.map((workspace) => workspace.id));
-      }),
+      "trash-workspaces": (action) => this.workspaceLibrary.trash(action.workspaceIds, false),
+      "restore-workspaces": saved((action) => this.workspaceLibrary.restore(action.workspaceIds, false)),
+      "delete-workspaces": saved((action) => this.workspaceLibrary.delete(action.workspaceIds, false)),
       favorite: saved((action) => placeFavorite(this.library, action.workspaceId, action.index)),
       unfavorite: saved((action) => removeFavorite(this.library, action.workspaceId)),
       "move-workspace": saved((action) => moveWorkspace(this.library, action.workspaceId, action)),
@@ -2323,15 +2317,10 @@ export class Host {
       "apply-layout-grid": (action) => this.workspaces.applyTemplate(this.currentWorkspaceId(), gridTemplate(action.columns, action.rows)),
       "save-snapshot": (action) => this.workspaces.saveSnapshot(this.currentWorkspaceId(), action.name),
       "update-snapshot": (action) => this.workspaces.updateSnapshot(this.currentWorkspaceId(), action.snapshotId),
-      "apply-snapshot": (action) => this.applySnapshot(action.snapshotId),
+      "apply-snapshot": (action) => this.workspaceLibrary.applySnapshot(this.currentWorkspaceId(), action.snapshotId),
       "rename-snapshot": (action) => this.workspaces.renameSnapshot(this.currentWorkspaceId(), action.snapshotId, action.name),
       // Undo puts it back into the workspace it came from, whichever one is open by then.
-      "delete-snapshot": (action) => {
-        const removed = this.workspaces.deleteSnapshot(this.currentWorkspaceId(), action.snapshotId);
-        return this.undos.keep(() => {
-          if (!this.workspaces.restoreSnapshot(removed)) throw new UndoGoneError();
-        });
-      },
+      "delete-snapshot": (action) => this.workspaceLibrary.deleteSnapshot(this.currentWorkspaceId(), action.snapshotId),
 
       // Browser panels
       "browser-new-tab": (action) => this.openBrowserTab(action.instanceId, null, false),
@@ -2619,27 +2608,6 @@ export class Host {
     for (const record of this.records(changed.workspaceId)) if (record.moduleId === changed.moduleId) this.moduleView(record.instanceId)?.overGameChanged(keys);
   }
 
-  /**
-   * Moves workspaces to Trash (those already gone are skipped, so a list the screen showed a moment ago still works) and
-   * answers with the token that takes it back: out of Trash into their places. Undo opens a workspace again only when it
-   * was open and the user is still on the start screen it left them on; one switched to meanwhile stays open.
-   */
-  private trashWorkspaces(ids: readonly string[], strict: boolean): string {
-    const live = strict ? [...ids] : ids.filter((id) => isLive(this.library, id));
-    const places = live.map((id) => placeOf(this.library, id));
-    const now = new Date();
-    for (const id of live) trashWorkspace(this.library, id, now);
-    const wasOpen = this.workspaceId !== null && live.includes(this.workspaceId) ? this.workspaceId : null;
-    if (wasOpen) this.showScreen("welcome");
-    this.saveLibrary();
-    return this.undos.keep(() => {
-      const back = untrashWorkspaces(this.library, places);
-      if (!back.length) throw new UndoGoneError();
-      this.saveLibrary();
-      if (wasOpen && back.includes(wasOpen) && this.screen === "welcome" && this.workspaceId === null) this.openWorkspace(wasOpen);
-    });
-  }
-
   private openWorkspace(workspaceId: string): void {
     if (!isLive(this.library, workspaceId)) throw new LibraryError("error.workspaceGone");
     this.questions.cancel({ workspace: workspaceId }, "gameSwitch");
@@ -2648,19 +2616,6 @@ export class Host {
     markOpened(this.library, workspaceId, new Date());
     this.saveLibrary();
     this.openCurrentWorkspace();
-  }
-
-  private async chooseWorkspaceImage(workspaceId: string): Promise<void> {
-    if (!isLive(this.library, workspaceId)) throw new LibraryError("error.workspaceGone");
-    const source = await this.fileDialogs.pick("workspace-image", {
-      title: translate(this.language, "dialog.chooseIcon"),
-      properties: ["openFile"],
-      filters: [{ name: translate(this.language, "dialog.images"), extensions: ["png", "jpg", "jpeg"] }],
-    });
-    if (!source) return;
-    const file = await this.gameIcons.importImage(workspaceId, source);
-    this.fileDialogs.remember("workspace-image", source);
-    await this.gameIcons.choose(workspaceId, { kind: "image", file });
   }
 
   private get profileDir(): string {
@@ -2693,65 +2648,6 @@ export class Host {
     await this.saveProfile();
     if (previous !== picture) await removePicture(this.profileDir, previous);
     this.pushState();
-  }
-
-  /** Adds the games of a Steam import that are not in the library yet. Answers with how many. */
-  private importSteam(games: SteamImportGame[]): ActionResult {
-    const added = importSteamGames(this.library, games, new Date());
-    this.workspaces.addWorkspaces(added);
-    // Saved even with nothing added: a game already here may have learned its game's id from the import.
-    this.saveLibrary();
-    if (added.length > 0) this.gameIcons.lookSoon();
-    return { ok: true, added: added.length };
-  }
-
-  /** Deletes everything stored for a workspace that left the library for good. */
-  private async deleteWorkspaceData(workspace: WorkspaceEntry): Promise<void> {
-    await this.forgetWorkspaceData(workspace);
-    await this.clearSessionsOf([workspace.id]);
-  }
-
-  /** deleteWorkspaceData without the browser sessions, so many workspaces can be deleted and the sessions cleared once. */
-  private async forgetWorkspaceData(workspace: WorkspaceEntry): Promise<void> {
-    const records = this.workspaces.forgetWorkspace(workspace.id);
-    // A panel of this workspace that was over its game closes with it.
-    // Its data goes, so its pages don't get the moment to save that a closed panel gets.
-    for (const record of records) this.panels.close(record.instanceId, true);
-    await Promise.all(records.map((record) => this.data.panelState.remove(record.instanceId)));
-    this.data.forgetWorkspace(workspace.id);
-    this.streaming.forgetWorkspace(workspace.id);
-    this.gameOverlays.forgetWorkspace(workspace.id);
-    this.layout.forgetWorkspace(workspace.id);
-    // A folder the user chose can be gone (an unplugged drive): the workspace still goes, and they are told where its pictures may remain.
-    await this.files.noteWorkspaceDeleted(workspace.name, (root) => deleteModuleData(this.options.userData, workspace.id, root));
-    await this.gameIcons.forget(workspace);
-  }
-
-  private async clearSessionsOf(workspaceIds: string[]): Promise<void> {
-    // Sessions may already be open in this run, so clear them; their directories are removed at the next start. Only
-    // these workspaces': after a lost library, others not in it may be the user's (holdLeftovers).
-    for (const dir of await partitionsOf(this.options.userData, workspaceIds)) {
-      const ses = session.fromPartition(`persist:${decodeURIComponent(path.basename(dir))}`);
-      await ses.clearStorageData();
-      await ses.clearCache();
-    }
-  }
-
-  /**
-   * A game workspace the user just added starts with Notes and To-Dos side by side, so the first look shows
-   * something to use rather than a layout to choose. Only the starter modules that are installed and work in this
-   * workspace are docked; a personal workspace, and workspaces that arrive by other ways (a Steam import, a
-   * restored library), start empty as before.
-   */
-  private startWorkspace(workspaceId: string): void {
-    if (this.library.workspaces[workspaceId]?.kind !== "game") return;
-    const records = STARTER_MODULES.flatMap((moduleId): InstanceRecord[] => {
-      const module = this.modules.get(moduleId);
-      if (!module || !this.supportsWorkspace(module, workspaceId)) return [];
-      const panelType = continuingPanelType(module.manifest) ?? undefined;
-      return [{ instanceId: randomUUID(), moduleId, ...(panelType ? { panelType } : {}) }];
-    });
-    this.workspaces.start(workspaceId, records);
   }
 
   /**
@@ -3162,18 +3058,6 @@ export class Host {
     const workspace = this.workspace;
     if (!workspace) throw new WorkspaceError("error.openWorkspaceFirst");
     return workspace.id;
-  }
-
-  /** Replaces the open panels with the snapshot's; views start for the new panels and stop for the rest. */
-  private applySnapshot(snapshotId: string): void {
-    const { opened, closed } = this.workspaces.applySnapshot(this.currentWorkspaceId(), snapshotId);
-    for (const record of closed) this.closeView(record.instanceId);
-    for (const [index, record] of opened.entries()) {
-      this.panels.setLaunch(record.instanceId, { reason: "add" });
-      // A layout is one click: one welcome at most.
-      if (index < opened.length - 1) this.panels.withholdWelcome(record.instanceId);
-      this.createView(record, this.workspace!);
-    }
   }
 
   // ── Views ────────────────────────────────────────────────────────────
@@ -4545,6 +4429,12 @@ async function registerHostProtocol(rendererDir: string, imageDirs: Record<strin
     callback({ cancel: !allowed.some((prefix) => details.url.startsWith(prefix)) });
   });
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
+}
+
+/** Clears what a browser session keeps: its storage and its cache. */
+async function clearSession(ses: Electron.Session): Promise<void> {
+  await ses.clearStorageData();
+  await ses.clearCache();
 }
 
 function devCsp(server: URL): string {

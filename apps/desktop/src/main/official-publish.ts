@@ -68,6 +68,8 @@ export const HOST_ONLY: ReadonlySet<string> = new Set(
     "main/share-icons.ts",
     // The library's game icons and the Add a game list's (game-icons.ts gathers them for host.ts).
     "main/game-icons.ts",
+    // Adding, trashing and deleting workspaces, and their snapshots, from the host window (workspace-library.ts).
+    "main/workspace-library.ts",
     "main/catalog-client.ts",
     // The catalog's pages, reviews, reports and update checks as the host window uses them (module-catalog.ts).
     "main/module-catalog.ts",
