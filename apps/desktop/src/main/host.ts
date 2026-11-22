@@ -30,8 +30,7 @@ import {
   type WebContentsView,
 } from "electron";
 import type { TavoraWorkspace } from "@tavora/sdk/protocol";
-import type { PanelDialogSize } from "./bridge";
-import type { AccountView, ActionResult, AiUsageView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviewsResult, DeveloperLink, InstalledGameView, LegalPage, LicenceList, ModulePageResult, WorkspaceView, HostViewState, ModuleMenu, OnlineSearchResult, PanelDialog, PanelPlacement, ProfileRanksView, ReleaseStatus, Screen, SteamLibraryResult, SteamShareResult, UnlistedGame } from "../shared/host-api";
+import type { AccountView, ActionResult, AiUsageView, BrowserCommand, CatalogListResult, CatalogPageResult, CatalogReviewsResult, DeveloperLink, InstalledGameView, LegalPage, LicenceList, ModulePageResult, WorkspaceView, HostViewState, OnlineSearchResult, PanelPlacement, ProfileRanksView, ReleaseStatus, Screen, SteamLibraryResult, SteamShareResult, UnlistedGame } from "../shared/host-api";
 import { MAX_PICKER_COVERS } from "../shared/host-api";
 import { isForWorkspaceGame } from "./workspace-game";
 import { resolveLanguage, translate, type Language } from "../shared/i18n";
@@ -41,6 +40,7 @@ import { isVoicePaused } from "../shared/discord-voice";
 import { UserError } from "./messages";
 import { UndoGoneError, UndoShelf } from "./undo-shelf";
 import { WorkspaceLibrary } from "./workspace-library";
+import { PanelDialogs } from "./panel-dialogs";
 import { buildReport, errorLog, timings } from "./diagnostics";
 import { popularGames } from "./catalog";
 import { readLicences } from "./licences";
@@ -147,7 +147,6 @@ import { ModuleFilesFolder } from "./module-files-folder";
 import { BrowserPanel, browserPartition, browserSession, browserUserAgent, type BrowserKind, type BrowserSessionHooks } from "./browser-view";
 import { BROWSER_MODULE_ID, isExampleModule, panelsWait, waitingModules, type InstalledModule, type ModuleInfo, type ModuleProblem } from "./registry";
 import { DataRegistry, PanelStateStore } from "./storage";
-import type { CheckedMenu } from "./module-menu";
 import {TooltipWindow} from "./tooltip-window";
 import { ToastView } from "./toast-view";
 import { AI_USAGE_VERSION, AiUsageConnector } from "./ai-usage";
@@ -243,10 +242,6 @@ async function realUserModulesDir(options: HostOptions): Promise<string> {
 const TITLE_BAR_HEIGHT = 47;
 /** How dark the kit's dialog backdrop is (bg-black/80 in DialogOverlay). */
 const DIALOG_BACKDROP_OPACITY = 0.8;
-/** How long a dialog asked for from the in-game layer waits for its panel to be back in Tavora. */
-const PENDING_DIALOG_MS = 5000;
-/** How big the dialog is that Settings on an overlay's frame opens over the Overlay page (a module sets its own size when it opens its dialog itself). */
-const OVERLAY_SETTINGS_DIALOG = { width: 960, height: 680 } as const;
 
 export interface HostOptions {
   userData: string;
@@ -366,7 +361,7 @@ export class Host {
     asking: (instanceId) => this.askingIn(instanceId),
     releasing: (instanceId, forget) => {
       this.tooltips.close(instanceId);
-      this.closeModuleMenu(instanceId);
+      this.panelDialogs.closeMenu(instanceId);
       // The panel is closing for good: its questions (a leaderboard question, a waiting dialog) end with it, and its live state goes, whether or not it was running.
       if (forget) {
         this.questions.cancel({ panel: instanceId });
@@ -391,24 +386,14 @@ export class Host {
     },
     lending: (instanceId) => {
       this.tooltips.close(instanceId);
-      this.closeModuleMenu(instanceId);
+      this.panelDialogs.closeMenu(instanceId);
     },
     returned: () => {
       this.pushStateSoon();
-      this.openPendingDialog();
+      this.panelDialogs.openPending();
     },
-    dialogClosed: (instanceId) => {
-      // A tooltip or menu of the panel in its dialog was placed there; neither outlives it.
-      this.tooltips?.close();
-      this.closeModuleMenu(instanceId);
-      if (this.window.isDestroyed()) return;
-      this.window.webContents.send("host:panel-dialog", null);
-      // The dialog's page may have held the keys; they go back to the host page (which returns focus to where it was).
-      if (this.window.isFocused()) this.window.webContents.focus();
-    },
-    dialogDrawn: (instanceId) => {
-      if (!this.window.isDestroyed()) this.window.webContents.send("host:panel-dialog-drawn", instanceId);
-    },
+    dialogClosed: (instanceId) => this.panelDialogs.closed(instanceId),
+    dialogDrawn: (instanceId) => this.panelDialogs.drawn(instanceId),
     openingEnded: (ended) => this.openingEnded(ended),
     placing: () => this.tooltips?.ensureVisible(),
     overlayOpening: () => {
@@ -425,6 +410,33 @@ export class Host {
   });
   /** Every open question to the user: link, navigation, game switch, connector, leaderboard, waiting panel dialog and module menu (pending-questions.ts). */
   private readonly questions = new PendingQuestions();
+  /** A module's menus and a panel shown big in its dialog, drawn by the host page over the panels (panel-dialogs.ts). */
+  private readonly panelDialogs = new PanelDialogs({
+    questions: this.questions,
+    panels: this.panels,
+    page: {
+      send: (channel, payload) => this.window.webContents.send(channel, payload),
+      focus: () => this.window.webContents.focus(),
+      focused: () => this.window.isFocused(),
+      gone: () => this.window.isDestroyed(),
+    },
+    describe: (module) => ({ title: this.shown(module.manifest).name, icon: this.moduleInfo.get(module.manifest.id)?.icon ?? null }),
+    closeTooltips: (instanceId) => this.tooltips?.close(instanceId),
+    focusPanel: (instanceId) => {
+      const view = this.moduleView(instanceId);
+      if (view && !view.view.webContents.isDestroyed()) view.view.webContents.focus();
+    },
+    inShownWorkspace: (instanceId) => !!this.workspaceId && this.records(this.workspaceId).some((record) => record.instanceId === instanceId),
+    fromGame: {
+      workspaceOf: (instanceId) => ((workspaceId) => (workspaceId && isLive(this.library, workspaceId) ? workspaceId : null))(this.gameOverlays.panelWorkspace(instanceId)),
+      bringBack: (workspaceId) => {
+        // From Home or the Overlay page too: no workspace counts as shown there.
+        if (this.workspaceId !== workspaceId) this.openWorkspace(workspaceId);
+        this.gameOverlays.endLayer();
+        this.bringToFront();
+      },
+    },
+  });
   /** How to put back what the user deleted a moment ago (a layout, a folder, a workspace), while its toast offers Undo. */
   private readonly undos = new UndoShelf();
   /** What every browser session is made safe with; built when the first Browser panel opens. */
@@ -1760,7 +1772,7 @@ export class Host {
     ipcMain.on("host:panel-bounds", (event, bounds: unknown) => {
       if (fromHost(event)) {
         this.panels.place(bounds);
-        this.openPendingDialog();
+        this.panelDialogs.openPending();
       }
     });
     ipcMain.on("host:workspace-bounds", (event, bounds: unknown) => {
@@ -1813,7 +1825,7 @@ export class Host {
       }
     });
     ipcMain.on("host:module-menu-answer", (event, answer: unknown) => {
-      if (fromHost(event)) this.answerModuleMenu(answer);
+      if (fromHost(event)) this.panelDialogs.answerMenu(answer);
     });
     ipcMain.on("host:panel-dialog-bounds", (event, raw: unknown) => {
       if (fromHost(event)) this.panels.placeDialog(raw);
@@ -3154,7 +3166,7 @@ export class Host {
         this.notice = translate(this.language, "overlays.bringBackFirst");
         this.pushState();
       },
-      showMenu: (menu) => this.showModuleMenu(record.instanceId, menu),
+      showMenu: (menu) => this.panelDialogs.showMenu(record.instanceId, menu),
       ...this.fileDialogs.forModule(Host.notesKey(module)),
       pickReadOnlyFile: async (extensions, multiple, near) => {
         const files=new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,workspace.id);
@@ -3171,8 +3183,8 @@ export class Host {
       openPanels: async (types) => this.openPanels(record, types),
       setLive: (state) => this.gameOverlays.setLive(record.instanceId, module.owner, state),
       setMaximized: (maximized) => this.window.webContents.send("host:shortcut", `${maximized ? "maximize" : "restore"}:${record.instanceId}`),
-      setDialog: (open, size, how) => (open ? this.openPanelDialog(record.instanceId, module, size, how?.byClick ?? true) : this.closePanelDialog(record.instanceId)),
-      setDialogTitle: (title) => this.setPanelDialogTitle(record.instanceId, title),
+      setDialog: (open, size, how) => (open ? this.panelDialogs.open(record.instanceId, module, size, how?.byClick ?? true) : this.panelDialogs.close(record.instanceId)),
+      setDialogTitle: (title) => this.panelDialogs.setTitle(record.instanceId, title),
       // The grants of the owner this page runs as: a copy of another owner installed under the same id later has its own.
       networkHosts: () => this.networkHostsOf(module),
       connectors: () => this.connectorsOf(module),
@@ -3193,7 +3205,7 @@ export class Host {
         setSources: (sources) => this.gameOverlays.setSources(record.instanceId, module.owner, sources, { moduleId: module.manifest.id, workspaceId: workspace.id }),
         preview: async (key) => this.previews.show({ owner: module.owner, moduleId: module.manifest.id, workspaceId: workspace.id, key }),
         openPage: () => {
-          this.closePanelDialog(record.instanceId);
+          this.panelDialogs.close(record.instanceId);
           this.showOverlayPage(null);
         },
       },
@@ -3300,7 +3312,7 @@ export class Host {
     const unknown = types.find((type) => !known.has(type));
     if (unknown !== undefined) throw new HostError("INVALID_PARAMS", `this module has no panel type "${unknown}"`);
     // Called from its dialog (a welcome's last step), the panel goes back in its slot first, so the layout is laid out around it.
-    this.closePanelDialog(from.instanceId);
+    this.panelDialogs.close(from.instanceId);
     const result: Record<string, PanelOpenManyResult> = {};
     const shown: string[] = [];
     // The new panels' ids come first, so the layout can name them before they open.
@@ -3741,63 +3753,7 @@ export class Host {
     }
   }
 
-  // ── Module menus ─────────────────────────────────────────────────────
-
-  /**
-   * Draws a module's menu in the host UI, over its panel and every other one. Only one at a time: a
-   * new one closes the last. Nothing is shown for a panel that is hidden or under a host menu or dialog; a panel in its
-   * own dialog can show one, once its view has stepped aside for it.
-   */
-  private showModuleMenu(instanceId: string, menu: CheckedMenu): Promise<string | null> {
-    if (!this.panels.has(instanceId) || !this.panels.mayShowMenu(instanceId) || this.window.isDestroyed()) return Promise.resolve(null);
-    this.closeModuleMenu();
-    const { id: requestId, answer } = this.questions.ask("menu", { panel: instanceId }, { choices: menu.choices });
-    const shown: ModuleMenu = { requestId, instanceId, ...menu.request };
-    const draw = () => {
-      if (this.questions.peek("menu")?.id !== requestId || this.window.isDestroyed()) return;
-      // The menu is drawn by the host page, so the keyboard goes there while it is open.
-      this.window.webContents.focus();
-      this.window.webContents.send("host:module-menu", shown);
-    };
-    if (this.panels.inDialog(instanceId)) {
-      this.tooltips.close(instanceId);
-      void this.panels.openDialogMenu(instanceId).then(draw);
-    } else draw();
-    return answer;
-  }
-
-  /** The user chose an item or closed the menu. Only an item the module offered (and did not disable) counts. */
-  private answerModuleMenu(raw: unknown): void {
-    const answer = (typeof raw === "object" && raw !== null ? raw : {}) as { requestId?: unknown; id?: unknown };
-    const open = this.questions.peek("menu");
-    if (!open || answer.requestId !== open.id) return;
-    this.questions.answer(open.id, typeof answer.id === "string" && open.payload.choices.has(answer.id) ? answer.id : null);
-    this.panels.closeDialogMenu();
-    // The keyboard goes back to the panel, so an action such as Rename can take it.
-    const view = "panel" in open.scope ? this.moduleView(open.scope.panel) : undefined;
-    if (view && !view.view.webContents.isDestroyed()) view.view.webContents.focus();
-  }
-
-  /**
-   * Shows a panel big in a dialog centred over the workspace: the host UI draws the frame (the module's name and a close
-   * button) over the dimmed app and says where the page goes; the panel's own view moves there, so it keeps everything it
-   * had. Only a panel in sight in the workspace, one at a time; a new one closes the last. A dialog opened by a click
-   * closes on a click beside it; one a panel just added opened on its own (a welcome) does not.
-   */
-  private openPanelDialog(instanceId: string, module: InstalledModule, size: PanelDialogSize, byClick = true): void {
-    if (this.panels.isLent(instanceId)) return this.openPanelDialogFromGame(instanceId, module, size);
-    if (this.window.isDestroyed()) return;
-    // A panel just added can ask before the host UI has given it its slot: it opens once it is there, if that is soon.
-    if (!this.panels.isPlaced(instanceId) && this.workspaceId && this.records(this.workspaceId).some((record) => record.instanceId === instanceId)) {
-      void this.questions.ask("dialog", { panel: instanceId }, { module, size, until: Date.now() + PENDING_DIALOG_MS, byClick });
-      return;
-    }
-    if (!this.panels.openDialog(instanceId, size)) return;
-    this.closeModuleMenu();
-    this.tooltips.close(instanceId);
-    const shown: PanelDialog = { instanceId, title: this.shown(module.manifest).name, icon: this.moduleInfo.get(module.manifest.id)?.icon ?? null, ...size, closesOnClickBeside: byClick };
-    this.window.webContents.send("host:panel-dialog", shown);
-  }
+  // ── Settings over the Overlay page ───────────────────────────────────
 
   /**
    * The Overlay page's Settings button: the panel behind the item comes up in its dialog over the page, which stays where it is
@@ -3814,75 +3770,7 @@ export class Host {
     if (!this.panels.has(record.instanceId)) this.createView(record, { id: entry.id, displayName: entry.name, kind: entry.kind });
     const view = this.moduleView(record.instanceId);
     if (!view) return;
-    if (!this.openPanelDialogOverPage(record.instanceId, module, { width: OVERLAY_SETTINGS_DIALOG.width, height: OVERLAY_SETTINGS_DIALOG.height })) return;
-    const key = item.key;
-    if (key === null) return;
-    // The page may still be starting: the key is handed over once it has connected, if that is soon.
-    const until = Date.now() + PENDING_DIALOG_MS;
-    const send = (): void => {
-      if (view.openSettings(key) || Date.now() > until || this.panels.dialog?.instanceId !== record.instanceId) return;
-      setTimeout(send, 100);
-    };
-    send();
-  }
-
-  /** A panel's dialog over a page where it has no slot (the Overlay page). Whether it opened. */
-  private openPanelDialogOverPage(instanceId: string, module: InstalledModule, size: PanelDialogSize): boolean {
-    if (!this.panels.openDialog(instanceId, size, true)) return false;
-    this.closeModuleMenu();
-    this.tooltips.close(instanceId);
-    const shown: PanelDialog = { instanceId, title: this.shown(module.manifest).name, icon: this.moduleInfo.get(module.manifest.id)?.icon ?? null, ...size, closesOnClickBeside: true };
-    this.window.webContents.send("host:panel-dialog", shown);
-    return true;
-  }
-
-  /**
-   * A panel over the game opens its dialog: the layer closes, Tavora comes to the front on the panel's workspace, and the
-   * dialog opens as soon as the panel is back in its slot.
-   */
-  private openPanelDialogFromGame(instanceId: string, module: InstalledModule, size: PanelDialogSize): void {
-    const workspaceId = this.gameOverlays.panelWorkspace(instanceId);
-    if (!workspaceId || this.window.isDestroyed() || !isLive(this.library, workspaceId)) return;
-    // It opens once the panel is back in its slot, if that happens soon.
-    void this.questions.ask("dialog", { panel: instanceId }, { module, size, until: Date.now() + PENDING_DIALOG_MS, byClick: true });
-    // From Home or the Overlay page too: no workspace counts as shown there.
-    if (this.workspaceId !== workspaceId) this.openWorkspace(workspaceId);
-    this.gameOverlays.endLayer();
-    this.bringToFront();
-    this.openPendingDialog();
-  }
-
-  /** panel.setDialogTitle: the frame of this panel's dialog shows `title` (null: the module's name); nothing while it has no dialog open. */
-  private setPanelDialogTitle(instanceId: string, title: string | null): void {
-    if (this.window.isDestroyed() || this.panels.dialog?.instanceId !== instanceId) return;
-    this.window.webContents.send("host:panel-dialog-title", { instanceId, title });
-  }
-
-  /** panel.closeDialog: puts the panel back, and drops a dialog it asked for that is still waiting for its slot. */
-  private closePanelDialog(instanceId: string): void {
-    this.questions.cancel({ panel: instanceId }, "dialog");
-    this.panels.closeDialog(instanceId);
-  }
-
-  /** Opens the dialog a panel asked for from the layer once the panel is back in its slot; a panel that took too long misses it. */
-  private openPendingDialog(): void {
-    const pending = this.questions.peek("dialog");
-    if (!pending || !("panel" in pending.scope)) return;
-    const instanceId = pending.scope.panel;
-    if (Date.now() > pending.payload.until) {
-      this.questions.cancel(pending.id);
-      return;
-    }
-    if (this.panels.isLent(instanceId) || !this.panels.isPlaced(instanceId)) return;
-    this.questions.answer(pending.id, true);
-    this.openPanelDialog(instanceId, pending.payload.module, pending.payload.size, pending.payload.byClick);
-  }
-
-  /** Closes the module menu shown now (only if it belongs to `instanceId`, when given), as if nothing was chosen. */
-  private closeModuleMenu(instanceId?: string): void {
-    const ended = instanceId === undefined ? this.questions.cancelKind("menu") : this.questions.cancel({ panel: instanceId }, "menu");
-    if (ended) this.panels.closeDialogMenu();
-    if (ended && !this.window.isDestroyed()) this.window.webContents.send("host:module-menu", null);
+    this.panelDialogs.openSettings(record.instanceId, module, view, item.key);
   }
 
   // ── State ────────────────────────────────────────────────────────────
