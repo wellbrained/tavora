@@ -31,7 +31,7 @@ import type { OverlayPanel } from "./game-overlay-window";
 import type { PanelInGame } from "./panel-views";
 import { layerCardContent, type LayerMode } from "../shared/layer-card";
 import { LAYER_CLOSED, layerScene, layerStep, placedOverlays, placedPanels, type LayerEvent, type LayerLook, type LayerState, type Placed } from "./game-layer";
-import { CRASH_SPAN_MS, LayerWindows, MAX_CRASHES, type LayerWindowsPlatform, type OverlayWindow, type OverlayWindowRequest, type WindowMaker } from "./game-layer-windows";
+import { CRASH_SPAN_MS, LayerWindows, MAX_CRASHES, type LayerWindowsPlatform, type OverlayWindow, type OverlayWindowRequest, type PanelWindowMaker, type WindowMaker } from "./game-layer-windows";
 import {
   ALL_GAMES,
   EVERYWHERE,
@@ -1029,7 +1029,6 @@ export class GameOverlays {
   }
 
   /** The window of a panel's live view: the module's overlay page, fed by what the panel passes to panel.setLive. */
-  /** The window of a panel's live view: the module's overlay page, fed by what the panel passes to panel.setLive. */
   private makeLive(panel: InGamePanel, id: string, setup: string): WindowMaker {
     const instanceId = panel.instanceId;
     return {
@@ -1083,7 +1082,7 @@ export class GameOverlays {
   }
 
   /** The window of a panel over the game: Panel views lends the panel's view into it (panel-views.ts `lend`). */
-  private makePanel(panel: InGamePanel, id: string): WindowMaker {
+  private makePanel(panel: InGamePanel, id: string): PanelWindowMaker {
     const subject: OverlaySubject = { owner: panel.owner, moduleId: panel.moduleId, workspaceId: panel.workspaceId, key: panel.instanceId };
     const request = this.requestFor(
       subject,

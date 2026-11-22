@@ -5,7 +5,7 @@
 // The windows come from the platform: Electron's (game-layer-electron.ts) or a test's stand-ins.
 import type { JsonValue } from "@tavora/sdk/protocol";
 import { EVERYWHERE, type Opacity, type Rect, type WindowMode } from "./game-overlays";
-import type { ItemKind, LayerScene, SceneItem } from "./game-layer";
+import type { ItemKind, LayerScene, LiveItem, OverlayItem, PanelItem, SceneItem } from "./game-layer";
 import type { GameOverlayWindow, OverlayPanel } from "./game-overlay-window";
 import type { LayerCard, LayerCardRequest } from "./game-layer-card";
 import type { VeilWindow } from "./game-veil-window";
@@ -36,13 +36,17 @@ export interface OverlayWindowRequest {
   frameText(): { name: string; closeLabel: string; layoutLabel: string };
 }
 
-/**
- * How an item's window is made: for an overlay page or a live view, from its request; for a panel, Panel views lends the
- * panel's view into the window made for it (panel-views.ts `lend`), or answers null when it can't right now.
- */
+/** How the window of an overlay page or of a live view is made: from its request. */
 export interface WindowMaker {
   request: OverlayWindowRequest;
-  lend?(open: (panel: OverlayPanel) => OverlayWindow): PanelInGame<OverlayWindow> | null;
+}
+
+/**
+ * How a panel's window is made: Panel views lends the panel's view into the window made for it (panel-views.ts `lend`),
+ * or answers null when it can't right now.
+ */
+export interface PanelWindowMaker extends WindowMaker {
+  lend(open: (panel: OverlayPanel) => OverlayWindow): PanelInGame<OverlayWindow> | null;
 }
 
 /** The windows Electron draws, and Windows' order of windows (a test stands in for them). */
@@ -85,7 +89,6 @@ interface Entry {
   zoom: number;
   /** A live view kept on screen but see-through while the layer is open (its panel is there instead). */
   veiled: boolean;
-  instanceId?: string | undefined;
   /** The panel's view, lent by Panel views while its window holds it. */
   loan?: PanelInGame<OverlayWindow> | undefined;
 }
@@ -157,7 +160,7 @@ export class LayerWindows {
     const handle = scene.awayHandle;
     const awayGame = handle !== 0 && platform.stackAboveGame && !platform.gameOnTop?.(handle) ? handle : 0;
     const onTop = (setup: string) => awayGame === 0 || setup === EVERYWHERE;
-    const started: Entry[] = [];
+    const started: { entry: Entry; instanceId: string }[] = [];
     /** Whether a window came up in this look: it is drawn above the card, which goes on top again. */
     let shownNow = false;
     // The veil first: everything shown after it is above it.
@@ -203,9 +206,9 @@ export class LayerWindows {
     // One window takes the keyboard, the panel used last; not each in turn.
     let focused = false;
     if (started.length > 0) {
-      const used = (entry: Entry) => this.options.usedAt(entry.instanceId!);
-      const newest = started.filter((entry) => entry.window.focusPanel).sort((a, b) => used(b) - used(a) || b.shownOrder - a.shownOrder)[0];
-      newest?.window.focusPanel?.();
+      const used = (one: { instanceId: string }) => this.options.usedAt(one.instanceId);
+      const newest = started.filter((one) => one.entry.window.focusPanel).sort((a, b) => used(b) - used(a) || b.entry.shownOrder - a.entry.shownOrder)[0];
+      newest?.entry.window.focusPanel?.();
       focused = newest !== undefined;
     }
     // The card stays on top of everything the layer shows; a window given the keyboard comes to the top of its level, so after that.
@@ -214,10 +217,9 @@ export class LayerWindows {
   }
 
   /** An overlay's window: shown where its setup has it, or hidden. Whether it came up now. */
-  private showOverlay(item: SceneItem, now: number, onTop: (setup: string) => boolean): boolean {
+  private showOverlay(item: OverlayItem, now: number, onTop: (setup: string) => boolean): boolean {
     let entry = this.open.get(item.id);
-    const look = item.look;
-    if (!look) {
+    if (!item.look) {
       if (entry?.showing.status === "shown") {
         entry.window.setMode("off");
         entry.window.setShown(false);
@@ -226,11 +228,11 @@ export class LayerWindows {
       if (entry) this.idle(item, entry, now);
       return false;
     }
-    entry ??= this.make(item) ?? undefined;
-    if (!entry) return false;
-    entry.setup = item.setup!;
+    const look = item.look;
+    entry ??= this.openWindow(item, item.make());
+    entry.setup = item.setup;
     if (entry.showing.status === "idle") entry.showing = { status: "hidden" };
-    this.style(entry, look.opacity!, look.hideFromCapture!);
+    this.style(entry, look.opacity, look.hideFromCapture);
     if (!entry.window.dragging) entry.window.setRect(look.rect);
     this.zoomTo(entry, look.zoom);
     // Where it goes before it shows, so it never comes up over a window that covers the game.
@@ -243,29 +245,28 @@ export class LayerWindows {
   }
 
   /** A panel's window while the layer is open, made when it has none. Whether it came up now. */
-  private showPanel(item: SceneItem, started: Entry[]): boolean {
-    const look = item.look!;
+  private showPanel(item: PanelItem, started: { entry: Entry; instanceId: string }[]): boolean {
+    const look = item.look;
     // It can't be lent right now (its view is restarting, or a paused Discord panel doesn't start). It keeps its setups
     // and key, and the next look asks again; a panel that is really gone is taken out by the service.
-    const entry = this.open.get(item.id) ?? this.make(item);
+    const entry = this.open.get(item.id) ?? this.lend(item);
     if (!entry) return false;
-    entry.setup = item.setup!;
+    entry.setup = item.setup;
     if (!entry.window.dragging) entry.window.setRect(look.rect);
     this.zoomTo(entry, look.zoom);
     const shownNow = this.reveal(entry);
     // One that comes up in Use, or is back from Arrange, may get the keyboard, so the user can tick or type right away.
-    if (look.mode === "use" && modeOf(entry) !== "use") started.push(entry);
+    if (look.mode === "use" && modeOf(entry) !== "use") started.push({ entry, instanceId: item.instanceId });
     this.setMode(entry, look.mode);
     return shownNow;
   }
 
   /** A panel's live view: shown; see-through behind its panel while the layer is open (only one on screen already); or hidden. */
-  private showLive(item: SceneItem, now: number, onTop: (setup: string) => boolean): void {
+  private showLive(item: LiveItem, now: number, onTop: (setup: string) => boolean): void {
     let entry = this.open.get(item.id);
-    const look = item.look;
     // With the layer open only a view already on screen stays (veiled); none is made or shown for it.
-    const veiled = look?.veiled === true && entry?.showing.status === "shown";
-    if (!look || (look.veiled === true && !veiled)) {
+    const veiled = item.look?.veiled === true && entry?.showing.status === "shown";
+    if (!item.look || (item.look.veiled && !veiled)) {
       if (entry?.veiled) entry.window.setVeiled?.((entry.veiled = false));
       if (entry?.showing.status === "shown") {
         entry.window.setShown(false);
@@ -274,10 +275,11 @@ export class LayerWindows {
       if (entry) this.idle(item, entry, now);
       return;
     }
-    entry ??= this.make(item)!;
-    entry.setup = item.setup!;
+    const look = item.look;
+    entry ??= this.openWindow(item, item.make());
+    entry.setup = item.setup;
     if (entry.showing.status === "idle") entry.showing = { status: "hidden" };
-    this.style(entry, look.opacity!, look.hideFromCapture!);
+    this.style(entry, look.opacity, look.hideFromCapture);
     entry.window.setRect(look.rect);
     this.zoomTo(entry, look.zoom);
     if (entry.veiled !== veiled) entry.window.setVeiled?.((entry.veiled = veiled));
@@ -286,7 +288,7 @@ export class LayerWindows {
   }
 
   /** A hidden window waits while its setup is on screen; gone from the screen for a while, it goes, and is made again on show. */
-  private idle(item: SceneItem, entry: Entry, now: number): void {
+  private idle(item: Pick<SceneItem, "id" | "setup">, entry: Entry, now: number): void {
     if (item.setup !== null) {
       entry.showing = { status: "hidden" };
       return;
@@ -295,18 +297,21 @@ export class LayerWindows {
     if (now - entry.showing.since >= IDLE_CLOSE_MS) this.drop(item.id);
   }
 
-  /** Makes the item's window; null when a panel can't be lent now. A new window is fully opaque, click-through and visible to capture. */
-  private make(item: SceneItem): Entry | null {
+  /** Makes the window of an overlay's page or of a live view. */
+  private openWindow(item: { id: string; kind: ItemKind; setup: string }, maker: WindowMaker): Entry {
+    return this.add(item, this.options.platform.openWindow(maker.request));
+  }
+
+  /** Makes a panel's window by lending the panel's view into it; null when it can't be lent now. */
+  private lend(item: PanelItem): Entry | null {
     const maker = item.make();
-    let window: OverlayWindow;
-    let loan: PanelInGame<OverlayWindow> | undefined;
-    if (maker.lend) {
-      const lent = maker.lend((view) => this.options.platform.openWindow(maker.request, view));
-      if (!lent) return null;
-      loan = lent;
-      window = lent.window;
-    } else window = this.options.platform.openWindow(maker.request);
-    const entry: Entry = { kind: item.kind, window, setup: item.setup!, showing: { status: "hidden" }, opacity: 100, hideFromCapture: false, shownOrder: 0, zoom: 1, veiled: false, instanceId: item.instanceId, loan };
+    const loan = maker.lend((view) => this.options.platform.openWindow(maker.request, view));
+    return loan ? this.add(item, loan.window, loan) : null;
+  }
+
+  /** A new window is fully opaque, click-through and visible to capture. */
+  private add(item: { id: string; kind: ItemKind; setup: string }, window: OverlayWindow, loan?: PanelInGame<OverlayWindow>): Entry {
+    const entry: Entry = { kind: item.kind, window, setup: item.setup, showing: { status: "hidden" }, opacity: 100, hideFromCapture: false, shownOrder: 0, zoom: 1, veiled: false, loan };
     this.open.set(item.id, entry);
     return entry;
   }
@@ -359,7 +364,8 @@ export class LayerWindows {
       const overGame = stack.filter((one) => one.entry.setup !== EVERYWHERE);
       // Top first: the last in the stack is the highest.
       const handles = overGame.flatMap((one) => (one.entry.window.handle ? [one.entry.window.handle] : [])).reverse();
-      stacked = handles.length > 0 && this.options.platform.stackAboveGame!(awayGame, handles);
+      // (awayGame is a handle only where the platform stacks: see show.)
+      stacked = handles.length > 0 && (this.options.platform.stackAboveGame?.(awayGame, handles) ?? false);
       // Windows wouldn't stack them: above every window, as before, rather than lost under the game.
       if (handles.length > 0 && !stacked) for (const one of overGame) one.entry.window.setTopmost?.(true);
     }

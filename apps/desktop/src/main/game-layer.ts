@@ -1,14 +1,15 @@
 // What the in-game layer shows, decided without any window (game-overlay-service.ts asks, game-layer-windows.ts makes
-// the windows do it). Two pure steps:
+// the windows do it):
 //
-// - `layerStep`: the layer itself, `closed | open(game, window, mode)`, and what the service has to do on each step
+// - `layerStep`, pure: the layer itself, `closed | open(game, window, mode)`, and what the service has to do on each step
 //   (take or give back Esc, give the game the keyboard, say why it can't open).
-// - `layerScene`: from the setups on screen and the layer, every item's window as it should be now: shown where and how,
-//   hidden, or idle (its setup is off the screen); and the veil and the card while the layer is open.
+// - `layerScene`, deterministic over its input (some of which it reads through lookups): from the setups on screen
+//   and the layer, every item's window as it should be now: shown where and how, hidden, or idle (its setup is off
+//   the screen); and the veil and the card while the layer is open.
 import type { LayerCardContent, LayerMode } from "../shared/layer-card";
 import { contentScale } from "../shared/overlay-anchor";
 import { EVERYWHERE, liveWindowId, overlayId, overlayVisible, panelWindowId, placeItem, type GameOverlay, type GameOverlayStore, type InGamePanel, type Opacity, type Rect, type WindowMode } from "./game-overlays";
-import type { WindowMaker } from "./game-layer-windows";
+import type { PanelWindowMaker, WindowMaker } from "./game-layer-windows";
 
 // ── The layer ────────────────────────────────────────────────────────
 
@@ -124,41 +125,50 @@ export interface SceneInput {
   card(mode: LayerMode): LayerCardContent;
   /** The handle of the game window the user left while overlays stay (0: none, or not known). */
   awayHandle: number;
-  /** The window each kind of item lives in, made only when it has none. */
+  /** The window each kind of item lives in, made only when it has none. A live view's keeps to the area of `setup`. */
   make: {
-    overlay(overlay: GameOverlay, id: string, setup: string): WindowMaker;
-    panel(panel: InGamePanel, id: string, setup: string): WindowMaker;
+    overlay(overlay: GameOverlay, id: string): WindowMaker;
+    panel(panel: InGamePanel, id: string): PanelWindowMaker;
     live(panel: InGamePanel, id: string, setup: string): WindowMaker;
   };
 }
 
-/** How a shown item looks: its place, zoom and mode, and its place in the setup's stacking order. */
-export interface ItemLook {
+/** How a shown panel looks: its place, zoom and mode, and its place in the setup's stacking order (null: never arranged). */
+export interface PanelLook {
   rect: Rect;
   zoom: number;
   mode: WindowMode;
-  /** The place in the setup's stacking order (Arrange on the Overlay page); null: never arranged. */
   z: number | null;
-  /** Overlays and live views; a panel's window keeps its own. */
-  opacity?: Opacity;
-  hideFromCapture?: boolean;
-  /** A live view while the layer is open: see-through behind its panel, and only if it is on screen already. */
-  veiled?: boolean;
 }
+
+/** How a shown overlay looks: as a panel, and how see-through it is and whether screen capture sees it. */
+export interface OverlayLook extends PanelLook {
+  opacity: Opacity;
+  hideFromCapture: boolean;
+}
+
+/** How a shown live view looks: as an overlay; while the layer is open, see-through behind its panel (`veiled`), and only if it is on screen already. */
+export interface LiveLook extends OverlayLook {
+  veiled: boolean;
+}
+
+export type ItemLook = PanelLook | OverlayLook | LiveLook;
 
 export type ItemKind = "overlay" | "panel" | "live";
 
-export interface SceneItem {
-  /** The window's id: overlayId, panelWindowId or liveWindowId. */
-  id: string;
-  kind: ItemKind;
-  instanceId?: string;
-  /** The setup on screen it shows from; null while no setup on screen has it (its window goes after a while). */
-  setup: string | null;
-  /** Shown like this, or hidden (null). */
-  look: ItemLook | null;
-  make(): WindowMaker;
-}
+/**
+ * Where an overlay or a live view is: shown from a setup on screen, with its look and how its window is made; or hidden
+ * (`look` null), with the setup on screen that has it, or null while none does (its window goes after a while).
+ */
+type Placement<L> = { setup: string; look: L; make(): WindowMaker } | { setup: string | null; look: null };
+
+/** An overlay's page; its window's id is overlayId. */
+export type OverlayItem = { id: string; kind: "overlay" } & Placement<OverlayLook>;
+/** A panel, only while the layer is open, and then always shown; its window's id is panelWindowId. */
+export type PanelItem = { id: string; kind: "panel"; instanceId: string; setup: string; look: PanelLook; make(): PanelWindowMaker };
+/** A panel's live view; its window's id is liveWindowId. */
+export type LiveItem = { id: string; kind: "live"; instanceId: string } & Placement<LiveLook>;
+export type SceneItem = OverlayItem | PanelItem | LiveItem;
 
 export interface LayerScene {
   /** The open layer: its area (the veil, with the card at its top) and what the card says; null while it is closed. */
@@ -169,7 +179,10 @@ export interface LayerScene {
   items: SceneItem[];
 }
 
-/** Everything the layer shows now. A window without an item in `items` goes. */
+/**
+ * Everything the layer shows now. A window without an item in `items` goes. Deterministic over its input: it decides
+ * from the setups and the layer, and reads the rest through the input's own lookups (`areaOf`, `usable`, `hasLive`, `card`).
+ */
 export function layerScene(input: SceneInput): LayerScene {
   const { active, layer, front, store } = input;
   // Over a game, the layer needs its window; over the screen, nothing but itself.
@@ -186,14 +199,11 @@ export function layerScene(input: SceneInput): LayerScene {
     const where = placed ? input.areaOf(placed.setup) : null;
     const settings = placed?.item ?? overlay;
     const visible = input.usable(overlay) && !input.stopped.has(id) && where !== null && overlayVisible({ enabled: active, gameInFront: placed !== undefined, mode: settings.mode, toggledOn: input.toggled.has(id), layerOpen });
-    items.push({
-      id,
-      kind: "overlay",
-      setup: placed?.setup ?? null,
+    if (placed && where && visible) {
       // An overlay has its frame only in Arrange; in Use it stays click-through.
-      look: visible ? { rect: placeItem(settings, where!), zoom: contentScale(where!.height), mode: arranging ? "arrange" : "off", z: placed!.item.z ?? null, opacity: settings.opacity, hideFromCapture: settings.hideFromCapture } : null,
-      make: () => input.make.overlay(overlay, id, placed!.setup),
-    });
+      const look: OverlayLook = { rect: placeItem(settings, where), zoom: contentScale(where.height), mode: arranging ? "arrange" : "off", z: placed.item.z ?? null, opacity: settings.opacity, hideFromCapture: settings.hideFromCapture };
+      items.push({ id, kind: "overlay", setup: placed.setup, look, make: () => input.make.overlay(overlay, id) });
+    } else items.push({ id, kind: "overlay", setup: placed?.setup ?? null, look: null });
   }
   // Panels are over the game (or the screen) only while the layer is open. A panel takes input in Use; in Arrange its
   // frame covers it.
@@ -208,7 +218,7 @@ export function layerScene(input: SceneInput): LayerScene {
         instanceId: panel.instanceId,
         setup,
         look: { rect: placeItem(panel, where), zoom: contentScale(where.height), mode: arranging ? "arrange" : "use", z: panel.z ?? null },
-        make: () => input.make.panel(panel, id, setup),
+        make: () => input.make.panel(panel, id),
       });
     }
   }
@@ -227,16 +237,11 @@ export function layerScene(input: SceneInput): LayerScene {
       !input.stopped.has(id) &&
       where !== null &&
       overlayVisible({ enabled: active, gameInFront: placed !== undefined, mode: settings.mode, toggledOn: input.toggled.has(id), layerOpen: false });
-    items.push({
-      id,
-      kind: "live",
-      instanceId,
-      setup: placed?.setup ?? null,
-      look: visible
-        ? { rect: placeItem(settings, where!), zoom: contentScale(where!.height), mode: "off", z: placed!.item.z ?? null, opacity: settings.opacity, hideFromCapture: settings.hideFromCapture, veiled: layerOpen }
-        : null,
-      make: () => input.make.live(panel, id, placed!.setup),
-    });
+    if (placed && where && visible) {
+      const setup = placed.setup;
+      const look: LiveLook = { rect: placeItem(settings, where), zoom: contentScale(where.height), mode: "off", z: placed.item.z ?? null, opacity: settings.opacity, hideFromCapture: settings.hideFromCapture, veiled: layerOpen };
+      items.push({ id, kind: "live", instanceId, setup, look, make: () => input.make.live(panel, id, setup) });
+    } else items.push({ id, kind: "live", instanceId, setup: placed?.setup ?? null, look: null });
   }
   return { layer: area && layer.status === "open" ? { area, card: input.card(layer.mode) } : null, awayHandle: input.awayHandle, items };
 }
