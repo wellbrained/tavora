@@ -3,11 +3,11 @@ import type { Context } from "hono";
 import { PUBLISH_STATEMENT, ZIP_LIMITS } from "@tavora/pack";
 import type { AccountStore } from "./account-store.ts";
 import { bearerToken, fail as refuse, tooMany } from "./sign-in.ts";
-import { MAIL_RESERVED } from "./accounts.ts";
+import { MAIL_RESERVED, NOTICES_PER_ACCOUNT, noticeRoom } from "./accounts.ts";
 import { CatalogError, checkCatalogZip, checkReleaseVersion, isOfficialId, type CatalogStore, type CheckedZip, type ReviewReason } from "./catalog.ts";
 import { catalogTrust, keyRefusal, OFFICIAL_PINS, officialOn, type OfficialPins } from "./catalog-trust.ts";
 import { mailLanguage, publishedMail, withdrawnMail, type Mail, type MailLanguage, type Mailer } from "./mail.ts";
-import { createNotifier, waitingMail, waitingNoticeMail } from "./moderation-mail.ts";
+import { waitingMail, waitingNoticeMail } from "./moderation-mail.ts";
 import { reviewUpload, runChecks } from "./moderation.ts";
 import { signedStatement } from "./publishers.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
@@ -152,6 +152,9 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
       return refuse(context, 403, "bad-signature", "The upload is not signed by the key that signed the zip.");
     }
     if (accountId !== key.accountId) return refuse(context, 403, "wrong-account", "This publisher key is linked to another Tavora account than the one publishing.");
+    // Paused when the account's address changed (account-store.ts revokeMinted). Apps know to link a key that isn't linked,
+    // and linking it again wakes it, so it answers with that reason.
+    if (key.paused) return refuse(context, 403, "key-not-linked", "This publisher key was paused when your account's email changed. Link it again to publish with it.");
     return key;
   };
 
@@ -165,18 +168,31 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     return session ? { accountId: session.accountId, token: null } : null;
   };
 
-  // The developer hears of every publish and every withdraw; best effort, and never with the emails kept for sign-in codes.
+  /**
+   * Sends a notice about `accountId`'s publishing, best effort: out of the notices' own share of the day's emails
+   * (accounts.ts NOTICE_SHARE), the account's NOTICES_PER_ACCOUNT, and never once codes to new addresses stopped, so
+   * publishing can't use up the emails for signing in. False when it didn't go out.
+   */
+  const notice = async (store: AccountStore, accountId: string, via: { mailer: Mailer; mailDailyLimit?: number }, message: Mail, at: number) => {
+    const day = new Date(at).toISOString().slice(0, 10);
+    const room = via.mailDailyLimit === undefined ? null : noticeRoom(via.mailDailyLimit);
+    if (room && store.mailsSent(day) + 1 > room.ceiling) return false;
+    if (!store.takeNotice(day, accountId, NOTICES_PER_ACCOUNT, room?.perDay ?? Number.POSITIVE_INFINITY)) return false;
+    try {
+      await via.mailer.send(message);
+      store.countMail(day);
+      return true;
+    } catch {
+      // Done all the same; the email is best effort.
+      return false;
+    }
+  };
+
+  // The developer hears of every publish and every withdraw, within the notices' share (notice()).
   const tellAccount = async (store: AccountStore, context: Context, accountId: string, write: (to: string, language: MailLanguage) => Mail, at: number) => {
     const to = store.account(accountId)?.email;
     if (!mail || !to) return;
-    const day = new Date(at).toISOString().slice(0, 10);
-    if (mail.mailDailyLimit !== undefined && store.mailsSent(day) >= Math.max(0, mail.mailDailyLimit - MAIL_RESERVED)) return;
-    try {
-      await mail.mailer.send(write(to, languageOf(context)));
-      store.countMail(day);
-    } catch {
-      // Done all the same; the email is best effort.
-    }
+    await notice(store, accountId, mail, write(to, languageOf(context)), at);
   };
 
   const tellPublished = (store: AccountStore, context: Context, accountId: string, checked: CheckedZip, token: string | null, at: number) =>
@@ -189,10 +205,11 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     if (!mail && !maintainer) return;
     const module = { id: checked.manifest.id, name: checked.manifest.name, version: checked.manifest.version };
     const to = store.account(accountId)?.email;
-    if (mail && to) await createNotifier({ store, mailer: mail.mailer, mailDailyLimit: mail.mailDailyLimit, now: () => at }).send(waitingMail(to, module, reasons, languageOf(context)));
+    if (mail && to) await notice(store, accountId, mail, waitingMail(to, module, reasons, languageOf(context)), at);
+    // The maintainer's notice counts against the account that uploaded, so it can't fill the maintainer's inbox either.
     if (maintainer) {
       const developer = store.developer(accountId)?.name ?? to ?? accountId;
-      await createNotifier({ store, mailer: maintainer.mailer, mailDailyLimit: maintainer.mailDailyLimit, now: () => at }).send(waitingNoticeMail(maintainer.email, module, developer, reasons));
+      await notice(store, accountId, maintainer, waitingNoticeMail(maintainer.email, module, developer, reasons), at);
     }
   };
 

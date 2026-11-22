@@ -106,6 +106,22 @@ export const MAIL_RESERVED = 20;
  * accounts, so new addresses get codes until 187 went out.
  */
 export const MAIL_FOR_ACCOUNTS_SHARE = 1 / 3;
+/**
+ * Notices about publishing (published, waiting, withdrawn, and the maintainer's "waiting" notice) have their own share of
+ * the day (audit 2026-11-22): at most this share of the sign-in emails (rounded down) for all accounts together, and
+ * NOTICES_PER_ACCOUNT for one account, counted against the account that published. They also stop where codes to new
+ * addresses stop, so they never take the emails kept for accounts' sign-ins (MAIL_FOR_ACCOUNTS_SHARE) or for deletes
+ * (MAIL_RESERVED). At Brevo's 300: 56 notices a day, and new addresses still get at least 131 codes.
+ */
+export const NOTICE_SHARE = 1 / 5;
+/** A notice for each of the 10 versions an account may publish a day (catalog-publish.ts PUBLISH_LIMITS). */
+export const NOTICES_PER_ACCOUNT = 10;
+
+/** The publishing notices' room on a day with `mailDailyLimit` emails: how many in all, and the day's count they stop at. */
+export function noticeRoom(mailDailyLimit: number): { perDay: number; ceiling: number } {
+  const signIn = Math.max(0, mailDailyLimit - MAIL_RESERVED);
+  return { perDay: Math.floor(signIn * NOTICE_SHARE), ceiling: signIn - Math.floor(signIn * MAIL_FOR_ACCOUNTS_SHARE) };
+}
 /** New accounts a day by default, by email and Discord together. */
 export const ACCOUNTS_PER_DAY = 500;
 /**
@@ -384,8 +400,10 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const at = now();
     const existing = store.accountByEmail(email);
     const create = input.create === true;
-    // A new address keeps its code until the user said yes to an account and there is room for it today.
-    if (!store.checkCode(email, "sign-in", null, input.code, at, Boolean(existing))) return wrongCode(context);
+    // A new address keeps its code until the user said yes to an account and there is room for it today. Wrong tries from
+    // another network than the one that asked for the code count apart (account-store.ts CODE_OTHER_TRIES).
+    const from = networkOf(clientKey(context.req.raw));
+    if (!store.checkCode(email, "sign-in", null, input.code, at, Boolean(existing), undefined, from)) return wrongCode(context);
     if (!existing && !create) return context.json({ status: "no-account" });
     // Said only after the code was right, so the answer never tells whether an address has an account.
     if (existing && store.isSuspended(existing.id)) return suspended(context);
@@ -394,7 +412,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
       const full = accountsFull(context) ?? networkAccountsFull(context);
       if (full) return full;
       // Right a moment ago, so this spends it.
-      if (!store.checkCode(email, "sign-in", null, input.code, at, true)) return wrongCode(context);
+      if (!store.checkCode(email, "sign-in", null, input.code, at, true, undefined, from)) return wrongCode(context);
       try {
         account = store.createAccount({ email }, at);
       } catch {
@@ -453,7 +471,8 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const email = normalizeEmail(input.email);
     if (!email || typeof input.code !== "string" || !CODE.test(input.code)) return context.json({ error: "Send { email, code }.", reason: "bad-request" }, 400);
     const account = store.accountByEmail(email);
-    if (!account || !store.isSuspended(account.id) || !store.checkCode(email, "delete", account.id, input.code, now(), true)) return wrongCode(context);
+    const from = networkOf(clientKey(context.req.raw));
+    if (!account || !store.isSuspended(account.id) || !store.checkCode(email, "delete", account.id, input.code, now(), true, undefined, from)) return wrongCode(context);
     deleteAccount(account.id);
     return context.body(null, 204);
   });
@@ -500,9 +519,13 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   // public half of a key ever reaches the service (publishers.ts links it with a code from here).
   const developerAnswer = (accountId: string) => {
     const developer = store.developer(accountId);
+    // A paused key (account-store.ts revokeMinted) is left out of `keys`, so the app offers to link it again, which wakes it.
+    const paused = store.pausedKeys(accountId);
+    const keys = store.keys(accountId);
     return {
       developer: developer ? { name: developer.name, changedAt: new Date(developer.changedAt).toISOString(), nextChangeAt: new Date(developer.changedAt + NAME_HOLD_MS).toISOString() } : null,
-      keys: store.keys(accountId),
+      keys: keys.filter((key) => !paused.has(key.fingerprint)),
+      pausedKeys: keys.filter((key) => paused.has(key.fingerprint)),
       requests: store.keyRequests(accountId).map((request) => ({
         old: request.old,
         new: request.new,
@@ -541,7 +564,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   signedIn.post("/keys/code", (context) => {
     const account = context.get("account");
     if (!store.developer(account.id)) return context.json({ error: "Choose a developer name first.", reason: "no-developer-name" }, 409);
-    const { code, expiresAt } = store.linkCode(account.id, now());
+    const { code, expiresAt } = store.linkCode(account.id, now(), context.get("session").id);
     return context.json({ code, expiresAt: new Date(expiresAt).toISOString() });
   });
 
@@ -633,7 +656,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const name = typeof raw === "string" ? raw.trim() : "";
     if (!name || name.length > 40 || /[\u0000-\u001f\u007f]/.test(name)) return context.json({ error: "A token's name is 1 to 40 characters.", reason: "bad-name" }, 400);
     if (!store.developer(account.id)) return context.json({ error: "Choose a developer name first.", reason: "no-developer-name" }, 409);
-    const created = store.createPublishToken(account.id, name, now());
+    const created = store.createPublishToken(account.id, name, now(), context.get("session").id);
     if (!created) return context.json({ error: "This account has as many publish tokens as it can. Remove one first.", reason: "too-many-tokens" }, 409);
     return context.json({ token: created.token, ...developerAnswer(account.id) }, 201);
   });
@@ -724,7 +747,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     }
     if (!store.checkCode(email, "change-email", account.id, input.code, now(), true)) return wrongCode(context);
     if (account.email && !store.checkCode(account.email, "confirm-email-change", account.id, input.currentCode as string, now(), true, email)) return wrongCurrentCode(context);
-    if (store.changeEmail(account.id, email, context.get("session").id) === "taken") {
+    if (store.changeEmail(account.id, email, context.get("session").id, now()) === "taken") {
       return context.json({ error: "That address already has a Tavora account.", reason: "email-taken" }, 409);
     }
     // The old address hears about it as well. Its share was counted with the codes (POST /email/code), and it never

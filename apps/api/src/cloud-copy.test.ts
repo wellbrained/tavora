@@ -3,10 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 import { AccountStore } from "./account-store.ts";
 import { createApp } from "./app.ts";
 import { mkdtempSync } from "node:fs";
-import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync, StatementSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { COPY_LIMIT, copyLimitsFromEnv, CopyStore, FREE_FLOOR, MAX_MANIFEST_BYTES, MAX_PART_BYTES, NETWORK_DAY_LIMIT, NETWORK_SHARE, NEW_ACCOUNT_MS, NEW_ACCOUNT_SHARE, readParts, readSwap, STORED_LIMIT, TOTAL_LIMIT, UNUSED_PART_MS, writeParts, type CopyHolder, type CopyStoreOptions } from "./cloud-copy.ts";
+import { COPY_LIMIT, copyLimitsFromEnv, CopyStore, FREE_FLOOR, MAX_MANIFEST_BYTES, MAX_PART_BYTES, MAX_STORED_PARTS, NETWORK_DAY_LIMIT, NETWORK_SHARE, NEW_ACCOUNT_MS, NEW_ACCOUNT_SHARE, readParts, readSwap, STORED_LIMIT, SWEEP_PAGE, TOTAL_LIMIT, UNUSED_PART_MS, writeParts, type CopyHolder, type CopyStoreOptions } from "./cloud-copy.ts";
 import { buildDataset, writeDatabase } from "./dataset.ts";
 import { createTestInbox } from "./mail.ts";
 import { createRateLimiter } from "./rate-limit.ts";
@@ -394,6 +394,42 @@ describe("the cloud copy", () => {
     expect(copies.sweep(10 * day)).toEqual({ parts: 1, bytes: 50 });
     expect(copies.parts("a", [used.id])).toHaveLength(1);
     expect(copies.storedTotal()).toBe(105);
+  });
+
+  it("caps how many parts an account stores, not only their bytes (audit 2026-11-22)", () => {
+    const copies = new CopyStore(":memory:");
+    // Tiny parts: their bytes are far below STORED_LIMIT, their number is not.
+    const tiny = (count: number) => Array.from({ length: count }, () => part(1));
+    expect(copies.addParts("a", tiny(MAX_STORED_PARTS - 1), 1000)).toBe("ok");
+    expect(copies.addParts("a", tiny(2), 1000)).toBe("copy-full");
+    expect(copies.addParts("a", tiny(1), 1000)).toBe("ok");
+    expect(copies.addParts("a", tiny(1), 1000)).toBe("copy-full");
+    // Another account has its own.
+    expect(copies.addParts("b", tiny(1), 1000)).toBe("ok");
+  });
+
+  it("drops unused parts a page at a time, never reading them all at once (audit 2026-11-22)", () => {
+    const copies = new CopyStore(":memory:");
+    const count = 2 * SWEEP_PAGE + 500;
+    for (const account of ["a", "b", "c"]) copies.addParts(account, Array.from({ length: count / 3 + (account === "a" ? count % 3 : 0) }, () => part(2)), 1000);
+    const used = part(10);
+    copies.addParts("d", [used], 1000);
+    copies.swap("d", 0, new Uint8Array(5), [used.id], 2000);
+    const read: number[] = [];
+    const all = StatementSync.prototype.all;
+    const spy = vi.spyOn(StatementSync.prototype, "all").mockImplementation(function (this: StatementSync, ...args: Parameters<StatementSync["all"]>) {
+      const rows = all.apply(this, args);
+      read.push(rows.length);
+      return rows;
+    });
+    try {
+      expect(copies.sweep(1000 + UNUSED_PART_MS + 1)).toEqual({ parts: count, bytes: 2 * count });
+    } finally {
+      spy.mockRestore();
+    }
+    expect(Math.max(...read)).toBeLessThanOrEqual(SWEEP_PAGE);
+    expect(copies.storedTotal()).toBe(15);
+    expect(copies.parts("d", [used.id])).toHaveLength(1);
   });
 
   it("counts parts from before their time as old: kept with a copy until its next save, dropped without one", () => {

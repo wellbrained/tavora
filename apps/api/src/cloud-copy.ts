@@ -50,6 +50,13 @@ export const BATCH_BYTES = 8 * 1024 * 1024;
 export const MAX_MANIFEST_BYTES = 4 * 1024 * 1024;
 /** Parts one copy may use. */
 export const MAX_PARTS = 50_000;
+/**
+ * Parts one account may store at once, used or not (audit 2026-11-22): a saved copy's and a new version's, as STORED_LIMIT
+ * is for bytes. The bytes alone would let tiny parts make millions of rows.
+ */
+export const MAX_STORED_PARTS = 2 * MAX_PARTS;
+/** Unused parts sweep() reads and drops at once, so dropping millions never holds them all in memory. */
+export const SWEEP_PAGE = 1000;
 /** Parts one download may ask for. */
 export const MAX_ASK = 2048;
 const ID_BYTES = 32;
@@ -381,30 +388,44 @@ export class CopyStore {
    */
   sweep(now: number = Date.now()): { parts: number; bytes: number } {
     this.lastSweep = now;
-    const unused = this.db
-      .prepare(
-        `select p.account_id as accountId, p.id as id, p.size as size from parts p left join copies c on c.account_id = p.account_id
-         where coalesce(p.created_at, 0) < ? and (c.account_id is null or (p.created_at is not null and p.created_at > c.updated_at))`,
-      )
-      .all(now - UNUSED_PART_MS) as unknown as { accountId: string; id: Uint8Array; size: number }[];
-    if (unused.length === 0) return { parts: 0, bytes: 0 };
-    let bytes = 0;
+    // A page at a time, each in its own transaction: what a page dropped no longer matches, so the next one reads on.
+    const page = this.db.prepare(
+      `select p.account_id as accountId, p.id as id, p.size as size from parts p left join copies c on c.account_id = p.account_id
+       where coalesce(p.created_at, 0) < ? and (c.account_id is null or (p.created_at is not null and p.created_at > c.updated_at)) limit ?`,
+    );
     const drop = this.db.prepare("delete from parts where account_id = ? and id = ?");
-    this.db.exec("begin");
+    let parts = 0;
+    let bytes = 0;
     try {
-      for (const part of unused) {
-        drop.run(part.accountId, part.id);
-        bytes += part.size;
+      for (;;) {
+        const unused = page.all(now - UNUSED_PART_MS, SWEEP_PAGE) as unknown as { accountId: string; id: Uint8Array; size: number }[];
+        if (unused.length === 0) break;
+        this.db.exec("begin");
+        try {
+          for (const part of unused) drop.run(part.accountId, part.id);
+          this.db.exec("commit");
+        } catch (error) {
+          this.db.exec("rollback");
+          throw error;
+        }
+        const dropped = unused.reduce((total, part) => total + part.size, 0);
+        this.total -= dropped;
+        bytes += dropped;
+        parts += unused.length;
+        if (unused.length < SWEEP_PAGE) break;
       }
-      this.db.exec("commit");
-    } catch (error) {
-      this.db.exec("rollback");
-      throw error;
+    } finally {
+      // Kept right for the pages that went, also when a later one failed.
+      if (parts > 0) this.onTop = this.countOnTop();
     }
-    this.total -= bytes;
-    this.onTop = this.countOnTop();
+    if (parts === 0) return { parts: 0, bytes: 0 };
     this.db.exec("pragma incremental_vacuum");
-    return { parts: unused.length, bytes };
+    return { parts, bytes };
+  }
+
+  /** Parts stored for the account, used by a version or not. */
+  partCount(accountId: string): number {
+    return (this.db.prepare("select count(*) as n from parts where account_id = ?").get(accountId) as { n: number }).n;
   }
 
   info(accountId: string): CopyInfo | null {
@@ -442,13 +463,13 @@ export class CopyStore {
     const bytesOf = (list: { data: Uint8Array }[]) => list.reduce((total, part) => total + part.data.length, 0);
     let fresh = freshOf();
     if (bytesOf(fresh) === 0) return "ok";
-    if (this.stored(accountId) + bytesOf(fresh) > STORED_LIMIT) return "copy-full";
+    if (this.stored(accountId) + bytesOf(fresh) > STORED_LIMIT || this.partCount(accountId) + fresh.length > MAX_STORED_PARTS) return "copy-full";
     const pooled = (bytes: number) => Math.max(0, bytes - this.replacing(accountId));
     if (!this.room(accountId, bytesOf(fresh), () => pooled(bytesOf(fresh)), who, now)) return "no-room";
     // A sweep for room may have dropped old unused parts of this account too: those are stored again.
     fresh = freshOf();
     const adding = bytesOf(fresh);
-    if (this.stored(accountId) + adding > STORED_LIMIT) return "copy-full";
+    if (this.stored(accountId) + adding > STORED_LIMIT || this.partCount(accountId) + fresh.length > MAX_STORED_PARTS) return "copy-full";
     const drawn = pooled(adding);
     if (this.fits(accountId, adding, drawn, who, now) !== "ok") return "no-room";
     const insert = this.db.prepare("insert into parts (account_id, id, data, size, created_at, charged) values (?, ?, ?, ?, ?, ?)");

@@ -115,6 +115,32 @@ describe("signing in with a code", () => {
     expect((await call("POST", "/verify", { email: "me@example.com", code, create: true })).status).toBe(400);
   });
 
+  it("never lets wrong tries from another network spend someone's code, and still takes five wrong tries at most (audit 2026-11-22)", async () => {
+    const { call, lastCode } = setup();
+    const owner = "203.0.113.5";
+    const stranger = "198.51.100.7";
+    await call("POST", "/code", { email: "me@example.com" }, undefined, owner);
+    const code = lastCode();
+    const wrong = code === "000000" ? "000001" : "000000";
+    // A stranger who knows the address guesses as long as their own limit lets them.
+    for (let i = 0; i < 10; i++) expect((await call("POST", "/verify", { email: "me@example.com", code: wrong }, undefined, stranger)).status).toBe(400);
+    // Three of those were checked; the rest weren't, so even the right code from there is refused now.
+    expect((await call("POST", "/verify", { email: "me@example.com", code, create: true }, undefined, stranger)).status).toBe(400);
+    // The owner still has their tries: one wrong, then the right one.
+    expect((await call("POST", "/verify", { email: "me@example.com", code: wrong }, undefined, owner)).status).toBe(400);
+    expect(await (await call("POST", "/verify", { email: "me@example.com", code, create: true }, undefined, owner)).json()).toMatchObject({ status: "created" });
+  });
+
+  it("spends a code after five wrong tries from everyone together", async () => {
+    const { call, lastCode } = setup();
+    await call("POST", "/code", { email: "me@example.com" }, undefined, "203.0.113.5");
+    const code = lastCode();
+    const wrong = code === "000000" ? "000001" : "000000";
+    for (let i = 0; i < 3; i++) await call("POST", "/verify", { email: "me@example.com", code: wrong }, undefined, "198.51.100.7");
+    for (let i = 0; i < 2; i++) await call("POST", "/verify", { email: "me@example.com", code: wrong }, undefined, "203.0.113.5");
+    expect((await call("POST", "/verify", { email: "me@example.com", code, create: true }, undefined, "203.0.113.5")).status).toBe(400);
+  });
+
   it("lets a code expire after ten minutes, and a new code replaces the old one", async () => {
     const { call, lastCode, clock } = setup();
     await call("POST", "/code", { email: "me@example.com" });
