@@ -5,7 +5,7 @@
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { isModuleId } from "@tavora/module-schema";
-import { CLASSIC_STYLE, STYLE_LOOKS, STYLE_PARTS, STYLE_RANGES, type StyleLooks, type StyleValues, type TavoraStyle, type TavoraTheme, type ToastPosition } from "@tavora/sdk/protocol";
+import { CLASSIC_STYLE, STYLE_LOOKS, STYLE_PARTS, STYLE_RANGES, type StyleLooks, type StyleValues, type TabOverflow, type TavoraStyle, type TavoraTheme, type ToastPosition } from "@tavora/sdk/protocol";
 import { candidates, glassOpacity, insetPanelTheme, moduleTheme, withRadius, type ThemePackage, type ThemeVariation } from "./themes";
 import { OFFICIAL_PREFIX, type Provenance } from "./registry";
 import { CLASSIC_STYLE_ID, resolveFontId, resolveRadius, STYLE_RADIUS } from "../shared/styles";
@@ -288,6 +288,8 @@ export interface AppearanceSettings {
   /** The font id over the style's; left out for the style's. */
   font?: string | undefined;
   toasts: ToastPosition;
+  /** How tabs that don't fit are reached (Too many tabs); left out for the list. The kit's TabStrip follows it. */
+  tabOverflow?: TabOverflow;
 }
 
 /**
@@ -305,7 +307,7 @@ export function appearanceThemes(
   const font = themeFont(resolveFontId(settings.font, style));
   const sent = tavoraStyle(style);
   if (style.looks.surface === "glass") sent.values.glassOpacity = glassOpacity(choice.variation, style.values.glassOpacity);
-  const host = moduleTheme(withRadius(choice.variation, radius), settings.toasts, font, sent);
+  const host = moduleTheme(withRadius(choice.variation, radius), settings.toasts, font, sent, settings.tabOverflow);
   const panel = insetPanelTheme(choice.theme, choice.variation, host);
   // A panel in other colours (an inset style) draws its menus and dialogs as glass over those.
   if (panel === host || style.looks.surface !== "glass") return { host, panel };

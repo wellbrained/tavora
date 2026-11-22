@@ -9,11 +9,18 @@
 // - Rename: double-click or F2 on a `renamable` tab. Enter or leaving the field keeps the name, Esc drops it.
 // - Icon: the scoped `icon` slot (`{ tab }`) puts an icon before a tab's label. It stays while the tab is renamed
 //   and is not part of the rename field's text. Give it its own look (e.g. `text-primary size-3.5`) and a tooltip.
-// - A row that is too wide scrolls with the wheel and fades at the edges. The `add` slot sits after the row, always visible.
-import { nextTick, ref, watch } from "vue";
+// - A row that is too wide scrolls with the wheel and fades at the edges. The open tab stays in view when the row gets
+//   narrower. The tabs that don't fit are reached as the user picked under Settings > Appearance > Too many tabs, like
+//   Tavora's own panel tabs: a list button with their count (a menu of them), or ‹ › arrows that open the tab before or
+//   after the open one, each shown only on a side that has hidden tabs. The arrows take no Tab stop: the arrow keys
+//   already walk the tabs. `overflow` sets one of the two for this strip instead.
+// - The `add` slot sits after the row, always visible.
+import { computed, nextTick, ref, watch } from "vue";
 import { useResizeObserver } from "@vueuse/core";
-import { X } from "@lucide/vue";
+import { ChevronDown, ChevronLeft, ChevronRight, X } from "@lucide/vue";
 import { TabsRoot } from "reka-ui";
+import { Button } from "../button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "../dropdown-menu";
 import { isComposing } from "../../../lib/keys";
 import { cn } from "../../../lib/utils";
 import { Input } from "../input";
@@ -24,11 +31,21 @@ import TabsList from "./TabsList.vue";
 import TabsTrigger from "./TabsTrigger.vue";
 import { reducedMotion, useReorderMotion } from "../reorder";
 import { bindDrag } from "../../../lib/bind-drag";
-import { checkRename, dropPlace, moveTab, neighbourAfterClose, stepTab, type StripTab } from "./tab-strip";
+import { checkRename, dropPlace, moveTab, neighbourAfterClose, neighbourTab, revealBy, stepTab, tabsOutOfView, type StripTab } from "./tab-strip";
+import { tabOverflow, type TabOverflow } from "./tab-overflow";
 
-const props = withDefaults(defineProps<{ tabs: StripTab[]; modelValue?: string; maxLength?: number; ariaLabel?: string; class?: string }>(), {
-  maxLength: DEFAULT_NAME_LIMIT,
-});
+const props = withDefaults(
+  defineProps<{
+    tabs: StripTab[];
+    modelValue?: string;
+    maxLength?: number;
+    ariaLabel?: string;
+    /** How tabs that don't fit are reached; left out, the user's choice (Settings > Appearance > Too many tabs). */
+    overflow?: TabOverflow;
+    class?: string;
+  }>(),
+  { maxLength: DEFAULT_NAME_LIMIT, overflow: undefined, ariaLabel: undefined, modelValue: undefined, class: undefined },
+);
 const emit = defineEmits<{
   "update:modelValue": [id: string];
   close: [id: string];
@@ -39,18 +56,54 @@ const emit = defineEmits<{
 const scroller = ref<HTMLElement | null>(null);
 const canScrollBack = ref(false);
 const canScrollForward = ref(false);
+/** The tabs not entirely in view, in tab order, and the sides they are on. */
+const outOfView = ref<{ hidden: string[]; before: boolean; after: boolean }>({ hidden: [], before: false, after: false });
+const mode = computed<TabOverflow>(() => props.overflow ?? tabOverflow.value);
+const hiddenTabs = computed(() => outOfView.value.hidden.map((id) => props.tabs.find((tab) => tab.id === id)).filter((tab): tab is StripTab => !!tab));
+const moreLabel = computed(() => (hiddenTabs.value.length === 1 ? uiText.value.moreTab : uiText.value.moreTabs.replace("{count}", String(hiddenTabs.value.length))));
 
 const ids = () => props.tabs.map((tab) => tab.id);
 const tabElements = () => [...(scroller.value?.querySelectorAll<HTMLElement>("[data-tab-id]") ?? [])];
 const tabElement = (id: string) => tabElements().find((el) => el.dataset.tabId === id);
 
-// ── Scrolling
+// ── Scrolling and the tabs that don't fit
 
-function updateEdges() {
+/**
+ * Finds the tabs out of view. With `keepOpen` the open tab is brought into the row first, as when the row got narrower;
+ * after the user scrolled the row it stays where they put it.
+ */
+function measure(keepOpen: boolean) {
   const el = scroller.value;
   if (!el) return;
+  const row = el.getBoundingClientRect();
+  const open = keepOpen && !dragId.value && props.modelValue !== undefined ? tabElement(props.modelValue) : undefined;
+  const by = open ? revealBy(row, open.getBoundingClientRect()) : 0;
+  if (by) el.scrollLeft += by;
   canScrollBack.value = el.scrollLeft > 1;
   canScrollForward.value = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+  const next = tabsOutOfView(row, places());
+  const now = outOfView.value;
+  if (next.hidden.join("\n") !== now.hidden.join("\n") || next.before !== now.before || next.after !== now.after) outOfView.value = next;
+}
+
+/** An arrow: opens the tab before or after the open one, and the row follows it. Past the end it brings in the nearest hidden tab. */
+function step(by: -1 | 1) {
+  const next = neighbourTab(ids(), props.modelValue, by);
+  if (next) return emit("update:modelValue", next);
+  const el = scroller.value;
+  if (!el) return;
+  const row = el.getBoundingClientRect();
+  const boxes = places();
+  const target = by < 0 ? boxes.filter((box) => box.left < row.left - 1).at(-1) : boxes.find((box) => box.right > row.right + 1);
+  if (!target) return;
+  el.scrollLeft += revealBy(row, target);
+  measure(false);
+}
+
+function pickHidden(id: string) {
+  emit("update:modelValue", id);
+  // A tab already open (scrolled away with the wheel) is brought back too.
+  nextTick(() => measure(true));
 }
 
 function onWheel(event: WheelEvent) {
@@ -60,9 +113,12 @@ function onWheel(event: WheelEvent) {
   el.scrollLeft += event.deltaY;
 }
 
-useResizeObserver(scroller, updateEdges);
-watch(() => props.tabs.map((tab) => tab.id + tab.label).join("\n"), () => nextTick(updateEdges), { flush: "post" });
-watch(() => props.modelValue, (id) => id && nextTick(() => tabElement(id)?.scrollIntoView?.({ block: "nearest", inline: "nearest" })));
+// The row and the tabs in it: a narrower row, or tabs that got wider (another font), keep the open tab in view.
+const tabRow = computed(() => scroller.value?.firstElementChild as HTMLElement | null | undefined);
+useResizeObserver([scroller, tabRow], () => measure(true));
+// A new order or name only counts again: after a drag the row stays where the tab was dropped.
+watch(() => props.tabs.map((tab) => tab.id + tab.label).join("\n"), () => nextTick(() => measure(false)), { flush: "post" });
+watch(() => props.modelValue, (id) => id !== undefined && nextTick(() => measure(true)));
 
 const mask = () =>
   `linear-gradient(to right, ${canScrollBack.value ? "transparent" : "#000"}, #000 1.5rem, #000 calc(100% - 1.5rem), ${canScrollForward.value ? "transparent" : "#000"})`;
@@ -232,16 +288,32 @@ function endDrag(settled: boolean) {
   <TabsRoot
     :model-value="modelValue"
     data-slot="tab-strip"
+    :data-tab-overflow="mode"
     :class="cn('after:bg-border relative flex h-8 items-stretch after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px', props.class)"
     @update:model-value="emit('update:modelValue', String($event))"
   >
+    <!-- The arrows take no Tab stop and keep the focus where it is: the arrow keys walk the tabs already. -->
+    <div v-if="mode === 'arrows' && outOfView.before" class="relative z-10 flex flex-none items-center pr-1">
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        tabindex="-1"
+        :aria-label="uiText.previousTab"
+        :title="uiText.previousTab"
+        data-testid="strip-previous-tab"
+        @mousedown.prevent
+        @click="step(-1)"
+      >
+        <ChevronLeft aria-hidden="true" />
+      </Button>
+    </div>
     <div
       ref="scroller"
       class="relative z-10 min-w-0 flex-initial overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       :style="{ maskImage: mask(), WebkitMaskImage: mask() }"
       data-testid="tab-strip-scroller"
       @wheel="onWheel"
-      @scroll.passive="updateEdges"
+      @scroll.passive="measure(false)"
     >
       <!-- The strip keeps each tab's own line (no sliding one): tabs open, close and move all the time. -->
       <TabsList class="h-full w-max border-b-0" :indicator="false" :aria-label="ariaLabel">
@@ -298,6 +370,36 @@ function endDrag(settled: boolean) {
           </TabsTrigger>
         </template>
       </TabsList>
+    </div>
+    <div v-if="mode === 'arrows' && outOfView.after" class="relative z-10 flex flex-none items-center pl-1">
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        tabindex="-1"
+        :aria-label="uiText.nextTab"
+        :title="uiText.nextTab"
+        data-testid="strip-next-tab"
+        @mousedown.prevent
+        @click="step(1)"
+      >
+        <ChevronRight aria-hidden="true" />
+      </Button>
+    </div>
+    <div v-else-if="mode === 'list' && hiddenTabs.length" class="relative z-10 flex flex-none items-center pl-1">
+      <DropdownMenu>
+        <DropdownMenuTrigger as-child>
+          <Button variant="ghost" size="sm" class="gap-0.5 px-1.5 text-xs tabular-nums" :aria-label="moreLabel" :title="moreLabel" data-testid="strip-hidden-tabs">
+            <ChevronDown aria-hidden="true" />{{ hiddenTabs.length }}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="bottom" align="end" class="max-w-72 min-w-52" data-testid="strip-hidden-menu">
+          <DropdownMenuLabel class="text-muted-foreground truncate text-xs font-normal">{{ moreLabel }}</DropdownMenuLabel>
+          <DropdownMenuItem v-for="tab in hiddenTabs" :key="tab.id" :data-tab-id="tab.id" data-testid="strip-hidden-tab" @select="pickHidden(tab.id)">
+            <span v-if="$slots.icon" class="flex flex-none items-center empty:hidden"><slot name="icon" :tab="tab" /></span>
+            <span class="min-w-0 truncate">{{ tab.label }}</span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
     <Tooltip :open="renameTip && !!renameProblem" :anchor="renameAnchor" :title="renameProblem" tone="danger" compact @dismiss="renameTip = false" />
     <span :id="renameTipId" class="sr-only" role="alert">{{ renameProblem }}</span>

@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.62",
+    "date": "2026-11-22",
+    "notes": [
+      "Tabs that don't fit show in a list or behind arrows, as you set under Settings > Appearance > Too many tabs. A new specimen shows both."
+    ]
+  },
+  {
     "version": "0.1.61",
     "date": "2026-11-22",
     "notes": [

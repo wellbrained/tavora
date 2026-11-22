@@ -42,7 +42,7 @@ export const PAGES = [
   { id: "lists", group: "display", keywords: "table rows columns grid data cells spreadsheet sheet fill handle frozen virtual header list stats compare row hover selected settings divider card add remove animated reorder drag drop slot target zone focus delete keyboard", examples: ["Table", "DataGrid", "DataGridReadOnly", "SelectableList", "AnimatedRows", "FocusAfterDelete", "ReorderRows", "DropOnSlots", "SettingRows", "Card"] },
   { id: "folding", group: "display", keywords: "expand collapse more less long text read clamp collapsible disclosure accordion details summary open close fold section force-mount height", examples: ["ShowMoreLong", "ShowMoreShort", "Collapsible", "CollapsibleDivider"] },
   // Navigation
-  { id: "tabs", group: "navigation", keywords: "tabs views strip close closable reorder drag rename middle-click scroll overflow add", examples: ["Tabs", "TabStrip", "TabIcon", "TabsCrowded"] },
+  { id: "tabs", group: "navigation", keywords: "tabs views strip close closable reorder drag rename middle-click scroll overflow add list arrows hidden more", examples: ["Tabs", "TabStrip", "TabIcon", "TabsCrowded", "TabOverflow"] },
   { id: "navlist", group: "navigation", keywords: "nav list categories settings sidebar sections menu plates", examples: ["Grouped", "Plates"] },
   // Canvas
   { id: "zoom", group: "canvas", keywords: "zoom pan drag pinch fit width scroll graph tree map canvas viewport double-click percent 100 whole extras view-only remember persist glide tooltip hide show hidden ausblenden einblenden", examples: ["WideContent", "AutoFitOff", "RememberView", "HideAndShow", "HundredExtras", "PersistView", "ViewOnly", "BoxTooltip", "FitWidth"] },
