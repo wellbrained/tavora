@@ -686,11 +686,12 @@ async function swapOne({ place, staged, kept, since, inCopy }: SwapPlace, resume
 }
 
 /**
- * Sorts what a settled swap put in `written-since`, so only real work stays there. A file with the copy's content is no
- * one's work and goes; one as this PC last synced it (`before`) is an ordinary backup and joins the rest. What can't be
- * read stays, as it may be work. True when anything is left: the user is told, and pruning keeps it.
+ * Sorts what a settled swap put in `written-since`, so only real work stays there. A file with the copy's content, or with
+ * that of an `earlier` copy this swap was putting in before its list was lost, is no one's work and goes; one as this PC
+ * last synced it (`before`) is an ordinary backup and joins the rest. What can't be read stays, as it may be work. True
+ * when anything is left: the user is told, and pruning keeps it.
  */
-export async function sortWrittenSince(keepIn: string, copy: DownloadedCopy, before: CopyState): Promise<boolean> {
+export async function sortWrittenSince(keepIn: string, copy: DownloadedCopy, before: CopyState, earlier: readonly DownloadedCopy[] = []): Promise<boolean> {
   const root = path.join(keepIn, WRITTEN_SINCE);
   const walk = async (dir: string, name: string): Promise<void> => {
     const names = await lookNames(dir);
@@ -709,7 +710,7 @@ export async function sortWrittenSince(keepIn: string, copy: DownloadedCopy, bef
       }
       const sha = await look(() => fileSha256(file));
       if (sha.status !== "present") continue;
-      if (copy.files[inCopy]?.sha256 === sha.value) {
+      if (copy.files[inCopy]?.sha256 === sha.value || earlier.some((other) => other.files[inCopy]?.sha256 === sha.value)) {
         await rm(file, { force: true }).catch(() => undefined);
       } else if (before.files[inCopy]?.sha256 === sha.value) {
         const kept = path.join(keepIn, ...inCopy.split("/"));
@@ -732,6 +733,20 @@ export async function emptyPlaces(staging: string, roots: CopyRoot[], keepIn: st
   const empty: string[] = [];
   for (const { place, inCopy } of await swapPlaces(staging, roots, keepIn, copy)) if (inCopy && !(await exists(place))) empty.push(place);
   return empty;
+}
+
+/**
+ * The same for another copy once a swap has begun (its list was lost, and a newer copy takes its place): what was empty
+ * before (`before`), and a place the new copy holds with nothing in it, in the backup or in `written-since`.
+ */
+export async function emptyPlacesSince(staging: string, roots: CopyRoot[], keepIn: string, copy: DownloadedCopy, before: readonly string[]): Promise<string[]> {
+  const empty = new Set(before);
+  for (const { place, kept, since, inCopy } of await swapPlaces(staging, roots, keepIn, copy)) {
+    if (!inCopy || (await exists(place)) || (await exists(kept))) continue;
+    if ((await namesIn(path.dirname(since))).some((name) => plainName(name) === path.basename(since))) continue;
+    empty.add(place);
+  }
+  return [...empty];
 }
 
 /**

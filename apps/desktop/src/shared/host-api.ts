@@ -511,7 +511,7 @@ export interface PairingView {
 }
 
 /** Why the cloud copy could not sync last time, worded by the host UI. */
-export type CloudCopyProblem = "offline" | "signed-out" | "too-big" | "failed" | "deleted" | "new-key" | "no-folder" | "folder-locked" | "not-arrived";
+export type CloudCopyProblem = "offline" | "signed-out" | "too-big" | "failed" | "deleted" | "new-key" | "no-folder" | "folder-locked" | "not-arrived" | "disk-full";
 
 /** What the cloud copy is doing right now: one thing at a time, with how far an upload got (bytes read and sent of what changed). */
 export type CloudCopyActivity =
@@ -550,6 +550,8 @@ export interface CloudCopyView {
   conflict: boolean;
   /** Part of this PC's data couldn't be opened: nothing goes up until the user chooses, and `conflict` asks them. */
   lostData: boolean;
+  /** A copy the user chose waits for the account it belongs to: `conflict` asks them to sign in with it or keep this PC's data. */
+  copyWaiting: boolean;
   /** A copy stopped halfway going in: nothing goes up, and `conflict` asks to try again or go back to this PC's data. */
   swapUnfinished: boolean;
   /** A newer copy from another PC is downloaded; a restart takes it. */

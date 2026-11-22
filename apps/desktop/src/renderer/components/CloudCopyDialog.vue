@@ -13,10 +13,13 @@ const megabytes = (bytes: number) => Math.max(0, Math.ceil(bytes / (1024 * 1024)
 
 const unfinished = computed(() => copyQuestion.value === "conflict" && cloudCopy.value?.swapUnfinished === true);
 const lost = computed(() => copyQuestion.value === "conflict" && cloudCopy.value?.lostData === true);
-const title = computed(() => t(unfinished.value ? "cloudCopy.unfinished.title" : lost.value ? "cloudCopy.lost.title" : copyQuestion.value === "closing" ? "cloudCopy.closing.title" : copyQuestion.value === "conflict" ? "cloudCopy.conflict.title" : "cloudCopy.newer.title"));
+// A chosen copy waiting for its account: only this PC's side can be the answer here.
+const waiting = computed(() => copyQuestion.value === "conflict" && cloudCopy.value?.copyWaiting === true);
+const title = computed(() => t(unfinished.value ? "cloudCopy.unfinished.title" : lost.value ? "cloudCopy.lost.title" : waiting.value ? "cloudCopy.waiting.title" : copyQuestion.value === "closing" ? "cloudCopy.closing.title" : copyQuestion.value === "conflict" ? "cloudCopy.conflict.title" : "cloudCopy.newer.title"));
 const text = computed(() => {
   if (unfinished.value) return t("cloudCopy.unfinished.text");
   if (lost.value) return t("cloudCopy.lost.text");
+  if (waiting.value) return t("cloudCopy.waiting.text");
   if (copyQuestion.value === "conflict") return t("cloudCopy.conflict.text");
   if (copyQuestion.value === "newer") return t("cloudCopy.newer.text");
   const progress = cloudCopy.value?.progress;
@@ -43,11 +46,11 @@ function later() {
 <template>
   <ModalDialog v-if="copyQuestion" :title="title" :description="text" :icon="Cloud" testid="cloud-copy-question" :busy="copyQuestion === 'closing'" @close="later">
     <template v-if="copyQuestion === 'conflict'">
-      <p class="text-muted-foreground text-sm">{{ t(unfinished ? "cloudCopy.unfinished.hint" : "cloudCopy.conflict.cloudHint") }}</p>
+      <p v-if="!waiting" class="text-muted-foreground text-sm">{{ t(unfinished ? "cloudCopy.unfinished.hint" : "cloudCopy.conflict.cloudHint") }}</p>
       <DialogFooter>
         <DialogButton close variant="ghost" :disabled="busy" @click="later">{{ t("cloudCopy.later") }}</DialogButton>
         <DialogButton variant="secondary" :icon="HardDrive" :disabled="busy" data-testid="cloud-copy-keep-pc" @click="run({ type: 'cloud-copy-keep', side: 'pc' })">{{ t("cloudCopy.conflict.keepPc") }}</DialogButton>
-        <DialogButton :icon="Cloud" :disabled="busy" data-testid="cloud-copy-keep-cloud" @click="run({ type: 'cloud-copy-keep', side: 'cloud' })">{{ t("cloudCopy.conflict.useCloud") }}</DialogButton>
+        <DialogButton v-if="!waiting" :icon="Cloud" :disabled="busy" data-testid="cloud-copy-keep-cloud" @click="run({ type: 'cloud-copy-keep', side: 'cloud' })">{{ t("cloudCopy.conflict.useCloud") }}</DialogButton>
       </DialogFooter>
     </template>
     <DialogFooter v-else-if="copyQuestion === 'newer'">

@@ -705,6 +705,55 @@ describe("a power cut around what the user and the app do", () => {
     expect(bad.join("\n")).toBe("");
   }, 600_000);
 
+  it("going back after an older Tavora's turn-on keeps what this PC saw of a sealed copy, whatever the cut", async () => {
+    const setup = await chosen();
+    const { cloud, b } = setup;
+    const bad: string[] = [];
+    let done = false;
+    await eachStop(setup, async (n, stop) => {
+      if (done) return;
+      done = true;
+      await restore(b, stop);
+      const parked = path.join(b.userData, "cloud-copy-swapping.json");
+      await replaceFile(parked, JSON.stringify({ ...(JSON.parse(await readFile(parked, "utf8")) as object), sealed: true }));
+      await olderTurnsOn(setup, b);
+      const older = `${b.root}-sealed`;
+      await rm(older, { recursive: true, force: true });
+      await snapshotOf(b.root, older);
+      await everyCut(b, older, () => tavora(cloud, b).beforeLoad(), async (m) => {
+        await tavora(cloud, b).beforeLoad();
+        const state = JSON.parse((await readFile(path.join(b.userData, "cloud-copy.json"), "utf8").catch(() => null)) ?? "{}") as { sealed?: boolean };
+        if (state.sealed !== true) bad.push(`stop ${n}, cut ${m}: sealed is gone`);
+      });
+    });
+    expect(done).toBe(true);
+    expect(bad.join("\n")).toBe("");
+  }, 600_000);
+
+  it.each(["in step", "lost"] as const)("choosing the cloud copy (%s) never leaves it chosen with the state where an older Tavora uploads", async (how) => {
+    const setup = await copyTaken();
+    const { cloud, b, taken, version, remote } = setup;
+    await restore(b, taken);
+    if (how === "lost") {
+      await replaceFile(path.join(b.userData, "library.json"), "{ broken");
+      await appRuns(cloud, b);
+    }
+    const before = `${b.root}-choosing`;
+    await rm(before, { recursive: true, force: true });
+    await snapshotOf(b.root, before);
+    const bad: string[] = [];
+    const answer = async () => {
+      const at = await appRuns(cloud, b);
+      await (how === "lost" ? at.keep("cloud") : at.restore());
+    };
+    await everyCut(b, before, answer, async (n) => {
+      if ((await phaseOf(b)) !== "chosen") return;
+      if ((await olderStart(setup, b)) !== "off") bad.push(`cut ${n}: chosen, and an older Tavora finds the copy on`);
+      if ((await remote()) !== version) bad.push(`cut ${n}: uploaded`);
+    });
+    expect(bad.join("\n")).toBe("");
+  }, 600_000);
+
   it("an older Tavora starting during a swap uploads nothing, and this one settles after it", async () => {
     const setup = await chosen();
     const { cloud, b, remote } = setup;

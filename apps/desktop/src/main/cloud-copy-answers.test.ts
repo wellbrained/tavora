@@ -251,11 +251,12 @@ describe("answering, settling and holding", () => {
     await next.sync.beforeLoad();
     // The backups and the Trash purge wait: the user hears why, and how to get out.
     expect(next.sync.dataHeld).toBe(true);
-    expect(next.sync.view().conflict).toBe(true);
-    await expect(next.sync.keep("cloud")).rejects.toThrow();
+    expect(next.sync.view()).toMatchObject({ conflict: true, copyWaiting: true });
+    // Not "signed out": another account is signed in.
+    await expect(next.sync.keep("cloud")).rejects.toMatchObject({ key: "cloudCopy.error.otherAccount" });
     await next.sync.keep("pc");
     expect(next.sync.dataHeld).toBe(false);
-    expect(next.sync.view().conflict).toBe(false);
+    expect(next.sync.view()).toMatchObject({ conflict: false, copyWaiting: false });
     expect(await read(b, "workspace.json")).toBe(B["workspace.json"]);
     const after = tavora(cloud, b);
     await after.sync.beforeLoad();

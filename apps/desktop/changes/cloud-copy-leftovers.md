@@ -4,5 +4,6 @@ tags: cloud-copy
 
 - After you pick Use the cloud copy, an older Tavora can't upload over it before the restart.
 - Use the cloud copy works again on a restore that stopped and lost its file list.
-- A copy waiting for another account now asks you what to keep.
+- A copy waiting for another account says so, and lets you keep this PC's data.
+- A full disk now says your disk is full.
 - When a restore keeps two backups, you hear about both.
