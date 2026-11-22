@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CloudCopy, copyRoots, EMPTY_STATE, hasLocalChanges, lookCopyState, scanCopy, type CopyState, type CopyStorage } from "./cloud-copy";
+import { CloudCopy, copyRoots, EMPTY_STATE, hasLocalChanges, lookCopyState, saveCopyState, scanCopy, type CopyState, type CopyStorage } from "./cloud-copy";
 import { CopySync } from "./cloud-copy-sync";
 import { cleanUp, pc, service } from "./cloud-copy.test-helper";
 import { FolderStorage } from "./copy-folder";
@@ -28,7 +28,8 @@ beforeEach(() => {
   vi.mocked(rename).mockImplementation(async (from, to) => {
     if (held(String(from))) throw Object.assign(new Error("held"), { code: "EPERM" });
     const code = failing(String(from));
-    if (code) throw Object.assign(new Error(code), { code, path: String(from) });
+    // As Node's write errors mostly are: with no path that says where.
+    if (code) throw Object.assign(new Error(code), { code });
     await meanwhile(String(to));
     return realRename(from, to);
   });
@@ -428,7 +429,10 @@ describe("a stopped swap whose list of the incoming copy is gone", () => {
       await writeFile(file, text);
     }
     const state = (await lookCopyState(stateFile(s.a))) as { status: "present"; value: CopyState };
-    return new CloudCopy(storage).upload(s.key, s.a.roots, state.value);
+    const result = await new CloudCopy(storage).upload(s.key, s.a.roots, state.value);
+    // As A's Tavora keeps it, so A's next version follows this one.
+    if (result.status === "uploaded") await saveCopyState(stateFile(s.a), result.state);
+    return result;
   }
 
   it("puts this PC's pictures back when the copy that comes down again has none", async () => {
@@ -547,6 +551,66 @@ describe("a stopped swap whose list of the incoming copy is gone", () => {
     const next = await appStart(s.cloud, b);
     expect(await bHasAll(b)).toEqual(B);
     expect(next.sync.view()).toMatchObject({ on: false, conflictKind: null });
+  }, 60_000);
+
+  it("keeps this PC's own file once the pictures came back, also after the list is lost a second time (B1-bis)", async () => {
+    const s = await setup();
+    const { b } = s;
+    // This PC's picture looks like the first copy's (A's), and the copy is turned on fresh here.
+    await writeFile(path.join(b.moduleFiles, "official", "pic.txt"), A["module-blobs/official/pic.txt"]);
+    const at = tavora(s.cloud, b);
+    await at.sync.beforeLoad();
+    await at.sync.turnOn(s.folder);
+    await at.sync.enterKey(s.recovery);
+    await at.sync.keep("cloud");
+    // A's swap moves everything, then stops at the last state write.
+    let parkedWrites = 0;
+    meanwhile = async (to) => {
+      if (to === parkedFile(b) && ++parkedWrites > 1) throw Object.assign(new Error("held"), { code: "EPERM" });
+    };
+    await tavora(s.cloud, b).sync.beforeLoad();
+    meanwhile = async () => undefined;
+    expect(await read(b, "workspace.json")).toBe(A["workspace.json"]);
+    const list = path.join(b.userData, "cloud-copy-staging", "copy-list.json");
+    await rm(list);
+    // Another PC's newer version goes up without pictures (over the limit); this PC takes it.
+    await writeFile(path.join(s.a.userData, "workspace.json"), '{"from":"copy B"}');
+    const small = (await scanCopy(s.a.roots)).filter((file) => !file.picture).reduce((sum, file) => sum + file.size, 0);
+    expect(await newerFromA(s, {}, Object.create(new FolderStorage(s.folder), { limit: { value: small } }) as CopyStorage)).toMatchObject({ status: "uploaded", pictures: false });
+    await (await appStart(s.cloud, b)).sync.keep("cloud");
+    // That swap takes the pictures back first, then stops at workspace.json.
+    held = (from) => from === stagedOf(b, "workspace.json");
+    await appStart(s.cloud, b);
+    held = () => false;
+    expect(await read(b, "module-blobs/official/pic.txt")).toBe(A["module-blobs/official/pic.txt"]);
+    // The list is lost again, and a version with pictures comes down.
+    await rm(list);
+    expect(await newerFromA(s, { "module-blobs/official/pic.txt": "pic copy C" })).toMatchObject({ status: "uploaded" });
+    await (await appStart(s.cloud, b)).sync.keep("cloud");
+    const done = await appStart(s.cloud, b);
+    expect(done.sync.view()).toMatchObject({ conflict: false, conflictKind: null });
+    expect(await read(b, "module-blobs/official/pic.txt")).toBe("pic copy C");
+    // This PC's own picture is still somewhere, and the user is told where.
+    expect(await filesUnder(path.join(b.userData, "backups"))).toContain(A["module-blobs/official/pic.txt"]);
+    expect(done.sync.changesKeptIn).not.toBeNull();
+  }, 60_000);
+
+  it("turned off while Use the cloud copy writes its answer: nothing is left chosen, and no stale question (should-fix)", async () => {
+    const s = await setup();
+    const t = await appStart(s.cloud, s.a);
+    let off: Promise<void> | null = null;
+    meanwhile = async (to) => {
+      if (off || !to.endsWith("cloud-copy-status.json")) return;
+      off = t.sync.turnOff();
+      await off;
+    };
+    await t.sync.restore();
+    expect(off).not.toBeNull();
+    expect(t.events.restarts).toBe(0);
+    expect(await there(path.join(s.a.userData, "cloud-copy-status.json"))).toBe(false);
+    const next = await appStart(s.cloud, s.a);
+    expect(next.sync.view()).toMatchObject({ on: false, conflict: false });
+    expect(next.sync.dataHeld).toBe(false);
   }, 60_000);
 
   it("a full drive under the copy's folder is the folder's problem, where another folder can be picked", async () => {

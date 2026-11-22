@@ -397,16 +397,10 @@ export class CopySync {
     if (error instanceof KeyChanged) return (this.problem = "new-key");
     // A folder that turned read-only (or full) after it was picked fails as a plain file error.
     const code = (error as NodeJS.ErrnoException | undefined)?.code;
-    // Full: the folder's drive (or one that can't be told) is the folder's problem, where another folder can be picked.
-    const inFolder = (where: string | undefined) => this.folder !== null && (where === undefined || isInside(where, this.folder));
+    // A full drive under the copy's folder is told by FolderStorage itself ("folder-locked", where another folder can be
+    // picked): one that comes here as it is was this PC's own disk.
     const reason =
-      error instanceof CopyError
-        ? error.reason
-        : code === "ENOSPC"
-          ? inFolder((error as NodeJS.ErrnoException).path) ? "folder-locked" : "disk-full"
-          : this.folder !== null && (code === "EACCES" || code === "EPERM" || code === "EROFS")
-            ? "folder-locked"
-            : "failed";
+      error instanceof CopyError ? error.reason : code === "ENOSPC" ? "disk-full" : this.folder !== null && (code === "EACCES" || code === "EPERM" || code === "EROFS") ? "folder-locked" : "failed";
     this.problem =
       reason === "unreachable" || reason === "unavailable" || reason === "too-many"
         ? "offline"
@@ -909,9 +903,24 @@ export class CopySync {
     return { ...beside.value, sealed: true };
   }
 
-  /** What earlier copies of this swap put in (sortWrittenSince): their lists, and only the places the plan says they put in. */
+  /**
+   * What earlier copies of this swap put in (sortWrittenSince): their lists, and the places the plan says they put in, as
+   * long as that still holds: what was there before is still in the backup, or there was nothing. A later step may have
+   * put this PC's own back in such a place (a copy without pictures takes the pictures back), and then a file there that
+   * looks like an earlier copy's is this PC's own.
+   */
   private async earlier(plan: SwapPlan): Promise<EarlierCopies> {
-    return { lists: plan.earlierIn?.length ? await this.earlierLists(plan.keepIn) : [], places: plan.earlierIn ?? [] };
+    if (!plan.earlierIn?.length) return { lists: [], places: [] };
+    const roots = copyRoots(this.options.userData, plan.moduleFiles);
+    const places: string[] = [];
+    for (const name of plan.earlierIn) {
+      const [rootName, ...rest] = name.split("/");
+      const root = roots.find((candidate) => candidate.name === rootName);
+      if (!root) continue;
+      const place = path.join(root.path, ...rest);
+      if (plan.empty.includes(place) || unlessHeld(await lookStat(path.join(plan.keepIn, ...name.split("/")))) !== null) places.push(name);
+    }
+    return { lists: places.length > 0 ? await this.earlierLists(plan.keepIn) : [], places };
   }
 
   /** The lists of every copy this swap has put in so far (INCOMING_LISTS); none when they can't be read. */
@@ -1395,17 +1404,20 @@ export class CopySync {
    * swap the state is parked, and a cloud-copy.json beside it is no one's. Otherwise the state is parked while the answer
    * keeps it so (a chosen copy, or lost data still asked about), and back in cloud-copy.json once it doesn't.
    */
-  private async repairState(duringSwap: boolean): Promise<void> {
+  private async repairState(duringSwap: boolean, turn = this.turn): Promise<void> {
+    // Forgotten meanwhile (turned off): the state files are gone, and a repair would bring one back.
+    if (turn !== this.turn) return;
     if (!duringSwap) {
       const parked = parksState(this.swap);
       if (parked) await this.parkForQuestion();
       else await this.unparkState(null);
       const file = parked ? this.parkedFile : this.stateFile;
-      if (isDamaged(await lookCopyState(file))) await saveCopyState(file, EMPTY_STATE);
+      if (isDamaged(await lookCopyState(file)) && turn === this.turn) await saveCopyState(file, EMPTY_STATE);
       return;
     }
     const parked = await lookCopyState(this.parkedFile);
     const beside = isDamaged(await lookCopyState(this.stateFile));
+    if (turn !== this.turn) return;
     if (isDamaged(parked) || (parked.status === "missing" && beside)) await saveCopyState(this.parkedFile, EMPTY_STATE);
     if (beside) await rm(this.stateFile, { force: true });
   }
@@ -1417,8 +1429,12 @@ export class CopySync {
     const swap = await this.swapForAnswer();
     if (swap.phase === "swapping" || swap.phase === "undoing") {
       if (side === "cloud") return this.takeCopy(swap);
-      await this.moveFrom(swap, { type: "go-back" });
-      await this.repairState(true);
+      const turn = this.turn;
+      const back = stepSwap(swap, { type: "go-back" });
+      if (!(await this.writeStatusFor(turn, back))) return;
+      this.swap = back;
+      await this.repairState(true, turn);
+      if (turn !== this.turn) return;
       return this.restart();
     }
     if (!this.on) {
@@ -1502,7 +1518,7 @@ export class CopySync {
       const next = stepSwap(from, { type: "try-again" });
       if (!(await this.writeStatusFor(turn, next))) return;
       this.swap = next;
-      await this.repairState(true);
+      await this.repairState(true, turn);
       if (turn !== this.turn) return;
       return this.restart();
     }
@@ -1514,8 +1530,11 @@ export class CopySync {
         // first: cut off before the status says chosen, the next start puts it back.
         if (turn === this.turn) {
           await this.parkForQuestion();
-          await this.moveFrom(swap, { type: "chosen" });
-          await this.repairState(false);
+          const chosen = stepSwap(swap, { type: "chosen" });
+          if (await this.writeStatusFor(turn, chosen)) {
+            this.swap = chosen;
+            await this.repairState(false, turn);
+          }
         }
       } catch (error) {
         if (error instanceof KeyChanged) throw CopySync.userError(this.noteProblem(error));
@@ -1789,12 +1808,6 @@ function activityView(activity: CloudCopyActivity): Pick<CloudCopyView, "busy" |
     default:
       return assertNever(activity);
   }
-}
-
-/** Whether `file` is `folder` or in it. */
-function isInside(file: string, folder: string): boolean {
-  const relative = path.relative(folder, file);
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
 /** The names in a note's list. */

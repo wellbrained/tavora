@@ -147,7 +147,7 @@ export class FolderStorage implements CopyStorage {
       const file = this.partFile(part.id.toString("hex"));
       // Named by content: one that is there already holds the same.
       if (readable(await lookStat(file))) continue;
-      await writeFileAtomic(file, part.data);
+      await writeInFolder(file, part.data);
     }
   }
 
@@ -187,7 +187,7 @@ export class FolderStorage implements CopyStorage {
     body.writeUInt32BE(ids.length, MAGIC.length + 8);
     ids.forEach((id, index) => Buffer.from(id, "hex").copy(body, HEADER_BYTES + index * PART_ID_BYTES));
     Buffer.from(sealed).copy(body, HEADER_BYTES + ids.length * PART_ID_BYTES);
-    await writeFileAtomic(path.join(this.manifestsDir, `${pad(version)}-${pad(base)}.bin`), body);
+    await writeInFolder(path.join(this.manifestsDir, `${pad(version)}-${pad(base)}.bin`), body);
     await this.cleanUp().catch(() => undefined);
     return { status: "saved", version, size };
   }
@@ -247,6 +247,21 @@ export function follows(newestFirst: { version: number; base: number }[], known:
   let at: number | undefined = newestFirst[0]!.version;
   while (at !== undefined && at > known) at = byVersion.get(at)?.base;
   return at === known || !byVersion.has(known);
+}
+
+/**
+ * Writes a file of the copy in the picked folder. One that can't be written because the folder's drive is full, read-only
+ * or not Tavora's to write is the folder's problem ("folder-locked"): the user may pick another folder. Said here, as the
+ * error itself rarely names the file.
+ */
+async function writeInFolder(file: string, data: Uint8Array): Promise<void> {
+  try {
+    await writeFileAtomic(file, data);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | undefined)?.code;
+    if (code === "ENOSPC" || code === "EACCES" || code === "EPERM" || code === "EROFS") throw new CopyError("folder-locked", "can't write in the cloud copy folder");
+    throw error;
+  }
 }
 
 /** Writes a file in the picked folder to see that Tavora may; throws "no-folder" when it is not there and "folder-locked" when Tavora may not write in it. */
