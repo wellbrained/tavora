@@ -80,6 +80,8 @@ export const HOST_ONLY: ReadonlySet<string> = new Set(
     "main/device-name.ts",
     "main/inbox.ts",
     "main/example-copy.ts",
+    // Settings > Development's folders and the examples copied from them (development-folders.ts gathers them for host.ts).
+    "main/development-folders.ts",
     "main/cloud-copy.ts",
     "main/cloud-copy-sync.ts",
     "main/copy-crypto.ts",

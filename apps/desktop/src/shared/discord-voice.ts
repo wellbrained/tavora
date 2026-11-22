@@ -4,7 +4,7 @@
 //
 // While paused, the connection to the Discord app never starts (main/discord.ts), Settings > Connections and its search
 // leave Discord out (renderer/host.ts hiddenSettingIds), panels of the Discord module say it's paused instead of
-// loading it or offering to install it (main/host.ts panelTypeOf, PanelContent.vue), and its overlay page isn't shown
+// loading it or offering to install it (main/module-panels.ts typeOf, PanelContent.vue), and its overlay page isn't shown
 // over games or in streaming software (main/overlay-wiring.ts). Nothing saved is changed: panels, overlays,
 // settings, module data and the Discord sign-in stay as they are. Signing in to the Tavora account with Discord is a
 // different thing and stays.
