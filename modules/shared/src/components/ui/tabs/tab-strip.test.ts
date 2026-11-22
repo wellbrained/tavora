@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkRename, dropPlace, moveTab, neighbourAfterClose, stepTab } from "./tab-strip";
+import { checkRename, dropPlace, moveTab, neighbourAfterClose, neighbourTab, revealBy, stepTab, tabsOutOfView } from "./tab-strip";
 
 describe("moveTab", () => {
   const ids = ["a", "b", "c", "d"];
@@ -67,5 +67,44 @@ describe("checkRename", () => {
     expect(checkRename("Plan", "   ")).toEqual({ kind: "invalid", problem: "empty" });
     expect(checkRename("Plan", "x".repeat(11), 10)).toEqual({ kind: "invalid", problem: "tooLong" });
     expect(checkRename("Plan", "x".repeat(10), 10)).toEqual({ kind: "rename", label: "x".repeat(10) });
+  });
+});
+
+describe("tabsOutOfView", () => {
+  const row = { left: 100, right: 300 };
+  const tab = (id: string, left: number, right: number) => ({ id, left, right });
+  it("names the tabs cut off on either side, in order", () => {
+    const tabs = [tab("a", 20, 110), tab("b", 110, 200), tab("c", 200, 290), tab("d", 290, 380)];
+    expect(tabsOutOfView(row, tabs)).toEqual({ hidden: ["a", "d"], before: true, after: true });
+  });
+  it("says only the side that has hidden tabs", () => {
+    expect(tabsOutOfView(row, [tab("a", 100, 200), tab("b", 200, 350)])).toEqual({ hidden: ["b"], before: false, after: true });
+    expect(tabsOutOfView(row, [tab("a", 0, 100), tab("b", 100, 300)])).toEqual({ hidden: ["a"], before: true, after: false });
+  });
+  it("lets a tab stick out by a pixel of rounding", () => {
+    expect(tabsOutOfView(row, [tab("a", 99.5, 200), tab("b", 200, 301)])).toEqual({ hidden: [], before: false, after: false });
+  });
+});
+
+describe("revealBy", () => {
+  const row = { left: 100, right: 300 };
+  it("scrolls a tab in from either side, and leaves one in view", () => {
+    expect(revealBy(row, { left: 280, right: 360 })).toBe(60);
+    expect(revealBy(row, { left: 40, right: 120 })).toBe(-60);
+    expect(revealBy(row, { left: 120, right: 280 })).toBe(0);
+  });
+  it("shows the start of a tab wider than the row", () => {
+    expect(revealBy(row, { left: 150, right: 500 })).toBe(50);
+  });
+});
+
+describe("neighbourTab", () => {
+  it("gives the tab before or after, and nothing past the ends", () => {
+    expect(neighbourTab(["a", "b", "c"], "b", -1)).toBe("a");
+    expect(neighbourTab(["a", "b", "c"], "b", 1)).toBe("c");
+    expect(neighbourTab(["a", "b", "c"], "a", -1)).toBeNull();
+    expect(neighbourTab(["a", "b", "c"], "c", 1)).toBeNull();
+    expect(neighbourTab(["a", "b"], "x", 1)).toBeNull();
+    expect(neighbourTab(["a", "b"], undefined, 1)).toBeNull();
   });
 });

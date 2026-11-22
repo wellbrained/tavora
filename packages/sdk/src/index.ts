@@ -182,11 +182,13 @@ export type {
   StylePart,
   StyleValues,
   TavoraStyle,
+  TabOverflow,
   ThemeFont,
   ThemeToken,
   ToastPosition,
 } from "./protocol.js";
 export { CLASSIC_STYLE, STYLE_LOOKS, STYLE_PARTS, STYLE_RANGES, STYLE_TAVORA, STYLE_VARIABLES, styleMarks } from "./protocol.js";
+export { TAB_OVERFLOW_TAVORA, TAB_OVERFLOWS, tabOverflowOf } from "./protocol.js";
 export { AUDIO_TYPES, BLOB_ID, BLOB_TYPES, DEFAULT_THEME_FONT, OVERLAY_FONT_PATH, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, OVERLAY_KEY, PICTURE_TYPES, PROTOCOL_VERSION, MEDIA_ACTIONS, SYSTEM_INTERVALS_MS, SYSTEM_MAX_DRIVES, SYSTEM_PING_TARGET, OPTIONAL_THEME_TOKENS, THEME_TOKENS, TOAST_POSITIONS } from "./protocol.js";
 
 /** How long a menu may stay open; the host closes it itself when its panel goes. */
@@ -200,7 +202,7 @@ function localDay(at: number): string {
 }
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.4.5";
+export const SDK_VERSION = "0.4.7";
 
 /**
  * The oldest Tavora that has everything this SDK version offers, worked out from the table of calls

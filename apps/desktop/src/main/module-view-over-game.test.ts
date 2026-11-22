@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { OverGame } from "./game-overlays";
 
 // ModuleView needs only a little of Electron to be made: a view with a page, and a session to harden.
 const made = vi.hoisted(() => ({
@@ -89,6 +90,9 @@ const { ModuleView, allowedHere, ADD_DIALOG_MS, CONNECT_GAP_MS, GESTURE_MS, HEAR
 const { STORAGE_CHECK_MS } = await import("./storage-guard");
 const { BLOB_PATH, CLIPBOARD_PATH, FILE_OPEN_PATH, FILE_SAVE_PATH, JSON_EXPORT_PATH, JSON_OPEN_PATH, JSON_SAVE_PATH, PICTURES_PATH } = await import("@tavora/sdk/protocol");
 
+/** How the window holding a panel says it is over the game: taking input or not, faded and zoomed as `look` says. */
+const over = (takesInput: boolean, look: Partial<OverGame> = {}): OverGame => ({ takesInput, opacity: 100, zoom: 1, ...look });
+
 function make(extra: Record<string, unknown> = {}) {
   const options = {
     instanceId: "11111111-1111-4111-8111-111111111111",
@@ -141,7 +145,7 @@ describe("closing a panel", () => {
         inner.hideUntilSettled();
         view.noteGesture();
         view.reload();
-        view.leaveGame();
+        view.setOverGame(null);
         vi.advanceTimersByTime(5 * 60_000);
       }).not.toThrow();
       expect(statuses).toEqual([]);
@@ -154,11 +158,10 @@ describe("closing a panel", () => {
     vi.useFakeTimers();
     try {
       const view = make({ onStatus: () => undefined });
-      view.enterGame(() => false);
-      view.setGameOpacity(50);
+      view.setOverGame(over(false, { opacity: 50 }));
       // Electron drops the page before the queued steps run.
       (view as unknown as { view: { webContents?: unknown } }).view.webContents = undefined;
-      view.leaveGame();
+      view.setOverGame(null);
       await expect(vi.runAllTimersAsync()).resolves.not.toThrow();
     } finally {
       vi.useRealTimers();
@@ -199,7 +202,7 @@ describe("files.exportJson", () => {
   it("is not for a panel over the game, and opens no dialog there", async () => {
     const told = vi.fn();
     const view = make({ onNeedsTavora: told });
-    view.enterGame(() => true);
+    view.setOverGame(over(true));
     view.noteGesture();
     const reply = await exportJson();
     expect(reply.status).toBe(403);
@@ -218,11 +221,11 @@ describe("panel.overGame", () => {
     const emit = vi.spyOn(bridge, "emit");
     const told = () => emit.mock.calls.filter(([event]) => event === "panel.overGame").map(([, data]) => data);
     expect(bridge.context.isOverGame()).toBe(false);
-    view.enterGame(() => true);
-    view.enterGame(() => true);
+    view.setOverGame(over(true));
+    view.setOverGame(over(true));
     expect(bridge.context.isOverGame()).toBe(true);
-    view.leaveGame();
-    view.leaveGame();
+    view.setOverGame(null);
+    view.setOverGame(null);
     expect(bridge.context.isOverGame()).toBe(false);
     expect(told()).toEqual([{ over: true }, { over: false }]);
   });
@@ -253,7 +256,7 @@ describe("panels.openMany", () => {
     const opened = vi.fn(async () => ({}));
     const view = make({ ...bridged, openPanels: opened, onNeedsTavora: told });
     const bridge = context(view);
-    view.enterGame(() => true);
+    view.setOverGame(over(true));
     view.noteGesture();
     await expect(bridge.openPanels(["map"])).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
     expect(told).toHaveBeenCalledTimes(1);
@@ -331,7 +334,7 @@ describe("folders.showInFolder", () => {
       folders: { granted: () => true, state: async () => ({ found: true }), list: async () => ({ files: [], truncated: false }), read: async () => Buffer.alloc(0), watch: async () => null, choose: async () => false, reveal: async (...args: unknown[]) => (asked.push(args), null) },
     });
     view.connect();
-    view.enterGame(() => true);
+    view.setOverGame(over(true));
     view.noteGesture();
     const folders = (view as unknown as { bridge: { context: { folders: { showInFolder(folder: string, file: string): Promise<void> } } } }).bridge.context.folders;
     await expect(folders.showInFolder("Documents/StarCraft II", "Replays/a.SC2Replay")).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
@@ -367,7 +370,7 @@ describe("links.open", () => {
 });
 
 describe("a panel over the game", () => {
-  it("counts a click or key press only while the layer is open (Use or Arrange), and always in the workspace", () => {
+  it("counts a click or key press over the game only while it takes input (in Use), and always in the workspace", () => {
     const view = make();
     const taken = () => {
       view.usedAt = 0;
@@ -376,16 +379,15 @@ describe("a panel over the game", () => {
     };
     expect(taken()).toBe(true);
 
-    let layerOpen = false;
-    view.enterGame(() => layerOpen);
+    view.setOverGame(over(false));
     expect(view.isOverGame).toBe(true);
     expect(taken()).toBe(false);
-    layerOpen = true;
+    view.setOverGame(over(true));
     expect(taken()).toBe(true);
-    layerOpen = false;
+    view.setOverGame(over(false));
     expect(taken()).toBe(false);
 
-    view.leaveGame();
+    view.setOverGame(null);
     expect(view.isOverGame).toBe(false);
     expect(taken()).toBe(true);
   });
@@ -394,12 +396,12 @@ describe("a panel over the game", () => {
     const view = make();
     const state = made.views.at(-1)!;
     expect(state.background).toBe("#202020");
-    view.enterGame(() => false);
+    view.setOverGame(over(false));
     expect(state.background).toBe("#00000000");
     // A new theme while over the game doesn't paint the panel opaque again.
     view.applyTheme({ tokens: { background: "#ffffff" } } as never);
     expect(state.background).toBe("#00000000");
-    view.leaveGame();
+    view.setOverGame(null);
     expect(state.background).toBe("#202020");
   });
 
@@ -422,25 +424,24 @@ describe("a panel over the game", () => {
   it("takes the style away even when it was still being inserted as the panel came back", async () => {
     const view = make();
     const state = made.views.at(-1)!;
-    view.enterGame(() => false);
-    view.setGameOpacity(50);
+    view.setOverGame(over(false, { opacity: 50 }));
     // The style is on its way in when the panel comes back.
     await vi.waitFor(() => expect(state.css).toHaveLength(1));
-    view.leaveGame();
+    view.setOverGame(null);
     await vi.waitFor(() => expect(state.removed).toEqual(["key-1"]));
   });
 
   it("never keeps the game's zoom in the workspace, even when it was lent again before it came back", async () => {
     const view = make();
     const state = made.views.at(-1)!;
-    view.enterGame(() => true);
-    view.setGameZoom(1.33);
+    view.setOverGame(over(true));
+    view.setOverGame(over(true, { zoom: 1.33 }));
     await vi.waitFor(() => expect(state.css.filter((css) => css.includes("zoom:1.33"))).toHaveLength(1));
     // Lent again without coming back first: the zoom it had goes, and the new stay sets its own.
-    view.enterGame(() => true);
-    view.setGameZoom(1.33);
+    view.setOverGame(over(true));
+    view.setOverGame(over(true, { zoom: 1.33 }));
     await vi.waitFor(() => expect(state.removed).toContain("key-1"));
-    view.leaveGame();
+    view.setOverGame(null);
     // Every style that went in came out again.
     await vi.waitFor(() => expect(state.removed).toEqual(state.css.map((_, index) => `key-${index + 1}`)));
   });
@@ -453,7 +454,7 @@ describe("a panel over the game", () => {
     expect(() => refuse("ui.showMenu")).not.toThrow();
     expect(told).not.toHaveBeenCalled();
 
-    view.enterGame(() => true);
+    view.setOverGame(over(true));
     view.noteGesture();
     expect(() => refuse("ui.showMenu")).toThrowError(expect.objectContaining({ code: "PERMISSION_DENIED" }));
     expect(() => refuse("links.open")).toThrow();
@@ -463,7 +464,7 @@ describe("a panel over the game", () => {
     expect(() => refuse("hotkeys.set")).toThrow();
     expect(told).toHaveBeenCalledTimes(2);
 
-    view.leaveGame();
+    view.setOverGame(null);
     expect(() => refuse("ui.showMenu")).not.toThrow();
   });
 
@@ -487,14 +488,13 @@ describe("a panel over the game", () => {
   it("fades the page by a style of Tavora's own, and takes it away when it comes back", async () => {
     const view = make();
     const state = made.views.at(-1)!;
-    view.enterGame(() => false);
-    view.setGameOpacity(50);
+    view.setOverGame(over(false, { opacity: 50 }));
     await vi.waitFor(() => expect(state.css.some((css) => css.includes("opacity:0.5"))).toBe(true));
-    view.setGameOpacity(100);
+    view.setOverGame(over(false, { opacity: 100 }));
     await vi.waitFor(() => expect(state.removed).toHaveLength(1));
-    view.setGameOpacity(25);
+    view.setOverGame(over(false, { opacity: 25 }));
     await vi.waitFor(() => expect(state.css.some((css) => css.includes("opacity:0.25"))).toBe(true));
-    view.leaveGame();
+    view.setOverGame(null);
     await vi.waitFor(() => expect(state.removed).toHaveLength(2));
   });
 });
@@ -587,7 +587,7 @@ describe("a panel shown again", () => {
       vi.spyOn(bridge, "emit").mockImplementation((event) => void order.push(event));
       view.setVisible(true);
       made.sent.length = 0;
-      view.enterGame(() => true);
+      view.setOverGame(over(true));
       expect(order).toContain("panel.overGame");
       expect(frameRequest()).toBeUndefined();
       const done = vi.fn();
@@ -621,7 +621,7 @@ describe("a panel shown again", () => {
   it("stays clear over the game", () => {
     const view = make();
     const state = made.views.at(-1)!;
-    view.enterGame(() => false);
+    view.setOverGame(over(false));
     view.setVisible(true);
     view.framed(frameRequest());
     expect(state.background).toBe("#00000000");
@@ -676,7 +676,7 @@ describe("a dialog right after Add", () => {
 
   it("is not there over the game", async () => {
     const { view, opened, ask } = made_({ reason: "add" });
-    view.enterGame(() => false);
+    view.setOverGame(over(false));
     await expect(ask()).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
     expect(opened).toEqual([]);
   });
@@ -924,7 +924,7 @@ describe("guarded calls", () => {
 
   it.each(ROWS.filter((row) => row.overGame).map((row) => [row.name, row] as const))("%s is refused over the game, even after a press, and does nothing", async (_name, row) => {
     const { view, context, spies } = guarded();
-    view.enterGame(() => true);
+    view.setOverGame(over(true));
     view.noteGesture();
     await expect(row.call(context)).rejects.toMatchObject({ code: "PERMISSION_DENIED", message: expect.stringContaining("over the game") });
     nothingDone(spies);

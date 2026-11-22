@@ -1,3 +1,18 @@
+## 0.4.7
+
+Too many tabs. Tavora tells modules how the user reaches tabs that don't fit a row (Settings > Appearance > Too many tabs), so the kit's `TabStrip` can follow it like Tavora's own panel tabs. It comes with the next Tavora (`TAB_OVERFLOW_TAVORA` in `protocol.ts`; the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.21.43).
+
+- `TavoraTheme` gets an optional `tabOverflow`: `"list"` (a button with the hidden tabs' count opens a menu of them) or `"arrows"` (‹ › open the tab before or after the open one). It comes with `ui.getTheme` and every `ui.theme` event, so it can change while the module is open. Type `TabOverflow`, values `TAB_OVERFLOWS`.
+- `tabOverflowOf(theme)` reads it: an older Tavora leaves it out, and that, like a value this SDK doesn't know, means `"list"`.
+- `@tavora/sdk/testing`: the memory host and `themeFromPackage` send `"list"`, `host.changeTheme({ tabOverflow })` sends another one and `{ tabOverflow: undefined }` none; a host older than `TAB_OVERFLOW_TAVORA` never sends one.
+
+## 0.4.6
+
+The document-id rule in one place. `MIN_TAVORA` stays (Tavora 0.21.43).
+
+- `@tavora/sdk/testing`: the memory host's `documents.put` now refuses the ids Tavora refuses for a new document, with `INVALID_PARAMS` and Tavora's message: `index` and the names Windows keeps for devices (`con`, `nul`, `com1`, …) in any case, and an id that differs from a saved one only by case (`Notes` next to `notes`). Before, a module test could pass with an id Tavora refuses. The id is checked before `ifRevision`, as in Tavora. A host older than `DOCUMENT_ID_RULE_TAVORA`, Tavora 0.24.73, still takes them, and one older than `DOCUMENT_ID_ZERO_DEVICES_TAVORA`, Tavora 0.24.103, still takes `com0` and `lpt0`, as those Tavoras do.
+- `protocol.ts`: `newDocumentIdProblem(id, savedIds)` says why a new document can't have an id (or null), the rule Tavora itself uses. `isWindowsDeviceName(name)` comes from here now; `@tavora/module-schema` passes it on.
+
 ## 0.4.5
 
 Unit cards. The shared tooltip gets a layout for a game unit as games show it on the board. It comes with the next Tavora (`UNIT_CARD_TAVORA` in `protocol.ts`; the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.21.43).

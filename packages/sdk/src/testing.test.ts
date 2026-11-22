@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { LIMITS, MIN_TAVORA, TavoraError } from "./index.js";
+import { LIMITS, MIN_TAVORA, TAB_OVERFLOW_TAVORA, TAB_OVERFLOWS, tabOverflowOf, TavoraError } from "./index.js";
 import { METHOD_INFO, versionAtLeast } from "./protocol.js";
 import { ADD_DIALOG_MS, createMemoryHost, GESTURE_MS, LATEST_TAVORA } from "./testing.js";
 
@@ -124,6 +124,41 @@ describe("documents", () => {
     await sdk.documents.delete("d", { ifRevision: 1 });
     await sdk.documents.delete("d", { ifRevision: 99 });
     expect(await sdk.documents.list()).toEqual([]);
+  });
+
+  it("refuses the ids Tavora refuses for a new document, as Tavora does", async () => {
+    const { sdk, host } = createMemoryHost();
+    for (const id of ["index", "INDEX", "con", "Nul", "com1", "LPT9", "com0", "lpt0"]) {
+      expect(await failure(sdk.documents.put({ id, title: "T", data: 1 }))).toMatchObject({ code: "INVALID_PARAMS", message: `"${id}" can't be a document id: Windows or Tavora keeps that name for itself` });
+    }
+    await sdk.documents.put({ id: "notes", title: "N", data: 1 });
+    expect(await failure(sdk.documents.put({ id: "Notes", title: "N", data: 2 }))).toMatchObject({ code: "INVALID_PARAMS", message: 'document id "Notes" differs from "notes" only by case' });
+    expect(() => host.documents.put({ id: "aux", title: "A", data: 1 })).toThrow("Windows or Tavora keeps that name");
+    // Fine: the same id again, and names that only start like a device name.
+    await sdk.documents.put({ id: "notes", title: "N", data: 3 });
+    for (const id of ["console", "com10", "indexes", "nul_list"]) await sdk.documents.put({ id, title: "T", data: 1 });
+    expect((await sdk.documents.list()).map((doc) => doc.id).sort()).toEqual(["com10", "console", "indexes", "notes", "nul_list"]);
+  });
+
+  it("checks the id before the revision, as Tavora does", async () => {
+    const { sdk } = createMemoryHost();
+    expect(await failure(sdk.documents.put({ id: "con", title: "C", data: 1, ifRevision: 3 }))).toMatchObject({ code: "INVALID_PARAMS" });
+  });
+
+  it("takes com0 and lpt0 on a Tavora from before they were refused", async () => {
+    const { sdk } = createMemoryHost({ version: "0.24.102" });
+    await sdk.documents.put({ id: "com0", title: "C", data: 1 });
+    await sdk.documents.put({ id: "LPT0", title: "L", data: 1 });
+    expect(await failure(sdk.documents.put({ id: "com1", title: "C", data: 1 }))).toMatchObject({ code: "INVALID_PARAMS" });
+    const { sdk: newer } = createMemoryHost({ version: "0.24.103" });
+    expect(await failure(newer.documents.put({ id: "com0", title: "C", data: 1 }))).toMatchObject({ code: "INVALID_PARAMS" });
+  });
+
+  it("takes those ids on a Tavora from before the rule", async () => {
+    const { sdk } = createMemoryHost({ version: "0.24.72" });
+    await sdk.documents.put({ id: "index", title: "I", data: 1 });
+    await sdk.documents.put({ id: "Index", title: "I", data: 1 });
+    expect((await sdk.documents.list()).map((doc) => doc.id).sort()).toEqual(["Index", "index"]);
   });
 
   it("checks ids, titles, data and quotas", async () => {
@@ -871,5 +906,34 @@ describe("an older Tavora", () => {
     const { sdk } = createMemoryHost({ version: LATEST_TAVORA });
     expect(await sdk.storage.compareAndSet("k", null, 1)).toBe(true);
     expect(await sdk.leaderboards.mine()).toEqual({ boards: [] });
+  });
+});
+
+describe("tabOverflow in the theme", () => {
+  it("comes as the list by default, follows the host's changes and goes with an older Tavora", async () => {
+    const { sdk, host } = createMemoryHost();
+    expect((await sdk.ui.getTheme()).tabOverflow).toBe("list");
+    const themes = vi.fn();
+    sdk.ui.onThemeChange(themes);
+    host.changeTheme({ tabOverflow: "arrows" });
+    expect(themes.mock.calls.at(-1)![0]).toMatchObject({ tabOverflow: "arrows" });
+    expect((await sdk.ui.getTheme()).tabOverflow).toBe("arrows");
+    host.changeTheme({ tabOverflow: undefined });
+    expect("tabOverflow" in (await sdk.ui.getTheme())).toBe(false);
+
+    expect(versionAtLeast(TAB_OVERFLOW_TAVORA, "0.24.135")).toBe(true);
+    expect(versionAtLeast(LATEST_TAVORA, TAB_OVERFLOW_TAVORA)).toBe(true);
+    const older = createMemoryHost({ version: "0.24.134", theme: { tabOverflow: "arrows" } });
+    expect((await older.sdk.ui.getTheme()).tabOverflow).toBeUndefined();
+    older.host.changeTheme({ tabOverflow: "arrows" });
+    expect(tabOverflowOf(await older.sdk.ui.getTheme())).toBe("list");
+  });
+
+  it("reads as the list when it is missing or unknown", () => {
+    expect(tabOverflowOf(undefined)).toBe("list");
+    expect(tabOverflowOf({})).toBe("list");
+    expect(tabOverflowOf({ tabOverflow: "arrows" })).toBe("arrows");
+    expect(tabOverflowOf({ tabOverflow: "wheel" as never })).toBe("list");
+    expect(TAB_OVERFLOWS).toEqual(["list", "arrows"]);
   });
 });

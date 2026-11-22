@@ -122,12 +122,9 @@ describe("WebRTC on overlay pages (G4)", () => {
   it("a window holding a panel (a live view) locks its own pages too", () => {
     const panel = {
       view: { webContents: { focus: () => undefined } },
-      enterGame: () => undefined,
-      leaveGame: () => undefined,
+      setOverGame: () => undefined,
       setBounds: () => undefined,
       setVisible: () => undefined,
-      setGameOpacity: () => undefined,
-      setGameZoom: () => undefined,
       suspend: () => undefined,
       resume: () => undefined,
     };

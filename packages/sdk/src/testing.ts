@@ -10,13 +10,17 @@ import {
   BLOB_PATH,
   BLOB_TYPES,
   DOCUMENT_ID,
+  DOCUMENT_ID_RULE_TAVORA,
+  DOCUMENT_ID_ZERO_DEVICES_TAVORA,
   CLASSIC_STYLE,
   FIELD_SINCE,
   STYLE_TAVORA,
+  TAB_OVERFLOW_TAVORA,
   HOST_FEATURES,
   LIMITS,
   METHOD_INFO,
   needsGesture,
+  newDocumentIdProblem,
   OVERLAY_KEY,
   supportsCall,
   PROTOCOL_VERSION,
@@ -46,6 +50,7 @@ import {
   type PanelOpenResult,
   type TavoraDocument,
   type TavoraStyle,
+  type TabOverflow,
   type TavoraTheme,
   type TavoraViewport,
   type TavoraWorkspace,
@@ -155,9 +160,10 @@ export interface MemoryHost {
   /**
    * The user switched theme; every panel of the shared state hears it. Missing parts stay as they were. `style` sends a
    * design style (the default is `CLASSIC_STYLE`); `style: undefined` takes it away, as an older Tavora sends the theme.
-   * A host older than `STYLE_TAVORA` never sends one.
+   * A host older than `STYLE_TAVORA` never sends one. `tabOverflow` (`"list"` by default) works the same way, with
+   * `TAB_OVERFLOW_TAVORA`.
    */
-  changeTheme(theme: Partial<Omit<TavoraTheme, "style">> & { style?: TavoraStyle | undefined }): void;
+  changeTheme(theme: Partial<Omit<TavoraTheme, "style" | "tabOverflow">> & { style?: TavoraStyle | undefined; tabOverflow?: TabOverflow | undefined }): void;
   setLanguage(language: string): void;
   resize(viewport: TavoraViewport): void;
   /** Another panel asked this one to show `content` (panels.open): runs the `panel.onNavigate` handler. */
@@ -228,7 +234,7 @@ export interface MemoryHost {
 }
 
 /** Newest Tavora the SDK knows, and the default version of a memory host: the newest `since` of every call it has. */
-export const LATEST_TAVORA: string = [...Object.values(METHOD_INFO).map((info) => info.since), ...Object.values(FIELD_SINCE), ...Object.values(HOST_FEATURES), STYLE_TAVORA].reduce((a, b) =>
+export const LATEST_TAVORA: string = [...Object.values(METHOD_INFO).map((info) => info.since), ...Object.values(FIELD_SINCE), ...Object.values(HOST_FEATURES), STYLE_TAVORA, TAB_OVERFLOW_TAVORA].reduce((a, b) =>
   versionAtLeast(a, b) ? a : b,
 );
 /** How long a click or key press lets a call through, as in Tavora (module-view.ts). */
@@ -325,13 +331,14 @@ function defaultTheme(): TavoraTheme {
   const colors = { background: "#101114", surface: "#1b1d22", text: "#f2f3f5", textMuted: "#9a9ea8", accent: "#6d8cff" };
   const tokens = Object.fromEntries(THEME_TOKENS.map((token) => [token, colors.accent])) as TavoraTheme["tokens"];
   Object.assign(tokens, { background: colors.background, foreground: colors.text, card: colors.surface });
-  return { mode: "dark", colors, tokens, radius: 8, style: structuredClone(CLASSIC_STYLE) };
+  return { mode: "dark", colors, tokens, radius: 8, style: structuredClone(CLASSIC_STYLE), tabOverflow: "list" };
 }
 
-/** The theme as a panel gets it: a Tavora older than STYLE_TAVORA sends no style. */
+/** The theme as a panel gets it: a Tavora older than STYLE_TAVORA sends no style, one older than TAB_OVERFLOW_TAVORA no tabOverflow. */
 function themeFor(shared: Shared): TavoraTheme {
   const theme = structuredClone(shared.theme);
   if (theme.style === undefined || !versionAtLeast(shared.version, STYLE_TAVORA)) delete theme.style;
+  if (theme.tabOverflow === undefined || !versionAtLeast(shared.version, TAB_OVERFLOW_TAVORA)) delete theme.tabOverflow;
   return theme;
 }
 
@@ -455,6 +462,14 @@ function storeOps(shared: Shared, map: Map<string, string>, maxBytes: () => numb
   };
 }
 
+/** Refuses an id a new document can't have on this Tavora (the SDK's one rule; an older Tavora took some of them). */
+function checkNewDocumentId(version: string, id: string, saved: Iterable<string>): void {
+  if (!versionAtLeast(version, DOCUMENT_ID_RULE_TAVORA)) return;
+  if (!versionAtLeast(version, DOCUMENT_ID_ZERO_DEVICES_TAVORA) && /^(?:com|lpt)0$/i.test(id)) return;
+  const problem = newDocumentIdProblem(id, saved);
+  if (problem !== null) fail("INVALID_PARAMS", problem);
+}
+
 /** Puts a document with the host's rules; `origin` is the panel that did it (it is not told), or null for the test itself. */
 function putDocument(shared: Shared, params: unknown, origin: Panel | null): DocumentSummary {
   if (typeof params !== "object" || params === null) fail("INVALID_PARAMS", "params must be an object");
@@ -470,6 +485,8 @@ function putDocument(shared: Shared, params: unknown, origin: Panel | null): Doc
   if (ifRevision !== undefined && !Number.isSafeInteger(ifRevision)) fail("INVALID_PARAMS", "ifRevision must be an integer");
 
   const existing = shared.documents.get(docId);
+  // Before the revision, as Tavora checks it.
+  if (!existing) checkNewDocumentId(shared.version, docId, shared.documents.keys());
   checkRevision(existing, ifRevision);
   if (!existing && shared.documents.size >= shared.limits.maxDocuments) {
     fail("QUOTA_EXCEEDED", `a module may keep at most ${shared.limits.maxDocuments} documents per workspace`);
@@ -1259,6 +1276,7 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
     changeTheme: (theme) => {
       shared.theme = { ...shared.theme, ...theme } as TavoraTheme;
       if (shared.theme.style === undefined) delete shared.theme.style;
+      if (shared.theme.tabOverflow === undefined) delete shared.theme.tabOverflow;
       everyPanel((other) => deliver(other, "ui.theme", themeFor(shared)));
     },
     setLanguage: (language) => {

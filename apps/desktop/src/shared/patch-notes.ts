@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.135",
+    date: "2026-11-22",
+    title: "Too many tabs in modules",
+    notes: [
+      "Tabs inside a module, like the PDF Viewer's files, now follow Settings > Appearance > Too many tabs: a list of the hidden ones, or arrows.",
+    ],
+    prs: [
+      { number: 889, title: "TabStrip follows Too many tabs (list or arrows)" },
+    ],
+    tags: ["games", "pdf-viewer", "publishing", "sdk", "ui-kit", "website", "workspace"],
+  },
+  {
     version: "0.24.134",
     date: "2026-11-22",
     title: "Panels stay on after the in-game layer",

@@ -30,8 +30,8 @@ import type { Foreground, ForegroundProbe } from "./foreground";
 import type { OverlayPanel } from "./game-overlay-window";
 import type { PanelInGame } from "./panel-views";
 import { layerCardContent, type LayerMode } from "../shared/layer-card";
-import { LAYER_CLOSED, layerScene, layerStep, placedOverlays, placedPanels, type LayerEvent, type LayerLook, type LayerState, type Placed } from "./game-layer";
-import { CRASH_SPAN_MS, LayerWindows, MAX_CRASHES, type LayerWindowsPlatform, type OverlayWindow, type OverlayWindowRequest, type WindowMaker } from "./game-layer-windows";
+import { LAYER_CLOSED, WATCH_START, awayOf, frontOf, layerScene, layerStep, placedOverlays, placedPanels, watchStep, type LayerEvent, type LayerLook, type LayerState, type Placed, type Watch, type WatchEvent } from "./game-layer";
+import { CRASH_SPAN_MS, LayerWindows, MAX_CRASHES, type LayerWindowsPlatform, type OverlayWindow, type OverlayWindowRequest, type PanelWindowMaker, type WindowMaker } from "./game-layer-windows";
 import {
   ALL_GAMES,
   EVERYWHERE,
@@ -266,32 +266,16 @@ export class GameOverlays {
   /** The quicker look while overlays are stacked above the game (STACKED_LOOK_MS). */
   private stackedTimer: ReturnType<typeof setInterval> | undefined;
   private probe: ForegroundProbe | null = null;
-  /** Windows' functions could not be loaded: nothing is looked at or shown until Tavora starts again. */
-  private probeFailed = false;
-  /** The game in front that has something to show, and where its window is (DIPs). */
-  private front: string | null = null;
-  private game: Rect | null = null;
-  /** The last game window seen in front: a panel shown in the game while Tavora is in front is sized against it. */
-  private lastGame: Rect | null = null;
-  /** The game seen in front last, and its window while the user is in another one and overlays stay (`stay`). */
-  private left: string | null = null;
-  private away: { gameId: string; bounds: Rect } | null = null;
-  /** One of Tavora's own windows (not an overlay's) is in front: Everywhere hides. */
-  private tavoraFront = false;
+  /** What the service watches: hidden for now, failed, the game in front or left (game-layer.ts `watchStep`, run by `see`). */
+  private watch: Watch = WATCH_START;
   /** The in-game layer (game-layer.ts `layerStep`). */
   private layer: LayerState = LAYER_CLOSED;
-  /** The window handle of the game window in front (when known), and of whatever window is in front. */
-  private frontWindow: string | null = null;
-  private foregroundWindow: string | null = null;
   /** The window handle of each game's window as last seen in front (in memory only), to take its picture on a click. */
   private readonly handles = new Map<string, string>();
   /** The library games the game watcher says are running (game-watch.ts); a handle only counts for these. */
   private running: ReadonlySet<string> = new Set();
-  private notification: number | null = null;
   /** Esc is taken while the layer is open (when the system let Tavora have it). */
   private escape = false;
-  /** Stopped: nothing shows until the user starts the overlays with the header button, and again after Tavora starts. */
-  private suspended = true;
   /** Whether something showed at the last look: the keys are told when that changes. */
   private wasShowing = false;
   /** Whether any window is shown over a game or the screen now (`GameOverlaysView.showing`). */
@@ -345,7 +329,7 @@ export class GameOverlays {
 
   /** Whether overlays and the layer may show now: Tavora can, the switch is on, and the user didn't hide them for now. */
   private active(): boolean {
-    return this.options.platform.supported && this.options.settings.gameOverlays && !this.suspended;
+    return this.options.platform.supported && this.options.settings.gameOverlays && !this.watch.hidden;
   }
 
   // ── What a module panel gets ─────────────────────────────────────────
@@ -437,7 +421,7 @@ export class GameOverlays {
 
   /** What a new overlay or panel is sized against: the game window in front, else the one seen last, else the main screen. */
   private startArea(): Rect | null {
-    return this.game ?? this.lastGame ?? this.options.platform.screen?.() ?? null;
+    return this.gameWindow() ?? this.watch.lastGame ?? this.options.platform.screen?.() ?? null;
   }
 
   /** Whether the panel is in some setup. */
@@ -634,14 +618,14 @@ export class GameOverlays {
 
   /** "Hide all for now" in Settings > Overlays: nothing shows, and no key is taken, until Tavora starts again or this is called with false. */
   setHidden(hidden: boolean): void {
-    if (this.suspended === hidden) return;
-    this.suspended = hidden;
+    if (this.watch.hidden === hidden) return;
+    this.see({ type: "hide", hidden });
     this.tick();
     this.options.changed();
   }
 
   get hidden(): boolean {
-    return this.suspended;
+    return this.watch.hidden;
   }
 
   /** Forgets that an overlay's page crashed. */
@@ -706,18 +690,18 @@ export class GameOverlays {
   private onScreen(): string[] {
     // A layer over the screen holds only what the keys reach, never a game setup staying over the spot of a game left.
     if (this.layer.status === "open" && this.layer.game === null) return this.keySetups();
-    return setupsOnScreen(this.front ?? this.away?.gameId ?? null, this.tavoraFront, (id) => this.store.hasSetup(id));
+    return setupsOnScreen(this.frontGame() ?? awayOf(this.watch)?.game ?? null, this.watch.tavoraFront, (id) => this.store.hasSetup(id));
   }
 
   /** The setups whose keys work now: as on screen, but a game's only while it is in front, not while its items stay over its spot. */
   private keySetups(): string[] {
-    return setupsOnScreen(this.front, this.tavoraFront, (id) => this.store.hasSetup(id));
+    return setupsOnScreen(this.frontGame(), this.watch.tavoraFront, (id) => this.store.hasSetup(id));
   }
 
   /** Where the items of a setup sit: Everywhere's on the main screen, the others on the game's window (the one in front, or the one they stay over). */
   private areaOf(setupId: string): Rect | null {
     if (setupId === EVERYWHERE) return this.options.platform.screen?.() ?? null;
-    return this.game ?? this.away?.bounds ?? null;
+    return this.gameWindow() ?? awayOf(this.watch)?.bounds ?? null;
   }
 
   /** Whether something shows for the keys now (keySetups have items): they work only then. */
@@ -727,7 +711,12 @@ export class GameOverlays {
 
   /** The game in front that has something to show (its own setup, or All games), or null. */
   frontGame(): string | null {
-    return this.front;
+    return frontOf(this.watch)?.game ?? null;
+  }
+
+  /** Where the game window in front is (DIPs), or null. */
+  private gameWindow(): Rect | null {
+    return frontOf(this.watch)?.bounds ?? null;
   }
 
   // ── Keys ─────────────────────────────────────────────────────────────
@@ -790,7 +779,8 @@ export class GameOverlays {
 
   /** What the last look saw, as the layer needs it. */
   private layerLook(): LayerLook {
-    return { front: this.front, frontWindow: this.frontWindow, foregroundWindow: this.foregroundWindow, exclusive: looksExclusive(this.notification) };
+    const front = frontOf(this.watch);
+    return { front: front?.game ?? null, frontWindow: front?.window ?? null, foregroundWindow: this.watch.foregroundWindow, exclusive: looksExclusive(front?.notification ?? null) };
   }
 
   /** One step of the layer (game-layer.ts), and what it asks for: Esc, the game's keyboard, a look, or a word to the user. */
@@ -839,9 +829,7 @@ export class GameOverlays {
     this.prune();
     if (!this.active() || this.store.empty) {
       this.closeAll();
-      this.setFront(null, null);
-      this.left = null;
-      this.away = null;
+      this.see({ type: "off" });
       this.keysFollow();
       return;
     }
@@ -855,22 +843,23 @@ export class GameOverlays {
 
   private look(): void {
     let foreground: Foreground | null = null;
-    if (!this.probeFailed) {
+    let failed = this.watch.failed;
+    if (!failed) {
       try {
         this.probe ??= this.options.platform.probe();
         foreground = this.probe.look();
       } catch (error) {
         // Windows' functions could not be loaded; looking again won't help, so it is said once and not tried again.
         console.warn(`[tavora] game overlays stopped: ${error instanceof Error ? error.message : String(error)}`);
-        this.probeFailed = true;
+        failed = true;
         clearInterval(this.timer);
         this.timer = undefined;
         this.lookQuickly(false);
       }
     }
-    if (this.probeFailed) {
+    if (failed) {
       this.closeAll();
-      this.setFront(null, null);
+      this.see({ type: "failed" });
       return;
     }
     // A panel in the layer took the keyboard, so Tavora's own window is in front: the game (or the desktop) still is the one in front.
@@ -878,62 +867,49 @@ export class GameOverlays {
       this.apply();
       return;
     }
-    this.tavoraFront = (this.options.platform.tavoraInFront?.() ?? false) && !this.ownWindowFocused();
+    const tavoraFront = (this.options.platform.tavoraInFront?.() ?? false) && !this.ownWindowFocused();
     const withSetups = new Set(this.store.gameSetups());
     const general = this.store.count(ALL_GAMES) > 0;
-    const front = foreground?.program ? gameInFront(this.options.watcher.gamesOf(foreground.program), withSetups, general, (id) => this.options.workspaces.scopeOf(id) === "game") : null;
-    this.setFront(front, front && foreground ? this.options.platform.toDip(foreground.bounds) : null);
-    this.frontWindow = front && foreground?.handle ? foreground.handle : null;
-    this.foregroundWindow = foreground?.handle ?? null;
-    if (front && this.frontWindow && this.handles.get(front) !== this.frontWindow) {
-      this.handles.set(front, this.frontWindow);
+    const game = foreground?.program ? gameInFront(this.options.watcher.gamesOf(foreground.program), withSetups, general, (id) => this.options.workspaces.scopeOf(id) === "game") : null;
+    const front = game !== null && foreground ? { game, bounds: this.options.platform.toDip(foreground.bounds), window: foreground.handle ?? null, notification: foreground.notification } : null;
+    // Overlays stay while the user is in another window: over the game window seen in front last, while it is still open
+    // and not minimized. Overlays only; the layer and the keys stay with the game in front.
+    const kept = () => {
+      const window = this.probe?.kept?.() ?? null;
+      return window ? this.options.platform.toDip(window) : null;
+    };
+    this.see({ type: "look", front, foregroundWindow: foreground?.handle ?? null, tavoraFront, stay: this.options.settings.overlaysStay === true, kept });
+    if (front?.window && this.handles.get(front.game) !== front.window) {
+      this.handles.set(front.game, front.window);
       this.layoutPort?.refresh();
     }
-    this.notification = front && foreground ? foreground.notification : null;
-    this.away = this.stayingAway(front);
-    if (front && foreground && looksExclusive(foreground.notification) && !this.store.exclusiveHintShown) {
+    // The game in front is the one overlays stay over once the user leaves it (the probe remembers its window).
+    if (front) this.probe?.keep?.();
+    if (front && looksExclusive(front.notification) && !this.store.exclusiveHintShown) {
       this.store.markExclusiveHintShown();
       this.options.shell.notify(translate(this.options.language(), "overlays.exclusiveHint"));
     }
     // The layer ends (and gives the keyboard to nobody) when what it opened over is gone (layerStep).
-    if (this.layer.status === "open") this.stepLayer({ type: "look", look: this.layerLook(), tavoraFront: this.tavoraFront, showing: this.showing() });
+    if (this.layer.status === "open") this.stepLayer({ type: "look", look: this.layerLook(), tavoraFront: this.watch.tavoraFront, showing: this.showing() });
     this.apply();
   }
 
   /**
-   * Where overlays stay while the user is in another window: over the game window seen in front last, while it is
-   * still open and not minimized. Overlays only; the layer and the keys stay with the game in front.
+   * One step of what the service watches (game-layer.ts `watchStep`), and what follows from it: the Overlay layout's canvas
+   * takes the shape of the window last seen for the game in front, and the keys follow that game (streaming.ts sync).
    */
-  private stayingAway(front: string | null): { gameId: string; bounds: Rect } | null {
-    if (front !== null) {
-      this.left = front;
-      this.probe?.keep?.();
-      return null;
-    }
-    if (this.left === null || !this.options.settings.overlaysStay) return null;
-    const kept = this.probe?.kept?.() ?? null;
-    if (!kept) {
-      this.left = null;
-      return null;
-    }
-    return { gameId: this.left, bounds: this.options.platform.toDip(kept) };
-  }
-
-  private setFront(gameId: string | null, bounds: Rect | null): void {
-    this.game = bounds;
-    if (bounds) this.lastGame = bounds;
-    // The Overlay layout's canvas takes the shape of the window last seen for the game, and the positions an older Tavora
-    // saved (fractions of the window) are converted on the first real window size seen. A launcher's or splash screen's
-    // window is no size to go by.
-    if (gameId && bounds && isRealWindow(bounds)) {
-      const seen = this.store.setSeen(gameId, bounds);
-      const converted = this.store.convertLegacy(gameId, bounds);
+  private see(event: WatchEvent): void {
+    const was = this.frontGame();
+    this.watch = watchStep(this.watch, event);
+    const front = frontOf(this.watch);
+    // Each look: the positions an older Tavora saved (fractions of the window) are converted on the first real window
+    // size seen. A launcher's or splash screen's window is no size to go by.
+    if (event.type === "look" && front && isRealWindow(front.bounds)) {
+      const seen = this.store.setSeen(front.game, front.bounds);
+      const converted = this.store.convertLegacy(front.game, front.bounds);
       if (seen || converted) this.options.changed();
     }
-    if (gameId === this.front) return;
-    this.front = gameId;
-    // The keys follow the game in front (streaming.ts sync).
-    this.options.changed();
+    if ((front?.game ?? null) !== was) this.options.changed();
   }
 
   /** The keys work while something shows: when that changed since the last look (Tavora's window came in front, say), they follow. */
@@ -946,12 +922,12 @@ export class GameOverlays {
 
   /** Shows what the setups and the layer say now (game-layer.ts `layerScene`), through the windows (game-layer-windows.ts). */
   private apply(): void {
-    const handle = this.front === null && this.away !== null ? Number(this.probe?.keptHandle?.() ?? 0) : 0;
+    const handle = awayOf(this.watch) !== null ? Number(this.probe?.keptHandle?.() ?? 0) : 0;
     const scene = layerScene({
       active: this.active(),
       layer: this.layer,
-      front: this.front,
-      game: this.game,
+      front: this.frontGame(),
+      game: this.gameWindow(),
       setups: this.onScreen(),
       areaOf: (setupId) => this.areaOf(setupId),
       store: this.store,
@@ -1029,7 +1005,6 @@ export class GameOverlays {
   }
 
   /** The window of a panel's live view: the module's overlay page, fed by what the panel passes to panel.setLive. */
-  /** The window of a panel's live view: the module's overlay page, fed by what the panel passes to panel.setLive. */
   private makeLive(panel: InGamePanel, id: string, setup: string): WindowMaker {
     const instanceId = panel.instanceId;
     return {
@@ -1083,7 +1058,7 @@ export class GameOverlays {
   }
 
   /** The window of a panel over the game: Panel views lends the panel's view into it (panel-views.ts `lend`). */
-  private makePanel(panel: InGamePanel, id: string): WindowMaker {
+  private makePanel(panel: InGamePanel, id: string): PanelWindowMaker {
     const subject: OverlaySubject = { owner: panel.owner, moduleId: panel.moduleId, workspaceId: panel.workspaceId, key: panel.instanceId };
     const request = this.requestFor(
       subject,
@@ -1151,7 +1126,7 @@ export class GameOverlays {
       seenSize: (gameId) => this.store.seenSize(gameId),
       handleOf: (gameId) => (this.running.has(gameId) ? (this.handles.get(gameId) ?? null) : null),
       gameRunning: (gameId) => this.running.has(gameId),
-      gameWindow: () => this.game ?? this.lastGame,
+      gameWindow: () => this.gameWindow() ?? this.watch.lastGame,
       grid: () => this.store.grid,
       setGrid: (grid) => {
         this.store.setGrid(grid);
@@ -1168,7 +1143,10 @@ export class GameOverlays {
         if (done) this.tick();
         return done;
       },
-      running: () => [...this.running].sort((a, b) => Number(b === this.front) - Number(a === this.front)),
+      running: () => {
+        const front = this.frontGame();
+        return [...this.running].sort((a, b) => Number(b === front) - Number(a === front));
+      },
       addPanel: (setupId, panel) => this.addPanelTo(setupId, panel),
       addOverlay: (setupId, overlay) => {
         const module = this.options.installed.shown(overlay.moduleId);
@@ -1466,7 +1444,7 @@ export class GameOverlays {
       enabled: this.options.settings.gameOverlays,
       stay: this.options.settings.overlaysStay ?? false,
       sidebar: this.options.settings.overlaySidebar,
-      hidden: this.suspended,
+      hidden: this.watch.hidden,
       showing: this.windowsShown,
       gameSetups: this.store.gameSetups(),
       layerKey: this.options.streaming.keyOf(layerBinding()),
@@ -1503,9 +1481,7 @@ export class GameOverlays {
   async shutdown(): Promise<void> {
     this.closeNow();
     // The keys follow what shows: with nothing, the layer and toggle keys go back to the system.
-    this.setFront(null, null);
-    this.tavoraFront = true;
-    this.away = null;
+    this.see({ type: "quit" });
     this.keysFollow();
     await this.store.save();
   }
