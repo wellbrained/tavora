@@ -111,6 +111,10 @@ export function signLatestYml({ latestYml, version, file, sha512, privateKey, pi
  * uploads. `signed`: whether the tavoraSignature line must be there (after signing) or must not (as built).
  */
 export function feedProblem(text, { version, file, sha512 }, { signed = true } = {}) {
+  // A YAML reader breaks lines at a lone CR too, so a notes line could start a key of its own: none of these anywhere.
+  if (/[\x00-\x09\x0b-\x1f\x7f-\x9f\u2028\u2029\ufeff]/.test(String(text))) {
+    return "latest.yml has a control character or a line separator the feed never has (a lone CR, a tab, NUL, U+0085, U+2028)";
+  }
   const lines = String(text).split("\n");
   if (lines.at(-1) === "") lines.pop();
   const seen = {};
@@ -136,7 +140,7 @@ export function feedProblem(text, { version, file, sha512 }, { signed = true } =
       return "latest.yml's files list must hold exactly this installer: its url, sha512 and size";
     }
     if (line === `version: ${version}`) count("version");
-    else if (line.startsWith("tavoraSignature: ")) count("tavoraSignature");
+    else if (/^tavoraSignature: '[A-Za-z0-9+/]{85}[AQgw]=='$/.test(line)) count("tavoraSignature");
     else if (line === "files:") {
       count("files");
       state = "files";

@@ -92,30 +92,78 @@ describe("the update server's feed check, and the same check in pnpm release", (
   });
 });
 
+// What electron-updater reads latest.yml with (its own js-yaml), to see what an installed Tavora would make of a feed.
+const reader = createRequire(desktopRequire.resolve("electron-updater"))("js-yaml") as { load: (text: string) => unknown };
+const signedFeed = (unsigned: string) => addSignatureToLatestYml(unsigned, signature);
+const withNotes = signedFeed(built(["Fixes", "More fixes"]));
+const signatureLine = withNotes.split("\n").find((line: string) => line.startsWith("tavoraSignature:"))!;
+
+// A lone CR is a line break to a YAML reader: inside a notes line it would start keys of their own.
+const CR_ATTACK = withNotes.replace("  - Fixes\n", "  - Fixes\rpackages:\r  x64:\r    path: https://evil.example/p.7z\risAdminRightsRequired: true\rstagingPercentage: 0\n");
+/** Control characters and separators, each put inside a notes line, between two keys, after the signature and first. */
+const SEPARATORS = ["\r", "\u0085", "\u2028", "\u2029", "\v", "\f", "\0", "\t", "\x7f", "\ufeff", "\x1b"];
+const FUZZED = SEPARATORS.flatMap((sep) => [
+  withNotes.replace("  - Fixes", `  - Fi${sep}xes`),
+  withNotes.replace("  - Fixes\n", `  - Fixes${sep}stagingPercentage: 0\n`),
+  withNotes.replace("\npath:", `${sep}path:`),
+  withNotes.replace("\npath:", `\n${sep}path:`),
+  withNotes.replace(signatureLine, `${signatureLine}${sep}`),
+  withNotes.replace(signatureLine, `${signatureLine}${sep}isAdminRightsRequired: true`),
+  `${sep}${withNotes}`,
+]);
+
+/** Every feed both checks are tried on: electron-builder's own, ones made to slip past, and the fuzzed ones. */
+const FEEDS: string[] = [
+  ...Object.values(NOTES).map((notes) => signedFeed(built(notes))),
+  withNotes,
+  signedFeed(LATEST.replace("path:", `  - url: https://evil.example/Tavora-Setup-1.0.1-x64.exe\n    sha512: ${otherSha512}\n    size: 1\npath:`)),
+  signedFeed(LATEST.replace("path:", `  - url: Tavora-Setup-1.0.1-x64.exe\n    sha512: ${otherSha512}\n    size: 1\npath:`)),
+  signedFeed(LATEST.replace("releaseDate:", "packages:\n  x64:\n    path: x.7z\nreleaseDate:")),
+  signedFeed(LATEST.replace("releaseDate:", "isAdminRightsRequired: true\nreleaseDate:")),
+  signedFeed(LATEST.replace("releaseDate:", "releaseNotes: |\n  - fine\n  - url: https://evil.example/x.exe\nreleaseDate:")),
+  signedFeed(LATEST.replace("releaseDate:", "releaseNotes: |\n  - fine\nurl: https://evil.example/x.exe\nreleaseDate:")),
+  signedFeed(LATEST.replace("releaseDate:", "releaseNotes: |\n    deeper\nreleaseDate:")),
+  signedFeed(LATEST.replace("releaseDate:", "releaseNotes: >\n  folded\nreleaseDate:")),
+  signedFeed(LATEST.replace("releaseDate:", 'releaseNotes: "- a\\tb\\n"\nreleaseDate:')),
+  signedFeed(`${LATEST}path: ${installer}\n`),
+  signedFeed(LATEST).replace(/\n/g, "\r\n"),
+  withNotes.replace(signatureLine, `${signatureLine} # trailing`),
+  withNotes.replace(signatureLine, "tavoraSignature: AAAA"),
+  CR_ATTACK,
+  ...FUZZED,
+];
+
+describe("what an installed Tavora reads from a feed the checks take", () => {
+  it("refuses a lone CR, and every other control character or separator, wherever it is", () => {
+    expect(feedProblem(CR_ATTACK, fields)).toContain("control character");
+    for (const feed of FUZZED) expect(feedProblem(feed, fields)).toContain("control character");
+  });
+
+  it("is only the version, the signature, this one installer, the date and the notes as text", () => {
+    let taken = 0;
+    for (const feed of FEEDS) {
+      if (feedProblem(feed, fields) !== null) continue;
+      taken++;
+      const info = reader.load(feed) as Record<string, unknown>;
+      const keys = Object.keys(info).sort();
+      expect(keys.filter((key) => key !== "releaseNotes")).toEqual(["files", "path", "releaseDate", "sha512", "tavoraSignature", "version"]);
+      expect(info).toMatchObject({ version: "1.0.1", path: installer, sha512, tavoraSignature: signature });
+      expect(info.files).toEqual([{ url: installer, sha512, size: 123456 }]);
+      if ("releaseNotes" in info) expect(typeof info.releaseNotes).toBe("string");
+    }
+    expect(taken).toBeGreaterThanOrEqual(4);
+  });
+});
+
 describe.skipIf(!capable)("the update server and pnpm release agree", () => {
-  it("on every feed: the ones electron-builder writes, and ones made to slip past", () => {
-    const made = [
-      ...Object.values(NOTES).map(built),
-      LATEST.replace("path:", `  - url: https://evil.example/Tavora-Setup-1.0.1-x64.exe\n    sha512: ${otherSha512}\n    size: 1\npath:`),
-      LATEST.replace("path:", `  - url: Tavora-Setup-1.0.1-x64.exe\n    sha512: ${otherSha512}\n    size: 1\npath:`),
-      LATEST.replace("releaseDate:", "packages:\n  x64:\n    path: x.7z\nreleaseDate:"),
-      LATEST.replace("releaseDate:", "isAdminRightsRequired: true\nreleaseDate:"),
-      LATEST.replace("releaseDate:", "releaseNotes: |\n  - fine\n  - url: https://evil.example/x.exe\nreleaseDate:"),
-      LATEST.replace("releaseDate:", "releaseNotes: |\n  - fine\nurl: https://evil.example/x.exe\nreleaseDate:"),
-      LATEST.replace("releaseDate:", "releaseNotes: |\n    deeper\nreleaseDate:"),
-      LATEST.replace("releaseDate:", "releaseNotes: >\n  folded\nreleaseDate:"),
-      LATEST.replace("releaseDate:", 'releaseNotes: "- a\\tb\\n"\nreleaseDate:'),
-      `${LATEST}path: ${installer}\n`,
-      LATEST.replace(/\n/g, "\r\n"),
-    ];
-    for (const unsigned of made) {
-      const feed = addSignatureToLatestYml(unsigned, signature);
+  it("on every feed: the ones electron-builder writes, ones made to slip past, and fuzzed ones", () => {
+    for (const feed of FEEDS) {
       const js = feedProblem(feed, fields);
       const server = verify(feed);
       expect({ feed, ok: server.ok }).toEqual({ feed, ok: js === null });
       if (js !== null) expect(server.err).toContain(js.trim());
     }
-  }, 60_000);
+  }, 120_000);
 });
 
 describe.skipIf(!capable)("tavora-update-signature", { timeout: 30_000 }, () => {
@@ -144,7 +192,7 @@ describe.skipIf(!capable)("tavora-update-signature", { timeout: 30_000 }, () => 
     const feed = signed();
     const line = feed.split("\n").find((l: string) => l.startsWith("tavoraSignature:"))!;
     expect(verify(`${feed}${line}\n`).err).toContain("more than one");
-    expect(verify(feed.replace(line, "tavoraSignature: 'AAAA'")).err).toContain("not 64 bytes");
+    expect(verify(feed.replace(line, "tavoraSignature: 'AAAA'")).err).toContain("never has: tavoraSignature: 'AAAA'");
   });
 
   it("takes the feed as electron-builder writes it, release notes included", () => {
@@ -186,7 +234,7 @@ describe.skipIf(!capable)("tavora-update-signature", { timeout: 30_000 }, () => 
     const signature = line.slice("tavoraSignature: '".length, -1);
     const loose = (value: string) => value.slice(0, -3) + String.fromCharCode(value.charCodeAt(value.length - 3) + 1) + value.slice(-2);
     expect(Buffer.from(loose(signature), "base64")).toEqual(Buffer.from(signature, "base64"));
-    expect(verify(feed.replace(signature, loose(signature))).err).toContain("not 64 bytes of base64");
+    expect(verify(feed.replace(signature, loose(signature))).err).toContain("never has: tavoraSignature:");
     expect(verify(feed, { digest: loose(sha512) }).err).toContain("not 64 bytes of base64");
     const key = release.publicKey;
     const looseKey = key.slice(0, -2) + String.fromCharCode(key.charCodeAt(key.length - 2) + 1) + "=";
