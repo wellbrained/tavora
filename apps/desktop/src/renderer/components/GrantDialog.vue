@@ -10,7 +10,8 @@
 // With `inPanel` the same question is the content of the panel that asks (decision of 2026-10-28): the module's first
 // panel when it is added or still misses access, or the running panel that asks for a connector on request. Cancel then
 // closes the panels that wait for the answer; Allow lets the host start them (main/host.ts questionOf).
-import { Check, Cpu, Folder, Gauge, Globe, Headphones, Monitor, Music, Radio, ShieldCheck, Trophy } from "@lucide/vue";
+// Running while its game runs (a panel type's `withGame`, main/with-game.ts) is asked here too, with the rest.
+import { Check, Cpu, Folder, Gamepad2, Gauge, Globe, Headphones, Monitor, Music, Radio, ShieldCheck, Trophy } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
@@ -45,6 +46,8 @@ const programs = computed(() => hosts.value.filter((host) => host.startsWith("lo
 const connectors = computed(() => asks.value?.connectors ?? []);
 /** Folders on this PC to read (permissions.folders), with what the module may see in each. */
 const folders = computed(() => foldersOf(asks.value?.folders ?? []));
+/** Running a panel out of sight while the module's game runs. */
+const withGame = computed(() => asks.value?.withGame === true);
 const aiAccounts = computed(() => aiUsage.value?.accounts ?? []);
 const discordUser = computed(() => discord.value?.user ?? null);
 
@@ -67,9 +70,9 @@ function close(request: GrantRequest = props.request) {
 
 // The module went away, or has nothing left to ask: nothing to answer.
 watch(
-  [module, hosts, connectors, folders],
+  [module, hosts, connectors, folders, withGame],
   () => {
-    if (!props.inPanel && !busy.value && (!module.value || hosts.value.length + connectors.value.length + folders.value.length === 0)) closeDialog(props.request);
+    if (!props.inPanel && !busy.value && (!module.value || (hosts.value.length + connectors.value.length + folders.value.length === 0 && !withGame.value))) closeDialog(props.request);
   },
   { immediate: true },
 );
@@ -97,6 +100,7 @@ const title = computed(() => {
   if (!current) return "";
   if (update.value) return t("grant.updateTitle", { name: current.name, version: update.value.version });
   if (props.request.review) return t("grant.reviewTitle", { name: current.name });
+  if (withGame.value && !connectors.value.length && !hosts.value.length && !folders.value.length) return t("grant.ask.withGame", { name: current.name });
   if (!connectors.value.length && !hosts.value.length && folders.value.length) return t("grant.ask.folder", { name: current.name });
   const only = connectors.value.length === 1 && !hosts.value.length && !folders.value.length ? (ASK as Record<string, (typeof ASK)[keyof typeof ASK]>)[connectors.value[0]!] : undefined;
   if (only) return t(only, { name: current.name });
@@ -140,7 +144,10 @@ async function allow() {
     return;
   }
   // Exactly what this dialog shows: the main process grants only what the module still asks for.
-  const result = await act({ type: "grant-module", moduleId: current.id, network: [...hosts.value], connectors: [...connectors.value], folders: folders.value.map((folder) => folder.key) }, { quiet: true });
+  const result = await act(
+    { type: "grant-module", moduleId: current.id, network: [...hosts.value], connectors: [...connectors.value], folders: folders.value.map((folder) => folder.key), ...(withGame.value ? { withGame: true } : {}) },
+    { quiet: true },
+  );
   busy.value = false;
   if (!result.ok) {
     if (props.request === request) error.value = result.error;
@@ -234,6 +241,10 @@ async function allow() {
         </li>
       </ul>
       <p class="text-muted-foreground text-sm">{{ t("grant.foldersNote") }}</p>
+    </section>
+    <section v-if="withGame" class="flex flex-col gap-2" :aria-label="module.gameName ? t('grant.withGame', { game: module.gameName }) : t('grant.withGameAny')" data-testid="grant-with-game">
+      <h3 class="flex items-center gap-2 font-medium"><Gamepad2 class="size-4" /> {{ module.gameName ? t("grant.withGame", { game: module.gameName }) : t("grant.withGameAny") }}</h3>
+      <p class="text-muted-foreground text-sm">{{ t("grant.withGameNote") }}</p>
     </section>
     <ModuleNotes v-if="update && update.notes.length" :module-id="module.id" :version="update.version" :unseen="false" :entries="update.notes" />
     <p class="text-muted-foreground text-sm">{{ t("grant.later") }}</p>

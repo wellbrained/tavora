@@ -7,13 +7,18 @@ import path from "node:path";
 import { folderKey, LOCAL_OWNER, OFFICIAL_OWNER, type Connector } from "@tavora/module-schema";
 import type { CatalogClient } from "./catalog-client";
 import { CatalogUpdater, asksNothing, type CatalogInstalled } from "./catalog-updates";
-import type { GrantStore } from "./grants";
+import { asksWithGame, type GrantStore } from "./grants";
 import { checkZipData, dropOldCopies, forgetOwner, installZip, installZipData, type InstallOptions, type Installed } from "./installer";
 import { LibraryError } from "./library";
 import { UserError } from "./messages";
 import type { OfficialUpdates } from "./official-updates";
 import { OFFICIAL_PREFIX, type InstalledModule } from "./registry";
 import type { SafetyCheck } from "./safety-lists";
+
+/** Running a panel while its game runs, as far as an installed version asks for it (catalog-updates.ts newAsks). */
+function withGameAsk(module: InstalledModule): { withGame?: true } {
+  return asksWithGame(module.manifest) ? { withGame: true } : {};
+}
 
 /** What the lifecycle may do to a module's open panels. */
 export interface ModulePanels {
@@ -202,12 +207,23 @@ export class ModuleLifecycle {
    * (grants.ts), so a module updated while the dialog was open gets nothing it did not show. Open
    * panels of the module start again, so they connect with the new grant.
    */
-  async grant(moduleId: string, network: string[], connectors: Connector[], folders: string[] = []): Promise<void> {
+  async grant(moduleId: string, network: string[], connectors: Connector[], folders: string[] = [], withGame = false): Promise<void> {
     const module = this.options.modules().get(moduleId);
     if (!module || module.builtIn) throw new LibraryError("error.moduleMissing");
-    await this.options.grants().grant(module, { network, connectors, folders });
+    await this.options.grants().grant(module, { network, connectors, folders, ...(withGame ? { withGame: true } : {}) });
     this.options.grantsChanged?.();
     this.options.panels.reload(moduleId);
+  }
+
+  /**
+   * Settings > Connections: whether the module's panel runs while its game runs. Only for a module that asks for it;
+   * the host starts or stops that panel at once (grantsChanged).
+   */
+  async setWithGame(moduleId: string, on: boolean): Promise<void> {
+    const module = this.options.modules().get(moduleId);
+    if (!module || module.builtIn) throw new LibraryError("error.moduleMissing");
+    await this.options.grants().setWithGame(module, on);
+    this.options.grantsChanged?.();
   }
 
   /** Takes back everything granted to a module, after its panels are removed in every workspace. Its data stays. */
@@ -250,7 +266,7 @@ export class ModuleLifecycle {
       for (const [id, module] of this.options.modules()) {
         if (module.provenance !== "official" || module.builtIn || module.shippedVersion === undefined) continue;
         const { network, connectors = [], folders = [] } = module.manifest.permissions;
-        installed.push({ id, owner: module.owner, version: module.manifest.version, asks: { network: [...network], connectors: [...connectors], folders: folders.map(folderKey) }, official: true });
+        installed.push({ id, owner: module.owner, version: module.manifest.version, asks: { network: [...network], connectors: [...connectors], folders: folders.map(folderKey), ...withGameAsk(module) }, official: true });
       }
     }
     for (const id of this.options.catalogIds()) {
@@ -264,7 +280,7 @@ export class ModuleLifecycle {
         continue;
       }
       const { network, connectors = [], folders = [] } = module.manifest.permissions;
-      installed.push({ id, owner: module.owner, version: module.manifest.version, asks: { network: [...network], connectors: [...connectors], folders: folders.map(folderKey) } });
+      installed.push({ id, owner: module.owner, version: module.manifest.version, asks: { network: [...network], connectors: [...connectors], folders: folders.map(folderKey), ...withGameAsk(module) } });
     }
     return installed;
   }

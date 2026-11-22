@@ -156,3 +156,72 @@ describe("sanitizeGrants", () => {
     expect(sanitizeGrants({ owners: "x" }).size).toBe(0);
   });
 });
+
+describe("running while its game runs", () => {
+  const panels = [{ id: "history", name: "History", withGame: true }];
+  function withGame(version = "1.0.0", asks = true, network: string[] = []): GrantSubject {
+    return { owner: KEY, manifest: { id: "community.someone.kings", version, permissions: { network }, ...(asks ? { panels } : {}) } };
+  }
+
+  it("is asked with the rest, granted on the yes, and kept with the other grants", async () => {
+    const { dir, grants } = await store();
+    expect(grants.missing(withGame())).toEqual({ network: [], connectors: [], folders: [], withGame: true });
+    expect(grants.allowed(withGame())).toEqual({ network: [], connectors: [], folders: [] });
+    await grants.grant(withGame());
+    expect(grants.missing(withGame())).toEqual({ network: [], connectors: [], folders: [] });
+    expect(grants.allowed(withGame())).toEqual({ network: [], connectors: [], folders: [], withGame: true });
+    const again = await GrantStore.load(dir);
+    expect(again.get(KEY, "community.someone.kings")?.withGame).toBe(true);
+  });
+
+  it("is granted only when the dialog showed it and the manifest asks for it", async () => {
+    const { grants } = await store();
+    await grants.grant(withGame(), { network: [], connectors: [], folders: [] });
+    expect(grants.get(KEY, "community.someone.kings")?.withGame).toBeUndefined();
+    await grants.grant(withGame("1.0.0", false), { network: [], connectors: [], folders: [], withGame: true });
+    expect(grants.get(KEY, "community.someone.kings")?.withGame).toBeUndefined();
+  });
+
+  it("survives an update and covers nothing for a version that no longer asks", async () => {
+    const { grants } = await store();
+    await grants.grant(withGame());
+    expect(grants.allowed(withGame("1.1.0"))).toMatchObject({ withGame: true });
+    expect(grants.missing(withGame("1.1.0"))).toEqual({ network: [], connectors: [], folders: [] });
+    expect(grants.allowed(withGame("1.2.0", false))).toEqual({ network: [], connectors: [], folders: [] });
+  });
+
+  it("switched off stays answered, so it isn't asked again, and on again is allowed", async () => {
+    const { grants } = await store();
+    await grants.grant(withGame("1.0.0", true, ["api.example.com"]));
+    await grants.setWithGame(withGame("1.0.0", true, ["api.example.com"]), false);
+    expect(grants.allowed(withGame("1.0.0", true, ["api.example.com"]))).toEqual({ network: ["api.example.com"], connectors: [], folders: [] });
+    expect(grants.missing(withGame("1.0.0", true, ["api.example.com"]))).toEqual({ network: [], connectors: [], folders: [] });
+    // A later yes to something else doesn't turn it back on.
+    await grants.grant(withGame("1.1.0", true, ["api.example.com"]), { network: ["api.example.com"], connectors: [], folders: [] });
+    expect(grants.get(KEY, "community.someone.kings")?.withGame).toBe(false);
+    await grants.setWithGame(withGame(), true);
+    expect(grants.allowed(withGame())).toMatchObject({ withGame: true });
+  });
+
+  it("taken back on its own stays answered; taken back with everything goes, and is asked again", async () => {
+    const { grants } = await store();
+    await grants.grant(withGame());
+    await grants.revoke(KEY, "community.someone.kings", { network: [], connectors: [], folders: [], withGame: true });
+    expect(grants.get(KEY, "community.someone.kings")?.withGame).toBe(false);
+    await grants.revoke(KEY, "community.someone.kings");
+    expect(grants.get(KEY, "community.someone.kings")).toBeUndefined();
+    expect(grants.missing(withGame())).toMatchObject({ withGame: true });
+  });
+
+  it("can't be switched on for a module that doesn't ask for it", async () => {
+    const { grants } = await store();
+    await grants.setWithGame(withGame("1.0.0", false), true);
+    expect(grants.get(KEY, "community.someone.kings")).toBeUndefined();
+  });
+
+  it("reads grants from before it existed, and drops a value that is no answer", () => {
+    const read = sanitizeGrants({ owners: { [KEY]: { "community.a.b": { version: "1.0.0", grantedAt: "x", network: [] }, "community.c.d": { version: "1.0.0", grantedAt: "x", network: [], withGame: "yes" } } } });
+    expect(read.get(KEY)?.get("community.a.b")).toEqual({ version: "1.0.0", grantedAt: "x", network: [], connectors: [], folders: [] });
+    expect(read.get(KEY)?.get("community.c.d")?.withGame).toBeUndefined();
+  });
+});

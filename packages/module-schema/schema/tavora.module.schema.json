@@ -317,6 +317,10 @@
           "inGame": {
             "type": "boolean",
             "description": "The user may show this panel in their game: its menu offers Show in game, and the panel appears over the game only while the user holds Tavora's in-game layer open. Needs a minTavora newer than 0.21.2 (except Tavora's own modules); the TypeScript validator checks that."
+          },
+          "withGame": {
+            "type": "boolean",
+            "description": "With the user's yes, Tavora runs this panel hidden while one of the module's games runs, for example to watch a save folder. At most one panel type, only for a module whose games names its games, and a minTavora newer than 0.24.128 (except Tavora's own modules); the TypeScript validator checks that."
           }
         }
       }

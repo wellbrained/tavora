@@ -1190,6 +1190,34 @@ describe("cleanup", () => {
     expect(rig.views.isKept(B)).toBe(true);
   });
 
+  it("keeps a panel for the overlays and with its game apart: letting go of one leaves the other", () => {
+    const rig = panelViewsRig();
+    const a = rig.add(A);
+    rig.views.keepRunning(A);
+    rig.views.keepRunning(A, "game");
+    expect(rig.views.keptIds()).toEqual([A]);
+    expect(rig.views.keptIds("game")).toEqual([A]);
+    rig.views.stopKeeping(A);
+    expect(rig.views.keptIds()).toEqual([]);
+    expect(rig.views.isKept(A)).toBe(true);
+    expect(rig.views.isKept(A, "overlay")).toBe(false);
+    // Still kept with its game: leaving the workspace leaves it running, out of sight but not paused.
+    rig.views.closeAll();
+    expect(rig.views.has(A)).toBe(true);
+    rig.views.layOut(A);
+    expect(a.suspended).toBe(false);
+    // Also while Tavora's window is minimized: the user is playing.
+    rig.world.hidden = true;
+    rig.views.applyBounds();
+    expect(a.suspended).toBe(false);
+    rig.views.stopKeeping(A, "game");
+    rig.views.applyBounds();
+    expect(a.suspended).toBe(true);
+    expect(rig.views.isKept(A)).toBe(false);
+    rig.views.close(A);
+    expect(rig.views.keptIds("game")).toEqual([]);
+  });
+
   it("closing a panel nobody built a view for still forgets its state", () => {
     const rig = panelViewsRig();
     rig.views.setAwaiting(A);

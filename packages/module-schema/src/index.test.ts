@@ -2,7 +2,7 @@ import { glob, readFile } from "node:fs/promises";
 import { Ajv } from "ajv";
 import { describe, expect, it } from "vitest";
 import schema from "../schema/tavora.module.schema.json" with { type: "json" };
-import { allowsPersonalWorkspaces, BLOCKED_LOCAL_PORTS, catalogListingProblem, MAX_LISTED_GAMES, MAX_LISTED_VERSION, folderAccessProblem, folderKey, isFolderName, isFolderPath, isTavoraOwnFolder, isWindowsDeviceName, isLocalLowGameFolder, isLocalPort, LAST_TAVORA_WITHOUT_LOCAL_PORTS, LAST_TAVORA_WITHOUT_LOCALLOW_FOLDERS, parseFolderKey, splitFolderPath, localPortOf, CHANGELOG_LIMITS, connectorsAtAdd, continuingPanelType, firstKeyOf, isOfficialSigner, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, isReleaseVersion, LAST_TAVORA_WITHOUT_GAME_OVERLAYS, LAST_TAVORA_WITHOUT_BOARD_NAMES, LAST_TAVORA_WITHOUT_LEADERBOARDS, LAST_TAVORA_WITHOUT_PANEL_LAYOUT, LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES, LAST_TAVORA_WITHOUT_TRANSLATIONS, LAST_TAVORA_WITHOUT_WIDE_LAYOUT, needsNewerTavora, panelTypes, translateManifest, validateManifest, type ModuleManifest } from "./index";
+import { allowsPersonalWorkspaces, BLOCKED_LOCAL_PORTS, catalogListingProblem, MAX_LISTED_GAMES, MAX_LISTED_VERSION, folderAccessProblem, folderKey, isFolderName, isFolderPath, isTavoraOwnFolder, isWindowsDeviceName, isLocalLowGameFolder, isLocalPort, LAST_TAVORA_WITHOUT_LOCAL_PORTS, LAST_TAVORA_WITHOUT_LOCALLOW_FOLDERS, parseFolderKey, splitFolderPath, localPortOf, CHANGELOG_LIMITS, connectorsAtAdd, continuingPanelType, firstKeyOf, isOfficialSigner, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, isReleaseVersion, LAST_TAVORA_WITHOUT_GAME_OVERLAYS, LAST_TAVORA_WITHOUT_BOARD_NAMES, LAST_TAVORA_WITHOUT_LEADERBOARDS, LAST_TAVORA_WITHOUT_PANEL_LAYOUT, LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES, LAST_TAVORA_WITHOUT_TRANSLATIONS, LAST_TAVORA_WITHOUT_WIDE_LAYOUT, LAST_TAVORA_WITHOUT_WITH_GAME_PANELS, needsNewerTavora, panelTypes, withGamePanelType, translateManifest, validateManifest, type ModuleManifest } from "./index";
 
 const valid = {
   id: "community.example.campaign-companion",
@@ -486,6 +486,9 @@ const cases: [string, unknown, boolean][] = [
   ["module inGame", { ...valid, minTavora: "0.21.3", inGame: true }, true],
   ["panel inGame false", { ...valid, panels: [{ id: "planner", name: "Planner", inGame: false }] }, true],
   ["panel inGame as a string", { ...valid, minTavora: "0.21.3", panels: [{ id: "planner", name: "Planner", inGame: "yes" }] }, false],
+  ["panel withGame", { ...valid, minTavora: "0.24.129", panels: [{ id: "history", name: "History", withGame: true }] }, true],
+  ["panel withGame false", { ...valid, panels: [{ id: "history", name: "History", withGame: false }] }, true],
+  ["panel withGame as a string", { ...valid, minTavora: "0.24.129", panels: [{ id: "history", name: "History", withGame: "yes" }] }, false],
   ["a folder to read", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "Documents/StarCraft II", read: ["sc2replay"], names: ["lnk"] }] } }, true],
   ["a folder in Saved Games, names only", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "Saved Games/My Game/Saves", names: ["sav"] }] } }, true],
   ["a folder in AppData", { ...valid, minTavora: "0.23.113", permissions: { network: [], folders: [{ path: "AppData/Roaming/Discord", read: ["ldb"] }] } }, false],
@@ -565,6 +568,26 @@ describe("panel types", () => {
     expect(validateManifest({ ...valid, minTavora: "0.21.28", overlaySize: { width: 440, height: 100 } })).toEqual({ ok: false, errors: ["overlaySize needs an overlay page"] });
     expect(validateManifest({ ...overlay, overlaySize: { width: 440 } })).toEqual({ ok: false, errors: ["overlaySize must be { width, height } in pixels"] });
     expect(validateManifest({ ...overlay, overlaySize: { width: 440, height: 100, depth: 1 } }).ok).toBe(false);
+  });
+
+  it("takes withGame on one panel type of a module for named games, from a minTavora newer than the last without it", () => {
+    const panels = [{ id: "history", name: "History", withGame: true }, { id: "stats", name: "Stats" }];
+    const newer = { ...valid, minTavora: "0.24.129", panels };
+    expect(validateManifest(newer)).toMatchObject({ ok: true });
+    expect(validateManifest({ ...newer, minTavora: LAST_TAVORA_WITHOUT_WITH_GAME_PANELS })).toEqual({
+      ok: false,
+      errors: [`panels[0].withGame needs a minTavora newer than ${LAST_TAVORA_WITHOUT_WITH_GAME_PANELS}, because older Tavoras refuse it`],
+    });
+    expect(validateManifest({ ...valid, id: "tavora.history", panels }).ok).toBe(true);
+    expect(validateManifest({ ...newer, games: [] })).toEqual({ ok: false, errors: ["panels[0].withGame needs games to name the module's games: it runs while one of them runs"] });
+    expect(validateManifest({ ...newer, panels: [panels[0], { ...panels[1], withGame: true }] })).toEqual({ ok: false, errors: ["only one panel type may set withGame"] });
+  });
+
+  it("passes withGame on to the resolved type and names that type", () => {
+    const manifest = { ...valid, minTavora: "0.24.129", panels: [{ id: "a", name: "A" }, { id: "b", name: "B", withGame: true }] } as ModuleManifest;
+    expect(panelTypes(manifest).map((type) => type.withGame)).toEqual([undefined, true]);
+    expect(withGamePanelType(manifest)).toBe("b");
+    expect(withGamePanelType(valid as ModuleManifest)).toBeNull();
   });
 
   it("passes inGame on to the resolved type", () => {

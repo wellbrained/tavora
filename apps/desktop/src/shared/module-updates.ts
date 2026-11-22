@@ -16,7 +16,7 @@ export function waitingUpdates<T extends WaitingUpdate>(modules: readonly T[]): 
 
 /** Whether installing the update needs the user's yes to new access first. */
 export function asksMore(update: { asks: ModulePermissions }): boolean {
-  return update.asks.network.length > 0 || update.asks.connectors.length > 0 || update.asks.folders.length > 0;
+  return update.asks.network.length > 0 || update.asks.connectors.length > 0 || update.asks.folders.length > 0 || update.asks.withGame === true;
 }
 
 /** Update all: the ids that install at once, then the ids that each get a consent dialog, in the order the list shows. */

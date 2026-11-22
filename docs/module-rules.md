@@ -317,6 +317,10 @@ The UI Playground (Tavora features > Settings) shows one page, several pages and
 - **Overlay pages** (the manifest's `overlay`) change what they show through `watchOverlay`, never by reloading or
   going to another page. In OBS the page may load again only within 30 seconds of OBS loading the source (at most 10
   times); after that a reload shows nothing until the user refreshes the source in OBS.
+- **Running with the game** (a panel type's `withGame`): that panel also runs out of sight while its game runs, often
+  as a hidden panel nobody sees. Keep the work that must go on there (watching a folder, saving runs) apart from what
+  needs the user: it can't open a dialog, menu, picker or link then (`PERMISSION_DENIED`), and a toast there is never
+  seen. Save as you go, so a crash (it starts once more) or the game closing loses nothing.
 - **Data**: bundled with the module, loaded once and shared between panels. Modules reach the network only through the hosts the user granted (`permissions.network`, `network.fetch`), and a program on this PC, such as a game's local API, only read-only as `localhost:<port>`. A folder on this PC, such as a game's replays or saves, is read only through `permissions.folders` and `folders` once the user allowed it; for a single file the user picks, use `files.pickReadOnly`.
 - **Accessibility**: icon-only buttons have a label, everything works by keyboard, a tree or list with a role also has
   its arrow keys, state is never shown by colour alone. In component tests, `ariaProblems(root)` from

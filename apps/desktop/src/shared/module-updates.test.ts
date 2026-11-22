@@ -27,6 +27,7 @@ describe("module updates", () => {
     expect(asksMore({ asks: { network: ["api.example.com"], connectors: [], folders: [] } })).toBe(true);
     expect(asksMore({ asks: { network: [], connectors: ["discord"], folders: [] } })).toBe(true);
     expect(asksMore({ asks: { network: [], connectors: [], folders: ["Documents/Game|sav|"] } })).toBe(true);
+    expect(asksMore({ asks: { ...none, withGame: true } })).toBe(true);
   });
 
   it("updates the plain ones first, then asks for each of the others in list order", () => {

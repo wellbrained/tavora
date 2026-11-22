@@ -84,8 +84,21 @@ A module can offer several tools as separate panels, such as an Inventory, a Bui
 | `viewport` | no | This type's sizes, with the same rules as the module's `viewport`, `wide` included. The module's when left out; a type with its own `viewport` doesn't take the module's `wide`. |
 | `continues` | no | `true` on the type that panels opened before the module had panel types become, keeping their state. At most one type; without it, the first type. |
 | `inGame` | no | `true` when the user may show this panel in their game: its menu offers **Show in game**, and the panel appears over the game only while the user holds Tavora's in-game layer open (see [Game overlays](./protocol.md#game-overlays)). Types without it get no such item. In game the panel is scaled with the game window's height, so give its page `height: 100%` rather than `100vh`, which can overflow there (see [Game overlays](./protocol.md#game-overlays)). Needs Tavora 0.21.3 or newer, so `minTavora` must be newer than `0.20.54` (except Tavora's own modules); Tavora refuses the manifest otherwise. |
+| `withGame` | no | `true` when this panel should keep running, out of sight, while one of the module's games runs, for example to watch the game's save folder and record runs while the user plays. Tavora asks the user with the module's other permissions, and runs it only after a yes (see [Running with the game](#running-with-the-game)). At most one type per module, only for a module whose `games` names its games (not empty). Needs a `minTavora` newer than `0.24.128` (except Tavora's own modules); Tavora refuses the manifest otherwise. |
 
 When an update removes a panel type, its open panels keep their place and say the type is gone; the user can remove them or pick another type of the same module. The module's saved content is not touched. Each panel can also show content of its own, such as a different build; see [Content per panel](./protocol.md#content-per-panel). The Panel Types Example in Tavora's examples folder shows every option, and [Several panels](../guide/panels.md) walks through a module built this way.
+
+### Running with the game
+
+A panel type with `withGame: true` runs while one of the module's games runs, even when the user has no panel of the module open:
+
+- **Only after the user's yes.** Tavora asks with the module's other permissions when it is added (or when an update first brings it): "Run while 9 Kings runs". The user can switch it off for the module in Settings > Connections > Runs while its game runs; it isn't asked again then, until a version newly brings it.
+- **Only while the game runs.** When Tavora sees one of the module's games running that is in the user's library (a game workspace; the one opened last when there are several), it starts the panel in that workspace, also when the game ran already as Tavora started, and lets it go when the game closes. A game that isn't in the library starts nothing.
+- **One panel, never two.** If that workspace's layout has a panel of this type, that panel runs. Otherwise Tavora runs a hidden one that is never placed in the layout; it keeps the same id every time, so what it saves with `panel.state` is there next time. Its storage, documents and files are the module's, as for every panel of that workspace.
+- **Out of sight it can't ask the user anything.** It can read and write its data, read and watch its granted folders, use the network and connectors it was granted and publish overlay or live state. Calls that need the user fail with `PERMISSION_DENIED` (see [Running with the game](./protocol.md#running-with-the-game)).
+- **A crash starts it once more.** A second crash in the same game session leaves it off until the game starts again. The user isn't told.
+
+While it runs, the running game's card in Tavora's rail says so in one quiet line ("9 Kings Companion runs with the game"). Nothing is shown over the game.
 
 ## Panel layout
 

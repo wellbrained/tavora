@@ -321,6 +321,12 @@ When the user shows a panel in game (the [`inGame`](./manifest.md#panel-types) i
 - The user picks per panel whether the view is always there or toggled by a key, its opacity, and Hide from capture, on the Overlay page (the Overlay button in the workspace header).
 - Needs no click and no permission. Tavora 0.21.11 and newer, so set `minTavora` to at least `0.21.11` if you rely on it.
 
+### Running with the game
+
+A panel type with [`withGame`](./manifest.md#running-with-the-game) runs while one of the module's games runs, after the user allowed it: the panel of that type in the game's workspace, or a hidden one that is never placed in the layout. Its page loads and runs as usual (`getLaunch` says `restore`), is never shown and never paused (no `lifecycle.suspend`), also while Tavora's window is minimized. Chromium still slows timers of a page out of sight, so react to `folders.watch` events rather than polling. It ends with `lifecycle.dispose` when the game closes, like a closed panel.
+
+While it runs only for the game (the hidden panel, or the panel of a workspace not shown now), what needs the user fails with `PERMISSION_DENIED` ("… is not available while the panel runs with its game, out of sight") and nobody is told: every call that needs a click or key press (`links.open`, `panels.open`, `panels.openMany`, `panel.setMaximized`, `panel.openDialog`, `ui.showMenu`, `ui.tooltip.show`, `files.pickReadOnly`, `files.showInFolder`, `folders.choose`, `folders.showInFolder`, `hotkeys.set`, `overlay.copyLink`, `overlay.showOverGame`, `overlay.preview`, `overlay.openPage`, `leaderboards.show`, …). Save and open dialogs need a click in a panel the user sees. Show a toast or ask only in a panel the user has open. A crashed page starts once more; a second crash in the same game session leaves it off until the game starts again. Tavora 0.24.129 and newer (`minTavora` newer than `0.24.128`).
+
 ### Overlay preview
 
 `overlay.preview(key)` opens a small, normal Tavora window with the overlay page for `key` at its real size, so the user can see how it looks without a game or OBS. A footer switches the background between dark, light and checkered. Call it from the click or key press that asked for it, for example a Preview button next to Show over game. The page gets the same live state as in the game (`overlay.publish`, `watchOverlay`), no bridge and no network. It needs no connector and no permission, the module needs an `overlay` in its manifest, and it works whether Game overlays and Stream overlays are on or off. There is one window per overlay: calling it again brings that window forward. Tavora 0.21.3 and newer, so set `minTavora` to at least `0.21.3` if you rely on it.
@@ -554,7 +560,7 @@ SDK:
 | `BAD_REQUEST` | Malformed message, wrong `v`, no handshake yet, over the size limit or too many requests in flight | `supported` for a wrong `v` |
 | `UNKNOWN_METHOD` | The method is not part of the protocol | |
 | `INVALID_PARAMS` | Params missing, of the wrong shape or not JSON, or params sent to a method that takes none | |
-| `PERMISSION_DENIED` | The method exists but needs a capability this module was not granted; also a call that needs a click it did not get, or Tavora's own window while the panel is over the game | `capability` (only for a missing capability) |
+| `PERMISSION_DENIED` | The method exists but needs a capability this module was not granted; also a call that needs a click it did not get, Tavora's own window while the panel is over the game, or the user while the panel [runs with its game](#running-with-the-game) out of sight | `capability` (only for a missing capability) |
 | `QUOTA_EXCEEDED` | A storage, document or panel-state limit would be exceeded, or a network answer is over 5 MB | |
 | `NETWORK_ERROR` | `network.fetch` got no answer: the host could not be found or reached, the connection or certificate failed, or it took too long | |
 | `CONFLICT` | `ifRevision` did not match | `revision` |

@@ -5,7 +5,7 @@
 // "Update modules automatically" does one that asks for nothing new install at once (its panels
 // reload); every other update waits, fully checked, until the user says yes, and the installed
 // version keeps running until then. One that asks for new network hosts or connectors always waits.
-import { connectorsAtAdd, folderKey, type Connector, type ModuleManifest } from "@tavora/module-schema";
+import { connectorsAtAdd, folderKey, withGamePanelType, type Connector, type ModuleManifest } from "@tavora/module-schema";
 import type { ModuleNote } from "../shared/host-api";
 import type { CatalogClient, CatalogEntry, CatalogVersion } from "./catalog-client";
 import type { Permissions } from "./grants";
@@ -79,8 +79,11 @@ export function findUpdates(
   return updates;
 }
 
-/** What `after` asks for that `before` did not; connectors it asks for on request wait until the module needs them. */
-export function newAsks(before: Permissions, after: Pick<ModuleManifest, "permissions">["permissions"]): Permissions {
+/**
+ * What `after` asks for that `before` did not; connectors it asks for on request wait until the module needs them.
+ * `afterWithGame`: the new version runs a panel while its game runs, asked only when the installed one didn't.
+ */
+export function newAsks(before: Permissions, after: Pick<ModuleManifest, "permissions">["permissions"], afterWithGame = false): Permissions {
   const hosts = new Set(before.network);
   const connectors = new Set(before.connectors);
   const folders = new Set(before.folders);
@@ -88,11 +91,12 @@ export function newAsks(before: Permissions, after: Pick<ModuleManifest, "permis
     network: after.network.filter((host) => !hosts.has(host)),
     connectors: connectorsAtAdd(after).filter((name: Connector) => !connectors.has(name)),
     folders: (after.folders ?? []).map(folderKey).filter((key) => !folders.has(key)),
+    ...(afterWithGame && !before.withGame ? { withGame: true } : {}),
   };
 }
 
 export function asksNothing(asks: Permissions): boolean {
-  return asks.network.length === 0 && asks.connectors.length === 0 && asks.folders.length === 0;
+  return asks.network.length === 0 && asks.connectors.length === 0 && asks.folders.length === 0 && !asks.withGame;
 }
 
 /**
@@ -221,7 +225,7 @@ export class CatalogUpdater {
         // The zip must be signed by the listed key; the installer then checks it is this module's owner.
         const expect = { id: entry.id, owner: entry.owner };
         const checked = await this.options.check(zip, expect);
-        const asks = newAsks(module.asks, checked.manifest.permissions);
+        const asks = newAsks(module.asks, checked.manifest.permissions, withGamePanelType(checked.manifest) !== null);
         if (asksNothing(asks) && this.options.autoInstall?.()) {
           outcome.updated.push((await this.installOnce(entry.id, asks, () => this.options.install(zip, expect))).installed);
           continue;

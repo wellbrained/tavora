@@ -43,6 +43,13 @@ export interface ModulePanelType {
    * while the user holds Tavora's in-game layer open. Needs a `minTavora` newer than LAST_TAVORA_WITHOUT_IN_GAME_PANELS.
    */
   inGame?: boolean;
+  /**
+   * With the user's yes (asked with the module's other permissions), Tavora runs this panel hidden while one of the
+   * module's games runs, so it can keep track of the game (watch a save folder, say) without being open. At most one
+   * type per module, only for a module whose `games` names its games, and it needs a `minTavora` newer than
+   * LAST_TAVORA_WITHOUT_WITH_GAME_PANELS.
+   */
+  withGame?: boolean;
 }
 
 /**
@@ -276,7 +283,7 @@ export function isHomepage(value: unknown): value is string {
 export const MAX_PANEL_TYPES = 16;
 export const MAX_PANEL_NAME = 24;
 const PANEL_TYPE_ID = /^[a-z][a-z0-9-]{0,31}$/;
-const PANEL_FIELDS = ["id", "name", "entry", "icon", "viewport", "continues", "inGame"];
+const PANEL_FIELDS = ["id", "name", "entry", "icon", "viewport", "continues", "inGame", "withGame"];
 
 /** Most hotkey actions one module may declare, and the longest name Tavora shows for one. */
 export const MAX_ACTIONS = 16;
@@ -300,6 +307,8 @@ export interface ResolvedPanelType {
   viewport: ModuleViewport;
   /** The user may show this panel in their game (the type's `inGame`). */
   inGame?: true;
+  /** Runs hidden while the module's game runs, once the user allowed it (the type's `withGame`). */
+  withGame?: true;
 }
 
 /** The module's panel types, resolved; empty for a module with one panel and no types. */
@@ -311,7 +320,13 @@ export function panelTypes(manifest: ModuleManifest): ResolvedPanelType[] {
     icon: type.icon ?? manifest.icon,
     viewport: type.viewport ?? manifest.viewport,
     ...(type.inGame === true ? { inGame: true as const } : {}),
+    ...(type.withGame === true ? { withGame: true as const } : {}),
   }));
+}
+
+/** The panel type that runs hidden while the module's game runs (`withGame`), or null when none does. */
+export function withGamePanelType(manifest: Pick<ModuleManifest, "panels">): string | null {
+  return manifest.panels?.find((type) => type.withGame === true)?.id ?? null;
 }
 
 /** The type a panel opened before the module had types becomes: the one marked `continues`, else the first. Null without types. */
@@ -664,6 +679,8 @@ export const MAX_TRANSLATIONS = 32;
 export const LAST_TAVORA_WITHOUT_GAME_OVERLAYS = "0.20.50";
 /** The last Tavora that refuses a panel type's `inGame`; a manifest with it needs a newer `minTavora`. */
 export const LAST_TAVORA_WITHOUT_IN_GAME_PANELS = "0.21.2";
+/** The last Tavora that refuses a panel type's `withGame`; a manifest with it needs a newer `minTavora`. */
+export const LAST_TAVORA_WITHOUT_WITH_GAME_PANELS = "0.24.128";
 /** The last Tavora that refuses `translations`; a manifest with them needs a newer `minTavora`. */
 export const LAST_TAVORA_WITHOUT_TRANSLATIONS = "0.20.12";
 /** The last Tavora that refuses `overlaySize`; a manifest with it needs a newer `minTavora`. */
@@ -815,13 +832,23 @@ function checkViewport(viewport: unknown, at: string, errors: string[], wideAllo
   if (!wideAllowed) errors.push(`${at}.wide needs a minTavora newer than ${LAST_TAVORA_WITHOUT_WIDE_LAYOUT}, because older Tavoras refuse it`);
 }
 
-function checkPanels(panels: unknown, errors: string[], inGameAllowed = true, wideAllowed = true): void {
+/** What checkPanels needs to know of the rest of the manifest. */
+interface PanelChecks {
+  inGameAllowed: boolean;
+  wideAllowed: boolean;
+  withGameAllowed: boolean;
+  /** `games` names specific games (not empty, which means any game). */
+  forGames: boolean;
+}
+
+function checkPanels(panels: unknown, errors: string[], { inGameAllowed, wideAllowed, withGameAllowed, forGames }: PanelChecks): void {
   if (!Array.isArray(panels) || panels.length === 0 || panels.length > MAX_PANEL_TYPES) {
     errors.push(`panels must be an array of 1 to ${MAX_PANEL_TYPES} panel types`);
     return;
   }
   const ids = new Set<string>();
   let continuing = 0;
+  let withGame = 0;
   panels.forEach((type: unknown, index) => {
     const at = `panels[${index}]`;
     if (!isRecord(type)) {
@@ -845,10 +872,17 @@ function checkPanels(panels: unknown, errors: string[], inGameAllowed = true, wi
     if (type.continues === true) continuing++;
     if (type.inGame !== undefined && typeof type.inGame !== "boolean") errors.push(`${at}.inGame must be true or false`);
     else if (type.inGame === true && !inGameAllowed) errors.push(`${at}.inGame needs a minTavora newer than ${LAST_TAVORA_WITHOUT_IN_GAME_PANELS}, because older Tavoras refuse it`);
+    if (type.withGame !== undefined && typeof type.withGame !== "boolean") errors.push(`${at}.withGame must be true or false`);
+    else if (type.withGame === true) {
+      withGame++;
+      if (!forGames) errors.push(`${at}.withGame needs games to name the module's games: it runs while one of them runs`);
+      if (!withGameAllowed) errors.push(`${at}.withGame needs a minTavora newer than ${LAST_TAVORA_WITHOUT_WITH_GAME_PANELS}, because older Tavoras refuse it`);
+    }
     const unknown = Object.keys(type).filter((key) => !PANEL_FIELDS.includes(key));
     if (unknown.length > 0) errors.push(`unknown ${at} fields: ${unknown.join(", ")}`);
   });
   if (continuing > 1) errors.push("only one panel type may set continues");
+  if (withGame > 1) errors.push("only one panel type may set withGame");
 }
 
 /** Checks `panelLayout` against the module's panel types (`types`: their ids, null without `panels`). */
@@ -1069,7 +1103,12 @@ export function validateManifest(input: unknown): ManifestResult {
   checkViewport(input.viewport, "viewport", errors, wideAllowed);
   if (input.panels !== undefined) {
     const minTavora = { minTavora: typeof input.minTavora === "string" ? input.minTavora : "" };
-    checkPanels(input.panels, errors, officialId(input) || needsNewerTavora(minTavora, LAST_TAVORA_WITHOUT_IN_GAME_PANELS), wideAllowed);
+    checkPanels(input.panels, errors, {
+      inGameAllowed: officialId(input) || needsNewerTavora(minTavora, LAST_TAVORA_WITHOUT_IN_GAME_PANELS),
+      wideAllowed,
+      withGameAllowed: officialId(input) || needsNewerTavora(minTavora, LAST_TAVORA_WITHOUT_WITH_GAME_PANELS),
+      forGames: Array.isArray(input.games) && input.games.length > 0,
+    });
   }
   if (input.panelLayout !== undefined) {
     const types = Array.isArray(input.panels) ? new Set(input.panels.filter(isRecord).map((type) => type.id).filter(isPanelTypeId)) : null;

@@ -166,6 +166,9 @@ export interface PanelLease {
   return(): void;
 }
 
+/** Why a panel runs out of sight: an overlay or panel item of the in-game overlays, or its game running (a `withGame` type). */
+export type KeepReason = "overlay" | "game";
+
 export interface PanelViewState {
   kind: "module" | "browser";
   status: InstanceStatus;
@@ -207,7 +210,8 @@ export class PanelViews {
   private readonly noWelcome = new Set<string>();
   private readonly opened = new Map<string, OpenedFrom>();
   private readonly placements = new Map<string, PanelPlacement>();
-  private readonly keep = new Set<string>();
+  /** Panels that run out of sight, from any workspace, and why: for the overlays, or with their game (KeepReason). */
+  private readonly keep = new Map<string, Set<KeepReason>>();
   /** Panels lent to the in-game layer, with what to tell it when the panel closes for good. */
   private readonly lent = new Map<string, () => void>();
   private openingState: { startedAt: number; timer: ReturnType<typeof setTimeout>; tag: string } | null = null;
@@ -356,21 +360,32 @@ export class PanelViews {
     return !this.noWelcome.delete(instanceId);
   }
 
-  /** The panel runs for the in-game overlays, from any workspace, and stays when its workspace is left. */
-  keepRunning(instanceId: string): void {
-    this.keep.add(instanceId);
+  /**
+   * The panel runs out of sight, from any workspace, and stays when its workspace is left: for the in-game overlays
+   * (`overlay`), or while its game runs (`game`, host.ts syncWithGame). Each reason is let go of on its own.
+   */
+  keepRunning(instanceId: string, why: KeepReason = "overlay"): void {
+    const reasons = this.keep.get(instanceId);
+    if (reasons) reasons.add(why);
+    else this.keep.set(instanceId, new Set([why]));
   }
 
-  stopKeeping(instanceId: string): void {
-    this.keep.delete(instanceId);
+  stopKeeping(instanceId: string, why: KeepReason = "overlay"): void {
+    const reasons = this.keep.get(instanceId);
+    if (!reasons) return;
+    reasons.delete(why);
+    if (reasons.size === 0) this.keep.delete(instanceId);
   }
 
-  isKept(instanceId: string): boolean {
-    return this.keep.has(instanceId);
+  /** Kept for that reason, or for any when left out. */
+  isKept(instanceId: string, why?: KeepReason): boolean {
+    const reasons = this.keep.get(instanceId);
+    return reasons !== undefined && (why === undefined || reasons.has(why));
   }
 
-  keptIds(): string[] {
-    return [...this.keep];
+  /** The panels kept for that reason. */
+  keptIds(why: KeepReason = "overlay"): string[] {
+    return [...this.keep].filter(([, reasons]) => reasons.has(why)).map(([instanceId]) => instanceId);
   }
 
   // ── Cleanup ─────────────────────────────────────────────────────────
@@ -573,8 +588,9 @@ export class PanelViews {
     this.followSight(instanceId, adapter, rect !== undefined, visible && dialog === undefined);
     adapter.setVisible(visible);
     if (back && this.standIns.has(instanceId)) this.liftStandIn(instanceId, adapter);
-    // A panel kept running for the overlays isn't paused for being out of sight: its overlay goes on being fed.
-    if ((rect || this.keep.has(instanceId)) && !this.deps.windowHidden()) adapter.resume();
+    // A panel kept running for the overlays isn't paused for being out of sight: its overlay goes on being fed. One
+    // running with its game isn't paused at all, also while Tavora's window is minimized: the user is playing.
+    if (this.isKept(instanceId, "game") || ((rect || this.keep.has(instanceId)) && !this.deps.windowHidden())) adapter.resume();
     else adapter.suspend();
   }
 

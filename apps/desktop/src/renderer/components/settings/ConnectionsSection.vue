@@ -2,11 +2,14 @@
 // Settings > Connections: everything a module may reach outside its panel, one row each: websites, Discord, the AI
 // accounts, system info, media and leaderboards. A row says how much it is used; opened, it lists the modules
 // allowed to use it, each with Take back, and what there is to set up. Discord, AI accounts and Leaderboards show
-// only once an installed module asks for them (hiddenSettingIds). A search result opens its row.
-import { Cpu, Folder, Globe, Headphones, Music, Sparkles, Trophy } from "@lucide/vue";
+// only once an installed module asks for them (hiddenSettingIds). A search result opens its row. Running while its
+// game runs (main/with-game.ts) is a switch per module instead: off is kept as an answer, so the module doesn't ask
+// again, and on starts it at once if its game runs.
+import { Cpu, Folder, Gamepad2, Globe, Headphones, Music, Sparkles, Trophy } from "@lucide/vue";
 import { computed, reactive, watch } from "vue";
 import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { account, act, aiUsage, confirmAction, discord, hiddenSettingIds, state, submitAction } from "../../host";
 import { t } from "../../i18n";
 import ModuleIcon from "../ModuleIcon.vue";
@@ -61,6 +64,13 @@ const boards = computed(() => modules.value.filter((module) => module.permission
 const boardsGranted = (module: ModuleView) => module.permissions.granted.connectors.includes("leaderboards");
 const signedIn = computed(() => account.value?.account != null);
 
+/** Installed modules that ask to run while their game runs, on or off. */
+const withGame = computed(() => modules.value.filter((module) => module.permissions.asks.withGame));
+const withGameOn = computed(() => withGame.value.filter((module) => module.permissions.granted.withGame).length);
+function setWithGame(module: ModuleView, on: boolean) {
+  void act({ type: "set-module-with-game", moduleId: module.id, on });
+}
+
 function leaveBoards(module: ModuleView) {
   confirmAction({
     title: t("integrations.leaderboards.leaveTitle", { name: module.name }),
@@ -111,6 +121,34 @@ function leaveBoards(module: ModuleView) {
           </Button>
         </template>
       </GrantedModules>
+    </SettingExpand>
+
+    <SettingExpand
+      v-if="!hiddenSettingIds.has('with-game')"
+      v-model:open="open['with-game']"
+      :label="t('settings.with-game.label')"
+      :description="withGameOn ? t('connections.withGame', { count: withGameOn }) : t('connections.unused')"
+      :details="t('settings.with-game.description')"
+      setting="with-game"
+      :highlighted="highlight === 'with-game'"
+      testid="connection-with-game"
+    >
+      <template #lead><span class="module-tile size-9" aria-hidden="true"><Gamepad2 class="size-4" /></span></template>
+      <p v-if="!withGame.length" class="text-muted-foreground py-3 text-sm" data-testid="with-game-users-none">{{ t("integrations.withGame.none") }}</p>
+      <AnimatedList v-else tag="ul" class="flex flex-col py-2" data-testid="with-game-users">
+        <li v-for="module in withGame" :key="module.id" class="flex items-center gap-3 border-b border-dashed py-2 last:border-b-0" :data-testid="`with-game-user-${module.id}`">
+          <span class="module-tile size-8" aria-hidden="true">
+            <ModuleIcon :module-id="module.id" size="size-4" />
+          </span>
+          <span class="min-w-0 flex-1 truncate font-medium">{{ module.name }}</span>
+          <Switch
+            :model-value="module.permissions.granted.withGame === true"
+            :aria-label="t('integrations.withGame.label', { name: module.name })"
+            :data-testid="`with-game-switch-${module.id}`"
+            @update:model-value="(on: boolean) => setWithGame(module, on)"
+          />
+        </li>
+      </AnimatedList>
     </SettingExpand>
 
     <SettingExpand

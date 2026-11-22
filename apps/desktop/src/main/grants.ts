@@ -4,7 +4,7 @@
 // A grant only covers what the module's current manifest still asks for, and every gated call
 // checks it again, so revoking takes effect at once.
 import path from "node:path";
-import { connectorsAtAdd, folderKey, isConnector, isModuleId, isNetworkEntry, isOwnerId, parseFolderKey, type Connector, type ModuleManifest } from "@tavora/module-schema";
+import { connectorsAtAdd, folderKey, isConnector, isModuleId, isNetworkEntry, isOwnerId, parseFolderKey, withGamePanelType, type Connector, type ModuleManifest } from "@tavora/module-schema";
 import { SerialQueue, writeFileAtomic } from "./fsutil";
 import { readSavedFile } from "./json";
 import { SUPPORTED_VERSIONS } from "./saved-versions";
@@ -21,6 +21,12 @@ export interface Permissions {
   connectors: Connector[];
   /** Folders on this PC to read, each as its folderKey (path and both extension lists). */
   folders: string[];
+  /**
+   * Running a panel hidden while the module's game runs (a panel type's `withGame`). In what is asked, missing or
+   * allowed it is true or left out; in a stored grant, false means the user switched it off in Settings, which counts
+   * as answered, so it isn't asked again until a version newly asks for it (catalog-updates.ts newAsks).
+   */
+  withGame?: boolean;
 }
 
 export interface Grant extends Permissions {
@@ -33,7 +39,7 @@ export interface Grant extends Permissions {
 /** The module a grant is for: who publishes it and what it asks for. */
 export interface GrantSubject {
   owner: string;
-  manifest: Pick<ModuleManifest, "id" | "version" | "permissions">;
+  manifest: Pick<ModuleManifest, "id" | "version" | "permissions" | "panels">;
 }
 
 type GrantFile = { version: number; owners: Record<string, Record<string, Grant>> };
@@ -42,12 +48,22 @@ const EMPTY: Permissions = { network: [], connectors: [], folders: [] };
 
 /** What a manifest asks for, with the optional connectors filled in. */
 function asked(manifest: GrantSubject["manifest"]): Permissions {
-  return { network: manifest.permissions.network, connectors: manifest.permissions.connectors ?? [], folders: (manifest.permissions.folders ?? []).map(folderKey) };
+  return {
+    network: manifest.permissions.network,
+    connectors: manifest.permissions.connectors ?? [],
+    folders: (manifest.permissions.folders ?? []).map(folderKey),
+    ...(asksWithGame(manifest) ? { withGame: true } : {}),
+  };
+}
+
+/** Whether the module asks to run a panel while its game runs (one of its panel types has `withGame`). */
+export function asksWithGame(manifest: Pick<ModuleManifest, "panels">): boolean {
+  return withGamePanelType(manifest) !== null;
 }
 
 function sanitizeGrant(value: unknown): Grant | null {
   if (typeof value !== "object" || value === null) return null;
-  const { version, grantedAt, network, connectors = [], folders = [] } = value as Record<string, unknown>;
+  const { version, grantedAt, network, connectors = [], folders = [], withGame } = value as Record<string, unknown>;
   if (typeof version !== "string" || typeof grantedAt !== "string" || !Array.isArray(network) || !Array.isArray(connectors) || !Array.isArray(folders)) return null;
   return {
     version,
@@ -55,6 +71,8 @@ function sanitizeGrant(value: unknown): Grant | null {
     network: [...new Set(network.filter(isNetworkEntry))],
     connectors: [...new Set(connectors.filter(isConnector))],
     folders: [...new Set(folders.filter((key): key is string => parseFolderKey(key) !== null))],
+    // Anything but true or false is as if never answered.
+    ...(typeof withGame === "boolean" ? { withGame } : {}),
   };
 }
 
@@ -88,6 +106,8 @@ export function missingPermissions(manifest: GrantSubject["manifest"], grant: Gr
     network: ask.network.filter((host) => !hosts.has(host)),
     connectors: ask.connectors.filter((name) => !connectors.has(name)),
     folders: ask.folders.filter((key) => !folders.has(key)),
+    // Switched off in Settings is an answer too.
+    ...(asksWithGame(manifest) && grant?.withGame === undefined ? { withGame: true } : {}),
   };
 }
 
@@ -98,7 +118,12 @@ export function effectivePermissions(manifest: GrantSubject["manifest"], grant: 
   const hosts = new Set(grant.network);
   const connectors = new Set(grant.connectors);
   const folders = new Set(grant.folders);
-  return { network: ask.network.filter((host) => hosts.has(host)), connectors: ask.connectors.filter((name) => connectors.has(name)), folders: ask.folders.filter((key) => folders.has(key)) };
+  return {
+    network: ask.network.filter((host) => hosts.has(host)),
+    connectors: ask.connectors.filter((name) => connectors.has(name)),
+    folders: ask.folders.filter((key) => folders.has(key)),
+    ...(ask.withGame && grant.withGame === true ? { withGame: true } : {}),
+  };
 }
 
 export class GrantStore {
@@ -141,8 +166,25 @@ export class GrantStore {
     const network = [...new Set([...(previous?.network ?? []), ...what.network.filter((host) => ask.network.includes(host))])];
     const connectors = [...new Set([...(previous?.connectors ?? []), ...what.connectors.filter((name) => ask.connectors.includes(name))])];
     const folders = [...new Set([...(previous?.folders ?? []), ...what.folders.filter((key) => ask.folders.includes(key))])];
+    // Granted when asked and shown; else what the user answered before stays (a switch turned off too).
+    const withGame = what.withGame === true && ask.withGame === true ? true : previous?.withGame;
     if (!this.owners.has(owner)) this.owners.set(owner, new Map());
-    this.owners.get(owner)!.set(manifest.id, { version: manifest.version, grantedAt: this.now().toISOString(), network, connectors, folders });
+    this.owners.get(owner)!.set(manifest.id, { version: manifest.version, grantedAt: this.now().toISOString(), network, connectors, folders, ...(withGame !== undefined ? { withGame } : {}) });
+    return this.save();
+  }
+
+  /**
+   * Settings > Connections, "Runs while its game runs": the switch for a module that asks for it. Off is kept as an
+   * answer, so the module isn't asked again; on is the user's yes. Nothing else of the grant changes.
+   */
+  setWithGame(subject: GrantSubject, on: boolean): Promise<void> {
+    const { owner, manifest } = subject;
+    if (!asksWithGame(manifest)) return Promise.resolve();
+    const previous = this.get(owner, manifest.id);
+    const now = this.now().toISOString();
+    const base = previous ?? { version: manifest.version, grantedAt: now, network: [], connectors: [], folders: [] };
+    if (!this.owners.has(owner)) this.owners.set(owner, new Map());
+    this.owners.get(owner)!.set(manifest.id, { ...base, ...(on ? { grantedAt: now } : {}), withGame: on });
     return this.save();
   }
 
@@ -156,7 +198,11 @@ export class GrantStore {
     const network = previous.network.filter((host) => !takenHosts.has(host));
     const connectors = previous.connectors.filter((name) => !takenConnectors.has(name));
     const folders = previous.folders.filter((key) => !takenFolders.has(key));
-    if (what && network.length + connectors.length + folders.length > 0) this.owners.get(owner)!.set(moduleId, { ...previous, network, connectors, folders });
+    // Taken back on its own, running with the game stays answered (off), so it isn't asked again.
+    const withGame = what?.withGame === true && previous.withGame !== undefined ? false : previous.withGame;
+    if (what && (network.length + connectors.length + folders.length > 0 || withGame !== undefined)) {
+      this.owners.get(owner)!.set(moduleId, { ...previous, network, connectors, folders, ...(withGame !== undefined ? { withGame } : {}) });
+    }
     else this.owners.get(owner)!.delete(moduleId);
     if (this.owners.get(owner)!.size === 0) this.owners.delete(owner);
     return this.save();

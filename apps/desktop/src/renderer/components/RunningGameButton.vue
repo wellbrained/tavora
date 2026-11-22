@@ -3,7 +3,8 @@
 // card that peeks out above it, like the notification behind the front one, and switches to the game. The profile
 // card says which game it is. It slides back while that game is open, since there is nothing to switch to, and moves
 // the items above it up and down as it comes and goes. A running game that is not in the library (or only in Trash)
-// gets the same layer offering to add it; once added, it opens and the layer is the switch again.
+// gets the same layer offering to add it; once added, it opens and the layer is the switch again. While modules run
+// with that game (main/with-game.ts), a quiet line under the label names them; compact, the tooltip says it.
 //
 // Only transform and opacity move. The row's height changes at once, and what sits above it starts where it was and
 // glides to its new place (a FLIP), in step with the layer, instead of animating the height.
@@ -12,12 +13,12 @@ import { computed, ref, watch } from "vue";
 import { cn } from "@tavora/official-ui/lib/utils";
 import { useTask } from "@tavora/official-ui/use-task";
 import type { UnlistedGame } from "../../shared/host-api";
-import { act, state } from "../host";
+import { act, listOf, state } from "../host";
 import { t } from "../i18n";
 import { addInputForUnlisted } from "../lib/game-picker";
 import RailTooltip from "./RailTooltip.vue";
 
-defineProps<{ expanded: boolean }>();
+const props = defineProps<{ expanded: boolean }>();
 
 const game = computed(() => {
   const id = state.value!.runningGameId;
@@ -47,6 +48,21 @@ watch(
   { immediate: true },
 );
 const label = computed(() => (offer.value.kind === "add" ? t("rail.addRunningGame", { name: offer.value.game.name }) : t("rail.switchToGame")));
+/**
+ * The modules running with the game offered, as one quiet line. Kept while the layer slides away, like the offer, so
+ * the layer doesn't shrink on its way out.
+ */
+const alongside = ref<string | null>(null);
+watch(
+  [() => state.value!.runningWithGame, game, () => offer.value.kind],
+  ([names]) => {
+    if (!shown.value) return;
+    alongside.value = offer.value.kind === "switch" && names.length ? t("rail.withGame", { count: names.length, names: listOf(names) }) : null;
+  },
+  { immediate: true },
+);
+/** The tooltip and the name for screen readers: the label, then the line. */
+const described = computed(() => (alongside.value ? `${label.value}. ${alongside.value}` : label.value));
 const status = computed(() => (adding.busy.value ? "adding" : offer.value.kind));
 
 function run() {
@@ -64,8 +80,8 @@ function run() {
   }
 }
 
-/** How far the row grows and shrinks: the part of the layer that shows above the profile card (h-7). */
-const PEEK = 28;
+/** How far the row grows and shrinks: the part of the layer that shows above the profile card (h-7, h-11 with the line). */
+const peekHeight = computed(() => (alongside.value && props.expanded ? 44 : 28));
 const peek = ref<HTMLElement | null>(null);
 watch(
   shown,
@@ -76,7 +92,7 @@ watch(
     if (!above || !("animate" in above) || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const style = getComputedStyle(peek.value!);
     above.animate(
-      { transform: [`translateY(${now ? PEEK : -PEEK}px)`, "translateY(0)"] },
+      { transform: [`translateY(${now ? peekHeight.value : -peekHeight.value}px)`, "translateY(0)"] },
       { duration: parseFloat(style.getPropertyValue("--duration-panel")) || 250, easing: style.getPropertyValue("--ease-out-strong").trim() || "ease-out" },
     );
   },
@@ -86,13 +102,14 @@ watch(
 
 <template>
   <!-- The 28 px that show above the profile card; the rest of the layer sits under it. -->
-  <div ref="peek" :class="cn('running-peek relative', shown ? 'h-7' : 'h-0')" :inert="!shown">
-    <RailTooltip :text="label" :disabled="expanded">
+  <div ref="peek" :class="cn('running-peek relative', !shown ? 'h-0' : peekHeight === 44 ? 'h-11' : 'h-7')" :inert="!shown">
+    <RailTooltip :text="described" :disabled="expanded">
       <button
         type="button"
         :class="
           cn(
-            'running-layer group/run absolute top-0 flex h-10 items-start rounded-lg border pt-[5px] text-xs font-medium',
+            'running-layer group/run absolute top-0 flex items-start rounded-lg border pt-[5px] text-xs font-medium',
+            peekHeight === 44 ? 'h-14' : 'h-10',
             // Narrower than what it sits behind: the profile card when expanded, the avatar tile when compact.
             expanded ? 'inset-x-4 justify-between px-2.5' : 'inset-x-[18px] justify-center',
             !shown && 'translate-y-7 opacity-0',
@@ -101,13 +118,16 @@ watch(
         data-rail-item
         data-testid="rail-running"
         :data-status="status"
-        :aria-label="label"
+        :aria-label="described"
         :aria-busy="adding.busy.value"
         @click="run"
       >
-        <span class="relative flex h-[18px] items-center gap-2">
-          <span class="running-dot" aria-hidden="true" />
-          <span v-if="expanded" class="text-foreground/90 truncate">{{ label }}</span>
+        <span class="relative flex min-w-0 flex-col items-start gap-0.5">
+          <span class="flex h-[18px] items-center gap-2">
+            <span class="running-dot" aria-hidden="true" />
+            <span v-if="expanded" class="text-foreground/90 truncate">{{ label }}</span>
+          </span>
+          <span v-if="expanded && alongside" class="text-muted-foreground max-w-full truncate pl-[15px] font-normal" data-testid="rail-running-with-game">{{ alongside }}</span>
         </span>
         <component
           :is="offer.kind === 'add' ? Plus : ArrowRight"

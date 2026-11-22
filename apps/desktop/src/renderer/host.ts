@@ -217,8 +217,8 @@ export const makesModules = computed(() => Boolean(state.value?.library.makesMod
 
 /**
  * Single settings not shown on this run: Discord and AI usage until an installed module asks for them (Discord also
- * while its voice connection is paused, shared/discord-voice.ts), Leaderboards until one offers them, and the game
- * overlays on a PC that can't show them.
+ * while its voice connection is paused, shared/discord-voice.ts), Leaderboards until one offers them, running with
+ * the game until one asks for it, and the game overlays on a PC that can't show them.
  */
 export const hiddenSettingIds = computed<ReadonlySet<string>>(
   () =>
@@ -226,6 +226,8 @@ export const hiddenSettingIds = computed<ReadonlySet<string>>(
       ...(asksFor("discord") && !DISCORD_VOICE_PAUSED ? [] : ["discord-connection"]),
       ...(asksFor("ai-usage") ? [] : ["ai-usage-accounts"]),
       ...(asksFor("leaderboards") ? [] : ["leaderboards"]),
+      // Until an installed module asks to run while its game runs.
+      ...(state.value?.modules.some((module) => module.permissions.asks.withGame) ? [] : ["with-game"]),
       ...(state.value?.gameOverlays.supported ? [] : GAME_OVERLAY_SETTINGS),
       // Panel styles belong to Classic; in another style the row is hidden, so search doesn't lead there.
       ...(state.value && state.value.appearance.styleId !== CLASSIC_STYLE ? ["panel-style"] : []),
@@ -741,7 +743,7 @@ export function stopUpdateAsks(): void {
 
 /** Whether the module asks for something the user has not granted yet. */
 export function needsGrant(module: ModuleState): boolean {
-  return module.permissions.missing.network.length > 0 || module.permissions.missing.connectors.length > 0 || module.permissions.missing.folders.length > 0;
+  return module.permissions.missing.network.length > 0 || module.permissions.missing.connectors.length > 0 || module.permissions.missing.folders.length > 0 || module.permissions.missing.withGame === true;
 }
 
 /**

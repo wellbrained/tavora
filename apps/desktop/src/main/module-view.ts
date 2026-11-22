@@ -165,6 +165,12 @@ export interface ModuleViewOptions {
   hotkeys: { list(): HotkeyBinding[]; set(action: string, target: string, label: string): Promise<HotkeySetResult>; remove(target: string, action: string | null): void };
   /** Test runs only: hosts mapped to a local server (network.ts). */
   testHosts?: TestHosts;
+  /**
+   * The panel runs now only because its game runs, out of sight (with-game.ts): the hidden panel never placed in a
+   * layout, or one of a workspace not shown. What needs the user there (a dialog, a menu, a picker, a link, another
+   * panel, a key) is refused, without a word to the user.
+   */
+  runsOnlyWithGame?(): boolean;
 }
 
 /** How often the host checks that a module's page still runs. */
@@ -650,8 +656,14 @@ export class ModuleView {
     this.options.onNeedsTavora?.();
   }
 
+  /** What needs the user is not for a panel that runs only with its game, out of sight: refused, and nobody is told. */
+  private refuseWithGame(what: string): void {
+    if (this.options.runsOnlyWithGame?.()) throw new HostError("PERMISSION_DENIED", `${what} is not available while the panel runs with its game, out of sight`);
+  }
+
   /** Calls that need Tavora's own window (a dialog, a menu, another panel) are not for a panel over the game. */
   private refuseOverGame(what: string): void {
+    this.refuseWithGame(what);
     if (!this.overGame) return;
     this.needsTavora();
     throw new HostError("PERMISSION_DENIED", `${what} is not available while the panel is shown over the game; bring it back first`);
@@ -659,6 +671,7 @@ export class ModuleView {
 
   /** `what` is the call as METHOD_INFO names it (gesture-table.test.ts holds the two together); `detail` only goes into the error. */
   private async takeGesture(what: CallName, detail?: string): Promise<void> {
+    this.refuseWithGame(detail ?? what);
     if (!unused(this.press)) {
       await new Promise<void>((resolve) => {
         const done = () => {
@@ -710,6 +723,7 @@ export class ModuleView {
   /** panel.setDialog: opening takes a click or key press, or the pass of a panel just added (used up either way). */
   private async requestDialog(open: boolean, size: PanelDialogSize): Promise<void> {
     if (!open) return this.options.setDialog(false, size);
+    this.refuseWithGame("panel.setDialog");
     const pass = this.addPass;
     this.addPass = null;
     if (pass && !unused(this.press) && !this.overGame && Date.now() <= pass.until) return this.options.setDialog(true, size, { byClick: false });
@@ -894,6 +908,7 @@ export class ModuleView {
         openLink: (url) => this.openLink(url),
         tooltip:{
           show:async request=>{
+            this.refuseWithGame("ui.tooltip.show");
             if(!this.tooltipAnchorAllowed(request.at))return false;
             if(request.pinned)await this.takeGesture("ui.tooltip.show", "a pinned ui.tooltip.show");
             else {

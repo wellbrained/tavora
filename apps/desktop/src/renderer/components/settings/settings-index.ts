@@ -120,6 +120,7 @@ export const SETTING_SECTIONS: readonly (readonly [id: string, section: Settings
   ["module-files", "modules"],
   ["module-grants", "connections"],
   ["folder-grants", "connections"],
+  ["with-game", "connections"],
   ["discord-connection", "connections"],
   ["ai-usage-accounts", "connections"],
   ["system-info", "connections"],

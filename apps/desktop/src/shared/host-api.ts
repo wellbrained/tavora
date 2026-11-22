@@ -841,6 +841,8 @@ export interface HostViewState {
     icon: string | null;
     /** What the module may do: what its manifest asks for (`asks`), what the user granted of it, and what is still to answer. */
     permissions: { asks: ModulePermissions; granted: ModulePermissions; missing: ModulePermissions };
+    /** For a module that runs with its game (`permissions.asks.withGame`) made for one game: that game's name in the library, for the consent dialog. */
+    gameName?: string;
     /** Workspaces (ids in the library) with a panel of this module, for the dialogs that remove them. */
     usedIn: string[];
     /** The newest version the module's patch notes cover (null without any), and whether some are new to the user. */
@@ -897,6 +899,8 @@ export interface HostViewState {
    * the game of the workspace open now. Its id is its game workspace's. Null when none, or while "When a game starts" is off.
    */
   runningGameId: string | null;
+  /** The modules whose panels run with that game now (main/with-game.ts), by name, for a quiet line on its card. */
+  runningWithGame: string[];
   /** Whether the game of the workspace open now runs on this PC; the header says so. False while "When a game starts" is off. */
   workspaceRunning: boolean;
   /**
@@ -1017,6 +1021,8 @@ export interface ModulePermissions {
   connectors: ModuleConnector[];
   /** Folders on this PC it may read (permissions.folders), each as its grant key (module-schema folderKey, parseFolderKey). */
   folders: string[];
+  /** Runs a panel hidden while its game runs (a panel type's `withGame`); left out when not. */
+  withGame?: boolean;
 }
 
 /** The connectors Tavora has (module-schema CONNECTORS). */

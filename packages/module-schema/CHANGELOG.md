@@ -2,6 +2,10 @@
 
 What changed in `@tavora/module-schema`, newest first.
 
+## 0.2.2
+
+- A panel type may set `withGame: true`: with the user's yes, Tavora runs that panel out of sight while one of the module's games runs. At most one type per module, only for a module whose `games` names its games, and it needs a `minTavora` newer than `LAST_TAVORA_WITHOUT_WITH_GAME_PANELS` (0.24.128), except Tavora's own modules. `panelTypes` passes it on (`ResolvedPanelType.withGame`), and `withGamePanelType(manifest)` names that type. The JSON Schema knows the field.
+
 ## 0.2.1
 
 - New `isWindowsDeviceName(name)`: whether Windows keeps a name for a device, also with an extension or spaces after it (`NUL.txt`, `com1.x`, `CON .json`), with a superscript digit (`COM¹`, `LPT³`) and as `CONIN$` or `CONOUT$`. `isFolderName` uses it, so a manifest folder name such as `COM¹` or `CONIN$` is now refused too.

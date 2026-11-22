@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp, defineComponent, h, type App } from "vue";
 import type { HostViewState, UnlistedGame } from "../../shared/host-api";
 
-const host = vi.hoisted(() => ({ act: vi.fn() }));
+const host = vi.hoisted(() => ({ act: vi.fn(), listOf: (names: string[]) => new Intl.ListFormat("en", { type: "conjunction" }).format(names) }));
 vi.mock("../host", async () => {
   const { shallowRef } = await import("vue");
   return { ...host, state: shallowRef(null) };
@@ -33,9 +33,10 @@ const KINGS: UnlistedGame = { name: "9 Kings", steamAppId: 2784470, catalogId: n
 const FORTNITE = { id: "local-fortnite", name: "Fortnite" };
 
 /** The part of the host's state the card reads. */
-function setState(view: { runningGameId?: string | null; unlistedGame?: UnlistedGame | null }) {
+function setState(view: { runningGameId?: string | null; unlistedGame?: UnlistedGame | null; runningWithGame?: string[] }) {
   state.value = {
     runningGameId: view.runningGameId ?? null,
+    runningWithGame: view.runningWithGame ?? [],
     unlistedGame: view.unlistedGame ?? null,
     library: { workspaces: { [FORTNITE.id]: FORTNITE, "local-9-kings": { id: "local-9-kings", name: "9 Kings" } } },
   } as unknown as HostViewState;
@@ -54,8 +55,8 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-async function mount() {
-  app = createApp(defineComponent({ render: () => h(RunningGameButton, { expanded: true }) }));
+async function mount(expanded = true) {
+  app = createApp(defineComponent({ render: () => h(RunningGameButton, { expanded }) }));
   app.mount(root);
   await settle();
 }
@@ -99,6 +100,33 @@ describe("RunningGameButton", () => {
     await settle();
     expect(button().dataset.status).toBe("add");
     expect(button().getAttribute("aria-label")).toBe("Add 9 Kings");
+  });
+
+  it("names the modules running with the game in one quiet line, and keeps it while sliding away", async () => {
+    setState({ runningGameId: "local-9-kings", runningWithGame: ["9 Kings Companion"] });
+    await mount();
+    const line = () => root.querySelector('[data-testid="rail-running-with-game"]');
+    expect(line()?.textContent).toBe("9 Kings Companion runs with the game");
+    expect(button().getAttribute("aria-label")).toBe("Switch to game. 9 Kings Companion runs with the game");
+    setState({ runningGameId: "local-9-kings", runningWithGame: ["9 Kings Companion", "Run Notes"] });
+    await settle();
+    expect(line()?.textContent).toBe("9 Kings Companion and Run Notes run with the game");
+    setState({ runningGameId: "local-9-kings" });
+    await settle();
+    expect(line()).toBeNull();
+    setState({ runningGameId: "local-9-kings", runningWithGame: ["9 Kings Companion"] });
+    await settle();
+    // The game is open now, so the layer slides away with its words.
+    setState({});
+    await settle();
+    expect(line()?.textContent).toBe("9 Kings Companion runs with the game");
+  });
+
+  it("puts the line in the name only while compact", async () => {
+    setState({ runningGameId: "local-9-kings", runningWithGame: ["9 Kings Companion"] });
+    await mount(false);
+    expect(root.querySelector('[data-testid="rail-running-with-game"]')).toBeNull();
+    expect(button().getAttribute("aria-label")).toBe("Switch to game. 9 Kings Companion runs with the game");
   });
 
   it("becomes the switch to the added game when it couldn't be opened", async () => {
