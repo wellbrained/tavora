@@ -28,6 +28,32 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.24.140",
+    date: "2026-11-22",
+    title: "Development folders kept",
+    notes: [
+      "A development folder you add is still there after a restart.",
+    ],
+    prs: [
+      { number: 905, title: "Give the Host's concepts their own modules, part 3c: workspace library, panel dialogs, profile and questions, window frame" },
+    ],
+    tags: ["modules", "workspace"],
+  },
+  {
+    version: "0.24.139",
+    date: "2026-11-22",
+    title: "Safer starts and moves",
+    notes: [
+      "Started with a switch Tavora doesn't know, it closes and says so. Start it from its own shortcut or the Start menu. `--disable-gpu` still works.",
+      "Moving your pictures to a folder that links back to where they are now is refused, so none get lost.",
+      "A module's hotkeys control your music only when you set them for play/pause, next or previous.",
+    ],
+    prs: [
+      { number: 902, title: "Harden desktop edges: switch allowlist, real paths for the files move, no link loops in backups, media hotkeys" },
+    ],
+    tags: ["cloud-copy", "modules", "privacy", "sdk", "website"],
+  },
+  {
     version: "0.24.138",
     date: "2026-11-22",
     title: "Taking your account back",

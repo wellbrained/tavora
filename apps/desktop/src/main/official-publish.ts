@@ -52,6 +52,8 @@ export const HOST_ONLY: ReadonlySet<string> = new Set(
     "main/index.ts",
     "main/host.ts",
     "main/startup-failure.ts",
+    // Tavora's window frame: its buttons' colours and its saved place (window-frame.ts).
+    "main/window-frame.ts",
     "main/actions.ts",
     "main/game-copy.ts",
     "main/games-seen.ts",
@@ -68,6 +70,8 @@ export const HOST_ONLY: ReadonlySet<string> = new Set(
     "main/share-icons.ts",
     // The library's game icons and the Add a game list's (game-icons.ts gathers them for host.ts).
     "main/game-icons.ts",
+    // Adding, trashing and deleting workspaces, and their snapshots, from the host window (workspace-library.ts).
+    "main/workspace-library.ts",
     "main/catalog-client.ts",
     // The catalog's pages, reviews, reports and update checks as the host window uses them (module-catalog.ts).
     "main/module-catalog.ts",
@@ -75,6 +79,8 @@ export const HOST_ONLY: ReadonlySet<string> = new Set(
     "main/module-page.ts",
     "main/publisher-names.ts",
     "main/account.ts",
+    // The profile card and what of it goes to the account (user-profile.ts).
+    "main/user-profile.ts",
     "main/account-key.ts",
     "main/sign-in.ts",
     "main/pairing.ts",

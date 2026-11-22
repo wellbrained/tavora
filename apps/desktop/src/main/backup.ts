@@ -1,4 +1,4 @@
-import { copyFile, cp, mkdir, readdir, rename, rm, stat } from "node:fs/promises";
+import { copyFile, cp, lstat, mkdir, readdir, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { isOwnerId } from "@tavora/module-schema";
 import { FILES_DIR } from "./module-files";
@@ -26,13 +26,18 @@ export function dayName(now: Date): string {
   return `${now.getFullYear()}-${two(now.getMonth() + 1)}-${two(now.getDate())}`;
 }
 
+/**
+ * How many bytes `target` holds. A link (a symlink, or a junction on Windows) counts nothing and is never followed,
+ * as a snapshot leaves it out: a link back up the tree would otherwise be counted over and over.
+ */
 async function sizeOf(target: string): Promise<number> {
   let info;
   try {
-    info = await stat(target);
+    info = await lstat(target);
   } catch {
     return 0;
   }
+  if (info.isSymbolicLink()) return 0;
   if (!info.isDirectory()) return info.size;
   let total = 0;
   for (const name of await readdir(target)) total += await sizeOf(path.join(target, name));
@@ -120,8 +125,16 @@ export async function backupData(options: BackupOptions): Promise<BackupResult> 
     for (const name of dirs) {
       for (const part of await parts(name)) {
         const from = path.join(source(name), part);
-        // Temp files of a write in progress are not part of the data.
-        if (await exists(from)) await cp(from, path.join(partial, name, part), { recursive: true, filter: (file) => !file.endsWith(".tmp") });
+        // Temp files of a write in progress are not part of the data. Nor are links (symlinks, junctions): Tavora
+        // makes none, a link back up the tree would loop, and cp would make a junction a symlink, which Windows lets
+        // only Developer Mode or an admin make, failing the whole snapshot.
+        const keep = async (file: string) => {
+          if (file.endsWith(".tmp")) return false;
+          const link = await lstat(file).then((info) => info.isSymbolicLink(), () => false);
+          if (link) log(`backup leaves out the link ${file}`);
+          return !link;
+        };
+        if (await exists(from)) await cp(from, path.join(partial, name, part), { recursive: true, filter: keep });
       }
     }
     await rename(partial, target);

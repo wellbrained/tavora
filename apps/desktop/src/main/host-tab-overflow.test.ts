@@ -29,7 +29,7 @@ function host(panels: InstanceType<typeof ModuleView>[]) {
   Object.assign(subject, {
     library,
     syncNativeTheme: () => {},
-    applyTitleBarOverlay: () => {},
+    frame: { recolour: () => {} },
     applyCorners: () => {},
     saveLibrary: vi.fn(),
     window: { setBackgroundColor: () => {} },

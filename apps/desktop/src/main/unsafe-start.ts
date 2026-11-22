@@ -6,8 +6,9 @@ import { findUnsafeSwitch } from "./unsafe-switches";
  */
 export function quitOnUnsafeSwitches(options: { packaged: boolean; argv: readonly string[]; show: (message: string) => void; quit: () => void }): boolean {
   const unsafe = options.packaged ? findUnsafeSwitch(options.argv) : undefined;
-  if (!unsafe) return false;
-  options.show(`Tavora was started with --${unsafe}, which would let other programs into it, so it closed. Start Tavora from its own shortcut or the Start menu.`);
+  // A bare `--` is a switch too, named "".
+  if (unsafe === undefined) return false;
+  options.show(`Tavora was started with --${unsafe} and closed, as switches it doesn't know could let other programs into it. Start Tavora from its own shortcut or the Start menu.`);
   options.quit();
   return true;
 }

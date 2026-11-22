@@ -214,6 +214,7 @@ export class DevelopmentFolders {
     if (!folder) return;
     if (library.developmentFolders.length >= MAX_DEVELOPMENT_FOLDERS) throw new LibraryError("error.tooManyDevelopmentFolders");
     library.developmentFolders = cleanDevelopmentFolders([...library.developmentFolders, folder]);
+    this.options.saveLibrary();
     dialogs.remember("development-folder", folder);
     await this.options.reload();
     return path.resolve(folder);

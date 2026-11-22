@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -75,6 +75,20 @@ describe("backupData", () => {
     expect(await list("backups/2026-10-01")).toEqual(["library.json", "module-data", "profile.json", "workspace.json"]);
     expect(await backupData({ userData: dir, now: at(2026, 10, 2), maxBytes: 10 })).toEqual({ status: "too-big" });
     expect(await list("backups")).toEqual(["2026-10-01"]);
+  });
+
+  it("leaves links out, counting none, instead of following them round and round", async () => {
+    await seed();
+    await write("profile/big.png", "x".repeat(400));
+    // A junction on Windows needs no Developer Mode a symlink would; Node's lstat sees either as a link.
+    await symlink(path.join(dir, "profile"), path.join(dir, "profile", "loop"), process.platform === "win32" ? "junction" : "dir");
+    const lines: string[] = [];
+    // Followed, the loop counts big.png once per level until the system gives up (dozens of levels): far over 2000.
+    const result = await backupData({ userData: dir, now: at(2026, 10, 1), maxBytes: 2000, log: (line) => lines.push(line) });
+    expect(result).toMatchObject({ status: "made", withPictures: true });
+    expect(await readFile(path.join(dir, "backups/2026-10-01/profile/big.png"), "utf8")).toHaveLength(400);
+    expect(await list("backups/2026-10-01/profile")).toEqual(["avatar.png", "big.png"]);
+    expect(lines).toContain(`backup leaves out the link ${path.join(dir, "profile", "loop")}`);
   });
 
   it("backs up the pictures folder wherever it is, but only the modules' own folders in it", async () => {

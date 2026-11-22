@@ -946,6 +946,44 @@ describe("guarded calls", () => {
     expect(spies.setDialog).not.toHaveBeenCalled();
   });
 
+  it("a press of the module's hotkey for a media control allows that one control, once", async () => {
+    for (const [action, control] of [["play-pause", "playPause"], ["next", "next"], ["previous", "previous"]] as const) {
+      const { view, context, spies } = guarded();
+      view.hotkeyPressed({ action, target: "player" });
+      await expect(context.media.control("session-1", control), action).resolves.toBe(true);
+      expect(spies.mediaControl, action).toHaveBeenCalledTimes(1);
+      await expect(context.media.control("session-1", control), action).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+      expect(spies.mediaControl, action).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it("a press of any other hotkey allows no media control", async () => {
+    // A key set for something else (Start, or one named like Object's own fields), or for another control.
+    for (const [action, control] of [["start", "playPause"], ["constructor", "next"], ["next", "playPause"], ["play-pause", "previous"]] as const) {
+      const { view, context, spies } = guarded();
+      view.hotkeyPressed({ action, target: "item-1" });
+      await expect(context.media.control("session-1", control), `${action} → ${control}`).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+      expect(spies.mediaControl).not.toHaveBeenCalled();
+    }
+  });
+
+  it("a media hotkey's press ends with the window, and with a press of another hotkey", async () => {
+    const { view, context, spies } = guarded();
+    const start = Date.now();
+    const clock = vi.spyOn(Date, "now").mockReturnValue(start);
+    try {
+      view.hotkeyPressed({ action: "next", target: "player" });
+      clock.mockReturnValue(start + GESTURE_MS + 1);
+      await expect(context.media.control("session-1", "next")).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+      view.hotkeyPressed({ action: "next", target: "player" });
+      view.hotkeyPressed({ action: "start", target: "item-1" });
+      await expect(context.media.control("session-1", "next")).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+      expect(spies.mediaControl).not.toHaveBeenCalled();
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
   it("a fresh press gets each call past its check, which uses the press up", async () => {
     for (const row of ROWS) {
       const { view, context } = guarded();

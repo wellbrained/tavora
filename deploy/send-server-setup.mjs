@@ -40,9 +40,11 @@ const work = mkdtempSync(path.join(tmpdir(), "tavora-server-setup-"));
 try {
   const tree = path.join(work, "tree");
   mkdirSync(path.join(tree, "keys"), { recursive: true });
-  // git archive: exactly the committed bytes (LF endings), the same ones deploys compare with.
+  // git archive: exactly the committed bytes (LF endings), the same ones deploys compare with (`git cat-file`).
+  // With core.autocrlf on (the Windows default), git archive would write CRLF into every text file that
+  // .gitattributes doesn't pin, so the server's checks (update-keys.ts) and the hashes would not match.
   const archive = path.join(work, "head.tar");
-  run("git", ["archive", "--format=tar", "-o", archive, "HEAD", "--", ...PATHS]);
+  run("git", ["-c", "core.autocrlf=false", "-c", "core.eol=lf", "archive", "--format=tar", "-o", archive, "HEAD", "--", ...PATHS]);
   const tar = path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe");
   run(tar, ["-xf", archive, "-C", tree]);
   for (const { user, keyVar } of Object.values(JOBS)) {

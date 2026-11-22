@@ -5,7 +5,7 @@ import { serveFolderFile, type FolderHost, type FolderWatch } from './folder-acc
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { app, BrowserWindow, clipboard, ClipboardItem, MessageChannelMain, session, shell, WebContentsView, type IpcMainEvent, type Session, type WebContents } from "electron";
-import type { CallName, Capability, GameOverlayResult, ReadOnlyFile, SystemApps, SystemInfo, SystemTraffic, HotkeyBinding, HotkeySetResult, JsonValue, OverlayLinkResult, OverlaySource, TavoraTheme, TavoraViewport, TavoraWorkspace } from "@tavora/sdk/protocol";
+import type { CallName, Capability, GameOverlayResult, MediaAction, ReadOnlyFile, SystemApps, SystemInfo, SystemTraffic, HotkeyBinding, HotkeySetResult, JsonValue, OverlayLinkResult, OverlaySource, TavoraTheme, TavoraViewport, TavoraWorkspace } from "@tavora/sdk/protocol";
 import type { ResolvedPanelType } from "@tavora/module-schema";
 import { modulePartition } from "./module-data";
 import { gestureCounts, type OverGame } from "./game-overlays";
@@ -428,6 +428,11 @@ export type NavigateOutcome = "switched" | "failed" | "unhandled";
 /** How long after a click or key press a link may be opened. */
 export const GESTURE_MS = 2_000;
 /**
+ * The hotkey actions that control media, and the one control each allows: a module's actions with these ids (manifest
+ * `actions`). A press of any other of its hotkeys allows none, whatever the module does with it.
+ */
+export const MEDIA_HOTKEY_ACTIONS: Readonly<Record<string, MediaAction>> = { "play-pause": "playPause", next: "next", previous: "previous" };
+/**
  * How long a call that needs a click waits for it. The preload reports clicks on another channel than
  * the bridge, so the report can land just after the call the click made.
  */
@@ -470,8 +475,8 @@ export class ModuleView implements PanelViewAdapter {
   private readonly folderWatches = new Map<string, FolderWatch>();
   /** How many folders.watch calls each folder had, so a slow start can't outlive a later call. */
   private readonly folderTurns = new Map<string, number>();
-  /** When one of the module's hotkeys was last pressed for this panel; it allows one media.control, like a click. */
-  private hotkeyAt = 0;
+  /** The last press of one of the module's media hotkeys for this panel (MEDIA_HOTKEY_ACTIONS): it allows that one media.control. */
+  private mediaHotkey: { action: MediaAction; at: number } | null = null;
   /** The theme's colours in the current page, replaced when the theme changes. */
   private readonly themeCss = new InsertedCss(() => this.view.webContents);
   /** The font in the current page, replaced only when the user picks another (InsertedCss skips the same sheet). */
@@ -1175,8 +1180,8 @@ export class ModuleView implements PanelViewAdapter {
    * The media connector as this panel uses it. Changes reach only this page and only while the grant lasts (a revoke
    * ends the watch at the next change at the latest, and closing the panel ends it at once). Unlike system info they
    * keep coming while the panel is hidden: they are rare and cheap, and a module's overlay over the game or on stream
-   * has to stay current while Tavora is behind the game. A control needs a click or key press in the page, or one of
-   * the module's hotkeys, just before; one press allows one control.
+   * has to stay current while Tavora is behind the game. A control needs a click or key press in the page, or a press
+   * of the module's hotkey for that very control (MEDIA_HOTKEY_ACTIONS), just before; one press allows one control.
    */
   private mediaFor(bridge: () => BridgeSession): BridgeContext["media"] {
     const connected = () => this.bridge === bridge() && this.capabilities().has("media");
@@ -1194,7 +1199,8 @@ export class ModuleView implements PanelViewAdapter {
       },
       control: async (session, action) => {
         if (!this.mediaWatch) return false;
-        if (Date.now() - this.hotkeyAt <= GESTURE_MS) this.hotkeyAt = 0;
+        const pressed = this.mediaHotkey;
+        if (pressed?.action === action && Date.now() - pressed.at <= GESTURE_MS) this.mediaHotkey = null;
         else await this.takeGesture("media.control");
         return (await this.mediaWatch?.control(session, action)) ?? false;
       },
@@ -1267,7 +1273,9 @@ export class ModuleView implements PanelViewAdapter {
 
   /** The user pressed a hotkey set for this module in this workspace. */
   hotkeyPressed(binding: HotkeyBinding): void {
-    this.hotkeyAt = Date.now();
+    // Object.hasOwn: an action id like `constructor` must not find something of Object's.
+    const media = Object.hasOwn(MEDIA_HOTKEY_ACTIONS, binding.action) ? MEDIA_HOTKEY_ACTIONS[binding.action] : undefined;
+    this.mediaHotkey = media ? { action: media, at: Date.now() } : null;
     this.bridge?.emit("hotkeys.pressed", { ...binding });
   }
 

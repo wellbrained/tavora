@@ -108,7 +108,8 @@ the pull request that makes it explicit.
 - **Panel slot content** (`components/workspace/PanelContent.vue`: a 9-way `v-if`) → a pure `panelSlot(panel)` union
   and `data-status` on the slot.
 
-- **Panel dialog** (`components/PanelDialog.vue`, `main/panel-views.ts` `dialogState`) → `closed | placing | drawn | shown`.
+- **Panel dialog** (`components/PanelDialog.vue`, `main/panel-views.ts` `dialogState`; opened, and a dialog asked for
+  before its panel had its slot kept waiting, by `main/panel-dialogs.ts`) → `closed | placing | drawn | shown`.
   A menu of the panel over its dialog is already one value (`dialogMenu`: `null | picturing | out`): the view steps aside
   behind its picture (`dialogPicture`) while the host page draws the menu.
 

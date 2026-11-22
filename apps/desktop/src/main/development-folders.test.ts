@@ -155,7 +155,7 @@ describe("DevelopmentFolders", () => {
     const { folders, calls, library } = setup({ pick: "/dev/mods" });
     expect(await folders.add()).toBe(path.resolve("/dev/mods"));
     expect(library.developmentFolders).toEqual([path.resolve("/dev/mods")]);
-    expect(calls).toEqual(["pick development-folder", "remember development-folder /dev/mods", "reload"]);
+    expect(calls).toEqual(["pick development-folder", "library saved", "remember development-folder /dev/mods", "reload"]);
   });
 
   it("adds no folder past the limit", async () => {

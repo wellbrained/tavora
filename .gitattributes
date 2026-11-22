@@ -4,3 +4,4 @@
 *.timer text eol=lf
 deploy/server/tavora-* text eol=lf
 *.conf text eol=lf
+apps/desktop/src/main/update-keys.ts text eol=lf

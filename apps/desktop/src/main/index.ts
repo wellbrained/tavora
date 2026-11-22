@@ -11,6 +11,7 @@ import { parseTestInstalled } from "./installed-list";
 import { readGrayscaleText } from "./saved-data";
 import { reportStartupFailure } from "./startup-failure";
 import { quitOnUnsafeSwitches } from "./unsafe-start";
+import { clearUnsafeEnvironment } from "./unsafe-switches";
 import { refuseClientCertificates } from "./client-certificates";
 import { refuseDevices } from "./devices";
 
@@ -34,6 +35,9 @@ quitOnUnsafeSwitches({
   show: (message) => reportStartupFailure(userData, message),
   quit: () => process.exit(1),
 });
+// Nor does it pass on the variables that would have Chromium write TLS keys or its log to a file (UNSAFE_ENVIRONMENT):
+// gone before any helper process starts, the network service among them.
+if (app.isPackaged) clearUnsafeEnvironment(process.env);
 
 // Both schemes behave like https origins: standard URL parsing, a secure
 // context and per-origin storage. Neither may register service workers.

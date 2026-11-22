@@ -2,7 +2,7 @@
 // picks the place in a system dialog; everything is copied and checked first, the setting is
 // switched next, and only then are the old files removed, so a failure never loses a picture.
 
-import { copyFile, mkdir, readdir, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
+import { copyFile, lstat, mkdir, readdir, realpath, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isGameId, isModuleId, isOwnerId } from "@tavora/module-schema";
 import { parseBlobFileName } from "./blobs";
@@ -36,8 +36,32 @@ const inside = (child: string, parent: string) => {
 const insideOrSame = (child: string, parent: string) => sameFolder(child, parent) || inside(child, parent) || (process.platform === "win32" && inside(child.toLowerCase(), parent.toLowerCase()));
 
 /**
+ * Where `place` really is: its real path (links, and junctions on Windows, resolved), or for a place not made yet the
+ * real path of the nearest folder above it that is there, with the rest appended.
+ */
+async function realPlace(place: string): Promise<string> {
+  const resolved = path.resolve(place);
+  try {
+    return await realpath(resolved);
+  } catch {
+    const parent = path.dirname(resolved);
+    return parent === resolved ? resolved : path.join(await realPlace(parent), path.basename(resolved));
+  }
+}
+
+/** Why `root` can't take the files now in `currentRoot`, comparing where both really are (no link may lead one into the other). */
+async function overlap(root: string, currentRoot: string): Promise<"same" | "nested" | null> {
+  const [real, current] = await Promise.all([realPlace(root), realPlace(currentRoot)]);
+  if (sameFolder(real, current)) return "same";
+  if (insideOrSame(real, current) || insideOrSame(current, real)) return "nested";
+  return null;
+}
+
+/**
  * The folder the files would go to if the user picked `picked`: a folder called FILES_FOLDER_NAME
  * inside it (or `picked` itself when it already has that name). Null with the problem when it cannot be used.
+ * Places are compared where they really are, so a link or junction onto the folder in use (or into it) is refused
+ * like the folder itself: the move would otherwise copy each file onto itself and then delete it.
  */
 export async function filesTarget(
   picked: string,
@@ -47,11 +71,11 @@ export async function filesTarget(
 ): Promise<{ root: string } | { problem: TargetProblem }> {
   const chosen = path.resolve(picked);
   const root = [FILES_FOLDER_NAME, OLD_FOLDER_NAME].includes(path.basename(chosen)) ? chosen : path.join(chosen, FILES_FOLDER_NAME);
-  const dataDefault = path.resolve(defaultRoot);
-  if (sameFolder(root, path.resolve(currentRoot))) return { problem: "same" };
-  if (insideOrSame(root, path.resolve(currentRoot)) || insideOrSame(path.resolve(currentRoot), root)) return { problem: "nested" };
+  const before = await overlap(root, currentRoot);
+  if (before) return { problem: before };
   // Tavora's own data folder is no place for it, except the default folder itself.
-  if (!sameFolder(root, dataDefault) && insideOrSame(root, path.resolve(userData))) return { problem: "inside-data" };
+  const [real, realDefault, realData] = await Promise.all([realPlace(root), realPlace(defaultRoot), realPlace(userData)]);
+  if (!sameFolder(real, realDefault) && insideOrSame(real, realData)) return { problem: "inside-data" };
   try {
     await mkdir(root, { recursive: true });
     const probe = path.join(root, `.tavora-write-test-${process.pid}`);
@@ -60,6 +84,9 @@ export async function filesTarget(
   } catch {
     return { problem: "not-writable" };
   }
+  // Now that it is there, once more where it really is.
+  const after = await overlap(root, currentRoot);
+  if (after) return { problem: after };
   return { root };
 }
 
@@ -107,12 +134,19 @@ const fileAt = (root: string, file: StoredFile) => path.join(root, file.owner, f
  * kept, so a move that was cut off can be run again. Throws on the first problem; the old files are untouched.
  */
 export async function copyStoredFiles(from: string, to: string, files: readonly StoredFile[]): Promise<void> {
+  const source = await realPlace(from);
   for (const file of files) {
     const target = fileAt(to, file);
-    const existing = await stat(target).then((info) => info.size, () => -1);
-    if (existing !== file.bytes) {
-      await mkdir(path.dirname(target), { recursive: true });
+    await mkdir(path.dirname(target), { recursive: true });
+    // A link inside the new folder (to a module's or a workspace's folder, or to the file itself) may lead back into
+    // the old one: the "copy" would be the original, deleted once the move is done. A file there is never a link.
+    if (insideOrSame(await realPlace(path.dirname(target)), source)) throw new Error(`${path.dirname(target)} leads back into ${from}`);
+    const there = await lstat(target).catch(() => null);
+    if (there && !there.isFile()) throw new Error(`${target} is no plain file`);
+    if (there?.size !== file.bytes) {
       const part = `${target}.part`;
+      // A .part left over (or put there as a link) goes first: copyFile writes through a link.
+      await rm(part, { force: true });
       await copyFile(fileAt(from, file), part);
       if ((await stat(part)).size !== file.bytes) throw new Error(`copy of ${file.name} is not the same size`);
       await rename(part, target);
