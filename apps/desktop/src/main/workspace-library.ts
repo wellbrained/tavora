@@ -118,7 +118,8 @@ export class WorkspaceLibrary {
    * Moves workspaces to Trash and answers with the token that takes them back: out of Trash into their places. `strict`:
    * every one must be there; else those already gone are skipped, so a list the screen showed a moment ago still works.
    * Undo opens a workspace again only when it was open and the user is still on the Home it left them on; one switched to
-   * meanwhile stays open.
+   * meanwhile stays open. The open one is read after the trash, as host.ts always did: trashing clears the library's last
+   * workspace, which is what host.ts shows, so today the screen stays and Undo brings it back as the last one instead.
    */
   trash(ids: readonly string[], strict: boolean): string {
     const { library, saveLibrary, screen } = this.options;

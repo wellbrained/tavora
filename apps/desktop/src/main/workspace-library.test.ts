@@ -24,8 +24,8 @@ interface Setup {
   unfit?: string[];
   pick?: string | undefined;
   found?: OnlineSearchResult;
-  shown?: string | null;
-  home?: boolean;
+  /** The workspace open now, as the library's last one; Home when none. */
+  open?: string;
 }
 
 async function setup(options: Setup = {}) {
@@ -36,7 +36,9 @@ async function setup(options: Setup = {}) {
   const installed = new Installed({ modules: new Map(modules.map((item) => [item.manifest.id, item])), blocked: new Map(), catalog: new Set(), info: new Map(), problems: [] }, (manifest) => manifest);
   const userData = await mkdtemp(path.join(tmpdir(), "tavora-workspaces-"));
   const undos = new UndoShelf();
-  const screen = { shown: options.shown ?? null, home: options.home ?? true };
+  // As in host.ts: the workspace shown is the library's last one, while the workspace screen is up.
+  const screen = { on: options.open ? "workspace" : "home" };
+  if (options.open) library.lastWorkspaceId = options.open;
   const shelf = new WorkspaceLibrary({
     library,
     saveLibrary: () => void calls.push("library saved"),
@@ -59,17 +61,16 @@ async function setup(options: Setup = {}) {
     },
     gameListed: (workspaceId) => void calls.push(`listed ${workspaceId}`),
     screen: {
-      shown: () => screen.shown,
-      onHome: () => screen.home,
+      shown: () => (screen.on === "workspace" ? library.lastWorkspaceId : null),
+      onHome: () => screen.on === "home",
       goHome: () => {
         calls.push("home");
-        screen.shown = null;
-        screen.home = true;
+        screen.on = "home";
       },
       open: (workspaceId) => {
         calls.push(`open ${workspaceId}`);
-        screen.shown = workspaceId;
-        screen.home = false;
+        screen.on = "workspace";
+        library.lastWorkspaceId = workspaceId;
       },
     },
     views: {
@@ -142,32 +143,36 @@ describe("WorkspaceLibrary", () => {
     expect(calls).toEqual(["library saved"]);
   });
 
-  it("trashes the open workspace and goes Home; Undo puts it back and opens it while the user is still Home", async () => {
+  it("moves workspaces to Trash; Undo puts them back in their places, and the offer is gone after", async () => {
     const library = emptyLibrary();
     addWorkspace(library, valheim, new Date());
-    const { shelf, calls, undos } = await setup({ library, shown: "valheim", home: false });
-    const token = shelf.trash(["valheim"], true);
-    expect(isLive(library, "valheim")).toBe(false);
-    expect(calls).toEqual(["home", "library saved"]);
-
-    await undos.undo(token);
-    expect(isLive(library, "valheim")).toBe(true);
-    expect(calls.slice(2)).toEqual(["library saved", "open valheim"]);
-    // Once back, the offer is gone.
-    await expect(undos.undo(token)).rejects.toMatchObject({ key: "error.undoGone" });
-  });
-
-  it("leaves the workspace switched to open after an Undo, and skips workspaces already gone when not strict", async () => {
-    const library = emptyLibrary();
-    addWorkspace(library, valheim, new Date());
-    const { shelf, calls, undos, screen } = await setup({ library, shown: "valheim", home: false });
+    addWorkspace(library, { online: { id: "satisfactory", name: "Satisfactory" } }, new Date());
+    const { shelf, calls, undos } = await setup({ library });
     const token = shelf.trash(["valheim", "gone"], false);
-    screen.shown = "other";
-    screen.home = false;
+    expect(isLive(library, "valheim")).toBe(false);
+    expect(calls).toEqual(["library saved"]);
+
     await undos.undo(token);
-    expect(calls).not.toContain("open valheim");
+    expect(library.root.map((item) => item.id)).toEqual(["valheim", "satisfactory"]);
+    expect(calls).toEqual(["library saved", "library saved"]);
+    await expect(undos.undo(token)).rejects.toMatchObject({ key: "error.undoGone" });
     // Strict: every one must be there.
     expect(() => shelf.trash(["gone"], true)).toThrow();
+  });
+
+  // As host.ts did before this module: the open workspace is read after trashing, which clears the library's last
+  // workspace, so the screen isn't left (the host page shows Home, having no workspace to show) and Undo brings it
+  // back as the last one rather than opening it. Kept as it was; the pull request that moved this notes it.
+  it("reads the open workspace after the trash: the screen stays, and Undo makes it the last workspace again", async () => {
+    const library = emptyLibrary();
+    addWorkspace(library, valheim, new Date());
+    const { shelf, calls, undos } = await setup({ library, open: "valheim" });
+    const token = shelf.trash(["valheim"], true);
+    expect(library.lastWorkspaceId).toBeNull();
+    expect(calls).toEqual(["library saved"]);
+    await undos.undo(token);
+    expect(library.lastWorkspaceId).toBe("valheim");
+    expect(calls).toEqual(["library saved", "library saved"]);
   });
 
   it("restores from Trash and tells the rail; strict refuses one that isn't there, else it is skipped", async () => {
