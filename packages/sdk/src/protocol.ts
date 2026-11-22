@@ -1745,7 +1745,7 @@ export const STYLE_TAVORA = "0.24.110";
  * number is written. Set it to the version the pull request merges as, right before merging, then run
  * `pnpm --filter @tavora/docs protocol`. An older Tavora leaves it out, which means `"list"`.
  */
-export const TAB_OVERFLOW_TAVORA = "0.24.134";
+export const TAB_OVERFLOW_TAVORA = "0.24.135";
 
 export const METHOD_INFO: Readonly<Record<CallName, MethodInfo>> = {
   "bridge.handshake": call("0.1.0"),

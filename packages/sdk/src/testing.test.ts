@@ -921,9 +921,9 @@ describe("tabOverflow in the theme", () => {
     host.changeTheme({ tabOverflow: undefined });
     expect("tabOverflow" in (await sdk.ui.getTheme())).toBe(false);
 
-    expect(versionAtLeast(TAB_OVERFLOW_TAVORA, "0.24.134")).toBe(true);
+    expect(versionAtLeast(TAB_OVERFLOW_TAVORA, "0.24.135")).toBe(true);
     expect(versionAtLeast(LATEST_TAVORA, TAB_OVERFLOW_TAVORA)).toBe(true);
-    const older = createMemoryHost({ version: "0.24.133", theme: { tabOverflow: "arrows" } });
+    const older = createMemoryHost({ version: "0.24.134", theme: { tabOverflow: "arrows" } });
     expect((await older.sdk.ui.getTheme()).tabOverflow).toBeUndefined();
     older.host.changeTheme({ tabOverflow: "arrows" });
     expect(tabOverflowOf(await older.sdk.ui.getTheme())).toBe("list");
