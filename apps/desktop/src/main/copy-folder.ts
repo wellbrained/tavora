@@ -155,8 +155,8 @@ export interface FolderStorageOptions {
 
 /**
  * What `unusedFile` holds: for the folder it is about, how long this PC has seen each part (or sync app copy) unused, and
- * when it last looked. Each look adds the time since the one before, at most a day: a clock that jumps ahead can't make a
- * part old at once, nor one set back keep it longer.
+ * when it last looked. Each look adds the time since the one before, at most three days: a clock that jumps ahead can't
+ * make a part old at once, nor one set back keep it longer.
  */
 interface UnusedRecord {
   v: 1;
@@ -363,7 +363,9 @@ export class FolderStorage implements CopyStorage {
    * save goes on top of that. Anything else there (another PC saved meanwhile) is for the user to choose.
    */
   async makeRoom(base: number, followed: number | undefined, check: ManifestCheck): Promise<number | null> {
-    if (base <= SANE_VERSION) return base;
+    // Only when this PC kept its side over that list does it know why a list goes: otherwise (a start over, an older
+    // Tavora's state) nothing is removed, and the save goes on top as ever.
+    if (base <= SANE_VERSION || followed === undefined) return base;
     const all = await this.manifests();
     /** "yes" opens with the key; "no" was read and doesn't; "unknown" can't be read right now. */
     const opens = async (file: ManifestFile): Promise<"yes" | "no" | "unknown"> => {
@@ -378,7 +380,7 @@ export class FolderStorage implements CopyStorage {
     if (at && (await opens(at)) !== "no") return base;
     for (const file of all) if (file.version > SANE_VERSION && (await opens(file)) === "no") await rm(path.join(this.manifestsDir, file.name), { force: true });
     const newest = (await this.manifests())[0]?.version ?? 0;
-    return followed !== undefined && newest === followed ? followed : null;
+    return newest === followed ? followed : null;
   }
 
   nextVersion(base: number): number {
@@ -427,11 +429,12 @@ export class FolderStorage implements CopyStorage {
    *   are kept while it is.
    * - One that was read and can't be checked (junk, sealed with another key, or saying something else than its name or
    *   header) stops it while it is among those kept: nothing is deleted this time. Past them it goes. One numbered above
-   *   every real one blocks every save, until the user keeps this PC's side over it (CopySync.keep): then it sinks.
+   *   every real one blocks every save, until the user keeps this PC's side over it (CopySync.keep): below 2^48 the save
+   *   goes on top and it sinks; above, the save doesn't climb on it, and it is removed (makeRoom).
    * - One that can't be read right now (busy, online only, gone) stops it, wherever it is: it may come right.
    * - One whose name says a version above MAX_VERSION isn't one: it goes.
    * - A part no kept manifest uses goes once this PC has counted it unused for a week (KEEP_PART_MS, noted in
-   *   `unusedFile`; each clean-up counts at most a day), when no manifest has used it since. A sync app's copy of a part
+   *   `unusedFile`; each clean-up counts at most three days), when no manifest has used it since. A sync app's copy of a part
    *   (Tavora never reads one) likewise.
    */
   private async cleanUp(check: ManifestCheck): Promise<void> {

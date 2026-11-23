@@ -5,7 +5,7 @@ import { cp, mkdir, open as openFile, rm, rmdir, writeFile } from "node:fs/promi
 import path from "node:path";
 import { isOwnerId } from "@tavora/module-schema";
 import { DATA_DIRS, PICTURE_DIRS } from "./backup";
-import { copyKeys, manifestMark, open, PART_ID_BYTES, partId, seal, type CopyKeys } from "./copy-crypto";
+import { copyKeys, keyFingerprint, manifestMark, open, PART_ID_BYTES, partId, seal, type CopyKeys } from "./copy-crypto";
 import { writeFileAtomic } from "./fsutil";
 import { DamagedFile, look, lookBytes, lookNames, lookStat, unlessHeld, type Looked } from "./file-look";
 import { renameHeld } from "./rename-held";
@@ -104,6 +104,11 @@ export interface CopyState {
    * only when it is still the newest left (FolderStorage.makeRoom). An older Tavora ignores it.
    */
   keptFrom?: number;
+  /**
+   * Which key `files` were synced with (copy-crypto.ts `keyFingerprint`). Under another key their part ids mean nothing, so
+   * an upload with it sends every file again. A state without it (an older Tavora's) can't tell, and counts as the same.
+   */
+  keyId?: string;
 }
 
 export const EMPTY_STATE: CopyState = { version: 0, pictures: true, files: {} };
@@ -507,8 +512,11 @@ export class CloudCopy {
    * again, and parts the copy already has are not sent again. Returns the state to keep on success.
    * `progress` hears how much of what changed is read and sent so far.
    */
-  async upload(copyKey: Uint8Array, roots: CopyRoot[], synced: CopyState, progress?: (done: number, total: number) => void): Promise<UploadResult> {
+  async upload(copyKey: Uint8Array, roots: CopyRoot[], last: CopyState, progress?: (done: number, total: number) => void): Promise<UploadResult> {
     const keys = copyKeys(copyKey);
+    const keyId = keyFingerprint(copyKey);
+    // Synced under another key (a crash while the key changed): none of its parts are this key's.
+    const synced = last.keyId !== undefined && last.keyId !== keyId ? { ...last, files: {} } : last;
     // Kept over a list put there that the key doesn't open (FolderStorage.makeRoom): on top of where this PC was before, when
     // nothing else came meanwhile; otherwise the user chooses.
     const base = this.storage.makeRoom ? await this.storage.makeRoom(synced.version, synced.keptFrom, checkWith(keys)) : synced.version;
@@ -587,7 +595,7 @@ export class CloudCopy {
       const sealed = seal(keys, Buffer.from(JSON.stringify(manifest)));
       const ids = manifestParts(manifest);
       const answer = await this.storage.swap(state.version, version, ids, sealed, checkWith(keys));
-      if (answer.status === "saved") return { status: "uploaded", state: { version: answer.version, pictures, files, sealed: true, marked: true }, pictures, size: answer.size };
+      if (answer.status === "saved") return { status: "uploaded", state: { version: answer.version, pictures, files, sealed: true, marked: true, keyId }, pictures, size: answer.size };
       if (answer.status === "conflict") return { status: "conflict", version: answer.version };
       if (answer.status === "too-big") return { status: "too-big", size: answer.size ?? total };
       return "missing-parts";
@@ -733,7 +741,7 @@ export class CloudCopy {
         await joinParts(partsDir, file, target);
         result[file.path] = { size: file.size, sha256: file.sha256, parts: file.parts };
       }
-      return { version, pictures: manifest.pictures !== false, files: result, ...(sealed ? { sealed: true } : {}), ...(marked ? { marked: true } : {}) };
+      return { version, pictures: manifest.pictures !== false, files: result, ...(sealed ? { sealed: true } : {}), ...(marked ? { marked: true } : {}), keyId: keyFingerprint(copyKey) };
     } finally {
       await rm(partsDir, { recursive: true, force: true }).catch(() => undefined);
     }
@@ -771,6 +779,8 @@ export interface DownloadedCopy {
   sealed?: boolean;
   /** Its manifest carried its mark. */
   marked?: boolean;
+  /** The key it came down with (CopyState `keyId`). */
+  keyId?: string;
 }
 
 /**
@@ -1015,7 +1025,7 @@ export async function swapInCopy(staging: string, roots: CopyRoot[], keepIn: str
     const same = !resumed || (found.size === synced.size && (await fileSha256(found.file)) === synced.sha256);
     files[found.path] = { ...synced, mtimeMs: same ? found.mtimeMs : CHANGED_SINCE };
   }
-  return { version: copy.version, pictures: copy.pictures, files, ...(copy.sealed ? { sealed: true } : {}), ...(copy.marked ? { marked: true } : {}) };
+  return { version: copy.version, pictures: copy.pictures, files, ...(copy.sealed ? { sealed: true } : {}), ...(copy.marked ? { marked: true } : {}), ...(copy.keyId !== undefined ? { keyId: copy.keyId } : {}) };
 }
 
 // What this PC keeps about the copy: the state in cloud-copy.json (paths, sizes, hashes and part ids,
@@ -1037,7 +1047,7 @@ export async function lookCopyState(file: string): Promise<Looked<CopyState>> {
   if (typeof saved.v === "number" && saved.v > STORE_VERSIONS.cloudCopy) return { status: "present", value: EMPTY_STATE };
   if (saved.v !== STORE_VERSIONS.cloudCopy) return damaged;
   if (typeof saved.version !== "number" || typeof saved.files !== "object" || saved.files === null) return damaged;
-  return { status: "present", value: { version: saved.version, pictures: saved.pictures !== false, files: saved.files as Record<string, SyncedFile>, ...(saved.kept === true ? { kept: true } : {}), ...(saved.sealed === true ? { sealed: true } : {}), ...(saved.marked === true ? { marked: true } : {}), ...(typeof saved.keptFrom === "number" && Number.isSafeInteger(saved.keptFrom) ? { keptFrom: saved.keptFrom } : {}) } };
+  return { status: "present", value: { version: saved.version, pictures: saved.pictures !== false, files: saved.files as Record<string, SyncedFile>, ...(saved.kept === true ? { kept: true } : {}), ...(saved.sealed === true ? { sealed: true } : {}), ...(saved.marked === true ? { marked: true } : {}), ...(typeof saved.keptFrom === "number" && Number.isSafeInteger(saved.keptFrom) ? { keptFrom: saved.keptFrom } : {}), ...(typeof saved.keyId === "string" ? { keyId: saved.keyId } : {}) } };
 }
 
 /** The state as saved, or the empty one when it can't be used. */
@@ -1048,5 +1058,5 @@ export async function loadCopyState(file: string): Promise<CopyState> {
 
 /** Writes the state. During a swap it goes to another file than cloud-copy.json (CopySync.parkState). */
 export async function saveCopyState(file: string, state: CopyState): Promise<void> {
-  await writeFileAtomic(file, JSON.stringify({ v: STORE_VERSIONS.cloudCopy, version: state.version, pictures: state.pictures, files: state.files, ...(state.kept ? { kept: true } : {}), ...(state.sealed ? { sealed: true } : {}), ...(state.marked ? { marked: true } : {}), ...(state.keptFrom !== undefined ? { keptFrom: state.keptFrom } : {}) }));
+  await writeFileAtomic(file, JSON.stringify({ v: STORE_VERSIONS.cloudCopy, version: state.version, pictures: state.pictures, files: state.files, ...(state.kept ? { kept: true } : {}), ...(state.sealed ? { sealed: true } : {}), ...(state.marked ? { marked: true } : {}), ...(state.keptFrom !== undefined ? { keptFrom: state.keptFrom } : {}), ...(state.keyId !== undefined ? { keyId: state.keyId } : {}) }));
 }

@@ -5,7 +5,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { CloudCopyView } from "../shared/host-api";
 
-import { CloudCopy, CopyError, EMPTY_STATE, NewestUnreadable, swapInCopy, type CopyState } from "./cloud-copy";
+import { CloudCopy, CopyError, EMPTY_STATE, loadCopyState, NewestUnreadable, saveCopyState, swapInCopy, type CopyState } from "./cloud-copy";
 import { cleanUp, pc } from "./cloud-copy.test-helper";
 import { CopySync } from "./cloud-copy-sync";
 import { copyKeys, newCopyKey, open, partId, recoveryKey, seal } from "./copy-crypto";
@@ -561,6 +561,30 @@ describe("the cloud copy in a folder, as Tavora runs it", () => {
     expect(again.sync.view()).toMatchObject({ conflictKind: "unreadable" });
   });
 
+  it("never leaves the old key's parts noted under the new key when taking it stops halfway", async () => {
+    const onedrive = await folder();
+    const o = await pc({ "library.json": "o0" });
+    const atO = tavora(o);
+    await atO.sync.beforeLoad();
+    await atO.sync.turnOn(onedrive);
+    const oldKey = Buffer.from(atO.sync["key"]!);
+    const newKey = newCopyKey();
+    const n = await pc({ "library.json": "n0" });
+    const [current] = await manifests(onedrive);
+    const fromN = await new CloudCopy(new FolderStorage(onedrive)).upload(newKey, n.roots, { ...EMPTY_STATE, version: Number(current!.slice(0, 16)) });
+    if (fromN.status !== "uploaded") throw new Error(fromN.status);
+    await writeFile(path.join(o.userData, "library.json"), "o1");
+    const again = tavora(o);
+    await again.sync.beforeLoad();
+    await expect(again.sync.keep("cloud")).rejects.toMatchObject({ key: "cloudCopy.error.unreadable" });
+    // Writing the state fails (a full disk, or the copy was turned off right then).
+    again.sync["keepState"] = async () => false;
+    await again.sync.enterOtherKey(recoveryKey(newKey)).catch(() => undefined);
+    // The state is written before the key changes: it didn't get written, so the key stayed.
+    expect(Buffer.from(again.sync["key"]!).equals(oldKey)).toBe(true);
+    expect(Object.keys((await loadCopyState(path.join(o.userData, "cloud-copy.json"))).files).length).toBeGreaterThan(0);
+  });
+
   it("says so when the folder's copy went away before the new key's copy came down", async () => {
     const onedrive = await folder();
     const o = await pc({ "library.json": "o0" });
@@ -868,6 +892,27 @@ describe("what anyone who can write the folder can do", () => {
       });
     }
 
+    it("removes nothing on a start over above 2^48, and the new key's copy goes on top", async () => {
+      const key = newCopyKey();
+      const onedrive = await folder();
+      const a = await pc({ "library.json": "a0" });
+      const first = await up(onedrive, key, a.roots, EMPTY_STATE);
+      if (first.status !== "uploaded") throw new Error(first.status);
+      await plant(onedrive, 2 ** 48 - 1, first.state.version);
+      await writeFile(path.join(a.userData, "library.json"), "a1");
+      const s1 = await up(onedrive, key, a.roots, keptOver(first.state, 2 ** 48 - 1));
+      if (s1.status !== "uploaded") throw new Error(s1.status);
+      await writeFile(path.join(a.userData, "library.json"), "a2");
+      const s2 = await up(onedrive, key, a.roots, s1.state);
+      if (s2.status !== "uploaded") throw new Error(s2.status);
+      // Another PC starts over: its copy under a new key, on top of the newest, with nothing kept over.
+      const n = await pc({ "library.json": "n0" });
+      const started = await up(onedrive, newCopyKey(), n.roots, { ...EMPTY_STATE, version: s2.state.version });
+      expect(started.status).toBe("uploaded");
+      const left = (await manifests(onedrive)).map((name) => Number(name.slice(0, 16)));
+      expect(left).toEqual(expect.arrayContaining([s1.state.version, s2.state.version]));
+    });
+
     it("never removes this key's lists above 2^48, only ones it doesn't open", async () => {
       const key = newCopyKey();
       const onedrive = await folder();
@@ -893,6 +938,24 @@ describe("what anyone who can write the folder can do", () => {
       expect(left).toEqual(expect.arrayContaining(real));
       expect(left).not.toContain(2 ** 52 - 1);
     });
+  });
+
+  it("never reuses parts noted under another key", async () => {
+    const onedrive = await folder();
+    const oldKey = newCopyKey();
+    const a = await pc({ "library.json": "a0", "profile.json": "same profile" });
+    const first = await new CloudCopy(new FolderStorage(onedrive)).upload(oldKey, a.roots, EMPTY_STATE);
+    if (first.status !== "uploaded") throw new Error(first.status);
+    const newKey = newCopyKey();
+    const n = await pc({ "library.json": "n0" });
+    const fromN = await new CloudCopy(new FolderStorage(onedrive)).upload(newKey, n.roots, { ...EMPTY_STATE, version: first.state.version });
+    if (fromN.status !== "uploaded") throw new Error(fromN.status);
+    // This PC's state still notes the old key's parts (a crash while the key changed), and it saves under the new key.
+    await writeFile(path.join(a.userData, "library.json"), "a1");
+    const kept = await new CloudCopy(new FolderStorage(onedrive)).upload(newKey, a.roots, { ...first.state, version: fromN.state.version, kept: true });
+    expect(kept.status).toBe("uploaded");
+    const c = await pc();
+    expect(await new CloudCopy(new FolderStorage(onedrive)).download(newKey, c.roots, path.join(c.root, "staging"), 0, { chosen: true })).toMatchObject({ files: { "profile.json": expect.anything() } });
   });
 
   it("counts a save as done when its list is only held for a moment when read back", async () => {
@@ -1076,7 +1139,7 @@ describe("what anyone who can write the folder can do", () => {
       if (up.status !== "uploaded") throw new Error(up.status);
       saved.state = up.state;
     };
-    /** A save a day for eight days: parts seen unused before then have waited a week (each look counts a day at most). */
+    /** A save a day for eight days: parts seen unused before then have waited a week (each look counts the day since the one before). */
     const aWeekOn = async () => {
       for (let day = 1; day <= 8; day++) {
         clock.now += DAY;
@@ -1111,12 +1174,27 @@ describe("what anyone who can write the folder can do", () => {
     const id = partId(keys, content).toString("hex");
     await storage.putParts([{ id: partId(keys, content), data: seal(keys, content) }]);
     await saveAgain();
-    // The clock jumps eight days ahead: two saves right after don't make the part a week old.
+    // The clock jumps eight days ahead, twice: each save after a jump counts three days, so the part has waited six.
+    const file = path.join(onedrive, "Tavora", "parts", id.slice(0, 2), id);
     clock.now += 8 * DAY;
     await saveAgain("v8");
     clock.now += 60_000;
     await saveAgain("v9");
-    expect(await partFiles(onedrive)).toContain(path.join(onedrive, "Tavora", "parts", id.slice(0, 2), id));
+    clock.now += 8 * DAY;
+    await saveAgain("v10");
+    expect(await partFiles(onedrive)).toContain(file);
+    // A third: nine days, and it goes.
+    clock.now += 8 * DAY;
+    await saveAgain("v11");
+    expect(await partFiles(onedrive)).not.toContain(file);
+  });
+
+  it("keeps where it was before keeping over a list, and which key it synced with, across a restart", async () => {
+    const a = await pc();
+    const file = path.join(a.userData, "cloud-copy.json");
+    const state: CopyState = { version: 2 ** 52 - 1, pictures: true, files: {}, kept: true, keptFrom: 3_145_728, keyId: "0123456789abcdef" };
+    await saveCopyState(file, state);
+    expect(await loadCopyState(file)).toEqual(state);
   });
 
   it("cleans up nothing when a kept manifest's name says another version than its seal", async () => {

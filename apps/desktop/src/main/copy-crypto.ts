@@ -45,6 +45,12 @@ export function copyKeys(copyKey: Uint8Array): CopyKeys {
  */
 export const manifestMark = (keys: CopyKeys, fields: string): string => createHmac("sha256", keys.mark).update("tavora-copy-manifest-2\n").update(fields).digest("base64url");
 
+/**
+ * Which key this PC synced with, as it notes in its own state (CopyState `keyId`, never in the copy): part ids made under
+ * one key mean nothing under another.
+ */
+export const keyFingerprint = (copyKey: Uint8Array): string => createHash("sha256").update("tavora-copy-key-fingerprint").update(copyKey).digest("hex").slice(0, 16);
+
 /** A part's name: the HMAC of its plain content, so it says nothing to anyone without the key. */
 export const partId = (keys: CopyKeys, plain: Uint8Array): Buffer => createHmac("sha256", keys.id).update(plain).digest();
 

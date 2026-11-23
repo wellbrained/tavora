@@ -1595,13 +1595,17 @@ export class CopySync {
       await rm(this.stagingDir, { recursive: true, force: true });
       throw new UserError("cloudCopy.error.noCopy");
     }
-    // The key first, then the copy's list: a list staged under a key this PC doesn't have would be damaged at the next start.
+    // Nothing of what this PC synced under the old key counts any more, as at turn-on: written before the key changes, so a
+    // crash in between never leaves the old key's parts noted under the new one (that is harmless the other way round).
+    this.state = EMPTY_STATE;
+    if (!(await this.keepState(turn))) {
+      await rm(this.stagingDir, { recursive: true, force: true });
+      return;
+    }
+    // The key, then the copy's list: a list staged under a key this PC doesn't have would be damaged at the next start.
     await this.accountKeys.takeHere(key);
     const staged: Staged = { v: 1, ...came };
     await writeFileAtomic(this.listFile, JSON.stringify(staged));
-    // Nothing of what this PC synced under the old key counts any more, as at turn-on.
-    this.state = EMPTY_STATE;
-    if (!(await this.keepState(turn))) return;
     this.unreadable = false;
     this.problem = null;
     this.ask("conflict");
