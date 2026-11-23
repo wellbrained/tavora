@@ -1,9 +1,12 @@
 // No store can skip a save rule: every file of the user's (saved-versions.ts) has a kind in saved-file.ts, only
-// SavedFile reads and writes one, and only with a kind from there. Every other write of a file in main/ is listed
-// here, call by call, with what it writes: nothing of it is the user's data, or it says why it doesn't move yet.
+// SavedFile reads and writes one, and only with a kind from there. Every other write of a file under main/ (renames
+// too, as one can put any file in place of the user's) is listed here, call by call with its target and what it writes:
+// nothing of it is the user's data, or it says why it doesn't move yet. The sources are read with TypeScript's own
+// parser (file-writes.test-helper.ts), so a renamed import, a module used as a whole or a file handle is followed.
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { fileWrites, savedFileKinds } from "./file-writes.test-helper";
 import { NOT_SAVED_FILES, SAVED_FILES } from "./saved-file";
 import { STORE_VERSIONS, SUPPORTED_VERSIONS } from "./saved-versions";
 
@@ -31,102 +34,83 @@ const USES_RULE_PIECES: Record<string, string> = {
   "discord-store.ts": "the sealed files; move to SavedFile in the next pull request",
 };
 
-/** The calls that write a file: Node's, and fsutil.ts's own. */
-const WRITE_CALLS = /(?<![\w$])(writeFileAtomic|writeFileUnlessReplaced|writeFileSync|writeFile|appendFileSync|appendFile|createWriteStream|copyFileSync|copyFile|cpSync|cp|keepCopyAt|keepCopy)\s*\(/g;
-
 /**
- * Every write of a file in main/ outside SavedFile's own, by source file: each call as `api(first argument)`, as many
- * times as it is there, and what it writes. A new write, or one that writes something else, is added here with its reason.
+ * Every write of a file under main/ outside SavedFile's own, by source file (its path under main/): each call as
+ * `api(target)`, as many times as it is there, and what it writes. A new write, or one that writes something else, is
+ * added here with its reason; one that went leaves, so the list only gets shorter.
  */
-const WRITES: Record<string, { calls: string[]; what: string }> = {
-  "saved-file.ts": { calls: ["writeFileSync(now)", "writeFileUnlessReplaced(this.file)", "writeFileAtomic(this.file)"], what: "the module that keeps the rules" },
-  "fsutil.ts": { calls: ["writeFileUnlessReplaced(file)", "writeFile(body)", "keepCopyAt(dir)", "writeFileAtomic(target)"], what: "writeFileAtomic itself, and the copies keepCopy makes" },
-  "json.ts": { calls: ["keepCopyAt(path.dirname(file))", "keepCopy(path.dirname(file))", "keepCopy(path.dirname(file))"], what: "the copies the rules keep aside (`.corrupt`, `.from-version-<n>`, `.unopened`)" },
-  "saved-data.ts": {
-    calls: ["writeFileAtomic(this.file(LIBRARY_FILE))", "writeFileAtomic(this.file(PROFILE_FILE))", "writeFileAtomic(this.file(WINDOW_FILE))"],
-    what: "window.json (where the window was); library.json and profile.json move to SavedFile in the next pull request",
-  },
-  "workspace.ts": { calls: ["writeFileAtomic(file)"], what: "workspace.json; moves to SavedFile in the next pull request" },
-  "game-overlays.ts": { calls: ["keepCopy(path.join(backupsDir(userData), BEFORE_SETUPS_DIR))", "writeFileAtomic(this.file)"], what: "the backup before the move to setups; game-overlays.json moves to SavedFile in the next pull request" },
-  "storage.ts": { calls: ["writeFileAtomic(this.file)", "writeFileAtomic(file)", "writeFileAtomic(file)"], what: "module settings and panel state; move to SavedFile in the next pull request" },
-  "documents.ts": { calls: ["writeFileAtomic(this.file(docId))", "writeFileAtomic(this.indexFile)"], what: "the documents' index.json, rebuilt from them; the documents move to SavedFile in the next pull request" },
-  "folder-access.ts": { calls: ["writeFileAtomic(this.file)"], what: "folders.json; moves to SavedFile in the next pull request" },
-  "workspace-move.ts": { calls: ["keepCopy(backup)", "writeFileAtomic(path.join(userData, name))"], what: "the move to the workspace names at start, after keepNewerFiles, of files that still have the old names, and their backup" },
-  "moved-modules.ts": { calls: ["writeFileAtomic(file)"], what: "the moves of renamed modules at start, after keepNewerFiles" },
-  "module-data.ts": { calls: ["writeFileAtomic(file)"], what: "the sweep's hold list: bookkeeping, not in saved-versions.ts" },
-  "read-only-files.ts": { calls: ["writeFileAtomic(this.file)", "writeFileAtomic(path.join(path.dirname(this.file), 'picker.json'))"], what: "sources.json, the version on each entry (NOT_SAVED_FILES), and picker.json (a hint)" },
-  "host.ts": { calls: ['appendFile(path.join(this.options.userData, "updates.log"))', "writeFileAtomic(file)"], what: "updates.log, and ai-usage.json (NOT_SAVED_FILES)" },
-  "account.ts": { calls: ["writeFileAtomic(file)"], what: "account.json, sealed (NOT_SAVED_FILES)" },
-  "account-key.ts": { calls: ["writeFileAtomic(seenFile)", "writeFileAtomic(file)", "writeFileAtomic(place.keyFile)"], what: "the account vault's seen mark and cache, and the sealed key file (NOT_SAVED_FILES)" },
-  "discord-store.ts": { calls: ["writeFileAtomic(file)"], what: "discord.json, sealed (NOT_SAVED_FILES)" },
-  "cloud-copy.ts": { calls: ["writeFile(path.join(partsDir, id))", "writeFile(content)", "cp(from)", "writeFileAtomic(file)"], what: "the cloud copy's files, being changed elsewhere (#909)" },
-  "cloud-copy-sync.ts": {
-    calls: ["writeFileAtomic(this.listFile)", "writeFileAtomic(path.join(dir, KEEP_WHOLE))", "writeFileAtomic(this.listFile)", "writeFileAtomic(file)", "writeFileAtomic(file)"],
-    what: "the cloud copy's files, being changed elsewhere (#909)",
-  },
-  "cloud-copy-swap.ts": { calls: ["writeFileAtomic(file)"], what: "the cloud copy's files, being changed elsewhere (#909)" },
-  "copy-folder.ts": { calls: ["writeFileAtomic(file)", "writeFile(probe)"], what: "the cloud copy's folder, being changed elsewhere (#909)" },
-  "pairing.ts": { calls: ["writeFileAtomic(file)", "writeFileAtomic(this.file(id, step))"], what: "pairing's steps and pairing-answers.json, one pairing at a time" },
-  "backup.ts": { calls: ["copyFile(path.join(userData, name))", "cp(from)"], what: "the daily backup's copies of the data files" },
-  "diagnostics.ts": { calls: ["writeFileSync(file)"], what: "the crash and diagnostics log" },
-  "example-copy.ts": { calls: ["writeFile(to)", "copyFile(path.join(source, file))", 'writeFile(path.join(target, ".gitignore"))'], what: "an example module copied into the developer's own folder" },
-  "file-dialogs.ts": { calls: ["writeFile(file)"], what: "a file the user saves from a module, where they chose in the save dialog" },
-  "installer.ts": {
-    calls: ["writeFile(file.data)", "writeFile(`${old}${UPDATING}`)", "writeFile(`${old}${DONE}`)", "writeFile(path.join(stagingRoot, `${REMOVED}${moduleId}`))"],
-    what: "a module's files from its zip, and the install's own markers",
-  },
-  "module-files.ts": { calls: ["writeFile(probe)", "copyFile(fileAt(from, file))"], what: "a probe of the module files folder, and a module's files moved to a new one" },
-  "official-publish.ts": { calls: ['appendFile(path.join(this.options.userData, "official-publishes.log"))', "writeFile(file)"], what: "the official publishes' log, and a manifest in the developer's own folder" },
-  "appearance.ts": { calls: ["writeFileAtomic(path.join(folder, name))"], what: "a starter theme or style the user makes, in its own folder" },
-  "module-publish.ts": { calls: ["writeFileAtomic(file)", "writeFileAtomic(manifestFile)", "writeFileAtomic(pkgFile)", "writeFileAtomic(file)"], what: "a module developer's manifest, changelog and package.json, in their own folder" },
-  "games-seen.ts": { calls: ["writeFileAtomic(this.file)"], what: "games-seen.json: when games were seen running" },
-  "inbox.ts": { calls: ["writeFileAtomic(this.o.file)"], what: "inbox.json: which notes were shown" },
-  "panel-cover.ts": { calls: ["writeFileAtomic(this.file)"], what: "open-times.json: how fast layouts open here" },
-  "publisher-names.ts": { calls: ["writeFileAtomic(this.options.file)"], what: "publisher-names.json: downloaded" },
-  "safety-lists.ts": { calls: ["writeFileAtomic(this.options.file)"], what: "catalog-lists.json: downloaded" },
-  "module-folder-check.ts": { calls: ["writeFileAtomic(this.file)"], what: "module-checks.json: the folders' signature checks, made again when missing" },
-  "official-key-store.ts": { calls: ["writeFileAtomic(this.file)"], what: "official-publisher-key.bin: development builds only" },
-  "icons.ts": { calls: ["writeFileAtomic(path.join(iconDir, file))"], what: "icons, not JSON" },
-  "hosted-icons.ts": { calls: ["writeFileAtomic(path.join(iconDir, file))"], what: "icons, not JSON" },
-  "steam-icons.ts": { calls: Array.from({ length: 5 }, () => "writeFileAtomic(path.join(iconDir, file))"), what: "icons, not JSON" },
-  "steam-shortcuts.ts": { calls: ["writeFileAtomic(path.join(iconDir, file))"], what: "icons, not JSON" },
-  "layout-pictures.ts": { calls: ["writeFileAtomic(this.file(gameId))"], what: "pictures, not JSON" },
-  "profile.ts": { calls: ["writeFileAtomic(path.join(dir, file))"], what: "the profile picture, not JSON" },
-};
+const WRITES: { file: string; what: string; calls: string[] }[] = [
+  { file: "account-key.ts", what: "the account vault's seen mark and cache, and the sealed key files moved between slots (NOT_SAVED_FILES)", calls: ["rename(legacy, this.options.file)", "rename(slot.keyFile, this.options.file)", "rename(slot.cacheFile, this.options.cacheFile)", "rename(slot.cacheFile, files.cacheFile)", "fsutil.writeFileAtomic(seenFile)", "fsutil.writeFileAtomic(file)", "rename(main.keyFile, files.keyFile)", "rename(main.cacheFile, files.cacheFile)", "rename(place.keyFile, to.keyFile)", "rename(place.cacheFile!, to.cacheFile)", "fsutil.writeFileAtomic(place.keyFile)"] },
+  { file: "account.ts", what: "account.json, sealed (NOT_SAVED_FILES)", calls: ["fsutil.writeFileAtomic(file)"] },
+  { file: "appearance.ts", what: "a starter theme or style the user makes, in its own folder", calls: ["fsutil.writeFileAtomic(path.join(folder, name))"] },
+  { file: "backup.ts", what: "the daily backup: copies of the data files, put in place whole", calls: ["copyFile(path.join(userData, name), path.join(partial, name))", "cp(from, path.join(partial, name, part))", "rename(partial, target)"] },
+  { file: "blobs.ts", what: "a module's saved files (blobs), written to a temp and renamed into place", calls: ["open(temp)", "FileHandle.write(handle)", "rename(temp, path.join(dir, name))"] },
+  { file: "cloud-copy-swap.ts", what: "the cloud copy's files, being changed elsewhere (#909)", calls: ["fsutil.writeFileAtomic(file)"] },
+  { file: "cloud-copy-sync.ts", what: "the cloud copy's files, being changed elsewhere (#909)", calls: ["fsutil.writeFileAtomic(this.listFile)", "fsutil.writeFileAtomic(path.join(dir, KEEP_WHOLE))", "rename-held.renameHeld(this.stateFile, this.parkedFile)", "rename-held.renameHeld(this.parkedFile, this.stateFile)", "rename-held.renameHeld(this.stagedData, backup)", "rename-held.renameHeld(this.stagedData, backup)", "rename-held.renameHeld(incoming, this.stagedData)", "fsutil.writeFileAtomic(this.listFile)", "fsutil.writeFileAtomic(file)", "fsutil.writeFileAtomic(file)"] },
+  { file: "cloud-copy.ts", what: "the cloud copy's files, being changed elsewhere (#909)", calls: ["writeFile(path.join(partsDir, id))", "open(target)", "FileHandle.writeFile(out)", "rename-held.renameHeld(from, to)", "cp(from, part)", "rename-held.renameHeld(part, to)", "rename-held.renameHeld(from, done)", "fsutil.writeFileAtomic(file)"] },
+  { file: "copy-folder.ts", what: "the cloud copy's folder, being changed elsewhere (#909)", calls: ["fsutil.writeFileAtomic(file)", "writeFile(probe)"] },
+  { file: "diagnostics.ts", what: "the crash and diagnostics log", calls: ["writeFileSync(file)"] },
+  { file: "discord-store.ts", what: "discord.json, sealed (NOT_SAVED_FILES)", calls: ["fsutil.writeFileAtomic(file)"] },
+  { file: "documents.ts", what: "the documents' index.json, rebuilt from them, set aside when damaged", calls: ["json.readJsonOrSetAside(this.indexFile)", "fsutil.writeFileAtomic(this.indexFile)"] },
+  { file: "documents.ts", what: "the documents; move to SavedFile in the next pull request", calls: ["fsutil.writeFileAtomic(this.file(docId))"] },
+  { file: "example-copy.ts", what: "an example module copied into the developer's own folder", calls: ["writeFile(to)", "copyFile(path.join(source, file), to)", "writeFile(path.join(target, \".gitignore\"))"] },
+  { file: "file-dialogs.ts", what: "a file the user saves from a module, where they chose in the save dialog", calls: ["writeFile(file)"] },
+  { file: "folder-access.ts", what: "folders.json; moves to SavedFile in the next pull request", calls: ["fsutil.writeFileAtomic(this.file)"] },
+  { file: "fsutil.ts", what: "writeFileAtomic itself (a temp, then renamed into place), and the copies keepCopy makes", calls: ["open(temp)", "FileHandle.writeFile(handle)", "rename-held.renameHeld(temp, file)"] },
+  { file: "game-overlays.ts", what: "the backup of game-overlays.json before the move to setups", calls: ["fsutil.keepCopy(path.join(backupsDir(userData), BEFORE_SETUPS_DIR), GAME_OVERLAYS_FILE)"] },
+  { file: "game-overlays.ts", what: "game-overlays.json; moves to SavedFile in the next pull request", calls: ["fsutil.writeFileAtomic(this.file)"] },
+  { file: "games-seen.ts", what: "games-seen.json: when games were seen running", calls: ["fsutil.writeFileAtomic(this.file)"] },
+  { file: "host.ts", what: "updates.log, and ai-usage.json (NOT_SAVED_FILES)", calls: ["appendFile(path.join(this.options.userData, \"updates.log\"))", "fsutil.writeFileAtomic(file)"] },
+  { file: "hosted-icons.ts", what: "icons, not JSON", calls: ["fsutil.writeFileAtomic(path.join(iconDir, file))"] },
+  { file: "icons.ts", what: "icons, not JSON", calls: ["fsutil.writeFileAtomic(path.join(iconDir, file))"] },
+  { file: "inbox.ts", what: "inbox.json: which notes were shown", calls: ["fsutil.writeFileAtomic(this.o.file)"] },
+  { file: "installer.ts", what: "a module's files from its zip, the install's own markers, and its folders moved into place", calls: ["open(destination)", "FileHandle.writeFile(handle)", "writeFile(`${old}${UPDATING}`)", "rename-held.renameHeld(target, old)", "rename-held.renameHeld(staging, target)", "rename-held.renameHeld(old, target)", "rename-held.renameHeld(staging, target)", "writeFile(`${old}${DONE}`)", "writeFile(path.join(stagingRoot, `${REMOVED}${moduleId}`))", "rename-held.renameHeld(old, path.join(stagingRoot, path.basename(old).replace(/^old-/, \"left-\")))", "rename-held.renameHeld(old, target)", "rename-held.renameHeld(target, unfinished)", "rename-held.renameHeld(old, target)", "rename-held.renameHeld(unfinished, target)"] },
+  { file: "json.ts", what: "the rules' copies aside: a damaged file renamed to `.corrupt-<time>`, and the `.corrupt`, `.from-version-<n>` and `.unopened` copies", calls: ["rename(file, target)", "fsutil.keepCopyAt(path.dirname(file), `${path.basename(file)}.corrupt`)", "fsutil.keepCopy(path.dirname(file), `${path.basename(file)}.from-version-${version}`)", "fsutil.keepCopy(path.dirname(file), `${path.basename(file)}.unopened`)"] },
+  { file: "layout-pictures.ts", what: "pictures, not JSON", calls: ["fsutil.writeFileAtomic(this.file(gameId))"] },
+  { file: "module-data.ts", what: "the sweep's hold list: bookkeeping, not in saved-versions.ts", calls: ["json.keepNewerCopy(file)", "json.setAside(file)", "fsutil.writeFileAtomic(file)"] },
+  { file: "module-data.ts", what: "module data and browser storage folders moved to another owner or workspace", calls: ["rename(path.join(dataRoot, name), target)", "rename(path.join(partitions, name), target)", "rename(path.join(from, workspace), target)", "rename(path.join(partitions, name), target)"] },
+  { file: "module-files.ts", what: "a probe of the module files folder, and a module's files moved to a new one", calls: ["writeFile(probe)", "copyFile(fileAt(from, file), part)", "rename(part, target)"] },
+  { file: "module-folder-check.ts", what: "module-checks.json: the folders' signature checks, made again when missing", calls: ["fsutil.writeFileAtomic(this.file)"] },
+  { file: "module-publish.ts", what: "a module developer's manifest, changelog and package.json, in their own folder", calls: ["fsutil.writeFileAtomic(file)", "fsutil.writeFileAtomic(manifestFile)", "fsutil.writeFileAtomic(pkgFile)", "fsutil.writeFileAtomic(file)"] },
+  { file: "moved-modules.ts", what: "the moves of renamed modules at start, after keepNewerFiles: their saved files, data folders and browser storage", calls: ["rename(path.join(source, game), target)", "rename(path.join(partitions, name), target)", "fsutil.writeFileAtomic(file)"] },
+  { file: "official-key-store.ts", what: "official-publisher-key.bin: development builds only", calls: ["fsutil.writeFileAtomic(this.file)"] },
+  { file: "official-publish.ts", what: "the official publishes' log, and a manifest in the developer's own folder", calls: ["appendFile(path.join(this.options.userData, \"official-publishes.log\"))", "writeFile(file)"] },
+  { file: "pairing.ts", what: "pairing's steps and pairing-answers.json, one pairing at a time", calls: ["fsutil.writeFileAtomic(file)", "fsutil.writeFileAtomic(this.file(id, step))"] },
+  { file: "panel-cover.ts", what: "open-times.json: how fast layouts open here, set aside when damaged", calls: ["json.readJsonOrSetAside(this.file)", "fsutil.writeFileAtomic(this.file)"] },
+  { file: "profile.ts", what: "the profile picture, not JSON", calls: ["fsutil.writeFileAtomic(path.join(dir, file))"] },
+  { file: "publisher-names.ts", what: "publisher-names.json: downloaded, set aside when damaged", calls: ["json.readJsonOrSetAside(this.options.file)", "fsutil.writeFileAtomic(this.options.file)"] },
+  { file: "read-only-files.ts", what: "sources.json, the version on each entry (NOT_SAVED_FILES), and picker.json (a hint)", calls: ["json.keepNewerCopy(this.file)", "json.setAside(this.file)", "fsutil.writeFileAtomic(this.file)", "fsutil.writeFileAtomic(path.join(path.dirname(this.file), 'picker.json'))"] },
+  { file: "rename-held.ts", what: "renameHeld itself", calls: ["rename(from, to)", "rename(from, to)"] },
+  { file: "safety-lists.ts", what: "catalog-lists.json: downloaded, set aside when damaged", calls: ["json.readJsonOrSetAside(this.options.file)", "fsutil.writeFileAtomic(this.options.file)"] },
+  { file: "saved-data.ts", what: "window.json (where the window was), set aside when damaged", calls: ["json.readJsonOrSetAside(this.file(WINDOW_FILE))", "fsutil.writeFileAtomic(this.file(WINDOW_FILE))"] },
+  { file: "saved-data.ts", what: "keepNewerFiles: a copy of each data file a newer Tavora wrote; and a profile without a usable id set aside", calls: ["json.keepNewerCopy(file)", "json.setAside(file)"] },
+  { file: "saved-data.ts", what: "library.json and profile.json; move to SavedFile in the next pull request", calls: ["fsutil.writeFileAtomic(this.file(LIBRARY_FILE))", "fsutil.writeFileAtomic(this.file(PROFILE_FILE))"] },
+  { file: "saved-file.ts", what: "the module that keeps the rules: its writes, and the write at quit through `<file>.now`", calls: ["writeFileSync(now)", "renameSync(now, file)", "fsutil.writeFileUnlessReplaced(this.file)"] },
+  { file: "steam-icons.ts", what: "icons, not JSON", calls: ["fsutil.writeFileAtomic(path.join(iconDir, file))", "fsutil.writeFileAtomic(path.join(iconDir, file))", "fsutil.writeFileAtomic(path.join(iconDir, file))", "fsutil.writeFileAtomic(path.join(iconDir, file))", "fsutil.writeFileAtomic(path.join(iconDir, file))"] },
+  { file: "steam-shortcuts.ts", what: "icons, not JSON", calls: ["fsutil.writeFileAtomic(path.join(iconDir, file))"] },
+  { file: "storage.ts", what: "module settings and panel state; move to SavedFile in the next pull request", calls: ["fsutil.writeFileAtomic(this.file)", "fsutil.writeFileAtomic(file)", "fsutil.writeFileAtomic(file)"] },
+  { file: "storage.ts", what: "a panel's state file moved aside, for the owner that wrote it, when another owner's page writes", calls: ["rename(file, this.asideFile(instanceId, other))"] },
+  { file: "workspace-move.ts", what: "the move to the workspace names at start, after keepNewerFiles, of files that still have the old names, and their backup", calls: ["fsutil.keepCopy(backup, name)", "fsutil.writeFileAtomic(path.join(userData, name))"] },
+  { file: "workspace.ts", what: "workspace.json; moves to SavedFile in the next pull request", calls: ["fsutil.writeFileAtomic(file)"] },
+];
 
-/** The source files of main/, without comments. */
+/** Every source under main/, folders in it too, by its path there (with `/`). */
 async function sources(): Promise<Map<string, string>> {
   const found = new Map<string, string>();
-  for (const name of (await readdir(__dirname)).sort()) {
-    if (!name.endsWith(".ts") || name.endsWith(".test.ts") || name.includes("test-helper")) continue;
-    const text = await readFile(path.join(__dirname, name), "utf8");
-    found.set(name, text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1"));
-  }
+  const walk = async (dir: string): Promise<void> => {
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) await walk(full);
+      else if (/\.tsx?$/.test(entry.name) && !entry.name.endsWith(".test.ts") && !entry.name.includes("test-helper")) {
+        found.set(path.relative(__dirname, full).split(path.sep).join("/"), await readFile(full, "utf8"));
+      }
+    }
+  };
+  await walk(__dirname);
   return found;
 }
 
-/** The arguments of the call whose `(` is just before `from`, each as its text with spaces made single. */
-function argumentsAt(text: string, from: number): string[] {
-  const args: string[] = [];
-  let depth = 0;
-  let current = "";
-  for (let i = from; i < text.length; i++) {
-    const char = text[i]!;
-    if ("([{".includes(char)) depth++;
-    if (")]}".includes(char)) {
-      if (depth === 0) break;
-      depth--;
-    }
-    if (char === "," && depth === 0) {
-      args.push(current);
-      current = "";
-    } else current += char;
-  }
-  args.push(current);
-  return args.map((arg) => arg.replace(/\s+/g, " ").trim());
-}
-
-/** The names a source file imports, re-exports included. */
+/** The names a source imports from Tavora's own modules, renamed ones by the name they have there. */
 function importedNames(text: string): Set<string> {
   const names = new Set<string>();
   for (const match of text.matchAll(/(?:import|export)\s+(?:type\s+)?\{([^}]*)\}\s*from\s*["'][^"']+["']/g)) {
@@ -137,6 +121,8 @@ function importedNames(text: string): Set<string> {
   }
   return names;
 }
+
+const sorted = (calls: readonly string[]) => [...calls].sort();
 
 describe("the save rules can't be skipped", () => {
   it("every file of the user's has a kind with its version, or says why not", () => {
@@ -149,16 +135,15 @@ describe("the save rules can't be skipped", () => {
     for (const name of [...Object.keys(kinds), ...Object.keys(NOT_SAVED_FILES)]) expect(listed, `${name} is in saved-versions.ts`).toHaveProperty([name]);
   });
 
-  it("every SavedFile is made with a kind from SAVED_FILES", async () => {
-    const made: string[] = [];
+  it("every SavedFile is made with a kind from SAVED_FILES, and none is made otherwise", async () => {
+    let made = 0;
     for (const [name, text] of await sources()) {
-      for (const match of text.matchAll(/new\s+SavedFile\s*\(/g)) {
-        const kind = argumentsAt(text, match.index + match[0].length)[1] ?? "";
-        made.push(kind);
-        expect(kind, `${name}: new SavedFile(…, ${kind})`).toMatch(/^SAVED_FILES(\.[\w$]+|\[[^\]]+\])$/);
-      }
+      const { kinds, extended } = savedFileKinds(name, text);
+      expect(extended, `${name} extends SavedFile`).toBe(false);
+      for (const kind of kinds) expect(kind, `${name}: new SavedFile(…, ${kind})`).toMatch(/^SAVED_FILES(\.[\w$]+|\[[^\]]+\])$/);
+      made += kinds.length;
     }
-    expect(made.length).toBeGreaterThan(0);
+    expect(made).toBeGreaterThan(0);
   });
 
   it("only SavedFile uses the pieces of the rules, and those this file names", async () => {
@@ -168,28 +153,19 @@ describe("the save rules can't be skipped", () => {
     expect(Object.keys(USES_RULE_PIECES).filter((file) => !users.includes(file))).toEqual([]);
   });
 
-  it("no source reaches the file system, the rules or fsutil.ts through a namespace, a default import or require", async () => {
-    const modules = String.raw`(?:node:)?fs(?:\/promises)?|\.\/(?:fsutil|json|saved-versions|saved-file|rename-held)`;
-    const ways = [
-      new RegExp(String.raw`import\s+\*\s+as\s+[\w$]+\s+from\s*["'](?:${modules})["']`),
-      new RegExp(String.raw`import\s+[\w$]+\s*(?:,\s*\{[^}]*\})?\s+from\s*["'](?:${modules})["']`),
-      new RegExp(String.raw`(?:require|import)\s*\(\s*["'](?:${modules})["']`),
-    ];
-    const found = [...(await sources())].filter(([, text]) => ways.some((way) => way.test(text))).map(([file]) => file);
-    expect(found).toEqual([]);
+  it("Tavora's own file modules are only imported by name, so every use of them is seen", async () => {
+    const whole = /import\s+(?:\*\s+as\s+[\w$]+|[\w$]+(?:\s*,\s*\{[^}]*\})?)\s+from\s*["'](?:\.\.?\/)+(?:fsutil|json|saved-versions|saved-file|rename-held)["']/;
+    expect([...(await sources())].filter(([, text]) => whole.test(text)).map(([file]) => file)).toEqual([]);
   });
 
   it("every other write of a file is one this file names, with what it writes", async () => {
     const found: Record<string, string[]> = {};
     for (const [name, text] of await sources()) {
-      for (const match of text.matchAll(WRITE_CALLS)) {
-        // The definitions in fsutil.ts are not calls.
-        if (/function\s*$/.test(text.slice(Math.max(0, match.index - 20), match.index))) continue;
-        (found[name] ??= []).push(`${match[1]}(${argumentsAt(text, match.index + match[0].length)[0]})`);
-      }
+      const writes = fileWrites(name, text);
+      if (writes.length) found[name] = sorted(writes);
     }
-    const listed = Object.fromEntries(Object.entries(WRITES).map(([name, { calls }]) => [name, [...calls].sort()]));
-    // Every write there is listed, as often as it is there; a write that went leaves the list, so it only gets shorter.
-    expect(Object.fromEntries(Object.entries(found).map(([name, calls]) => [name, calls.sort()]))).toEqual(listed);
+    const listed: Record<string, string[]> = {};
+    for (const { file, calls } of WRITES) listed[file] = sorted([...(listed[file] ?? []), ...calls]);
+    expect(found).toEqual(listed);
   });
 });

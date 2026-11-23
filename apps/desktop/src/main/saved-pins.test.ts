@@ -56,15 +56,22 @@ const at = (...names: string[]) => path.join(dir, ...names);
 const slashed = () => dir.split(path.sep).join("/");
 /** The separator of the paths the stores are given: the system's, or Windows' to see the pins hold there too. */
 let separator = path.sep;
-const inData = (name: string) => `${dir}${separator}${name}`;
+/** The names in the data folder this run gave a store as a path, each made with `separator`. */
+const given = new Set<string>();
+const inData = (name: string) => {
+  given.add(name);
+  return `${dir}${separator}${name}`;
+};
 
 /**
- * The data folder's path shown as `%USERDATA%`, written with `/` or with the system's separator, and the separators of
- * the rest of a path in it as `/`: the pins are the same on every system. Nothing else of the text changes.
+ * The data folder's path shown as `%USERDATA%`, written with `/` or with the system's separator, so the pins are the
+ * same on every system. A path a store was given shows as `%USERDATA%%SEP%<name>` only when the store wrote it exactly
+ * as given, with the separator it came with: one that changed the separator shows it. Nothing else of the text changes.
  */
 function hidePaths(text: string): string {
-  const shown = text.split(JSON.stringify(slashed()).slice(1, -1)).join("%USERDATA%").split(JSON.stringify(dir).slice(1, -1)).join("%USERDATA%");
-  return shown.replace(/%USERDATA%((?:\\\\[^"\\]*)+)/g, (_, rest: string) => `%USERDATA%${rest.split("\\\\").join("/")}`);
+  let shown = text;
+  for (const name of [...given].sort((a, b) => b.length - a.length)) shown = shown.split(JSON.stringify(`${dir}${separator}${name}`).slice(1, -1)).join(`%USERDATA%%SEP%${name}`);
+  return shown.split(JSON.stringify(slashed()).slice(1, -1)).join("%USERDATA%").split(JSON.stringify(dir).slice(1, -1)).join("%USERDATA%");
 }
 
 /** How a store is opened, changed and written, for one of the user's files. */
@@ -400,21 +407,26 @@ describe("what each store writes, as Tavora 0.24.147 wrote it", () => {
     try {
       const store = STORES.find((item) => item.name === "chosen-folders")!;
       const found = await scenarios(store);
-      expect(JSON.stringify(found)).toContain("%USERDATA%/Elden Ring");
+      expect(JSON.stringify(found)).toContain("%USERDATA%%SEP%Elden Ring");
       expect(found).toEqual(JSON.parse(await readFile(path.join(PINS, "chosen-folders.json"), "utf8")));
     } finally {
       separator = path.sep;
     }
   });
 
-  it("hides only the data folder and its separators", () => {
+  it("hides only the data folder, and the separator of a path given only where the store kept it", () => {
     const real = dir;
     dir = "C:\\Users\\Nik\\AppData\\Roaming\\Tavora";
+    separator = "\\";
     try {
-      const text = JSON.stringify({ a: `${dir}\\Elden Ring\\Saves`, b: "C:\\Other\\Place", c: `${slashed()}/x` });
-      expect(JSON.parse(hidePaths(text))).toEqual({ a: "%USERDATA%/Elden Ring/Saves", b: "C:\\Other\\Place", c: "%USERDATA%/x" });
+      const place = inData("Elden Ring");
+      const text = JSON.stringify({ kept: place, other: "C:\\Other\\Place", slashed: `${slashed()}/x`, native: `${dir}\\y` });
+      expect(JSON.parse(hidePaths(text))).toEqual({ kept: "%USERDATA%%SEP%Elden Ring", other: "C:\\Other\\Place", slashed: "%USERDATA%/x", native: "%USERDATA%\\y" });
+      // A store that wrote the path with the other separator doesn't match the pin.
+      expect(hidePaths(JSON.stringify(place.split("\\").join("/")))).not.toContain("%SEP%");
     } finally {
       dir = real;
+      separator = path.sep;
     }
   });
 

@@ -107,6 +107,8 @@ export interface ConnectionStore {
   save(data: StoredConnection): void;
   /** Writes at once, for the moment Tavora quits. */
   saveNow?(data: StoredConnection): void;
+  /** Resolves when everything saved so far is written, the write at quit included. */
+  flush?(): Promise<void>;
 }
 
 /**
@@ -428,6 +430,11 @@ export class ConnectionWatcher implements ConnectionSource {
     this.tracker.outages.length = 0;
     if (open) this.tracker.outages.push(open);
     this.persist();
+  }
+
+  /** Resolves when everything saved so far is on disk: quitting waits for it after dispose. */
+  flush(): Promise<void> {
+    return this.store.flush?.() ?? Promise.resolve();
   }
 
   /** Stops everything and writes the log once more. */

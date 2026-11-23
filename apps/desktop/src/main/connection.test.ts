@@ -554,3 +554,40 @@ describe("who may change the watcher", () => {
     expect(asked).toEqual(["systemInfo.setConnectionSettings", "systemInfo.clearConnectionLog"]);
   });
 });
+
+describe("connection.json at quit", () => {
+  it("the write at quit takes the place of a save still waiting, and quitting waits for both", async () => {
+    const { mkdtemp, readFile, rm } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const path = await import("node:path");
+    const { ConnectionFile } = await import("./connection");
+    const dir = await mkdtemp(path.join(tmpdir(), "tavora-connection-"));
+    try {
+      const file = new ConnectionFile(path.join(dir, "connection.json"));
+      const data = await file.load();
+      file.save({ ...data, savedAt: 1 });
+      file.saveNow({ ...data, savedAt: 2 });
+      await file.flush();
+      expect(JSON.parse(await readFile(path.join(dir, "connection.json"), "utf8")).savedAt).toBe(2);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("the watcher's flush waits for its store's", async () => {
+    let done = false;
+    const store: ConnectionStore = { save: () => undefined, saveNow: () => undefined, flush: () =>
+        new Promise((resolve) =>
+          setTimeout(() => {
+            done = true;
+            resolve();
+          }, 10),
+        ),
+    };
+    const probe = { close: () => undefined } as unknown as ConnectionProbe;
+    const watcher = new ConnectionWatcher({ probe, store, initial: { ...DEFAULT_STORED, outages: [] }, now: () => 0 });
+    watcher.dispose();
+    await watcher.flush();
+    expect(done).toBe(true);
+  });
+});

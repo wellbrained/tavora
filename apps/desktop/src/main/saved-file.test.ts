@@ -7,19 +7,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { onUnreadableFileKept, unreadableFilesKept } from "./json";
 import { RawJson, SavedFile, SavedFileHeld, type SavedFileKind } from "./saved-file";
 
-/** Runs once, right before the next rename of a written file, as if it came while that rename was under way. */
-const renames = vi.hoisted(() => ({ during: null as (() => void) | null }));
+/**
+ * What comes at the next renames of a written file, one each, in turn: `before` it is tried (it still looks whether it
+ * is wanted), or `during` it (it was asked for already: nothing looks again). `landed` says, per rename, whether it went.
+ */
+const renames = vi.hoisted(() => ({ next: [] as { at: "before" | "during"; run: () => void }[], landed: [] as boolean[] }));
 vi.mock("./rename-held", async (original) => {
   const real = await original<typeof import("./rename-held")>();
   return {
     ...real,
     renameHeld: async (from: string, to: string, waits?: readonly number[], stillWanted?: () => boolean) => {
-      const during = renames.during;
-      renames.during = null;
-      if (!during) return real.renameHeld(from, to, waits, stillWanted);
-      during();
-      // The rename was asked for already: nothing looks again.
-      return real.renameHeld(from, to, waits);
+      const hook = renames.next.shift();
+      hook?.run();
+      const landed = await real.renameHeld(from, to, waits, hook?.at === "during" ? undefined : stillWanted);
+      renames.landed.push(landed);
+      return landed;
     },
   };
 });
@@ -30,6 +32,8 @@ beforeEach(async () => {
   dir = await mkdtemp(path.join(tmpdir(), "tavora-saved-file-"));
   file = path.join(dir, "notes.json");
   vi.spyOn(console, "error").mockImplementation(() => undefined);
+  renames.next = [];
+  renames.landed = [];
 });
 afterEach(async () => {
   onUnreadableFileKept(null);
@@ -115,15 +119,19 @@ describe("writing", () => {
   it("refuses a list where the fields belong", async () => {
     const saved = new SavedFile(file, V1);
     // @ts-expect-error A list would be written as a record of its indexes.
-    expect(() => saved.write(["a"])).toThrow();
-    await expect(saved.update(() => ["a"] as never)).rejects.toThrow();
+    const listed = saved.write(["a"]);
+    await expect(listed).rejects.toThrow();
+    // @ts-expect-error The same for what update writes.
+    await expect(saved.update(() => [1, 2])).rejects.toThrow();
+    // @ts-expect-error And for a write at quit, which only answers false.
+    expect(saved.writeNow(["a"])).toBe(false);
     expect(await names()).toEqual([]);
   });
 
   it("writes JSON already serialized as it is, in a compact file", async () => {
     await new SavedFile(file, { version: 1, format: "compact" }).write({ title: "a", data: new RawJson('{"b": 1}') });
     expect(await text()).toBe('{"version":1,"title":"a","data":{"b": 1}}');
-    expect(() => new SavedFile(file, V1).write({ data: new RawJson("1") })).toThrow();
+    await expect(new SavedFile(file, V1).write({ data: new RawJson("1") })).rejects.toThrow();
   });
 
   it("takes the fields as they are when asked, not when the write runs", async () => {
@@ -317,23 +325,52 @@ describe("writeNow, for the moment Tavora quits", () => {
     await saved.read();
     const earlier = saved.write({ a: "older" });
     expect(saved.writeNow({ a: "at quit" })).toBe(true);
-    // The older one never goes in place, not even for a moment.
-    let renamed = false;
-    renames.during = () => (renamed = true);
     await earlier;
     await saved.flush();
-    renames.during = null;
-    expect(renamed).toBe(false);
+    // The older one is never even tried.
+    expect(renames.landed).toEqual([]);
     expect(JSON.parse(await text())).toEqual({ version: 1, a: "at quit" });
     expect(await names()).toEqual(["notes.json"]);
   });
 
-  it("writes its text again over a write whose file went in place while it was made", async () => {
+  it("never puts a write being made in place, not even for a moment, once it came", async () => {
     const saved = new SavedFile(file, V1);
     await saved.read();
-    renames.during = () => saved.writeNow({ a: "at quit" });
+    renames.next = [{ at: "before", run: () => saved.writeNow({ a: "at quit" }) }];
     await saved.write({ a: "older" });
+    expect(renames.landed).toEqual([false]);
     expect(JSON.parse(await text())).toEqual({ version: 1, a: "at quit" });
+    expect(await names()).toEqual(["notes.json"]);
+  });
+
+  it("writes the newest of its texts again over a write that went in place while it was made, at once", async () => {
+    const saved = new SavedFile(file, V1);
+    await saved.read();
+    let newest = "";
+    const atQuit = (a: string) => () => {
+      if (saved.writeNow({ a })) newest = a;
+    };
+    // Each rename after the first (were the text written again the same way) brings another write at quit.
+    renames.next = [
+      { at: "during", run: atQuit("first") },
+      { at: "during", run: atQuit("second") },
+      { at: "during", run: atQuit("third") },
+    ];
+    await saved.write({ a: "older" });
+    await saved.flush();
+    expect(JSON.parse(await text())).toEqual({ version: 1, a: newest });
+    expect(newest).not.toBe("");
+  });
+
+  it("takes the place of nothing when it fails: a write waiting still lands", async () => {
+    const saved = new SavedFile(file, V1);
+    await saved.read();
+    // A folder where its own temp goes: the write at quit can't be made.
+    await mkdir(`${file}.now`);
+    const waiting = saved.write({ a: "newer" });
+    expect(saved.writeNow({ a: "at quit" })).toBe(false);
+    await waiting;
+    expect(JSON.parse(await text())).toEqual({ version: 1, a: "newer" });
   });
 
   it("lets a write asked for after it land", async () => {

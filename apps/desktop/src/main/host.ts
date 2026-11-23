@@ -3913,7 +3913,7 @@ export class Host {
   async flush(): Promise<void> {
     // What is waiting goes to disk at once (an update's installer doesn't wait long), and again once the pages have saved.
     this.workspaces.flush();
-    await Promise.all([this.pageSaved(), this.closePanelPages(), this.savedData.flush()]);
+    await Promise.all([this.pageSaved(), this.closePanelPages(), this.savedData.flush(), this.connection.flush()]);
     await this.gameOverlays?.shutdown();
     await this.streaming?.shutdown();
     return this.savedData.flush();
