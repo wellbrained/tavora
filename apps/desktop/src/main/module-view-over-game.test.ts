@@ -18,6 +18,8 @@ const made = vi.hoisted(() => ({
   beforeRequest: undefined as ((details: { url: string; webContentsId?: number }, callback: (answer: { cancel: boolean }) => void) => void) | undefined,
   /** The id the next page gets. */
   nextId: 1,
+  /** Closes the newest port, as Electron does when its page reloads or goes. */
+  closePort: undefined as (() => void) | undefined,
 }));
 
 vi.mock("electron", () => {
@@ -76,7 +78,12 @@ vi.mock("electron", () => {
     clipboard: {},
     ClipboardItem: class {},
     MessageChannelMain: class {
-      port1 = { on: () => undefined, postMessage: () => undefined, start: () => undefined, close: () => undefined };
+      port1 = {
+        on: (event: string, listener: () => void) => void (event === "close" && (made.closePort = listener)),
+        postMessage: () => undefined,
+        start: () => undefined,
+        close: () => undefined,
+      };
       port2 = {};
     },
     session: { fromPartition: () => ses },
@@ -1290,6 +1297,36 @@ describe("a page's watches", () => {
     await again;
     navigate();
     expect(notes.slice(3)).toEqual(["folder close Documents/Game", "discord release 11111111-1111-4111-8111-111111111111"]);
+  });
+
+  it("a page whose port closes (a reload) ends every watch it started and lets go of Discord, while the panel stays open", async () => {
+    const { context, notes, starts } = watching();
+    context.media.watch(true);
+    context.systemInfo.watch({ blocks: ["cpu"] });
+    await context.discord.state();
+    const watch = context.folders.watch("Documents/Game", true);
+    starts[0]!.finish();
+    await watch;
+    notes.length = 0;
+    made.closePort!();
+    expect(notes.sort()).toEqual(["discord release 11111111-1111-4111-8111-111111111111", "folder close Documents/Game", "media close", "system close"]);
+  });
+
+  it("folders: a watch that finishes starting after its page went is closed, not kept", async () => {
+    const { context, notes, starts } = watching();
+    const watch = context.folders.watch("Documents/Game", true);
+    made.closePort!();
+    notes.length = 0;
+    starts[0]!.finish();
+    await watch;
+    expect(notes).toEqual(["folder close Documents/Game"]);
+  });
+
+  it("opens the module's linked files as the owner and module its page runs as, in its workspace", async () => {
+    const { ReadOnlyFiles } = await import("./read-only-files");
+    const { view } = watching();
+    const files = (view as unknown as { session: { options: { readOnlyFiles(): unknown } } }).session.options.readOnlyFiles() as { file: string };
+    expect(files.file).toBe((new ReadOnlyFiles("/nowhere", "official", "tavora.todos", "elden") as unknown as { file: string }).file);
   });
 
   it("discord: what it tells reaches the page while granted, and closing the panel lets go of the connection", async () => {

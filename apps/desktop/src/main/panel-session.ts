@@ -173,6 +173,7 @@ export class PanelSession {
       hotkeys: {
         list: () => connectors.hotkeys.list(),
         set: async (action, target, label) => {
+          // The manifest as installed now (read at the call, not at connect): a reload with a newer copy brings its actions.
           if (!(this.options.module().manifest.actions ?? []).some((item) => item.id === action)) throw new HostError("INVALID_PARAMS", `this module has no action "${action}" in its manifest`);
           // Tavora's dialog takes the key; one click opens it once.
           await this.gate.enter("hotkeys.set");
