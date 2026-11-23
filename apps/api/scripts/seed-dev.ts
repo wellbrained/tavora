@@ -497,7 +497,8 @@ export function seedDev({ stateDir, gamesFile, now = Date.now() }: SeedOptions):
   // Installs from Browse, per module.
   for (const module of MODULES) {
     const installs = module.popularity * module.versions[0]!.age * 0.6;
-    for (let i = 0; i < Math.round(installs); i += 1) catalog.countInstall(module.id);
+    // One write per module: counting one at a time commits thousands of times, and a commit is a disk flush (slow on Windows CI).
+    if (Math.round(installs) > 0) catalog.countInstall(module.id, Math.round(installs));
   }
 
   // Open reports of modules, with who sent them.

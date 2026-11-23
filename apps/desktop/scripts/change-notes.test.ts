@@ -140,7 +140,10 @@ describe("today", () => {
 // about ten of them, so ~3 s, and a loaded run hits the 5 s limit). The full path skips that lookup.
 const GIT = ["/usr/bin/git", "/usr/local/bin/git", "/opt/homebrew/bin/git"].find((candidate) => existsSync(candidate)) ?? "git";
 
-describe("collectPullRequest", () => {
+// Each test builds a throwaway repo and reads it back: about 15 git processes in a row. A process costs ~25 ms on this Mac
+// but up to a second on a loaded Windows runner (Defender scans each git.exe), so these get their own limit instead of the
+// CI default of 20 s, which they came within a few seconds of. Measured with 300 ms added per spawn: ~5 s a test.
+describe("collectPullRequest", { timeout: 60_000 }, () => {
   /** A throwaway repo shaped like Tavora's: both package.json files and apps/desktop/changes. */
   function repo() {
     const dir = mkdtempSync(path.join(tmpdir(), "change-notes-"));
@@ -153,13 +156,13 @@ describe("collectPullRequest", () => {
       write("package.json", JSON.stringify({ version: v }));
       write("apps/desktop/package.json", JSON.stringify({ version: v }));
     };
+    // Two spawns, not three: the tests name a branch where they need a commit, so no rev-parse after each one.
     const commit = (message: string) => {
       git("add", "-A");
       git("commit", "-q", "-m", message);
-      return git("rev-parse", "HEAD");
     };
     git("init", "-q", "-b", "main");
-    return { git, write, version, commit };
+    return { dir, git, write, version, commit };
   }
   const note = (title: string, bump = "") => `${bump ? `bump: ${bump}\n` : ""}# ${title}\n\n- Something users see.\n`;
 
@@ -169,13 +172,13 @@ describe("collectPullRequest", () => {
     commit("start");
     git("switch", "-q", "-c", "feature");
     write("apps/desktop/changes/mine.md", note("Mine"));
-    const head = commit("pr");
+    commit("pr");
     git("switch", "-q", "main");
     // A stuck Number run: main holds a note that raises the minor number, and an invalid one.
     write("apps/desktop/changes/stuck.md", note("Stuck", "minor"));
     write("apps/desktop/changes/broken.md", "not a note\n");
     commit("main moves");
-    const result = collectPullRequest(git, "main", head);
+    const result = collectPullRequest(git, "main", "feature");
     expect(result.problems).toEqual([]);
     expect(result.notes.map((n: { file: string }) => n.file)).toEqual(["mine.md"]);
     expect(checkPullRequest({ ...result, featureComplete: false })).toEqual([]);
@@ -187,11 +190,11 @@ describe("collectPullRequest", () => {
     commit("start");
     git("switch", "-q", "-c", "feature");
     write("a.txt", "x");
-    const head = commit("pr");
+    commit("pr");
     git("switch", "-q", "main");
     version("0.5.1");
     commit("0.5.1: numbered");
-    const result = collectPullRequest(git, "main", head);
+    const result = collectPullRequest(git, "main", "feature");
     expect([result.base, result.head, result.rootHead]).toEqual(["0.5.0", "0.5.0", "0.5.0"]);
     expect(checkPullRequest({ ...result, featureComplete: false })).toEqual([]);
   });
@@ -204,8 +207,8 @@ describe("collectPullRequest", () => {
     version("0.5.1");
     write("apps/desktop/changes/mine.md", note("Mine", "minor"));
     write("apps/desktop/changes/bad.md", "nope\n");
-    const head = commit("pr");
-    const result = collectPullRequest(git, "main", head);
+    commit("pr");
+    const result = collectPullRequest(git, "main", "feature");
     expect(result.problems.length).toBeGreaterThan(0);
     expect(result.head).toBe("0.5.1");
     const problems = checkPullRequest({ ...result, featureComplete: false });
@@ -214,15 +217,15 @@ describe("collectPullRequest", () => {
   });
 
   it("counts a note moved in from elsewhere as added, so it can't skip the label rule", () => {
-    const { git, write, version, commit } = repo();
+    const { dir, git, write, version, commit } = repo();
     version("0.5.0");
     write("docs/idea.md", note("A long enough title for git to call this a rename", "major"));
     commit("start");
     git("switch", "-q", "-c", "feature");
-    mkdirSync(path.join(git("rev-parse", "--show-toplevel"), "apps/desktop/changes"), { recursive: true });
+    mkdirSync(path.join(dir, "apps/desktop/changes"), { recursive: true });
     git("mv", "docs/idea.md", "apps/desktop/changes/idea.md");
-    const head = commit("pr");
-    const result = collectPullRequest(git, "main", head);
+    commit("pr");
+    const result = collectPullRequest(git, "main", "feature");
     expect(result.notes.map((n: { file: string }) => n.file)).toEqual(["idea.md"]);
     expect(checkPullRequest({ ...result, featureComplete: false }).some((p: string) => p.includes("bump: major"))).toBe(true);
   });
@@ -237,7 +240,8 @@ describe("collectPullRequest", () => {
       git("switch", "-q", "-c", "fold");
       version("1.0.0");
       write("apps/desktop/src/shared/patch-notes.ts", patchNotes(...left));
-      return collectPullRequest(git, "main", commit("fold"));
+      commit("fold");
+      return collectPullRequest(git, "main", "fold");
     }
 
     it("lets the version go back to 1.0.0 when only the 1.0.0 entry is left", () => {

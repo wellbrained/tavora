@@ -1251,10 +1251,10 @@ export class CatalogStore {
     this.db.prepare("delete from report_senders where account_id = ?").run(accountId);
   }
 
-  /** Counts one install of a listed module from Browse. Nothing about the user is kept. */
-  countInstall(id: string): boolean {
+  /** Counts installs of a listed module from Browse (one by default; the dev seed adds a module's whole history in one write). Nothing about the user is kept. */
+  countInstall(id: string, times = 1): boolean {
     if (!this.db.prepare("select 1 from modules m where m.id = ? and m.listed = 1 and exists (select 1 from versions where module_id = m.id and status = 'listed')").get(id)) return false;
-    this.db.prepare("insert into installs (module_id, count) values (?, 1) on conflict (module_id) do update set count = count + 1").run(id);
+    this.db.prepare("insert into installs (module_id, count) values (?, ?) on conflict (module_id) do update set count = count + excluded.count").run(id, times);
     return true;
   }
 

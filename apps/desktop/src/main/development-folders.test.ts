@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -38,6 +38,8 @@ interface Setup {
   openPath?: boolean;
   /** What the next look at the modules finds. */
   next?: InstalledModule[];
+  /** Runs whenever a watcher is made, to change the disk while the watchers start. */
+  onWatch?: () => void;
 }
 
 function setup(options: Setup = {}) {
@@ -47,6 +49,7 @@ function setup(options: Setup = {}) {
   const listeners = new Map<string, (name: string | null) => void>();
   const open = new Set<string>();
   const watch: WatchFolder = (dir, recursive, listener) => {
+    options.onWatch?.();
     if (!existsSync(dir)) throw Object.assign(new Error("gone"), { code: "ENOENT" });
     const key = `${dir}${recursive ? " (deep)" : ""}`;
     listeners.set(key, listener);
@@ -145,6 +148,49 @@ describe("DevelopmentFolders", () => {
     expect(open.size).toBe(3);
     folders.close();
     expect(open.size).toBe(0);
+  });
+
+  it("finds a project made after the first look but before the watchers started", async () => {
+    const { folder } = await folderWithProject();
+    const library = { ...emptyLibrary(), developmentFolders: [folder] };
+    // The look is over when the first watcher is made, and nobody hears what is made until the watchers listen: on a slow disk
+    // that gap is long. A project made in it has to be found anyway.
+    let made = false;
+    const { folders, calls, quiet } = setup({
+      library,
+      onWatch: () => {
+        if (made) return;
+        made = true;
+        mkdirSync(path.join(folder, "late"));
+        writeFileSync(path.join(folder, "late", "tavora.module.json"), JSON.stringify({ id: "local.late", entry: "dist/index.html" }));
+      },
+    });
+    await folders.watch();
+    await quiet();
+    expect(calls).toEqual(["reload", "changed"]);
+  });
+
+  it("finds a project that gets built while the watchers start", async () => {
+    const { folder, project } = await folderWithProject();
+    const library = { ...emptyLibrary(), developmentFolders: [folder] };
+    let built = false;
+    const { folders, calls, quiet } = setup({
+      library,
+      onWatch: () => {
+        if (built) return;
+        built = true;
+        mkdirSync(path.join(project, "dist"));
+        writeFileSync(path.join(project, "dist", "index.html"), "<p>built</p>");
+      },
+    });
+    await folders.watch();
+    await quiet();
+    expect(calls).toEqual(["reload", "changed"]);
+    // Looked at again, with nothing new, it stays quiet: a project that can't load for another reason doesn't loop.
+    calls.length = 0;
+    await folders.watch();
+    await quiet();
+    expect(calls).toEqual([]);
   });
 
   it("adds a folder the user picks and looks for its modules; nothing when the dialog is closed", async () => {

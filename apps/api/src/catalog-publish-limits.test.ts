@@ -181,17 +181,25 @@ describe("reading an upload", () => {
   });
 
   it("lets a slow honest line finish long past the grace time", async () => {
-    let sent = 0;
-    const body = new ReadableStream<Uint8Array>({
-      async pull(controller) {
-        await new Promise((resolve) => setTimeout(resolve, 25));
-        if (sent++ === 10) controller.close();
-        else controller.enqueue(new Uint8Array(8192));
-      },
-    }, { highWaterMark: 0 });
-    const request = new Request(url, { method: "POST", body, duplex: "half" } as RequestInit);
-    const read = await readUpload(request, 1024 * 1024, { idleMs: 500, graceMs: 40, bytesPerSecond: 100_000 });
-    expect(read).toMatchObject({ bytes: expect.objectContaining({ length: 81_920 }) });
+    // On a fake clock: readUpload measures speed against Date.now, so a slow CI runner delaying real timers could push this
+    // line under the limit. Here 10 chunks take exactly 250 ms, about 330 KB/s against a floor of 100 KB/s plus 40 ms grace.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    try {
+      let sent = 0;
+      const body = new ReadableStream<Uint8Array>({
+        async pull(controller) {
+          await new Promise((resolve) => setTimeout(resolve, 25));
+          if (sent++ === 10) controller.close();
+          else controller.enqueue(new Uint8Array(8192));
+        },
+      }, { highWaterMark: 0 });
+      const request = new Request(url, { method: "POST", body, duplex: "half" } as RequestInit);
+      const reading = readUpload(request, 1024 * 1024, { idleMs: 500, graceMs: 40, bytesPerSecond: 100_000 });
+      await vi.advanceTimersByTimeAsync(400);
+      expect(await reading).toMatchObject({ bytes: expect.objectContaining({ length: 81_920 }) });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("gives a bigger upload longer to arrive, and its client longer to wait", () => {

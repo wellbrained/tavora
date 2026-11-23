@@ -118,31 +118,35 @@ export class DevelopmentFolders {
    */
   async watch(): Promise<void> {
     // Read everything first, so two calls at once cannot leave watchers of the older one behind.
+    const builtAlready = (root: string, entry: string | undefined) => entry !== undefined && existsSync(path.join(root, entry));
+    const look = async (folder: string) => {
+      const found = await developmentProjects(folder);
+      const projects = found === "missing" ? [] : found;
+      const holder = !(projects.length === 1 && projects[0] === folder);
+      let others: string[] = [];
+      if (holder) {
+        try {
+          others = (await readdir(folder, { withFileTypes: true }))
+            .filter((entry) => entry.isDirectory() && mayHoldProject(entry.name))
+            .map((entry) => path.join(folder, entry.name))
+            .filter((dir) => !projects.includes(dir))
+            .slice(0, MAX_DEVELOPMENT_SUBFOLDERS);
+        } catch {
+          // Gone: Settings says so, and there is nothing to watch.
+        }
+      }
+      return { folder, holder, others, projects };
+    };
     const folders = await Promise.all(
       this.options.library.developmentFolders.map(async (folder) => {
-        const found = await developmentProjects(folder);
-        const projects = found === "missing" ? [] : found;
-        const holder = !(projects.length === 1 && projects[0] === folder);
-        let others: string[] = [];
-        if (holder) {
-          try {
-            others = (await readdir(folder, { withFileTypes: true }))
-              .filter((entry) => entry.isDirectory() && mayHoldProject(entry.name))
-              .map((entry) => path.join(folder, entry.name))
-              .filter((dir) => !projects.includes(dir))
-              .slice(0, MAX_DEVELOPMENT_SUBFOLDERS);
-          } catch {
-            // Gone: Settings says so, and there is nothing to watch.
-          }
-        }
+        const seen = await look(folder);
         return {
-          folder,
-          holder,
-          others,
+          ...seen,
           projects: await Promise.all(
-            projects.map(async (project) => {
+            seen.projects.map(async (project) => {
               const module = [...this.options.installed.modules.values()].find((item) => item.developmentProject === project);
-              return { project, module, entry: module?.manifest.entry ?? (await projectEntry(project)) };
+              const entry = module?.manifest.entry ?? (await projectEntry(project));
+              return { project, module, entry, built: builtAlready(module?.root ?? project, entry) };
             }),
           ),
         };
@@ -173,10 +177,12 @@ export class DevelopmentFolders {
       this.watched.set(key, state);
       return { changed, watchOne };
     };
+    const lookAgain = new Map<string, () => void | Promise<void>>();
     for (const { folder, holder, others, projects } of folders) {
       if (holder) {
         // A project appearing in the folder, or a manifest in one of its folders, is a new module.
         const { changed, watchOne } = watched(folder);
+        lookAgain.set(folder, () => changed(true));
         watchOne(folder, false, () => changed(true));
         for (const dir of others) {
           watchOne(dir, false, (name) => {
@@ -184,8 +190,10 @@ export class DevelopmentFolders {
           });
         }
       }
-      for (const { project, module, entry } of projects) {
+      for (const { project, module, entry, built: wasBuilt } of projects) {
         const { changed, watchOne } = watched(project);
+        // A project that wasn't built at the look and is now: its build came while the watchers started.
+        if (!module) lookAgain.set(project, async () => ((await projectEntry(project).then((now) => builtAlready(project, now))) && !wasBuilt ? changed(true) : undefined));
         const root = module?.root ?? project;
         const built = entry === undefined ? undefined : buildFolderName(entry);
         watchOne(root, false, (name) => {
@@ -196,6 +204,19 @@ export class DevelopmentFolders {
         if (built !== undefined) watchOne(path.join(root, built), true, () => changed(!module || !existsSync(path.join(root, entry!))));
       }
     }
+    // What was made or built between the look above and the watchers starting just now was heard by nobody, and a look follows
+    // every reload, so a project made or finished right after one (on a slow disk the look takes long) would stay as it was.
+    // Look once more now that the watchers listen: anything that differs is news.
+    const shape = (seen: { holder: boolean; others: string[]; projects: readonly (string | { project: string })[] }) =>
+      JSON.stringify([seen.holder, seen.others, seen.projects.map((item) => (typeof item === "string" ? item : item.project))]);
+    await Promise.all([
+      ...folders.map(async (before) => {
+        if (!before.holder) return;
+        const now = await look(before.folder);
+        if (shape(now) !== shape(before)) lookAgain.get(before.folder)?.();
+      }),
+      ...folders.flatMap((before) => before.projects.map((item) => lookAgain.get(item.project)?.())),
+    ]);
   }
 
   /** Stops watching every folder, and drops the reloads still waiting for a quiet moment. */
