@@ -163,10 +163,17 @@ describe("a file that can't be read right now is never written over", () => {
     expect(JSON.parse(await text())).toEqual({ version: 1, notes: [] });
   });
 
-  it("refuses a first write when the read it does first fails", async () => {
+  it("refuses a first write when the read it does first fails, and reads again at the next one", async () => {
     await mkdir(file);
-    await expect(new SavedFile(file, V1).write({ notes: [] })).rejects.toBeInstanceOf(SavedFileHeld);
+    const saved = new SavedFile(file, V1);
+    await expect(saved.write({ notes: [] })).rejects.toBeInstanceOf(SavedFileHeld);
     expect(await names()).toEqual(["notes.json"]);
+    // Nothing the store has came from that read: once the file can be read, the next write goes through.
+    await rm(file, { recursive: true });
+    await writeFile(file, '{"version":2,"notes":["newer"]}');
+    await saved.write({ notes: ["mine"] });
+    expect(JSON.parse(await text())).toEqual({ version: 1, notes: ["mine"] });
+    expect(JSON.parse(await readFile(`${file}.from-version-2`, "utf8"))).toEqual({ version: 2, notes: ["newer"] });
   });
 
   it("update leaves it as it is", async () => {

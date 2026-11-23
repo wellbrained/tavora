@@ -3,8 +3,8 @@
 // - a file a newer Tavora wrote is copied aside (`<file>.from-version-<n>`) before this one can write over it, and is
 //   then read as far as this Tavora understands it;
 // - a damaged one is set aside (`<file>.corrupt-<time>`), the user is told, and the store starts from nothing;
-// - one that can't be read right now (held by a virus scan) is never written over: until the store reads it again,
-//   every write is refused;
+// - one that can't be read right now (held by a virus scan) is never written over: after a read of the store's that
+//   failed, every write is refused until it reads the file again;
 // - the fields a newer Tavora added are written back as they were, for the kinds that keep them;
 // - writes of a file run one at a time, in order, each whole or not at all (fsutil.ts writeFileAtomic).
 // A store gives its file's kind (SAVED_FILES) and its own fields; it never writes the version, or the file, itself.
@@ -213,9 +213,20 @@ export class SavedFile {
     return saved;
   }
 
-  /** Reads the file first when this SavedFile hasn't; refuses while it couldn't be read. */
+  /**
+   * Reads the file first when this SavedFile hasn't; refuses while it couldn't be read. A read the store asked for that
+   * failed holds every write until one succeeds, as what the store has may stand in for what it couldn't read. One done
+   * here only for the write holds just this write: nothing the store has came from it, so the next write reads again.
+   */
   private async ready(): Promise<void> {
-    if (this.status.kind === "unread") await this.readNow().catch(() => undefined);
+    if (this.status.kind === "unread") {
+      try {
+        await this.readNow();
+      } catch (error) {
+        this.status = { kind: "unread" };
+        throw new SavedFileHeld(this.file, error);
+      }
+    }
     if (this.status.kind === "held") throw new SavedFileHeld(this.file, this.status.error);
   }
 
