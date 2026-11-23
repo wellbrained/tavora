@@ -214,6 +214,9 @@ describe("the line sealed in each folder list", () => {
     const key = newCopyKey();
     const dir = await folder();
     const storage = new FolderStorage(dir);
+    // Clean-up reads every list on each save, which over this many saves is slow (Windows CI), and nothing here is old
+    // enough for it to remove: it is left out.
+    (storage as unknown as { cleanUp: () => Promise<void> }).cleanUp = async () => undefined;
     const a = await pc();
     const k = await save(storage, key, a, EMPTY_STATE, "k");
     let state = k;

@@ -38,7 +38,7 @@ const ASK_IDS = 2048;
  * The most versions a folder manifest's line names: the saves it grew out of, nearest first. A PC that synced a version
  * further back than that is asked rather than taking the copy on its own.
  */
-export const LINE_LENGTH = 64;
+export const LINE_LENGTH = 256;
 export const COPY_TIMEOUT_MS = 60_000;
 
 /** Where a part of the copy lives on this PC: a data file, or a folder of them. */
