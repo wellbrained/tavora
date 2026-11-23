@@ -226,7 +226,7 @@ describe("check 3: copies", () => {
   });
 });
 
-describe("check 4: warning signs in the code", () => {
+describe("check 4: warning signs in the code", { timeout: 30_000 }, () => {
   const code = (text: string, name = "app.js") => [{ name, data: Buffer.from(text) }];
   const flagged = async (text: string, name?: string) => {
     const { developer, send, verdict } = setup();
@@ -308,7 +308,7 @@ describe("check 4: warning signs in the code", () => {
     expect(await flagged(libraryExcerpts.join(";\n"))).toBe("listed");
   });
 
-  it("still holds anything that only looks like those pieces", { timeout: 30_000 }, async () => {
+  it("still holds anything that only looks like those pieces", async () => {
     for (const text of [
       "Function('return this; fetch(x)')()",
       "Function('return this')(); eval(x)",
