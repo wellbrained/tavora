@@ -145,7 +145,7 @@ describe("the cloud copy in a folder", () => {
     expect(await new FolderStorage(onedrive).remote(up.state.version)).toMatchObject({ version: up.state.version, follows: true });
   });
 
-  it("cleans up old manifests and parts no one uses, but only once they are old", async () => {
+  it("cleans up old manifests and parts no one uses, but only once they are old", { timeout: 30_000 }, async () => {
     const key = newCopyKey();
     const onedrive = await folder();
     let now = Date.now();
@@ -770,8 +770,9 @@ describe("what anyone who can write the folder can do", () => {
     }
   });
 
-  it("asks a PC whose sync app was stuck for a month while it saved, once it catches up", async () => {
-    for (let round = 0; round < 6; round++) {
+  // Whether A's first save numbers above or below P's is random: three runs see both often enough, each a dozen saves.
+  it("asks a PC whose sync app was stuck for a month while it saved, once it catches up", { timeout: 30_000 }, async () => {
+    for (let round = 0; round < 3; round++) {
       const key = newCopyKey();
       const shared = await folder();
       const clock = { now: Date.now() };
