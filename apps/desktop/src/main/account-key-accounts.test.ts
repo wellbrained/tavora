@@ -79,8 +79,9 @@ async function onPc(cloud: Service, fetch: typeof globalThis.fetch, signed: { no
  * DeveloperKeys.accountChanged starts a read of its own and doesn't wait for it, so awaiting a second refresh next to it
  * runs two reads at once: both read-then-write the seen file, so one can undo the other's change (a mark "1" that
  * should have become the account's stays), and one can still be writing when the test ends (the clean-up then fails with
- * ENOTEMPTY). Under load that showed as a flaky test. This waits for the read the change starts, as the host's one is the
- * only read, and reads once itself only when the change started none (the same account again).
+ * ENOTEMPTY). Under load that showed as a flaky test. This waits for the read the change starts and reads once itself only
+ * when the change started none (the same account again). The host can still run a refresh next to it (host.ts); the
+ * seen file's changes go one at a time for that (AccountKey.changeSeen, account-key.test.ts).
  */
 async function accountChangedAndSettled(keys: DeveloperKeys, account: string | null): Promise<void> {
   const started: Promise<void>[] = [];
@@ -321,8 +322,10 @@ async function copyPc(cloud: Service, fetch: typeof globalThis.fetch, signed: { 
   });
   /** The account changes as the host tells it. */
   const changed = async () => {
+    // In the host's order (account-flows.ts): the publisher keys first, then the cloud copy.
+    const settled = accountChangedAndSettled(keys, signed.now?.id ?? null);
     sync.accountChanged(signed.now?.id ?? null);
-    await accountChangedAndSettled(keys, signed.now?.id ?? null);
+    await settled;
   };
   await sync.beforeLoad();
   await changed();
