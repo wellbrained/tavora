@@ -61,7 +61,6 @@ describe("host.ts", () => {
     expect(host).toMatch(/onRefused: \(info\) => removeRefusedInstaller\(info, app\.isPackaged\)/);
   });
 
-  // The rule itself is OfficialPublishing's (official-publishing.test.ts); this holds host.ts to telling it what build this is.
   it("resets the host page's popup watch when its overlay closes, so a late answer shows nothing (renderer/host.ts)", () => {
     // openWatch's reset is overlay-area.test.ts'; this holds the renderer's close to calling it.
     const renderer = readFileSync(path.join(import.meta.dirname, "../renderer/host.ts"), "utf8").replace(/\r\n/g, "\n");
@@ -69,6 +68,7 @@ describe("host.ts", () => {
     expect(close?.[1]).toContain("watchState = openWatch(watchState);");
   });
 
+  // The rule itself is OfficialPublishing's (official-publishing.test.ts); this holds host.ts to telling it what build this is.
   it("tells built-in module publishing whether this is a packaged build and whether the pins are set", () => {
     const made = body(/this\.officialPublishing = new OfficialPublishing\(\{/);
     expect(made).toContain("packaged: app.isPackaged,");
