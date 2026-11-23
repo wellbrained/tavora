@@ -683,6 +683,16 @@ These need a Tavora with `ui.tooltip.defineSkin` (its version is in the table ab
   card has `per`. The rich layout shows it after the value ("12 · +3"). `per` and `perHeading` need a Tavora with
   `sdk.supports("ui.tooltip.per")`; on an older one the SDK puts `per` into the value and leaves the heading out (a raw
   caller does that itself).
+- A property may have `more`: up to 3 extra values after `value` (up to 40 characters each), say the stat at level 2
+  and 3. On the card each gets a column of its own in the accent colour, after the value and before `per`; a property
+  with fewer leaves the rest empty, and an empty text leaves its cell empty. With a filled `more`, `value` may be empty.
+  `content.columns` (up to 4 headings of up to 20 characters, e.g. `["Lv 1", "Lv 2", "Lv 3"]`) heads the value column
+  and then each extra column, in the small style of `perHeading`; the heading row shows only with `columns`. The number
+  columns take what they need and a long label wraps; the card stays 280 px wide. The rich layout shows the extra
+  values after the value ("6 · 12 · 18"). `more` and `columns` need a Tavora with `sdk.supports("ui.tooltip.columns")`:
+  an older one refuses the unknown keys, and with them the whole tooltip, so the SDK puts `more` into `per` there
+  ("12 / 18") and the headings after the first into `perHeading` ("Lv 2 / Lv 3"), or all of it into the value where
+  `per` isn't known either (a raw caller does that itself).
 - A property may have `icon`: a small pictogram before its label (a heart for health, a sword for damage). It follows
   the rules of `image` (a `dist/` path, up to 500 characters, read only from the module's own bundle), but must be a
   PNG or WebP (it is a mask: a JPEG would draw a filled square, a GIF would animate), up to 64 KB. Only its shape counts: the card draws it as a mask in the label's colour (the
@@ -724,7 +734,7 @@ These need a Tavora with `sdk.supports("ui.tooltip.unit")` (`UNIT_CARD_TAVORA` i
   (44 × 67 px, cut to fill) sticking out at the top left, a title bar from the portrait to the right edge with the
   title and the corner value, and below it the body, indented under the portrait: the `subtitle`, the `effect` (plain
   text, accent runs in the accent colour), the stats, the sections, the icon row and the pips on the body's bottom
-  edge. It leaves out `badges`, `requirements`, `perHeading` and a property's `per` and `icon`. Without an `image` the
+  edge. It leaves out `badges`, `requirements`, `perHeading`, `columns` and a property's `per`, `more` and `icon`. Without an `image` the
   bar and body start at the left edge. The card is at least 316 px wide and grows to fit the stats and the icon row, up
   to 520 px; the effect, the type line and the rows wrap to it and never widen it. The footer with the module's name
   stays, under the body.

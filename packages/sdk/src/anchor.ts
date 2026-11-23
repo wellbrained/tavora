@@ -44,6 +44,8 @@ function point(target: AnchorTarget): TooltipAnchor["at"] {
  * older Tavora than `ui.tooltip.pinnable` would reject the unknown key, so it is left out there (the card still shows,
  * with the old hint). The same goes for the card's `layout`, `effect` and `skin` on a Tavora older than
  * `ui.tooltip.skin`: the card shows in the rich layout there; and for a stat's `icon` before `ui.tooltip.propertyIcon`.
+ * A stat's extra values (`more`) and their `columns` go into `per` before `ui.tooltip.columns`, and with it into the
+ * value before `ui.tooltip.per`.
  * A unit card (`layout: "unit"`) becomes a plain card before `ui.tooltip.unit`, and a stat's `suffix` goes into its
  * value wherever the unit layout doesn't show it.
  */
@@ -53,6 +55,7 @@ export function tooltipShowParams(request: TooltipShowOptions, hostVersion: stri
   if (params.pinnable !== undefined && !supportsCall(hostVersion, "ui.tooltip.pinnable")) delete params.pinnable;
   if (params.content) params.content = unitFallback(params.content, supportsCall(hostVersion, "ui.tooltip.unit"));
   if (params.content && !supportsCall(hostVersion, "ui.tooltip.propertyIcon")) params.content = withoutIcons(params.content);
+  if (params.content && !supportsCall(hostVersion, "ui.tooltip.columns")) params.content = withoutColumns(params.content);
   if (params.content && !supportsCall(hostVersion, "ui.tooltip.per")) params.content = withoutPer(params.content);
   const content = params.content as TooltipContent | undefined;
   if (content && (content.layout !== undefined || content.effect !== undefined || content.skin !== undefined) && !supportsCall(hostVersion, "ui.tooltip.skin")) {
@@ -84,6 +87,37 @@ function unitFallback(content: TooltipContent, unit: boolean): TooltipContent {
 function withoutIcons(content: TooltipContent): TooltipContent {
   if (!content.properties?.some((p) => p.icon !== undefined)) return content;
   return { ...content, properties: content.properties.map(({ icon: _icon, ...p }) => p) };
+}
+
+/** A stat's extra values as one text ("12 / 18"): an empty one in between as "–", empty ones at the end left out. */
+function joinedMore(more: readonly string[] | undefined, separator: string): string {
+  const cells = [...(more ?? [])];
+  while (cells.length && !cells[cells.length - 1]!.trim()) cells.pop();
+  return cells.map((cell) => (cell.trim() ? cell : "–")).join(separator);
+}
+
+/** `text` cut to `max` characters, ending in "…" when it was longer. */
+function cut(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+/**
+ * For a Tavora without extra value columns: a stat's `more` goes into its `per` ("12 / 18"), before the `per` it already
+ * had ("12 / 18 · +3"), and the headings after the first become `perHeading` ("Lv 2 / Lv 3"), before the one it already
+ * had; cut to the 40 and 60 characters they may have there. `columns` and `more` go.
+ */
+function withoutColumns(content: TooltipContent): TooltipContent {
+  if (content.columns === undefined && !content.properties?.some((p) => p.more !== undefined)) return content;
+  const { columns, ...rest } = content;
+  if (!rest.properties) return rest;
+  const folds = rest.properties.some((p) => joinedMore(p.more, "") !== "");
+  const properties = rest.properties.map(({ more, ...p }) => {
+    const folded = joinedMore(more, " / ");
+    return folded ? { ...p, per: cut(p.per === undefined ? folded : `${folded} · ${p.per}`, 40) } : p;
+  });
+  const headings = (columns ?? []).slice(1).join(" / ");
+  if (!folds || !headings) return { ...rest, properties };
+  return { ...rest, properties, perHeading: cut(rest.perHeading === undefined ? headings : `${headings} · ${rest.perHeading}`, 60) };
 }
 
 /**

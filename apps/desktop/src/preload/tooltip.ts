@@ -264,7 +264,7 @@ function renderCard(card: HTMLElement, c: TooltipContent, de: boolean) {
     if (c.effect)
         item.append(effectBox(c.effect));
     if (c.properties?.length)
-        item.append(stats(c.properties, c.perHeading));
+        item.append(stats(c.properties, c.perHeading, c.columns));
     const { properties: _stats, ...rows } = c;
     appendRows(item, rows);
     // Requirements come last, as rows like the properties, under their own heading.
@@ -275,25 +275,52 @@ function renderCard(card: HTMLElement, c: TooltipContent, de: boolean) {
     }
 }
 /**
- * The card's stats: label, value and, when a row of the card has one, how much it grows (`per`) in a third column
- * with its heading over it. No colons: the columns line the values up. Long values wrap; the label keeps its room.
- * When a row has an icon, every label keeps room for one, so the labels still line up.
+ * The card's stats: label, value, the extra values (`more`) each in a column of its own and, when a row of the card has
+ * one, how much it grows (`per`) in a last column. `columns` head the value and the extra columns, `heading` the `per`
+ * column. No colons: the columns line the values up. The number columns take what they need and the label wraps; only
+ * when that isn't enough do long values wrap. When a row has an icon, every label keeps room for one, so the labels
+ * still line up.
  */
-function stats(rows: { label: string; value: string; per?: string; icon?: string; suffix?: string }[], heading?: string) {
+function stats(rows: { label: string; value: string; per?: string; icon?: string; suffix?: string; more?: string[] }[], heading?: string, columns?: string[]) {
     const per = rows.some(r => r.per !== undefined), icons = rows.some(r => r.icon !== undefined);
-    const grid = node("div", undefined, "stats" + (per ? " has-per" : "") + (icons ? " has-icons" : ""));
-    if (per && heading)
-        grid.append(node("span"), node("span"), node("small", heading, "per-heading"));
+    const extra = Math.min(3, Math.max(0, (columns?.length ?? 0) - 1, ...rows.map(r => r.more?.length ?? 0)));
+    const grid = node("div", undefined, "stats" + (per ? " has-per" : "") + (extra ? " has-columns" : "") + (icons ? " has-icons" : ""));
+    if (extra)
+        grid.style.setProperty("--stat-columns", String(1 + extra + (per ? 1 : 0)));
+    const blank = (n: number) => Array.from({ length: n }, () => node("span"));
+    if (columns?.length) {
+        grid.append(node("span"));
+        for (let i = 0; i <= extra; i++)
+            grid.append(columns[i] ? node("small", columns[i], "per-heading") : node("span"));
+        if (per)
+            grid.append(heading ? node("small", heading, "per-heading") : node("span"));
+    }
+    else if (per && heading)
+        grid.append(...blank(2 + extra), node("small", heading, "per-heading"));
     for (const r of rows) {
         const label = node("span", icons ? undefined : r.label, "stats-label");
         if (icons)
             label.append(statIcon(r.icon), document.createTextNode(r.label));
         // Only the unit layout hangs a suffix past the value; here it is part of it.
         grid.append(label, node("span", r.value + (r.suffix ?? ""), "value"));
+        for (let i = 0; i < extra; i++)
+            grid.append(node("span", r.more?.[i] ?? "", "more"));
         if (per)
             grid.append(node("span", r.per ?? "", "per"));
     }
     return grid;
+}
+/**
+ * A stat in one line, for the rich layout: the value, its extra values and what it grows by, "6 · 12 · 18 · +3". An
+ * empty extra value in between shows as "–", empty ones at the end are left out.
+ */
+function inlineStat(p: { value: string; per?: string; suffix?: string; more?: string[] }) {
+    const own = p.value + (p.suffix ?? "");
+    const cells = [own, ...(p.more ?? [])];
+    while (cells.length && !cells[cells.length - 1]!.trim())
+        cells.pop();
+    const values = cells.map(cell => (cell.trim() ? cell : "–")).join(" · ");
+    return p.per === undefined ? values || own : values ? values + " · " + p.per : p.per;
 }
 /**
  * A stat's icon: only its shape, as a mask in the label's colour (so it follows the theme and the skin). It is
@@ -400,10 +427,9 @@ function appendRows(details: HTMLElement, c: TooltipContent) {
         const props = node("div", undefined, "properties");
         for (const p of c.properties) {
             const row = node("div");
-            // The rich layout has no third column: what a stat grows by follows its value, and so does its suffix.
-            const own = p.value + (p.suffix ?? "");
-            const value = p.per === undefined ? own : own.trim() ? own + " \u00b7 " + p.per : p.per;
-            row.append(node("span", p.label ? p.label + ": " : ""), node("span", value, "value"));
+            // The rich layout has no more columns: the extra values and what a stat grows by follow its value, and so
+            // does its suffix.
+            row.append(node("span", p.label ? p.label + ": " : ""), node("span", inlineStat(p), "value"));
             props.append(row);
         }
         details.append(props);

@@ -73,6 +73,28 @@ describe("ItemCard", () => {
     expect(Array.from(rich.querySelectorAll(".tavora-item-card-props dd"), (d) => d.textContent)).toEqual(["12 · +3", "3"])
   })
 
+  it("shows a stat's extra values in columns of their own under their headings, and after the value in the rich layout", () => {
+    const levels: TooltipContent = { ...card, columns: ["Lv 1", "Lv 2", "Lv 3"], perHeading: "Per level", properties: [{ label: "Units", value: "6", more: ["12", "18"] }, { label: "Attack speed", value: "0.6" }, { label: "Damage", value: "6", more: ["", "8.6"], per: "+1" }] }
+    const stats = mount(levels).querySelector<HTMLElement>(".tavora-item-card-stats")!
+    expect(stats.hasAttribute("data-columns")).toBe(true)
+    expect(stats.hasAttribute("data-per")).toBe(true)
+    expect(stats.style.getPropertyValue("--ic-columns")).toBe("4")
+    expect(Array.from(stats.children, (c) => c.textContent)).toEqual(["", "Lv 1", "Lv 2", "Lv 3", "Per level", "Units", "6", "12", "18", "", "Attack speed", "0.6", "", "", "", "Damage", "6", "", "8.6", "+1"])
+    expect(Array.from(stats.querySelectorAll(".tavora-item-card-per-heading"), (h) => h.textContent)).toEqual(["Lv 1", "Lv 2", "Lv 3", "Per level"])
+    expect(Array.from(stats.querySelectorAll(".tavora-item-card-more"), (c) => c.textContent)).toEqual(["12", "18", "", "", "", "8.6"])
+    app!.unmount()
+    // Without columns there is no heading row; a per heading sits over the per column, after the extra ones.
+    const bare = mount({ ...card, perHeading: "Per level", properties: [{ label: "Units", value: "6", more: ["12"], per: "+6" }, { label: "Range", value: "3" }] }).querySelector<HTMLElement>(".tavora-item-card-stats")!
+    expect(bare.style.getPropertyValue("--ic-columns")).toBe("3")
+    expect(Array.from(bare.children, (c) => c.textContent)).toEqual(["", "", "", "Per level", "Units", "6", "12", "+6", "Range", "3", "", ""])
+    app!.unmount()
+    // A card without extra values keeps its columns as before.
+    expect(mount(card).querySelector(".tavora-item-card-stats")!.hasAttribute("data-columns")).toBe(false)
+    app!.unmount()
+    const rich = mount({ ...levels, layout: "rich", properties: [...levels.properties!, { label: "Shield", value: "", more: ["", "4", " "] }] })
+    expect(Array.from(rich.querySelectorAll(".tavora-item-card-props dd"), (d) => d.textContent)).toEqual(["6 · 12 · 18", "0.6", "6 · – · 8.6 · +1", "– · – · 4"])
+  })
+
   it("draws a stat's icon before its label as a mask, and keeps its room on every label when only some have one", () => {
     const icons: TooltipContent = { ...card, perHeading: "Per level", properties: [{ label: "HP", value: "40", icon: "icons/heart.png" }, { label: "Damage", value: "12", per: "+3", icon: "data:image/png;base64,iVBORw0KGgo=" }, { label: "Range", value: "3" }] }
     const stats = mount(icons).querySelector(".tavora-item-card-stats")!

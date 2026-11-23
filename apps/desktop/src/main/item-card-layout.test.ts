@@ -12,6 +12,13 @@ describe("tooltip page and the kit's card: what a stat grows by, and rows under 
         expect(KIT_CSS).toContain(".tavora-item-card-stats[data-per]{grid-template-columns:minmax(72px,1fr) fit-content(36%) auto}");
     });
 
+    it("give extra value columns what they need and let the label wrap, in the accent colour like what a stat grows by", () => {
+        expect(TOOLTIP_DOCUMENT).toContain("body.card .stats.has-columns{grid-template-columns:minmax(72px,1fr) repeat(var(--stat-columns),auto)}");
+        expect(KIT_CSS).toContain(".tavora-item-card-stats[data-columns]{grid-template-columns:minmax(72px,1fr) repeat(var(--ic-columns),auto)}");
+        expect(TOOLTIP_DOCUMENT).toContain("body.card .per,body.card .more{color:var(--primary,#e0a243)}");
+        expect(KIT_CSS).toContain(".tavora-item-card-per,.tavora-item-card-more{color:var(--ic-accent)}");
+    });
+
     it("let a row's own text wrap and keep only its status on one line", () => {
         expect(TOOLTIP_DOCUMENT).toContain("li{display:grid;grid-template-columns:minmax(0,1fr) max-content;");
         expect(KIT_CSS).toContain(".tavora-item-card-section li span+span{color:var(--ic-muted);white-space:nowrap}");

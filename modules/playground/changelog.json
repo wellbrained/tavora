@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.63",
+    "date": "2026-11-23",
+    "notes": [
+      "The Item cards specimen has a card with a column per level, under their headings."
+    ]
+  },
+  {
     "version": "0.1.62",
     "date": "2026-11-22",
     "notes": [

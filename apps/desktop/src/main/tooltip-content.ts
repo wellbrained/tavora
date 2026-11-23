@@ -62,7 +62,7 @@ export function checkTooltip(v: unknown): TooltipRequest {
     // A card that says it can't be pinned never pins: asking for both is a mistake, not something to guess at.
     if (o.pinnable === false && o.pinned === true)
         fail();
-    const c = obj(o.content, ["title", "subtitle", "look", "tone", "image", "layout", "effect", "skin", "badges", "requirements", "properties", "perHeading", "sections", "corner", "icons", "pips"]);
+    const c = obj(o.content, ["title", "subtitle", "look", "tone", "image", "layout", "effect", "skin", "badges", "requirements", "properties", "perHeading", "columns", "sections", "corner", "icons", "pips"]);
     const content: TooltipContent = { title: text(c.title, 200) };
     if (c.subtitle !== undefined)
         content.subtitle = text(c.subtitle, 300);
@@ -98,11 +98,22 @@ export function checkTooltip(v: unknown): TooltipRequest {
     // A stat may grow by `per` (a third column on the card); with it, its value may be empty (it only grows). Its `icon`
     // is a picture in the module's bundle, by the same rules as `image`.
     // The unit layout hangs a `suffix` past the value ("E+12", " (MAX)"): kept as given, a leading space too.
+    // Its `more` are up to 3 extra values after it, each up to 40 characters; an empty one leaves its cell empty, and
+    // with one that isn't, the value may be empty too (the stat has none at the first level).
     const stat = (v: unknown) => {
-        const p = obj(v, ["label", "value", "per", "icon", "suffix"]);
-        if (p.per !== undefined && (typeof p.value !== "string" || p.value.length > 300))
+        const p = obj(v, ["label", "value", "per", "icon", "suffix", "more"]);
+        const more = p.more === undefined ? undefined : list(p.more, 3, cell => { if (typeof cell !== "string" || cell.length > 40)
+            fail(); return cell; });
+        if (more?.length === 0)
             fail();
-        const row: NonNullable<TooltipContent["properties"]>[number] = p.per === undefined ? property({ label: p.label, value: p.value }) : { label: text(p.label, 100), value: p.value as string, per: text(p.per, 40) };
+        const filled = more?.some(cell => cell.trim()) ?? false;
+        if ((p.per !== undefined || filled) && (typeof p.value !== "string" || p.value.length > 300))
+            fail();
+        const row: NonNullable<TooltipContent["properties"]>[number] = p.per === undefined && !filled ? property({ label: p.label, value: p.value }) : { label: text(p.label, 100), value: p.value as string };
+        if (p.per !== undefined)
+            row.per = text(p.per, 40);
+        if (more)
+            row.more = more;
         if (p.icon !== undefined)
             row.icon = bundleImage(p.icon, true);
         if (p.suffix !== undefined)
@@ -113,6 +124,12 @@ export function checkTooltip(v: unknown): TooltipRequest {
         content.properties = list(c.properties, 20, stat);
     if (c.perHeading !== undefined)
         content.perHeading = text(c.perHeading, 60);
+    // The headings over the value column and each `more` column ("Lv 1", "Lv 2", …).
+    if (c.columns !== undefined) {
+        content.columns = list(c.columns, 4, v => text(v, 20));
+        if (!content.columns.length)
+            fail();
+    }
     let rows = 0;
     if (c.sections !== undefined)
         content.sections = list(c.sections, 12, v => { const s = obj(v, ["title", "rows"]); return { ...(s.title === undefined ? {} : { title: text(s.title, 100) }), rows: list(s.rows, 60, v => { if (++rows > 100)

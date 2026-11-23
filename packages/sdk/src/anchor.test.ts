@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { skinParams, tooltipParams, tooltipShowParams } from "./anchor.js";
-import { ITEM_CARD_BOX_BORDER_TAVORA, ITEM_CARD_ICON_TAVORA, ITEM_CARD_PER_TAVORA, ITEM_CARD_TAVORA, TOOLTIP_ANCHOR_BOX_TAVORA, UNIT_CARD_TAVORA, type TooltipContent } from "./protocol.js";
+import { ITEM_CARD_BOX_BORDER_TAVORA, ITEM_CARD_COLUMNS_TAVORA, ITEM_CARD_ICON_TAVORA, ITEM_CARD_PER_TAVORA, ITEM_CARD_TAVORA, TOOLTIP_ANCHOR_BOX_TAVORA, UNIT_CARD_TAVORA, type TooltipContent } from "./protocol.js";
 
 const at = { x: 1, y: 2 };
 const OLD = "0.24.0";
@@ -46,6 +46,54 @@ describe("tooltipShowParams and the stats' third column", () => {
     expect(tooltipShowParams({ id: "a", at, content }, ITEM_CARD_PER_TAVORA).content).toEqual(content);
     const plain = { title: "A", properties: [{ label: "Range", value: "3" }] };
     expect(tooltipShowParams({ id: "a", at, content: plain }, ITEM_CARD_TAVORA).content).toBe(plain);
+  });
+});
+
+describe("tooltipShowParams and the stats' extra columns", () => {
+  const content: TooltipContent = { title: "A", layout: "card", columns: ["Lv 1", "Lv 2", "Lv 3"], properties: [{ label: "Units", value: "6", more: ["12", "18"] }, { label: "Attack speed", value: "0.6" }, { label: "Damage", value: "6", more: ["", "8.6"], per: "+1" }] };
+  const BEFORE = UNIT_CARD_TAVORA;
+
+  it("puts the extra values into per and the later headings into perHeading on a Tavora with per but without columns", () => {
+    const sent = tooltipShowParams({ id: "a", at, content }, BEFORE).content;
+    expect(sent).toEqual({ title: "A", layout: "card", perHeading: "Lv 2 / Lv 3", properties: [{ label: "Units", value: "6", per: "12 / 18" }, { label: "Attack speed", value: "0.6" }, { label: "Damage", value: "6", per: "– / 8.6 · +1" }] });
+    // The caller's content stays as it was.
+    expect(content.properties![0]!.more).toEqual(["12", "18"]);
+    expect(content.columns).toHaveLength(3);
+  });
+
+  it("keeps a perHeading after the folded headings, and leaves the headings out when no stat has an extra value", () => {
+    const withHeading = { ...content, perHeading: "Per level" };
+    expect(tooltipShowParams({ id: "a", at, content: withHeading }, BEFORE).content.perHeading).toBe("Lv 2 / Lv 3 · Per level");
+    const headingsOnly = { title: "A", layout: "card" as const, columns: ["Lv 1", "Lv 2"], properties: [{ label: "Range", value: "3" }, { label: "Damage", value: "", more: [" ", ""], per: "+3" }] };
+    expect(tooltipShowParams({ id: "a", at, content: headingsOnly }, BEFORE).content).toEqual({ title: "A", layout: "card", properties: [{ label: "Range", value: "3" }, { label: "Damage", value: "", per: "+3" }] });
+  });
+
+  it("keeps the folded texts within the 40 and 60 characters an older Tavora takes", () => {
+    const long: TooltipContent = { title: "A", columns: ["x".repeat(20), "y".repeat(20), "z".repeat(20), "w".repeat(20)], properties: [{ label: "Note", value: "1", more: ["a".repeat(40), "b".repeat(40), "c".repeat(40)], per: "+3" }] };
+    const sent = tooltipShowParams({ id: "a", at, content: long }, BEFORE).content;
+    expect(sent.properties![0]!.per).toHaveLength(40);
+    expect(sent.properties![0]!.per!.endsWith("…")).toBe(true);
+    expect(sent.perHeading).toHaveLength(60);
+  });
+
+  it("puts the folded text into the value on a Tavora without per either", () => {
+    expect(tooltipShowParams({ id: "a", at, content }, ITEM_CARD_TAVORA).content).toEqual({ title: "A", layout: "card", properties: [{ label: "Units", value: "6 · 12 / 18" }, { label: "Attack speed", value: "0.6" }, { label: "Damage", value: "6 · – / 8.6 · +1" }] });
+  });
+
+  it("sends them as they are to a Tavora with columns, and a card without them as it is everywhere", () => {
+    expect(tooltipShowParams({ id: "a", at, content }, ITEM_CARD_COLUMNS_TAVORA).content).toEqual(content);
+    const plain = { title: "A", perHeading: "Per level", properties: [{ label: "Range", value: "3", per: "+1" }] };
+    expect(tooltipShowParams({ id: "a", at, content: plain }, BEFORE).content).toBe(plain);
+  });
+
+  it("is used by the memory host's show", async () => {
+    const { createMemoryHost } = await import("./testing.js");
+    const { sdk, host } = createMemoryHost({ version: BEFORE });
+    await sdk.ui.tooltip.show({ id: "a", at, content });
+    expect(sdk.supports("ui.tooltip.columns")).toBe(false);
+    const shown = (host.calls["ui.tooltip.show"] as { content: TooltipContent }[])[0]!.content;
+    expect("columns" in shown).toBe(false);
+    expect(shown.properties!.some((p) => "more" in p)).toBe(false);
   });
 });
 

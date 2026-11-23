@@ -1,3 +1,11 @@
+## 0.4.8
+
+Extra value columns on item cards, say a stat at level 1, 2 and 3. They come with the next Tavora (`ITEM_CARD_COLUMNS_TAVORA` in `protocol.ts`; the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.21.43).
+
+- A property takes `more`: up to 3 extra values after `value`, each up to 40 characters. The card shows each in a column of its own in the accent colour; a row with fewer leaves the rest empty, and an empty text leaves its cell empty. With a filled `more`, `value` may be empty. With `per` too, the order is label, value, `more`, `per`. The rich layout shows them after the value ("6 · 12 · 18").
+- `TooltipContent` takes `columns`: up to 4 headings of up to 20 characters, over the value column and then each extra column (["Lv 1", "Lv 2", "Lv 3"]), in the small style of `perHeading`. The heading row shows only with `columns`. The unit layout leaves both out.
+- An older Tavora refuses the new keys, and with them the whole tooltip, so the SDK puts `more` into `per` there ("12 / 18", before a `per` the stat already had: "12 / 18 · +3") and the headings after the first into `perHeading` ("Lv 2 / Lv 3"); on a Tavora without `per` either, all of it goes into the value. `sdk.supports("ui.tooltip.columns")` tells which case you are in; the memory host does the same.
+
 ## 0.4.7
 
 Too many tabs. Tavora tells modules how the user reaches tabs that don't fit a row (Settings > Appearance > Too many tabs), so the kit's `TabStrip` can follow it like Tavora's own panel tabs. It comes with the next Tavora (`TAB_OVERFLOW_TAVORA` in `protocol.ts`; the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.21.43).

@@ -117,6 +117,28 @@ describe("tooltip preload", () => {
         expect(rich.querySelector(".per-heading")).toBeNull();
     });
 
+    it("shows a stat's extra values in columns of their own under their headings, before what it grows by", () => {
+        const levels: TooltipContent = { ...card, columns: ["Lv 1", "Lv 2", "Lv 3"], perHeading: "Per level", properties: [{ label: "Units", value: "6", more: ["12", "18"] }, { label: "Attack speed", value: "0.6" }, { label: "Damage", value: "6", more: ["", "8.6"], per: "+1" }] };
+        const stats = render(levels).querySelector<HTMLElement>(".stats")!;
+        expect(stats.className).toBe("stats has-per has-columns");
+        expect(stats.style.getPropertyValue("--stat-columns")).toBe("4");
+        expect(Array.from(stats.children).map(c => c.textContent)).toEqual(["", "Lv 1", "Lv 2", "Lv 3", "Per level", "Units", "6", "12", "18", "", "Attack speed", "0.6", "", "", "", "Damage", "6", "", "8.6", "+1"]);
+        expect(Array.from(stats.querySelectorAll(".per-heading")).map(h => h.tagName)).toEqual(["SMALL", "SMALL", "SMALL", "SMALL"]);
+        expect(Array.from(stats.querySelectorAll(".more")).map(c => c.textContent)).toEqual(["12", "18", "", "", "", "8.6"]);
+        // Without columns there is no heading row; without any per no per column.
+        const bare = render({ ...card, properties: [{ label: "Units", value: "6", more: ["12", "18"] }, { label: "Range", value: "3" }] }).querySelector<HTMLElement>(".stats")!;
+        expect(bare.className).toBe("stats has-columns");
+        expect(bare.style.getPropertyValue("--stat-columns")).toBe("3");
+        expect(Array.from(bare.children).map(c => c.textContent)).toEqual(["Units", "6", "12", "18", "Range", "3", "", ""]);
+        // A per heading without columns sits over the per column, after the extra ones.
+        const per = render({ ...card, perHeading: "Per level", properties: [{ label: "Units", value: "6", more: ["12"], per: "+6" }] }).querySelector(".stats")!;
+        expect(Array.from(per.children).map(c => c.textContent)).toEqual(["", "", "", "Per level", "Units", "6", "12", "+6"]);
+        // The rich layout follows the value with them: an empty one in between as a dash, empty ones at the end left out.
+        const rich = render({ ...levels, layout: "rich", properties: [...levels.properties!, { label: "Shield", value: "", more: ["", "4", " "] }] });
+        expect(Array.from(rich.querySelectorAll(".properties .value")).map(v => v.textContent)).toEqual(["6 · 12 · 18", "0.6", "6 · – · 8.6 · +1", "– · – · 4"]);
+        expect(rich.querySelector(".per-heading")).toBeNull();
+    });
+
     it("draws a stat's icon before its label as a mask, and keeps its room on every label when only some have one", () => {
         const HEART = "data:image/png;base64,iVBORw0KGgo=";
         const stats = render({ ...card, perHeading: "Per level", properties: [{ label: "HP", value: "40", icon: HEART }, { label: "Damage", value: "12", per: "+3", icon: "data:image/webp;base64,UklGRg==" }, { label: "Range", value: "3" }] }).querySelector(".stats")!;

@@ -23,6 +23,10 @@ const layout = computed(() => (props.content.layout === "card" || props.content.
 const skin = computed(() => (layout.value === "rich" ? undefined : props.skin))
 // A third stats column only when a stat of this card grows (`per`); the rich layout puts it after the value instead.
 const hasPer = computed(() => !!props.content.properties?.some((p) => p.per !== undefined))
+// Extra value columns after the value (`more`, as many as the longest row or the headings ask for, up to 3); the rich
+// layout puts them after the value instead.
+const extra = computed(() => Math.min(3, Math.max(0, (props.content.columns?.length ?? 0) - 1, ...(props.content.properties ?? []).map((p) => p.more?.length ?? 0))))
+const numberColumns = computed(() => 1 + extra.value + (hasPer.value ? 1 : 0))
 // An icon before a stat's label; when a stat of the card has one, every label keeps its room so the labels line up.
 const hasIcons = computed(() => !!props.content.properties?.some((p) => p.icon !== undefined))
 // Made absolute against the page, so the stylesheet's own address can't change what a relative path points at.
@@ -48,7 +52,14 @@ const cornerIcon = computed(() => {
 })
 // Only the unit layout hangs a suffix past the value; the others show it as part of it.
 const own = (p: { value: string; suffix?: string }) => p.value + (p.suffix ?? "")
-const withPer = (p: { value: string; per?: string; suffix?: string }) => (p.per === undefined ? own(p) : own(p).trim() ? `${own(p)} · ${p.per}` : p.per)
+// The rich layout's stat in one line, "6 · 12 · 18 · +3": an empty extra value in between as "–", empty ones at the end
+// left out.
+const inline = (p: { value: string; per?: string; suffix?: string; more?: string[] }) => {
+  const cells = [own(p), ...(p.more ?? [])]
+  while (cells.length && !cells[cells.length - 1]!.trim()) cells.pop()
+  const values = cells.map((cell) => (cell.trim() ? cell : "–")).join(" · ")
+  return p.per === undefined ? values || own(p) : values ? `${values} · ${p.per}` : p.per
+}
 const runs = computed(() => {
   const effect = props.content.effect
   return typeof effect === "string" ? [{ text: effect }] : (effect ?? [])
@@ -129,9 +140,11 @@ const style = computed<CSSProperties>(() => {
       </div>
       <p v-if="content.subtitle" class="tavora-item-card-type">{{ content.subtitle }}</p>
       <p v-if="runs.length" class="tavora-item-card-effect"><template v-for="(run, i) in runs" :key="i"><span v-if="'accent' in run && run.accent" data-accent>{{ run.text }}</span><template v-else>{{ run.text }}</template></template></p>
-      <div v-if="content.properties?.length" class="tavora-item-card-stats" :data-per="hasPer ? '' : undefined" :data-icons="hasIcons ? '' : undefined">
-        <template v-if="hasPer && content.perHeading"><span /><span /><span class="tavora-item-card-per-heading">{{ content.perHeading }}</span></template>
-        <template v-for="(p, i) in content.properties" :key="i"><span class="tavora-item-card-label"><span v-if="hasIcons" class="tavora-item-card-icon" aria-hidden="true" :data-drawn="icons[i] ? '' : undefined" :style="icons[i] ? { '--ic-icon': icons[i] } : undefined" />{{ p.label }}</span><span class="tavora-item-card-value">{{ own(p) }}</span><span v-if="hasPer" class="tavora-item-card-per">{{ p.per ?? "" }}</span></template>
+      <div v-if="content.properties?.length" class="tavora-item-card-stats" :data-per="hasPer ? '' : undefined" :data-columns="extra ? '' : undefined" :data-icons="hasIcons ? '' : undefined" :style="extra ? { '--ic-columns': String(numberColumns) } : undefined">
+        <!-- The heading row: `columns` over the value and the extra columns, `perHeading` over what a stat grows by. -->
+        <template v-if="content.columns?.length"><span /><template v-for="h in extra + 1" :key="`h${h}`"><span v-if="content.columns[h - 1]" class="tavora-item-card-per-heading">{{ content.columns[h - 1] }}</span><span v-else /></template><template v-if="hasPer"><span v-if="content.perHeading" class="tavora-item-card-per-heading">{{ content.perHeading }}</span><span v-else /></template></template>
+        <template v-else-if="hasPer && content.perHeading"><span /><span /><span v-for="h in extra" :key="`h${h}`" /><span class="tavora-item-card-per-heading">{{ content.perHeading }}</span></template>
+        <template v-for="(p, i) in content.properties" :key="i"><span class="tavora-item-card-label"><span v-if="hasIcons" class="tavora-item-card-icon" aria-hidden="true" :data-drawn="icons[i] ? '' : undefined" :style="icons[i] ? { '--ic-icon': icons[i] } : undefined" />{{ p.label }}</span><span class="tavora-item-card-value">{{ own(p) }}</span><span v-for="m in extra" :key="`m${m}`" class="tavora-item-card-more">{{ p.more?.[m - 1] ?? "" }}</span><span v-if="hasPer" class="tavora-item-card-per">{{ p.per ?? "" }}</span></template>
       </div>
       <section v-for="(s, i) in content.sections ?? []" :key="i" class="tavora-item-card-section">
         <p v-if="s.title">{{ s.title }}</p>
@@ -191,7 +204,7 @@ const style = computed<CSSProperties>(() => {
         <p v-if="content.subtitle" class="tavora-item-card-type">{{ content.subtitle }}</p>
         <p v-if="runs.length" class="tavora-item-card-effect"><template v-for="(run, i) in runs" :key="i"><span v-if="'accent' in run && run.accent" data-accent>{{ run.text }}</span><template v-else>{{ run.text }}</template></template></p>
         <dl v-if="content.properties?.length" class="tavora-item-card-props">
-          <template v-for="(p, i) in content.properties" :key="i"><dt>{{ p.label }}</dt><dd>{{ withPer(p) }}</dd></template>
+          <template v-for="(p, i) in content.properties" :key="i"><dt>{{ p.label }}</dt><dd>{{ inline(p) }}</dd></template>
         </dl>
         <section v-for="(s, i) in content.sections ?? []" :key="i" class="tavora-item-card-section">
           <p v-if="s.title">{{ s.title }}</p>

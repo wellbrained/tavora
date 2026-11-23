@@ -1729,6 +1729,12 @@ export const TOOLTIP_ANCHOR_BOX_TAVORA = "0.24.58";
  */
 export const UNIT_CARD_TAVORA = "0.24.127";
 /**
+ * The first Tavora with extra value columns on item cards (`more` on a property and `columns` on a tooltip): the one
+ * place that number is written. Set it to the version the pull request merges as, right before merging. Too low, and
+ * the SDK sends an older Tavora keys it refuses, and with them the whole tooltip.
+ */
+export const ITEM_CARD_COLUMNS_TAVORA = "0.24.148";
+/**
  * The first Tavora that tells a panel whether it is over the game (`panel.isOverGame` and the `panel.overGame` event):
  * the one place that number is written. Set it to the version the pull request merges as, right before merging, then
  * run `pnpm --filter @tavora/docs protocol`. Too low, and a module asks an older Tavora, which answers UNKNOWN_METHOD.
@@ -1897,7 +1903,7 @@ const SDK_CALLS = { "panel.openDialog": "panel.setDialog", "panel.closeDialog": 
  * Params of an existing call that only a newer Tavora knows. An older one rejects the unknown key (INVALID_PARAMS) for the
  * whole call, so the SDK leaves the key out there. They never raise `MIN_TAVORA`.
  */
-export const FIELD_SINCE = { "ui.tooltip.pinnable": "0.23.91", "ui.tooltip.skin": ITEM_CARD_TAVORA, "ui.tooltip.per": ITEM_CARD_PER_TAVORA, "ui.tooltip.boxBorder": ITEM_CARD_BOX_BORDER_TAVORA, "ui.tooltip.propertyIcon": ITEM_CARD_ICON_TAVORA, "ui.tooltip.anchorBox": TOOLTIP_ANCHOR_BOX_TAVORA, "ui.tooltip.unit": UNIT_CARD_TAVORA } as const;
+export const FIELD_SINCE = { "ui.tooltip.pinnable": "0.23.91", "ui.tooltip.skin": ITEM_CARD_TAVORA, "ui.tooltip.per": ITEM_CARD_PER_TAVORA, "ui.tooltip.boxBorder": ITEM_CARD_BOX_BORDER_TAVORA, "ui.tooltip.propertyIcon": ITEM_CARD_ICON_TAVORA, "ui.tooltip.anchorBox": TOOLTIP_ANCHOR_BOX_TAVORA, "ui.tooltip.unit": UNIT_CARD_TAVORA, "ui.tooltip.columns": ITEM_CARD_COLUMNS_TAVORA } as const;
 
 /** A protocol call, a param only newer Tavoras know (`ui.tooltip.pinnable`), or one of the SDK calls named differently on the wire (`panel.openDialog`). */
 export type SupportedCall = CallName | keyof typeof SDK_CALLS | keyof typeof FIELD_SINCE;

@@ -40,6 +40,14 @@ describe("tooltip boundary", () => {
         for (const extra of [{ properties: [{ label: "Range", value: "" }] }, { properties: [{ label: "Range", value: "3", per: "" }] }, { properties: [{ label: "Range", value: "3", per: "x".repeat(41) }] }, { properties: [{ label: "Range", value: "3", per: 3 }] }, { properties: [{ label: "Range", value: 3, per: "+1" }] }, { properties: [{ label: "Range", value: "x".repeat(301), per: "+1" }] }, { properties: [{ label: "Range", value: "3", per: "+1", color: "red" }] }, { perHeading: "" }, { perHeading: "x".repeat(61) }, { perHeading: 1 }])
             expect(() => checkTooltip({ ...base, content: { title: "x", ...extra } })).toThrow();
     });
+    it("takes extra values after a stat's value and the columns' headings, and an empty value only next to a filled extra", () => {
+        const content = { title: "x", layout: "card", columns: ["Lv 1", "Lv 2", "Lv 3", "Max"], perHeading: "Per level", properties: [{ label: "Units", value: "6", more: ["12", "18", "x".repeat(40)] }, { label: "Attack speed", value: "0.6" }, { label: "Damage", value: "6", more: ["", "8.6"], per: "+1" }, { label: "Shield", value: "", more: ["", "4"] }] };
+        expect(checkTooltip({ ...base, content }).content).toEqual(content);
+        expect("columns" in checkTooltip(base).content).toBe(false);
+        const stat = (extra: object) => ({ properties: [{ label: "Range", value: "3", ...extra }] });
+        for (const extra of [stat({ more: [] }), stat({ more: ["1", "2", "3", "4"] }), stat({ more: ["x".repeat(41)] }), stat({ more: [1] }), stat({ more: [null] }), stat({ more: "12" }), stat({ more: { 0: "12" } }), stat({ value: "", more: ["", " "] }), stat({ value: 3, more: ["12"] }), stat({ value: "x".repeat(301), more: ["12"] }), { requirements: [{ label: "Level", value: "2", more: ["3"] }] }, { columns: [] }, { columns: ["a", "b", "c", "d", "e"] }, { columns: ["x".repeat(21)] }, { columns: [""] }, { columns: [" "] }, { columns: [1] }, { columns: "Lv 1" }])
+            expect(() => checkTooltip({ ...base, content: { title: "x", ...extra } })).toThrow();
+    });
     it("takes a stat's icon from the module's bundle by the picture's path rules, with or without a per", () => {
         const content = { title: "x", layout: "card", properties: [{ label: "HP", value: "40", icon: "dist/icons/heart.png" }, { label: "Damage", value: "", per: "+3", icon: "dist/icons/sword.webp" }, { label: "Range", value: "3" }] };
         expect(checkTooltip({ ...base, content }).content).toEqual(content);

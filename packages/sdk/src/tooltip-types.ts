@@ -23,10 +23,10 @@ export interface TooltipContent {
      * `"unit"` is a game unit as games show it on the board: the picture (`image`) as a small framed portrait sticking out
      * at the top left, a title bar with the title and the `corner` value, and below it the `subtitle`, the `effect`, the
      * stats (label, value and `suffix`), the sections, the `icons` row and the `pips` on the bottom edge. It leaves out
-     * `badges`, `requirements`, `perHeading` and a stat's `per` and `icon`. It is at least 316 px wide and grows to fit the
-     * stats and the icons, up to 520 px; the effect and the rows wrap. Needs `sdk.supports("ui.tooltip.unit")`: on an
-     * older Tavora the SDK shows it in the `"card"` layout, without `corner`, `icons` and `pips`, with each `suffix` after
-     * its value.
+     * `badges`, `requirements`, `perHeading`, `columns` and a stat's `per`, `more` and `icon`. It is at least 316 px
+     * wide and grows to fit the stats and the icons, up to 520 px; the effect and the rows wrap. Needs
+     * `sdk.supports("ui.tooltip.unit")`: on an older Tavora the SDK shows it in the `"card"` layout, without `corner`,
+     * `icons` and `pips`, with each `suffix` after its value.
      */
     layout?: "rich" | "card" | "unit";
     /**
@@ -86,6 +86,12 @@ export interface TooltipContent {
      * the values line up on their right edge and the suffix hangs past it in the accent colour, never wrapped, e.g.
      * "3.95" with "E+12", or "99.999" with " (MAX)". In the other layouts, and on a Tavora without
      * `sdk.supports("ui.tooltip.unit")`, the SDK puts it at the end of the value.
+     * A row's `more` (up to 3 texts of up to 40 characters) are extra values after `value`, say the stat at level 2 and
+     * 3: the card layout shows each in a column of its own, in the accent colour, with `columns` as headings; a row
+     * with fewer leaves the rest empty, and an empty text leaves its cell empty. With `per` too, the order is label,
+     * value, `more`, `per`. The rich layout shows them after the value ("6 · 12 · 18"). Needs
+     * `sdk.supports("ui.tooltip.columns")`: on an older Tavora the SDK puts them into `per` ("12 / 18"), or into the
+     * value where `per` isn't known either.
      */
     properties?: {
         label: string;
@@ -93,9 +99,17 @@ export interface TooltipContent {
         per?: string;
         icon?: string;
         suffix?: string;
+        more?: string[];
     }[];
     /** The heading over the `per` column ("Per level"), in the user's language, up to 60 characters; shown only with a `per`. */
     perHeading?: string;
+    /**
+     * Headings over the value column and then each `more` column (["Lv 1", "Lv 2", "Lv 3"]), in the user's language: up
+     * to 4, each up to 20 characters, in the small style of `perHeading`. The heading row shows only with `columns`.
+     * Only the card layout shows them. Needs `sdk.supports("ui.tooltip.columns")`: on an older Tavora the SDK makes the
+     * headings after the first the `perHeading` ("Lv 2 / Lv 3"), or leaves them out where `per` isn't known either.
+     */
+    columns?: string[];
     sections?: {
         title?: string;
         rows: {
