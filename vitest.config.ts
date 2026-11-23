@@ -17,6 +17,9 @@ export default defineConfig({
     // No real disk flush in tests (scripts/vitest-no-fsync.ts).
     setupFiles: ["scripts/vitest-no-fsync.ts"],
     globalSetup: ["scripts/vitest-global-setup.ts"],
+    // Windows CI runners are several times slower at files and processes than Linux ones: the default 5 s made sound
+    // tests time out there only (unit (windows) in ci.yml). Locally and on Linux the default stays.
+    ...(process.env.CI && process.platform === "win32" ? { testTimeout: 20_000, hookTimeout: 20_000 } : {}),
     include: ["packages/*/src/**/*.test.ts", "apps/*/src/**/*.test.ts", "apps/*/scripts/**/*.test.ts", "modules/*/src/**/*.test.ts", "scripts/**/*.test.ts"],
   },
 });
