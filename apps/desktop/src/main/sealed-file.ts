@@ -4,12 +4,13 @@
 // - one that can't be read right now (a virus scan or a sync app holds it, the user profile is locked) is never written
 //   over or removed: a write reads it again first, and is refused while that fails, and the user is told. A store whose
 //   file always holds less than what it writes (a sign-in, written when the user signs in) may move it aside instead
-//   (`<file>.held-<time>`, kept), so the user is never stuck with it; only one that can't even be moved is refused;
+//   (`<file>.held-<time>`), so the user is never stuck with it; only one that can't even be moved is refused. Such a
+//   copy is a sign-in the next one replaced, never the user's data or a key: signing out removes it, if it can;
 // - a damaged one is set aside, and reads as missing; one a newer Tavora wrote is copied aside;
 // - one whose data doesn't open here (sealed by another Windows user, a key store locked for now, or the store refuses
 //   it) stays where it is, so the next start can try again, and a copy goes aside (`<file>.unopened`).
 // The bytes are the same as before: `{"v":1,"data":…}`, then the store's own fields next to the sealed data.
-import { rename, stat } from "node:fs/promises";
+import { readdir, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { keepCopy } from "./fsutil";
 import { forgetSealedFile, type SavedRecord } from "./json";
@@ -104,7 +105,8 @@ export class SealedFile {
 
   /**
    * Removes the file and every copy of it set aside (signing out). Refused like a write while it can't be read; or, with
-   * `moveHeldAside`, it is moved aside then (and kept), and so is one that can't be removed.
+   * `moveHeldAside`, it is moved aside then, and so is one that can't be removed. With `moveHeldAside`, the sign-ins moved
+   * aside before (`<file>.held-<time>`) go too, as far as they can.
    */
   async forget(): Promise<void> {
     if (this.held) await this.readAgain();
@@ -115,6 +117,15 @@ export class SealedFile {
       if (!this.options.moveHeldAside) throw error;
       await this.moveAside();
       await forgetSealedFile(this.file);
+    }
+    if (this.options.moveHeldAside) await this.forgetHeldCopies();
+  }
+
+  /** Removes the sign-ins moved aside (`<file>.held-<time>`); one that can't be removed stays for the next sign-out. */
+  private async forgetHeldCopies(): Promise<void> {
+    const base = `${path.basename(this.file)}.held-`;
+    for (const name of await readdir(path.dirname(this.file)).catch(() => [] as string[])) {
+      if (name.startsWith(base) && /^\d+(-\d+)?$/.test(name.slice(base.length))) await rm(path.join(path.dirname(this.file), name), { force: true }).catch(() => undefined);
     }
   }
 

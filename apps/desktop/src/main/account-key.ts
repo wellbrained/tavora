@@ -215,34 +215,49 @@ export class AccountKey {
 
   /** Reads this PC's keys, at start. Never throws. Answers the copy's key. */
   load(): Promise<Buffer | null> {
-    return this.serial<Buffer | null>(async () => {
-      const read = await readKey(this.options.file, this.options.encryptor);
-      let saved = read.status === "opened" ? read : null;
-      this.mainHold = read.status === "blocked" ? read : null;
-      const legacy = this.options.legacyFile;
-      // Only in place of a key file that is truly missing: one this run can't open is never put out of its place.
-      if (read.status === "missing" && legacy) {
-        const old = await readKey(legacy, this.options.encryptor);
-        if (old.status === "opened") {
-          if (await this.moveLegacyIn(legacy)) saved = old;
-          else this.mainHold = { file: legacy, reason: "held", owner: old.owner };
-        } else if (old.status === "blocked") this.mainHold = old;
-      }
-      this.main = saved ? this.mainSlot(saved) : null;
-      this.mainBlocked = read.status === "blocked";
-      this.others.clear();
-      this.othersHold.clear();
-      this.touched.clear();
-      for (const name of await readdir(path.dirname(this.options.file)).catch(() => [] as string[])) {
-        const tag = this.tagOfFile(name);
-        if (tag === null) continue;
-        const other = await readKey(path.join(path.dirname(this.options.file), name), this.options.encryptor);
-        if (other.status === "blocked") this.othersHold.set(tag, other);
-        if (other.status === "opened") this.others.set(tag, this.otherSlot(tag, other));
-      }
-      if (saved) await this.noteOwner(saved);
-      return this.main?.key ?? null;
-    });
+    return this.serial(() => this.loadNow());
+  }
+
+  /**
+   * The key files that may hold the key needed now and couldn't be opened are read again (only those), as they may open
+   * now: the cloud copy asks, while it waits for its key.
+   */
+  openAgainNow(): Promise<void> {
+    return this.serial(() => this.openAgain(this.options.account()));
+  }
+
+  private async loadNow(): Promise<Buffer | null> {
+    const read = await readKey(this.options.file, this.options.encryptor);
+    let saved = read.status === "opened" ? read : null;
+    this.mainHold = read.status === "blocked" ? read : null;
+    const legacy = this.options.legacyFile;
+    // Only in place of a key file that is truly missing: one this run can't open is never put out of its place.
+    if (read.status === "missing" && legacy) {
+      const old = await readKey(legacy, this.options.encryptor);
+      if (old.status === "opened") {
+        if (await this.moveLegacyIn(legacy)) saved = old;
+        else {
+          // account-key.json came meanwhile: that one is read, and the older file stays as it is.
+          const now = await readKey(this.options.file, this.options.encryptor);
+          if (now.status === "opened") saved = now;
+          else if (now.status === "blocked") this.mainHold = now;
+        }
+      } else if (old.status === "blocked") this.mainHold = old;
+    }
+    this.main = saved ? this.mainSlot(saved) : null;
+    this.mainBlocked = this.mainHold?.file === this.options.file;
+    this.others.clear();
+    this.othersHold.clear();
+    this.touched.clear();
+    for (const name of await readdir(path.dirname(this.options.file)).catch(() => [] as string[])) {
+      const tag = this.tagOfFile(name);
+      if (tag === null) continue;
+      const other = await readKey(path.join(path.dirname(this.options.file), name), this.options.encryptor);
+      if (other.status === "blocked") this.othersHold.set(tag, other);
+      if (other.status === "opened") this.others.set(tag, this.otherSlot(tag, other));
+    }
+    if (saved) await this.noteOwner(saved);
+    return this.main?.key ?? null;
   }
 
   /**
@@ -252,6 +267,8 @@ export class AccountKey {
   forAccount(): Promise<Buffer | null> {
     return this.serial<Buffer | null>(async () => {
       const who = this.options.account();
+      // A key file that may hold it and couldn't be opened is read again: it may open now.
+      await this.openAgain(who);
       return who === null ? this.get() : ((await this.claim(who, this.generation))?.key ?? null);
     });
   }
@@ -635,11 +652,13 @@ export class AccountKey {
       }
       return;
     }
-    // The older file, with account-key.json missing at start: it moves in only while that is still so.
-    if (read.status === "opened" && !this.main && !this.mainBlocked && (await this.moveLegacyIn(blocked.file))) {
+    // The older file, with account-key.json missing at start: it moves in only while that is still so. One there now
+    // (another Tavora wrote it) is read instead, and the older file stays as it is.
+    if (read.status !== "opened" || this.main || this.mainBlocked) return;
+    if (await this.moveLegacyIn(blocked.file)) {
       this.main = this.mainSlot(read);
       await this.noteOwner(read);
-    }
+    } else await this.reopenMain({ file: this.options.file, reason: "held", owner: undefined });
   }
 
   /** Another account's key file (or one moved aside), read again. */
@@ -1105,6 +1124,7 @@ export class AccountKey {
    * `cacheFile`: where its last read goes while the key isn't kept yet.
    */
   private async putVault(who: string, base: number, key: Buffer, content: VaultContent, cacheFile?: string): Promise<boolean> {
+    const generation = this.generation;
     const sealed = sealVault(key, Buffer.from(JSON.stringify(content)));
     const body = Buffer.alloc(4 + sealed.length);
     body.writeUInt32BE(base);
@@ -1113,6 +1133,8 @@ export class AccountKey {
     if (response.status === 409) return false;
     if (response.status === 413) throw new CopyError("failed", "the vault is full");
     if (!response.ok) throw new CopyError("failed", `the vault answered ${response.status}`);
+    // Signed out (or in as another account) while it went up: nothing of it is noted on this PC.
+    if (generation !== this.generation || this.options.account() !== who) throw new CopyError("signed-out");
     await this.markSeen(who);
     await this.keepFor(who, key, sealed, cacheFile);
     return true;

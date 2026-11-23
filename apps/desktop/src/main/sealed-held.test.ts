@@ -15,12 +15,13 @@ import { onSealedFileHeld, sealedFilesHeld } from "./sealed-file";
 
 vi.mock("node:fs/promises", async (original) => {
   const real = await original<typeof import("node:fs/promises")>();
-  return { ...real, readFile: vi.fn(real.readFile), rename: vi.fn(real.rename), stat: vi.fn(real.stat) };
+  return { ...real, readFile: vi.fn(real.readFile), rename: vi.fn(real.rename), rm: vi.fn(real.rm), stat: vi.fn(real.stat) };
 });
 
 const realReadFile = vi.mocked(readFile).getMockImplementation()!;
 const realRename = vi.mocked(rename).getMockImplementation()!;
 const realStat = vi.mocked(stat).getMockImplementation()!;
+const realRm = vi.mocked(rm).getMockImplementation()!;
 const readText = async (file: string) => String(await realReadFile(file, "utf8"));
 /** The files that can't be read right now, and with which error. */
 const busy = new Map<string, string>();
@@ -28,6 +29,8 @@ const busy = new Map<string, string>();
 const stuck = new Set<string>();
 /** The files that can't be looked at (stat) right now. */
 const unseen = new Set<string>();
+/** Which files can't be removed right now. */
+let unremovable: (file: string) => boolean = () => false;
 /** Reads of a file that wait until its gate opens. */
 const gated = new Map<string, Promise<void>>();
 
@@ -51,6 +54,12 @@ beforeEach(async () => {
     if (stuck.has(path.resolve(String(from)))) throw error("EBUSY");
     return realRename(from, to);
   }) as never);
+  unremovable = () => false;
+  vi.mocked(rm).mockImplementation((async (file: string, options: never) => {
+    const key = path.resolve(String(file));
+    if (unremovable(key) && (await realStat(key).then(() => true, () => false))) throw error("EBUSY");
+    return realRm(file, options);
+  }) as never);
   vi.mocked(stat).mockImplementation((async (file: string, options: never) => {
     if (unseen.has(path.resolve(String(file)))) throw error("EPERM");
     return realStat(file, options);
@@ -62,6 +71,7 @@ afterEach(async () => {
   stuck.clear();
   unseen.clear();
   gated.clear();
+  unremovable = () => false;
   onSealedFileHeld(null);
   vi.restoreAllMocks();
   await rm(dir, { recursive: true, force: true });
@@ -146,13 +156,18 @@ describe.each(["account.json", "discord.json"])("%s", (name) => {
       expect(found[name]).not.toBe(opened.before);
     });
 
-    it(`${code} on read: signing out moves it aside, kept, so it never signs in again by itself`, async () => {
+    it(`${code} on read: signing out moves it aside, so it never signs in again by itself, and the copy goes as far as it can`, async () => {
       const opened = store(name);
       await writeFile(at(name), opened.before);
       hold(name, code);
       await opened.load();
+      // Removing the copy fails too: it stays, for the next sign-out.
+      unremovable = (file) => path.basename(file).startsWith(`${name}.held-`);
       await opened.forget();
       expect(await files()).toEqual({ [`${name}.held-<time>`]: opened.before });
+      unremovable = () => false;
+      await opened.forget();
+      expect(await files()).toEqual({});
     });
 
     it(`${code} on read, and it can't be moved either: nothing is written or removed, and the user is told`, async () => {
@@ -176,6 +191,27 @@ describe.each(["account.json", "discord.json"])("%s", (name) => {
       expect(await readText(at(name))).not.toBe(opened.before);
     });
   }
+
+  it("a sign-in moved aside goes at the next sign-out", async () => {
+    const opened = store(name);
+    await writeFile(at(name), opened.before);
+    hold(name);
+    await opened.load();
+    await opened.save();
+    expect(Object.keys(await files())).toEqual([name, `${name}.held-<time>`]);
+    free(name);
+    await opened.forget();
+    expect(await files()).toEqual({});
+  });
+
+  it("read, but it can't be removed at sign-out: it moves aside instead, and goes from there", async () => {
+    const opened = store(name);
+    await writeFile(at(name), opened.before);
+    await opened.load();
+    unremovable = (file) => file === path.resolve(at(name));
+    await opened.forget();
+    expect(await files()).toEqual({});
+  });
 
   it("truly missing: made as before", async () => {
     const opened = store(name);
@@ -209,10 +245,16 @@ describe.each(["account.json", "discord.json"])("%s", (name) => {
 const KEY = Buffer.alloc(32, 1);
 const keyFile = (key: Buffer, account: string | null) => JSON.stringify({ v: 1, data: seal(key.toString("base64")), account });
 
-/** The account's key on this PC, with the service answering that the account has no vault yet. */
-function accountKey(signed: { now: string | null } = { now: null }, extra: { maxOtherKeys?: number } = {}): AccountKey {
-  const fetch = (async (_url: string, init?: RequestInit) =>
-    init?.method === "PUT" ? new Response(null, { status: 200 }) : new Response(null, { status: 404 })) as unknown as typeof globalThis.fetch;
+/**
+ * The account's key on this PC, with the service answering that the account has no vault yet. `put`: waited for before
+ * the service answers a vault put.
+ */
+function accountKey(signed: { now: string | null } = { now: null }, extra: { maxOtherKeys?: number } = {}, put?: () => Promise<void>): AccountKey {
+  const fetch = (async (_url: string, init?: RequestInit) => {
+    if (init?.method !== "PUT") return new Response(null, { status: 404 });
+    await put?.();
+    return new Response(null, { status: 200 });
+  }) as unknown as typeof globalThis.fetch;
   return new AccountKey({
     file: at("account-key.json"),
     legacyFile: at("cloud-copy-key.json"),
@@ -374,6 +416,55 @@ describe("account-key.json", () => {
     expect(await files()).toEqual({ "account-key.json": newer, "account-key.json.from-version-2": newer });
   });
 
+  it("signed out while a new key's vault goes up: nothing of it is noted on this PC", async () => {
+    const signed: { now: string | null } = { now: "account-a" };
+    let sending!: () => void;
+    let answer!: () => void;
+    const sent = new Promise<void>((resolve) => (sending = resolve));
+    const key = accountKey(signed, {}, () => {
+      sending();
+      return new Promise<void>((resolve) => (answer = resolve));
+    });
+    await key.load();
+    const setUp = key.setUp();
+    await sent;
+    signed.now = null;
+    await key.forget();
+    answer();
+    await expect(setUp).rejects.toMatchObject({ reason: "signed-out" });
+    expect(await files()).toEqual({});
+  });
+
+  it("reading a key file again reads only that file: the copy's key, readable at start, stays", async () => {
+    const copyKey = Buffer.alloc(32, 2);
+    await writeFile(at("account-key.json"), keyFile(copyKey, "account-a"));
+    await writeFile(at("account-key.account-b.json"), keyFile(KEY, "account-b"));
+    hold("account-key.account-b.json");
+    const signed: { now: string | null } = { now: "account-b" };
+    const key = accountKey(signed);
+    await key.load();
+    // Held now too: what was read at start stays as it was.
+    hold("account-key.json");
+    expect(await key.setUp()).toEqual(ASK);
+    signed.now = "account-a";
+    expect(key.get()).toEqual(copyKey);
+  });
+
+  it("one moved aside in this run still keeps a new key from being made", async () => {
+    // The copy's key file, sealed by another Windows user; B's own key, readable.
+    await writeFile(at("account-key.json"), OTHER_USER);
+    await writeFile(at("account-key.account-b.json"), keyFile(KEY, "account-b"));
+    const signed: { now: string | null } = { now: "account-b" };
+    const key = accountKey(signed);
+    await key.load();
+    expect(await key.setUp()).toEqual({ status: "ready", created: false });
+    // B's key becomes the copy's: the file that couldn't be opened moves aside, as it is.
+    await key.useForCopy();
+    expect((await files())["account-key.unopened.json"]).toBe(OTHER_USER);
+    signed.now = null;
+    expect(await key.setUpHere(false)).toEqual(ASK);
+  });
+
   it("a key file moving aside never lands on one that can't be looked at right now", async () => {
     const earlier = keyFile(Buffer.alloc(32, 5), null);
     await writeFile(at("account-key.json"), OTHER_USER);
@@ -413,6 +504,21 @@ describe("cloud-copy-key.json (the key's older file)", () => {
     hold("account-key.json");
     await accountKey().load();
     expect(await files()).toEqual({ "account-key.json": held, "cloud-copy-key.json": legacy });
+  });
+
+  it("account-key.json came after start, while the older file was held: that one is used, the older one never moved onto it", async () => {
+    const legacy = keyFile(Buffer.alloc(32, 4), null);
+    await writeFile(at("cloud-copy-key.json"), legacy);
+    hold("cloud-copy-key.json");
+    const key = accountKey();
+    await key.load();
+    free("cloud-copy-key.json");
+    // Another Tavora (or a restore) put one there meanwhile.
+    const now = keyFile(Buffer.alloc(32, 7), null);
+    await writeFile(at("account-key.json"), now);
+    expect(await key.setUpHere(false)).toEqual({ status: "ready", created: false });
+    expect(key.copyKey()).toEqual(Buffer.alloc(32, 7));
+    expect(await files()).toEqual({ "account-key.json": now, "cloud-copy-key.json": legacy });
   });
 
   it("truly missing account-key.json: the older file moves in, as before", async () => {

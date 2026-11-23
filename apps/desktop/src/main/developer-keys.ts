@@ -46,6 +46,7 @@ export class DeveloperKeys {
       status: this.status,
       keys: this.keys.map((kept) => ({ fingerprint: kept.fingerprint })),
       hasKey: this.options.accountKey.get() !== null,
+      keyBlocked: this.options.accountKey.keyBlocked,
       recoveryKey: this.recoveryKey,
       vault: this.options.accountKey.trouble,
     };

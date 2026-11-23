@@ -1069,7 +1069,11 @@ export class CopySync {
     if (!this.options.enabled) return;
     this.timer = setInterval(() => void this.sync().catch(() => undefined), SYNC_EVERY_MS);
     this.timer.unref?.();
-    if (!this.on) return;
+    if (!this.on) {
+      // Its key file can't be opened right now: the copy stays on and waits for it (sync reads it again), and says why.
+      if (this.keyBlocked()) this.changed();
+      return;
+    }
     if (this.keyHere) {
       void this.sync().catch(() => undefined);
       return;
@@ -1098,8 +1102,25 @@ export class CopySync {
     return this.questions.size > 0 || this.swap.phase !== "idle";
   }
 
+  /**
+   * The copy is on but its key file on this PC can't be opened (held, or sealed by another user): it waits for it,
+   * nothing of it goes, and Settings says why ("key-blocked"). Notes the problem; whether it is so.
+   */
+  private keyBlocked(): boolean {
+    if (!this.copyOn || this.key !== null || !this.accountKeys.keyBlocked) return false;
+    this.problem = "key-blocked";
+    return true;
+  }
+
   /** Uploads what changed. Quiet: problems show in Settings. `loud` throws them for a button. */
   async sync(loud = false): Promise<void> {
+    if (this.keyBlocked()) {
+      // Read again (only that file): it may open now.
+      await this.accountKeys.openAgainNow();
+      if (this.keyBlocked()) return this.changed();
+      if (this.problem === "key-blocked") this.problem = null;
+      this.changed();
+    }
     if (!this.on || (this.waiting && !loud)) return;
     if (this.asked("conflict") || this.dataHeld) throw new UserError("cloudCopy.error.conflict");
     await this.exclusive("uploading", async () => {

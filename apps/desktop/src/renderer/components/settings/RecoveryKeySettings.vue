@@ -67,6 +67,8 @@ function rebuild() {
     </div>
 
     <form v-else-if="asking" class="flex flex-col gap-3 py-4" @submit.prevent="keyText.trim() && enter()">
+      <!-- A key file here that can't be opened (in use, or sealed by another user): why the key is asked for. -->
+      <Notice v-if="view.status === 'ask' && view.keyBlocked" variant="warning" data-testid="recovery-key-blocked">{{ t("cloudCopy.askKey.blocked") }}</Notice>
       <span v-if="view.status === 'ask'" class="text-muted-foreground">{{ t("recoveryKey.ask") }}</span>
       <!-- Also when this PC's key no longer opens the account's vault: another PC sends the new one. -->
       <PairingAsk />

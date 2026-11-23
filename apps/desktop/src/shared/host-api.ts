@@ -367,6 +367,8 @@ export interface DeveloperKeysView {
    */
   status: "loading" | "ready" | "none" | "ask" | "signed-out" | "offline";
   keys: { fingerprint: string }[];
+  /** A key file on this PC that may hold the account's key can't be opened: the recovery key is asked for, and why. */
+  keyBlocked: boolean;
   /** Whether this PC has the account's key (the recovery key opens it). */
   hasKey: boolean;
   /** The account's recovery key, while the user looks at it (made just now, or asked to see). */
@@ -534,7 +536,7 @@ export interface PairingView {
 }
 
 /** Why the cloud copy could not sync last time, worded by the host UI. */
-export type CloudCopyProblem = "offline" | "signed-out" | "too-big" | "failed" | "deleted" | "new-key" | "no-folder" | "folder-locked" | "not-arrived" | "disk-full";
+export type CloudCopyProblem = "offline" | "signed-out" | "too-big" | "failed" | "deleted" | "new-key" | "no-folder" | "folder-locked" | "not-arrived" | "disk-full" | "key-blocked";
 
 /** What the cloud copy is doing right now: one thing at a time, with how far an upload got (bytes read and sent of what changed). */
 export type CloudCopyActivity =
