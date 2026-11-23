@@ -96,6 +96,8 @@ const ACCEPTED: [{ type: string; [field: string]: unknown }][] = [
   [{ type: "cloud-copy-move", to: "server" }],
   [{ type: "cloud-copy-move", to: "folder" }],
   [{ type: "cloud-copy-key", key: "ABCD-EFGH" }],
+  // The key of a PC that started over, typed where the newest list won't open.
+  [{ type: "cloud-copy-other-key", key: "ABCD-EFGH" }],
   [{ type: "cloud-copy-keep", side: "pc" }],
   [{ type: "cloud-copy-keep", side: "cloud" }],
   [{ type: "cloud-copy-close-anyway" }],
@@ -624,6 +626,8 @@ describe("parseAction", () => {
     // An undo token is one the main process made (a random UUID).
     [{ type: "undo-delete", token: "../x" }],
     [{ type: "undo-forget" }],
+    [{ type: "cloud-copy-other-key" }],
+    [{ type: "cloud-copy-other-key", key: 5 }],
   ])("rejects %j", (action) => {
     expect(parseAction(action)).toBeNull();
   });
