@@ -345,6 +345,11 @@ export interface CopyStorage {
   putParts(parts: { id: Buffer; data: Buffer }[]): Promise<void>;
   /** A folder only: which of these parts aren't there (another PC's clean-up took them, or they never arrived). */
   missingParts?(ids: string[]): Promise<string[]>;
+  /**
+   * A folder only: the version to save on top of instead of `base`, when no save on top of `base` could be read (a list
+   * put there with a version near the most there can be). It removes such lists; `base` itself when there is room.
+   */
+  makeRoom?(base: number): Promise<number>;
   /** Some of the asked parts, at least one when any of them is there. */
   getParts(ids: string[]): Promise<{ id: string; data: Uint8Array }[]>;
   /**
@@ -496,8 +501,12 @@ export class CloudCopy {
    * again, and parts the copy already has are not sent again. Returns the state to keep on success.
    * `progress` hears how much of what changed is read and sent so far.
    */
-  async upload(copyKey: Uint8Array, roots: CopyRoot[], state: CopyState, progress?: (done: number, total: number) => void): Promise<UploadResult> {
+  async upload(copyKey: Uint8Array, roots: CopyRoot[], synced: CopyState, progress?: (done: number, total: number) => void): Promise<UploadResult> {
     const keys = copyKeys(copyKey);
+    // Saved on top of a list put there too high for any save to go above it (FolderStorage.makeRoom): on top of what is
+    // left once such lists are gone.
+    const base = (await this.storage.makeRoom?.(synced.version)) ?? synced.version;
+    const state = base === synced.version ? synced : { ...synced, version: base, kept: true };
     const limit = this.storage.limit;
     let found = await scanCopy(roots);
     let pictures = true;
@@ -598,7 +607,7 @@ export class CloudCopy {
    * before that PC had this version's manifest), from this PC's own files when they are still as synced. Other PCs would
    * wait for them ("not-arrived") until this PC saved again. Returns how many went back.
    */
-  async heal(copyKey: Uint8Array, roots: CopyRoot[], state: CopyState): Promise<number> {
+  async heal(copyKey: Uint8Array, roots: CopyRoot[], state: CopyState, wanted: () => boolean = () => true): Promise<number> {
     if (!this.storage.missingParts || state.version === 0) return 0;
     const missing = new Set(await this.storage.missingParts([...new Set(Object.values(state.files).flatMap((file) => file.parts))]));
     if (missing.size === 0) return 0;
@@ -610,6 +619,8 @@ export class CloudCopy {
       if (!synced || synced.size !== file.size || synced.mtimeMs !== file.mtimeMs || !synced.parts.some((id) => missing.has(id))) continue;
       const content = unlessHeld(await lookBytes(file.file));
       if (content === null) continue;
+      // Turned off or deleted meanwhile: nothing more goes into the folder.
+      if (!wanted()) return put;
       const parts: { id: Buffer; data: Buffer }[] = [];
       for (let index = 0; index < Math.max(1, Math.ceil(content.length / PART_BYTES)); index++) {
         const plain = content.subarray(index * PART_BYTES, (index + 1) * PART_BYTES);
@@ -617,6 +628,7 @@ export class CloudCopy {
         if (!missing.delete(id.toString("hex"))) continue;
         parts.push({ id, data: seal(keys, plain) });
       }
+      if (!wanted()) return put;
       await this.storage.putParts(parts);
       put += parts.length;
     }

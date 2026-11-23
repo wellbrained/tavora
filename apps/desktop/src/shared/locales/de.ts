@@ -641,6 +641,8 @@ export const de: Record<keyof typeof en, string> = {
   "cloudCopy.waiting.text": "Sie gehört zu einem anderen Konto. Melde dich damit an und starte neu, oder behalte die Daten dieses PCs.",
   "cloudCopy.unreadable.title": "Deine neueste Cloud-Kopie lässt sich nicht öffnen",
   "cloudCopy.unreadable.text": "Vielleicht hat ein anderer PC mit einem neuen Schlüssel neu angefangen. Gib diesen Schlüssel ein, um seine Kopie zu nutzen, oder behalte die Daten dieses PCs.",
+  "cloudCopy.unreadable.textOwnKey": "Dein Schlüssel öffnet sie nicht: Vielleicht ist sie beschädigt. Behalte die Daten dieses PCs, um sie darüberzulegen.",
+  "cloudCopy.replace.textOwnKey": "Deine Daten kommen obendrauf. Von dieser Kopie bleibt nichts, da dein Schlüssel sie nicht öffnet.",
   "cloudCopy.unreadable.typeKey": "Wiederherstellungsschlüssel des PCs, der neu angefangen hat",
   "cloudCopy.replace.title": "Die neuere Kopie ersetzen?",
   "cloudCopy.replace.text": "Ein anderer PC hat sie mit einem anderen Schlüssel gespeichert und kann deine Daten danach nicht öffnen. Mach das nur, wenn kein PC neu angefangen hat.",

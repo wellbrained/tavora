@@ -20,13 +20,16 @@ const lost = computed(() => kind.value === "lost");
 const waiting = computed(() => kind.value === "waiting");
 const unreadable = computed(() => kind.value === "unreadable");
 const onlyPc = computed(() => waiting.value || unreadable.value);
-// Over a copy the key doesn't open, keeping this PC's replaces another PC's newer copy: asked once more first.
-const replacing = ref(false);
-// Signed out with the copy in a folder, the key of a PC that started over can be typed in here.
+// Over a copy the key doesn't open, keeping this PC's replaces it: the question asks once more first ("replace").
+type Step = "choose" | "replace";
+const step = ref<Step>("choose");
+const replacing = computed(() => step.value === "replace");
+// Signed out with the copy in a folder, it may be another PC's that started over: its key can be typed in here. Signed
+// in, the account's key still fits (or the copy would have said "new key"), so that can't be it.
 const canTypeKey = computed(() => unreadable.value && cloudCopy.value?.folder != null && !account.value?.account);
 const keyText = ref("");
 watch(kind, () => {
-  replacing.value = false;
+  step.value = "choose";
   keyText.value = "";
 });
 const title = computed(() => t(replacing.value ? "cloudCopy.replace.title" : unfinished.value ? "cloudCopy.unfinished.title" : lost.value ? "cloudCopy.lost.title" : waiting.value ? "cloudCopy.waiting.title" : unreadable.value ? "cloudCopy.unreadable.title" : copyQuestion.value === "closing" ? "cloudCopy.closing.title" : copyQuestion.value === "conflict" ? "cloudCopy.conflict.title" : "cloudCopy.newer.title"));
@@ -34,8 +37,8 @@ const text = computed(() => {
   if (unfinished.value) return t("cloudCopy.unfinished.text");
   if (lost.value) return t("cloudCopy.lost.text");
   if (waiting.value) return t("cloudCopy.waiting.text");
-  if (replacing.value) return t("cloudCopy.replace.text");
-  if (unreadable.value) return t("cloudCopy.unreadable.text");
+  if (replacing.value) return t(canTypeKey.value ? "cloudCopy.replace.text" : "cloudCopy.replace.textOwnKey");
+  if (unreadable.value) return t(canTypeKey.value ? "cloudCopy.unreadable.text" : "cloudCopy.unreadable.textOwnKey");
   if (copyQuestion.value === "conflict") return t("cloudCopy.conflict.text");
   if (copyQuestion.value === "newer") return t("cloudCopy.newer.text");
   const progress = cloudCopy.value?.progress;
@@ -53,8 +56,8 @@ async function run(action: Parameters<typeof act>[0]) {
 }
 
 function keepPc() {
-  if (unreadable.value && !replacing.value) replacing.value = true;
-  else void run({ type: "cloud-copy-keep", side: "pc", ...(replacing.value ? { replace: true } : {}) });
+  if (unreadable.value && step.value === "choose") step.value = "replace";
+  else void run({ type: "cloud-copy-keep", side: "pc", ...(step.value === "replace" ? { replace: true } : {}) });
 }
 
 /** Put off for now: the question comes back at the next start, and Settings still offers it. */
@@ -76,7 +79,7 @@ function later() {
         </div>
       </form>
       <DialogFooter v-if="replacing">
-        <DialogButton variant="ghost" :disabled="busy" @click="replacing = false">{{ t("common.back") }}</DialogButton>
+        <DialogButton variant="ghost" :disabled="busy" data-testid="cloud-copy-replace-back" @click="step = 'choose'">{{ t("common.back") }}</DialogButton>
         <DialogButton variant="destructive" :icon="HardDrive" :disabled="busy" data-testid="cloud-copy-replace" @click="keepPc">{{ t("cloudCopy.replace.confirm") }}</DialogButton>
       </DialogFooter>
       <DialogFooter v-else>

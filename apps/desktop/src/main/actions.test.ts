@@ -628,6 +628,7 @@ describe("parseAction", () => {
     [{ type: "undo-forget" }],
     [{ type: "cloud-copy-other-key" }],
     [{ type: "cloud-copy-other-key", key: 5 }],
+    [{ type: "cloud-copy-other-key", key: "x".repeat(201) }],
   ])("rejects %j", (action) => {
     expect(parseAction(action)).toBeNull();
   });

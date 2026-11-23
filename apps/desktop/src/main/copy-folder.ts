@@ -52,6 +52,13 @@ const REWRITE_PART_MS = 24 * 60 * 60_000;
  * was put there, and a save on top of it would get a version no PC can count with (above 2^53): it is junk.
  */
 const MAX_VERSION = 2 ** 52;
+/** The highest version a save on top of still fits under MAX_VERSION (a save goes up to two blocks higher). */
+const ROOM = MAX_VERSION - 2 * RANDOM_BITS;
+/**
+ * No copy gets this high (2^28 saves): above it are only lists put there, and saves on top of them. When a save has no room
+ * left (its base is above ROOM), they are removed and the save goes on top of what is left (makeRoom).
+ */
+const SANE_VERSION = 2 ** 48;
 /** About this much of parts goes back from one read. */
 const READ_BYTES = 8 * 1024 * 1024;
 /** The most a part file holds: a part, sealed. */
@@ -147,19 +154,32 @@ export interface FolderStorageOptions {
   unusedFile?: string;
 }
 
-/** What `unusedFile` holds: for the folder it is about, when this PC first saw each part (or sync app copy) unused. */
+/**
+ * What `unusedFile` holds: for the folder it is about, how long this PC has seen each part (or sync app copy) unused, and
+ * when it last looked. Each look adds the time since the one before, at most a day: a clock that jumps ahead can't make a
+ * part old at once, nor one set back keep it longer.
+ */
 interface UnusedRecord {
   v: 1;
   folder: string;
-  since: Record<string, number>;
+  last: number;
+  waited: Record<string, number>;
 }
+
+interface Unused {
+  last: number | null;
+  waited: Map<string, number>;
+}
+
+/** The most one look adds to how long a part has waited. */
+const COUNT_AT_MOST_MS = 24 * 60 * 60_000;
 
 export class FolderStorage implements CopyStorage {
   readonly limit = null;
   readonly arrivesLate = true;
   private readonly root: string;
-  /** When this PC first saw each part unused (`unusedFile`), loaded at the first clean-up. */
-  private unused: Map<string, number> | null = null;
+  /** How long each part has waited unused, as this PC counted it (`unusedFile`), loaded at the first clean-up. */
+  private unused: Unused | null = null;
 
   /** `folder` is the one the user picked; the copy goes in a "Tavora" folder inside it. */
   constructor(
@@ -335,6 +355,17 @@ export class FolderStorage implements CopyStorage {
     return found;
   }
 
+  /**
+   * The version to save on top of instead of `base`, when a save on top of it would get above MAX_VERSION: only a list put
+   * there, or a save on top of one, gets that high. Every manifest above SANE_VERSION goes (the user kept this PC's side
+   * over it, or took it), and the newest left is returned. `base` itself when there is room.
+   */
+  async makeRoom(base: number): Promise<number> {
+    if (base <= ROOM) return base;
+    for (const file of await this.manifests()) if (file.version > SANE_VERSION) await rm(path.join(this.manifestsDir, file.name), { force: true });
+    return (await this.manifests())[0]?.version ?? 0;
+  }
+
   nextVersion(base: number): number {
     return (Math.floor(base / RANDOM_BITS) + 1) * RANDOM_BITS + randomInt(RANDOM_BITS);
   }
@@ -363,6 +394,10 @@ export class FolderStorage implements CopyStorage {
     await writeInFolder(path.join(this.manifestsDir, `${pad(version)}-${pad(base)}.bin`), body);
     // Without the key nothing is known for sure, so nothing is deleted.
     if (check) await this.cleanUp(check).catch(() => undefined);
+    // Saved only when it is there to be read: one no PC reads would leave the copy where it was.
+    const saved = (await this.manifests()).find((file) => file.version === version);
+    if (!saved) throw new CopyError("failed", "the saved manifest isn't in the folder");
+    await this.readManifest(saved);
     return { status: "saved", version, size };
   }
 
@@ -377,8 +412,9 @@ export class FolderStorage implements CopyStorage {
    *   every real one blocks every save, until the user keeps this PC's side over it (CopySync.keep): then it sinks.
    * - One that can't be read right now (busy, online only, gone) stops it, wherever it is: it may come right.
    * - One whose name says a version above MAX_VERSION isn't one: it goes.
-   * - A part no kept manifest uses goes a week after this PC first saw it so (KEEP_PART_MS, noted in `unusedFile`), when
-   *   no manifest has used it since. A sync app's copy of a part (Tavora never reads one) likewise.
+   * - A part no kept manifest uses goes once this PC has counted it unused for a week (KEEP_PART_MS, noted in
+   *   `unusedFile`; each clean-up counts at most a day), when no manifest has used it since. A sync app's copy of a part
+   *   (Tavora never reads one) likewise.
    */
   private async cleanUp(check: ManifestCheck): Promise<void> {
     const now = this.now();
@@ -427,8 +463,9 @@ export class FolderStorage implements CopyStorage {
       else for (const id of list.parts) used.add(id);
     }
     if ((await this.kindOf(this.partsDir)) !== "dir") return;
-    const since = await this.loadUnused();
-    const unused = new Map<string, number>();
+    const before = await this.loadUnused();
+    const step = before.last === null ? 0 : Math.max(0, Math.min(now - before.last, COUNT_AT_MOST_MS));
+    const waited = new Map<string, number>();
     const shards = await lookNames(this.partsDir);
     for (const shard of shards.status === "present" ? shards.value : []) {
       if (!SHARD_NAME.test(shard)) continue;
@@ -444,25 +481,27 @@ export class FolderStorage implements CopyStorage {
         const info = await lookOwnFile(target);
         if (info.status !== "present" || info.value === null) continue;
         const key = `${shard}/${name}`;
-        // A clock set back counts from now, so it can't keep a part for longer than a week.
-        const first = Math.min(since.get(key) ?? now, now);
-        if (now - first >= KEEP_PART_MS) await rm(target, { force: true });
-        else unused.set(key, first);
+        // First seen now: it starts at nothing.
+        const time = before.waited.has(key) ? before.waited.get(key)! + step : 0;
+        if (time >= KEEP_PART_MS) await rm(target, { force: true });
+        else waited.set(key, time);
       }
     }
-    await this.saveUnused(unused);
+    await this.saveUnused({ last: now, waited });
   }
 
   /** When this PC first saw each part unused, for this folder; none when it can't be read. */
-  private async loadUnused(): Promise<Map<string, number>> {
+  private async loadUnused(): Promise<Unused> {
     if (this.unused) return this.unused;
     const file = this.options.unusedFile;
-    const found = new Map<string, number>();
+    const found: Unused = { last: null, waited: new Map() };
     if (file) {
       try {
         const saved = JSON.parse(await readFile(file, "utf8")) as Partial<UnusedRecord>;
-        if (saved.v === 1 && saved.folder === this.folder && typeof saved.since === "object" && saved.since !== null)
-          for (const [key, at] of Object.entries(saved.since)) if (typeof at === "number" && Number.isFinite(at)) found.set(key, at);
+        if (saved.v === 1 && saved.folder === this.folder && typeof saved.last === "number" && typeof saved.waited === "object" && saved.waited !== null) {
+          found.last = saved.last;
+          for (const [key, time] of Object.entries(saved.waited)) if (typeof time === "number" && Number.isFinite(time) && time >= 0) found.waited.set(key, time);
+        }
       } catch {
         // None yet, or unreadable: every part counts from now.
       }
@@ -471,11 +510,11 @@ export class FolderStorage implements CopyStorage {
   }
 
   /** Keeps the list for the next clean-up. One that can't be written only means parts count from now next time. */
-  private async saveUnused(unused: Map<string, number>): Promise<void> {
+  private async saveUnused(unused: Unused): Promise<void> {
     this.unused = unused;
     const file = this.options.unusedFile;
     if (!file) return;
-    const record: UnusedRecord = { v: 1, folder: this.folder, since: Object.fromEntries(unused) };
+    const record: UnusedRecord = { v: 1, folder: this.folder, last: unused.last ?? 0, waited: Object.fromEntries(unused.waited) };
     await writeFileAtomic(file, JSON.stringify(record)).catch(() => undefined);
   }
 

@@ -639,6 +639,8 @@ export const en = {
   "cloudCopy.waiting.text": "It belongs to another account. Sign in with that one and restart, or keep this PC's data.",
   "cloudCopy.unreadable.title": "Your newest cloud copy won't open",
   "cloudCopy.unreadable.text": "Another PC may have started over with a new key. Type that key to use its copy, or keep this PC's data.",
+  "cloudCopy.unreadable.textOwnKey": "Your key doesn't open it: it may be damaged. Keep this PC's data to put it on top.",
+  "cloudCopy.replace.textOwnKey": "Your data goes on top. Nothing of that copy can be kept, as your key doesn't open it.",
   "cloudCopy.unreadable.typeKey": "Recovery key of the PC that started over",
   "cloudCopy.replace.title": "Replace the newer copy?",
   "cloudCopy.replace.text": "Another PC saved it with a different key and can't open your data afterwards. Only do this if no PC started over.",

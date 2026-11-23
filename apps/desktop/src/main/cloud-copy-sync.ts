@@ -635,7 +635,7 @@ export class CopySync {
     if (remote.version === this.state.version) {
       // Parts of this PC's own last save that went missing go back, or every other PC waits for them.
       if (this.cloud.storage.arrivesLate) {
-        const put = await this.cloud.heal(this.key!, this.roots(), this.state).catch((error: unknown) => {
+        const put = await this.cloud.heal(this.key!, this.roots(), this.state, () => turn === this.turn).catch((error: unknown) => {
           this.log(`cloud copy: missing parts not put back: ${error instanceof Error ? error.message : String(error)}`);
           return 0;
         });
@@ -1555,7 +1555,9 @@ export class CopySync {
   /**
    * Signed out, the newest list in the folder doesn't open with this PC's key: the recovery key of another PC that started
    * over is typed in. Only a key that opens that list is taken (one that doesn't leaves everything as it was, so a mistyped
-   * key never costs this PC the key it has). Then the copy goes on with it as when turned on: the user keeps one side.
+   * key never costs this PC the key it has), and only once its copy came down whole: parts a sync app hasn't brought yet
+   * ("not-arrived") leave everything as it was too, to try again later. Then the copy goes on with it as when turned on:
+   * the user keeps one side.
    */
   async enterOtherKey(text: string): Promise<void> {
     if (!this.on || !this.keyHere || !this.unreadable) throw new UserError("cloudCopy.error.wrongKey");
@@ -1576,6 +1578,13 @@ export class CopySync {
     });
     if (turn !== this.turn) return;
     if (!opens) throw new UserError("cloudCopy.error.wrongKey");
+    const came = await this.exclusive("downloading", () => this.cloud.download(key, this.roots(), this.stagedData, 0, { chosen: true }, () => turn === this.turn))
+      .catch((error: unknown) => {
+        if (turn !== this.turn) return null;
+        throw CopySync.userError(this.noteProblem(error));
+      })
+      .finally(() => rm(this.stagingDir, { recursive: true, force: true }));
+    if (!came || turn !== this.turn) return;
     await this.accountKeys.takeHere(key);
     const folder = this.folder;
     await this.forget(null);

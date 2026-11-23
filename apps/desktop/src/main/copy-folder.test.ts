@@ -5,7 +5,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { CloudCopyView } from "../shared/host-api";
 
-import { CloudCopy, EMPTY_STATE, NewestUnreadable, swapInCopy } from "./cloud-copy";
+import { CloudCopy, CopyError, EMPTY_STATE, NewestUnreadable, swapInCopy } from "./cloud-copy";
 import { cleanUp, pc } from "./cloud-copy.test-helper";
 import { CopySync } from "./cloud-copy-sync";
 import { copyKeys, newCopyKey, open, partId, recoveryKey, seal } from "./copy-crypto";
@@ -170,18 +170,22 @@ describe("the cloud copy in a folder", () => {
     const up = await new CloudCopy(storage).upload(key, a.roots, state);
     if (up.status !== "uploaded") throw new Error(up.status);
     expect(await manifests(onedrive)).toHaveLength(5);
-    // The parts only the dropped manifests used go a week after this PC first saw them unused.
+    // The parts only the dropped manifests used go once this PC has seen them unused for a week.
     expect(await parts()).toHaveLength(9);
-    now += 8 * 24 * 60 * 60_000;
-    await writeFile(path.join(a.userData, "library.json"), "v10");
-    const later = await new CloudCopy(storage).upload(key, a.roots, up.state);
-    if (later.status !== "uploaded") throw new Error(later.status);
+    const partOf = (text: string) => partId(copyKeys(key), Buffer.from(text)).toString("hex");
+    let last = up.state;
+    for (let day = 1; day <= 8; day++) {
+      now += 24 * 60 * 60_000;
+      await writeFile(path.join(a.userData, "library.json"), `day ${day}`);
+      const later = await new CloudCopy(storage).upload(key, a.roots, last);
+      if (later.status !== "uploaded") throw new Error(later.status);
+      last = later.state;
+    }
     expect(await manifests(onedrive)).toHaveLength(5);
-    // The five the manifests use, and the one the manifest just dropped used (for a week).
-    expect(await parts()).toHaveLength(6);
+    for (const gone of ["v1", "v2", "v3", "v4"]) expect(await parts()).not.toContain(path.join(partOf(gone).slice(0, 2), partOf(gone)));
     const b = await pc();
     await new CloudCopy(storage).download(key, b.roots, path.join(b.root, "staging"));
-    expect(await read(path.join(b.root, "staging"), "library.json")).toBe("v10");
+    expect(await read(path.join(b.root, "staging"), "library.json")).toBe("day 8");
   });
 
   it("deletes only its own files, and says so when the folder is gone", async () => {
@@ -431,6 +435,106 @@ describe("the cloud copy in a folder, as Tavora runs it", () => {
     expect(names).not.toContain(planted);
     expect(names.every((name) => Number.isSafeInteger(Number(name.slice(0, 16))))).toBe(true);
     expect(await new FolderStorage(onedrive).remote()).toMatchObject({ version: Number(names.at(-1)!.slice(0, 16)) });
+  });
+
+  it("gets over a list put there just below the highest version: the save is read, and the next start asks nothing", async () => {
+    for (const top of [2 ** 52 - 1, 2 ** 52 - 2 ** 21 - 1]) {
+      const onedrive = await folder();
+      const a = await pc({ "library.json": "a0" });
+      const atA = tavora(a);
+      await atA.sync.beforeLoad();
+      await atA.sync.turnOn(onedrive);
+      const [current] = await manifests(onedrive);
+      const planted = `${String(top).padStart(16, "0")}-${current!.slice(0, 16)}.bin`;
+      await writeFile(path.join(onedrive, "Tavora", "manifests", planted), "junk");
+      await writeFile(path.join(a.userData, "library.json"), "a1");
+      const again = tavora(a);
+      await again.sync.beforeLoad();
+      expect(again.sync.view()).toMatchObject({ conflict: true });
+      await again.sync.keep("pc", true);
+      // Two saves more: neither hits a wall.
+      for (const text of ["a2", "a3"]) {
+        await writeFile(path.join(a.userData, "library.json"), text);
+        await again.sync.sync(true);
+      }
+      const names = await manifests(onedrive);
+      expect(names).not.toContain(planted);
+      const newest = Number(names.at(-1)!.slice(0, 16));
+      expect(await new FolderStorage(onedrive).remote()).toMatchObject({ version: newest });
+      expect(Number.isSafeInteger(newest)).toBe(true);
+      const third = tavora(a);
+      await third.sync.beforeLoad();
+      expect(third.sync.view()).toMatchObject({ conflict: false, problem: null });
+      const b = await pc();
+      const staging = path.join(b.root, "staging");
+      await new CloudCopy(new FolderStorage(onedrive)).download(Buffer.from(atA.sync["key"]!), b.roots, staging);
+      expect(await read(staging, "library.json")).toBe("a3");
+    }
+  });
+
+  it("never says uploaded for a manifest that isn't there to be read", async () => {
+    const key = newCopyKey();
+    const onedrive = await folder();
+    const a = await pc({ "library.json": "a0" });
+    const first = await new CloudCopy(new FolderStorage(onedrive)).upload(key, a.roots, EMPTY_STATE);
+    if (first.status !== "uploaded") throw new Error(first.status);
+    const before = new Set(await manifests(onedrive));
+    // The sync app takes the new one away as soon as it is written (or it can't be read back).
+    const proto = FolderStorage.prototype as unknown as { readManifest: (file: { name: string }) => Promise<unknown> };
+    const original = proto.readManifest;
+    proto.readManifest = async function (this: unknown, file: { name: string }) {
+      if (!before.has(file.name)) throw new CopyError("failed", "a manifest in the folder went away");
+      return original.call(this, file);
+    };
+    try {
+      await writeFile(path.join(a.userData, "library.json"), "a1");
+      await expect(new CloudCopy(new FolderStorage(onedrive)).upload(key, a.roots, first.state)).rejects.toMatchObject({ reason: "failed" });
+    } finally {
+      proto.readManifest = original;
+    }
+  });
+
+  it("keeps the copy on with its key when the new key is right but that copy can't come down yet", async () => {
+    const onedrive = await folder();
+    const o = await pc({ "library.json": "o0" });
+    const atO = tavora(o);
+    await atO.sync.beforeLoad();
+    await atO.sync.turnOn(onedrive);
+    const oldKey = Buffer.from(atO.sync["key"]!);
+    const newKey = newCopyKey();
+    const n = await pc({ "library.json": "n0" });
+    const [current] = await manifests(onedrive);
+    const fromN = await new CloudCopy(new FolderStorage(onedrive)).upload(newKey, n.roots, { ...EMPTY_STATE, version: Number(current!.slice(0, 16)) });
+    if (fromN.status !== "uploaded") throw new Error(fromN.status);
+    // Its list came, its parts not yet.
+    const parked = await folder();
+    const newParts = await partFiles(onedrive);
+    for (const file of newParts) await rename(file, path.join(parked, path.basename(file)));
+    await writeFile(path.join(o.userData, "library.json"), "o1");
+    const again = tavora(o);
+    await again.sync.beforeLoad();
+    await expect(again.sync.keep("cloud")).rejects.toMatchObject({ key: "cloudCopy.error.unreadable" });
+    await expect(again.sync.enterOtherKey(recoveryKey(newKey))).rejects.toMatchObject({ key: "cloudCopy.error.not-arrived" });
+    expect(again.sync.view()).toMatchObject({ on: true, conflict: true, conflictKind: "unreadable" });
+    expect(Buffer.from(again.sync["key"]!).equals(oldKey)).toBe(true);
+    // Once they are there, the same key goes through.
+    for (const file of newParts) await rename(path.join(parked, path.basename(file)), file);
+    await again.sync.enterOtherKey(recoveryKey(newKey));
+    expect(Buffer.from(again.sync["key"]!).equals(newKey)).toBe(true);
+    expect(again.sync.view()).toMatchObject({ on: true, conflict: true, conflictKind: null });
+  });
+
+  it("puts nothing back once the copy was turned off meanwhile", async () => {
+    const onedrive = await folder();
+    const a = await pc({ "library.json": "a0" });
+    const atA = tavora(a);
+    await atA.sync.beforeLoad();
+    await atA.sync.turnOn(onedrive);
+    const gone = await partFiles(onedrive);
+    for (const file of gone) await rm(file);
+    const put = await new CloudCopy(new FolderStorage(onedrive)).heal(Buffer.from(atA.sync["key"]!), a.roots, atA.sync["state"], () => false);
+    expect(put).toBe(0);
+    expect(await partFiles(onedrive)).toEqual([]);
   });
 
   it("lets a PC on the old key take the new key of a PC that started over, so the two don't go back and forth", async () => {
@@ -710,10 +814,13 @@ describe("what anyone who can write the folder can do", () => {
     expect(await manifests(onedrive)).toHaveLength(5);
     const oldPart = path.join(onedrive, "Tavora", "parts", id.toString("hex").slice(0, 2), id.toString("hex"));
     expect(await partFiles(onedrive)).toContain(oldPart);
-    now += 8 * DAY;
-    await writeFile(path.join(a.userData, "library.json"), "new 6");
-    const later = await new CloudCopy(storage).upload(key, a.roots, state);
-    if (later.status !== "uploaded") throw new Error(later.status);
+    for (let day = 1; day <= 8; day++) {
+      now += DAY;
+      await writeFile(path.join(a.userData, "library.json"), `day ${day}`);
+      const later = await new CloudCopy(storage).upload(key, a.roots, state);
+      if (later.status !== "uploaded") throw new Error(later.status);
+      state = later.state;
+    }
     expect(await partFiles(onedrive)).not.toContain(oldPart);
   });
 
@@ -810,25 +917,47 @@ describe("what anyone who can write the folder can do", () => {
       if (up.status !== "uploaded") throw new Error(up.status);
       saved.state = up.state;
     };
-    /** A week and a day on, a save once more: parts first seen unused at the save before go now. */
+    /** A save a day for eight days: parts seen unused before then have waited a week (each look counts a day at most). */
     const aWeekOn = async () => {
-      clock.now += 8 * DAY;
-      await saveAgain("v8");
+      for (let day = 1; day <= 8; day++) {
+        clock.now += DAY;
+        await saveAgain(`day ${day}`);
+      }
+    };
+    /** Where the part of a library holding `text` is. */
+    const partOf = (text: string) => {
+      const id = partId(copyKeys(key), Buffer.from(text)).toString("hex");
+      return path.join(onedrive, "Tavora", "parts", id.slice(0, 2), id);
     };
     const manifestFile = (at: number) => path.join(onedrive, "Tavora", "manifests", `${pad(versions[at]!.version)}-${pad(versions[at]!.base)}.bin`);
-    return { key, onedrive, clock, storage, a, state, versions, saveAgain, aWeekOn, manifestFile };
+    return { key, onedrive, clock, storage, a, state, versions, saveAgain, aWeekOn, partOf, manifestFile };
   }
 
   it("cleans up as before when nothing was changed", async () => {
-    const { onedrive, saveAgain, aWeekOn } = await sixOldSaves();
+    const { onedrive, saveAgain, aWeekOn, partOf } = await sixOldSaves();
     await saveAgain();
     expect(await manifests(onedrive)).toHaveLength(5);
     // The two dropped manifests' parts are seen unused now, and stay for a week.
     expect(await partFiles(onedrive)).toHaveLength(7);
     await aWeekOn();
     expect(await manifests(onedrive)).toHaveLength(5);
-    // They are gone; the one the manifest dropped now used stays for its week.
-    expect(await partFiles(onedrive)).toHaveLength(6);
+    for (const gone of ["v1", "v2"]) expect(await partFiles(onedrive)).not.toContain(partOf(gone));
+    expect(await partFiles(onedrive)).toContain(partOf("day 8"));
+  });
+
+  it("doesn't count a clock that jumps ahead as the week a part waits", async () => {
+    const { key, onedrive, clock, storage, saveAgain } = await sixOldSaves();
+    const keys = copyKeys(key);
+    const content = Buffer.from("written by a PC whose manifest is on its way");
+    const id = partId(keys, content).toString("hex");
+    await storage.putParts([{ id: partId(keys, content), data: seal(keys, content) }]);
+    await saveAgain();
+    // The clock jumps eight days ahead: two saves right after don't make the part a week old.
+    clock.now += 8 * DAY;
+    await saveAgain("v8");
+    clock.now += 60_000;
+    await saveAgain("v9");
+    expect(await partFiles(onedrive)).toContain(path.join(onedrive, "Tavora", "parts", id.slice(0, 2), id));
   });
 
   it("cleans up nothing when a kept manifest's name says another version than its seal", async () => {
@@ -895,11 +1024,13 @@ describe("what anyone who can write the folder can do", () => {
     const others = ["desktop.ini", "notes.txt", "ABCDEF.tmp"];
     for (const name of [...copies, ...others]) await writeFile(path.join(shard, name), "x");
     await saveAgain();
-    // Seen now: they stay a week. One that comes later counts from then.
+    // Seen now: they stay a week.
     for (const name of copies) expect(await readdir(shard)).toContain(name);
+    await aWeekOn();
+    // One that comes later counts from when it is first seen.
     const later = `${path.basename(part!)} (2)`;
     await writeFile(path.join(shard, later), "x");
-    await aWeekOn();
+    await saveAgain("after");
     const left = await readdir(shard);
     for (const name of copies) expect(left).not.toContain(name);
     for (const name of [later, ...others]) expect(left).toContain(name);
@@ -946,9 +1077,11 @@ describe("what anyone who can write the folder can do", () => {
       state = next.state;
     };
     await save("v1");
-    // Another start, a week and a day on: it still knows when it first saw it.
-    clock.now += 8 * DAY;
-    await save("v2");
+    // A start a day, for eight days: each still knows how long it has waited.
+    for (let day = 1; day <= 8; day++) {
+      clock.now += DAY;
+      await save(`day ${day}`);
+    }
     expect(await partFiles(onedrive)).not.toContain(path.join(onedrive, "Tavora", "parts", id.slice(0, 2), id));
     // A note for another folder doesn't count here.
     const saved = JSON.parse(await readFile(unusedFile, "utf8")) as { folder: string };
