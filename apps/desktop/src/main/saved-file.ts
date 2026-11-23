@@ -7,8 +7,7 @@
 //   failed, every write is refused until it reads the file again;
 // - the fields a newer Tavora added are written back as they were, for the kinds that keep them;
 // - writes of a file run one at a time, in order, each whole or not at all (fsutil.ts writeFileAtomic); a write at
-//   quit (writeNow) goes first, and no write asked before it lands after it; and none waits forever: a read or write
-//   that takes too long is given up (SAVED_FILE_TURN_MS), and the next goes on.
+//   quit (writeNow) goes first, and no write asked before it lands after it.
 // A store gives its file's kind (SAVED_FILES) and its own fields; it never writes the version, or the file, itself.
 import { closeSync, fsyncSync, mkdirSync, openSync, renameSync, writeSync } from "node:fs";
 import path from "node:path";
@@ -97,48 +96,18 @@ type Fields<T extends SavedFields> = T & { readonly length?: never };
 const lines = new Map<string, Promise<void>>();
 
 /**
- * How long one read or write of a file may take in its turn. One that takes longer (a disk or a virus scan that never
- * answers) is given up: its caller hears SavedFileTimeout, the next in line goes on, and what it was writing is never
- * put in place after that. So no read or write of a file waits forever.
+ * How long a turn of a file's line may take before the log says so, once. It still goes on: the turn after it waits,
+ * so the order stays, and nothing else changes.
  */
-export const SAVED_FILE_TURN_MS = 30_000;
+export const SLOW_TURN_MS = 30_000;
 
-/** A read or write of a file given up after its turn took too long (SAVED_FILE_TURN_MS). */
-export class SavedFileTimeout extends Error {
-  constructor(file: string, ms: number) {
-    super(`${path.basename(file)} wasn't read or written within ${ms} ms, so it was given up`);
-    this.name = "SavedFileTimeout";
-  }
-}
-
-/** A turn of a file's line: told whether it still lasts (false once it was given up). */
-type Turn<T> = (live: () => boolean) => Promise<T>;
-
-function inLine<T>(file: string, task: Turn<T>): Promise<T> {
+function inLine<T>(file: string, task: () => Promise<T>): Promise<T> {
   const key = path.resolve(file);
-  const result = (lines.get(key) ?? Promise.resolve()).then(
-    () =>
-      new Promise<T>((resolve, reject) => {
-        let live = true;
-        const timer = setTimeout(() => {
-          live = false;
-          reject(new SavedFileTimeout(file, SAVED_FILE_TURN_MS));
-        }, SAVED_FILE_TURN_MS);
-        timer.unref?.();
-        task(() => live).then(
-          (value) => {
-            if (!live) return;
-            clearTimeout(timer);
-            resolve(value);
-          },
-          (error: unknown) => {
-            if (!live) return;
-            clearTimeout(timer);
-            reject(error);
-          },
-        );
-      }),
-  );
+  const result = (lines.get(key) ?? Promise.resolve()).then(() => {
+    const slow = setTimeout(() => console.warn(`[tavora] ${file} still being saved after ${SLOW_TURN_MS / 1000} s`), SLOW_TURN_MS);
+    slow.unref?.();
+    return task().finally(() => clearTimeout(slow));
+  });
   const tail = result.then(
     () => undefined,
     () => undefined,
@@ -229,14 +198,7 @@ export class SavedFile {
    * can't be read right now throws, and nothing is written to it until a read succeeds.
    */
   read(): Promise<SavedRecord | null> {
-    return inLine(this.file, (live) => this.readNow(live)).catch((error: unknown) => {
-      // Given up: what is in it is as unknown as one that couldn't be read, so nothing is written over it.
-      if (error instanceof SavedFileTimeout) {
-        this.status = { kind: "held", error };
-        this.kept = [];
-      }
-      throw error;
-    });
+    return inLine(this.file, () => this.readNow());
   }
 
   /**
@@ -252,9 +214,9 @@ export class SavedFile {
       return Promise.reject(error);
     }
     const asked = quitCount(this.file);
-    return inLine(this.file, async (live) => {
-      await this.ready(live);
-      await this.writeMembers(members, asked, live);
+    return inLine(this.file, async () => {
+      await this.ready();
+      await this.writeMembers(members, asked);
     });
   }
 
@@ -265,9 +227,9 @@ export class SavedFile {
    */
   update<T extends SavedFields>(change: (saved: SavedRecord | null) => Fields<T> | null | Promise<Fields<T> | null>): Promise<void> {
     const asked = quitCount(this.file);
-    return inLine(this.file, async (live) => {
-      const fields = await change(await this.readNow(live));
-      if (fields !== null && live()) await this.writeMembers(membersOf(fields, this.kind.format), asked, live);
+    return inLine(this.file, async () => {
+      const fields = await change(await this.readNow());
+      if (fields !== null) await this.writeMembers(membersOf(fields, this.kind.format), asked);
     });
   }
 
@@ -295,18 +257,15 @@ export class SavedFile {
     return inLine(this.file, async () => undefined);
   }
 
-  /** Reads the file in a turn; one given up meanwhile changes nothing of what this SavedFile knows. */
-  private async readNow(live: () => boolean): Promise<SavedRecord | null> {
+  private async readNow(): Promise<SavedRecord | null> {
     let saved: SavedRecord | null;
     try {
       saved = await readSavedFile(this.file, { version: this.kind.version, ...(this.kind.versionKey ? { versionKey: this.kind.versionKey } : {}), ...(this.kind.notice === false ? { notice: false } : {}) });
     } catch (error) {
-      if (!live()) throw error;
       this.status = { kind: "held", error };
       this.kept = [];
       throw error;
     }
-    if (!live()) throw new SavedFileTimeout(this.file, SAVED_FILE_TURN_MS);
     this.status = { kind: "read" };
     const keep = this.kind.keep;
     this.kept = keep ? membersOf(unknownFields(saved, [this.versionKey, ...keep.known]), this.kind.format) : [];
@@ -318,12 +277,11 @@ export class SavedFile {
    * failed holds every write until one succeeds, as what the store has may stand in for what it couldn't read. One done
    * here only for the write holds just this write: nothing the store has came from it, so the next write reads again.
    */
-  private async ready(live: () => boolean): Promise<void> {
+  private async ready(): Promise<void> {
     if (this.status.kind === "unread") {
       try {
-        await this.readNow(live);
+        await this.readNow();
       } catch (error) {
-        if (!live()) throw error;
         this.status = { kind: "unread" };
         throw new SavedFileHeld(this.file, error);
       }
@@ -348,18 +306,14 @@ export class SavedFile {
     return textOf([...own.slice(0, at), ...kept, ...own.slice(at)], format);
   }
 
-  /**
-   * Writes, unless a write at quit came after this one was asked for (`asked`: how many there were then), or its turn
-   * was given up meanwhile.
-   */
-  private async writeMembers(members: readonly Member[], asked: number, live: () => boolean): Promise<void> {
-    const quitSince = () => quitCount(this.file) !== asked;
-    const current = () => live() && !quitSince();
+  /** Writes, unless a write at quit came after this one was asked for (`asked`: how many there were then). */
+  private async writeMembers(members: readonly Member[], asked: number): Promise<void> {
+    const current = () => quitCount(this.file) === asked;
     if (!current()) return;
     const wrote = await writeFileUnlessReplaced(this.file, this.textOf(members), current);
     // Put in place while a write at quit was made: the newest of those goes back over it, at once (nothing can come
     // between, and Tavora can't stop in the middle of it).
     const last = quitWrites.get(path.resolve(this.file));
-    if (wrote && last && quitSince() && !putNow(this.file, last.text)) console.error(`[tavora] couldn't write ${path.basename(this.file)} again as it was at quit`);
+    if (wrote && last && !current() && !putNow(this.file, last.text)) console.error(`[tavora] couldn't write ${path.basename(this.file)} again as it was at quit`);
   }
 }
