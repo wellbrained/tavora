@@ -2,12 +2,13 @@ import { readFile, stat } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { writeFileAtomic } from "./fsutil";
-import { keepNewerCopy, readJsonOrSetAside, readSavedFile, setAside } from "./json";
+import { keepNewerCopy, readJsonOrSetAside, setAside } from "./json";
 import { libraryToSave, sanitizeLibrary, type Library } from "./library";
 import { isProfileId, sanitizeProfile, type Profile } from "./profile";
+import { SAVED_FILES, SavedFile } from "./saved-file";
 import { SUPPORTED_VERSIONS } from "./saved-versions";
 import type { WindowState } from "./window-state";
-import { loadWorkspace, saveWorkspace, type WorkspaceState } from "./workspace";
+import { loadWorkspace, saveWorkspace, workspaceFile, type WorkspaceState } from "./workspace";
 
 // The files the host keeps in the data folder: the library, the workspaces, the profile and the
 // window. This module is the only one that knows their names. It reads them, writes them one after
@@ -42,7 +43,7 @@ export async function hasLibrary(userData: string): Promise<boolean> {
 
 /** The saved library, cleaned up; a missing file gives an empty one, and an unreadable one is set aside first. */
 export async function loadLibrary(userData: string): Promise<Library> {
-  return sanitizeLibrary(await readSavedFile(libraryFile(userData), { version: SUPPORTED_VERSIONS[LIBRARY_FILE] }));
+  return sanitizeLibrary(await new SavedFile(libraryFile(userData), SAVED_FILES[LIBRARY_FILE]).read());
 }
 
 /**
@@ -91,8 +92,16 @@ export class SavedData {
   private readonly waiting = new Map<string, { write: () => Promise<void>; what: string }>();
   private draining = false;
   private profileSaves = 0;
+  /** The user's files, kept by the save rules: what each read decides what it may write. */
+  private readonly library: SavedFile;
+  private readonly workspace: SavedFile;
+  private readonly profile: SavedFile;
 
-  constructor(private readonly userData: string) {}
+  constructor(private readonly userData: string) {
+    this.library = new SavedFile(libraryFile(userData), SAVED_FILES[LIBRARY_FILE]);
+    this.workspace = workspaceFile(this.file(WORKSPACE_FILE));
+    this.profile = new SavedFile(this.file(PROFILE_FILE), SAVED_FILES[PROFILE_FILE]);
+  }
 
   /**
    * Copies aside every file in the data folder a newer Tavora wrote, before anything here (a move of old names
@@ -104,13 +113,13 @@ export class SavedData {
     }
   }
 
-  loadLibrary(): Promise<Library> {
-    return loadLibrary(this.userData);
+  async loadLibrary(): Promise<Library> {
+    return sanitizeLibrary(await this.library.read());
   }
 
   /** The panels and layouts of the workspaces in the library (Trash included), with only panels of installed modules. */
   loadWorkspace(workspaceIds: readonly string[], isInstalled: (moduleId: string) => boolean): Promise<WorkspaceState> {
-    return loadWorkspace(this.file(WORKSPACE_FILE), workspaceIds, isInstalled);
+    return loadWorkspace(this.workspace, workspaceIds, isInstalled);
   }
 
   /**
@@ -119,7 +128,7 @@ export class SavedData {
    */
   async loadProfile(): Promise<{ profile: Profile; saved: boolean }> {
     const file = this.file(PROFILE_FILE);
-    let saved = await readSavedFile(file, { version: SUPPORTED_VERSIONS[PROFILE_FILE] });
+    let saved = await this.profile.read();
     if (saved !== null && !isProfileId(saved.id)) {
       await setAside(file, true);
       saved = null;
@@ -132,15 +141,16 @@ export class SavedData {
   }
 
   saveLibrary(library: Library): void {
-    const body = JSON.stringify(libraryToSave(library), null, 2);
-    this.enqueue(() => writeFileAtomic(this.file(LIBRARY_FILE), body), "library");
+    // Taken as it is now; it is written when its turn comes.
+    const fields = structuredClone(libraryToSave(library));
+    this.enqueue(() => this.library.write(fields), "library");
   }
 
   /** Queues the write like the others, and also tells the caller whether it landed. */
   saveProfile(profile: Profile): Promise<void> {
-    const body = JSON.stringify(profile, null, 2);
+    const fields = structuredClone(profile);
     return new Promise((resolve, reject) => {
-      const write = () => writeFileAtomic(this.file(PROFILE_FILE), body).then(resolve, (error: unknown) => {
+      const write = () => this.profile.write(fields).then(resolve, (error: unknown) => {
         reject(error);
         throw error;
       });
@@ -150,7 +160,7 @@ export class SavedData {
 
   /** Writes this workspace state as it is when the write runs: the caller hands over a copy it won't change (Workspaces.save makes one). */
   saveWorkspace(workspace: WorkspaceState): void {
-    this.enqueue(() => saveWorkspace(this.file(WORKSPACE_FILE), workspace), "workspace");
+    this.enqueue(() => saveWorkspace(this.workspace, workspace), "workspace");
   }
 
   saveWindow(state: WindowState): void {

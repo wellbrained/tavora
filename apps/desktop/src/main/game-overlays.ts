@@ -25,9 +25,8 @@ import {
 } from "../shared/overlay-anchor";
 import { MAX_CONTENT_SCALE, MIN_CONTENT_SCALE } from "../shared/overlay-content";
 import { backupsDir } from "./backup";
-import { SerialQueue, keepCopy, writeFileAtomic } from "./fsutil";
-import { readSavedFile } from "./json";
-import { SUPPORTED_VERSIONS } from "./saved-versions";
+import { keepCopy } from "./fsutil";
+import { SAVED_FILES, SavedFile } from "./saved-file";
 
 export { MIN_OVERLAY_SIZE, type Rect };
 
@@ -175,9 +174,9 @@ interface Setup {
  * Version 4 is version 3 with the workspace names (workspace-move.ts); a file moved from version 1 or 2 says so in
  * `formerVersion`. Version 3 kept each position twice (an anchor and fractions of the window for older Tavoras); an
  * item without an anchor is not converted yet. A file of a higher version is copied aside before anything is written
- * (json.ts readSavedFile), then read as version 5.
+ * (SavedFile), then read as version 5.
  */
-export const FILE_VERSION = SUPPORTED_VERSIONS["game-overlays.json"];
+export const FILE_VERSION = SAVED_FILES["game-overlays.json"].version;
 
 /** The folder in backups/ that keeps game-overlays.json as it was before the setups. Backups never prune it. */
 export const BEFORE_SETUPS_DIR = "before-overlay-setups";
@@ -483,13 +482,12 @@ export class GameOverlayStore {
   private gridSetting: GridSetting = DEFAULT_GRID;
   private toolbarSetting: ToolbarSetting = { ...DEFAULT_TOOLBAR, buttons: [...DEFAULT_TOOLBAR.buttons] };
   private seen = new Map<string, SeenSize>();
-  private readonly queue = new SerialQueue();
   private saveTimer: ReturnType<typeof setTimeout> | undefined;
   /** Never write the file this session: it couldn't be backed up before the move to setups, so it stays as it was. */
   private readOnly = false;
 
   private constructor(
-    private readonly file: string,
+    private readonly file: SavedFile,
     private setupList: Setup[],
     private hintShown: boolean,
     /** Whether a workspace is a game workspace ("game") or a personal one ("all"), for the source rules. */
@@ -508,14 +506,15 @@ export class GameOverlayStore {
    */
   static async load(userData: string, scopeOf: (workspaceId: string) => OverlayScope = () => "game"): Promise<GameOverlayStore> {
     const file = path.join(userData, GAME_OVERLAYS_FILE);
-    // Written by a newer Tavora: copied aside for that one (readSavedFile), and read as the current version.
-    const read = (await readSavedFile(file, { version: FILE_VERSION })) as Partial<GameOverlayFile> | null;
+    const saved = new SavedFile(file, SAVED_FILES["game-overlays.json"]);
+    // Written by a newer Tavora: copied aside for that one (SavedFile), and read as the current version.
+    const read = (await saved.read()) as Partial<GameOverlayFile> | null;
     const raw = read === null ? null : typeof read.version === "number" && read.version > FILE_VERSION ? { ...read, version: FILE_VERSION } : read;
     // A file moved to the workspace names keeps what version it was until it is written again.
     const version = raw?.version === 4 && (raw.formerVersion === 1 || raw.formerVersion === 2) ? raw.formerVersion : raw?.version;
     const old = raw !== null && raw.version !== FILE_VERSION;
     const migrated = old && version !== 2 && version !== 3 && version !== 4;
-    const store = new GameOverlayStore(file, old ? GameOverlayStore.readOld(raw, scopeOf, migrated) : GameOverlayStore.readSetups(raw), raw?.exclusiveHintShown === true, scopeOf);
+    const store = new GameOverlayStore(saved, old ? GameOverlayStore.readOld(raw, scopeOf, migrated) : GameOverlayStore.readSetups(raw), raw?.exclusiveHintShown === true, scopeOf);
     store.migrated = migrated;
     store.moved = old;
     const layout = isObject(raw?.layout) ? raw.layout : {};
@@ -1030,8 +1029,7 @@ export class GameOverlayStore {
     this.saveTimer = undefined;
     if (this.readOnly) return Promise.resolve();
     const stored = ({ rect, legacy }: Pick<ItemSettings, "rect" | "legacy">): StoredPosition => (legacy ? { rect: legacy } : { anchor: rect });
-    const body: GameOverlayFile = {
-      version: FILE_VERSION,
+    const body: Omit<GameOverlayFile, "version"> = {
       exclusiveHintShown: this.hintShown,
       layout: { grid: this.gridSetting, seen: Object.fromEntries(this.seen), toolbar: this.toolbarSetting },
       setups: this.setupList.map((setup) => ({
@@ -1040,8 +1038,7 @@ export class GameOverlayStore {
         panels: setup.panels.map(({ rect, legacy, ...item }) => ({ ...item, ...stored({ rect, ...(legacy ? { legacy } : {}) }) })),
       })),
     };
-    const text = `${JSON.stringify(body, null, 2)}\n`;
-    return this.queue.run(() => writeFileAtomic(this.file, text)).catch((error: unknown) => console.error("[tavora] saving game overlays failed", error));
+    return this.file.write(body).catch((error: unknown) => console.error("[tavora] saving game overlays failed", error));
   }
 }
 

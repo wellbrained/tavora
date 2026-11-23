@@ -1,13 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { isPanelTypeId } from "@tavora/module-schema";
-import { writeFileAtomic } from "./fsutil";
 import { INSTANCE_ID } from "./ids";
-import { readSavedFile, unknownFields } from "./json";
+import { unknownFields } from "./json";
 import { UserError } from "./messages";
 import { gridTemplate, type LayoutTemplate } from "../shared/layout-templates";
 import { LAYOUT_LIMITS, layoutPanels, parseSavedLayout, pruneLayout, templateLayout, vacateLayout, type SavedLayout } from "./layout";
 import { checkPanelContent, type PanelContent } from "./panel-content";
-import { SUPPORTED_VERSIONS } from "./saved-versions";
+import { SAVED_FILES, SavedFile } from "./saved-file";
 
 export { INSTANCE_ID } from "./ids";
 
@@ -163,18 +162,18 @@ function parseWorkspace(workspace: Partial<Record<keyof Workspace, unknown>>, is
  * are kept as they were and written back (`unlisted`): the library may have
  * been lost, and they are the layouts it would bring back. A missing file gives
  * empty workspaces; an unreadable one is set aside first, and one a newer Tavora
- * wrote is copied aside (json.ts readSavedFile). Version 1 files (panels
+ * wrote is copied aside (SavedFile). Version 1 files (panels
  * without a layout) are read as they are; the host UI places their panels.
  * Fields this Tavora doesn't know, at the top, on a workspace, a panel or a
  * snapshot, are kept as they were and saved again (a newer Tavora's).
  */
 export async function loadWorkspace(
-  file: string,
+  file: string | SavedFile,
   workspaceIds: readonly string[],
   isInstalled: (moduleId: string) => boolean,
 ): Promise<WorkspaceState> {
   const state = emptyWorkspaces(workspaceIds);
-  const saved = (await readSavedFile(file, { version: SUPPORTED_VERSIONS["workspace.json"] })) as { workspaces?: Record<string, Partial<Record<keyof Workspace, unknown>>> } | null;
+  const saved = (await workspaceFile(file).read()) as { workspaces?: Record<string, Partial<Record<keyof Workspace, unknown>>> } | null;
   if (!saved) return state;
   for (const workspaceId of workspaceIds) {
     const workspace = saved.workspaces?.[workspaceId];
@@ -242,10 +241,15 @@ export function noteOwners(state: WorkspaceState, ownerOf: (moduleId: string) =>
   return noted;
 }
 
-/** Writes the workspace file whole or not at all (fsutil.ts writeFileAtomic), like the other data files. */
-export async function saveWorkspace(file: string, state: WorkspaceState): Promise<void> {
+/** workspace.json, kept by the save rules (SavedFile); SavedData keeps one open, so what it read decides what it writes. */
+export function workspaceFile(file: string | SavedFile): SavedFile {
+  return typeof file === "string" ? new SavedFile(file, SAVED_FILES["workspace.json"]) : file;
+}
+
+/** Writes the workspace file whole or not at all, like the other data files. */
+export async function saveWorkspace(file: string | SavedFile, state: WorkspaceState): Promise<void> {
   const { unlisted, ...saved } = state;
-  await writeFileAtomic(file, JSON.stringify(unlisted ? { ...saved, workspaces: { ...unlisted, ...saved.workspaces } } : saved, null, 2));
+  await workspaceFile(file).write(unlisted ? { ...saved, workspaces: { ...unlisted, ...saved.workspaces } } : saved);
 }
 
 /**

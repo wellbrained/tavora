@@ -14,10 +14,10 @@ import {
 } from "@tavora/sdk/protocol";
 import { HostError } from "./errors";
 import { SerialQueue, writeFileAtomic } from "./fsutil";
-import { readJsonOrSetAside, readSavedFile, serializeJson } from "./json";
-import { STORE_VERSIONS } from "./saved-versions";
+import { readJsonOrSetAside, serializeJson } from "./json";
+import { RawJson, SAVED_FILES, SavedFile } from "./saved-file";
 
-const VERSION = STORE_VERSIONS.document;
+const VERSION = SAVED_FILES.document.version;
 
 interface StoredDocument {
   version: typeof VERSION;
@@ -44,7 +44,7 @@ export interface DocumentLimits {
  * makes listing cheap; it is rebuilt from the document files whenever it is
  * missing or older than any of them, so a crash between the two writes
  * never loses a change. A document file a newer Tavora wrote is copied aside
- * before this one writes it (json.ts readSavedFile); the index is not checked.
+ * before this one writes it (SavedFile); the index is not checked.
  *
  * Emits "change" with (change, origin) so other panels can refresh.
  */
@@ -52,6 +52,8 @@ export class DocumentStore extends EventEmitter<{ change: [DocumentChange, unkno
   private index: Map<string, DocumentSummary> | undefined;
   /** Documents whose file was read this run, so a newer Tavora's file is copied aside before a write. */
   private readonly checked = new Set<string>();
+  /** The documents' files, by id. */
+  private readonly files = new Map<string, SavedFile>();
   private readonly queue = new SerialQueue();
 
   constructor(
@@ -117,7 +119,7 @@ export class DocumentStore extends EventEmitter<{ change: [DocumentChange, unkno
       };
       const { bytes: _bytes, ...meta } = summary;
       if (!this.checked.has(docId)) await this.read(docId);
-      await writeFileAtomic(this.file(docId), `${JSON.stringify({ version: VERSION, ...meta }).slice(0, -1)},"data":${serialized}}`);
+      await this.saved(docId).write({ ...meta, data: new RawJson(serialized) });
       index.set(docId, summary);
       await this.persistIndex(index);
       this.emit("change", { id: docId, revision: summary.revision, deleted: false }, origin);
@@ -146,9 +148,15 @@ export class DocumentStore extends EventEmitter<{ change: [DocumentChange, unkno
     return path.join(this.dir, `${id}.json`);
   }
 
-  /** A document's file: one a newer Tavora wrote is copied aside, an unreadable one set aside (readSavedFile). */
+  private saved(id: string): SavedFile {
+    let saved = this.files.get(id);
+    if (!saved) this.files.set(id, (saved = new SavedFile(this.file(id), SAVED_FILES.document)));
+    return saved;
+  }
+
+  /** A document's file: one a newer Tavora wrote is copied aside, an unreadable one set aside (SavedFile). */
   private async read(id: string): Promise<StoredDocument | null> {
-    const stored = (await readSavedFile(this.file(id), { version: VERSION })) as StoredDocument | null;
+    const stored = (await this.saved(id).read()) as StoredDocument | null;
     this.checked.add(id);
     return stored;
   }

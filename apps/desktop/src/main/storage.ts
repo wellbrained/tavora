@@ -6,9 +6,9 @@ import { LIMITS, type JsonValue } from "@tavora/sdk/protocol";
 import { BlobStore, BlobWrites } from "./blobs";
 import { DocumentStore } from "./documents";
 import { HostError } from "./errors";
-import { SerialQueue, writeFileAtomic } from "./fsutil";
-import { readSavedFile, serializeJson, unknownFields } from "./json";
-import { STORE_VERSIONS } from "./saved-versions";
+import { SerialQueue } from "./fsutil";
+import { serializeJson } from "./json";
+import { RawJson, SAVED_FILES, SavedFile } from "./saved-file";
 import { INSTANCE_ID } from "./ids";
 import { isWorkspaceId } from "./workspace-id";
 import { defaultFilesRoot } from "./module-files";
@@ -22,16 +22,6 @@ export function validateKey(key: unknown): asserts key is string {
 }
 
 /**
- * The fields of a saved file other than these, as JSON members to write back as they were (`"name":value,` each), so a
- * newer Tavora's fields survive this one's writes.
- */
-function keptMembers(saved: unknown, known: readonly string[]): string {
-  return Object.entries(unknownFields(saved, known))
-    .map(([key, value]) => `${JSON.stringify(key)}:${JSON.stringify(value)},`)
-    .join("");
-}
-
-/**
  * Private key/value settings for one module in one workspace, or shared by all its
  * workspaces (storage.app). Values are kept serialized so the quota is measured on
  * exactly what is written to disk. Fields of the file other than the entries (a newer
@@ -39,15 +29,17 @@ function keptMembers(saved: unknown, known: readonly string[]): string {
  */
 export class ModuleStore {
   private entries: Map<string, string> | undefined;
-  /** The file's fields this Tavora doesn't know, ready to write back. */
-  private kept = "";
   private bytes = 0;
   private readonly queue = new SerialQueue();
+  /** The file, which keeps the fields this Tavora doesn't know. */
+  private readonly saved: SavedFile;
 
   constructor(
     readonly file: string,
     private readonly maxBytes: number = LIMITS.maxStoreBytes,
-  ) {}
+  ) {
+    this.saved = new SavedFile(file, SAVED_FILES.moduleSettings);
+  }
 
   get(key: unknown): Promise<JsonValue | null> {
     validateKey(key);
@@ -127,21 +119,17 @@ export class ModuleStore {
   private async load(): Promise<Map<string, string>> {
     if (this.entries) return this.entries;
     const entries = new Map<string, string>();
-    const parsed = (await readSavedFile(this.file, { version: STORE_VERSIONS.moduleSettings })) as { entries?: Record<string, JsonValue> } | null;
+    const parsed = (await this.saved.read()) as { entries?: Record<string, JsonValue> } | null;
     if (parsed && typeof parsed.entries === "object" && parsed.entries !== null && !Array.isArray(parsed.entries)) {
       for (const [key, value] of Object.entries(parsed.entries)) entries.set(key, JSON.stringify(value));
     }
-    this.kept = keptMembers(parsed, ["version", "entries"]);
     this.bytes = [...entries].reduce((sum, [key, value]) => sum + entrySize(key, value), 0);
     this.entries = entries;
     return entries;
   }
 
   private persist(entries: Map<string, string>): Promise<void> {
-    const body = `{"version":${STORE_VERSIONS.moduleSettings},${this.kept}"entries":{${[...entries]
-      .map(([key, value]) => `${JSON.stringify(key)}:${value}`)
-      .join(",")}}}`;
-    return writeFileAtomic(this.file, body);
+    return this.saved.write({ entries: new RawJson(`{${[...entries].map(([key, value]) => `${JSON.stringify(key)}:${value}`).join(",")}}`) });
   }
 }
 
@@ -179,10 +167,12 @@ export class PanelStateStore {
   /** Panels handed over to another owner this run: writes of any other owner (the old page still saving) are dropped. */
   private readonly owners = new Map<string, string>();
   /**
-   * Per panel file read this run, its fields this Tavora doesn't know, ready to write back: a newer Tavora's file is
-   * copied aside, and read, before the first write only.
+   * Per panel file, its SavedFile, which keeps the fields this Tavora doesn't know: a newer Tavora's file is copied aside,
+   * and read, before the first write only.
    */
-  private readonly kept = new Map<string, string>();
+  private readonly files = new Map<string, SavedFile>();
+  /** The panel files read this run. */
+  private readonly checked = new Set<string>();
   /** Per panel file read or written this run, the owner noted in it (null: none). */
   private readonly stamps = new Map<string, string | null>();
 
@@ -191,6 +181,19 @@ export class PanelStateStore {
   private file(instanceId: string): string {
     if (!INSTANCE_ID.test(instanceId)) throw new Error("invalid instance id");
     return path.join(this.dir, `${instanceId}.json`);
+  }
+
+  private saved(file: string): SavedFile {
+    let saved = this.files.get(file);
+    if (!saved) this.files.set(file, (saved = new SavedFile(file, SAVED_FILES.panelState)));
+    return saved;
+  }
+
+  /** Forgets what was read of a panel file that is gone: the next write reads it again, finding nothing to keep. */
+  private forget(file: string): void {
+    this.files.delete(file);
+    this.checked.delete(file);
+    this.stamps.delete(file);
   }
 
   /** Where `owner`'s state of the panel waits while another owner's page runs in it. */
@@ -222,7 +225,7 @@ export class PanelStateStore {
       const saved = await this.read(file);
       if (owner === undefined || typeof saved?.owner !== "string" || saved.owner === owner) return (saved?.value as JsonValue | undefined) ?? null;
       // Another owner's page ran in the panel last: this owner's own state, if it left any, waits aside.
-      const aside = await readSavedFile(this.asideFile(instanceId, owner), { version: STORE_VERSIONS.panelState }).catch(() => null);
+      const aside = await new SavedFile(this.asideFile(instanceId, owner), SAVED_FILES.panelState).read().catch(() => null);
       return aside?.owner === owner ? ((aside.value as JsonValue | undefined) ?? null) : null;
     });
   }
@@ -238,15 +241,15 @@ export class PanelStateStore {
       const saved = await this.read(file);
       // A file from before owners were noted: it is `from`'s.
       if (!saved || typeof saved.owner === "string" || saved.value === undefined) return;
-      await writeFileAtomic(file, `{"version":${STORE_VERSIONS.panelState},"owner":${JSON.stringify(from)},${this.kept.get(file) ?? ""}"value":${JSON.stringify(saved.value)}}`);
+      await this.saved(file).write({ owner: from, value: saved.value });
       this.stamps.set(file, from);
     });
   }
 
-  /** The saved file of a panel: one a newer Tavora wrote is copied aside, an unreadable one set aside (readSavedFile). */
+  /** The saved file of a panel: one a newer Tavora wrote is copied aside, an unreadable one set aside (SavedFile). */
   private async read(file: string): Promise<Record<string, unknown> | null> {
-    const saved = await readSavedFile(file, { version: STORE_VERSIONS.panelState });
-    this.kept.set(file, keptMembers(saved, ["version", "owner", "value"]));
+    const saved = await this.saved(file).read();
+    this.checked.add(file);
     this.stamps.set(file, typeof saved?.owner === "string" ? saved.owner : null);
     return saved;
   }
@@ -260,7 +263,8 @@ export class PanelStateStore {
     await rename(file, this.asideFile(instanceId, other)).catch((error: NodeJS.ErrnoException) => {
       if (error.code !== "ENOENT") throw error;
     });
-    this.kept.set(file, "");
+    // Moved aside with the other owner's fields: nothing of it is kept here.
+    this.files.delete(file);
     this.stamps.set(file, null);
   }
 
@@ -276,11 +280,10 @@ export class PanelStateStore {
     }
     return this.queue.run(async () => {
       // Read before it is first written over, so a newer Tavora's file is copied aside first and its fields are kept.
-      if (!this.kept.has(file)) await this.read(file);
+      if (!this.checked.has(file)) await this.read(file);
       if (owner !== undefined) await this.moveAsideFor(instanceId, file, owner);
-      const kept = this.kept.get(file) ?? "";
-      const stamp = owner === undefined ? "" : `"owner":${JSON.stringify(owner)},`;
-      await writeFileAtomic(file, `{"version":${STORE_VERSIONS.panelState},${stamp}${kept}"value":${serialized}}`);
+      const value = new RawJson(serialized);
+      await this.saved(file).write(owner === undefined ? { value } : { owner, value });
       this.stamps.set(file, owner ?? null);
     });
   }
@@ -294,8 +297,7 @@ export class PanelStateStore {
       const other = this.stamps.get(file);
       if (typeof other !== "string" || other === owner) {
         await rm(file, { force: true });
-        this.kept.delete(file);
-        this.stamps.delete(file);
+        this.forget(file);
       }
       await rm(aside, { force: true });
     });
@@ -306,8 +308,7 @@ export class PanelStateStore {
     const file = this.file(instanceId);
     return this.queue.run(async () => {
       await rm(file, { force: true });
-      this.kept.delete(file);
-      this.stamps.delete(file);
+      this.forget(file);
       const names = await readdir(this.asideDir).catch(() => [] as string[]);
       for (const name of names) if (panelOfFile(name) === instanceId) await rm(path.join(this.asideDir, name), { force: true });
     });
@@ -327,8 +328,7 @@ export class PanelStateStore {
         .map((name) =>
           this.queue.run(async () => {
             await rm(path.join(this.dir, name), { force: true });
-            this.kept.delete(path.join(this.dir, name));
-            this.stamps.delete(path.join(this.dir, name));
+            this.forget(path.join(this.dir, name));
           }),
         ),
     );

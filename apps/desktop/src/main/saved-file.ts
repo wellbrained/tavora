@@ -13,7 +13,7 @@ import { closeSync, fsyncSync, mkdirSync, openSync, renameSync, writeSync } from
 import path from "node:path";
 import { writeFileUnlessReplaced } from "./fsutil";
 import { readSavedFile, unknownFields, type SavedRecord } from "./json";
-import { SUPPORTED_VERSIONS } from "./saved-versions";
+import { STORE_VERSIONS, SUPPORTED_VERSIONS } from "./saved-versions";
 
 /** How a kind of saved file is written: indented with a newline at the end, indented without one, or on one line. */
 export type SavedFormat = "lines" | "indented" | "compact";
@@ -48,6 +48,15 @@ export const SAVED_FILES = {
   "connection.json": { version: SUPPORTED_VERSIONS["connection.json"], format: "lines" },
   "traffic.json": { version: SUPPORTED_VERSIONS["traffic.json"], format: "lines" },
   "module-data-pending.json": { version: SUPPORTED_VERSIONS["module-data-pending.json"], format: "lines" },
+  "game-overlays.json": { version: SUPPORTED_VERSIONS["game-overlays.json"], format: "lines" },
+  // Their unknown fields are kept by the stores themselves, at every level, as they travel with the cloud copy.
+  "library.json": { version: SUPPORTED_VERSIONS["library.json"], format: "indented" },
+  "workspace.json": { version: SUPPORTED_VERSIONS["workspace.json"], format: "indented" },
+  "profile.json": { version: SUPPORTED_VERSIONS["profile.json"], format: "indented" },
+  moduleSettings: { version: STORE_VERSIONS.moduleSettings, format: "compact", keep: { known: ["entries"] } },
+  panelState: { version: STORE_VERSIONS.panelState, format: "compact", keep: { known: ["owner", "value"], before: "value" } },
+  document: { version: STORE_VERSIONS.document, format: "compact" },
+  chosenFolders: { version: STORE_VERSIONS.chosenFolders, format: "compact" },
 } as const satisfies Record<string, SavedFileKind>;
 
 /**
@@ -55,15 +64,7 @@ export const SAVED_FILES = {
  * (saved-file-rules.test.ts).
  */
 export const NOT_SAVED_FILES: Readonly<Record<string, string>> = {
-  "library.json": "moves to SavedFile in the next pull request",
-  "workspace.json": "moves to SavedFile in the next pull request",
-  "profile.json": "moves to SavedFile in the next pull request",
-  "game-overlays.json": "moves to SavedFile in the next pull request",
   "ai-usage.json": "planned: moves to SavedFile in a pull request after #909, with the cloud copy's files and the sealed ones (decided 2026-11-23); until then the AI usage connector reads and writes it through its own file access (AiUsageDeps), which its tests fake, and checks it with json.ts checkSavedFile",
-  moduleSettings: "moves to SavedFile in the next pull request",
-  panelState: "moves to SavedFile in the next pull request",
-  document: "moves to SavedFile in the next pull request",
-  chosenFolders: "moves to SavedFile in the next pull request",
   sealed: "planned: moves to SavedFile in a pull request after #909, and then a sealed file that can't be read right now is never written over either (decided 2026-11-23); until then json.ts openSealedFile opens it, and gives none for such a file",
   readOnlyFiles: "the version is on each entry, as Tavora 0.24 refuses a file with anything but entries in it",
   cloudCopy: "the cloud copy's files are being changed elsewhere (#909); they move once that has landed",
