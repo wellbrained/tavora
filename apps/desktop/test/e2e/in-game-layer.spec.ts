@@ -144,8 +144,7 @@ async function staysFor(app: ElectronApplication, ms: number, check: (now: Scene
 
 test.skip(process.platform !== "win32", "game overlays are Windows only");
 
-// TEMPORARY: ten copies, to see the spec is steady on CI; removed before review.
-for (let run = 1; run <= 10; run++) test(`the in-game layer over a game in front: Use takes clicks, Arrange frames the panel and stays open, and closing leaves the live view current (run ${run})`, async () => {
+test("the in-game layer over a game in front: Use takes clicks, Arrange frames the panel and stays open, and closing leaves the live view current", async () => {
   const userData = await newUserData();
   await writeFile(path.join(userData, "library.json"), JSON.stringify({ ...seedLibrary(), gameOverlays: true }));
   const { app, page } = await launch(userData, [MODULES], { seed: false, env: { TAVORA_TEST_GAME_WINDOW: "poe2" } });
