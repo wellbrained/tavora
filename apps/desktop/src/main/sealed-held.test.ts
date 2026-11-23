@@ -266,15 +266,22 @@ describe("account-key.json", () => {
     expect(JSON.parse(found["account-key.json"]!)).toMatchObject({ v: 1, account: null });
   });
 
-  it("from a newer Tavora: copied aside, and moved aside before a new key is made, as before", async () => {
+  it("from a newer Tavora: copied aside, the recovery key is asked for, nothing is made", async () => {
     const newer = JSON.stringify({ v: 2, data: "sealed anew", account: null });
     await writeFile(at("account-key.json"), newer);
     const key = accountKey();
     await key.load();
-    expect(await key.setUpHere(false)).toEqual({ status: "ready", created: true });
-    const found = await files();
-    expect(found["account-key.json.from-version-2"]).toBe(newer);
-    expect(found["account-key.unopened.json"]).toBe(newer);
+    expect(await key.setUpHere(false)).toEqual({ status: "ask" });
+    expect(await files()).toEqual({ "account-key.json": newer, "account-key.json.from-version-2": newer });
+  });
+
+  it("from a newer Tavora, signed in: the recovery key is asked for, no new key is made for the account", async () => {
+    const newer = JSON.stringify({ v: 2, data: "sealed anew", account: "account-a" });
+    await writeFile(at("account-key.json"), newer);
+    const key = accountKey({ now: "account-a" });
+    await key.load();
+    expect(await key.setUp()).toEqual({ status: "ask" });
+    expect(await files()).toEqual({ "account-key.json": newer, "account-key.json.from-version-2": newer });
   });
 });
 

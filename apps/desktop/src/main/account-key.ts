@@ -37,8 +37,8 @@ import { SealedFile } from "./sealed-file";
 // Nor is a new key made while a key file that may hold the one needed can't be opened (decided 2026-11-23, "a saved
 // file that can't be read is never written over"): only one that is truly missing is made anew. One that can't be read
 // right now (held by a virus scan) is read again first, and the user is told; one whose data doesn't open here (sealed
-// by another Windows user, or no key store to open it) asks for the recovery key. A newer Tavora's key file is copied
-// aside, and moves aside before a new key is made, as before.
+// by another Windows user, or no key store to open it) or that a newer Tavora wrote (copied aside) asks for the
+// recovery key: a new key would leave what was sealed with the old one behind.
 //
 // A key made or typed in signed out (a folder's copy) belongs to no account yet: the first account it is used with
 // takes it, when that account has no vault yet or its vault opens with it. A key file from before keys noted their
@@ -552,9 +552,8 @@ export class AccountKey {
    */
   private mayHold(who: string | null): Blocked | null {
     const main = this.mainHold;
-    if (main && main.reason !== "newer" && (main.owner === undefined || main.owner === null || main.owner === who)) return main;
-    const own = who === null ? undefined : this.othersHold.get(this.tagOf(who));
-    return own && own.reason !== "newer" ? own : null;
+    if (main && (main.owner === undefined || main.owner === null || main.owner === who)) return main;
+    return who === null ? null : (this.othersHold.get(this.tagOf(who)) ?? null);
   }
 
   /** A key file that may hold `who`'s key couldn't be opened at start: all are read again, as it may open now. */
@@ -564,7 +563,8 @@ export class AccountKey {
 
   /**
    * Instead of a new key for `who`, while a key file that may hold one can't be opened: one that can't be read right now
-   * tells the user (keyHeld); one whose data doesn't open here asks for the recovery key. Null when a new one may be made.
+   * tells the user (keyHeld); one whose data doesn't open here, or a newer Tavora's, asks for the recovery key. Null when a
+   * new one may be made.
    */
   private noNewKey(who: string | null): KeySetUp | null {
     const blocked = this.mayHold(who);
