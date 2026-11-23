@@ -5,7 +5,9 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AiUsageConnector } from "./ai-usage";
 import { loadCopyState } from "./cloud-copy";
-import { loadPlace } from "./cloud-copy-sync";
+import { lookSwapStatus } from "./cloud-copy-swap";
+import { loadPlace, lookStagedList, readIncomingLists } from "./cloud-copy-sync";
+import { readUnused } from "./copy-folder";
 import { ConnectionFile } from "./connection";
 import { DocumentStore } from "./documents";
 import { ChosenFolders } from "./folder-access";
@@ -242,6 +244,24 @@ const SAMPLE_TESTS: Record<string, () => Promise<void>> = {
     await place("cloud-copy-place.v1.json", "cloud-copy-place.json");
     expect(await loadPlace(path.join(dir, "cloud-copy-place.json"))).toBe(inData("OneDrive", "Tavora"));
   },
+  "cloud-copy-status.v1.json": async () => {
+    await place("cloud-copy-status.v1.json", "cloud-copy-status.json");
+    expect(await lookSwapStatus(path.join(dir, "cloud-copy-status.json"), path.join(dir, "backups"))).toEqual({ status: "present", value: { phase: "asking", why: "lost", files: ["library.json", "workspace.json"] } });
+  },
+  "copy-list.v1.json": async () => {
+    await place("copy-list.v1.json", "cloud-copy-staging", "copy-list.json");
+    expect(await lookStagedList(path.join(dir, "cloud-copy-staging", "copy-list.json"))).toMatchObject({ status: "present", value: { version: 7, sealed: true, marked: true, listed: true, files: { "library.json": { size: 2048 } } } });
+  },
+  "incoming-lists.v1.json": async () => {
+    const keepIn = path.join(dir, "backups", "cloud-copy-2026-11-23T10-00-00-000Z-this-pc");
+    await place("incoming-lists.v1.json", "backups", path.basename(keepIn), "incoming-lists.json");
+    expect(await readIncomingLists(keepIn)).toMatchObject([{ version: 7, files: { "library.json": { size: 2048 } } }]);
+  },
+  "cloud-copy-unused.v1.json": async () => {
+    await place("cloud-copy-unused.v1.json", "cloud-copy-unused.json");
+    const unused = await readUnused(path.join(dir, "cloud-copy-unused.json"), inData("OneDrive", "Tavora"));
+    expect({ last: unused.last, waited: [...unused.waited] }).toEqual({ last: 1763100000000, waited: [[`ab/${"ab".repeat(16)}`, 86400000]] });
+  },
 };
 
 function aiUsage(): AiUsageConnector {
@@ -281,7 +301,12 @@ describe("the sample files", () => {
       document: ["document"],
       chosenFolders: ["folders"],
       readOnlyFiles: ["sources"],
-      cloudCopy: ["cloud-copy", "cloud-copy-place"],
+      cloudCopy: ["cloud-copy"],
+      copyPlace: ["cloud-copy-place"],
+      copyStatus: ["cloud-copy-status"],
+      copyList: ["copy-list"],
+      incomingLists: ["incoming-lists"],
+      copyUnused: ["cloud-copy-unused"],
       // Sealed by the system of the PC that wrote them, so no sample can open elsewhere; saved-files.test.ts covers them.
       sealed: [],
     };

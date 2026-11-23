@@ -5,6 +5,7 @@
   "remove %B%/data/cloud-copy-place.json (not there)",
   "move %B%/data/cloud-copy.json -> %B%/data/cloud-copy-swapping.json",
   "put %B%/data/cloud-copy-status.json {\"v\":1,\"phase\":\"chosen\"}",
+  "put %B%/data/cloud-copy-status.json.corrupt { damaged",
   "remove %B%/data/cloud-copy-staging/copy-list.json (was there)",
   "remove %B%/data/cloud-copy-staging/staged.json (not there)",
   "put %B%/data/cloud-copy.json {\"v\":1,\"version\":1,\"pictures\":true,\"files\":{},\"kept\":true}",

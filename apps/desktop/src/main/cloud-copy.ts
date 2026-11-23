@@ -6,11 +6,11 @@ import path from "node:path";
 import { isOwnerId } from "@tavora/module-schema";
 import { DATA_DIRS, PICTURE_DIRS } from "./backup";
 import { copyKeys, keyFingerprint, lineMark, manifestMark, open, PART_ID_BYTES, partId, seal, type CopyKeys } from "./copy-crypto";
-import { writeFileAtomic } from "./fsutil";
-import { DamagedFile, look, lookBytes, lookNames, lookStat, unlessHeld, type Looked } from "./file-look";
+import { lookCopyFile, removeCopyFile, writeCopyFile } from "./copy-files";
+import { look, lookBytes, lookNames, lookStat, unlessHeld, type Looked } from "./file-look";
+import type { SavedRecord } from "./json";
 import { renameHeld } from "./rename-held";
-import { checkSavedFile } from "./json";
-import { STORE_VERSIONS } from "./saved-versions";
+import { SAVED_FILES } from "./saved-file";
 import { OWNER_RECORDS_FILE } from "./installer";
 import { FILES_DIR } from "./module-files";
 import { DATA_FILES } from "./saved-data";
@@ -1186,25 +1186,23 @@ export async function swapInCopy(staging: string, roots: CopyRoot[], keepIn: str
 }
 
 // What this PC keeps about the copy: the state in cloud-copy.json (paths, sizes, hashes and part ids,
-// nothing of the content). The key is the account's (account-key.ts).
+// nothing of the content). The key is the account's (account-key.ts). Read and written with copy-files.ts.
+
+/** The state a record holds; one a newer Tavora wrote counts as empty. Null for one that isn't a state. */
+function parseState(saved: SavedRecord): CopyState | null {
+  const { version } = SAVED_FILES.cloudCopy;
+  if (typeof saved.v === "number" && saved.v > version) return EMPTY_STATE;
+  if (saved.v !== version || typeof saved.version !== "number" || typeof saved.files !== "object" || saved.files === null) return null;
+  return { version: saved.version, pictures: saved.pictures !== false, files: saved.files as Record<string, SyncedFile>, ...(saved.kept === true ? { kept: true } : {}), ...(saved.sealed === true ? { sealed: true } : {}), ...(saved.marked === true ? { marked: true } : {}), ...(saved.listed === true ? { listed: true } : {}), ...(typeof saved.keptFrom === "number" && Number.isSafeInteger(saved.keptFrom) ? { keptFrom: saved.keptFrom } : {}), ...(typeof saved.keyId === "string" ? { keyId: saved.keyId } : {}) };
+}
 
 /**
  * The state as saved, or held when it is busy or damaged (a damaged one is also copied aside and left where it is, as
  * its being there says the copy is on; the user isn't told, as nothing of theirs is in it). One a newer Tavora wrote is
  * copied aside and counts as empty.
  */
-export async function lookCopyState(file: string): Promise<Looked<CopyState>> {
-  const bytes = await lookBytes(file);
-  if (bytes.status !== "present") return bytes;
-  const read = await look(() => checkSavedFile(file, bytes.value, { version: STORE_VERSIONS.cloudCopy, versionKey: "v", notice: false, leaveInPlace: true }));
-  if (read.status === "held") return read;
-  const saved = read.status === "present" ? read.value : null;
-  const damaged: Looked<CopyState> = { status: "held", error: new DamagedFile(`${file} is damaged`) };
-  if (saved === null) return damaged;
-  if (typeof saved.v === "number" && saved.v > STORE_VERSIONS.cloudCopy) return { status: "present", value: EMPTY_STATE };
-  if (saved.v !== STORE_VERSIONS.cloudCopy) return damaged;
-  if (typeof saved.version !== "number" || typeof saved.files !== "object" || saved.files === null) return damaged;
-  return { status: "present", value: { version: saved.version, pictures: saved.pictures !== false, files: saved.files as Record<string, SyncedFile>, ...(saved.kept === true ? { kept: true } : {}), ...(saved.sealed === true ? { sealed: true } : {}), ...(saved.marked === true ? { marked: true } : {}), ...(saved.listed === true ? { listed: true } : {}), ...(typeof saved.keptFrom === "number" && Number.isSafeInteger(saved.keptFrom) ? { keptFrom: saved.keptFrom } : {}), ...(typeof saved.keyId === "string" ? { keyId: saved.keyId } : {}) } };
+export function lookCopyState(file: string): Promise<Looked<CopyState>> {
+  return lookCopyFile(file, "state", parseState);
 }
 
 /** The state as saved, or the empty one when it can't be used. */
@@ -1213,7 +1211,15 @@ export async function loadCopyState(file: string): Promise<CopyState> {
   return looked.status === "present" ? looked.value : EMPTY_STATE;
 }
 
-/** Writes the state. During a swap it goes to another file than cloud-copy.json (CopySync.parkState). */
+/**
+ * Writes the state, at once and flushed. During a swap it goes to another file than cloud-copy.json (CopySync.parkState).
+ * Refused (HeldError) while the file can't be read.
+ */
 export async function saveCopyState(file: string, state: CopyState): Promise<void> {
-  await writeFileAtomic(file, JSON.stringify({ v: STORE_VERSIONS.cloudCopy, version: state.version, pictures: state.pictures, files: state.files, ...(state.kept ? { kept: true } : {}), ...(state.sealed ? { sealed: true } : {}), ...(state.marked ? { marked: true } : {}), ...(state.listed ? { listed: true } : {}), ...(state.keptFrom !== undefined ? { keptFrom: state.keptFrom } : {}), ...(state.keyId !== undefined ? { keyId: state.keyId } : {}) }));
+  await writeCopyFile(file, "state", { version: state.version, pictures: state.pictures, files: state.files, ...(state.kept ? { kept: true } : {}), ...(state.sealed ? { sealed: true } : {}), ...(state.marked ? { marked: true } : {}), ...(state.listed ? { listed: true } : {}), ...(state.keptFrom !== undefined ? { keptFrom: state.keptFrom } : {}), ...(state.keyId !== undefined ? { keyId: state.keyId } : {}) });
+}
+
+/** Removes the state (the copy is off, or it moved). Refused (HeldError) while the file can't be read. */
+export function removeCopyState(file: string): Promise<void> {
+  return removeCopyFile(file, "state");
 }

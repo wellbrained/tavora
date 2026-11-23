@@ -97,7 +97,9 @@
         "{\"v\":1,\"phase\":\"asking\",\"why\":\"went-back\",\"files\":[]}"
       ]
     },
-    "files": {},
+    "files": {
+      "cloud-copy-status.json.from-version-2": "{\"v\":2,\"phase\":\"swapping\",\"plan\":{\"keepIn\":\"%DATA%/backups/cloud-copy-<time>-this-pc\",\"moduleFiles\":\"%DATA%/Pictures\",\"own\":{\"moduleFilesFolder\":\"D:/Pictures\"},\"empty\":[\"%DATA%/modules\"],\"place\":null,\"account\":\"me\",\"earlierIn\":[\"data/modules\"]},\"somethingNew\":{\"kept\":true}}"
+    },
     "told": 0
   },
   "damaged": {
@@ -118,7 +120,9 @@
         "{\"v\":1,\"phase\":\"asking\",\"why\":\"went-back\",\"files\":[]}"
       ]
     },
-    "files": {},
+    "files": {
+      "cloud-copy-status.json.corrupt": "{ damaged"
+    },
     "told": 0
   },
   "shapeless": {
@@ -139,7 +143,9 @@
         "{\"v\":1,\"phase\":\"asking\",\"why\":\"went-back\",\"files\":[]}"
       ]
     },
-    "files": {},
+    "files": {
+      "cloud-copy-status.json.corrupt": "{\"v\":1}"
+    },
     "told": 0
   },
   "held": {

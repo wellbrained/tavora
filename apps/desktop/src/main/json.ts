@@ -148,17 +148,24 @@ export async function checkSavedFile(file: string, bytes: Buffer | string, rules
     value = undefined;
   }
   if (!isSavedRecord(value)) {
-    if (rules.leaveInPlace) {
-      const { wrote } = await keepCopyAt(path.dirname(file), `${path.basename(file)}.corrupt`, Buffer.from(bytes));
-      console.error(`[tavora] unreadable file has been copied aside: ${file}`);
-      // Left where it is, the same damaged file is read again at every start: tell the user once, when the copy is new.
-      if (wrote && rules.notice !== false) tellKept();
-    } else await setAside(file, rules.notice !== false);
+    if (rules.leaveInPlace) await keepDamagedCopy(file, bytes, rules.notice !== false);
+    else await setAside(file, rules.notice !== false);
     return null;
   }
   const version = value[rules.versionKey ?? "version"];
   if (typeof version === "number" && version > rules.version) await keepNewerCopy(file, version, Buffer.from(bytes));
   return value;
+}
+
+/**
+ * Copies a damaged file aside (`<file>.corrupt`, once per content) and leaves it where it is, for a file whose being there
+ * means something (the cloud copy's own files say it is on, or that a swap began). With `notice`, the user is told.
+ */
+export async function keepDamagedCopy(file: string, bytes: Buffer | string, notice: boolean): Promise<void> {
+  const { wrote } = await keepCopyAt(path.dirname(file), `${path.basename(file)}.corrupt`, Buffer.from(bytes));
+  console.error(`[tavora] unreadable file has been copied aside: ${file}`);
+  // Left where it is, the same damaged file is read again at every start: tell the user once, when the copy is new.
+  if (wrote && notice) tellKept();
 }
 
 /**

@@ -1,7 +1,7 @@
-// Where putting a cloud copy in place stands: one value, kept in its own file, written before any step that depends on
-// it. Older Tavoras don't know the file, so it can't mislead them. Transitions are the pure stepSwap below.
-import { rm } from "node:fs/promises";
+// Where putting a cloud copy in place stands: one value, kept in its own file (copy-files.ts), written before any step
+// that depends on it. Older Tavoras don't know the file, so it can't mislead them. Transitions are the pure stepSwap below.
 import path from "node:path";
+import { lookCopyFile, removeCopyFile, writeCopyFile } from "./copy-files";
 import { DamagedFile, lookJson, type Looked } from "./file-look";
 import { writeFileAtomic } from "./fsutil";
 
@@ -115,6 +115,7 @@ function parsePlan(value: unknown, backups: string): SwapPlan | null {
   return plan;
 }
 
+/** The status a record holds; null for one that isn't one, and for a newer Tavora's, which this one can't follow. */
 function parseStatus(saved: Record<string, unknown>, backups: string): SwapStatus | null {
   if (saved.v !== 1) return null;
   switch (saved.phase) {
@@ -141,23 +142,23 @@ export async function lookSwapPlan(file: string, backups: string): Promise<Looke
   return plan ? { status: "present", value: plan } : { status: "held", error: new DamagedFile(`${file} is damaged`) };
 }
 
-/** The status on disk: no file is `idle`, and one that is busy or damaged is held. `backups` is the folder a plan's backup must be in. */
+/**
+ * The status on disk: no file is `idle`, and one that is busy or damaged is held (a damaged one stays, with a copy
+ * aside; so does a newer Tavora's). `backups` is the folder a plan's backup must be in.
+ */
 export async function lookSwapStatus(file: string, backups: string): Promise<Looked<SwapStatus>> {
-  const looked = await lookJson(file);
-  if (looked.status === "missing") return { status: "present", value: SWAP_IDLE };
-  if (looked.status === "held") return looked;
-  const status = parseStatus(looked.value, backups);
-  return status ? { status: "present", value: status } : { status: "held", error: new DamagedFile(`${file} is damaged`) };
+  const looked = await lookCopyFile(file, "status", (saved) => parseStatus(saved, backups));
+  return looked.status === "missing" ? { status: "present", value: SWAP_IDLE } : looked;
 }
 
-/** Writes the status before anything goes on; `idle` removes the file. */
+/** Writes the status before anything goes on, at once and flushed; `idle` removes the file. Refused while it can't be read. */
 export async function writeSwapStatus(file: string, status: SwapStatus): Promise<void> {
   if (status.phase === "held") throw new Error("a held status is never written");
-  if (status.phase === "idle") return rm(file, { force: true });
-  return writeFlushed(file, { v: 1, ...status });
+  if (status.phase === "idle") return removeCopyFile(file, "status");
+  return writeCopyFile(file, "status", status);
 }
 
-/** Writes JSON whole and on the disk (writeFileAtomic flushes it before the rename). */
+/** Writes JSON whole and on the disk (writeFileAtomic flushes it before the rename): the swap's plan, and the lost files' note. */
 export function writeFlushed(file: string, value: unknown): Promise<void> {
   return writeFileAtomic(file, JSON.stringify(value));
 }

@@ -74,7 +74,8 @@
     },
     "changed": null,
     "files": {
-      "cloud-copy.json": "{\"v\":1,\"version\":1,\"pictures\":true,\"files\":{}}"
+      "cloud-copy.json": "{\"v\":1,\"version\":1,\"pictures\":true,\"files\":{}}",
+      "cloud-copy.json.corrupt": "{\"v\":1}"
     },
     "told": 0
   },

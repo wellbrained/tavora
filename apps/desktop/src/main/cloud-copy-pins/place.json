@@ -35,9 +35,10 @@
     "read": null,
     "changed": null,
     "files": {
-      "cloud-copy-place.json": "{\"v\":1}"
+      "cloud-copy-place.json": "{\"v\":1}",
+      "cloud-copy-place.json.corrupt": "{\"v\":1}"
     },
-    "told": 0
+    "told": 1
   },
   "held": {
     "read": null,

@@ -1,8 +1,9 @@
 import { randomInt } from "node:crypto";
 import type { Stats } from "node:fs";
-import { lstat, mkdir, open, readFile, rm, rmdir, utimes, writeFile } from "node:fs/promises";
+import { lstat, mkdir, open, rm, rmdir, utimes, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { CopyError, PART_BYTES, type CopyStorage, type ManifestCheck, type RemoteCopy, type SwapAnswer } from "./cloud-copy";
+import { readCopyFile, writeCopyFile } from "./copy-files";
 import { look, lookNames, lookStat, type Looked } from "./file-look";
 import { PART_ID_BYTES, SEAL_OVERHEAD } from "./copy-crypto";
 import { writeFileAtomic } from "./fsutil";
@@ -167,9 +168,27 @@ interface UnusedRecord {
   waited: Record<string, number>;
 }
 
-interface Unused {
+export interface Unused {
   last: number | null;
   waited: Map<string, number>;
+}
+
+/**
+ * When this PC first saw each part in `folder` unused, as noted in `file`; none when it is about another folder, or can't
+ * be read (copy-files.ts: a damaged one is set aside, and one that can't be read right now isn't written over).
+ */
+export async function readUnused(file: string, folder: string): Promise<Unused> {
+  const found: Unused = { last: null, waited: new Map() };
+  try {
+    const saved = ((await readCopyFile(file, "unused")) ?? {}) as Partial<UnusedRecord>;
+    if (saved.v === 1 && saved.folder === folder && typeof saved.last === "number" && typeof saved.waited === "object" && saved.waited !== null) {
+      found.last = saved.last;
+      for (const [key, time] of Object.entries(saved.waited)) if (typeof time === "number" && Number.isFinite(time) && time >= 0) found.waited.set(key, time);
+    }
+  } catch {
+    // Can't be read right now: every part counts from now, and the file isn't written over.
+  }
+  return found;
 }
 
 /** The most one look adds to how long a part has waited: a PC that saves every few days still gets there in a week or so. */
@@ -520,32 +539,23 @@ export class FolderStorage implements CopyStorage {
     await this.saveUnused({ last: now, waited });
   }
 
-  /** When this PC first saw each part unused, for this folder; none when it can't be read. */
+  /** When this PC first saw each part unused, for this folder: loaded once. */
   private async loadUnused(): Promise<Unused> {
     if (this.unused) return this.unused;
     const file = this.options.unusedFile;
-    const found: Unused = { last: null, waited: new Map() };
-    if (file) {
-      try {
-        const saved = JSON.parse(await readFile(file, "utf8")) as Partial<UnusedRecord>;
-        if (saved.v === 1 && saved.folder === this.folder && typeof saved.last === "number" && typeof saved.waited === "object" && saved.waited !== null) {
-          found.last = saved.last;
-          for (const [key, time] of Object.entries(saved.waited)) if (typeof time === "number" && Number.isFinite(time) && time >= 0) found.waited.set(key, time);
-        }
-      } catch {
-        // None yet, or unreadable: every part counts from now.
-      }
-    }
-    return (this.unused = found);
+    return (this.unused = file ? await readUnused(file, this.folder) : { last: null, waited: new Map() });
   }
 
-  /** Keeps the list for the next clean-up. One that can't be written only means parts count from now next time. */
+  /**
+   * Keeps the list for the next clean-up. One that can't be written (or read, so it isn't written over) only means parts
+   * count from now next time.
+   */
   private async saveUnused(unused: Unused): Promise<void> {
     this.unused = unused;
     const file = this.options.unusedFile;
     if (!file) return;
-    const record: UnusedRecord = { v: 1, folder: this.folder, last: unused.last ?? 0, waited: Object.fromEntries(unused.waited) };
-    await writeFileAtomic(file, JSON.stringify(record)).catch(() => undefined);
+    const record: Omit<UnusedRecord, "v"> = { folder: this.folder, last: unused.last ?? 0, waited: Object.fromEntries(unused.waited) };
+    await writeCopyFile(file, "unused", record).catch(() => undefined);
   }
 
   /** Deletes the copy's parts and manifests. Anything else in the folder stays; a link in their place goes, not what it leads to. */

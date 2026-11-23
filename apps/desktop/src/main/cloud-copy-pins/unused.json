@@ -28,7 +28,8 @@
       "uploaded"
     ],
     "files": {
-      "cloud-copy-unused.json": "{\"v\":1,\"folder\":\"%DATA%/OneDrive\",\"last\":<time>,\"waited\":{}}"
+      "cloud-copy-unused.json": "{\"v\":1,\"folder\":\"%DATA%/OneDrive\",\"last\":<time>,\"waited\":{}}",
+      "cloud-copy-unused.json.from-version-2": "{\"v\":2,\"folder\":\"%DATA%/OneDrive\",\"last\":<time>,\"waited\":{\"<id 1>\":1000},\"somethingNew\":{\"kept\":true}}"
     },
     "told": 0
   },
@@ -39,7 +40,8 @@
       "uploaded"
     ],
     "files": {
-      "cloud-copy-unused.json": "{\"v\":1,\"folder\":\"%DATA%/OneDrive\",\"last\":<time>,\"waited\":{}}"
+      "cloud-copy-unused.json": "{\"v\":1,\"folder\":\"%DATA%/OneDrive\",\"last\":<time>,\"waited\":{}}",
+      "cloud-copy-unused.json.corrupt-<time>": "{ damaged"
     },
     "told": 0
   },
@@ -50,7 +52,8 @@
       "uploaded"
     ],
     "files": {
-      "cloud-copy-unused.json": "{\"v\":1,\"folder\":\"%DATA%/OneDrive\",\"last\":<time>,\"waited\":{}}"
+      "cloud-copy-unused.json": "{\"v\":1,\"folder\":\"%DATA%/OneDrive\",\"last\":<time>,\"waited\":{}}",
+      "cloud-copy-unused.json.corrupt-<time>": "{\"v\":1}"
     },
     "told": 0
   },

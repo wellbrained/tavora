@@ -65,14 +65,26 @@ export const STORE_VERSIONS = {
   readOnlyFiles: 1,
   /** account.json, account-key.json (account-key.<account>.json, and the older cloud-copy-key.json), discord.json: sealed, `v`. */
   sealed: 1,
-  /** cloud-copy.json, cloud-copy-place.json: `v`. */
+  /** The cloud copy's state: cloud-copy.json, and cloud-copy-swapping.json, where it is parked during a swap: `v`. */
   cloudCopy: 1,
+  /** cloud-copy-place.json, where the cloud copy is kept: `v`. */
+  copyPlace: 1,
+  /** cloud-copy-status.json, where putting a cloud copy in place stands (cloud-copy-swap.ts): `v`. */
+  copyStatus: 1,
+  /** cloud-copy-staging/copy-list.json, the staged copy's list, and staged.json, where an older Tavora kept it: `v`. */
+  copyList: 1,
+  /** backups/cloud-copy-<time>-this-pc/incoming-lists.json, the lists of the copies a swap put in: `v`. */
+  incomingLists: 1,
+  /** cloud-copy-unused.json, how long this PC has seen each part in the copy's folder unused: `v`. */
+  copyUnused: 1,
 } as const;
 
 // Not checked, as nothing of the user's is lost with them: window.json (where the window was), open-times.json (how
 // fast layouts open here), games-seen.json (when games were seen running), inbox.json (which notes were shown),
 // publisher-names.json and catalog-lists.json (downloaded), the documents' index.json (rebuilt), picker.json (a hint),
-// the cloud copy's staged.json (one take at a time), pairing's steps (one pairing at a time), pairing-answers.json
+// a cloud copy swap's plan (swap-plan.json: written once as the swap begins, before its status, and made again from the
+// backup when both are damaged) and the note of files lost at a held start (cloud-copy-lost.json: a damaged one reads as
+// the library lost), pairing's steps (one pairing at a time), pairing-answers.json
 // (when this PC last answered another PC without an Add), the vault cache (a copy of the account's) and
 // account-vault-seen (a mark that the account's vault was seen), module-checks.json (the installed
 // folders' signature checks, made again when missing), official-publisher-key.bin (development builds; the key file

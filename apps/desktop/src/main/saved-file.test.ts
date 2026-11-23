@@ -478,3 +478,78 @@ describe("a turn that takes long", () => {
     expect(warned).not.toHaveBeenCalled();
   });
 });
+
+describe("look, and a kind left in place", () => {
+  const PLACED: SavedFileKind = { version: 1, versionKey: "v", format: "compact", notice: false, leaveInPlace: true };
+  const parse = (saved: Record<string, unknown>) => (typeof saved.note === "string" ? saved.note : null);
+
+  it("tells present, missing and held apart, as file-look.ts does", async () => {
+    const saved = new SavedFile(file, PLACED);
+    expect(await saved.look(parse)).toEqual({ status: "missing" });
+    await writeFile(file, '{"v":1,"note":"hi"}');
+    expect(await saved.look(parse)).toEqual({ status: "present", value: "hi" });
+    await rm(file);
+    await mkdir(file);
+    expect(await saved.look(parse)).toMatchObject({ status: "held" });
+    // Held, it isn't written over.
+    await rm(file, { recursive: true });
+    await expect(saved.write({ note: "mine" })).rejects.toBeInstanceOf(SavedFileHeld);
+  });
+
+  it("leaves a damaged one where it is, with a copy aside, reads it as damaged, and writes over it then", async () => {
+    const saved = new SavedFile(file, PLACED);
+    const kept = unreadableFilesKept();
+    await writeFile(file, "{ damaged");
+    expect(await saved.look(parse)).toMatchObject({ status: "held", error: expect.objectContaining({ name: "Error", message: `${file} is damaged` }) });
+    expect(await text()).toBe("{ damaged");
+    expect(await readFile(`${file}.corrupt`, "utf8")).toBe("{ damaged");
+    // One the store can't use is damaged too.
+    await writeFile(file, '{"v":1}');
+    expect((await saved.look(parse)).status).toBe("held");
+    expect(await readFile(`${file}.corrupt.2`, "utf8")).toBe('{"v":1}');
+    // Read again, the same file makes no new copy.
+    await saved.look(parse);
+    expect((await names()).filter((name) => name.includes(".corrupt"))).toHaveLength(2);
+    expect(unreadableFilesKept()).toBe(kept);
+    await saved.write({ note: "fresh" });
+    expect(await text()).toBe('{"v":1,"note":"fresh"}');
+  });
+
+  it("copies a newer one aside once, and reads it as far as the store understands it", async () => {
+    const saved = new SavedFile(file, PLACED);
+    await writeFile(file, '{"v":2,"note":"newer","more":1}');
+    expect(await saved.look(parse)).toEqual({ status: "present", value: "newer" });
+    await writeFile(file, '{"v":2,"other":true}');
+    expect((await saved.look(parse)).status).toBe("held");
+    // A copy aside for each, never a `.corrupt` one besides.
+    expect((await names()).sort()).toEqual(["notes.json", "notes.json.from-version-2", "notes.json.from-version-2.2"]);
+  });
+
+  it("a kind set aside reads a file it can't use as missing", async () => {
+    const saved = new SavedFile(file, { version: 1, versionKey: "v", format: "compact", notice: false });
+    await writeFile(file, '{"v":1}');
+    expect(await saved.look(parse)).toEqual({ status: "missing" });
+    expect((await names()).some((name) => name.startsWith("notes.json.corrupt-"))).toBe(true);
+  });
+});
+
+describe("remove", () => {
+  it("removes after the writes asked before, and reads first, so a newer one is copied aside", async () => {
+    await writeFile(file, '{"version":2,"notes":["newer"]}');
+    const saved = new SavedFile(file, V1);
+    const writing = saved.write({ notes: ["mine"] });
+    await saved.remove();
+    await writing;
+    expect(await names()).toEqual(["notes.json.from-version-2"]);
+  });
+
+  it("is refused like a write while the file can't be read", async () => {
+    await mkdir(file);
+    const saved = new SavedFile(file, V1);
+    await expect(saved.read()).rejects.toThrow();
+    await rm(file, { recursive: true });
+    await writeFile(file, '{"version":1,"notes":["kept"]}');
+    await expect(saved.remove()).rejects.toBeInstanceOf(SavedFileHeld);
+    expect(await text()).toBe('{"version":1,"notes":["kept"]}');
+  });
+});

@@ -541,11 +541,13 @@ describe("a stopped swap whose list of the incoming copy is gone", () => {
     let off: Promise<void> | null = null;
     meanwhile = async (to) => {
       if (off || !to.endsWith(at)) return;
+      // Not waited for in here: a file's writes go one at a time (copy-files.ts), so turning off writes the status right
+      // after the write under way.
       off = one.sync.turnOff();
-      await off;
     };
     await expect(one.sync.keep("cloud")).resolves.toBeUndefined();
     expect(off).not.toBeNull();
+    await off;
     expect(one.events.restarts).toBe(0);
     expect(JSON.parse(await readFile(path.join(b.userData, "cloud-copy-status.json"), "utf8"))).toMatchObject({ phase: "undoing" });
     const next = await appStart(s.cloud, b);
@@ -601,11 +603,13 @@ describe("a stopped swap whose list of the incoming copy is gone", () => {
     let off: Promise<void> | null = null;
     meanwhile = async (to) => {
       if (off || !to.endsWith("cloud-copy-status.json")) return;
+      // Not waited for in here: a file's writes go one at a time (copy-files.ts), so turning off writes the status right
+      // after the write under way.
       off = t.sync.turnOff();
-      await off;
     };
     await t.sync.restore();
     expect(off).not.toBeNull();
+    await off;
     expect(t.events.restarts).toBe(0);
     expect(await there(path.join(s.a.userData, "cloud-copy-status.json"))).toBe(false);
     const next = await appStart(s.cloud, s.a);

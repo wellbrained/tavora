@@ -3,17 +3,22 @@
 // - a file a newer Tavora wrote is copied aside (`<file>.from-version-<n>`) before this one can write over it, and is
 //   then read as far as this Tavora understands it;
 // - a damaged one is set aside (`<file>.corrupt-<time>`), the user is told, and the store starts from nothing; so is one
-//   its kind can't use at all (`valid`);
+//   its kind can't use at all (`valid`). A kind whose file means something by being there (the cloud copy's) leaves it
+//   in place instead, with a copy aside (`<file>.corrupt`), and its store reads it with look(), which says it is damaged;
 // - one that can't be read right now (held by a virus scan) is never written over: after a read of the store's that
 //   failed, every write is refused until it reads the file again;
 // - the fields a newer Tavora added are written back as they were, for the kinds that keep them;
-// - writes of a file run one at a time, in order, each whole or not at all (fsutil.ts writeFileAtomic); a write at
-//   quit (writeNow) goes first, and no write asked before it lands after it.
+// - writes of a file run one at a time, in order, each whole or not at all (fsutil.ts writeFileAtomic), each at once
+//   and flushed to the disk before it is in place: none is put off or joined with another, so a store that writes one
+//   before a step that depends on it can rely on that; a write at quit (writeNow) goes first, and no write asked before
+//   it lands after it.
 // A store gives its file's kind (SAVED_FILES) and its own fields; it never writes the version, or the file, itself.
 import { closeSync, fsyncSync, mkdirSync, openSync, renameSync, writeSync } from "node:fs";
+import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
+import { DamagedFile, type Looked } from "./file-look";
 import { writeFileUnlessReplaced } from "./fsutil";
-import { readSavedFile, setAside, unknownFields, type SavedRecord } from "./json";
+import { checkSavedFile, keepDamagedCopy, setAside, unknownFields, type SavedFileRules, type SavedRecord } from "./json";
 import { STORE_VERSIONS, SUPPORTED_VERSIONS } from "./saved-versions";
 
 /** How a kind of saved file is written: indented with a newline at the end, indented without one, or on one line. */
@@ -39,6 +44,12 @@ export interface SavedFileKind {
    * and read as missing. Left out, every JSON object is.
    */
   readonly valid?: (saved: SavedRecord) => boolean;
+  /**
+   * A damaged one stays where it is, with a copy aside (`<file>.corrupt`, once per content), instead of being set aside:
+   * for a file whose being there means something (the cloud copy's own files say it is on, or that a swap began). Its
+   * store reads it with look(), which tells a damaged one from a missing one.
+   */
+  readonly leaveInPlace?: boolean;
 }
 
 /**
@@ -46,6 +57,10 @@ export interface SavedFileKind {
  * which is copied aside and read as far as this Tavora understands it (sealed-file.ts).
  */
 const isSealed = (saved: SavedRecord) => (typeof saved.v === "number" && saved.v > STORE_VERSIONS.sealed) || (saved.v === STORE_VERSIONS.sealed && typeof saved.data === "string");
+
+/** A note of the parts this PC saw unused (copy-folder.ts), or one a newer Tavora wrote. */
+const isUnusedNote = (saved: SavedRecord) =>
+  (typeof saved.v === "number" && saved.v > STORE_VERSIONS.copyUnused) || (saved.v === STORE_VERSIONS.copyUnused && typeof saved.folder === "string" && typeof saved.last === "number" && typeof saved.waited === "object" && saved.waited !== null);
 
 /**
  * Every kind of the user's saved files, by its name in saved-versions.ts and with the version from there. A new kind of
@@ -73,6 +88,16 @@ export const SAVED_FILES = {
   // account.json, account-key.json (and account-key.<account>.json, and the older cloud-copy-key.json), discord.json:
   // read and written by sealed-file.ts. The fields next to the sealed data (the key's `account`) are the store's own.
   sealed: { version: STORE_VERSIONS.sealed, versionKey: "v", format: "compact", valid: isSealed },
+  // The cloud copy's own files, read and written by copy-files.ts. One that is there says something (the copy is on, a
+  // swap began), so a damaged one stays, with a copy aside, and reads as damaged. Bookkeeping the user never sees, so
+  // they aren't told, except of where the copy is kept: with that damaged, the copy is off for the run.
+  cloudCopy: { version: STORE_VERSIONS.cloudCopy, versionKey: "v", notice: false, format: "compact", leaveInPlace: true },
+  copyPlace: { version: STORE_VERSIONS.copyPlace, versionKey: "v", format: "compact", leaveInPlace: true },
+  copyStatus: { version: STORE_VERSIONS.copyStatus, versionKey: "v", notice: false, format: "compact", leaveInPlace: true },
+  copyList: { version: STORE_VERSIONS.copyList, versionKey: "v", notice: false, format: "compact", leaveInPlace: true },
+  incomingLists: { version: STORE_VERSIONS.incomingLists, versionKey: "v", notice: false, format: "compact", leaveInPlace: true },
+  // Only how long parts have waited: a damaged one is set aside, and every part counts from now.
+  copyUnused: { version: STORE_VERSIONS.copyUnused, versionKey: "v", notice: false, format: "compact", valid: isUnusedNote },
 } as const satisfies Record<string, SavedFileKind>;
 
 /**
@@ -81,8 +106,6 @@ export const SAVED_FILES = {
  */
 export const NOT_SAVED_FILES: Readonly<Record<string, string>> = {
   readOnlyFiles: "the version is on each entry, as Tavora 0.24 refuses a file with anything but entries in it",
-  cloudCopy:
-    "planned: the cloud copy's files (cloud-copy.json, cloud-copy-unused.json, the staged list) move in a later pull request, as the cloud copy's code is being changed elsewhere (lineage inside the seal)",
 };
 
 /** A write refused because the file couldn't be read: it may hold what the store never saw. */
@@ -168,6 +191,9 @@ function putNow(file: string, text: string): boolean {
 /** A top-level member as it is written: its name and its value's text. */
 type Member = readonly [name: string, text: string];
 
+/** What a read found: the record (and its bytes), nothing, or a damaged file, set aside or (left in place) copied aside. */
+type Found = { status: "saved"; saved: SavedRecord; bytes: Buffer } | { status: "missing" } | { status: "damaged" };
+
 /** The members of `fields` written in `format`, taken now, so a store may change its own objects right after. */
 function membersOf(fields: SavedFields, format: SavedFormat): Member[] {
   if (Array.isArray(fields)) throw new Error("A saved file holds a record, not a list");
@@ -213,7 +239,42 @@ export class SavedFile {
    * can't be read right now throws, and nothing is written to it until a read succeeds.
    */
   read(): Promise<SavedRecord | null> {
-    return inLine(this.file, () => this.readNow());
+    return inLine(this.file, async () => {
+      const found = await this.readNow();
+      return found.status === "saved" ? found.saved : null;
+    });
+  }
+
+  /**
+   * What the file holds, told the way file-look.ts tells it: present, missing, or held, which is a file that can't be
+   * read right now or a damaged one (DamagedFile). `parse` gives the store's value of the record, or null when it can't
+   * use it, which counts as damaged too. A damaged one is set aside as read() does, so for a kind left in place it stays,
+   * with a copy aside; one a newer Tavora wrote is copied aside first, then parsed. Never throws.
+   */
+  look<T>(parse: (saved: SavedRecord) => T | null): Promise<Looked<T>> {
+    return inLine(this.file, async (): Promise<Looked<T>> => {
+      let found: Found;
+      try {
+        found = await this.readNow();
+      } catch (error) {
+        return { status: "held", error };
+      }
+      const gone: Looked<T> = this.kind.leaveInPlace ? { status: "held", error: new DamagedFile(`${this.file} is damaged`) } : { status: "missing" };
+      if (found.status === "missing") return { status: "missing" };
+      if (found.status === "damaged") return gone;
+      const value = parse(found.saved);
+      if (value !== null) return { status: "present", value };
+      // A newer Tavora's is kept aside already, as it was.
+      if (!this.isNewer(found.saved)) {
+        try {
+          await this.putAside(found.bytes);
+        } catch (error) {
+          this.status = { kind: "held", error };
+          return { status: "held", error };
+        }
+      }
+      return gone;
+    });
   }
 
   /**
@@ -243,7 +304,8 @@ export class SavedFile {
   update<T extends SavedFields>(change: (saved: SavedRecord | null) => Fields<T> | null | Promise<Fields<T> | null>): Promise<void> {
     const asked = quitCount(this.file);
     return inLine(this.file, async () => {
-      const fields = await change(await this.readNow());
+      const found = await this.readNow();
+      const fields = await change(found.status === "saved" ? found.saved : null);
       if (fields !== null) await this.writeMembers(membersOf(fields, this.kind.format), asked);
     });
   }
@@ -267,34 +329,70 @@ export class SavedFile {
     return true;
   }
 
+  /**
+   * Removes the file, after every write of it asked for before, and only as a write may: after reading it first when
+   * this SavedFile hasn't (so a newer Tavora's is copied aside), and refused (SavedFileHeld) while it couldn't be read.
+   * A write at quit made since it was asked for stays.
+   */
+  remove(): Promise<void> {
+    const asked = quitCount(this.file);
+    return inLine(this.file, async () => {
+      await this.ready();
+      if (quitCount(this.file) === asked) await rm(this.file, { force: true });
+    });
+  }
+
   /** Resolves once every write of the file asked for so far is done (or has failed). */
   flush(): Promise<void> {
     return inLine(this.file, async () => undefined);
   }
 
-  private async readNow(): Promise<SavedRecord | null> {
-    let saved: SavedRecord | null;
+  private async readNow(): Promise<Found> {
+    let found: Found;
     try {
-      saved = await readSavedFile(this.file, { version: this.kind.version, ...(this.kind.versionKey ? { versionKey: this.kind.versionKey } : {}), ...(this.kind.notice === false ? { notice: false } : {}) });
+      found = await this.find();
     } catch (error) {
       this.status = { kind: "held", error };
       this.kept = [];
       throw error;
     }
-    if (saved !== null && this.kind.valid && !this.kind.valid(saved)) {
-      try {
-        await setAside(this.file, this.kind.notice !== false);
-      } catch (error) {
-        this.status = { kind: "held", error };
-        this.kept = [];
-        throw error;
-      }
-      saved = null;
-    }
     this.status = { kind: "read" };
     const keep = this.kind.keep;
-    this.kept = keep ? membersOf(unknownFields(saved, [this.versionKey, ...keep.known]), this.kind.format) : [];
-    return saved;
+    this.kept = keep && found.status === "saved" ? membersOf(unknownFields(found.saved, [this.versionKey, ...keep.known]), this.kind.format) : [];
+    return found;
+  }
+
+  /** Reads the file by the rules: one its kind can't use is put aside like one that isn't JSON. */
+  private async find(): Promise<Found> {
+    let bytes: Buffer;
+    try {
+      bytes = await readFile(this.file);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return { status: "missing" };
+      throw error;
+    }
+    const saved = await checkSavedFile(this.file, bytes, this.rules);
+    if (saved === null) return { status: "damaged" };
+    if (this.kind.valid && !this.kind.valid(saved)) {
+      await this.putAside(bytes);
+      return { status: "damaged" };
+    }
+    return { status: "saved", saved, bytes };
+  }
+
+  private get rules(): SavedFileRules {
+    return { version: this.kind.version, ...(this.kind.versionKey ? { versionKey: this.kind.versionKey } : {}), ...(this.kind.notice === false ? { notice: false } : {}), ...(this.kind.leaveInPlace ? { leaveInPlace: true } : {}) };
+  }
+
+  /** A file that can't be used: set aside, or, for a kind left in place, copied aside. */
+  private async putAside(bytes: Buffer): Promise<void> {
+    if (this.kind.leaveInPlace) await keepDamagedCopy(this.file, bytes, this.kind.notice !== false);
+    else await setAside(this.file, this.kind.notice !== false);
+  }
+
+  private isNewer(saved: SavedRecord): boolean {
+    const version = saved[this.versionKey];
+    return typeof version === "number" && version > this.kind.version;
   }
 
   /**
