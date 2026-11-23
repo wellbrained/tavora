@@ -16,6 +16,8 @@ paths = [
   '''^apps/desktop/src/main/module-notes-seen\.test\.ts$''',
   '''^apps/desktop/src/main/publisher-names\.test\.ts$''',
   '''^apps/desktop/src/main/saved-samples\.test\.ts$''',
+  '''^apps/desktop/src/main/saved-pins\.test\.ts$''',
+  '''^apps/desktop/src/main/saved-pins/''',
   '''^packages/pack/src/pack\.test\.ts$''',
   '''^apps/api/scripts/deploy-scripts\.test\.ts$''',
   '''^apps/desktop/src/main/saved-samples/''',
