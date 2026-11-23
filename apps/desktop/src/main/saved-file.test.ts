@@ -6,7 +6,23 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { onUnreadableFileKept, unreadableFilesKept } from "./json";
-import { RawJson, SavedFile, SavedFileHeld, type SavedFileKind } from "./saved-file";
+import { RawJson, SAVED_FILE_TURN_MS, SavedFile, SavedFileHeld, SavedFileTimeout, type SavedFileKind } from "./saved-file";
+
+/** A read of a saved file held until the test lets it go: the next read waits for `reads.hold` first. */
+const reads = vi.hoisted(() => ({ hold: null as Promise<void> | null }));
+vi.mock("./json", async (original) => {
+  const real = await original<typeof import("./json")>();
+  return {
+    ...real,
+    readSavedFile: async (...args: Parameters<typeof real.readSavedFile>) => {
+      const hold = reads.hold;
+      reads.hold = null;
+      const read = await real.readSavedFile(...args);
+      if (hold) await hold;
+      return read;
+    },
+  };
+});
 
 /** The calls of the file system's sync functions a write at quit makes, in order. */
 const syncCalls = vi.hoisted(() => [] as string[]);
@@ -25,14 +41,14 @@ vi.mock("node:fs", async (original) => {
  * What comes at the next renames of a written file, one each, in turn: `before` it is tried (it still looks whether it
  * is wanted), or `during` it (it was asked for already: nothing looks again). `landed` says, per rename, whether it went.
  */
-const renames = vi.hoisted(() => ({ next: [] as { at: "before" | "during"; run: () => void }[], landed: [] as boolean[] }));
+const renames = vi.hoisted(() => ({ next: [] as { at: "before" | "during"; run: () => void | Promise<void> }[], landed: [] as boolean[] }));
 vi.mock("./rename-held", async (original) => {
   const real = await original<typeof import("./rename-held")>();
   return {
     ...real,
     renameHeld: async (from: string, to: string, waits?: readonly number[], stillWanted?: () => boolean) => {
       const hook = renames.next.shift();
-      hook?.run();
+      await hook?.run();
       const landed = await real.renameHeld(from, to, waits, hook?.at === "during" ? undefined : stillWanted);
       renames.landed.push(landed);
       return landed;
@@ -48,6 +64,7 @@ beforeEach(async () => {
   vi.spyOn(console, "error").mockImplementation(() => undefined);
   renames.next = [];
   renames.landed = [];
+  reads.hold = null;
 });
 afterEach(async () => {
   onUnreadableFileKept(null);
@@ -350,7 +367,7 @@ describe("writeNow, for the moment Tavora quits", () => {
   it("never puts a write being made in place, not even for a moment, once it came", async () => {
     const saved = new SavedFile(file, V1);
     await saved.read();
-    renames.next = [{ at: "before", run: () => saved.writeNow({ a: "at quit" }) }];
+    renames.next = [{ at: "before", run: () => void saved.writeNow({ a: "at quit" }) }];
     await saved.write({ a: "older" });
     expect(renames.landed).toEqual([false]);
     expect(JSON.parse(await text())).toEqual({ version: 1, a: "at quit" });
@@ -425,5 +442,76 @@ describe("writeNow, for the moment Tavora quits", () => {
     await writeFile(file, '{"version":2}');
     expect(new SavedFile(file, V1).writeNow({ a: 1 })).toBe(false);
     expect(await text()).toBe('{"version":2}');
+  });
+});
+
+describe("no read or write of a file waits forever", () => {
+  /** Lets real file work go on while the timers are fake. */
+  const settle = async (until: () => boolean) => {
+    for (let n = 0; n < 500 && !until(); n++) await new Promise((resolve) => setImmediate(resolve));
+    expect(until()).toBe(true);
+  };
+  const later = () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    return { held, release };
+  };
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("gives up a write whose turn never ends: the next goes on, and the one given up is never put in place", async () => {
+    const saved = new SavedFile(file, V1);
+    await saved.read();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const rename = later();
+    renames.next = [{ at: "before", run: () => rename.held }];
+    const stuck = saved.write({ a: "stuck" });
+    const stuckFailed = expect(stuck).rejects.toBeInstanceOf(SavedFileTimeout);
+    const next = saved.write({ a: "next" });
+    // The first write is at its rename, which doesn't come back.
+    await settle(() => renames.next.length === 0);
+    await vi.advanceTimersByTimeAsync(SAVED_FILE_TURN_MS);
+    await stuckFailed;
+    await next;
+    expect(JSON.parse(await text())).toEqual({ version: 1, a: "next" });
+    // Its rename comes back at last: what it wrote stays out.
+    rename.release();
+    await settle(() => renames.landed.length === 2);
+    expect(renames.landed).toEqual([true, false]);
+    expect(JSON.parse(await text())).toEqual({ version: 1, a: "next" });
+    expect(await names()).toEqual(["notes.json"]);
+  });
+
+  it("gives up a read whose turn never ends, and holds the file: what it may hold is unknown", async () => {
+    await writeFile(file, '{"version":1,"notes":["kept"]}');
+    const saved = new SavedFile(file, V1);
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const read = later();
+    reads.hold = read.held;
+    const reading = saved.read();
+    const readFailed = expect(reading).rejects.toBeInstanceOf(SavedFileTimeout);
+    await vi.advanceTimersByTimeAsync(SAVED_FILE_TURN_MS);
+    await readFailed;
+    await expect(saved.write({ notes: [] })).rejects.toBeInstanceOf(SavedFileHeld);
+    // The read given up comes back at last: it changes nothing, the file stays held until it is read again.
+    read.release();
+    await settle(() => reads.hold === null);
+    for (let n = 0; n < 20; n++) await new Promise((resolve) => setImmediate(resolve));
+    await expect(saved.write({ notes: [] })).rejects.toBeInstanceOf(SavedFileHeld);
+    expect(await text()).toBe('{"version":1,"notes":["kept"]}');
+    expect(await saved.read()).toEqual({ version: 1, notes: ["kept"] });
+    await saved.write({ notes: ["new"] });
+    expect(JSON.parse(await text())).toEqual({ version: 1, notes: ["new"] });
+  });
+
+  it("leaves no timer behind once a read or write is done in time", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const saved = new SavedFile(file, V1);
+    await saved.write({ a: 1 });
+    await saved.read();
+    await saved.flush();
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

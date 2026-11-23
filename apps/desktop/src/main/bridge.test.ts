@@ -222,6 +222,27 @@ describe("identity", () => {
     expect(await registry.get("local", "local.example.b", "poe2").settings.get("n")).toBeNull();
   });
 
+  it("answers a write with another module's id, in a store that never saved, at once, and every write after it", async () => {
+    // The hostile module of isolation.spec.ts, in its order: nothing of the store is on disk yet.
+    const timed = async (method: string, params: unknown) => {
+      const started = Date.now();
+      const answer = await call(port, method, params);
+      return { answer, ms: Date.now() - started };
+    };
+    const read = await timed("storage.get", { key: "count", moduleId: "local.example.b", gameId: "poe2", workspaceId: "poe2" });
+    expect(read.answer).toMatchObject({ ok: true, result: null });
+    const write = await timed("storage.set", { key: "count", value: 999, moduleId: "local.example.b" });
+    expect(write.answer).toMatchObject({ ok: true });
+    // Answered by the store, not by the 3 s the module gives up after.
+    expect(write.ms).toBeLessThan(1500);
+    expect(await call(port, "storage.set", { key: "d", value: new Date() })).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+    expect(await call(port, "storage.set", { key: "big", value: "x".repeat(LIMITS.maxStoreBytes) })).toMatchObject({ ok: false, error: { code: "QUOTA_EXCEEDED" } });
+    expect(await call(port, "storage.set", { key: "../../../escape", value: 1 })).toMatchObject({ ok: true });
+    // The store goes on: what it took is there, the other module's is untouched.
+    expect(await call(port, "storage.keys")).toMatchObject({ ok: true, result: ["../../../escape", "count"] });
+    expect(await registry.get("local", "local.example.b", "poe2").settings.get("count")).toBeNull();
+  });
+
   it("keeps panel state per panel", async () => {
     const other = await connected(makeContext(OTHER_INSTANCE));
     expect(await call(port, "panel.setState", { value: { tab: "gear" } })).toMatchObject({ ok: true });
