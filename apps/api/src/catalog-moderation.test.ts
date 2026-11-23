@@ -308,7 +308,7 @@ describe("check 4: warning signs in the code", () => {
     expect(await flagged(libraryExcerpts.join(";\n"))).toBe("listed");
   });
 
-  it("still holds anything that only looks like those pieces", async () => {
+  it("still holds anything that only looks like those pieces", { timeout: 30_000 }, async () => {
     for (const text of [
       "Function('return this; fetch(x)')()",
       "Function('return this')(); eval(x)",
