@@ -1840,6 +1840,8 @@ export class Host {
       this.connection.dispose();
       this.media.dispose();
       this.gameWatcher.stop();
+      // The development folders' watchers (a later watch() starts them again; nothing does once the window is gone).
+      this.developmentFolders.close();
       this.copySync.dispose();
       this.pairing.dispose();
       this.moduleCatalog.stopChecks();

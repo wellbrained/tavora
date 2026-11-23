@@ -42,6 +42,11 @@ describe("host.ts", () => {
     expect(flush).toMatch(/this\.connection\.dispose\(\);\s+(?:\/\/.*\s+)*await Promise\.all\(\[[^\]]*this\.connection\.flush\(\)[^\]]*\]\)/);
   });
 
+  it("closes the development folders' watchers when the window closes", () => {
+    // DevelopmentFolders.close() is tested in development-folders.test.ts; nothing else stops its fs watchers at quit.
+    expect(body(/this\.window\.on\("closed", \(\) => \{/)).toContain("this.developmentFolders.close();");
+  });
+
   // Restarting the panels of a module that changed owner is ModulePanels' (module-panels.test.ts).
   it("gives a panel only the grants of the owner its page runs as", () => {
     // The panel's connectors (its session gates them) are made for the module the page runs as.
