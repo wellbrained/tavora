@@ -7,6 +7,11 @@ export type { PanelOverflow };
 export const MAX_OVERFLOW_PX = 4000;
 /** Elements looked at in one page, so a huge page can't hold the double-click up. */
 const MAX_ELEMENTS = 20000;
+/**
+ * Marks a scrolling part the fit leaves out, with all it holds: a list beside the content, so the panel fits the content
+ * and the list keeps scrolling (e.g. a run list left of the run it opens).
+ */
+export const FIT_IGNORE = '[data-tavora-fit="ignore"]';
 /** A world of its own, so the page's scripts can't change what it reads (0 is the page's, 999 Electron's preload world). */
 const MEASURE_WORLD = 1078;
 /** How long a page waits to get its new size before it measures anyway ("since"). */
@@ -25,7 +30,8 @@ export type OverflowMode = "now" | "since";
  * scrolls, across and down. An element only counts when it shows a scrollbar for it (overflow auto or scroll; for the
  * page, neither html nor body hiding it). "since" first waits (up to RESIZE_WAIT_MS) for the page to get a size other
  * than the one it last measured at, then counts only parts that did not scroll that way at "now": a list that always
- * scrolled is no part that "starts" to scroll. What "now" saw stays in this world's own globals.
+ * scrolled is no part that "starts" to scroll. What "now" saw stays in this world's own globals. A part inside
+ * marked with FIT_IGNORE, or inside one, never counts.
  */
 const measure = (mode: OverflowMode) => `(async () => {
   const since = ${mode === "since"};
@@ -58,7 +64,7 @@ const measure = (mode: OverflowMode) => `(async () => {
     if (el === root) continue;
     const down = el.scrollHeight - el.clientHeight;
     const across = el.scrollWidth - el.clientWidth;
-    if ((down <= 1 && across <= 1) || el.clientHeight === 0 || el.clientWidth === 0) continue;
+    if ((down <= 1 && across <= 1) || el.clientHeight === 0 || el.clientWidth === 0 || el.closest(${JSON.stringify(FIT_IGNORE)})) continue;
     const style = getComputedStyle(el);
     note(el, down > 1 && /auto|scroll/.test(style.overflowY) ? down : 0, across > 1 && /auto|scroll/.test(style.overflowX) ? across : 0);
   }

@@ -313,6 +313,9 @@ The UI Playground (Tavora features > Settings) shows one page, several pages and
 - **Size**: `viewport.minWidth` / `minHeight` in the manifest are the real minimum, and the panel works at exactly that
   size: fixed side columns fold away or become a view switch below it. A separate wide layout uses `viewport.wide` and
   `@media (orientation: landscape)` (each panel is its own page, so media queries measure the panel).
+- **Fit on double-click**: a double-click on the line next to a panel gives it the room its most scrolling part needs.
+  A side list beside the content (runs left of the open run) gets `data-tavora-fit="ignore"` on its scroller, so the
+  panel fits the content and the list keeps scrolling.
 - **Overlays and drop targets** inside a panel use token colours and the kit's radius like everything else.
 - **Overlay pages** (the manifest's `overlay`) change what they show through `watchOverlay`, never by reloading or
   going to another page. In OBS the page may load again only within 30 seconds of OBS loading the source (at most 10

@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({ contents: undefined as unknown }));
 vi.mock("electron", () => ({ webContents: { fromId: () => state.contents } }));
 
-import { MAX_OVERFLOW_PX, checkOverflow, panelOverflow } from "./panel-overflow";
+import { FIT_IGNORE, MAX_OVERFLOW_PX, checkOverflow, panelOverflow } from "./panel-overflow";
 
 describe("checkOverflow", () => {
   it("keeps whole numbers in range", () => {
@@ -62,6 +62,18 @@ describe("panelOverflow", () => {
     sized("hidden", 5000);
     runInPage();
     await expect(panelOverflow(7)).resolves.toEqual({ x: 0, y: 900 });
+  });
+
+  it("leaves out parts marked to be left out, and what they hold", async () => {
+    // A long side list beside a run page: the panel fits the page.
+    const side = sized("auto", 3000);
+    side.dataset.tavoraFit = "ignore";
+    expect(side.matches(FIT_IGNORE)).toBe(true);
+    const inner = sized("auto", 2000);
+    side.append(inner);
+    sized("auto", 500);
+    runInPage();
+    await expect(panelOverflow(7)).resolves.toEqual({ x: 0, y: 200 });
   });
 
   it("after a resize, counts only parts that did not scroll before", async () => {
