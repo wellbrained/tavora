@@ -38,9 +38,12 @@ describe("host.ts", () => {
 
   // Restarting the panels of a module that changed owner is ModulePanels' (module-panels.test.ts).
   it("gives a panel only the grants of the owner its page runs as", () => {
-    const view = body(/private createView\(/);
-    expect(view).toContain("networkHosts: () => this.networkHostsOf(module),");
-    expect(view).toContain("connectors: () => this.connectorsOf(module),");
+    // The panel's connectors (its session gates them) are made for the module the page runs as.
+    expect(body(/private createView\(/)).toContain("connectors: this.panelConnectors(record, module, workspace),");
+    const connectors = body(/private panelConnectors\(/);
+    expect(connectors).toContain("networkHosts: () => this.networkHostsOf(module),");
+    expect(connectors).toContain("connectors: () => this.connectorsOf(module),");
+    expect(connectors).toContain("folders: this.folderHostOf(module),");
     expect(body(/private networkHostsOf\(/)).toContain("sameOwner(module, this.modules)");
     expect(body(/private connectorsOf\(/)).toContain("sameOwner(module, this.modules)");
     expect(body(/private folderHostOf\(/)).toContain("sameOwner(module, this.modules)");
