@@ -292,6 +292,10 @@ export class FolderStorage implements CopyStorage {
     return { version: current.version, base: current.base, sealed: read.sealed, follows: follows(all, known) };
   }
 
+  async *lists(): AsyncGenerator<{ version: number; read: () => Promise<Uint8Array | null> }> {
+    for (const file of await this.manifests()) yield { version: file.version, read: () => this.readManifest(file).then((read) => read.sealed, () => null) };
+  }
+
   async *earlierManifests(): AsyncGenerator<Uint8Array> {
     for (const file of (await this.manifests()).slice(1)) {
       const read = await this.readManifest(file).catch(() => null);

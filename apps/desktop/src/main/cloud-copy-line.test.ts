@@ -9,7 +9,7 @@ import type { CloudCopyView } from "../shared/host-api";
 import { CloudCopy, CopyError, EMPTY_STATE, LINE_LENGTH, openManifest, type CopyState, type CopyStorage, type UploadResult } from "./cloud-copy";
 import { cleanUp, pc } from "./cloud-copy.test-helper";
 import { CopySync } from "./cloud-copy-sync";
-import { copyKeys, lineMark, newCopyKey, open, seal } from "./copy-crypto";
+import { copyKeys, lineMark, manifestMark, newCopyKey, open, seal } from "./copy-crypto";
 import { FolderStorage, type FolderStorageOptions } from "./copy-folder";
 
 const folders: string[] = [];
@@ -93,6 +93,26 @@ async function asOlderTavora(dir: string, key: Uint8Array, version: number): Pro
   await writeFile(file, Buffer.concat([body.subarray(0, start), seal(keys, Buffer.from(JSON.stringify(manifest)))]));
 }
 
+/**
+ * Writes `count` lists as an older Tavora (marks, no line) saves them, each on top of the one before, from `from` up, with
+ * the files of `from`'s list. The newest one's version.
+ */
+async function olderChain(dir: string, key: Uint8Array, from: number, count: number): Promise<number> {
+  const keys = copyKeys(key);
+  const body = await readFile(path.join(manifestsDir(dir), (await nameOf(dir, from))!));
+  const start = HEADER + body.readUInt32BE(12) * 32;
+  const { pictures, files } = JSON.parse(open(keys, body.subarray(start)).toString("utf8")) as { pictures: boolean; files: { path: string; size: number; sha256: string; parts: string[] }[] };
+  let parent = from;
+  for (let n = 0; n < count; n++) {
+    const version = (Math.floor(parent / BLOCK) + 1) * BLOCK + 7;
+    const list: Record<string, unknown> = { v: 1, version, parent, pictures, files };
+    list.mark = manifestMark(keys, JSON.stringify([1, version, null, parent, pictures, files.map((file) => [file.path, file.size, file.sha256, file.parts])]));
+    await writeFile(path.join(manifestsDir(dir), `${pad(version)}-${pad(parent)}.bin`), Buffer.concat([body.subarray(0, start), seal(keys, Buffer.from(JSON.stringify(list)))]));
+    parent = version;
+  }
+  return parent;
+}
+
 /** A state an older Tavora's PC would have: it never saw a line. */
 const neverListed = ({ listed: _listed, ...state }: CopyState): CopyState => state;
 
@@ -100,10 +120,10 @@ const neverListed = ({ listed: _listed, ...state }: CopyState): CopyState => sta
  * Whether a PC that last synced `state` takes the folder's newest copy on its own, as the check at start would
  * (CopySync.fetchNewer): false when it asks ("older").
  */
-async function takes(dir: string, key: Uint8Array, state: CopyState, chosen = false): Promise<boolean> {
+async function takes(dir: string, key: Uint8Array, state: CopyState, chosen = false, lineLength?: number): Promise<boolean> {
   const at = await pc();
   try {
-    await new CloudCopy(new FolderStorage(dir)).download(key, at.roots, path.join(at.root, "staging"), state.version, { ...state, chosen });
+    await new CloudCopy(new FolderStorage(dir), lineLength !== undefined ? { lineLength } : {}).download(key, at.roots, path.join(at.root, "staging"), state.version, { ...state, chosen });
     return true;
   } catch (error) {
     if (error instanceof CopyError && error.reason === "older") return false;
@@ -324,6 +344,71 @@ describe("the line sealed in each folder list", () => {
       await rm(path.join(manifestsDir(dir), (await nameOf(dir, b2.version))!));
       expect(await takes(dir, key, a1)).toBe(false);
       expect(await takes(dir, key, neverListed(a1))).toBe(false);
+    });
+
+    it("follows older Tavoras' saves only as far down as a line goes, and asks beyond", async () => {
+      const key = newCopyKey();
+      const dir = await folder();
+      const a = await pc();
+      const k = await save(new FolderStorage(dir), key, a, EMPTY_STATE, "k");
+      // Nine older saves on top of K: from the newest's parent down, K is the ninth version. A line of nine reaches it, one
+      // of eight doesn't, and the PC is asked, as at the full LINE_LENGTH with 256 and 257.
+      await olderChain(dir, key, k.version, 9);
+      expect(await takes(dir, key, k, false, 9)).toBe(true);
+      expect(await takes(dir, key, k, false, 8)).toBe(false);
+      expect(await takes(dir, key, neverListed(k), false, 8)).toBe(false);
+    });
+
+    it("reads only the lists on the way down, and stops once it is answered", async () => {
+      const key = newCopyKey();
+      const dir = await folder();
+      const a = await pc();
+      const k = await save(new FolderStorage(dir), key, a, EMPTY_STATE, "k");
+      const below = await olderChain(dir, key, k.version, 37);
+      await olderChain(dir, key, below, 3);
+      const proto = FolderStorage.prototype as unknown as { readManifest: (file: unknown) => Promise<unknown> };
+      const original = proto.readManifest;
+      const reads = { count: 0 };
+      proto.readManifest = async function (this: unknown, file: unknown) {
+        reads.count++;
+        return original.call(this, file);
+      };
+      try {
+        // Synced three saves back: the newest, then the two between.
+        expect(await takes(dir, key, { ...k, version: below })).toBe(true);
+        expect(reads.count).toBeLessThanOrEqual(3);
+        // Forty back, past a line of eight: the newest and the eight on the way, and nothing more for a PC that knows lines.
+        reads.count = 0;
+        expect(await takes(dir, key, k, false, 8)).toBe(false);
+        expect(reads.count).toBeLessThanOrEqual(1 + 8);
+      } finally {
+        proto.readManifest = original;
+      }
+    });
+
+    it("R4: an unmarked list (a part shaped like one) where a list of the chain is gone doesn't make a lost save followed", async () => {
+      const key = newCopyKey();
+      const keys = copyKeys(key);
+      const dir = await folder();
+      const a = await pc();
+      const b = await pc();
+      const k = await save(new FolderStorage(dir), key, a, EMPTY_STATE, "k");
+      const b1 = await save(new Numbered(dir, "low"), key, b, k, "b1");
+      const bName = (await nameOf(dir, b1.version))!;
+      const bBody = await readFile(path.join(manifestsDir(dir), bName));
+      await rm(path.join(manifestsDir(dir), bName));
+      const a1 = await save(new Numbered(dir, "high"), key, a, k, "a1");
+      const o1 = await olderChain(dir, key, a1.version, 1);
+      await olderChain(dir, key, o1, 1);
+      await rm(path.join(manifestsDir(dir), (await nameOf(dir, a1.version))!));
+      await rm(path.join(manifestsDir(dir), (await nameOf(dir, k.version))!));
+      await writeFile(path.join(manifestsDir(dir), `${pad(b1.version)}-${pad(k.version)}.bin`), bBody);
+      // In A1's place, a list without a mark saying it was saved on B1: what a part a module shaped like one could say.
+      const start = HEADER + bBody.readUInt32BE(12) * 32;
+      const files = (JSON.parse(open(keys, bBody.subarray(start)).toString("utf8")) as { files: unknown[] }).files;
+      const fake = seal(keys, Buffer.from(JSON.stringify({ v: 1, version: a1.version, parent: b1.version, pictures: true, files })));
+      await writeFile(path.join(manifestsDir(dir), `${pad(a1.version)}-${pad(b1.version)}.bin`), Buffer.concat([bBody.subarray(0, start), fake]));
+      expect(await takes(dir, key, b1)).toBe(false);
     });
 
     it("asks a PC that knows lines when only older Tavoras' lists are left, one renamed", async () => {
