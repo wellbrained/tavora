@@ -325,10 +325,11 @@ export interface CopyStorage {
    */
   manifest(): Promise<{ version: number; base?: number; sealed: Uint8Array } | null>;
   /**
-   * A folder only: the sealed manifests kept besides the current one, newest first, at most `count` (those it can read
-   * now). Asked only when the current one has no mark, to see whether this storage holds marked ones.
+   * A folder only: the sealed manifests kept besides the current one, newest first, all of them (those it can read now;
+   * one it can't is skipped). Asked only when the current one has no mark, to see whether this storage holds marked
+   * ones: whoever can write the folder may put any number of files before them, so there is no cap.
    */
-  earlierManifests?(count: number): Promise<Uint8Array[]>;
+  earlierManifests?(): AsyncIterable<Uint8Array>;
   /** Stores parts it does not have yet. */
   putParts(parts: { id: Buffer; data: Buffer }[]): Promise<void>;
   /** Some of the asked parts, at least one when any of them is there. */
@@ -573,8 +574,10 @@ export class CloudCopy {
 
   /** Whether the storage keeps marked manifests besides the current one (a folder; the service keeps only one). */
   private async holdsMarked(keys: CopyKeys): Promise<boolean> {
-    const earlier = (await this.storage.earlierManifests?.(MARKS_LOOKED_AT)) ?? [];
-    return earlier.some((sealed) => checkWith(keys)(sealed)?.marked === true);
+    if (!this.storage.earlierManifests) return false;
+    // Only one that opens with the key and has a right mark counts; the first ends the look.
+    for await (const sealed of this.storage.earlierManifests()) if (checkWith(keys)(sealed)?.marked === true) return true;
+    return false;
   }
 
   /**
@@ -666,8 +669,6 @@ export class CloudCopy {
   }
 }
 
-/** How many manifests besides the current one are looked at for a mark. */
-const MARKS_LOOKED_AT = 10;
 /** Writes a file from its parts, one part in memory at a time, and checks it against the copy's list. */
 async function joinParts(partsDir: string, file: { size: number; sha256: string; parts: string[] }, target: string): Promise<void> {
   const hash = createHash("sha256");

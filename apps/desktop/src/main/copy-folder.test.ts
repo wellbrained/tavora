@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { cp, mkdtemp, readdir, readFile, rename, rm, symlink, truncate, utimes, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, readdir, readFile, rename, rm, stat, symlink, truncate, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -8,7 +8,7 @@ import type { CloudCopyView } from "../shared/host-api";
 import { CloudCopy, EMPTY_STATE, swapInCopy } from "./cloud-copy";
 import { cleanUp, pc } from "./cloud-copy.test-helper";
 import { CopySync } from "./cloud-copy-sync";
-import { copyKeys, newCopyKey, partId, seal } from "./copy-crypto";
+import { copyKeys, newCopyKey, open, partId, seal } from "./copy-crypto";
 import { FolderStorage, follows, MAX_MANIFEST_FILE, MAX_PART_FILE } from "./copy-folder";
 
 const folders: string[] = [];
@@ -193,7 +193,15 @@ describe("following a copy's line", () => {
     expect(follows(line, 21)).toBe(false);
   });
   it("can't tell about a save that is cleaned up already, and doesn't ask then", () => {
-    expect(follows(line, 5)).toBe(true);
+    // 10 and older are cleaned up: the line breaks off above 5.
+    expect(follows(line.slice(0, 3), 5)).toBe(true);
+  });
+  it("tells a save the line went below without reaching it, also when that save's own manifest is gone", () => {
+    // The line reaches 0 and never passes 5: 5 isn't in it, whether or not its manifest is there.
+    expect(follows(line, 5)).toBe(false);
+    expect(follows([...line, { version: 5, base: 0 }].sort((a, b) => b.version - a.version), 5)).toBe(false);
+    // Saved on top of 10, then gone (the folder was put back); another PC saved on top of 10 since.
+    expect(follows([{ version: 40, base: 10 }, { version: 10, base: 0 }], 25)).toBe(false);
   });
 });
 
@@ -389,12 +397,61 @@ describe("what anyone who can write the folder can do", () => {
     const second = await new CloudCopy(new FolderStorage(onedrive)).upload(key, a.roots, first.state);
     if (second.status !== "uploaded") throw new Error(second.status);
     await rm(path.join(onedrive, "Tavora", "manifests", `${pad(second.state.version)}-${pad(first.state.version)}.bin`));
-    // Its own manifest is gone, so the folder can't tell it was left behind; the version still can.
-    expect(await new FolderStorage(onedrive).remote(second.state.version)).toMatchObject({ version: first.state.version, follows: true });
+    // Its own manifest is gone, but the line goes below it without reaching it: left behind, so the user is asked.
+    expect(await new FolderStorage(onedrive).remote(second.state.version)).toMatchObject({ version: first.state.version, follows: false });
     const b = await pc();
     const staging = path.join(b.root, "staging");
     await expect(new CloudCopy(new FolderStorage(onedrive)).download(key, b.roots, staging, second.state.version, second.state)).rejects.toMatchObject({ reason: "older" });
     expect(await new CloudCopy(new FolderStorage(onedrive)).download(key, b.roots, staging, 0, { ...second.state, chosen: true })).toMatchObject({ version: first.state.version });
+  });
+
+  it("asks when the folder was put back and another PC saved since, once or twice", async () => {
+    for (const saves of [1, 2]) {
+      const key = newCopyKey();
+      const onedrive = await folder();
+      const a = await pc({ "library.json": "v1" });
+      const first = await new CloudCopy(new FolderStorage(onedrive)).upload(key, a.roots, EMPTY_STATE);
+      if (first.status !== "uploaded") throw new Error(first.status);
+      await writeFile(path.join(a.userData, "library.json"), "v2");
+      const second = await new CloudCopy(new FolderStorage(onedrive)).upload(key, a.roots, first.state);
+      if (second.status !== "uploaded") throw new Error(second.status);
+      // OneDrive goes back a day: A's save is gone. PC C, still at the first version, saves on.
+      await rm(path.join(onedrive, "Tavora", "manifests", `${pad(second.state.version)}-${pad(first.state.version)}.bin`));
+      const c = await pc({ "library.json": "c1" });
+      let state = first.state;
+      for (let round = 1; round <= saves; round++) {
+        await writeFile(path.join(c.userData, "library.json"), `c${round}`);
+        const up = await new CloudCopy(new FolderStorage(onedrive)).upload(key, c.roots, state);
+        if (up.status !== "uploaded") throw new Error(up.status);
+        state = up.state;
+      }
+      // A's save isn't in the copy's line: A asks (CopySync.fetchNewer), whether C's number is above A's or not.
+      expect(await new FolderStorage(onedrive).remote(second.state.version)).toMatchObject({ version: state.version, follows: false });
+    }
+  });
+
+  it("finds the marked manifests behind any number of files put before them", async () => {
+    for (const filler of ["junk", "copies"] as const) {
+      const key = newCopyKey();
+      const keys = copyKeys(key);
+      const onedrive = await folder();
+      const version = 9_000_000_000_000;
+      const forged = JSON.stringify({ v: 1, version, pictures: true, files: [] });
+      const a = await pc({ "library.json": "mine", "module-data/m/g/storage.json": forged });
+      const up = await new CloudCopy(new FolderStorage(onedrive)).upload(key, a.roots, EMPTY_STATE);
+      if (up.status !== "uploaded") throw new Error(up.status);
+      const id = partId(keys, Buffer.from(forged)).toString("hex");
+      const header = Buffer.alloc(16);
+      header.write("TVC1");
+      const planted = Buffer.concat([header, await readFile(path.join(onedrive, "Tavora", "parts", id.slice(0, 2), id))]);
+      const dir = path.join(onedrive, "Tavora", "manifests");
+      await writeFile(path.join(dir, `${pad(version)}-${pad(up.state.version)}.bin`), planted);
+      // Ten files between it and the real one: without the key, or the same part again (it opens, and has no mark).
+      for (let n = 1; n <= 10; n++) await writeFile(path.join(dir, `${pad(version - n)}-${pad(up.state.version)}.bin`), filler === "junk" ? "junk" : planted);
+      // A PC that synced before, with an older Tavora (it never saw a mark), and changed nothing: asked, not taken.
+      const b = await pc();
+      await expect(new CloudCopy(new FolderStorage(onedrive)).download(key, b.roots, path.join(b.root, "staging"), up.state.version, { sealed: true })).rejects.toMatchObject({ reason: "older" });
+    }
   });
 
   it("can't rename a manifest to say it was saved on top of another version", async () => {
@@ -567,14 +624,40 @@ describe("what anyone who can write the folder can do", () => {
     expect(await partFiles(onedrive)).toHaveLength(7);
   });
 
-  it("goes on past a manifest it can't read that is older than any it keeps, and leaves that one alone", async () => {
+  it("goes on past a manifest it can't read that is older than any it keeps, and removes it", async () => {
     const { onedrive, clock, saveAgain } = await sixOldSaves();
+    const then = new Date(clock.now - 35 * DAY);
+    // Junk, and a list sealed with the key from before Start over: no PC opens either.
     const junk = path.join(onedrive, "Tavora", "manifests", `${pad(1)}-${pad(0)}.bin`);
     await writeFile(junk, "not a manifest");
-    await utimes(junk, new Date(clock.now - 35 * DAY), new Date(clock.now - 35 * DAY));
+    const header = Buffer.alloc(16);
+    header.write("TVC1");
+    const oldKey = path.join(onedrive, "Tavora", "manifests", `${pad(2)}-${pad(1)}.bin`);
+    await writeFile(oldKey, Buffer.concat([header, seal(copyKeys(newCopyKey()), Buffer.from(JSON.stringify({ v: 1, version: 2, pictures: true, files: [] })))]));
+    for (const file of [junk, oldKey]) await utimes(file, then, then);
     await saveAgain();
-    expect(await manifests(onedrive)).toHaveLength(6);
-    expect(await manifests(onedrive)).toContain(`${pad(1)}-${pad(0)}.bin`);
+    expect(await manifests(onedrive)).toHaveLength(5);
+    expect(await partFiles(onedrive)).toHaveLength(5);
+  });
+
+  it("removes a manifest no PC opens that was planted above every real one, once it is a month old", async () => {
+    const { key, onedrive, clock, storage, a, state } = await sixOldSaves();
+    const then = new Date(clock.now - 35 * DAY);
+    const header = Buffer.alloc(16);
+    header.write("TVC1");
+    const top = 9_000_000_000_000;
+    const junk = path.join(onedrive, "Tavora", "manifests", `${pad(top)}-${pad(state.version)}.bin`);
+    await writeFile(junk, "not a manifest");
+    const oldKey = path.join(onedrive, "Tavora", "manifests", `${pad(top + 1)}-${pad(top)}.bin`);
+    await writeFile(oldKey, Buffer.concat([header, seal(copyKeys(newCopyKey()), Buffer.from(JSON.stringify({ v: 1, version: top + 1, pictures: true, files: [] })))]));
+    for (const file of [junk, oldKey]) await utimes(file, then, then);
+    // The user kept this PC's side over it (the copy's version then is the planted one): the save goes on top.
+    await writeFile(path.join(a.userData, "library.json"), "v7");
+    const up = await new CloudCopy(storage).upload(key, a.roots, { ...state, version: top + 1 });
+    if (up.status !== "uploaded") throw new Error(up.status);
+    expect(await manifests(onedrive)).toHaveLength(5);
+    expect(await manifests(onedrive)).not.toContain(path.basename(junk));
+    expect(await manifests(onedrive)).not.toContain(path.basename(oldKey));
     expect(await partFiles(onedrive)).toHaveLength(5);
   });
 
@@ -611,6 +694,30 @@ describe("what anyone who can write the folder can do", () => {
     expect(up).toMatchObject({ status: "uploaded" });
     expect(await manifests(onedrive)).toContain(`${pad(first.state.version)}-${pad(0)}.bin`);
     expect(await manifests(onedrive)).toHaveLength(7);
+  });
+
+  it("writes a part used again anew once it is over a day old, so every sync app brings its new time", async () => {
+    const key = newCopyKey();
+    const keys = copyKeys(key);
+    const onedrive = await folder();
+    const clock = { now: Date.now() };
+    const storage = new FolderStorage(onedrive, { now: () => clock.now });
+    const content = Buffer.from("same");
+    const id = partId(keys, content);
+    const file = path.join(onedrive, "Tavora", "parts", id.toString("hex").slice(0, 2), id.toString("hex"));
+    await storage.putParts([{ id, data: seal(keys, content) }]);
+    const written = await stat(file);
+    // Within a day: only touched.
+    clock.now += 60 * 60_000;
+    await storage.putParts([{ id, data: seal(keys, content) }]);
+    expect((await stat(file)).ino).toBe(written.ino);
+    // Two days on: written again, and it still opens as the same part.
+    clock.now += 2 * DAY;
+    await utimes(file, new Date(clock.now - 2 * DAY), new Date(clock.now - 2 * DAY));
+    await storage.putParts([{ id, data: seal(keys, content) }]);
+    expect((await stat(file)).ino).not.toBe(written.ino);
+    const [again] = await storage.getParts([id.toString("hex")]);
+    expect(open(keys, again!.data).equals(content)).toBe(true);
   });
 
   it("keeps a part a PC used again, though no manifest the clean-up sees uses it yet", async () => {
