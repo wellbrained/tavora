@@ -94,7 +94,7 @@ export interface PanelSessionOptions extends Omit<PanelGateOptions, "module" | "
   pickReadOnly?(request: LinkFileRequest): Promise<string[]>;
   /** Where a pick with no file to start next to opens first: the game the panel's workspace is for (save-dialog-folder.ts). */
   pickGame(): string;
-  /** The files this panel's module linked in this workspace (read-only-files.ts), as the module installed now. */
+  /** The files this panel's module linked in this workspace (read-only-files.ts), for the module this view was made for (a reload keeps its owner and id). */
   readOnlyFiles(): ReadOnlyFiles;
   /** Shows a file in the system's file manager, selected; nothing is opened or launched. */
   showItemInFolder(path: string): void;
