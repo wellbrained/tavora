@@ -115,6 +115,20 @@ describe("refused folders", () => {
   });
 });
 
+describe("a folder the user picks by its 8.3 short name", () => {
+  // The short-name refusal is for paths a module passes in; a folder the user chose is resolved to its long name.
+  it.runIf(process.platform === "win32")("is read under its long name", async () => {
+    const long = path.join(places.roots.Documents, "Long Game Folder");
+    await mkdir(long, { recursive: true });
+    const short = execSync(`cmd /c for %I in ("${long}") do @echo %~sI`, { encoding: "utf8" }).trim();
+    // 8.3 names can be turned off for a drive; then there is nothing to check.
+    if (short.toLowerCase() === long.toLowerCase() || !short.includes("~")) return;
+    const chosen = new ChosenFolders(places.userData, "local", "local.game");
+    await chosen.set(replays.path, short);
+    expect(await findFolder(replays, chosen, places)).toBe(realpathSync.native(long));
+  });
+});
+
 describe("AppData\\LocalLow", () => {
   const settings: FolderAccess = { path: "AppData/LocalLow/SadSocket/9Kings", read: ["json"] };
   const lowOf = (...names: string[]) => path.join(places.roots["AppData/LocalLow"], ...names);
