@@ -204,6 +204,27 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
 
+  # The same unit tests as `check`, on Windows, where the app ships: path separators, line endings and file locking
+  # made tests fail only there (tavora-update-signature.test.ts until #917). No build, no Electron, no e2e. The suite is
+  # split over 4 runners (vitest --shard); each one's name is a required check, like `check`.
+  unit-windows:
+    name: unit (windows ${{ matrix.shard }}/4)
+    runs-on: windows-2025
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test --shard=${{ matrix.shard }}/4
+
   # e2e runs Tavora unpackaged, so code that only runs packaged was never started before a
   # release (0.17.3 quit on every start). This builds the real installer, installs it the way
   # a user does and passes only once the installed Tavora shows its window. `pnpm release`
