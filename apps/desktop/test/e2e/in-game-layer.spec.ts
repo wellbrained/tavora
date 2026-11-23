@@ -59,12 +59,19 @@ async function spy(app: ElectronApplication): Promise<void> {
   });
 }
 
-const spied = <T>(app: ElectronApplication, read: (seen: Spy) => T): Promise<T> =>
-  app.evaluate((_electron, source) => new Function("seen", `return (${source})(seen)`)((globalThis as unknown as { __layerSpy: Spy }).__layerSpy), read.toString()) as Promise<T>;
+/** What the spy saw so far, as plain data (the keys by name); the test picks from it here, not in the main process. */
+type Seen = Omit<Spy, "keys"> & { keys: string[] };
+async function spied<T>(app: ElectronApplication, read: (seen: Seen) => T): Promise<T> {
+  const seen = await app.evaluate(() => {
+    const { keys, ...rest } = (globalThis as unknown as { __layerSpy: Spy }).__layerSpy;
+    return { ...rest, keys: [...keys.keys()] };
+  });
+  return read(seen);
+}
 
 /** The layer key, as the system would call it. */
 async function pressKey(app: ElectronApplication): Promise<void> {
-  await expect.poll(() => spied(app, (seen) => [...seen.keys.keys()])).toContain(KEY);
+  await expect.poll(() => spied(app, (seen) => seen.keys)).toContain(KEY);
   await app.evaluate((_electron, key) => (globalThis as unknown as { __layerSpy: Spy }).__layerSpy.keys.get(key)!(), KEY);
 }
 
@@ -173,8 +180,8 @@ for (let run = 1; run <= 10; run++) test(`the in-game layer over a game in front
     const openedAt = await app.evaluate(() => Date.now());
     await pressKey(app);
     await expect.poll(async () => (await scene(app)).panel?.visible).toBe(true);
-    const window = (await scene(app)).panel!.id;
-    await expect.poll(() => spied(app, (seen) => seen.mouse.filter((one) => one.id === window).at(-1)?.ignore)).toBe(false);
+    const panelWindow = (await scene(app)).panel!.id;
+    await expect.poll(() => spied(app, (seen) => seen.mouse.filter((one) => one.id === panelWindow).at(-1)?.ignore)).toBe(false);
     const use = (await scene(app)).panel!;
     expect(use.frame.visible).toBe(false);
     expect(use.focusable).toBe(true);
@@ -185,7 +192,7 @@ for (let run = 1; run <= 10; run++) test(`the in-game layer over a game in front
     const over = heard.find((one) => one.over && one.at >= openedAt);
     expect(over).toBeDefined();
     const tookMouse = await spied(app, (seen) => seen.mouse.filter((one) => !one.ignore));
-    expect(tookMouse.find((one) => one.id === window)!.at).toBeGreaterThan(over!.at);
+    expect(tookMouse.find((one) => one.id === panelWindow)!.at).toBeGreaterThan(over!.at);
     // A click counts in the panel, and its live view, still on screen behind it, follows.
     await realClick(app, ID, '[data-testid="count-up"]');
     await expect.poll(() => inModule<string>(app, ID, `document.querySelector('[data-testid="count"]').textContent`)).toBe("1");
@@ -204,13 +211,13 @@ for (let run = 1; run <= 10; run++) test(`the in-game layer over a game in front
     await (await cardPage(app)).getByTestId("layer-mode-arrange").click();
     await expect.poll(async () => (await scene(app)).panel?.frame.visible).toBe(true);
     const arrange = (await scene(app)).panel!;
-    expect(arrange.id).toBe(window);
+    expect(arrange.id).toBe(panelWindow);
     expect(arrange.frame.onTop).toBe(true);
     expect(contains(arrange.frame.bounds, arrange.view.bounds)).toBe(true);
     // The window keeps the keyboard it may have: made unfocusable, it handed the keyboard to another program, which ended the layer.
     expect(arrange.focusable).toBe(true);
     await staysFor(app, 1600, (now) => {
-      expect(now.panel?.id).toBe(window);
+      expect(now.panel?.id).toBe(panelWindow);
       expect(now.panel?.frame.visible).toBe(true);
       expect(now.card?.visible).toBe(true);
       expect(now.live?.visible).toBe(true);
