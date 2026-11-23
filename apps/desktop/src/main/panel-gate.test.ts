@@ -99,17 +99,18 @@ describe("the gate's table", () => {
   });
 
   it("sends each connector's events only under the grant they were sent under before, to the live page", () => {
-    // The connectors' events go through the gate (`send`, or the aiUsage grant for the accounts' change); read from module-view.ts.
-    const source = readFileSync(path.join(import.meta.dirname, "module-view.ts"), "utf8").replace(/\r\n/g, "\n");
+    // The connectors' events go through the gate (`send`, or the aiUsage grant for the accounts' change); read from the
+    // panel's session, which keeps the watches, and module-view.ts.
+    const source = ["panel-session.ts", "module-view.ts"].map((file) => readFileSync(path.join(import.meta.dirname, file), "utf8").replace(/\r\n/g, "\n")).join("\n");
     const lines = source.split("\n");
     const events: Record<string, { grant: string; livePageOnly: boolean; stopsWatch: boolean }> = {};
     for (const line of lines) {
-      for (const m of line.matchAll(/(if \(!)?this\.gate\.send\(bridge\(\), "(\w+)", "([\w.]+)"/g)) events[m[3]!] = { grant: m[2]!, livePageOnly: true, stopsWatch: m[1] !== undefined && /\) this\.stop\w+\(\);$/.test(line) };
+      for (const m of line.matchAll(/(if \(!)?this\.gate\.send\((?:bridge|page)\(\), "(\w+)", "([\w.]+)"/g)) events[m[3]!] = { grant: m[2]!, livePageOnly: true, stopsWatch: m[1] !== undefined && /\) this\.stop\w+\(\);$/.test(line) };
       const any = line.match(/this\.gate\.granted\(\)\.has\("(\w+)"\)\) this\.bridge\?\.emit\("([\w.]+)"/);
       if (any) events[any[2]!] = { grant: any[1]!, livePageOnly: false, stopsWatch: false };
     }
     // And no connector event is sent past the gate.
-    expect(source).not.toMatch(/bridge\(\)\.emit\(/);
+    expect(source).not.toMatch(/(?:bridge|page)\(\)\.emit\(/);
     expect(Object.fromEntries(Object.keys(events).sort().map((key) => [key, events[key]]))).toEqual(EVENTS_BEFORE);
   });
 });

@@ -1,7 +1,5 @@
-import { ReadOnlyFiles } from './read-only-files';
 import { ChosenFolders, folderHost, type FolderHost, type FolderPlaces } from './folder-access';
 import { showInBackground, windowLook, type WindowStart } from "./background-window";
-import { saveDialogDirectory } from './save-dialog-folder';
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import os from "node:os";
@@ -42,6 +40,7 @@ import { WorkspaceLibrary } from "./workspace-library";
 import { PanelDialogs } from "./panel-dialogs";
 import { ConnectorQuestions } from "./panel-gate";
 import { PanelQuestions } from "./panel-questions";
+import type { PanelConnectors } from "./panel-session";
 import { UserProfile } from "./user-profile";
 import { ModuleBoards } from "./module-boards";
 import { buildReport, errorLog, timings } from "./diagnostics";
@@ -3003,14 +3002,13 @@ export class Host {
         this.pushState();
       },
       showMenu: (menu) => this.panelDialogs.showMenu(record.instanceId, menu),
-      // Remembered by who publishes the module and its id, as its patch notes are.
-      ...this.fileDialogs.forModule(`${module.owner}:${module.manifest.id}`),
-      pickReadOnlyFile: async (extensions, multiple, near) => {
-        const files=new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,workspace.id);
-        const defaultPath=(near ? await files.directoryNear(near.file,near.up ?? 0) : undefined) ?? await saveDialogDirectory(files,this.library.workspaces[workspace.id]?.catalogId ?? workspace.id);
-        const picked = await dialog.showOpenDialog(this.window, {...(defaultPath?{defaultPath}:{}),title:this.language.startsWith('de')?'Datei mit '+this.shown(module.manifest).name+' verknüpfen':'Link a file to '+this.shown(module.manifest).name,buttonLabel:this.language.startsWith('de')?'Datei verknüpfen':'Link file',properties:multiple?['openFile','multiSelections']:['openFile'],filters:[{name:this.language.startsWith('de')?'Datei auswählen':'Choose a file',extensions}]});
-        return picked.canceled ? [] : multiple ? picked.filePaths : picked.filePaths.slice(0,1);
+      files: {
+        // Remembered by who publishes the module and its id, as its patch notes are.
+        ...this.fileDialogs.forModule(`${module.owner}:${module.manifest.id}`),
+        pickReadOnly: (request) => this.fileDialogs.pickReadOnly(this.shown(module.manifest).name, request),
       },
+      // A pick of files to link with nothing to start next to opens where the workspace's game keeps its files.
+      pickGame: () => this.library.workspaces[workspace.id]?.catalogId ?? workspace.id,
       tooltip:{show:request=>this.tooltips.show(record.instanceId,request),move:anchor=>this.tooltips.move(record.instanceId,anchor.id,anchor.at,anchor.box),close:(id,hoverOnly,linger)=>this.tooltips.close(record.instanceId,id,hoverOnly,linger),defineSkin:(name,skin)=>this.tooltips.defineSkin(record.moduleId,module.root,name,skin)},
       launch: () => this.launchOf(record),
       mayWelcome: () => this.panels.takeWelcome(record.instanceId),
@@ -3022,32 +3020,9 @@ export class Host {
       setMaximized: (maximized) => this.window.webContents.send("host:shortcut", `${maximized ? "maximize" : "restore"}:${record.instanceId}`),
       setDialog: (open, size, how) => (open ? this.panelDialogs.open(record.instanceId, module, size, how?.byClick ?? true) : this.panelDialogs.close(record.instanceId)),
       setDialogTitle: (title) => this.panelDialogs.setTitle(record.instanceId, title),
-      // The grants of the owner this page runs as: a copy of another owner installed under the same id later has its own.
-      networkHosts: () => this.networkHostsOf(module),
-      connectors: () => this.connectorsOf(module),
-      folders: this.folderHostOf(module),
       appSettings: this.data.appSettings(module.owner, module.manifest.id),
       appBlobs: this.data.appBlobs(module.owner, module.manifest.id),
-      leaderboards: this.moduleBoards.of(module, (question) => this.panelQuestions.askLeaderboard(record.instanceId, record.moduleId, question)),
-      aiUsage: { accounts: () => this.aiUsage.accountInfos(), read: (accountId) => this.aiUsage.read(accountId) },
-      discord: this.discord,
-      systemInfo: this.systemInfo,
-      connection: this.connection,
-      media: this.media,
-      overlay: {
-        ...this.streaming.overlayFor(module, workspace.id),
-        showOverGame: (key) => this.gameOverlays.show(module, workspace.id, key),
-        hideOverGame: (key) => this.gameOverlays.hide(module, workspace.id, key),
-        overGame: () => this.gameOverlays.keysOf(module, workspace.id),
-        setSources: (sources) => this.gameOverlays.setSources(record.instanceId, module.owner, sources, { moduleId: module.manifest.id, workspaceId: workspace.id }),
-        preview: async (key) => this.previews.show({ owner: module.owner, moduleId: module.manifest.id, workspaceId: workspace.id, key }),
-        openPage: () => {
-          this.panelDialogs.close(record.instanceId);
-          this.showOverlayPage(null);
-        },
-      },
-      hotkeys: this.streaming.hotkeysFor(module, workspace.id),
-      ...(this.options.testNetworkHosts ? { testHosts: this.options.testNetworkHosts } : {}),
+      connectors: this.panelConnectors(record, module, workspace),
       onStatus: (status) => {
         if (!measured && status === "ready") {
           measured = true;
@@ -3070,6 +3045,39 @@ export class Host {
         this.window.contentView.addChildView(view.view);
       },
     }));
+  }
+
+  /**
+   * The connectors of `module` as one of its panels in `workspace` uses them; the panel's session gates them
+   * (panel-session.ts). The grants are those of the owner this page runs as: a copy of another owner installed under
+   * the same id later has its own.
+   */
+  private panelConnectors(record: InstanceRecord, module: InstalledModule, workspace: TavoraWorkspace): PanelConnectors {
+    return {
+      networkHosts: () => this.networkHostsOf(module),
+      connectors: () => this.connectorsOf(module),
+      folders: this.folderHostOf(module),
+      leaderboards: this.moduleBoards.of(module, (question) => this.panelQuestions.askLeaderboard(record.instanceId, record.moduleId, question)),
+      aiUsage: { accounts: () => this.aiUsage.accountInfos(), read: (accountId) => this.aiUsage.read(accountId) },
+      discord: this.discord,
+      systemInfo: this.systemInfo,
+      connection: this.connection,
+      media: this.media,
+      overlay: {
+        ...this.streaming.overlayFor(module, workspace.id),
+        showOverGame: (key) => this.gameOverlays.show(module, workspace.id, key),
+        hideOverGame: (key) => this.gameOverlays.hide(module, workspace.id, key),
+        overGame: () => this.gameOverlays.keysOf(module, workspace.id),
+        setSources: (sources) => this.gameOverlays.setSources(record.instanceId, module.owner, sources, { moduleId: module.manifest.id, workspaceId: workspace.id }),
+        preview: async (key) => this.previews.show({ owner: module.owner, moduleId: module.manifest.id, workspaceId: workspace.id, key }),
+        openPage: () => {
+          this.panelDialogs.close(record.instanceId);
+          this.showOverlayPage(null);
+        },
+      },
+      hotkeys: this.streaming.hotkeysFor(module, workspace.id),
+      ...(this.options.testNetworkHosts ? { testHosts: this.options.testNetworkHosts } : {}),
+    };
   }
 
   /**
@@ -3260,14 +3268,7 @@ export class Host {
       allowed,
       chosen: new ChosenFolders(app.getPath("userData"), module.owner, module.manifest.id),
       places: () => this.folderPlaces(),
-      pick: async (start, entry) => {
-        const picked = await dialog.showOpenDialog(this.window, {
-          ...(start ? { defaultPath: start } : {}),
-          title: translate(this.language, "dialog.chooseFolder", { name: this.shown(module.manifest).name, folder: entry.path.split("/").join(path.sep) }),
-          properties: ["openDirectory"],
-        });
-        return picked.canceled ? undefined : picked.filePaths[0];
-      },
+      pick: (start, entry) => this.fileDialogs.pickFolder(this.shown(module.manifest).name, entry.path, start),
       refused: () => {
         this.notice = translate(this.language, "folders.refused");
         this.pushState();

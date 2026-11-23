@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { OpenDialogOptions, SaveDialogOptions } from "electron";
 import { describe, expect, it, vi } from "vitest";
-import type { Language } from "../shared/i18n";
+import { translate, type Language } from "../shared/i18n";
 import { HostError } from "./errors";
 import { FileDialogs } from "./file-dialogs";
 import type { Library } from "./library";
@@ -218,5 +218,48 @@ describe("FileDialogs for Tavora's own files", () => {
     answer(null);
     await dialogs.openKeyFile(used);
     expect(used).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("a module's pickers (files.pickReadOnly, folders.choose)", () => {
+  /** File dialogs whose open dialog answers `paths` (null: closed), noting what it was asked. */
+  function pickers(language: Language, paths: string[] | null) {
+    const asked: OpenDialogOptions[] = [];
+    const dialogs = new FileDialogs({
+      dialogs: {
+        open: async (options) => (asked.push(options), paths === null ? { canceled: true, filePaths: [] } : { canceled: false, filePaths: paths }),
+        save: async () => ({ canceled: true, filePath: "" }),
+      },
+      library: { dialogFolders: {}, moduleFolders: {} },
+      saveLibrary: () => undefined,
+      language: () => language,
+      documents: () => "/nowhere",
+      pictures: () => "/nowhere",
+    });
+    return { dialogs, asked };
+  }
+
+  it("links files with a dialog named for the module, where it was told to start, one file unless several are asked for", async () => {
+    const one = pickers("en", ["/saves/a.sav", "/saves/b.sav"]);
+    expect(await one.dialogs.pickReadOnly("Planner", { extensions: ["sav"], multiple: false, start: "/saves" })).toEqual(["/saves/a.sav"]);
+    expect(one.asked).toEqual([{ defaultPath: "/saves", title: "Link a file to Planner", buttonLabel: "Link file", properties: ["openFile"], filters: [{ name: "Choose a file", extensions: ["sav"] }] }]);
+
+    const several = pickers("de", ["/saves/a.sav", "/saves/b.sav"]);
+    expect(await several.dialogs.pickReadOnly("Planer", { extensions: ["sav", "json"], multiple: true })).toEqual(["/saves/a.sav", "/saves/b.sav"]);
+    expect(several.asked).toEqual([{ title: "Datei mit Planer verknüpfen", buttonLabel: "Datei verknüpfen", properties: ["openFile", "multiSelections"], filters: [{ name: "Datei auswählen", extensions: ["sav", "json"] }] }]);
+
+    expect(await pickers("en", null).dialogs.pickReadOnly("Planner", { extensions: ["sav"], multiple: true })).toEqual([]);
+  });
+
+  it("chooses a module's folder with a dialog that names the module and the folder, starting where it was told", async () => {
+    const { dialogs, asked } = pickers("en", ["/home/me/Documents/My Game"]);
+    expect(await dialogs.pickFolder("Planner", "Documents/My Game", "/home/me/Documents")).toBe("/home/me/Documents/My Game");
+    expect(await dialogs.pickFolder("Planner", "Documents/My Game", undefined)).toBe("/home/me/Documents/My Game");
+    const title = translate("en", "dialog.chooseFolder", { name: "Planner", folder: ["Documents", "My Game"].join(path.sep) });
+    expect(asked).toEqual([
+      { defaultPath: "/home/me/Documents", title, properties: ["openDirectory"] },
+      { title, properties: ["openDirectory"] },
+    ]);
+    expect(await pickers("en", null).dialogs.pickFolder("Planner", "Documents/My Game", undefined)).toBeUndefined();
   });
 });

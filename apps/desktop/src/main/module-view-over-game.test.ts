@@ -93,8 +93,12 @@ const { BLOB_PATH, CLIPBOARD_PATH, FILE_OPEN_PATH, FILE_SAVE_PATH, JSON_EXPORT_P
 /** How the window holding a panel says it is over the game: taking input or not, faded and zoomed as `look` says. */
 const over = (takesInput: boolean, look: Partial<OverGame> = {}): OverGame => ({ takesInput, opacity: 100, zoom: 1, ...look });
 
+/** What ModuleViewOptions groups: the connectors the session gates, and Tavora's dialogs. A test names them flat. */
+const CONNECTOR_KEYS = new Set(["networkHosts", "connectors", "folders", "aiUsage", "leaderboards", "systemInfo", "connection", "media", "discord", "overlay", "hotkeys", "testHosts"]);
+const FILE_KEYS = new Set(["savePicture", "saveJson", "openJson", "saveFile", "openFile", "pickReadOnly"]);
+
 function make(extra: Record<string, unknown> = {}) {
-  const options = {
+  const flat: Record<string, unknown> = {
     instanceId: "11111111-1111-4111-8111-111111111111",
     module: { owner: "official", root: "/nowhere", provenance: "official", manifest: { id: "tavora.todos", entry: "dist/index.html", permissions: {} } },
     panelType: null,
@@ -107,9 +111,17 @@ function make(extra: Record<string, unknown> = {}) {
     openJson: async () => null,
     saveFile: async () => null,
     openFile: async () => null,
+    pickReadOnly: async () => [],
+    pickGame: () => "elden",
     discord: { release: () => undefined },
     ...extra,
   };
+  const options: Record<string, unknown> = { connectors: {}, files: {} };
+  for (const [key, value] of Object.entries(flat)) {
+    const group = CONNECTOR_KEYS.has(key) ? "connectors" : FILE_KEYS.has(key) ? "files" : null;
+    if (group) (options[group] as Record<string, unknown>)[key] = value;
+    else options[key] = value;
+  }
   return new ModuleView(options as never);
 }
 
@@ -346,9 +358,10 @@ describe("folders.showInFolder", () => {
   it("shows nothing once the grant is taken back while the folder was looked at", async () => {
     let granted = true;
     const { view, show } = folderView({ path: "/docs/a.SC2Replay", kind: "file" });
-    (view as unknown as { options: { folders: { granted(): boolean; reveal(): Promise<Target> } } }).options.folders.granted = () => granted;
-    const reveal = (view as unknown as { options: { folders: { reveal(): Promise<Target> } } }).options.folders.reveal;
-    (view as unknown as { options: { folders: { reveal(): Promise<Target> } } }).options.folders.reveal = async () => ((granted = false), reveal());
+    const folders = (view as unknown as { options: { connectors: { folders: { granted(): boolean; reveal(): Promise<Target> } } } }).options.connectors.folders;
+    folders.granted = () => granted;
+    const reveal = folders.reveal;
+    folders.reveal = async () => ((granted = false), reveal());
     view.noteGesture();
     await show();
     expect(shell.showItemInFolder).not.toHaveBeenCalled();
@@ -806,7 +819,7 @@ describe("guarded calls", () => {
     setDialog: vi.fn(),
     leaderboardsShow: vi.fn(async () => true),
     leaderboardsHide: vi.fn(async () => true),
-    pickReadOnlyFile: vi.fn(async () => []),
+    pickReadOnly: vi.fn(async () => []),
     showMenu: vi.fn(async () => null),
     copyLink: vi.fn(async () => "copied"),
     showOverGame: vi.fn(async () => true),
@@ -872,7 +885,7 @@ describe("guarded calls", () => {
       setMaximized: spies.setMaximized,
       setDialog: spies.setDialog,
       leaderboards: { status: async () => null, show: spies.leaderboardsShow, hide: spies.leaderboardsHide },
-      pickReadOnlyFile: spies.pickReadOnlyFile,
+      pickReadOnly: spies.pickReadOnly,
       showMenu: spies.showMenu,
       overlay: { copyLink: spies.copyLink, copyNeedsWindow: () => true, showOverGame: spies.showOverGame, preview: spies.preview, openPage: spies.openPage },
       hotkeys: { list: () => [], set: spies.setHotkey, remove: () => undefined },

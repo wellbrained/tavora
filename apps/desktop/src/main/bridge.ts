@@ -109,7 +109,8 @@ export interface BridgeContext {
     choose(folder: string): Promise<boolean>;
     showInFolder(folder: string, path: string): Promise<void>;
   };
-  readOnlyFiles?: {
+  /** Files the user linked to the module (files.pickReadOnly), as the panel's session keeps them (panel-session.ts). */
+  readOnlyFiles: {
     pick(extensions: string[], multiple: boolean, near?: import('@tavora/sdk/protocol').PickNear): Promise<import('@tavora/sdk/protocol').ReadOnlyFile[]>;
     forget(id:string):Promise<void>;
     check(id:string):Promise<import('@tavora/sdk/protocol').ReadOnlyFileState>;
@@ -483,23 +484,19 @@ const handlers = new Map<string, Handler>([
     const multiple = object(params).multiple;
     if (multiple !== undefined && typeof multiple !== 'boolean') throw new HostError('INVALID_PARAMS','multiple must be true or false.');
     const near = pickNear(object(params).near);
-    if (!s.context.readOnlyFiles) throw new HostError('UNKNOWN_METHOD','Update Tavora to remember files.');
     const picked = await s.context.readOnlyFiles.pick(extensions, multiple === true, near);
     return multiple === true ? picked : (picked[0] ?? null);
   }],
   ['files.forget', async (s,params) => {
     const id = fileReference(params);
-    if (!s.context.readOnlyFiles) throw new HostError('UNKNOWN_METHOD','Update Tavora to remember files.');
     await s.context.readOnlyFiles.forget(id); return null;
   }],
   ['files.check', async (s,params) => {
     const id = fileReference(params);
-    if (!s.context.readOnlyFiles) throw new HostError('UNKNOWN_METHOD','Update Tavora to check files.');
     return s.context.readOnlyFiles.check(id);
   }],
   ['files.showInFolder', async (s,params) => {
     const id = fileReference(params);
-    if (!s.context.readOnlyFiles) throw new HostError('UNKNOWN_METHOD','Update Tavora to show files in their folder.');
     await s.context.readOnlyFiles.showInFolder(id); return null;
   }],
   ["workspace.getCurrent", (s, params) => (noParams(params), { ...s.context.workspace })],

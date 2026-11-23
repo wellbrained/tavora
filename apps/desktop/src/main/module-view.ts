@@ -1,11 +1,11 @@
 import { ReadOnlyFiles } from './read-only-files';
 import { serveReadOnlyFile } from './read-only-files-http';
 import { FOLDER_READ_PATH, READ_ONLY_FILE_PATH } from '@tavora/sdk/protocol';
-import { serveFolderFile, type FolderHost, type FolderWatch } from './folder-access';
+import { serveFolderFile, type FolderHost } from './folder-access';
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { app, BrowserWindow, clipboard, ClipboardItem, MessageChannelMain, session, shell, WebContentsView, type IpcMainEvent, type Session, type WebContents } from "electron";
-import type { GameOverlayResult, ReadOnlyFile, SystemApps, SystemInfo, SystemTraffic, HotkeyBinding, HotkeySetResult, JsonValue, OverlayLinkResult, OverlaySource, TavoraTheme, TavoraViewport, TavoraWorkspace } from "@tavora/sdk/protocol";
+import type { HotkeyBinding, JsonValue, TavoraTheme, TavoraViewport, TavoraWorkspace } from "@tavora/sdk/protocol";
 import type { ResolvedPanelType } from "@tavora/module-schema";
 import { modulePartition } from "./module-data";
 import { gestureCounts, type OverGame } from "./game-overlays";
@@ -14,17 +14,14 @@ import type { PanelCorners } from "./panel-corners";
 import { InsertedCss } from "./inserted-css";
 import { contentTypeFor, moduleCsp, MODULE_SCHEME, resolveAsset, withModulePolicy } from "./assets";
 import { APP_BLOB_PATH, BLOB_PATH, CLIPBOARD_PATH, PICTURES_PATH, JSON_EXPORT_PATH, JSON_SAVE_PATH, JSON_OPEN_PATH, FILE_SAVE_PATH, FILE_OPEN_PATH } from "@tavora/sdk/protocol";
-import { BridgeSession, newBridgeBudget, type BridgeContext, type PanelDialogSize } from "./bridge";
-import { moduleReadPage } from "./page-import";
+import { BridgeSession, newBridgeBudget, type PanelDialogSize } from "./bridge";
 import type { CheckedMenu } from "./module-menu";
-import type {TooltipRequest,TooltipAnchor,TooltipSkin,FileKind} from "@tavora/sdk/protocol";
+import type {TooltipRequest,TooltipAnchor,TooltipSkin} from "@tavora/sdk/protocol";
 import { pointerOverAnchor } from "./tooltip-pointer";
 import type { PanelContent, PanelLaunch } from "./panel-content";
 import { LIMITS, type PanelOpenManyResult, type PanelOpenResult } from "@tavora/sdk/protocol";
-import type { DiscordConnector, DiscordListener } from "./discord";
-import { connectionAccess, type ConnectionWatcher } from "./connection";
-import type { SystemMonitor, SystemSubscription } from "./system-info";
-import type { MediaConnector, MediaSubscription } from "./media";
+import type { ModuleFileDialogs, PanelFileDialogs } from "./file-dialogs";
+import { PanelSession, type PanelConnectors } from "./panel-session";
 import type { BlobStore } from "./blobs";
 import { serveBlobs } from "./blob-http";
 import { serveClipboard } from "./clipboard-http";
@@ -38,8 +35,7 @@ import type { PanelViewAdapter } from "./panel-views";
 import { recordCrash } from "./crash-log";
 import { isPrivateUrl, isWebUrl } from "./browser-url";
 import { HostError } from "./errors";
-import { GESTURE_MS, grantedCapabilities, PanelGate, unused, type Press } from "./panel-gate";
-import { moduleFetch, type TestHosts } from "./network";
+import { GESTURE_MS, unused, type PanelGate, type Press } from "./panel-gate";
 import type { InstalledModule } from "./registry";
 import type { InstanceStatus } from "../shared/host-api";
 import type { ModuleData, ModuleStore, PanelStateStore } from "./storage";
@@ -83,18 +79,13 @@ export interface ModuleViewOptions {
   onNeedsTavora?(): void;
   /** Shows a module's menu in the host UI, over this panel (host.ts); resolves with the chosen id, or null. */
   showMenu(menu: CheckedMenu): Promise<string | null>;
-  /** files.pickReadOnly, after its click was taken: Tavora's open dialog; the chosen paths (one unless `multiple`), empty when closed. */
-  pickReadOnlyFile?(extensions:string[], multiple:boolean, near?:import('@tavora/sdk/protocol').PickNear):Promise<string[]>;
-  /** pictures.save, after its click was taken: Tavora's save dialog for the checked PNG; the file name, or null when the user closed it. */
-  savePicture(png: Buffer, name: string): Promise<string | null>;
-  /** files.saveJson, after its click was taken: Tavora's save dialog for the formatted JSON; the file name, or null when the user closed it. */
-  saveJson(data: Buffer, name: string): Promise<string | null>;
-  /** files.openJson, after its click was taken: Tavora's open dialog; the chosen file's name and text, or null when the user closed it. */
-  openJson(): Promise<{ fileName: string; text: string } | null>;
-  /** files.save, after its click was taken: Tavora's save dialog for the checked .csv or .xlsx; the file name, or null when the user closed it. */
-  saveFile(data: Buffer, name: string, kind: FileKind): Promise<string | null>;
-  /** files.open, after its click was taken: Tavora's open dialog for one of `kinds`; the chosen file's name, kind and bytes, or null when the user closed it. */
-  openFile(kinds: FileKind[]): Promise<{ fileName: string; kind: FileKind; bytes: Buffer } | null>;
+  /**
+   * Tavora's dialogs for this module, each opened only after its click was taken: pictures.save, files.saveJson /
+   * openJson / save / open (the session's addresses), and linking files (files.pickReadOnly, through the gate).
+   */
+  files: PanelFileDialogs;
+  /** Where a pick of files to link opens when there is no linked file to start next to: the workspace's game (save-dialog-folder.ts). */
+  pickGame(): string;
   tooltip?: {
     show(request:TooltipRequest):Promise<boolean>;
     move(anchor:TooltipAnchor):void;
@@ -123,50 +114,12 @@ export interface ModuleViewOptions {
   setDialogTitle(title: string | null): void;
   /** panel.setLive from this panel (size already checked): what its live view over the game shows; null shows nothing. */
   setLive(state: JsonValue | null): void;
-  /** Hosts the user granted this module for network.fetch, as installed now; asked on every call and redirect. */
-  networkHosts(): ReadonlySet<string>;
-  /** Connectors the user granted this module, as installed now; asked on every call. */
-  connectors(): ReadonlySet<string>;
-  /** The module's folders on this PC (permissions.folders), the grant asked on every call; none for a host without them. */
-  folders?: FolderHost & { granted(): boolean };
   /** The module's settings shared by every workspace (storage.app). */
   appSettings: ModuleStore;
   /** The module's files shared by every workspace (blobs.app). */
   appBlobs: BlobStore;
-  /** The ai-usage connector, for a module granted it. */
-  aiUsage: BridgeContext["aiUsage"];
-  /** The leaderboards connector for this module (leaderboards.ts); `show` asks the user in this panel. */
-  leaderboards: BridgeContext["leaderboards"];
-  /** The system-info connector, shared by every panel; each view holds one subscription of its own. */
-  systemInfo: { info(): SystemInfo | Promise<SystemInfo>; subscribe: SystemMonitor["subscribe"]; apps(): Promise<SystemApps>; traffic(): Promise<SystemTraffic> };
-  /** The connection watcher (connection.ts): its log and settings are shared by every panel. */
-  connection: Pick<ConnectionWatcher, "outageLog" | "clearLog" | "getSettings" | "setSettings">;
-  /** The media connector, shared by every panel; each view holds one subscription of its own while it watches. */
-  media: Pick<MediaConnector, "subscribe">;
-  /** The discord connector, shared by every panel; this view uses it under its own instance id. */
-  discord: Pick<DiscordConnector, "use" | "release" | "state" | "connectNow" | "allowControl" | "command" | "subscribe" | "unsubscribe" | "image">;
-  /** Overlays of this module in this workspace: Stream overlay links (granted the stream-overlay connector) and game overlays. */
-  overlay: {
-    publish(key: string, state: JsonValue): void;
-    remove(key: string): void;
-    copyLink(key: string): Promise<OverlayLinkResult>;
-    /** Whether copyLink would open Tavora's window now (the consent dialog, or the setting that is off). */
-    copyNeedsWindow?(): boolean;
-    resetLink(key: string): void;
-    showOverGame(key: string): GameOverlayResult;
-    hideOverGame(key: string): void;
-    overGame(): string[];
-    /** overlay.setSources from this panel (already checked): what it can show over the game, for the Overlay page. */
-    setSources(sources: OverlaySource[]): void;
-    /** Opens the preview window of the overlay for `key`; throws INVALID_PARAMS for a module without an overlay page. */
-    preview(key: string): Promise<void>;
-    /** Shows the Overlay page and closes this panel's dialog (overlay.openPage, already given its click). */
-    openPage(): void;
-  };
-  /** Hotkeys of this module in this workspace; `set` opens Tavora's hotkey dialog. */
-  hotkeys: { list(): HotkeyBinding[]; set(action: string, target: string, label: string): Promise<HotkeySetResult>; remove(target: string, action: string | null): void };
-  /** Test runs only: hosts mapped to a local server (network.ts). */
-  testHosts?: TestHosts;
+  /** The connectors of the module as this panel uses them; the panel's session gates them (panel-session.ts). */
+  connectors: PanelConnectors;
   /**
    * The panel runs now only because its game runs, out of sight (with-game.ts): the hidden panel never placed in a
    * layout, or one of a workspace not shown. What needs the user there (a dialog, a menu, a picker, a link, another
@@ -307,7 +260,7 @@ export function exportsFolder(): string {
  * Every module gets its own session per workspace: separate cookies, web storage,
  * cache and a separate renderer process from the host and other modules.
  */
-function moduleSession(module: InstalledModule, workspace: TavoraWorkspace, blobs: BlobStore, appBlobs: BlobStore, files: Pick<ModuleViewOptions, "savePicture" | "saveJson" | "openJson" | "saveFile" | "openFile" | "folders">): Session {
+function moduleSession(module: InstalledModule, workspace: TavoraWorkspace, blobs: BlobStore, appBlobs: BlobStore, files: ModuleFileDialogs & { folders?: Pick<FolderHost, "read"> }): Session {
   const ses = session.fromPartition(modulePartition(module.owner, module.manifest.id, workspace.id));
   // The folder a session serves from follows the module as installed now: a built-in module's downloaded copy lives elsewhere than the shipped one.
   serving.set(ses, module);
@@ -443,14 +396,6 @@ export class ModuleView implements PanelViewAdapter {
   /** Tavora's window is behind another program (the game), as the host last said. The panel is behind only while it is not over the game itself. */
   private windowBehind = false;
   private behind = false;
-  /** This panel's watch of the PC (system-info.ts), once it asked to watch something. */
-  private systemWatch: SystemSubscription | undefined;
-  /** This panel's watch of what plays on the PC (media.ts), while it watches. */
-  private mediaWatch: MediaSubscription | undefined;
-  /** The folders this panel watches (folders.watch), by manifest path. */
-  private readonly folderWatches = new Map<string, FolderWatch>();
-  /** How many folders.watch calls each folder had, so a slow start can't outlive a later call. */
-  private readonly folderTurns = new Map<string, number>();
   /** The theme's colours in the current page, replaced when the theme changes. */
   private readonly themeCss = new InsertedCss(() => this.view.webContents);
   /** The font in the current page, replaced only when the user picks another (InsertedCss skips the same sheet). */
@@ -486,29 +431,39 @@ export class ModuleView implements PanelViewAdapter {
   /** panel.navigate requests waiting for the page's answer. */
   private readonly navigations = new Map<number, (outcome: NavigateOutcome) => void>();
 
-  /** What this panel's page may call now: the grant, the press, where the panel is, and its live page (panel-gate.ts). */
+  /** The connectors and pickers as this panel's pages reach them, and the watches they started (panel-session.ts). */
+  private readonly session: PanelSession;
+  /** What this panel's page may call now: the grant, the press, where the panel is, and its live page (the session's). */
   private readonly gate: PanelGate;
 
   constructor(private readonly options: ModuleViewOptions) {
     const { module, workspace } = options;
-    this.gate = new PanelGate({
-      module,
-      // The grants of the owner the page runs as (host.ts): a copy of another owner under the same id has its own.
-      granted: () => grantedCapabilities(options),
+    this.session = new PanelSession({
+      instanceId: options.instanceId,
+      module: () => this.options.module,
+      workspace,
+      hostVersion: options.hostVersion,
+      connectors: options.connectors,
+      pickReadOnly: (request) => options.files.pickReadOnly(request),
+      pickGame: () => options.pickGame(),
+      readOnlyFiles: () => new ReadOnlyFiles(app.getPath("userData"), module.owner, module.manifest.id, workspace.id),
+      showItemInFolder: (place) => shell.showItemInFolder(place),
+      suspended: () => this.suspended,
       page: () => this.bridge,
       runsOnlyWithGame: () => options.runsOnlyWithGame?.() ?? false,
       overGame: () => this.overGame !== null,
       onNeedsTavora: () => options.onNeedsTavora?.(),
     });
+    this.gate = this.session.gate;
     this.view = new WebContentsView({
       webPreferences: {
         session: moduleSession(module, workspace, options.data.blobs, options.appBlobs, {
-          savePicture: (png, name) => options.savePicture(png, name),
-          saveJson: (data, name) => options.saveJson(data, name),
-          openJson: () => options.openJson(),
-          saveFile: (data, name, kind) => options.saveFile(data, name, kind),
-          openFile: (kinds) => options.openFile(kinds),
-          ...(options.folders ? { folders: options.folders } : {}),
+          savePicture: (png, name) => options.files.savePicture(png, name),
+          saveJson: (data, name) => options.files.saveJson(data, name),
+          openJson: () => options.files.openJson(),
+          saveFile: (data, name, kind) => options.files.saveFile(data, name, kind),
+          openFile: (kinds) => options.files.openFile(kinds),
+          ...(options.connectors.folders ? { folders: options.connectors.folders } : {}),
         }),
         preload: options.preload,
         sandbox: true,
@@ -836,39 +791,8 @@ export class ModuleView implements PanelViewAdapter {
         panelState: { get: (id) => panelState.get(id, module.owner), set: (id, value) => panelState.set(id, value, module.owner) },
         appSettings: this.options.appSettings,
         appBlobs: this.options.appBlobs,
-        aiUsage: this.options.aiUsage,
-        leaderboards: {
-          status: () => this.options.leaderboards.status(),
-          show: async () => {
-            // Tavora asks in this panel: one click asks once, and not while the panel is over the game.
-            await this.gate.enter("leaderboards.show");
-            return this.options.leaderboards.show();
-          },
-          hide: async () => {
-            // Deleting the user's results takes their click, so a page can't do it on its own.
-            await this.gate.enter("leaderboards.hide");
-            return this.options.leaderboards.hide();
-          },
-          submit: (params) => this.options.leaderboards.submit(params),
-          top: (params) => this.options.leaderboards.top(params),
-          mine: (params) => this.options.leaderboards.mine(params),
-        },
-        systemInfo: this.systemInfoFor(() => bridge),
-        media: this.mediaFor(() => bridge),
-        discord: this.discordFor(() => bridge),
-        capabilities: () => this.gate.granted(),
-        readPage: (params) => moduleReadPage(params, {
-          allowedHosts: this.options.networkHosts,
-          userAgent: `Tavora/${hostVersion} (module ${module.manifest.id})`,
-        }, module.manifest.id, pageImports.signal),
-        fetch: (params) =>
-          moduleFetch(params, {
-            allowedHosts: this.options.networkHosts,
-            userAgent: `Tavora/${hostVersion} (module ${module.manifest.id})`,
-            ...(this.options.testHosts ? { testHosts: this.options.testHosts } : {}),
-            // A port that closes (a new one asked for, a reload, the panel closed) ends its requests.
-            signal: pageImports.signal,
-          }),
+        // The connectors and pickers: the session gates them and keeps what this page watches.
+        ...this.session.connect(() => bridge, pageImports.signal),
         getViewport: () => ({ ...this.viewport }),
         isSuspended: () => this.suspended,
         isBehind: () => this.behind,
@@ -895,73 +819,10 @@ export class ModuleView implements PanelViewAdapter {
           close:(id,hoverOnly)=>this.options.tooltip?.close(id,hoverOnly,true),
           defineSkin:async(name,skin)=>{await this.options.tooltip?.defineSkin(name,skin);},
         },
-        ...(this.options.folders ? { folders: this.foldersFor(() => bridge, this.options.folders) } : {}),
-        readOnlyFiles: {
-          pick: async (extensions, multiple, near) => {
-            await this.gate.enter("files.pickReadOnly");
-            const selected = (await this.options.pickReadOnlyFile?.(extensions, multiple, near)) ?? [];
-            if (!selected.length || !this.gate.live(bridge)) return [];
-            const files = new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,workspace.id);
-            const picked: ReadOnlyFile[] = [];
-            try {
-              for (const path of selected) picked.push(await files.remember(path,()=>this.gate.live(bridge)));
-            } catch (error) {
-              // All or nothing: a pick that fails part-way leaves no links behind that the module never heard of.
-              await Promise.all(picked.map(file=>files.forget(file.id).catch(()=>undefined)));
-              throw error;
-            }
-            return picked;
-          },
-          forget: id => new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,workspace.id).forget(id),
-          check: id => new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,workspace.id).check(id),
-          showInFolder: async id => {
-            await this.gate.enter("files.showInFolder");
-            const place = await new ReadOnlyFiles(app.getPath('userData'),module.owner,module.manifest.id,workspace.id).locate(id);
-            if (this.gate.live(bridge)) shell.showItemInFolder(place);
-          },
-        },
         showMenu: async (menu) => {
           // One click opens one menu, so a page cannot keep menus coming on its own.
           await this.gate.enter("ui.showMenu");
           return this.options.showMenu(menu);
-        },
-        overlay: {
-          publish: (key, state) => this.options.overlay.publish(key, state),
-          remove: (key) => this.options.overlay.remove(key),
-          copyLink: async (key) => {
-            // One click copies one link, so a page cannot keep the clipboard to itself.
-            await this.gate.enter("overlay.copyLink", { opensWindow: this.options.overlay.copyNeedsWindow?.() ?? false });
-            return this.options.overlay.copyLink(key);
-          },
-          resetLink: (key) => this.options.overlay.resetLink(key),
-          showOverGame: async (key) => {
-            // One click shows one overlay, so a page cannot keep opening windows over the game.
-            await this.gate.enter("overlay.showOverGame");
-            return this.options.overlay.showOverGame(key);
-          },
-          hideOverGame: (key) => this.options.overlay.hideOverGame(key),
-          overGame: () => this.options.overlay.overGame(),
-          setSources: (sources) => this.options.overlay.setSources(sources),
-          preview: async (key) => {
-            // One click opens one window, so a page cannot keep opening windows.
-            await this.gate.enter("overlay.preview");
-            return this.options.overlay.preview(key);
-          },
-          openPage: async () => {
-            // One click changes the screen once, so a page cannot keep pulling the user away from what they are doing.
-            await this.gate.enter("overlay.openPage");
-            this.options.overlay.openPage();
-          },
-        },
-        hotkeys: {
-          list: () => this.options.hotkeys.list(),
-          set: async (action, target, label) => {
-            if (!(module.manifest.actions ?? []).some((item) => item.id === action)) throw new HostError("INVALID_PARAMS", `this module has no action "${action}" in its manifest`);
-            // Tavora's dialog takes the key; one click opens it once.
-            await this.gate.enter("hotkeys.set");
-            return this.options.hotkeys.set(action, target, label);
-          },
-          remove: (target, action) => this.options.hotkeys.remove(target, action),
         },
       },
       () => {
@@ -972,189 +833,11 @@ export class ModuleView implements PanelViewAdapter {
         // its port going only ends the wait for its saves.
         if (this.disposed) return this.closeNow();
         this.options.tooltip?.close();
-        this.stopSystemWatch();
-        this.stopMediaWatch();
-        this.stopFolderWatches();
-        this.options.discord.release(this.options.instanceId);
+        this.session.pageGone();
       },
     );
     this.bridge = bridge;
     this.view.webContents.postMessage("tavora:port", null, [port2]);
-  }
-
-  /**
-   * The module's folders as this panel uses them. Changes reach only this page and only while the grant lasts (a revoke
-   * ends a watch at its next change at the latest, and closing the panel ends it at once); like media they keep coming
-   * while the panel is hidden, since they are rare and an overlay over the game may need them.
-   */
-  private foldersFor(bridge: () => BridgeSession, folders: FolderHost): NonNullable<BridgeContext["folders"]> {
-    return {
-      state: (folder) => folders.state(folder),
-      list: (folder) => folders.list(folder),
-      watch: async (folder, on) => {
-        // Only the newest call for a folder counts: a watch that finishes starting after a later on or off is dropped.
-        this.folderWatches.get(folder)?.close();
-        this.folderWatches.delete(folder);
-        if (!on) {
-          this.folderTurns.delete(folder);
-          return;
-        }
-        const turn = (this.folderTurns.get(folder) ?? 0) + 1;
-        this.folderTurns.set(folder, turn);
-        let watcher: FolderWatch | null;
-        try {
-          watcher = await folders.watch(folder, (change) => {
-            if (!this.gate.send(bridge(), "folders", "folders.changed", change)) this.stopFolderWatches();
-          });
-        } catch (error) {
-          if (this.folderTurns.get(folder) === turn) this.folderTurns.delete(folder);
-          throw error;
-        }
-        if (!watcher) return;
-        if (this.gate.live(bridge()) && this.folderTurns.get(folder) === turn) this.folderWatches.set(folder, watcher);
-        else watcher.close();
-      },
-      choose: async (folder) => {
-        // Tavora's folder dialog; one click opens it once, and not while the panel is over the game.
-        await this.gate.enter("folders.choose");
-        return folders.choose(folder);
-      },
-      showInFolder: async (folder, file) => {
-        // Explorer opens once per click, and not over the game; the file must pass the same checks as a listing.
-        await this.gate.enter("folders.showInFolder");
-        const target = await folders.reveal(folder, file);
-        // Nothing to show, or the panel or the grant went while it was looked up: the same quiet answer.
-        if (!target || !this.gate.live(bridge(), "folders")) return;
-        // Only ever selected in its own folder, also the folder a gone file was in: nothing is launched or opened.
-        shell.showItemInFolder(target.path);
-      },
-    };
-  }
-
-  private stopFolderWatches(): void {
-    for (const watcher of this.folderWatches.values()) watcher.close();
-    this.folderWatches.clear();
-  }
-
-  /**
-   * The system-info connector as this panel uses it. Its snapshots reach only this page, only while the grant lasts
-   * (a revoke ends the watch at the next snapshot at the latest, and closing the panel ends it at once), and not
-   * while the panel is hidden (suspend and resume).
-   */
-  private systemInfoFor(bridge: () => BridgeSession): BridgeContext["systemInfo"] {
-    return {
-      info: () => this.options.systemInfo.info(),
-      apps: () => {
-        this.gate.check("systemInfo.apps");
-        return this.options.systemInfo.apps();
-      },
-      traffic: () => {
-        this.gate.check("systemInfo.traffic");
-        return this.options.systemInfo.traffic();
-      },
-      watch: (request) => {
-        if (!this.systemWatch) {
-          this.systemWatch = this.options.systemInfo.subscribe({
-            snapshot: (snapshot) => {
-              if (!this.gate.send(bridge(), "systemInfo", "systemInfo.snapshot", snapshot)) this.stopSystemWatch();
-            },
-            drivesChanged: () => {
-              this.gate.send(bridge(), "systemInfo", "systemInfo.drivesChanged", null);
-            },
-            connectionChanged: (connection) => {
-              this.gate.send(bridge(), "systemInfo", "systemInfo.connectionChanged", connection);
-            },
-          });
-          if (this.suspended) this.systemWatch.setSuspended(true);
-        }
-        this.systemWatch.watch(request);
-      },
-      ...connectionAccess(this.options.connection, (what) => this.gate.enter(what)),
-    };
-  }
-
-  private stopSystemWatch(): void {
-    this.systemWatch?.close();
-    this.systemWatch = undefined;
-  }
-
-  /**
-   * The media connector as this panel uses it. Changes reach only this page and only while the grant lasts (a revoke
-   * ends the watch at the next change at the latest, and closing the panel ends it at once). Unlike system info they
-   * keep coming while the panel is hidden: they are rare and cheap, and a module's overlay over the game or on stream
-   * has to stay current while Tavora is behind the game. A control needs a click or key press in the page, or a press
-   * of the module's hotkey for that very control (panel-gate.ts MEDIA_HOTKEY_ACTIONS), just before; one press allows one control.
-   */
-  private mediaFor(bridge: () => BridgeSession): BridgeContext["media"] {
-    return {
-      watch: (on) => {
-        if (!on) {
-          this.stopMediaWatch();
-          return null;
-        }
-        this.mediaWatch ??= this.options.media.subscribe((state) => {
-          if (!this.gate.send(bridge(), "media", "media.changed", state)) this.stopMediaWatch();
-        });
-        return this.mediaWatch.state();
-      },
-      control: async (session, action) => {
-        if (!this.mediaWatch) return false;
-        await this.gate.enter("media.control", { control: action });
-        return (await this.mediaWatch?.control(session, action)) ?? false;
-      },
-    };
-  }
-
-  private stopMediaWatch(): void {
-    this.mediaWatch?.close();
-    this.mediaWatch = undefined;
-  }
-
-  /**
-   * The discord connector as this panel uses it. Any call but image() makes the panel a user, which
-   * keeps the connection running until the page goes; what the connector tells reaches only the page
-   * that asked, and only while the grant lasts. Signing in, joining or leaving a channel, and muting or
-   * deafening the user need a click or key press in the page first, one per click.
-   */
-  private discordFor(bridge: () => BridgeSession): BridgeContext["discord"] {
-    const connector = this.options.discord;
-    const instanceId = this.options.instanceId;
-    const listener: DiscordListener = {
-      state: (state) => {
-        this.gate.send(bridge(), "discord", "discord.state", state);
-      },
-      event: (event) => {
-        this.gate.send(bridge(), "discord", "discord.event", event);
-      },
-    };
-    const use = () => connector.use(instanceId, listener);
-    return {
-      state: async () => (await use(), connector.state()),
-      connect: async () => {
-        await this.gate.enter("discord.connect");
-        await use();
-        await connector.connectNow();
-      },
-      allowControl: async () => {
-        await this.gate.enter("discord.allowControl");
-        await use();
-        await connector.allowControl();
-      },
-      command: async (command, args) => {
-        // Joining or leaving, and muting or deafening the user (which can switch their microphone back on),
-        // only follow a click or key press (D8). A person's volume streams while a slider is dragged, and only
-        // changes what the user hears, so it needs none.
-        if (command === "SELECT_VOICE_CHANNEL" || command === "SET_VOICE_SETTINGS") await this.gate.enter("discord.command", { detail: command });
-        await use();
-        return connector.command(command, args);
-      },
-      subscribe: async (event, channelId) => {
-        await use();
-        await connector.subscribe(instanceId, event, channelId);
-      },
-      unsubscribe: (event, channelId) => connector.unsubscribe(instanceId, event, channelId),
-      image: (url) => connector.image(url),
-    };
   }
 
   /** The Overlay page added or removed one of this module's game overlays in this workspace scope: `keys` is what overlay.overGame gives now. */
@@ -1449,7 +1132,7 @@ export class ModuleView implements PanelViewAdapter {
     this.options.tooltip?.close();
     if (this.suspended) return;
     this.suspended = true;
-    this.systemWatch?.setSuspended(true);
+    this.session.setSuspended(true);
     this.bridge?.emit("lifecycle.suspend", null);
   }
 
@@ -1472,7 +1155,7 @@ export class ModuleView implements PanelViewAdapter {
   resume(): void {
     if (!this.suspended) return;
     this.suspended = false;
-    this.systemWatch?.setSuspended(false);
+    this.session.setSuspended(false);
     this.bridge?.emit("lifecycle.resume", null);
   }
 
@@ -1702,10 +1385,7 @@ export class ModuleView implements PanelViewAdapter {
     if (this.disposed) this.gate.usePress();
     // A page that goes away answers nothing more.
     for (const finish of [...this.navigations.values()]) finish("failed");
-    this.stopSystemWatch();
-    this.stopMediaWatch();
-    this.stopFolderWatches();
-    this.options.discord.release(this.options.instanceId);
+    this.session.pageGone();
   }
 
   private setStatus(status: InstanceStatus): void {

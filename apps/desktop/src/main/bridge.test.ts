@@ -46,6 +46,7 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
     instanceId,
     panelType: null,
     launch: { reason: "add" },
+    readOnlyFiles: { pick: async () => [], forget: async () => undefined, check: async () => ({ found: true }) as never, showInFolder: async () => undefined },
     setContent: () => {},
     openPanel: () => Promise.resolve("opened"),
     openPanels: (types) => Promise.resolve(Object.fromEntries(types.map((type) => [type, "opened" as const]))),

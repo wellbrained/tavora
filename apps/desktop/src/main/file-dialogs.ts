@@ -3,7 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { OpenDialogOptions, OpenDialogReturnValue, SaveDialogOptions, SaveDialogReturnValue } from "electron";
 import type { FileKind } from "@tavora/sdk/protocol";
-import type { Language } from "../shared/i18n";
+import { translate, type Language } from "../shared/i18n";
 import { HostError } from "./errors";
 import { readJsonText } from "./json-file-http";
 import type { DialogPlace, Library } from "./library";
@@ -48,6 +48,20 @@ export interface ModuleFileDialogs {
   saveFile(data: Buffer, name: string, kind: FileKind): Promise<string | null>;
   /** Offers only `kinds`; a file of another kind picked through "all files" is refused. */
   openFile(kinds: FileKind[]): Promise<{ fileName: string; kind: FileKind; bytes: Buffer } | null>;
+}
+
+/** What a module's panel links files through (files.pickReadOnly), once its gate let the call through (panel-session.ts). */
+export interface LinkFileRequest {
+  extensions: string[];
+  multiple: boolean;
+  /** Where the dialog opens: next to a linked file, or where the game keeps its files; left out, the system's choice. */
+  start?: string;
+}
+
+/** Every dialog a module's panel opens: the saves and opens of ModuleFileDialogs, and linking files (FileDialogs.pickReadOnly). */
+export interface PanelFileDialogs extends ModuleFileDialogs {
+  /** The chosen paths (one unless `multiple`), empty when the user closed the dialog. */
+  pickReadOnly(request: LinkFileRequest): Promise<string[]>;
 }
 
 type SaveKind = "png" | "json" | FileKind | "zip" | "pem";
@@ -141,6 +155,35 @@ export class FileDialogs {
         return { fileName: path.basename(file), kind, bytes };
       },
     };
+  }
+
+  /**
+   * The open dialog that links files to a module (files.pickReadOnly), named for the module: the chosen paths (one
+   * unless `multiple`), empty when the user closed it. Nothing is remembered here: the panel's session keeps the links.
+   */
+  async pickReadOnly(name: string, request: LinkFileRequest): Promise<string[]> {
+    const german = this.german();
+    const picked = await this.options.dialogs.open({
+      ...(request.start ? { defaultPath: request.start } : {}),
+      title: german ? `Datei mit ${name} verknüpfen` : `Link a file to ${name}`,
+      buttonLabel: german ? "Datei verknüpfen" : "Link file",
+      properties: request.multiple ? ["openFile", "multiSelections"] : ["openFile"],
+      filters: [{ name: german ? "Datei auswählen" : "Choose a file", extensions: request.extensions }],
+    });
+    return picked.canceled ? [] : request.multiple ? picked.filePaths : picked.filePaths.slice(0, 1);
+  }
+
+  /**
+   * The folder dialog for one of a module's folders (folders.choose; `folder` as permissions.folders names it, such as
+   * Documents/My Game), starting in `start`: the chosen folder, or undefined when the user closed it.
+   */
+  async pickFolder(name: string, folder: string, start: string | undefined): Promise<string | undefined> {
+    const picked = await this.options.dialogs.open({
+      ...(start ? { defaultPath: start } : {}),
+      title: translate(this.options.language(), "dialog.chooseFolder", { name, folder: folder.split("/").join(path.sep) }),
+      properties: ["openDirectory"],
+    });
+    return picked.canceled ? undefined : picked.filePaths[0];
   }
 
   private german(): boolean {
