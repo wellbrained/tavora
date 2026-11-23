@@ -515,7 +515,8 @@ export class CloudCopy {
   async upload(copyKey: Uint8Array, roots: CopyRoot[], last: CopyState, progress?: (done: number, total: number) => void): Promise<UploadResult> {
     const keys = copyKeys(copyKey);
     const keyId = keyFingerprint(copyKey);
-    // Synced under another key (a crash while the key changed): none of its parts are this key's.
+    // Synced under another key: none of its parts are this key's. A second safeguard: taking another key already writes
+    // the empty state before the key changes (CopySync.enterOtherKey).
     const synced = last.keyId !== undefined && last.keyId !== keyId ? { ...last, files: {} } : last;
     // Kept over a list put there that the key doesn't open (FolderStorage.makeRoom): on top of where this PC was before, when
     // nothing else came meanwhile; otherwise the user chooses.

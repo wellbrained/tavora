@@ -1597,8 +1597,17 @@ export class CopySync {
     }
     // Nothing of what this PC synced under the old key counts any more, as at turn-on: written before the key changes, so a
     // crash in between never leaves the old key's parts noted under the new one (that is harmless the other way round).
+    // Not written (a full disk): this PC stays as it was, in memory too, with nothing staged.
+    const before = this.state;
     this.state = EMPTY_STATE;
-    if (!(await this.keepState(turn))) {
+    const written = await this.keepState(turn).catch((error: unknown) => {
+      this.state = before;
+      return rm(this.stagingDir, { recursive: true, force: true }).then(() => {
+        throw CopySync.userError(this.noteProblem(error));
+      });
+    });
+    if (!written) {
+      if (turn === this.turn) this.state = before;
       await rm(this.stagingDir, { recursive: true, force: true });
       return;
     }

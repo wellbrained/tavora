@@ -577,12 +577,18 @@ describe("the cloud copy in a folder, as Tavora runs it", () => {
     const again = tavora(o);
     await again.sync.beforeLoad();
     await expect(again.sync.keep("cloud")).rejects.toMatchObject({ key: "cloudCopy.error.unreadable" });
-    // Writing the state fails (a full disk, or the copy was turned off right then).
-    again.sync["keepState"] = async () => false;
-    await again.sync.enterOtherKey(recoveryKey(newKey)).catch(() => undefined);
-    // The state is written before the key changes: it didn't get written, so the key stayed.
+    // Writing the state fails: the disk is full.
+    const synced = again.sync["state"];
+    again.sync["keepState"] = async () => {
+      throw Object.assign(new Error("ENOSPC: no space left on device, write"), { code: "ENOSPC" });
+    };
+    await expect(again.sync.enterOtherKey(recoveryKey(newKey))).rejects.toMatchObject({ key: "cloudCopy.error.disk-full" });
+    // The state is written before the key changes: it didn't get written, so the key stayed, and so did the state, on disk
+    // and in memory, with nothing left staged.
     expect(Buffer.from(again.sync["key"]!).equals(oldKey)).toBe(true);
+    expect(again.sync["state"]).toBe(synced);
     expect(Object.keys((await loadCopyState(path.join(o.userData, "cloud-copy.json"))).files).length).toBeGreaterThan(0);
+    expect(await readdir(path.join(o.userData, "cloud-copy-staging")).catch(() => [])).toEqual([]);
   });
 
   it("says so when the folder's copy went away before the new key's copy came down", async () => {
@@ -891,6 +897,20 @@ describe("what anyone who can write the folder can do", () => {
         expect((await up(onedrive, key, c.roots, keptOver(first.state, junk))).status).toBe("conflict");
       });
     }
+
+    it("asks on a start over on top of a list just below 2^52, and removes nothing", async () => {
+      const key = newCopyKey();
+      const onedrive = await folder();
+      const a = await pc({ "library.json": "a0" });
+      const first = await up(onedrive, key, a.roots, EMPTY_STATE);
+      if (first.status !== "uploaded") throw new Error(first.status);
+      await plant(onedrive, 2 ** 52 - 1, first.state.version);
+      const before = await manifests(onedrive);
+      // Another PC starts over on top of the newest: no save could go above it.
+      const n = await pc({ "library.json": "n0" });
+      expect(await up(onedrive, newCopyKey(), n.roots, { ...EMPTY_STATE, version: 2 ** 52 - 1 })).toMatchObject({ status: "conflict", version: 2 ** 52 - 1 });
+      expect(await manifests(onedrive)).toEqual(before);
+    });
 
     it("removes nothing on a start over above 2^48, and the new key's copy goes on top", async () => {
       const key = newCopyKey();

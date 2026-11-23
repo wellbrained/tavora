@@ -364,8 +364,10 @@ export class FolderStorage implements CopyStorage {
    */
   async makeRoom(base: number, followed: number | undefined, check: ManifestCheck): Promise<number | null> {
     // Only when this PC kept its side over that list does it know why a list goes: otherwise (a start over, an older
-    // Tavora's state) nothing is removed, and the save goes on top as ever.
-    if (base <= SANE_VERSION || followed === undefined) return base;
+    // Tavora's state) nothing is removed. The save goes on top as ever, while there is room above it: with none (a list
+    // put there just below MAX_VERSION), no save could be read, and the user is asked instead.
+    if (base <= SANE_VERSION) return base;
+    if (followed === undefined) return (Math.floor(base / RANDOM_BITS) + 2) * RANDOM_BITS - 1 <= MAX_VERSION ? base : null;
     const all = await this.manifests();
     /** "yes" opens with the key; "no" was read and doesn't; "unknown" can't be read right now. */
     const opens = async (file: ManifestFile): Promise<"yes" | "no" | "unknown"> => {
