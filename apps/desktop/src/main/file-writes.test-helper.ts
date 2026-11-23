@@ -15,7 +15,9 @@
 // Found as a write of its own, so it fails unless listed: a writing function used other than by a call (`ref api`:
 // handed on, or taken with `??`, `||`, a comma, a computed key or destructuring that isn't by plain name), one
 // exported again (`export api`), `require` or `import()` of these modules, and `createRequire` or `original-fs` at all.
-// Not covered: what a class's methods write (a store's own, behind its SavedFile), and code built to hide a write.
+// Not covered, though the write itself is still listed where it is made: what a class's methods write (a store's own,
+// behind its SavedFile), a writer of main/ handed on by reference (`files.map(saveOne)`), one built by a call
+// (`throttle((file) => writeFileAtomic(file, …))`), and code built to hide a write.
 import path from "node:path";
 import ts from "typescript";
 
@@ -308,13 +310,9 @@ function analyze(fileName: string, source: ts.SourceFile, writers: Writers): { f
  */
 export function fileWrites(sources: ReadonlyMap<string, string>): Map<string, string[]> {
   const parsed = new Map([...sources].map(([name, text]) => [name, ts.createSourceFile(name, text, ts.ScriptTarget.Latest, true, name.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS)]));
-  // The modules each source imports or exports from, to look at it again only when one of them gained a writer.
-  const imports = new Map(
-    [...parsed].map(([name, source]) => [
-      name,
-      new Set(source.statements.flatMap((statement) => ((ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement)) && statement.moduleSpecifier && ts.isStringLiteral(statement.moduleSpecifier) ? [moduleOf(name, statement.moduleSpecifier.text)] : []))),
-    ]),
-  );
+  // The modules each source imports or exports from, or loads with import() or require(), to look at it again only
+  // when one of them gained a writer.
+  const imports = new Map([...parsed].map(([name, source]) => [name, modulesReached(name, source)]));
   const writers: Writers = new Map();
   const result = new Map<string, string[]>();
   let grew: Set<string> | null = null;
@@ -336,6 +334,20 @@ export function fileWrites(sources: ReadonlyMap<string, string>): Map<string, st
     }
   }
   return result;
+}
+
+/** The modules a source imports or exports from, and those it loads with `import()` or `require()`, by their name from main/. */
+function modulesReached(fileName: string, source: ts.SourceFile): Set<string> {
+  const found = new Set<string>();
+  const visit = (node: ts.Node): void => {
+    if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) found.add(moduleOf(fileName, node.moduleSpecifier.text));
+    if (ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(node.expression) && node.expression.text === "require")) && node.arguments[0] && ts.isStringLiteralLike(node.arguments[0])) {
+      found.add(moduleOf(fileName, node.arguments[0].text));
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return found;
 }
 
 /** Every `new SavedFile(…)` in a source, with its kind as written, and whether SavedFile is extended. */

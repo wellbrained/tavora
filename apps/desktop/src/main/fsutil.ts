@@ -55,9 +55,10 @@ const SWEEP_DEPTH = 8;
 /**
  * Removes the temps writeFileAtomic left when Tavora was stopped in the middle of a write, at a start. Only in the data
  * folder (never the cloud copy's folder, where another PC may be writing), only `<file>.<12 hex>.tmp` files (and the
- * `<file>.now` of a write at quit, saved-file.ts) more than an hour old by the clock as each is looked at (a temp dated in the future stays), and only next to their file: then that
- * file is whole (the old content or the new), so nothing is lost. A temp whose file is missing stays, as it may be the
- * only copy. Links are never followed or removed. Answers what it removed.
+ * `<file>.now` of a write at quit, saved-file.ts) more than an hour old by the clock as each is looked at (a temp dated
+ * in the future stays), and only next to their file: then that file is whole (the old content or the new), so nothing
+ * is lost. A temp whose file is missing stays, as it may be the only copy. Links are never followed or removed.
+ * Answers what it removed.
  */
 export async function sweepWriteLeftovers(userData: string, clock: () => number = Date.now): Promise<string[]> {
   const removed: string[] = [];

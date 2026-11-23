@@ -70,6 +70,21 @@ describe("file writes", () => {
     expect(found["d.ts"]).toEqual(['b.saveMore("library.json")']);
   });
 
+  it("follows writers whatever order the sources come in: an importer before what it imports, also lazily", () => {
+    const found = writesOf({
+      "a-lazy.ts": `export const run = async () => (await import("./z-store")).saveIt("library.json");`,
+      "a-required.ts": `export const run = () => require("./z-store").saveIt("library.json");`,
+      "b-importer.ts": `import { saveIt } from "./z-store";\nexport const run = () => saveIt("library.json");`,
+      "z-store.ts": `import { keep } from "./zz-wrapper";\nexport const saveIt = (file: string) => keep(file);`,
+      "zz-wrapper.ts": `import { writeFileAtomic } from "./zzz-fsutil";\nexport function keep(file: string) { return writeFileAtomic(file, "{}"); }`,
+      "zzz-fsutil.ts": FSUTIL,
+    });
+    expect(found["a-lazy.ts"]).toEqual(["require ./z-store"]);
+    expect(found["a-required.ts"]).toEqual(["require ./z-store"]);
+    expect(found["b-importer.ts"]).toEqual(['z-store.saveIt("library.json")']);
+    expect(found["z-store.ts"]).toEqual(["zz-wrapper.keep(file)"]);
+  });
+
   it("leaves reads, and names that only look like the file system's, alone", () => {
     const text = `import { open, readFile } from "node:fs/promises";
 interface Deps { open(): Promise<void>; write(x: string): void }
