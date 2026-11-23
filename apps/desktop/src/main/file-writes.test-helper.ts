@@ -308,12 +308,21 @@ function analyze(fileName: string, source: ts.SourceFile, writers: Writers): { f
  */
 export function fileWrites(sources: ReadonlyMap<string, string>): Map<string, string[]> {
   const parsed = new Map([...sources].map(([name, text]) => [name, ts.createSourceFile(name, text, ts.ScriptTarget.Latest, true, name.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS)]));
+  // The modules each source imports or exports from, to look at it again only when one of them gained a writer.
+  const imports = new Map(
+    [...parsed].map(([name, source]) => [
+      name,
+      new Set(source.statements.flatMap((statement) => ((ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement)) && statement.moduleSpecifier && ts.isStringLiteral(statement.moduleSpecifier) ? [moduleOf(name, statement.moduleSpecifier.text)] : []))),
+    ]),
+  );
   const writers: Writers = new Map();
-  let result = new Map<string, string[]>();
-  for (let changed = true; changed; ) {
-    changed = false;
-    result = new Map();
+  const result = new Map<string, string[]>();
+  let grew: Set<string> | null = null;
+  while (grew === null || grew.size > 0) {
+    const looked: Set<string> | null = grew;
+    grew = new Set<string>();
     for (const [name, source] of parsed) {
+      if (looked && ![...imports.get(name)!].some((module) => looked.has(module))) continue;
       const { found, exported } = analyze(name, source, writers);
       result.set(name, found);
       const self = selfOf(name);
@@ -321,7 +330,7 @@ export function fileWrites(sources: ReadonlyMap<string, string>): Map<string, st
       for (const writer of exported) {
         if (known.has(writer)) continue;
         known.add(writer);
-        changed = true;
+        grew.add(self);
       }
       writers.set(self, known);
     }

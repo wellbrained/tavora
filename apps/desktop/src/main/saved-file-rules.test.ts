@@ -137,6 +137,8 @@ function importedNames(text: string): Set<string> {
 }
 
 const sorted = (calls: readonly string[]) => [...calls].sort();
+/** Reading every source of main/ takes a few seconds, more on a busy machine. */
+const READS_ALL = 60_000;
 
 describe("the save rules can't be skipped", () => {
   it("every file of the user's has a kind with its version, or says why not", () => {
@@ -158,7 +160,7 @@ describe("the save rules can't be skipped", () => {
       made += kinds.length;
     }
     expect(made).toBeGreaterThan(0);
-  });
+  }, READS_ALL);
 
   it("only SavedFile uses the pieces of the rules, and those this file names", async () => {
     const users = [...(await sources())].filter(([, text]) => RULE_PIECES.some((piece) => importedNames(text).has(piece))).map(([file]) => file);
@@ -178,5 +180,5 @@ describe("the save rules can't be skipped", () => {
     const listed: Record<string, string[]> = {};
     for (const { file, calls } of WRITES) listed[file] = sorted([...(listed[file] ?? []), ...calls]);
     expect(found).toEqual(listed);
-  });
+  }, READS_ALL);
 });
