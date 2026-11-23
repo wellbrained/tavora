@@ -802,7 +802,8 @@ test.describe("ui playground pages", () => {
     await inModule(app, PLAYGROUND, `${tabNamed("Steel")}.dispatchEvent(new MouseEvent("auxclick", { button: 1, bubbles: true, cancelable: true }))`);
     await expect.poll(labels).toEqual(["Copper", "Plastic"]);
 
-    // Dragging a tab past the last one moves it to the end.
+    // Dragging a tab past the last one moves it to the end. (Short of its edge the lifted tab is under the pointer
+    // itself; Electron 44 only passed there because the row scrolled the lifted tab's overhang into view.)
     await inModule(app, PLAYGROUND, `(() => {
       const from = ${tabNamed("Copper")};
       const to = ${tabNamed("Plastic")}.getBoundingClientRect();
@@ -810,7 +811,7 @@ test.describe("ui playground pages", () => {
       const at = (x) => ({ bubbles: true, cancelable: true, button: 0, clientX: x, clientY: box.top + box.height / 2, pointerId: 1 });
       from.dispatchEvent(new PointerEvent("pointerdown", at(box.left + 10)));
       document.dispatchEvent(new PointerEvent("pointermove", at(box.left + 30)));
-      document.dispatchEvent(new PointerEvent("pointermove", at(to.right - 5)));
+      document.dispatchEvent(new PointerEvent("pointermove", at(to.right + 5)));
     })()`);
     await expect.poll(() => inModule(app, PLAYGROUND, `${tabNamed("Plastic")}.dataset.drop`)).toBe("after");
     await inModule(app, PLAYGROUND, `document.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, button: 0, pointerId: 1 }))`);
