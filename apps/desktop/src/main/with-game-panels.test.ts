@@ -64,8 +64,6 @@ function rig() {
       log.push(`create ${record.instanceId === HIDDEN ? "hidden" : record.instanceId}`);
     },
     held: () => world.held,
-    moduleName: (id) => (id === KINGS.moduleId ? "9 Kings Companion" : null),
-    changed: () => undefined,
     later: (run) => run(),
   });
   /** The page reports how it is doing, as ModuleView's onStatus does. */
@@ -129,8 +127,6 @@ describe("WithGamePanels", () => {
       panels: () => ({ keepRunning: () => undefined, stopKeeping: () => undefined, letGo: () => undefined, has: () => false, layOut: () => undefined, release: () => undefined, isLent: () => false }),
       createView: () => void log.push("create"),
       held: () => false,
-      moduleName: () => null,
-      changed: () => undefined,
     });
     unstarted.gamesRunning(["kings"]);
     unstarted.sync();
@@ -217,19 +213,6 @@ describe("WithGamePanels", () => {
     // The panel shows in the open workspace: it says it crashed there, with Reload; nothing starts it by itself.
     report("placed", "crashed");
     expect(log.slice(before)).toEqual([]);
-  });
-
-  it("names the modules running with each game for the rail, whatever game start says and whichever workspace shows", () => {
-    const { world, withGame } = rig();
-    // Nothing about "When a game starts" reaches it: the watcher reports the games either way.
-    world.shown = "kings";
-    withGame.gamesRunning(["kings", "kings-2"]);
-    expect(withGame.lines()).toEqual([
-      { workspaceId: "kings", names: ["9 Kings Companion"] },
-      { workspaceId: "kings-2", names: ["9 Kings Companion"] },
-    ]);
-    withGame.gamesRunning([]);
-    expect(withGame.lines()).toEqual([]);
   });
 
   it("stops everything when the window closes", () => {

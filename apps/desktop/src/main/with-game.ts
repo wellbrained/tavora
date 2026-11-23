@@ -203,13 +203,6 @@ export interface WithGamePage {
 /** The panels as far as WithGamePanels needs them (panel-views.ts PanelViews). */
 export type WithGamePanelViews = Pick<PanelViews, "keepRunning" | "stopKeeping" | "letGo" | "has" | "layOut" | "release" | "isLent">;
 
-/** The modules running with one game now, for the running game's card in the rail. */
-export interface WithGameLine {
-  workspaceId: string;
-  /** The modules' names, each once. */
-  names: string[];
-}
-
 export interface WithGamePanelsDeps {
   /** Pages may start (the window is open and not closing). */
   ready(): boolean;
@@ -232,10 +225,6 @@ export interface WithGamePanelsDeps {
    * stop or hang meanwhile is no crash, and nothing starts again until it is done (the purge starts them itself).
    */
   held(moduleId: string, workspaceId: string): boolean;
-  /** The module's name as the user sees it; null when it is gone. */
-  moduleName(moduleId: string): string | null;
-  /** Something the host UI shows changed (the rail's line). */
-  changed(): void;
   /** Runs a crash's restart after the page's event is over (setImmediate in the host; tests run it at once). */
   later?(run: () => void): void;
   /** Timers, for tests. */
@@ -305,18 +294,6 @@ export class WithGamePanels {
     return this.runner.all();
   }
 
-  /** Per running game with a module running with it, those modules' names, in the order they started. */
-  lines(): WithGameLine[] {
-    const lines = new Map<string, Set<string>>();
-    for (const run of this.runner.all()) {
-      const name = this.deps.moduleName(run.moduleId);
-      if (!name) continue;
-      if (!lines.has(run.workspaceId)) lines.set(run.workspaceId, new Set());
-      lines.get(run.workspaceId)!.add(name);
-    }
-    return [...lines].map(([workspaceId, names]) => ({ workspaceId, names: [...names] }));
-  }
-
   /**
    * A panel's page changed how it is doing (ModuleView onStatus). Running only with its game, a crash starts it once
    * more, and so does a page unresponsive for WITH_GAME_HUNG_MS (it is ended first); Tavora's own stops and anything
@@ -372,7 +349,6 @@ export class WithGamePanels {
     if (!panels.has(run.instanceId)) return this.forget(run);
     // Never placed: laid out here so it runs (a kept panel isn't paused for being out of sight).
     panels.layOut(run.instanceId);
-    this.deps.changed();
     return true;
   }
 
@@ -388,6 +364,5 @@ export class WithGamePanels {
     this.unwatch(run.instanceId);
     this.deps.panels().letGo(run.instanceId, "game");
     if (!run.inLayout) this.hidden.delete(run.instanceId);
-    this.deps.changed();
   }
 }

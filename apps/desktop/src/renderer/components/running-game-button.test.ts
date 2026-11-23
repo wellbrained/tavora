@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp, defineComponent, h, type App } from "vue";
 import type { HostViewState, UnlistedGame } from "../../shared/host-api";
 
-const host = vi.hoisted(() => ({ act: vi.fn(), listOf: (names: string[]) => new Intl.ListFormat("en", { type: "conjunction" }).format(names) }));
+const host = vi.hoisted(() => ({ act: vi.fn() }));
 vi.mock("../host", async () => {
   const { shallowRef } = await import("vue");
   return { ...host, state: shallowRef(null) };
@@ -32,12 +32,10 @@ const settle = async () => {
 const KINGS: UnlistedGame = { name: "9 Kings", steamAppId: 2784470, catalogId: null };
 const FORTNITE = { id: "local-fortnite", name: "Fortnite" };
 
-/** The part of the host's state the card reads; names alone run with 9 Kings. */
-function setState(view: { runningGameId?: string | null; unlistedGame?: UnlistedGame | null; runningWithGame?: string[] | HostViewState["runningWithGame"] }) {
-  const withGame = view.runningWithGame ?? [];
+/** The part of the host's state the card reads. */
+function setState(view: { runningGameId?: string | null; unlistedGame?: UnlistedGame | null }) {
   state.value = {
     runningGameId: view.runningGameId ?? null,
-    runningWithGame: withGame.length && typeof withGame[0] === "string" ? [{ workspaceId: "local-9-kings", names: withGame as string[] }] : withGame,
     unlistedGame: view.unlistedGame ?? null,
     library: { workspaces: { [FORTNITE.id]: FORTNITE, "local-9-kings": { id: "local-9-kings", name: "9 Kings" } } },
   } as unknown as HostViewState;
@@ -56,8 +54,8 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-async function mount(expanded = true) {
-  app = createApp(defineComponent({ render: () => h(RunningGameButton, { expanded }) }));
+async function mount() {
+  app = createApp(defineComponent({ render: () => h(RunningGameButton, { expanded: true }) }));
   app.mount(root);
   await settle();
 }
@@ -101,70 +99,6 @@ describe("RunningGameButton", () => {
     await settle();
     expect(button().dataset.status).toBe("add");
     expect(button().getAttribute("aria-label")).toBe("Add 9 Kings");
-  });
-
-  it("names the modules running with the game in one quiet line, and keeps it while sliding away", async () => {
-    setState({ runningGameId: "local-9-kings", runningWithGame: ["9 Kings Companion"] });
-    await mount();
-    const line = () => root.querySelector('[data-testid="rail-running-with-game"]');
-    expect(line()?.textContent).toBe("9 Kings Companion runs with the game");
-    expect(button().getAttribute("aria-label")).toBe("Switch to game. 9 Kings Companion runs with the game");
-    setState({ runningGameId: "local-9-kings", runningWithGame: ["9 Kings Companion", "Run Notes"] });
-    await settle();
-    expect(line()?.textContent).toBe("9 Kings Companion and Run Notes run with the game");
-    setState({ runningGameId: "local-9-kings" });
-    await settle();
-    expect(line()).toBeNull();
-    setState({ runningGameId: "local-9-kings", runningWithGame: ["9 Kings Companion"] });
-    await settle();
-    // The game is open now, so the layer slides away with its words.
-    setState({});
-    await settle();
-    expect(line()?.textContent).toBe("9 Kings Companion runs with the game");
-  });
-
-  it("puts the line in the name only while compact", async () => {
-    setState({ runningGameId: "local-9-kings", runningWithGame: ["9 Kings Companion"] });
-    await mount(false);
-    expect(root.querySelector('[data-testid="rail-running-with-game"]')).toBeNull();
-    expect(button().getAttribute("aria-label")).toBe("Switch to game. 9 Kings Companion runs with the game");
-  });
-
-  it("shows only the line, with no button, while modules run with a game and there is nothing to switch to", async () => {
-    // "When a game starts" is off, or the game's workspace is open: no game to switch to, but the module runs.
-    setState({ runningWithGame: ["9 Kings Companion"] });
-    await mount();
-    const card = button();
-    expect(card.tagName).toBe("DIV");
-    expect(card.getAttribute("data-status")).toBe("with-game");
-    expect(card.getAttribute("role")).toBe("status");
-    expect(card.getAttribute("aria-label")).toBe("9 Kings Companion runs with the game");
-    expect(root.querySelector('[data-testid="rail-running-with-game"]')?.textContent).toBe("9 Kings Companion runs with the game");
-    // One row: no second line, no arrow.
-    expect(root.querySelectorAll('[data-testid="rail-running-with-game"]')).toHaveLength(1);
-    expect(root.querySelector(".running-peek")?.classList.contains("h-7")).toBe(true);
-    expect(card.querySelector("svg")).toBeNull();
-    card.click();
-    expect(host.act).not.toHaveBeenCalled();
-    // A game to switch to starts: the switch, with the line under it.
-    setState({ runningGameId: "local-fortnite", runningWithGame: ["9 Kings Companion"] });
-    await settle();
-    expect(button().tagName).toBe("BUTTON");
-    expect(button().getAttribute("data-status")).toBe("switch");
-    expect(button().getAttribute("aria-label")).toBe("Switch to game. 9 Kings Companion runs with the game");
-  });
-
-  it("names the modules of every game they run with", async () => {
-    setState({ runningWithGame: [{ workspaceId: "local-9-kings", names: ["9 Kings Companion"] }, { workspaceId: "local-fortnite", names: ["Drop Notes", "9 Kings Companion"] }] });
-    await mount();
-    expect(button().getAttribute("aria-label")).toBe("9 Kings Companion and Drop Notes run with your games");
-  });
-
-  it("names them with a game not in the library too", async () => {
-    setState({ unlistedGame: KINGS, runningWithGame: [{ workspaceId: "local-fortnite", names: ["Drop Notes"] }] });
-    await mount();
-    expect(button().getAttribute("data-status")).toBe("add");
-    expect(button().getAttribute("aria-label")).toBe("Add 9 Kings. Drop Notes runs with the game");
   });
 
   it("becomes the switch to the added game when it couldn't be opened", async () => {

@@ -933,11 +933,6 @@ export interface HostViewState {
    * the game of the workspace open now. Its id is its game workspace's. Null when none, or while "When a game starts" is off.
    */
   runningGameId: string | null;
-  /**
-   * Every running game with modules running with it now (main/with-game.ts), with their names, for a quiet line on the
-   * running game's card. Whatever "When a game starts" says, also for the game of the workspace open now.
-   */
-  runningWithGame: { workspaceId: string; names: string[] }[];
   /** Whether the game of the workspace open now runs on this PC; the header says so. False while "When a game starts" is off. */
   workspaceRunning: boolean;
   /**

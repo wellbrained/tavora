@@ -98,7 +98,7 @@ A panel type with `withGame: true` runs while one of the module's games runs, ev
 - **Out of sight it can't ask the user anything.** It can read and write its data, read and watch its granted folders, use the network and connectors it was granted and publish overlay or live state. Calls that need the user fail with `PERMISSION_DENIED` (see [Running with the game](./protocol.md#running-with-the-game)).
 - **A crash starts it once more,** and so does a page that stays unresponsive for 10 seconds. A second time in the same game session leaves it off until the game starts again. The user isn't told.
 
-While it runs, the running game's card in Tavora's rail says so in one quiet line ("9 Kings Companion runs with the game"), also with "When a game starts" off. Nothing is shown over the game.
+Nothing is shown over the game.
 
 ## Panel layout
 

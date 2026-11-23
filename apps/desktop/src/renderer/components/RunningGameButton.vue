@@ -3,10 +3,7 @@
 // card that peeks out above it, like the notification behind the front one, and switches to the game. The profile
 // card says which game it is. It slides back while that game is open, since there is nothing to switch to, and moves
 // the items above it up and down as it comes and goes. A running game that is not in the library (or only in Trash)
-// gets the same layer offering to add it; once added, it opens and the layer is the switch again. While modules run
-// with a game (main/with-game.ts), a quiet line under the label names them, for every game they run with; compact,
-// the tooltip says it. With nothing to switch to or add (game start off, or the game open), the layer still shows,
-// only that line and no button (`with-game`), so the user always sees what runs with the game.
+// gets the same layer offering to add it; once added, it opens and the layer is the switch again.
 //
 // Only transform and opacity move. The row's height changes at once, and what sits above it starts where it was and
 // glides to its new place (a FLIP), in step with the layer, instead of animating the height.
@@ -15,12 +12,12 @@ import { computed, ref, watch } from "vue";
 import { cn } from "@tavora/official-ui/lib/utils";
 import { useTask } from "@tavora/official-ui/use-task";
 import type { UnlistedGame } from "../../shared/host-api";
-import { act, listOf, state } from "../host";
+import { act, state } from "../host";
 import { t } from "../i18n";
 import { addInputForUnlisted } from "../lib/game-picker";
 import RailTooltip from "./RailTooltip.vue";
 
-const props = defineProps<{ expanded: boolean }>();
+defineProps<{ expanded: boolean }>();
 
 const game = computed(() => {
   const id = state.value!.runningGameId;
@@ -28,13 +25,8 @@ const game = computed(() => {
 });
 /** A running game that is not in the library; null while a game of the library runs (the host leaves it out then). */
 const unlisted = computed(() => state.value!.unlistedGame);
-/** The games with modules running with them now, whatever "When a game starts" says (the game open now too). */
-const withGame = computed(() => state.value!.runningWithGame);
-/** Those modules' names, each once. */
-const withGameNames = computed(() => [...new Set(withGame.value.flatMap((line) => line.names))]);
-// runningGameId already leaves out the game of the workspace open now, so the layer slides back there, unless modules
-// run with a game.
-const shown = computed(() => game.value !== null || unlisted.value !== null || withGameNames.value.length > 0);
+// runningGameId already leaves out the game of the workspace open now, so the layer slides back there.
+const shown = computed(() => game.value !== null || unlisted.value !== null);
 /** Adding the game and opening it; a second click meanwhile does nothing. A failure shows its toast (act). */
 const adding = useTask();
 /** The game added and opened from here, until the layer has slid away: it runs, but it is about to be the open one. */
@@ -43,38 +35,18 @@ let opened: string | null = null;
  * What the layer offers. It keeps the last one while it slides away, and while adding, so its words don't change on the
  * way out: the added game runs, and the layer goes as it opens.
  */
-const offer = ref<{ kind: "switch" } | { kind: "add"; game: UnlistedGame } | { kind: "with-game" }>({ kind: "switch" });
+const offer = ref<{ kind: "switch" } | { kind: "add"; game: UnlistedGame }>({ kind: "switch" });
 watch(
-  [game, unlisted, withGameNames, adding.busy],
+  [game, unlisted, adding.busy],
   () => {
     if (!shown.value) opened = null;
     if (adding.busy.value || (opened !== null && game.value?.id === opened)) return;
     if (game.value) offer.value = { kind: "switch" };
     else if (unlisted.value) offer.value = { kind: "add", game: unlisted.value };
-    else if (withGameNames.value.length) offer.value = { kind: "with-game" };
   },
   { immediate: true },
 );
-/**
- * The modules running with a game, as one quiet line. Kept while the layer slides away, like the offer, so the layer
- * doesn't shrink on its way out.
- */
-const alongside = ref<string | null>(null);
-watch(
-  [withGame, withGameNames],
-  ([lines, names]) => {
-    if (!shown.value) return;
-    alongside.value = names.length ? t(lines.length > 1 ? "rail.withGames" : "rail.withGame", { count: names.length, names: listOf(names) }) : null;
-  },
-  { immediate: true },
-);
-/** Only the line: nothing to switch to or add. */
-const quiet = computed(() => offer.value.kind === "with-game");
-const label = computed(() => (offer.value.kind === "add" ? t("rail.addRunningGame", { name: offer.value.game.name }) : offer.value.kind === "with-game" ? (alongside.value ?? "") : t("rail.switchToGame")));
-/** The line under the label; with only the line, it is the label. */
-const below = computed(() => (quiet.value ? null : alongside.value));
-/** The tooltip and the name for screen readers: the label, then the line. */
-const described = computed(() => (below.value ? `${label.value}. ${below.value}` : label.value));
+const label = computed(() => (offer.value.kind === "add" ? t("rail.addRunningGame", { name: offer.value.game.name }) : t("rail.switchToGame")));
 const status = computed(() => (adding.busy.value ? "adding" : offer.value.kind));
 
 function run() {
@@ -87,13 +59,13 @@ function run() {
       // Not opened: the layer becomes the switch to it.
       if (!(await act({ type: "open-workspace", workspaceId: added.id })).ok) opened = null;
     });
-  } else if (now.kind === "switch" && game.value) {
+  } else if (game.value) {
     void act({ type: "open-workspace", workspaceId: game.value.id });
   }
 }
 
-/** How far the row grows and shrinks: the part of the layer that shows above the profile card (h-7, h-11 with the line). */
-const peekHeight = computed(() => (below.value && props.expanded ? 44 : 28));
+/** How far the row grows and shrinks: the part of the layer that shows above the profile card (h-7). */
+const PEEK = 28;
 const peek = ref<HTMLElement | null>(null);
 watch(
   shown,
@@ -104,7 +76,7 @@ watch(
     if (!above || !("animate" in above) || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const style = getComputedStyle(peek.value!);
     above.animate(
-      { transform: [`translateY(${now ? peekHeight.value : -peekHeight.value}px)`, "translateY(0)"] },
+      { transform: [`translateY(${now ? PEEK : -PEEK}px)`, "translateY(0)"] },
       { duration: parseFloat(style.getPropertyValue("--duration-panel")) || 250, easing: style.getPropertyValue("--ease-out-strong").trim() || "ease-out" },
     );
   },
@@ -114,17 +86,13 @@ watch(
 
 <template>
   <!-- The 28 px that show above the profile card; the rest of the layer sits under it. -->
-  <div ref="peek" :class="cn('running-peek relative', !shown ? 'h-0' : peekHeight === 44 ? 'h-11' : 'h-7')" :inert="!shown">
-    <RailTooltip :text="described" :disabled="expanded">
-      <!-- Only the line (with-game) is no button: there is nothing to do there. -->
-      <component
-        :is="quiet ? 'div' : 'button'"
-        :type="quiet ? undefined : 'button'"
-        :role="quiet ? 'status' : undefined"
+  <div ref="peek" :class="cn('running-peek relative', shown ? 'h-7' : 'h-0')" :inert="!shown">
+    <RailTooltip :text="label" :disabled="expanded">
+      <button
+        type="button"
         :class="
           cn(
-            'running-layer group/run absolute top-0 flex items-start rounded-lg border pt-[5px] text-xs font-medium',
-            peekHeight === 44 ? 'h-14' : 'h-10',
+            'running-layer group/run absolute top-0 flex h-10 items-start rounded-lg border pt-[5px] text-xs font-medium',
             // Narrower than what it sits behind: the profile card when expanded, the avatar tile when compact.
             expanded ? 'inset-x-4 justify-between px-2.5' : 'inset-x-[18px] justify-center',
             !shown && 'translate-y-7 opacity-0',
@@ -133,21 +101,17 @@ watch(
         data-rail-item
         data-testid="rail-running"
         :data-status="status"
-        :aria-label="described"
+        :aria-label="label"
         :aria-busy="adding.busy.value"
         @click="run"
       >
-        <span class="relative flex min-w-0 flex-col items-start gap-0.5">
-          <span class="flex h-[18px] max-w-full items-center gap-2">
-            <span class="running-dot" aria-hidden="true" />
-            <span v-if="expanded && quiet" class="text-muted-foreground truncate font-normal" data-testid="rail-running-with-game">{{ label }}</span>
-            <span v-else-if="expanded" class="text-foreground/90 truncate">{{ label }}</span>
-          </span>
-          <span v-if="expanded && below" class="text-muted-foreground max-w-full truncate pl-[15px] font-normal" data-testid="rail-running-with-game">{{ below }}</span>
+        <span class="relative flex h-[18px] items-center gap-2">
+          <span class="running-dot" aria-hidden="true" />
+          <span v-if="expanded" class="text-foreground/90 truncate">{{ label }}</span>
         </span>
         <component
           :is="offer.kind === 'add' ? Plus : ArrowRight"
-          v-if="expanded && !quiet"
+          v-if="expanded"
           :class="
             cn(
               'text-foreground/90 relative mt-px size-4 flex-none transition-transform duration-(--duration-press) ease-(--ease-out-strong)',
@@ -155,7 +119,7 @@ watch(
             )
           "
         />
-      </component>
+      </button>
     </RailTooltip>
   </div>
 </template>

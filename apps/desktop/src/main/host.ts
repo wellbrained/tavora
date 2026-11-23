@@ -537,11 +537,6 @@ export class Host {
       if (entry && !entry.trashedAt) this.createView(record, { id: entry.id, displayName: entry.name, kind: entry.kind });
     },
     held: (moduleId, workspaceId) => this.purging.has(`${moduleId}@${workspaceId}`),
-    moduleName: (moduleId) => {
-      const module = this.modules.get(moduleId);
-      return module ? this.shown(module.manifest).name : null;
-    },
-    changed: () => this.pushStateSoon(),
   });
   /** The running games not in the library, the one started last at the end (game-watch.ts). */
   private unlistedRunning: readonly UnlistedGame[] = [];
@@ -3792,7 +3787,6 @@ export class Host {
       opening: this.panels.opening,
       ...pending,
       runningGameId: this.running.filter((id) => id !== this.workspaceId && isLive(this.library, id)).at(-1) ?? null,
-      runningWithGame: this.withGame.lines(),
       workspaceRunning: this.workspaceId !== null && this.running.includes(this.workspaceId),
       unlistedGame: this.unlistedRunning.length ? unlistedToOffer(this.unlistedRunning, liveWorkspaces(this.library), this.running, this.library.gameStart) : null,
       pendingGameSwitch: pending.pendingGameSwitch && isLive(this.library, pending.pendingGameSwitch) ? pending.pendingGameSwitch : null,
