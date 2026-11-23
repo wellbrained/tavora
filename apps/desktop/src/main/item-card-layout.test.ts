@@ -7,6 +7,11 @@ import { TOOLTIP_DOCUMENT } from "../shared/tooltip-document";
 const KIT_CSS = readFileSync(new URL("../../../../modules/shared/src/components/ui/item-card/item-card.css", import.meta.url), "utf8");
 
 describe("tooltip page and the kit's card: what a stat grows by, and rows under the stats", () => {
+    it("under a picture, move the name row in to line up with the picture's tags (the close button sits over the picture, so no room for it)", () => {
+        expect(TOOLTIP_DOCUMENT).toContain("body.card .card-art+.name{padding:0 6px}");
+        expect(KIT_CSS).toContain(".tavora-item-card-art+.tavora-item-card-name{padding:0 6px}");
+    });
+
     it("keep what a stat grows by whole: its column takes what it needs, only the label gives way", () => {
         expect(TOOLTIP_DOCUMENT).toContain("body.card .stats.has-per{grid-template-columns:minmax(72px,1fr) fit-content(36%) auto}");
         expect(KIT_CSS).toContain(".tavora-item-card-stats[data-per]{grid-template-columns:minmax(72px,1fr) fit-content(36%) auto}");

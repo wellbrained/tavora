@@ -21,6 +21,8 @@
 .tavora-item-card[data-skinned] .tavora-item-card-art-tag{border-radius:0}
 .tavora-item-card-name{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}
 .tavora-item-card-name h3{flex:1 1 auto;min-width:0}
+/* Under the picture, the name row moves in to line up with the tags on the picture's corners (6 px in). */
+.tavora-item-card-art+.tavora-item-card-name{padding:0 6px}
 .tavora-item-card-name .tavora-item-card-badges{margin-left:auto;justify-content:flex-end}
 .tavora-item-card-name+.tavora-item-card-type{margin-top:-4px}
 /* The card's stats: label, value and (when a stat grows) how much, lined up in columns like the kit's TooltipRows. */
