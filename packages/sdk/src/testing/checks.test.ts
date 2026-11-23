@@ -191,10 +191,22 @@ describe.skipIf(!browser)("checkFocus", () => {
     expect((await checkFocus(page, "#root", { settleMs: 0, strictRing: true })).issues.map((one) => one.kind)).toEqual(["focus-ring"]);
   });
 
-  // TODO(#922): fails on Windows CI only, even with a long settle; not understood yet.
-  it.skipIf(process.platform === "win32")("waits for a ring that fades in before calling it missing, when strict", async () => {
+  it("waits for a ring that fades in before calling it missing, when strict", async () => {
     await page.setContent(html(`<button>Fades in</button>`, `button{outline:0 solid transparent;transition:outline-width 140ms}button:focus-visible{outline:2px solid blue}`));
     expect((await checkFocus(page, "#root", { settleMs: 0, strictRing: true })).issues).toEqual([]);
+  });
+
+  it("counts a ring that is still fading in when the settle ends, when strict", async () => {
+    // A ring reads as none until its fade has drawn a first frame, and on a slow machine (Windows CI) the settle can end
+    // before that. A fade that starts after a long delay is always in that state here.
+    const ring = `button{outline:0 solid transparent;transition:outline-width 140ms 3s}button:focus-visible{outline:2px solid blue}`;
+    await page.setContent(html(`<button>Slow ring</button>`, ring));
+    expect((await checkFocus(page, "#root", { settleMs: 0, strictRing: true })).issues).toEqual([]);
+    // The same for a ring the field draws around the control, and a ring that is really missing still is.
+    await page.setContent(html(`<div class="field"><input aria-label="Count"></div>`, `input:focus-visible{outline:none}.field{box-shadow:0 0 0 0 blue;transition:box-shadow 140ms 3s}.field:focus-within{box-shadow:0 0 0 3px blue}`));
+    expect((await checkFocus(page, "#root", { settleMs: 0, strictRing: true })).issues).toEqual([]);
+    await page.setContent(html(`<button>No ring</button>`, `button{transition:outline-width 140ms 3s}button:focus-visible{outline:none}`));
+    expect((await checkFocus(page, "#root", { settleMs: 0, strictRing: true })).issues.map((one) => one.kind)).toEqual(["focus-ring"]);
   });
 
   it("finds a positive tabindex, and the control Tab then never reaches", async () => {

@@ -133,7 +133,7 @@ The checks need a browser that lays the page out. In jsdom they find nothing.
 
 It resolves with `{ stops, issues, complete }`: the stops in order, the findings (`unreachable`, `focus-order`, `positive-tabindex`, `focus-ring`) and whether Tab went all the way round. If a dialog is open, it starts at the top of it (the one on top, when one is open over another), not at the field the dialog focused: so it reads the dialog from its × through its fields to its buttons. Order is read within one layer: going from the panel to the toasts drawn over its bottom edge is never "up the page".
 
-By default a control that matches `:focus-visible` counts as having a ring, so a ring your CSS takes away goes unseen. Pass `strictRing: true` to count only a drawn outline or shadow, on the control or on the field around it (a number field draws its ring on its frame). A strict check waits 150 ms after each Tab press so a ring that fades in (the kit Button's takes 140 ms) has shown; `ringSettleMs` changes that.
+By default a control that matches `:focus-visible` counts as having a ring, so a ring your CSS takes away goes unseen. Pass `strictRing: true` to count only a drawn outline or shadow, on the control or on the field around it (a number field draws its ring on its frame). A ring that fades in (the kit Button's takes 140 ms) counts once its fade has run to its end. A strict check also waits 150 ms after each Tab press; `ringSettleMs` changes that.
 
 ## Put it together
 

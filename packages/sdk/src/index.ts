@@ -202,7 +202,7 @@ function localDay(at: number): string {
 }
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.4.9";
+export const SDK_VERSION = "0.4.10";
 
 /**
  * The oldest Tavora that has everything this SDK version offers, worked out from the table of calls

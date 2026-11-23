@@ -83,7 +83,7 @@ export interface FocusCheckOptions {
    * Count only a drawn ring (an outline or a box-shadow, on the control or on the field around it up to three levels up,
    * as a number field draws one with `:focus-within`) as a focus ring. Default false: a control that matches
    * `:focus-visible` counts too, which every control Tab reaches does, so a ring taken away by CSS goes unseen. Strict, a
-   * ring that is still fading in when it is measured counts as missing: see `ringSettleMs`.
+   * ring that fades in (a transition on `outline` or `box-shadow`) counts once its fade has run to its end.
    */
   strictRing?: boolean;
   /**
@@ -275,6 +275,16 @@ function focusStop(arg: { root: string; outside: string; strictRing: boolean }):
   const el = document.activeElement as HTMLElement | null;
   const root = document.querySelector(arg.root);
   if (!el || el === document.body || !root || !(root.contains(el) || el.closest(arg.outside))) return null;
+  // A ring can fade in (a transition on outline or box-shadow). Judge where the fade ends, not where a slow machine has got
+  // to: until its first frame the ring reads as none. The control and the fields around it (the ones that may draw it).
+  if (typeof CSSTransition !== "undefined") {
+    let holder: Element | null = el;
+    for (let level = 0; level < 4 && holder && holder !== root.parentElement; level++, holder = holder.parentElement) {
+      for (const animation of holder.getAnimations()) {
+        if (animation instanceof CSSTransition && /^(outline|box-shadow)/.test(animation.transitionProperty)) animation.finish();
+      }
+    }
+  }
   const rect = el.getBoundingClientRect();
   const style = getComputedStyle(el);
   // Where it sits in each area around it that clips or scrolls, and in the page: a list scrolled down and the footer

@@ -1,3 +1,9 @@
+## 0.4.10
+
+A focus ring that fades in is no longer missed. `MIN_TAVORA` stays (Tavora 0.21.43).
+
+- `@tavora/sdk/testing`: `checkFocus` and `inspectFocus` with `strictRing` let a ring's fade (a transition on `outline` or `box-shadow`, on the control or the field around it) run to its end before they look. Before, a ring read as missing until its fade had drawn a first frame, so a slow machine (Windows CI) could call a ring missing that shows. A ring that is really missing is still reported. `ringSettleMs` stays for rings that appear by other means.
+
 ## 0.4.9
 
 Tags over an item card's picture, say a kind and a rarity. They come with the next Tavora (`ITEM_CARD_ART_TAGS_TAVORA` in `protocol.ts`; the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.21.43).
