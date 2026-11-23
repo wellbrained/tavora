@@ -2183,7 +2183,7 @@ export class Host {
         // The module's pages start again, so they find the folder where the user said.
         if (await this.folderHostOf(module).choose(action.folder)) this.modulePanels.reloadViews(action.moduleId);
       },
-      "revoke-module": (action) => this.lifecycle.revoke(action.moduleId),
+      "revoke-module": (action) => this.lifecycle.revoke({ owner: action.owner, id: action.moduleId }),
       "leaderboards-hide": (action) => this.moduleBoards.leave(action.moduleId),
       "install-module": () => this.modulesFolder.installZip(),
       "install-catalog-module": (action) => this.lifecycle.installFromCatalog(action.moduleId),

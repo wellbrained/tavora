@@ -14,6 +14,6 @@ export function revokeModule(module: ModuleView, unused: MessageKey): void {
     message: workspaces.length ? t("integrations.grants.revokeUsed", { name: module.name, workspaces: listOf(workspaces) }) : t(unused, { name: module.name }),
     confirm: t("integrations.grants.revoke"),
     danger: true,
-    run: () => submitAction({ type: "revoke-module", moduleId: module.id }),
+    run: () => submitAction({ type: "revoke-module", owner: module.owner, moduleId: module.id }),
   });
 }

@@ -44,6 +44,8 @@ describe("host.ts", () => {
     expect(body(/private networkHostsOf\(/)).toContain("sameOwner(module, this.modules)");
     expect(body(/private connectorsOf\(/)).toContain("sameOwner(module, this.modules)");
     expect(body(/private folderHostOf\(/)).toContain("sameOwner(module, this.modules)");
+    // Settings' folder choice goes to the owner it showed, not to whichever copy holds the id now.
+    expect(body(/"choose-module-folder": async \(action\) => \{/)).toContain("sameOwner({ owner: action.owner, manifest: { id: action.moduleId } }, this.modules)");
     // The open module pages are the ones a look at the modules restarts or reloads.
     expect(body(/this\.modulePanels = new ModulePanels\(\{/)).toContain("views: () => this.moduleViews(),");
   });

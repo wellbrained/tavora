@@ -245,12 +245,14 @@ export class ModuleLifecycle {
     return found;
   }
 
-  /** Takes back everything granted to a module, after its panels are removed in every workspace. Its data stays. */
-  async revoke(moduleId: string): Promise<void> {
-    const module = this.options.modules().get(moduleId);
-    if (!module) throw new LibraryError("error.moduleMissing");
-    this.options.panels.close(moduleId);
-    await this.options.grants().revoke(module.owner, moduleId);
+  /**
+   * Takes back everything granted to the owner Settings showed, after its panels are removed in every workspace. Its
+   * data stays. Taking back is always safe, so it goes to that owner even while another owner's copy holds the id; that
+   * copy's panels stay, as they run on its own grant.
+   */
+  async revoke(module: ShownModule): Promise<void> {
+    if (sameOwner({ owner: module.owner, manifest: { id: module.id } }, this.options.modules())) this.options.panels.close(module.id);
+    await this.options.grants().revoke(module.owner, module.id);
     this.options.grantsChanged?.();
   }
 

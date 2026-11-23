@@ -401,8 +401,8 @@ export function hostActionTable(c: HostChecks) {
     "set-module-with-game": { owner: c.ownerId, moduleId: c.moduleId, on: bool },
     /** Settings: shows the system's folder dialog so the user can say where one of a module's granted folders is (for the owner Settings showed). */
     "choose-module-folder": { owner: c.ownerId, moduleId: c.moduleId, folder: c.folderPath },
-    /** Takes back everything granted to a module, after removing its panels in every workspace; its data stays. */
-    "revoke-module": { moduleId: c.moduleId },
+    /** Takes back everything granted to a module's owner Settings showed, after removing its panels in every workspace; its data stays. */
+    "revoke-module": { owner: c.ownerId, moduleId: c.moduleId },
     /** Settings > Integrations > Leaderboards: takes the user off a module's boards; the service deletes their results there. */
     "leaderboards-hide": { moduleId: c.moduleId },
     /** Asks for a module zip and installs it into the user's modules folder; answers with the module's id. */

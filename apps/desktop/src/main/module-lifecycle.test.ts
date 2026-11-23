@@ -261,10 +261,24 @@ describe("ModuleLifecycle", () => {
     steps.length = 0;
     let grantWhenClosed: unknown;
     state.onClose = () => (grantWhenClosed = grants.get(fingerprint(key), ID));
-    await lifecycle.revoke(ID);
+    await lifecycle.revoke({ owner: fingerprint(key), id: ID });
     expect(steps).toEqual([`close panels ${ID}`]);
     expect(grantWhenClosed).toBeDefined();
     expect(grants.get(fingerprint(key), ID)).toBeUndefined();
+  });
+
+  it("takes back the shown owner's grant even when another owner's copy took the id, and leaves that copy's panels", async () => {
+    const { lifecycle, steps, grants, modules, zipFile } = await setup();
+    const key = generateKeyPairSync("ed25519").privateKey;
+    await lifecycle.installFile(await zipFile(zipOf("1.0.0", key, ["api.example.com"])));
+    const shown = fingerprint(key);
+    await lifecycle.grant({ owner: shown, id: ID }, ["api.example.com"], []);
+    // A development folder takes the id while the click is on its way.
+    modules().set(ID, { ...modules().get(ID)!, owner: LOCAL_OWNER });
+    steps.length = 0;
+    await lifecycle.revoke({ owner: shown, id: ID });
+    expect(grants.get(shown, ID)).toBeUndefined();
+    expect(steps).toEqual([]);
   });
 
   it("tells the host when a grant is taken back or given, so what runs on it can stop at once", async () => {
@@ -274,7 +288,7 @@ describe("ModuleLifecycle", () => {
     state.grantChanges = 0;
     await lifecycle.grant({ owner: fingerprint(key), id: ID }, ["api.example.com"], []);
     expect(state.grantChanges).toBe(1);
-    await lifecycle.revoke(ID);
+    await lifecycle.revoke({ owner: fingerprint(key), id: ID });
     expect(state.grantChanges).toBe(2);
   });
 
