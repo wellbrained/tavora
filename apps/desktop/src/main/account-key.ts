@@ -126,6 +126,8 @@ export class AccountKey {
   private generation = 0;
   /** The account whose vault this PC saw in this run (the seen file keeps it across runs). */
   private sawVault: string | null = null;
+  /** The seen file's last change, so the next one waits for it (changeSeen). */
+  private seenTurn: Promise<void> = Promise.resolve();
   private problem: { account: string; trouble: VaultTrouble } | null = null;
 
   constructor(private readonly options: AccountKeyOptions) {}
@@ -495,10 +497,8 @@ export class AccountKey {
       await forgetSealedFile(slot.keyFile);
       if (slot.cacheFile) await forgetSealedFile(slot.cacheFile);
     }
-    const seenFile = this.options.seenFile;
-    if (!seenFile) return;
-    if (all || (!this.main && !this.mainBlocked && this.others.size === 0)) await forgetSealedFile(seenFile);
-    else if (account) await this.writeSeen((await this.seenMarks()).filter((mark) => mark !== account));
+    if (all || (!this.main && !this.mainBlocked && this.others.size === 0)) await this.changeSeen(() => "forget");
+    else if (account) await this.changeSeen((marks) => marks.filter((mark) => mark !== account));
   }
 
   /**
@@ -643,15 +643,26 @@ export class AccountKey {
     return text === null ? [] : text.split("\n").map((line) => line.trim()).filter(Boolean);
   }
 
-  private async writeSeen(marks: string[]): Promise<void> {
-    if (this.options.seenFile) await writeFileAtomic(this.options.seenFile, marks.slice(-MAX_SEEN).join("\n")).catch(() => undefined);
+  /**
+   * Changes the seen file one change at a time: each reads what the one before wrote, so two that overlap (a sign-in's
+   * own read and a refresh) can't drop each other's mark. `change` answers the new lines, `"forget"` to delete the file,
+   * or null to leave it.
+   */
+  private changeSeen(change: (marks: string[]) => string[] | "forget" | null): Promise<void> {
+    const seenFile = this.options.seenFile;
+    if (!seenFile) return Promise.resolve();
+    const turn = this.seenTurn.then(async () => {
+      const next = change(await this.seenMarks());
+      if (next === "forget") await forgetSealedFile(seenFile);
+      else if (next) await writeFileAtomic(seenFile, next.slice(-MAX_SEEN).join("\n")).catch(() => undefined);
+    });
+    this.seenTurn = turn.catch(() => undefined);
+    return turn;
   }
 
   /** A key from before keys noted their account is `who`'s: the seen file's "1" was `who`'s vault. */
-  private async provenSeen(who: string): Promise<void> {
-    const marks = await this.seenMarks();
-    if (!marks.includes(SEEN_BEFORE_ACCOUNTS)) return;
-    await this.writeSeen([...new Set(marks.map((mark) => (mark === SEEN_BEFORE_ACCOUNTS ? who : mark)))]);
+  private provenSeen(who: string): Promise<void> {
+    return this.changeSeen((marks) => (marks.includes(SEEN_BEFORE_ACCOUNTS) ? [...new Set(marks.map((mark) => (mark === SEEN_BEFORE_ACCOUNTS ? who : mark)))] : null));
   }
 
   /** Whether this PC was used signed in: it saw a vault, or kept one. */
@@ -663,8 +674,7 @@ export class AccountKey {
   private async markSeen(who: string): Promise<void> {
     if (this.sawVault === who) return;
     this.sawVault = who;
-    const marks = await this.seenMarks();
-    if (!marks.includes(who)) await this.writeSeen([...marks, who]);
+    await this.changeSeen((marks) => (marks.includes(who) ? null : [...marks, who]));
   }
 
   /** Where `who`'s vault as last read under `key` is kept now (looked up again each time: useForCopy may move it). */

@@ -93,9 +93,15 @@ describe("the popups of a menu or hint (measureStep, answerStep)", () => {
     expect(last.request).toEqual({ seq: 1 });
     // Every panel is asked now: the overlay says so, and the watch keeps no second copy of it.
     expect(last.watch.asked).toBeNull();
-    const again = measureStep(last.watch, [over("menu", OVER_LEFT)], panels, viewport, true);
-    expect(again).toEqual({ watch: last.watch, request: null, hold: [], show: [] });
-    expect(measureStep(last.watch, [over("menu", OVER_LEFT)], panels, viewport).request).not.toBeNull();
+  });
+
+  it("shows nothing for an answer that comes after the overlay closed (the close resets the watch)", () => {
+    const asked = askAllStep(openWatch(NO_WATCH));
+    expect(answerStep(asked.watch, asked.request.seq).showAll).toBe(true);
+    // The overlay closes before the host answered: the watch starts over, request numbers go on.
+    const closed = openWatch(asked.watch);
+    expect(closed).toEqual({ ...NO_WATCH, seq: asked.request.seq });
+    expect(answerStep(closed, asked.request.seq).showAll).toBe(false);
   });
 
   it("holds a second popup over a panel asked for a moment ago, and asks only for new panels", () => {

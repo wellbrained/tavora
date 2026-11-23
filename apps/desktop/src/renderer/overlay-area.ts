@@ -130,16 +130,14 @@ export interface MeasuredPopup<P> {
  * One frame's look at the popups while only menus or hints are open. The first request goes once a popup is placed (or
  * every panel is asked after POPUP_WAIT_FRAMES without one); later ones ask for panels a popup reaches that were not
  * asked yet. Each placed popup either waits for the answer to the newest request that asked for a panel under it
- * (`hold`), or may show (`show`). `all`: every panel is asked already (the overlay's status), so there is nothing to measure.
+ * (`hold`), or may show (`show`). Not called once every panel is asked (the overlay's `all`): nothing is left to measure.
  */
 export function measureStep<P>(
   watch: PopupWatch,
   popups: readonly MeasuredPopup<P>[],
   panels: readonly (Box & { instanceId: string })[],
   viewport: { width: number; height: number },
-  all = false,
 ): { watch: PopupWatch; request: PopupRequest | null; hold: { popup: P; seq: number }[]; show: P[] } {
-  if (all) return { watch, request: null, hold: [], show: [] };
   const placed = popups.filter((item) => isPlaced(item.box, item.hidden, viewport)).map((item) => ({ popup: item.popup, ids: panelsUnder(item.box, panels) }));
   if (watch.asked === null && !placed.length) {
     const quiet = { ...watch, quietFrames: watch.quietFrames + 1 };

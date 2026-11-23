@@ -53,6 +53,17 @@ function tampered(cloud: Service) {
 }
 
 describe("the account's key", () => {
+  it("keeps every mark when two changes to the seen file overlap", async () => {
+    const cloud = await service();
+    const { key, userData } = await onPc(cloud, { kept: true });
+    const seenFile = path.join(userData, "account-vault-seen");
+    await writeFile(seenFile, "1");
+    // A sign-in's own read and a refresh, at once: one names the old "1" as its account, the other adds another.
+    const marks = key as unknown as { provenSeen(who: string): Promise<void>; markSeen(who: string): Promise<void> };
+    await Promise.all([marks.provenSeen("me"), marks.markSeen("other")]);
+    expect((await readFile(seenFile, "utf8")).split("\n").sort()).toEqual(["me", "other"]);
+  });
+
   it("made while signing out is not kept on this PC", async () => {
     const cloud = await service();
     let answer: (() => void) | null = null;

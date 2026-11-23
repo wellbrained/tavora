@@ -83,10 +83,13 @@ function close(request: GrantRequest = props.request) {
 }
 
 // The module went away, or has nothing left to ask: nothing to answer (also once an answer that came too late is back).
+// One from Update all goes on with the next update in the queue, as an answer would, instead of leaving it behind.
 watch(
   [module, hosts, connectors, folders, withGame, busy],
   () => {
-    if (!props.inPanel && !busy.value && (!module.value || (hosts.value.length + connectors.value.length + folders.value.length === 0 && !withGame.value))) closeDialog(props.request);
+    if (props.inPanel || busy.value || (module.value && hosts.value.length + connectors.value.length + folders.value.length + (withGame.value ? 1 : 0) > 0)) return;
+    if (props.request.backToUpdates && dialog.value === props.request) nextUpdateAsk();
+    else closeDialog(props.request);
   },
   { immediate: true },
 );
@@ -171,6 +174,8 @@ async function allow() {
   if (props.inPanel) return;
   close(request);
   if (request.review) return;
+  // Another owner's copy took the id while the answer was on its way: nothing was granted, and its panels would only ask.
+  if (state.value?.modules.find((item) => item.id === current.id)?.owner !== current.owner) return;
   void openPanels(current.id, request.slot, request.panelTypes ?? []);
 }
 </script>

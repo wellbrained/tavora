@@ -34,7 +34,7 @@ vi.mock("@tavora/official-ui/components/ui/dialog", async () => {
   };
 });
 
-import { account, dialog, state, type GrantRequest, type PromptRequest, type ShareIconsRequest } from "../host";
+import { account, dialog, state, updateQueue, type GrantRequest, type PromptRequest, type ShareIconsRequest } from "../host";
 import CopyExampleDialog from "./developer/CopyExampleDialog.vue";
 import GrantDialog from "./GrantDialog.vue";
 import PromptDialog from "./PromptDialog.vue";
@@ -309,6 +309,44 @@ describe("the consent dialog grants only the owner it showed", () => {
     saved.resolve({ ok: false, error: "That module is no longer installed." });
     await settle();
     expect(dialog.value).toBeNull();
+  });
+
+  it("opens no panels when another owner's copy took the id while the answer was on its way", async () => {
+    const adding: GrantRequest = { kind: "grant", moduleId: MODULE, slot: null, review: false };
+    const saved = holdAct("grant-module");
+    dialog.value = adding;
+    mount(GrantDialog, () => ({ request: adding }));
+    await settle();
+    button("grant-allow").click();
+    await settle();
+    state.value = hostState("local");
+    await nextTick();
+    saved.resolve({ ok: true });
+    await settle();
+    expect(bridge.act.mock.calls.map(([action]) => action.type)).toEqual(["grant-module"]);
+    expect(dialog.value).toBeNull();
+  });
+
+  it("goes on with Update all's next update when another owner's copy takes the id of the one shown", async () => {
+    /** Both modules have an update that asks for more; `firstOwner` is whose copy holds the first one's id. */
+    const withUpdates = (firstOwner: string): HostViewState => {
+      const base = hostState();
+      const update = { version: "2.0.0", notes: [], asks: { network: ["more.example.com"], connectors: [], folders: [] } };
+      return { ...base, modules: base.modules.map((item, index) => ({ ...item, ...(index === 0 ? { owner: firstOwner } : {}), update })) } as unknown as HostViewState;
+    };
+    state.value = withUpdates(PUBLISHER);
+    const asking: GrantRequest = { kind: "grant", moduleId: MODULE, slot: null, review: true, update: true, backToUpdates: true };
+    updateQueue.value = ["local.example.vue-module"];
+    dialog.value = asking;
+    mount(GrantDialog, () => ({ request: asking }));
+    await settle();
+    state.value = withUpdates("local");
+    await settle();
+    expect(dialog.value).toEqual({ kind: "grant", moduleId: "local.example.vue-module", slot: null, review: true, update: true, backToUpdates: true });
+    expect(updateQueue.value).toEqual([]);
+    expect(bridge.act).not.toHaveBeenCalled();
+    app?.unmount();
+    app = undefined;
   });
 
   it("closes, without asking for the new copy, when another owner's copy takes the id while it is open", async () => {
