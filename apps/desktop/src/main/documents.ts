@@ -140,6 +140,9 @@ export class DocumentStore extends EventEmitter<{ change: [DocumentChange, unkno
       index.delete(docId);
       await this.persistIndex(index);
       await rm(this.file(docId), { force: true });
+      // Gone: nothing of its file is kept (a document of the same id later starts afresh).
+      this.files.delete(docId);
+      this.checked.delete(docId);
       this.emit("change", { id: docId, revision: existing.revision, deleted: true }, origin);
     });
   }

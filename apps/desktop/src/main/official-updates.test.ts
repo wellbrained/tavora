@@ -576,3 +576,16 @@ describe("the module lifecycle", () => {
     expect(await lifecycle.updates.check()).toEqual({ updated: [], waiting: [] });
   });
 });
+
+describe("the records on disk", () => {
+  it("a save keeps what another save wrote since this one read them", async () => {
+    const one = officialOf();
+    const other = officialOf();
+    await one.load();
+    await other.load();
+    const record = (id: string) => ({ id, version: "1.1.0", sha256: "a".repeat(64), signer: PINNED });
+    await other.save(record("tavora.clock-counter"));
+    await one.save(record("tavora.notes"));
+    expect(Object.keys(await readOfficialRecords(userData)).sort()).toEqual(["tavora.clock-counter", "tavora.notes"]);
+  });
+});

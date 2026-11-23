@@ -384,3 +384,25 @@ describe("the files keep their version", () => {
     expect(await readFile(at("documents", `doc-1.json.from-version-${STORE_VERSIONS.document + 1}`), "utf8")).toBe(newer);
   });
 });
+
+describe("changes from two places at once", () => {
+  it("chosen folders: two set at once both land", async () => {
+    const folders = new ChosenFolders(dir, "local", "local.game");
+    await Promise.all([folders.set("Documents/My Games/A", at("A")), new ChosenFolders(dir, "local", "local.game").set("Documents/My Games/B", at("B"))]);
+    expect(await folders.get("Documents/My Games/A")).toBe(at("A"));
+    expect(await folders.get("Documents/My Games/B")).toBe(at("B"));
+  });
+});
+
+describe("what a store keeps open", () => {
+  it("a document deleted keeps nothing of its file, and one of the same id starts afresh", async () => {
+    const store = new DocumentStore(at("documents"));
+    const files = (store as unknown as { files: Map<string, unknown> }).files;
+    await store.put({ id: "a", title: "A", data: 1 });
+    expect(files.size).toBe(1);
+    await store.delete("a");
+    expect(files.size).toBe(0);
+    await store.put({ id: "a", title: "A again", data: 2 });
+    expect(await store.get("a")).toMatchObject({ title: "A again", revision: 1, data: 2 });
+  });
+});

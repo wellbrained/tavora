@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { onUnreadableFileKept, unreadableFilesKept } from "./json";
 import { emptyLibrary } from "./library";
 import { DATA_FILES, keepNewerFile, readGrayscaleText, SavedData, WINDOW_FILE } from "./saved-data";
 import { emptyWorkspaces } from "./workspace";
@@ -11,15 +12,16 @@ const writes = vi.hoisted(() => new Map<string, number>());
 const order = vi.hoisted(() => [] as string[]);
 vi.mock("./fsutil", async (original) => {
   const actual = await original<typeof import("./fsutil")>();
-  return {
-    ...actual,
-    writeFileAtomic: (file: string, ...rest: unknown[]) => {
+  const counted =
+    <T>(write: (file: string, ...rest: never[]) => Promise<T>) =>
+    (file: string, ...rest: never[]) => {
       const name = path.basename(file);
       writes.set(name, (writes.get(name) ?? 0) + 1);
       order.push(name);
-      return (actual.writeFileAtomic as (...args: unknown[]) => Promise<void>)(file, ...rest);
-    },
-  };
+      return write(file, ...rest);
+    };
+  // SavedFile writes with writeFileUnlessReplaced, window.json with writeFileAtomic.
+  return { ...actual, writeFileAtomic: counted(actual.writeFileAtomic), writeFileUnlessReplaced: counted(actual.writeFileUnlessReplaced) };
 });
 
 let dir: string;
@@ -53,6 +55,39 @@ describe("SavedData", () => {
     await saved.flush();
     expect(JSON.parse(await read("library.json")).onlineSearch).toBe(false);
     expect((await saved.loadLibrary()).onlineSearch).toBe(false);
+  });
+
+  it("takes the library and the profile as they are when saved, what is nested in them too", async () => {
+    const saved = new SavedData(dir);
+    const library = emptyLibrary();
+    library.favorites = ["poe2"];
+    saved.saveLibrary(library);
+    library.favorites.push("elden-ring");
+    const { profile } = await saved.loadProfile();
+    const mine = { ...profile, name: "Nik" };
+    const written = saved.saveProfile(mine);
+    mine.name = "Someone else";
+    await saved.flush();
+    await written;
+    expect(JSON.parse(await read("library.json")).favorites).toEqual(["poe2"]);
+    expect(JSON.parse(await read("profile.json")).name).toBe("Nik");
+  });
+
+  it("sets aside a damaged library before writing over it, even unread, and tells the user", async () => {
+    // Before saved-file.ts a library written before it was read went over a damaged one; now it is kept, as at a read.
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const before = unreadableFilesKept();
+    await write("library.json", "{ damaged");
+    const saved = new SavedData(dir);
+    saved.saveLibrary(emptyLibrary());
+    await saved.flush();
+    const aside = (await list()).filter((name) => name.startsWith("library.json.corrupt-"));
+    expect(aside).toHaveLength(1);
+    expect(await read(aside[0]!)).toBe("{ damaged");
+    expect(unreadableFilesKept()).toBe(before + 1);
+    expect(JSON.parse(await read("library.json")).version).toBe(2);
+    onUnreadableFileKept(null);
+    vi.restoreAllMocks();
   });
 
   it("says whether there was a profile, and keeps going after a failed write", async () => {
