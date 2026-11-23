@@ -296,6 +296,33 @@ describe("the cloud copy in a folder, as Tavora runs it", () => {
     expect((await readdir(path.join(first, "Tavora"))).sort()).toEqual(["manifests", "parts"]);
   });
 
+  it("asks before anything comes down at turn-on when the newest list has no mark but the folder holds marked ones", async () => {
+    const onedrive = await folder();
+    const version = 9_000_000_000_000;
+    const forged = JSON.stringify({ v: 1, version, pictures: true, files: [] });
+    const a = await pc({ "library.json": JSON.stringify({ version: 2, workspaces: { "elden-ring": {} } }), "module-data/m/g/storage.json": forged });
+    const atA = tavora(a);
+    await atA.sync.beforeLoad();
+    await atA.sync.turnOn(onedrive);
+    const key = atA.sync.view().recoveryKey!;
+    const id = partId(copyKeys(Buffer.from(atA.sync["key"]!)), Buffer.from(forged)).toString("hex");
+    const header = Buffer.alloc(16);
+    header.write("TVC1");
+    const [current] = await manifests(onedrive);
+    await writeFile(
+      path.join(onedrive, "Tavora", "manifests", `${String(version).padStart(16, "0")}-${current!.slice(0, 16)}.bin`),
+      Buffer.concat([header, await readFile(path.join(onedrive, "Tavora", "parts", id.slice(0, 2), id))]),
+    );
+
+    const b = await pc({ "library.json": JSON.stringify({ version: 2, workspaces: {} }) });
+    const atB = tavora(b);
+    await atB.sync.beforeLoad();
+    await atB.sync.turnOn(onedrive);
+    await atB.sync.enterKey(key);
+    expect(atB.sync.view()).toMatchObject({ on: true, conflict: true });
+    expect(await readdir(path.join(b.userData, "cloud-copy-staging")).catch(() => [])).toEqual([]);
+  });
+
   it("says when the folder can't be used", async () => {
     const atA = tavora(await pc());
     await atA.sync.beforeLoad();
@@ -337,16 +364,37 @@ describe("what anyone who can write the folder can do", () => {
     // It has no mark: a PC that took or saved a marked one doesn't take it on its own (the user is asked, as for an older list).
     const b = await pc({ "library.json": "mine" });
     await expect(new CloudCopy(storage).download(key, b.roots, path.join(b.root, "staging"), up.state.version, up.state)).rejects.toMatchObject({ reason: "older" });
-    // One with a mark that isn't right is damaged, for any PC.
+    // Nor does a PC that never synced, as the folder holds a marked one. Only the user's own choice takes it.
+    await expect(new CloudCopy(storage).download(key, b.roots, path.join(b.root, "staging"))).rejects.toMatchObject({ reason: "older" });
+    expect(await new CloudCopy(storage).download(key, b.roots, path.join(b.root, "staging"), 0, { chosen: true })).toMatchObject({ version, files: {} });
+    // One with a mark that isn't right is damaged, for any PC, also when everything else about it fits its name.
     await rm(path.join(onedrive, "Tavora", "manifests", `${pad(version)}-${pad(up.state.version)}.bin`));
-    const marked = JSON.stringify({ v: 1, version, pictures: true, files: [], mark: "AAAA" });
+    const marked = JSON.stringify({ v: 1, version, parent: 5, pictures: true, files: [], mark: "AAAA" });
     await writeFile(path.join(a.userData, "module-data/m/g/storage.json"), marked);
     const markedId = partId(copyKeys(key), Buffer.from(marked)).toString("hex");
     const second = await new CloudCopy(storage).upload(key, a.roots, up.state);
     if (second.status !== "uploaded") throw new Error(second.status);
     const markedPart = await readFile(path.join(onedrive, "Tavora", "parts", markedId.slice(0, 2), markedId));
-    await writeFile(path.join(onedrive, "Tavora", "manifests", `${pad(version)}-${pad(second.state.version)}.bin`), Buffer.concat([header, markedPart]));
+    await writeFile(path.join(onedrive, "Tavora", "manifests", `${pad(version)}-${pad(5)}.bin`), Buffer.concat([header, markedPart]));
     await expect(new CloudCopy(storage).download(key, b.roots, path.join(b.root, "staging"))).rejects.toMatchObject({ reason: "damaged" });
+  });
+
+  it("doesn't take an older copy than the one this PC synced, when newer manifests were deleted or the folder put back", async () => {
+    const key = newCopyKey();
+    const onedrive = await folder();
+    const a = await pc({ "library.json": "v1" });
+    const first = await new CloudCopy(new FolderStorage(onedrive)).upload(key, a.roots, EMPTY_STATE);
+    if (first.status !== "uploaded") throw new Error(first.status);
+    await writeFile(path.join(a.userData, "library.json"), "v2");
+    const second = await new CloudCopy(new FolderStorage(onedrive)).upload(key, a.roots, first.state);
+    if (second.status !== "uploaded") throw new Error(second.status);
+    await rm(path.join(onedrive, "Tavora", "manifests", `${pad(second.state.version)}-${pad(first.state.version)}.bin`));
+    // Its own manifest is gone, so the folder can't tell it was left behind; the version still can.
+    expect(await new FolderStorage(onedrive).remote(second.state.version)).toMatchObject({ version: first.state.version, follows: true });
+    const b = await pc();
+    const staging = path.join(b.root, "staging");
+    await expect(new CloudCopy(new FolderStorage(onedrive)).download(key, b.roots, staging, second.state.version, second.state)).rejects.toMatchObject({ reason: "older" });
+    expect(await new CloudCopy(new FolderStorage(onedrive)).download(key, b.roots, staging, 0, { ...second.state, chosen: true })).toMatchObject({ version: first.state.version });
   });
 
   it("can't rename a manifest to say it was saved on top of another version", async () => {
@@ -465,6 +513,116 @@ describe("what anyone who can write the folder can do", () => {
     const empty = await folder();
     expect(await new FolderStorage(empty).swap(0, null, [], Buffer.alloc(MAX_MANIFEST_FILE))).toMatchObject({ status: "too-big" });
     expect(await readdir(empty)).toEqual([]);
+  });
+
+  /** Six saves of this Tavora, a month and more ago; the next save cleans up. */
+  async function sixOldSaves() {
+    const key = newCopyKey();
+    const onedrive = await folder();
+    const clock = { now: Date.now() };
+    const storage = new FolderStorage(onedrive, { now: () => clock.now });
+    const a = await pc({ "library.json": "v0" });
+    let state = EMPTY_STATE;
+    const versions: { version: number; base: number }[] = [];
+    for (let round = 1; round <= 6; round++) {
+      await writeFile(path.join(a.userData, "library.json"), `v${round}`);
+      const up = await new CloudCopy(storage).upload(key, a.roots, state);
+      if (up.status !== "uploaded") throw new Error(up.status);
+      versions.push({ version: up.state.version, base: state.version });
+      state = up.state;
+    }
+    clock.now += 40 * DAY;
+    await age(onedrive, 35 * DAY, clock.now);
+    const saveAgain = async () => {
+      await writeFile(path.join(a.userData, "library.json"), "v7");
+      const up = await new CloudCopy(storage).upload(key, a.roots, state);
+      if (up.status !== "uploaded") throw new Error(up.status);
+    };
+    const manifestFile = (at: number) => path.join(onedrive, "Tavora", "manifests", `${pad(versions[at]!.version)}-${pad(versions[at]!.base)}.bin`);
+    return { key, onedrive, clock, storage, a, state, versions, saveAgain, manifestFile };
+  }
+
+  it("cleans up as before when nothing was changed", async () => {
+    const { onedrive, saveAgain } = await sixOldSaves();
+    await saveAgain();
+    expect(await manifests(onedrive)).toHaveLength(5);
+    expect(await partFiles(onedrive)).toHaveLength(5);
+  });
+
+  it("cleans up nothing when a kept manifest's name says another version than its seal", async () => {
+    const { onedrive, versions, saveAgain, manifestFile } = await sixOldSaves();
+    await rename(manifestFile(3), path.join(onedrive, "Tavora", "manifests", `${pad(versions[3]!.version + 1)}-${pad(versions[3]!.base)}.bin`));
+    await saveAgain();
+    expect(await manifests(onedrive)).toHaveLength(7);
+    expect(await partFiles(onedrive)).toHaveLength(7);
+  });
+
+  it("cleans up nothing when a kept manifest's ids outside the seal say other parts", async () => {
+    const { onedrive, saveAgain, manifestFile } = await sixOldSaves();
+    const body = await readFile(manifestFile(3));
+    body.fill(0xab, 16, 16 + 32);
+    await writeFile(manifestFile(3), body);
+    await saveAgain();
+    expect(await manifests(onedrive)).toHaveLength(7);
+    expect(await partFiles(onedrive)).toHaveLength(7);
+  });
+
+  it("goes on past a manifest it can't read that is older than any it keeps, and leaves that one alone", async () => {
+    const { onedrive, clock, saveAgain } = await sixOldSaves();
+    const junk = path.join(onedrive, "Tavora", "manifests", `${pad(1)}-${pad(0)}.bin`);
+    await writeFile(junk, "not a manifest");
+    await utimes(junk, new Date(clock.now - 35 * DAY), new Date(clock.now - 35 * DAY));
+    await saveAgain();
+    expect(await manifests(onedrive)).toHaveLength(6);
+    expect(await manifests(onedrive)).toContain(`${pad(1)}-${pad(0)}.bin`);
+    expect(await partFiles(onedrive)).toHaveLength(5);
+  });
+
+  it("stops at a manifest it can't read while that one could be kept", async () => {
+    const { onedrive, clock, versions, saveAgain } = await sixOldSaves();
+    // Written just now, as another PC's manifest a sync app hasn't finished: it may be one to keep.
+    const half = path.join(onedrive, "Tavora", "manifests", `${pad(versions[1]!.version + 1)}-${pad(versions[1]!.version)}.bin`);
+    await writeFile(half, "half synced");
+    await utimes(half, new Date(clock.now), new Date(clock.now));
+    await saveAgain();
+    expect(await manifests(onedrive)).toHaveLength(8);
+  });
+
+  it("counts only marked manifests for the five newer ones a manifest needs before it goes", async () => {
+    const key = newCopyKey();
+    const keys = copyKeys(key);
+    const onedrive = await folder();
+    const clock = { now: Date.now() };
+    const storage = new FolderStorage(onedrive, { now: () => clock.now });
+    const a = await pc({ "library.json": "v1" });
+    const first = await new CloudCopy(storage).upload(key, a.roots, EMPTY_STATE);
+    if (first.status !== "uploaded") throw new Error(first.status);
+    // Five unmarked ones on top: an older Tavora's, or parts put there.
+    let base = first.state.version;
+    for (let round = 0; round < 5; round++) {
+      const version = storage.nextVersion(base);
+      expect(await storage.swap(base, version, [], seal(keys, Buffer.from(JSON.stringify({ v: 1, version, pictures: true, files: [] }))))).toMatchObject({ status: "saved" });
+      base = version;
+    }
+    clock.now += 40 * DAY;
+    await age(onedrive, 35 * DAY, clock.now);
+    await writeFile(path.join(a.userData, "library.json"), "v2");
+    const up = await new CloudCopy(storage).upload(key, a.roots, { ...first.state, version: base });
+    expect(up).toMatchObject({ status: "uploaded" });
+    expect(await manifests(onedrive)).toContain(`${pad(first.state.version)}-${pad(0)}.bin`);
+    expect(await manifests(onedrive)).toHaveLength(7);
+  });
+
+  it("keeps a part a PC used again, though no manifest the clean-up sees uses it yet", async () => {
+    const { key, onedrive, storage, saveAgain } = await sixOldSaves();
+    const keys = copyKeys(key);
+    // Another PC's library is "v1" again: its part is in the folder already, and its manifest is still on its way.
+    const content = Buffer.from("v1");
+    const id = partId(keys, content).toString("hex");
+    await storage.putParts([{ id: partId(keys, content), data: seal(keys, content) }]);
+    await saveAgain();
+    expect(await partFiles(onedrive)).toContain(path.join(onedrive, "Tavora", "parts", id.slice(0, 2), id));
+    expect(await partFiles(onedrive)).toHaveLength(6);
   });
 
   it("follows no link or junction in its folder", async () => {

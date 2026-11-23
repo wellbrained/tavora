@@ -719,8 +719,16 @@ export class FolderPairing implements PairingTransport {
     return path.join(this.dir, `${id}.${step}.json`);
   }
 
+  /** A step's file as it is, not what a link in its place leads to: null when it is a link or anything else than a file. */
+  private async ownFile(id: string, step: Step) {
+    const info = await lstat(this.file(id, step)).catch(() => null);
+    return info?.isFile() ? info : null;
+  }
+
   private async readStep(id: string, step: Step): Promise<Record<string, unknown> | null> {
     try {
+      // A link in a step's place leads out of the folder: not read, as if a sync app hadn't finished it.
+      if (!(await this.ownFile(id, step))) return null;
       const value = JSON.parse(await readFile(this.file(id, step), "utf8")) as unknown;
       return typeof value === "object" && value !== null && !Array.isArray(value) && (value as { v?: unknown }).v === 1 ? (value as Record<string, unknown>) : null;
     } catch {
@@ -823,7 +831,7 @@ export class FolderPairing implements PairingTransport {
 
   /** Written longer ago than any request lasts. */
   private async isOld(id: string, step: Step): Promise<boolean> {
-    const info = await stat(this.file(id, step)).catch(() => null);
+    const info = await lstat(this.file(id, step)).catch(() => null);
     return info !== null && this.now() - info.mtimeMs > FOLDER_PAIRING_MS;
   }
 
@@ -838,7 +846,7 @@ export class FolderPairing implements PairingTransport {
 
   async answer(id: string, publicKey: string): Promise<boolean> {
     // Any answer there, readable yet or not, is another PC's.
-    if (await stat(this.file(id, "answer")).catch(() => null)) return false;
+    if (await lstat(this.file(id, "answer")).catch(() => null)) return false;
     const by = randomBytes(8).toString("hex");
     // One request at a time: the one answered before is done with.
     this.answered.clear();

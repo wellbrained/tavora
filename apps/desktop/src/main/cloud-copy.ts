@@ -324,6 +324,11 @@ export interface CopyStorage {
    * name says it was saved on top of (`base`): a marked manifest has to say the same inside.
    */
   manifest(): Promise<{ version: number; base?: number; sealed: Uint8Array } | null>;
+  /**
+   * A folder only: the sealed manifests kept besides the current one, newest first, at most `count` (those it can read
+   * now). Asked only when the current one has no mark, to see whether this storage holds marked ones.
+   */
+  earlierManifests?(count: number): Promise<Uint8Array[]>;
   /** Stores parts it does not have yet. */
   putParts(parts: { id: Buffer; data: Buffer }[]): Promise<void>;
   /** Some of the asked parts, at least one when any of them is there. */
@@ -566,21 +571,29 @@ export class CloudCopy {
     return second;
   }
 
+  /** Whether the storage keeps marked manifests besides the current one (a folder; the service keeps only one). */
+  private async holdsMarked(keys: CopyKeys): Promise<boolean> {
+    const earlier = (await this.storage.earlierManifests?.(MARKS_LOOKED_AT)) ?? [];
+    return earlier.some((sealed) => checkWith(keys)(sealed)?.marked === true);
+  }
+
   /**
    * Downloads the copy into `staging` (emptied first), checking every part and file against the key and the
    * manifest, and returns its version and the files as they will be synced once swapped in. Nothing outside
    * `staging` is touched; null when there is no copy. `synced` is the version this PC last synced: a copy the
    * service saved on top of an older one is refused ("older"), and so is one without a sealed version once this PC has
    * seen a sealed one (`seen.sealed`): a list from before Tavora sealed it can only be an old one served again. Likewise
-   * one without a mark once this PC has seen a marked one (`seen.marked`): an older Tavora's, or a part put in its place.
-   * Once `wanted` says no (the copy was turned off meanwhile) it stops writing and answers null.
+   * one without a mark once this PC has seen a marked one (`seen.marked`) or the folder holds one: an older Tavora's, or
+   * a part put in its place. In a folder (where versions only grow) a copy older than `synced` is refused too: newer
+   * manifests were deleted, or the folder was put back to an earlier day. Those two are asked about unless the user chose
+   * this copy (`seen.chosen`). Once `wanted` says no (the copy was turned off meanwhile) it stops writing and answers null.
    */
   async download(
     copyKey: Uint8Array,
     roots: CopyRoot[],
     staging: string,
     synced = 0,
-    seen: Pick<CopyState, "sealed" | "marked"> = {},
+    seen: Pick<CopyState, "sealed" | "marked"> & { chosen?: boolean } = {},
     wanted: () => boolean = () => true,
   ): Promise<DownloadedCopy | null> {
     const keys = copyKeys(copyKey);
@@ -597,9 +610,13 @@ export class CloudCopy {
     if (manifest.base !== undefined && manifest.base < synced) throw new CopyError("older", "the copy was saved on top of an older version than this PC has");
     const sealed = manifest.version !== undefined || manifest.base !== undefined;
     if (!sealed && seen.sealed === true && synced > 0) throw new CopyError("older", "the copy's list has no sealed version, though this PC has seen one that has");
+    // In a folder the PC picks versions, and each is above the one it was saved on: one below what this PC synced is an
+    // older copy, whatever its name says it follows.
+    if (current.base !== undefined && seen.chosen !== true && version < synced) throw new CopyError("older", "the copy is older than the one this PC last synced");
     // Without a mark it may be a part put in the manifest's place (one a module saved, shaped like a list), so it isn't
-    // taken on its own once this PC knows marked ones: the user chooses, as for an older list. Asked, they may take it.
-    if (!marked && seen.marked === true && synced > 0) throw new CopyError("older", "the copy's list has no mark, though this PC has seen one that has");
+    // taken on its own once this PC knows marked ones, or the folder holds one: the user chooses, as for an older list.
+    // Asked, they may take it.
+    if (!marked && seen.chosen !== true && (seen.marked === true || (await this.holdsMarked(keys)))) throw new CopyError("older", "the copy's list has no mark, though marked ones are known");
     const { files } = manifest;
     if (!files.every((file) => safeCopyPath(file.path, roots))) throw new CopyError("damaged", "the copy's list is off");
 
@@ -649,6 +666,8 @@ export class CloudCopy {
   }
 }
 
+/** How many manifests besides the current one are looked at for a mark. */
+const MARKS_LOOKED_AT = 10;
 /** Writes a file from its parts, one part in memory at a time, and checks it against the copy's list. */
 async function joinParts(partsDir: string, file: { size: number; sha256: string; parts: string[] }, target: string): Promise<void> {
   const hash = createHash("sha256");

@@ -342,3 +342,21 @@ it("reads, writes and cleans up nothing through a link in place of the pairing f
   await expect(transport.ask(commit())).rejects.toMatchObject({ reason: "folder-locked" });
   expect(await readdir(elsewhere)).toEqual(["0123456789abcdef.request.json"]);
 });
+
+it("reads no step through a link in place of its file", async (context) => {
+  const { root } = await pc();
+  const folder = path.join(root, "OneDrive");
+  const dir = path.join(folder, "Tavora", "pairing");
+  const elsewhere = path.join(root, "elsewhere");
+  await mkdir(dir, { recursive: true });
+  const now = Date.now();
+  await plant(elsewhere, "0123456789abcdef", now + 60_000);
+  try {
+    await symlink(path.join(elsewhere, "0123456789abcdef.request.json"), path.join(dir, "0123456789abcdef.request.json"), "file");
+  } catch (error) {
+    // Windows makes file links only with the right to: nothing to look at there.
+    if ((error as NodeJS.ErrnoException).code === "EPERM") return context.skip();
+    throw error;
+  }
+  expect(await new FolderPairing(folder, "Desk", () => now).read()).toBeNull();
+});

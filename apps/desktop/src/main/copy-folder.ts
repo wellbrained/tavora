@@ -1,6 +1,6 @@
 import { randomInt } from "node:crypto";
 import type { Stats } from "node:fs";
-import { lstat, mkdir, open, rm, rmdir, writeFile } from "node:fs/promises";
+import { lstat, mkdir, open, rm, rmdir, utimes, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { CopyError, PART_BYTES, type CopyStorage, type ManifestCheck, type RemoteCopy, type SwapAnswer } from "./cloud-copy";
 import { look, lookNames, lookStat, type Looked } from "./file-look";
@@ -230,6 +230,15 @@ export class FolderStorage implements CopyStorage {
     return { version: current.version, base: current.base, sealed: (await this.readManifest(current)).sealed };
   }
 
+  async earlierManifests(count: number): Promise<Uint8Array[]> {
+    const found: Uint8Array[] = [];
+    for (const file of (await this.manifests()).slice(1, count + 1)) {
+      const read = await this.readManifest(file).catch(() => null);
+      if (read) found.push(read.sealed);
+    }
+    return found;
+  }
+
   async putParts(parts: { id: Buffer; data: Buffer }[]): Promise<void> {
     await this.reachable();
     const checked = new Set<string>();
@@ -240,8 +249,13 @@ export class FolderStorage implements CopyStorage {
         await this.writableDir(shard);
         checked.add(shard);
       }
-      // Named by content: one that is there already holds the same.
-      if (readable(await lookKind(file)) === "file") continue;
+      // Named by content: one that is there already holds the same. It counts as new again, so another PC's clean-up,
+      // which may not have this PC's manifest yet, doesn't take it as one no manifest uses.
+      if (readable(await lookKind(file)) === "file") {
+        const now = new Date(this.now());
+        await utimes(file, now, now).catch(() => undefined);
+        continue;
+      }
       await writeInFolder(file, part.data);
     }
   }
@@ -301,35 +315,43 @@ export class FolderStorage implements CopyStorage {
 
   /**
    * Drops old manifests, then parts no manifest left uses, once both are old enough. It goes by what each manifest says
-   * inside its seal (`check`), never by its name or header alone. A manifest that can't be checked (half synced, held,
-   * sealed with another key, or saying something else than its name or header) stops it: nothing is deleted this time.
-   * A manifest goes only with five newer marked ones (Tavora's own: none can be made without the key); one without a mark
-   * (an older Tavora's, or a part put there) never counts for those five, but its parts are kept while it is.
+   * inside its seal (`check`), never by its name or header alone. A manifest goes only with five newer marked ones
+   * (Tavora's own: none can be made without the key) and once it is old; one without a mark (an older Tavora's, or a part
+   * put there) never counts for those five, but its parts are kept while it is. A manifest that can't be checked (half
+   * synced, held, sealed with another key, or saying something else than its name or header) stops it while it could
+   * still be one that is kept: nothing is deleted this time. Past that, it is left where it is and its parts aren't kept.
    */
   private async cleanUp(check: ManifestCheck): Promise<void> {
     const now = this.now();
-    const lists: { file: ManifestFile; mtimeMs: number; marked: boolean; named: boolean; parts: string[] }[] = [];
+    const lists: { file: ManifestFile; drop: boolean; parts: string[] }[] = [];
+    let newerMarked = 0;
     for (const file of await this.manifests()) {
       const looked = await lookOwnFile(path.join(this.manifestsDir, file.name));
       // One that is held may be in use: nothing is cleaned up this time.
       if (looked.status === "held") return;
       if (looked.status === "missing" || looked.value === null) continue;
+      const past = newerMarked >= KEEP_MANIFESTS && now - looked.value.mtimeMs >= KEEP_MANIFEST_MS;
       const read = await this.readManifest(file).catch(() => null);
-      if (!read) return;
-      const opened = check(read.sealed);
-      if (!opened || !sameIds(read.ids, opened.parts)) return;
+      const opened = read ? check(read.sealed) : null;
       // Its name has to say what it says inside. A list of a long-gone Tavora that has no version inside can't be placed
       // by its name: it stays.
-      if (opened.version !== undefined && opened.version !== file.version) return;
-      if (opened.marked && opened.parent !== file.base) return;
-      lists.push({ file, mtimeMs: looked.value.mtimeMs, marked: opened.marked, named: opened.version !== undefined, parts: opened.parts });
+      const fits =
+        read !== null &&
+        opened !== null &&
+        sameIds(read.ids, opened.parts) &&
+        (opened.version === undefined || opened.version === file.version) &&
+        (!opened.marked || opened.parent === file.base);
+      if (!fits) {
+        if (past) continue;
+        return;
+      }
+      lists.push({ file, drop: past && opened.version !== undefined, parts: opened.parts });
+      if (opened.marked) newerMarked++;
     }
     const used = new Set<string>();
-    let newerMarked = 0;
     for (const list of lists) {
-      if (newerMarked >= KEEP_MANIFESTS && list.named && now - list.mtimeMs >= KEEP_MANIFEST_MS) await rm(path.join(this.manifestsDir, list.file.name), { force: true });
+      if (list.drop) await rm(path.join(this.manifestsDir, list.file.name), { force: true });
       else for (const id of list.parts) used.add(id);
-      if (list.marked) newerMarked++;
     }
     if ((await this.kindOf(this.partsDir)) !== "dir") return;
     const shards = await lookNames(this.partsDir);

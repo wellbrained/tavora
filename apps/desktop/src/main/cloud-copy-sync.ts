@@ -649,15 +649,16 @@ export class CopySync {
 
   /**
    * Downloads the copy into the staging folder, to be taken at the next start. A copy saved on top of an older
-   * version than `since` is refused ("older"); only the check at start passes one, the user's own choices take any.
+   * version than `since` is refused ("older"); only the check at start passes one. One that looks older or unmarked is
+   * refused too (CloudCopy.download), unless the user `chosen` it: their own choices take any.
    */
-  private async stage(since = 0): Promise<Staged | null> {
+  private async stage(since = 0, chosen = false): Promise<Staged | null> {
     this.refuseDuringSwap();
     const turn = this.turn;
     await rm(this.stagingDir, { recursive: true, force: true });
     let copy: Awaited<ReturnType<CloudCopy["download"]>>;
     try {
-      copy = await this.cloud.download(this.key!, this.roots(), this.stagedData, since, this.state, () => turn === this.turn);
+      copy = await this.cloud.download(this.key!, this.roots(), this.stagedData, since, { sealed: this.state.sealed === true, marked: this.state.marked === true, chosen }, () => turn === this.turn);
     } catch (error) {
       // The account's vault doesn't open with this PC's key either (another PC started over with a new key, or the
       // service sent something else): the copy goes off here, and turning it on asks for the new key. The key and the
@@ -685,10 +686,10 @@ export class CopySync {
     const list = await this.lookList();
     const staged = list.status === "present" ? list.value : null;
     const remote = staged ? await this.cloud.remote() : null;
-    if (!staged || !remote || remote.version !== staged.version) return this.stage();
+    if (!staged || !remote || remote.version !== staged.version) return this.stage(0, true);
     // Held counts as not whole here: the user asked for this copy, so it simply comes down again.
     const whole = await look(() => this.stagedWhole(staged));
-    return whole.status === "present" && whole.value ? staged : this.stage();
+    return whole.status === "present" && whole.value ? staged : this.stage(0, true);
   }
 
   /** The staged copy's list, also one an older Tavora left. A list that makes no sense is damaged, so held. */
@@ -1229,6 +1230,9 @@ export class CopySync {
   private async startCopy(turn: number): Promise<void> {
     if (this.swapOpen) throw new UserError("cloudCopy.error.restartFirst");
     let staged: Staged | null = null;
+    // A copy that isn't taken without asking (an unmarked list where marked ones are): nothing comes down before the
+    // user chooses, as for any copy that is there.
+    let asks = false;
     try {
       staged = await this.exclusive("downloading", async () => {
         const remote = await this.cloud.remote();
@@ -1239,9 +1243,12 @@ export class CopySync {
     } catch (error) {
       // Turned off meanwhile: nothing to say about a turn-on that no longer counts.
       if (turn !== this.turn) return;
-      // Sealed with another key: a copy from before the account had its key.
-      if (error instanceof CopyError && error.reason === "damaged") throw new UserError("cloudCopy.error.wrongKey");
-      throw CopySync.userError(this.noteProblem(error));
+      if (error instanceof CopyError && error.reason === "older") asks = true;
+      else {
+        // Sealed with another key: a copy from before the account had its key.
+        if (error instanceof CopyError && error.reason === "damaged") throw new UserError("cloudCopy.error.wrongKey");
+        throw CopySync.userError(this.noteProblem(error));
+      }
     }
     // Turned off (or signed out) while it looked: it stays off.
     if (turn !== this.turn) return;
@@ -1249,7 +1256,7 @@ export class CopySync {
     this.state = EMPTY_STATE;
     if (!(await this.keepState(turn)) || !(await this.keepPlace(turn, this.folder))) return;
     this.problem = null;
-    if (staged) {
+    if (staged || asks) {
       // This PC has its own data too: the user keeps one side.
       this.ask("conflict");
       this.changed();
@@ -1596,7 +1603,7 @@ export class CopySync {
     return this.exclusive("downloading", async () => {
       let copy: Awaited<ReturnType<CloudCopy["download"]>>;
       try {
-        copy = await this.cloud.download(this.key!, roots, incoming, 0, this.state, () => turn === this.turn);
+        copy = await this.cloud.download(this.key!, roots, incoming, 0, { sealed: this.state.sealed === true, marked: this.state.marked === true, chosen: true }, () => turn === this.turn);
       } catch (error) {
         await rm(incoming, { recursive: true, force: true });
         if (turn !== this.turn) return null;
