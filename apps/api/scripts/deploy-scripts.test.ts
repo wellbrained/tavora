@@ -144,7 +144,7 @@ cp "$1" "$target"`);
     expect(kept).toContain("tavora-api-20260102T031500Z.tar.gz");
     expect(kept.filter((name) => name.endsWith(".part"))).toEqual([]);
     const made = kept.find((name) => name !== "tavora-api-20260102T031500Z.tar.gz")!;
-    const listing = spawnSync("tar", ["-tzf", bashPath(path.join(backups, made))], { encoding: "utf8" }).stdout.split(/\r?\n/).filter(Boolean);
+    const listing = spawnSync("bash", ["-c", 'tar -tzf "$1"', "_", bashPath(path.join(backups, made))], { encoding: "utf8" }).stdout.split(/\r?\n/).filter(Boolean);
     for (const entry of ["./accounts.sqlite", "./icons.sqlite", "./catalog/catalog.sqlite", "./catalog/zips/abc.zip", "./catalog/lists/revocations.json", "./catalog/pictures/shot.webp", "./activity.sqlite"]) {
       expect(listing).toContain(entry);
     }

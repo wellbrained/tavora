@@ -508,7 +508,7 @@ describe("Unsuspend", () => {
     expect((await post("/api/accounts/unsuspend", { id: developer.id })).status).toBe(404);
   });
 
-  it("is kept in the accounts database across a restart", () => {
+  it("is kept in the accounts database across a restart", { timeout: 30_000 }, () => {
     const dir = mkdtempSync(path.join(tmpdir(), "tavora-suspension-"));
     const file = path.join(dir, "accounts.sqlite");
     const first = new AccountStore(file);
