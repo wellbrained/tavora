@@ -191,7 +191,8 @@ test("the in-game layer over a game in front: Use takes clicks, Arrange frames t
     const over = heard.find((one) => one.over && one.at >= openedAt);
     expect(over).toBeDefined();
     const tookMouse = await spied(app, (seen) => seen.mouse.filter((one) => !one.ignore));
-    expect(tookMouse.find((one) => one.id === panelWindow)!.at).toBeGreaterThan(over!.at);
+    // Two processes read the clock: the same millisecond still means after.
+    expect(tookMouse.find((one) => one.id === panelWindow)!.at).toBeGreaterThanOrEqual(over!.at);
     // A click counts in the panel, and its live view, still on screen behind it, follows.
     await realClick(app, ID, '[data-testid="count-up"]');
     await expect.poll(() => inModule<string>(app, ID, `document.querySelector('[data-testid="count"]').textContent`)).toBe("1");
@@ -245,6 +246,9 @@ test("the in-game layer over a game in front: Use takes clicks, Arrange frames t
     expect(closed.live).toMatchObject({ id: live, visible: true, count: "2" });
     expect(await spied(app, (seen) => seen.hidden)).not.toContainEqual(expect.objectContaining({ id: live }));
   } finally {
-    await app.close();
+    // A close that hangs must not leave Electron (and the stand-in game window with it) running.
+    const kill = setTimeout(() => app.process().kill(), 15_000);
+    await app.close().catch(() => undefined);
+    clearTimeout(kill);
   }
 });
