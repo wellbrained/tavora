@@ -71,6 +71,8 @@ interface Watched {
  */
 export class DevelopmentFolders {
   private readonly watched = new Map<string, Watched>();
+  /** Raised by every watch() and close(): a look that a newer one replaced acts on nothing. */
+  private watchTurn = 0;
 
   constructor(private readonly options: DevelopmentFoldersOptions) {}
 
@@ -153,6 +155,8 @@ export class DevelopmentFolders {
       }),
     );
     this.close();
+    // Its own close above raised the turn: a later watch() or close() raises it again, and this one's last look acts on nothing.
+    const turn = this.watchTurn;
     const watcher = this.options.watch ?? watchFolder;
     const quietMs = this.options.quietMs ?? DEVELOPMENT_RELOAD_MS;
     const watched = (key: string) => {
@@ -193,7 +197,7 @@ export class DevelopmentFolders {
       for (const { project, module, entry, built: wasBuilt } of projects) {
         const { changed, watchOne } = watched(project);
         // A project that wasn't built at the look and is now: its build came while the watchers started.
-        if (!module) lookAgain.set(project, async () => ((await projectEntry(project).then((now) => builtAlready(project, now))) && !wasBuilt ? changed(true) : undefined));
+        if (!module) lookAgain.set(project, async () => ((await projectEntry(project).then((now) => builtAlready(project, now))) && !wasBuilt && turn === this.watchTurn ? changed(true) : undefined));
         const root = module?.root ?? project;
         const built = entry === undefined ? undefined : buildFolderName(entry);
         watchOne(root, false, (name) => {
@@ -209,18 +213,21 @@ export class DevelopmentFolders {
     // Look once more now that the watchers listen: anything that differs is news.
     const shape = (seen: { holder: boolean; others: string[]; projects: readonly (string | { project: string })[] }) =>
       JSON.stringify([seen.holder, seen.others, seen.projects.map((item) => (typeof item === "string" ? item : item.project))]);
+    // Closed, or watched again, while it read: those watchers are gone, so is what it would reload.
+    const current = <T>(act: () => T): T | undefined => (turn === this.watchTurn ? act() : undefined);
     await Promise.all([
       ...folders.map(async (before) => {
         if (!before.holder) return;
         const now = await look(before.folder);
-        if (shape(now) !== shape(before)) lookAgain.get(before.folder)?.();
+        if (shape(now) !== shape(before)) current(() => lookAgain.get(before.folder)?.());
       }),
-      ...folders.flatMap((before) => before.projects.map((item) => lookAgain.get(item.project)?.())),
+      ...folders.flatMap((before) => before.projects.map((item) => current(() => lookAgain.get(item.project)?.()))),
     ]);
   }
 
   /** Stops watching every folder, and drops the reloads still waiting for a quiet moment. */
   close(): void {
+    this.watchTurn++;
     for (const { watchers, timer } of this.watched.values()) {
       clearTimeout(timer);
       for (const watcher of watchers) watcher.close();

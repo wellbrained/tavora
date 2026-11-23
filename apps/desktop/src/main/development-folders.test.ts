@@ -170,6 +170,28 @@ describe("DevelopmentFolders", () => {
     expect(calls).toEqual(["reload", "changed"]);
   });
 
+  it("reloads nothing when it was closed while it looked once more", async () => {
+    const { folder } = await folderWithProject();
+    const library = { ...emptyLibrary(), developmentFolders: [folder] };
+    let made = false;
+    let close = () => {};
+    const { folders, calls, quiet } = setup({
+      library,
+      onWatch: () => {
+        if (made) return;
+        made = true;
+        mkdirSync(path.join(folder, "late"));
+        writeFileSync(path.join(folder, "late", "tavora.module.json"), JSON.stringify({ id: "local.late", entry: "dist/index.html" }));
+        // Closed (or watched again) while the second look reads the disk: what it would reload is gone.
+        queueMicrotask(() => close());
+      },
+    });
+    close = () => folders.close();
+    await folders.watch();
+    await quiet();
+    expect(calls).toEqual([]);
+  });
+
   it("finds a project that gets built while the watchers start", async () => {
     const { folder, project } = await folderWithProject();
     const library = { ...emptyLibrary(), developmentFolders: [folder] };
