@@ -11,6 +11,7 @@ import { HOST_SCHEME } from "./assets";
 import type { TavoraTheme } from "@tavora/sdk/protocol";
 import { electronLayerPlatform } from "./game-layer-electron";
 import { GameOverlays, type PanelInfo } from "./game-overlay-service";
+import { standInGames } from "./game-stand-in";
 import type { GameWatcher } from "./game-watch";
 import type { GrantStore } from "./grants";
 import type { Installed } from "./installed-modules";
@@ -64,6 +65,8 @@ export interface OverlayWiringOptions {
   devTools: boolean;
   hostPreload: string;
   modulePreload: string;
+  /** Tests only: the library workspace whose game a window of the test's own stands in for (game-stand-in.ts). */
+  testGameWindow?: string | undefined;
 }
 
 export interface OverlayServices {
@@ -116,7 +119,7 @@ export async function createOverlayServices(wiring: OverlayWiring): Promise<Over
     installed,
     workspaces: wiring.workspaces,
     settings: library,
-    watcher: wiring.watcher,
+    watcher: options.testGameWindow ? standInGames(wiring.watcher, options.testGameWindow) : wiring.watcher,
     platform: electronLayerPlatform({
       hidden: options.hidden,
       devServer: options.devServer,
@@ -126,6 +129,7 @@ export async function createOverlayServices(wiring: OverlayWiring): Promise<Over
       theme: ports.theme,
       language: ports.language,
       fontCss: ports.fontCss,
+      standIn: options.testGameWindow !== undefined,
     }),
     panels: { info: ports.panelInfo, lend: (instanceId, workspaceId, open, revoked) => wiring.panels.lend(instanceId, workspaceId, open, revoked) },
     shell: ports.shell,

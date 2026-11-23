@@ -303,6 +303,8 @@ export interface HostOptions {
   testSteamAppId?: number | undefined;
   /** Tests only: the games installed on this PC for the Add a game list, instead of looking at the launchers. */
   testInstalled?: InstalledGame[] | undefined;
+  /** Tests only: a window the test opens counts as this library workspace's game in front (game-stand-in.ts). */
+  testGameWindow?: string | undefined;
   /** Tests only: what a module may keep in its browser storage, in bytes, instead of the usual limit. */
   moduleStorageLimit?: number | undefined;
   /** Tests only: host names network.fetch reaches on a local server, over plain http (network.ts). */
@@ -3937,7 +3939,7 @@ export class Host {
   private async startOverlays(): Promise<void> {
     const { options } = this;
     const services = await createOverlayServices({
-      options: { userData: options.userData, hidden: !!options.hidden, devServer: options.devServer, devTools: options.devTools, hostPreload: options.hostPreload, modulePreload: options.modulePreload },
+      options: { userData: options.userData, hidden: !!options.hidden, devServer: options.devServer, devTools: options.devTools, hostPreload: options.hostPreload, modulePreload: options.modulePreload, testGameWindow: options.testGameWindow },
       window: this.window,
       library: this.library,
       workspaces: new LibraryWorkspaces(this.library),

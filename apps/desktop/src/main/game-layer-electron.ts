@@ -12,6 +12,7 @@ import { GameLayerCard } from "./game-layer-card";
 import type { OverlayWindowRequest } from "./game-layer-windows";
 import type { OverlayPlatform } from "./game-overlay-service";
 import { GameOverlayWindow, type OverlayPanel } from "./game-overlay-window";
+import { STAND_IN_TITLE, standInProbe } from "./game-stand-in";
 import { GameVeilWindow } from "./game-veil-window";
 import { stackAbove, windowsOrder } from "./window-order";
 
@@ -31,17 +32,23 @@ export interface ElectronLayerOptions {
   language(): Language;
   /** The interface font's stylesheet for Tavora's own overlay chrome (module-fonts.ts). */
   fontCss?: (() => string) | undefined;
+  /** Tests only: a window of the test's own stands in for the game in front (game-stand-in.ts), in place of Windows' look. */
+  standIn?: boolean | undefined;
 }
 
 export function electronLayerPlatform(options: ElectronLayerOptions): OverlayPlatform {
   return {
     supported: process.platform === "win32",
-    probe: () => windowsForegroundProbe(),
+    probe: () => (options.standIn ? standInProbe(() => BrowserWindow.getAllWindows(), (rect) => screen.dipToScreenRect(null, rect)) : windowsForegroundProbe()),
     // Windows reports pixels; windows are placed in DIPs.
     toDip: (rect) => screen.screenToDipRect(null, rect),
     screen: () => screen.getPrimaryDisplay().bounds,
     // Any of Tavora's windows with the keyboard; the service tells its own overlay windows apart.
-    tavoraInFront: () => BrowserWindow.getFocusedWindow() !== null,
+    // (The test's stand-in for a game is no window of Tavora's.)
+    tavoraInFront: () => {
+      const focused = BrowserWindow.getFocusedWindow();
+      return focused !== null && !(options.standIn && focused.getTitle() === STAND_IN_TITLE);
+    },
     openWindow: (request, panel) => overlayWindow(options, request, panel),
     openVeil: () => new GameVeilWindow({ hidden: options.hidden }),
     // Overlays that stay while the user is elsewhere sit right above the game's window, not above every window.

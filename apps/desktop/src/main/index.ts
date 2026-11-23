@@ -8,6 +8,7 @@ import { errorLog } from "./diagnostics";
 import { Host } from "./host";
 import { parseTestHosts } from "./network";
 import { parseTestInstalled } from "./installed-list";
+import { standInWorkspace } from "./game-stand-in";
 import { readGrayscaleText } from "./saved-data";
 import { reportStartupFailure } from "./startup-failure";
 import { quitOnUnsafeSwitches } from "./unsafe-start";
@@ -221,6 +222,8 @@ if (!app.requestSingleInstanceLock()) {
         testSteamAppId: !app.isPackaged && /^\d+$/.test(process.env.TAVORA_TEST_STEAM_APP ?? "") ? Number(process.env.TAVORA_TEST_STEAM_APP) : undefined,
         // Tests only: the games installed on this PC are these (a JSON list of launcher games), never the PC's own.
         testInstalled: !app.isPackaged && process.env.TAVORA_TEST_INSTALLED ? parseTestInstalled(process.env.TAVORA_TEST_INSTALLED) : undefined,
+        // Tests only: a window the test opens in Tavora's process stands in for this workspace's game in front; never another program.
+        testGameWindow: !app.isPackaged ? standInWorkspace(process.env.TAVORA_TEST_GAME_WINDOW) : undefined,
         systemLocale: !app.isPackaged ? process.env.TAVORA_LOCALE : undefined,
         systemTheme: !app.isPackaged && (process.env.TAVORA_SYSTEM_THEME === "dark" || process.env.TAVORA_SYSTEM_THEME === "light") ? process.env.TAVORA_SYSTEM_THEME : undefined,
         devServer,

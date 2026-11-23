@@ -146,8 +146,8 @@ export class LayerWindows {
   }
 
   /**
-   * Makes the windows what the scene says, in one go: the veil first, then the card, each item's window in the scene's
-   * order, then the windows no item has any more go, and last the stacking and the keyboard. Answers whether windows are
+   * Makes the windows what the scene says, in one go: the veil first, then each item's window in the scene's order, then
+   * the windows no item has any more go, then the card, and last the stacking and the keyboard. Answers whether windows are
    * stacked right above a game the user left (Windows raises the game over them when it is clicked, so the next look
    * should come sooner).
    */
@@ -172,11 +172,26 @@ export class LayerWindows {
         veilNew = true;
       }
       this.veil.place(layer.area);
-    } else if (this.veil) {
-      this.veil.destroy();
+    } else {
+      this.veil?.destroy();
       this.veil = null;
+      // The card goes with it, before the windows change.
+      this.dropCard();
     }
-    // The card at the top of the layer's area, above everything the layer shows.
+    const ids = new Set<string>();
+    for (const item of scene.items) {
+      ids.add(item.id);
+      if (item.kind === "overlay") shownNow = this.showOverlay(item, now, onTop) || shownNow;
+      else if (item.kind === "panel") shownNow = this.showPanel(item, started) || shownNow;
+      else this.showLive(item, now, onTop);
+    }
+    for (const [id, entry] of this.open) {
+      if (ids.has(id)) continue;
+      this.open.delete(id);
+      this.closeWindow(entry);
+    }
+    // The card at the top of the layer's area, above everything the layer shows. After the items, so it knows where the
+    // ones that came up in this look are: a new card placed before them came up over a panel for a look.
     let cardNew = false;
     if (layer && (this.card || this.cardMayStart(now))) {
       if (!this.card) {
@@ -189,18 +204,6 @@ export class LayerWindows {
         this.cardItems = [...this.open.values()].flatMap((entry) => (entry.showing.status === "shown" && !entry.veiled && entry.kind !== "live" && entry.window.placed ? [entry.window.placed] : []));
       }
       this.card.show(layer.area, layer.card, this.cardItems);
-    } else if (!layer) this.dropCard();
-    const ids = new Set<string>();
-    for (const item of scene.items) {
-      ids.add(item.id);
-      if (item.kind === "overlay") shownNow = this.showOverlay(item, now, onTop) || shownNow;
-      else if (item.kind === "panel") shownNow = this.showPanel(item, started) || shownNow;
-      else this.showLive(item, now, onTop);
-    }
-    for (const [id, entry] of this.open) {
-      if (ids.has(id)) continue;
-      this.open.delete(id);
-      this.closeWindow(entry);
     }
     const { restacked, stacked } = this.restack(scene, veilNew, awayGame, onTop);
     // One window takes the keyboard, the panel used last; not each in turn.

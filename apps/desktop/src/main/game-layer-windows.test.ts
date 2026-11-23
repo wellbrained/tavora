@@ -267,7 +267,7 @@ describe("the layer's veil and card", () => {
     layer.show(scene([overlay("a")]));
     calls.length = 0;
     layer.show(scene([overlay("a")], { layer: LAYER }));
-    expect(calls).toEqual(["veil made", "veil place", "card show", "a rect", "a top", "a raise", "a top", "card raise"]);
+    expect(calls).toEqual(["veil made", "veil place", "a rect", "a top", "card show", "a raise", "a top", "card raise"]);
     calls.length = 0;
     layer.show(scene([overlay("a")]));
     expect(calls).toEqual(["veil destroy", "card destroy", "a rect", "a top", "a top"]);
@@ -276,13 +276,21 @@ describe("the layer's veil and card", () => {
   it("keeps the card off the items you see, and in place while one is dragged", () => {
     const { layer, windows, cards } = rig();
     layer.show(scene([overlay("a")], { layer: LAYER }));
-    layer.show(scene([overlay("a")], { layer: LAYER }));
     const card = cards[0] as unknown as { items: readonly Rect[] };
+    expect(card.items).toEqual([{ x: 10, y: 10, width: 100, height: 50 }]);
+    layer.show(scene([overlay("a")], { layer: LAYER }));
     expect(card.items).toEqual([{ x: 10, y: 10, width: 100, height: 50 }]);
     windows[0]!.dragging = true;
     windows[0]!.placed = { x: 500, y: 500, width: 100, height: 50 };
     layer.show(scene([overlay("a")], { layer: LAYER }));
     expect(card.items).toEqual([{ x: 10, y: 10, width: 100, height: 50 }]);
+  });
+
+  it("keeps a new card off a panel that comes up with it, from its first look", () => {
+    const { layer, cards } = rig();
+    layer.show(scene([panel("p", [])], { layer: LAYER }));
+    // Before the panel's window had its place, the card was placed with nothing to keep off and came up over it.
+    expect((cards[0] as unknown as { items: readonly Rect[] }).items).toEqual([{ x: 10, y: 10, width: 100, height: 50 }]);
   });
 
   it("makes no new card after its page crashed too often", () => {
