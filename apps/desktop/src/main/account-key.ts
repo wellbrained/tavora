@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { readdir, readFile, rename, rm, stat, utimes } from "node:fs/promises";
+import { constants } from "node:fs";
+import { copyFile, readdir, readFile, rename, rm, stat, utimes } from "node:fs/promises";
 import path from "node:path";
 import { CopyError } from "./cloud-copy";
 import { newCopyKey, openVault, parseRecoveryKey, recoveryKey, sealVault } from "./copy-crypto";
@@ -36,9 +37,15 @@ import { SealedFile } from "./sealed-file";
 // whose account is unknown, to account-key.unproven*.json), and a key file that can't be opened in this run stays too.
 // Nor is a new key made while a key file that may hold the one needed can't be opened (decided 2026-11-23, "a saved
 // file that can't be read is never written over"): only one that is truly missing is made anew. One that can't be read
-// right now (held by a virus scan) is read again first, and the user is told; one whose data doesn't open here (sealed
-// by another Windows user, or no key store to open it) or that a newer Tavora wrote (copied aside) asks for the
-// recovery key: a new key would leave what was sealed with the old one behind.
+// right now (held by a virus scan, or for good: its rights or encryption changed), one whose data doesn't open here
+// (sealed by another Windows user, or no key store to open it) and one a newer Tavora wrote (copied aside) are read
+// again first, then the recovery key is asked for, and why (`keyBlocked`): a new key would leave what was sealed with
+// the old one behind. Start over moves such a file aside, never removes it. One moved aside already, whose record
+// names the account or no one, counts too.
+//
+// Every change runs in one queue, in the order asked, so two (a turn-on and a key another PC sends) never read and
+// write the files over each other. Signing out doesn't wait for it: it makes every change under way stale, and a stale
+// change keeps nothing.
 //
 // A key made or typed in signed out (a folder's copy) belongs to no account yet: the first account it is used with
 // takes it, when that account has no vault yet or its vault opens with it. A key file from before keys noted their
@@ -149,6 +156,8 @@ export class AccountKey {
   /** The seen file's last change, so the next one waits for it (changeSeen). */
   private seenTurn: Promise<void> = Promise.resolve();
   private problem: { account: string; trouble: VaultTrouble } | null = null;
+  /** The last change asked for; the next one waits for it (serial). */
+  private queue: Promise<unknown> = Promise.resolve();
 
   constructor(private readonly options: AccountKeyOptions) {}
 
@@ -190,6 +199,14 @@ export class AccountKey {
     return who !== null && this.ownSlot(who) && this.problem?.account === who ? this.problem.trouble : null;
   }
 
+  /**
+   * A key file on this PC that may hold the key for the account signed in now (or the copy's key, signed out) can't be
+   * opened: the recovery key is asked for instead of a new key, and the user is told why.
+   */
+  get keyBlocked(): boolean {
+    return this.mayHold(this.options.account()) !== null;
+  }
+
   /** The recovery key to show, when this PC has the key (see `get`). */
   recoveryKey(): string | null {
     const key = this.get();
@@ -197,115 +214,112 @@ export class AccountKey {
   }
 
   /** Reads this PC's keys, at start. Never throws. Answers the copy's key. */
-  async load(): Promise<Buffer | null> {
-    const read = await readKey(this.options.file, this.options.encryptor);
-    let saved = read.status === "opened" ? read : null;
-    this.mainHold = read.status === "blocked" ? read : null;
-    const legacy = this.options.legacyFile;
-    // Only in place of a key file that is truly missing: one this run can't open is never put out of its place.
-    if (read.status === "missing" && legacy) {
-      const old = await readKey(legacy, this.options.encryptor);
-      if (old.status === "opened") {
-        saved = old;
-        await rename(legacy, this.options.file).catch(() => undefined);
-      } else if (old.status === "blocked") this.mainHold = old;
-    }
-    this.main = saved ? { key: saved.key, owner: saved.owner ?? null, unproven: saved.unproven, keyFile: this.options.file, cacheFile: this.options.cacheFile } : null;
-    this.mainBlocked = read.status === "blocked";
-    this.others.clear();
-    this.othersHold.clear();
-    this.touched.clear();
-    for (const name of await readdir(path.dirname(this.options.file)).catch(() => [] as string[])) {
-      const tag = this.tagOfFile(name);
-      if (tag === null) continue;
-      const other = await readKey(path.join(path.dirname(this.options.file), name), this.options.encryptor);
-      if (other.status === "blocked") this.othersHold.set(tag, other);
-      if (other.status !== "opened") continue;
-      // One moved aside from before keys noted their account counts as unproven.
-      const unproven = other.unproven || other.owner === undefined || tag.startsWith(UNPROVEN_TAG);
-      this.others.set(tag, { key: other.key, owner: other.owner ?? null, unproven: unproven && !other.owner, ...this.filesOf(tag) });
-    }
-    if (saved && saved.owner === undefined) {
-      // From before keys noted their account: it is the one signed in now, which it was used with. With no one signed
-      // in, it is noted as unproven when this PC was used signed in, so a later start doesn't give it to whoever is then.
-      const who = this.options.account();
-      if (who !== null) {
-        await this.write(this.main!, saved.key, who, false, this.generation, who).catch(() => undefined);
-        await this.provenSeen(who);
-      } else {
-        await this.write(this.main!, saved.key, null, await this.usedSignedIn(), this.generation, null).catch(() => undefined);
+  load(): Promise<Buffer | null> {
+    return this.serial<Buffer | null>(async () => {
+      const read = await readKey(this.options.file, this.options.encryptor);
+      let saved = read.status === "opened" ? read : null;
+      this.mainHold = read.status === "blocked" ? read : null;
+      const legacy = this.options.legacyFile;
+      // Only in place of a key file that is truly missing: one this run can't open is never put out of its place.
+      if (read.status === "missing" && legacy) {
+        const old = await readKey(legacy, this.options.encryptor);
+        if (old.status === "opened") {
+          if (await this.moveLegacyIn(legacy)) saved = old;
+          else this.mainHold = { file: legacy, reason: "held", owner: old.owner };
+        } else if (old.status === "blocked") this.mainHold = old;
       }
-    }
-    return this.main?.key ?? null;
+      this.main = saved ? this.mainSlot(saved) : null;
+      this.mainBlocked = read.status === "blocked";
+      this.others.clear();
+      this.othersHold.clear();
+      this.touched.clear();
+      for (const name of await readdir(path.dirname(this.options.file)).catch(() => [] as string[])) {
+        const tag = this.tagOfFile(name);
+        if (tag === null) continue;
+        const other = await readKey(path.join(path.dirname(this.options.file), name), this.options.encryptor);
+        if (other.status === "blocked") this.othersHold.set(tag, other);
+        if (other.status === "opened") this.others.set(tag, this.otherSlot(tag, other));
+      }
+      if (saved) await this.noteOwner(saved);
+      return this.main?.key ?? null;
+    });
   }
 
   /**
    * The key for the account signed in now, taking a key of no account or an unproven one when it is that account's (see
    * `claim`); signed out, see `get`. Null when this PC has none for it.
    */
-  async forAccount(): Promise<Buffer | null> {
-    const who = this.options.account();
-    return who === null ? this.get() : ((await this.claim(who, this.generation))?.key ?? null);
+  forAccount(): Promise<Buffer | null> {
+    return this.serial<Buffer | null>(async () => {
+      const who = this.options.account();
+      return who === null ? this.get() : ((await this.claim(who, this.generation))?.key ?? null);
+    });
   }
 
   /**
    * Makes sure this PC has the account's key. When the account has none yet, one is made here
    * (`created`: show the recovery key now). When another PC made one, the user types it in ("ask").
    */
-  async setUp(): Promise<KeySetUp> {
-    const generation = this.generation;
-    const who = this.signedInAs();
-    await this.openAgain(who);
-    const slot = await this.claim(who, generation);
-    const vault = await this.vault(who, slot?.key);
-    if (slot) {
-      if (!vault) {
-        // Gone from the service: put back what this PC last read. With nothing to put back, an account that had a
-        // vault gets an empty one only when the user says so (rebuild); this PC goes on with its key.
-        await this.putBack(who, slot.key);
-        return { status: "ready", created: false };
+  setUp(): Promise<KeySetUp> {
+    return this.serial<KeySetUp>(async () => {
+      const generation = this.generation;
+      const who = this.signedInAs();
+      await this.openAgain(who);
+      const slot = await this.claim(who, generation);
+      const vault = await this.vault(who, slot?.key);
+      if (slot) {
+        if (!vault) {
+          // Gone from the service: put back what this PC last read. With nothing to put back, an account that had a
+          // vault gets an empty one only when the user says so (rebuild); this PC goes on with its key.
+          await this.putBack(who, slot.key);
+          return { status: "ready", created: false };
+        }
+        if (opens(slot.key, vault.data)) {
+          this.note(who, null);
+          return { status: "ready", created: false };
+        }
+        // Another PC started over with a new key, or the service sent something else: the new key is asked for, and
+        // this PC keeps its key and the vault it last read until one that opens it is typed in.
+        this.note(who, "unopened");
+        return { status: "ask" };
       }
-      if (opens(slot.key, vault.data)) {
-        this.note(who, null);
-        return { status: "ready", created: false };
-      }
-      // Another PC started over with a new key, or the service sent something else: the new key is asked for, and
-      // this PC keeps its key and the vault it last read until one that opens it is typed in.
-      this.note(who, "unopened");
-      return { status: "ask" };
-    }
-    // A vault this PC saw before and that is gone now: the account has a key, so it is asked for, not made anew.
-    if (vault || (await this.seen(who))) return { status: "ask" };
-    const blocked = this.noNewKey(who);
-    if (blocked) return blocked;
-    const made = newCopyKey();
-    const place = await this.freePlace(who);
-    // Another PC may have made one at the same moment: then its key is asked for.
-    if (!(await this.putVault(who, 0, made, EMPTY_VAULT, place.cacheFile))) return { status: "ask" };
-    await this.write(place, made, who, false, generation, who);
-    return { status: "ready", created: true };
+      // A vault this PC saw before and that is gone now: the account has a key, so it is asked for, not made anew.
+      if (vault || (await this.seen(who))) return { status: "ask" };
+      const blocked = this.noNewKey(who);
+      if (blocked) return blocked;
+      const made = newCopyKey();
+      const place = await this.freePlace(who);
+      // Another PC may have made one at the same moment: then its key is asked for.
+      if (!(await this.putVault(who, 0, made, EMPTY_VAULT, place.cacheFile))) return { status: "ask" };
+      await this.write(place, made, who, false, generation, who);
+      return { status: "ready", created: true };
+    });
   }
 
   /** Whether the account has a key already, made on this PC or another (also when its vault went missing since). */
-  async exists(): Promise<boolean> {
-    const who = this.signedInAs();
-    return (await this.vault(who)) !== null || (await this.seen(who));
+  exists(): Promise<boolean> {
+    return this.serial<boolean>(async () => {
+      const who = this.signedInAs();
+      return (await this.vault(who)) !== null || (await this.seen(who));
+    });
   }
 
   /**
    * Whether this PC's key still opens the account's vault; false only when it surely doesn't (another PC started over,
    * or the service sent something else), or this PC has no key for the account signed in. It forgets nothing either way.
    */
-  async fits(): Promise<boolean> {
-    const who = this.options.account();
-    if (who === null) return false;
-    const slot = await this.claim(who, this.generation);
-    if (!slot) return false;
-    const vault = await this.vault(who, slot.key);
-    if (!vault) return true;
-    const fits = opens(slot.key, vault.data);
-    this.note(who, fits ? null : "unopened");
-    return fits;
+  fits(): Promise<boolean> {
+    return this.serial<boolean>(async () => {
+      const who = this.options.account();
+      if (who === null) return false;
+      const slot = await this.claim(who, this.generation);
+      if (!slot) return false;
+      const vault = await this.vault(who, slot.key);
+      if (!vault) return true;
+      const fits = opens(slot.key, vault.data);
+      this.note(who, fits ? null : "unopened");
+      return fits;
+    });
   }
 
   /** The recovery key the user typed in: checked against the account's vault, then kept on this PC. */
@@ -320,43 +334,47 @@ export class AccountKey {
    * kept, in the account's own files (another key is never written over). The same key as one this PC keeps without
    * an account goes on with what that one last read.
    */
-  async take(key: Buffer): Promise<void> {
-    const generation = this.generation;
-    const who = this.signedInAs();
-    // Not kept as the last read yet: only once the key is kept on this PC.
-    const vault = await this.vault(who);
-    if (vault && !opens(key, vault.data)) throw new UserError("cloudCopy.error.wrongKey");
-    const same = [this.main, ...this.others.values()].find((item): item is Slot => item !== null && item.owner === null && item.key.equals(key));
-    if (same?.unproven) await this.adoptUnproven(same, who, generation);
-    else if (same) await this.write(same, key, who, false, generation, who);
-    else await this.write(await this.freePlace(who, key), key, who, false, generation, who);
-    if (vault) {
-      await this.keepFor(who, key, vault.data);
-      this.note(who, null);
-      return;
-    }
-    // No vault: the key becomes the account's, with what this PC last read under it. A vault seen before and gone now
-    // is not made again empty without the user (rebuild): the key is kept, and the trouble shown.
-    await this.putBack(who, key);
+  take(key: Buffer): Promise<void> {
+    return this.serial<void>(async () => {
+      const generation = this.generation;
+      const who = this.signedInAs();
+      // Not kept as the last read yet: only once the key is kept on this PC.
+      const vault = await this.vault(who);
+      if (vault && !opens(key, vault.data)) throw new UserError("cloudCopy.error.wrongKey");
+      const same = [this.main, ...this.others.values()].find((item): item is Slot => item !== null && item.owner === null && item.key.equals(key));
+      if (same?.unproven) await this.adoptUnproven(same, who, generation);
+      else if (same) await this.write(same, key, who, false, generation, who);
+      else await this.write(await this.freePlace(who, key), key, who, false, generation, who);
+      if (vault) {
+        await this.keepFor(who, key, vault.data);
+        this.note(who, null);
+        return;
+      }
+      // No vault: the key becomes the account's, with what this PC last read under it. A vault seen before and gone now
+      // is not made again empty without the user (rebuild): the key is kept, and the trouble shown.
+      await this.putBack(who, key);
+    });
   }
 
   /**
    * The user's answer when the account's vault is gone and this PC has nothing to put back: the account gets a vault
    * under this PC's key again, empty. Its publisher keys are lost then, unless the developer exported them to a file.
    */
-  async rebuild(): Promise<void> {
-    const who = this.signedInAs();
-    const slot = await this.claim(who, this.generation);
-    if (!slot) throw new CopyError("failed", "no key on this PC");
-    const key = slot.key;
-    const vault = await this.vault(who, key);
-    if (vault) {
-      // Back meanwhile: nothing is replaced.
-      this.note(who, opens(key, vault.data) ? null : "unopened");
-      return;
-    }
-    if (!(await this.putVault(who, 0, key, (await this.cached(who, key)) ?? EMPTY_VAULT))) throw new CopyError("failed", "another PC made a vault at the same moment");
-    this.note(who, null);
+  rebuild(): Promise<void> {
+    return this.serial<void>(async () => {
+      const who = this.signedInAs();
+      const slot = await this.claim(who, this.generation);
+      if (!slot) throw new CopyError("failed", "no key on this PC");
+      const key = slot.key;
+      const vault = await this.vault(who, key);
+      if (vault) {
+        // Back meanwhile: nothing is replaced.
+        this.note(who, opens(key, vault.data) ? null : "unopened");
+        return;
+      }
+      if (!(await this.putVault(who, 0, key, (await this.cached(who, key)) ?? EMPTY_VAULT))) throw new CopyError("failed", "another PC made a vault at the same moment");
+      this.note(who, null);
+    });
   }
 
   /**
@@ -364,86 +382,92 @@ export class AccountKey {
    * opened again, except the vault itself when this PC still has the old key: its publisher keys move over. Only the
    * account's own key moves anything over; what this PC keeps of other keys (another account's, an unproven one) stays.
    */
-  async startOver(): Promise<void> {
-    const generation = this.generation;
-    const who = this.signedInAs();
-    const oldKey = (await this.claim(who, generation))?.key ?? null;
-    const old = oldKey ? await this.vault(who, oldKey).catch(() => null) : null;
-    // The publisher keys move over: from the vault when the old key opens it, else from what this PC last read.
-    const content = (old && oldKey && openContent(oldKey, old.data)) || (oldKey && (await this.cached(who, oldKey))) || EMPTY_VAULT;
-    const key = newCopyKey();
-    const place = await this.freePlace(who);
-    for (let attempt = 0; ; attempt++) {
-      await this.request(who, "DELETE");
-      if (await this.putVault(who, 0, key, content, place.cacheFile)) break;
-      // Another PC came first. One that put back the old vault (it saw it missing) is undone and tried again; a vault
-      // under any other key is another PC's new key, which stays.
-      const now = await this.vault(who).catch(() => null);
-      if (attempt >= 2 || !now || !oldKey || !opens(oldKey, now.data)) throw new CopyError("failed", "another PC made a key at the same moment");
-    }
-    await this.write(place, key, who, false, generation, who);
-    this.note(who, null);
+  startOver(): Promise<void> {
+    return this.serial<void>(async () => {
+      const generation = this.generation;
+      const who = this.signedInAs();
+      const oldKey = (await this.claim(who, generation))?.key ?? null;
+      const old = oldKey ? await this.vault(who, oldKey).catch(() => null) : null;
+      // The publisher keys move over: from the vault when the old key opens it, else from what this PC last read.
+      const content = (old && oldKey && openContent(oldKey, old.data)) || (oldKey && (await this.cached(who, oldKey))) || EMPTY_VAULT;
+      const key = newCopyKey();
+      const place = await this.freePlace(who);
+      for (let attempt = 0; ; attempt++) {
+        await this.request(who, "DELETE");
+        if (await this.putVault(who, 0, key, content, place.cacheFile)) break;
+        // Another PC came first. One that put back the old vault (it saw it missing) is undone and tried again; a vault
+        // under any other key is another PC's new key, which stays.
+        const now = await this.vault(who).catch(() => null);
+        if (attempt >= 2 || !now || !oldKey || !opens(oldKey, now.data)) throw new CopyError("failed", "another PC made a key at the same moment");
+      }
+      await this.write(place, key, who, false, generation, who);
+      this.note(who, null);
+    });
   }
 
   /**
    * What the vault holds; when the service can't be reached, or its vault doesn't open with this PC's key or is gone,
    * what this PC last read (`trouble` says which).
    */
-  async content(): Promise<VaultContent> {
-    const who = this.signedInAs();
-    const slot = await this.claim(who, this.generation);
-    if (!slot) throw new CopyError("failed", "no key on this PC");
-    const key = slot.key;
-    let vault: { version: number; data: Uint8Array } | null;
-    try {
-      vault = await this.vault(who, key);
-    } catch (error) {
-      const cached = error instanceof CopyError && (error.reason === "unreachable" || error.reason === "unavailable") ? await this.cached(who, key) : null;
-      if (cached) return cached;
-      throw error;
-    }
-    if (!vault) {
-      // Gone from the service: what this PC last read goes back (setUp does the same); nothing is made empty here.
-      const cached = await this.cached(who, key);
-      if (!cached) {
-        this.note(who, (await this.seen(who)) ? "gone" : null);
-        return EMPTY_VAULT;
+  content(): Promise<VaultContent> {
+    return this.serial<VaultContent>(async () => {
+      const who = this.signedInAs();
+      const slot = await this.claim(who, this.generation);
+      if (!slot) throw new CopyError("failed", "no key on this PC");
+      const key = slot.key;
+      let vault: { version: number; data: Uint8Array } | null;
+      try {
+        vault = await this.vault(who, key);
+      } catch (error) {
+        const cached = error instanceof CopyError && (error.reason === "unreachable" || error.reason === "unavailable") ? await this.cached(who, key) : null;
+        if (cached) return cached;
+        throw error;
       }
-      await this.restore(who, key, cached).catch(() => undefined);
-      return cached;
-    }
-    const content = openContent(key, vault.data);
-    if (content) {
-      this.note(who, null);
-      return content;
-    }
-    this.note(who, "unopened");
-    const cached = await this.cached(who, key);
-    if (cached) return cached;
-    throw new CopyError("damaged");
+      if (!vault) {
+        // Gone from the service: what this PC last read goes back (setUp does the same); nothing is made empty here.
+        const cached = await this.cached(who, key);
+        if (!cached) {
+          this.note(who, (await this.seen(who)) ? "gone" : null);
+          return EMPTY_VAULT;
+        }
+        await this.restore(who, key, cached).catch(() => undefined);
+        return cached;
+      }
+      const content = openContent(key, vault.data);
+      if (content) {
+        this.note(who, null);
+        return content;
+      }
+      this.note(who, "unopened");
+      const cached = await this.cached(who, key);
+      if (cached) return cached;
+      throw new CopyError("damaged");
+    });
   }
 
   /** Changes what the vault holds, made on top of what it holds now (tried again when another PC changed it first). */
-  async change(update: (content: VaultContent) => VaultContent): Promise<VaultContent> {
-    const who = this.signedInAs();
-    const slot = await this.claim(who, this.generation);
-    if (!slot) throw new CopyError("failed", "no key on this PC");
-    const key = slot.key;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      const vault = await this.vault(who, key);
-      // Only on top of a vault this key opens; a gone one is made again from what this PC last read, never empty unasked.
-      const content = vault ? openContent(key, vault.data) : ((await this.cached(who, key)) ?? ((await this.seen(who)) ? null : EMPTY_VAULT));
-      if (!content) {
-        this.note(who, vault ? "unopened" : "gone");
-        throw new CopyError("damaged");
+  change(update: (content: VaultContent) => VaultContent): Promise<VaultContent> {
+    return this.serial<VaultContent>(async () => {
+      const who = this.signedInAs();
+      const slot = await this.claim(who, this.generation);
+      if (!slot) throw new CopyError("failed", "no key on this PC");
+      const key = slot.key;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const vault = await this.vault(who, key);
+        // Only on top of a vault this key opens; a gone one is made again from what this PC last read, never empty unasked.
+        const content = vault ? openContent(key, vault.data) : ((await this.cached(who, key)) ?? ((await this.seen(who)) ? null : EMPTY_VAULT));
+        if (!content) {
+          this.note(who, vault ? "unopened" : "gone");
+          throw new CopyError("damaged");
+        }
+        const next = update(content);
+        if (await this.putVault(who, vault?.version ?? 0, key, next)) {
+          this.note(who, null);
+          return next;
+        }
       }
-      const next = update(content);
-      if (await this.putVault(who, vault?.version ?? 0, key, next)) {
-        this.note(who, null);
-        return next;
-      }
-    }
-    throw new CopyError("failed", "the vault kept changing");
+      throw new CopyError("failed", "the vault kept changing");
+    });
   }
 
   /**
@@ -451,21 +475,23 @@ export class AccountKey {
    * copy's key before moves aside: another account's to that account's own files, where it waits; one of no account to
    * the unproven ones; a key file that can't be opened in this run as it is.
    */
-  async useForCopy(): Promise<void> {
-    const who = this.signedInAs();
-    const slot = await this.claim(who, this.generation);
-    if (!slot || slot === this.main) return;
-    if (this.mainBlocked) await this.moveBlockedAside();
-    if (this.main) await this.moveAside(this.main);
-    await this.setAside({ keyFile: this.options.file, cacheFile: this.options.cacheFile });
-    await rename(slot.keyFile, this.options.file);
-    if (slot.cacheFile && this.options.cacheFile) {
-      await rename(slot.cacheFile, this.options.cacheFile).catch(async () => {
-        await forgetSealedFile(this.options.cacheFile!);
-      });
-    }
-    for (const [tag, item] of this.others) if (item === slot) this.others.delete(tag);
-    this.main = { ...slot, keyFile: this.options.file, cacheFile: this.options.cacheFile };
+  useForCopy(): Promise<void> {
+    return this.serial<void>(async () => {
+      const who = this.signedInAs();
+      const slot = await this.claim(who, this.generation);
+      if (!slot || slot === this.main) return;
+      if (this.mainBlocked) await this.moveBlockedAside();
+      if (this.main) await this.moveAside(this.main);
+      await this.setAside({ keyFile: this.options.file, cacheFile: this.options.cacheFile });
+      await rename(slot.keyFile, this.options.file);
+      if (slot.cacheFile && this.options.cacheFile) {
+        await rename(slot.cacheFile, this.options.cacheFile).catch(async () => {
+          await forgetSealedFile(this.options.cacheFile!);
+        });
+      }
+      for (const [tag, item] of this.others) if (item === slot) this.others.delete(tag);
+      this.main = { ...slot, keyFile: this.options.file, cacheFile: this.options.cacheFile };
+    });
   }
 
   /** Whether this PC is signed in, so the key goes through the account's vault. */
@@ -479,14 +505,16 @@ export class AccountKey {
    * account a vault with it (setUp). Only a copy key of no account is used again: an account's waits for it, and a
    * new key is made beside it.
    */
-  async setUpHere(hasCopy: boolean): Promise<KeySetUp> {
-    await this.openAgain(null);
-    if (this.main && this.copyIsOf(null)) return { status: "ready", created: false };
-    if (hasCopy) return { status: "ask" };
-    const blocked = this.noNewKey(null);
-    if (blocked) return blocked;
-    await this.saveHere(newCopyKey(), null);
-    return { status: "ready", created: true };
+  setUpHere(hasCopy: boolean): Promise<KeySetUp> {
+    return this.serial<KeySetUp>(async () => {
+      await this.openAgain(null);
+      if (this.main && this.copyIsOf(null)) return { status: "ready", created: false };
+      if (hasCopy) return { status: "ask" };
+      const blocked = this.noNewKey(null);
+      if (blocked) return blocked;
+      await this.saveHere(newCopyKey(), null);
+      return { status: "ready", created: true };
+    });
   }
 
   /** Signed out: the recovery key typed in is kept here. Whether it opens the folder's copy is the check. */
@@ -497,24 +525,34 @@ export class AccountKey {
   }
 
   /** Signed out: the key another PC sent through the folder (pairing.ts) is kept here, like one typed in. */
-  async takeHere(key: Buffer): Promise<void> {
-    // The copy's key already: it stays its account's. Another one belongs to no account yet.
-    await this.saveHere(key, this.main?.key.equals(key) ? this.main.owner : null);
+  takeHere(key: Buffer): Promise<void> {
+    return this.serial<void>(async () => {
+      // The copy's key already: it stays its account's. Another one belongs to no account yet.
+      await this.saveHere(key, this.main?.key.equals(key) ? this.main.owner : null);
+    });
   }
 
   /** Signed out, a lost key: a new one is made here. */
-  async startOverHere(): Promise<void> {
-    await this.saveHere(newCopyKey(), null);
+  startOverHere(): Promise<void> {
+    return this.serial<void>(async () => {
+      await this.saveHere(newCopyKey(), null);
+    });
   }
 
   /**
    * Signed out: the key belongs to the account, so this PC forgets it. `account`: the account that signed out (only its
    * key goes, and one that belongs to no account yet); null for a key that belongs to none; left out, every key.
    */
-  async forget(account?: string | null): Promise<void> {
+  forget(account?: string | null): Promise<void> {
+    // At once, not after the changes queued: signing out never waits for one (a request may take long). Each change
+    // under way is stale from now on, and keeps nothing it writes (write).
     this.generation++;
     this.sawVault = null;
     this.problem = null;
+    return this.forgetNow(account);
+  }
+
+  private async forgetNow(account: string | null | undefined): Promise<void> {
     const all = account === undefined;
     const main = this.main;
     if ((main && (all || this.adoptable(main) || (account !== null && main.owner === account))) || (all && this.mainBlocked)) {
@@ -540,10 +578,12 @@ export class AccountKey {
    * Signed out while a folder's copy keeps the key here: the key stays (still the account's), the vault as last read,
    * with the account's publisher keys, goes. Signing in again reads it anew.
    */
-  async forgetVault(account: string | null): Promise<void> {
-    this.problem = null;
-    const slot = account === null ? (this.adoptable(this.main) ? this.main : null) : this.ownSlot(account);
-    if (slot?.cacheFile) await forgetSealedFile(slot.cacheFile);
+  forgetVault(account: string | null): Promise<void> {
+    return this.serial<void>(async () => {
+      this.problem = null;
+      const slot = account === null ? (this.adoptable(this.main) ? this.main : null) : this.ownSlot(account);
+      if (slot?.cacheFile) await forgetSealedFile(slot.cacheFile);
+    });
   }
 
   /**
@@ -551,26 +591,123 @@ export class AccountKey {
    * file of `who`, of no account or of an unknown one, or `who`'s own. Null when there is none.
    */
   private mayHold(who: string | null): Blocked | null {
-    const main = this.mainHold;
-    if (main && (main.owner === undefined || main.owner === null || main.owner === who)) return main;
-    return who === null ? null : (this.othersHold.get(this.tagOf(who)) ?? null);
-  }
-
-  /** A key file that may hold `who`'s key couldn't be opened at start: all are read again, as it may open now. */
-  private async openAgain(who: string | null): Promise<void> {
-    if (this.mayHold(who)) await this.load();
+    return this.blockedFor(who)[0]?.blocked ?? null;
   }
 
   /**
-   * Instead of a new key for `who`, while a key file that may hold one can't be opened: one that can't be read right now
-   * tells the user (keyHeld); one whose data doesn't open here, or a newer Tavora's, asks for the recovery key. Null when a
-   * new one may be made.
+   * The key files this run couldn't open that may hold `who`'s key, by file tag (null: the copy's, or its older file):
+   * the copy's when its record names `who`, no one or isn't known; `who`'s own; and one moved aside whose record names
+   * `who`, no one or isn't known.
+   */
+  private blockedFor(who: string | null): { tag: string | null; blocked: Blocked }[] {
+    const could = (blocked: Blocked) => blocked.owner === undefined || blocked.owner === null || blocked.owner === who;
+    const found: { tag: string | null; blocked: Blocked }[] = [];
+    if (this.mainHold && could(this.mainHold)) found.push({ tag: null, blocked: this.mainHold });
+    for (const [tag, blocked] of this.othersHold) {
+      const own = who !== null && tag === this.tagOf(who);
+      const aside = tag.startsWith(UNOPENED_TAG) || tag.startsWith(UNPROVEN_TAG);
+      if (own || (aside && could(blocked))) found.push({ tag, blocked });
+    }
+    return found;
+  }
+
+  /** The key files that may hold `who`'s key and couldn't be opened are read again (only those), as they may open now. */
+  private async openAgain(who: string | null): Promise<void> {
+    for (const { tag, blocked } of this.blockedFor(who)) {
+      if (tag === null) await this.reopenMain(blocked);
+      else await this.reopenOther(tag);
+    }
+  }
+
+  /** The copy's key file, or its older one, read again. */
+  private async reopenMain(blocked: Blocked): Promise<void> {
+    const read = await readKey(blocked.file, this.options.encryptor);
+    if (read.status === "blocked") {
+      this.mainHold = read;
+      return;
+    }
+    this.mainHold = null;
+    if (blocked.file === this.options.file) {
+      this.mainBlocked = false;
+      if (read.status === "opened") {
+        this.main = this.mainSlot(read);
+        await this.noteOwner(read);
+      }
+      return;
+    }
+    // The older file, with account-key.json missing at start: it moves in only while that is still so.
+    if (read.status === "opened" && !this.main && !this.mainBlocked && (await this.moveLegacyIn(blocked.file))) {
+      this.main = this.mainSlot(read);
+      await this.noteOwner(read);
+    }
+  }
+
+  /** Another account's key file (or one moved aside), read again. */
+  private async reopenOther(tag: string): Promise<void> {
+    const read = await readKey(this.filesOf(tag).keyFile, this.options.encryptor);
+    if (read.status === "blocked") {
+      this.othersHold.set(tag, read);
+      return;
+    }
+    this.othersHold.delete(tag);
+    if (read.status === "opened") this.others.set(tag, this.otherSlot(tag, read));
+  }
+
+  /**
+   * The older key file moves in as account-key.json, never onto one: a copy that fails when that is there, then the
+   * older file goes. Whether it moved.
+   */
+  private async moveLegacyIn(legacy: string): Promise<boolean> {
+    try {
+      await copyFile(legacy, this.options.file, constants.COPYFILE_EXCL);
+    } catch {
+      return false;
+    }
+    await rm(legacy, { force: true }).catch(() => undefined);
+    return true;
+  }
+
+  /** The copy's key as read. */
+  private mainSlot(read: OpenedKey): Slot {
+    return { key: read.key, owner: read.owner ?? null, unproven: read.unproven, keyFile: this.options.file, cacheFile: this.options.cacheFile };
+  }
+
+  /** Another account's key as read (or one moved aside: from before keys noted their account, it counts as unproven). */
+  private otherSlot(tag: string, read: OpenedKey): Slot {
+    const unproven = read.unproven || read.owner === undefined || tag.startsWith(UNPROVEN_TAG);
+    return { key: read.key, owner: read.owner ?? null, unproven: unproven && !read.owner, ...this.filesOf(tag) };
+  }
+
+  /**
+   * The copy's key from before keys noted their account: it is the one signed in now, which it was used with. With no one
+   * signed in, it is noted as unproven when this PC was used signed in, so a later start doesn't give it to whoever is then.
+   */
+  private async noteOwner(read: OpenedKey): Promise<void> {
+    if (read.owner !== undefined || !this.main) return;
+    const who = this.options.account();
+    if (who !== null) {
+      await this.write(this.main, read.key, who, false, this.generation, who).catch(() => undefined);
+      await this.provenSeen(who);
+    } else {
+      await this.write(this.main, read.key, null, await this.usedSignedIn(), this.generation, null).catch(() => undefined);
+    }
+  }
+
+  /** Runs one change after every change asked for before it (and before every one asked after). */
+  private serial<T>(change: () => Promise<T>): Promise<T> {
+    const turn = this.queue.then(change);
+    this.queue = turn.catch(() => undefined);
+    return turn;
+  }
+
+  /**
+   * Instead of a new key for `who`, while a key file that may hold one can't be opened (held, its data doesn't open here,
+   * or a newer Tavora's): the recovery key is asked for, and `keyBlocked` says why. Null when a new one may be made.
    */
   private noNewKey(who: string | null): KeySetUp | null {
     const blocked = this.mayHold(who);
     if (!blocked) return null;
-    this.log(`account key: ${path.basename(blocked.file)} couldn't be opened, so no new key is made`);
-    if (blocked.reason === "held") throw new UserError("cloudCopy.error.keyHeld");
+    this.log(`account key: ${path.basename(blocked.file)} couldn't be opened (${blocked.reason}), so no new key is made`);
     return { status: "ask" };
   }
 
@@ -810,9 +947,22 @@ export class AccountKey {
     const sealed = place.cacheFile ? await readVault(place.cacheFile) : null;
     const cache = sealed === HELD || (sealed !== null && !(keeps && opens(keeps, sealed)));
     if (!key && !cache) return;
-    const to = this.filesOf(await this.freeTag(UNOPENED_TAG));
-    if (key) await rename(place.keyFile, to.keyFile);
-    if (cache && to.cacheFile) await rename(place.cacheFile!, to.cacheFile);
+    const tag = await this.freeTag(UNOPENED_TAG);
+    const to = this.filesOf(tag);
+    // Moved, never removed: one that can't even be moved stops what was asked, and the user is told so.
+    const stuck = (error: unknown) => {
+      this.log(`account key: ${path.basename(place.keyFile)} couldn't be moved aside: ${error instanceof Error ? error.message : String(error)}`);
+      throw new UserError("cloudCopy.error.keyStuck");
+    };
+    if (key) await rename(place.keyFile, to.keyFile).catch(stuck);
+    if (cache && to.cacheFile) await rename(place.cacheFile!, to.cacheFile).catch(stuck);
+    // Still not opened where it is now: it still keeps a new key from being made in its stead.
+    const was = this.mainHold?.file === place.keyFile ? this.mainHold : [...this.othersHold.values()].find((item) => item.file === place.keyFile);
+    if (key && was) {
+      if (this.mainHold === was) this.mainHold = null;
+      for (const [other, item] of this.othersHold) if (item === was) this.othersHold.delete(other);
+      this.othersHold.set(tag, { ...was, file: to.keyFile });
+    }
     this.log(`account key: ${path.basename(key ? place.keyFile : place.cacheFile!)} couldn't be opened; kept as ${path.basename(key ? to.keyFile : to.cacheFile!)}`);
   }
 
@@ -1009,7 +1159,8 @@ function openContent(key: Buffer, sealed: Uint8Array): VaultContent | null {
 }
 
 /** A key file as read: its key and the account it belongs to, missing, or one this run can't open (Blocked). */
-type KeyRead = { status: "opened"; key: Buffer; owner: string | null | undefined; unproven: boolean } | { status: "missing" } | ({ status: "blocked" } & Blocked);
+type OpenedKey = { status: "opened"; key: Buffer; owner: string | null | undefined; unproven: boolean };
+type KeyRead = OpenedKey | { status: "missing" } | ({ status: "blocked" } & Blocked);
 
 /** The account a key's record names: null for none yet, undefined in a file from before keys noted it (or unreadable). */
 function ownerOf(owner: unknown): string | null | undefined {

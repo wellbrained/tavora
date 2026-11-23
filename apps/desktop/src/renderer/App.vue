@@ -62,7 +62,7 @@ watch(
   },
   { immediate: true },
 );
-// A sign-in or key that can't be read right now isn't written over (main/sealed-file.ts): say so each time one more isn't.
+// A sign-in or key that can't be saved, as its file can't be read right now (main/sealed-file.ts): say so for each one.
 watch(
   () => state.value?.sealedHeld ?? 0,
   (count, before) => {

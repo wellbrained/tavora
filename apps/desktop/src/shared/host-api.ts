@@ -550,6 +550,8 @@ export type CloudCopyActivity =
 export interface CloudCopyView {
   /** False where this PC can't keep the key encrypted: the copy can't be turned on here. */
   canKeepKey: boolean;
+  /** A key file on this PC that may hold the key needed can't be opened: the recovery key is asked for, and why. */
+  keyBlocked: boolean;
   /** A development run in its own desktop-dev folder: turning on asks first, as the copy belongs in the installed app. */
   devData: boolean;
   on: boolean;
@@ -956,8 +958,8 @@ export interface HostViewState {
    */
   keptAside: number;
   /**
-   * How many sealed files (a sign-in or a key) couldn't be read this run when something was to be saved in them: they
-   * are kept as they are, and the save waits. The host UI says so once each time it grows.
+   * How many sealed files (a sign-in or a key) couldn't be saved this run, as they couldn't be read (or moved aside):
+   * they are kept as they are. The host UI says so once each time it grows.
    */
   sealedHeld: number;
   /** The user's local profile. */

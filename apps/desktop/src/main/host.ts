@@ -190,7 +190,7 @@ import {
   type ThemeProblem,
 } from "./themes";
 import { discoverStyles } from "./styles";
-import { sweepWriteLeftovers, writeFileAtomic } from "./fsutil";
+import { sweepWriteLeftovers } from "./fsutil";
 import {
   emptyWorkspace,
   Workspaces,

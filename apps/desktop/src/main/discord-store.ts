@@ -86,7 +86,7 @@ function games(value: unknown): Record<string, DiscordGame> {
 
 /**
  * discord.json: Discord's sign-in, sealed (sealed-file.ts). One that couldn't be read at start reads as signed out, and
- * is never written over or removed until it reads again.
+ * is never written over or removed: a save or sign-out moves it aside (kept) when it still can't be read.
  */
 export class DiscordSecretsFile {
   private readonly sealed: SealedFile;
@@ -95,7 +95,8 @@ export class DiscordSecretsFile {
     file: string,
     private readonly encryptor: Encryptor,
   ) {
-    this.sealed = new SealedFile(file);
+    // What it writes is the sign-in now, newer than one it couldn't read: that one moves aside instead of holding it up.
+    this.sealed = new SealedFile(file, { moveHeldAside: true });
   }
 
   async load(): Promise<DiscordSecrets> {

@@ -2,11 +2,14 @@
 // Discord's sign-in), kept by SavedFile's rules (saved-file.ts), and by one more of its own (decided 2026-11-23, "a
 // saved file that can't be read is never written over"):
 // - one that can't be read right now (a virus scan or a sync app holds it, the user profile is locked) is never written
-//   over or removed: a write reads it again first, and is refused while that fails, and the user is told;
+//   over or removed: a write reads it again first, and is refused while that fails, and the user is told. A store whose
+//   file always holds less than what it writes (a sign-in, written when the user signs in) may move it aside instead
+//   (`<file>.held-<time>`, kept), so the user is never stuck with it; only one that can't even be moved is refused;
 // - a damaged one is set aside, and reads as missing; one a newer Tavora wrote is copied aside;
 // - one whose data doesn't open here (sealed by another Windows user, a key store locked for now, or the store refuses
 //   it) stays where it is, so the next start can try again, and a copy goes aside (`<file>.unopened`).
 // The bytes are the same as before: `{"v":1,"data":…}`, then the store's own fields next to the sealed data.
+import { rename, stat } from "node:fs/promises";
 import path from "node:path";
 import { keepCopy } from "./fsutil";
 import { forgetSealedFile, type SavedRecord } from "./json";
@@ -52,7 +55,14 @@ export class SealedFile {
   /** The last read of the store's failed: nothing is written or removed until one succeeds. */
   private held = false;
 
-  constructor(readonly file: string) {
+  /**
+   * `moveHeldAside`: a write or a removal that finds the file still can't be read moves it aside, as it is, and goes on.
+   * Only for a file whose store always writes what is newest (a sign-in): never for a key, which would be lost to it.
+   */
+  constructor(
+    readonly file: string,
+    private readonly options: { readonly moveHeldAside?: boolean } = {},
+  ) {
     this.saved = new SavedFile(file, SAVED_FILES.sealed);
   }
 
@@ -92,22 +102,61 @@ export class SealedFile {
     this.held = false;
   }
 
-  /** Removes the file and every copy of it set aside (signing out). Refused like a write while it can't be read. */
+  /**
+   * Removes the file and every copy of it set aside (signing out). Refused like a write while it can't be read; or, with
+   * `moveHeldAside`, it is moved aside then (and kept), and so is one that can't be removed.
+   */
   async forget(): Promise<void> {
     if (this.held) await this.readAgain();
     await this.saved.flush();
-    await forgetSealedFile(this.file);
+    try {
+      await forgetSealedFile(this.file);
+    } catch (error) {
+      if (!this.options.moveHeldAside) throw error;
+      await this.moveAside();
+      await forgetSealedFile(this.file);
+    }
   }
 
-  /** Reads the file again, after a read that failed; throws SavedFileHeld, and tells the user, while it still fails. */
+  /**
+   * Reads the file again, after a read that failed. While it still fails: with `moveHeldAside` it is moved aside, else
+   * SavedFileHeld is thrown and the user told.
+   */
   private async readAgain(refused?: SavedFileHeld): Promise<void> {
     try {
       await this.saved.read();
     } catch (error) {
-      this.held = true;
-      tellHeld(this.file);
-      throw refused ?? new SavedFileHeld(this.file, error);
+      if (!this.options.moveHeldAside) {
+        this.held = true;
+        tellHeld(this.file);
+        throw refused ?? new SavedFileHeld(this.file, error);
+      }
+      await this.moveAside();
+      // Gone from its place now: read as missing, so the store's write goes on.
+      await this.saved.read();
     }
     this.held = false;
+  }
+
+  /** Moves the file aside, as it is, to `<file>.held-<time>` (never onto a file there); throws SavedFileHeld when it can't. */
+  private async moveAside(): Promise<void> {
+    const stamp = `${this.file}.held-${Date.now()}`;
+    try {
+      for (let n = 1; ; n++) {
+        const target = n === 1 ? stamp : `${stamp}-${n}`;
+        const taken = await stat(target).then(
+          () => true,
+          (error: NodeJS.ErrnoException) => error.code !== "ENOENT",
+        );
+        if (taken) continue;
+        await rename(this.file, target);
+        console.error(`[tavora] ${path.basename(this.file)} couldn't be read, so it was kept as ${path.basename(target)}`);
+        return;
+      }
+    } catch (error) {
+      this.held = true;
+      tellHeld(this.file);
+      throw new SavedFileHeld(this.file, error);
+    }
   }
 }

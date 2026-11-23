@@ -116,6 +116,8 @@ describe("the publisher keys Tavora keeps", () => {
     const content = a.accountKey.content.bind(a.accountKey);
     vi.spyOn(a.accountKey, "content").mockImplementationOnce(() => new Promise((resolve) => (answer = () => resolve(content()))));
     const slow = a.keys.refresh();
+    // The vault is being read (the account's key reads one change at a time): signed out now.
+    await vi.waitFor(() => expect(answer).toBeTypeOf("function"));
     signedIn = false;
     await a.keys.refresh();
     answer();

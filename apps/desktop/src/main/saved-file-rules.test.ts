@@ -32,8 +32,8 @@ const USES_RULE_PIECES: Record<string, string> = {
 const WRITES: { file: string; what: string; calls: string[] }[] = [
   {
     file: "account-key.ts",
-    what: "the account vault's seen mark and the vault as last read (not JSON), and the sealed key files moved between slots, never onto a file (they are written with sealed-file.ts)",
-    calls: ["rename(legacy, this.options.file)", "rename(slot.keyFile, this.options.file)", "rename(slot.cacheFile, this.options.cacheFile)", "rename(slot.cacheFile, files.cacheFile)", "fsutil.writeFileAtomic(seenFile)", "fsutil.writeFileAtomic(file)", "rename(main.keyFile, files.keyFile)", "rename(main.cacheFile, files.cacheFile)", "rename(place.keyFile, to.keyFile)", "rename(place.cacheFile!, to.cacheFile)"],
+    what: "the account vault's seen mark and the vault as last read (not JSON), and the sealed key files moved between slots, never onto a file (the older key file is copied in only where none is; they are written with sealed-file.ts)",
+    calls: ["copyFile(legacy, this.options.file)", "rename(slot.keyFile, this.options.file)", "rename(slot.cacheFile, this.options.cacheFile)", "rename(slot.cacheFile, files.cacheFile)", "fsutil.writeFileAtomic(seenFile)", "fsutil.writeFileAtomic(file)", "rename(main.keyFile, files.keyFile)", "rename(main.cacheFile, files.cacheFile)", "rename(place.keyFile, to.keyFile)", "rename(place.cacheFile!, to.cacheFile)"],
   },
   { file: "appearance.ts", what: "a starter theme or style the user makes, in its own folder", calls: ["fsutil.writeFileAtomic(path.join(folder, name))"] },
   { file: "backup.ts", what: "the daily backup: copies of the data files, put in place whole", calls: ["copyFile(path.join(userData, name), path.join(partial, name))", "cp(from, path.join(partial, name, part))", "rename(partial, target)"] },
@@ -43,7 +43,7 @@ const WRITES: { file: string; what: string; calls: string[] }[] = [
   { file: "cloud-copy-sync.ts", what: "the list of the copy another PC's key brought down, staged as stage() stages one (enterOtherKey, #909)", calls: ["fsutil.writeFileAtomic(this.listFile)"] },
   { file: "cloud-copy.ts", what: "the cloud copy's files: planned, they move once the change to the cloud copy's code under way elsewhere has landed (NOT_SAVED_FILES)", calls: ["writeFile(path.join(partsDir, id))", "open(target)", "FileHandle.writeFile(out)", "rename-held.renameHeld(from, to)", "cp(from, part)", "rename-held.renameHeld(part, to)", "rename-held.renameHeld(from, done)", "json.checkSavedFile(file)", "fsutil.writeFileAtomic(file)"] },
   { file: "copy-folder.ts", what: "the cloud copy's folder, being changed elsewhere", calls: ["fsutil.writeFileAtomic(file)", "writeFile(probe)"] },
-  { file: "copy-folder.ts", what: "cloud-copy-unused.json in user data: how long this PC has seen each part of the folder unused : planned, moves to SavedFile with the cloud copy's files (NOT_SAVED_FILES)", calls: ["fsutil.writeFileAtomic(file)"] },
+  { file: "copy-folder.ts", what: "cloud-copy-unused.json in user data: how long this PC has seen each part of the folder unused; planned, it moves to SavedFile with the cloud copy's files (NOT_SAVED_FILES)", calls: ["fsutil.writeFileAtomic(file)"] },
   { file: "crash-log.ts", what: "crashes.log, through diagnostics.ts", calls: ["diagnostics.appendLogLine(file)"] },
   { file: "development-folders.ts", what: "an example module copied into the developer's own folder", calls: ["example-copy.copyExample(example.root)"] },
   { file: "diagnostics.ts", what: "the crash and start logs", calls: ["writeFileSync(file)"] },
@@ -85,7 +85,11 @@ const WRITES: { file: string; what: string; calls: string[] }[] = [
   { file: "saved-data.ts", what: "window.json (where the window was), set aside when damaged", calls: ["json.readJsonOrSetAside(this.file(WINDOW_FILE))", "fsutil.writeFileAtomic(this.file(WINDOW_FILE))"] },
   { file: "saved-data.ts", what: "keepNewerFiles: a copy of each data file a newer Tavora wrote; and a profile without a usable id set aside", calls: ["json.keepNewerCopy(file)", "json.setAside(file)"] },
   { file: "saved-file.ts", what: "the module that keeps the rules: its writes, the write at quit through `<file>.now`, and a file its kind can't use set aside", calls: ["openSync(now)", "writeSync(handle)", "renameSync(now, file)", "json.readSavedFile(this.file)", "json.setAside(this.file)", "fsutil.writeFileUnlessReplaced(this.file)"] },
-  { file: "sealed-file.ts", what: "a copy of a sealed file whose data doesn't open here (`.unopened`), left in place for the next start", calls: ["fsutil.keepCopy(path.dirname(this.file), `${path.basename(this.file)}.unopened`)"] },
+  {
+    file: "sealed-file.ts",
+    what: "a copy of a sealed file whose data doesn't open here (`.unopened`), left in place for the next start; and a sign-in that can't be read moved aside (`.held-<time>`, never onto a file) when the user signs in or out",
+    calls: ["fsutil.keepCopy(path.dirname(this.file), `${path.basename(this.file)}.unopened`)", "rename(this.file, target)"],
+  },
   { file: "startup-failure.ts", what: "startup.log, through diagnostics.ts", calls: ["diagnostics.appendStartupLog(log)"] },
   { file: "steam-icons.ts", what: "icons, not JSON", calls: ["fsutil.writeFileAtomic(path.join(iconDir, file))", "fsutil.writeFileAtomic(path.join(iconDir, file))", "fsutil.writeFileAtomic(path.join(iconDir, file))", "fsutil.writeFileAtomic(path.join(iconDir, file))", "fsutil.writeFileAtomic(path.join(iconDir, file))"] },
   { file: "steam-shortcuts.ts", what: "icons, not JSON", calls: ["fsutil.writeFileAtomic(path.join(iconDir, file))"] },

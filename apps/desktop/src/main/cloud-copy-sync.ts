@@ -324,6 +324,7 @@ export class CopySync {
   view(): CloudCopyView {
     return {
       canKeepKey: this.accountKeys.canKeep,
+      keyBlocked: this.accountKeys.keyBlocked,
       devData: this.options.devData === true,
       on: this.on,
       ...activityView(this.activity),

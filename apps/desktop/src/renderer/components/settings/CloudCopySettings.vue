@@ -161,6 +161,8 @@ function startOver() {
 
     <!-- Another PC made the account's key: its recovery key is asked for. -->
     <form v-if="view.askKey" class="flex flex-col gap-3 py-4" @submit.prevent="keyText.trim() && run({ type: 'cloud-copy-key', key: keyText })">
+      <!-- A key file here that can't be opened (in use, or sealed by another user): why the key is asked for. -->
+      <Notice v-if="view.keyBlocked" variant="warning" data-testid="cloud-copy-key-blocked">{{ t("cloudCopy.askKey.blocked") }}</Notice>
       <span class="text-muted-foreground">{{ t("cloudCopy.askKey.text") }}</span>
       <!-- The Recovery key group above asks too while signed in: one place to get it from another PC. -->
       <template v-if="developerKeys?.status !== 'ask'">
