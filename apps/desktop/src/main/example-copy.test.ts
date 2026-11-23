@@ -90,7 +90,15 @@ describe("copyExample", () => {
   });
 
   it("has the repository's TypeScript settings, without what only the repository uses", async () => {
-    const { declaration: _declaration, sourceMap: _sourceMap, customConditions: _conditions, ...base } = (await readJson(path.join(repo, "tsconfig.base.json"))).compilerOptions as Record<string, unknown>;
+    // noUncheckedSideEffectImports: the repository checks with TypeScript 6 and 7, which turn it on; a copy installs
+    // TYPESCRIPT_RANGE (5.9), where it is already off.
+    const {
+      declaration: _declaration,
+      sourceMap: _sourceMap,
+      customConditions: _conditions,
+      noUncheckedSideEffectImports: _sideEffects,
+      ...base
+    } = (await readJson(path.join(repo, "tsconfig.base.json"))).compilerOptions as Record<string, unknown>;
     expect(BASE_COMPILER_OPTIONS).toEqual(base);
   });
 });

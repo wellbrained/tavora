@@ -55,7 +55,7 @@ Module pages run in a sandbox. The host validates their requests, scopes stored 
 
 ## Run from source
 
-Use Node.js 24 LTS and pnpm 12.18.0 (the repository pins pnpm in `package.json`; `.nvmrc` selects Node 24). The API service and the published packages for module developers still support Node 22, and CI tests them on it too.
+Use Node.js 24 LTS and pnpm 12.18.0 (the repository pins pnpm in `package.json`; `.nvmrc` selects Node 24). The API service and the published packages for module developers still support Node 22, and CI tests them on it too. `tsc` is TypeScript 7; `typescript` itself is the TypeScript 6 compatibility package, because vue-tsc and other tools that use TypeScript's API can't run on 7 yet.
 
 ```sh
 corepack enable

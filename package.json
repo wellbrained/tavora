@@ -28,12 +28,13 @@
     "check": "pnpm check:patches && pnpm check:modules && pnpm typecheck && pnpm test && pnpm build && pnpm test:e2e"
   },
   "devDependencies": {
+    "@typescript/native": "npm:typescript@7.0.2",
     "@vitejs/plugin-vue": "6.0.11",
     "allo-font": "1.0.1",
     "jsdom": "31.0.1",
     "oxlint": "1.94.0",
     "subset-font": "2.9.0",
-    "typescript": "^5.9.3",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
     "vitest": "5.1.0"
   },
   "license": "MIT"

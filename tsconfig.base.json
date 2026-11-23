@@ -13,6 +13,7 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
+    "noUncheckedSideEffectImports": false,
     "declaration": true,
     "sourceMap": true,
     "customConditions": [

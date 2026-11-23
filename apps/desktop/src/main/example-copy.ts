@@ -26,8 +26,9 @@ const MAX_FILES = 500;
 const MAX_BYTES = 20 * 1024 * 1024;
 
 /**
- * The repository's tsconfig.base.json without what only the repository uses (its "source" condition and
- * declaration output). A copy has these in its own tsconfig.json; example-copy.test.ts keeps them the same.
+ * The repository's tsconfig.base.json without what only the repository uses (its "source" condition,
+ * declaration output, and noUncheckedSideEffectImports turned back off for its TypeScript 6 and 7, which a copy on
+ * TYPESCRIPT_RANGE doesn't need). A copy has these in its own tsconfig.json; example-copy.test.ts keeps them the same.
  */
 export const BASE_COMPILER_OPTIONS = {
   target: "ES2022",
