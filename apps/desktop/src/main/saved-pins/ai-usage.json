@@ -1,0 +1,76 @@
+{
+  "empty": {
+    "read": {
+      "accounts": []
+    },
+    "files": {
+      "ai-usage.json": "{\n  \"version\": 2,\n  \"accounts\": [\n    {\n      \"id\": \"<new>\",\n      \"provider\": \"claude\",\n      \"label\": \"Home\",\n      \"directory\": \"%USERDATA%%SEP%.claude-home\"\n    }\n  ]\n}"
+    },
+    "told": 0
+  },
+  "sample": {
+    "read": {
+      "accounts": [
+        {
+          "id": "9d2c1b5e-7f3a-4e1b-8c6d-2a4f5e6b7c8d",
+          "provider": "claude",
+          "label": "Work",
+          "directory": "%USERDATA%/.claude",
+          "plan": null
+        },
+        {
+          "id": "1a2b3c4d-5e6f-4a1b-8c2d-3e4f5a6b7c8d",
+          "provider": "codex",
+          "label": "Codex",
+          "directory": "%USERDATA%/.codex",
+          "plan": null
+        }
+      ]
+    },
+    "files": {
+      "ai-usage.json": "{\n  \"version\": 2,\n  \"accounts\": [\n    {\n      \"id\": \"9d2c1b5e-7f3a-4e1b-8c6d-2a4f5e6b7c8d\",\n      \"provider\": \"claude\",\n      \"label\": \"Work\",\n      \"directory\": \"%USERDATA%/.claude\"\n    },\n    {\n      \"id\": \"1a2b3c4d-5e6f-4a1b-8c2d-3e4f5a6b7c8d\",\n      \"provider\": \"codex\",\n      \"label\": \"Codex\",\n      \"directory\": \"%USERDATA%/.codex\"\n    },\n    {\n      \"id\": \"<new>\",\n      \"provider\": \"claude\",\n      \"label\": \"Home\",\n      \"directory\": \"%USERDATA%%SEP%.claude-home\"\n    }\n  ]\n}"
+    },
+    "told": 0
+  },
+  "newer": {
+    "read": {
+      "accounts": [
+        {
+          "id": "9d2c1b5e-7f3a-4e1b-8c6d-2a4f5e6b7c8d",
+          "provider": "claude",
+          "label": "Work",
+          "directory": "%USERDATA%/.claude",
+          "plan": null
+        },
+        {
+          "id": "1a2b3c4d-5e6f-4a1b-8c2d-3e4f5a6b7c8d",
+          "provider": "codex",
+          "label": "Codex",
+          "directory": "%USERDATA%/.codex",
+          "plan": null
+        }
+      ]
+    },
+    "files": {
+      "ai-usage.json": "{\n  \"version\": 2,\n  \"accounts\": [\n    {\n      \"id\": \"9d2c1b5e-7f3a-4e1b-8c6d-2a4f5e6b7c8d\",\n      \"provider\": \"claude\",\n      \"label\": \"Work\",\n      \"directory\": \"%USERDATA%/.claude\"\n    },\n    {\n      \"id\": \"1a2b3c4d-5e6f-4a1b-8c2d-3e4f5a6b7c8d\",\n      \"provider\": \"codex\",\n      \"label\": \"Codex\",\n      \"directory\": \"%USERDATA%/.codex\"\n    },\n    {\n      \"id\": \"<new>\",\n      \"provider\": \"claude\",\n      \"label\": \"Home\",\n      \"directory\": \"%USERDATA%%SEP%.claude-home\"\n    }\n  ]\n}",
+      "ai-usage.json.from-version-3": "{\n  \"version\": 3,\n  \"accounts\": [\n    {\n      \"id\": \"9d2c1b5e-7f3a-4e1b-8c6d-2a4f5e6b7c8d\",\n      \"provider\": \"claude\",\n      \"label\": \"Work\",\n      \"directory\": \"%USERDATA%/.claude\"\n    },\n    {\n      \"id\": \"1a2b3c4d-5e6f-4a1b-8c2d-3e4f5a6b7c8d\",\n      \"provider\": \"codex\",\n      \"label\": \"Codex\",\n      \"directory\": \"%USERDATA%/.codex\"\n    }\n  ],\n  \"somethingNew\": {\n    \"kept\": true\n  }\n}\n"
+    },
+    "told": 0
+  },
+  "damaged": {
+    "read": {
+      "accounts": []
+    },
+    "files": {
+      "ai-usage.json": "{\n  \"version\": 2,\n  \"accounts\": [\n    {\n      \"id\": \"<new>\",\n      \"provider\": \"claude\",\n      \"label\": \"Home\",\n      \"directory\": \"%USERDATA%%SEP%.claude-home\"\n    }\n  ]\n}",
+      "ai-usage.json.corrupt-<time>": "{ damaged"
+    },
+    "told": 1
+  },
+  "held": {
+    "outcome": "changed",
+    "files": {
+      "ai-usage.json": "{\n  \"version\": 2,\n  \"accounts\": [\n    {\n      \"id\": \"<new>\",\n      \"provider\": \"claude\",\n      \"label\": \"Home\",\n      \"directory\": \"%USERDATA%%SEP%.claude-home\"\n    }\n  ]\n}"
+    }
+  }
+}

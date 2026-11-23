@@ -1,0 +1,40 @@
+{
+  "empty": {
+    "read": null,
+    "files": {
+      "account-key.json": "{\"v\":1,\"data\":\"GC05EhgtORIYLTkSGC05EhgtORIYLTkSGC05EhgtORIYLTkSGC05EhgtOWc=\",\"account\":null}"
+    },
+    "told": 0
+  },
+  "sample": {
+    "read": "0101010101010101010101010101010101010101010101010101010101010101",
+    "files": {
+      "account-key.json": "{\"v\":1,\"data\":\"GC05EhgtORIYLTkSGC05EhgtORIYLTkSGC05EhgtORIYLTkSGC05EhgtOWc=\",\"account\":null}",
+      "account-key.unproven.json": "{\"v\":1,\"data\":\"GwsfGBsLHxgbCx8YGwsfGBsLHxgbCx8YGwsfGBsLHxgbCx8YGwsfGBsLH2c=\",\"account\":null}"
+    },
+    "told": 0
+  },
+  "newer": {
+    "read": null,
+    "files": {
+      "account-key.json": "{\"v\":1,\"data\":\"GC05EhgtORIYLTkSGC05EhgtORIYLTkSGC05EhgtORIYLTkSGC05EhgtOWc=\",\"account\":null}",
+      "account-key.json.from-version-2": "{\n  \"v\": 2,\n  \"data\": \"GwsfGBsLHxgbCx8YGwsfGBsLHxgbCx8YGwsfGBsLHxgbCx8YGwsfGBsLH2c=\",\n  \"account\": null,\n  \"somethingNew\": {\n    \"kept\": true\n  }\n}\n",
+      "account-key.unopened.json": "{\n  \"v\": 2,\n  \"data\": \"GwsfGBsLHxgbCx8YGwsfGBsLHxgbCx8YGwsfGBsLHxgbCx8YGwsfGBsLH2c=\",\n  \"account\": null,\n  \"somethingNew\": {\n    \"kept\": true\n  }\n}\n"
+    },
+    "told": 0
+  },
+  "damaged": {
+    "read": null,
+    "files": {
+      "account-key.json": "{\"v\":1,\"data\":\"GC05EhgtORIYLTkSGC05EhgtORIYLTkSGC05EhgtORIYLTkSGC05EhgtOWc=\",\"account\":null}",
+      "account-key.json.corrupt-<time>": "{ damaged"
+    },
+    "told": 1
+  },
+  "held": {
+    "outcome": "changed",
+    "files": {
+      "account-key.json": "{\"v\":1,\"data\":\"GC05EhgtORIYLTkSGC05EhgtORIYLTkSGC05EhgtORIYLTkSGC05EhgtOWc=\",\"account\":null}"
+    }
+  }
+}
