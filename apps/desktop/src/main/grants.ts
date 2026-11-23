@@ -5,13 +5,9 @@
 // checks it again, so revoking takes effect at once.
 import path from "node:path";
 import { connectorsAtAdd, folderKey, isConnector, isModuleId, isNetworkEntry, isOwnerId, parseFolderKey, withGamePanelType, type Connector, type ModuleManifest } from "@tavora/module-schema";
-import { SerialQueue, writeFileAtomic } from "./fsutil";
-import { readSavedFile } from "./json";
-import { SUPPORTED_VERSIONS } from "./saved-versions";
+import { SAVED_FILES, SavedFile } from "./saved-file";
 
 export const GRANTS_FILE = "grants.json";
-/** The format of grants.json (saved-versions.ts says when to raise it). */
-export const GRANTS_VERSION = SUPPORTED_VERSIONS[GRANTS_FILE];
 
 /** What a module may do, as far as grants decide it. */
 export interface Permissions {
@@ -141,17 +137,15 @@ export function effectivePermissions(manifest: GrantSubject["manifest"], grant: 
 }
 
 export class GrantStore {
-  private readonly queue = new SerialQueue();
-
   private constructor(
-    private readonly file: string,
+    private readonly file: SavedFile,
     private readonly owners: Map<string, Map<string, Grant>>,
     private readonly now: () => Date,
   ) {}
 
   static async load(userData: string, now: () => Date = () => new Date()): Promise<GrantStore> {
-    const file = path.join(userData, GRANTS_FILE);
-    return new GrantStore(file, sanitizeGrants(await readSavedFile(file, { version: GRANTS_VERSION })), now);
+    const file = new SavedFile(path.join(userData, GRANTS_FILE), SAVED_FILES[GRANTS_FILE]);
+    return new GrantStore(file, sanitizeGrants(await file.read()), now);
   }
 
   /** The stored grant of a module, whatever its current manifest asks for. */
@@ -244,9 +238,8 @@ export class GrantStore {
   }
 
   private save(): Promise<void> {
-    const body: GrantFile = { version: GRANTS_VERSION, owners: {} };
-    for (const [owner, modules] of this.owners) body.owners[owner] = Object.fromEntries(modules);
-    const text = `${JSON.stringify(body, null, 2)}\n`;
-    return this.queue.run(() => writeFileAtomic(this.file, text));
+    const owners: GrantFile["owners"] = {};
+    for (const [owner, modules] of this.owners) owners[owner] = Object.fromEntries(modules);
+    return this.file.write({ owners });
   }
 }

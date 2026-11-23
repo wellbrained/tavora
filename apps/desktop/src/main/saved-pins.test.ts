@@ -77,7 +77,7 @@ interface Pinned<H = any> {
 }
 
 const GRANT = { owner: KEY, manifest: { id: "community.someone.timer", version: "2.0.0", permissions: { network: ["api.timer.example"] } } };
-const official = () => new OfficialUpdates({ userData: dir, pins: { key: "fedcba9876543210fedcba9876543210", account: "account" }, safety: { blocked: () => null, revoked: () => null, firstKeyChain: (key) => ({ key, account: null }) } as never });
+const official = () => new OfficialUpdates({ userData: dir, pins: { key: "fedcba9876543210fedcba9876543210", account: "account" }, safety: { blocked: () => null, revoked: () => null, firstKeyChain: (key: string) => ({ key, account: null }) } as never });
 
 const STORES: Pinned[] = [
   {

@@ -2,12 +2,13 @@
 // over by an older one. This module imports nothing: every store takes its version from here.
 //
 // Rules (the decision log, saved data, 2026-11-14):
-// - Every file holding the user's data has a version and is read with readSavedFile (json.ts). One a newer Tavora
-//   wrote is copied aside (`<file>.from-version-<n>`) before this one can write over it; one that can't be read is set
-//   aside (`<file>.corrupt-<time>`) before starting fresh, and the user is told. Caches, derived files and logs have
-//   neither (they are listed at the end).
-// - These records keep the fields they don't know when they save (json.ts unknownFields), so a new field on them needs
-//   no new version: library.json's top level, each workspace entry and each folder; workspace.json's top level, each
+// - Every file holding the user's data has a version and is kept with SavedFile (saved-file.ts), which keeps these
+//   rules for its store: one a newer Tavora wrote is copied aside (`<file>.from-version-<n>`) before this one can write
+//   over it; one that can't be read is set aside (`<file>.corrupt-<time>`) before starting fresh, and the user is told.
+//   A new file gets its kind there (saved-file-rules.test.ts checks every one here has one, or says why not). Caches,
+//   derived files and logs have neither (they are listed at the end).
+// - These records keep the fields they don't know when they save (a kind's `keep`, or json.ts unknownFields), so a
+//   new field on them needs no new version: library.json's top level, each workspace entry and each folder; workspace.json's top level, each
 //   workspace, each panel and each snapshot; storage.json's top level (not inside `entries`); a panel-state file's top
 //   level. Raise their version only for a change an older Tavora could misread. Everything nested in them is still
 //   rebuilt from the fields this Tavora knows: a new field in a layout, a panel's `content`, a workspace's `icon`, the
@@ -21,7 +22,8 @@
 // - Every other file: raise its version for any new field, and for any change an older Tavora could misread. Never
 //   rename or restructure what is saved in one step: add to it, and read both forms.
 // - saved-samples/ holds each file as Tavora wrote it, at every version still read; saved-samples.test.ts opens them
-//   all. A new format adds its sample, and no later Tavora may stop opening one.
+//   all. A new format adds its sample, and no later Tavora may stop opening one. saved-pins/ holds what each store
+//   wrote byte for byte (saved-pins.test.ts): a change to it is a change of format.
 
 /**
  * The files in the data folder itself, with the version this Tavora writes. SavedData.keepNewerFiles copies aside, at

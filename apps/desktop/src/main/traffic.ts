@@ -7,9 +7,7 @@
  * switched off nothing is read or kept. The TrafficBook below is pure; the reading and the file come in from outside.
  */
 import type { SystemTraffic, SystemTrafficPeriod } from "@tavora/sdk/protocol";
-import { readSavedFile } from "./json";
-import { SUPPORTED_VERSIONS } from "./saved-versions";
-import { writeFileAtomic } from "./fsutil";
+import { SAVED_FILES, SavedFile } from "./saved-file";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** How far back Windows answers: a range that starts more than 60 days ago comes back empty. An hour less, to be safe. */
@@ -22,8 +20,6 @@ export const TRAFFIC_FRESH_MS = 5 * 60 * 1000;
 const SETTLED_MS = DAY_MS;
 /** The months kept in the file. */
 const KEEP_MONTHS = 12;
-/** The format of traffic.json (saved-versions.ts). */
-const VERSION = SUPPORTED_VERSIONS["traffic.json"];
 
 /** Bytes received and sent in one range. */
 export interface TrafficBytes {
@@ -92,32 +88,25 @@ export function sanitizeMonths(raw: unknown): StoredMonth[] {
   return months;
 }
 
-/** traffic.json in the data folder. */
+/** traffic.json in the data folder. One that couldn't be read gives no months, and this run never writes over it. */
 export class TrafficFile implements TrafficStore {
-  private writing: Promise<void> = Promise.resolve();
-  /** The file couldn't be read: this run keeps no months and never writes over it. */
-  private unread = false;
+  private readonly file: SavedFile;
 
-  constructor(private readonly file: string) {}
+  constructor(file: string) {
+    this.file = new SavedFile(file, SAVED_FILES["traffic.json"]);
+  }
 
   async load(): Promise<StoredMonth[]> {
-    try {
-      return sanitizeMonths(await readSavedFile(this.file, { version: VERSION }));
-    } catch {
-      this.unread = true;
-      return [];
-    }
+    return sanitizeMonths(await this.file.read().catch(() => null));
   }
 
   save(months: StoredMonth[]): void {
-    if (this.unread) return;
-    const body = `${JSON.stringify({ version: VERSION, months }, null, 2)}\n`;
-    this.writing = this.writing.then(() => writeFileAtomic(this.file, body)).catch(() => undefined);
+    void this.file.write({ months }).catch(() => undefined);
   }
 
   /** Resolves when everything saved so far is written. */
   flush(): Promise<void> {
-    return this.writing;
+    return this.file.flush();
   }
 }
 

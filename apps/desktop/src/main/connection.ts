@@ -9,12 +9,8 @@
  * (pure, tested with fakes). Nothing is run and nothing is sent but the two pings.
  */
 import { SYSTEM_PING_TARGET, type SystemConnection, type SystemConnectionLog, type SystemConnectionSettings, type SystemOutage, type SystemOutageKind } from "@tavora/sdk/protocol";
-import { mkdirSync, renameSync, writeFileSync } from "node:fs";
-import path from "node:path";
 import { HostError } from "./errors";
-import { readSavedFile } from "./json";
-import { SUPPORTED_VERSIONS } from "./saved-versions";
-import { writeFileAtomic } from "./fsutil";
+import { SAVED_FILES, SavedFile } from "./saved-file";
 import { isPublicAddress } from "./network";
 import { parseConnectionTarget, parseIpv4, type ConnectionSettingsChange } from "./system-info-parse";
 
@@ -30,8 +26,6 @@ export const LOSS_WINDOW = 100;
 export const LOG_DAYS = 30;
 /** The most drops kept, the oldest go first. */
 const MAX_OUTAGES = 500;
-/** The format of connection.json (saved-versions.ts). */
-const VERSION = SUPPORTED_VERSIONS["connection.json"];
 /** An address found for a name is used this long before asking again. */
 const RESOLVE_TTL_MS = 5 * 60 * 1000;
 /** A name that could not be found, or came out on this PC or the local network, is asked again after this long. */
@@ -115,43 +109,33 @@ export interface ConnectionStore {
   saveNow?(data: StoredConnection): void;
 }
 
-/** connection.json in the data folder, written in order, never half. */
+/**
+ * connection.json in the data folder, written in order, never half. One that couldn't be read at start gives the
+ * defaults, and this run never writes over it.
+ */
 export class ConnectionFile implements ConnectionStore {
-  private writing: Promise<void> = Promise.resolve();
-  /** The file couldn't be read at start: this run works from the defaults and never writes over it. */
-  private unread = false;
+  private readonly file: SavedFile;
 
-  constructor(private readonly file: string) {}
+  constructor(file: string) {
+    this.file = new SavedFile(file, SAVED_FILES["connection.json"]);
+  }
 
   async load(): Promise<StoredConnection> {
-    try {
-      return sanitizeStored(await readSavedFile(this.file, { version: VERSION }));
-    } catch {
-      this.unread = true;
-      return sanitizeStored(null);
-    }
+    return sanitizeStored(await this.file.read().catch(() => null));
   }
 
   save(data: StoredConnection): void {
-    if (this.unread) return;
-    const body = `${JSON.stringify({ version: VERSION, ...data }, null, 2)}\n`;
-    this.writing = this.writing.then(() => writeFileAtomic(this.file, body)).catch(() => undefined);
+    void this.file.write({ ...data }).catch(() => undefined);
   }
 
+  /** The log of this run may be lost when this fails; nothing else depends on it. */
   saveNow(data: StoredConnection): void {
-    if (this.unread) return;
-    try {
-      mkdirSync(path.dirname(this.file), { recursive: true });
-      writeFileSync(`${this.file}.now`, `${JSON.stringify({ version: VERSION, ...data }, null, 2)}\n`);
-      renameSync(`${this.file}.now`, this.file);
-    } catch {
-      // The log of this run may be lost; nothing else depends on it.
-    }
+    this.file.writeNow({ ...data });
   }
 
   /** Resolves when everything saved so far is written. */
   flush(): Promise<void> {
-    return this.writing;
+    return this.file.flush();
   }
 }
 

@@ -100,8 +100,9 @@ export async function readJsonOrSetAside<T>(file: string): Promise<T | null> {
 }
 
 /**
- * How one of the user's saved files is kept safe (readSavedFile). Every file holding the user's data has a version
- * and is read this way; caches, derived files and logs are not. The rules for raising a version are in saved-versions.ts.
+ * How one of the user's saved files is kept safe (readSavedFile). Every file holding the user's data has a version and
+ * is kept with SavedFile (saved-file.ts), which reads it this way; caches, derived files and logs are not. The rules for
+ * raising a version are in saved-versions.ts.
  */
 export interface SavedFileRules {
   /** The newest format of the file this Tavora understands. */

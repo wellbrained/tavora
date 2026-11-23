@@ -9,12 +9,10 @@ import path from "node:path";
 import { isModuleId, isOwnerId, LOCAL_OWNER, manifestFiles, needsNewerTavora, OFFICIAL_OWNER, validateManifest, type ModuleManifest } from "@tavora/module-schema";
 import { MANIFEST_FILE, readZip, SIGNATURE_FILE, signedHash, verifyFiles, ZIP_LIMITS, ZipError, type ZipFile } from "@tavora/pack";
 import { compareModuleVersions } from "../shared/module-version";
-import { SerialQueue, writeFileAtomic } from "./fsutil";
 import { COPY_STATUS_FILE } from "./cloud-copy-swap";
 import { HeldError, isDamaged, look, lookJson, lookNames, lookStat, unlessHeld } from "./file-look";
 import { renameHeld } from "./rename-held";
-import { readSavedFile } from "./json";
-import { SUPPORTED_VERSIONS } from "./saved-versions";
+import { SAVED_FILES, SavedFile } from "./saved-file";
 import { UserError } from "./messages";
 import { cancelPartitionDeletes } from "./module-data";
 import { MOVED_MODULES } from "./moved-modules";
@@ -46,8 +44,10 @@ const RECORDS = OWNER_RECORDS_FILE;
  * in the module's folder, so a folder cannot name its own owner.
  */
 export async function readOwnerRecords(userData: string): Promise<OwnerRecords> {
-  return parseOwnerRecords(await readSavedFile(path.join(userData, RECORDS), { version: SUPPORTED_VERSIONS[OWNER_RECORDS_FILE] }));
+  return parseOwnerRecords(await ownerRecordsFile(userData).read());
 }
+
+const ownerRecordsFile = (userData: string) => new SavedFile(path.join(userData, RECORDS), SAVED_FILES[OWNER_RECORDS_FILE]);
 
 function parseOwnerRecords(parsed: Record<string, unknown> | null): OwnerRecords {
   const records: OwnerRecords = {};
@@ -65,15 +65,15 @@ function parseOwnerRecords(parsed: Record<string, unknown> | null): OwnerRecords
   return records;
 }
 
-/** Changes to the records, one at a time: two installs at once would otherwise each write back what they read, and one record would be lost. */
-const recordChanges = new SerialQueue();
-
-/** Reads the records, lets `change` edit them (false: nothing to write) and writes them back, after any change before it. */
+/**
+ * Reads the records, lets `change` edit them (false: nothing to write) and writes them back, after any change before it
+ * and in the same turn of the file: two installs at once would otherwise each write back what they read, and one record
+ * would be lost.
+ */
 function changeOwnerRecords(userData: string, change: (records: OwnerRecords) => boolean | void): Promise<void> {
-  return recordChanges.run(async () => {
-    const records = await readOwnerRecords(userData);
-    if (change(records) === false) return;
-    await writeFileAtomic(path.join(userData, RECORDS), `${JSON.stringify({ version: SUPPORTED_VERSIONS[OWNER_RECORDS_FILE], folders: records }, null, 2)}\n`);
+  return ownerRecordsFile(userData).update((saved) => {
+    const records = parseOwnerRecords(saved);
+    return change(records) === false ? null : { folders: records };
   });
 }
 

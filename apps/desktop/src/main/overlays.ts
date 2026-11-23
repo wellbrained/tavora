@@ -22,9 +22,8 @@ import { LIMITS, OVERLAY_COLOR_SCHEME_MESSAGE, OVERLAY_CSS_MESSAGE, OVERLAY_FONT
 import { overlayFontCss, overlayMessage, watchOverlayFont } from "./overlay-font";
 import { contentTypeFor, resolveAsset } from "./assets";
 import { HostError } from "./errors";
-import { SerialQueue, writeFileAtomic } from "./fsutil";
-import { isJsonValue, readSavedFile } from "./json";
-import { SUPPORTED_VERSIONS } from "./saved-versions";
+import { isJsonValue } from "./json";
+import { SAVED_FILES, SavedFile } from "./saved-file";
 import { trackOwnServer } from "./own-ports";
 
 export const OVERLAYS_FILE = "overlays.json";
@@ -62,9 +61,7 @@ export interface OverlayLink extends OverlaySubject {
   token: string;
 }
 
-const VERSION = SUPPORTED_VERSIONS[OVERLAYS_FILE];
-
-type OverlayFile = { version: typeof VERSION; links: (OverlayLink & { state?: JsonValue })[] };
+type OverlayFile = { version: number; links: (OverlayLink & { state?: JsonValue })[] };
 
 const sameSubject = (a: OverlaySubject, b: OverlaySubject) => a.owner === b.owner && a.moduleId === b.moduleId && a.workspaceId === b.workspaceId && a.key === b.key;
 
@@ -74,19 +71,18 @@ function isSubjectField(value: unknown): value is string {
 
 /** The overlay links and what each one shows, kept in overlays.json in the data folder. */
 export class OverlayStore {
-  private readonly queue = new SerialQueue();
   private saveTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly watchers = new Map<string, Set<(state: JsonValue | null | undefined) => void>>();
 
   private constructor(
-    private readonly file: string,
+    private readonly file: SavedFile,
     private readonly links: Map<string, OverlayLink>,
     private readonly states: Map<string, JsonValue>,
   ) {}
 
   static async load(userData: string): Promise<OverlayStore> {
-    const file = path.join(userData, OVERLAYS_FILE);
-    const raw = (await readSavedFile(file, { version: VERSION })) as Partial<OverlayFile> | null;
+    const file = new SavedFile(path.join(userData, OVERLAYS_FILE), SAVED_FILES[OVERLAYS_FILE]);
+    const raw = (await file.read()) as Partial<OverlayFile> | null;
     const links = new Map<string, OverlayLink>();
     const states = new Map<string, JsonValue>();
     for (const entry of Array.isArray(raw?.links) ? raw.links : []) {
@@ -214,12 +210,8 @@ export class OverlayStore {
   save(): Promise<void> {
     clearTimeout(this.saveTimer);
     this.saveTimer = undefined;
-    const body: OverlayFile = {
-      version: VERSION,
-      links: [...this.links.values()].map((link) => (this.states.has(link.token) ? { ...link, state: this.states.get(link.token)! } : { ...link })),
-    };
-    const text = `${JSON.stringify(body, null, 2)}\n`;
-    return this.queue.run(() => writeFileAtomic(this.file, text)).catch((error: unknown) => console.error("[tavora] saving overlays failed", error));
+    const links: OverlayFile["links"] = [...this.links.values()].map((link) => (this.states.has(link.token) ? { ...link, state: this.states.get(link.token)! } : { ...link }));
+    return this.file.write({ links }).catch((error: unknown) => console.error("[tavora] saving overlays failed", error));
   }
 }
 

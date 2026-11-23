@@ -2,9 +2,9 @@ import { mkdir, readdir, readFile, rename, rm, rmdir, stat } from "node:fs/promi
 import path from "node:path";
 import { isModuleId, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER } from "@tavora/module-schema";
 import { isWorkspaceId } from "./workspace-id";
-import { SerialQueue, writeFileAtomic } from "./fsutil";
-import { keepNewerCopy, readSavedFile, setAside } from "./json";
-import { SUPPORTED_VERSIONS } from "./saved-versions";
+import { writeFileAtomic } from "./fsutil";
+import { keepNewerCopy, setAside, type SavedRecord } from "./json";
+import { SAVED_FILES, SavedFile } from "./saved-file";
 import { defaultFilesRoot } from "./module-files";
 import { OFFICIAL_PREFIX } from "./registry";
 import { APP_DATA_DIR } from "./storage";
@@ -228,31 +228,32 @@ interface PendingChanges {
 const PENDING = "module-data-pending.json";
 
 /**
- * What waits for the next start. A file a newer Tavora wrote is copied aside first, and a damaged one set aside
- * (readSavedFile); one that can't be read right now throws, so nothing queued is written over.
+ * The file of what waits for the next start. A file a newer Tavora wrote is copied aside first, and a damaged one set
+ * aside (SavedFile); one that can't be read right now throws, so nothing queued is written over. Changes to it run one
+ * at a time, each read and written in one turn, so two at once can't drop each other's.
  */
+const pendingFile = (userData: string) => new SavedFile(path.join(userData, PENDING), SAVED_FILES[PENDING]);
+
+/** What waits for the next start. */
 async function readPending(userData: string): Promise<PendingChanges> {
-  const parsed = ((await readSavedFile(path.join(userData, PENDING), { version: SUPPORTED_VERSIONS[PENDING] })) ?? {}) as PendingChanges;
+  return parsePending(await pendingFile(userData).read());
+}
+
+function parsePending(saved: SavedRecord | null): PendingChanges {
+  const parsed = (saved ?? {}) as PendingChanges;
   return {
     moves: (Array.isArray(parsed.moves) ? parsed.moves : []).filter((move) => isModuleId(move?.moduleId) && isOwnerId(move?.to) && move.to !== LOCAL_OWNER && move.to !== OFFICIAL_OWNER),
     deletePartitions: (Array.isArray(parsed.deletePartitions) ? parsed.deletePartitions : []).filter((name) => typeof name === "string" && /^persist:module:[a-z0-9]+:[a-z0-9.-]+@[a-z0-9-]+$/.test(name)),
   };
 }
 
-/** Changes to the file, one at a time, so two at once can't drop each other's. */
-const pendingChanges = new SerialQueue();
-
-async function writePending(userData: string, changes: PendingChanges): Promise<void> {
-  await writeFileAtomic(path.join(userData, PENDING), `${JSON.stringify({ version: SUPPORTED_VERSIONS[PENDING], ...changes }, null, 2)}\n`);
-}
-
 function queue(userData: string, change: PendingChanges): Promise<void> {
-  return pendingChanges.run(async () => {
-    const pending = await readPending(userData);
-    await writePending(userData, {
+  return pendingFile(userData).update((saved) => {
+    const pending = parsePending(saved);
+    return {
       moves: [...(pending.moves ?? []), ...(change.moves ?? [])],
       deletePartitions: [...new Set([...(pending.deletePartitions ?? []), ...(change.deletePartitions ?? [])])],
-    });
+    };
   });
 }
 
@@ -267,15 +268,16 @@ function partitionModule(partition: string): { owner: string; moduleId: string }
  * the delete queued for the next start is called off.
  */
 export function cancelPartitionDeletes(userData: string, owner: string, moduleId: string): Promise<void> {
-  return pendingChanges.run(async () => {
-    const pending = await readPending(userData);
+  return pendingFile(userData).update(async (saved) => {
+    const pending = parsePending(saved);
     const kept = (pending.deletePartitions ?? []).filter((partition) => {
       const of = partitionModule(partition);
       return of?.owner !== owner || of.moduleId !== moduleId;
     });
-    if (kept.length === (pending.deletePartitions ?? []).length) return;
-    if (kept.length === 0 && (pending.moves ?? []).length === 0) await rm(path.join(userData, PENDING), { force: true });
-    else await writePending(userData, { moves: pending.moves ?? [], deletePartitions: kept });
+    if (kept.length === (pending.deletePartitions ?? []).length) return null;
+    if (kept.length > 0 || (pending.moves ?? []).length > 0) return { moves: pending.moves ?? [], deletePartitions: kept };
+    await rm(path.join(userData, PENDING), { force: true });
+    return null;
   });
 }
 

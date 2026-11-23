@@ -8,10 +8,9 @@ import { readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { isModuleId, isOfficialSigner, OFFICIAL_PINS, officialOn, type OfficialPins } from "@tavora/module-schema";
 import { compareModuleVersions } from "../shared/module-version";
-import { writeFileAtomic } from "./fsutil";
-import { readSavedFile } from "./json";
+import type { SavedRecord } from "./json";
 import { FolderChecks, type Verified } from "./module-folder-check";
-import { SUPPORTED_VERSIONS } from "./saved-versions";
+import { SAVED_FILES, SavedFile } from "./saved-file";
 import type { SafetyCheck } from "./safety-lists";
 
 export const OFFICIAL_UPDATES_DIR = "official-updates";
@@ -51,9 +50,14 @@ export function resolveOfficialPins(packaged: boolean, env: Record<string, strin
 /** Whether a version string is something the records may hold. */
 const isVersion = (value: unknown): value is string => typeof value === "string" && /^\d+\.\d+\.\d+$/.test(value);
 
+const officialFile = (userData: string) => new SavedFile(path.join(userData, OFFICIAL_UPDATES_FILE), SAVED_FILES[OFFICIAL_UPDATES_FILE]);
+
 export async function readOfficialRecords(userData: string): Promise<OfficialRecords> {
   // An unreadable file is set aside (kept, never written over) before the records start again.
-  const parsed = await readSavedFile(path.join(userData, OFFICIAL_UPDATES_FILE), { version: SUPPORTED_VERSIONS[OFFICIAL_UPDATES_FILE] });
+  return parseOfficialRecords(await officialFile(userData).read());
+}
+
+function parseOfficialRecords(parsed: SavedRecord | null): OfficialRecords {
   const records: OfficialRecords = {};
   const modules = parsed?.modules;
   if (typeof modules !== "object" || modules === null) return records;
@@ -82,8 +86,6 @@ export class OfficialUpdates {
   private readonly checks = new FolderChecks();
   /** Ids being installed right now: cleanup leaves their folder alone until the record is saved. */
   private readonly installing = new Set<string>();
-  /** Saves run one after another, so two at once cannot drop a record and its high-water mark. */
-  private saving: Promise<void> = Promise.resolve();
 
   constructor(private readonly options: OfficialUpdatesOptions) {}
 
@@ -137,13 +139,11 @@ export class OfficialUpdates {
 
   /** Records a copy that was just put in place; the high-water mark only goes up. */
   save(entry: Omit<OfficialRecord, "highWater">): Promise<void> {
-    const next = this.saving.then(() => this.write(entry));
-    this.saving = next.catch(() => undefined);
-    return next;
+    // Read and written in one turn of the file, so two saves at once cannot drop a record and its high-water mark.
+    return officialFile(this.options.userData).update((saved) => this.merge(parseOfficialRecords(saved), entry));
   }
 
-  private async write(entry: Omit<OfficialRecord, "highWater">): Promise<void> {
-    const records = await readOfficialRecords(this.options.userData);
+  private merge(records: OfficialRecords, entry: Omit<OfficialRecord, "highWater">): { modules: OfficialRecords } {
     // The highest seen, on disk or in memory, for every module: a file set aside since this run read it never lowers one.
     const higher = (...seen: (string | undefined)[]) => seen.reduce<string | undefined>((high, one) => (one && (!high || compareModuleVersions(one, high) > 0) ? one : high), undefined);
     const merged = { ...this.records, ...records };
@@ -153,7 +153,7 @@ export class OfficialUpdates {
     }
     merged[entry.id] = { ...entry, highWater: higher(entry.version, records[entry.id]?.highWater, this.records[entry.id]?.highWater)! };
     this.records = merged;
-    await writeFileAtomic(path.join(this.options.userData, OFFICIAL_UPDATES_FILE), `${JSON.stringify({ version: SUPPORTED_VERSIONS[OFFICIAL_UPDATES_FILE], modules: this.records }, null, 2)}\n`);
+    return { modules: this.records };
   }
 
   /**

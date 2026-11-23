@@ -6,9 +6,7 @@ import path from "node:path";
 import { LIMITS } from "@tavora/sdk/protocol";
 import { isHotkey } from "../shared/hotkey-keys";
 import { ALL_GAMES } from "./game-overlays";
-import { SerialQueue, writeFileAtomic } from "./fsutil";
-import { readSavedFile } from "./json";
-import { SUPPORTED_VERSIONS } from "./saved-versions";
+import { SAVED_FILES, SavedFile } from "./saved-file";
 
 export const HOTKEYS_FILE = "hotkeys.json";
 
@@ -26,9 +24,7 @@ export interface HotkeyRecord {
   accelerator: string;
 }
 
-const VERSION = SUPPORTED_VERSIONS[HOTKEYS_FILE];
-
-type HotkeyFile = { version: typeof VERSION; hotkeys: HotkeyRecord[] };
+type HotkeyFile = { version: number; hotkeys: HotkeyRecord[] };
 
 const FIELDS = ["owner", "moduleId", "workspaceId", "action", "target", "label"] as const;
 
@@ -38,16 +34,14 @@ export function sameBinding(a: Omit<HotkeyRecord, "label" | "accelerator">, b: O
 }
 
 export class HotkeyStore {
-  private readonly queue = new SerialQueue();
-
   private constructor(
-    private readonly file: string,
+    private readonly file: SavedFile,
     private records: HotkeyRecord[],
   ) {}
 
   static async load(userData: string): Promise<HotkeyStore> {
-    const file = path.join(userData, HOTKEYS_FILE);
-    const raw = (await readSavedFile(file, { version: VERSION })) as Partial<HotkeyFile> | null;
+    const file = new SavedFile(path.join(userData, HOTKEYS_FILE), SAVED_FILES[HOTKEYS_FILE]);
+    const raw = (await file.read()) as Partial<HotkeyFile> | null;
     const records: HotkeyRecord[] = [];
     for (const entry of Array.isArray(raw?.hotkeys) ? raw.hotkeys : []) {
       if (typeof entry !== "object" || entry === null) continue;
@@ -102,12 +96,11 @@ export class HotkeyStore {
 
   /** Resolves once every save started so far has been written (or has failed and been reported). */
   flush(): Promise<void> {
-    return this.queue.run(async () => undefined);
+    return this.file.flush();
   }
 
   private save(): Promise<void> {
-    const text = `${JSON.stringify({ version: VERSION, hotkeys: this.records } satisfies HotkeyFile, null, 2)}\n`;
-    return this.queue.run(() => writeFileAtomic(this.file, text)).catch((error: unknown) => console.error("[tavora] saving hotkeys failed", error));
+    return this.file.write({ hotkeys: this.records }).catch((error: unknown) => console.error("[tavora] saving hotkeys failed", error));
   }
 }
 
