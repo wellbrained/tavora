@@ -62,6 +62,14 @@ watch(
   },
   { immediate: true },
 );
+// A sign-in or key that can't be read right now isn't written over (main/sealed-file.ts): say so each time one more isn't.
+watch(
+  () => state.value?.sealedHeld ?? 0,
+  (count, before) => {
+    if (count > (before ?? 0)) showToast(t("savedData.sealedHeld"));
+  },
+  { immediate: true },
+);
 // A PC asked while this one answers no more for now (main/pairing.ts MAX_OPEN_ANSWERS): say so each time. The count
 // the window first sees is from before it was there, so only a rise after that shows the notice.
 watch(

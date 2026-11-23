@@ -9,18 +9,17 @@ import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { loadAccount, saveAccount } from "./account";
+import { AccountFile } from "./account";
 import { AccountKey } from "./account-key";
-import { AI_USAGE_VERSION, AiUsageConnector } from "./ai-usage";
-import { writeFileAtomic } from "./fsutil";
-import { loadDiscordSecrets, saveDiscordSecrets, type Encryptor } from "./discord-store";
+import { AiUsageConnector } from "./ai-usage";
+import { DiscordSecretsFile, type Encryptor } from "./discord-store";
 import { DocumentStore } from "./documents";
 import { ChosenFolders } from "./folder-access";
 import { GameOverlayStore } from "./game-overlays";
 import { GrantStore } from "./grants";
 import { HotkeyStore } from "./hotkeys";
 import { forgetOwner, readOwnerRecords } from "./installer";
-import { checkSavedFile, onUnreadableFileKept, unreadableFilesKept } from "./json";
+import { onUnreadableFileKept, unreadableFilesKept } from "./json";
 import { queueLocalDataMove } from "./module-data";
 import { OfficialUpdates, readOfficialRecords } from "./official-updates";
 import { OverlayStore } from "./overlays";
@@ -276,18 +275,24 @@ const STORES: Pinned[] = [
     file: ["account.json"],
     sample: "",
     versionKey: "v",
-    open: async () => ({ account: await loadAccount(at("account.json"), encryptor) }),
+    open: async () => {
+      const file = new AccountFile(at("account.json"), encryptor);
+      return { file, account: await file.load() };
+    },
     read: ({ account }) => account,
-    change: () => saveAccount(at("account.json"), encryptor, { token: "t".repeat(24), email: "nik@example.com", discord: null, createdAt: "2026-11-01T00:00:00.000Z" }),
+    change: ({ file }) => file.save({ token: "t".repeat(24), email: "nik@example.com", discord: null, createdAt: "2026-11-01T00:00:00.000Z" }),
   },
   {
     name: "discord",
     file: ["discord.json"],
     sample: "",
     versionKey: "v",
-    open: async () => ({ secrets: await loadDiscordSecrets(at("discord.json"), encryptor) }),
+    open: async () => {
+      const file = new DiscordSecretsFile(at("discord.json"), encryptor);
+      return { file, secrets: await file.load() };
+    },
     read: ({ secrets }) => secrets,
-    change: () => saveDiscordSecrets(at("discord.json"), encryptor, { token: { accessToken: "a", refreshToken: "r", expiresAt: 1 } as never, last: null, games: {} }),
+    change: ({ file }) => file.save({ token: { accessToken: "a", refreshToken: "r", expiresAt: 1 } as never, last: null, games: {} }),
   },
   {
     name: "account-key",
@@ -341,9 +346,7 @@ function aiUsage(): AiUsageConnector {
     version: "9.9.9",
     fetch: (async () => new Response("{}", { status: 500 })) as unknown as typeof fetch,
     readText: (file) => readFile(file, "utf8").catch((error: NodeJS.ErrnoException) => (error.code === "ENOENT" ? null : Promise.reject(error))),
-    check: (file, text) => checkSavedFile(file, text, { version: AI_USAGE_VERSION }),
     isDirectory: async () => true,
-    writeText: (file, text) => writeFileAtomic(file, text),
     readCodex: async () => ({ signedIn: false, apiKey: false, email: null, limits: [] }) as never,
     readClaudeEmail: async () => null,
     detect: async () => [],

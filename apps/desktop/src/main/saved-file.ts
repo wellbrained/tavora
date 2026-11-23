@@ -2,7 +2,8 @@
 // - its version is checked when it is read, and written first (or in its place) whenever it is written;
 // - a file a newer Tavora wrote is copied aside (`<file>.from-version-<n>`) before this one can write over it, and is
 //   then read as far as this Tavora understands it;
-// - a damaged one is set aside (`<file>.corrupt-<time>`), the user is told, and the store starts from nothing;
+// - a damaged one is set aside (`<file>.corrupt-<time>`), the user is told, and the store starts from nothing; so is one
+//   its kind can't use at all (`valid`);
 // - one that can't be read right now (held by a virus scan) is never written over: after a read of the store's that
 //   failed, every write is refused until it reads the file again;
 // - the fields a newer Tavora added are written back as they were, for the kinds that keep them;
@@ -12,7 +13,7 @@
 import { closeSync, fsyncSync, mkdirSync, openSync, renameSync, writeSync } from "node:fs";
 import path from "node:path";
 import { writeFileUnlessReplaced } from "./fsutil";
-import { readSavedFile, unknownFields, type SavedRecord } from "./json";
+import { readSavedFile, setAside, unknownFields, type SavedRecord } from "./json";
 import { STORE_VERSIONS, SUPPORTED_VERSIONS } from "./saved-versions";
 
 /** How a kind of saved file is written: indented with a newline at the end, indented without one, or on one line. */
@@ -33,7 +34,18 @@ export interface SavedFileKind {
    * store gives.
    */
   readonly keep?: { readonly known: readonly string[]; readonly before?: string };
+  /**
+   * Whether a file read is one of this kind at all. One that isn't is damaged: set aside like a file that isn't JSON,
+   * and read as missing. Left out, every JSON object is.
+   */
+  readonly valid?: (saved: SavedRecord) => boolean;
 }
+
+/**
+ * A sealed file (`{ "v": 1, "data": … }`): its data sealed with the system's key store, or one a newer Tavora wrote,
+ * which is copied aside and read as far as this Tavora understands it (sealed-file.ts).
+ */
+const isSealed = (saved: SavedRecord) => (typeof saved.v === "number" && saved.v > STORE_VERSIONS.sealed) || (saved.v === STORE_VERSIONS.sealed && typeof saved.data === "string");
 
 /**
  * Every kind of the user's saved files, by its name in saved-versions.ts and with the version from there. A new kind of
@@ -49,6 +61,7 @@ export const SAVED_FILES = {
   "traffic.json": { version: SUPPORTED_VERSIONS["traffic.json"], format: "lines" },
   "module-data-pending.json": { version: SUPPORTED_VERSIONS["module-data-pending.json"], format: "lines" },
   "game-overlays.json": { version: SUPPORTED_VERSIONS["game-overlays.json"], format: "lines" },
+  "ai-usage.json": { version: SUPPORTED_VERSIONS["ai-usage.json"], format: "indented" },
   // Their unknown fields are kept by the stores themselves, at every level, as they travel with the cloud copy.
   "library.json": { version: SUPPORTED_VERSIONS["library.json"], format: "indented" },
   "workspace.json": { version: SUPPORTED_VERSIONS["workspace.json"], format: "indented" },
@@ -57,6 +70,9 @@ export const SAVED_FILES = {
   panelState: { version: STORE_VERSIONS.panelState, format: "compact", keep: { known: ["owner", "value"], before: "value" } },
   document: { version: STORE_VERSIONS.document, format: "compact" },
   chosenFolders: { version: STORE_VERSIONS.chosenFolders, format: "compact" },
+  // account.json, account-key.json (and account-key.<account>.json, and the older cloud-copy-key.json), discord.json:
+  // read and written by sealed-file.ts. The fields next to the sealed data (the key's `account`) are the store's own.
+  sealed: { version: STORE_VERSIONS.sealed, versionKey: "v", format: "compact", valid: isSealed },
 } as const satisfies Record<string, SavedFileKind>;
 
 /**
@@ -64,10 +80,9 @@ export const SAVED_FILES = {
  * (saved-file-rules.test.ts).
  */
 export const NOT_SAVED_FILES: Readonly<Record<string, string>> = {
-  "ai-usage.json": "planned: moves to SavedFile in a pull request after #909, with the cloud copy's files and the sealed ones (decided 2026-11-23); until then the AI usage connector reads and writes it through its own file access (AiUsageDeps), which its tests fake, and checks it with json.ts checkSavedFile",
-  sealed: "planned: moves to SavedFile in a pull request after #909, and then a sealed file that can't be read right now is never written over either (decided 2026-11-23); until then json.ts openSealedFile opens it, and gives none for such a file",
   readOnlyFiles: "the version is on each entry, as Tavora 0.24 refuses a file with anything but entries in it",
-  cloudCopy: "the cloud copy's files are being changed elsewhere (#909); they move once that has landed",
+  cloudCopy:
+    "planned: the cloud copy's files (cloud-copy.json, cloud-copy-unused.json, the staged list) move in a later pull request, as the cloud copy's code is being changed elsewhere (lineage inside the seal)",
 };
 
 /** A write refused because the file couldn't be read: it may hold what the store never saw. */
@@ -265,6 +280,16 @@ export class SavedFile {
       this.status = { kind: "held", error };
       this.kept = [];
       throw error;
+    }
+    if (saved !== null && this.kind.valid && !this.kind.valid(saved)) {
+      try {
+        await setAside(this.file, this.kind.notice !== false);
+      } catch (error) {
+        this.status = { kind: "held", error };
+        this.kept = [];
+        throw error;
+      }
+      saved = null;
     }
     this.status = { kind: "read" };
     const keep = this.kind.keep;

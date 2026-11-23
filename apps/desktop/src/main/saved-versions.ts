@@ -63,7 +63,7 @@ export const STORE_VERSIONS = {
    * with anything but entries in it.
    */
   readOnlyFiles: 1,
-  /** account.json, cloud-copy-key.json (and the older account-key.json), discord.json: sealed, `v`. */
+  /** account.json, account-key.json (account-key.<account>.json, and the older cloud-copy-key.json), discord.json: sealed, `v`. */
   sealed: 1,
   /** cloud-copy.json, cloud-copy-place.json: `v`. */
   cloudCopy: 1,

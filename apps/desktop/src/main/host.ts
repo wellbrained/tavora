@@ -152,8 +152,9 @@ import { BROWSER_MODULE_ID, isExampleModule, panelsWait, waitingModules, type In
 import { DataRegistry, PanelStateStore } from "./storage";
 import {TooltipWindow} from "./tooltip-window";
 import { ToastView } from "./toast-view";
-import { AI_USAGE_VERSION, AiUsageConnector } from "./ai-usage";
-import { checkSavedFile, onUnreadableFileKept, unreadableFilesKept } from "./json";
+import { AiUsageConnector } from "./ai-usage";
+import { onUnreadableFileKept, unreadableFilesKept } from "./json";
+import { onSealedFileHeld, sealedFilesHeld } from "./sealed-file";
 import { ConnectionFile, ConnectionWatcher, SYSTEM_MONITOR_ID } from "./connection";
 import { connectionProbe } from "./connection-windows";
 import { SystemMonitorThread } from "./system-info-thread";
@@ -178,9 +179,9 @@ import { CopySync, type CopySyncOptions } from "./cloud-copy-sync";
 import { Inbox } from "./inbox";
 import { AccountFlows } from "./account-flows";
 import { thisDeviceName } from "./device-name";
-import { AccountClient, deviceOs, linkCommand, loadAccount, saveAccount, type AccountClientOptions } from "./account";
+import { AccountClient, AccountFile, deviceOs, linkCommand, type AccountClientOptions } from "./account";
 import { discordLogin } from "./discord-login";
-import { loadDiscordSecrets, saveDiscordSecrets, type Encryptor } from "./discord-store";
+import { DiscordSecretsFile, type Encryptor } from "./discord-store";
 import { PurgeCount, viewsInSession } from "./storage-purge";
 import {
   discoverThemes,
@@ -654,6 +655,8 @@ export class Host {
     this.installed = prepared.installed;
     // A file of the user's set aside from now on (unreadable) reaches the host UI, which says so (keptAside).
     onUnreadableFileKept(() => this.pushStateSoon());
+    // A sealed file (a sign-in or a key) that can't be read and so isn't written: the host UI says so too (sealedHeld).
+    onSealedFileHeld(() => this.pushStateSoon());
     this.copySync = prepared.copySync;
     this.safetyLists = prepared.safetyLists;
     this.official = prepared.official;
@@ -1834,6 +1837,7 @@ export class Host {
       // Their pages are closing with the rest (closePanelPages waits for them); nothing runs with a game any more.
       this.withGame.clear();
       onUnreadableFileKept(null);
+      onSealedFileHeld(null);
       this.cover.dispose();
       this.toastView.dispose();
       this.discord.dispose();
@@ -2790,9 +2794,7 @@ export class Host {
       readClaudeEmail: (directory) => readClaudeEmail(directory),
       fetch: (input, init) => fetch(input, init),
       readText: (file) => readFile(file, "utf8").catch((error: NodeJS.ErrnoException) => (error.code === "ENOENT" ? null : Promise.reject(error))),
-      check: (file, text) => checkSavedFile(file, text, { version: AI_USAGE_VERSION }),
       isDirectory: (directory) => stat(directory).then((info) => info.isDirectory(), () => false),
-      writeText: (file, text) => writeFileAtomic(file, text),
       readCodex: (directory, signal) => readCodexUsage(directory, app.getVersion(), signal),
       // Profile folders next to the defaults, such as ~/.claude and ~/.claude-work; only their names are looked at.
       detect: async () => {
@@ -2837,8 +2839,8 @@ export class Host {
 
   /** The saved sign-in, read at start for whoever needs the token before the account client exists. */
   private static signIn(options: HostOptions, encryptor: Encryptor): SignIn {
-    const file = path.join(options.userData, "account.json");
-    return new SignIn({ enabled: options.accounts === true, load: () => loadAccount(file, encryptor), save: (account) => saveAccount(file, encryptor, account) });
+    const file = new AccountFile(path.join(options.userData, "account.json"), encryptor);
+    return new SignIn({ enabled: options.accounts === true, load: () => file.load(), save: (account) => file.save(account) });
   }
 
   /**
@@ -2863,15 +2865,15 @@ export class Host {
   // ── Discord ──────────────────────────────────────────────────────────
 
   private static discordConnector(options: HostOptions, encryptor: Encryptor, onChange: (view: ReturnType<DiscordConnector["view"]>) => void): DiscordConnector {
-    const file = path.join(options.userData, "discord.json");
+    const file = new DiscordSecretsFile(path.join(options.userData, "discord.json"), encryptor);
     const test = options.discord;
     return new DiscordConnector({
       clientId: DISCORD_CLIENT_ID,
       connect: (events) => RpcClient.connect(DISCORD_CLIENT_ID, events, test ? [test.ipcPath] : undefined),
       ...(test ? { tokenUrl: test.tokenUrl } : {}),
       fetch: (input, init) => fetch(input, init),
-      load: () => loadDiscordSecrets(file, encryptor),
-      save: (secrets) => saveDiscordSecrets(file, encryptor, secrets),
+      load: () => file.load(),
+      save: (secrets) => file.save(secrets),
       get canSaveSignIn() {
         return encryptor.isAvailable();
       },
@@ -3803,6 +3805,7 @@ export class Host {
       snapshots: workspace.snapshots.map(({ id, name, savedAt }) => ({ id, name, savedAt })),
       notice: this.notice,
       keptAside: unreadableFilesKept(),
+      sealedHeld: sealedFilesHeld(),
       profile: this.userProfile.view(),
       restartPending: library.grayscaleText !== this.options.grayscaleText,
       appearance: this.appearance.view(),

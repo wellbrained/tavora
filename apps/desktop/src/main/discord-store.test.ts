@@ -2,7 +2,7 @@ import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { loadDiscordSecrets, saveDiscordSecrets, type Encryptor } from "./discord-store";
+import { DiscordSecretsFile, type DiscordSecrets, type Encryptor } from "./discord-store";
 
 // Stands in for safeStorage: reversible, and never the plain text.
 const encryptor = (available = true): Encryptor => ({
@@ -10,6 +10,10 @@ const encryptor = (available = true): Encryptor => ({
   encrypt: (text) => Buffer.from([...Buffer.from(text)].map((byte) => byte ^ 0x5a)),
   decrypt: (data) => Buffer.from([...data].map((byte) => byte ^ 0x5a)).toString(),
 });
+
+/** One read or write of discord.json, each by a store of its own, as at a start of Tavora. */
+const loadDiscordSecrets = (file: string, encryptor: Encryptor) => new DiscordSecretsFile(file, encryptor).load();
+const saveDiscordSecrets = (file: string, encryptor: Encryptor, secrets: DiscordSecrets) => new DiscordSecretsFile(file, encryptor).save(secrets);
 
 const file = async () => path.join(await mkdtemp(path.join(os.tmpdir(), "tavora-discord-store-")), "discord.json");
 const TOKEN = { accessToken: "a", refreshToken: "r", expiresAt: 123 };

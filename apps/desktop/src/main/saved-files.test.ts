@@ -5,22 +5,23 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AccountKey } from "./account-key";
-import { loadAccount, saveAccount } from "./account";
+import { AccountFile } from "./account";
 import { loadCopyState } from "./cloud-copy";
-import { loadDiscordSecrets, type Encryptor } from "./discord-store";
+import { DiscordSecretsFile, type Encryptor } from "./discord-store";
 import { DocumentStore } from "./documents";
 import { ChosenFolders } from "./folder-access";
 import { GameOverlayStore } from "./game-overlays";
 import { GrantStore } from "./grants";
 import { HotkeyStore } from "./hotkeys";
 import { readOwnerRecords } from "./installer";
-import { checkSavedFile, forgetSealedFile, onUnreadableFileKept, openSealedFile, readSavedFile, setAside, unreadableFilesKept } from "./json";
+import { checkSavedFile, forgetSealedFile, onUnreadableFileKept, readSavedFile, setAside, unreadableFilesKept } from "./json";
 import { loadLibrary, SavedData } from "./saved-data";
 import { queueLocalDataMove } from "./module-data";
 import { readOfficialRecords } from "./official-updates";
 import { OverlayStore } from "./overlays";
 import { ReadOnlyFiles } from "./read-only-files";
 import { STORE_VERSIONS, SUPPORTED_VERSIONS } from "./saved-versions";
+import { SealedFile } from "./sealed-file";
 import { ModuleStore, PanelStateStore } from "./storage";
 import { ConnectionFile } from "./connection";
 import { TrafficFile } from "./traffic";
@@ -142,21 +143,22 @@ describe("readSavedFile", () => {
   });
 });
 
-describe("openSealedFile", () => {
+describe("a sealed file (sealed-file.ts)", () => {
   const open = (data: string) => {
     if (data !== "ok") throw new Error("doesn't open");
     return "opened";
   };
+  const openAt = (file: string) => new SealedFile(file).open(open);
 
   it("opens a file of this version", async () => {
     await put(at("a.json"), '{"v":1,"data":"ok"}');
-    expect(await openSealedFile(at("a.json"), open)).toBe("opened");
+    expect(await openAt(at("a.json"))).toMatchObject({ status: "opened", value: "opened" });
     expect(await copiesOf(at("a.json"))).toEqual([]);
   });
 
-  it("copies a newer one aside and gives null, leaving it in place", async () => {
+  it("copies a newer one aside, leaving it in place", async () => {
     await put(at("a.json"), '{"v":2,"data":"new"}');
-    expect(await openSealedFile(at("a.json"), open)).toBeNull();
+    expect(await openAt(at("a.json"))).toMatchObject({ status: "newer" });
     expect(await copiesOf(at("a.json"))).toEqual(["a.json.from-version-2"]);
     expect(await readFile(at("a.json"), "utf8")).toBe('{"v":2,"data":"new"}');
   });
@@ -166,7 +168,7 @@ describe("openSealedFile", () => {
     // Set aside within the same millisecond: no copy takes another's name.
     for (const text of ["{", '{"v":1}', "[]"]) {
       await put(at("a.json"), text);
-      expect(await openSealedFile(at("a.json"), open)).toBeNull();
+      expect(await openAt(at("a.json"))).toEqual({ status: "missing" });
     }
     const aside = (await copiesOf(at("a.json"))).filter((name) => name.includes(".corrupt-"));
     expect(aside).toHaveLength(3);
@@ -177,8 +179,8 @@ describe("openSealedFile", () => {
   it("leaves one whose data doesn't open here where it is, for the next start, with a copy aside", async () => {
     const before = unreadableFilesKept();
     await put(at("a.json"), '{"v":1,"data":"other"}');
-    expect(await openSealedFile(at("a.json"), open)).toBeNull();
-    expect(await openSealedFile(at("a.json"), open)).toBeNull();
+    expect(await openAt(at("a.json"))).toMatchObject({ status: "unopened" });
+    expect(await openAt(at("a.json"))).toMatchObject({ status: "unopened" });
     expect(await readFile(at("a.json"), "utf8")).toBe('{"v":1,"data":"other"}');
     expect(await copiesOf(at("a.json"))).toEqual(["a.json.unopened"]);
     expect(unreadableFilesKept()).toBe(before);
@@ -186,11 +188,11 @@ describe("openSealedFile", () => {
 
   it("forgets a sealed file together with every copy of it", async () => {
     await put(at("a.json"), '{"v":2,"data":"new"}');
-    await openSealedFile(at("a.json"), open);
+    await openAt(at("a.json"));
     await put(at("a.json"), '{"v":1,"data":"other"}');
-    await openSealedFile(at("a.json"), open);
+    await openAt(at("a.json"));
     await put(at("a.json"), "{");
-    await openSealedFile(at("a.json"), open);
+    await openAt(at("a.json"));
     await put(at("a.json"), '{"v":1,"data":"ok"}');
     await put(at("a.json.unrelated"), "keep");
     expect((await copiesOf(at("a.json"))).length).toBe(4);
@@ -198,8 +200,13 @@ describe("openSealedFile", () => {
     expect(await readdir(dir)).toEqual(["a.json.unrelated"]);
   });
 
-  it("gives null for a missing one, quietly", async () => {
-    expect(await openSealedFile(at("none.json"), open)).toBeNull();
+  it("reads a missing one as missing, quietly", async () => {
+    expect(await openAt(at("none.json"))).toEqual({ status: "missing" });
+  });
+
+  it("writes the version first, then the sealed data and the store's own fields", async () => {
+    await new SealedFile(at("a.json")).write({ data: "ok", account: null });
+    expect(await readFile(at("a.json"), "utf8")).toBe('{"v":1,"data":"ok","account":null}');
   });
 });
 
@@ -239,8 +246,8 @@ const STORES: { name: string; file: () => string; version: number; versionKey?: 
   { name: "panel state (written)", file: () => at("panel-state", "22222222-2222-4222-8222-222222222222.json"), version: STORE_VERSIONS.panelState, load: () => new PanelStateStore(at("panel-state")).set("22222222-2222-4222-8222-222222222222", { open: true }) },
   { name: "a document", file: () => at("documents", "doc-1.json"), version: STORE_VERSIONS.document, load: () => new DocumentStore(at("documents")).list() },
   { name: "chosen folders", file: () => at("folder-access", "local", "local.game", "folders.json"), version: STORE_VERSIONS.chosenFolders, load: () => new ChosenFolders(dir, "local", "local.game").set("Documents/My Games", dir) },
-  { name: "account.json", file: () => at("account.json"), version: STORE_VERSIONS.sealed, versionKey: "v", load: () => loadAccount(at("account.json"), encryptor) },
-  { name: "discord.json", file: () => at("discord.json"), version: STORE_VERSIONS.sealed, versionKey: "v", load: () => loadDiscordSecrets(at("discord.json"), encryptor) },
+  { name: "account.json", file: () => at("account.json"), version: STORE_VERSIONS.sealed, versionKey: "v", load: () => new AccountFile(at("account.json"), encryptor).load() },
+  { name: "discord.json", file: () => at("discord.json"), version: STORE_VERSIONS.sealed, versionKey: "v", load: () => new DiscordSecretsFile(at("discord.json"), encryptor).load() },
   {
     name: "cloud-copy-key.json",
     file: () => at("cloud-copy-key.json"),
@@ -369,9 +376,9 @@ describe("the files keep their version", () => {
   });
 
   it("the sealed files say `v`, and an account saved now opens again", async () => {
-    await saveAccount(at("account.json"), encryptor, { token: "t".repeat(43), email: "me@example.com", discord: null, createdAt: "2026-10-16T12:00:00.000Z" });
+    await new AccountFile(at("account.json"), encryptor).save({ token: "t".repeat(43), email: "me@example.com", discord: null, createdAt: "2026-10-16T12:00:00.000Z" });
     expect(JSON.parse(await readFile(at("account.json"), "utf8")).v).toBe(STORE_VERSIONS.sealed);
-    expect(await loadAccount(at("account.json"), encryptor)).toMatchObject({ email: "me@example.com" });
+    expect(await new AccountFile(at("account.json"), encryptor).load()).toMatchObject({ email: "me@example.com" });
   });
 
   it("a document written over a newer Tavora's copies it aside first", async () => {

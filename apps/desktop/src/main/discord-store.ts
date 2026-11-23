@@ -1,8 +1,6 @@
 import { isGameId } from "@tavora/module-schema";
 import { isSnowflake } from "./discord-parse";
-import { writeFileAtomic } from "./fsutil";
-import { forgetSealedFile, openSealedFile } from "./json";
-import { STORE_VERSIONS } from "./saved-versions";
+import { SealedFile } from "./sealed-file";
 
 // The Discord sign-in (token), kept in discord.json in the user data folder and
 // encrypted with the operating system's key store (Electron's safeStorage: DPAPI
@@ -86,31 +84,44 @@ function games(value: unknown): Record<string, DiscordGame> {
   return result;
 }
 
-export async function loadDiscordSecrets(file: string, encryptor: Encryptor): Promise<DiscordSecrets> {
-  if (!encryptor.isAvailable()) return EMPTY;
-  // Missing, newer, damaged, or encrypted by another user or PC: start without (openSealedFile keeps the file aside).
-  const raw = await openSealedFile(file, (data) => {
-    const value: unknown = JSON.parse(encryptor.decrypt(Buffer.from(data, "base64")));
-    if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("not Discord's secrets");
-    return value as Record<string, unknown>;
-  });
-  if (!raw) return EMPTY;
-  try {
-    const secrets = { token: token(raw.token), last: last(raw.last), games: games(raw.games) };
-    // A file from before 0.6.1 holds a Client Secret: write it again without.
-    if ("secret" in raw) await saveDiscordSecrets(file, encryptor, secrets).catch(() => undefined);
-    return secrets;
-  } catch {
-    return EMPTY;
-  }
-}
+/**
+ * discord.json: Discord's sign-in, sealed (sealed-file.ts). One that couldn't be read at start reads as signed out, and
+ * is never written over or removed until it reads again.
+ */
+export class DiscordSecretsFile {
+  private readonly sealed: SealedFile;
 
-export async function saveDiscordSecrets(file: string, encryptor: Encryptor, secrets: DiscordSecrets): Promise<void> {
-  if (!secrets.token && !secrets.last && Object.keys(secrets.games ?? {}).length === 0) {
-    await forgetSealedFile(file);
-    return;
+  constructor(
+    file: string,
+    private readonly encryptor: Encryptor,
+  ) {
+    this.sealed = new SealedFile(file);
   }
-  if (!encryptor.isAvailable()) throw new Error("No secure storage on this PC.");
-  const data = encryptor.encrypt(JSON.stringify(secrets)).toString("base64");
-  await writeFileAtomic(file, JSON.stringify({ v: STORE_VERSIONS.sealed, data }));
+
+  async load(): Promise<DiscordSecrets> {
+    const encryptor = this.encryptor;
+    if (!encryptor.isAvailable()) return EMPTY;
+    // Missing, newer, damaged, can't be read now, or encrypted by another user or PC: start without (the file is kept).
+    const read = await this.sealed.open((data) => {
+      const value: unknown = JSON.parse(encryptor.decrypt(Buffer.from(data, "base64")));
+      if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("not Discord's secrets");
+      return value as Record<string, unknown>;
+    });
+    if (read.status !== "opened") return EMPTY;
+    const raw = read.value;
+    try {
+      const secrets = { token: token(raw.token), last: last(raw.last), games: games(raw.games) };
+      // A file from before 0.6.1 holds a Client Secret: write it again without.
+      if ("secret" in raw) await this.save(secrets).catch(() => undefined);
+      return secrets;
+    } catch {
+      return EMPTY;
+    }
+  }
+
+  async save(secrets: DiscordSecrets): Promise<void> {
+    if (!secrets.token && !secrets.last && Object.keys(secrets.games ?? {}).length === 0) return this.sealed.forget();
+    if (!this.encryptor.isAvailable()) throw new Error("No secure storage on this PC.");
+    await this.sealed.write({ data: this.encryptor.encrypt(JSON.stringify(secrets)).toString("base64") });
+  }
 }

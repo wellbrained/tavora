@@ -6,12 +6,12 @@ import type { AiProvider, AiUsageView } from "../shared/host-api";
 import { claudeAccessToken, claudePlan, claudeTokenRenews, codexPlan, parseEmail } from "./ai-usage-parse";
 import { CodexMissingError, type CodexReading } from "./ai-usage-codex";
 import { HostError } from "./errors";
-import { isJsonValue } from "./json";
+import { isJsonValue, wasSetAside } from "./json";
 import { UserError } from "./messages";
-import { SUPPORTED_VERSIONS } from "./saved-versions";
+import { SAVED_FILES, SavedFile } from "./saved-file";
 
 /** The format of ai-usage.json (saved-versions.ts). */
-export const AI_USAGE_VERSION = SUPPORTED_VERSIONS["ai-usage.json"];
+export const AI_USAGE_VERSION = SAVED_FILES["ai-usage.json"].version;
 
 // The AI Usage connector (the decision log, AI Usage rows of 2026-10-17): the Claude and Codex
 // accounts the user set up in Settings > Integrations, and their usage read for a granted module.
@@ -37,11 +37,6 @@ interface StoredAccount {
   directory: string;
 }
 
-interface Stored {
-  version: typeof AI_USAGE_VERSION;
-  accounts: StoredAccount[];
-}
-
 /**
  * What version 1 of ai-usage.json kept for the built-in panel (before 0.16.10): handed to the AI
  * Usage module's settings once, then dropped from the file.
@@ -53,22 +48,16 @@ export interface LegacyPanelData {
 }
 
 export interface AiUsageDeps {
-  /** Where ai-usage.json lives. */
+  /** Where ai-usage.json lives: read and written with SavedFile (saved-file.ts), so tests give it a folder of their own. */
   file: string;
   /** Tavora's version, sent as the user agent. */
   version: string;
   /** Where Claude's usage is asked; only tests change it. */
   usageUrl?: string;
   fetch: typeof fetch;
-  /** The text of a file, or null when it does not exist. Throws when it can't be read right now, so ai-usage.json is never started anew over it. */
+  /** The text of a login's file, or null when it does not exist. */
   readText(file: string): Promise<string | null>;
-  /**
-   * Checks the text read from ai-usage.json before it is used (json.ts checkSavedFile): copies aside a file a newer
-   * Tavora wrote, and sets aside a damaged one (null). Without it, the text is only parsed.
-   */
-  check?(file: string, text: string): Promise<Record<string, unknown> | null>;
   isDirectory(directory: string): Promise<boolean>;
-  writeText(file: string, text: string): Promise<void>;
   readCodex(directory: string, signal: AbortSignal): Promise<CodexReading>;
   /** Who is signed in to a Claude profile (ai-usage-claude.ts), or null. */
   readClaudeEmail(directory: string): Promise<string | null>;
@@ -158,24 +147,18 @@ export class AiUsageConnector {
   private readonly plans = new Map<string, string | null>();
   private readonly states = new Map<string, AccountState>();
   private loaded: Promise<void> | undefined;
+  /** ai-usage.json, by the save rules: one that can't be read right now throws, and is never written over. */
+  private readonly saved: SavedFile;
 
-  constructor(private readonly deps: AiUsageDeps) {}
+  constructor(private readonly deps: AiUsageDeps) {
+    this.saved = new SavedFile(deps.file, SAVED_FILES["ai-usage.json"]);
+  }
 
   /** The saved file, null when there is none yet. */
   private async readFile(): Promise<Record<string, unknown> | null> {
-    const text = await this.deps.readText(this.deps.file);
-    if (text !== null && this.deps.check) {
-      // Set aside when damaged: it starts empty, like a damaged file always did, so nothing is offered again. A copy
-      // aside that fails throws, so nothing is saved over a newer Tavora's file.
-      return (await this.deps.check(this.deps.file, text)) ?? {};
-    }
-    try {
-      const parsed: unknown = text === null ? null : JSON.parse(text);
-      return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
-    } catch {
-      // A damaged file starts empty, like a missing one would not: nothing is offered again.
-      return {};
-    }
+    const saved = await this.saved.read();
+    // Set aside when damaged: it starts empty, like a damaged file always did, so nothing is offered again.
+    return saved ?? (wasSetAside(this.deps.file) ? {} : null);
   }
 
   /**
@@ -204,8 +187,7 @@ export class AiUsageConnector {
   }
 
   private async save(): Promise<void> {
-    const stored: Stored = { version: AI_USAGE_VERSION, accounts: this.accounts };
-    await this.deps.writeText(this.deps.file, JSON.stringify(stored, null, 2)).catch((error: unknown) => console.error("[tavora] ai-usage save failed", error));
+    await this.saved.write({ accounts: this.accounts }).catch((error: unknown) => console.error("[tavora] ai-usage save failed", error));
   }
 
   private emit(): void {

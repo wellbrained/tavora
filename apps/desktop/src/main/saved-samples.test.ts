@@ -251,7 +251,6 @@ function aiUsage(): AiUsageConnector {
     fetch: (async () => new Response("{}", { status: 500 })) as unknown as typeof fetch,
     readText: async (file) => readFile(file, "utf8").catch(() => null),
     isDirectory: async () => true,
-    writeText: async (file, text) => writeFile(file, text),
     readCodex: async () => ({ signedIn: false, apiKey: false, email: null, limits: [] }) as never,
     readClaudeEmail: async () => null,
     detect: async () => [],

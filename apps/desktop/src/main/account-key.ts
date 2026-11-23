@@ -5,9 +5,9 @@ import { CopyError } from "./cloud-copy";
 import { newCopyKey, openVault, parseRecoveryKey, recoveryKey, sealVault } from "./copy-crypto";
 import type { Encryptor } from "./discord-store";
 import { writeFileAtomic } from "./fsutil";
-import { forgetSealedFile, openSealedFile } from "./json";
-import { STORE_VERSIONS } from "./saved-versions";
+import { forgetSealedFile } from "./json";
 import { UserError } from "./messages";
+import { SealedFile } from "./sealed-file";
 
 // The account's key (decided 2026-10-20, "one recovery key"): one random 256-bit root key per account,
 // made on the first PC that needs it and shown to the user once as the recovery key. Everything the
@@ -34,6 +34,11 @@ import { UserError } from "./messages";
 // with the key it was sealed with: while another account is signed in, it stays off. Signing out forgets only that
 // account's. No key file is ever written over with another key: a key moves aside first (a key of no account, or one
 // whose account is unknown, to account-key.unproven*.json), and a key file that can't be opened in this run stays too.
+// Nor is a new key made while a key file that may hold the one needed can't be opened (decided 2026-11-23, "a saved
+// file that can't be read is never written over"): only one that is truly missing is made anew. One that can't be read
+// right now (held by a virus scan) is read again first, and the user is told; one whose data doesn't open here (sealed
+// by another Windows user, or no key store to open it) asks for the recovery key. A newer Tavora's key file is copied
+// aside, and moves aside before a new key is made, as before.
 //
 // A key made or typed in signed out (a folder's copy) belongs to no account yet: the first account it is used with
 // takes it, when that account has no vault yet or its vault opens with it. A key file from before keys noted their
@@ -113,11 +118,26 @@ interface Slot {
 
 type Files = Pick<Slot, "keyFile" | "cacheFile">;
 
+/**
+ * A key file this run couldn't open: "held" when it can't be read right now, "unopened" when its data doesn't open here
+ * (sealed by another user or PC, or no key store to open it), "newer" when a newer Tavora wrote it (copied aside).
+ */
+interface Blocked {
+  file: string;
+  reason: "held" | "unopened" | "newer";
+  /** The account its record names (outside the seal), null for none, undefined when unknown. */
+  owner: string | null | undefined;
+}
+
 export class AccountKey {
   /** The cloud copy's key, in account-key.json: the one older Tavoras read. */
   private main: Slot | null = null;
   /** account-key.json is there but couldn't be opened in this run (a locked key store, a newer Tavora's): never written over. */
   private mainBlocked = false;
+  /** The copy's key file (or the older one it came from) when it couldn't be opened in this run: no new key is made beside it. */
+  private mainHold: Blocked | null = null;
+  /** The other accounts' key files this run couldn't open, by file tag. */
+  private readonly othersHold = new Map<string, Blocked>();
   /** The other accounts' keys (and keys moved aside), by file tag. */
   private readonly others = new Map<string, Slot>();
   /** Keys whose last use was noted in this run (pruneOthers). */
@@ -178,21 +198,29 @@ export class AccountKey {
 
   /** Reads this PC's keys, at start. Never throws. Answers the copy's key. */
   async load(): Promise<Buffer | null> {
-    let saved = await readKey(this.options.file, this.options.encryptor);
+    const read = await readKey(this.options.file, this.options.encryptor);
+    let saved = read.status === "opened" ? read : null;
+    this.mainHold = read.status === "blocked" ? read : null;
     const legacy = this.options.legacyFile;
-    if (!saved && legacy) {
-      saved = await readKey(legacy, this.options.encryptor);
-      if (saved) await rename(legacy, this.options.file).catch(() => undefined);
+    // Only in place of a key file that is truly missing: one this run can't open is never put out of its place.
+    if (read.status === "missing" && legacy) {
+      const old = await readKey(legacy, this.options.encryptor);
+      if (old.status === "opened") {
+        saved = old;
+        await rename(legacy, this.options.file).catch(() => undefined);
+      } else if (old.status === "blocked") this.mainHold = old;
     }
     this.main = saved ? { key: saved.key, owner: saved.owner ?? null, unproven: saved.unproven, keyFile: this.options.file, cacheFile: this.options.cacheFile } : null;
-    this.mainBlocked = !saved && (await exists(this.options.file));
+    this.mainBlocked = read.status === "blocked";
     this.others.clear();
+    this.othersHold.clear();
     this.touched.clear();
     for (const name of await readdir(path.dirname(this.options.file)).catch(() => [] as string[])) {
       const tag = this.tagOfFile(name);
       if (tag === null) continue;
       const other = await readKey(path.join(path.dirname(this.options.file), name), this.options.encryptor);
-      if (!other) continue;
+      if (other.status === "blocked") this.othersHold.set(tag, other);
+      if (other.status !== "opened") continue;
       // One moved aside from before keys noted their account counts as unproven.
       const unproven = other.unproven || other.owner === undefined || tag.startsWith(UNPROVEN_TAG);
       this.others.set(tag, { key: other.key, owner: other.owner ?? null, unproven: unproven && !other.owner, ...this.filesOf(tag) });
@@ -227,6 +255,7 @@ export class AccountKey {
   async setUp(): Promise<KeySetUp> {
     const generation = this.generation;
     const who = this.signedInAs();
+    await this.openAgain(who);
     const slot = await this.claim(who, generation);
     const vault = await this.vault(who, slot?.key);
     if (slot) {
@@ -247,6 +276,8 @@ export class AccountKey {
     }
     // A vault this PC saw before and that is gone now: the account has a key, so it is asked for, not made anew.
     if (vault || (await this.seen(who))) return { status: "ask" };
+    const blocked = this.noNewKey(who);
+    if (blocked) return blocked;
     const made = newCopyKey();
     const place = await this.freePlace(who);
     // Another PC may have made one at the same moment: then its key is asked for.
@@ -449,8 +480,11 @@ export class AccountKey {
    * new key is made beside it.
    */
   async setUpHere(hasCopy: boolean): Promise<KeySetUp> {
+    await this.openAgain(null);
     if (this.main && this.copyIsOf(null)) return { status: "ready", created: false };
     if (hasCopy) return { status: "ask" };
+    const blocked = this.noNewKey(null);
+    if (blocked) return blocked;
     await this.saveHere(newCopyKey(), null);
     return { status: "ready", created: true };
   }
@@ -486,6 +520,7 @@ export class AccountKey {
     if ((main && (all || this.adoptable(main) || (account !== null && main.owner === account))) || (all && this.mainBlocked)) {
       this.main = null;
       this.mainBlocked = false;
+      this.mainHold = null;
       await forgetSealedFile(this.options.file);
       if (this.options.legacyFile) await forgetSealedFile(this.options.legacyFile);
       // With any half-written copy a crash left (forgetSealedFile removes those too).
@@ -509,6 +544,34 @@ export class AccountKey {
     this.problem = null;
     const slot = account === null ? (this.adoptable(this.main) ? this.main : null) : this.ownSlot(account);
     if (slot?.cacheFile) await forgetSealedFile(slot.cacheFile);
+  }
+
+  /**
+   * A key file this run couldn't open that may hold `who`'s key (null: the copy's key of no account): the copy's key
+   * file of `who`, of no account or of an unknown one, or `who`'s own. Null when there is none.
+   */
+  private mayHold(who: string | null): Blocked | null {
+    const main = this.mainHold;
+    if (main && main.reason !== "newer" && (main.owner === undefined || main.owner === null || main.owner === who)) return main;
+    const own = who === null ? undefined : this.othersHold.get(this.tagOf(who));
+    return own && own.reason !== "newer" ? own : null;
+  }
+
+  /** A key file that may hold `who`'s key couldn't be opened at start: all are read again, as it may open now. */
+  private async openAgain(who: string | null): Promise<void> {
+    if (this.mayHold(who)) await this.load();
+  }
+
+  /**
+   * Instead of a new key for `who`, while a key file that may hold one can't be opened: one that can't be read right now
+   * tells the user (keyHeld); one whose data doesn't open here asks for the recovery key. Null when a new one may be made.
+   */
+  private noNewKey(who: string | null): KeySetUp | null {
+    const blocked = this.mayHold(who);
+    if (!blocked) return null;
+    this.log(`account key: ${path.basename(blocked.file)} couldn't be opened, so no new key is made`);
+    if (blocked.reason === "held") throw new UserError("cloudCopy.error.keyHeld");
+    return { status: "ask" };
   }
 
   /** A key that belongs to no account yet, which the first account to use it may take (claim). */
@@ -686,7 +749,9 @@ export class AccountKey {
   private async cached(who: string, key: Buffer): Promise<VaultContent | null> {
     const file = this.cacheOf(who, key);
     if (!file) return null;
-    const sealed = await readFile(file).catch(() => null);
+    const sealed = await readVault(file);
+    // One that can't be read right now is not taken for missing: nothing is made anew in its place.
+    if (sealed === HELD) throw new CopyError("failed", "the vault as last read can't be read right now");
     return sealed ? openContent(key, sealed) : null;
   }
 
@@ -730,6 +795,7 @@ export class AccountKey {
   private async moveBlockedAside(): Promise<void> {
     await this.setAside({ keyFile: this.options.file, cacheFile: this.options.cacheFile });
     this.mainBlocked = false;
+    if (this.mainHold?.file === this.options.file) this.mainHold = null;
   }
 
   /**
@@ -739,9 +805,10 @@ export class AccountKey {
    */
   private async setAside(place: Files, keeps?: Buffer): Promise<void> {
     const key = await exists(place.keyFile);
-    // A vault as last read that opens with the key going there is that key's: it stays.
-    const sealed = place.cacheFile ? await readFile(place.cacheFile).catch(() => null) : null;
-    const cache = sealed !== null && !(keeps && opens(keeps, sealed));
+    // A vault as last read that opens with the key going there is that key's: it stays. One that can't be read right
+    // now isn't known to be, so it moves aside (or, still held, stops this).
+    const sealed = place.cacheFile ? await readVault(place.cacheFile) : null;
+    const cache = sealed === HELD || (sealed !== null && !(keeps && opens(keeps, sealed)));
     if (!key && !cache) return;
     const to = this.filesOf(await this.freeTag(UNOPENED_TAG));
     if (key) await rename(place.keyFile, to.keyFile);
@@ -777,8 +844,9 @@ export class AccountKey {
     const candidates: { tag: string; slot: Slot; at: number }[] = [];
     for (const [tag, slot] of this.others) {
       if (slot.unproven || slot.owner === null) continue;
-      const sealed = slot.cacheFile ? await readFile(slot.cacheFile).catch(() => null) : null;
-      if (sealed && openContent(slot.key, sealed)?.publisherKeys?.length) continue;
+      const sealed = slot.cacheFile ? await readVault(slot.cacheFile) : null;
+      // One that can't be read right now may hold publisher keys: it stays.
+      if (sealed === HELD || (sealed && openContent(slot.key, sealed)?.publisherKeys?.length)) continue;
       candidates.push({ tag, slot, at: (await stat(slot.keyFile).catch(() => null))?.mtimeMs ?? 0 });
     }
     const oldest = candidates.sort((a, b) => a.at - b.at)[0];
@@ -806,8 +874,9 @@ export class AccountKey {
     const tag = isMain ? null : this.tagOfFile(path.basename(place.keyFile))!;
     if (tag !== null) await this.pruneOthers(tag);
     const data = this.options.encryptor.encrypt(key.toString("base64")).toString("base64");
-    // `account` and `unproven` sit next to the sealed key: older Tavoras read only `v` and `data`.
-    await writeFileAtomic(place.keyFile, JSON.stringify({ v: STORE_VERSIONS.sealed, data, account: owner, ...(unproven ? { unproven } : {}) }));
+    // `account` and `unproven` sit next to the sealed key: older Tavoras read only `v` and `data`. A file there that
+    // can't be read right now is never written over (sealed-file.ts).
+    await new SealedFile(place.keyFile).write({ data, account: owner, ...(unproven ? { unproven } : {}) });
     if (stale()) {
       await rm(place.keyFile, { force: true });
       throw new CopyError("signed-out");
@@ -906,11 +975,20 @@ function withTag(file: string, tag: string): string {
   return `${file.slice(0, file.length - ext.length)}.${tag}${ext}`;
 }
 
+/** Whether a file is there: one that can't be looked at right now counts as there. */
 function exists(file: string): Promise<boolean> {
   return stat(file).then(
     () => true,
-    () => false,
+    (error: NodeJS.ErrnoException) => error.code !== "ENOENT",
   );
+}
+
+/** A vault as last read that is there but can't be read right now. */
+const HELD = Symbol("held");
+
+/** A vault as last read: its bytes, null when missing, HELD when it can't be read right now. */
+function readVault(file: string): Promise<Buffer | null | typeof HELD> {
+  return readFile(file).catch((error: NodeJS.ErrnoException) => (error.code === "ENOENT" ? null : HELD));
 }
 
 function opens(key: Buffer, sealed: Uint8Array): boolean {
@@ -930,17 +1008,35 @@ function openContent(key: Buffer, sealed: Uint8Array): VaultContent | null {
   return keys.length > 0 ? { v: 1, publisherKeys: keys } : { v: 1 };
 }
 
+/** A key file as read: its key and the account it belongs to, missing, or one this run can't open (Blocked). */
+type KeyRead = { status: "opened"; key: Buffer; owner: string | null | undefined; unproven: boolean } | { status: "missing" } | ({ status: "blocked" } & Blocked);
+
+/** The account a key's record names: null for none yet, undefined in a file from before keys noted it (or unreadable). */
+function ownerOf(owner: unknown): string | null | undefined {
+  return typeof owner === "string" && owner.length > 0 ? owner : owner === null ? null : undefined;
+}
+
 /**
  * A kept key and the account it belongs to: null for none yet, undefined in a file from before keys noted it (or one
- * whose note can't be read: it is treated the same). `unproven`: see the header.
+ * whose note can't be read: it is treated the same). `unproven`: see the header. Missing, or damaged (set aside), is
+ * missing; one that can't be read right now, a newer Tavora's (copied aside), or one sealed by another user or PC is
+ * blocked, and stays where it is.
  */
-async function readKey(file: string, encryptor: Encryptor): Promise<{ key: Buffer; owner: string | null | undefined; unproven: boolean } | null> {
-  if (!encryptor.isAvailable()) return null;
-  // Missing, newer, damaged, or sealed by another user or PC: none (openSealedFile keeps the file aside).
-  return openSealedFile(file, (data, saved) => {
+async function readKey(file: string, encryptor: Encryptor): Promise<KeyRead> {
+  if (!encryptor.isAvailable()) return (await exists(file)) ? { status: "blocked", file, reason: "unopened", owner: undefined } : { status: "missing" };
+  const read = await new SealedFile(file).open((data, saved) => {
     const key = Buffer.from(encryptor.decrypt(Buffer.from(data, "base64")), "base64");
     if (key.length !== 32) throw new Error("not a key");
-    const owner = saved.account;
-    return { key, owner: typeof owner === "string" && owner.length > 0 ? owner : owner === null ? null : undefined, unproven: saved.unproven === true };
+    return { key, owner: ownerOf(saved.account), unproven: saved.unproven === true };
   });
+  switch (read.status) {
+    case "opened":
+      return { status: "opened", ...read.value };
+    case "missing":
+      return { status: "missing" };
+    case "held":
+      return { status: "blocked", file, reason: "held", owner: undefined };
+    default:
+      return { status: "blocked", file, reason: read.status, owner: ownerOf(read.saved.account) };
+  }
 }

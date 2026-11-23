@@ -955,6 +955,11 @@ export interface HostViewState {
    * Tavora started that part fresh. The host UI says so once each time it grows.
    */
   keptAside: number;
+  /**
+   * How many sealed files (a sign-in or a key) couldn't be read this run when something was to be saved in them: they
+   * are kept as they are, and the save waits. The host UI says so once each time it grows.
+   */
+  sealedHeld: number;
   /** The user's local profile. */
   profile: { name: string; initials: string; pictureUrl: string | null; ranks: ProfileRanksSetting; banner: ProfileBanner };
   /** A setting that only applies on start was changed since Tavora started. */

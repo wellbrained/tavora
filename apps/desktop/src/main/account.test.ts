@@ -5,7 +5,7 @@ import path from "node:path";
 import { fingerprint as packFingerprint, LINK_STATEMENT, packModule, PUBLISH_STATEMENT } from "@tavora/pack";
 import { describe, expect, it } from "vitest";
 import type { AccountView } from "../shared/host-api";
-import { AccountClient, deviceOs, loadAccount, saveAccount, type ProfileData, type SavedAccount } from "./account";
+import { AccountClient, AccountFile, deviceOs, type ProfileData, type SavedAccount } from "./account";
 import type { Encryptor } from "./discord-store";
 import { UserError } from "./messages";
 import { SignIn } from "./sign-in";
@@ -16,6 +16,10 @@ const encryptor = (available = true): Encryptor => ({
   encrypt: (text) => Buffer.from([...Buffer.from(text)].map((byte) => byte ^ 0x5a)),
   decrypt: (data) => Buffer.from([...data].map((byte) => byte ^ 0x5a)).toString(),
 });
+
+/** One read or write of account.json, each by a store of its own, as at a start of Tavora. */
+const loadAccount = (file: string, encryptor: Encryptor) => new AccountFile(file, encryptor).load();
+const saveAccount = (file: string, encryptor: Encryptor, account: SavedAccount | null) => new AccountFile(file, encryptor).save(account);
 
 const TOKEN = "t".repeat(43);
 const SAVED: SavedAccount = { token: TOKEN, email: "me@example.com", discord: null, createdAt: "2026-10-16T12:00:00.000Z" };

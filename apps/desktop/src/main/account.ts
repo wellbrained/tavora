@@ -6,11 +6,9 @@ import type { AccountDevice, AccountPending, AccountPrefix, AccountPublishToken,
 import type { Language, MessageKey } from "../shared/i18n";
 import { isIdPrefix } from "../shared/id-prefix";
 import type { Encryptor } from "./discord-store";
-import { writeFileAtomic } from "./fsutil";
-import { forgetSealedFile, openSealedFile } from "./json";
-import { STORE_VERSIONS } from "./saved-versions";
 import type { DiscordLoginResult } from "./discord-login";
 import { UserError } from "./messages";
+import { SealedFile } from "./sealed-file";
 
 import type { SignIn } from "./sign-in";
 
@@ -48,19 +46,33 @@ function savedAccount(value: unknown): SavedAccount | null {
   return isToken(raw.token) && isText(raw.createdAt, 40) && (email || discord) ? { token: raw.token, email, discord, createdAt: raw.createdAt } : null;
 }
 
-export async function loadAccount(file: string, encryptor: Encryptor): Promise<SavedAccount | null> {
-  if (!encryptor.isAvailable()) return null;
-  // Missing, newer, damaged, or encrypted by another user or PC: signed out (openSealedFile keeps the file aside).
-  return openSealedFile(file, (data) => savedAccount(JSON.parse(encryptor.decrypt(Buffer.from(data, "base64")))));
-}
+/**
+ * account.json: the sign-in, sealed (sealed-file.ts). One that couldn't be read at start reads as signed out, and is
+ * never written over or removed until it reads again.
+ */
+export class AccountFile {
+  private readonly sealed: SealedFile;
 
-export async function saveAccount(file: string, encryptor: Encryptor, account: SavedAccount | null): Promise<void> {
-  if (!account) {
-    await forgetSealedFile(file);
-    return;
+  constructor(
+    file: string,
+    private readonly encryptor: Encryptor,
+  ) {
+    this.sealed = new SealedFile(file);
   }
-  if (!encryptor.isAvailable()) return;
-  await writeFileAtomic(file, JSON.stringify({ v: STORE_VERSIONS.sealed, data: encryptor.encrypt(JSON.stringify(account)).toString("base64") }));
+
+  async load(): Promise<SavedAccount | null> {
+    if (!this.encryptor.isAvailable()) return null;
+    // Missing, newer, damaged, can't be read now, or encrypted by another user or PC: signed out (the file is kept).
+    const read = await this.sealed.open((data) => savedAccount(JSON.parse(this.encryptor.decrypt(Buffer.from(data, "base64")))));
+    return read.status === "opened" ? read.value : null;
+  }
+
+  /** Writes the sign-in down; null removes the file. */
+  async save(account: SavedAccount | null): Promise<void> {
+    if (!account) return this.sealed.forget();
+    if (!this.encryptor.isAvailable()) return;
+    await this.sealed.write({ data: this.encryptor.encrypt(JSON.stringify(account)).toString("base64") });
+  }
 }
 
 export function deviceOs(platform: NodeJS.Platform): DeviceOs {

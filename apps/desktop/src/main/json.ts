@@ -3,7 +3,6 @@ import path from "node:path";
 import type { JsonValue } from "@tavora/sdk/protocol";
 import { HostError } from "./errors";
 import { keepCopy, keepCopyAt } from "./fsutil";
-import { STORE_VERSIONS } from "./saved-versions";
 
 const MAX_DEPTH = 64;
 
@@ -169,36 +168,6 @@ export async function checkSavedFile(file: string, bytes: Buffer | string, rules
  */
 export function keepNewerCopy(file: string, version: number, bytes: Buffer): Promise<string> {
   return keepCopy(path.dirname(file), `${path.basename(file)}.from-version-${version}`, bytes);
-}
-
-/**
- * Opens one of the sealed files (`{ "v": 1, "data": … }`, the data sealed by the system: account, keys, Discord) with
- * `open`. Missing, or a file that can't be read right now, gives null. One a newer Tavora wrote is copied aside and
- * gives null. One that is damaged is set aside, the user is told, and it gives null. One whose data doesn't open here
- * (sealed by another Windows user, a keyring that is locked for now, or `open` refuses it) stays where it is, so the
- * next start can try again, and a copy goes aside (`<file>.unopened`) in case something is written over it meanwhile.
- * Never throws. Copies of a sealed file hold what it held: forgetSealedFile removes them with it. `open` also gets the
- * whole record, for fields kept next to the sealed data.
- */
-export async function openSealedFile<T>(file: string, open: (data: string, saved: SavedRecord) => T | Promise<T>): Promise<T | null> {
-  const version = STORE_VERSIONS.sealed;
-  let saved: SavedRecord | null;
-  try {
-    saved = await readSavedFile(file, { version, versionKey: "v" });
-  } catch {
-    return null;
-  }
-  if (saved === null || (typeof saved.v === "number" && saved.v > version)) return null;
-  if (saved.v !== version || typeof saved.data !== "string") {
-    await setAside(file, true).catch(() => undefined);
-    return null;
-  }
-  try {
-    return await open(saved.data, saved);
-  } catch {
-    await keepCopy(path.dirname(file), `${path.basename(file)}.unopened`, Buffer.from(JSON.stringify(saved))).catch(() => undefined);
-    return null;
-  }
 }
 
 /** Removes a sealed file and every copy of it set aside (signing out forgets them all). */

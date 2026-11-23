@@ -1,5 +1,7 @@
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AiUsageView } from "../shared/host-api";
 import { AI_USAGE_VERSION, AiUsageConnector, MAX_ANSWER_BYTES, USAGE_URL, type AiUsageDeps } from "./ai-usage";
 import { parseClaudeStatus } from "./ai-usage-claude";
@@ -14,7 +16,19 @@ import { UserError } from "./messages";
 const HOME = path.resolve("/home/tester");
 const CLAUDE_DIR = path.join(HOME, ".claude");
 const CODEX_DIR = path.join(HOME, ".codex");
-const FILE = path.join(HOME, "ai-usage.json");
+/** ai-usage.json, in a folder of each test's own: the connector reads and writes it with SavedFile. */
+let FILE: string;
+beforeEach(() => {
+  FILE = path.join(mkdtempSync(path.join(tmpdir(), "tavora-ai-usage-")), "ai-usage.json");
+  // Setting a damaged file aside is logged on purpose; keep it out of the test output.
+  vi.spyOn(console, "error").mockImplementation(() => undefined);
+});
+afterEach(() => {
+  vi.restoreAllMocks();
+  rmSync(path.dirname(FILE), { recursive: true, force: true });
+});
+/** What ai-usage.json holds now. */
+const savedText = () => readFileSync(FILE, "utf8");
 
 describe("emails", () => {
   it("accepts one plain address and nothing else", () => {
@@ -83,8 +97,11 @@ const CLAUDE_LOGIN = JSON.stringify({ claudeAiOauth: { accessToken: "test-token"
 const USAGE_ANSWER = { limits: [{ kind: "session", percent: 30, resets_at: "2026-10-16T15:00:00Z", is_active: true }], extra_usage: { is_enabled: false } };
 const CODEX_LIMITS = { rateLimits: { primary: { usedPercent: 10, windowDurationMins: 300 } }, rateLimitResetCredits: { availableCount: 3 } };
 
+/** `files`: ai-usage.json goes to the disk, a login's file to the store `readText` reads. */
 function setup(overrides: Partial<AiUsageDeps> = {}, files: Record<string, string> = {}) {
-  const store = new Map<string, string>(Object.entries(files));
+  const store = new Map<string, string>(Object.entries(files).filter(([file]) => file !== FILE));
+  const saved = files[FILE];
+  if (saved !== undefined) writeFileSync(FILE, saved);
   const views: AiUsageView[] = [];
   const clock = { now: Date.parse("2026-10-16T12:00:00Z") };
   const fetchMock = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => new Response(JSON.stringify(USAGE_ANSWER), { status: 200 }));
@@ -96,7 +113,6 @@ function setup(overrides: Partial<AiUsageDeps> = {}, files: Record<string, strin
     fetch: fetchMock as unknown as typeof fetch,
     readText: async (file) => store.get(file) ?? null,
     isDirectory: async (directory) => directory.startsWith(HOME),
-    writeText: async (file, text) => void store.set(file, text),
     readCodex: codex,
     readClaudeEmail: email,
     detect: async () => [
@@ -121,7 +137,7 @@ async function firstId(connector: AiUsageConnector): Promise<string> {
 
 describe("AiUsageConnector accounts", () => {
   it("offers the profile folders found on this PC the first time only", async () => {
-    const { connector, store, deps } = setup();
+    const { connector, deps } = setup();
     const view = await connector.view();
     expect(view.accounts.map((a) => [a.provider, a.label, a.directory, a.plan])).toEqual([
       ["claude", "claude", CLAUDE_DIR, "Pro"],
@@ -133,7 +149,7 @@ describe("AiUsageConnector accounts", () => {
     expect(saved.accounts).toHaveLength(2);
     for (const account of saved.accounts) await again.remove(account.id);
     expect((await new AiUsageConnector(deps).view()).accounts).toEqual([]);
-    expect(JSON.parse(store.get(FILE)!)).toEqual({ version: 2, accounts: [] });
+    expect(JSON.parse(savedText())).toEqual({ version: 2, accounts: [] });
   });
 
   it("gives modules the accounts without their folders", async () => {
@@ -174,23 +190,37 @@ describe("AiUsageConnector accounts", () => {
     await expect(connector.add("claude", "One more", path.join(HOME, ".claude-extra"))).rejects.toMatchObject({ key: "aiUsage.error.limit" });
   });
 
-  it("starts empty from a damaged file instead of failing, and offers nothing", async () => {
-    const { connector } = setup({}, { [FILE]: "{not json" });
+  const copies = () => readdirSync(path.dirname(FILE)).filter((name) => name !== "ai-usage.json");
+
+  it("sets a damaged file aside and starts empty instead of failing, offering nothing", async () => {
+    const detect = vi.fn(async () => [{ provider: "claude" as const, directory: CLAUDE_DIR }]);
+    const { connector } = setup({ detect }, { [FILE]: "{not json" });
     expect((await connector.view()).accounts).toEqual([]);
+    expect(detect).not.toHaveBeenCalled();
+    expect(copies()).toEqual([expect.stringMatching(/^ai-usage\.json\.corrupt-\d+$/)]);
+    // Read again before the first change (Settings at start): still nothing offered.
+    expect(await new AiUsageConnector({ ...setup({ detect }).deps }).view()).toMatchObject({ accounts: [] });
   });
 
-  it("has the saved file checked before it is used: set aside when damaged, still offering nothing", async () => {
-    const check = vi.fn(async (_file: string, _text: string) => null);
-    const { connector } = setup({ check }, { [FILE]: "{not json" });
-    expect((await connector.view()).accounts).toEqual([]);
-    expect(check).toHaveBeenCalledWith(FILE, "{not json");
-  });
-
-  it("reads what the check gives back, so a newer file still opens as far as it can", async () => {
-    const saved = { version: AI_USAGE_VERSION + 1, accounts: [{ id: "a", provider: "claude", label: "Mine", directory: CLAUDE_DIR }] };
-    const check = vi.fn(async (_file: string, text: string) => JSON.parse(text) as Record<string, unknown>);
-    const { connector } = setup({ check }, { [FILE]: JSON.stringify(saved) });
+  it("copies a newer file aside, and reads it as far as it can", async () => {
+    const saved = JSON.stringify({ version: AI_USAGE_VERSION + 1, accounts: [{ id: "a", provider: "claude", label: "Mine", directory: CLAUDE_DIR }] });
+    const { connector } = setup({}, { [FILE]: saved });
     expect((await connector.view()).accounts.map((account) => account.label)).toEqual(["Mine"]);
+    expect(copies()).toEqual([`ai-usage.json.from-version-${AI_USAGE_VERSION + 1}`]);
+    expect(readFileSync(`${FILE}.from-version-${AI_USAGE_VERSION + 1}`, "utf8")).toBe(saved);
+  });
+
+  it("never writes over a file it can't read right now, and reads it again at the next ask", async () => {
+    // A folder in its place can't be read as a file.
+    mkdirSync(FILE);
+    const detect = vi.fn(async () => [{ provider: "claude" as const, directory: CLAUDE_DIR }]);
+    const { connector } = setup({ detect });
+    await expect(connector.view()).rejects.toMatchObject({ code: "EISDIR" });
+    await expect(connector.add("codex", "Work", CODEX_DIR)).rejects.toMatchObject({ code: "EISDIR" });
+    expect(detect).not.toHaveBeenCalled();
+    expect(readdirSync(FILE)).toEqual([]);
+    rmSync(FILE, { recursive: true });
+    expect((await connector.view()).accounts.map((account) => account.directory)).toEqual([CLAUDE_DIR]);
   });
 
   it("drops saved accounts that are not valid", async () => {
@@ -227,11 +257,11 @@ describe("AiUsageConnector reads", () => {
   });
 
   it("never saves the token or hands it to a module, and never saves an email", async () => {
-    const { connector, store, views } = setup(onlyClaude);
+    const { connector, views } = setup(onlyClaude);
     const reading = await connector.read(await firstId(connector));
     expect(JSON.stringify(reading)).not.toContain("test-token");
-    expect(store.get(FILE)).not.toContain("test-token");
-    expect(store.get(FILE)).not.toContain("claude@example.com");
+    expect(savedText()).not.toContain("test-token");
+    expect(savedText()).not.toContain("claude@example.com");
     expect(JSON.stringify(views)).not.toContain("test-token");
   });
 
@@ -354,14 +384,14 @@ describe("the built-in panel's settings", () => {
   });
 
   it("are handed over once from version 1 of the file, then dropped from it", async () => {
-    const { connector, store, deps } = setup({}, { [FILE]: VERSION_1 });
+    const { connector, deps } = setup({}, { [FILE]: VERSION_1 });
     expect(await connector.legacyPanelData()).toEqual({
       refreshMinutes: 15,
       style: "used",
       readings: { a: { fetchedAt: 1, windows: [{ kind: "weekly", name: null, usedPercent: 20, resetsAt: null }] } },
     });
     await connector.forgetLegacyPanelData();
-    expect(JSON.parse(store.get(FILE)!)).toEqual({ version: 2, accounts: [{ id: "a", provider: "claude", label: "Good", directory: CLAUDE_DIR }] });
+    expect(JSON.parse(savedText())).toEqual({ version: 2, accounts: [{ id: "a", provider: "claude", label: "Good", directory: CLAUDE_DIR }] });
     expect(await connector.legacyPanelData()).toBeNull();
     expect(await new AiUsageConnector(deps).legacyPanelData()).toBeNull();
   });
@@ -369,11 +399,11 @@ describe("the built-in panel's settings", () => {
   it("are asked for at start without looking for accounts or reading a login", async () => {
     const detect = vi.fn(async () => [{ provider: "claude" as const, directory: CLAUDE_DIR }]);
     const reads: string[] = [];
-    const { connector, store } = setup({ detect, readText: async (file) => (reads.push(file), null) });
+    const { connector } = setup({ detect, readText: async (file) => (reads.push(file), null) });
     expect(await connector.legacyPanelData()).toBeNull();
     expect(detect).not.toHaveBeenCalled();
-    expect(reads).toEqual([FILE]);
-    expect(store.has(FILE)).toBe(false);
+    expect(reads).toEqual([]);
+    expect(existsSync(FILE)).toBe(false);
   });
 
   it("are clamped and defaulted when odd", async () => {
