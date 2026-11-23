@@ -45,7 +45,11 @@ function signed(privateKey = release.privateKey, keys = { release: release.publi
   return signLatestYml({ latestYml: LATEST, version: "1.0.1", file: installer, sha512, privateKey, pinned: keys }).text;
 }
 function run(...args: string[]) {
-  const result = spawnSync("bash", [helper, ...args], { encoding: "utf8" });
+  // The arguments travel in the environment: Windows mangles a newline inside a command-line argument, but not in a variable.
+  const env: Record<string, string> = { ...(process.env as Record<string, string>), TAVORA_HELPER: helper, TAVORA_ARGC: String(args.length) };
+  args.forEach((arg, i) => (env[`TAVORA_ARG${i}`] = arg));
+  const script = 'list=(); for ((i = 0; i < TAVORA_ARGC; i++)); do name="TAVORA_ARG$i"; list+=("${!name}"); done; exec bash "$TAVORA_HELPER" "${list[@]}"';
+  const result = spawnSync("bash", ["-c", script], { encoding: "utf8", env });
   return { ok: result.status === 0, out: result.stdout.trim(), err: result.stderr.trim() };
 }
 const verify = (feed: string, { keys = pins, version = "1.0.1", file = installer, digest = sha512 } = {}) => run("verify", keys, write(feed), version, file, digest);

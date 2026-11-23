@@ -70,10 +70,33 @@ async function onPc(cloud: Service, fetch: typeof globalThis.fetch, signed: { no
   });
   /** The account changes as the host tells it (an account change from AccountClient). */
   const changed = async () => {
-    keys.accountChanged(signed.now?.id ?? null);
-    await keys.refresh();
+    await accountChangedAndSettled(keys, signed.now?.id ?? null);
   };
   return { accountKey, keys, changed, userData, ...files };
+}
+
+/**
+ * DeveloperKeys.accountChanged starts a read of its own and doesn't wait for it, so awaiting a second refresh next to it
+ * runs two reads at once: both read-then-write the seen file, so one can undo the other's change (a mark "1" that
+ * should have become the account's stays), and one can still be writing when the test ends (the clean-up then fails with
+ * ENOTEMPTY). Under load that showed as a flaky test. This waits for the read the change starts, as the host's one is the
+ * only read, and reads once itself only when the change started none (the same account again).
+ */
+async function accountChangedAndSettled(keys: DeveloperKeys, account: string | null): Promise<void> {
+  const started: Promise<void>[] = [];
+  const refresh = keys.refresh.bind(keys);
+  keys.refresh = () => {
+    const read = refresh();
+    started.push(read);
+    return read;
+  };
+  try {
+    keys.accountChanged(account);
+    if (started.length === 0) await keys.refresh();
+    await Promise.all(started);
+  } finally {
+    keys.refresh = refresh;
+  }
 }
 
 const pem = () => generateKeyPairSync("ed25519").privateKey.export({ format: "pem", type: "pkcs8" }).toString();
@@ -298,9 +321,8 @@ async function copyPc(cloud: Service, fetch: typeof globalThis.fetch, signed: { 
   });
   /** The account changes as the host tells it. */
   const changed = async () => {
-    keys.accountChanged(signed.now?.id ?? null);
     sync.accountChanged(signed.now?.id ?? null);
-    await keys.refresh();
+    await accountChangedAndSettled(keys, signed.now?.id ?? null);
   };
   await sync.beforeLoad();
   await changed();
