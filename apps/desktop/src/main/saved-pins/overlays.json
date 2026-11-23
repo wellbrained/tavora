@@ -1,0 +1,60 @@
+{
+  "empty": {
+    "read": null,
+    "files": {
+      "overlays.json": "{\n  \"version\": 2,\n  \"links\": [\n    {\n      \"owner\": \"official\",\n      \"moduleId\": \"tavora.clock-counter\",\n      \"workspaceId\": \"poe2\",\n      \"key\": \"deaths\",\n      \"token\": \"<new>\",\n      \"state\": {\n        \"count\": 13\n      }\n    }\n  ]\n}\n"
+    },
+    "told": 0
+  },
+  "sample": {
+    "read": {
+      "link": {
+        "token": "0afd3377dcfeb531c32f3d13bc68569a",
+        "owner": "official",
+        "moduleId": "tavora.clock-counter",
+        "workspaceId": "poe2",
+        "key": "deaths"
+      },
+      "state": {
+        "count": 12,
+        "label": "Deaths"
+      }
+    },
+    "files": {
+      "overlays.json": "{\n  \"version\": 2,\n  \"links\": [\n    {\n      \"token\": \"0afd3377dcfeb531c32f3d13bc68569a\",\n      \"owner\": \"official\",\n      \"moduleId\": \"tavora.clock-counter\",\n      \"workspaceId\": \"poe2\",\n      \"key\": \"deaths\",\n      \"state\": {\n        \"count\": 13\n      }\n    }\n  ]\n}\n"
+    },
+    "told": 0
+  },
+  "newer": {
+    "read": {
+      "link": {
+        "token": "0afd3377dcfeb531c32f3d13bc68569a",
+        "owner": "official",
+        "moduleId": "tavora.clock-counter",
+        "workspaceId": "poe2",
+        "key": "deaths"
+      },
+      "state": {
+        "count": 12,
+        "label": "Deaths"
+      }
+    },
+    "files": {
+      "overlays.json": "{\n  \"version\": 2,\n  \"links\": [\n    {\n      \"token\": \"0afd3377dcfeb531c32f3d13bc68569a\",\n      \"owner\": \"official\",\n      \"moduleId\": \"tavora.clock-counter\",\n      \"workspaceId\": \"poe2\",\n      \"key\": \"deaths\",\n      \"state\": {\n        \"count\": 13\n      }\n    }\n  ]\n}\n",
+      "overlays.json.from-version-3": "{\n  \"version\": 3,\n  \"links\": [\n    {\n      \"owner\": \"official\",\n      \"moduleId\": \"tavora.clock-counter\",\n      \"workspaceId\": \"poe2\",\n      \"key\": \"deaths\",\n      \"token\": \"0afd3377dcfeb531c32f3d13bc68569a\",\n      \"state\": {\n        \"count\": 12,\n        \"label\": \"Deaths\"\n      }\n    }\n  ],\n  \"somethingNew\": {\n    \"kept\": true\n  }\n}\n"
+    },
+    "told": 0
+  },
+  "damaged": {
+    "read": null,
+    "files": {
+      "overlays.json": "{\n  \"version\": 2,\n  \"links\": [\n    {\n      \"owner\": \"official\",\n      \"moduleId\": \"tavora.clock-counter\",\n      \"workspaceId\": \"poe2\",\n      \"key\": \"deaths\",\n      \"token\": \"<new>\",\n      \"state\": {\n        \"count\": 13\n      }\n    }\n  ]\n}\n",
+      "overlays.json.corrupt-<time>": "{ damaged"
+    },
+    "told": 1
+  },
+  "held": {
+    "outcome": "open threw EISDIR",
+    "files": {}
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "empty": {
+    "read": {
+      "enabled": true,
+      "target": "1.1.1.1",
+      "outages": [],
+      "savedAt": 0
+    },
+    "files": {
+      "connection.json": "{\n  \"version\": 1,\n  \"enabled\": true,\n  \"target\": \"1.1.1.1\",\n  \"outages\": [],\n  \"savedAt\": 1763200000000\n}\n"
+    },
+    "told": 0
+  },
+  "sample": {
+    "read": {
+      "enabled": true,
+      "target": "1.1.1.1",
+      "outages": [
+        {
+          "start": 1762000000000,
+          "end": 1762000060000,
+          "kind": "no-internet"
+        }
+      ],
+      "savedAt": 1763100000000
+    },
+    "files": {
+      "connection.json": "{\n  \"version\": 1,\n  \"enabled\": true,\n  \"target\": \"1.1.1.1\",\n  \"outages\": [\n    {\n      \"start\": 1762000000000,\n      \"end\": 1762000060000,\n      \"kind\": \"no-internet\"\n    }\n  ],\n  \"savedAt\": 1763200000000\n}\n"
+    },
+    "told": 0
+  },
+  "newer": {
+    "read": {
+      "enabled": true,
+      "target": "1.1.1.1",
+      "outages": [
+        {
+          "start": 1762000000000,
+          "end": 1762000060000,
+          "kind": "no-internet"
+        }
+      ],
+      "savedAt": 1763100000000
+    },
+    "files": {
+      "connection.json": "{\n  \"version\": 1,\n  \"enabled\": true,\n  \"target\": \"1.1.1.1\",\n  \"outages\": [\n    {\n      \"start\": 1762000000000,\n      \"end\": 1762000060000,\n      \"kind\": \"no-internet\"\n    }\n  ],\n  \"savedAt\": 1763200000000\n}\n",
+      "connection.json.from-version-2": "{\n  \"version\": 2,\n  \"enabled\": true,\n  \"target\": \"1.1.1.1\",\n  \"outages\": [\n    {\n      \"start\": 1762000000000,\n      \"end\": 1762000060000,\n      \"kind\": \"no-internet\"\n    }\n  ],\n  \"savedAt\": 1763100000000,\n  \"somethingNew\": {\n    \"kept\": true\n  }\n}\n"
+    },
+    "told": 0
+  },
+  "damaged": {
+    "read": {
+      "enabled": true,
+      "target": "1.1.1.1",
+      "outages": [],
+      "savedAt": 0
+    },
+    "files": {
+      "connection.json": "{\n  \"version\": 1,\n  \"enabled\": true,\n  \"target\": \"1.1.1.1\",\n  \"outages\": [],\n  \"savedAt\": 1763200000000\n}\n",
+      "connection.json.corrupt-<time>": "{ damaged"
+    },
+    "told": 1
+  },
+  "held": {
+    "outcome": "changed",
+    "files": {}
+  }
+}

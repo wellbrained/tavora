@@ -1,0 +1,56 @@
+{
+  "empty": {
+    "read": {},
+    "files": {
+      "module-data/local/local.notes/poe2/storage.json": "{\"version\":1,\"entries\":{\"zoom\":2}}"
+    },
+    "told": 0
+  },
+  "sample": {
+    "read": {
+      "favorites": [
+        "build-1",
+        "build-2"
+      ],
+      "view": {
+        "tab": "builds",
+        "zoom": 1.25
+      }
+    },
+    "files": {
+      "module-data/local/local.notes/poe2/storage.json": "{\"version\":1,\"entries\":{\"view\":{\"tab\":\"builds\",\"zoom\":1.25},\"favorites\":[\"build-1\",\"build-2\"],\"zoom\":2}}"
+    },
+    "told": 0
+  },
+  "newer": {
+    "read": {
+      "favorites": [
+        "build-1",
+        "build-2"
+      ],
+      "view": {
+        "tab": "builds",
+        "zoom": 1.25
+      }
+    },
+    "files": {
+      "module-data/local/local.notes/poe2/storage.json": "{\"version\":1,\"somethingNew\":{\"kept\":true},\"entries\":{\"view\":{\"tab\":\"builds\",\"zoom\":1.25},\"favorites\":[\"build-1\",\"build-2\"],\"zoom\":2}}",
+      "module-data/local/local.notes/poe2/storage.json.from-version-2": "{\n  \"version\": 2,\n  \"entries\": {\n    \"view\": {\n      \"tab\": \"builds\",\n      \"zoom\": 1.25\n    },\n    \"favorites\": [\n      \"build-1\",\n      \"build-2\"\n    ]\n  },\n  \"somethingNew\": {\n    \"kept\": true\n  }\n}\n"
+    },
+    "told": 0
+  },
+  "damaged": {
+    "read": {},
+    "files": {
+      "module-data/local/local.notes/poe2/storage.json": "{\"version\":1,\"entries\":{\"zoom\":2}}",
+      "module-data/local/local.notes/poe2/storage.json.corrupt-<time>": "{ damaged"
+    },
+    "told": 1
+  },
+  "held": {
+    "outcome": "changed",
+    "files": {
+      "module-data/local/local.notes/poe2/storage.json": "{\"version\":1,\"entries\":{\"zoom\":2}}"
+    }
+  }
+}

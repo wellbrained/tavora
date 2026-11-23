@@ -1,0 +1,76 @@
+{
+  "empty": {
+    "read": {
+      "profile": {
+        "version": 1,
+        "id": "<new>",
+        "name": "",
+        "initials": "",
+        "picture": null,
+        "updatedAt": null
+      },
+      "saved": false
+    },
+    "files": {
+      "profile.json": "{\n  \"version\": 1,\n  \"id\": \"<new>\",\n  \"name\": \"Nina\",\n  \"initials\": \"\",\n  \"picture\": null,\n  \"updatedAt\": null\n}"
+    },
+    "told": 0
+  },
+  "sample": {
+    "read": {
+      "profile": {
+        "version": 1,
+        "id": "5f0c6a52-3a1e-4c62-9d5a-7b8f2e1c4d3a",
+        "name": "Nik",
+        "initials": "NK",
+        "picture": null,
+        "updatedAt": "2026-11-10T12:00:00.000Z"
+      },
+      "saved": true
+    },
+    "files": {
+      "profile.json": "{\n  \"version\": 1,\n  \"id\": \"5f0c6a52-3a1e-4c62-9d5a-7b8f2e1c4d3a\",\n  \"name\": \"Nina\",\n  \"initials\": \"NK\",\n  \"picture\": null,\n  \"updatedAt\": \"2026-11-10T12:00:00.000Z\"\n}"
+    },
+    "told": 0
+  },
+  "newer": {
+    "read": {
+      "profile": {
+        "version": 1,
+        "id": "5f0c6a52-3a1e-4c62-9d5a-7b8f2e1c4d3a",
+        "name": "Nik",
+        "initials": "NK",
+        "picture": null,
+        "updatedAt": "2026-11-10T12:00:00.000Z"
+      },
+      "saved": true
+    },
+    "files": {
+      "profile.json": "{\n  \"version\": 1,\n  \"id\": \"5f0c6a52-3a1e-4c62-9d5a-7b8f2e1c4d3a\",\n  \"name\": \"Nina\",\n  \"initials\": \"NK\",\n  \"picture\": null,\n  \"updatedAt\": \"2026-11-10T12:00:00.000Z\"\n}",
+      "profile.json.from-version-2": "{\n  \"version\": 2,\n  \"id\": \"5f0c6a52-3a1e-4c62-9d5a-7b8f2e1c4d3a\",\n  \"name\": \"Nik\",\n  \"initials\": \"NK\",\n  \"picture\": null,\n  \"updatedAt\": \"2026-11-10T12:00:00.000Z\",\n  \"somethingNew\": {\n    \"kept\": true\n  }\n}\n"
+    },
+    "told": 0
+  },
+  "damaged": {
+    "read": {
+      "profile": {
+        "version": 1,
+        "id": "<new>",
+        "name": "",
+        "initials": "",
+        "picture": null,
+        "updatedAt": null
+      },
+      "saved": false
+    },
+    "files": {
+      "profile.json": "{\n  \"version\": 1,\n  \"id\": \"<new>\",\n  \"name\": \"Nina\",\n  \"initials\": \"\",\n  \"picture\": null,\n  \"updatedAt\": null\n}",
+      "profile.json.corrupt-<time>": "{ damaged"
+    },
+    "told": 1
+  },
+  "held": {
+    "outcome": "open threw EISDIR",
+    "files": {}
+  }
+}

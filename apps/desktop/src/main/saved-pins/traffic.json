@@ -1,0 +1,50 @@
+{
+  "empty": {
+    "read": [],
+    "files": {
+      "traffic.json": "{\n  \"version\": 1,\n  \"months\": [\n    {\n      \"month\": \"2026-11\",\n      \"downBytes\": 1,\n      \"upBytes\": 2,\n      \"countedFrom\": 3\n    }\n  ]\n}\n"
+    },
+    "told": 0
+  },
+  "sample": {
+    "read": [
+      {
+        "month": "2026-10",
+        "downBytes": 52000000000,
+        "upBytes": 4100000000,
+        "countedFrom": 1759276800000
+      }
+    ],
+    "files": {
+      "traffic.json": "{\n  \"version\": 1,\n  \"months\": [\n    {\n      \"month\": \"2026-10\",\n      \"downBytes\": 52000000000,\n      \"upBytes\": 4100000000,\n      \"countedFrom\": 1759276800000\n    },\n    {\n      \"month\": \"2026-11\",\n      \"downBytes\": 1,\n      \"upBytes\": 2,\n      \"countedFrom\": 3\n    }\n  ]\n}\n"
+    },
+    "told": 0
+  },
+  "newer": {
+    "read": [
+      {
+        "month": "2026-10",
+        "downBytes": 52000000000,
+        "upBytes": 4100000000,
+        "countedFrom": 1759276800000
+      }
+    ],
+    "files": {
+      "traffic.json": "{\n  \"version\": 1,\n  \"months\": [\n    {\n      \"month\": \"2026-10\",\n      \"downBytes\": 52000000000,\n      \"upBytes\": 4100000000,\n      \"countedFrom\": 1759276800000\n    },\n    {\n      \"month\": \"2026-11\",\n      \"downBytes\": 1,\n      \"upBytes\": 2,\n      \"countedFrom\": 3\n    }\n  ]\n}\n",
+      "traffic.json.from-version-2": "{\n  \"version\": 2,\n  \"months\": [\n    {\n      \"month\": \"2026-10\",\n      \"downBytes\": 52000000000,\n      \"upBytes\": 4100000000,\n      \"countedFrom\": 1759276800000\n    }\n  ],\n  \"somethingNew\": {\n    \"kept\": true\n  }\n}\n"
+    },
+    "told": 0
+  },
+  "damaged": {
+    "read": [],
+    "files": {
+      "traffic.json": "{\n  \"version\": 1,\n  \"months\": [\n    {\n      \"month\": \"2026-11\",\n      \"downBytes\": 1,\n      \"upBytes\": 2,\n      \"countedFrom\": 3\n    }\n  ]\n}\n",
+      "traffic.json.corrupt-<time>": "{ damaged"
+    },
+    "told": 1
+  },
+  "held": {
+    "outcome": "changed",
+    "files": {}
+  }
+}

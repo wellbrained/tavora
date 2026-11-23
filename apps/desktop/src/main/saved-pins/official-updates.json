@@ -1,0 +1,54 @@
+{
+  "empty": {
+    "read": {},
+    "files": {
+      "official-updates.json": "{\n  \"version\": 1,\n  \"modules\": {\n    \"tavora.clock-counter\": {\n      \"id\": \"tavora.clock-counter\",\n      \"version\": \"1.1.0\",\n      \"sha256\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\n      \"signer\": \"fedcba9876543210fedcba9876543210\",\n      \"highWater\": \"1.1.0\"\n    }\n  }\n}\n"
+    },
+    "told": 0
+  },
+  "sample": {
+    "read": {
+      "tavora.notes": {
+        "id": "tavora.notes",
+        "version": "1.4.0",
+        "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "signedSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "signer": "fedcba9876543210fedcba9876543210",
+        "highWater": "1.5.0"
+      }
+    },
+    "files": {
+      "official-updates.json": "{\n  \"version\": 1,\n  \"modules\": {\n    \"tavora.notes\": {\n      \"id\": \"tavora.notes\",\n      \"version\": \"1.4.0\",\n      \"sha256\": \"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\n      \"signedSha256\": \"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\n      \"signer\": \"fedcba9876543210fedcba9876543210\",\n      \"highWater\": \"1.5.0\"\n    },\n    \"tavora.clock-counter\": {\n      \"id\": \"tavora.clock-counter\",\n      \"version\": \"1.1.0\",\n      \"sha256\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\n      \"signer\": \"fedcba9876543210fedcba9876543210\",\n      \"highWater\": \"1.1.0\"\n    }\n  }\n}\n"
+    },
+    "told": 0
+  },
+  "newer": {
+    "read": {
+      "tavora.notes": {
+        "id": "tavora.notes",
+        "version": "1.4.0",
+        "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "signedSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "signer": "fedcba9876543210fedcba9876543210",
+        "highWater": "1.5.0"
+      }
+    },
+    "files": {
+      "official-updates.json": "{\n  \"version\": 1,\n  \"modules\": {\n    \"tavora.notes\": {\n      \"id\": \"tavora.notes\",\n      \"version\": \"1.4.0\",\n      \"sha256\": \"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\n      \"signedSha256\": \"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\n      \"signer\": \"fedcba9876543210fedcba9876543210\",\n      \"highWater\": \"1.5.0\"\n    },\n    \"tavora.clock-counter\": {\n      \"id\": \"tavora.clock-counter\",\n      \"version\": \"1.1.0\",\n      \"sha256\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\n      \"signer\": \"fedcba9876543210fedcba9876543210\",\n      \"highWater\": \"1.1.0\"\n    }\n  }\n}\n",
+      "official-updates.json.from-version-2": "{\n  \"version\": 2,\n  \"modules\": {\n    \"tavora.notes\": {\n      \"id\": \"tavora.notes\",\n      \"version\": \"1.4.0\",\n      \"sha256\": \"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\n      \"signedSha256\": \"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\n      \"signer\": \"fedcba9876543210fedcba9876543210\",\n      \"highWater\": \"1.5.0\"\n    }\n  },\n  \"somethingNew\": {\n    \"kept\": true\n  }\n}\n"
+    },
+    "told": 0
+  },
+  "damaged": {
+    "read": {},
+    "files": {
+      "official-updates.json": "{\n  \"version\": 1,\n  \"modules\": {\n    \"tavora.clock-counter\": {\n      \"id\": \"tavora.clock-counter\",\n      \"version\": \"1.1.0\",\n      \"sha256\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\n      \"signer\": \"fedcba9876543210fedcba9876543210\",\n      \"highWater\": \"1.1.0\"\n    }\n  }\n}\n",
+      "official-updates.json.corrupt-<time>": "{ damaged"
+    },
+    "told": 1
+  },
+  "held": {
+    "outcome": "open threw EISDIR",
+    "files": {}
+  }
+}

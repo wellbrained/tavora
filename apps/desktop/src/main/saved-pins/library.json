@@ -1,0 +1,493 @@
+{
+  "empty": {
+    "read": {
+      "version": 2,
+      "workspaces": {},
+      "folders": {},
+      "root": [],
+      "favorites": [],
+      "sort": "recent",
+      "rail": {
+        "expanded": false,
+        "width": 280
+      },
+      "startup": "last-workspace",
+      "gameStart": "show",
+      "gameEndWorkspaceId": null,
+      "grayscaleText": false,
+      "onlineSearch": true,
+      "autoUpdate": true,
+      "autoUpdateModules": false,
+      "steamIcons": true,
+      "moduleIcons": true,
+      "panelStyle": "framed",
+      "tabOverflow": "list",
+      "toasts": "bottom-center",
+      "streamOverlays": false,
+      "overlayPort": 47820,
+      "gameOverlays": false,
+      "overlaysStay": true,
+      "overlaySidebar": "right",
+      "moduleFilesFolder": null,
+      "developmentFolders": [],
+      "collapsedDevelopmentFolders": [],
+      "dialogFolders": {},
+      "moduleFolders": {},
+      "moduleNotesSeen": {},
+      "steamProfile": null,
+      "iconsOffered": [],
+      "installId": null,
+      "askedModules": [],
+      "language": "system",
+      "profileRanks": {
+        "hidden": false,
+        "period": "all"
+      },
+      "profileBanner": null,
+      "theme": {
+        "id": "tavora.default",
+        "variation": "dark"
+      },
+      "followSystem": true,
+      "radius": null,
+      "onboarded": false,
+      "makesModules": false,
+      "seenVersion": null,
+      "browser": {
+        "sharedSites": [],
+        "adblockOff": []
+      },
+      "lastWorkspaceId": null,
+      "pc": {}
+    },
+    "files": {
+      "library.json": "{\n  \"version\": 2,\n  \"workspaces\": {},\n  \"folders\": {},\n  \"root\": [],\n  \"favorites\": [],\n  \"sort\": \"recent\",\n  \"rail\": {\n    \"expanded\": false,\n    \"width\": 280\n  },\n  \"startup\": \"last-workspace\",\n  \"gameStart\": \"show\",\n  \"gameEndWorkspaceId\": null,\n  \"grayscaleText\": false,\n  \"onlineSearch\": true,\n  \"autoUpdate\": true,\n  \"autoUpdateModules\": false,\n  \"steamIcons\": true,\n  \"moduleIcons\": true,\n  \"panelStyle\": \"framed\",\n  \"tabOverflow\": \"list\",\n  \"toasts\": \"bottom-center\",\n  \"streamOverlays\": false,\n  \"overlayPort\": 47820,\n  \"gameOverlays\": false,\n  \"overlaysStay\": true,\n  \"overlaySidebar\": \"right\",\n  \"moduleFilesFolder\": null,\n  \"developmentFolders\": [],\n  \"collapsedDevelopmentFolders\": [],\n  \"dialogFolders\": {},\n  \"moduleFolders\": {},\n  \"moduleNotesSeen\": {},\n  \"steamProfile\": null,\n  \"iconsOffered\": [],\n  \"installId\": null,\n  \"askedModules\": [],\n  \"language\": \"en\",\n  \"profileRanks\": {\n    \"hidden\": false,\n    \"period\": \"all\"\n  },\n  \"profileBanner\": null,\n  \"theme\": {\n    \"id\": \"tavora.default\",\n    \"variation\": \"dark\"\n  },\n  \"followSystem\": true,\n  \"radius\": null,\n  \"onboarded\": false,\n  \"makesModules\": false,\n  \"seenVersion\": null,\n  \"browser\": {\n    \"sharedSites\": [],\n    \"adblockOff\": []\n  },\n  \"lastWorkspaceId\": null,\n  \"pc\": {}\n}"
+    },
+    "told": 0
+  },
+  "sample": {
+    "read": {
+      "version": 2,
+      "workspaces": {
+        "poe2": {
+          "id": "poe2",
+          "kind": "game",
+          "catalogId": "poe2",
+          "gameId": null,
+          "name": "Path of Exile 2",
+          "icon": {
+            "kind": "monogram",
+            "text": "PE2"
+          },
+          "useOriginalIcon": true,
+          "steamAppId": 2694490,
+          "iconFile": null,
+          "iconCheckedAt": "2026-11-01T10:00:00.000Z",
+          "iconSharedAt": null,
+          "showNews": true,
+          "addedAt": "2026-10-14T10:00:00.000Z",
+          "lastOpenedAt": "2026-11-13T19:30:00.000Z",
+          "trashedAt": null
+        },
+        "elden-ring": {
+          "id": "elden-ring",
+          "kind": "game",
+          "catalogId": "elden-ring",
+          "gameId": null,
+          "name": "Elden Ring",
+          "icon": {
+            "kind": "monogram",
+            "text": "ER"
+          },
+          "useOriginalIcon": true,
+          "steamAppId": 1245620,
+          "iconFile": null,
+          "iconCheckedAt": null,
+          "iconSharedAt": null,
+          "showNews": true,
+          "addedAt": "2026-10-20T10:00:00.000Z",
+          "lastOpenedAt": null,
+          "trashedAt": null
+        },
+        "local-my-game": {
+          "id": "local-my-game",
+          "kind": "game",
+          "catalogId": null,
+          "gameId": null,
+          "name": "My Game",
+          "icon": {
+            "kind": "monogram",
+            "text": "MG"
+          },
+          "useOriginalIcon": false,
+          "steamAppId": null,
+          "iconFile": null,
+          "iconCheckedAt": null,
+          "iconSharedAt": null,
+          "showNews": false,
+          "addedAt": "2026-10-21T10:00:00.000Z",
+          "lastOpenedAt": null,
+          "trashedAt": "2026-11-12T08:00:00.000Z"
+        },
+        "local-notes": {
+          "id": "local-notes",
+          "kind": "personal",
+          "catalogId": null,
+          "gameId": null,
+          "name": "Notes",
+          "icon": {
+            "kind": "monogram",
+            "text": "N"
+          },
+          "useOriginalIcon": false,
+          "steamAppId": null,
+          "iconFile": null,
+          "iconCheckedAt": null,
+          "iconSharedAt": null,
+          "showNews": false,
+          "addedAt": "2026-10-22T10:00:00.000Z",
+          "lastOpenedAt": "2026-11-14T09:00:00.000Z",
+          "trashedAt": null
+        }
+      },
+      "folders": {
+        "44444444-4444-4444-8444-444444444444": {
+          "id": "44444444-4444-4444-8444-444444444444",
+          "name": "Souls",
+          "label": "SL",
+          "workspaces": [
+            "elden-ring"
+          ]
+        }
+      },
+      "root": [
+        {
+          "kind": "workspace",
+          "id": "poe2"
+        },
+        {
+          "kind": "folder",
+          "id": "44444444-4444-4444-8444-444444444444"
+        },
+        {
+          "kind": "workspace",
+          "id": "local-notes"
+        }
+      ],
+      "favorites": [
+        "poe2"
+      ],
+      "sort": "manual",
+      "rail": {
+        "expanded": true,
+        "width": 280
+      },
+      "startup": "last-workspace",
+      "gameStart": "ask",
+      "gameEndWorkspaceId": "local-notes",
+      "grayscaleText": false,
+      "onlineSearch": true,
+      "autoUpdate": true,
+      "autoUpdateModules": true,
+      "steamIcons": true,
+      "moduleIcons": true,
+      "panelStyle": "framed",
+      "tabOverflow": "list",
+      "toasts": "bottom-right",
+      "streamOverlays": true,
+      "overlayPort": 47820,
+      "gameOverlays": true,
+      "overlaysStay": true,
+      "overlaySidebar": "right",
+      "moduleFilesFolder": null,
+      "developmentFolders": [],
+      "collapsedDevelopmentFolders": [],
+      "dialogFolders": {},
+      "moduleFolders": {},
+      "moduleNotesSeen": {
+        "official:tavora.notes": "1.4.0"
+      },
+      "steamProfile": null,
+      "iconsOffered": [],
+      "installId": null,
+      "askedModules": [],
+      "language": "de",
+      "profileRanks": {
+        "hidden": false,
+        "period": "week"
+      },
+      "profileBanner": null,
+      "theme": {
+        "id": "tavora.theme-default",
+        "variation": "dark"
+      },
+      "followSystem": false,
+      "radius": 8,
+      "onboarded": true,
+      "makesModules": false,
+      "seenVersion": "0.24.60",
+      "browser": {
+        "sharedSites": [
+          "poe2db.tw"
+        ],
+        "adblockOff": []
+      },
+      "lastWorkspaceId": "poe2",
+      "pc": {}
+    },
+    "files": {
+      "library.json": "{\n  \"version\": 2,\n  \"workspaces\": {\n    \"poe2\": {\n      \"id\": \"poe2\",\n      \"kind\": \"game\",\n      \"catalogId\": \"poe2\",\n      \"gameId\": null,\n      \"name\": \"Path of Exile 2\",\n      \"icon\": {\n        \"kind\": \"monogram\",\n        \"text\": \"PE2\"\n      },\n      \"useOriginalIcon\": true,\n      \"steamAppId\": 2694490,\n      \"iconFile\": null,\n      \"iconCheckedAt\": \"2026-11-01T10:00:00.000Z\",\n      \"iconSharedAt\": null,\n      \"showNews\": true,\n      \"addedAt\": \"2026-10-14T10:00:00.000Z\",\n      \"lastOpenedAt\": \"2026-11-13T19:30:00.000Z\",\n      \"trashedAt\": null\n    },\n    \"elden-ring\": {\n      \"id\": \"elden-ring\",\n      \"kind\": \"game\",\n      \"catalogId\": \"elden-ring\",\n      \"gameId\": null,\n      \"name\": \"Elden Ring\",\n      \"icon\": {\n        \"kind\": \"monogram\",\n        \"text\": \"ER\"\n      },\n      \"useOriginalIcon\": true,\n      \"steamAppId\": 1245620,\n      \"iconFile\": null,\n      \"iconCheckedAt\": null,\n      \"iconSharedAt\": null,\n      \"showNews\": true,\n      \"addedAt\": \"2026-10-20T10:00:00.000Z\",\n      \"lastOpenedAt\": null,\n      \"trashedAt\": null\n    },\n    \"local-my-game\": {\n      \"id\": \"local-my-game\",\n      \"kind\": \"game\",\n      \"catalogId\": null,\n      \"gameId\": null,\n      \"name\": \"My Game\",\n      \"icon\": {\n        \"kind\": \"monogram\",\n        \"text\": \"MG\"\n      },\n      \"useOriginalIcon\": false,\n      \"steamAppId\": null,\n      \"iconFile\": null,\n      \"iconCheckedAt\": null,\n      \"iconSharedAt\": null,\n      \"showNews\": false,\n      \"addedAt\": \"2026-10-21T10:00:00.000Z\",\n      \"lastOpenedAt\": null,\n      \"trashedAt\": \"2026-11-12T08:00:00.000Z\"\n    },\n    \"local-notes\": {\n      \"id\": \"local-notes\",\n      \"kind\": \"personal\",\n      \"catalogId\": null,\n      \"gameId\": null,\n      \"name\": \"Notes\",\n      \"icon\": {\n        \"kind\": \"monogram\",\n        \"text\": \"N\"\n      },\n      \"useOriginalIcon\": false,\n      \"steamAppId\": null,\n      \"iconFile\": null,\n      \"iconCheckedAt\": null,\n      \"iconSharedAt\": null,\n      \"showNews\": false,\n      \"addedAt\": \"2026-10-22T10:00:00.000Z\",\n      \"lastOpenedAt\": \"2026-11-14T09:00:00.000Z\",\n      \"trashedAt\": null\n    }\n  },\n  \"folders\": {\n    \"44444444-4444-4444-8444-444444444444\": {\n      \"id\": \"44444444-4444-4444-8444-444444444444\",\n      \"name\": \"Souls\",\n      \"label\": \"SL\",\n      \"workspaces\": [\n        \"elden-ring\"\n      ]\n    }\n  },\n  \"root\": [\n    {\n      \"kind\": \"workspace\",\n      \"id\": \"poe2\"\n    },\n    {\n      \"kind\": \"folder\",\n      \"id\": \"44444444-4444-4444-8444-444444444444\"\n    },\n    {\n      \"kind\": \"workspace\",\n      \"id\": \"local-notes\"\n    }\n  ],\n  \"favorites\": [\n    \"poe2\"\n  ],\n  \"sort\": \"manual\",\n  \"rail\": {\n    \"expanded\": true,\n    \"width\": 280\n  },\n  \"startup\": \"last-workspace\",\n  \"gameStart\": \"ask\",\n  \"gameEndWorkspaceId\": \"local-notes\",\n  \"grayscaleText\": false,\n  \"onlineSearch\": true,\n  \"autoUpdate\": true,\n  \"autoUpdateModules\": true,\n  \"steamIcons\": true,\n  \"moduleIcons\": true,\n  \"panelStyle\": \"framed\",\n  \"tabOverflow\": \"list\",\n  \"toasts\": \"bottom-right\",\n  \"streamOverlays\": true,\n  \"overlayPort\": 47820,\n  \"gameOverlays\": true,\n  \"overlaysStay\": true,\n  \"overlaySidebar\": \"right\",\n  \"moduleFilesFolder\": null,\n  \"developmentFolders\": [],\n  \"collapsedDevelopmentFolders\": [],\n  \"dialogFolders\": {},\n  \"moduleFolders\": {},\n  \"moduleNotesSeen\": {\n    \"official:tavora.notes\": \"1.4.0\"\n  },\n  \"steamProfile\": null,\n  \"iconsOffered\": [],\n  \"installId\": null,\n  \"askedModules\": [],\n  \"language\": \"en\",\n  \"profileRanks\": {\n    \"hidden\": false,\n    \"period\": \"week\"\n  },\n  \"profileBanner\": null,\n  \"theme\": {\n    \"id\": \"tavora.theme-default\",\n    \"variation\": \"dark\"\n  },\n  \"followSystem\": false,\n  \"radius\": 8,\n  \"onboarded\": true,\n  \"makesModules\": false,\n  \"seenVersion\": \"0.24.60\",\n  \"browser\": {\n    \"sharedSites\": [\n      \"poe2db.tw\"\n    ],\n    \"adblockOff\": []\n  },\n  \"lastWorkspaceId\": \"poe2\",\n  \"pc\": {}\n}"
+    },
+    "told": 0
+  },
+  "newer": {
+    "read": {
+      "somethingNew": {
+        "kept": true
+      },
+      "version": 2,
+      "workspaces": {
+        "poe2": {
+          "id": "poe2",
+          "kind": "game",
+          "catalogId": "poe2",
+          "gameId": null,
+          "name": "Path of Exile 2",
+          "icon": {
+            "kind": "monogram",
+            "text": "PE2"
+          },
+          "useOriginalIcon": true,
+          "steamAppId": 2694490,
+          "iconFile": null,
+          "iconCheckedAt": "2026-11-01T10:00:00.000Z",
+          "iconSharedAt": null,
+          "showNews": true,
+          "addedAt": "2026-10-14T10:00:00.000Z",
+          "lastOpenedAt": "2026-11-13T19:30:00.000Z",
+          "trashedAt": null
+        },
+        "elden-ring": {
+          "id": "elden-ring",
+          "kind": "game",
+          "catalogId": "elden-ring",
+          "gameId": null,
+          "name": "Elden Ring",
+          "icon": {
+            "kind": "monogram",
+            "text": "ER"
+          },
+          "useOriginalIcon": true,
+          "steamAppId": 1245620,
+          "iconFile": null,
+          "iconCheckedAt": null,
+          "iconSharedAt": null,
+          "showNews": true,
+          "addedAt": "2026-10-20T10:00:00.000Z",
+          "lastOpenedAt": null,
+          "trashedAt": null
+        },
+        "local-my-game": {
+          "id": "local-my-game",
+          "kind": "game",
+          "catalogId": null,
+          "gameId": null,
+          "name": "My Game",
+          "icon": {
+            "kind": "monogram",
+            "text": "MG"
+          },
+          "useOriginalIcon": false,
+          "steamAppId": null,
+          "iconFile": null,
+          "iconCheckedAt": null,
+          "iconSharedAt": null,
+          "showNews": false,
+          "addedAt": "2026-10-21T10:00:00.000Z",
+          "lastOpenedAt": null,
+          "trashedAt": "2026-11-12T08:00:00.000Z"
+        },
+        "local-notes": {
+          "id": "local-notes",
+          "kind": "personal",
+          "catalogId": null,
+          "gameId": null,
+          "name": "Notes",
+          "icon": {
+            "kind": "monogram",
+            "text": "N"
+          },
+          "useOriginalIcon": false,
+          "steamAppId": null,
+          "iconFile": null,
+          "iconCheckedAt": null,
+          "iconSharedAt": null,
+          "showNews": false,
+          "addedAt": "2026-10-22T10:00:00.000Z",
+          "lastOpenedAt": "2026-11-14T09:00:00.000Z",
+          "trashedAt": null
+        }
+      },
+      "folders": {
+        "44444444-4444-4444-8444-444444444444": {
+          "id": "44444444-4444-4444-8444-444444444444",
+          "name": "Souls",
+          "label": "SL",
+          "workspaces": [
+            "elden-ring"
+          ]
+        }
+      },
+      "root": [
+        {
+          "kind": "workspace",
+          "id": "poe2"
+        },
+        {
+          "kind": "folder",
+          "id": "44444444-4444-4444-8444-444444444444"
+        },
+        {
+          "kind": "workspace",
+          "id": "local-notes"
+        }
+      ],
+      "favorites": [
+        "poe2"
+      ],
+      "sort": "manual",
+      "rail": {
+        "expanded": true,
+        "width": 280
+      },
+      "startup": "last-workspace",
+      "gameStart": "ask",
+      "gameEndWorkspaceId": "local-notes",
+      "grayscaleText": false,
+      "onlineSearch": true,
+      "autoUpdate": true,
+      "autoUpdateModules": true,
+      "steamIcons": true,
+      "moduleIcons": true,
+      "panelStyle": "framed",
+      "tabOverflow": "list",
+      "toasts": "bottom-right",
+      "streamOverlays": true,
+      "overlayPort": 47820,
+      "gameOverlays": true,
+      "overlaysStay": true,
+      "overlaySidebar": "right",
+      "moduleFilesFolder": null,
+      "developmentFolders": [],
+      "collapsedDevelopmentFolders": [],
+      "dialogFolders": {},
+      "moduleFolders": {},
+      "moduleNotesSeen": {
+        "official:tavora.notes": "1.4.0"
+      },
+      "steamProfile": null,
+      "iconsOffered": [],
+      "installId": null,
+      "askedModules": [],
+      "language": "de",
+      "profileRanks": {
+        "hidden": false,
+        "period": "week"
+      },
+      "profileBanner": null,
+      "theme": {
+        "id": "tavora.theme-default",
+        "variation": "dark"
+      },
+      "followSystem": false,
+      "radius": 8,
+      "onboarded": true,
+      "makesModules": false,
+      "seenVersion": "0.24.60",
+      "browser": {
+        "sharedSites": [
+          "poe2db.tw"
+        ],
+        "adblockOff": []
+      },
+      "lastWorkspaceId": "poe2",
+      "pc": {}
+    },
+    "files": {
+      "library.json": "{\n  \"somethingNew\": {\n    \"kept\": true\n  },\n  \"version\": 2,\n  \"workspaces\": {\n    \"poe2\": {\n      \"id\": \"poe2\",\n      \"kind\": \"game\",\n      \"catalogId\": \"poe2\",\n      \"gameId\": null,\n      \"name\": \"Path of Exile 2\",\n      \"icon\": {\n        \"kind\": \"monogram\",\n        \"text\": \"PE2\"\n      },\n      \"useOriginalIcon\": true,\n      \"steamAppId\": 2694490,\n      \"iconFile\": null,\n      \"iconCheckedAt\": \"2026-11-01T10:00:00.000Z\",\n      \"iconSharedAt\": null,\n      \"showNews\": true,\n      \"addedAt\": \"2026-10-14T10:00:00.000Z\",\n      \"lastOpenedAt\": \"2026-11-13T19:30:00.000Z\",\n      \"trashedAt\": null\n    },\n    \"elden-ring\": {\n      \"id\": \"elden-ring\",\n      \"kind\": \"game\",\n      \"catalogId\": \"elden-ring\",\n      \"gameId\": null,\n      \"name\": \"Elden Ring\",\n      \"icon\": {\n        \"kind\": \"monogram\",\n        \"text\": \"ER\"\n      },\n      \"useOriginalIcon\": true,\n      \"steamAppId\": 1245620,\n      \"iconFile\": null,\n      \"iconCheckedAt\": null,\n      \"iconSharedAt\": null,\n      \"showNews\": true,\n      \"addedAt\": \"2026-10-20T10:00:00.000Z\",\n      \"lastOpenedAt\": null,\n      \"trashedAt\": null\n    },\n    \"local-my-game\": {\n      \"id\": \"local-my-game\",\n      \"kind\": \"game\",\n      \"catalogId\": null,\n      \"gameId\": null,\n      \"name\": \"My Game\",\n      \"icon\": {\n        \"kind\": \"monogram\",\n        \"text\": \"MG\"\n      },\n      \"useOriginalIcon\": false,\n      \"steamAppId\": null,\n      \"iconFile\": null,\n      \"iconCheckedAt\": null,\n      \"iconSharedAt\": null,\n      \"showNews\": false,\n      \"addedAt\": \"2026-10-21T10:00:00.000Z\",\n      \"lastOpenedAt\": null,\n      \"trashedAt\": \"2026-11-12T08:00:00.000Z\"\n    },\n    \"local-notes\": {\n      \"id\": \"local-notes\",\n      \"kind\": \"personal\",\n      \"catalogId\": null,\n      \"gameId\": null,\n      \"name\": \"Notes\",\n      \"icon\": {\n        \"kind\": \"monogram\",\n        \"text\": \"N\"\n      },\n      \"useOriginalIcon\": false,\n      \"steamAppId\": null,\n      \"iconFile\": null,\n      \"iconCheckedAt\": null,\n      \"iconSharedAt\": null,\n      \"showNews\": false,\n      \"addedAt\": \"2026-10-22T10:00:00.000Z\",\n      \"lastOpenedAt\": \"2026-11-14T09:00:00.000Z\",\n      \"trashedAt\": null\n    }\n  },\n  \"folders\": {\n    \"44444444-4444-4444-8444-444444444444\": {\n      \"id\": \"44444444-4444-4444-8444-444444444444\",\n      \"name\": \"Souls\",\n      \"label\": \"SL\",\n      \"workspaces\": [\n        \"elden-ring\"\n      ]\n    }\n  },\n  \"root\": [\n    {\n      \"kind\": \"workspace\",\n      \"id\": \"poe2\"\n    },\n    {\n      \"kind\": \"folder\",\n      \"id\": \"44444444-4444-4444-8444-444444444444\"\n    },\n    {\n      \"kind\": \"workspace\",\n      \"id\": \"local-notes\"\n    }\n  ],\n  \"favorites\": [\n    \"poe2\"\n  ],\n  \"sort\": \"manual\",\n  \"rail\": {\n    \"expanded\": true,\n    \"width\": 280\n  },\n  \"startup\": \"last-workspace\",\n  \"gameStart\": \"ask\",\n  \"gameEndWorkspaceId\": \"local-notes\",\n  \"grayscaleText\": false,\n  \"onlineSearch\": true,\n  \"autoUpdate\": true,\n  \"autoUpdateModules\": true,\n  \"steamIcons\": true,\n  \"moduleIcons\": true,\n  \"panelStyle\": \"framed\",\n  \"tabOverflow\": \"list\",\n  \"toasts\": \"bottom-right\",\n  \"streamOverlays\": true,\n  \"overlayPort\": 47820,\n  \"gameOverlays\": true,\n  \"overlaysStay\": true,\n  \"overlaySidebar\": \"right\",\n  \"moduleFilesFolder\": null,\n  \"developmentFolders\": [],\n  \"collapsedDevelopmentFolders\": [],\n  \"dialogFolders\": {},\n  \"moduleFolders\": {},\n  \"moduleNotesSeen\": {\n    \"official:tavora.notes\": \"1.4.0\"\n  },\n  \"steamProfile\": null,\n  \"iconsOffered\": [],\n  \"installId\": null,\n  \"askedModules\": [],\n  \"language\": \"en\",\n  \"profileRanks\": {\n    \"hidden\": false,\n    \"period\": \"week\"\n  },\n  \"profileBanner\": null,\n  \"theme\": {\n    \"id\": \"tavora.theme-default\",\n    \"variation\": \"dark\"\n  },\n  \"followSystem\": false,\n  \"radius\": 8,\n  \"onboarded\": true,\n  \"makesModules\": false,\n  \"seenVersion\": \"0.24.60\",\n  \"browser\": {\n    \"sharedSites\": [\n      \"poe2db.tw\"\n    ],\n    \"adblockOff\": []\n  },\n  \"lastWorkspaceId\": \"poe2\",\n  \"pc\": {}\n}",
+      "library.json.from-version-3": "{\n  \"version\": 3,\n  \"workspaces\": {\n    \"poe2\": {\n      \"id\": \"poe2\",\n      \"kind\": \"game\",\n      \"catalogId\": \"poe2\",\n      \"gameId\": null,\n      \"name\": \"Path of Exile 2\",\n      \"icon\": {\n        \"kind\": \"monogram\",\n        \"text\": \"PE2\"\n      },\n      \"useOriginalIcon\": true,\n      \"steamAppId\": 2694490,\n      \"iconFile\": null,\n      \"iconCheckedAt\": \"2026-11-01T10:00:00.000Z\",\n      \"iconSharedAt\": null,\n      \"showNews\": true,\n      \"addedAt\": \"2026-10-14T10:00:00.000Z\",\n      \"lastOpenedAt\": \"2026-11-13T19:30:00.000Z\",\n      \"trashedAt\": null\n    },\n    \"elden-ring\": {\n      \"id\": \"elden-ring\",\n      \"kind\": \"game\",\n      \"catalogId\": \"elden-ring\",\n      \"gameId\": null,\n      \"name\": \"Elden Ring\",\n      \"icon\": {\n        \"kind\": \"monogram\",\n        \"text\": \"ER\"\n      },\n      \"useOriginalIcon\": true,\n      \"steamAppId\": 1245620,\n      \"iconFile\": null,\n      \"iconCheckedAt\": null,\n      \"iconSharedAt\": null,\n      \"showNews\": true,\n      \"addedAt\": \"2026-10-20T10:00:00.000Z\",\n      \"lastOpenedAt\": null,\n      \"trashedAt\": null\n    },\n    \"local-my-game\": {\n      \"id\": \"local-my-game\",\n      \"kind\": \"game\",\n      \"catalogId\": null,\n      \"gameId\": null,\n      \"name\": \"My Game\",\n      \"icon\": {\n        \"kind\": \"monogram\",\n        \"text\": \"MG\"\n      },\n      \"useOriginalIcon\": false,\n      \"steamAppId\": null,\n      \"iconFile\": null,\n      \"iconCheckedAt\": null,\n      \"iconSharedAt\": null,\n      \"showNews\": false,\n      \"addedAt\": \"2026-10-21T10:00:00.000Z\",\n      \"lastOpenedAt\": null,\n      \"trashedAt\": \"2026-11-12T08:00:00.000Z\"\n    },\n    \"local-notes\": {\n      \"id\": \"local-notes\",\n      \"kind\": \"personal\",\n      \"catalogId\": null,\n      \"gameId\": null,\n      \"name\": \"Notes\",\n      \"icon\": {\n        \"kind\": \"monogram\",\n        \"text\": \"N\"\n      },\n      \"useOriginalIcon\": false,\n      \"steamAppId\": null,\n      \"iconFile\": null,\n      \"iconCheckedAt\": null,\n      \"iconSharedAt\": null,\n      \"showNews\": false,\n      \"addedAt\": \"2026-10-22T10:00:00.000Z\",\n      \"lastOpenedAt\": \"2026-11-14T09:00:00.000Z\",\n      \"trashedAt\": null\n    }\n  },\n  \"folders\": {\n    \"44444444-4444-4444-8444-444444444444\": {\n      \"id\": \"44444444-4444-4444-8444-444444444444\",\n      \"name\": \"Souls\",\n      \"label\": \"SL\",\n      \"workspaces\": [\n        \"elden-ring\"\n      ]\n    }\n  },\n  \"root\": [\n    {\n      \"kind\": \"workspace\",\n      \"id\": \"poe2\"\n    },\n    {\n      \"kind\": \"folder\",\n      \"id\": \"44444444-4444-4444-8444-444444444444\"\n    },\n    {\n      \"kind\": \"workspace\",\n      \"id\": \"local-notes\"\n    }\n  ],\n  \"favorites\": [\n    \"poe2\"\n  ],\n  \"sort\": \"manual\",\n  \"rail\": {\n    \"expanded\": true,\n    \"width\": 280\n  },\n  \"startup\": \"last-workspace\",\n  \"gameStart\": \"ask\",\n  \"gameEndWorkspaceId\": \"local-notes\",\n  \"grayscaleText\": false,\n  \"onlineSearch\": true,\n  \"autoUpdate\": true,\n  \"autoUpdateModules\": true,\n  \"steamIcons\": true,\n  \"moduleIcons\": true,\n  \"panelStyle\": \"framed\",\n  \"tabOverflow\": \"list\",\n  \"toasts\": \"bottom-right\",\n  \"streamOverlays\": true,\n  \"overlayPort\": 47820,\n  \"gameOverlays\": true,\n  \"overlaysStay\": true,\n  \"overlaySidebar\": \"right\",\n  \"moduleFilesFolder\": null,\n  \"developmentFolders\": [],\n  \"collapsedDevelopmentFolders\": [],\n  \"dialogFolders\": {},\n  \"moduleFolders\": {},\n  \"moduleNotesSeen\": {\n    \"official:tavora.notes\": \"1.4.0\"\n  },\n  \"steamProfile\": null,\n  \"iconsOffered\": [],\n  \"installId\": null,\n  \"askedModules\": [],\n  \"language\": \"de\",\n  \"profileRanks\": {\n    \"hidden\": false,\n    \"period\": \"week\"\n  },\n  \"profileBanner\": null,\n  \"theme\": {\n    \"id\": \"tavora.theme-default\",\n    \"variation\": \"dark\"\n  },\n  \"followSystem\": false,\n  \"radius\": 8,\n  \"onboarded\": true,\n  \"makesModules\": false,\n  \"seenVersion\": \"0.24.60\",\n  \"browser\": {\n    \"sharedSites\": [\n      \"poe2db.tw\"\n    ],\n    \"adblockOff\": []\n  },\n  \"lastWorkspaceId\": \"poe2\",\n  \"pc\": {},\n  \"somethingNew\": {\n    \"kept\": true\n  }\n}\n"
+    },
+    "told": 0
+  },
+  "damaged": {
+    "read": {
+      "version": 2,
+      "workspaces": {},
+      "folders": {},
+      "root": [],
+      "favorites": [],
+      "sort": "recent",
+      "rail": {
+        "expanded": false,
+        "width": 280
+      },
+      "startup": "last-workspace",
+      "gameStart": "show",
+      "gameEndWorkspaceId": null,
+      "grayscaleText": false,
+      "onlineSearch": true,
+      "autoUpdate": true,
+      "autoUpdateModules": false,
+      "steamIcons": true,
+      "moduleIcons": true,
+      "panelStyle": "framed",
+      "tabOverflow": "list",
+      "toasts": "bottom-center",
+      "streamOverlays": false,
+      "overlayPort": 47820,
+      "gameOverlays": false,
+      "overlaysStay": true,
+      "overlaySidebar": "right",
+      "moduleFilesFolder": null,
+      "developmentFolders": [],
+      "collapsedDevelopmentFolders": [],
+      "dialogFolders": {},
+      "moduleFolders": {},
+      "moduleNotesSeen": {},
+      "steamProfile": null,
+      "iconsOffered": [],
+      "installId": null,
+      "askedModules": [],
+      "language": "system",
+      "profileRanks": {
+        "hidden": false,
+        "period": "all"
+      },
+      "profileBanner": null,
+      "theme": {
+        "id": "tavora.default",
+        "variation": "dark"
+      },
+      "followSystem": true,
+      "radius": null,
+      "onboarded": false,
+      "makesModules": false,
+      "seenVersion": null,
+      "browser": {
+        "sharedSites": [],
+        "adblockOff": []
+      },
+      "lastWorkspaceId": null,
+      "pc": {}
+    },
+    "files": {
+      "library.json": "{\n  \"version\": 2,\n  \"workspaces\": {},\n  \"folders\": {},\n  \"root\": [],\n  \"favorites\": [],\n  \"sort\": \"recent\",\n  \"rail\": {\n    \"expanded\": false,\n    \"width\": 280\n  },\n  \"startup\": \"last-workspace\",\n  \"gameStart\": \"show\",\n  \"gameEndWorkspaceId\": null,\n  \"grayscaleText\": false,\n  \"onlineSearch\": true,\n  \"autoUpdate\": true,\n  \"autoUpdateModules\": false,\n  \"steamIcons\": true,\n  \"moduleIcons\": true,\n  \"panelStyle\": \"framed\",\n  \"tabOverflow\": \"list\",\n  \"toasts\": \"bottom-center\",\n  \"streamOverlays\": false,\n  \"overlayPort\": 47820,\n  \"gameOverlays\": false,\n  \"overlaysStay\": true,\n  \"overlaySidebar\": \"right\",\n  \"moduleFilesFolder\": null,\n  \"developmentFolders\": [],\n  \"collapsedDevelopmentFolders\": [],\n  \"dialogFolders\": {},\n  \"moduleFolders\": {},\n  \"moduleNotesSeen\": {},\n  \"steamProfile\": null,\n  \"iconsOffered\": [],\n  \"installId\": null,\n  \"askedModules\": [],\n  \"language\": \"en\",\n  \"profileRanks\": {\n    \"hidden\": false,\n    \"period\": \"all\"\n  },\n  \"profileBanner\": null,\n  \"theme\": {\n    \"id\": \"tavora.default\",\n    \"variation\": \"dark\"\n  },\n  \"followSystem\": true,\n  \"radius\": null,\n  \"onboarded\": false,\n  \"makesModules\": false,\n  \"seenVersion\": null,\n  \"browser\": {\n    \"sharedSites\": [],\n    \"adblockOff\": []\n  },\n  \"lastWorkspaceId\": null,\n  \"pc\": {}\n}",
+      "library.json.corrupt-<time>": "{ damaged"
+    },
+    "told": 1
+  },
+  "held": {
+    "outcome": "open threw EISDIR",
+    "files": {}
+  }
+}

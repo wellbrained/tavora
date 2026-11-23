@@ -1,0 +1,74 @@
+{
+  "empty": {
+    "read": null,
+    "files": {
+      "documents/build-1.json": "{\"version\":1,\"id\":\"build-1\",\"title\":\"Lightning Arrow\",\"revision\":1,\"updatedAt\":\"2026-11-23T10:00:00.000Z\",\"data\":{\"class\":\"Ranger\",\"level\":93}}",
+      "documents/index.json": "{\"version\":1,\"documents\":{\"build-1\":{\"id\":\"build-1\",\"title\":\"Lightning Arrow\",\"revision\":1,\"updatedAt\":\"2026-11-23T10:00:00.000Z\",\"bytes\":29}}}"
+    },
+    "told": 0
+  },
+  "sample": {
+    "read": {
+      "id": "build-1",
+      "title": "Lightning Arrow",
+      "revision": 1,
+      "updatedAt": "2026-11-14T21:02:27.566Z",
+      "data": {
+        "class": "Ranger",
+        "level": 92,
+        "gems": [
+          "Lightning Arrow",
+          "Barrage"
+        ]
+      },
+      "bytes": 66
+    },
+    "files": {
+      "documents/build-1.json": "{\"version\":1,\"id\":\"build-1\",\"title\":\"Lightning Arrow\",\"revision\":2,\"updatedAt\":\"2026-11-23T10:00:00.000Z\",\"data\":{\"class\":\"Ranger\",\"level\":93}}",
+      "documents/index.json": "{\"version\":1,\"documents\":{\"build-1\":{\"id\":\"build-1\",\"title\":\"Lightning Arrow\",\"revision\":2,\"updatedAt\":\"2026-11-23T10:00:00.000Z\",\"bytes\":29}}}"
+    },
+    "told": 0
+  },
+  "newer": {
+    "read": {
+      "id": "build-1",
+      "title": "Lightning Arrow",
+      "revision": 1,
+      "updatedAt": "2026-11-14T21:02:27.566Z",
+      "data": {
+        "class": "Ranger",
+        "level": 92,
+        "gems": [
+          "Lightning Arrow",
+          "Barrage"
+        ]
+      },
+      "somethingNew": {
+        "kept": true
+      },
+      "bytes": 66
+    },
+    "files": {
+      "documents/build-1.json": "{\"version\":1,\"id\":\"build-1\",\"title\":\"Lightning Arrow\",\"revision\":2,\"updatedAt\":\"2026-11-23T10:00:00.000Z\",\"data\":{\"class\":\"Ranger\",\"level\":93}}",
+      "documents/build-1.json.from-version-2": "{\n  \"version\": 2,\n  \"id\": \"build-1\",\n  \"title\": \"Lightning Arrow\",\n  \"revision\": 1,\n  \"updatedAt\": \"2026-11-14T21:02:27.566Z\",\n  \"data\": {\n    \"class\": \"Ranger\",\n    \"level\": 92,\n    \"gems\": [\n      \"Lightning Arrow\",\n      \"Barrage\"\n    ]\n  },\n  \"somethingNew\": {\n    \"kept\": true\n  }\n}\n",
+      "documents/index.json": "{\"version\":1,\"documents\":{\"build-1\":{\"id\":\"build-1\",\"title\":\"Lightning Arrow\",\"revision\":2,\"updatedAt\":\"2026-11-23T10:00:00.000Z\",\"bytes\":29}}}"
+    },
+    "told": 0
+  },
+  "damaged": {
+    "read": null,
+    "files": {
+      "documents/build-1.json": "{\"version\":1,\"id\":\"build-1\",\"title\":\"Lightning Arrow\",\"revision\":1,\"updatedAt\":\"2026-11-23T10:00:00.000Z\",\"data\":{\"class\":\"Ranger\",\"level\":93}}",
+      "documents/build-1.json.corrupt-<time>": "{ damaged",
+      "documents/index.json": "{\"version\":1,\"documents\":{\"build-1\":{\"id\":\"build-1\",\"title\":\"Lightning Arrow\",\"revision\":1,\"updatedAt\":\"2026-11-23T10:00:00.000Z\",\"bytes\":29}}}"
+    },
+    "told": 1
+  },
+  "held": {
+    "outcome": "changed",
+    "files": {
+      "documents/build-1.json": "{\"version\":1,\"id\":\"build-1\",\"title\":\"Lightning Arrow\",\"revision\":1,\"updatedAt\":\"2026-11-23T10:00:00.000Z\",\"data\":{\"class\":\"Ranger\",\"level\":93}}",
+      "documents/index.json": "{\"version\":1,\"documents\":{\"build-1\":{\"id\":\"build-1\",\"title\":\"Lightning Arrow\",\"revision\":1,\"updatedAt\":\"2026-11-23T10:00:00.000Z\",\"bytes\":29}}}"
+    }
+  }
+}

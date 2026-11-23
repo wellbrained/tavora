@@ -1,0 +1,52 @@
+{
+  "empty": {
+    "read": null,
+    "files": {
+      "grants.json": "{\n  \"version\": 1,\n  \"owners\": {\n    \"0123456789abcdef0123456789abcdef\": {\n      \"community.someone.timer\": {\n        \"version\": \"2.0.0\",\n        \"grantedAt\": \"2026-11-23T10:00:00.000Z\",\n        \"network\": [\n          \"api.timer.example\"\n        ],\n        \"connectors\": [],\n        \"folders\": []\n      }\n    }\n  }\n}\n"
+    },
+    "told": 0
+  },
+  "sample": {
+    "read": {
+      "version": "1.2.0",
+      "grantedAt": "2026-11-03T12:00:00.000Z",
+      "network": [
+        "api.example.com"
+      ],
+      "connectors": [],
+      "folders": []
+    },
+    "files": {
+      "grants.json": "{\n  \"version\": 1,\n  \"owners\": {\n    \"0123456789abcdef0123456789abcdef\": {\n      \"community.someone.tracker\": {\n        \"version\": \"1.2.0\",\n        \"grantedAt\": \"2026-11-03T12:00:00.000Z\",\n        \"network\": [\n          \"api.example.com\"\n        ],\n        \"connectors\": [],\n        \"folders\": []\n      },\n      \"community.someone.timer\": {\n        \"version\": \"2.0.0\",\n        \"grantedAt\": \"2026-11-23T10:00:00.000Z\",\n        \"network\": [\n          \"api.timer.example\"\n        ],\n        \"connectors\": [],\n        \"folders\": []\n      }\n    }\n  }\n}\n"
+    },
+    "told": 0
+  },
+  "newer": {
+    "read": {
+      "version": "1.2.0",
+      "grantedAt": "2026-11-03T12:00:00.000Z",
+      "network": [
+        "api.example.com"
+      ],
+      "connectors": [],
+      "folders": []
+    },
+    "files": {
+      "grants.json": "{\n  \"version\": 1,\n  \"owners\": {\n    \"0123456789abcdef0123456789abcdef\": {\n      \"community.someone.tracker\": {\n        \"version\": \"1.2.0\",\n        \"grantedAt\": \"2026-11-03T12:00:00.000Z\",\n        \"network\": [\n          \"api.example.com\"\n        ],\n        \"connectors\": [],\n        \"folders\": []\n      },\n      \"community.someone.timer\": {\n        \"version\": \"2.0.0\",\n        \"grantedAt\": \"2026-11-23T10:00:00.000Z\",\n        \"network\": [\n          \"api.timer.example\"\n        ],\n        \"connectors\": [],\n        \"folders\": []\n      }\n    }\n  }\n}\n",
+      "grants.json.from-version-2": "{\n  \"version\": 2,\n  \"owners\": {\n    \"0123456789abcdef0123456789abcdef\": {\n      \"community.someone.tracker\": {\n        \"version\": \"1.2.0\",\n        \"grantedAt\": \"2026-11-03T12:00:00.000Z\",\n        \"network\": [\n          \"api.example.com\"\n        ],\n        \"connectors\": [],\n        \"folders\": []\n      }\n    }\n  },\n  \"somethingNew\": {\n    \"kept\": true\n  }\n}\n"
+    },
+    "told": 0
+  },
+  "damaged": {
+    "read": null,
+    "files": {
+      "grants.json": "{\n  \"version\": 1,\n  \"owners\": {\n    \"0123456789abcdef0123456789abcdef\": {\n      \"community.someone.timer\": {\n        \"version\": \"2.0.0\",\n        \"grantedAt\": \"2026-11-23T10:00:00.000Z\",\n        \"network\": [\n          \"api.timer.example\"\n        ],\n        \"connectors\": [],\n        \"folders\": []\n      }\n    }\n  }\n}\n",
+      "grants.json.corrupt-<time>": "{ damaged"
+    },
+    "told": 1
+  },
+  "held": {
+    "outcome": "open threw EISDIR",
+    "files": {}
+  }
+}

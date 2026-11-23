@@ -1,0 +1,57 @@
+{
+  "empty": {
+    "read": {},
+    "files": {},
+    "told": 0
+  },
+  "sample": {
+    "read": {
+      "wellbrained.poe2-builds": {
+        "id": "wellbrained.poe2-builds",
+        "owner": "0123456789abcdef0123456789abcdef",
+        "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "signedSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "catalog": true
+      },
+      "local.notes": {
+        "id": "local.notes",
+        "owner": "local"
+      }
+    },
+    "files": {
+      "module-owners.json": "{\n  \"version\": 1,\n  \"folders\": {\n    \"wellbrained.poe2-builds\": {\n      \"id\": \"wellbrained.poe2-builds\",\n      \"owner\": \"0123456789abcdef0123456789abcdef\",\n      \"sha256\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\n      \"signedSha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\n      \"catalog\": true\n    }\n  }\n}\n"
+    },
+    "told": 0
+  },
+  "newer": {
+    "read": {
+      "wellbrained.poe2-builds": {
+        "id": "wellbrained.poe2-builds",
+        "owner": "0123456789abcdef0123456789abcdef",
+        "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "signedSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "catalog": true
+      },
+      "local.notes": {
+        "id": "local.notes",
+        "owner": "local"
+      }
+    },
+    "files": {
+      "module-owners.json": "{\n  \"version\": 1,\n  \"folders\": {\n    \"wellbrained.poe2-builds\": {\n      \"id\": \"wellbrained.poe2-builds\",\n      \"owner\": \"0123456789abcdef0123456789abcdef\",\n      \"sha256\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\n      \"signedSha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\n      \"catalog\": true\n    }\n  }\n}\n",
+      "module-owners.json.from-version-2": "{\n  \"version\": 2,\n  \"folders\": {\n    \"wellbrained.poe2-builds\": {\n      \"id\": \"wellbrained.poe2-builds\",\n      \"owner\": \"0123456789abcdef0123456789abcdef\",\n      \"sha256\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\n      \"signedSha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\n      \"catalog\": true\n    },\n    \"local.notes\": {\n      \"id\": \"local.notes\",\n      \"owner\": \"local\"\n    }\n  },\n  \"somethingNew\": {\n    \"kept\": true\n  }\n}\n"
+    },
+    "told": 0
+  },
+  "damaged": {
+    "read": {},
+    "files": {
+      "module-owners.json.corrupt-<time>": "{ damaged"
+    },
+    "told": 1
+  },
+  "held": {
+    "outcome": "changed",
+    "files": {}
+  }
+}

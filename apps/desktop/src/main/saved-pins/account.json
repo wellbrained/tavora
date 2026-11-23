@@ -1,0 +1,43 @@
+{
+  "empty": {
+    "read": null,
+    "files": {
+      "account.json": "{\"v\":1,\"data\":\"IXguNTE/NHhgeC4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLnh2eD83OzM2eGB4NDMxGj8iOzcqNj90OTU3eHZ4PjMpOTUoPnhgNC82NnZ4OSg/Oy4/PhsueGB4aGpobHdra3dqaw5qamBqamBqanRqamoAeCc=\"}"
+    },
+    "told": 0
+  },
+  "sample": {
+    "read": {
+      "token": "ssssssssssssssssssssssss",
+      "email": "old@example.com",
+      "discord": "nik",
+      "createdAt": "2026-10-01T00:00:00.000Z"
+    },
+    "files": {
+      "account.json": "{\"v\":1,\"data\":\"IXguNTE/NHhgeC4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLnh2eD83OzM2eGB4NDMxGj8iOzcqNj90OTU3eHZ4PjMpOTUoPnhgNC82NnZ4OSg/Oy4/PhsueGB4aGpobHdra3dqaw5qamBqamBqanRqamoAeCc=\"}"
+    },
+    "told": 0
+  },
+  "newer": {
+    "read": null,
+    "files": {
+      "account.json": "{\"v\":1,\"data\":\"IXguNTE/NHhgeC4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLnh2eD83OzM2eGB4NDMxGj8iOzcqNj90OTU3eHZ4PjMpOTUoPnhgNC82NnZ4OSg/Oy4/PhsueGB4aGpobHdra3dqaw5qamBqamBqanRqamoAeCc=\"}",
+      "account.json.from-version-2": "{\n  \"v\": 2,\n  \"data\": \"IXguNTE/NHhgeCkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKXh2eD83OzM2eGB4NTY+Gj8iOzcqNj90OTU3eHZ4PjMpOTUoPnhgeDQzMXh2eDkoPzsuPz4bLnhgeGhqaGx3a2p3amsOampgampgamp0ampqAHgn\",\n  \"somethingNew\": {\n    \"kept\": true\n  }\n}\n"
+    },
+    "told": 0
+  },
+  "damaged": {
+    "read": null,
+    "files": {
+      "account.json": "{\"v\":1,\"data\":\"IXguNTE/NHhgeC4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLnh2eD83OzM2eGB4NDMxGj8iOzcqNj90OTU3eHZ4PjMpOTUoPnhgNC82NnZ4OSg/Oy4/PhsueGB4aGpobHdra3dqaw5qamBqamBqanRqamoAeCc=\"}",
+      "account.json.corrupt-<time>": "{ damaged"
+    },
+    "told": 1
+  },
+  "held": {
+    "outcome": "changed",
+    "files": {
+      "account.json": "{\"v\":1,\"data\":\"IXguNTE/NHhgeC4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLnh2eD83OzM2eGB4NDMxGj8iOzcqNj90OTU3eHZ4PjMpOTUoPnhgNC82NnZ4OSg/Oy4/PhsueGB4aGpobHdra3dqaw5qamBqamBqanRqamoAeCc=\"}"
+    }
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "empty": {
+    "read": {
+      "token": null,
+      "last": null,
+      "games": {}
+    },
+    "files": {
+      "discord.json": "{\"v\":1,\"data\":\"IXguNTE/NHhgIXg7OTk/KSkONTE/NHhgeDt4dngoPzwoPykyDjUxPzR4YHgoeHZ4PyIqMyg/KRsueGBrJ3Z4NjspLnhgNC82NnZ4PTs3Pyl4YCEnJw==\"}"
+    },
+    "told": 0
+  },
+  "sample": {
+    "read": {
+      "token": {
+        "accessToken": "x",
+        "refreshToken": "y",
+        "expiresAt": 2
+      },
+      "last": null,
+      "games": {}
+    },
+    "files": {
+      "discord.json": "{\"v\":1,\"data\":\"IXguNTE/NHhgIXg7OTk/KSkONTE/NHhgeDt4dngoPzwoPykyDjUxPzR4YHgoeHZ4PyIqMyg/KRsueGBrJ3Z4NjspLnhgNC82NnZ4PTs3Pyl4YCEnJw==\"}"
+    },
+    "told": 0
+  },
+  "newer": {
+    "read": {
+      "token": null,
+      "last": null,
+      "games": {}
+    },
+    "files": {
+      "discord.json": "{\"v\":1,\"data\":\"IXguNTE/NHhgIXg7OTk/KSkONTE/NHhgeDt4dngoPzwoPykyDjUxPzR4YHgoeHZ4PyIqMyg/KRsueGBrJ3Z4NjspLnhgNC82NnZ4PTs3Pyl4YCEnJw==\"}",
+      "discord.json.from-version-2": "{\n  \"v\": 2,\n  \"data\": \"IXguNTE/NHhgIXg7OTk/KSkONTE/NHhgeCJ4dngoPzwoPykyDjUxPzR4YHgjeHZ4PyIqMyg/KRsueGBoJ3Z4NjspLnhgNC82NnZ4PTs3Pyl4YCEnJw==\",\n  \"somethingNew\": {\n    \"kept\": true\n  }\n}\n"
+    },
+    "told": 0
+  },
+  "damaged": {
+    "read": {
+      "token": null,
+      "last": null,
+      "games": {}
+    },
+    "files": {
+      "discord.json": "{\"v\":1,\"data\":\"IXguNTE/NHhgIXg7OTk/KSkONTE/NHhgeDt4dngoPzwoPykyDjUxPzR4YHgoeHZ4PyIqMyg/KRsueGBrJ3Z4NjspLnhgNC82NnZ4PTs3Pyl4YCEnJw==\"}",
+      "discord.json.corrupt-<time>": "{ damaged"
+    },
+    "told": 1
+  },
+  "held": {
+    "outcome": "changed",
+    "files": {
+      "discord.json": "{\"v\":1,\"data\":\"IXguNTE/NHhgIXg7OTk/KSkONTE/NHhgeDt4dngoPzwoPykyDjUxPzR4YHgoeHZ4PyIqMyg/KRsueGBrJ3Z4NjspLnhgNC82NnZ4PTs3Pyl4YCEnJw==\"}"
+    }
+  }
+}

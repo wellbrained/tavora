@@ -1,0 +1,38 @@
+{
+  "empty": {
+    "read": null,
+    "files": {
+      "folder-access/local/local.game/folders.json": "{\"version\":1,\"Documents/My Games/Elden Ring\":\"%USERDATA%/Elden Ring\"}"
+    },
+    "told": 0
+  },
+  "sample": {
+    "read": "%USERDATA%/Path of Exile 2",
+    "files": {
+      "folder-access/local/local.game/folders.json": "{\"version\":1,\"Documents/My Games/Path of Exile 2\":\"%USERDATA%/Path of Exile 2\",\"Documents/My Games/Elden Ring\":\"%USERDATA%/Elden Ring\"}"
+    },
+    "told": 0
+  },
+  "newer": {
+    "read": "%USERDATA%/Path of Exile 2",
+    "files": {
+      "folder-access/local/local.game/folders.json": "{\"version\":1,\"Documents/My Games/Path of Exile 2\":\"%USERDATA%/Path of Exile 2\",\"Documents/My Games/Elden Ring\":\"%USERDATA%/Elden Ring\"}",
+      "folder-access/local/local.game/folders.json.from-version-2": "{\n  \"version\": 2,\n  \"Documents/My Games/Path of Exile 2\": \"%USERDATA%/Path of Exile 2\",\n  \"somethingNew\": {\n    \"kept\": true\n  }\n}\n"
+    },
+    "told": 0
+  },
+  "damaged": {
+    "read": null,
+    "files": {
+      "folder-access/local/local.game/folders.json": "{\"version\":1,\"Documents/My Games/Elden Ring\":\"%USERDATA%/Elden Ring\"}",
+      "folder-access/local/local.game/folders.json.corrupt-<time>": "{ damaged"
+    },
+    "told": 1
+  },
+  "held": {
+    "outcome": "changed",
+    "files": {
+      "folder-access/local/local.game/folders.json": "{\"version\":1,\"Documents/My Games/Elden Ring\":\"%USERDATA%/Elden Ring\"}"
+    }
+  }
+}

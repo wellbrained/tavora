@@ -1,0 +1,36 @@
+{
+  "empty": {
+    "read": null,
+    "files": {
+      "game-overlays.json": "{\n  \"version\": 5,\n  \"exclusiveHintShown\": true,\n  \"layout\": {\n    \"grid\": \"normal\",\n    \"seen\": {},\n    \"toolbar\": {\n      \"show\": true,\n      \"buttons\": [\n        \"settings\",\n        \"hide\",\n        \"reset\",\n        \"reset-size\",\n        \"remove\"\n      ]\n    }\n  },\n  \"setups\": [\n    {\n      \"id\": \"$everywhere\",\n      \"overlays\": [],\n      \"panels\": []\n    },\n    {\n      \"id\": \"$all\",\n      \"overlays\": [],\n      \"panels\": []\n    }\n  ]\n}\n"
+    },
+    "told": 0
+  },
+  "sample": {
+    "read": null,
+    "files": {
+      "game-overlays.json": "{\n  \"version\": 5,\n  \"exclusiveHintShown\": true,\n  \"layout\": {\n    \"grid\": \"normal\",\n    \"seen\": {},\n    \"toolbar\": {\n      \"show\": true,\n      \"buttons\": [\n        \"settings\",\n        \"hide\",\n        \"reset\",\n        \"reset-size\",\n        \"remove\"\n      ]\n    }\n  },\n  \"setups\": [\n    {\n      \"id\": \"$everywhere\",\n      \"overlays\": [],\n      \"panels\": []\n    },\n    {\n      \"id\": \"$all\",\n      \"overlays\": [],\n      \"panels\": []\n    },\n    {\n      \"id\": \"poe2\",\n      \"overlays\": [\n        {\n          \"owner\": \"official\",\n          \"moduleId\": \"tavora.clock-counter\",\n          \"workspaceId\": \"poe2\",\n          \"key\": \"deaths\",\n          \"mode\": \"always\",\n          \"opacity\": 100,\n          \"hideFromCapture\": false,\n          \"anchor\": {\n            \"h\": \"left\",\n            \"v\": \"top\",\n            \"x\": 0.036,\n            \"y\": 0.03,\n            \"width\": 0.356,\n            \"height\": 0.16\n          }\n        }\n      ],\n      \"panels\": [\n        {\n          \"owner\": \"official\",\n          \"moduleId\": \"tavora.notes\",\n          \"workspaceId\": \"poe2\",\n          \"instanceId\": \"11111111-1111-4111-8111-111111111111\",\n          \"mode\": \"always\",\n          \"opacity\": 100,\n          \"hideFromCapture\": false,\n          \"anchor\": {\n            \"h\": \"left\",\n            \"v\": \"top\",\n            \"x\": 0.036,\n            \"y\": 0.45000000000000007,\n            \"width\": 0.39,\n            \"height\": 0.4\n          }\n        }\n      ]\n    }\n  ]\n}\n"
+    },
+    "told": 0
+  },
+  "newer": {
+    "read": null,
+    "files": {
+      "game-overlays.json": "{\n  \"version\": 5,\n  \"exclusiveHintShown\": true,\n  \"layout\": {\n    \"grid\": \"normal\",\n    \"seen\": {},\n    \"toolbar\": {\n      \"show\": true,\n      \"buttons\": [\n        \"settings\",\n        \"hide\",\n        \"reset\",\n        \"reset-size\",\n        \"remove\"\n      ]\n    }\n  },\n  \"setups\": [\n    {\n      \"id\": \"$everywhere\",\n      \"overlays\": [],\n      \"panels\": []\n    },\n    {\n      \"id\": \"$all\",\n      \"overlays\": [],\n      \"panels\": []\n    },\n    {\n      \"id\": \"poe2\",\n      \"overlays\": [\n        {\n          \"owner\": \"official\",\n          \"moduleId\": \"tavora.clock-counter\",\n          \"workspaceId\": \"poe2\",\n          \"key\": \"deaths\",\n          \"mode\": \"always\",\n          \"opacity\": 100,\n          \"hideFromCapture\": false,\n          \"anchor\": {\n            \"h\": \"left\",\n            \"v\": \"top\",\n            \"x\": 0.036,\n            \"y\": 0.03,\n            \"width\": 0.356,\n            \"height\": 0.16\n          }\n        }\n      ],\n      \"panels\": [\n        {\n          \"owner\": \"official\",\n          \"moduleId\": \"tavora.notes\",\n          \"workspaceId\": \"poe2\",\n          \"instanceId\": \"11111111-1111-4111-8111-111111111111\",\n          \"mode\": \"always\",\n          \"opacity\": 100,\n          \"hideFromCapture\": false,\n          \"anchor\": {\n            \"h\": \"left\",\n            \"v\": \"top\",\n            \"x\": 0.036,\n            \"y\": 0.45000000000000007,\n            \"width\": 0.39,\n            \"height\": 0.4\n          }\n        }\n      ]\n    }\n  ]\n}\n",
+      "game-overlays.json.from-version-6": "{\n  \"version\": 6,\n  \"exclusiveHintShown\": false,\n  \"layout\": {\n    \"grid\": \"normal\",\n    \"seen\": {},\n    \"toolbar\": {\n      \"show\": true,\n      \"buttons\": [\n        \"settings\",\n        \"hide\",\n        \"reset\",\n        \"reset-size\",\n        \"remove\"\n      ]\n    }\n  },\n  \"setups\": [\n    {\n      \"id\": \"$everywhere\",\n      \"overlays\": [],\n      \"panels\": []\n    },\n    {\n      \"id\": \"$all\",\n      \"overlays\": [],\n      \"panels\": []\n    },\n    {\n      \"id\": \"poe2\",\n      \"overlays\": [\n        {\n          \"owner\": \"official\",\n          \"moduleId\": \"tavora.clock-counter\",\n          \"workspaceId\": \"poe2\",\n          \"key\": \"deaths\",\n          \"mode\": \"always\",\n          \"opacity\": 100,\n          \"hideFromCapture\": false,\n          \"anchor\": {\n            \"h\": \"left\",\n            \"v\": \"top\",\n            \"x\": 0.036,\n            \"y\": 0.03,\n            \"width\": 0.356,\n            \"height\": 0.16\n          }\n        }\n      ],\n      \"panels\": [\n        {\n          \"owner\": \"official\",\n          \"moduleId\": \"tavora.notes\",\n          \"workspaceId\": \"poe2\",\n          \"instanceId\": \"11111111-1111-4111-8111-111111111111\",\n          \"mode\": \"always\",\n          \"opacity\": 100,\n          \"hideFromCapture\": false,\n          \"anchor\": {\n            \"h\": \"left\",\n            \"v\": \"top\",\n            \"x\": 0.036,\n            \"y\": 0.45000000000000007,\n            \"width\": 0.39,\n            \"height\": 0.4\n          }\n        }\n      ]\n    }\n  ],\n  \"somethingNew\": {\n    \"kept\": true\n  }\n}\n"
+    },
+    "told": 0
+  },
+  "damaged": {
+    "read": null,
+    "files": {
+      "game-overlays.json": "{\n  \"version\": 5,\n  \"exclusiveHintShown\": true,\n  \"layout\": {\n    \"grid\": \"normal\",\n    \"seen\": {},\n    \"toolbar\": {\n      \"show\": true,\n      \"buttons\": [\n        \"settings\",\n        \"hide\",\n        \"reset\",\n        \"reset-size\",\n        \"remove\"\n      ]\n    }\n  },\n  \"setups\": [\n    {\n      \"id\": \"$everywhere\",\n      \"overlays\": [],\n      \"panels\": []\n    },\n    {\n      \"id\": \"$all\",\n      \"overlays\": [],\n      \"panels\": []\n    }\n  ]\n}\n",
+      "game-overlays.json.corrupt-<time>": "{ damaged"
+    },
+    "told": 1
+  },
+  "held": {
+    "outcome": "open threw EISDIR",
+    "files": {}
+  }
+}

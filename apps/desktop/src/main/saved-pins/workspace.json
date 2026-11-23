@@ -1,0 +1,269 @@
+{
+  "empty": {
+    "read": {
+      "version": 3,
+      "workspaces": {
+        "poe2": {
+          "instances": [],
+          "layout": null,
+          "snapshots": []
+        },
+        "local-notes": {
+          "instances": [],
+          "layout": null,
+          "snapshots": []
+        }
+      }
+    },
+    "files": {
+      "workspace.json": "{\n  \"version\": 3,\n  \"workspaces\": {\n    \"poe2\": {\n      \"instances\": [],\n      \"layout\": null,\n      \"snapshots\": []\n    },\n    \"local-notes\": {\n      \"instances\": [],\n      \"layout\": null,\n      \"snapshots\": []\n    }\n  }\n}"
+    },
+    "told": 0
+  },
+  "sample": {
+    "read": {
+      "version": 3,
+      "workspaces": {
+        "poe2": {
+          "instances": [
+            {
+              "instanceId": "11111111-1111-4111-8111-111111111111",
+              "moduleId": "tavora.notes",
+              "content": {
+                "id": "build-notes",
+                "title": "Build notes"
+              }
+            },
+            {
+              "instanceId": "22222222-2222-4222-8222-222222222222",
+              "moduleId": "wellbrained.poe2-builds",
+              "panelType": "planner"
+            }
+          ],
+          "layout": {
+            "width": 1200,
+            "height": 800,
+            "direction": "row",
+            "root": {
+              "kind": "split",
+              "size": 800,
+              "children": [
+                {
+                  "kind": "group",
+                  "size": 600,
+                  "panels": [
+                    "11111111-1111-4111-8111-111111111111"
+                  ],
+                  "active": "11111111-1111-4111-8111-111111111111"
+                },
+                {
+                  "kind": "group",
+                  "size": 600,
+                  "panels": [
+                    "22222222-2222-4222-8222-222222222222"
+                  ],
+                  "active": "22222222-2222-4222-8222-222222222222"
+                }
+              ]
+            }
+          },
+          "snapshots": [
+            {
+              "id": "33333333-3333-4333-8333-333333333333",
+              "name": "Mapping",
+              "savedAt": "2026-11-02T18:00:00.000Z",
+              "layout": {
+                "width": 1200,
+                "height": 800,
+                "direction": "row",
+                "root": {
+                  "kind": "split",
+                  "size": 800,
+                  "children": [
+                    {
+                      "kind": "group",
+                      "size": 600,
+                      "panels": [
+                        "11111111-1111-4111-8111-111111111111"
+                      ],
+                      "active": "11111111-1111-4111-8111-111111111111"
+                    },
+                    {
+                      "kind": "group",
+                      "size": 600,
+                      "panels": [
+                        "22222222-2222-4222-8222-222222222222"
+                      ],
+                      "active": "22222222-2222-4222-8222-222222222222"
+                    }
+                  ]
+                }
+              },
+              "modules": {
+                "11111111-1111-4111-8111-111111111111": "tavora.notes",
+                "22222222-2222-4222-8222-222222222222": "wellbrained.poe2-builds"
+              },
+              "panelTypes": {
+                "22222222-2222-4222-8222-222222222222": "planner"
+              }
+            }
+          ]
+        },
+        "local-notes": {
+          "instances": [],
+          "layout": null,
+          "snapshots": []
+        }
+      },
+      "unlisted": {
+        "elden-ring": {
+          "instances": [],
+          "layout": null,
+          "snapshots": []
+        }
+      }
+    },
+    "files": {
+      "workspace.json": "{\n  \"version\": 3,\n  \"workspaces\": {\n    \"elden-ring\": {\n      \"instances\": [],\n      \"layout\": null,\n      \"snapshots\": []\n    },\n    \"poe2\": {\n      \"instances\": [\n        {\n          \"instanceId\": \"11111111-1111-4111-8111-111111111111\",\n          \"moduleId\": \"tavora.notes\",\n          \"content\": {\n            \"id\": \"build-notes\",\n            \"title\": \"Build notes\"\n          }\n        },\n        {\n          \"instanceId\": \"22222222-2222-4222-8222-222222222222\",\n          \"moduleId\": \"wellbrained.poe2-builds\",\n          \"panelType\": \"planner\"\n        }\n      ],\n      \"layout\": {\n        \"width\": 1200,\n        \"height\": 800,\n        \"direction\": \"row\",\n        \"root\": {\n          \"kind\": \"split\",\n          \"size\": 800,\n          \"children\": [\n            {\n              \"kind\": \"group\",\n              \"size\": 600,\n              \"panels\": [\n                \"11111111-1111-4111-8111-111111111111\"\n              ],\n              \"active\": \"11111111-1111-4111-8111-111111111111\"\n            },\n            {\n              \"kind\": \"group\",\n              \"size\": 600,\n              \"panels\": [\n                \"22222222-2222-4222-8222-222222222222\"\n              ],\n              \"active\": \"22222222-2222-4222-8222-222222222222\"\n            }\n          ]\n        }\n      },\n      \"snapshots\": [\n        {\n          \"id\": \"33333333-3333-4333-8333-333333333333\",\n          \"name\": \"Mapping\",\n          \"savedAt\": \"2026-11-02T18:00:00.000Z\",\n          \"layout\": {\n            \"width\": 1200,\n            \"height\": 800,\n            \"direction\": \"row\",\n            \"root\": {\n              \"kind\": \"split\",\n              \"size\": 800,\n              \"children\": [\n                {\n                  \"kind\": \"group\",\n                  \"size\": 600,\n                  \"panels\": [\n                    \"11111111-1111-4111-8111-111111111111\"\n                  ],\n                  \"active\": \"11111111-1111-4111-8111-111111111111\"\n                },\n                {\n                  \"kind\": \"group\",\n                  \"size\": 600,\n                  \"panels\": [\n                    \"22222222-2222-4222-8222-222222222222\"\n                  ],\n                  \"active\": \"22222222-2222-4222-8222-222222222222\"\n                }\n              ]\n            }\n          },\n          \"modules\": {\n            \"11111111-1111-4111-8111-111111111111\": \"tavora.notes\",\n            \"22222222-2222-4222-8222-222222222222\": \"wellbrained.poe2-builds\"\n          },\n          \"panelTypes\": {\n            \"22222222-2222-4222-8222-222222222222\": \"planner\"\n          }\n        }\n      ]\n    },\n    \"local-notes\": {\n      \"instances\": [],\n      \"layout\": null,\n      \"snapshots\": []\n    }\n  }\n}"
+    },
+    "told": 0
+  },
+  "newer": {
+    "read": {
+      "somethingNew": {
+        "kept": true
+      },
+      "version": 3,
+      "workspaces": {
+        "poe2": {
+          "instances": [
+            {
+              "instanceId": "11111111-1111-4111-8111-111111111111",
+              "moduleId": "tavora.notes",
+              "content": {
+                "id": "build-notes",
+                "title": "Build notes"
+              }
+            },
+            {
+              "instanceId": "22222222-2222-4222-8222-222222222222",
+              "moduleId": "wellbrained.poe2-builds",
+              "panelType": "planner"
+            }
+          ],
+          "layout": {
+            "width": 1200,
+            "height": 800,
+            "direction": "row",
+            "root": {
+              "kind": "split",
+              "size": 800,
+              "children": [
+                {
+                  "kind": "group",
+                  "size": 600,
+                  "panels": [
+                    "11111111-1111-4111-8111-111111111111"
+                  ],
+                  "active": "11111111-1111-4111-8111-111111111111"
+                },
+                {
+                  "kind": "group",
+                  "size": 600,
+                  "panels": [
+                    "22222222-2222-4222-8222-222222222222"
+                  ],
+                  "active": "22222222-2222-4222-8222-222222222222"
+                }
+              ]
+            }
+          },
+          "snapshots": [
+            {
+              "id": "33333333-3333-4333-8333-333333333333",
+              "name": "Mapping",
+              "savedAt": "2026-11-02T18:00:00.000Z",
+              "layout": {
+                "width": 1200,
+                "height": 800,
+                "direction": "row",
+                "root": {
+                  "kind": "split",
+                  "size": 800,
+                  "children": [
+                    {
+                      "kind": "group",
+                      "size": 600,
+                      "panels": [
+                        "11111111-1111-4111-8111-111111111111"
+                      ],
+                      "active": "11111111-1111-4111-8111-111111111111"
+                    },
+                    {
+                      "kind": "group",
+                      "size": 600,
+                      "panels": [
+                        "22222222-2222-4222-8222-222222222222"
+                      ],
+                      "active": "22222222-2222-4222-8222-222222222222"
+                    }
+                  ]
+                }
+              },
+              "modules": {
+                "11111111-1111-4111-8111-111111111111": "tavora.notes",
+                "22222222-2222-4222-8222-222222222222": "wellbrained.poe2-builds"
+              },
+              "panelTypes": {
+                "22222222-2222-4222-8222-222222222222": "planner"
+              }
+            }
+          ]
+        },
+        "local-notes": {
+          "instances": [],
+          "layout": null,
+          "snapshots": []
+        }
+      },
+      "unlisted": {
+        "elden-ring": {
+          "instances": [],
+          "layout": null,
+          "snapshots": []
+        }
+      }
+    },
+    "files": {
+      "workspace.json": "{\n  \"somethingNew\": {\n    \"kept\": true\n  },\n  \"version\": 3,\n  \"workspaces\": {\n    \"elden-ring\": {\n      \"instances\": [],\n      \"layout\": null,\n      \"snapshots\": []\n    },\n    \"poe2\": {\n      \"instances\": [\n        {\n          \"instanceId\": \"11111111-1111-4111-8111-111111111111\",\n          \"moduleId\": \"tavora.notes\",\n          \"content\": {\n            \"id\": \"build-notes\",\n            \"title\": \"Build notes\"\n          }\n        },\n        {\n          \"instanceId\": \"22222222-2222-4222-8222-222222222222\",\n          \"moduleId\": \"wellbrained.poe2-builds\",\n          \"panelType\": \"planner\"\n        }\n      ],\n      \"layout\": {\n        \"width\": 1200,\n        \"height\": 800,\n        \"direction\": \"row\",\n        \"root\": {\n          \"kind\": \"split\",\n          \"size\": 800,\n          \"children\": [\n            {\n              \"kind\": \"group\",\n              \"size\": 600,\n              \"panels\": [\n                \"11111111-1111-4111-8111-111111111111\"\n              ],\n              \"active\": \"11111111-1111-4111-8111-111111111111\"\n            },\n            {\n              \"kind\": \"group\",\n              \"size\": 600,\n              \"panels\": [\n                \"22222222-2222-4222-8222-222222222222\"\n              ],\n              \"active\": \"22222222-2222-4222-8222-222222222222\"\n            }\n          ]\n        }\n      },\n      \"snapshots\": [\n        {\n          \"id\": \"33333333-3333-4333-8333-333333333333\",\n          \"name\": \"Mapping\",\n          \"savedAt\": \"2026-11-02T18:00:00.000Z\",\n          \"layout\": {\n            \"width\": 1200,\n            \"height\": 800,\n            \"direction\": \"row\",\n            \"root\": {\n              \"kind\": \"split\",\n              \"size\": 800,\n              \"children\": [\n                {\n                  \"kind\": \"group\",\n                  \"size\": 600,\n                  \"panels\": [\n                    \"11111111-1111-4111-8111-111111111111\"\n                  ],\n                  \"active\": \"11111111-1111-4111-8111-111111111111\"\n                },\n                {\n                  \"kind\": \"group\",\n                  \"size\": 600,\n                  \"panels\": [\n                    \"22222222-2222-4222-8222-222222222222\"\n                  ],\n                  \"active\": \"22222222-2222-4222-8222-222222222222\"\n                }\n              ]\n            }\n          },\n          \"modules\": {\n            \"11111111-1111-4111-8111-111111111111\": \"tavora.notes\",\n            \"22222222-2222-4222-8222-222222222222\": \"wellbrained.poe2-builds\"\n          },\n          \"panelTypes\": {\n            \"22222222-2222-4222-8222-222222222222\": \"planner\"\n          }\n        }\n      ]\n    },\n    \"local-notes\": {\n      \"instances\": [],\n      \"layout\": null,\n      \"snapshots\": []\n    }\n  }\n}",
+      "workspace.json.from-version-4": "{\n  \"version\": 4,\n  \"workspaces\": {\n    \"poe2\": {\n      \"instances\": [\n        {\n          \"instanceId\": \"11111111-1111-4111-8111-111111111111\",\n          \"moduleId\": \"tavora.notes\",\n          \"content\": {\n            \"id\": \"build-notes\",\n            \"title\": \"Build notes\"\n          }\n        },\n        {\n          \"instanceId\": \"22222222-2222-4222-8222-222222222222\",\n          \"moduleId\": \"wellbrained.poe2-builds\",\n          \"panelType\": \"planner\"\n        }\n      ],\n      \"layout\": {\n        \"width\": 1200,\n        \"height\": 800,\n        \"direction\": \"row\",\n        \"root\": {\n          \"kind\": \"split\",\n          \"size\": 800,\n          \"children\": [\n            {\n              \"kind\": \"group\",\n              \"size\": 600,\n              \"panels\": [\n                \"11111111-1111-4111-8111-111111111111\"\n              ],\n              \"active\": \"11111111-1111-4111-8111-111111111111\"\n            },\n            {\n              \"kind\": \"group\",\n              \"size\": 600,\n              \"panels\": [\n                \"22222222-2222-4222-8222-222222222222\"\n              ],\n              \"active\": \"22222222-2222-4222-8222-222222222222\"\n            }\n          ]\n        }\n      },\n      \"snapshots\": [\n        {\n          \"id\": \"33333333-3333-4333-8333-333333333333\",\n          \"name\": \"Mapping\",\n          \"savedAt\": \"2026-11-02T18:00:00.000Z\",\n          \"layout\": {\n            \"width\": 1200,\n            \"height\": 800,\n            \"direction\": \"row\",\n            \"root\": {\n              \"kind\": \"split\",\n              \"size\": 800,\n              \"children\": [\n                {\n                  \"kind\": \"group\",\n                  \"size\": 600,\n                  \"panels\": [\n                    \"11111111-1111-4111-8111-111111111111\"\n                  ],\n                  \"active\": \"11111111-1111-4111-8111-111111111111\"\n                },\n                {\n                  \"kind\": \"group\",\n                  \"size\": 600,\n                  \"panels\": [\n                    \"22222222-2222-4222-8222-222222222222\"\n                  ],\n                  \"active\": \"22222222-2222-4222-8222-222222222222\"\n                }\n              ]\n            }\n          },\n          \"modules\": {\n            \"11111111-1111-4111-8111-111111111111\": \"tavora.notes\",\n            \"22222222-2222-4222-8222-222222222222\": \"wellbrained.poe2-builds\"\n          },\n          \"panelTypes\": {\n            \"22222222-2222-4222-8222-222222222222\": \"planner\"\n          }\n        }\n      ]\n    },\n    \"elden-ring\": {\n      \"instances\": [],\n      \"layout\": null,\n      \"snapshots\": []\n    },\n    \"local-notes\": {\n      \"instances\": [],\n      \"layout\": null,\n      \"snapshots\": []\n    }\n  },\n  \"somethingNew\": {\n    \"kept\": true\n  }\n}\n"
+    },
+    "told": 0
+  },
+  "damaged": {
+    "read": {
+      "version": 3,
+      "workspaces": {
+        "poe2": {
+          "instances": [],
+          "layout": null,
+          "snapshots": []
+        },
+        "local-notes": {
+          "instances": [],
+          "layout": null,
+          "snapshots": []
+        }
+      }
+    },
+    "files": {
+      "workspace.json": "{\n  \"version\": 3,\n  \"workspaces\": {\n    \"poe2\": {\n      \"instances\": [],\n      \"layout\": null,\n      \"snapshots\": []\n    },\n    \"local-notes\": {\n      \"instances\": [],\n      \"layout\": null,\n      \"snapshots\": []\n    }\n  }\n}",
+      "workspace.json.corrupt-<time>": "{ damaged"
+    },
+    "told": 1
+  },
+  "held": {
+    "outcome": "open threw EISDIR",
+    "files": {}
+  }
+}

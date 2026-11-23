@@ -1,0 +1,56 @@
+{
+  "empty": {
+    "read": [],
+    "files": {
+      "hotkeys.json": "{\n  \"version\": 2,\n  \"hotkeys\": [\n    {\n      \"owner\": \"official\",\n      \"moduleId\": \"tavora.clock-counter\",\n      \"workspaceId\": \"poe2\",\n      \"action\": \"increment\",\n      \"target\": \"kills\",\n      \"label\": \"Kills\",\n      \"accelerator\": \"Ctrl+Shift+K\"\n    }\n  ]\n}\n"
+    },
+    "told": 0
+  },
+  "sample": {
+    "read": [
+      {
+        "owner": "official",
+        "moduleId": "tavora.clock-counter",
+        "workspaceId": "poe2",
+        "action": "increment",
+        "target": "deaths",
+        "label": "Deaths",
+        "accelerator": "Ctrl+Shift+D"
+      }
+    ],
+    "files": {
+      "hotkeys.json": "{\n  \"version\": 2,\n  \"hotkeys\": [\n    {\n      \"owner\": \"official\",\n      \"moduleId\": \"tavora.clock-counter\",\n      \"workspaceId\": \"poe2\",\n      \"action\": \"increment\",\n      \"target\": \"deaths\",\n      \"label\": \"Deaths\",\n      \"accelerator\": \"Ctrl+Shift+D\"\n    },\n    {\n      \"owner\": \"official\",\n      \"moduleId\": \"tavora.clock-counter\",\n      \"workspaceId\": \"poe2\",\n      \"action\": \"increment\",\n      \"target\": \"kills\",\n      \"label\": \"Kills\",\n      \"accelerator\": \"Ctrl+Shift+K\"\n    }\n  ]\n}\n"
+    },
+    "told": 0
+  },
+  "newer": {
+    "read": [
+      {
+        "owner": "official",
+        "moduleId": "tavora.clock-counter",
+        "workspaceId": "poe2",
+        "action": "increment",
+        "target": "deaths",
+        "label": "Deaths",
+        "accelerator": "Ctrl+Shift+D"
+      }
+    ],
+    "files": {
+      "hotkeys.json": "{\n  \"version\": 2,\n  \"hotkeys\": [\n    {\n      \"owner\": \"official\",\n      \"moduleId\": \"tavora.clock-counter\",\n      \"workspaceId\": \"poe2\",\n      \"action\": \"increment\",\n      \"target\": \"deaths\",\n      \"label\": \"Deaths\",\n      \"accelerator\": \"Ctrl+Shift+D\"\n    },\n    {\n      \"owner\": \"official\",\n      \"moduleId\": \"tavora.clock-counter\",\n      \"workspaceId\": \"poe2\",\n      \"action\": \"increment\",\n      \"target\": \"kills\",\n      \"label\": \"Kills\",\n      \"accelerator\": \"Ctrl+Shift+K\"\n    }\n  ]\n}\n",
+      "hotkeys.json.from-version-3": "{\n  \"version\": 3,\n  \"hotkeys\": [\n    {\n      \"owner\": \"official\",\n      \"moduleId\": \"tavora.clock-counter\",\n      \"workspaceId\": \"poe2\",\n      \"action\": \"increment\",\n      \"target\": \"deaths\",\n      \"label\": \"Deaths\",\n      \"accelerator\": \"Ctrl+Shift+D\"\n    }\n  ],\n  \"somethingNew\": {\n    \"kept\": true\n  }\n}\n"
+    },
+    "told": 0
+  },
+  "damaged": {
+    "read": [],
+    "files": {
+      "hotkeys.json": "{\n  \"version\": 2,\n  \"hotkeys\": [\n    {\n      \"owner\": \"official\",\n      \"moduleId\": \"tavora.clock-counter\",\n      \"workspaceId\": \"poe2\",\n      \"action\": \"increment\",\n      \"target\": \"kills\",\n      \"label\": \"Kills\",\n      \"accelerator\": \"Ctrl+Shift+K\"\n    }\n  ]\n}\n",
+      "hotkeys.json.corrupt-<time>": "{ damaged"
+    },
+    "told": 1
+  },
+  "held": {
+    "outcome": "open threw EISDIR",
+    "files": {}
+  }
+}
