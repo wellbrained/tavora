@@ -541,9 +541,10 @@ describe("a stopped swap whose list of the incoming copy is gone", () => {
     let off: Promise<void> | null = null;
     meanwhile = async (to) => {
       if (off || !to.endsWith(at)) return;
-      // Not waited for in here: a file's writes go one at a time (copy-files.ts), so turning off writes the status right
-      // after the write under way.
       off = one.sync.turnOff();
+      // Done before the write under way lands, as the incoming lists are another file. The status's own writes go one at a
+      // time (copy-files.ts): there turning off writes it right after the one under way, so it isn't waited for in here.
+      if (at === "incoming-lists.json") await off;
     };
     await expect(one.sync.keep("cloud")).resolves.toBeUndefined();
     expect(off).not.toBeNull();

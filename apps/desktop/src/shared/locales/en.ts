@@ -1324,7 +1324,7 @@ export const en = {
   "settings.language.searchPlaceholder": "Search languages",
   "settings.language.none": "No language matches.",
   "error.generic": "Something went wrong. Try again.",
-  "savedData.keptAside": "Some of your saved data couldn't be opened, so Tavora kept a copy and started that part fresh.",
+  "savedData.keptAside": "Some of your saved data couldn't be opened. Tavora kept a copy of it.",
   "savedData.sealedHeld": "Can't save a sign-in or key right now, as its file can't be opened. Try again in a moment.",
   "error.notAllowed": "Not allowed.",
   "error.notUnderstood": "Tavora did not understand that request.",

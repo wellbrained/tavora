@@ -183,10 +183,11 @@ export class CopySync {
    */
   private turn = 0;
   /**
-   * How many forgets are under way. One asked while an answer writes the status lands right after that write (a file's
-   * writes go one at a time, copy-files.ts) and only then raises `turn`: the answer stops there all the same.
+   * The forgets under way, until each has written its status and raised `turn` (or failed to). One asked while an answer
+   * writes the status writes its own right after (a file's writes go one at a time, copy-files.ts): the answer waits for
+   * it to settle (goesOn) before it goes on or stops.
    */
-  private forgetting = 0;
+  private readonly forgetting = new Set<Promise<void>>();
   private timer: ReturnType<typeof setInterval> | undefined;
 
   /** The copy on Tavora's service. */
@@ -1506,7 +1507,7 @@ export class CopySync {
       if (!(await this.writeStatusFor(turn, back))) return;
       this.swap = back;
       await this.repairState(true, turn);
-      if (!this.goesOn(turn)) return;
+      if (!(await this.goesOn(turn))) return;
       return this.restart();
     }
     if (!this.on) {
@@ -1681,7 +1682,7 @@ export class CopySync {
       if (!(await this.writeStatusFor(turn, next))) return;
       this.swap = next;
       await this.repairState(true, turn);
-      if (!this.goesOn(turn)) return;
+      if (!(await this.goesOn(turn))) return;
       return this.restart();
     }
     const turn = this.turn;
@@ -1711,29 +1712,33 @@ export class CopySync {
       }
     });
     // Turned off while it downloaded: no restart; the start drops what was staged, as the copy is off.
-    if (!this.goesOn(turn)) return;
+    if (!(await this.goesOn(turn))) return;
     this.restart();
   }
 
   /**
    * Writes a status for work started under `turn`, unless the copy was forgotten since: forgotten while it wrote, the
    * status is written again as forgetting leaves it (stepSwap's `forgotten`), so the next start doesn't finish a swap with
-   * the copy off. False when it was forgotten, or is being forgotten: then forgetting writes the status right after.
+   * the copy off. A forget asked meanwhile is waited for: once it failed, the copy is still on and the answer goes on.
+   * False when it was forgotten.
    */
   private async writeStatusFor(turn: number, status: SwapStatus): Promise<boolean> {
-    if (!this.goesOn(turn)) return false;
+    if (!(await this.goesOn(turn))) return false;
     await writeSwapStatus(this.statusFile, status);
-    if (this.goesOn(turn)) return true;
-    if (turn === this.turn) return false;
+    if (await this.goesOn(turn)) return true;
     const forgotten = stepSwap(status, { type: "forgotten" });
     await writeSwapStatus(this.statusFile, forgotten);
     this.swap = forgotten;
     return false;
   }
 
-  /** Whether work started under `turn` goes on: the copy wasn't forgotten since, and isn't being forgotten. */
-  private goesOn(turn: number): boolean {
-    return turn === this.turn && this.forgetting === 0;
+  /**
+   * Whether work started under `turn` goes on: the copy wasn't forgotten since. A forget under way is waited for first
+   * (never from inside a write of the status, which it waits for in turn): one that failed leaves the copy on.
+   */
+  private async goesOn(turn: number): Promise<boolean> {
+    while (this.forgetting.size > 0) await Promise.allSettled([...this.forgetting]);
+    return turn === this.turn;
   }
 
   /** Why the copy can't be reached from here right now, for an answer that needs it. */
@@ -1875,19 +1880,27 @@ export class CopySync {
     return false;
   }
 
-  private async forget(problem: CloudCopyProblem | null): Promise<void> {
-    // Written first. A swap stopped halfway is taken back at the next start; if that can't be noted, nothing is forgotten,
-    // as the next start would finish the swap over this PC's data.
-    this.forgetting++;
+  /** The status as forgetting leaves it, on disk, then `turn` raised: from then on, work started before writes nothing. */
+  private async noteForgotten(): Promise<void> {
     try {
       await this.moveFrom(await this.swapForAnswer(), { type: "forgotten" });
     } catch (error) {
       this.log(`cloud copy: can't note what to do with the unfinished copy: ${error instanceof Error ? error.message : String(error)}`);
       throw CopySync.userError("failed");
-    } finally {
-      this.forgetting--;
     }
     this.turn++;
+  }
+
+  private async forget(problem: CloudCopyProblem | null): Promise<void> {
+    // Written first. A swap stopped halfway is taken back at the next start; if that can't be noted, nothing is forgotten,
+    // as the next start would finish the swap over this PC's data.
+    const noted = this.noteForgotten();
+    this.forgetting.add(noted);
+    try {
+      await noted;
+    } finally {
+      this.forgetting.delete(noted);
+    }
     this.copyOn = false;
     this.state = EMPTY_STATE;
     this.shownKey = null;

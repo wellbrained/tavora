@@ -1325,7 +1325,7 @@ export const de: Record<keyof typeof en, string> = {
   "steamImport.trademark": "Die Spielelisten stammen von Steam. Steam und das Steam-Logo sind Marken der Valve Corporation; Tavora steht in keiner Verbindung zu Valve und wird weder von Valve unterstützt noch gefördert. Spielnamen gehören ihren Publishern.",
   "settings.language.searchPlaceholder": "Sprachen suchen",
   "settings.language.none": "Keine Sprache passt.",
-  "savedData.keptAside": "Ein Teil deiner gespeicherten Daten ließ sich nicht öffnen. Tavora hat eine Kopie behalten und diesen Teil neu angelegt.",
+  "savedData.keptAside": "Ein Teil deiner gespeicherten Daten ließ sich nicht öffnen. Tavora hat eine Kopie davon behalten.",
   "savedData.sealedHeld": "Eine Anmeldung oder ein Schlüssel lässt sich gerade nicht speichern, weil die Datei sich nicht öffnen lässt. Versuch es gleich nochmal.",
   "error.generic": "Etwas ist schiefgelaufen. Versuch es noch mal.",
   "error.notAllowed": "Nicht erlaubt.",

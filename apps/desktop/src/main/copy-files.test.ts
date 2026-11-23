@@ -49,6 +49,20 @@ describe("the cloud copy's own files", () => {
     expect(await readdir(dir)).toEqual([]);
   });
 
+  // A folder the user may not change: its files can't be removed (on Windows and as root they can, so not there).
+  it.skipIf(process.platform === "win32" || process.getuid?.() === 0)("a state the system won't let go of is held, not a crash", async () => {
+    const file = path.join(dir, "locked", "cloud-copy.json");
+    await mkdir(path.dirname(file));
+    await saveCopyState(file, STATE);
+    await chmod(path.dirname(file), 0o500);
+    try {
+      await expect(removeCopyState(file)).rejects.toBeInstanceOf(HeldError);
+    } finally {
+      await chmod(path.dirname(file), 0o700);
+    }
+    expect(await readFile(file, "utf8")).toBe('{"v":1,"version":3,"pictures":true,"files":{}}');
+  });
+
   // A file only its owner may not read (as a virus scan holds one): readable on Windows and as root, so not there.
   it.skipIf(process.platform === "win32" || process.getuid?.() === 0)("the note of the parts seen unused isn't written over while it can't be read, and every part counts from now", async () => {
     const unusedFile = path.join(dir, "cloud-copy-unused.json");

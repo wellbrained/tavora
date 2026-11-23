@@ -1,8 +1,11 @@
 // The cloud copy's own files, kept by SavedFile's rules (saved-file.ts) like every other file of the user's, and by one
 // more (decided 2026-11-23, "a saved file that can't be read is never written over"):
-// - one that can't be read right now (a virus scan or a sync app holds it) is never written over or removed: a write
-//   after such a read reads it again first, and while that still fails nothing is written (HeldError, which the cloud
-//   copy holds until the next start, as for any read that is held);
+// - one whose last read failed (a virus scan or a sync app held it), or that was never read here, isn't written over or
+//   removed without a read first: SavedFile refuses the write, this module reads the file once more, and tries the write
+//   once more only if that read worked. While it still fails the write is a HeldError, which the cloud copy holds until
+//   the next start as for any read that is held; nothing waits or tries again later. One whose last read worked is
+//   written as SavedFile writes it, with no read first. A removal that the system refuses because the file is busy or
+//   locked is a HeldError too;
 // - a damaged one stays where it is, as its being there says something (the copy is on, a swap began), with a copy
 //   aside, and reads as damaged (file-look.ts); one a newer Tavora wrote is copied aside;
 // - each write is made at once, whole and flushed to the disk before it is in place, after every write of the same file
@@ -64,13 +67,23 @@ export function writeCopyFile<T extends SavedFields>(file: string, kind: CopyFil
   return afterRead(saved, () => saved.write(fields));
 }
 
-/** Removes the file. Refused (HeldError) while it can't be read. */
-export function removeCopyFile(file: string, kind: CopyFileKind): Promise<void> {
+/** The system's answers for a file that is busy or locked right now (a virus scan, a sync app, its rights). */
+const BUSY = new Set(["EBUSY", "EPERM", "EACCES"]);
+
+/** Removes the file. Refused (HeldError) while it can't be read, or while the system won't let it go. */
+export async function removeCopyFile(file: string, kind: CopyFileKind): Promise<void> {
   const saved = savedFile(file, kind);
-  return afterRead(saved, () => saved.remove());
+  try {
+    await afterRead(saved, () => saved.remove());
+  } catch (error) {
+    throw BUSY.has((error as NodeJS.ErrnoException | undefined)?.code ?? "") ? new HeldError(error) : error;
+  }
 }
 
-/** Does it; refused because the last read failed, it reads the file again first, and does it once that works. */
+/**
+ * Does it. Refused by SavedFile (its last read of the file failed, or a first read for this write did), it reads the file
+ * once more and, if that worked, does it once more; else HeldError. The read and the second try are turns of their own.
+ */
 async function afterRead(saved: SavedFile, act: () => Promise<void>): Promise<void> {
   try {
     return await act();
