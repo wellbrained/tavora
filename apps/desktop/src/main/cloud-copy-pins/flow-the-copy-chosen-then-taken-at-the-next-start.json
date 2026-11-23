@@ -1,0 +1,20 @@
+[
+  "remove %B%/data/cloud-copy-staging/swap-plan.json (not there)",
+  "put %B%/data/cloud-copy-staging/copy-list.json {\"v\":1,\"version\":1,\"pictures\":true,\"files\":{\"library.json\":{\"size\":44,\"sha256\":\"<id 1>\",\"parts\":[\"<id 2>\"]},\"workspace.json\":{\"size\":15,\"sha256\":\"<id 3>\",\"parts\":[\"<id 4>\"]},\"modules/dice/m.json\":{\"size\":9,\"sha256\":\"<id 5>\",\"parts\":[\"<id 6>\"]},\"module-blobs/official/pic.txt\":{\"size\":8,\"sha256\":\"<id 7>\",\"parts\":[\"<id 8>\"]}},\"sealed\":true,\"marked\":true,\"keyId\":\"<id 9>\"}",
+  "put %B%/data/cloud-copy.json {\"v\":1,\"version\":0,\"pictures\":true,\"files\":{}}",
+  "remove %B%/data/cloud-copy-place.json (not there)",
+  "move %B%/data/cloud-copy.json -> %B%/data/cloud-copy-swapping.json",
+  "put %B%/data/cloud-copy-status.json {\"v\":1,\"phase\":\"chosen\"}",
+  "remove %B%/data/cloud-copy-staging/swap-plan.json (not there)",
+  "put %B%/data/cloud-copy-staging/swap-plan.json {\"keepIn\":\"%B%/data/backups/cloud-copy-<time>-this-pc\",\"moduleFiles\":\"%B%/Pictures/Tavora\",\"own\":{},\"empty\":[],\"place\":null,\"account\":\"me\"}",
+  "put %B%/data/cloud-copy-swapping.json {\"v\":1,\"version\":0,\"pictures\":true,\"files\":{}}",
+  "remove %B%/data/cloud-copy.json (not there)",
+  "put %B%/data/cloud-copy-status.json {\"v\":1,\"phase\":\"swapping\",\"plan\":{\"keepIn\":\"%B%/data/backups/cloud-copy-<time>-this-pc\",\"moduleFiles\":\"%B%/Pictures/Tavora\",\"own\":{},\"empty\":[],\"place\":null,\"account\":\"me\"}}",
+  "put %B%/data/backups/cloud-copy-<time>-this-pc/incoming-lists.json {\"v\":1,\"lists\":[{\"v\":1,\"version\":1,\"pictures\":true,\"files\":{\"library.json\":{\"size\":44,\"sha256\":\"<id 1>\",\"parts\":[\"<id 2>\"]},\"workspace.json\":{\"size\":15,\"sha256\":\"<id 3>\",\"parts\":[\"<id 4>\"]},\"modules/dice/m.json\":{\"size\":9,\"sha256\":\"<id 5>\",\"parts\":[\"<id 6>\"]},\"module-blobs/official/pic.txt\":{\"size\":8,\"sha256\":\"<id 7>\",\"parts\":[\"<id 8>\"]}},\"sealed\":true,\"marked\":true,\"keyId\":\"<id 9>\"}]}",
+  "put %B%/data/cloud-copy-swapping.json {\"v\":1,\"version\":1,\"pictures\":true,\"files\":{\"library.json\":{\"size\":44,\"sha256\":\"<id 1>\",\"parts\":[\"<id 2>\"],\"mtimeMs\":<time>},\"workspace.json\":{\"size\":15,\"sha256\":\"<id 3>\",\"parts\":[\"<id 4>\"],\"mtimeMs\":<time>},\"modules/dice/m.json\":{\"size\":9,\"sha256\":\"<id 5>\",\"parts\":[\"<id 6>\"],\"mtimeMs\":<time>},\"module-blobs/official/pic.txt\":{\"size\":8,\"sha256\":\"<id 7>\",\"parts\":[\"<id 8>\"],\"mtimeMs\":<time>}},\"sealed\":true,\"marked\":true,\"keyId\":\"<id 9>\"}",
+  "remove %B%/data/cloud-copy-status.json (was there)",
+  "put %B%/data/cloud-copy.json {\"v\":1,\"version\":1,\"pictures\":true,\"files\":{\"library.json\":{\"size\":44,\"sha256\":\"<id 1>\",\"parts\":[\"<id 2>\"],\"mtimeMs\":<time>},\"workspace.json\":{\"size\":15,\"sha256\":\"<id 3>\",\"parts\":[\"<id 4>\"],\"mtimeMs\":<time>},\"modules/dice/m.json\":{\"size\":9,\"sha256\":\"<id 5>\",\"parts\":[\"<id 6>\"],\"mtimeMs\":<time>},\"module-blobs/official/pic.txt\":{\"size\":8,\"sha256\":\"<id 7>\",\"parts\":[\"<id 8>\"],\"mtimeMs\":<time>}},\"sealed\":true,\"marked\":true,\"keyId\":\"<id 9>\"}",
+  "remove %B%/data/cloud-copy-swapping.json (was there)",
+  "remove %B%/data/cloud-copy-staging/copy-list.json (was there)",
+  "remove %B%/data/cloud-copy-staging/staged.json (not there)"
+]

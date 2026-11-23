@@ -1,0 +1,47 @@
+{
+  "empty": {
+    "read": null,
+    "changed": null,
+    "files": {},
+    "told": 0
+  },
+  "sample": {
+    "read": "%DATA%/OneDrive",
+    "changed": null,
+    "files": {
+      "cloud-copy-place.json": "{\"v\":1,\"folder\":\"%DATA%/OneDrive\"}"
+    },
+    "told": 0
+  },
+  "newer": {
+    "read": "%DATA%/OneDrive",
+    "changed": null,
+    "files": {
+      "cloud-copy-place.json": "{\"v\":2,\"folder\":\"%DATA%/OneDrive\",\"somethingNew\":{\"kept\":true}}",
+      "cloud-copy-place.json.from-version-2": "{\"v\":2,\"folder\":\"%DATA%/OneDrive\",\"somethingNew\":{\"kept\":true}}"
+    },
+    "told": 0
+  },
+  "damaged": {
+    "read": null,
+    "changed": null,
+    "files": {
+      "cloud-copy-place.json": "{ damaged",
+      "cloud-copy-place.json.corrupt": "{ damaged"
+    },
+    "told": 1
+  },
+  "shapeless": {
+    "read": null,
+    "changed": null,
+    "files": {
+      "cloud-copy-place.json": "{\"v\":1}"
+    },
+    "told": 0
+  },
+  "held": {
+    "read": null,
+    "changed": null,
+    "files": {}
+  }
+}

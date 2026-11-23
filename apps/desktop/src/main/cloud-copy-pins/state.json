@@ -1,0 +1,91 @@
+{
+  "empty": {
+    "read": {
+      "status": "missing"
+    },
+    "changed": null,
+    "files": {
+      "cloud-copy.json": "{\"v\":1,\"version\":1,\"pictures\":true,\"files\":{}}"
+    },
+    "told": 0
+  },
+  "sample": {
+    "read": {
+      "status": "present",
+      "value": {
+        "version": 7,
+        "pictures": true,
+        "files": {
+          "library.json": {
+            "size": 2048,
+            "mtimeMs": "<time>",
+            "sha256": "<id 1>",
+            "parts": [
+              "<id 2>"
+            ]
+          }
+        },
+        "kept": true,
+        "sealed": true,
+        "marked": true,
+        "listed": true,
+        "keptFrom": 6,
+        "keyId": "<id 3>"
+      }
+    },
+    "changed": null,
+    "files": {
+      "cloud-copy.json": "{\"v\":1,\"version\":8,\"pictures\":true,\"files\":{\"library.json\":{\"size\":2048,\"mtimeMs\":<time>,\"sha256\":\"<id 1>\",\"parts\":[\"<id 2>\"]}},\"kept\":true,\"sealed\":true,\"marked\":true,\"listed\":true,\"keptFrom\":6,\"keyId\":\"<id 3>\"}"
+    },
+    "told": 0
+  },
+  "newer": {
+    "read": {
+      "status": "present",
+      "value": {
+        "version": 0,
+        "pictures": true,
+        "files": {}
+      }
+    },
+    "changed": null,
+    "files": {
+      "cloud-copy.json": "{\"v\":1,\"version\":1,\"pictures\":true,\"files\":{}}",
+      "cloud-copy.json.from-version-2": "{\"v\":2,\"version\":7,\"pictures\":true,\"files\":{\"library.json\":{\"size\":2048,\"mtimeMs\":<time>,\"sha256\":\"<id 1>\",\"parts\":[\"<id 2>\"]}},\"kept\":true,\"sealed\":true,\"marked\":true,\"listed\":true,\"keptFrom\":6,\"keyId\":\"<id 3>\",\"somethingNew\":{\"kept\":true}}"
+    },
+    "told": 0
+  },
+  "damaged": {
+    "read": {
+      "status": "held",
+      "error": "DamagedFile"
+    },
+    "changed": null,
+    "files": {
+      "cloud-copy.json": "{\"v\":1,\"version\":1,\"pictures\":true,\"files\":{}}",
+      "cloud-copy.json.corrupt": "{ damaged"
+    },
+    "told": 0
+  },
+  "shapeless": {
+    "read": {
+      "status": "held",
+      "error": "DamagedFile"
+    },
+    "changed": null,
+    "files": {
+      "cloud-copy.json": "{\"v\":1,\"version\":1,\"pictures\":true,\"files\":{}}"
+    },
+    "told": 0
+  },
+  "held": {
+    "read": {
+      "status": "held",
+      "error": "Error EISDIR"
+    },
+    "changed": null,
+    "files": {
+      "cloud-copy.json": "{\"v\":1,\"version\":1,\"pictures\":true,\"files\":{}}"
+    }
+  }
+}

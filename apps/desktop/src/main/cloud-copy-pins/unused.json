@@ -1,0 +1,67 @@
+{
+  "empty": {
+    "read": null,
+    "changed": [
+      "uploaded",
+      "uploaded"
+    ],
+    "files": {
+      "cloud-copy-unused.json": "{\"v\":1,\"folder\":\"%DATA%/OneDrive\",\"last\":<time>,\"waited\":{}}"
+    },
+    "told": 0
+  },
+  "sample": {
+    "read": null,
+    "changed": [
+      "uploaded",
+      "uploaded"
+    ],
+    "files": {
+      "cloud-copy-unused.json": "{\"v\":1,\"folder\":\"%DATA%/OneDrive\",\"last\":<time>,\"waited\":{}}"
+    },
+    "told": 0
+  },
+  "newer": {
+    "read": null,
+    "changed": [
+      "uploaded",
+      "uploaded"
+    ],
+    "files": {
+      "cloud-copy-unused.json": "{\"v\":1,\"folder\":\"%DATA%/OneDrive\",\"last\":<time>,\"waited\":{}}"
+    },
+    "told": 0
+  },
+  "damaged": {
+    "read": null,
+    "changed": [
+      "uploaded",
+      "uploaded"
+    ],
+    "files": {
+      "cloud-copy-unused.json": "{\"v\":1,\"folder\":\"%DATA%/OneDrive\",\"last\":<time>,\"waited\":{}}"
+    },
+    "told": 0
+  },
+  "shapeless": {
+    "read": null,
+    "changed": [
+      "uploaded",
+      "uploaded"
+    ],
+    "files": {
+      "cloud-copy-unused.json": "{\"v\":1,\"folder\":\"%DATA%/OneDrive\",\"last\":<time>,\"waited\":{}}"
+    },
+    "told": 0
+  },
+  "held": {
+    "read": null,
+    "changed": [
+      "uploaded",
+      "uploaded"
+    ],
+    "files": {
+      "cloud-copy-unused.json": "{\"v\":1,\"folder\":\"%DATA%/OneDrive\",\"last\":<time>,\"waited\":{}}"
+    }
+  }
+}

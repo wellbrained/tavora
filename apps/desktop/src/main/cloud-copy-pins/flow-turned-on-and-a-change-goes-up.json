@@ -1,0 +1,7 @@
+[
+  "remove %A%/data/cloud-copy-staging/swap-plan.json (not there)",
+  "put %A%/data/cloud-copy.json {\"v\":1,\"version\":0,\"pictures\":true,\"files\":{}}",
+  "remove %A%/data/cloud-copy-place.json (not there)",
+  "put %A%/data/cloud-copy.json {\"v\":1,\"version\":1,\"pictures\":true,\"files\":{\"library.json\":{\"size\":44,\"mtimeMs\":<time>,\"sha256\":\"<id 1>\",\"parts\":[\"<id 2>\"]},\"workspace.json\":{\"size\":15,\"mtimeMs\":<time>,\"sha256\":\"<id 3>\",\"parts\":[\"<id 4>\"]},\"modules/dice/m.json\":{\"size\":9,\"mtimeMs\":<time>,\"sha256\":\"<id 5>\",\"parts\":[\"<id 6>\"]},\"module-blobs/official/pic.txt\":{\"size\":8,\"mtimeMs\":<time>,\"sha256\":\"<id 7>\",\"parts\":[\"<id 8>\"]}},\"sealed\":true,\"marked\":true,\"keyId\":\"<id 9>\"}",
+  "put %A%/data/cloud-copy.json {\"v\":1,\"version\":2,\"pictures\":true,\"files\":{\"library.json\":{\"size\":44,\"mtimeMs\":<time>,\"sha256\":\"<id 1>\",\"parts\":[\"<id 2>\"]},\"workspace.json\":{\"size\":18,\"mtimeMs\":<time>,\"sha256\":\"<id 3>\",\"parts\":[\"<id 4>\"]},\"modules/dice/m.json\":{\"size\":9,\"mtimeMs\":<time>,\"sha256\":\"<id 5>\",\"parts\":[\"<id 6>\"]},\"module-blobs/official/pic.txt\":{\"size\":8,\"mtimeMs\":<time>,\"sha256\":\"<id 7>\",\"parts\":[\"<id 8>\"]}},\"sealed\":true,\"marked\":true,\"keyId\":\"<id 9>\"}"
+]

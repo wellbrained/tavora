@@ -1,0 +1,165 @@
+{
+  "empty": {
+    "read": {
+      "status": "present",
+      "value": {
+        "phase": "idle"
+      }
+    },
+    "changed": {
+      "looked": {
+        "status": "present",
+        "value": {
+          "phase": "idle"
+        }
+      },
+      "seen": [
+        "{\"v\":1,\"phase\":\"chosen\"}",
+        "{\"v\":1,\"phase\":\"swapping\",\"plan\":{\"keepIn\":\"%DATA%/backups/cloud-copy-<time>-this-pc\",\"moduleFiles\":\"%DATA%/Pictures\",\"own\":{\"moduleFilesFolder\":\"D:/Pictures\"},\"empty\":[\"%DATA%/modules\"],\"place\":null,\"account\":\"me\",\"earlierIn\":[\"data/modules\"]}}",
+        "{\"v\":1,\"phase\":\"undoing\",\"plan\":{\"keepIn\":\"%DATA%/backups/cloud-copy-<time>-this-pc\",\"moduleFiles\":\"%DATA%/Pictures\",\"own\":null,\"empty\":[\"%DATA%/modules\"],\"place\":\"%DATA%/OneDrive\",\"account\":\"me\",\"earlierIn\":[\"data/modules\"]}}",
+        "{\"v\":1,\"phase\":\"asking\",\"why\":\"lost\",\"files\":[\"library.json\",\"workspace.json\"]}",
+        "{\"v\":1,\"phase\":\"asking\",\"why\":\"went-back\",\"files\":[]}"
+      ]
+    },
+    "files": {},
+    "told": 0
+  },
+  "sample": {
+    "read": {
+      "status": "present",
+      "value": {
+        "phase": "swapping",
+        "plan": {
+          "keepIn": "%DATA%/backups/cloud-copy-<time>-this-pc",
+          "moduleFiles": "%DATA%/Pictures",
+          "own": {
+            "moduleFilesFolder": "D:/Pictures"
+          },
+          "empty": [
+            "%DATA%/modules"
+          ],
+          "place": null,
+          "account": "me",
+          "earlierIn": [
+            "data/modules"
+          ]
+        }
+      }
+    },
+    "changed": {
+      "looked": {
+        "status": "present",
+        "value": {
+          "phase": "swapping",
+          "plan": {
+            "keepIn": "%DATA%/backups/cloud-copy-<time>-this-pc",
+            "moduleFiles": "%DATA%/Pictures",
+            "own": {
+              "moduleFilesFolder": "D:/Pictures"
+            },
+            "empty": [
+              "%DATA%/modules"
+            ],
+            "place": null,
+            "account": "me",
+            "earlierIn": [
+              "data/modules"
+            ]
+          }
+        }
+      },
+      "seen": [
+        "{\"v\":1,\"phase\":\"chosen\"}",
+        "{\"v\":1,\"phase\":\"swapping\",\"plan\":{\"keepIn\":\"%DATA%/backups/cloud-copy-<time>-this-pc\",\"moduleFiles\":\"%DATA%/Pictures\",\"own\":{\"moduleFilesFolder\":\"D:/Pictures\"},\"empty\":[\"%DATA%/modules\"],\"place\":null,\"account\":\"me\",\"earlierIn\":[\"data/modules\"]}}",
+        "{\"v\":1,\"phase\":\"undoing\",\"plan\":{\"keepIn\":\"%DATA%/backups/cloud-copy-<time>-this-pc\",\"moduleFiles\":\"%DATA%/Pictures\",\"own\":null,\"empty\":[\"%DATA%/modules\"],\"place\":\"%DATA%/OneDrive\",\"account\":\"me\",\"earlierIn\":[\"data/modules\"]}}",
+        "{\"v\":1,\"phase\":\"asking\",\"why\":\"lost\",\"files\":[\"library.json\",\"workspace.json\"]}",
+        "{\"v\":1,\"phase\":\"asking\",\"why\":\"went-back\",\"files\":[]}"
+      ]
+    },
+    "files": {},
+    "told": 0
+  },
+  "newer": {
+    "read": {
+      "status": "held",
+      "error": "DamagedFile"
+    },
+    "changed": {
+      "looked": {
+        "status": "held",
+        "error": "DamagedFile"
+      },
+      "seen": [
+        "{\"v\":1,\"phase\":\"chosen\"}",
+        "{\"v\":1,\"phase\":\"swapping\",\"plan\":{\"keepIn\":\"%DATA%/backups/cloud-copy-<time>-this-pc\",\"moduleFiles\":\"%DATA%/Pictures\",\"own\":{\"moduleFilesFolder\":\"D:/Pictures\"},\"empty\":[\"%DATA%/modules\"],\"place\":null,\"account\":\"me\",\"earlierIn\":[\"data/modules\"]}}",
+        "{\"v\":1,\"phase\":\"undoing\",\"plan\":{\"keepIn\":\"%DATA%/backups/cloud-copy-<time>-this-pc\",\"moduleFiles\":\"%DATA%/Pictures\",\"own\":null,\"empty\":[\"%DATA%/modules\"],\"place\":\"%DATA%/OneDrive\",\"account\":\"me\",\"earlierIn\":[\"data/modules\"]}}",
+        "{\"v\":1,\"phase\":\"asking\",\"why\":\"lost\",\"files\":[\"library.json\",\"workspace.json\"]}",
+        "{\"v\":1,\"phase\":\"asking\",\"why\":\"went-back\",\"files\":[]}"
+      ]
+    },
+    "files": {},
+    "told": 0
+  },
+  "damaged": {
+    "read": {
+      "status": "held",
+      "error": "DamagedFile"
+    },
+    "changed": {
+      "looked": {
+        "status": "held",
+        "error": "DamagedFile"
+      },
+      "seen": [
+        "{\"v\":1,\"phase\":\"chosen\"}",
+        "{\"v\":1,\"phase\":\"swapping\",\"plan\":{\"keepIn\":\"%DATA%/backups/cloud-copy-<time>-this-pc\",\"moduleFiles\":\"%DATA%/Pictures\",\"own\":{\"moduleFilesFolder\":\"D:/Pictures\"},\"empty\":[\"%DATA%/modules\"],\"place\":null,\"account\":\"me\",\"earlierIn\":[\"data/modules\"]}}",
+        "{\"v\":1,\"phase\":\"undoing\",\"plan\":{\"keepIn\":\"%DATA%/backups/cloud-copy-<time>-this-pc\",\"moduleFiles\":\"%DATA%/Pictures\",\"own\":null,\"empty\":[\"%DATA%/modules\"],\"place\":\"%DATA%/OneDrive\",\"account\":\"me\",\"earlierIn\":[\"data/modules\"]}}",
+        "{\"v\":1,\"phase\":\"asking\",\"why\":\"lost\",\"files\":[\"library.json\",\"workspace.json\"]}",
+        "{\"v\":1,\"phase\":\"asking\",\"why\":\"went-back\",\"files\":[]}"
+      ]
+    },
+    "files": {},
+    "told": 0
+  },
+  "shapeless": {
+    "read": {
+      "status": "held",
+      "error": "DamagedFile"
+    },
+    "changed": {
+      "looked": {
+        "status": "held",
+        "error": "DamagedFile"
+      },
+      "seen": [
+        "{\"v\":1,\"phase\":\"chosen\"}",
+        "{\"v\":1,\"phase\":\"swapping\",\"plan\":{\"keepIn\":\"%DATA%/backups/cloud-copy-<time>-this-pc\",\"moduleFiles\":\"%DATA%/Pictures\",\"own\":{\"moduleFilesFolder\":\"D:/Pictures\"},\"empty\":[\"%DATA%/modules\"],\"place\":null,\"account\":\"me\",\"earlierIn\":[\"data/modules\"]}}",
+        "{\"v\":1,\"phase\":\"undoing\",\"plan\":{\"keepIn\":\"%DATA%/backups/cloud-copy-<time>-this-pc\",\"moduleFiles\":\"%DATA%/Pictures\",\"own\":null,\"empty\":[\"%DATA%/modules\"],\"place\":\"%DATA%/OneDrive\",\"account\":\"me\",\"earlierIn\":[\"data/modules\"]}}",
+        "{\"v\":1,\"phase\":\"asking\",\"why\":\"lost\",\"files\":[\"library.json\",\"workspace.json\"]}",
+        "{\"v\":1,\"phase\":\"asking\",\"why\":\"went-back\",\"files\":[]}"
+      ]
+    },
+    "files": {},
+    "told": 0
+  },
+  "held": {
+    "read": {
+      "status": "held",
+      "error": "Error EISDIR"
+    },
+    "changed": {
+      "looked": {
+        "status": "held",
+        "error": "Error EISDIR"
+      },
+      "seen": [
+        "{\"v\":1,\"phase\":\"chosen\"}",
+        "{\"v\":1,\"phase\":\"swapping\",\"plan\":{\"keepIn\":\"%DATA%/backups/cloud-copy-<time>-this-pc\",\"moduleFiles\":\"%DATA%/Pictures\",\"own\":{\"moduleFilesFolder\":\"D:/Pictures\"},\"empty\":[\"%DATA%/modules\"],\"place\":null,\"account\":\"me\",\"earlierIn\":[\"data/modules\"]}}",
+        "{\"v\":1,\"phase\":\"undoing\",\"plan\":{\"keepIn\":\"%DATA%/backups/cloud-copy-<time>-this-pc\",\"moduleFiles\":\"%DATA%/Pictures\",\"own\":null,\"empty\":[\"%DATA%/modules\"],\"place\":\"%DATA%/OneDrive\",\"account\":\"me\",\"earlierIn\":[\"data/modules\"]}}",
+        "{\"v\":1,\"phase\":\"asking\",\"why\":\"lost\",\"files\":[\"library.json\",\"workspace.json\"]}",
+        "{\"v\":1,\"phase\":\"asking\",\"why\":\"went-back\",\"files\":[]}"
+      ]
+    },
+    "files": {}
+  }
+}
