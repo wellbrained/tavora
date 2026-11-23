@@ -351,6 +351,8 @@ export class ConnectionWatcher implements ConnectionSource {
   private busy = false;
   /** Raised whenever the watching stops or its address changes, so a look still under way is dropped. */
   private generation = 0;
+  /** Disposed: the log was written for the last time. */
+  private disposed = false;
   /** What the last lookup of the chosen name gave: an address, or null when it was not found or not a public one. */
   private resolved: { name: string; ip: string | null; at: number } | null = null;
   private changedAt = -Infinity;
@@ -437,8 +439,10 @@ export class ConnectionWatcher implements ConnectionSource {
     return this.store.flush?.() ?? Promise.resolve();
   }
 
-  /** Stops everything and writes the log once more. */
+  /** Stops everything and writes the log once more, once: quitting does it, and the window closing again. */
   dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
     this.stop();
     this.persist(true);
     this.listeners.clear();

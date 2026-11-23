@@ -1,11 +1,25 @@
 // The save rules of the user's files (saved-versions.ts), tested once here for every store that keeps its file with
 // SavedFile: an older Tavora and a newer one taking turns on the same file lose nothing of each other's.
+import { mkdirSync } from "node:fs";
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { onUnreadableFileKept, unreadableFilesKept } from "./json";
 import { RawJson, SavedFile, SavedFileHeld, type SavedFileKind } from "./saved-file";
+
+/** The calls of the file system's sync functions a write at quit makes, in order. */
+const syncCalls = vi.hoisted(() => [] as string[]);
+vi.mock("node:fs", async (original) => {
+  const real = await original<typeof import("node:fs")>();
+  const noted =
+    <A extends unknown[], R>(name: string, call: (...args: A) => R) =>
+    (...args: A): R => {
+      syncCalls.push(name);
+      return call(...args);
+    };
+  return { ...real, default: real, writeSync: noted("writeSync", real.writeSync), fsyncSync: noted("fsyncSync", real.fsyncSync), renameSync: noted("renameSync", real.renameSync) };
+});
 
 /**
  * What comes at the next renames of a written file, one each, in turn: `before` it is tried (it still looks whether it
@@ -343,23 +357,49 @@ describe("writeNow, for the moment Tavora quits", () => {
     expect(await names()).toEqual(["notes.json"]);
   });
 
-  it("writes the newest of its texts again over a write that went in place while it was made, at once", async () => {
+  it("writes the newest of its texts again over a write that went in place while they were made, at once", async () => {
     const saved = new SavedFile(file, V1);
     await saved.read();
-    let newest = "";
-    const atQuit = (a: string) => () => {
-      if (saved.writeNow({ a })) newest = a;
-    };
-    // Each rename after the first (were the text written again the same way) brings another write at quit.
+    // Two writes at quit while the older write's rename is under way: it lands after both.
     renames.next = [
-      { at: "during", run: atQuit("first") },
-      { at: "during", run: atQuit("second") },
-      { at: "during", run: atQuit("third") },
+      {
+        at: "during",
+        run: () => {
+          expect(saved.writeNow({ a: "first" })).toBe(true);
+          expect(saved.writeNow({ a: "second" })).toBe(true);
+        },
+      },
     ];
     await saved.write({ a: "older" });
-    await saved.flush();
-    expect(JSON.parse(await text())).toEqual({ version: 1, a: newest });
-    expect(newest).not.toBe("");
+    expect(renames.landed).toEqual([true]);
+    // Written again before the write's turn ended, so nothing can come between.
+    expect(JSON.parse(await text())).toEqual({ version: 1, a: "second" });
+  });
+
+  it("flushes its text to the disk before it puts it in place", async () => {
+    const saved = new SavedFile(file, V1);
+    await saved.read();
+    syncCalls.length = 0;
+    expect(saved.writeNow({ a: 1 })).toBe(true);
+    expect(syncCalls).toEqual(["writeSync", "fsyncSync", "renameSync"]);
+  });
+
+  it("says so when it can't write its text again over a write that went in place meanwhile", async () => {
+    const logged = vi.mocked(console.error);
+    const saved = new SavedFile(file, V1);
+    await saved.read();
+    renames.next = [
+      {
+        at: "during",
+        run: () => {
+          saved.writeNow({ a: "at quit" });
+          // A folder where its temp goes: written again, it can't be.
+          mkdirSync(`${file}.now`);
+        },
+      },
+    ];
+    await saved.write({ a: "older" });
+    expect(logged).toHaveBeenCalledWith(expect.stringContaining("couldn't write notes.json again"));
   });
 
   it("takes the place of nothing when it fails: a write waiting still lands", async () => {

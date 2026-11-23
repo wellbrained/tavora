@@ -46,6 +46,17 @@ describe("sweepWriteLeftovers", () => {
     expect(await readFile(path.join(root, "library.json"), "utf8")).toBe("{}");
   });
 
+  it("removes the old temp of a write at quit cut off, next to its file, and leaves a fresh one", async () => {
+    await put("connection.json", "{}");
+    await put("connection.json.now", "{half");
+    await put("traffic.json", "{}");
+    await put("traffic.json.now", "{half", true);
+    await put("orphan.json.now", "{only copy");
+
+    expect(await sweepWriteLeftovers(root, () => now)).toEqual([path.join(root, "connection.json.now")]);
+    expect(await names()).toEqual(["connection.json", "orphan.json.now", "traffic.json", "traffic.json.now"]);
+  });
+
   it("leaves a temp a running write may still own", async () => {
     await put("library.json");
     await put("library.json.0123456789ab.tmp", "x", true);

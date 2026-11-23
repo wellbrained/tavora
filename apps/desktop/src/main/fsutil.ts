@@ -3,8 +3,8 @@ import { lstat, mkdir, open, readdir, readFile, rm, stat } from "node:fs/promise
 import path from "node:path";
 import { renameHeld } from "./rename-held";
 
-/** The temp file writeFileAtomic writes first: `<file>.<12 hex>.tmp`. */
-const TEMP_NAME = /^(.+)\.[0-9a-f]{12}\.tmp$/;
+/** The temp file writeFileAtomic writes first, `<file>.<12 hex>.tmp`, or a write at quit, `<file>.now` (saved-file.ts). */
+const TEMP_NAME = /^(.+)(?:\.[0-9a-f]{12}\.tmp|\.now)$/;
 
 /**
  * Writes to a temp file, flushes it to the disk and renames it over the target, so readers never see half a file and a
@@ -54,8 +54,8 @@ const SWEEP_DEPTH = 8;
 
 /**
  * Removes the temps writeFileAtomic left when Tavora was stopped in the middle of a write, at a start. Only in the data
- * folder (never the cloud copy's folder, where another PC may be writing), only `<file>.<12 hex>.tmp` files more than an
- * hour old by the clock as each is looked at (a temp dated in the future stays), and only next to their file: then that
+ * folder (never the cloud copy's folder, where another PC may be writing), only `<file>.<12 hex>.tmp` files (and the
+ * `<file>.now` of a write at quit, saved-file.ts) more than an hour old by the clock as each is looked at (a temp dated in the future stays), and only next to their file: then that
  * file is whole (the old content or the new), so nothing is lost. A temp whose file is missing stays, as it may be the
  * only copy. Links are never followed or removed. Answers what it removed.
  */

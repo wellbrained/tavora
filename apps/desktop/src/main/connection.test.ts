@@ -574,6 +574,16 @@ describe("connection.json at quit", () => {
     }
   });
 
+  it("the watcher writes its log at quit once, whether Quit or the window closing comes first", () => {
+    const immediate: unknown[] = [];
+    const store: ConnectionStore = { save: () => undefined, saveNow: (data) => void immediate.push(data) };
+    const probe = { close: () => undefined } as unknown as ConnectionProbe;
+    const watcher = new ConnectionWatcher({ probe, store, initial: { ...DEFAULT_STORED, outages: [] }, now: () => 0 });
+    watcher.dispose();
+    watcher.dispose();
+    expect(immediate).toHaveLength(1);
+  });
+
   it("the watcher's flush waits for its store's", async () => {
     let done = false;
     const store: ConnectionStore = { save: () => undefined, saveNow: () => undefined, flush: () =>

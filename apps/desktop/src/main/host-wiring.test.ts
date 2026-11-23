@@ -36,6 +36,12 @@ describe("host.ts", () => {
     expect(body(/async flush\(\): Promise<void> \{/)).toContain("this.workspaces.flush();");
   });
 
+  it("writes the connection log at quit and waits for it, also when Quit comes before the window closes", () => {
+    // Quit runs flush before the window closes (and disposes the watcher there): flush writes it and waits for the file.
+    const flush = body(/async flush\(\): Promise<void> \{/);
+    expect(flush).toMatch(/this\.connection\.dispose\(\);\s+(?:\/\/.*\s+)*await Promise\.all\(\[[^\]]*this\.connection\.flush\(\)[^\]]*\]\)/);
+  });
+
   // Restarting the panels of a module that changed owner is ModulePanels' (module-panels.test.ts).
   it("gives a panel only the grants of the owner its page runs as", () => {
     // The panel's connectors (its session gates them) are made for the module the page runs as.

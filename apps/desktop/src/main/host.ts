@@ -3913,6 +3913,9 @@ export class Host {
   async flush(): Promise<void> {
     // What is waiting goes to disk at once (an update's installer doesn't wait long), and again once the pages have saved.
     this.workspaces.flush();
+    // The connection log is written at quit (its dispose), here too when Quit comes before the window closes, and
+    // quitting waits for it.
+    this.connection.dispose();
     await Promise.all([this.pageSaved(), this.closePanelPages(), this.savedData.flush(), this.connection.flush()]);
     await this.gameOverlays?.shutdown();
     await this.streaming?.shutdown();

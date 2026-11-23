@@ -9,7 +9,7 @@
 // - writes of a file run one at a time, in order, each whole or not at all (fsutil.ts writeFileAtomic); a write at
 //   quit (writeNow) goes first, and no write asked before it lands after it.
 // A store gives its file's kind (SAVED_FILES) and its own fields; it never writes the version, or the file, itself.
-import { mkdirSync, renameSync, writeFileSync } from "node:fs";
+import { closeSync, fsyncSync, mkdirSync, openSync, renameSync, writeSync } from "node:fs";
 import path from "node:path";
 import { writeFileUnlessReplaced } from "./fsutil";
 import { readSavedFile, unknownFields, type SavedRecord } from "./json";
@@ -116,12 +116,22 @@ const quitWrites = new Map<string, { count: number; text: string }>();
 
 const quitCount = (file: string) => quitWrites.get(path.resolve(file))?.count ?? 0;
 
-/** Writes a file at once, whole (through `<file>.now`): for the moment Tavora quits. Whether it was written. */
+/**
+ * Writes a file at once, whole: to `<file>.now`, flushed to the disk, then renamed over the file, so a power cut leaves
+ * the old file or the new one. For the moment Tavora quits. Whether it was written; a `<file>.now` a crash left behind
+ * goes at the next start (fsutil.ts sweepWriteLeftovers).
+ */
 function putNow(file: string, text: string): boolean {
   const now = `${file}.now`;
   try {
     mkdirSync(path.dirname(file), { recursive: true });
-    writeFileSync(now, text);
+    const handle = openSync(now, "w");
+    try {
+      writeSync(handle, text);
+      fsyncSync(handle);
+    } finally {
+      closeSync(handle);
+    }
     renameSync(now, file);
     return true;
   } catch {
@@ -293,6 +303,6 @@ export class SavedFile {
     // Put in place while a write at quit was made: the newest of those goes back over it, at once (nothing can come
     // between, and Tavora can't stop in the middle of it).
     const last = quitWrites.get(path.resolve(this.file));
-    if (wrote && last && !current()) putNow(this.file, last.text);
+    if (wrote && last && !current() && !putNow(this.file, last.text)) console.error(`[tavora] couldn't write ${path.basename(this.file)} again as it was at quit`);
   }
 }
