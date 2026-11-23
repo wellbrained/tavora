@@ -24,8 +24,8 @@ const onlyPc = computed(() => waiting.value || unreadable.value);
 type Step = "choose" | "replace";
 const step = ref<Step>("choose");
 const replacing = computed(() => step.value === "replace");
-// Signed out with the copy in a folder, it may be another PC's that started over: its key can be typed in here. Signed
-// in, the account's key still fits (or the copy would have said "new key"), so that can't be it.
+// It may be another PC's that started over with a key of its own (one signed out has one). Signed out with the copy in a
+// folder, that key can be typed in here; signed in, this PC keeps the account's key, so it isn't asked for.
 const canTypeKey = computed(() => unreadable.value && cloudCopy.value?.folder != null && !account.value?.account);
 const keyText = ref("");
 watch(kind, () => {
@@ -37,7 +37,7 @@ const text = computed(() => {
   if (unfinished.value) return t("cloudCopy.unfinished.text");
   if (lost.value) return t("cloudCopy.lost.text");
   if (waiting.value) return t("cloudCopy.waiting.text");
-  if (replacing.value) return t(canTypeKey.value ? "cloudCopy.replace.text" : "cloudCopy.replace.textOwnKey");
+  if (replacing.value) return t("cloudCopy.replace.text");
   if (unreadable.value) return t(canTypeKey.value ? "cloudCopy.unreadable.text" : "cloudCopy.unreadable.textOwnKey");
   if (copyQuestion.value === "conflict") return t("cloudCopy.conflict.text");
   if (copyQuestion.value === "newer") return t("cloudCopy.newer.text");

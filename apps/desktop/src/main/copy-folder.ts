@@ -52,11 +52,10 @@ const REWRITE_PART_MS = 24 * 60 * 60_000;
  * was put there, and a save on top of it would get a version no PC can count with (above 2^53): it is junk.
  */
 const MAX_VERSION = 2 ** 52;
-/** The highest version a save on top of still fits under MAX_VERSION (a save goes up to two blocks higher). */
-const ROOM = MAX_VERSION - 2 * RANDOM_BITS;
 /**
- * No copy gets this high (2^28 saves): above it are only lists put there, and saves on top of them. When a save has no room
- * left (its base is above ROOM), they are removed and the save goes on top of what is left (makeRoom).
+ * No copy gets this high (2^28 saves): above it are only lists put there, and saves on top of them. A save on top of such a
+ * list this PC's key doesn't open doesn't climb on it, as it could be planted just below MAX_VERSION with no room above
+ * (makeRoom): the save goes where this PC was before it kept its side over it.
  */
 const SANE_VERSION = 2 ** 48;
 /** About this much of parts goes back from one read. */
@@ -171,8 +170,8 @@ interface Unused {
   waited: Map<string, number>;
 }
 
-/** The most one look adds to how long a part has waited. */
-const COUNT_AT_MOST_MS = 24 * 60 * 60_000;
+/** The most one look adds to how long a part has waited: a PC that saves every few days still gets there in a week or so. */
+const COUNT_AT_MOST_MS = 3 * 24 * 60 * 60_000;
 
 export class FolderStorage implements CopyStorage {
   readonly limit = null;
@@ -356,14 +355,30 @@ export class FolderStorage implements CopyStorage {
   }
 
   /**
-   * The version to save on top of instead of `base`, when a save on top of it would get above MAX_VERSION: only a list put
-   * there, or a save on top of one, gets that high. Every manifest above SANE_VERSION goes (the user kept this PC's side
-   * over it, or took it), and the newest left is returned. `base` itself when there is room.
+   * The version to save on top of instead of `base`, or null when this PC has to be asked first ("conflict"). Only for a
+   * `base` above SANE_VERSION that `check` doesn't open: a list put there, which the user kept this PC's side over. It may
+   * be numbered just below MAX_VERSION, with no room for any save above it, so the save doesn't climb on it. Every list
+   * above SANE_VERSION that was read and doesn't open with the key goes (never one by its name alone, nor one that can't
+   * be read right now); when the newest left is `followed`, the version this PC had before it kept its side over it, the
+   * save goes on top of that. Anything else there (another PC saved meanwhile) is for the user to choose.
    */
-  async makeRoom(base: number): Promise<number> {
-    if (base <= ROOM) return base;
-    for (const file of await this.manifests()) if (file.version > SANE_VERSION) await rm(path.join(this.manifestsDir, file.name), { force: true });
-    return (await this.manifests())[0]?.version ?? 0;
+  async makeRoom(base: number, followed: number | undefined, check: ManifestCheck): Promise<number | null> {
+    if (base <= SANE_VERSION) return base;
+    const all = await this.manifests();
+    /** "yes" opens with the key; "no" was read and doesn't; "unknown" can't be read right now. */
+    const opens = async (file: ManifestFile): Promise<"yes" | "no" | "unknown"> => {
+      try {
+        return check((await this.readManifest(file)).sealed) ? "yes" : "no";
+      } catch (error) {
+        return error instanceof CopyError && error.reason === "damaged" ? "no" : "unknown";
+      }
+    };
+    const at = all.find((file) => file.version === base);
+    // This PC's own line up there (it took a copy there, or saved on top of a list below SANE_VERSION): it climbs on.
+    if (at && (await opens(at)) !== "no") return base;
+    for (const file of all) if (file.version > SANE_VERSION && (await opens(file)) === "no") await rm(path.join(this.manifestsDir, file.name), { force: true });
+    const newest = (await this.manifests())[0]?.version ?? 0;
+    return followed !== undefined && newest === followed ? followed : null;
   }
 
   nextVersion(base: number): number {
@@ -394,10 +409,13 @@ export class FolderStorage implements CopyStorage {
     await writeInFolder(path.join(this.manifestsDir, `${pad(version)}-${pad(base)}.bin`), body);
     // Without the key nothing is known for sure, so nothing is deleted.
     if (check) await this.cleanUp(check).catch(() => undefined);
-    // Saved only when it is there to be read: one no PC reads would leave the copy where it was.
+    // Saved only when it is there to be read: one no PC reads would leave the copy where it was. One held right now (a
+    // sync app or a virus scan busy with it) is there.
     const saved = (await this.manifests()).find((file) => file.version === version);
     if (!saved) throw new CopyError("failed", "the saved manifest isn't in the folder");
-    await this.readManifest(saved);
+    await this.readManifest(saved).catch((error: unknown) => {
+      if (!(error instanceof CopyError && error.reason === "folder-locked")) throw error;
+    });
     return { status: "saved", version, size };
   }
 

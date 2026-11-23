@@ -5,7 +5,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { CloudCopyView } from "../shared/host-api";
 
-import { CloudCopy, CopyError, EMPTY_STATE, NewestUnreadable, swapInCopy } from "./cloud-copy";
+import { CloudCopy, CopyError, EMPTY_STATE, NewestUnreadable, swapInCopy, type CopyState } from "./cloud-copy";
 import { cleanUp, pc } from "./cloud-copy.test-helper";
 import { CopySync } from "./cloud-copy-sync";
 import { copyKeys, newCopyKey, open, partId, recoveryKey, seal } from "./copy-crypto";
@@ -524,6 +524,70 @@ describe("the cloud copy in a folder, as Tavora runs it", () => {
     expect(again.sync.view()).toMatchObject({ on: true, conflict: true, conflictKind: null });
   });
 
+  it("takes the new key with the copy it brought down, and checks again a newer list that came by the answer", async () => {
+    const onedrive = await folder();
+    const o = await pc({ "library.json": "o0" });
+    const atO = tavora(o);
+    await atO.sync.beforeLoad();
+    await atO.sync.turnOn(onedrive);
+    const newKey = newCopyKey();
+    const n = await pc({ "library.json": "n0" });
+    const [current] = await manifests(onedrive);
+    const fromN = await new CloudCopy(new FolderStorage(onedrive)).upload(newKey, n.roots, { ...EMPTY_STATE, version: Number(current!.slice(0, 16)) });
+    if (fromN.status !== "uploaded") throw new Error(fromN.status);
+    await writeFile(path.join(o.userData, "library.json"), "o1");
+    const again = tavora(o);
+    await again.sync.beforeLoad();
+    await expect(again.sync.keep("cloud")).rejects.toMatchObject({ key: "cloudCopy.error.unreadable" });
+    const reads = { parts: 0 };
+    const getParts = FolderStorage.prototype.getParts;
+    FolderStorage.prototype.getParts = async function (this: FolderStorage, ids: string[]) {
+      reads.parts++;
+      return getParts.call(this, ids);
+    };
+    try {
+      await again.sync.enterOtherKey(recoveryKey(newKey));
+    } finally {
+      FolderStorage.prototype.getParts = getParts;
+    }
+    // Brought down once, and staged: the question is the ordinary one.
+    expect(reads.parts).toBe(1);
+    expect(again.sync.view()).toMatchObject({ on: true, conflict: true, conflictKind: null });
+    // A list that doesn't open with the new key came meanwhile: Use the cloud copy doesn't take it unchecked.
+    const top = 9_000_000_000_000;
+    const planted = `${String(top).padStart(16, "0")}-${String(fromN.state.version).padStart(16, "0")}.bin`;
+    await writeFile(path.join(onedrive, "Tavora", "manifests", planted), "junk");
+    await expect(again.sync.keep("cloud")).rejects.toMatchObject({ key: "cloudCopy.error.unreadable" });
+    expect(again.sync.view()).toMatchObject({ conflictKind: "unreadable" });
+  });
+
+  it("says so when the folder's copy went away before the new key's copy came down", async () => {
+    const onedrive = await folder();
+    const o = await pc({ "library.json": "o0" });
+    const atO = tavora(o);
+    await atO.sync.beforeLoad();
+    await atO.sync.turnOn(onedrive);
+    const oldKey = Buffer.from(atO.sync["key"]!);
+    const newKey = newCopyKey();
+    const n = await pc({ "library.json": "n0" });
+    const [current] = await manifests(onedrive);
+    const fromN = await new CloudCopy(new FolderStorage(onedrive)).upload(newKey, n.roots, { ...EMPTY_STATE, version: Number(current!.slice(0, 16)) });
+    if (fromN.status !== "uploaded") throw new Error(fromN.status);
+    await writeFile(path.join(o.userData, "library.json"), "o1");
+    const again = tavora(o);
+    await again.sync.beforeLoad();
+    await expect(again.sync.keep("cloud")).rejects.toMatchObject({ key: "cloudCopy.error.unreadable" });
+    // The key opens the list; by the time its copy is fetched, the folder was emptied.
+    const download = CloudCopy.prototype.download;
+    CloudCopy.prototype.download = async () => null;
+    try {
+      await expect(again.sync.enterOtherKey(recoveryKey(newKey))).rejects.toMatchObject({ key: "cloudCopy.error.noCopy" });
+    } finally {
+      CloudCopy.prototype.download = download;
+    }
+    expect(Buffer.from(again.sync["key"]!).equals(oldKey)).toBe(true);
+  });
+
   it("puts nothing back once the copy was turned off meanwhile", async () => {
     const onedrive = await folder();
     const a = await pc({ "library.json": "a0" });
@@ -761,6 +825,100 @@ describe("what anyone who can write the folder can do", () => {
       const b = await pc();
       await expect(new CloudCopy(new FolderStorage(onedrive)).download(key, b.roots, path.join(b.root, "staging"), up.state.version, { sealed: true })).rejects.toMatchObject({ reason: "older" });
     }
+  });
+
+  describe("a list put there high up, that the user kept this PC's side over", () => {
+    const plant = (dir: string, version: number, base: number) => writeFile(path.join(dir, "Tavora", "manifests", `${pad(version)}-${pad(base)}.bin`), "junk");
+    const keptOver = (state: CopyState, over: number): CopyState => ({ ...state, version: over, kept: true, keptFrom: state.version });
+    const up = (onedrive: string, key: Uint8Array, roots: Awaited<ReturnType<typeof pc>>["roots"], state: CopyState) => new CloudCopy(new FolderStorage(onedrive)).upload(key, roots, state);
+
+    for (const junk of [2 ** 47, 2 ** 50, 2 ** 52 - 1]) {
+      it(`at ${junk}: another PC's save under it isn't saved over unasked`, async () => {
+        const key = newCopyKey();
+        const onedrive = await folder();
+        const a = await pc({ "library.json": "a0" });
+        const b = await pc({ "library.json": "a0" });
+        const first = await up(onedrive, key, a.roots, EMPTY_STATE);
+        if (first.status !== "uploaded") throw new Error(first.status);
+        await writeFile(path.join(b.userData, "library.json"), "B's work");
+        const fromB = await up(onedrive, key, b.roots, first.state);
+        if (fromB.status !== "uploaded") throw new Error(fromB.status);
+        await plant(onedrive, junk, first.state.version);
+        await writeFile(path.join(a.userData, "library.json"), "A's work");
+        const fromA = await up(onedrive, key, a.roots, keptOver(first.state, junk));
+        const remote = await new FolderStorage(onedrive).remote(fromB.state.version);
+        // Either A is asked and B's save stays the newest one that opens, or A went on top and B is asked.
+        if (fromA.status === "conflict") expect(remote!.version === fromB.state.version || remote!.follows === false).toBe(true);
+        else expect(remote!.follows).toBe(false);
+      });
+
+      it(`at ${junk}: two PCs that both kept their side over it don't save over each other unasked`, async () => {
+        const key = newCopyKey();
+        const onedrive = await folder();
+        const a = await pc({ "library.json": "a0" });
+        const c = await pc({ "library.json": "a0" });
+        const first = await up(onedrive, key, a.roots, EMPTY_STATE);
+        if (first.status !== "uploaded") throw new Error(first.status);
+        await plant(onedrive, junk, first.state.version);
+        await writeFile(path.join(a.userData, "library.json"), "A's work");
+        await writeFile(path.join(c.userData, "library.json"), "C's work");
+        expect((await up(onedrive, key, a.roots, keptOver(first.state, junk))).status).toBe("uploaded");
+        expect((await up(onedrive, key, c.roots, keptOver(first.state, junk))).status).toBe("conflict");
+      });
+    }
+
+    it("never removes this key's lists above 2^48, only ones it doesn't open", async () => {
+      const key = newCopyKey();
+      const onedrive = await folder();
+      const a = await pc({ "library.json": "a0" });
+      const first = await up(onedrive, key, a.roots, EMPTY_STATE);
+      if (first.status !== "uploaded") throw new Error(first.status);
+      // Saves on top of a list put there just below 2^48 climb on it, to above 2^48.
+      await plant(onedrive, 2 ** 48 - 1, first.state.version);
+      await writeFile(path.join(a.userData, "library.json"), "a1");
+      const s1 = await up(onedrive, key, a.roots, keptOver(first.state, 2 ** 48 - 1));
+      if (s1.status !== "uploaded") throw new Error(s1.status);
+      await writeFile(path.join(a.userData, "library.json"), "a2");
+      const s2 = await up(onedrive, key, a.roots, s1.state);
+      if (s2.status !== "uploaded") throw new Error(s2.status);
+      const real = [s1.state.version, s2.state.version];
+      expect(real.every((version) => version > 2 ** 48)).toBe(true);
+      // Then one near the top, kept over too: only it goes.
+      await plant(onedrive, 2 ** 52 - 1, s2.state.version);
+      await writeFile(path.join(a.userData, "library.json"), "a3");
+      const s3 = await up(onedrive, key, a.roots, keptOver(s2.state, 2 ** 52 - 1));
+      expect(s3.status).toBe("uploaded");
+      const left = (await manifests(onedrive)).map((name) => Number(name.slice(0, 16)));
+      expect(left).toEqual(expect.arrayContaining(real));
+      expect(left).not.toContain(2 ** 52 - 1);
+    });
+  });
+
+  it("counts a save as done when its list is only held for a moment when read back", async () => {
+    const key = newCopyKey();
+    const onedrive = await folder();
+    const a = await pc({ "library.json": "a0" });
+    const first = await new CloudCopy(new FolderStorage(onedrive)).upload(key, a.roots, EMPTY_STATE);
+    if (first.status !== "uploaded") throw new Error(first.status);
+    const before = new Set(await manifests(onedrive));
+    const proto = FolderStorage.prototype as unknown as { readManifest: (file: { name: string }) => Promise<unknown> };
+    const original = proto.readManifest;
+    proto.readManifest = async function (this: unknown, file: { name: string }) {
+      if (!before.has(file.name)) throw new CopyError("folder-locked", "something in the cloud copy folder can't be read right now");
+      return original.call(this, file);
+    };
+    let saved: Awaited<ReturnType<CloudCopy["upload"]>>;
+    try {
+      await writeFile(path.join(a.userData, "library.json"), "a1");
+      saved = await new CloudCopy(new FolderStorage(onedrive)).upload(key, a.roots, first.state);
+    } finally {
+      proto.readManifest = original;
+    }
+    expect(saved.status).toBe("uploaded");
+    if (saved.status !== "uploaded") return;
+    // The next save goes on top of it, never into "both changed".
+    await writeFile(path.join(a.userData, "library.json"), "a2");
+    expect(await new CloudCopy(new FolderStorage(onedrive)).upload(key, a.roots, saved.state)).toMatchObject({ status: "uploaded" });
   });
 
   it("can't rename a manifest to say it was saved on top of another version", async () => {

@@ -1517,7 +1517,9 @@ export class CopySync {
         }
         if (over !== null) {
           await rm(this.stagingDir, { recursive: true, force: true });
-          this.state = { ...this.state, version: over, kept: true };
+          // Where it was before: if that list can't be saved on top of, the save goes there (FolderStorage.makeRoom). Kept
+          // over the same list again (the save before had to ask), still where it was the first time.
+          this.state = { ...this.state, version: over, kept: true, keptFrom: this.state.keptFrom ?? this.state.version };
         } else if (staged) {
           // The list goes first: a crash can't leave it naming files that moved. The upload below replaces the copy, so
           // it doesn't run unless the copy's side is safe in the backup.
@@ -1528,7 +1530,8 @@ export class CopySync {
           // This PC's side goes up on top of the copy, even when nothing changed here since its last sync (the copy was
           // older, or made anew). Marked on disk, so it counts as changed until an upload succeeds, also across a restart;
           // the files keep their dates and parts, so a retry reads only what really changed.
-          this.state = { ...this.state, version: staged.version, kept: true };
+          const { keptFrom: _, ...rest } = this.state;
+          this.state = { ...rest, version: staged.version, kept: true };
         } else {
           this.state = EMPTY_STATE;
         }
@@ -1556,8 +1559,8 @@ export class CopySync {
    * Signed out, the newest list in the folder doesn't open with this PC's key: the recovery key of another PC that started
    * over is typed in. Only a key that opens that list is taken (one that doesn't leaves everything as it was, so a mistyped
    * key never costs this PC the key it has), and only once its copy came down whole: parts a sync app hasn't brought yet
-   * ("not-arrived") leave everything as it was too, to try again later. Then the copy goes on with it as when turned on:
-   * the user keeps one side.
+   * ("not-arrived") leave everything as it was too, to try again later. That copy stays staged, and the user keeps one
+   * side as when turning the copy on (a newer list by then is downloaded and checked again when they answer).
    */
   async enterOtherKey(text: string): Promise<void> {
     if (!this.on || !this.keyHere || !this.unreadable) throw new UserError("cloudCopy.error.wrongKey");
@@ -1578,19 +1581,31 @@ export class CopySync {
     });
     if (turn !== this.turn) return;
     if (!opens) throw new UserError("cloudCopy.error.wrongKey");
-    const came = await this.exclusive("downloading", () => this.cloud.download(key, this.roots(), this.stagedData, 0, { chosen: true }, () => turn === this.turn))
-      .catch((error: unknown) => {
+    await rm(this.stagingDir, { recursive: true, force: true });
+    const came = await this.exclusive("downloading", () => this.cloud.download(key, this.roots(), this.stagedData, 0, { chosen: true }, () => turn === this.turn)).catch(
+      async (error: unknown) => {
+        await rm(this.stagingDir, { recursive: true, force: true });
         if (turn !== this.turn) return null;
         throw CopySync.userError(this.noteProblem(error));
-      })
-      .finally(() => rm(this.stagingDir, { recursive: true, force: true }));
-    if (!came || turn !== this.turn) return;
+      },
+    );
+    if (turn !== this.turn) return;
+    if (!came) {
+      // The folder's copy went away meanwhile: nothing changes, and the user hears so.
+      await rm(this.stagingDir, { recursive: true, force: true });
+      throw new UserError("cloudCopy.error.noCopy");
+    }
+    // The key first, then the copy's list: a list staged under a key this PC doesn't have would be damaged at the next start.
     await this.accountKeys.takeHere(key);
-    const folder = this.folder;
-    await this.forget(null);
-    const mine = this.turn;
-    this.use(folder);
-    await this.startCopy(mine);
+    const staged: Staged = { v: 1, ...came };
+    await writeFileAtomic(this.listFile, JSON.stringify(staged));
+    // Nothing of what this PC synced under the old key counts any more, as at turn-on.
+    this.state = EMPTY_STATE;
+    if (!(await this.keepState(turn))) return;
+    this.unreadable = false;
+    this.problem = null;
+    this.ask("conflict");
+    this.changed();
   }
 
   /** This PC's side counts as changed until an upload succeeds (CopyState `kept`), wherever the state is now. */

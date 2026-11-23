@@ -98,6 +98,12 @@ export interface CopyState {
    * as older, as for `sealed`. An older Tavora ignores it (and drops it when it saves).
    */
   marked?: boolean;
+  /**
+   * The user kept this PC's side over a newest list its key doesn't open (`version` is that list's, and `kept` is set): the
+   * version this PC had followed before. Where that list can't be saved on top of, the save goes on top of this one, and
+   * only when it is still the newest left (FolderStorage.makeRoom). An older Tavora ignores it.
+   */
+  keptFrom?: number;
 }
 
 export const EMPTY_STATE: CopyState = { version: 0, pictures: true, files: {} };
@@ -346,10 +352,10 @@ export interface CopyStorage {
   /** A folder only: which of these parts aren't there (another PC's clean-up took them, or they never arrived). */
   missingParts?(ids: string[]): Promise<string[]>;
   /**
-   * A folder only: the version to save on top of instead of `base`, when no save on top of `base` could be read (a list
-   * put there with a version near the most there can be). It removes such lists; `base` itself when there is room.
+   * A folder only: the version to save on top of instead of `base` (a list put there that this PC's key doesn't open, which
+   * it doesn't climb on), or null when the user has to choose first. `followed` is CopyState `keptFrom`.
    */
-  makeRoom?(base: number): Promise<number>;
+  makeRoom?(base: number, followed: number | undefined, check: ManifestCheck): Promise<number | null>;
   /** Some of the asked parts, at least one when any of them is there. */
   getParts(ids: string[]): Promise<{ id: string; data: Uint8Array }[]>;
   /**
@@ -503,9 +509,10 @@ export class CloudCopy {
    */
   async upload(copyKey: Uint8Array, roots: CopyRoot[], synced: CopyState, progress?: (done: number, total: number) => void): Promise<UploadResult> {
     const keys = copyKeys(copyKey);
-    // Saved on top of a list put there too high for any save to go above it (FolderStorage.makeRoom): on top of what is
-    // left once such lists are gone.
-    const base = (await this.storage.makeRoom?.(synced.version)) ?? synced.version;
+    // Kept over a list put there that the key doesn't open (FolderStorage.makeRoom): on top of where this PC was before, when
+    // nothing else came meanwhile; otherwise the user chooses.
+    const base = this.storage.makeRoom ? await this.storage.makeRoom(synced.version, synced.keptFrom, checkWith(keys)) : synced.version;
+    if (base === null) return { status: "conflict", version: (await this.storage.remote())?.version ?? 0 };
     const state = base === synced.version ? synced : { ...synced, version: base, kept: true };
     const limit = this.storage.limit;
     let found = await scanCopy(roots);
@@ -1030,7 +1037,7 @@ export async function lookCopyState(file: string): Promise<Looked<CopyState>> {
   if (typeof saved.v === "number" && saved.v > STORE_VERSIONS.cloudCopy) return { status: "present", value: EMPTY_STATE };
   if (saved.v !== STORE_VERSIONS.cloudCopy) return damaged;
   if (typeof saved.version !== "number" || typeof saved.files !== "object" || saved.files === null) return damaged;
-  return { status: "present", value: { version: saved.version, pictures: saved.pictures !== false, files: saved.files as Record<string, SyncedFile>, ...(saved.kept === true ? { kept: true } : {}), ...(saved.sealed === true ? { sealed: true } : {}), ...(saved.marked === true ? { marked: true } : {}) } };
+  return { status: "present", value: { version: saved.version, pictures: saved.pictures !== false, files: saved.files as Record<string, SyncedFile>, ...(saved.kept === true ? { kept: true } : {}), ...(saved.sealed === true ? { sealed: true } : {}), ...(saved.marked === true ? { marked: true } : {}), ...(typeof saved.keptFrom === "number" && Number.isSafeInteger(saved.keptFrom) ? { keptFrom: saved.keptFrom } : {}) } };
 }
 
 /** The state as saved, or the empty one when it can't be used. */
@@ -1041,5 +1048,5 @@ export async function loadCopyState(file: string): Promise<CopyState> {
 
 /** Writes the state. During a swap it goes to another file than cloud-copy.json (CopySync.parkState). */
 export async function saveCopyState(file: string, state: CopyState): Promise<void> {
-  await writeFileAtomic(file, JSON.stringify({ v: STORE_VERSIONS.cloudCopy, version: state.version, pictures: state.pictures, files: state.files, ...(state.kept ? { kept: true } : {}), ...(state.sealed ? { sealed: true } : {}), ...(state.marked ? { marked: true } : {}) }));
+  await writeFileAtomic(file, JSON.stringify({ v: STORE_VERSIONS.cloudCopy, version: state.version, pictures: state.pictures, files: state.files, ...(state.kept ? { kept: true } : {}), ...(state.sealed ? { sealed: true } : {}), ...(state.marked ? { marked: true } : {}), ...(state.keptFrom !== undefined ? { keptFrom: state.keptFrom } : {}) }));
 }

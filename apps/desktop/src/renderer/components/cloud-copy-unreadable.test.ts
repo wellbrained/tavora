@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// The question when the newest cloud copy in the folder doesn't open with this PC's key (#909): signed out it may be
-// another PC's that started over, and its key can be typed in; signed in it can't, and no key is asked for. Keeping
+// The question when the newest cloud copy in the folder doesn't open with this PC's key (#909): it may be another PC's that
+// started over with a key of its own; signed out that key can be typed in, signed in it isn't asked for. Keeping
 // this PC's data over it is asked once more first. The host is a fake.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp, defineComponent, h, type App } from "vue";
@@ -65,13 +65,14 @@ describe("the question when the newest cloud copy won't open", () => {
     expect(host.act).toHaveBeenCalledWith({ type: "cloud-copy-other-key", key: "ABCD-EFGH" });
   });
 
-  it("signed in: asks for no key and doesn't speak of another PC starting over", async () => {
+  it("signed in: asks for no key, and still says another PC may have started over", async () => {
     await ask(true);
     expect($("text")!.textContent).toBe(t("cloudCopy.unreadable.textOwnKey"));
+    expect($("text")!.textContent).toContain("started over");
     expect($("cloud-copy-other-key-input")).toBeNull();
     $("cloud-copy-keep-pc")!.click();
     await tick();
-    expect($("text")!.textContent).toBe(t("cloudCopy.replace.textOwnKey"));
+    expect($("text")!.textContent).toBe(t("cloudCopy.replace.text"));
   });
 
   it("asks once more before this PC's data replaces it, and Back goes back", async () => {
