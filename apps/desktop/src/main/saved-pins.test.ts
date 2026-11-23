@@ -54,6 +54,18 @@ afterEach(async () => {
 
 const at = (...names: string[]) => path.join(dir, ...names);
 const slashed = () => dir.split(path.sep).join("/");
+/** The separator of the paths the stores are given: the system's, or Windows' to see the pins hold there too. */
+let separator = path.sep;
+const inData = (name: string) => `${dir}${separator}${name}`;
+
+/**
+ * The data folder's path shown as `%USERDATA%`, written with `/` or with the system's separator, and the separators of
+ * the rest of a path in it as `/`: the pins are the same on every system. Nothing else of the text changes.
+ */
+function hidePaths(text: string): string {
+  const shown = text.split(JSON.stringify(slashed()).slice(1, -1)).join("%USERDATA%").split(JSON.stringify(dir).slice(1, -1)).join("%USERDATA%");
+  return shown.replace(/%USERDATA%((?:\\\\[^"\\]*)+)/g, (_, rest: string) => `%USERDATA%${rest.split("\\\\").join("/")}`);
+}
 
 /** How a store is opened, changed and written, for one of the user's files. */
 interface Pinned<H = any> {
@@ -216,7 +228,7 @@ const STORES: Pinned[] = [
     sample: "folders.v1.json",
     open: async () => new ChosenFolders(dir, "local", "local.game"),
     read: (store: ChosenFolders) => store.get("Documents/My Games/Path of Exile 2"),
-    change: (store: ChosenFolders) => store.set("Documents/My Games/Elden Ring", path.join(dir, "Elden Ring")),
+    change: (store: ChosenFolders) => store.set("Documents/My Games/Elden Ring", inData("Elden Ring")),
   },
   {
     name: "library",
@@ -289,7 +301,7 @@ async function put(file: string, text: string): Promise<void> {
 async function snapshot(store: Pinned): Promise<Record<string, string>> {
   const files: Record<string, string> = {};
   const hide = (text: string) => {
-    const shown = text.split(JSON.stringify(slashed()).slice(1, -1)).join("%USERDATA%").split(JSON.stringify(dir).slice(1, -1)).join("%USERDATA%");
+    const shown = hidePaths(text);
     return store.normalize ? store.normalize(shown) : shown;
   };
   const walk = async (folder: string): Promise<void> => {
@@ -304,7 +316,7 @@ async function snapshot(store: Pinned): Promise<Record<string, string>> {
 }
 
 const plain = (store: Pinned, value: unknown) => {
-  const text = JSON.stringify(value ?? null).split(JSON.stringify(slashed()).slice(1, -1)).join("%USERDATA%").split(JSON.stringify(dir).slice(1, -1)).join("%USERDATA%");
+  const text = hidePaths(JSON.stringify(value ?? null));
   return JSON.parse(store.normalize ? store.normalize(text) : text) as unknown;
 };
 const failure = (error: unknown) => `threw ${(error as NodeJS.ErrnoException).code ?? (error as Error).name}`;
@@ -380,6 +392,30 @@ describe("what each store writes, as Tavora 0.24.147 wrote it", () => {
       await writeFile(pin, `${JSON.stringify(found, null, 2)}\n`);
     }
     expect(found).toEqual(JSON.parse(await readFile(pin, "utf8")));
+  });
+
+  it("the pins hold on Windows too, where the paths the stores are given use backslashes", async () => {
+    // On Windows the chosen folder's path, as written, is `C:\\…\\Elden Ring`: the pin hides the separator, not the folder.
+    separator = "\\";
+    try {
+      const store = STORES.find((item) => item.name === "chosen-folders")!;
+      const found = await scenarios(store);
+      expect(JSON.stringify(found)).toContain("%USERDATA%/Elden Ring");
+      expect(found).toEqual(JSON.parse(await readFile(path.join(PINS, "chosen-folders.json"), "utf8")));
+    } finally {
+      separator = path.sep;
+    }
+  });
+
+  it("hides only the data folder and its separators", () => {
+    const real = dir;
+    dir = "C:\\Users\\Nik\\AppData\\Roaming\\Tavora";
+    try {
+      const text = JSON.stringify({ a: `${dir}\\Elden Ring\\Saves`, b: "C:\\Other\\Place", c: `${slashed()}/x` });
+      expect(JSON.parse(hidePaths(text))).toEqual({ a: "%USERDATA%/Elden Ring/Saves", b: "C:\\Other\\Place", c: "%USERDATA%/x" });
+    } finally {
+      dir = real;
+    }
   });
 
   it("a newer Tavora's file is kept aside exactly as it was", async () => {

@@ -13,6 +13,14 @@ const TEMP_NAME = /^(.+)\.[0-9a-f]{12}\.tmp$/;
  * removed by sweepWriteLeftovers at the next start.
  */
 export async function writeFileAtomic(file: string, body: string | Uint8Array): Promise<void> {
+  await writeFileUnlessReplaced(file, body, () => true);
+}
+
+/**
+ * writeFileAtomic, putting the new file in place only while `stillWanted` says yes (it is asked right before, so a
+ * newer write that took its place meanwhile wins). Answers whether the file was written.
+ */
+export async function writeFileUnlessReplaced(file: string, body: string | Uint8Array, stillWanted: () => boolean): Promise<boolean> {
   await mkdir(path.dirname(file), { recursive: true });
   const temp = `${file}.${randomBytes(6).toString("hex")}.tmp`;
   try {
@@ -23,11 +31,13 @@ export async function writeFileAtomic(file: string, body: string | Uint8Array): 
     } finally {
       await handle.close();
     }
-    await renameHeld(temp, file);
+    if (await renameHeld(temp, file, undefined, stillWanted)) return true;
   } catch (error) {
     await rm(temp, { force: true }).catch(() => undefined);
     throw error;
   }
+  await rm(temp, { force: true }).catch(() => undefined);
+  return false;
 }
 
 /** How old a temp must be to count as left over: a write takes moments, so no running write still owns one this old. */

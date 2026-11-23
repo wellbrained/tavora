@@ -6,11 +6,12 @@
 // - one that can't be read right now (held by a virus scan) is never written over: after a read of the store's that
 //   failed, every write is refused until it reads the file again;
 // - the fields a newer Tavora added are written back as they were, for the kinds that keep them;
-// - writes of a file run one at a time, in order, each whole or not at all (fsutil.ts writeFileAtomic).
+// - writes of a file run one at a time, in order, each whole or not at all (fsutil.ts writeFileAtomic); a write at
+//   quit (writeNow) goes first, and no write asked before it lands after it.
 // A store gives its file's kind (SAVED_FILES) and its own fields; it never writes the version, or the file, itself.
 import { mkdirSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { writeFileAtomic } from "./fsutil";
+import { writeFileAtomic, writeFileUnlessReplaced } from "./fsutil";
 import { readSavedFile, unknownFields, type SavedRecord } from "./json";
 import { SUPPORTED_VERSIONS } from "./saved-versions";
 
@@ -63,7 +64,7 @@ export const NOT_SAVED_FILES: Readonly<Record<string, string>> = {
   panelState: "moves to SavedFile in the next pull request",
   document: "moves to SavedFile in the next pull request",
   chosenFolders: "moves to SavedFile in the next pull request",
-  sealed: "moves to SavedFile in the next pull request",
+  sealed: "planned: moves to SavedFile in a pull request after #909, and then a sealed file that can't be read right now is never written over either (decided 2026-11-23); until then json.ts openSealedFile opens it, and gives none for such a file",
   readOnlyFiles: "the version is on each entry, as Tavora 0.24 refuses a file with anything but entries in it",
   cloudCopy: "the cloud copy's files are being changed elsewhere (#909); they move once that has landed",
 };
@@ -81,8 +82,11 @@ export class RawJson {
   constructor(readonly text: string) {}
 }
 
-/** What a store writes: its own fields at the top of the file, without the version. */
-export type SavedFields = Readonly<Record<string, unknown>>;
+/** What a store writes: its own fields at the top of the file (a record, never a list), without the version. */
+export type SavedFields = object;
+
+/** Fields that can't be a list: a list would be written as a record of its indexes. */
+type NotAList<T> = T extends readonly unknown[] ? never : T;
 
 /** The writes and reads of each file, by its path, one at a time and in order, whichever SavedFile asks. */
 const lines = new Map<string, Promise<void>>();
@@ -101,11 +105,20 @@ function inLine<T>(file: string, task: () => Promise<T>): Promise<T> {
   return result;
 }
 
+/**
+ * The writes at quit (writeNow) of each file, by its path: how many so far, and the text of the last. A write asked
+ * before the last of them never lands after it.
+ */
+const quitWrites = new Map<string, { count: number; text: string }>();
+
+const quitCount = (file: string) => quitWrites.get(path.resolve(file))?.count ?? 0;
+
 /** A top-level member as it is written: its name and its value's text. */
 type Member = readonly [name: string, text: string];
 
 /** The members of `fields` written in `format`, taken now, so a store may change its own objects right after. */
 function membersOf(fields: SavedFields, format: SavedFormat): Member[] {
+  if (Array.isArray(fields)) throw new Error("A saved file holds a record, not a list");
   const members: Member[] = [];
   for (const [name, value] of Object.entries(fields)) {
     if (value instanceof RawJson) {
@@ -156,11 +169,12 @@ export class SavedFile {
    * hasn't read the file yet, it reads it first, so a newer Tavora's file is copied aside before it is written over.
    * Refused (SavedFileHeld) while the file couldn't be read. The fields are taken as they are now.
    */
-  write(fields: SavedFields): Promise<void> {
+  write<T extends SavedFields>(fields: NotAList<T>): Promise<void> {
     const members = membersOf(fields, this.kind.format);
+    const asked = quitCount(this.file);
     return inLine(this.file, async () => {
       await this.ready();
-      await this.writeMembers(members);
+      await this.writeMembers(members, asked);
     });
   }
 
@@ -170,22 +184,27 @@ export class SavedFile {
    * for this turn to end, which waits for it.
    */
   update(change: (saved: SavedRecord | null) => SavedFields | null | Promise<SavedFields | null>): Promise<void> {
+    const asked = quitCount(this.file);
     return inLine(this.file, async () => {
       const fields = await change(await this.readNow());
-      if (fields !== null) await this.writeMembers(membersOf(fields, this.kind.format));
+      if (fields !== null) await this.writeMembers(membersOf(fields, this.kind.format), asked);
     });
   }
 
   /**
    * Writes now, without waiting, for the moment Tavora quits. Only after a read that succeeded; false when it didn't
-   * write (or the write failed).
+   * write (or the write failed). It takes the place of every write asked for before it: one still waiting is dropped,
+   * one being written is not put in place, and one whose file went in place meanwhile is written over with this text again.
    */
-  writeNow(fields: SavedFields): boolean {
+  writeNow<T extends SavedFields>(fields: NotAList<T>): boolean {
     if (this.status.kind !== "read") return false;
+    const text = this.textOf(membersOf(fields, this.kind.format));
+    const key = path.resolve(this.file);
+    quitWrites.set(key, { count: quitCount(this.file) + 1, text });
     const now = `${this.file}.now`;
     try {
       mkdirSync(path.dirname(this.file), { recursive: true });
-      writeFileSync(now, this.textOf(membersOf(fields, this.kind.format)));
+      writeFileSync(now, text);
       renameSync(now, this.file);
       return true;
     } catch {
@@ -247,7 +266,13 @@ export class SavedFile {
     return textOf([...own.slice(0, at), ...kept, ...own.slice(at)], format);
   }
 
-  private async writeMembers(members: readonly Member[]): Promise<void> {
-    await writeFileAtomic(this.file, this.textOf(members));
+  /** Writes, unless a write at quit came after this one was asked for (`asked`: how many there were then). */
+  private async writeMembers(members: readonly Member[], asked: number): Promise<void> {
+    const current = () => quitCount(this.file) === asked;
+    if (!current()) return;
+    const wrote = await writeFileUnlessReplaced(this.file, this.textOf(members), current);
+    // Put in place while the write at quit was made: that one's text goes back over it.
+    const last = quitWrites.get(path.resolve(this.file));
+    if (wrote && last && !current()) await writeFileAtomic(this.file, last.text);
   }
 }
