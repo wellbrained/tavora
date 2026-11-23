@@ -46,6 +46,21 @@ const partFiles = async (dir: string) =>
 const manifests = async (dir: string) => (await readdir(path.join(dir, "Tavora", "manifests"))).sort();
 const read = (dir: string, name: string) => readFile(path.join(dir, name), "utf8");
 
+/**
+ * Whether a PC that last synced `state` takes the folder's newest copy on its own, as the check at start would
+ * (CopySync.fetchNewer): false when it asks ("older").
+ */
+async function takes(dir: string, key: Uint8Array, state: CopyState): Promise<boolean> {
+  const at = await pc();
+  try {
+    await new CloudCopy(new FolderStorage(dir)).download(key, at.roots, path.join(at.root, "staging"), state.version, state);
+    return true;
+  } catch (error) {
+    if (error instanceof CopyError && error.reason === "older") return false;
+    throw error;
+  }
+}
+
 describe("the cloud copy in a folder", () => {
   it("takes a PC's data to another PC through the folder, sealed", async () => {
     const key = newCopyKey();
@@ -55,7 +70,7 @@ describe("the cloud copy in a folder", () => {
     const uploaded = await copy.upload(key, a.roots, EMPTY_STATE);
     expect(uploaded).toMatchObject({ status: "uploaded", pictures: true });
     if (uploaded.status !== "uploaded") return;
-    expect(await copy.remote(uploaded.state.version)).toMatchObject({ version: uploaded.state.version, follows: true, size: expect.any(Number) });
+    expect(await copy.remote()).toMatchObject({ version: uploaded.state.version, size: expect.any(Number) });
 
     // Nothing in the folder can be read without the key.
     for (const file of await readdir(onedrive, { recursive: true })) {
@@ -99,11 +114,11 @@ describe("the cloud copy in a folder", () => {
 
     // Every PC sees the same newest version. The one that lost is told; the winner is not.
     const winner = Math.max(fromA.state.version, fromB.state.version);
-    const remoteA = await new FolderStorage(atA).remote(fromA.state.version);
-    const remoteB = await new FolderStorage(atB).remote(fromB.state.version);
+    const remoteA = await new FolderStorage(atA).remote();
+    const remoteB = await new FolderStorage(atB).remote();
     expect(remoteA?.version).toBe(winner);
     expect(remoteB?.version).toBe(winner);
-    expect([remoteA?.follows, remoteB?.follows].sort()).toEqual([false, true]);
+    expect([await takes(atA, key, fromA.state), await takes(atB, key, fromB.state)].sort()).toEqual([false, true]);
     // And the loser can't save on top either.
     const loser = fromA.state.version === winner ? { at: atB, pc: b, state: fromB.state } : { at: atA, pc: a, state: fromA.state };
     await writeFile(path.join(loser.pc.userData, "library.json"), "again");
@@ -142,7 +157,7 @@ describe("the cloud copy in a folder", () => {
     if (up.status !== "uploaded") throw new Error(up.status);
     const [name] = await manifests(onedrive);
     await cp(path.join(onedrive, "Tavora", "manifests", name!), path.join(onedrive, "Tavora", "manifests", `${name!.replace(".bin", "")} (1).bin`));
-    expect(await new FolderStorage(onedrive).remote(up.state.version)).toMatchObject({ version: up.state.version, follows: true });
+    expect(await new FolderStorage(onedrive).remote()).toMatchObject({ version: up.state.version });
   });
 
   it("cleans up old manifests and parts no one uses, but only once they are old", { timeout: 30_000 }, async () => {
@@ -767,8 +782,8 @@ describe("what anyone who can write the folder can do", () => {
     const second = await new CloudCopy(new FolderStorage(onedrive)).upload(key, a.roots, first.state);
     if (second.status !== "uploaded") throw new Error(second.status);
     await rm(path.join(onedrive, "Tavora", "manifests", `${pad(second.state.version)}-${pad(first.state.version)}.bin`));
-    // Its own manifest is gone, but the line goes below it without reaching it: left behind, so the user is asked.
-    expect(await new FolderStorage(onedrive).remote(second.state.version)).toMatchObject({ version: first.state.version, follows: false });
+    // Its own manifest is gone, and the copy is older than it: the user is asked.
+    expect(await new FolderStorage(onedrive).remote()).toMatchObject({ version: first.state.version });
     const b = await pc();
     const staging = path.join(b.root, "staging");
     await expect(new CloudCopy(new FolderStorage(onedrive)).download(key, b.roots, staging, second.state.version, second.state)).rejects.toMatchObject({ reason: "older" });
@@ -796,7 +811,8 @@ describe("what anyone who can write the folder can do", () => {
         state = up.state;
       }
       // A's save isn't in the copy's line: A asks (CopySync.fetchNewer), whether C's number is above A's or not.
-      expect(await new FolderStorage(onedrive).remote(second.state.version)).toMatchObject({ version: state.version, follows: false });
+      expect(await new FolderStorage(onedrive).remote()).toMatchObject({ version: state.version });
+      expect(await takes(onedrive, key, second.state)).toBe(false);
     }
   });
 
@@ -830,7 +846,8 @@ describe("what anyone who can write the folder can do", () => {
       }
       // P's sync app catches up.
       await cp(path.join(shared, "Tavora"), path.join(pFolder, "Tavora"), { recursive: true, force: false });
-      expect(await storageAt(pFolder).remote(p1.state.version)).toMatchObject({ version: state.version, follows: false });
+      expect(await storageAt(pFolder).remote()).toMatchObject({ version: state.version });
+      expect(await takes(pFolder, key, p1.state)).toBe(false);
     }
   });
 
@@ -877,10 +894,10 @@ describe("what anyone who can write the folder can do", () => {
         await plant(onedrive, junk, first.state.version);
         await writeFile(path.join(a.userData, "library.json"), "A's work");
         const fromA = await up(onedrive, key, a.roots, keptOver(first.state, junk));
-        const remote = await new FolderStorage(onedrive).remote(fromB.state.version);
+        const remote = await new FolderStorage(onedrive).remote();
         // Either A is asked and B's save stays the newest one that opens, or A went on top and B is asked.
-        if (fromA.status === "conflict") expect(remote!.version === fromB.state.version || remote!.follows === false).toBe(true);
-        else expect(remote!.follows).toBe(false);
+        if (fromA.status === "conflict") expect(remote!.version === fromB.state.version || !(await takes(onedrive, key, fromB.state))).toBe(true);
+        else expect(await takes(onedrive, key, fromB.state)).toBe(false);
       });
 
       it(`at ${junk}: two PCs that both kept their side over it don't save over each other unasked`, async () => {

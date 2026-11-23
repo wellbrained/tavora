@@ -135,7 +135,7 @@ async function olderStart(s: Setup, at: Pc): Promise<"off" | "uploaded" | "asks"
   const saved = JSON.parse(text) as Record<string, unknown>;
   const state: CopyState = saved.v === 1 && typeof saved.version === "number" && typeof saved.files === "object" && saved.files !== null ? { version: saved.version, pictures: saved.pictures !== false, files: saved.files as CopyState["files"] } : EMPTY_STATE;
   const engine = new CloudCopy(new FolderStorage(s.folder));
-  const r = await engine.remote(state.version);
+  const r = await engine.remote();
   if (r?.version === state.version) return (await engine.upload(s.key, at.roots, state)).status === "uploaded" ? "uploaded" : "nothing";
   return (await hasLocalChanges(at.roots, state)) ? "asks" : "nothing";
 }

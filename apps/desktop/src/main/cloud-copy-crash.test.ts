@@ -468,7 +468,7 @@ async function olderStart({ folder, key }: Setup, at: Pc): Promise<"off" | "uplo
   const state: CopyState =
     saved.v === 1 && typeof saved.version === "number" && typeof saved.files === "object" && saved.files !== null ? { version: saved.version, pictures: saved.pictures !== false, files: saved.files as CopyState["files"] } : EMPTY_STATE;
   const engine = new CloudCopy(new FolderStorage(folder));
-  const remote = await engine.remote(state.version);
+  const remote = await engine.remote();
   if (remote?.version === state.version) return (await engine.upload(key, at.roots, state)).status === "uploaded" ? "uploaded" : "nothing";
   return (await hasLocalChanges(at.roots, state)) ? "asks" : "nothing";
 }

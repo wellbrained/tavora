@@ -15,3 +15,6 @@ release/
 /docs/threat-model.md
 /docs/browser-security.md
 /docs/design/
+
+# An older Tavora's code, checked out by cloud-copy-older.test.ts while it runs
+apps/desktop/.older-*/

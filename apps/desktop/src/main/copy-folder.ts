@@ -15,9 +15,11 @@ import { writeFileAtomic } from "./fsutil";
 // A sync app is slow and has no version check, so:
 // - Every manifest is its own file, named by its version and the version it was saved on
 //   top of. Versions count up in the high bits and are random in the low ones, so two PCs
-//   saving at once get different versions, and every PC agrees which one is newer.
+//   saving at once get different versions, and every PC agrees which one is newer. The names
+//   only order the manifests and point to them.
 // - A PC whose last save lost against another PC's (it is not in the newest version's
-//   line) is told, so the user keeps one side instead of losing that save.
+//   line, sealed inside that manifest) is told, so the user keeps one side instead of
+//   losing that save.
 // - Parts that are missing may still be on their way, not lost.
 // - Only names Tavora writes are read: "file (1)" copies a sync app makes are left alone.
 // - Old manifests and parts no manifest uses are cleaned up after a while, so a PC still
@@ -263,7 +265,7 @@ export class FolderStorage implements CopyStorage {
     return { size, ids, sealed: body.subarray(start) };
   }
 
-  async remote(known = 0): Promise<RemoteCopy | null> {
+  async remote(): Promise<RemoteCopy | null> {
     const all = await this.manifests();
     const current = all[0];
     if (!current) return null;
@@ -275,18 +277,19 @@ export class FolderStorage implements CopyStorage {
       if (error instanceof CopyError && error.reason === "damaged") return { size: 0 };
       throw error;
     });
-    return { version: current.version, size: read.size, updatedAt: info.mtime.toISOString(), follows: follows(all, known) };
+    return { version: current.version, size: read.size, updatedAt: info.mtime.toISOString() };
   }
 
-  async manifest(): Promise<{ version: number; base: number; sealed: Uint8Array } | null> {
-    const current = (await this.manifests())[0];
+  async manifest(known = 0): Promise<{ version: number; base: number; sealed: Uint8Array; follows: boolean } | null> {
+    const all = await this.manifests();
+    const current = all[0];
     if (!current) return null;
     // Not a manifest at all: nothing that opens (CloudCopy.download says what then).
     const read = await this.readManifest(current).catch((error: unknown) => {
       if (error instanceof CopyError && error.reason === "damaged") return { sealed: new Uint8Array(0) };
       throw error;
     });
-    return { version: current.version, base: current.base, sealed: read.sealed };
+    return { version: current.version, base: current.base, sealed: read.sealed, follows: follows(all, known) };
   }
 
   async *earlierManifests(): AsyncGenerator<Uint8Array> {
@@ -551,7 +554,9 @@ export class FolderStorage implements CopyStorage {
 }
 
 /**
- * Whether the newest manifest grew out of version `known`: following each manifest back to the one it was
+ * Only for a newest manifest of an older Tavora, which has no line inside (CloudCopy.download), and only until this PC has
+ * seen one that has, or the folder holds one: whoever can write the folder can change file names, and clean-up takes
+ * manifests away. Whether the newest manifest grew out of version `known`: following each manifest back to the one it was
  * saved on top of reaches it. When the line goes below `known` without reaching it, another PC's save won over it, or
  * the folder was put back to an earlier day and another PC saved since: also when `known`'s own manifest is gone. Only
  * when the line breaks off where a save on top of `known` could be, and `known`'s own manifest is gone too (older

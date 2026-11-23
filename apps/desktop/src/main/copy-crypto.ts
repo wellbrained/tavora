@@ -46,6 +46,13 @@ export function copyKeys(copyKey: Uint8Array): CopyKeys {
 export const manifestMark = (keys: CopyKeys, fields: string): string => createHmac("sha256", keys.mark).update("tavora-copy-manifest-2\n").update(fields).digest("base64url");
 
 /**
+ * The mark over a folder manifest's line (the versions it grew out of) and its own mark, under the same manifest-only key.
+ * A mark of its own, not part of `manifestMark`: Tavora 0.24.151 to 0.24.153, from before lines, checks that one over a fixed set of fields, and
+ * has to keep opening manifests that carry a line.
+ */
+export const lineMark = (keys: CopyKeys, fields: string): string => createHmac("sha256", keys.mark).update("tavora-copy-line-1\n").update(fields).digest("base64url");
+
+/**
  * Which key this PC synced with, as it notes in its own state (CopyState `keyId`, never in the copy): part ids made under
  * one key mean nothing under another.
  */

@@ -74,6 +74,8 @@ interface Staged {
   sealed?: boolean;
   /** Its manifest carried its mark (one from an older Tavora has none). */
   marked?: boolean;
+  /** Its manifest carried its line (one from an older Tavora has none). */
+  listed?: boolean;
   /** In a `staged.json` an older Tavora left: the user chose it. Now that is the status `chosen`. */
   take?: boolean;
 }
@@ -625,7 +627,7 @@ export class CopySync {
    * staging folder. True when a copy is staged. A changed PC gets the keep-which-side question instead.
    */
   private async fetchNewer(turn: number): Promise<boolean> {
-    const remote = await this.cloud.remote(this.state.version);
+    const remote = await this.cloud.remote();
     if (turn !== this.turn) return false;
     if (!remote) {
       // The copy was deleted (on another PC): it is off here too.
@@ -644,8 +646,9 @@ export class CopySync {
       }
       return false;
     }
-    // Changed here, or this PC's last save lost against another PC's (in a synced folder): the user chooses.
-    if (remote.follows === false || this.swap.phase === "asking" || (await hasLocalChanges(this.roots(), this.state))) {
+    // Changed here: the user chooses. So they do when this PC's last save lost against another PC's (in a synced folder),
+    // which the newest list tells once it is open (CloudCopy.download: "older").
+    if (this.swap.phase === "asking" || (await hasLocalChanges(this.roots(), this.state))) {
       if (turn !== this.turn) return false;
       this.unreadable = false;
       this.ask("conflict");
@@ -677,7 +680,7 @@ export class CopySync {
     await rm(this.stagingDir, { recursive: true, force: true });
     let copy: Awaited<ReturnType<CloudCopy["download"]>>;
     try {
-      copy = await this.cloud.download(this.key!, this.roots(), this.stagedData, since, { sealed: this.state.sealed === true, marked: this.state.marked === true, chosen }, () => turn === this.turn);
+      copy = await this.cloud.download(this.key!, this.roots(), this.stagedData, since, { sealed: this.state.sealed === true, marked: this.state.marked === true, listed: this.state.listed === true, chosen }, () => turn === this.turn);
     } catch (error) {
       // The account's vault doesn't open with this PC's key either (another PC started over with a new key, or the
       // service sent something else): the copy goes off here, and turning it on asks for the new key. The key and the
@@ -912,8 +915,9 @@ export class CopySync {
 
   /**
    * Going back after an older Tavora turned the copy on during the swap: its cloud-copy.json beside the parked state is
-   * newer and wins, but it never knows `sealed` or `marked`. When the copy is still kept where the swap's copy came from,
-   * this PC has seen a sealed (or marked) one there, and keeps that: an unsealed (or unmarked) list there stays refused. Where is the place and the
+   * newer and wins, but it never knows `sealed`, `marked` or `listed`. When the copy is still kept where the swap's copy
+   * came from, this PC has seen a sealed (or marked, or listed) one there, and keeps that: an unsealed (or unmarked) list
+   * there stays refused, and one without a line is judged as `listed` says. Where is the place and the
    * account signed in (the service keeps one copy per account). Null to leave it as it is.
    */
   private async sealedBeside(plan: SwapPlan): Promise<CopyState | null> {
@@ -922,11 +926,17 @@ export class CopySync {
     const parked = await lookCopyState(this.parkedFile);
     const beside = await lookCopyState(this.stateFile);
     if (parked.status !== "present" || beside.status !== "present") return null;
-    // The same goes for a marked one.
+    // The same goes for a marked one, and one with a line.
     const sealed = parked.value.sealed === true && beside.value.sealed !== true;
     const marked = parked.value.marked === true && beside.value.marked !== true;
-    if (!sealed && !marked) return null;
-    return { ...beside.value, ...(parked.value.sealed === true ? { sealed: true } : {}), ...(parked.value.marked === true ? { marked: true } : {}) };
+    const listed = parked.value.listed === true && beside.value.listed !== true;
+    if (!sealed && !marked && !listed) return null;
+    return {
+      ...beside.value,
+      ...(parked.value.sealed === true ? { sealed: true } : {}),
+      ...(parked.value.marked === true ? { marked: true } : {}),
+      ...(parked.value.listed === true ? { listed: true } : {}),
+    };
   }
 
   /**
@@ -1017,8 +1027,8 @@ export class CopySync {
     // copy with pictures, which had begun to move them: those places are taken back first.
     if (resumed && !staged.pictures) await undoSwap(this.stagedData, roots.filter((root) => root.picture), plan.keepIn, { version: 0, pictures: true, files: {} }, plan.empty);
     const taken = await swapInCopy(this.stagedData, roots, plan.keepIn, staged, resumed);
-    // Once seen, a sealed (or marked) copy stays seen, also after taking an older Tavora's copy.
-    const state = { ...taken, ...(before.sealed === true ? { sealed: true } : {}), ...(before.marked === true ? { marked: true } : {}) };
+    // Once seen, a sealed (or marked, or listed) copy stays seen, also after taking an older Tavora's copy.
+    const state = { ...taken, ...(before.sealed === true ? { sealed: true } : {}), ...(before.marked === true ? { marked: true } : {}), ...(before.listed === true ? { listed: true } : {}) };
     await keepPcSettings(libraryFile(this.options.userData), plan.own, state);
     if (await sortWrittenSince(plan.keepIn, staged, before, await this.earlier(plan))) this.keptAside = plan.keepIn;
     // Turned off before the cut: the files are finished, and the copy stays off.
@@ -1749,7 +1759,7 @@ export class CopySync {
     return this.exclusive("downloading", async () => {
       let copy: Awaited<ReturnType<CloudCopy["download"]>>;
       try {
-        copy = await this.cloud.download(this.key!, roots, incoming, 0, { sealed: this.state.sealed === true, marked: this.state.marked === true, chosen: true }, () => turn === this.turn);
+        copy = await this.cloud.download(this.key!, roots, incoming, 0, { sealed: this.state.sealed === true, marked: this.state.marked === true, listed: this.state.listed === true, chosen: true }, () => turn === this.turn);
       } catch (error) {
         await rm(incoming, { recursive: true, force: true });
         if (turn !== this.turn) return null;
