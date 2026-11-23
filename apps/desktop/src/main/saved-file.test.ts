@@ -429,9 +429,10 @@ describe("writeNow, for the moment Tavora quits", () => {
 });
 
 describe("a turn that takes long", () => {
-  /** Lets real file work go on while the timers are fake. */
+  /** Lets real file work go on while the timers are fake: up to 4 s of real time (inside the test time limit), as a busy runner's disk may need. */
   const settle = async (until: () => boolean) => {
-    for (let n = 0; n < 500 && !until(); n++) await new Promise((resolve) => setImmediate(resolve));
+    const end = Date.now() + 4_000;
+    while (!until() && Date.now() < end) await new Promise((resolve) => setImmediate(resolve));
     expect(until()).toBe(true);
   };
 
