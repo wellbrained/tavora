@@ -1,4 +1,4 @@
-import { mkdirSync, readdirSync, rmSync } from "node:fs";
+import { mkdirSync, readdirSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -12,7 +12,9 @@ const RUNS = "tavora-test-runs";
 
 /** Gives this test run its own temp folder and returns the cleanup for the end of the run. */
 export function useRunTempDir(): () => void {
-  const runs = path.join(tmpdir(), RUNS);
+  // The long name: a Windows runner's temp folder is C:\Users\RUNNER~1\..., a short name the app's real-path checks
+  // (and so its tests) rightly refuse, since the real place is never spelled that way.
+  const runs = path.join(realpathSync.native(tmpdir()), RUNS);
   removeAbandonedRuns(runs);
   const dir = path.join(runs, `${process.pid}-${Date.now().toString(36)}`);
   mkdirSync(dir, { recursive: true });

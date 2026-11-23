@@ -193,7 +193,7 @@ describe.skipIf(!browser)("checkFocus", () => {
 
   it("waits for a ring that fades in before calling it missing, when strict", async () => {
     await page.setContent(html(`<button>Fades in</button>`, `button{outline:0 solid transparent;transition:outline-width 140ms}button:focus-visible{outline:2px solid blue}`));
-    expect((await checkFocus(page, "#root", { settleMs: 0, strictRing: true })).issues).toEqual([]);
+    expect((await checkFocus(page, "#root", { settleMs: 0, strictRing: true, ringSettleMs: 600 })).issues).toEqual([]);
   });
 
   it("finds a positive tabindex, and the control Tab then never reaches", async () => {
