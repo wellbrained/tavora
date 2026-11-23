@@ -38,7 +38,7 @@ async function setup(options: Setup = {}) {
   const installed = new Installed({ modules: new Map(modules.map((item) => [item.manifest.id, item])), blocked: new Map(), catalog: new Set(), info: new Map(), problems: [] }, (manifest) => manifest);
   const userData = await mkdtemp(path.join(tmpdir(), "tavora-workspaces-"));
   const undos = new UndoShelf();
-  const questions = new PendingQuestions();
+  const questions = new PendingQuestions({ installedOwner: () => undefined });
   // As in host.ts: the workspace shown is the library's last one, while the workspace screen is up.
   const screen = { on: options.open ? "workspace" : "home" };
   const shown = () => (screen.on === "workspace" ? library.lastWorkspaceId : null);

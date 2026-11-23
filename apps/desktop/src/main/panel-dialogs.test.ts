@@ -27,7 +27,7 @@ interface Setup {
 function setup(options: Setup = {}) {
   const calls: string[] = [];
   const sent: [string, unknown][] = [];
-  const questions = new PendingQuestions();
+  const questions = new PendingQuestions({ installedOwner: () => undefined });
   const placed = new Set(options.placed ?? options.open ?? ["map"]);
   const lent = new Set(options.lent ?? []);
   let dialog: { instanceId: string; width: number; height: number; bounds: null } | null = null;

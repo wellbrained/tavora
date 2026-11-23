@@ -17,7 +17,7 @@ const copyLink = { name: "overlay.copyLink", capability: "overlay" } as const;
 
 function setup(options: { awaiting?: string[]; shown?: InstanceRecord[] } = {}) {
   const calls: string[] = [];
-  const questions = new PendingQuestions();
+  const questions = new PendingQuestions({ installedOwner: (moduleId) => installed.get(moduleId)?.owner });
   const installed = new Installed({ modules: new Map([[media.manifest.id, media]]), blocked: new Map(), catalog: new Set(), info: new Map(), problems: [] }, (manifest) => manifest);
   const awaiting = new Set(options.awaiting ?? []);
   const panels = { isAwaiting: (id: string) => awaiting.has(id), applyBounds: () => void calls.push("bounds") };
@@ -109,9 +109,20 @@ describe("PanelQuestions", () => {
     expect(mixed.map((record) => panel.of(record, mixed))).toEqual([null, "ask", null, null]);
     expect(connector.isFor({ moduleId: "wellbrained.media", owner: "abcd1234" })).toBe(true);
     expect(connector.isFor({ moduleId: "wellbrained.media", owner: "local" })).toBe(false);
-    // A record from before owners were noted has none: it is no page of the asking owner's.
-    expect(connector.isFor({ moduleId: "wellbrained.media" })).toBe(false);
     expect(connector.isFor({ moduleId: "tavora.notes", owner: "abcd1234" })).toBe(false);
+  });
+
+  it("counts a panel with no owner noted yet as the copy installed now, so it asks only while that is the asker", () => {
+    // A workspace file from before owners were noted: the panel runs as the copy installed now (host.ts settleOwner).
+    const unnoted: InstanceRecord[] = [{ instanceId: "old", moduleId: "wellbrained.media" }, records[2]!];
+    const { panel, connector, installed } = setup({ shown: unnoted });
+    void connector.ask(asker, "media", copyLink);
+    expect(unnoted.map((record) => panel.of(record, unnoted))).toEqual(["ask", null]);
+    expect(panel.asking("old")).toBe(true);
+    // Another owner's copy took the id over: the panel would run as that one, so it is not asked there.
+    installed.replace({ modules: new Map([[media.manifest.id, localMedia]]), blocked: new Map(), catalog: new Set(), info: new Map(), problems: [] });
+    expect(unnoted.map((record) => panel.of(record, unnoted))).toEqual([null, null]);
+    expect(panel.asking("old")).toBe(false);
   });
 
   it("shows a leaderboard question in the panel that asked, whatever its place, and answers it once", async () => {

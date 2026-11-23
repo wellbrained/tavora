@@ -41,7 +41,7 @@ export interface ModulePanelsOptions {
   close: (instanceId: string) => void;
   /** A module's pages start again: its tooltips' skins go with them. */
   forgetTooltips: (moduleId: string) => void;
-  /** A module's open panels start again as another owner's: what their old pages asked the user ends (PanelQuestions.ownerChanged). */
+  /** A module's open panels start again as another owner's: what their old pages asked the user ends (ConnectorQuestions.ownerChanged, panel-gate.ts). */
   ownerChanged: (moduleId: string) => void;
   /** After a look, once the panels have their types: what else follows the modules (streams, notes, overlays, panels with their game). */
   modulesChanged: (restarted: boolean) => Promise<void>;

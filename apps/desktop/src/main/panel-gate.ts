@@ -320,7 +320,7 @@ export interface AskingModule {
   manifest: { id: string; permissions: { onRequest?: readonly Connector[] } };
 }
 
-/** Who an open connector question is for: a module id and the owner whose page asked. */
+/** A panel a connector question may show in: its module id, and the owner its page runs as (left out in a file from before owners were noted). */
 export interface QuestionOwner {
   moduleId: string;
   owner?: string;
@@ -361,10 +361,15 @@ export class ConnectorQuestions {
     return answer;
   }
 
-  /** Whether the question shown now is for `panel`: its module id and the owner its page runs as, both. */
+  /**
+   * Whether the question shown now is for `panel`: its module id and the owner its page runs as, both. A panel with no
+   * owner noted yet (a workspace file from before owners were) runs as the copy installed now, as host.ts settleOwner
+   * notes once its page starts.
+   */
   isFor(panel: QuestionOwner): boolean {
     const pending = this.options.questions.peek("connector")?.payload;
-    return pending !== undefined && pending.moduleId === panel.moduleId && pending.owner === panel.owner;
+    if (pending === undefined || pending.moduleId !== panel.moduleId) return false;
+    return pending.owner === (panel.owner ?? this.options.installed.modules.get(panel.moduleId)?.owner);
   }
 
   /**

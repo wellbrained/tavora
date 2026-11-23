@@ -1,15 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { PendingQuestions } from "./pending-questions";
+import { PendingQuestions, type PendingQuestionsOptions } from "./pending-questions";
 
 const content = { id: "c1", title: "Build" } as never;
 const navigation = { workspaceId: "w1", moduleId: "m", panelType: "t", panelName: "Viewer", content };
 const dialog = { module: {} as never, size: {} as never, until: 0, byClick: true };
 const consent = { kind: "consent", name: "Ann" } as const;
 const connector = { moduleId: "m", owner: "local", connector: "stream-overlay" } as const;
+/** Open questions where every module id is installed as the owner the connector questions here ask as ("local"). */
+const questionsWith = (options: Partial<PendingQuestionsOptions> = {}) => new PendingQuestions({ installedOwner: () => "local", ...options });
 
 describe("ask, answer and cancel", () => {
   it("resolves the asker with the answer and clears the slice", async () => {
-    const questions = new PendingQuestions();
+    const questions = questionsWith();
     const { id, answer } = questions.ask("link", { workspace: "w1" }, { url: "https://example.com" });
     expect(questions.snapshot().pendingLink).toBe("https://example.com");
     expect(questions.answer(id, "system")).toBe(true);
@@ -18,7 +20,7 @@ describe("ask, answer and cancel", () => {
   });
 
   it("ignores an answer for an id that is not open (or already answered)", async () => {
-    const questions = new PendingQuestions();
+    const questions = questionsWith();
     const { id, answer } = questions.ask("connector", { module: "m" }, connector);
     expect(questions.answer(id + 99, true)).toBe(false);
     expect(questions.answer(id, true)).toBe(true);
@@ -27,7 +29,7 @@ describe("ask, answer and cancel", () => {
   });
 
   it("takes the question away at once when the answer is still being worked out", async () => {
-    const questions = new PendingQuestions();
+    const questions = questionsWith();
     const { id, answer } = questions.ask("connector", { module: "m" }, connector);
     let finish!: (granted: boolean) => void;
     questions.answer(id, new Promise<boolean>((resolve) => (finish = resolve)));
@@ -37,7 +39,7 @@ describe("ask, answer and cancel", () => {
   });
 
   it("gives every question its own id", () => {
-    const questions = new PendingQuestions();
+    const questions = questionsWith();
     const ids = [
       questions.ask("link", { workspace: "w" }, { url: "a" }).id,
       questions.ask("connector", { module: "m" }, connector).id,
@@ -49,7 +51,7 @@ describe("ask, answer and cancel", () => {
   });
 
   it("cancels one question by id with the no-answer of its kind", async () => {
-    const questions = new PendingQuestions();
+    const questions = questionsWith();
     const link = questions.ask("link", { workspace: "w" }, { url: "a" });
     const menu = questions.ask("menu", { panel: "p" }, { choices: new Set(["x"]) });
     const board = questions.ask("leaderboard", { panel: "p" }, { moduleId: "m", question: consent });
@@ -65,7 +67,7 @@ describe("ask, answer and cancel", () => {
 
 describe("scopes", () => {
   function rig() {
-    const questions = new PendingQuestions();
+    const questions = questionsWith();
     return {
       questions,
       onPanel: questions.ask("leaderboard", { panel: "p1" }, { moduleId: "m", question: consent }),
@@ -115,13 +117,13 @@ describe("scopes", () => {
   });
 
   it("cancelling an empty scope does nothing", () => {
-    expect(new PendingQuestions().cancel({ panel: "none" })).toBe(0);
+    expect(questionsWith().cancel({ panel: "none" })).toBe(0);
   });
 });
 
 describe("a newer question of the same kind", () => {
   it("replaces the older one, which counts as not answered", async () => {
-    const questions = new PendingQuestions();
+    const questions = questionsWith();
     const first = questions.ask("leaderboard", { panel: "p1" }, { moduleId: "m", question: consent });
     const second = questions.ask("leaderboard", { panel: "p2" }, { moduleId: "m", question: { kind: "sign-in" } });
     await expect(first.answer).resolves.toBe(false);
@@ -130,7 +132,7 @@ describe("a newer question of the same kind", () => {
   });
 
   it("keeps different kinds side by side", () => {
-    const questions = new PendingQuestions();
+    const questions = questionsWith();
     questions.ask("connector", { module: "m" }, connector);
     questions.ask("leaderboard", { panel: "p" }, { moduleId: "m", question: consent });
     questions.ask("link", { workspace: "w" }, { url: "a" });
@@ -142,7 +144,7 @@ describe("a newer question of the same kind", () => {
 });
 
 describe("queued kinds", () => {
-  const queued = () => new PendingQuestions({ queued: ["connector"] });
+  const queued = () => questionsWith({ queued: ["connector"] });
   const ask = (questions: PendingQuestions, moduleId: string) => questions.ask("connector", { module: moduleId }, { moduleId, owner: "local", connector: "stream-overlay" });
 
   it("makes the second ask wait until the first is answered", async () => {
@@ -182,11 +184,11 @@ describe("queued kinds", () => {
 
 describe("snapshot", () => {
   it("is empty without questions", () => {
-    expect(new PendingQuestions().snapshot()).toEqual({ pendingLink: null, pendingNavigation: null, pendingGameSwitch: null, pendingConnector: null, pendingLeaderboard: null });
+    expect(questionsWith().snapshot()).toEqual({ pendingLink: null, pendingNavigation: null, pendingGameSwitch: null, pendingConnector: null, pendingLeaderboard: null });
   });
 
   it("has the shape of the host view fields, per kind", () => {
-    const questions = new PendingQuestions();
+    const questions = questionsWith();
     questions.ask("link", { workspace: "w1" }, { url: "https://example.com" });
     questions.ask("navigation", { workspace: "w1" }, navigation);
     questions.ask("gameSwitch", { workspace: "g1" }, { gameId: "g1" });
@@ -215,10 +217,10 @@ describe("snapshot", () => {
   });
 
   it("leaves menus and waiting dialogs out: the host UI gets them another way", () => {
-    const questions = new PendingQuestions();
+    const questions = questionsWith();
     questions.ask("menu", { panel: "p" }, { choices: new Set(["a"]) });
     questions.ask("dialog", { panel: "p" }, dialog);
-    expect(questions.snapshot()).toEqual(new PendingQuestions().snapshot());
+    expect(questions.snapshot()).toEqual(questionsWith().snapshot());
     expect(questions.peek("menu")?.payload.choices.has("a")).toBe(true);
     expect(questions.peek("dialog")?.scope).toEqual({ panel: "p" });
   });
@@ -226,7 +228,7 @@ describe("snapshot", () => {
 
 describe("a panel closing while its question is open", () => {
   it("says no to its leaderboard question, as the host did before", async () => {
-    const questions = new PendingQuestions();
+    const questions = questionsWith();
     const board = questions.ask("leaderboard", { panel: "p1" }, { moduleId: "m", question: consent });
     questions.cancel({ panel: "p1" });
     await expect(board.answer).resolves.toBe(false);
@@ -235,7 +237,7 @@ describe("a panel closing while its question is open", () => {
   });
 
   it("drops the panel's menu and waiting dialog too", async () => {
-    const questions = new PendingQuestions();
+    const questions = questionsWith();
     const menu = questions.ask("menu", { panel: "p1" }, { choices: new Set(["a"]) });
     const waiting = questions.ask("dialog", { panel: "p1" }, dialog);
     questions.cancel({ panel: "p1" });

@@ -46,6 +46,10 @@ describe("host.ts", () => {
     expect(body(/private folderHostOf\(/)).toContain("sameOwner(module, this.modules)");
     // Settings' folder choice goes to the owner it showed, not to whichever copy holds the id now.
     expect(body(/"choose-module-folder": async \(action\) => \{/)).toContain("sameOwner({ owner: action.owner, manifest: { id: action.moduleId } }, this.modules)");
+    // A connector question ends when its module's panels start again as another owner's, and Tavora's window shows it
+    // only while the asking owner's copy is installed (panel-gate.ts ConnectorQuestions, pending-questions.ts).
+    expect(body(/this\.modulePanels = new ModulePanels\(\{/)).toContain("ownerChanged: (moduleId) => this.connectorQuestions.ownerChanged(moduleId),");
+    expect(host).toContain("new PendingQuestions({ installedOwner: (moduleId) => this.modules.get(moduleId)?.owner })");
     // The open module pages are the ones a look at the modules restarts or reloads.
     expect(body(/this\.modulePanels = new ModulePanels\(\{/)).toContain("views: () => this.moduleViews(),");
   });
