@@ -67,7 +67,8 @@ const named = (dir: string, name: string) => {
  */
 function hidePaths(text: string): string {
   let shown = text;
-  for (const [dir, name] of [...places].sort((a, b) => b[0].length - a[0].length)) shown = shown.split(JSON.stringify(dir).slice(1, -1)).join(name).split(dir).join(name);
+  // Each folder as JSON writes it, as the system writes it, and with `/` (the samples' form on Windows).
+  for (const [dir, name] of [...places].sort((a, b) => b[0].length - a[0].length)) for (const form of [JSON.stringify(dir).slice(1, -1), dir, dir.split(path.sep).join("/")]) shown = shown.split(form).join(name);
   return shown.replace(/\\\\|\\(?!")/g, "/");
 }
 
