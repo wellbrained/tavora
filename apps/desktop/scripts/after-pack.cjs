@@ -1,6 +1,7 @@
 // electron-builder afterPack hook: makes the packaged Windows app smaller (win-unpacked, so the installer and the zip).
-//  - dxcompiler.dll / dxil.dll (26 MB) are the DirectX shader compiler that only Chromium's WebGPU uses. Tavora
-//    has no WebGPU; WebGL keeps working through ANGLE and d3dcompiler_47.dll, which stay.
+//  - dxcompiler.dll (25 MB) is the DirectX shader compiler that only Chromium's WebGPU uses. Tavora has no WebGPU;
+//    WebGL keeps working through ANGLE and d3dcompiler_47.dll, which stay. (Electron 45 no longer ships dxil.dll,
+//    which went with it.)
 //  - LICENSES.chromium.html (19.5 MB) is shipped as LICENSES.chromium.html.gz, next to LICENSE.electron.txt.
 //    Nothing in the app reads it; it is there to satisfy the licence terms.
 // A file that is not there fails the build: a new Electron may have renamed it, and the app would quietly ship full size.
@@ -8,7 +9,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const zlib = require("node:zlib");
 
-const REMOVE = ["dxcompiler.dll", "dxil.dll"];
+const REMOVE = ["dxcompiler.dll"];
 const LICENCES = "LICENSES.chromium.html";
 
 exports.default = async function afterPack(context) {
