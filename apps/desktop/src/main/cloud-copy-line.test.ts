@@ -9,7 +9,7 @@ import type { CloudCopyView } from "../shared/host-api";
 import { CloudCopy, CopyError, EMPTY_STATE, LINE_LENGTH, openManifest, type CopyState, type CopyStorage, type UploadResult } from "./cloud-copy";
 import { cleanUp, pc } from "./cloud-copy.test-helper";
 import { CopySync } from "./cloud-copy-sync";
-import { copyKeys, newCopyKey, open, seal } from "./copy-crypto";
+import { copyKeys, lineMark, newCopyKey, open, seal } from "./copy-crypto";
 import { FolderStorage, type FolderStorageOptions } from "./copy-folder";
 
 const folders: string[] = [];
@@ -69,10 +69,10 @@ function uploaded(result: UploadResult): CopyState {
 }
 
 /** One save of `text` from a PC, on top of `state`. */
-async function save(storage: CopyStorage, key: Uint8Array, at: Awaited<ReturnType<typeof pc>>, state: CopyState, text: string): Promise<CopyState> {
+async function save(storage: CopyStorage, key: Uint8Array, at: Awaited<ReturnType<typeof pc>>, state: CopyState, text: string, lineLength?: number): Promise<CopyState> {
   await mkdir(at.userData, { recursive: true });
   await writeFile(path.join(at.userData, "library.json"), text);
-  return uploaded(await new CloudCopy(storage).upload(key, at.roots, state));
+  return uploaded(await new CloudCopy(storage, lineLength !== undefined ? { lineLength } : {}).upload(key, at.roots, state));
 }
 
 /** The opened list of `version` in the folder. */
@@ -129,6 +129,19 @@ describe("the line sealed in each folder list", () => {
     const { manifest } = await listOf(dir, key, a2.version);
     expect(() => openManifest(keys, seal(keys, Buffer.from(JSON.stringify({ ...manifest, line: [a1.version, 5] }))))).toThrow(CopyError);
     expect(() => openManifest(keys, seal(keys, Buffer.from(JSON.stringify({ ...manifest, lineMark: undefined }))))).toThrow(CopyError);
+    // A line under a right mark of its own, that still isn't one a save has: it doesn't start at the parent, doesn't go
+    // down, or a first save names any.
+    const marked = (fields: Record<string, unknown>) => {
+      const list = { ...manifest, ...fields };
+      return seal(keys, Buffer.from(JSON.stringify({ ...list, lineMark: lineMark(keys, JSON.stringify([list.mark, list.line])) })));
+    };
+    expect(() => openManifest(keys, marked({}))).not.toThrow();
+    expect(() => openManifest(keys, marked({ line: [k.version] }))).toThrow(CopyError);
+    expect(() => openManifest(keys, marked({ line: [a1.version, a1.version] }))).toThrow(CopyError);
+    expect(() => openManifest(keys, marked({ line: [a1.version, a1.version + 1] }))).toThrow(CopyError);
+    expect(() => openManifest(keys, marked({ line: [a1.version, 0] }))).toThrow(CopyError);
+    const first = (await listOf(dir, key, k.version)).manifest;
+    expect(() => openManifest(keys, seal(keys, Buffer.from(JSON.stringify({ ...first, line: [5], lineMark: lineMark(keys, JSON.stringify([first.mark, [5]])) }))))).toThrow(CopyError);
     // Without a mark, whatever line it says is left aside: it is judged as any list without a mark.
     expect(openManifest(keys, seal(keys, Buffer.from(JSON.stringify({ ...manifest, mark: undefined }))))).toMatchObject({ marked: false, listed: false });
   });
@@ -210,24 +223,42 @@ describe("the line sealed in each folder list", () => {
     expect(await takes(atB, key, fromB)).toBe(false);
   });
 
-  it(`follows a PC up to ${LINE_LENGTH} saves behind, and asks one further back`, { timeout: 60_000 }, async () => {
+  it("follows a PC as many saves behind as the line holds, and asks one further back", async () => {
+    expect(LINE_LENGTH).toBe(256);
+    // Eight here, as LINE_LENGTH saves take long: the same rule, at any length.
+    const length = 8;
     const key = newCopyKey();
     const dir = await folder();
     const storage = new FolderStorage(dir);
-    // Clean-up reads every list on each save, which over this many saves is slow (Windows CI), and nothing here is old
-    // enough for it to remove: it is left out.
-    (storage as unknown as { cleanUp: () => Promise<void> }).cleanUp = async () => undefined;
     const a = await pc();
-    const k = await save(storage, key, a, EMPTY_STATE, "k");
+    const k = await save(storage, key, a, EMPTY_STATE, "k", length);
     let state = k;
-    for (let round = 1; round <= LINE_LENGTH; round++) state = await save(storage, key, a, state, `a${round}`);
-    expect((await listOf(dir, key, state.version)).manifest.line).toHaveLength(LINE_LENGTH);
-    // The PC that synced K was away for LINE_LENGTH saves: K is the line's last.
+    for (let round = 1; round <= length; round++) state = await save(storage, key, a, state, `a${round}`, length);
+    expect((await listOf(dir, key, state.version)).manifest.line).toHaveLength(length);
+    // The PC that synced K was away for as many saves as the line holds: K is the line's last.
     expect(await takes(dir, key, k)).toBe(true);
     // One save more: K is past the line, though its list is still in the folder. Asked, never assumed.
-    state = await save(storage, key, a, state, "one more");
+    state = await save(storage, key, a, state, "one more", length);
+    expect((await listOf(dir, key, state.version)).manifest.line).toHaveLength(length);
     expect(await nameOf(dir, k.version)).toBeDefined();
     expect(await takes(dir, key, k)).toBe(false);
+  });
+
+  it("lets a PC at keptFrom follow the save made over the list it couldn't open", async () => {
+    const key = newCopyKey();
+    const dir = await folder();
+    const a = await pc();
+    const k = await save(new FolderStorage(dir), key, a, EMPTY_STATE, "k");
+    const f = await save(new FolderStorage(dir), key, a, k, "f");
+    // Another PC started over with a key of its own, on top of F.
+    const other = await pc();
+    const u = await save(new FolderStorage(dir), newCopyKey(), other, { ...f, files: {} }, "junk");
+    // P kept its side over that list: its save goes on top of it, and its line on from F.
+    const p = await pc();
+    const fromP = await save(new FolderStorage(dir), key, p, { ...f, version: u.version, kept: true, keptFrom: f.version }, "p");
+    expect((await listOf(dir, key, fromP.version)).manifest.line).toEqual([u.version, f.version, k.version]);
+    expect(await takes(dir, key, f)).toBe(true);
+    expect(await takes(dir, key, k)).toBe(true);
   });
 
   it("asks a PC whose last save went with a folder put back, once another PC saved since", async () => {
@@ -281,12 +312,41 @@ describe("the line sealed in each folder list", () => {
       const b2 = await save(new FolderStorage(dir), key, b, a1, "b2");
       await asOlderTavora(dir, key, b2.version);
       expect(await takes(dir, key, a1)).toBe(true);
-      // Two of its saves on top: this PC, which knows lines, can't tell, and asks.
+      // Two of its saves on top: the parents sealed in them lead to A1, so this PC follows, also one that never saw a line.
       const b3 = await save(new FolderStorage(dir), key, b, neverListed(b2), "b3");
       await asOlderTavora(dir, key, b3.version);
+      expect(await takes(dir, key, a1)).toBe(true);
+      expect(await takes(dir, key, neverListed(a1))).toBe(true);
+      expect(await takes(dir, key, k)).toBe(true);
+      // A save beside them is not on the way down: asked.
+      expect(await takes(dir, key, { ...a1, version: b2.version + 1 })).toBe(false);
+      // B2's list gone, they no longer tell: a PC that knows lines, or in a folder that holds one, asks.
+      await rm(path.join(manifestsDir(dir), (await nameOf(dir, b2.version))!));
       expect(await takes(dir, key, a1)).toBe(false);
-      // A PC that never saw a line, in a folder that holds one, asks too.
       expect(await takes(dir, key, neverListed(a1))).toBe(false);
+    });
+
+    it("asks a PC that knows lines when only older Tavoras' lists are left, one renamed", async () => {
+      const key = newCopyKey();
+      const shared = await folder();
+      const a = await pc();
+      const k = await save(new FolderStorage(shared), key, a, EMPTY_STATE, "k");
+      const pFolder = await folder();
+      await mirror(shared, pFolder);
+      const p = await pc();
+      const p1 = await save(new Numbered(pFolder, "low"), key, p, k, "p-work");
+      expect(p1.listed).toBe(true);
+      const o = await pc();
+      const o1 = neverListed(await save(new Numbered(shared, "high"), key, o, neverListed(k), "o1"));
+      await asOlderTavora(shared, key, o1.version);
+      const o2 = neverListed(await save(new FolderStorage(shared), key, o, o1, "o2"));
+      await asOlderTavora(shared, key, o2.version);
+      await syncApp(pFolder, shared);
+      // A writer without the key removes every list with a line, and renames O1 as if saved on P1.
+      await rm(path.join(manifestsDir(shared), (await nameOf(shared, k.version))!));
+      await rm(path.join(manifestsDir(shared), (await nameOf(shared, p1.version))!));
+      await rename(path.join(manifestsDir(shared), (await nameOf(shared, o1.version))!), path.join(manifestsDir(shared), `${pad(o1.version)}-${pad(p1.version)}.bin`));
+      expect(await takes(shared, key, p1)).toBe(false);
     });
 
     it("goes by the names, as before, only where no line was ever seen", async () => {

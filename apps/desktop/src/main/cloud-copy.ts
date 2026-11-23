@@ -255,6 +255,32 @@ export const manifestParts = (manifest: Pick<Manifest, "files">): string[] => [.
  */
 export type ManifestCheck = (sealed: Uint8Array) => { version?: number; parent?: number; marked: boolean; line?: number[]; parts: string[] } | null;
 
+/** What the marked manifests that open with the key say of themselves, by the version inside their seal, never by name. */
+type SealedLists = Map<number, { parent?: number; line?: number[] }>;
+
+/** Notes one manifest in `said`, when it opens with the key and is marked; the first of a version counts. */
+function noteSealed(keys: CopyKeys, said: SealedLists, sealed: Uint8Array): void {
+  const checked = checkWith(keys)(sealed);
+  if (checked?.marked && checked.version !== undefined && !said.has(checked.version)) said.set(checked.version, checked);
+}
+
+/**
+ * `from`, then down through the parents `said` seals, to the first list with a line, and that line. Parents only go down,
+ * so it ends; it stops where no list says more.
+ */
+function walkDown(said: SealedLists, from: number): number[] {
+  const line = [from];
+  for (let at = said.get(from); at; at = said.get(line.at(-1)!)) {
+    if (at.line) {
+      line.push(...at.line);
+      break;
+    }
+    if (!at.parent) break;
+    line.push(at.parent);
+  }
+  return line;
+}
+
 export class CopyError extends Error {
   constructor(
     readonly reason: "signed-out" | "unreachable" | "unavailable" | "too-many" | "damaged" | "failed" | "no-folder" | "folder-locked" | "not-arrived" | "older",
@@ -546,7 +572,11 @@ export class ServiceStorage implements CopyStorage {
 
 /** The engine: what changed goes up sealed, a copy comes down checked. Where it is kept is up to the storage. */
 export class CloudCopy {
-  constructor(readonly storage: CopyStorage) {}
+  constructor(
+    readonly storage: CopyStorage,
+    /** Tests only: a shorter line than LINE_LENGTH, so going past it takes a few saves. */
+    private readonly options: { lineLength?: number } = {},
+  ) {}
 
   remote(): Promise<RemoteCopy | null> {
     return this.storage.remote();
@@ -647,7 +677,7 @@ export class CloudCopy {
       };
       manifest.mark = manifestMark(keys, markedFields(manifest));
       if (version !== null) {
-        manifest.line = line ??= await this.lineBelow(keys, state.version);
+        manifest.line = line ??= await this.lineBelow(keys, state.version, state.kept === true ? state.keptFrom : undefined);
         manifest.lineMark = lineMark(keys, lineFields(manifest));
       }
       const sealed = seal(keys, Buffer.from(JSON.stringify(manifest)));
@@ -668,61 +698,54 @@ export class CloudCopy {
     return second;
   }
 
-  /**
-   * Whether the storage keeps marked manifests (or ones with a line) besides the current one (a folder; the service keeps
-   * only one).
-   */
-  private async holds(keys: CopyKeys, what: "marked" | "listed"): Promise<boolean> {
+  /** Whether the storage keeps marked manifests besides the current one (a folder; the service keeps only one). */
+  private async holdsMarked(keys: CopyKeys): Promise<boolean> {
     if (!this.storage.earlierManifests) return false;
     // Only one that opens with the key and has a right mark counts; the first ends the look.
-    for await (const sealed of this.storage.earlierManifests()) {
-      const checked = checkWith(keys)(sealed);
-      if (what === "marked" ? checked?.marked === true : checked?.line !== undefined) return true;
-    }
+    for await (const sealed of this.storage.earlierManifests()) if (checkWith(keys)(sealed)?.marked === true) return true;
     return false;
+  }
+
+  /** Notes what the storage's manifests besides the current one say of themselves (sealedLists). */
+  private async noteEarlier(keys: CopyKeys, said: SealedLists): Promise<void> {
+    if (this.storage.earlierManifests) for await (const sealed of this.storage.earlierManifests()) noteSealed(keys, said, sealed);
   }
 
   /**
    * The line of a folder manifest saved on top of `base`: `base`, then the versions `base` grew out of, as its own list
    * says inside its seal, at most LINE_LENGTH. `base`'s list is the newest one when the save can go through at all. A list of
-   * an older Tavora has no line, but a marked one seals its parent: the line goes on through those, as far as lists that
-   * open with the key say. It stops where none does (gone, or not this key's): a PC that synced further back is asked.
-   * Never by file names.
+   * an older Tavora has no line, but a marked one seals its parent: the line goes on through those (walkDown). It stops
+   * where none does (gone, or not this key's): a PC that synced further back is asked. Never by file names. Kept over a
+   * list the key doesn't open (`keptFrom`, CopyState), the line goes on from where this PC was before, so the PCs there
+   * follow this save.
    */
-  private async lineBelow(keys: CopyKeys, base: number): Promise<number[]> {
+  private async lineBelow(keys: CopyKeys, base: number, keptFrom: number | undefined): Promise<number[]> {
     if (base === 0) return [];
-    const said = new Map<number, { parent?: number; line?: number[] }>();
-    const note = (sealed: Uint8Array) => {
-      const checked = checkWith(keys)(sealed);
-      if (checked?.marked && checked.version !== undefined && !said.has(checked.version)) said.set(checked.version, checked);
-    };
+    const length = this.options.lineLength ?? LINE_LENGTH;
+    const said: SealedLists = new Map();
     const current = await this.storage.manifest();
-    if (current) note(current.sealed);
-    // Older lists are read only when `base`'s own has no line: the first save after an update, or on top of an older
-    // Tavora's.
-    if (said.get(base)?.line === undefined && this.storage.earlierManifests) for await (const sealed of this.storage.earlierManifests()) note(sealed);
-    const line = [base];
-    for (let at = said.get(base); at && line.length < LINE_LENGTH; at = said.get(line.at(-1)!)) {
-      if (at.line) {
-        line.push(...at.line);
-        break;
-      }
-      if (!at.parent) break;
-      line.push(at.parent);
-    }
-    return line.slice(0, LINE_LENGTH);
+    if (current) noteSealed(keys, said, current.sealed);
+    const from = !said.has(base) && keptFrom !== undefined && keptFrom < base ? keptFrom : base;
+    // Older lists are read only when that list has no line: the first save after an update, on top of an older Tavora's,
+    // or over a list the key doesn't open.
+    if (said.get(from)?.line === undefined) await this.noteEarlier(keys, said);
+    return [...(from === base ? [] : [base]), ...walkDown(said, from)].slice(0, length);
   }
 
   /**
    * Whether a folder's newest list grew out of `synced`. One with a line: when `synced` is in it. Beyond the line nothing is
-   * assumed: a PC that synced further back is asked. One of an older Tavora (no line) that says inside it was saved right
-   * on top of `synced`: yes. Otherwise, once this PC has seen lists with a line, or the folder holds one, it can't tell,
-   * and asks; before that, the file names tell, as they did (`byNames`).
+   * assumed: a PC that synced further back is asked. One of an older Tavora (no line) seals its parent: down through the
+   * parents sealed in the lists that open with the key, to the first with a line (walkDown), `synced` is passed or not.
+   * Where they don't tell (a list gone, or not this key's), once this PC has seen lists with a line, or the folder holds
+   * one, it can't tell, and asks; before that, the file names tell, as they did (`byNames`).
    */
   private async grewFrom(keys: CopyKeys, { manifest, marked, listed }: ReturnType<typeof openManifest>, synced: number, byNames: boolean | undefined, seen: Pick<CopyState, "listed">): Promise<boolean> {
     if (listed) return manifest.line!.includes(synced);
     if (marked && manifest.parent === synced) return true;
-    if (seen.listed === true || (await this.holds(keys, "listed"))) return false;
+    const said: SealedLists = new Map();
+    await this.noteEarlier(keys, said);
+    if (marked && manifest.parent !== undefined && walkDown(said, manifest.parent).includes(synced)) return true;
+    if (seen.listed === true || [...said.values()].some((list) => list.line !== undefined)) return false;
     return byNames !== false;
   }
 
@@ -793,7 +816,7 @@ export class CloudCopy {
     } catch (error) {
       // Earlier ones open with this key, so the key is right and the newest is what's off: the user may put their data on
       // top of it. Otherwise the key typed in isn't this copy's.
-      if (error instanceof CopyError && error.reason === "damaged" && (await this.holds(keys, "marked"))) throw new NewestUnreadable(version);
+      if (error instanceof CopyError && error.reason === "damaged" && (await this.holdsMarked(keys))) throw new NewestUnreadable(version);
       throw error;
     }
     const { manifest, marked, listed } = opened;
@@ -809,7 +832,7 @@ export class CloudCopy {
     // Without a mark it may be a part put in the manifest's place (one a module saved, shaped like a list), so it isn't
     // taken on its own once this PC knows marked ones, or the folder holds one: the user chooses, as for an older list.
     // Asked, they may take it.
-    if (!marked && seen.chosen !== true && (seen.marked === true || (await this.holds(keys, "marked")))) throw new CopyError("older", "the copy's list has no mark, though marked ones are known");
+    if (!marked && seen.chosen !== true && (seen.marked === true || (await this.holdsMarked(keys)))) throw new CopyError("older", "the copy's list has no mark, though marked ones are known");
     // In a folder two PCs may save at once, and the copy may not have grown out of what this PC synced: then this PC's
     // last save isn't in it, and it isn't taken on its own. Told by the line sealed in the newest list, under its mark;
     // file names only for a list of an older Tavora, as before (`current.follows`).

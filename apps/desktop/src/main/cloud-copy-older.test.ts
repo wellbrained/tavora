@@ -37,7 +37,8 @@ describe.skipIf(!ref)(`the cloud copy code of ${ref ?? "an older Tavora"}`, () =
     const top = execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: desktop, encoding: "utf8" }).trim();
     const archive = execFileSync("git", ["archive", `${ref!}:apps/desktop/src`], { cwd: top, maxBuffer: 1024 * 1024 * 1024 });
     await mkdir(path.join(tree, "src"));
-    execFileSync("tar", ["-x", "-C", path.join(tree, "src")], { input: archive });
+    // In the folder itself, not with -C: Git Bash's GNU tar reads "C:" in a path as a remote host.
+    execFileSync("tar", ["-x"], { cwd: path.join(tree, "src"), input: archive });
     const load = (file: string) => import(/* @vite-ignore */ pathToFileURL(path.join(tree, "src", "main", file)).href);
     older = { ...(await load("cloud-copy.ts")), ...(await load("copy-folder.ts")) } as Older;
   }, 60_000);
