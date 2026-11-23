@@ -117,6 +117,37 @@ describe("tooltip preload", () => {
         expect(rich.querySelector(".per-heading")).toBeNull();
     });
 
+    it("draws the tags over the picture in its bottom corners, coloured ones in their colour, and as badges without a picture", () => {
+        const tagged: TooltipContent = { ...card, badges: ["Troop"], artTags: [{ text: "Stone", side: "left" }, { text: "Legendary", color: "#e0a243" }, { text: "Odd", color: "red", side: "right" }] };
+        const el = render(tagged);
+        const art = el.querySelector(".card-art")!;
+        expect(Array.from(art.querySelectorAll(".art-tags > div")).map(row => row.className + ": " + Array.from(row.children).map(t => t.textContent).join(", "))).toEqual(["left: Stone", "right: Legendary, Odd"]);
+        const [stone, legendary, odd] = Array.from(art.querySelectorAll<HTMLElement>(".art-tag"));
+        expect(stone!.getAttribute("style")).toBeNull();
+        expect([legendary!.style.color, legendary!.style.borderColor]).toEqual(["rgb(224, 162, 67)", "rgb(224, 162, 67)"]);
+        // A colour the host would have refused is left out here too.
+        expect(odd!.getAttribute("style")).toBeNull();
+        expect(Array.from(el.querySelectorAll(".name .badge")).map(b => b.textContent)).toEqual(["Troop"]);
+        // Only right-hand tags: one row.
+        expect(render({ ...card, artTags: [{ text: "Legendary" }] }).querySelectorAll(".art-tags > div.right")).toHaveLength(1);
+        // Without a picture, and in the rich layout, their texts follow the badges, in their order.
+        const { image: _image, ...bare } = tagged;
+        const plain = render(bare);
+        expect(plain.querySelector(".art-tags")).toBeNull();
+        expect(Array.from(plain.querySelectorAll(".name .badge")).map(b => b.textContent)).toEqual(["Troop", "Stone", "Legendary", "Odd"]);
+        const rich = render({ ...tagged, layout: "rich" });
+        expect(rich.querySelector(".art-tags")).toBeNull();
+        expect(Array.from(rich.querySelectorAll(".heading .badge")).map(b => b.textContent)).toEqual(["Troop", "Stone", "Legendary", "Odd"]);
+        // The unit layout leaves them out, like the badges.
+        const unit = render({ ...tagged, layout: "unit" });
+        expect(unit.querySelector(".art-tags, .badge")).toBeNull();
+    });
+
+    it("draws a \u2013 in an extra column faint, and nothing else", () => {
+        const stats = render({ ...card, columns: ["Lv 1", "Lv 2", "Lv 3"], properties: [{ label: "Units", value: "6", more: ["\u2013", "12"] }, { label: "Range", value: "3", more: ["-", "\u2013 1"] }] }).querySelector(".stats")!;
+        expect(Array.from(stats.querySelectorAll(".more")).map(c => c.className)).toEqual(["more faint", "more", "more", "more"]);
+    });
+
     it("shows a stat's extra values in columns of their own under their headings, before what it grows by", () => {
         const levels: TooltipContent = { ...card, columns: ["Lv 1", "Lv 2", "Lv 3"], perHeading: "Per level", properties: [{ label: "Units", value: "6", more: ["12", "18"] }, { label: "Attack speed", value: "0.6" }, { label: "Damage", value: "6", more: ["", "8.6"], per: "+1" }] };
         const stats = render(levels).querySelector<HTMLElement>(".stats")!;

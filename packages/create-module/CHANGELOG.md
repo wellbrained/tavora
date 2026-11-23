@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.47
+
+- New projects start on `@tavora/sdk` 0.4.9: item cards can show tags over their picture (`artTags`).
+
 ## 0.1.46
 
 - New projects start on `@tavora/sdk` 0.4.8: item-card stats can show extra value columns with headings (`more`, `columns`).

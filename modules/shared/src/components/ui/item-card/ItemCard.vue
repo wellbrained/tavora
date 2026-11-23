@@ -60,6 +60,17 @@ const inline = (p: { value: string; per?: string; suffix?: string; more?: string
   const values = cells.map((cell) => (cell.trim() ? cell : "–")).join(" · ")
   return p.per === undefined ? values || own(p) : values ? `${values} · ${p.per}` : p.per
 }
+// Tags over the picture: a row in each bottom corner that has one ("right" when a tag doesn't say). A tag's colour is
+// "#rrggbb" only, as in the shared tooltip. Without a picture, and in the rich layout, their texts follow the badges.
+const HEX = /^#[0-9a-fA-F]{6}$/
+const tagRows = computed(() =>
+  (["left", "right"] as const)
+    .map((side) => ({ side, tags: (props.content.artTags ?? []).filter((tag) => (tag.side === "left" ? "left" : "right") === side) }))
+    .filter((row) => row.tags.length),
+)
+const tagStyle = (color: string | undefined) => (color && HEX.test(color) ? { color, borderColor: color } : undefined)
+const tagBadges = computed(() => [...(props.content.badges ?? []), ...(props.content.artTags ?? []).map((tag) => tag.text)])
+const cardBadges = computed(() => (props.content.image ? (props.content.badges ?? []) : tagBadges.value))
 const runs = computed(() => {
   const effect = props.content.effect
   return typeof effect === "string" ? [{ text: effect }] : (effect ?? [])
@@ -131,11 +142,18 @@ const style = computed<CSSProperties>(() => {
     :style="style"
   >
     <template v-if="layout === 'card'">
-      <div v-if="content.image" class="tavora-item-card-art"><img :src="content.image" alt="" /></div>
+      <div v-if="content.image" class="tavora-item-card-art">
+        <img :src="content.image" alt="" />
+        <div v-if="tagRows.length" class="tavora-item-card-art-tags">
+          <div v-for="row in tagRows" :key="row.side" :data-side="row.side">
+            <span v-for="(tag, i) in row.tags" :key="i" class="tavora-item-card-art-tag" :style="tagStyle(tag.color)">{{ tag.text }}</span>
+          </div>
+        </div>
+      </div>
       <div class="tavora-item-card-name">
         <h3>{{ content.title }}</h3>
-        <div v-if="content.badges?.length" class="tavora-item-card-badges">
-          <span v-for="(badge, i) in content.badges" :key="i" class="tavora-item-card-badge">{{ badge }}</span>
+        <div v-if="cardBadges.length" class="tavora-item-card-badges">
+          <span v-for="(badge, i) in cardBadges" :key="i" class="tavora-item-card-badge">{{ badge }}</span>
         </div>
       </div>
       <p v-if="content.subtitle" class="tavora-item-card-type">{{ content.subtitle }}</p>
@@ -144,7 +162,7 @@ const style = computed<CSSProperties>(() => {
         <!-- The heading row: `columns` over the value and the extra columns, `perHeading` over what a stat grows by. -->
         <template v-if="content.columns?.length"><span /><template v-for="h in extra + 1" :key="`h${h}`"><span v-if="content.columns[h - 1]" class="tavora-item-card-per-heading">{{ content.columns[h - 1] }}</span><span v-else /></template><template v-if="hasPer"><span v-if="content.perHeading" class="tavora-item-card-per-heading">{{ content.perHeading }}</span><span v-else /></template></template>
         <template v-else-if="hasPer && content.perHeading"><span /><span /><span v-for="h in extra" :key="`h${h}`" /><span class="tavora-item-card-per-heading">{{ content.perHeading }}</span></template>
-        <template v-for="(p, i) in content.properties" :key="i"><span class="tavora-item-card-label"><span v-if="hasIcons" class="tavora-item-card-icon" aria-hidden="true" :data-drawn="icons[i] ? '' : undefined" :style="icons[i] ? { '--ic-icon': icons[i] } : undefined" />{{ p.label }}</span><span class="tavora-item-card-value">{{ own(p) }}</span><span v-for="m in extra" :key="`m${m}`" class="tavora-item-card-more">{{ p.more?.[m - 1] ?? "" }}</span><span v-if="hasPer" class="tavora-item-card-per">{{ p.per ?? "" }}</span></template>
+        <template v-for="(p, i) in content.properties" :key="i"><span class="tavora-item-card-label"><span v-if="hasIcons" class="tavora-item-card-icon" aria-hidden="true" :data-drawn="icons[i] ? '' : undefined" :style="icons[i] ? { '--ic-icon': icons[i] } : undefined" />{{ p.label }}</span><span class="tavora-item-card-value">{{ own(p) }}</span><span v-for="m in extra" :key="`m${m}`" class="tavora-item-card-more" :data-faint="p.more?.[m - 1] === '–' ? '' : undefined">{{ p.more?.[m - 1] ?? "" }}</span><span v-if="hasPer" class="tavora-item-card-per">{{ p.per ?? "" }}</span></template>
       </div>
       <section v-for="(s, i) in content.sections ?? []" :key="i" class="tavora-item-card-section">
         <p v-if="s.title">{{ s.title }}</p>
@@ -199,7 +217,7 @@ const style = computed<CSSProperties>(() => {
       <div>
         <div class="tavora-item-card-heading">
           <h3>{{ content.title }}</h3>
-          <span v-for="(badge, i) in content.badges ?? []" :key="i" class="tavora-item-card-badge">{{ badge }}</span>
+          <span v-for="(badge, i) in tagBadges" :key="i" class="tavora-item-card-badge">{{ badge }}</span>
         </div>
         <p v-if="content.subtitle" class="tavora-item-card-type">{{ content.subtitle }}</p>
         <p v-if="runs.length" class="tavora-item-card-effect"><template v-for="(run, i) in runs" :key="i"><span v-if="'accent' in run && run.accent" data-accent>{{ run.text }}</span><template v-else>{{ run.text }}</template></template></p>

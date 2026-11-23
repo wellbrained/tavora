@@ -23,7 +23,7 @@ export interface TooltipContent {
      * `"unit"` is a game unit as games show it on the board: the picture (`image`) as a small framed portrait sticking out
      * at the top left, a title bar with the title and the `corner` value, and below it the `subtitle`, the `effect`, the
      * stats (label, value and `suffix`), the sections, the `icons` row and the `pips` on the bottom edge. It leaves out
-     * `badges`, `requirements`, `perHeading`, `columns` and a stat's `per`, `more` and `icon`. It is at least 316 px
+     * `badges`, `artTags`, `requirements`, `perHeading`, `columns` and a stat's `per`, `more` and `icon`. It is at least 316 px
      * wide and grows to fit the stats and the icons, up to 520 px; the effect and the rows wrap. Needs
      * `sdk.supports("ui.tooltip.unit")`: on an older Tavora the SDK shows it in the `"card"` layout, without `corner`,
      * `icons` and `pips`, with each `suffix` after its value.
@@ -68,6 +68,17 @@ export interface TooltipContent {
      */
     skin?: string;
     badges?: string[];
+    /**
+     * Small tags over the bottom corners of the card's picture (`image`), say a kind and a rarity ("Stone" on the left,
+     * "Legendary" on the right): up to 3, each up to 24 characters. Each `side` ("left" or "right", the default) is a
+     * row in that corner. They look like badges on a mostly opaque patch of the card's surface, so they stay readable
+     * on any picture. A tag's `color` ("#rrggbb" only) sets its text and edge; without it, it takes the card's text and
+     * line colours. Only the card layout draws them, and only with an `image`; without one, and in the rich layout,
+     * they show as `badges` after the card's own, in their order (no colour, no side). The unit layout leaves them out,
+     * like `badges`. Needs `sdk.supports("ui.tooltip.artTags")`: on an older Tavora the SDK adds their texts to `badges`
+     * (up to the 8 badges a card may have).
+     */
+    artTags?: TooltipArtTag[];
     requirements?: {
         label: string;
         value: string;
@@ -91,7 +102,8 @@ export interface TooltipContent {
      * with fewer leaves the rest empty, and an empty text leaves its cell empty. With `per` too, the order is label,
      * value, `more`, `per`. The rich layout shows them after the value ("6 · 12 · 18"). Needs
      * `sdk.supports("ui.tooltip.columns")`: on an older Tavora the SDK puts them into `per` ("12 / 18"), or into the
-     * value where `per` isn't known either.
+     * value where `per` isn't known either. A `more` cell that is exactly "–" (U+2013) means "doesn't change": the card
+     * draws it faint, in the label's colour.
      */
     properties?: {
         label: string;
@@ -119,6 +131,15 @@ export interface TooltipContent {
             connected?: boolean;
         }[];
     }[];
+}
+/** A tag over the card's picture ("Legendary"). */
+export interface TooltipArtTag {
+    /** Up to 24 characters. */
+    text: string;
+    /** Its text and edge colour, "#rrggbb" only; without it, the card's text and line colours. */
+    color?: string;
+    /** The picture's bottom corner it sits in: `"right"` (the default) or `"left"`. */
+    side?: "left" | "right";
 }
 /** A picture in the unit layout's icon row. */
 export interface TooltipIcon {

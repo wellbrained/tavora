@@ -475,10 +475,12 @@ bundle. The look is the host's own: neutral in Tavora's theme colours, or the fi
 by name. No HTML, module styles, links, scripts, remote images or arbitrary file
 paths are accepted. Image reads stay inside that bundle and are limited to 512 KB. An item card's stats may each name
 a small icon by the same path rules (PNG or WebP only), read the same way and limited to 64 KB; the page shows it only as a mask in the
-label's colour, and only as a `data:` URL it checks again.
+label's colour, and only as a `data:` URL it checks again. A tag over an item card's picture may have a colour of its
+own for its text and edge: `#rrggbb` only, or the tooltip is refused, and the page checks it again before setting it.
 
-An item card may wear a skin the module defined (`ui.tooltip.defineSkin`). That is the one way a module's own colours,
-a frame picture and a font reach the host's tooltip window, and each is a checked value, never CSS: colours must be
+An item card may wear a skin the module defined (`ui.tooltip.defineSkin`). Besides those tag colours, that is the one
+way a module's own colours, a frame picture and a font reach the host's tooltip window, and each is a checked value,
+never CSS: colours must be
 `#rrggbb` and readable (contrast 4.5:1 for text, 3:1 for the accent line on the surface and for the effect box's edge),
 or the skin is refused. The frame picture and the
 font are read only from the module's own bundle under `dist/`, by the same path rules as the item picture (no `..`,

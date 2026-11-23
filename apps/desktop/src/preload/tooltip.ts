@@ -188,7 +188,8 @@ function draw(data: Data) {
     layout.append(details);
     const heading = node("div", undefined, "heading");
     heading.append(node("h2", c.title, c.tone));
-    for (const b of c.badges || [])
+    // The rich layout has no tags over the picture: they follow the badges.
+    for (const b of withTagBadges(c))
         heading.append(node("span", b, "badge"));
     details.append(heading);
     if (c.subtitle)
@@ -247,14 +248,18 @@ function renderCard(card: HTMLElement, c: TooltipContent, de: boolean) {
         image.alt = "";
         image.onload = measure;
         art.append(image);
+        if (c.artTags?.length)
+            art.append(artTags(c.artTags));
         item.append(art);
     }
     // The title row: the name, and the badges right-aligned beside it (under it on their own when they don't fit).
+    // Without a picture the tags over it are badges too.
     const name = node("div", undefined, "name");
     name.append(node("h2", c.title, c.tone));
-    if (c.badges?.length) {
+    const shown = c.image ? c.badges ?? [] : withTagBadges(c);
+    if (shown.length) {
         const badges = node("div", undefined, "badges");
-        for (const b of c.badges)
+        for (const b of shown)
             badges.append(node("span", b, "badge"));
         name.append(badges);
     }
@@ -273,6 +278,34 @@ function renderCard(card: HTMLElement, c: TooltipContent, de: boolean) {
         section.append(node("small", de ? "Ben\u00f6tigt" : "Requires"), stats(c.requirements));
         item.append(section);
     }
+}
+/**
+ * The tags over the card's picture: a row in its bottom-left corner and one in its bottom-right (the default), each
+ * only when a tag sits there. A tag's colour (checked again here, as it goes into a style) sets its text and edge;
+ * without one it keeps the card's text and line colours.
+ */
+function artTags(tags: NonNullable<TooltipContent["artTags"]>) {
+    const corners = node("div", undefined, "art-tags");
+    for (const side of ["left", "right"] as const) {
+        const here = tags.filter(tag => (tag.side === "left" ? "left" : "right") === side);
+        if (!here.length)
+            continue;
+        const row = node("div", undefined, side);
+        for (const tag of here) {
+            const el = node("span", tag.text, "art-tag");
+            if (tag.color && HEX.test(tag.color)) {
+                el.style.color = tag.color;
+                el.style.borderColor = tag.color;
+            }
+            row.append(el);
+        }
+        corners.append(row);
+    }
+    return corners;
+}
+/** The badges, and after them the texts of the tags over the picture, where there is no picture to put them on. */
+function withTagBadges(c: TooltipContent) {
+    return [...(c.badges ?? []), ...(c.artTags ?? []).map(tag => tag.text)];
 }
 /**
  * The card's stats: label, value, the extra values (`more`) each in a column of its own and, when a row of the card has
@@ -303,8 +336,9 @@ function stats(rows: { label: string; value: string; per?: string; icon?: string
             label.append(statIcon(r.icon), document.createTextNode(r.label));
         // Only the unit layout hangs a suffix past the value; here it is part of it.
         grid.append(label, node("span", r.value + (r.suffix ?? ""), "value"));
+        // "–" in an extra column means the stat doesn't change there: drawn faint.
         for (let i = 0; i < extra; i++)
-            grid.append(node("span", r.more?.[i] ?? "", "more"));
+            grid.append(node("span", r.more?.[i] ?? "", r.more?.[i] === "–" ? "more faint" : "more"));
         if (per)
             grid.append(node("span", r.per ?? "", "per"));
     }

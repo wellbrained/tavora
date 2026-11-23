@@ -95,6 +95,33 @@ describe("ItemCard", () => {
     expect(Array.from(rich.querySelectorAll(".tavora-item-card-props dd"), (d) => d.textContent)).toEqual(["6 · 12 · 18", "0.6", "6 · – · 8.6 · +1", "– · – · 4"])
   })
 
+  it("draws the tags over the picture in its bottom corners, coloured ones in their colour, and as badges without a picture", () => {
+    const tagged: TooltipContent = { ...card, badges: ["Troop"], artTags: [{ text: "Stone", side: "left" }, { text: "Legendary", color: "#e0a243" }, { text: "Odd", color: "red", side: "right" }] }
+    const el = mount(tagged)
+    const art = el.querySelector(".tavora-item-card-art")!
+    expect([...art.querySelectorAll(".tavora-item-card-art-tags > div")].map((row) => `${row.getAttribute("data-side")}: ${[...row.children].map((t) => t.textContent).join(", ")}`)).toEqual(["left: Stone", "right: Legendary, Odd"])
+    const [stone, legendary, odd] = [...art.querySelectorAll<HTMLElement>(".tavora-item-card-art-tag")]
+    expect(stone!.getAttribute("style")).toBeNull()
+    expect([legendary!.style.color, legendary!.style.borderColor]).toEqual(["rgb(224, 162, 67)", "rgb(224, 162, 67)"])
+    expect(odd!.getAttribute("style")).toBeNull()
+    expect([...el.querySelectorAll(".tavora-item-card-name .tavora-item-card-badge")].map((b) => b.textContent)).toEqual(["Troop"])
+    app!.unmount()
+    // Without a picture, and in the rich layout, their texts follow the badges, in their order.
+    const { image: _image, ...bare } = tagged
+    const plain = mount(bare)
+    expect(plain.querySelector(".tavora-item-card-art-tags")).toBeNull()
+    expect([...plain.querySelectorAll(".tavora-item-card-badge")].map((b) => b.textContent)).toEqual(["Troop", "Stone", "Legendary", "Odd"])
+    app!.unmount()
+    const rich = mount({ ...tagged, layout: "rich" })
+    expect(rich.querySelector(".tavora-item-card-art-tags")).toBeNull()
+    expect([...rich.querySelectorAll(".tavora-item-card-badge")].map((b) => b.textContent)).toEqual(["Troop", "Stone", "Legendary", "Odd"])
+  })
+
+  it("draws a \u2013 in an extra column faint, and nothing else", () => {
+    const stats = mount({ ...card, columns: ["Lv 1", "Lv 2", "Lv 3"], properties: [{ label: "Units", value: "6", more: ["\u2013", "12"] }, { label: "Range", value: "3", more: ["-", "\u2013 1"] }] }).querySelector(".tavora-item-card-stats")!
+    expect([...stats.querySelectorAll(".tavora-item-card-more")].map((c) => c.hasAttribute("data-faint"))).toEqual([true, false, false, false])
+  })
+
   it("draws a stat's icon before its label as a mask, and keeps its room on every label when only some have one", () => {
     const icons: TooltipContent = { ...card, perHeading: "Per level", properties: [{ label: "HP", value: "40", icon: "icons/heart.png" }, { label: "Damage", value: "12", per: "+3", icon: "data:image/png;base64,iVBORw0KGgo=" }, { label: "Range", value: "3" }] }
     const stats = mount(icons).querySelector(".tavora-item-card-stats")!

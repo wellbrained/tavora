@@ -40,6 +40,14 @@ describe("tooltip boundary", () => {
         for (const extra of [{ properties: [{ label: "Range", value: "" }] }, { properties: [{ label: "Range", value: "3", per: "" }] }, { properties: [{ label: "Range", value: "3", per: "x".repeat(41) }] }, { properties: [{ label: "Range", value: "3", per: 3 }] }, { properties: [{ label: "Range", value: 3, per: "+1" }] }, { properties: [{ label: "Range", value: "x".repeat(301), per: "+1" }] }, { properties: [{ label: "Range", value: "3", per: "+1", color: "red" }] }, { perHeading: "" }, { perHeading: "x".repeat(61) }, { perHeading: 1 }])
             expect(() => checkTooltip({ ...base, content: { title: "x", ...extra } })).toThrow();
     });
+    it("takes up to 3 tags over the picture with a #rrggbb colour and a side, and leaves them out when none are asked for", () => {
+        const content = { title: "x", layout: "card", image: "dist/a.png", badges: ["Troop"], artTags: [{ text: "Stone", side: "left" }, { text: "Legendary", color: "#E0a243", side: "right" }, { text: "x".repeat(24) }] };
+        expect(checkTooltip({ ...base, content }).content).toEqual(content);
+        expect("artTags" in checkTooltip(base).content).toBe(false);
+        const tags = (...artTags: unknown[]) => ({ artTags });
+        for (const extra of [{ artTags: [] }, { artTags: "Stone" }, { artTags: { 0: { text: "Stone" } } }, tags({ text: "a" }, { text: "b" }, { text: "c" }, { text: "d" }), tags({ text: "x".repeat(25) }), tags({ text: "" }), tags({ text: " " }), tags({ text: 1 }), tags("Stone"), tags(null), tags({ text: "a", color: "red" }), tags({ text: "a", color: "#e0a24" }), tags({ text: "a", color: "#e0a2431" }), tags({ text: "a", color: "#e0a24g" }), tags({ text: "a", color: "e0a243" }), tags({ text: "a", color: "#e0a243;x" }), tags({ text: "a", color: 0xe0a243 }), tags({ text: "a", side: "top" }), tags({ text: "a", side: "Left" }), tags({ text: "a", side: "" }), tags({ text: "a", side: 1 }), tags({ text: "a", tone: "rare" })])
+            expect(() => checkTooltip({ ...base, content: { title: "x", ...extra } })).toThrow();
+    });
     it("takes extra values after a stat's value and the columns' headings, and an empty value only next to a filled extra", () => {
         const content = { title: "x", layout: "card", columns: ["Lv 1", "Lv 2", "Lv 3", "Max"], perHeading: "Per level", properties: [{ label: "Units", value: "6", more: ["12", "18", "x".repeat(40)] }, { label: "Attack speed", value: "0.6" }, { label: "Damage", value: "6", more: ["", "8.6"], per: "+1" }, { label: "Shield", value: "", more: ["", "4"] }] };
         expect(checkTooltip({ ...base, content }).content).toEqual(content);

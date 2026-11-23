@@ -1,3 +1,11 @@
+## 0.4.9
+
+Tags over an item card's picture, say a kind and a rarity. They come with the next Tavora (`ITEM_CARD_ART_TAGS_TAVORA` in `protocol.ts`; the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.21.43).
+
+- `TooltipContent` takes `artTags`: up to 3 `{ text, color?, side? }` (type `TooltipArtTag`), each up to 24 characters. The card layout draws them over the bottom corners of `image`, a row per `side` (`"left"` or `"right"`, the default), like badges on a mostly opaque patch of the card's surface. `color` ("#rrggbb" only) sets a tag's text and edge; without it, the card's text and line colours. Without an `image`, and in the rich layout, their texts follow `badges`, in their order; the unit layout leaves them out.
+- A stat's `more` cell that is exactly "–" (U+2013) means "doesn't change": the card draws it faint, in the label's colour.
+- An older Tavora refuses the new key, and with it the whole tooltip, so the SDK adds the tags' texts to `badges` there (up to the 8 a card may have) and leaves `artTags` out. `sdk.supports("ui.tooltip.artTags")` tells which case you are in; the memory host does the same.
+
 ## 0.4.8
 
 Extra value columns on item cards, say a stat at level 1, 2 and 3. They come with the next Tavora (`ITEM_CARD_COLUMNS_TAVORA` in `protocol.ts`; the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.21.43).

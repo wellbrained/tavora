@@ -1,11 +1,12 @@
 <script setup lang="ts">
 // The shared tooltip's item card inside a panel: plain, with stats that grow per level (a third column, only when a
 // stat has `per`) and icons before some of their labels, in a module's skin, and with a column per level (`columns`
-// and `more`). The skin and the icons are the ones
+// and `more`), and in a skin with tags over its picture (`artTags`). The skin, the picture and the icons are the ones
 // the module gives sdk.ui.tooltip, with their files as URLs here instead of paths in dist/.
 import type { TooltipContent } from "@tavora/sdk";
 import { ItemCard, type ItemCardSkin } from "@tavora/official-ui/components/ui/item-card";
 import frame from "../../assets/card-frame.png?url";
+import knight from "../../assets/card-knight.png?url";
 import heart from "../../assets/stat-heart.png?url";
 import stopwatch from "../../assets/stat-stopwatch.png?url";
 import sword from "../../assets/stat-sword.png?url";
@@ -47,6 +48,24 @@ const skin: ItemCardSkin = {
   pixelArt: true,
   titleCaps: true,
 };
+// Tags over the picture: the kind at its bottom left, the rarity in its own colour at its bottom right. A "–" in a
+// level column means the stat doesn't change there, and is drawn faint.
+const knightCard: TooltipContent = {
+  title: "Paladin",
+  subtitle: "Troop · Kingdom of Stone",
+  layout: "card",
+  image: knight,
+  badges: ["Troop"],
+  // rules-allow: color a module's own rarity colour, fixed in every theme like a game's card
+  artTags: [{ text: "Stone", side: "left" }, { text: "Legendary", color: "#f0a640", side: "right" }],
+  columns: ["Lv 1", "Lv 2", "Lv 3"],
+  properties: [
+    { label: "Units", value: "4", more: ["6", "8"] },
+    { label: "HP", value: "30", more: ["39", "50"], icon: heart },
+    { label: "Damage", value: "9", more: ["–", "12"], icon: sword },
+    { label: "Range", value: "1", more: ["–", "–"] },
+  ],
+};
 </script>
 
 <template>
@@ -55,5 +74,6 @@ const skin: ItemCardSkin = {
     <ItemCard :content="levels" />
     <ItemCard :content="levels" :skin="skin" />
     <ItemCard :content="squad" />
+    <ItemCard :content="knightCard" :skin="skin" />
   </div>
 </template>

@@ -2,6 +2,7 @@ import type { TooltipAnchor, TooltipContent, TooltipRequest } from "@tavora/sdk/
 import { HostError } from "./errors";
 import { SKIN_NAME } from "./tooltip-skin";
 const ID = /^[a-zA-Z0-9._:-]{1,64}$/;
+const HEX = /^#[0-9a-fA-F]{6}$/;
 function fail(): never { throw new HostError("INVALID_PARAMS", "invalid tooltip content"); }
 function obj(v: unknown, keys: string[]): Record<string, unknown> { if (!v || typeof v !== "object" || Array.isArray(v))
     fail(); const o = v as Record<string, unknown>; if (Object.keys(o).some(k => !keys.includes(k)))
@@ -62,7 +63,7 @@ export function checkTooltip(v: unknown): TooltipRequest {
     // A card that says it can't be pinned never pins: asking for both is a mistake, not something to guess at.
     if (o.pinnable === false && o.pinned === true)
         fail();
-    const c = obj(o.content, ["title", "subtitle", "look", "tone", "image", "layout", "effect", "skin", "badges", "requirements", "properties", "perHeading", "columns", "sections", "corner", "icons", "pips"]);
+    const c = obj(o.content, ["title", "subtitle", "look", "tone", "image", "layout", "effect", "skin", "badges", "artTags", "requirements", "properties", "perHeading", "columns", "sections", "corner", "icons", "pips"]);
     const content: TooltipContent = { title: text(c.title, 200) };
     if (c.subtitle !== undefined)
         content.subtitle = text(c.subtitle, 300);
@@ -92,6 +93,15 @@ export function checkTooltip(v: unknown): TooltipRequest {
     }
     if (c.badges !== undefined)
         content.badges = list(c.badges, 8, v => text(v, 100));
+    // Up to 3 tags over the card's picture, each up to 24 characters, with an optional colour (#rrggbb only, as it goes
+    // into a style on the page) and the bottom corner it sits in.
+    if (c.artTags !== undefined) {
+        content.artTags = list(c.artTags, 3, v => { const t = obj(v, ["text", "color", "side"]); if (t.color !== undefined && (typeof t.color !== "string" || !HEX.test(t.color)))
+            fail(); if (t.side !== undefined && t.side !== "left" && t.side !== "right")
+            fail(); return { text: text(t.text, 24), ...(t.color === undefined ? {} : { color: t.color as string }), ...(t.side === undefined ? {} : { side: t.side as "left" | "right" }) }; });
+        if (!content.artTags.length)
+            fail();
+    }
     const property = (v: unknown) => { const p = obj(v, ["label", "value"]); return { label: text(p.label, 100), value: text(p.value, 300) }; };
     if (c.requirements !== undefined)
         content.requirements = list(c.requirements, 8, property);

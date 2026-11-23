@@ -692,7 +692,17 @@ These need a Tavora with `ui.tooltip.defineSkin` (its version is in the table ab
   values after the value ("6 · 12 · 18"). `more` and `columns` need a Tavora with `sdk.supports("ui.tooltip.columns")`:
   an older one refuses the unknown keys, and with them the whole tooltip, so the SDK puts `more` into `per` there
   ("12 / 18") and the headings after the first into `perHeading` ("Lv 2 / Lv 3"), or all of it into the value where
-  `per` isn't known either (a raw caller does that itself).
+  `per` isn't known either (a raw caller does that itself). A `more` cell that is exactly "–" (U+2013) means "doesn't
+  change": the card draws it faint, in the label's colour.
+- `content.artTags` are up to 3 small tags over the card's picture, say a kind and a rarity: `{ text, color?, side? }`,
+  `text` up to 24 characters, `color` "#rrggbb" only (any other form refuses the tooltip), `side` `"left"` or
+  `"right"` (the default). Each side is a row in that bottom corner of the picture's box, 6 px from its edges, the
+  tags 4 px apart. They look like badges on a mostly opaque patch of the card's surface; `color` sets a tag's text and
+  edge, without it the card's text and line colours (square on a skinned card). Only the card layout draws them, and
+  only with an `image`; without one, and in the rich layout, their texts follow the badges, in their order, without
+  colour. The unit layout leaves them out. `artTags` needs a Tavora with `sdk.supports("ui.tooltip.artTags")`: an
+  older one refuses the unknown key, and with it the whole tooltip, so the SDK adds their texts to `badges` there (up
+  to 8 badges) and leaves `artTags` out (a raw caller does that itself).
 - A property may have `icon`: a small pictogram before its label (a heart for health, a sword for damage). It follows
   the rules of `image` (a `dist/` path, up to 500 characters, read only from the module's own bundle), but must be a
   PNG or WebP (it is a mask: a JPEG would draw a filled square, a GIF would animate), up to 64 KB. Only its shape counts: the card draws it as a mask in the label's colour (the
@@ -734,7 +744,7 @@ These need a Tavora with `sdk.supports("ui.tooltip.unit")` (`UNIT_CARD_TAVORA` i
   (44 × 67 px, cut to fill) sticking out at the top left, a title bar from the portrait to the right edge with the
   title and the corner value, and below it the body, indented under the portrait: the `subtitle`, the `effect` (plain
   text, accent runs in the accent colour), the stats, the sections, the icon row and the pips on the body's bottom
-  edge. It leaves out `badges`, `requirements`, `perHeading`, `columns` and a property's `per`, `more` and `icon`. Without an `image` the
+  edge. It leaves out `badges`, `artTags`, `requirements`, `perHeading`, `columns` and a property's `per`, `more` and `icon`. Without an `image` the
   bar and body start at the left edge. The card is at least 316 px wide and grows to fit the stats and the icon row, up
   to 520 px; the effect, the type line and the rows wrap to it and never widen it. The footer with the module's name
   stays, under the body.

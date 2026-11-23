@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { skinParams, tooltipParams, tooltipShowParams } from "./anchor.js";
-import { ITEM_CARD_BOX_BORDER_TAVORA, ITEM_CARD_COLUMNS_TAVORA, ITEM_CARD_ICON_TAVORA, ITEM_CARD_PER_TAVORA, ITEM_CARD_TAVORA, TOOLTIP_ANCHOR_BOX_TAVORA, UNIT_CARD_TAVORA, type TooltipContent } from "./protocol.js";
+import { ITEM_CARD_ART_TAGS_TAVORA, ITEM_CARD_BOX_BORDER_TAVORA, ITEM_CARD_COLUMNS_TAVORA, ITEM_CARD_ICON_TAVORA, ITEM_CARD_PER_TAVORA, ITEM_CARD_TAVORA, TOOLTIP_ANCHOR_BOX_TAVORA, UNIT_CARD_TAVORA, type TooltipContent } from "./protocol.js";
 
 const at = { x: 1, y: 2 };
 const OLD = "0.24.0";
@@ -94,6 +94,40 @@ describe("tooltipShowParams and the stats' extra columns", () => {
     const shown = (host.calls["ui.tooltip.show"] as { content: TooltipContent }[])[0]!.content;
     expect("columns" in shown).toBe(false);
     expect(shown.properties!.some((p) => "more" in p)).toBe(false);
+  });
+});
+
+describe("tooltipShowParams and the tags over the picture", () => {
+  const content: TooltipContent = { title: "A", layout: "card", image: "dist/a.png", badges: ["Troop"], artTags: [{ text: "Stone", side: "left" }, { text: "Legendary", color: "#e0a243", side: "right" }] };
+
+  it("adds their texts to the badges in their order, without colour or side, on a Tavora without them", () => {
+    const sent = tooltipShowParams({ id: "a", at, content }, ITEM_CARD_COLUMNS_TAVORA).content;
+    expect(sent).toEqual({ title: "A", layout: "card", image: "dist/a.png", badges: ["Troop", "Stone", "Legendary"] });
+    // The caller's content stays as it was.
+    expect(content.badges).toEqual(["Troop"]);
+    expect(content.artTags).toHaveLength(2);
+    expect(tooltipShowParams({ id: "a", at, content: { title: "A", artTags: [{ text: "Stone" }] } }, ITEM_CARD_COLUMNS_TAVORA).content).toEqual({ title: "A", badges: ["Stone"] });
+  });
+
+  it("keeps to the 8 badges a card may have", () => {
+    const full = { title: "A", badges: ["1", "2", "3", "4", "5", "6", "7"], artTags: [{ text: "x" }, { text: "y" }, { text: "z" }] };
+    expect(tooltipShowParams({ id: "a", at, content: full }, ITEM_CARD_COLUMNS_TAVORA).content.badges).toEqual(["1", "2", "3", "4", "5", "6", "7", "x"]);
+  });
+
+  it("sends them as they are to a Tavora with them, and a card without them as it is everywhere", () => {
+    expect(tooltipShowParams({ id: "a", at, content }, ITEM_CARD_ART_TAGS_TAVORA).content).toEqual(content);
+    const plain = { title: "A", badges: ["Troop"] };
+    expect(tooltipShowParams({ id: "a", at, content: plain }, ITEM_CARD_COLUMNS_TAVORA).content).toBe(plain);
+  });
+
+  it("is used by the memory host's show", async () => {
+    const { createMemoryHost } = await import("./testing.js");
+    const { sdk, host } = createMemoryHost({ version: ITEM_CARD_COLUMNS_TAVORA });
+    await sdk.ui.tooltip.show({ id: "a", at, content });
+    expect(sdk.supports("ui.tooltip.artTags")).toBe(false);
+    const shown = (host.calls["ui.tooltip.show"] as { content: TooltipContent }[])[0]!.content;
+    expect("artTags" in shown).toBe(false);
+    expect(shown.badges).toEqual(["Troop", "Stone", "Legendary"]);
   });
 });
 

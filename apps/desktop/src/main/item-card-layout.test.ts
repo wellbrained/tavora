@@ -19,6 +19,24 @@ describe("tooltip page and the kit's card: what a stat grows by, and rows under 
         expect(KIT_CSS).toContain(".tavora-item-card-per,.tavora-item-card-more{color:var(--ic-accent)}");
     });
 
+    it("put the tags over the picture in its bottom corners, 6 px in, on a mostly opaque patch of the card's surface", () => {
+        expect(TOOLTIP_DOCUMENT).toContain("body.card .art-tags{position:absolute;left:6px;right:6px;bottom:6px;display:flex;align-items:flex-end;gap:4px}");
+        expect(KIT_CSS).toContain(".tavora-item-card-art-tags{position:absolute;left:6px;right:6px;bottom:6px;display:flex;align-items:flex-end;gap:4px}");
+        expect(TOOLTIP_DOCUMENT).toContain("body.card .art-tags>div{display:flex;flex-wrap:wrap-reverse;gap:4px;min-width:0}body.card .art-tags>.right{margin-left:auto;justify-content:flex-end}");
+        expect(KIT_CSS).toContain(".tavora-item-card-art-tags>div{display:flex;flex-wrap:wrap-reverse;gap:4px;min-width:0}");
+        expect(KIT_CSS).toContain(".tavora-item-card-art-tags>[data-side=right]{margin-left:auto;justify-content:flex-end}");
+        expect(TOOLTIP_DOCUMENT).toContain("line-height:1.4;padding:0 6px;border:1px solid var(--line);border-radius:3px;background:color-mix(in srgb,var(--surface) 82%,transparent);white-space:nowrap}");
+        expect(KIT_CSS).toContain("line-height:1.4;padding:0 6px;border:1px solid var(--ic-line);border-radius:var(--radius-sm);background:color-mix(in srgb,var(--ic-surface) 82%,transparent);color:var(--ic-text);white-space:nowrap}");
+        expect(TOOLTIP_DOCUMENT).toContain("body.skinned .art-tag{border-radius:0}");
+        expect(KIT_CSS).toContain(".tavora-item-card[data-skinned] .tavora-item-card-art-tag{border-radius:0}");
+    });
+
+    it("draw a \u2013 in an extra column faint, in the label's colour", () => {
+        expect(TOOLTIP_DOCUMENT).toContain("body.card .stats .more.faint{color:var(--soft);opacity:.55}");
+        expect(TOOLTIP_DOCUMENT).toContain("body.skin-colors .stats .more.faint{color:var(--skin-muted)}");
+        expect(KIT_CSS).toContain(".tavora-item-card-more[data-faint]{color:var(--ic-muted);opacity:.55}");
+    });
+
     it("let a row's own text wrap and keep only its status on one line", () => {
         expect(TOOLTIP_DOCUMENT).toContain("li{display:grid;grid-template-columns:minmax(0,1fr) max-content;");
         expect(KIT_CSS).toContain(".tavora-item-card-section li span+span{color:var(--ic-muted);white-space:nowrap}");

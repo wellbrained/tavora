@@ -45,7 +45,7 @@ function point(target: AnchorTarget): TooltipAnchor["at"] {
  * with the old hint). The same goes for the card's `layout`, `effect` and `skin` on a Tavora older than
  * `ui.tooltip.skin`: the card shows in the rich layout there; and for a stat's `icon` before `ui.tooltip.propertyIcon`.
  * A stat's extra values (`more`) and their `columns` go into `per` before `ui.tooltip.columns`, and with it into the
- * value before `ui.tooltip.per`.
+ * value before `ui.tooltip.per`. Tags over the picture (`artTags`) become badges before `ui.tooltip.artTags`.
  * A unit card (`layout: "unit"`) becomes a plain card before `ui.tooltip.unit`, and a stat's `suffix` goes into its
  * value wherever the unit layout doesn't show it.
  */
@@ -57,6 +57,7 @@ export function tooltipShowParams(request: TooltipShowOptions, hostVersion: stri
   if (params.content && !supportsCall(hostVersion, "ui.tooltip.propertyIcon")) params.content = withoutIcons(params.content);
   if (params.content && !supportsCall(hostVersion, "ui.tooltip.columns")) params.content = withoutColumns(params.content);
   if (params.content && !supportsCall(hostVersion, "ui.tooltip.per")) params.content = withoutPer(params.content);
+  if (params.content && !supportsCall(hostVersion, "ui.tooltip.artTags")) params.content = withoutArtTags(params.content);
   const content = params.content as TooltipContent | undefined;
   if (content && (content.layout !== undefined || content.effect !== undefined || content.skin !== undefined) && !supportsCall(hostVersion, "ui.tooltip.skin")) {
     const { layout: _layout, effect, skin: _skin, ...older } = content;
@@ -118,6 +119,17 @@ function withoutColumns(content: TooltipContent): TooltipContent {
   const headings = (columns ?? []).slice(1).join(" / ");
   if (!folds || !headings) return { ...rest, properties };
   return { ...rest, properties, perHeading: cut(rest.perHeading === undefined ? headings : `${headings} · ${rest.perHeading}`, 60) };
+}
+
+/** As many badges as a card may have; tags that become badges past them are left out. */
+const MAX_BADGES = 8;
+
+/** For a Tavora without tags over the picture: their texts follow the badges, as many as fit, without their colours. */
+function withoutArtTags(content: TooltipContent): TooltipContent {
+  if (content.artTags === undefined) return content;
+  const { artTags, ...rest } = content;
+  const badges = [...(rest.badges ?? []), ...artTags.map((tag) => tag.text)].slice(0, Math.max(MAX_BADGES, rest.badges?.length ?? 0));
+  return badges.length ? { ...rest, badges } : rest;
 }
 
 /**
