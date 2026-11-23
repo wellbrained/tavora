@@ -360,3 +360,16 @@ it("reads no step through a link in place of its file", async (context) => {
   }
   expect(await new FolderPairing(folder, "Desk", () => now).read()).toBeNull();
 });
+
+it("answers a real request from a PC whose clock is hours ahead", async () => {
+  const { root } = await pc();
+  const folder = path.join(root, "OneDrive");
+  await mkdir(path.join(folder, "Tavora"), { recursive: true });
+  const now = Date.now();
+  // Its clock is six hours ahead: its request says it lasts until 30 hours from here.
+  const { id } = await new FolderPairing(folder, "Laptop", () => now + 6 * 60 * 60_000).ask(commit());
+  const old = await oldPc(new FolderPairing(folder, "Desk", () => now), { now: () => now });
+  await old.pairing.lookForRequests();
+  expect((await readdir(path.join(folder, "Tavora", "pairing"))).sort()).toEqual([`${id}.answer.json`, `${id}.request.json`]);
+  old.pairing.dispose();
+});

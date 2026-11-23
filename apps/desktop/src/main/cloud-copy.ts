@@ -200,6 +200,17 @@ export class CopyError extends Error {
   }
 }
 
+/**
+ * In a folder, the newest manifest can't be used with this key, though earlier ones open with it: junk put on top, a list
+ * changed on the way, or one sealed with the key from before Start over. It isn't taken ("older": the user is asked); they
+ * may keep this PC's side, which saves on top of `version` (CopySync.keep).
+ */
+export class NewestUnreadable extends CopyError {
+  constructor(readonly version: number) {
+    super("older", "the newest list in the folder doesn't open with this key, though earlier ones do");
+  }
+}
+
 export type UploadResult =
   | { status: "uploaded"; state: CopyState; pictures: boolean; size: number }
   | { status: "unchanged" }
@@ -603,10 +614,19 @@ export class CloudCopy {
     const current = await this.storage.manifest();
     if (!current || !wanted()) return null;
     const { version } = current;
-    const { manifest, marked } = openManifest(keys, current.sealed);
-    if (manifest.version !== undefined && manifest.version !== version) throw new CopyError("damaged", "the copy's list belongs to another version");
-    // A folder's file name says what the manifest was saved on top of; a marked one says so inside, and the two agree.
-    if (marked && current.base !== undefined && manifest.parent !== current.base) throw new CopyError("damaged", "the copy's list belongs to another version");
+    let opened: ReturnType<typeof openManifest>;
+    try {
+      opened = openManifest(keys, current.sealed);
+      if (opened.manifest.version !== undefined && opened.manifest.version !== version) throw new CopyError("damaged", "the copy's list belongs to another version");
+      // A folder's file name says what the manifest was saved on top of; a marked one says so inside, and the two agree.
+      if (opened.marked && current.base !== undefined && opened.manifest.parent !== current.base) throw new CopyError("damaged", "the copy's list belongs to another version");
+    } catch (error) {
+      // Earlier ones open with this key, so the key is right and the newest is what's off: the user may put their data on
+      // top of it. Otherwise the key typed in isn't this copy's.
+      if (error instanceof CopyError && error.reason === "damaged" && (await this.holdsMarked(keys))) throw new NewestUnreadable(version);
+      throw error;
+    }
+    const { manifest, marked } = opened;
     if (manifest.base !== undefined && (!Number.isSafeInteger(manifest.base) || manifest.base < 0 || manifest.base >= version)) throw new CopyError("damaged", "the copy's list belongs to another version");
     // Saved on top of an older version than this PC has: an old copy served as a new one, or a copy made anew after a
     // delete. The two look the same, so the caller asks instead of taking it. Not "damaged", which can mean a new key.

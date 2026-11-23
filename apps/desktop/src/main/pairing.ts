@@ -29,10 +29,11 @@ import { UserError } from "./messages";
 /** How long a request through the folder lasts: a sync app can be slow. */
 export const FOLDER_PAIRING_MS = 24 * 60 * 60_000;
 /**
- * How far the asking PC's clock may be ahead. A request in the folder that says it lasts longer than FOLDER_PAIRING_MS and
- * this from now wasn't made by Tavora (anyone who can write the folder can plant one): it is removed, never answered.
+ * How far the asking PC's clock may be ahead (a day: clocks that are off by hours, or a time zone set wrong). A request
+ * in the folder that says it lasts longer than FOLDER_PAIRING_MS and this from now wasn't made by Tavora (anyone who can
+ * write the folder can plant one): it is removed, never answered. One within it that stays can't hide others (`skip`).
  */
-export const CLOCK_AHEAD_MS = 60 * 60_000;
+export const CLOCK_AHEAD_MS = 24 * 60 * 60_000;
 /** How often a PC that asks looks for an answer. */
 const ASK_EVERY_MS = { service: 3_000, folder: 5_000 };
 /** How often a PC with the key looks for a PC that asks. */

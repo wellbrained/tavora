@@ -43,6 +43,12 @@ const KEEP_PART_MS = 7 * 24 * 60 * 60_000;
  * Drive) don't sync a new time alone, and another PC's clean-up goes by the time it sees.
  */
 const REWRITE_PART_MS = 24 * 60 * 60_000;
+/**
+ * Parts written up to this long before the newest manifest this PC has seen (besides its own new one) are kept: a PC that
+ * was away may get other PCs' parts before their manifests, and a sync app keeps the time a part was written. Covers
+ * clocks of other PCs that are a little off.
+ */
+const SEEN_MARGIN_MS = 24 * 60 * 60_000;
 /** About this much of parts goes back from one read. */
 const READ_BYTES = 8 * 1024 * 1024;
 /** The most a part file holds: a part, sealed. */
@@ -52,6 +58,8 @@ export const MAX_MANIFEST_FILE = 64 * 1024 * 1024;
 
 const MANIFEST_NAME = /^(\d{16})-(\d{16})\.bin$/;
 const PART_NAME = /^[0-9a-f]{64}$/;
+/** A sync app's copy of a part ("… (1)", "… (Desk's conflicted copy …)", "…-DESK"), or a temp file a write left behind. */
+const PART_COPY_NAME = /^[0-9a-f]{64}[^0-9a-f]/;
 const SHARD_NAME = /^[0-9a-f]{2}$/;
 /**
  * A manifest file: "TVC1", the copy's size (8 bytes), the part count (4 bytes), the part ids, the sealed manifest. The
@@ -225,14 +233,24 @@ export class FolderStorage implements CopyStorage {
     if (!current) return null;
     const info = readable(await lookOwnFile(path.join(this.manifestsDir, current.name)));
     if (!info) throw new CopyError("failed", "a manifest in the folder went away");
-    const { size } = await this.readManifest(current);
-    return { version: current.version, size, updatedAt: info.mtime.toISOString(), follows: follows(all, known) };
+    // One that isn't a manifest at all (junk, or bigger than any) still is the newest: the copy can't be opened, and the
+    // user is asked (CloudCopy.download), rather than the folder failing for good.
+    const read = await this.readManifest(current).catch((error: unknown) => {
+      if (error instanceof CopyError && error.reason === "damaged") return { size: 0 };
+      throw error;
+    });
+    return { version: current.version, size: read.size, updatedAt: info.mtime.toISOString(), follows: follows(all, known) };
   }
 
   async manifest(): Promise<{ version: number; base: number; sealed: Uint8Array } | null> {
     const current = (await this.manifests())[0];
     if (!current) return null;
-    return { version: current.version, base: current.base, sealed: (await this.readManifest(current)).sealed };
+    // Not a manifest at all: nothing that opens (CloudCopy.download says what then).
+    const read = await this.readManifest(current).catch((error: unknown) => {
+      if (error instanceof CopyError && error.reason === "damaged") return { sealed: new Uint8Array(0) };
+      throw error;
+    });
+    return { version: current.version, base: current.base, sealed: read.sealed };
   }
 
   async *earlierManifests(): AsyncGenerator<Uint8Array> {
@@ -314,33 +332,47 @@ export class FolderStorage implements CopyStorage {
     ids.forEach((id, index) => Buffer.from(id, "hex").copy(body, HEADER_BYTES + index * PART_ID_BYTES));
     Buffer.from(sealed).copy(body, HEADER_BYTES + ids.length * PART_ID_BYTES);
     await this.writableDir(this.manifestsDir);
-    await writeInFolder(path.join(this.manifestsDir, `${pad(version)}-${pad(base)}.bin`), body);
+    const name = `${pad(version)}-${pad(base)}.bin`;
+    await writeInFolder(path.join(this.manifestsDir, name), body);
     // Without the key nothing is known for sure, so nothing is deleted.
-    if (check) await this.cleanUp(check).catch(() => undefined);
+    if (check) await this.cleanUp(check, name).catch(() => undefined);
     return { status: "saved", version, size };
   }
 
   /**
    * Drops old manifests, then parts no manifest left uses, once both are old enough. It goes by what each manifest says
-   * inside its seal (`check`), never by its name or header alone. A manifest goes only with five newer marked ones
-   * (Tavora's own: none can be made without the key) and once it is old; one without a mark (an older Tavora's, or a part
-   * put there) never counts for those five, but its parts are kept while it is. Nothing is deleted this time when:
-   * - one opens with the key but says something else than its name or header (changed on the way), unless it is past
-   *   the kept ones (five newer marked ones, and a month old): then it goes;
-   * - one doesn't open with the key (half synced, or junk) and is younger than a month. Once it is a month old and five
-   *   marked ones are there, wherever they are in the line, it goes: junk (also one planted with a number above every
-   *   real one), or a list sealed with the key from before Start over, which no PC opens any more. A PC whose key opens
-   *   none of them deletes nothing.
+   * inside its seal (`check`), never by its name or header alone.
+   * - A manifest goes only with five newer marked ones (Tavora's own: none can be made without the key) and once it is a
+   *   month old. One without a mark (an older Tavora's, or a part put there) never counts for those five, but its parts
+   *   are kept while it is.
+   * - One that was read and can't be checked (junk, sealed with another key, or saying something else than its name or
+   *   header) stops it while it is among those kept: nothing is deleted this time. Past them it goes. One numbered above
+   *   every real one blocks every save, until the user keeps this PC's side over it (CopySync.keep): then it sinks.
+   * - One that can't be read right now (busy, online only, gone) stops it, wherever it is: it may come right.
+   * - A part goes once no manifest kept uses it, it is a week old and it was written well before the newest manifest this
+   *   PC has seen besides `written` (its own new one): one written later may belong to a manifest still on its way.
+   * - A sync app's copy of a part (Tavora never reads one) goes once it is a week old.
    */
-  private async cleanUp(check: ManifestCheck): Promise<void> {
+  private async cleanUp(check: ManifestCheck, written: string): Promise<void> {
     const now = this.now();
-    const seen: { file: ManifestFile; old: boolean; opens: boolean; opened: NonNullable<ReturnType<ManifestCheck>> | null }[] = [];
+    const lists: { file: ManifestFile; drop: boolean; parts: string[] }[] = [];
+    const junk: ManifestFile[] = [];
+    let newerMarked = 0;
+    let seenAt = 0;
     for (const file of await this.manifests()) {
       const looked = await lookOwnFile(path.join(this.manifestsDir, file.name));
       // One that is held may be in use: nothing is cleaned up this time.
       if (looked.status === "held") return;
       if (looked.status === "missing" || looked.value === null) continue;
-      const read = await this.readManifest(file).catch(() => null);
+      const past = newerMarked >= KEEP_MANIFESTS && now - looked.value.mtimeMs >= KEEP_MANIFEST_MS;
+      let read: Awaited<ReturnType<FolderStorage["readManifest"]>> | null;
+      try {
+        read = await this.readManifest(file);
+      } catch (error) {
+        // Only what was read and isn't a manifest counts as junk.
+        if (!(error instanceof CopyError && error.reason === "damaged")) return;
+        read = null;
+      }
       const opened = read ? check(read.sealed) : null;
       // Its name has to say what it says inside. A list of a long-gone Tavora that has no version inside can't be placed
       // by its name: it stays.
@@ -350,25 +382,16 @@ export class FolderStorage implements CopyStorage {
         sameIds(read.ids, opened.parts) &&
         (opened.version === undefined || opened.version === file.version) &&
         (!opened.marked || opened.parent === file.base);
-      seen.push({ file, old: now - looked.value.mtimeMs >= KEEP_MANIFEST_MS, opens: opened !== null, opened: fits ? opened : null });
-    }
-    const marked = seen.filter((list) => list.opened?.marked).length;
-    // One that can't be checked and doesn't go yet stops it, before anything is deleted.
-    let newerMarked = 0;
-    for (const list of seen) {
-      if (list.opened === null && !(list.old && (list.opens ? newerMarked : marked) >= KEEP_MANIFESTS)) return;
-      if (list.opened?.marked) newerMarked++;
-    }
-    const lists: { file: ManifestFile; drop: boolean; parts: string[] }[] = [];
-    newerMarked = 0;
-    for (const { file, old, opened } of seen) {
-      if (opened === null) {
-        await rm(path.join(this.manifestsDir, file.name), { force: true });
+      if (!fits) {
+        if (!past) return;
+        junk.push(file);
         continue;
       }
-      lists.push({ file, drop: newerMarked >= KEEP_MANIFESTS && old && opened.version !== undefined, parts: opened.parts });
+      if (file.name !== written) seenAt = Math.max(seenAt, looked.value.mtimeMs);
+      lists.push({ file, drop: past && opened.version !== undefined, parts: opened.parts });
       if (opened.marked) newerMarked++;
     }
+    for (const file of junk) await rm(path.join(this.manifestsDir, file.name), { force: true });
     const used = new Set<string>();
     for (const list of lists) {
       if (list.drop) await rm(path.join(this.manifestsDir, list.file.name), { force: true });
@@ -384,10 +407,13 @@ export class FolderStorage implements CopyStorage {
       if (kind.status !== "present" || kind.value !== "dir") continue;
       const parts = await lookNames(shardDir);
       for (const name of parts.status === "present" ? parts.value : []) {
-        if (!PART_NAME.test(name) || used.has(name)) continue;
+        const part = PART_NAME.test(name);
+        if (part ? used.has(name) : !PART_COPY_NAME.test(name)) continue;
         const target = path.join(shardDir, name);
         const info = await lookOwnFile(target);
-        if (info.status === "present" && info.value !== null && now - info.value.mtimeMs >= KEEP_PART_MS) await rm(target, { force: true });
+        if (info.status !== "present" || info.value === null || now - info.value.mtimeMs < KEEP_PART_MS) continue;
+        if (part && info.value.mtimeMs >= seenAt - SEEN_MARGIN_MS) continue;
+        await rm(target, { force: true });
       }
     }
   }
@@ -405,15 +431,26 @@ export class FolderStorage implements CopyStorage {
  * Whether the newest manifest grew out of version `known`: following each manifest back to the one it was
  * saved on top of reaches it. When the line goes below `known` without reaching it, another PC's save won over it, or
  * the folder was put back to an earlier day and another PC saved since: also when `known`'s own manifest is gone. Only
- * when the line breaks off above `known` (older manifests cleaned up) there is nothing to tell, and it counts as followed.
+ * when the line breaks off where a save on top of `known` could be, and `known`'s own manifest is gone too (older
+ * manifests cleaned up), there is nothing to tell, and it counts as followed.
  */
 export function follows(newestFirst: { version: number; base: number }[], known: number): boolean {
   if (known === 0 || newestFirst.length === 0) return true;
   const byVersion = new Map(newestFirst.map((file) => [file.version, file]));
-  let at: number | undefined = newestFirst[0]!.version;
-  while (at !== undefined && at > known) at = byVersion.get(at)?.base;
-  return at === undefined || at === known;
+  let at = newestFirst[0]!.version;
+  while (at > known) {
+    const file = byVersion.get(at);
+    // The line breaks off at a manifest that is gone. Every save on top of `known` is numbered from the next block up, so
+    // one below that is another PC's, saved beside `known`. Above it, it may be cleaned up; but when `known`'s own manifest
+    // is still there, it would be in the line too.
+    if (!file) return at >= firstAbove(known) && !byVersion.has(known);
+    at = file.base;
+  }
+  return at === known;
 }
+
+/** The lowest version a save on top of `version` can get (FolderStorage.nextVersion). */
+const firstAbove = (version: number) => (Math.floor(version / RANDOM_BITS) + 1) * RANDOM_BITS;
 
 /**
  * Writes a file of the copy in the picked folder. One that can't be written because the folder's drive is full, read-only

@@ -16,6 +16,7 @@ import {
   fileSha256,
   filledPlaces,
   lookCopyState,
+  NewestUnreadable,
   sortWrittenSince,
   swapInCopy,
   undoSwap,
@@ -160,6 +161,8 @@ export class CopySync {
   private account: string | null | undefined = undefined;
   /** The questions syncing waits on. They can be open together (a key asked for while a conflict stands), so it is a set. */
   private questions: ReadonlySet<Question> = new Set();
+  /** The newest list in the folder doesn't open with this key, though earlier ones do: the question says so (NewestUnreadable). */
+  private unreadable = false;
   private closing: Closing = { phase: "open" };
   private problem: CloudCopyProblem | null = null;
   /** Where putting a copy in place stands (cloud-copy-swap.ts); on disk, except `held`. */
@@ -347,7 +350,7 @@ export class CopySync {
         // Only when another account is signed in: that is what the question says.
         return !this.on && this.accountKeys.signedIn && !this.accountKeys.copyIsOf(this.options.account.id()) ? "waiting" : null;
       case "idle":
-        return null;
+        return this.unreadable ? "unreadable" : null;
       default:
         return assertNever(this.swap);
     }
@@ -641,6 +644,7 @@ export class CopySync {
       // one. It isn't taken without the user: they choose, as when both changed.
       if (!(error instanceof CopyError) || error.reason !== "older") throw error;
       if (turn !== this.turn) return false;
+      this.unreadable = error instanceof NewestUnreadable;
       this.ask("conflict");
       this.changed();
       return false;
@@ -663,7 +667,7 @@ export class CopySync {
       // The account's vault doesn't open with this PC's key either (another PC started over with a new key, or the
       // service sent something else): the copy goes off here, and turning it on asks for the new key. The key and the
       // vault this PC last read stay until a key that opens the account's is typed in (account-key.ts).
-      if (error instanceof CopyError && error.reason === "damaged" && !this.keyHere && !(await this.accountKeys.fits())) {
+      if (error instanceof CopyError && (error.reason === "damaged" || error instanceof NewestUnreadable) && !this.keyHere && !(await this.accountKeys.fits())) {
         await this.forget("new-key");
         throw new KeyChanged();
       }
@@ -1243,7 +1247,10 @@ export class CopySync {
     } catch (error) {
       // Turned off meanwhile: nothing to say about a turn-on that no longer counts.
       if (turn !== this.turn) return;
-      if (error instanceof CopyError && error.reason === "older") asks = true;
+      if (error instanceof CopyError && error.reason === "older") {
+        asks = true;
+        this.unreadable = error instanceof NewestUnreadable;
+      }
       else {
         // Sealed with another key: a copy from before the account had its key.
         if (error instanceof CopyError && error.reason === "damaged") throw new UserError("cloudCopy.error.wrongKey");
@@ -1472,9 +1479,19 @@ export class CopySync {
     const turn = this.turn;
     await this.exclusive("downloading", async () => {
       try {
-        const staged = await this.stageCurrent();
+        // The newest list doesn't open with this key (NewestUnreadable): nothing of it can come down or be kept, and this
+        // PC's side goes on top of it. That is what the user chose, with the question saying so.
+        let over: number | null = null;
+        const staged = await this.stageCurrent().catch((error: unknown) => {
+          if (!(error instanceof NewestUnreadable)) throw error;
+          over = error.version;
+          return null;
+        });
         if (turn !== this.turn) return;
-        if (staged) {
+        if (over !== null) {
+          await rm(this.stagingDir, { recursive: true, force: true });
+          this.state = { ...this.state, version: over, kept: true };
+        } else if (staged) {
           // The list goes first: a crash can't leave it naming files that moved. The upload below replaces the copy, so
           // it doesn't run unless the copy's side is safe in the backup.
           const backup = await this.backupFolder("cloud");
@@ -1488,6 +1505,7 @@ export class CopySync {
         } else {
           this.state = EMPTY_STATE;
         }
+        this.unreadable = false;
         await rm(this.stagingDir, { recursive: true, force: true });
         await this.keepState(turn);
         // Choosing this PC's side also answers for data it lost: what is here now is what the user wants up.
@@ -1552,6 +1570,12 @@ export class CopySync {
       } catch (error) {
         if (error instanceof KeyChanged) throw CopySync.userError(this.noteProblem(error));
         if (error instanceof UserError) throw error;
+        // Nothing of it opens: only this PC's side can be the answer, and the question now says so.
+        if (error instanceof NewestUnreadable) {
+          this.unreadable = true;
+          this.changed();
+          throw new UserError("cloudCopy.error.unreadable");
+        }
         throw CopySync.userError(this.noteProblem(error));
       }
     });
@@ -1727,6 +1751,7 @@ export class CopySync {
     this.copyOn = false;
     this.state = EMPTY_STATE;
     this.shownKey = null;
+    this.unreadable = false;
     this.clear("askKey");
     this.clear("conflict");
     this.clear("restartToTake");

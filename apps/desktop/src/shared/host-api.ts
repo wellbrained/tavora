@@ -577,7 +577,7 @@ export interface CloudCopyView {
    * `waiting`: a copy the user chose belongs to another account than the one signed in (sign in with it, or keep this
    * PC's data). Null otherwise.
    */
-  conflictKind: "unfinished" | "lost" | "waiting" | null;
+  conflictKind: "unfinished" | "lost" | "waiting" | "unreadable" | null;
   /** A newer copy from another PC is downloaded; a restart takes it. */
   restartToTake: boolean;
   /** Closing waits for the last upload. */
