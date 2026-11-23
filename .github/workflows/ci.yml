@@ -52,8 +52,8 @@ jobs:
 
   # Known holes in what Tavora ships, and secrets in the history. The audit covers the whole workspace, dev tools
   # included, and fails on a high or critical advisory: most of what ends up in the app (electron, vue, the ad blocker,
-  # dockview, @vueuse) is listed as a devDependency because it is bundled, so `--prod` would miss it. package.json's
-  # pnpm.overrides lift the ones a compatible fix exists for, and pnpm.auditConfig.ignoreGhsas lists the rest with the
+  # dockview, @vueuse) is listed as a devDependency because it is bundled, so `--prod` would miss it. The overrides in
+  # pnpm-workspace.yaml lift the ones a compatible fix exists for, and its auditConfig.ignoreGhsas lists the rest with the
   # reason beside it: picomatch (GHSA-fc5q-39xc-vjpf), which Excalidraw's sass dependency pulls in for its file watcher; it is not in the
   # Whiteboard's built bundle; and minimatch (GHSA-g3hv-75wg-m249) under typedoc, which still calls an API that
   # minimatch 11 removed (typedoc 0.28.20 is the latest), so it stays on 10.x; it only runs in the docs build, on
@@ -68,7 +68,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
@@ -176,7 +176,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24

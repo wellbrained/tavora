@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { addedLines, checkPatches, parseSpec, storeFolders } from "./check-patches.mjs";
+import { addedLines, checkPatches, parseSpec, patchedDependencies, storeFolders } from "./check-patches.mjs";
 
 const PATCH = `diff --git a/dist/index.js b/dist/index.js
 index 1111111..2222222 100644
@@ -22,7 +22,7 @@ const PATCHED = "var a = 1;\r\n// Tavora: ten colours.\r\nvar b = 10;\r\n\r\nvar
 /** A repo with one patched dependency, installed in the given .pnpm folders with the given contents. */
 function repo(copies: Record<string, string>): string {
   const root = mkdtempSync(path.join(tmpdir(), "check-patches-"));
-  writeFileSync(path.join(root, "package.json"), JSON.stringify({ pnpm: { patchedDependencies: { "@scope/pkg@1.2.3": "patches/pkg.patch" } } }));
+  writeFileSync(path.join(root, "pnpm-workspace.yaml"), 'packages:\n  - apps/*\n\npatchedDependencies:\n  "@scope/pkg@1.2.3": patches/pkg.patch\n');
   mkdirSync(path.join(root, "patches"));
   writeFileSync(path.join(root, "patches", "pkg.patch"), PATCH);
   for (const [folder, text] of Object.entries(copies)) {
@@ -37,6 +37,24 @@ function repo(copies: Record<string, string>): string {
 describe("check-patches", () => {
   it("reads the added lines of each file, without blank ones", () => {
     expect(addedLines(PATCH)).toEqual({ "dist/index.js": ["// Tavora: ten colours.", "var b = 10;"] });
+  });
+
+  it("reads the patches from pnpm-workspace.yaml, and only from its patchedDependencies", () => {
+    const yaml = [
+      "packages:",
+      "  - apps/*",
+      "overrides:",
+      '  "@scope/other": 1.0.0',
+      "# patches",
+      "patchedDependencies:",
+      '  "@scope/pkg@1.2.3": patches/pkg.patch',
+      "  plain@2.0.0: 'patches/plain.patch'",
+      "",
+      "auditConfig:",
+      "  ignoreGhsas:",
+      "    - GHSA-xxxx",
+    ].join("\r\n");
+    expect(patchedDependencies(yaml)).toEqual({ "@scope/pkg@1.2.3": "patches/pkg.patch", "plain@2.0.0": "patches/plain.patch" });
   });
 
   it("finds every store folder of that version, also under a shortened name", () => {

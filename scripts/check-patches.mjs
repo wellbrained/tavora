@@ -1,4 +1,4 @@
-// `pnpm check:patches`: every dependency in package.json's pnpm.patchedDependencies is really patched in
+// `pnpm check:patches`: every dependency in pnpm-workspace.yaml's patchedDependencies is really patched in
 // node_modules. pnpm can report an install as done while a .pnpm folder still holds the unpatched files (the
 // 0.23.9 dry run: Excalidraw without Tavora's patch). Runs in CI right after `pnpm install` and in `pnpm check`.
 import { existsSync, readFileSync, readdirSync } from "node:fs";
@@ -40,6 +40,25 @@ export function storeFolders(store, entries, name, version) {
   });
 }
 
+/**
+ * The `patchedDependencies:` map of a pnpm-workspace.yaml: { "@scope/pkg@1.2.3": "patches/pkg.patch" }. Reads only
+ * that block (one `key: value` line per patch, quoted or not), so no YAML library is needed.
+ */
+export function patchedDependencies(yaml) {
+  const patched = {};
+  let inside = false;
+  for (const line of yaml.split(/\r?\n/)) {
+    if (!line.trim() || line.trimStart().startsWith("#")) continue;
+    if (!/^\s/.test(line)) {
+      inside = /^patchedDependencies:\s*$/.test(line);
+      continue;
+    }
+    const entry = inside && /^\s+(?:"([^"]+)"|'([^']+)'|([^\s:"'][^:]*?)):\s+(?:"([^"]+)"|'([^']+)'|(\S+))\s*$/.exec(line);
+    if (entry) patched[entry[1] ?? entry[2] ?? entry[3]] = entry[4] ?? entry[5] ?? entry[6];
+  }
+  return patched;
+}
+
 /** "@scope/pkg@1.2.3" → { name: "@scope/pkg", version: "1.2.3" }. */
 export function parseSpec(spec) {
   const at = spec.lastIndexOf("@");
@@ -48,8 +67,8 @@ export function parseSpec(spec) {
 
 /** What is wrong with the patched dependencies under `root`. Empty means every copy is patched. */
 export function checkPatches(root) {
-  const manifest = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
-  const patched = manifest.pnpm?.patchedDependencies ?? {};
+  const workspace = path.join(root, "pnpm-workspace.yaml");
+  const patched = existsSync(workspace) ? patchedDependencies(readFileSync(workspace, "utf8")) : {};
   const store = path.join(root, "node_modules", ".pnpm");
   const entries = existsSync(store) ? readdirSync(store) : [];
   const problems = [];
