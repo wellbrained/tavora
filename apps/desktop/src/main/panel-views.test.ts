@@ -1681,3 +1681,71 @@ describe("a panel that goes during a host menu", () => {
     expect(second.visible).toBe(true);
   });
 });
+
+describe("popups over panels as one state", () => {
+  /** The overlay and every panel's step, as the shared state has them (shared/popups-over-panels.ts). */
+  const steps = (rig: ReturnType<typeof panelViewsRig>) => {
+    const { overlay, panels } = rig.views.popupsOverPanels;
+    return { overlay: overlay.status === "partial" ? [...overlay.panels] : overlay.status, panels: Object.fromEntries([...panels].map(([instanceId, panel]) => [instanceId, panel.step === "settling" ? `settling after ${panel.after}` : panel.step])) };
+  };
+
+  it("goes from closed to a menu over some panels, to a dialog over all, and back with each picture settling", async () => {
+    const rig = panelViewsRig();
+    const a = rig.add(A);
+    rig.add(B);
+    rig.add(C);
+    rig.views.place([place(A), place(B, 400), place(C, 0, 300)]);
+    expect(steps(rig)).toEqual({ overlay: "closed", panels: {} });
+    let releaseA: (image: string) => void = () => undefined;
+    a.capture = () => new Promise((resolve) => (releaseA = resolve));
+    const menu = rig.views.freeze(true, [A], 1);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(steps(rig)).toEqual({ overlay: [A], panels: { [A]: "picturing" } });
+    releaseA("data:a");
+    await menu;
+    expect(steps(rig)).toEqual({ overlay: [A], panels: { [A]: "out" } });
+    await rig.views.freeze(true, undefined, 2);
+    expect(steps(rig)).toEqual({ overlay: "all", panels: { [A]: "out", [B]: "out", [C]: "out" } });
+    let settleA: () => void = () => undefined;
+    a.settled = new Promise((resolve) => (settleA = resolve));
+    const closing = rig.views.freeze(false);
+    await vi.advanceTimersByTimeAsync(FROZEN_GONE_MS);
+    expect(steps(rig)).toEqual({ overlay: "closed", panels: { [A]: "settling after overlay" } });
+    settleA();
+    await vi.advanceTimersByTimeAsync(FROZEN_GONE_MS);
+    await closing;
+    expect(steps(rig)).toEqual({ overlay: "closed", panels: {} });
+  });
+
+  it("settles a panel back from another tab on its last picture, and lets go when it leaves again first", async () => {
+    const rig = panelViewsRig();
+    const a = rig.add(A);
+    rig.views.place([place(A)]);
+    a.capture = () => Promise.resolve("data:last");
+    rig.views.place([]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(steps(rig).panels).toEqual({});
+    let settle: () => void = () => undefined;
+    a.settled = new Promise((resolve) => (settle = resolve));
+    rig.views.place([place(A)]);
+    expect(steps(rig).panels).toEqual({ [A]: "settling after away" });
+    rig.views.place([]);
+    expect(steps(rig).panels).toEqual({});
+    rig.views.place([place(A)]);
+    expect(steps(rig).panels).toEqual({ [A]: "settling after away" });
+    settle();
+    await vi.advanceTimersByTimeAsync(FROZEN_GONE_MS);
+    expect(steps(rig).panels).toEqual({});
+    expect(rig.frozen.at(-1)).toEqual({});
+  });
+
+  it("keeps nothing of a panel that goes while out", async () => {
+    const rig = panelViewsRig();
+    rig.add(A);
+    rig.views.place([place(A)]);
+    await rig.views.freeze(true, undefined, 1);
+    expect(steps(rig).panels).toEqual({ [A]: "out" });
+    rig.views.close(A);
+    expect(steps(rig)).toEqual({ overlay: "all", panels: {} });
+  });
+});

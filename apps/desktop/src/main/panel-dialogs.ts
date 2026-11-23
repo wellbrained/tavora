@@ -1,7 +1,7 @@
 import type { ModuleMenu, PanelDialog } from "../shared/host-api";
 import type { PanelDialogSize } from "./bridge";
 import type { CheckedMenu } from "./module-menu";
-import type { PanelViews } from "./panel-views";
+import type { PanelRect, PanelViews } from "./panel-views";
 import type { PendingQuestions } from "./pending-questions";
 import type { InstalledModule } from "./registry";
 
@@ -13,8 +13,8 @@ export const OVERLAY_SETTINGS_DIALOG = { width: 960, height: 680 } as const;
 export interface PanelDialogsOptions {
   /** Every open question; a module's menu (`menu`) and a dialog waiting for its panel (`dialog`) are among them. */
   questions: PendingQuestions;
-  /** The panels' views: their places, their dialog and a menu over it (panel-views.ts). */
-  panels: Pick<PanelViews, "has" | "mayShowMenu" | "inDialog" | "openDialogMenu" | "closeDialogMenu" | "isLent" | "isPlaced" | "openDialog" | "closeDialog" | "dialog">;
+  /** The panels' views: their places, their dialog, a menu over it, and how they step aside for the host page's popups (panel-views.ts). */
+  panels: Pick<PanelViews, "has" | "mayShowMenu" | "inDialog" | "openDialogMenu" | "closeDialogMenu" | "isLent" | "isPlaced" | "openDialog" | "closeDialog" | "dialog" | "freeze" | "prepareFreeze">;
   /** The host window's page, which draws the menus and the dialog frames. */
   page: {
     send(channel: "host:module-menu" | "host:panel-dialog" | "host:panel-dialog-title" | "host:panel-dialog-drawn", payload: unknown): void;
@@ -43,11 +43,11 @@ export interface PanelDialogsOptions {
 }
 
 /**
- * What the host page draws over the panels for a module: its menus and a panel shown big in its dialog. One menu at a
- * time and one dialog at a time; a new one closes the last. A dialog a panel asks for before it is in its slot (just
- * added, or over the game) waits for it a moment. The panels' own views step aside or move (panel-views.ts); this
- * decides when, tells the host page what to draw, and where the keyboard goes. Popups over panels (part 5 of the
- * architecture deepenings) are expected to land here.
+ * What the host page draws over the panels: a module's menus, a panel shown big in its dialog, and the host's own menus,
+ * hints, dialogs and drags (popups over panels). One menu at a time and one dialog at a time; a new one closes the last.
+ * A dialog a panel asks for before it is in its slot (just added, or over the game) waits for it a moment. The panels'
+ * own views step aside or move (panel-views.ts, by the one state in shared/popups-over-panels.ts); this decides when,
+ * tells the host page what to draw, and where the keyboard goes.
  */
 export class PanelDialogs {
   constructor(private readonly options: PanelDialogsOptions) {}
@@ -157,6 +157,20 @@ export class PanelDialogs {
     if (panels.isLent(instanceId) || !panels.isPlaced(instanceId)) return;
     questions.answer(pending.id, true);
     this.open(instanceId, pending.payload.module, pending.payload.size, pending.payload.byClick);
+  }
+
+  /**
+   * The host page's popups over the panels: a menu, hint, dialog or drag opened (`open`), or the last one closed. `only`:
+   * the panels a menu or hint lies over, added to those asked before; none: every panel. Each request `seq` is answered
+   * once its panels are out of the way (host:overlay-ready).
+   */
+  popups(open: boolean, only: readonly string[] | undefined, seq: number): void {
+    void this.options.panels.freeze(open, only, seq);
+  }
+
+  /** The user reaches for something that may open over the panels: their pictures are taken ahead, near `near` or everywhere. */
+  preparePopups(near?: PanelRect): void {
+    this.options.panels.prepareFreeze(near);
   }
 
   /** A panel's dialog closed (panel-views.ts): its tooltips and menu go with it, and the keyboard goes back to the host page. */

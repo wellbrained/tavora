@@ -1,4 +1,5 @@
 import { dialogPictureKey } from "../shared/dialog-picture";
+import { isOpen, isSteppedAside, noPopups, overlayPictures, panelStep, popupsStep, settlingAfterOverlay, type PopupsEvent, type PopupsOverPanels } from "../shared/popups-over-panels";
 import type { InstanceStatus, PanelPicture, PanelPlacement } from "../shared/host-api";
 import type { OverlayPanel } from "./game-overlay-window";
 import { INSTANCE_ID } from "./ids";
@@ -232,19 +233,13 @@ export class PanelViews {
   /** Panels lent to the in-game layer: each lend, with what to tell the layer when the panel closes for good. */
   private readonly lent = new Map<string, { revoked: () => void }>();
   private openingState: { startedAt: number; timer: ReturnType<typeof setTimeout>; tag: string } | null = null;
-  private overlayOpen = false;
-  /** Counts host overlays opened and closed, so the work of one that ended never touches the next. */
-  private overlaySession = 0;
-  /** What the host UI asked to step aside while the overlay is open: every panel (a dialog, a drag) or only these (under a menu or hint). */
-  private wanted: "all" | Set<string> = new Set();
-  /** Panels hidden behind their pictures now. */
-  private readonly out = new Set<string>();
-  /** Panels whose pictures are being taken: they stay in sight until their picture is on screen. */
-  private readonly picturing = new Set<string>();
+  /**
+   * The host menu, hint, dialog or drag over the workspace and how each panel steps aside for it, with its picture
+   * (shared/popups-over-panels.ts: the host UI steps the same function with the requests it sends).
+   */
+  private popups: PopupsOverPanels<Picture> = noPopups();
   /** An overlay's steps run one after another, so each answer (overlayReady) comes after the one before. */
   private freezing: Promise<void> = Promise.resolve();
-  /** Pictures standing in for panels hidden for a host menu, dialog or drag. */
-  private readonly overlayPictures = new Map<string, Picture>();
   /**
    * The last picture of each panel that left its slot (another tab in front, its column collapsed, another group
    * maximized). It lies under the panel when it comes back, until the page has drawn: the slot never shows empty.
@@ -535,11 +530,9 @@ export class PanelViews {
     }
     if (forget) this.bounds.delete(instanceId);
     this.inSight.delete(instanceId);
-    this.out.delete(instanceId);
-    this.picturing.delete(instanceId);
+    this.step({ type: "gone", id: instanceId });
     this.prepared.delete(instanceId);
     this.standIns.delete(instanceId);
-    this.overlayPictures.delete(instanceId);
     this.sendPictures();
   }
 
@@ -625,13 +618,13 @@ export class PanelViews {
     const adapter = this.get(instanceId);
     if (!adapter || this.deps.windowHidden() || !adapter.revealed || this.lent.has(instanceId)) return false;
     if (this.showsInDialog(instanceId)) return this.dialogMenu === null;
-    return this.bounds.has(instanceId) && !this.overlayOpen && !this.openingState;
+    return this.bounds.has(instanceId) && !isOpen(this.popups) && !this.openingState;
   }
 
   /** Whether a menu of this panel can be drawn over it now: in its slot with nothing over it, or in its own dialog. */
   mayShowMenu(instanceId: string): boolean {
     if (this.lent.has(instanceId)) return false;
-    return this.showsInDialog(instanceId) || (this.bounds.has(instanceId) && !this.overlayOpen);
+    return this.showsInDialog(instanceId) || (this.bounds.has(instanceId) && !isOpen(this.popups));
   }
 
   /** Where the panel's page is on the window now: in its dialog while it shows there, else its slot. */
@@ -759,7 +752,16 @@ export class PanelViews {
   // ── Host menus and dialogs over the workspace ───────────────────────
 
   get overlay(): boolean {
-    return this.overlayOpen;
+    return isOpen(this.popups);
+  }
+
+  /** The overlay and each panel's step for it, as both sides know them. */
+  get popupsOverPanels(): PopupsOverPanels<Picture> {
+    return this.popups;
+  }
+
+  private step(event: PopupsEvent<Picture>): void {
+    this.popups = popupsStep(this.popups, event);
   }
 
   /**
@@ -770,19 +772,15 @@ export class PanelViews {
    */
   freeze(open: boolean, only?: readonly string[], seq = 0): Promise<void> {
     if (!open) {
-      if (!this.overlayOpen) return Promise.resolve();
-      this.overlayOpen = false;
-      this.overlaySession++;
+      if (!isOpen(this.popups)) return Promise.resolve();
       return this.thaw();
     }
-    if (!this.overlayOpen) {
+    if (!isOpen(this.popups)) {
       this.deps.overlayOpening();
-      this.overlayOpen = true;
-      this.overlaySession++;
-      this.wanted = new Set();
+      this.step({ type: "open" });
       this.freezing = Promise.resolve();
     }
-    const session = this.overlaySession;
+    const session = this.popups.session;
     const askedAt = this.now();
     const step = this.freezing.then(() => this.stepAside(session, only, seq, askedAt));
     this.freezing = step.catch(() => undefined);
@@ -791,18 +789,29 @@ export class PanelViews {
 
   /** Whether the panel is out of the way of a host overlay: hidden behind its picture, or (under a dialog or drag) waiting for none. */
   private steppedAside(instanceId: string): boolean {
-    return this.out.has(instanceId) || (this.overlayOpen && this.wanted === "all" && !this.picturing.has(instanceId));
+    return isSteppedAside(this.popups, instanceId);
+  }
+
+  /** Hidden behind its picture (or with none) now. */
+  private isOut(instanceId: string): boolean {
+    return panelStep(this.popups, instanceId).step === "out";
+  }
+
+  /** Out, or its picture is being taken. */
+  private isHeld(instanceId: string): boolean {
+    const { step } = panelStep(this.popups, instanceId);
+    return step === "out" || step === "picturing";
   }
 
   private async stepAside(session: number, only: readonly string[] | undefined, seq: number, askedAt: number): Promise<void> {
-    if (session !== this.overlaySession || this.deps.windowGone()) return;
-    if (!only) this.wanted = "all";
-    else if (this.wanted !== "all") for (const instanceId of only) this.wanted.add(instanceId);
-    const wanted = this.wanted;
-    const targets = [...this.entries].filter(([instanceId]) => !this.lent.has(instanceId) && !this.inDialog(instanceId) && !this.out.has(instanceId) && (wanted === "all" || wanted.has(instanceId)));
+    if (session !== this.popups.session || this.deps.windowGone()) return;
+    this.step(only ? { type: "ask", only } : { type: "ask" });
+    const wanted = this.popups.overlay;
+    const asked = (instanceId: string) => wanted.status === "all" || (wanted.status === "partial" && wanted.panels.has(instanceId));
+    const targets = [...this.entries].filter(([instanceId]) => !this.lent.has(instanceId) && !this.inDialog(instanceId) && !this.isOut(instanceId) && asked(instanceId));
     const pictured = targets.filter(([instanceId, { adapter }]) => this.canBePictured(instanceId, adapter));
     const picturedIds = new Set(pictured.map(([instanceId]) => instanceId));
-    for (const instanceId of picturedIds) this.picturing.add(instanceId);
+    this.step({ type: "picturing", ids: [...picturedIds] });
     const images = new Map<string, string>();
     let ahead = 0;
     await Promise.all(
@@ -813,30 +822,32 @@ export class PanelViews {
         if (taken.image) images.set(instanceId, taken.image);
       }),
     );
-    if (session !== this.overlaySession || this.deps.windowGone()) return;
+    if (session !== this.popups.session || this.deps.windowGone()) return;
     // A panel closed or restarted while its picture was taken is not this view any more: nothing of it is kept.
     for (const [instanceId, { adapter }] of pictured) if (this.get(instanceId) !== adapter) images.delete(instanceId);
-    for (const [instanceId, image] of images) this.overlayPictures.set(instanceId, this.picture(image));
+    for (const [instanceId, image] of images) this.step({ type: "pictured", id: instanceId, picture: this.picture(image) });
     this.sendPictures([...images.keys()]);
     // Hidden before their pictures are on screen, the panels' slots would show empty for a frame.
     if (images.size) await this.deps.frozenOnScreen();
-    if (session !== this.overlaySession || this.deps.windowGone()) return;
+    if (session !== this.popups.session || this.deps.windowGone()) return;
     for (const [instanceId, { adapter }] of targets) {
       const now = this.get(instanceId);
       if (now !== adapter) {
         // Restarted while its picture was taken: the new view has no picture yet, and in sight it would draw over the menu.
         if (now && !this.lent.has(instanceId) && !this.inDialog(instanceId)) {
-          this.out.add(instanceId);
+          this.step({ type: "out", id: instanceId });
           this.inSight.delete(instanceId);
           now.setVisible(false);
         }
         continue;
       }
-      this.picturing.delete(instanceId);
       // A picture that came to nothing leaves the panel in sight under a menu, since its slot would show empty. Under a
       // dialog or drag it steps aside all the same: it would draw over them.
-      if (!images.has(instanceId) && wanted !== "all" && picturedIds.has(instanceId)) continue;
-      this.out.add(instanceId);
+      if (!images.has(instanceId) && wanted.status !== "all" && picturedIds.has(instanceId)) {
+        this.step({ type: "stay", id: instanceId });
+        continue;
+      }
+      this.step({ type: "out", id: instanceId });
       this.inSight.delete(instanceId);
       adapter.setVisible(false);
     }
@@ -854,7 +865,7 @@ export class PanelViews {
     if (this.deps.windowGone()) return;
     const now = this.now();
     for (const [instanceId, { adapter }] of this.entries) {
-      if (!this.canBePictured(instanceId, adapter) || this.out.has(instanceId) || this.picturing.has(instanceId)) continue;
+      if (!this.canBePictured(instanceId, adapter) || this.isHeld(instanceId)) continue;
       const bounds = this.bounds.get(instanceId)!;
       if (near && !reaches(near, bounds, PREPARE_REACH_PX)) continue;
       const key = this.pictureKey(instanceId, adapter);
@@ -901,16 +912,16 @@ export class PanelViews {
    * picture goes as its own panel settles, and only the one this close left: a menu opened since put a newer one there.
    */
   private thaw(): Promise<void> {
-    this.out.clear();
-    this.picturing.clear();
-    this.wanted = new Set();
+    this.step({ type: "close" });
     this.applyBounds();
     this.deps.shownAgain?.(this.inSlots());
     return Promise.all(
-      [...this.overlayPictures].map(async ([instanceId, picture]) => {
+      settlingAfterOverlay(this.popups).map(async ([instanceId, picture]) => {
         await this.settledThenGone(instanceId);
-        if (this.overlayPictures.get(instanceId) !== picture || this.out.has(instanceId) || this.picturing.has(instanceId) || this.deps.windowGone()) return;
-        this.overlayPictures.delete(instanceId);
+        if (this.deps.windowGone()) return;
+        const before = this.popups;
+        this.step({ type: "settled", id: instanceId, picture });
+        if (this.popups === before) return;
         // One that left its slot meanwhile (another tab in front) keeps it to lie on when it comes back.
         const adapter = this.get(instanceId);
         if (adapter?.status === "ready" && !this.bounds.has(instanceId) && !this.lent.has(instanceId)) this.keepStandIn(instanceId, picture);
@@ -935,6 +946,9 @@ export class PanelViews {
     const was = this.inSight.has(instanceId);
     if (shown) this.inSight.add(instanceId);
     else this.inSight.delete(instanceId);
+    // Out of sight again before it drew: it no longer settles on its last picture (the list of kept pictures still has it).
+    const settling = panelStep(this.popups, instanceId);
+    if (!shown && settling.step === "settling" && settling.after === "away") this.step({ type: "drop", id: instanceId, picture: settling.picture });
     // Placed but kept hidden (no data yet, a question): its slot shows the loader or the question, never an old picture.
     if (!shown && placed && (!adapter.revealed || this.deps.asking(instanceId))) this.dropStandIn(instanceId);
     if (!was || shown || placed || adapter.status !== "ready" || !adapter.revealed || !adapter.capturable || this.lent.has(instanceId)) return;
@@ -962,19 +976,26 @@ export class PanelViews {
   /** The panel is back in its slot: its last picture lies under it until it has drawn and turned solid; one that is not ready has none. */
   private liftStandIn(instanceId: string, adapter: PanelViewAdapter): void {
     const picture = this.standIns.get(instanceId);
-    if (adapter.status !== "ready") return this.dropStandIn(instanceId);
+    if (adapter.status !== "ready" || !picture) return this.dropStandIn(instanceId);
+    this.step({ type: "back", id: instanceId, picture });
     void this.settledThenGone(instanceId).then(() => {
+      this.step({ type: "settled", id: instanceId, picture });
       if (this.standIns.get(instanceId) === picture && this.inSight.has(instanceId)) this.dropStandIn(instanceId);
     });
   }
 
   private dropStandIn(instanceId: string): void {
-    if (this.standIns.delete(instanceId)) this.sendPictures();
+    const picture = this.standIns.get(instanceId);
+    if (!picture) return;
+    this.standIns.delete(instanceId);
+    this.step({ type: "drop", id: instanceId, picture });
+    this.sendPictures();
   }
 
   /** The theme changed: pictures taken before show the old colours, so none is kept. */
   forgetStandIns(): void {
     if (!this.standIns.size) return;
+    for (const [instanceId, picture] of this.standIns) this.step({ type: "drop", id: instanceId, picture });
     this.standIns.clear();
     this.sendPictures();
   }
@@ -989,7 +1010,7 @@ export class PanelViews {
    */
   private sendPictures(awaited: string[] = []): void {
     if (this.deps.windowGone()) return;
-    const shown = new Map([...this.standIns, ...this.overlayPictures]);
+    const shown = new Map([...this.standIns, ...overlayPictures(this.popups)]);
     if (this.dialogPicture) shown.set(dialogPictureKey(this.dialogPicture.instanceId), this.dialogPicture.picture);
     const changes: Record<string, Picture | null> = {};
     for (const [instanceId, picture] of shown) if (this.sentPictures.get(instanceId) !== picture.gen) changes[instanceId] = picture;
@@ -1148,7 +1169,7 @@ export class PanelViews {
     const dialog = this.dialogState;
     return {
       opening: this.openingState !== null,
-      overlay: this.overlayOpen,
+      overlay: isOpen(this.popups),
       dialog: dialog ? { instanceId: dialog.instanceId, width: dialog.width, height: dialog.height, placed: dialog.bounds !== null } : null,
       panels,
     };

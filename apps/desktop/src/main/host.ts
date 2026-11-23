@@ -1719,12 +1719,12 @@ export class Host {
       if (!fromHost(event) || typeof open !== "boolean") return;
       // Only these panels step aside (a menu or hint lies over them); none named: every panel.
       const ids = Array.isArray(only) && only.length <= LAYOUT_LIMITS.panels && only.every((id) => typeof id === "string" && INSTANCE_ID.test(id)) ? (only as string[]) : undefined;
-      void this.panels.freeze(open, ids, typeof seq === "number" && Number.isSafeInteger(seq) ? seq : 0);
+      this.panelDialogs.popups(open, ids, typeof seq === "number" && Number.isSafeInteger(seq) ? seq : 0);
     });
     ipcMain.on("host:overlay-prepare", (event, near: unknown) => {
       if (!fromHost(event)) return;
       // Where the menu or hint will open, to picture only the panels it could reach; none given (or not a place): every panel.
-      this.panels.prepareFreeze(this.windowRect(near) ?? undefined);
+      this.panelDialogs.preparePopups(this.windowRect(near) ?? undefined);
     });
     ipcMain.on("host:frozen-shown", (event) => {
       if (fromHost(event)) this.frozenShown?.();

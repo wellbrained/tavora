@@ -16,7 +16,9 @@ import { createSubmissions } from "./submissions.ts";
 
 const TOKEN = "t0ken-".repeat(5);
 const DAY = 86_400_000;
-const NOW = Date.parse("2026-10-26T12:00:00Z");
+// The panel counts against the real clock, so the accounts are made relative to it: a fixed date fell out of the
+// last-30-days window on 2026-11-23 and broke the count.
+const NOW = Date.now();
 // The version on the feed: the second newest, so there is a waiting one above it; with a single entry (right after the 1.0 fold) the only one.
 const FEED_VERSION = PATCH_NOTES[Math.min(1, PATCH_NOTES.length - 1)]!.version;
 
