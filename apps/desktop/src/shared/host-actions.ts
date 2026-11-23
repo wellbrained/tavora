@@ -630,7 +630,9 @@ export function hostActionTable(c: HostChecks) {
     /** Takes the copy in place of this PC's data (kept as a local backup); Tavora restarts. */
     "cloud-copy-restore": {},
     /** Both sides changed: keep this PC's (the copy is kept as a local backup) or the copy's. */
-    "cloud-copy-keep": { side: oneOf("pc", "cloud") },
+    "cloud-copy-keep": { side: oneOf("pc", "cloud"), replace: optional(bool) },
+    /** Signed out, the newest copy in the folder doesn't open with this PC's key: the key of the PC that started over. */
+    "cloud-copy-other-key": { key: text() },
     "cloud-copy-restart": {},
     /** Off on this PC; the copy stays for the other PCs. */
     "cloud-copy-off": {},

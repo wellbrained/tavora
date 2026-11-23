@@ -1,6 +1,6 @@
 import { randomInt } from "node:crypto";
 import type { Stats } from "node:fs";
-import { lstat, mkdir, open, rm, rmdir, utimes, writeFile } from "node:fs/promises";
+import { lstat, mkdir, open, readFile, rm, rmdir, utimes, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { CopyError, PART_BYTES, type CopyStorage, type ManifestCheck, type RemoteCopy, type SwapAnswer } from "./cloud-copy";
 import { look, lookNames, lookStat, type Looked } from "./file-look";
@@ -36,7 +36,11 @@ const RANDOM_BITS = 2 ** 20;
 const KEEP_MANIFESTS = 5;
 /** Older manifests are kept this long, so a PC that was away can still tell whether it was left behind. */
 const KEEP_MANIFEST_MS = 30 * 24 * 60 * 60_000;
-/** Parts no manifest uses are kept this long: another PC's manifest may still be on its way. */
+/**
+ * Parts no manifest uses are kept this long after this PC first saw them unused, by its own clock: another PC's manifest
+ * may still be on its way (a PC that was away gets parts before their manifests). Never by a part's file time, which is
+ * the writing PC's and which a sync app keeps.
+ */
 const KEEP_PART_MS = 7 * 24 * 60 * 60_000;
 /**
  * A part used again that was written longer ago than this is written again, not only touched: Dropbox (and likely Google
@@ -44,11 +48,10 @@ const KEEP_PART_MS = 7 * 24 * 60 * 60_000;
  */
 const REWRITE_PART_MS = 24 * 60 * 60_000;
 /**
- * Parts written up to this long before the newest manifest this PC has seen (besides its own new one) are kept: a PC that
- * was away may get other PCs' parts before their manifests, and a sync app keeps the time a part was written. Covers
- * clocks of other PCs that are a little off.
+ * The highest version a manifest's name may say. Versions count up by 2^20 a save, so no copy gets near it; one above it
+ * was put there, and a save on top of it would get a version no PC can count with (above 2^53): it is junk.
  */
-const SEEN_MARGIN_MS = 24 * 60 * 60_000;
+const MAX_VERSION = 2 ** 52;
 /** About this much of parts goes back from one read. */
 const READ_BYTES = 8 * 1024 * 1024;
 /** The most a part file holds: a part, sealed. */
@@ -137,12 +140,26 @@ function sameIds(a: string[], b: string[]): boolean {
 
 export interface FolderStorageOptions {
   now?: () => number;
+  /**
+   * Where this PC notes when it first saw each part no manifest uses (CopySync: in its data folder, never in the copy's
+   * folder). In memory only without it.
+   */
+  unusedFile?: string;
+}
+
+/** What `unusedFile` holds: for the folder it is about, when this PC first saw each part (or sync app copy) unused. */
+interface UnusedRecord {
+  v: 1;
+  folder: string;
+  since: Record<string, number>;
 }
 
 export class FolderStorage implements CopyStorage {
   readonly limit = null;
   readonly arrivesLate = true;
   private readonly root: string;
+  /** When this PC first saw each part unused (`unusedFile`), loaded at the first clean-up. */
+  private unused: Map<string, number> | null = null;
 
   /** `folder` is the one the user picked; the copy goes in a "Tavora" folder inside it. */
   constructor(
@@ -205,7 +222,7 @@ export class FolderStorage implements CopyStorage {
       if (!match) continue;
       const version = Number(match[1]);
       const base = Number(match[2]);
-      if (!Number.isSafeInteger(version) || version <= 0 || base >= version) continue;
+      if (!Number.isSafeInteger(version) || version <= 0 || version > MAX_VERSION || base >= version) continue;
       // A link with a manifest's name is not read.
       if (readable(await lookKind(path.join(this.manifestsDir, name))) !== "file") continue;
       found.push({ version, base, name });
@@ -285,6 +302,17 @@ export class FolderStorage implements CopyStorage {
     }
   }
 
+  async missingParts(ids: string[]): Promise<string[]> {
+    await this.reachable();
+    const missing: string[] = [];
+    for (const id of ids) {
+      if (!PART_NAME.test(id)) continue;
+      const there = (await this.kindOf(path.dirname(this.partFile(id)))) === "dir" && readable(await lookOwnFile(this.partFile(id)));
+      if (!there) missing.push(id);
+    }
+    return missing;
+  }
+
   async getParts(ids: string[]): Promise<{ id: string; data: Uint8Array }[]> {
     await this.reachable();
     const found: { id: string; data: Uint8Array }[] = [];
@@ -332,10 +360,9 @@ export class FolderStorage implements CopyStorage {
     ids.forEach((id, index) => Buffer.from(id, "hex").copy(body, HEADER_BYTES + index * PART_ID_BYTES));
     Buffer.from(sealed).copy(body, HEADER_BYTES + ids.length * PART_ID_BYTES);
     await this.writableDir(this.manifestsDir);
-    const name = `${pad(version)}-${pad(base)}.bin`;
-    await writeInFolder(path.join(this.manifestsDir, name), body);
+    await writeInFolder(path.join(this.manifestsDir, `${pad(version)}-${pad(base)}.bin`), body);
     // Without the key nothing is known for sure, so nothing is deleted.
-    if (check) await this.cleanUp(check, name).catch(() => undefined);
+    if (check) await this.cleanUp(check).catch(() => undefined);
     return { status: "saved", version, size };
   }
 
@@ -349,16 +376,19 @@ export class FolderStorage implements CopyStorage {
    *   header) stops it while it is among those kept: nothing is deleted this time. Past them it goes. One numbered above
    *   every real one blocks every save, until the user keeps this PC's side over it (CopySync.keep): then it sinks.
    * - One that can't be read right now (busy, online only, gone) stops it, wherever it is: it may come right.
-   * - A part goes once no manifest kept uses it, it is a week old and it was written well before the newest manifest this
-   *   PC has seen besides `written` (its own new one): one written later may belong to a manifest still on its way.
-   * - A sync app's copy of a part (Tavora never reads one) goes once it is a week old.
+   * - One whose name says a version above MAX_VERSION isn't one: it goes.
+   * - A part no kept manifest uses goes a week after this PC first saw it so (KEEP_PART_MS, noted in `unusedFile`), when
+   *   no manifest has used it since. A sync app's copy of a part (Tavora never reads one) likewise.
    */
-  private async cleanUp(check: ManifestCheck, written: string): Promise<void> {
+  private async cleanUp(check: ManifestCheck): Promise<void> {
     const now = this.now();
     const lists: { file: ManifestFile; drop: boolean; parts: string[] }[] = [];
     const junk: ManifestFile[] = [];
     let newerMarked = 0;
-    let seenAt = 0;
+    for (const name of readable(await lookNames(this.manifestsDir)) ?? []) {
+      const match = MANIFEST_NAME.exec(name);
+      if (match && Number(match[1]) > MAX_VERSION && readable(await lookKind(path.join(this.manifestsDir, name))) === "file") await rm(path.join(this.manifestsDir, name), { force: true });
+    }
     for (const file of await this.manifests()) {
       const looked = await lookOwnFile(path.join(this.manifestsDir, file.name));
       // One that is held may be in use: nothing is cleaned up this time.
@@ -387,7 +417,6 @@ export class FolderStorage implements CopyStorage {
         junk.push(file);
         continue;
       }
-      if (file.name !== written) seenAt = Math.max(seenAt, looked.value.mtimeMs);
       lists.push({ file, drop: past && opened.version !== undefined, parts: opened.parts });
       if (opened.marked) newerMarked++;
     }
@@ -398,6 +427,8 @@ export class FolderStorage implements CopyStorage {
       else for (const id of list.parts) used.add(id);
     }
     if ((await this.kindOf(this.partsDir)) !== "dir") return;
+    const since = await this.loadUnused();
+    const unused = new Map<string, number>();
     const shards = await lookNames(this.partsDir);
     for (const shard of shards.status === "present" ? shards.value : []) {
       if (!SHARD_NAME.test(shard)) continue;
@@ -407,15 +438,45 @@ export class FolderStorage implements CopyStorage {
       if (kind.status !== "present" || kind.value !== "dir") continue;
       const parts = await lookNames(shardDir);
       for (const name of parts.status === "present" ? parts.value : []) {
-        const part = PART_NAME.test(name);
-        if (part ? used.has(name) : !PART_COPY_NAME.test(name)) continue;
+        // Only parts and a sync app's copies of them: anything else there isn't Tavora's to delete.
+        if (PART_NAME.test(name) ? used.has(name) : !PART_COPY_NAME.test(name)) continue;
         const target = path.join(shardDir, name);
         const info = await lookOwnFile(target);
-        if (info.status !== "present" || info.value === null || now - info.value.mtimeMs < KEEP_PART_MS) continue;
-        if (part && info.value.mtimeMs >= seenAt - SEEN_MARGIN_MS) continue;
-        await rm(target, { force: true });
+        if (info.status !== "present" || info.value === null) continue;
+        const key = `${shard}/${name}`;
+        // A clock set back counts from now, so it can't keep a part for longer than a week.
+        const first = Math.min(since.get(key) ?? now, now);
+        if (now - first >= KEEP_PART_MS) await rm(target, { force: true });
+        else unused.set(key, first);
       }
     }
+    await this.saveUnused(unused);
+  }
+
+  /** When this PC first saw each part unused, for this folder; none when it can't be read. */
+  private async loadUnused(): Promise<Map<string, number>> {
+    if (this.unused) return this.unused;
+    const file = this.options.unusedFile;
+    const found = new Map<string, number>();
+    if (file) {
+      try {
+        const saved = JSON.parse(await readFile(file, "utf8")) as Partial<UnusedRecord>;
+        if (saved.v === 1 && saved.folder === this.folder && typeof saved.since === "object" && saved.since !== null)
+          for (const [key, at] of Object.entries(saved.since)) if (typeof at === "number" && Number.isFinite(at)) found.set(key, at);
+      } catch {
+        // None yet, or unreadable: every part counts from now.
+      }
+    }
+    return (this.unused = found);
+  }
+
+  /** Keeps the list for the next clean-up. One that can't be written only means parts count from now next time. */
+  private async saveUnused(unused: Map<string, number>): Promise<void> {
+    this.unused = unused;
+    const file = this.options.unusedFile;
+    if (!file) return;
+    const record: UnusedRecord = { v: 1, folder: this.folder, since: Object.fromEntries(unused) };
+    await writeFileAtomic(file, JSON.stringify(record)).catch(() => undefined);
   }
 
   /** Deletes the copy's parts and manifests. Anything else in the folder stays; a link in their place goes, not what it leads to. */

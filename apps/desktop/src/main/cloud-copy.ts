@@ -343,6 +343,8 @@ export interface CopyStorage {
   earlierManifests?(): AsyncIterable<Uint8Array>;
   /** Stores parts it does not have yet. */
   putParts(parts: { id: Buffer; data: Buffer }[]): Promise<void>;
+  /** A folder only: which of these parts aren't there (another PC's clean-up took them, or they never arrived). */
+  missingParts?(ids: string[]): Promise<string[]>;
   /** Some of the asked parts, at least one when any of them is there. */
   getParts(ids: string[]): Promise<{ id: string; data: Uint8Array }[]>;
   /**
@@ -589,6 +591,36 @@ export class CloudCopy {
     // Only one that opens with the key and has a right mark counts; the first ends the look.
     for await (const sealed of this.storage.earlierManifests()) if (checkWith(keys)(sealed)?.marked === true) return true;
     return false;
+  }
+
+  /**
+   * Puts parts of this PC's last synced version back where they went missing (a folder: another PC's clean-up took them
+   * before that PC had this version's manifest), from this PC's own files when they are still as synced. Other PCs would
+   * wait for them ("not-arrived") until this PC saved again. Returns how many went back.
+   */
+  async heal(copyKey: Uint8Array, roots: CopyRoot[], state: CopyState): Promise<number> {
+    if (!this.storage.missingParts || state.version === 0) return 0;
+    const missing = new Set(await this.storage.missingParts([...new Set(Object.values(state.files).flatMap((file) => file.parts))]));
+    if (missing.size === 0) return 0;
+    const keys = copyKeys(copyKey);
+    let put = 0;
+    for (const file of await scanCopy(roots)) {
+      const synced = state.files[file.path];
+      // Changed since: the next upload sends it anyway.
+      if (!synced || synced.size !== file.size || synced.mtimeMs !== file.mtimeMs || !synced.parts.some((id) => missing.has(id))) continue;
+      const content = unlessHeld(await lookBytes(file.file));
+      if (content === null) continue;
+      const parts: { id: Buffer; data: Buffer }[] = [];
+      for (let index = 0; index < Math.max(1, Math.ceil(content.length / PART_BYTES)); index++) {
+        const plain = content.subarray(index * PART_BYTES, (index + 1) * PART_BYTES);
+        const id = partId(keys, plain);
+        if (!missing.delete(id.toString("hex"))) continue;
+        parts.push({ id, data: seal(keys, plain) });
+      }
+      await this.storage.putParts(parts);
+      put += parts.length;
+    }
+    return put;
   }
 
   /**

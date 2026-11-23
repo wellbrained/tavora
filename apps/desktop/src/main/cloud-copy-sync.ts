@@ -17,6 +17,7 @@ import {
   filledPlaces,
   lookCopyState,
   NewestUnreadable,
+  openManifest,
   sortWrittenSince,
   swapInCopy,
   undoSwap,
@@ -30,7 +31,7 @@ import {
 } from "./cloud-copy";
 import { AccountKey } from "./account-key";
 import type { Encryptor } from "./discord-store";
-import { recoveryKey } from "./copy-crypto";
+import { copyKeys, parseRecoveryKey, recoveryKey } from "./copy-crypto";
 import { checkFolder, FolderStorage } from "./copy-folder";
 import { writeFileAtomic } from "./fsutil";
 import { COPY_STATUS_FILE, lookSwapPlan, lookSwapStatus, stepSwap, SWAP_IDLE, writeFlushed, writeSwapStatus, type SwapEvent, type SwapPlan, type SwapStatus } from "./cloud-copy-swap";
@@ -215,7 +216,9 @@ export class CopySync {
   }
 
   private storageFor(folder: string | null): CopyStorage {
-    return folder === null ? this.service : (this.options.folderStorage ?? ((picked) => new FolderStorage(picked)))(folder);
+    return folder === null
+      ? this.service
+      : (this.options.folderStorage ?? ((picked) => new FolderStorage(picked, { unusedFile: path.join(this.options.userData, "cloud-copy-unused.json") })))(folder);
   }
 
   /** Signed out with the copy in a folder: the key stays on this PC, without the account's vault. */
@@ -629,10 +632,21 @@ export class CopySync {
       return false;
     }
     this.copy = { size: remote.size, savedAt: remote.updatedAt };
-    if (remote.version === this.state.version) return false;
+    if (remote.version === this.state.version) {
+      // Parts of this PC's own last save that went missing go back, or every other PC waits for them.
+      if (this.cloud.storage.arrivesLate) {
+        const put = await this.cloud.heal(this.key!, this.roots(), this.state).catch((error: unknown) => {
+          this.log(`cloud copy: missing parts not put back: ${error instanceof Error ? error.message : String(error)}`);
+          return 0;
+        });
+        if (put > 0) this.log(`cloud copy: put back ${put} missing part(s) of this PC's last save`);
+      }
+      return false;
+    }
     // Changed here, or this PC's last save lost against another PC's (in a synced folder): the user chooses.
     if (remote.follows === false || this.swap.phase === "asking" || (await hasLocalChanges(this.roots(), this.state))) {
       if (turn !== this.turn) return false;
+      this.unreadable = false;
       this.ask("conflict");
       this.changed();
       return false;
@@ -1110,6 +1124,8 @@ export class CopySync {
         } else if (result.version === 0) {
           await this.forget("deleted");
         } else {
+          // Which kind it is shows once the user answers (keep).
+          this.unreadable = false;
           this.ask("conflict");
         }
       } catch (error) {
@@ -1442,8 +1458,13 @@ export class CopySync {
     if (beside) await rm(this.stateFile, { force: true });
   }
 
-  /** Keeps one side when both changed. The other side is kept as a local backup. */
-  async keep(side: "pc" | "cloud"): Promise<void> {
+  /**
+   * Keeps one side when both changed. The other side is kept as a local backup. Over a newest list this PC's key doesn't
+   * open (NewestUnreadable) nothing can be kept of the other side, and another PC that started over with a new key couldn't
+   * open this PC's side either: only with `replace` (the user confirmed that) does this PC's side go on top. Without it, the
+   * question says so (`conflictKind` "unreadable") and nothing changes.
+   */
+  async keep(side: "pc" | "cloud", replace = false): Promise<void> {
     // A swap that stopped halfway is settled at a start, when nothing reads the data: finished, or taken back. Also with
     // the copy off, where this is the only way out of it.
     const swap = await this.swapForAnswer();
@@ -1477,10 +1498,11 @@ export class CopySync {
     }
     if (side === "cloud") return this.takeCopy(swap);
     const turn = this.turn;
+    let unconfirmed = false;
     await this.exclusive("downloading", async () => {
       try {
         // The newest list doesn't open with this key (NewestUnreadable): nothing of it can come down or be kept, and this
-        // PC's side goes on top of it. That is what the user chose, with the question saying so.
+        // PC's side goes on top of it, once the user confirmed it replaces another PC's newer copy.
         let over: number | null = null;
         const staged = await this.stageCurrent().catch((error: unknown) => {
           if (!(error instanceof NewestUnreadable)) throw error;
@@ -1488,6 +1510,11 @@ export class CopySync {
           return null;
         });
         if (turn !== this.turn) return;
+        if (over !== null && !replace) {
+          unconfirmed = true;
+          await rm(this.stagingDir, { recursive: true, force: true });
+          return;
+        }
         if (over !== null) {
           await rm(this.stagingDir, { recursive: true, force: true });
           this.state = { ...this.state, version: over, kept: true };
@@ -1516,9 +1543,45 @@ export class CopySync {
       }
     });
     if (turn !== this.turn) return;
+    if (unconfirmed) {
+      this.unreadable = true;
+      return this.changed();
+    }
     this.clear("conflict");
     this.clear("restartToTake");
     await this.sync(true);
+  }
+
+  /**
+   * Signed out, the newest list in the folder doesn't open with this PC's key: the recovery key of another PC that started
+   * over is typed in. Only a key that opens that list is taken (one that doesn't leaves everything as it was, so a mistyped
+   * key never costs this PC the key it has). Then the copy goes on with it as when turned on: the user keeps one side.
+   */
+  async enterOtherKey(text: string): Promise<void> {
+    if (!this.on || !this.keyHere || !this.unreadable) throw new UserError("cloudCopy.error.wrongKey");
+    const key = parseRecoveryKey(text);
+    if (!key) throw new UserError("cloudCopy.error.badKey");
+    const turn = this.turn;
+    const opens = await this.exclusive("checking", async () => {
+      const current = await this.cloud.storage.manifest();
+      if (!current) return false;
+      try {
+        openManifest(copyKeys(key), current.sealed);
+        return true;
+      } catch {
+        return false;
+      }
+    }).catch((error: unknown) => {
+      throw CopySync.userError(this.noteProblem(error));
+    });
+    if (turn !== this.turn) return;
+    if (!opens) throw new UserError("cloudCopy.error.wrongKey");
+    await this.accountKeys.takeHere(key);
+    const folder = this.folder;
+    await this.forget(null);
+    const mine = this.turn;
+    this.use(folder);
+    await this.startCopy(mine);
   }
 
   /** This PC's side counts as changed until an upload succeeds (CopyState `kept`), wherever the state is now. */
