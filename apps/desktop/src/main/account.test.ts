@@ -481,6 +481,33 @@ describe("signed in", () => {
     expect(calls.at(-1)).toMatchObject({ method: "GET", auth: `Bearer ${renewed}` });
   });
 
+  it("keeps the new sign-in when a request sent with the old one answers 401 afterwards", async () => {
+    const renewed = "n".repeat(43);
+    const { fetchImpl: inner } = service({
+      "POST /email/code": () => json({ status: "sent", current: "email" }, 202),
+      "POST /email": () => json({ account: { email: "new@example.com", createdAt: SAVED.createdAt }, token: renewed, device: "dev2" }),
+      "GET /": () => json({ account: { email: "new@example.com" }, devices: [{ ...DEVICE, id: "dev2" }] }),
+    });
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input).includes("/v1/leaderboards")) {
+        await held;
+        return json({ error: "Signed out." }, 401);
+      }
+      return inner(input, init);
+    }) as typeof fetch;
+    const { account, kept } = client(fetchImpl, { saved: SAVED });
+    await account.init();
+    const board = account.leaderboardRequest("GET", "/x");
+    await account.sendEmailCode("new@example.com");
+    await account.changeEmail("111111", "222222");
+    release();
+    expect(await board).toMatchObject({ status: 401 });
+    expect(account.token()).toBe(renewed);
+    expect(kept.at(-1)).not.toBeNull();
+  });
+
   it("says which code was wrong and keeps the step", async () => {
     const { fetchImpl } = service({
       "POST /email/code": () => json({ status: "sent", current: "email" }, 202),
@@ -829,6 +856,29 @@ describe("Discord login", () => {
     await expect(account.disconnectDiscord("111111")).rejects.toMatchObject({ key: "account.error.lastMethod" });
     expect(calls.find((call) => call.url.endsWith("/discord/remove"))!.body).toEqual({ code: "111111" });
     expect(account.view().account).toMatchObject({ discord: { name: "alex" } });
+  });
+
+  it("goes on with the new sign-in removing a way in hands back, as every sign-in ended with it (audit run 7)", async () => {
+    const [first, second] = ["n".repeat(43), "m".repeat(43)];
+    let now = discordAccount("me@example.com", null);
+    const { calls, fetchImpl } = service({
+      "POST /discord/remove/code": () => json({ status: "sent" }, 202),
+      "POST /discord/remove": () => json({ account: discordAccount("me@example.com", null), token: first, device: "dev2" }),
+      "POST /email/remove/code": () => json({ status: "sent" }, 202),
+      "POST /email/remove": () => json({ account: (now = discordAccount(null, "alex")), token: second, device: "dev3" }),
+      "GET /": () => json({ account: now, devices: [{ ...DEVICE, id: "dev2" }] }),
+    });
+    const { account, kept } = client(fetchImpl, { saved: { ...SAVED, discord: "alex" } });
+    await account.init();
+    await account.sendDisconnectDiscordCode();
+    await account.disconnectDiscord("111111");
+    expect(kept.at(-1)).toEqual({ ...SAVED, token: first, discord: null });
+    expect(account.token()).toBe(first);
+    expect(calls.at(-1)).toMatchObject({ method: "GET", auth: `Bearer ${first}` });
+    await account.sendRemoveEmailCode();
+    await account.removeEmail("222222");
+    expect(account.token()).toBe(second);
+    expect(kept.at(-1)).toMatchObject({ token: second, email: null });
   });
 
   it("says when the account already has another Discord login", async () => {

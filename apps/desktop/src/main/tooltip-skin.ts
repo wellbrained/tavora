@@ -11,6 +11,8 @@ import { HostError } from "./errors";
  */
 export const SKIN_NAME = /^[a-z0-9-]{1,32}$/;
 export const MAX_SKINS = 32;
+/** Defines all modules may have running at once (each reads its files first). */
+export const MAX_PENDING_DEFINES = 256;
 /** The most a frame picture or a font may weigh, as for a tooltip's picture. */
 export const MAX_SKIN_FILE = 512000;
 /** The most inlined skin data (data: URL characters) Tavora keeps for all modules together; each file counts once. */
@@ -244,10 +246,15 @@ export interface StoredSkin {
 export class SkinStore {
     private readonly byModule = new Map<string, Map<string, StoredSkin>>();
     private readonly files = new Map<string, SkinFile>();
-    /** The newest define of each module and name, and each module's forget count: an older or forgotten define is dropped. */
+    /**
+     * The newest define still running of each module and name, and each module's forget count: an older or forgotten define
+     * is dropped. A define takes its entry out when it ends, refused or not, and a forget takes the module's (audit run 7),
+     * so only defines still running are kept here, at most `MAX_PENDING_DEFINES`.
+     */
     private readonly calls = new Map<string, number>();
     private readonly generations = new Map<string, number>();
     private nextId = 1;
+    private nextCall = 1;
 
     /** `maxData`: the most inlined data kept for all modules together (smaller in tests). */
     constructor(private readonly maxData = MAX_SKIN_DATA) { }
@@ -265,8 +272,22 @@ export class SkinStore {
      */
     async define(module: string, root: string, name: string, skin: TooltipSkin): Promise<{ stored: StoredSkin; replaced?: number } | undefined> {
         this.checkRoom(module, name);
-        const key = module + "\n" + name, call = (this.calls.get(key) ?? 0) + 1, generation = this.generations.get(module) ?? 0;
+        const key = module + "\n" + name;
+        if (!this.calls.has(key) && this.calls.size >= MAX_PENDING_DEFINES)
+            refuse("too many skins are being defined at once; try again in a moment");
+        // Numbered across all names, so a define that ends never hands its number to a later one.
+        const call = this.nextCall++, generation = this.generations.get(module) ?? 0;
         this.calls.set(key, call);
+        try {
+            return await this.defineNewest(module, root, name, skin, key, call, generation);
+        }
+        finally {
+            if (this.calls.get(key) === call)
+                this.calls.delete(key);
+        }
+    }
+
+    private async defineNewest(module: string, root: string, name: string, skin: TooltipSkin, key: string, call: number, generation: number): Promise<{ stored: StoredSkin; replaced?: number } | undefined> {
         const colors = skin.colors ? skinColors(skin.colors) : undefined;
         const resolved: ResolvedSkin = { pixelArt: skin.pixelArt === true, titleCaps: skin.titleCaps === true };
         const files: SkinFile[] = [];
@@ -312,6 +333,9 @@ export class SkinStore {
     /** Drops all of a module's skins (it reloads, updates, is turned off or removed); answers their ids. */
     forgetModule(module: string): number[] {
         this.generations.set(module, (this.generations.get(module) ?? 0) + 1);
+        for (const key of this.calls.keys())
+            if (key.startsWith(module + "\n"))
+                this.calls.delete(key);
         const skins = this.byModule.get(module);
         this.byModule.delete(module);
         this.prune();

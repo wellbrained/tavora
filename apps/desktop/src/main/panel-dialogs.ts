@@ -71,7 +71,8 @@ export class PanelDialogs {
     };
     if (panels.inDialog(instanceId)) {
       this.options.closeTooltips(instanceId);
-      void panels.openDialogMenu(instanceId).then(draw);
+      // A picture that can't be made closes the menu question instead of leaving it open.
+      void panels.openDialogMenu(instanceId).then(draw).catch(() => this.closeMenu());
     } else draw();
     return answer;
   }

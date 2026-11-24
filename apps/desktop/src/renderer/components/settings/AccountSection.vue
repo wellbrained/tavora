@@ -41,8 +41,9 @@ const busy = ref(false);
 /** True while Discord's page is open in the browser and Tavora waits for its return. */
 const waitingDiscord = ref(false);
 
-// A new step always starts with empty code boxes.
-watch(pending, () => {
+// A new step always starts with empty code boxes. The main process rebuilds `pending` on every account change, so the
+// step is compared by content.
+watch(() => (pending.value ? `${pending.value.kind}:${"email" in pending.value ? pending.value.email : ""}:${"proof" in pending.value ? pending.value.proof : ""}` : ""), () => {
   code.value = "";
   currentCode.value = "";
 });

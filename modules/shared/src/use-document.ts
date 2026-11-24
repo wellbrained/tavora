@@ -73,7 +73,12 @@ export function useDocument<T>(sdk: TavoraSDK, id: string, options: OpenDocument
     error,
     loaded,
     ready,
-    update: (change) => (handle ? handle.update(change) : void ready.then((opened) => (disposed ? undefined : opened.update(change)), () => undefined)),
+    // An edit after the scope ended (a blur or a timer that fires as the panel goes) is dropped, not an error.
+    update: (change) => {
+      if (disposed) return;
+      if (handle) handle.update(change);
+      else void ready.then((opened) => (disposed ? undefined : opened.update(change)), () => undefined);
+    },
     flush: () => (handle ? handle.flush() : ready.then((opened) => opened.flush(), () => undefined)),
   };
 }

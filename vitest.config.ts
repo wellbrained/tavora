@@ -3,7 +3,16 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   // Lets a test mount a kit component (*.vue); put `// @vitest-environment jsdom` on top of that test file.
-  plugins: [vue()],
+  // The app's public files ("/brand/...", served as they are in the app) are empty modules here.
+  plugins: [
+    vue(),
+    {
+      name: "public-files",
+      enforce: "pre",
+      resolveId: (id) => (id.startsWith("/brand/") ? "virtual:public-file" : undefined),
+      load: (id) => (id === "virtual:public-file" ? "export default ''" : undefined),
+    },
+  ],
   // Workspace packages export their TypeScript sources under "source", so
   // tests never depend on a stale build. Tests run in Node, which resolves
   // through the ssr settings, so the condition is set there too.

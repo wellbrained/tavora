@@ -861,7 +861,7 @@ describe("Discord login", () => {
     return { ...context, connect };
   };
 
-  it("reads the account again once Discord answered, so a login removed meanwhile deletes nothing", async () => {
+  it("reads the account again once Discord answered, so a login changed meanwhile deletes nothing", async () => {
     let release!: () => void;
     const gate = new Promise<void>((resolve) => (release = resolve));
     const slowDiscord: DiscordClient = {
@@ -876,8 +876,8 @@ describe("Discord login", () => {
     store.setDiscord(id, ALEX);
     const deleting = call("POST", "/delete/discord", { code: "codewellbrained", verifier: VERIFIER }, token);
     await new Promise((resolve) => setTimeout(resolve, 20));
-    // The owner removes the Discord login (a stolen one, say) while Discord still answers.
-    expect(store.removeDiscord(id)).toBe("ok");
+    // Another login takes its place while Discord still answers. (Removing it ends every sign-in, audit run 7.)
+    expect(store.setDiscord(id, OTHER)).toBe("ok");
     release();
     expect(await (await deleting).json()).toMatchObject({ reason: "discord-mismatch" });
     expect(store.account(id)).not.toBeNull();
@@ -978,10 +978,45 @@ describe("Discord login", () => {
     expect((await call("POST", "/email/remove/code", {}, token)).status).toBe(202);
     const code = lastCode();
     expect(await (await call("POST", "/email/remove", { code: code === "000000" ? "000001" : "000000" }, token)).json()).toMatchObject({ reason: "wrong-code" });
-    expect(await (await call("POST", "/email/remove", { code: lastCode() }, token)).json()).toMatchObject({ account: { email: null, discord: { name: "alex" } } });
-    expect(await (await call("POST", "/discord/remove/code", {}, token)).json()).toMatchObject({ reason: "last-method" });
-    expect(await (await call("POST", "/discord/remove", { code: "123456" }, token)).json()).toMatchObject({ reason: "last-method" });
-    expect(await (await call("POST", "/email/remove/code", {}, token)).json()).toMatchObject({ reason: "no-email" });
+    const removed = (await (await call("POST", "/email/remove", { code: lastCode() }, token)).json()) as { token: string };
+    expect(removed).toMatchObject({ account: { email: null, discord: { name: "alex" } } });
+    // Every sign-in ended with it; this one goes on with the new one (audit run 7).
+    const renewed = removed.token;
+    expect(await (await call("POST", "/discord/remove/code", {}, renewed)).json()).toMatchObject({ reason: "last-method" });
+    expect(await (await call("POST", "/discord/remove", { code: "123456" }, renewed)).json()).toMatchObject({ reason: "last-method" });
+    expect(await (await call("POST", "/email/remove/code", {}, renewed)).json()).toMatchObject({ reason: "no-email" });
+  });
+
+  it("ends every sign-in when a way in is removed, as an email change does, so one made through it stops working (audit run 7)", async () => {
+    const { call, signIn, store, lastCode, connect, clock } = setupDiscord();
+    const owner = await signIn("me@example.com");
+    await connect(owner, "codewellbrained");
+    const id = store.accountByEmail("me@example.com")!.id;
+    // Someone else has the Discord login, signs in with it and makes something to publish with.
+    const stolen = ((await (await call("POST", "/discord/sign-in", { code: "codewellbrained", verifier: VERIFIER })).json()) as { token: string }).token;
+    const thief = store.sessionByToken(stolen, clock.now)!;
+    store.createPublishToken(id, "theirs", clock.now, thief.id);
+    // The owner takes the Discord login away.
+    await call("POST", "/discord/remove/code", {}, owner);
+    const removed = (await (await call("POST", "/discord/remove", { code: lastCode() }, owner)).json()) as { token: string; device: string };
+    expect(removed).toMatchObject({ account: { email: "me@example.com", discord: null }, token: expect.any(String), device: expect.any(String) });
+    expect((await call("GET", "", undefined, stolen)).status).toBe(401);
+    expect((await call("GET", "", undefined, owner)).status).toBe(401);
+    expect(store.publishTokens(id, clock.now)).toEqual([]);
+    // The owner's device goes on with the new token from the answer.
+    expect(await (await call("GET", "", undefined, removed.token)).json()).toMatchObject({ account: { email: "me@example.com" }, devices: [{ current: true }] });
+
+    // The same for an address someone else could sign in with: removed through the Discord login, every sign-in ends.
+    clock.now += 15 * 60_000;
+    await connect(removed.token, "codewellbrained");
+    const byMail = await signIn("me@example.com");
+    clock.now += 15 * 60_000;
+    expect(await (await call("POST", "/email/remove/code", {}, removed.token)).json()).toEqual({ status: "sent" });
+    const mailGone = (await (await call("POST", "/email/remove", { code: lastCode() }, removed.token)).json()) as { token: string };
+    expect(mailGone).toMatchObject({ account: { email: null, discord: { name: "alex" } }, token: expect.any(String) });
+    expect((await call("GET", "", undefined, byMail)).status).toBe(401);
+    expect((await call("GET", "", undefined, removed.token)).status).toBe(401);
+    expect((await call("GET", "", undefined, mailGone.token)).status).toBe(200);
   });
 
   it("does not let a stolen sign-in add, swap or keep a Discord login without the mailbox (A6)", async () => {

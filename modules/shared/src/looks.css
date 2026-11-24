@@ -88,6 +88,13 @@
     inset 0 1px 0 color-mix(in srgb, white 60%, transparent),
     0 16px 40px -14px color-mix(in srgb, black 35%, transparent);
 }
+/* A toast is an inverted pill (--toast, --toast-foreground). On glass it is drawn in the popover's colour, so its text,
+   buttons and icon glyphs take the popover's text colour too; otherwise dark text sits on a dark pane (light on light). */
+:root[data-look-surface="glass"] [data-slot="toast"] {
+  --toast: var(--popover);
+  --toast-foreground: var(--popover-foreground);
+  color: var(--popover-foreground);
+}
 /* Cards inside a panel stay solid in glass: a module can't see behind its own view (ADR 0004). */
 
 /* ---------- Tabs (the kit's Tabs and TabStrip; the dock's tab strip follows in the host's dock.css) ---------- */

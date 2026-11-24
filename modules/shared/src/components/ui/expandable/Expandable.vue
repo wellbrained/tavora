@@ -45,6 +45,7 @@ onBeforeUnmount(() => observer?.disconnect())
     </div>
     <Button
       v-if="overflows"
+      type="button"
       variant="link"
       size="sm"
       class="mt-1 h-auto px-0"

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readdir, utimes, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -79,6 +79,16 @@ describe("DocumentStore", () => {
     await expect(store.delete("plan", 1)).rejects.toMatchObject({ code: "CONFLICT" });
     await store.delete("plan", 2);
     expect(await store.list()).toEqual([]);
+  });
+
+  it("keeps the document listed when its file can't be removed", async () => {
+    const store = new DocumentStore(dir);
+    await store.put({ id: "held", title: "Held", data: 1 });
+    // A folder where the file was: removing it fails, like a file another program holds.
+    await rm(path.join(dir, "held.json"));
+    await mkdir(path.join(dir, "held.json", "inside"), { recursive: true });
+    await expect(store.delete("held")).rejects.toThrow();
+    expect((await store.list()).map((doc) => doc.id)).toEqual(["held"]);
   });
 
   it("enforces size, count and total quotas", async () => {

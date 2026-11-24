@@ -2,7 +2,8 @@
 // A flow that waited goes on only from the dialog it started in (CLAUDE.md "State"): what the user opened meanwhile, or a
 // question that came up, stays. The real host.ts runs on a stand-in for the main process: `act` answers when the test says.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createApp, h, nextTick, type App, type Component } from "vue";
+import { createApp, defineComponent, h, nextTick, ref, type App, type Component } from "vue";
+import { useLayer } from "@tavora/official-ui/lib/layers";
 import type { AccountView, ActionResult, DeveloperKeysView, HostAction, HostViewState } from "../shared/host-api";
 
 const bridge = vi.hoisted(() => {
@@ -161,6 +162,29 @@ describe("the recovery key question after signing in", () => {
     expect(dialog.value?.kind).toBe("add-game");
 
     closeDialog(dialog.value);
+    await nextTick();
+    expect(dialog.value?.kind).toBe("recovery-ask");
+  });
+
+  it("waits for another dialog on the page (Search, Pairing ...), then asks", async () => {
+    account.value = signedOut();
+    await nextTick();
+    // A dialog of the kit that is not in the slot.
+    const other = createApp(
+      defineComponent({
+        setup() {
+          useLayer("dialog", ref(true), { name: () => "search-dialog" });
+          return () => null;
+        },
+      }),
+    );
+    other.mount(document.createElement("div"));
+    account.value = signedIn();
+    developerKeys.value = { status: "ask" } as DeveloperKeysView;
+    await nextTick();
+    expect(dialog.value).toBeNull();
+
+    other.unmount();
     await nextTick();
     expect(dialog.value?.kind).toBe("recovery-ask");
   });

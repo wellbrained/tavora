@@ -20,6 +20,8 @@ const props = withDefaults(
     round?: boolean;
     /** Width and height of the saved PNG. */
     size?: number;
+    /** The saved picture is being stored: Save waits. */
+    busy?: boolean;
   }>(),
   { round: false, size: 256 },
 );
@@ -235,7 +237,7 @@ function onOpenChange(value: boolean) {
 
       <DialogFooter>
         <DialogButton close data-testid="crop-cancel" @click="emit('cancel')">{{ t("common.cancel") }}</DialogButton>
-        <DialogButton :icon="Save" :loading="saving" data-testid="crop-save" :disabled="!image || saving" @click="save">{{ t("common.save") }}</DialogButton>
+        <DialogButton :icon="Save" :loading="saving || busy" data-testid="crop-save" :disabled="!image || saving || busy" @click="save">{{ t("common.save") }}</DialogButton>
       </DialogFooter>
     </DialogContent>
   </Dialog>

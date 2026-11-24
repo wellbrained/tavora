@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SystemConnection, SystemInfo, SystemSnapshot } from "@tavora/sdk/protocol";
 import { parseWatch } from "./system-info-parse";
-import { IDLE_MS, RESTART_MS, SystemMonitorThread, type FromWorker, type ToWorker, type WorkerLike } from "./system-info-thread";
+import { ASK_TIMEOUT_MS, IDLE_MS, RESTART_MS, SystemMonitorThread, type FromWorker, type ToWorker, type WorkerLike } from "./system-info-thread";
 
 const INFO: SystemInfo = { cpu: { model: "Test CPU", threads: 4 }, ramBytes: 16e9, gpus: [], drives: [] };
 
@@ -93,6 +93,46 @@ describe("the worker", () => {
     expect(message.type).toBe("info");
     latest().send({ type: "info", id: (message as { id: number }).id, info: INFO });
     await expect(asked).resolves.toEqual(INFO);
+  });
+
+  it("gives up on a question the worker never answers, and stops the idle worker after it", async () => {
+    const asked = thread.info();
+    const caught = expect(asked).rejects.toThrow("did not answer");
+    vi.advanceTimersByTime(ASK_TIMEOUT_MS);
+    await caught;
+    const worker = latest();
+    expect(worker.terminated).toBe(false);
+    vi.advanceTimersByTime(IDLE_MS);
+    expect(worker.terminated).toBe(true);
+  });
+
+  it("fails the question, and stays idle, when the worker can't start", async () => {
+    let fail = true;
+    const broken = new SystemMonitorThread({
+      start: () => {
+        if (fail) throw new Error("no worker");
+        const worker = new FakeWorker();
+        workers.push(worker);
+        return worker;
+      },
+      tavora: () => ({ cpu: 0, memoryBytes: 0 }),
+    });
+    await expect(broken.info()).rejects.toThrow("no worker");
+    fail = false;
+    const asked = broken.info();
+    const message = latest().received[0]!;
+    latest().send({ type: "info", id: (message as { id: number }).id, info: INFO });
+    await expect(asked).resolves.toEqual(INFO);
+    broken.dispose();
+  });
+
+  it("starts no new worker after a crash when the panels left meanwhile", () => {
+    const subscription = thread.subscribe(listener().target);
+    subscription.watch(cpu());
+    latest().crash();
+    subscription.close();
+    vi.advanceTimersByTime(RESTART_MS * 2);
+    expect(workers).toHaveLength(1);
   });
 
   it("answers the apps from the worker, and passes on a failure", async () => {

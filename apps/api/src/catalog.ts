@@ -112,16 +112,18 @@ export type ScreenshotType = "png" | "webp";
 /** A screenshot's kind by its own bytes (C10, like icons in G10), or null unless it is a well-formed PNG or WebP within the limits. */
 export function screenshotType(bytes: Uint8Array): ScreenshotType | null {
   if (inspectPng(bytes, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOT_PIXELS)) return "png";
-  return isWebp(bytes, MAX_SCREENSHOT_BYTES) ? "webp" : null;
+  return isWebp(bytes, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOT_PIXELS) ? "webp" : null;
 }
 
 /** Largest icon a listing shows, as for icons in the app (G10). */
 export const MAX_LISTING_ICON_BYTES = 256 * 1024;
+/** Widest and tallest icon a listing shows, in pixels. */
+export const MAX_LISTING_ICON_PIXELS = 1024;
 
 /** An icon's kind by its own bytes, or null unless it is a well-formed PNG or WebP of at most 256 KB and 1024 px. */
 export function iconType(bytes: Uint8Array): ScreenshotType | null {
-  if (inspectPng(bytes, MAX_LISTING_ICON_BYTES, 1024)) return "png";
-  return isWebp(bytes, MAX_LISTING_ICON_BYTES) ? "webp" : null;
+  if (inspectPng(bytes, MAX_LISTING_ICON_BYTES, MAX_LISTING_ICON_PIXELS)) return "png";
+  return isWebp(bytes, MAX_LISTING_ICON_BYTES, MAX_LISTING_ICON_PIXELS) ? "webp" : null;
 }
 
 /** A readme as text, or null unless it is UTF-8 of at most MAX_README_BYTES without control characters other than tabs and line breaks. */

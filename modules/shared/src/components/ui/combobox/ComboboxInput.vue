@@ -90,6 +90,7 @@ function clear() {
     <Transition enter-active-class="tavora-clear-in" leave-active-class="tavora-clear-out">
       <Button
         v-if="clearable && text && !props.disabled"
+        type="button"
         size="icon-xs"
         variant="ghost"
         class="absolute top-1/2 right-1.5 -translate-y-1/2"

@@ -4,6 +4,9 @@ import { readFile, rm, writeFile } from "node:fs/promises";
 import { userInfo } from "node:os";
 import path from "node:path";
 
+/** Windows' own icacls by its full path: by its bare name, Windows looks in the current folder first (audit run 7). */
+const ICACLS = path.win32.join(process.env.SystemRoot && path.win32.isAbsolute(process.env.SystemRoot) ? process.env.SystemRoot : "C:\\Windows", "System32", "icacls.exe");
+
 // Publisher keys in files, for publishing from CI. The pack command never makes a key; Tavora does, and
 // exports it for CI (Settings > Developer > Publishing > Publisher keys and CI).
 
@@ -34,7 +37,7 @@ export async function writePrivateFile(file: string, pem: string | Buffer): Prom
   await writeFile(file, "", { flag: "wx" });
   const name = userInfo().username;
   const user = process.env.USERDOMAIN ? `${process.env.USERDOMAIN}\\${name}` : name;
-  const result = spawnSync("icacls", [path.resolve(file), "/inheritance:r", "/grant:r", `${user}:F`], { encoding: "utf8" });
+  const result = spawnSync(ICACLS, [path.resolve(file), "/inheritance:r", "/grant:r", `${user}:F`], { encoding: "utf8" });
   if (result.status !== 0) {
     await rm(file, { force: true });
     throw new Error(`could not limit who can read ${path.resolve(file)}, so no key was written there. Make it on an NTFS drive (your user folder), then copy it where you keep it.`);

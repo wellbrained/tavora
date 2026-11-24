@@ -89,3 +89,30 @@ it("saves nothing before an edit and creates the same document for a new list", 
   `);
   await store.dispose();
 });
+
+// A newer copy may add fields (the catalogue's, before a fallback to the shipped one): this version keeps them through an
+// edit and its save, so nothing the newer one wrote is lost when it comes back.
+it("keeps fields a newer version added when it changes and saves the list", async () => {
+  const { sdk, host } = createMemoryHost();
+  const newer: JsonValue = {
+    version: 2,
+    sort: "manual",
+    groups: [{ id: "g1", name: "Run", color: "", icon: "flag", tasks: [{ id: "t1", title: "Boss", done: false, details: "", pinned: false, parentId: null, createdAt: "2026-11-01T00:00:00.000Z", doneAt: null, dueAt: "2026-12-01", tags: ["a"] }] }],
+  };
+  await host.documents.put({ id: LIST_ID, title: LIST_TITLE, data: newer });
+  const store = await createTodoStore(sdk, { debounceMs: 0 });
+  store.apply((data) => void (data.groups[0]!.tasks[0]!.title = "Boss fight"));
+  await store.flush();
+  const saved = host.documents.get(LIST_ID)!.data as { sort: string; groups: { icon: string; tasks: { title: string; dueAt: string; tags: string[] }[] }[] };
+  expect(saved.sort).toBe("manual");
+  expect(saved.groups[0]!.icon).toBe("flag");
+  expect(saved.groups[0]!.tasks[0]).toMatchObject({ title: "Boss fight", dueAt: "2026-12-01", tags: ["a"] });
+  await store.dispose();
+});
+
+it("still turns old steps into sub-to-dos once, without keeping the steps", () => {
+  const once = parseList(OLD);
+  expect(parseList(once as JsonValue)).toEqual(once);
+  expect(JSON.stringify(once)).not.toContain('"steps"');
+  expect(JSON.stringify(once)).not.toContain('"link"');
+});

@@ -94,8 +94,9 @@ export function isPrivateHost(hostname: string): boolean {
   if (!host.startsWith("[")) return host !== "" && !host.includes(".");
   const v6 = host.slice(1, -1);
   if (v6 === "::" || v6 === "::1") return true;
-  // IPv4-mapped (::ffff:7f00:1, as the URL parser writes ::ffff:127.0.0.1).
-  const mapped = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(v6);
+  // IPv4-mapped (::ffff:7f00:1, as the URL parser writes ::ffff:127.0.0.1), IPv4-compatible (::7f00:1) and NAT64
+  // (64:ff9b::7f00:1) addresses are judged by the IPv4 address in them (audit run 7).
+  const mapped = /^(?:::ffff:|::|64:ff9b::)([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(v6);
   if (mapped) {
     const high = parseInt(mapped[1]!, 16);
     const low = parseInt(mapped[2]!, 16);

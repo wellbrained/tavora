@@ -27,11 +27,12 @@ const ICONS = { tavora: MessageSquare, email: Mail, github: GitBranch, "discord-
 const kind = ref<ContactKind>(props.contact.kind);
 const value = ref(props.contact.value ?? "");
 const error = ref<string | null>(null);
+// The main process sends a fresh copy on every inbox push: only a changed choice replaces what is typed.
 watch(
-  () => props.contact,
-  (contact) => {
-    kind.value = contact.kind;
-    value.value = contact.value ?? "";
+  () => JSON.stringify([props.contact.kind, props.contact.value ?? ""]),
+  () => {
+    kind.value = props.contact.kind;
+    value.value = props.contact.value ?? "";
   },
 );
 

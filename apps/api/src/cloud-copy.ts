@@ -6,6 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 import type { AccountStore } from "./account-store.ts";
 import { createRateLimiter, networkOf, type RateLimiter } from "./rate-limit.ts";
 import { requireSignIn, signedOut, stillSignedIn, tooMany, type SignedInEnv } from "./sign-in.ts";
+import { uploadMemory, type UploadMemory } from "./upload-memory.ts";
 
 /**
  * The cloud copy (decided 2026-10-19): one copy of a user's Tavora data per account, which only the
@@ -828,12 +829,17 @@ export interface CopyOptions {
   /** Copy requests per client: 300 a minute by default, so a first upload of many parts fits. */
   rateLimiter?: RateLimiter;
   now?: () => number;
+  /** Where bodies are held while they come in: the memory uploads share, by default. */
+  memory?: UploadMemory;
 }
+
+/** Copy bodies one account sends at once: a PC sends one after another, so this leaves room for a second PC (audit run 7). */
+export const COPY_BODIES_PER_ACCOUNT = 2;
 
 type Env = SignedInEnv;
 
 /** The routes under /v1/account/copy. Bodies are application/octet-stream, which a web page cannot send without a preflight this service refuses. */
-export function copyRoutes({ copies, accounts, clientKey, rateLimiter, now = Date.now }: CopyOptions) {
+export function copyRoutes({ copies, accounts, clientKey, rateLimiter, now = Date.now, memory = uploadMemory }: CopyOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 300, windowMs: 60_000 });
   const app = new Hono<Env>();
   const bad = (context: Context, error: string) => context.json({ error, reason: "bad-request" }, 400);
@@ -846,8 +852,9 @@ export function copyRoutes({ copies, accounts, clientKey, rateLimiter, now = Dat
     }
     await next();
   });
-  // The sign-in, then the body, then the sign-in again (sign-in.ts requireSignIn), and once more right before a write.
-  app.use("*", requireSignIn(accounts, now, MAX_BODY));
+  // The sign-in, then the body, then the sign-in again (sign-in.ts requireSignIn), and once more right before a write. Bodies
+  // are read whole, so they wait for room in the memory uploads share, a few per account.
+  app.use("*", requireSignIn(accounts, now, MAX_BODY, { memory, perAccount: COPY_BODIES_PER_ACCOUNT }));
   app.use("*", bodyLimit({ maxSize: MAX_BODY, onError: (context) => context.json({ error: "Too big.", reason: "too-big" }, 413) }));
   const bytes = async (context: Context) => new Uint8Array(await context.req.arrayBuffer());
   /** Who adds bytes, for the shares of the total: when the account was made, and the request's network. */

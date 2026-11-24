@@ -118,7 +118,7 @@ describe("minTavora", () => {
 describe("panel types", () => {
   it("needs every panel type's page and icon, and gives each type its icon", async () => {
     const local = await mkdtemp(path.join(tmpdir(), "tavora-local-"));
-    const png = Buffer.from("89504e470d0a1a0a0000000d49484452", "hex");
+    const png = Buffer.from("89504e470d0a1a0a0000000d494844520000001000000010", "hex");
     const write = async (folder: string, panels: unknown[]) => {
       const dir = await makeModule(local, folder, `example.${folder}`);
       const manifest = JSON.parse(await readFile(path.join(dir, "tavora.module.json"), "utf8"));
@@ -242,6 +242,15 @@ describe("development folders", () => {
     await discoverModules({ development: [half] }, unreadable);
     expect(panelsWait(unreadable)("local.half")).toBe(true);
 
+    // A built-in module whose manifest can't be read keeps its panels waiting too (a directory where the file should be).
+    const shipped = await mkdtemp(path.join(tmpdir(), "tavora-shipped-"));
+    const busy = await makeModule(shipped, "notes", "tavora.notes");
+    await rm(path.join(busy, "tavora.module.json"));
+    await mkdir(path.join(busy, "tavora.module.json"));
+    const official: ModuleProblem[] = [];
+    await discoverModules({ official: [shipped] }, official);
+    expect(panelsWait(official)("tavora.notes")).toBe(true);
+
     // A module that names itself but can't load still waits, as before.
     const unbuilt = await makeModule(projects, "unbuilt", "example.unbuilt");
     await rm(path.join(unbuilt, "index.html"));
@@ -288,7 +297,7 @@ describe("describeModules", () => {
     const dir = await makeModule(own, "pictured", "local.me.pictured");
     const manifest = JSON.parse(await readFile(path.join(dir, "tavora.module.json"), "utf8"));
     await writeFile(path.join(dir, "tavora.module.json"), JSON.stringify({ ...manifest, icon: "icon.png" }));
-    await writeFile(path.join(dir, "icon.png"), Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(8)]));
+    await writeFile(path.join(dir, "icon.png"), Buffer.from("89504e470d0a1a0a0000000d494844520000001000000010", "hex"));
     const modules = await discoverModules({ local: [own] });
     const info = await describeModules(own, modules);
     expect(info.get("local.me.pictured")?.icon).toMatch(/^data:image\/png;base64,/);

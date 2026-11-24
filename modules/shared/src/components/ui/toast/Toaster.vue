@@ -74,6 +74,20 @@ function close() {
   collapseTimer = setTimeout(() => (expanded.value = false), 120);
 }
 
+// A toast that goes while the pointer is on it (its own close button, Undo) never says the pointer left: the stack closes
+// up unless the pointer or the focus is on one of the toasts still there, so their time goes on again.
+watch(
+  () => toasts.value.length,
+  (count, before) => {
+    if (!expanded.value || count >= (before ?? 0)) return;
+    const still = (el: Element) => toasts.value.some((item) => String(item.id) === (el.closest<HTMLElement>(".tavora-toast-slot")?.dataset.id ?? ""));
+    const hovered = [...holder.querySelectorAll(".tavora-toast-layer:hover")].some(still);
+    const focused = document.activeElement instanceof Element && holder.contains(document.activeElement) && still(document.activeElement);
+    if (!hovered && !focused) close();
+  },
+  { flush: "post" },
+);
+
 /** Each toast with where it sits in the stack, counted from the newest. The page keeps them oldest first. */
 const placed = computed(() => {
   const sign = fromTop.value ? 1 : -1;

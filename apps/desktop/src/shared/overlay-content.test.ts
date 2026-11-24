@@ -73,6 +73,11 @@ describe("resizing a frame that follows its content", () => {
     expect(resizeContentRect(before, { ...before, x: 300 }, text, 1.5)).toEqual({ rect: { ...before, x: 300 }, scale: 1.5 });
   });
 
+  it("keeps the scale when the content has no size yet", () => {
+    const { scale } = resizeContentRect(before, { x: 100, y: 100, width: 420, height: 120 }, { width: 0, height: 0 }, 1.5);
+    expect(scale).toBe(1.5);
+  });
+
   it("works in screen pixels of a bigger window", () => {
     // A 2160 px high game: two screen pixels to a pixel of the 1080 px window.
     const { scale, rect } = resizeContentRect({ x: 0, y: 0, width: 432, height: 132 }, { x: 0, y: 0, width: 832, height: 232 }, text, 1, 2);

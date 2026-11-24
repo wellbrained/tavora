@@ -92,16 +92,46 @@ export function stripPng(bytes: Uint8Array, maxBytes = MAX_ICON_BYTES): Uint8Arr
 }
 
 /**
- * Whether a file is a well-formed WebP by its RIFF header: the RIFF size matches the file, it says WEBP,
- * and its first chunk is one of the three image kinds and fits. Nothing is decoded.
+ * Whether a file is a well-formed WebP by its RIFF header: the RIFF size matches the file, it says WEBP, its first chunk
+ * is one of the three image kinds and fits, and the picture it says is at most `maxPixels` wide and tall, as for a PNG
+ * (audit run 7: a few bytes can say 16383 x 16383). Nothing is decoded.
  */
-export function isWebp(bytes: Uint8Array, maxBytes: number): boolean {
-  if (bytes.byteLength < 20 || bytes.byteLength > maxBytes) return false;
+export function isWebp(bytes: Uint8Array, maxBytes: number, maxPixels: number): boolean {
+  if (bytes.byteLength > maxBytes) return false;
+  const size = webpSize(bytes);
+  return size !== null && size.width <= maxPixels && size.height <= maxPixels;
+}
+
+/** A well-formed WebP's width and height by its first chunk (the canvas for VP8X), or null. Nothing is decoded. */
+export function webpSize(bytes: Uint8Array): { width: number; height: number } | null {
+  if (bytes.byteLength < 20) return null;
   const text = (from: number, to: number) => String.fromCharCode(...bytes.subarray(from, to));
-  if (text(0, 4) !== "RIFF" || text(8, 12) !== "WEBP") return false;
+  if (text(0, 4) !== "RIFF" || text(8, 12) !== "WEBP") return null;
   const v = view(bytes);
-  if (v.getUint32(4, true) + 8 !== bytes.byteLength) return false;
-  return ["VP8 ", "VP8L", "VP8X"].includes(text(12, 16)) && 20 + v.getUint32(16, true) <= bytes.byteLength;
+  if (v.getUint32(4, true) + 8 !== bytes.byteLength) return null;
+  const kind = text(12, 16);
+  const length = v.getUint32(16, true);
+  if (20 + length > bytes.byteLength) return null;
+  const uint24 = (at: number) => v.getUint16(at, true) | (bytes[at + 2]! << 16);
+  if (kind === "VP8L") {
+    // A signature byte, then 14 bits each of width and height, less one.
+    if (length < 5 || bytes[20] !== 0x2f) return null;
+    const bits = v.getUint32(21, true);
+    return { width: (bits & 0x3fff) + 1, height: ((bits >>> 14) & 0x3fff) + 1 };
+  }
+  if (kind === "VP8 ") {
+    // A 3-byte frame tag, the start code, then 14 bits each of width and height (two bits of scale above them).
+    if (length < 10 || bytes[23] !== 0x9d || bytes[24] !== 0x01 || bytes[25] !== 0x2a) return null;
+    const width = v.getUint16(26, true) & 0x3fff;
+    const height = v.getUint16(28, true) & 0x3fff;
+    return width > 0 && height > 0 ? { width, height } : null;
+  }
+  if (kind === "VP8X") {
+    // Flags and 3 reserved bytes, then the canvas: 24 bits each of width and height, less one.
+    if (length < 10) return null;
+    return { width: uint24(24) + 1, height: uint24(27) + 1 };
+  }
+  return null;
 }
 
 /** An 8-bit RGBA PNG from top-down rows of pixels. */

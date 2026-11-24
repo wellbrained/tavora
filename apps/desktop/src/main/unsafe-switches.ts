@@ -54,7 +54,8 @@ const MAX_SHOWN = 60;
  */
 export function findUnsafeSwitch(argv: readonly string[]): string | undefined {
   for (const arg of argv) {
-    const match = /^(?:--|-|\/)([^=]*)(?:=(.*))?$/s.exec(arg);
+    // Chromium trims whitespace before it looks for a switch, so " --remote-debugging-port" is one too (audit run 7).
+    const match = /^\s*(?:--|-|\/)([^=]*)(?:=(.*))?$/s.exec(arg);
     if (!match) continue;
     const name = (match[1] ?? "").toLowerCase();
     const allowed = Object.hasOwn(ALLOWED_SWITCHES, name) ? ALLOWED_SWITCHES[name] : undefined;

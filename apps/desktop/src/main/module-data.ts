@@ -52,6 +52,17 @@ async function ownFolder(parent: string, name: string): Promise<string | null> {
   return info?.isDirectory() && !info.isSymbolicLink() ? dir : null;
 }
 
+/** `root/names…` when every step is a real folder with exactly that name (see ownFolder); null otherwise. */
+export async function ownPath(root: string, ...names: string[]): Promise<string | null> {
+  let dir = root;
+  for (const name of names) {
+    const next = await ownFolder(dir, name);
+    if (!next) return null;
+    dir = next;
+  }
+  return dir;
+}
+
 /** The real folders under `dir` (no links or junctions) whose names pass `pick`. */
 async function ownFolders(dir: string, pick: (name: string) => boolean): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
@@ -105,8 +116,9 @@ export async function deleteModuleData(userData: string, workspaceId: string, bl
       }
     }
   };
-  for (const root of ownRoots(userData)) for await (const dir of workspaceFolders(root)) await rm(dir, { recursive: true, force: true });
+  // The files first: they are what another program can hold, and a failure there leaves the settings and documents intact.
   for await (const dir of workspaceFolders(blobRoot)) await removeFilesFolder(dir, trash, removeOwnFiles);
+  for (const root of ownRoots(userData)) for await (const dir of workspaceFolders(root)) await rm(dir, { recursive: true, force: true });
 }
 
 /**
@@ -400,17 +412,21 @@ async function applyPending(userData: string, log: (line: string) => void, blobR
   const partitions = path.join(userData, "Partitions");
   for (const { moduleId, to } of pending.moves ?? []) {
     for (const root of dataRoots(userData, blobRoot)) {
-      const from = path.join(root, LOCAL_OWNER, moduleId);
+      // Only real folders with exactly these names move (never a link, never a folder that only matches in another case): the files root can be the user's own Pictures\Tavora.
+      const from = await ownPath(root, LOCAL_OWNER, moduleId);
+      if (!from) continue;
       for (const workspace of await readdir(from).catch(() => [] as string[])) {
         // The settings shared by every workspace (storage.app) move like a workspace's.
         if (!isWorkspaceId(workspace) && workspace !== APP_DATA_DIR) continue;
+        const source = await ownFolder(from, workspace);
+        if (!source) continue;
         const target = path.join(root, to, moduleId, workspace);
         if (await pathExists(target)) {
           log(`${moduleId} already has data in ${workspace}; its local data there stays`);
           continue;
         }
         await mkdir(path.dirname(target), { recursive: true });
-        await rename(path.join(from, workspace), target);
+        await rename(source, target);
       }
       // Gone unless a workspace kept its local data.
       await rmdir(from).catch(() => undefined);

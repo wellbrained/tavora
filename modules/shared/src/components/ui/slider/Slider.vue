@@ -3,6 +3,7 @@ import type { SliderRootEmits, SliderRootProps } from "reka-ui"
 import type { HTMLAttributes } from "vue"
 import { reactiveOmit } from "@vueuse/core"
 import { SliderRange, SliderRoot, SliderThumb, SliderTrack, useForwardPropsEmits } from "reka-ui"
+import { computed, useAttrs } from "vue"
 import { cn } from "../../../lib/utils"
 
 // `valueText` is what a screen reader says for the value ("70 %"), when the bare number isn't enough.
@@ -12,6 +13,14 @@ const emits = defineEmits<SliderRootEmits>()
 const delegatedProps = reactiveOmit(props, "class", "valueText")
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
+
+// A screen reader names a slider by its thumb (role="slider"), so the name goes there; everything else stays on the box.
+defineOptions({ inheritAttrs: false })
+const attrs = useAttrs()
+const boxAttrs = computed(() => {
+  const { "aria-label": _label, "aria-labelledby": _labelledBy, ...rest } = attrs
+  return rest
+})
 </script>
 
 <template>
@@ -22,7 +31,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
       'relative flex w-full touch-none items-center select-none data-[disabled]:opacity-50 data-[orientation=vertical]:h-full data-[orientation=vertical]:min-h-40 data-[orientation=vertical]:w-auto data-[orientation=vertical]:flex-col',
       props.class,
     )"
-    v-bind="forwarded"
+    v-bind="{ ...boxAttrs, ...forwarded }"
   >
     <SliderTrack
       data-slot="slider-track"
@@ -39,6 +48,8 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
       :key="key"
       data-slot="slider-thumb"
       :aria-valuetext="valueText"
+      :aria-label="attrs['aria-label'] as string | undefined"
+      :aria-labelledby="attrs['aria-labelledby'] as string | undefined"
       class="border-primary bg-background dark:bg-foreground block size-4 shrink-0 rounded-full border-2 transition-colors outline-none hover:border-[var(--primary-hover)] focus-visible:ring-ring/50 focus-visible:ring-3 disabled:pointer-events-none disabled:opacity-50"
     />
   </SliderRoot>

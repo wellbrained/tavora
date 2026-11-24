@@ -107,6 +107,47 @@ describe("the inbox view", () => {
     expect(fake.state.calls).toHaveLength(0);
   });
 
+  it("drops a read that was under way when the user signed out", async () => {
+    const fake = service();
+    fake.state.conversations = [row()];
+    let token: string | null = "t".repeat(30);
+    const inner = fake.impl;
+    let inboxRef: Inbox | null = null;
+    const impl = (async (input: string | URL | Request, init?: RequestInit) => {
+      const answer = await inner(input, init);
+      if (String(input).endsWith("/v1/conversations") && (init?.method ?? "GET") === "GET") {
+        token = null;
+        inboxRef?.accountChanged(false);
+      }
+      return answer;
+    }) as typeof fetch;
+    const dir = await mkdtemp(path.join(tmpdir(), "tavora-inbox-"));
+    const file = path.join(dir, "inbox.json");
+    const inbox = new Inbox({
+      baseUrl: "https://api.test",
+      fetch: impl,
+      token: () => token,
+      language: () => "en",
+      tavoraVersion: "0.21.44",
+      file,
+      installedVersion: () => undefined,
+      isDeveloper: () => false,
+      ownModules: async () => [],
+      onChange: () => undefined,
+      openLink: () => undefined,
+      copy: () => undefined,
+      pollMs: 3_600_000,
+    });
+    inboxRef = inbox;
+    await inbox.init();
+    await inbox.refresh();
+    // Nothing of the signed-out account is remembered.
+    const saved = await readFile(file, "utf8").catch(() => "{}");
+    expect(JSON.parse(saved)).not.toMatchObject({ iconShown: true });
+    token = "t".repeat(30);
+    expect(inbox.view().items).toBeNull();
+  });
+
   it("shows no icon for a user without open conversations", async () => {
     const { inbox } = await make();
     expect(inbox.view()).toMatchObject({ active: true, icon: false, unread: 0, note: null });
