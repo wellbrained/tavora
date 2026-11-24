@@ -265,6 +265,33 @@ describe("the maintainer's queue", () => {
     expect(reviews.summary("wellbrained.timer")?.count).toBe(1);
   });
 
+  it("lets a held review through when the maintainer shows it: its text shows and its stars count (hunt L1)", async () => {
+    const { user, rate, reviews, call } = setup();
+    const mara = user("mara@example.com");
+    await rate(mara.token, { stars: 2, text: "get it at www.example.com", version: "1.0.0" });
+    const id = reviews.queue()[0]!.id;
+    expect(reviews.setHidden(id, false)).toBe(true);
+    expect(reviews.review(id)).toMatchObject({ held: false, hidden: false, seen: true });
+    expect(await (await call("GET", "/modules/wellbrained.timer/reviews")).json()).toMatchObject({ reviews: [{ text: "get it at www.example.com" }] });
+    expect(reviews.summary("wellbrained.timer")?.count).toBe(1);
+    expect(reviews.queue()).toEqual([]);
+  });
+
+  it("keeps a review the maintainer hid while it was held hidden when its author edits it clean (hunt L1)", async () => {
+    const { user, rate, reviews, call } = setup();
+    const mara = user("mara@example.com");
+    await rate(mara.token, { stars: 1, text: "get it at www.example.com", version: "1.0.0" });
+    const id = reviews.queue()[0]!.id;
+    expect(reviews.setHidden(id, true)).toBe(true);
+    await rate(mara.token, { stars: 2, text: "Not for me, sorry", version: "1.0.0" });
+    expect(reviews.review(id)).toMatchObject({ held: false, hidden: true });
+    expect(await (await call("GET", "/modules/wellbrained.timer/reviews")).json()).toMatchObject({ reviews: [] });
+    // Shown again by the maintainer, it stays shown through the next edit.
+    reviews.setHidden(id, false);
+    await rate(mara.token, { stars: 3, text: "Fine after all", version: "1.0.0" });
+    expect(reviews.review(id)).toMatchObject({ held: false, hidden: false });
+  });
+
   it("holds a module's 21st new rating of the day, keeps it held through edits, and lets the maintainer approve it", async () => {
     const { user, rate, reviews, clock } = setup();
     for (let index = 0; index < 20; index++) reviews.rate(`account-${index}`, "wellbrained.timer", { stars: 1, text: null, version: "1.0.0" }, clock.now - index * 60_000);

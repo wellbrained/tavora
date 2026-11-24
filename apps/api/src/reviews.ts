@@ -151,6 +151,9 @@ export class ReviewStore {
     if (!columns.includes("hidden_by_suspend")) this.db.exec("alter table reviews add column hidden_by_suspend integer not null default 0");
     // Limits (decided 2026-10-27): every new rating is logged, so deleting one and rating again still counts.
     if (!columns.includes("capped")) this.db.exec("alter table reviews add column capped integer not null default 0");
+    // Hidden by the maintainer's Hide, so an edit that releases a held review doesn't show it again. Reviews from before
+    // it read as not hidden by a person.
+    if (!columns.includes("hidden_by_person")) this.db.exec("alter table reviews add column hidden_by_person integer not null default 0");
     this.db.exec(`
       create table if not exists rating_log (account_id text not null, module_id text not null, at integer not null);
       create index if not exists rating_log_account on rating_log (account_id, at);
@@ -219,11 +222,12 @@ export class ReviewStore {
   rate(accountId: string, moduleId: string, input: { stars: number; text: string | null; version: string; held?: boolean; capped?: boolean }, now: number): StoredReview {
     const current = this.own(accountId, moduleId);
     if (current) {
-      // A rating held for the module's daily cap stays held whatever the new text says.
+      // A rating held for the module's daily cap stays held whatever the new text says. One released by the edit shows,
+      // unless the maintainer hid it.
       const held = input.held || current.capped ? 1 : 0;
       this.db
         .prepare(
-          "update reviews set stars = ?, text = ?, version = ?, updated_at = ?, hidden = case when ? = 1 then 1 when held = 1 then 0 else hidden end, held = ?, reviewed = case when ? is null then 1 else 0 end where id = ?",
+          "update reviews set stars = ?, text = ?, version = ?, updated_at = ?, hidden = case when ? = 1 then 1 when held = 1 and hidden_by_person = 0 then 0 else hidden end, held = ?, reviewed = case when ? is null then 1 else 0 end where id = ?",
         )
         .run(input.stars, input.text, input.version, now, held, held, input.text, current.id);
       if (input.text === null) this.db.prepare("delete from replies where review_id = ?").run(current.id);
@@ -262,7 +266,7 @@ export class ReviewStore {
 
   /** The maintainer lets a held review through: its text shows and its stars count. False when it isn't held. */
   approve(reviewId: string): boolean {
-    return Number(this.db.prepare("update reviews set held = 0, capped = 0, hidden = 0, reviewed = 1, hidden_by_suspend = 0 where id = ? and held = 1").run(reviewId).changes) > 0;
+    return Number(this.db.prepare("update reviews set held = 0, capped = 0, hidden = 0, reviewed = 1, hidden_by_suspend = 0, hidden_by_person = 0 where id = ? and held = 1").run(reviewId).changes) > 0;
   }
 
   /** The maintainer has looked at these live reviews. Returns how many were new. */
@@ -308,10 +312,17 @@ export class ReviewStore {
 
   /**
    * Hides a review's text (its stars still count) or shows it again. Hiding closes its report. A person's choice
-   * here is final: the review is no longer one that a suspension hid, so unsuspending leaves it as set.
+   * here is final: the review is no longer one that a suspension hid, so unsuspending leaves it as set, and a hidden one
+   * stays hidden when its author edits it. Showing a held review lets it through, like approve: its stars count too.
    */
   setHidden(reviewId: string, hidden: boolean): boolean {
-    const changed = Number(this.db.prepare("update reviews set hidden = ?, hidden_by_suspend = 0 where id = ?").run(hidden ? 1 : 0, reviewId).changes) > 0;
+    const changed =
+      Number(
+        (hidden
+          ? this.db.prepare("update reviews set hidden = 1, hidden_by_person = 1, hidden_by_suspend = 0 where id = ?")
+          : this.db.prepare("update reviews set hidden = 0, hidden_by_person = 0, hidden_by_suspend = 0, reviewed = case when held = 1 then 1 else reviewed end, held = 0, capped = 0 where id = ?")
+        ).run(reviewId).changes,
+      ) > 0;
     if (changed && hidden) this.dismissReport(reviewId);
     return changed;
   }
