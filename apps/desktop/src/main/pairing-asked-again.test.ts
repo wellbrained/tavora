@@ -1,11 +1,11 @@
-import { mkdir, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, expect, it } from "vitest";
 import { AccountKey } from "./account-key";
 import { cleanUp, pc } from "./cloud-copy.test-helper";
 import { newPairingKey, pairingCommit } from "./copy-crypto";
 import type { PairingKey } from "./copy-crypto";
-import { ANSWER_WAIT_MS, CLOCK_AHEAD_MS, FOLDER_PAIRING_MS, FolderPairing, MAX_OPEN_ANSWERS, OPEN_ANSWER_MS, Pairing, ServicePairing, SLOW_ANSWER_MS, type PairingOptions, type PairingTransport } from "./pairing";
+import { ANSWER_WAIT_MS, CLOCK_AHEAD_MS, FOLDER_PAIRING_MS, FolderPairing, MAX_OPEN_ANSWERS, MAX_PAIRING_FILES, MAX_STEP_FILE, OPEN_ANSWER_MS, Pairing, ServicePairing, SLOW_ANSWER_MS, type PairingOptions, type PairingTransport } from "./pairing";
 
 // An old PC asked again and again by whoever carries the messages: each answer counts, however it ends.
 
@@ -277,8 +277,10 @@ it("answers a real new PC once it let go of a planted request, though the plante
   let now = Date.now();
   const old = await oldPc(new FolderPairing(folder, "Desk", () => now), { now: () => now });
   const fresh = await onPc(new FolderPairing(folder, "Laptop", () => now), { now: () => now });
-  await fresh.pairing.start();
+  // Planted before the real one asks: it is seen first, and answered.
   await plant(dir, "0123456789abcdef", now + FOLDER_PAIRING_MS + CLOCK_AHEAD_MS);
+  await old.pairing.lookForRequests();
+  await fresh.pairing.start();
   await old.pairing.lookForRequests();
   expect(await readdir(dir)).toContain("0123456789abcdef.answer.json");
   // Whoever planted it takes the answer away, so it looks unanswered, and never shows a key: let go of, and the real
@@ -291,6 +293,67 @@ it("answers a real new PC once it let go of a planted request, though the plante
   expect(old.pairing.view().approve).toMatchObject({ name: "Laptop", code: fresh.pairing.view().asking!.code });
   fresh.pairing.dispose();
   old.pairing.dispose();
+});
+
+it("takes the request it saw first, not one planted next to it later or one that says it lasts longer", async () => {
+  const { root } = await pc();
+  const folder = path.join(root, "OneDrive");
+  const dir = path.join(folder, "Tavora", "pairing");
+  await mkdir(path.dirname(dir), { recursive: true });
+  const now = Date.now();
+  const { id } = await new FolderPairing(folder, "Laptop", () => now).ask(commit());
+  const reader = new FolderPairing(folder, "Desk", () => now);
+  expect(await reader.read()).toMatchObject({ id });
+  await plant(dir, "0123456789abcdef", now + FOLDER_PAIRING_MS + CLOCK_AHEAD_MS);
+  expect(await reader.read()).toMatchObject({ id });
+  await plant(dir, "fedcba9876543210", now + 60_000);
+  expect(await reader.read()).toMatchObject({ id });
+  // Seen in the same look, after a restart: the one that runs out first, so one planted to last two days doesn't win.
+  await rm(path.join(dir, "fedcba9876543210.request.json"));
+  expect(await new FolderPairing(folder, "Desk", () => now).read()).toMatchObject({ id });
+  // Once that one is gone, the next.
+  await rm(path.join(dir, `${id}.request.json`));
+  expect(await reader.read()).toMatchObject({ id: "0123456789abcdef" });
+});
+
+it("reads no step file bigger than any Tavora writes, and cleans one up once it is old", async () => {
+  const { root } = await pc();
+  const folder = path.join(root, "OneDrive");
+  const dir = path.join(folder, "Tavora", "pairing");
+  await mkdir(path.dirname(dir), { recursive: true });
+  let now = Date.now();
+  // A PC with a long name: its request is read, and is far within the limit.
+  const long = "Ä".repeat(255);
+  const { id } = await new FolderPairing(folder, long, () => now).ask(commit());
+  expect(await new FolderPairing(folder, "Desk", () => now).read()).toMatchObject({ id, name: long });
+  expect((await stat(path.join(dir, `${id}.request.json`))).size).toBeLessThan(MAX_STEP_FILE / 10);
+  await rm(path.join(dir, `${id}.request.json`));
+
+  // A request padded to just over the limit is not read, nor answered.
+  const padded = JSON.stringify({ v: 1, name: "Laptop", commit: commit(), expiresAt: now + 60_000 });
+  await writeFile(path.join(dir, "0123456789abcdef.request.json"), padded + " ".repeat(MAX_STEP_FILE + 1 - padded.length));
+  const old = await oldPc(new FolderPairing(folder, "Desk", () => now), { now: () => now });
+  await old.pairing.lookForRequests();
+  expect(await readdir(dir)).toEqual(["0123456789abcdef.request.json"]);
+  now += FOLDER_PAIRING_MS + 60_000;
+  await old.pairing.lookForRequests();
+  expect(await readdir(dir)).toEqual([]);
+  old.pairing.dispose();
+});
+
+// Writes and cleans up a few hundred files, which takes a while on Windows under load.
+it("looks at only so many files in the pairing folder at a time", { timeout: 60_000 }, async () => {
+  const { root } = await pc();
+  const folder = path.join(root, "OneDrive");
+  const dir = path.join(folder, "Tavora", "pairing");
+  const now = Date.now();
+  // Requests that ran out, which a look cleans up: a look gets to only so many.
+  for (let i = 0; i < MAX_PAIRING_FILES + 50; i++) await plant(dir, i.toString(16).padStart(16, "0"), now - 1);
+  const reader = new FolderPairing(folder, "Desk", () => now);
+  expect(await reader.read()).toBeNull();
+  expect(await readdir(dir)).toHaveLength(50);
+  expect(await reader.read()).toBeNull();
+  expect(await readdir(dir)).toEqual([]);
 });
 
 it("lets go of a request it answered once the request runs out, also when its key came and nobody clicked", async () => {

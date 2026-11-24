@@ -267,14 +267,19 @@ describe("a panel's gate", () => {
     await expect(g.enter("links.open")).rejects.toMatchObject({ message: expect.stringContaining("over the game") });
   });
 
-  it("lets a press of the module's own media hotkey allow that one control, once, within the window, even out of sight", async () => {
+  it("lets a press of the module's own media hotkey allow that one control, once, within the window, never out of sight", async () => {
     vi.useFakeTimers();
     const { gate: g, state } = gate({ withGame: true });
+    // Out of sight, with its game: a hotkey allows nothing either, as nothing that needs the user is.
+    g.noteHotkey("next");
+    await expect(g.enter("media.control", { control: "next" })).rejects.toMatchObject({ code: "PERMISSION_DENIED", message: expect.stringContaining("runs with its game") });
+    state.withGame = false;
     g.noteHotkey("next");
     await expect(g.enter("media.control", { control: "next" })).resolves.toBeUndefined();
-    // Used up: the next one needs a press, which a panel out of sight can't have.
-    await expect(g.enter("media.control", { control: "next" })).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
-    state.withGame = false;
+    // Used up: the next one needs a press.
+    const used = expect(g.enter("media.control", { control: "next" })).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+    await vi.advanceTimersByTimeAsync(250);
+    await used;
     g.noteHotkey("play-pause");
     const other = expect(g.enter("media.control", { control: "next" })).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
     await vi.advanceTimersByTimeAsync(250);

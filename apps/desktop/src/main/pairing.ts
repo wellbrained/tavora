@@ -1,5 +1,5 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import { lstat, readdir, readFile, rm, stat } from "node:fs/promises";
+import { lstat, opendir, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import type { PairingView } from "../shared/host-api";
 import type { CopySync } from "./cloud-copy-sync";
@@ -7,6 +7,7 @@ import { CopyError } from "./cloud-copy";
 import type { AccountKey } from "./account-key";
 import { newPairingKey, openFromPc, pairingCode, pairingCommit, sealForPc, type PairingKey } from "./copy-crypto";
 import { FOLDER_NAME } from "./copy-folder";
+import { lookCapped } from "./file-look";
 import { writeFileAtomic } from "./fsutil";
 import { UserError } from "./messages";
 
@@ -72,7 +73,8 @@ export interface PairingTransport {
   readonly via: "service" | "folder";
   /**
    * The request this PC asked, or one it may answer (or answered); null when there is none. Of several, none in `skip`
-   * (requests this PC turned down or let go of), so one that stays can't hide the others.
+   * (requests this PC turned down or let go of), so one that stays can't hide the others; through a folder, the one this
+   * PC saw first.
    */
   read(skip?: ReadonlySet<string>): Promise<PairingRequest | null>;
   ask(commit: string): Promise<{ id: string; expiresAt: number }>;
@@ -699,6 +701,31 @@ export class ServicePairing implements PairingTransport {
  */
 const STEP_FILE = /^([0-9a-f]{16})\.(request|answer|reveal|key|declined)\.json$/;
 type Step = "request" | "answer" | "reveal" | "key" | "declined";
+/**
+ * The biggest step file read. The biggest Tavora writes is a request or an answer: under 150 bytes and the PC's name,
+ * which is its network name (at most 255 bytes) or a Mac's computer name. Anyone who can write the folder could put a
+ * huge one there, read every 15 seconds; one over this is left as unreadable, and cleaned up once it is old.
+ */
+export const MAX_STEP_FILE = 8 * 1024;
+/**
+ * The most names one look lists in the pairing folder. It holds a few files per PC that asks, and some copies a sync app
+ * made; with more, the rest wait for a later look, as the ones listed are cleaned up.
+ */
+export const MAX_PAIRING_FILES = 256;
+
+/** Up to `max` names in `dir`, without listing the rest; none when it can't be read. */
+async function someNames(dir: string, max: number): Promise<string[]> {
+  const names: string[] = [];
+  try {
+    for await (const entry of await opendir(dir)) {
+      names.push(entry.name);
+      if (names.length >= max) break;
+    }
+  } catch {
+    return [];
+  }
+  return names;
+}
 
 export class FolderPairing implements PairingTransport {
   readonly via = "folder";
@@ -707,6 +734,12 @@ export class FolderPairing implements PairingTransport {
   private ownId: string | null = null;
   /** This PC's answers, so it knows which answer file is its own. */
   private answered = new Map<string, string>();
+  /**
+   * The look in which this PC first saw each request. What a request file says (its time, its name) is whatever whoever
+   * wrote it chose; when it turned up is the one thing this PC sees for itself.
+   */
+  private firstSeen = new Map<string, number>();
+  private looks = 0;
 
   constructor(
     readonly folder: string,
@@ -721,17 +754,13 @@ export class FolderPairing implements PairingTransport {
     return path.join(this.dir, `${id}.${step}.json`);
   }
 
-  /** A step's file as it is, not what a link in its place leads to: null when it is a link or anything else than a file. */
-  private async ownFile(id: string, step: Step) {
-    const info = await lstat(this.file(id, step)).catch(() => null);
-    return info?.isFile() ? info : null;
-  }
-
   private async readStep(id: string, step: Step): Promise<Record<string, unknown> | null> {
     try {
-      // A link in a step's place leads out of the folder: not read, as if a sync app hadn't finished it.
-      if (!(await this.ownFile(id, step))) return null;
-      const value = JSON.parse(await readFile(this.file(id, step), "utf8")) as unknown;
+      // A link in a step's place leads out of the folder, and one too big for a step isn't Tavora's: neither is read, as
+      // if a sync app hadn't finished it.
+      const looked = await lookCapped(this.file(id, step), MAX_STEP_FILE);
+      if (looked.status !== "present" || !Buffer.isBuffer(looked.value)) return null;
+      const value = JSON.parse(looked.value.toString("utf8")) as unknown;
       return typeof value === "object" && value !== null && !Array.isArray(value) && (value as { v?: unknown }).v === 1 ? (value as Record<string, unknown>) : null;
     } catch {
       return null;
@@ -762,7 +791,8 @@ export class FolderPairing implements PairingTransport {
   }
 
   async read(skip: ReadonlySet<string> = new Set()): Promise<PairingRequest | null> {
-    const names = (await this.kind()) === "dir" ? await readdir(this.dir).catch(() => [] as string[]) : [];
+    const names = (await this.kind()) === "dir" ? await someNames(this.dir, MAX_PAIRING_FILES) : [];
+    const look = ++this.looks;
     const steps = new Map<string, Set<Step>>();
     for (const name of names) {
       const match = STEP_FILE.exec(name);
@@ -771,9 +801,11 @@ export class FolderPairing implements PairingTransport {
       set.add(match[2] as Step);
       steps.set(match[1]!, set);
     }
-    // A request this PC answered whose files are all gone is done with.
+    // A request this PC answered whose files are all gone is done with. One not listed this time is seen anew, later.
     for (const id of this.answered.keys()) if (!steps.has(id)) this.answered.delete(id);
+    for (const id of this.firstSeen.keys()) if (!steps.get(id)?.has("request")) this.firstSeen.delete(id);
     let found: PairingRequest | null = null;
+    let foundSeen = 0;
     for (const [id, have] of steps) {
       const own = id === this.ownId;
       if (!have.has("request")) {
@@ -819,10 +851,20 @@ export class FolderPairing implements PairingTransport {
         ...(typeof key?.sealed === "string" ? { sealed: key.sealed } : {}),
       };
       if (own) return seen;
-      // Of several, the newest one this PC hasn't let go of; the one it answers comes first.
+      // Of several, the one it answers comes first; then of those it hasn't let go of, the one it saw first, and of those
+      // seen in the same look, the one that runs out first. Whoever can write the folder can put a request there that says
+      // anything, but not one this PC saw before the user's own: a request planted later, or one that says it lasts two
+      // days, doesn't hide it. One planted before it is answered first and let go of (`skip`), as before.
+      const firstSeen = this.firstSeen.get(id) ?? look;
+      this.firstSeen.set(id, firstSeen);
       if (skip.has(id) && !this.answered.has(id)) continue;
-      if (this.answered.has(id)) found = seen;
-      else if (!found || (!this.answered.has(found.id) && seen.expiresAt > found.expiresAt)) found = seen;
+      if (this.answered.has(id)) {
+        found = seen;
+        foundSeen = firstSeen;
+      } else if (!found || (!this.answered.has(found.id) && (firstSeen < foundSeen || (firstSeen === foundSeen && seen.expiresAt < found.expiresAt)))) {
+        found = seen;
+        foundSeen = firstSeen;
+      }
     }
     return found;
   }

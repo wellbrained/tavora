@@ -2,7 +2,7 @@
 // ENOENT means a thing isn't there. Anything else (a virus scan holding the file, a damaged file) is "held": we don't know
 // what is there, so nothing destructive happens, nothing is uploaded, and the next start looks again.
 import type { Stats } from "node:fs";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { lstat, open, readdir, readFile, stat } from "node:fs/promises";
 
 export type Looked<T> = { status: "present"; value: T } | { status: "missing" } | { status: "held"; error: unknown };
 
@@ -32,6 +32,33 @@ export async function look<T>(read: () => Promise<T>): Promise<Looked<T>> {
 export const lookStat = (file: string): Promise<Looked<Stats>> => look(() => stat(file));
 export const lookNames = (dir: string): Promise<Looked<string[]>> => look(() => readdir(dir));
 export const lookBytes = (file: string): Promise<Looked<Buffer>> => look(() => readFile(file));
+
+/**
+ * A file, read only when it is a file (not a link) of at most `max` bytes: "other" or "too-big" otherwise.
+ * Nothing bigger is read in, also when it grows or is swapped for another while being read.
+ */
+export const lookCapped = (file: string, max: number): Promise<Looked<Buffer | "other" | "too-big">> =>
+  look(async () => {
+    const info = await lstat(file);
+    if (!info.isFile()) return "other";
+    if (info.size > max) return "too-big";
+    const handle = await open(file, "r");
+    try {
+      const opened = await handle.stat();
+      if (opened.ino !== info.ino || opened.dev !== info.dev) return "other";
+      if (opened.size > max) return "too-big";
+      const buffer = Buffer.alloc(opened.size);
+      let at = 0;
+      while (at < buffer.length) {
+        const { bytesRead } = await handle.read(buffer, at, buffer.length - at, at);
+        if (bytesRead === 0) break;
+        at += bytesRead;
+      }
+      return buffer.subarray(0, at);
+    } finally {
+      await handle.close();
+    }
+  });
 
 /** A file holding a JSON object. Anything else in it is damaged, so held. */
 export async function lookJson(file: string): Promise<Looked<Record<string, unknown>>> {

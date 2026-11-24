@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { cp, mkdtemp, readdir, readFile, rename, rm, stat, symlink, truncate, utimes, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, symlink, truncate, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -1467,5 +1467,23 @@ describe("what anyone who can write the folder can do", () => {
     await storage.remove();
     expect(await readdir(moved)).not.toHaveLength(0);
     expect(await readFile(victim, "utf8")).toBe("not the copy's");
+  });
+
+  it("deletes only the link when the Tavora folder itself is a link or junction", async () => {
+    const onedrive = await folder();
+    // Somewhere else, folders named like the copy's, and the copy's Tavora folder made a junction to them.
+    const elsewhere = await folder();
+    for (const name of ["manifests", "parts"]) {
+      await mkdir(path.join(elsewhere, name));
+      await writeFile(path.join(elsewhere, name, "keep.txt"), "not the copy's");
+    }
+    await symlink(elsewhere, path.join(onedrive, "Tavora"), "junction");
+    await new FolderStorage(onedrive).remove();
+    for (const name of ["manifests", "parts"]) expect(await readFile(path.join(elsewhere, name, "keep.txt"), "utf8")).toBe("not the copy's");
+    expect(await readdir(onedrive)).toEqual([]);
+    // A file named Tavora isn't the copy's: it stays.
+    await writeFile(path.join(onedrive, "Tavora"), "a note");
+    await new FolderStorage(onedrive).remove();
+    expect(await readFile(path.join(onedrive, "Tavora"), "utf8")).toBe("a note");
   });
 });

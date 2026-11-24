@@ -5,8 +5,20 @@
 /apps/desktop/src/main/update-signature.ts @wellbrained
 /apps/desktop/src/main/updates.ts @wellbrained
 
+# What builds, signs and publishes a release and its update feed, and checks the app's fuses before it goes out.
+/.github/workflows/ @wellbrained
+/apps/desktop/scripts/release*.mjs @wellbrained
+/apps/desktop/scripts/update-feed.mjs @wellbrained
+/apps/desktop/scripts/update-key.mjs @wellbrained
+/apps/desktop/scripts/check-fuses.mjs @wellbrained
+/scripts/deploy-client.mjs @wellbrained
+/scripts/release-sdk*.mjs @wellbrained
+
 # The server's receiver and setup: what a deploy key may publish.
 /deploy/server/ @wellbrained
+
+# The API's server setup, installed as root.
+/apps/api/deploy/ @wellbrained
 
 # This file itself.
 /.github/CODEOWNERS @wellbrained

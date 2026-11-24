@@ -228,12 +228,14 @@ const KNOWN_SNIPPETS: { why: string; pattern: RegExp }[] = [
   {
     // immediate (JSZip), setimmediate: an empty script element as a timer, as the whole body of a function so nothing
     // else there can reach it. Its handler only runs the queue and drops it; it never gets a src or any text.
+    // Never two \s* with only something optional between them (`\s*;?\s*`): on a long run of spaces they try every way
+    // to split it, and a crafted file of spaces would hold the server for minutes. `\s*(?:;\s*)?` matches the same.
     why: "an empty script element used as a timer",
     pattern: new RegExp(
-      `function\\s*\\(\\s*(?:${ID})?\\s*\\)\\s*\\{\\s*` +
+      `function\\s*\\(\\s*(?:${ID}\\s*)?\\)\\s*\\{\\s*` +
         `(?:var|let|const)\\s+(${ID})\\s*=\\s*${PATH}\\.createElement\\(\\s*(${Q})script\\2\\s*\\)\\s*;\\s*` +
-        `\\1\\.onreadystatechange\\s*=\\s*function\\s*\\(\\)\\s*\\{\\s*${CLEANUP}(?:\\s*[,;]\\s*${CLEANUP})*\\s*;?\\s*\\}\\s*[,;]?\\s*` +
-        `${PATH}\\.appendChild\\(\\1\\)\\s*;?\\s*\\}`,
+        `\\1\\.onreadystatechange\\s*=\\s*function\\s*\\(\\)\\s*\\{\\s*${CLEANUP}(?:\\s*[,;]\\s*${CLEANUP})*\\s*(?:;\\s*)?\\}\\s*(?:[,;]\\s*)?` +
+        `${PATH}\\.appendChild\\(\\1\\)\\s*(?:;\\s*)?\\}`,
       "g",
     ),
   },
@@ -248,16 +250,54 @@ function firstWhere(pattern: RegExp, text: string, keep: (match: RegExpExecArray
   return null;
 }
 
-/** Whether the match sits on a line that is only a // comment, which never runs. */
-const onCommentLine = (text: string, index: number) => text.slice(text.lastIndexOf("\n", index) + 1, index).trimStart().startsWith("//");
+/**
+ * Whether a match sits on a line that is only a // comment, which never runs. Asked in order through the text, it reads
+ * each line once: looking back to the line's start for every match would read a long line again for each match on it.
+ */
+function commentLines(text: string): (index: number) => boolean {
+  const leading = /\s*/y;
+  let start = 0;
+  let end = -1;
+  let comment = 0;
+  return (index) => {
+    if (index < start || index >= end) {
+      start = text.lastIndexOf("\n", index) + 1;
+      end = text.indexOf("\n", index);
+      if (end === -1) end = text.length;
+      leading.lastIndex = start;
+      leading.exec(text);
+      comment = text.startsWith("//", leading.lastIndex) ? leading.lastIndex + 2 : 0;
+    }
+    return comment > 0 && comment <= index;
+  };
+}
 
-function signsIn(name: string, source: string): { sign: Sign; detail: string }[] {
+/**
+ * The first `<script …>` tag whose attributes match: `pattern` is sticky (y) and starts at `<script`. Each tag is read once;
+ * a `<script` inside an earlier tag that had no match can't have one either, as its text is the end of that tag's.
+ */
+function scriptTagWith(text: string, pattern: RegExp): RegExpExecArray | null {
+  const open = /<script\b/gi;
+  for (let tag = open.exec(text); tag; tag = open.exec(text)) {
+    pattern.lastIndex = tag.index;
+    const match = pattern.exec(text);
+    if (match) return match;
+    const end = text.indexOf(">", tag.index);
+    if (end === -1) return null;
+    open.lastIndex = end;
+  }
+  return null;
+}
+
+/** The warning signs in one code file's text. Exported for tests. */
+export function signsIn(name: string, source: string): { sign: Sign; detail: string }[] {
   const text = withoutKnownSnippets(source);
   const found: { sign: Sign; detail: string }[] = [];
   const add = (sign: Sign, match: RegExpExecArray | null | undefined) => {
     if (match) found.push({ sign, detail: `${name}: ${around(text, match.index)}` });
   };
   const count = (pattern: RegExp) => text.match(pattern)?.length ?? 0;
+  const onCommentLine = commentLines(text);
 
   add("eval", /(?<![\w$.])eval\s*\(|(?:window|globalThis|self)\s*\.\s*eval\s*\(/.exec(text));
   add("eval", /(?<![\w$])(?:new\s+)?Function\s*\(/.exec(text));
@@ -271,14 +311,14 @@ function signsIn(name: string, source: string): { sign: Sign; detail: string }[]
   // only defines one (a call there would be a syntax error; with a line break between, it is a call).
   add(
     "remote-code",
-    firstWhere(/(?<![\w$.])import\s*\(\s*(?!["'`])[^)\s](?![^()]*\)[ \t]*(?::[^;{}()\n]*)?\{)/g, text, (match) => !onCommentLine(text, match.index)),
+    firstWhere(/(?<![\w$.])import\s*\(\s*(?!["'`])[^)\s](?![^()]*\)[ \t]*(?::[^;{}()\n]*)?\{)/g, text, (match) => !onCommentLine(match.index)),
   );
   add("remote-code", /\b(?:from|import)\s*["'`](?:https?:)?\/\/[^"'`]+["'`]/.exec(text));
   add("remote-code", /\bimportScripts\s*\(/.exec(text));
   add("remote-code", /createElement(?:NS)?\s*\(\s*(?:["'`]http:\/\/www\.w3\.org\/2000\/svg["'`]\s*,\s*)?["'`]script["'`]/.exec(text));
-  add("remote-code", /<script\b[^>]*\bsrc\s*=\s*["']?(?:https?:)?\/\//i.exec(text));
+  add("remote-code", scriptTagWith(text, /<script\b[^>]*\bsrc\s*=\s*["']?(?:https?:)?\/\//iy));
   add("remote-code", /new\s+(?:Shared)?Worker\s*\(\s*["'`](?:https?:|data:|blob:)/.exec(text));
-  if (/\.svg$/i.test(name) || /\.x?html?$/i.test(name)) add("remote-code", /<script\b[^>]*\bhref\s*=\s*["']?(?:https?:)?\/\//i.exec(text));
+  if (/\.svg$/i.test(name) || /\.x?html?$/i.test(name)) add("remote-code", scriptTagWith(text, /<script\b[^>]*\bhref\s*=\s*["']?(?:https?:)?\/\//iy));
 
   if (count(/_0x[0-9a-f]{3,8}\b/g) >= 8) add("obfuscated", /_0x[0-9a-f]{3,8}\b/.exec(text));
   add("obfuscated", /eval\s*\(\s*function\s*\(\s*p\s*,\s*a\s*,\s*c\s*,\s*k\s*,\s*e\s*,\s*[dr]\s*\)/.exec(text));

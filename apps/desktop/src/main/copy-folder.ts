@@ -1,10 +1,10 @@
 import { randomInt } from "node:crypto";
 import type { Stats } from "node:fs";
-import { lstat, mkdir, open, rm, rmdir, utimes, writeFile } from "node:fs/promises";
+import { lstat, mkdir, rm, rmdir, unlink, utimes, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { CopyError, PART_BYTES, type CopyStorage, type ManifestCheck, type RemoteCopy, type SwapAnswer } from "./cloud-copy";
 import { readCopyFile, writeCopyFile } from "./copy-files";
-import { look, lookNames, lookStat, type Looked } from "./file-look";
+import { look, lookCapped, lookNames, lookStat, type Looked } from "./file-look";
 import { PART_ID_BYTES, SEAL_OVERHEAD } from "./copy-crypto";
 import { writeFileAtomic } from "./fsutil";
 
@@ -112,33 +112,6 @@ const lookOwnFile = (target: string): Promise<Looked<Stats | null>> =>
   look(async () => {
     const info = await lstat(target);
     return info.isFile() ? info : null;
-  });
-
-/**
- * A file of the copy, read only when it is a file (not a link) of at most `max` bytes: "other" or "too-big" otherwise.
- * Nothing bigger is read in, also when it grows or is swapped for another while being read.
- */
-const lookCapped = (file: string, max: number): Promise<Looked<Buffer | "other" | "too-big">> =>
-  look(async () => {
-    const info = await lstat(file);
-    if (!info.isFile()) return "other";
-    if (info.size > max) return "too-big";
-    const handle = await open(file, "r");
-    try {
-      const opened = await handle.stat();
-      if (opened.ino !== info.ino || opened.dev !== info.dev) return "other";
-      if (opened.size > max) return "too-big";
-      const buffer = Buffer.alloc(opened.size);
-      let at = 0;
-      while (at < buffer.length) {
-        const { bytesRead } = await handle.read(buffer, at, buffer.length - at, at);
-        if (bytesRead === 0) break;
-        at += bytesRead;
-      }
-      return buffer.subarray(0, at);
-    } finally {
-      await handle.close();
-    }
   });
 
 /** The same ids, in any order. */
@@ -561,6 +534,15 @@ export class FolderStorage implements CopyStorage {
   /** Deletes the copy's parts and manifests. Anything else in the folder stays; a link in their place goes, not what it leads to. */
   async remove(): Promise<void> {
     await this.reachable();
+    const kind = await this.kindOf(this.root);
+    if (kind === "missing") return;
+    if (kind === "other") {
+      // The Tavora folder itself is a link or junction: deleting "Tavora\manifests" would delete wherever it leads. Only
+      // the link goes (unlink removes a junction, and fails on a real folder put there since). Anything else stays.
+      const info = readable(await look(() => lstat(this.root)));
+      if (info?.isSymbolicLink()) await unlink(this.root).catch((error: NodeJS.ErrnoException) => (error.code === "ENOENT" ? undefined : Promise.reject(error)));
+      return;
+    }
     await rm(this.manifestsDir, { recursive: true, force: true });
     await rm(this.partsDir, { recursive: true, force: true });
     await rmdir(this.root).catch(() => undefined);

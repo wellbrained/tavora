@@ -274,16 +274,17 @@ export class PanelGate {
 
   /**
    * Lets the call through now: `check`, then the press it needs, which it uses up. Waits a moment first for a press
-   * whose report has not arrived yet. A media control that its own hotkey was just pressed for needs neither.
+   * whose report has not arrived yet. A media control that its own hotkey was just pressed for needs no press, but is
+   * still checked: out of sight, a hotkey allows nothing more than a click would.
    */
   async enter(call: GatedCall, as: EnterAs = {}): Promise<void> {
     const needs: CallNeeds = GATED_CALLS[call];
+    this.check(call, as);
     const hotkey = this.mediaHotkey;
     if (needs.press === "or-media-hotkey" && as.control !== undefined && hotkey?.action === as.control && Date.now() - hotkey.at <= GESTURE_MS) {
       this.mediaHotkey = null;
       return;
     }
-    this.check(call, as);
     if (!needs.press) return;
     if (!unused(this.press)) {
       await new Promise<void>((resolve) => {
