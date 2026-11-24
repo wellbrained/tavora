@@ -184,5 +184,5 @@ async function savePicture(png: string) {
     </DialogContent>
   </Dialog>
 
-  <ImageCropDialog v-if="croppingWanted" :src="cropping" :title="t('onboarding.crop')" round @save="savePicture" @cancel="cropping = null" />
+  <ImageCropDialog v-if="croppingWanted" :src="cropping" :title="t('onboarding.crop')" :busy="savingPicture" round @save="savePicture" @cancel="cropping = null" />
 </template>

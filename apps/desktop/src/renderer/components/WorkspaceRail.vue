@@ -246,7 +246,7 @@ function onDragStart(event: DragEvent, item: Dragged) {
   liftedDragImage(event, row);
   motion.begin(item.id);
   // Unless the drag already ended (dragend in the same frame), or the row would stay dimmed.
-  requestAnimationFrame(() => dragged.value === item && row.classList.add("drag-source"));
+  requestAnimationFrame(() => dragged.value?.id === item.id && dragged.value.kind === item.kind && row.classList.add("drag-source"));
 }
 
 function onDragEnd() {
