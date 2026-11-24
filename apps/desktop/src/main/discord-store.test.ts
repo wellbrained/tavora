@@ -38,6 +38,29 @@ describe("Discord secrets on disk", () => {
     await expect(stat(where)).rejects.toThrow();
   });
 
+  it("a disconnect while the secrets are being read: the sealed-again copy is not written back", async () => {
+    const where = await file();
+    await saveDiscordSecrets(where, encryptor(), { token: TOKEN });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const moved: Encryptor = {
+      ...encryptor(),
+      decrypt: async (data, note) => {
+        const text = await encryptor().decrypt(data);
+        await gate;
+        if (note) note.stale = true;
+        return text;
+      },
+    };
+    const store = new DiscordSecretsFile(where, moved);
+    const loading = store.load();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const removing = store.save({ token: null });
+    release();
+    await Promise.all([loading, removing]);
+    await expect(stat(where)).rejects.toThrow();
+  });
+
   it("deletes the file when nothing is left to keep", async () => {
     const where = await file();
     await saveDiscordSecrets(where, encryptor(), { token: null });

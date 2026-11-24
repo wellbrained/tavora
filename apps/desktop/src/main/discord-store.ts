@@ -99,6 +99,8 @@ function games(value: unknown): Record<string, DiscordGame> {
 export class DiscordSecretsFile {
   private readonly sealed: SealedFile;
   private readonly order = new Serial();
+  /** Counts the saves and removals asked for, so a read that comes back late can tell the file changed since. */
+  private changes = 0;
 
   constructor(
     file: string,
@@ -113,6 +115,7 @@ export class DiscordSecretsFile {
     if (!(await encryptor.ready())) return EMPTY;
     // Missing, newer, damaged, can't be read now, or encrypted by another user or PC: start without (the file is kept).
     const note = { stale: false };
+    const seen = this.changes;
     const read = await this.sealed.open(async (data) => {
       const value: unknown = JSON.parse(await encryptor.decrypt(Buffer.from(data, "base64"), note));
       if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("not Discord's secrets");
@@ -123,7 +126,17 @@ export class DiscordSecretsFile {
     try {
       const secrets = { token: token(raw.token), last: last(raw.last), games: games(raw.games) };
       // A file from before 0.6.1 holds a Client Secret: write it again without. Also when the system's key moved on.
-      if ("secret" in raw || note.stale) await this.save(secrets).catch(() => undefined);
+      // Only if nothing saved or removed the file since the read (a disconnect while it was opened must not be undone).
+      if ("secret" in raw || note.stale) {
+        await this.order
+          .run(async () => {
+            if (this.changes !== seen || !(await encryptor.ready())) return;
+            const data = (await encryptor.encrypt(JSON.stringify(secrets))).toString("base64");
+            // Sealing takes a moment: checked again, as a removal may have come in meanwhile.
+            if (this.changes === seen) await this.sealed.write({ data });
+          })
+          .catch(() => undefined);
+      }
       return secrets;
     } catch {
       return EMPTY;
@@ -132,6 +145,7 @@ export class DiscordSecretsFile {
 
   /** In the order asked: sealing takes a moment, and a removal asked after a save must not be undone by it. */
   save(secrets: DiscordSecrets): Promise<void> {
+    this.changes++;
     return this.order.run(async () => {
       if (!secrets.token && !secrets.last && Object.keys(secrets.games ?? {}).length === 0) return this.sealed.forget();
       if (!(await this.encryptor.ready())) throw new Error("No secure storage on this PC.");

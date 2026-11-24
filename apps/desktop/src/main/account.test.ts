@@ -93,6 +93,15 @@ const signedInAnswer = (status: "signed-in" | "created") => () =>
   json({ status, token: TOKEN, device: "dev1", account: { email: "me@example.com", createdAt: SAVED.createdAt } });
 
 describe("signing in", () => {
+  it("a late yes from the key store pushes the account view with the sign-in kept", () => {
+    const options = { canKeep: false };
+    const { account, views } = client(service({}).fetchImpl, options);
+    expect(account.view().canKeepSignIn).toBe(false);
+    options.canKeep = true;
+    account.keyStoreChanged();
+    expect(views.at(-1)?.canKeepSignIn).toBe(true);
+  });
+
   it("signed in while account.json can't be saved (it can't be read or moved): signed in for this run, and the window hears of it", async () => {
     const { fetchImpl } = service({
       "POST /code": () => json({ status: "sent" }, 202),
