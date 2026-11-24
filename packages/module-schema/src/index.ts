@@ -468,8 +468,9 @@ export function isNetworkHost(value: unknown): value is string {
   const labels = value.split(".");
   if (labels.length < 2 || !labels.every((label) => HOST_LABEL.test(label))) return false;
   const last = labels.at(-1)!;
-  // A top-level label of digits only is an IP address (or not a name at all).
-  return !/^\d+$/.test(last) && !["localhost", "local", "internal", "arpa"].includes(last);
+  // A top-level label of digits only, or 0x and hex digits, is an IP address (or not a name at all): browsers read
+  // `169.254.169.0xfe` and `example.0x1f` as addresses.
+  return !/^(?:\d+|0x[0-9a-f]*)$/.test(last) && !["localhost", "local", "internal", "arpa"].includes(last);
 }
 
 /**

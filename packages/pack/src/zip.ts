@@ -129,6 +129,12 @@ function readDirectory(zip: Buffer, limits: Readonly<ZipLimits>): DirectoryEntry
 
   const entries: DirectoryEntry[] = [];
   const seen = new Set<string>();
+  // Every folder a file or folder entry sits in, lower-case: a file may not have a folder's name.
+  const folders = new Set<string>();
+  const addFolders = (name: string) => {
+    const parts = name.toLowerCase().split("/");
+    for (let i = 1; i < parts.length; i++) folders.add(parts.slice(0, i).join("/"));
+  };
   let unpacked = 0;
   let at = start;
   for (let i = 0; i < count; i++) {
@@ -156,12 +162,15 @@ function readDirectory(zip: Buffer, limits: Readonly<ZipLimits>): DirectoryEntry
     if (type !== 0 && type !== (isFolder ? 0o040000 : 0o100000)) throw new ZipError(`${name} is a link or special file`);
     if (isFolder) {
       if (!isSafeEntryName(name.slice(0, -1))) throw new ZipError(`unsafe path: ${name}`);
+      folders.add(name.slice(0, -1).toLowerCase());
+      addFolders(name.slice(0, -1));
       continue;
     }
     if (!isSafeEntryName(name)) throw new ZipError(`unsafe path: ${name}`);
     const folded = name.toLowerCase();
     if (seen.has(folded)) throw new ZipError(`${name} is in the zip twice`);
     seen.add(folded);
+    addFolders(name);
     if (method !== 0 && method !== 8) throw new ZipError(`${name} uses a compression zips for Tavora do not support`);
     if (packedSize === 0xffffffff || plainSize === 0xffffffff) throw new ZipError("zip64 is not supported");
     unpacked += plainSize;
@@ -173,6 +182,7 @@ function readDirectory(zip: Buffer, limits: Readonly<ZipLimits>): DirectoryEntry
     if (dataAt + packedSize > start) throw new ZipError("the zip is damaged");
     entries.push({ name, size: plainSize, method, crc, packedSize, dataAt });
   }
+  for (const name of seen) if (folders.has(name)) throw new ZipError(`${name} is both a file and a folder in the zip`);
   if (unpacked > 1024 * 1024 && unpacked > zip.length * limits.maxRatio) throw new ZipError("the zip unpacks to far more than its size");
   return entries;
 }

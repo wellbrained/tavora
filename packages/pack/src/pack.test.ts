@@ -249,6 +249,12 @@ describe("readZip", () => {
     expect(() => readZip(writeZip([plain("dist/A.js"), plain("dist/a.js")]))).toThrow(/twice/);
   });
 
+  it("refuses a file and a folder of the same name", () => {
+    expect(() => readZip(writeZip([plain("dist"), plain("dist/index.html")]))).toThrow(/folder/);
+    expect(() => readZip(writeZip([plain("dist/index.html"), plain("DIST")]))).toThrow(/folder/);
+    expect(readZip(writeZip([plain("dist/a.js"), plain("dist/b/c.js")]))).toHaveLength(2);
+  });
+
   it("refuses symlinks and encrypted entries", () => {
     const zip = writeZip([plain("link")]);
     const at = zip.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]));
