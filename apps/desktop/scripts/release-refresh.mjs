@@ -19,7 +19,7 @@ import { fileURLToPath } from "node:url";
 import { hello, refresh } from "../../../scripts/deploy-client.mjs";
 import { checkRefresh, clockProblem, compareVersions, feedFreshness, issuedAfterLiveProblem, refreshKeyProblem } from "./release-guards.mjs";
 import { holdLock } from "./release-lock.mjs";
-import { describeSigned, fetchLiveFeed, freshStatement, loadUpdateSigningKey, readLatestYml, readPinsFromSource, refreshLatestYml } from "./update-feed.mjs";
+import { describeSigned, fetchLiveFeed, freshStatement, loadUpdateSigningKey, readLatestYml, refreshLatestYml, releasePins, sourceAtTag } from "./update-feed.mjs";
 import { PINNED_UPDATE_KEYS } from "../src/main/update-keys.ts";
 import { rawUpdatePublicKey } from "../src/main/update-signature.ts";
 import { parsePlainVersion } from "../src/shared/plain-version.ts";
@@ -40,6 +40,8 @@ function git(...args) {
   return result.stdout.trim();
 }
 const step = (text) => console.log(`\n== ${text}`);
+// Ctrl+C exits, so the exit handler frees RELEASE-RUNNING (release-lock.mjs holdLock).
+process.on("SIGINT", () => process.exit(130));
 
 if (process.argv.includes("--status")) {
   let text = null;
@@ -103,11 +105,12 @@ if (!dryRun) {
 
 // The pins that count are the apps': those of the live release, and of the release before it (its apps are offered
 // the live one). Both must pin the key that signs.
+// Only a release without update-keys.ts (from before signed updates) pins nothing; anything else unreadable stops.
 const pinsAt = (tag) => {
   try {
-    return readPinsFromSource(git("show", `v${tag}:apps/desktop/src/main/update-keys.ts`));
-  } catch {
-    return null;
+    return releasePins(tag, (file) => sourceAtTag(repo, tag, file)).pins;
+  } catch (error) {
+    fail(`Not refreshing: ${error.message} Nothing was signed or published.`);
   }
 };
 const released = tags
@@ -119,6 +122,8 @@ const livePins = pinsAt(version);
 if (!livePins) fail(`${version} pins no update keys, so its apps check no signature to refresh. Nothing was signed or published.`);
 const pinSets = [{ version, pins: livePins }, ...(before ? [{ version: before, pins: pinsAt(before) }] : [])];
 
+// A dry run gets here only when the clock check passed (above). It signs in memory and shows only the fields, never
+// the signature or the signed latest.yml, and writes nothing.
 step(`Signing ${version} again`);
 const statement = freshStatement(new Date());
 const order = issuedAfterLiveProblem(read.signature2, statement);
@@ -151,7 +156,8 @@ try {
   // Windows' own tar (from Git Bash, `tar` is GNU tar, which reads C:\... as a host).
   const tar = path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe");
   const packed = spawnSync(tar, ["-cf", bundle, "-C", dir, "latest.yml"], { stdio: "inherit" });
-  if (packed.status !== 0) fail("Can't pack latest.yml. Nothing was published.");
+  // Thrown, not fail(): the finally below must delete the signed latest.yml whatever happens.
+  if (packed.status !== 0) throw new Error("Can't pack latest.yml. Nothing was published.");
   refresh(version, bundle);
 } catch (error) {
   fail(`${error.message}\nThe live feed stays as it was.`);

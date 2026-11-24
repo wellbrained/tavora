@@ -32,7 +32,7 @@ import { AFTER_RELEASE, CHECKLIST, asksHandChecks, checkCi, checkDownload, check
 import { hello, publish } from "../../../scripts/deploy-client.mjs";
 import { installedVersion } from "./installed-version.mjs";
 import { holdLock } from "./release-lock.mjs";
-import { checkPinChange, describeSigned, feedProblem, fetchLiveFeed, freshStatement, loadUpdateSigningKey, readLatestYml, readPinsFromSource, signLatestYml } from "./update-feed.mjs";
+import { checkPinChange, describeSigned, feedProblem, fetchLiveFeed, freshStatement, loadUpdateSigningKey, readLatestYml, releasePins, signLatestYml, sourceAtTag } from "./update-feed.mjs";
 import { PINNED_UPDATE_KEYS } from "../src/main/update-keys.ts";
 import { rawUpdatePublicKey, readPinnedUpdateKeys } from "../src/main/update-signature.ts";
 
@@ -141,17 +141,15 @@ console.log("Version, branch, tags and patch notes are in order.");
 // Installed apps check this release against the keys their own build pins: those of the last release, not this checkout.
 {
   const previousVersion = lastReleased(git("tag", "--list", "v*").split(/\r?\n/).filter(Boolean));
-  let previousSource = null;
+  let previous = null;
   if (previousVersion) {
+    // A release from before signed updates has no update-keys.ts; one that has it must read as two keys.
     try {
-      previousSource = git("show", `v${previousVersion}:apps/desktop/src/main/update-keys.ts`);
-    } catch {
-      // That release was from before signed updates.
+      previous = releasePins(previousVersion, (file) => sourceAtTag(repo, previousVersion, file)).pins;
+    } catch (error) {
+      fail(`${error.message} Nothing was built or published.`);
     }
   }
-  const previous = readPinsFromSource(previousSource);
-  // A release is shipped only with real pins, so a file that is there must read as two keys.
-  if (previousSource !== null && !previous) fail(`Can't read the update keys ${previousVersion} pins. Nothing was built or published.`);
   const signingPublic = signing.problem ? null : rawUpdatePublicKey(signing.key);
   const pins = checkPinChange(previous, PINNED_UPDATE_KEYS, signingPublic);
   if (pins.problems.length) {
@@ -276,6 +274,9 @@ if (feedLayout) fail(`The update server would refuse this latest.yml: ${feedLayo
 // The second signature also dates the feed (update-signature.ts, tavoraSignature2): this PC's clock must agree with the
 // server's, and the statement must be later than the live one, or the server refuses the upload.
 const statement = freshStatement(new Date());
+// A dry run goes on when the clock can't be checked, but then signs no dated statement with the real key: the local
+// latest.yml gets the first signature only.
+let clockChecked = false;
 {
   let live = null;
   try {
@@ -288,8 +289,11 @@ const statement = freshStatement(new Date());
     const problem = clockProblem(live.date) ?? issuedAfterLiveProblem(live.text ? readLatestYml(live.text).signature2 : null, statement);
     if (problem && !dryRun) fail(`Not releasing ${version}: ${problem} Nothing was signed, published or tagged.`);
     if (problem) console.warn(`Dry run: a real release would stop here: ${problem}`);
+    clockChecked = !problem;
   }
 }
+const signedStatement = clockChecked ? statement : null;
+if (!signedStatement && !signing.problem) console.warn("Dry run: the clock check didn't pass, so the local latest.yml gets no second signature.");
 console.log(describeSigned(signed, statement).map((line) => `  ${line}`).join("\n"));
 if (signing.problem) {
   console.log(`\nDry run: this is what a release signs. A real release would stop before building: ${signing.problem}`);
@@ -299,9 +303,13 @@ if (signing.problem) {
 }
 try {
   const latestPath = path.join(releaseDir, "latest.yml");
-  const { text, key } = signLatestYml({ latestYml, ...signed, privateKey: signing.key, pinned: PINNED_UPDATE_KEYS, statement });
+  const { text, key } = signLatestYml({ latestYml, ...signed, privateKey: signing.key, pinned: PINNED_UPDATE_KEYS, statement: signedStatement });
   writeFileSync(latestPath, text);
-  console.log(`Signed with the ${key} key; latest.yml carries both signatures (fresh until ${statement.expiresAt}), and they check out against the app's pinned keys.`);
+  console.log(
+    signedStatement
+      ? `Signed with the ${key} key; latest.yml carries both signatures (fresh until ${signedStatement.expiresAt}), and they check out against the app's pinned keys.`
+      : `Signed with the ${key} key; latest.yml carries the first signature only (dry run), and it checks out against the app's pinned keys.`,
+  );
 } catch (error) {
   fail(`Signing failed (${error.message}). Nothing was published or tagged.`);
 }

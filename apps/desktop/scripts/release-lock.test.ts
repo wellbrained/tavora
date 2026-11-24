@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 // @ts-expect-error - plain JavaScript module shared with scripts/release.mjs
-import { lockPath, mainCheckoutOf, takeLock } from "./release-lock.mjs";
+import { holdLock, lockPath, mainCheckoutOf, takeLock } from "./release-lock.mjs";
 
 /** A folder like D:\Github\Tavora: a main checkout, a worktrees folder with a clone, and releases. */
 function home(): { root: string; main: string; clone: string } {
@@ -70,5 +70,21 @@ describe("release lock", () => {
     const lock = takeLock(file, "0.23.13");
     expect(lock.problem).toMatch(/Another release is running .*0\.23\.12 2026-10-31T13:00:00\.000Z.*delete that file/);
     expect(readFileSync(file, "utf8")).toBe("0.23.12 2026-10-31T13:00:00.000Z\n");
+  });
+});
+
+describe("holdLock", () => {
+  it("takes the lock, refuses a second, and its exit handler (also run after Ctrl+C's exit) removes the file", () => {
+
+    const file = path.join(mkdtempSync(path.join(tmpdir(), "release-lock-hold-")), "RELEASE-RUNNING");
+    const handlers: (() => void)[] = [];
+    const on = (_event: string, run: () => void) => void handlers.push(run);
+    const env = { TAVORA_RELEASE_LOCK: file };
+    expect(holdLock("C:/repo", "0.25.3 refresh", "", env, on)).toEqual({ file });
+    expect(readFileSync(file, "utf8")).toMatch(/^0\.25\.3 refresh /);
+    expect(holdLock("C:/repo", "0.25.3", "", env, on)).toMatchObject({ problem: expect.stringContaining("Another release is running") });
+    expect(handlers).toHaveLength(1);
+    handlers[0]!();
+    expect(existsSync(file)).toBe(false);
   });
 });

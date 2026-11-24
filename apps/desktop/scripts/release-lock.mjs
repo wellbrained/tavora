@@ -67,9 +67,10 @@ export function takeLock(file, version, now = new Date()) {
 /**
  * Takes the lock for the checkout at `repo` (the release's or the refresh's `label`) and frees it when the process
  * exits, however it exits. Returns { file } or { problem } (no releases folder, or another release holds the lock).
- * `worktrees`: what `git worktree list --porcelain` printed, to find the main checkout.
+ * `worktrees`: what `git worktree list --porcelain` printed, to find the main checkout. `on` registers the exit
+ * handler (tests pass their own); Ctrl+C frees the lock too, as long as the script's SIGINT handler exits.
  */
-export function holdLock(repo, label, worktrees, env = process.env) {
+export function holdLock(repo, label, worktrees, env = process.env, on = (event, run) => process.on(event, run)) {
   let main = null;
   try {
     main = mainCheckoutOf(worktrees);
@@ -83,6 +84,6 @@ export function holdLock(repo, label, worktrees, env = process.env) {
   }
   const lock = takeLock(file, label);
   if (lock.problem) return { problem: lock.problem };
-  process.on("exit", lock.release);
+  on("exit", lock.release);
   return { file };
 }

@@ -1,6 +1,7 @@
 // Tavora's signature in latest.yml (src/main/update-signature.ts holds the format and the check the app runs).
 // `pnpm release` signs on the maintainer's PC with the update key (TAVORA_UPDATE_KEY), after the files passed the
 // hash and build-provenance checks; scripts/update-check.mjs signs its throwaway test feeds with the same code.
+import { spawnSync } from "node:child_process";
 import { createPrivateKey } from "node:crypto";
 import { readFileSync } from "node:fs";
 import {
@@ -135,6 +136,34 @@ export function readPinsFromSource(text) {
 }
 
 /**
+ * `file` as git has it at the release tag `v<version>` of the checkout at `repo`, or null only when the tag has no such
+ * file. A missing tag, or a file git can't show, throws: neither may pass for "from before signed updates".
+ */
+export function sourceAtTag(repo, version, file) {
+  const ref = `v${version}`;
+  const git = (...args) => spawnSync("git", args, { cwd: repo, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
+  if (git("rev-parse", "--verify", "--quiet", `${ref}^{commit}`).status !== 0) throw new Error(`There is no tag ${ref} to read the update keys from.`);
+  if (git("cat-file", "-e", `${ref}:${file}`).status !== 0) return null;
+  const shown = git("show", `${ref}:${file}`);
+  if (shown.status !== 0 || shown.error) throw new Error(`Can't read ${file} at ${ref}.`);
+  return shown.stdout;
+}
+
+/**
+ * The keys a release pins, as its apps have them: `readSource(path)` gives update-keys.ts as git has it at that
+ * release, or null when the release has no such file (it is from before signed updates; then `pins` is null). A file
+ * that is there but pins no two keys this can read throws: a release ships only with real pins, so that is never a
+ * reason to skip the check.
+ */
+export function releasePins(version, readSource) {
+  const source = readSource("apps/desktop/src/main/update-keys.ts");
+  if (source === null) return { version, pins: null };
+  const pins = readPinsFromSource(source);
+  if (!pins) throw new Error(`Can't read the update keys ${version} pins.`);
+  return { version, pins };
+}
+
+/**
  * Whether the apps of the last release will take this one. What counts is the keys their builds pin, not this
  * checkout's: the signing key must be one of those, and the pins may gain at most one new key per release, so an app
  * that updated once still trusts a key the maintainer holds. `previous` null: no release pinned keys yet (the first).
@@ -156,7 +185,8 @@ export function checkPinChange(previous, current, signingPublicKey) {
  * Signs a release's latest.yml for this installer and checks the result the way the app will: both signatures read
  * back from the new text must hold for this version, file and SHA-512 under the pinned keys. Throws otherwise.
  * The v1 line is exactly what it was before v2 existed; v2 (`statement`: channel, platform, issuedAt, expiresAt; by
- * default the stable Windows feed, issued now) goes on the line after it.
+ * default the stable Windows feed, issued now) goes on the line after it. `statement: null` leaves v2 out (a dry run
+ * whose clock wasn't checked: a dated statement is made only when the time on it is known to be right).
  */
 export function signLatestYml({ latestYml, version, file, sha512, privateKey, pinned, statement = freshStatement() }) {
   const update = { version, file, sha512 };
@@ -165,7 +195,7 @@ export function signLatestYml({ latestYml, version, file, sha512, privateKey, pi
   const said = readLatestYml(latestYml).version;
   if (said !== version) throw new Error(`latest.yml says version ${said}, not ${version}`);
   const v1 = addSignatureToLatestYml(latestYml, signUpdate(update, privateKey));
-  const text = addSignature2ToLatestYml(v1, signUpdate2({ ...update, ...statement }, privateKey));
+  const text = statement ? addSignature2ToLatestYml(v1, signUpdate2({ ...update, ...statement }, privateKey)) : v1;
   const keys = readPinnedUpdateKeys(pinned);
   if (!keys.ok) throw new Error(keys.problem);
   const layout = feedProblem(text, update);
@@ -173,6 +203,7 @@ export function signLatestYml({ latestYml, version, file, sha512, privateKey, pi
   const back = readLatestYml(text);
   const check = verifyUpdateSignature(update, back.signature, keys.keys);
   if (!check.ok) throw new Error(`the signed latest.yml does not check out: ${check.reason}`);
+  if (!statement) return { text, key: check.key, statement: null };
   const check2 = verifyUpdateSignature2(update, back.signature2, keys.keys);
   if (!check2.ok) throw new Error(`the signed latest.yml does not check out: ${check2.reason}`);
   return { text, key: check.key, statement: check2.statement };

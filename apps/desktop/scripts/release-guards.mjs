@@ -3,6 +3,7 @@
 
 import { comparePlainVersions, parsePlainVersion } from "../src/shared/plain-version.ts";
 import { feedNoteProblem } from "./release-notes.mjs";
+import { readSignature2 } from "../src/main/update-signature.ts";
 
 /** -1, 0 or 1; both must be major.minor.patch (the same strict reader the app's update check uses). Throws on anything else. */
 export function compareVersions(a, b) {
@@ -211,8 +212,9 @@ export function clockProblem(serverDate, now = new Date()) {
  */
 export function issuedAfterLiveProblem(live, statement) {
   if (!live) return null;
-  const issued = /^\S+ \S+ (\S+) /.exec(live)?.[1];
-  if (!issued || Number.isNaN(Date.parse(issued))) return "The live latest.yml's second signature has no issue time this script can read.";
+  const read = readSignature2(live);
+  if (!read.ok) return `Can't read the live latest.yml's second signature (${read.reason}).`;
+  const issued = read.statement.issuedAt;
   if (Date.parse(statement.issuedAt) > Date.parse(issued)) return null;
   return `The live feed's second signature is issued ${issued}, not before this one (${statement.issuedAt}). Is this PC's clock behind?`;
 }
@@ -258,8 +260,9 @@ export const REFRESH_DUE_DAYS = 10;
  * is vouched for, how many whole days are left, and whether a release or `pnpm release:refresh` is due.
  */
 export function feedFreshness(signature2, now = new Date()) {
-  const expiresAt = signature2 ? /^\S+ \S+ \S+ (\S+) /.exec(signature2)?.[1] : null;
-  if (!expiresAt || Number.isNaN(Date.parse(expiresAt))) return { expiresAt: null, daysLeft: null, due: true };
+  const read = readSignature2(signature2);
+  if (!read.ok) return { expiresAt: null, daysLeft: null, due: true };
+  const { expiresAt } = read.statement;
   const daysLeft = Math.floor((Date.parse(expiresAt) - now.getTime()) / 86_400_000);
   return { expiresAt, daysLeft, due: daysLeft < REFRESH_DUE_DAYS };
 }

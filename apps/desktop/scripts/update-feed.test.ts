@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -15,6 +15,8 @@ import {
   readLatestYml,
   readPinsFromSource,
   refreshLatestYml,
+  releasePins,
+  sourceAtTag,
   signLatestYml,
   // @ts-expect-error - plain JavaScript module shared with scripts/release.mjs
 } from "./update-feed.mjs";
@@ -270,5 +272,54 @@ describe("refreshLatestYml", () => {
   it("refuses to sign with a key the pins don't name", () => {
     const stranger = makeUpdateKey();
     expect(() => refreshLatestYml({ latestYml: live, privateKey: stranger.privateKey, pinned, statement: later })).toThrow(/does not check out/);
+  });
+});
+
+describe("a release without a second signature (a dry run whose clock wasn't checked)", () => {
+  it("signs v1 only when asked to leave the statement out, and the server's layout still takes it", () => {
+    const fields = { version: "1.0.1", file: "Tavora-Setup-1.0.1.exe", sha512 };
+    const { text, statement } = signLatestYml({ latestYml: LATEST, ...fields, privateKey: release.privateKey, pinned, statement: null });
+    expect(statement).toBeNull();
+    expect(text).not.toContain(`${UPDATE_SIGNATURE2_FIELD}:`);
+    expect(text).toBe(addSignatureToLatestYml(LATEST, signUpdate(fields, release.privateKey)));
+    expect(feedProblem(text, fields)).toBeNull();
+  });
+});
+
+describe("releasePins", () => {
+  const source = `export const PINNED_UPDATE_KEYS = {\n  release: "${release.publicKey}",\n  backup: "${backup.publicKey}",\n};\n`;
+
+  it("reads a release's pins, and null only for a release from before signed updates (no update-keys.ts)", () => {
+    expect(releasePins("0.25.3", () => source)).toEqual({ version: "0.25.3", pins: pinned });
+    expect(releasePins("0.24.58", () => null)).toEqual({ version: "0.24.58", pins: null });
+  });
+
+  it("fails loudly when the file is there but pins no two keys it can read", () => {
+    expect(() => releasePins("0.25.3", () => "export const PINNED_UPDATE_KEYS = { release: 'x' };")).toThrow(/Can't read the update keys 0.25.3 pins/);
+    expect(() => releasePins("0.25.3", () => 'export const PINNED_UPDATE_KEYS = {\n  release: "",\n  backup: "",\n};\n')).toThrow(/Can't read the update keys 0.25.3 pins/);
+  });
+});
+
+describe("sourceAtTag", () => {
+  it("shows a file at a release tag, null only when the tag has no such file, and throws for a missing tag", async () => {
+    const { spawnSync } = await import("node:child_process");
+    const repo = await mkdtemp(path.join(tmpdir(), "tavora-tags-"));
+    const git = (...args: string[]) => {
+      const result = spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", "-c", "tag.gpgsign=false", ...args], { cwd: repo, encoding: "utf8" });
+      if (result.status !== 0) throw new Error(result.stderr);
+    };
+    git("init", "-q");
+    await writeFile(path.join(repo, "readme"), "x");
+    git("add", "readme");
+    git("commit", "-q", "-m", "old");
+    git("tag", "v0.1.0");
+    await mkdir(path.join(repo, "keys"));
+    await writeFile(path.join(repo, "keys/update-keys.ts"), "pins");
+    git("add", "keys/update-keys.ts");
+    git("commit", "-q", "-m", "new");
+    git("tag", "v0.2.0");
+    expect(sourceAtTag(repo, "0.2.0", "keys/update-keys.ts")).toBe("pins");
+    expect(sourceAtTag(repo, "0.1.0", "keys/update-keys.ts")).toBeNull();
+    expect(() => sourceAtTag(repo, "0.3.0", "keys/update-keys.ts")).toThrow(/no tag v0.3.0/);
   });
 });
