@@ -98,15 +98,43 @@ export async function sweepWriteLeftovers(userData: string, clock: () => number 
   return removed;
 }
 
-/** Runs tasks one at a time, in order. A failed task does not block later ones. */
+/** Pending jobs of queues made with `settleAtQuit` (see `settleSerial`). */
+const running = new Set<Promise<unknown>>();
+
+/**
+ * Runs tasks one at a time, in the order asked, each after the one before. A failed task does not block later ones,
+ * and its caller still gets the rejection.
+ *
+ * `settleAtQuit: true` is for files a sign-out or a quit must not overtake (the account and Discord stores): the
+ * queue's pending jobs are then waited for by `settleSerial()`, which Host.flush calls at quit. Off by default, so a
+ * queue that is not meant to hold up a quit (documents, blobs, storage) never does.
+ *
+ * Not used here, on purpose: inserted-css.ts (its queue is also its return value) and saved-file.ts (one line per
+ * file, with a slow-turn warning).
+ */
 export class SerialQueue {
   private tail: Promise<unknown> = Promise.resolve();
 
+  constructor(private readonly options: { settleAtQuit?: boolean } = {}) {}
+
   run<T>(task: () => Promise<T>): Promise<T> {
     const result = this.tail.then(task, task);
-    this.tail = result.catch(() => undefined);
+    const settled = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.tail = settled;
+    if (this.options.settleAtQuit) {
+      running.add(settled);
+      void settled.then(() => running.delete(settled));
+    }
     return result;
   }
+}
+
+/** Resolves once every job of the `settleAtQuit` queues asked so far is done (quitting waits for it). */
+export async function settleSerial(): Promise<void> {
+  while (running.size > 0) await Promise.all([...running]);
 }
 
 /**

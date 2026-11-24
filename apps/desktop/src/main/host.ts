@@ -170,7 +170,6 @@ import { DeveloperKeys } from "./developer-keys";
 import { ModulePublisher } from "./module-publish";
 import { Pairing } from "./pairing";
 import { osEncryptor } from "./os-encryptor";
-import { settleSerial } from "./serial";
 import { SignIn } from "./sign-in";
 import { accountServiceUrl, serviceUrl } from "./service-url";
 import { LibraryWorkspaces } from "./workspace-lookup";
@@ -191,7 +190,7 @@ import {
   type ThemeProblem,
 } from "./themes";
 import { discoverStyles } from "./styles";
-import { sweepWriteLeftovers } from "./fsutil";
+import { settleSerial, sweepWriteLeftovers } from "./fsutil";
 import {
   emptyWorkspace,
   Workspaces,

@@ -9,7 +9,7 @@ import { AccountClient, AccountFile, deviceOs, type ProfileData, type SavedAccou
 import type { Encryptor } from "./discord-store";
 import { UserError } from "./messages";
 import { SavedFileHeld } from "./saved-file";
-import { settleSerial } from "./serial";
+import { settleSerial } from "./fsutil";
 import { SignIn } from "./sign-in";
 
 // Stands in for safeStorage: reversible, and never the plain text.

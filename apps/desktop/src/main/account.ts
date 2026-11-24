@@ -6,7 +6,7 @@ import type { AccountDevice, AccountPending, AccountPrefix, AccountPublishToken,
 import type { Language, MessageKey } from "../shared/i18n";
 import { isIdPrefix } from "../shared/id-prefix";
 import type { Encryptor } from "./discord-store";
-import { Serial } from "./serial";
+import { SerialQueue } from "./fsutil";
 import type { DiscordLoginResult } from "./discord-login";
 import { UserError } from "./messages";
 import { SavedFileHeld } from "./saved-file";
@@ -54,7 +54,7 @@ function savedAccount(value: unknown): SavedAccount | null {
  */
 export class AccountFile {
   private readonly sealed: SealedFile;
-  private readonly order = new Serial();
+  private readonly order = new SerialQueue({ settleAtQuit: true });
 
   constructor(
     file: string,

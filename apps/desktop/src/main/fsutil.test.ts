@@ -9,7 +9,7 @@ vi.mock("./rename-held", async (original) => {
   return { renameHeld: (from: string, to: string) => (cutOff.value ? new Promise<void>(() => undefined) : actual.renameHeld(from, to)) };
 });
 
-import { LEFTOVER_TEMP_AGE_MS, sweepWriteLeftovers, writeFileAtomic } from "./fsutil";
+import { LEFTOVER_TEMP_AGE_MS, SerialQueue, settleSerial, sweepWriteLeftovers, writeFileAtomic } from "./fsutil";
 
 let root: string;
 const now = Date.now();
@@ -134,5 +134,82 @@ describe("sweepWriteLeftovers", () => {
 
     expect(await sweepWriteLeftovers(root, () => now)).toEqual([path.join(root, temp!)]);
     expect(await readFile(path.join(root, "f.json"), "utf8")).toBe("{}");
+  });
+});
+
+describe("SerialQueue", () => {
+  /** A job that ends when `release()` is called. */
+  function gate() {
+    let release!: () => void;
+    const open = new Promise<void>((resolve) => (release = resolve));
+    return { open, release };
+  }
+
+  it("runs jobs one at a time, in the order asked", async () => {
+    const queue = new SerialQueue();
+    const log: string[] = [];
+    const first = gate();
+    const a = queue.run(async () => {
+      log.push("a start");
+      await first.open;
+      log.push("a end");
+      return "a";
+    });
+    const b = queue.run(async () => {
+      log.push("b");
+      return "b";
+    });
+    await Promise.resolve();
+    expect(log).toEqual(["a start"]);
+    first.release();
+    expect(await Promise.all([a, b])).toEqual(["a", "b"]);
+    expect(log).toEqual(["a start", "a end", "b"]);
+  });
+
+  it("gives a failed job's rejection to its caller and still runs the next one", async () => {
+    const queue = new SerialQueue({ settleAtQuit: true });
+    const failed = queue.run(async () => {
+      throw new Error("disk full");
+    });
+    const after = queue.run(async () => "ok");
+    await expect(failed).rejects.toThrow("disk full");
+    await expect(after).resolves.toBe("ok");
+    await expect(settleSerial()).resolves.toBeUndefined();
+  });
+
+  it("settleSerial waits for the jobs of settleAtQuit queues, queued behind each other, and not for other queues", async () => {
+    const tracked = new SerialQueue({ settleAtQuit: true });
+    const plain = new SerialQueue();
+    const held = gate();
+    const never = new Promise<void>(() => undefined);
+    void plain.run(() => never);
+    let done = 0;
+    void tracked.run(async () => {
+      await held.open;
+      done++;
+    });
+    void tracked.run(async () => {
+      done++;
+    });
+    let settled = false;
+    const waiting = settleSerial().then(() => (settled = true));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(settled).toBe(false);
+    held.release();
+    await waiting;
+    expect(done).toBe(2);
+  });
+
+  it("settleSerial waits for jobs a settled job asked for meanwhile", async () => {
+    const tracked = new SerialQueue({ settleAtQuit: true });
+    let late = false;
+    void tracked.run(async () => {
+      void tracked.run(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        late = true;
+      });
+    });
+    await settleSerial();
+    expect(late).toBe(true);
   });
 });

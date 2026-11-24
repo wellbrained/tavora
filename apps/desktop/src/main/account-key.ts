@@ -4,7 +4,7 @@ import path from "node:path";
 import { CopyError } from "./cloud-copy";
 import { newCopyKey, openVault, parseRecoveryKey, recoveryKey, sealVault } from "./copy-crypto";
 import type { Encryptor } from "./discord-store";
-import { writeFileAtomic } from "./fsutil";
+import { SerialQueue, writeFileAtomic } from "./fsutil";
 import { forgetSealedFile } from "./json";
 import { UserError } from "./messages";
 import { SealedFile } from "./sealed-file";
@@ -156,8 +156,8 @@ export class AccountKey {
   /** The seen file's last change, so the next one waits for it (changeSeen). */
   private seenTurn: Promise<void> = Promise.resolve();
   private problem: { account: string; trouble: VaultTrouble } | null = null;
-  /** The last change asked for; the next one waits for it (serial). */
-  private queue: Promise<unknown> = Promise.resolve();
+  /** Runs one change after every change asked for before it (and before every one asked after). */
+  private readonly queue = new SerialQueue();
 
   constructor(private readonly options: AccountKeyOptions) {}
 
@@ -220,7 +220,7 @@ export class AccountKey {
 
   /** Reads this PC's keys, at start. Never throws. Answers the copy's key. */
   load(): Promise<Buffer | null> {
-    return this.serial(() => this.loadNow());
+    return this.queue.run(() => this.loadNow());
   }
 
   /**
@@ -228,7 +228,7 @@ export class AccountKey {
    * now: the cloud copy asks, while it waits for its key.
    */
   openAgainNow(): Promise<void> {
-    return this.serial(() => this.openAgain(this.options.account()));
+    return this.queue.run(() => this.openAgain(this.options.account()));
   }
 
   private async loadNow(): Promise<Buffer | null> {
@@ -270,7 +270,7 @@ export class AccountKey {
    * `claim`); signed out, see `get`. Null when this PC has none for it.
    */
   forAccount(): Promise<Buffer | null> {
-    return this.serial<Buffer | null>(async () => {
+    return this.queue.run<Buffer | null>(async () => {
       const who = this.options.account();
       // A key file that may hold it and couldn't be opened is read again: it may open now.
       await this.openAgain(who);
@@ -283,7 +283,7 @@ export class AccountKey {
    * (`created`: show the recovery key now). When another PC made one, the user types it in ("ask").
    */
   setUp(): Promise<KeySetUp> {
-    return this.serial<KeySetUp>(async () => {
+    return this.queue.run<KeySetUp>(async () => {
       const generation = this.generation;
       const who = this.signedInAs();
       await this.openAgain(who);
@@ -320,7 +320,7 @@ export class AccountKey {
 
   /** Whether the account has a key already, made on this PC or another (also when its vault went missing since). */
   exists(): Promise<boolean> {
-    return this.serial<boolean>(async () => {
+    return this.queue.run<boolean>(async () => {
       const who = this.signedInAs();
       return (await this.vault(who)) !== null || (await this.seen(who));
     });
@@ -331,7 +331,7 @@ export class AccountKey {
    * or the service sent something else), or this PC has no key for the account signed in. It forgets nothing either way.
    */
   fits(): Promise<boolean> {
-    return this.serial<boolean>(async () => {
+    return this.queue.run<boolean>(async () => {
       const who = this.options.account();
       if (who === null) return false;
       const slot = await this.claim(who, this.generation);
@@ -357,7 +357,7 @@ export class AccountKey {
    * an account goes on with what that one last read.
    */
   take(key: Buffer): Promise<void> {
-    return this.serial<void>(async () => {
+    return this.queue.run<void>(async () => {
       const generation = this.generation;
       const who = this.signedInAs();
       // Not kept as the last read yet: only once the key is kept on this PC.
@@ -383,7 +383,7 @@ export class AccountKey {
    * under this PC's key again, empty. Its publisher keys are lost then, unless the developer exported them to a file.
    */
   rebuild(): Promise<void> {
-    return this.serial<void>(async () => {
+    return this.queue.run<void>(async () => {
       const who = this.signedInAs();
       const slot = await this.claim(who, this.generation);
       if (!slot) throw new CopyError("failed", "no key on this PC");
@@ -405,7 +405,7 @@ export class AccountKey {
    * account's own key moves anything over; what this PC keeps of other keys (another account's, an unproven one) stays.
    */
   startOver(): Promise<void> {
-    return this.serial<void>(async () => {
+    return this.queue.run<void>(async () => {
       const generation = this.generation;
       const who = this.signedInAs();
       const oldKey = (await this.claim(who, generation))?.key ?? null;
@@ -432,7 +432,7 @@ export class AccountKey {
    * what this PC last read (`trouble` says which).
    */
   content(): Promise<VaultContent> {
-    return this.serial<VaultContent>(async () => {
+    return this.queue.run<VaultContent>(async () => {
       const who = this.signedInAs();
       const slot = await this.claim(who, this.generation);
       if (!slot) throw new CopyError("failed", "no key on this PC");
@@ -469,7 +469,7 @@ export class AccountKey {
 
   /** Changes what the vault holds, made on top of what it holds now (tried again when another PC changed it first). */
   change(update: (content: VaultContent) => VaultContent): Promise<VaultContent> {
-    return this.serial<VaultContent>(async () => {
+    return this.queue.run<VaultContent>(async () => {
       const who = this.signedInAs();
       const slot = await this.claim(who, this.generation);
       if (!slot) throw new CopyError("failed", "no key on this PC");
@@ -498,7 +498,7 @@ export class AccountKey {
    * the unproven ones; a key file that can't be opened in this run as it is.
    */
   useForCopy(): Promise<void> {
-    return this.serial<void>(async () => {
+    return this.queue.run<void>(async () => {
       const who = this.signedInAs();
       const slot = await this.claim(who, this.generation);
       if (!slot || slot === this.main) return;
@@ -528,7 +528,7 @@ export class AccountKey {
    * new key is made beside it.
    */
   setUpHere(hasCopy: boolean): Promise<KeySetUp> {
-    return this.serial<KeySetUp>(async () => {
+    return this.queue.run<KeySetUp>(async () => {
       await this.openAgain(null);
       if (this.main && this.copyIsOf(null)) return { status: "ready", created: false };
       if (hasCopy) return { status: "ask" };
@@ -548,7 +548,7 @@ export class AccountKey {
 
   /** Signed out: the key another PC sent through the folder (pairing.ts) is kept here, like one typed in. */
   takeHere(key: Buffer): Promise<void> {
-    return this.serial<void>(async () => {
+    return this.queue.run<void>(async () => {
       // The copy's key already: it stays its account's. Another one belongs to no account yet.
       await this.saveHere(key, this.main?.key.equals(key) ? this.main.owner : null);
     });
@@ -556,7 +556,7 @@ export class AccountKey {
 
   /** Signed out, a lost key: a new one is made here. */
   startOverHere(): Promise<void> {
-    return this.serial<void>(async () => {
+    return this.queue.run<void>(async () => {
       await this.saveHere(newCopyKey(), null);
     });
   }
@@ -601,7 +601,7 @@ export class AccountKey {
    * with the account's publisher keys, goes. Signing in again reads it anew.
    */
   forgetVault(account: string | null): Promise<void> {
-    return this.serial<void>(async () => {
+    return this.queue.run<void>(async () => {
       this.problem = null;
       const slot = account === null ? (this.adoptable(this.main) ? this.main : null) : this.ownSlot(account);
       if (slot?.cacheFile) await forgetSealedFile(slot.cacheFile);
@@ -715,13 +715,6 @@ export class AccountKey {
     } else {
       await this.write(this.main, read.key, null, await this.usedSignedIn(), this.generation, null).catch(() => undefined);
     }
-  }
-
-  /** Runs one change after every change asked for before it (and before every one asked after). */
-  private serial<T>(change: () => Promise<T>): Promise<T> {
-    const turn = this.queue.then(change);
-    this.queue = turn.catch(() => undefined);
-    return turn;
   }
 
   /**

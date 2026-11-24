@@ -1,7 +1,7 @@
 import { isGameId } from "@tavora/module-schema";
 import { isSnowflake } from "./discord-parse";
 import { SealedFile } from "./sealed-file";
-import { Serial } from "./serial";
+import { SerialQueue } from "./fsutil";
 
 // The Discord sign-in (token), kept in discord.json in the user data folder and
 // encrypted with the operating system's key store (Electron's safeStorage: DPAPI
@@ -99,7 +99,7 @@ function games(value: unknown): Record<string, DiscordGame> {
  */
 export class DiscordSecretsFile {
   private readonly sealed: SealedFile;
-  private readonly order = new Serial();
+  private readonly order = new SerialQueue({ settleAtQuit: true });
 
   constructor(
     file: string,

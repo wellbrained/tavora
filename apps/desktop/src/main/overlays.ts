@@ -22,6 +22,7 @@ import { LIMITS, OVERLAY_COLOR_SCHEME_MESSAGE, OVERLAY_CSS_MESSAGE, OVERLAY_FONT
 import { overlayFontCss, overlayMessage, watchOverlayFont } from "./overlay-font";
 import { contentTypeFor, resolveAsset } from "./assets";
 import { HostError } from "./errors";
+import { SerialQueue } from "./fsutil";
 import { isJsonValue } from "./json";
 import { SAVED_FILES, SavedFile } from "./saved-file";
 import { trackOwnServer } from "./own-ports";
@@ -408,12 +409,10 @@ export class OverlayServer {
    * Starts and stops run one after the other, in the order asked: a stop while it starts ends that start, and two quick
    * port changes leave one server, the newest, that `stop` can end.
    */
-  private queue: Promise<unknown> = Promise.resolve();
+  private readonly queue = new SerialQueue();
 
   private inTurn<T>(work: () => Promise<T>): Promise<T> {
-    const next = this.queue.then(work, work);
-    this.queue = next.catch(() => undefined);
-    return next;
+    return this.queue.run(work);
   }
 
   /** Listens on 127.0.0.1:port (stopping first if it ran on another one). */
