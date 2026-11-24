@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.25.7",
+    date: "2026-11-24",
+    title: "Safer account recovery",
+    notes: [
+      "Removing your email or disconnecting Discord now signs out your other devices, like changing your email does. Link your publisher keys again afterwards.",
+      "Module pictures that are far too large are no longer shown.",
+      "Tavora won't start with debugging switches hidden behind spaces.",
+    ],
+    prs: [
+      { number: 963, title: "Fix the six leads of security audit run 7, plus cheap hardening" },
+    ],
+    tags: ["accounts", "ai-usage", "catalog", "cloud-copy", "games", "icons", "modules", "privacy", "publishing", "service", "system-monitor", "website"],
+  },
+  {
     version: "0.25.6",
     date: "2026-11-24",
     title: "Steadier files and modules",

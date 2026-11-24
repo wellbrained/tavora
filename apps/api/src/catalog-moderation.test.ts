@@ -368,6 +368,46 @@ describe("check 4: warning signs in the code", { timeout: 30_000 }, () => {
     }
   });
 
+  it("counts the signs in a big file without holding every match, and finds the same as before (audit run 7)", () => {
+    const size = 1024 * 1024;
+    const texts: [string, string][] = [
+      ["a.js", "(".repeat(size)],
+      ["a.js", "\\x41".repeat(size / 4)],
+      ["a.js", "_0xabc ".repeat(size / 7)],
+      ["a.js", "String.fromCharCode".repeat(size / 19)],
+      ["a.js", `${"[]+(![]+[])+".repeat(80)}`],
+      ["a.js", `var a="${"\\x41".repeat(150)}";`],
+      ["a.js", `var a="${"\\u0041\\X4f".repeat(60)}";`],
+      ["a.js", Array.from({ length: 12 }, (_, i) => `var _0x${(0x1a2b + i).toString(16)}=1;`).join("")],
+      ["a.js", `${"var x = (a + b) * [c];\n".repeat(40)}`],
+    ];
+    const before = texts.map(([name, text]) => signsIn(name, text));
+    // String.match with a global pattern builds an array of every match: millions for a file like these.
+    const match = String.prototype.match;
+    const global: RegExp[] = [];
+    String.prototype.match = function (this: string, pattern: RegExp | string) {
+      if (pattern instanceof RegExp && pattern.global) global.push(pattern);
+      return match.call(this, pattern as RegExp);
+    } as typeof String.prototype.match;
+    try {
+      expect(texts.map(([name, text]) => signsIn(name, text))).toEqual(before);
+    } finally {
+      String.prototype.match = match;
+    }
+    expect(before.map((signs) => signs.map((sign) => sign.detail.replace(/^a\.js: /, "").slice(0, 30)))).toEqual([
+      ["reads like JSFuck"],
+      ["262144 escaped characters"],
+      ["_0xabc _0xabc _0xabc _0xabc _0"],
+      ["String.fromCharCodeString.from"],
+      ["reads like JSFuck"],
+      ["150 escaped characters"],
+      ["120 escaped characters"],
+      ["var _0x1a2b=1;var _0x1a2c=1;va"],
+      [],
+    ]);
+    expect(global).toEqual([]);
+  });
+
   it("holds packed and obfuscated code", async () => {
     expect(await flagged(Array.from({ length: 12 }, (_, i) => `var _0x${(0x1a2b + i).toString(16)}=1;`).join(""))).toBe("code");
     expect(await flagged("eval(function(p,a,c,k,e,d){return p}('0',1,1,'x'.split('|'),0,{}))")).toBe("code");

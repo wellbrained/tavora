@@ -36,6 +36,13 @@ describe("findUnsafeSwitch", () => {
     expect(findUnsafeSwitch([EXE, "--Disable-Web-Security"])).toBe("disable-web-security");
   });
 
+  it("finds a switch behind spaces, as Chromium trims them first (audit run 7)", () => {
+    expect(findUnsafeSwitch([EXE, " --remote-debugging-port=9222"])).toBe("remote-debugging-port");
+    expect(findUnsafeSwitch([EXE, "\t-no-sandbox"])).toBe("no-sandbox");
+    expect(findUnsafeSwitch([EXE, " /inspect"])).toBe("inspect");
+    expect(findUnsafeSwitch([EXE, "  --disable-gpu"])).toBeUndefined();
+  });
+
   // The switches a denylist missed (security audit run 5), and more of the kind: none of them is one Tavora takes.
   it.each([
     "--inspect-port=9229",

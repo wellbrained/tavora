@@ -1,10 +1,19 @@
 [
   {
-    "version": "0.1.47",
+    "version": "0.1.48",
     "date": "2026-11-24",
     "notes": [
       "Ctrl+Z brings back a clock or counter you just deleted.",
       "A deleted item's hotkeys go once the delete is final, also when the panel closes first."
+    ]
+  },
+  {
+    "version": "0.1.47",
+    "date": "2026-11-24",
+    "notes": [
+      "Messages are easy to read again in the Liquid Glass style.",
+      "A switched-off button no longer blocks the arrow keys.",
+      "Shortcut keys in tooltips are a little bigger."
     ]
   },
   {

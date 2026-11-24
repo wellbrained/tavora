@@ -22,6 +22,9 @@ import { PINNED_UPDATE_KEYS } from "../src/main/update-keys.ts";
 import { makeUpdateKey, rawUpdatePublicKey, readPinnedUpdateKeys, verifyUpdateSignature } from "../src/main/update-signature.ts";
 import { readLatestYml } from "./update-feed.mjs";
 
+/** Windows' own icacls by its full path: by its bare name, Windows looks in the current folder first (audit run 7). */
+const ICACLS = path.win32.join(process.env.SystemRoot && path.win32.isAbsolute(process.env.SystemRoot) ? process.env.SystemRoot : "C:\\Windows", "System32", "icacls.exe");
+
 const USAGE = [
   "usage: tavora-update-key key <key file>",
   "       tavora-update-key public <key file>",
@@ -43,7 +46,7 @@ export function writeKeyFile(file, pem) {
   }
   writeFileSync(file, "", { flag: "wx" });
   const user = process.env.USERDOMAIN ? `${process.env.USERDOMAIN}\\${userInfo().username}` : userInfo().username;
-  const result = spawnSync("icacls", [path.resolve(file), "/inheritance:r", "/grant:r", `${user}:F`], { encoding: "utf8" });
+  const result = spawnSync(ICACLS, [path.resolve(file), "/inheritance:r", "/grant:r", `${user}:F`], { encoding: "utf8" });
   if (result.status !== 0) {
     rmSync(file, { force: true });
     throw new Error(`could not limit who can read ${path.resolve(file)}, so no key was written there. Make it on an NTFS drive (your user folder), then copy it where you keep it.`);

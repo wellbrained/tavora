@@ -1,11 +1,20 @@
 [
   {
-    "version": "0.1.41",
+    "version": "0.1.42",
     "date": "2026-11-24",
     "notes": [
       "Keys pressed in a value's menu no longer change the sum.",
       "You can type @ with AltGr or Option, as on a German keyboard.",
       "Your settings keep what a newer version saved."
+    ]
+  },
+  {
+    "version": "0.1.41",
+    "date": "2026-11-24",
+    "notes": [
+      "Messages are easy to read again in the Liquid Glass style.",
+      "A switched-off button no longer blocks the arrow keys.",
+      "Shortcut keys in tooltips are a little bigger."
     ]
   },
   {

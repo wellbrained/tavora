@@ -1,6 +1,7 @@
 import type { Context, MiddlewareHandler } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { Account, AccountStore, Session } from "./account-store.ts";
+import type { MemoryTicket, UploadMemory } from "./upload-memory.ts";
 
 /**
  * The one sign-in gate of the API, and the one shape of its refusals: `{ error, reason }`, where `reason`
@@ -98,23 +99,68 @@ async function readBody(context: Context, max: number): Promise<boolean> {
 }
 
 /**
+ * Where routes with big bodies hold them (audit run 7): every body is counted in `memory` (the one the uploads share, so all
+ * of them together stay under the service's limit) from before its first byte until the answer is out, at twice its size,
+ * as it is held once while read and once more as the route reads it. And one account sends at most `perAccount` at once.
+ */
+export interface BodyHold {
+  memory: UploadMemory;
+  perAccount: number;
+}
+
+/** How long a client that found no room waits, in seconds. */
+const BUSY_WAIT = 30;
+
+/** No room for the body right now: the apps keep their data and try again later, as for any 503. */
+function busy(context: Context): Response {
+  context.header("Retry-After", String(BUSY_WAIT));
+  return fail(context, 503, "unavailable", "Tavora is busy right now. Try again in a minute.");
+}
+
+/**
  * Only signed in: 401 otherwise. Answers are the account's own, so nothing caches them.
  *
  * The sign-in is checked, then the body read, at most `maxBody` bytes (413 past it), then the sign-in checked again (audit
  * 2026-11-22): a body sent slowly can't hold a sign-in that was ended meanwhile (the email changed, the device was
  * removed) past that point, and a request without one is refused before anything is read. What a route writes after its own awaits checks again with stillSignedIn().
+ * With `hold`, the body waits for room first (see BodyHold), and a 503 says when there is none.
  */
-export function requireSignIn(store: SignInStore, now: () => number = Date.now, maxBody = SIGNED_IN_BODY): MiddlewareHandler<SignedInEnv> {
+export function requireSignIn(store: SignInStore, now: () => number = Date.now, maxBody = SIGNED_IN_BODY, hold?: BodyHold): MiddlewareHandler<SignedInEnv> {
+  const sending = new Map<string, number>();
   return async (context, next) => {
     // Checked before the body too, so a request without a working sign-in is answered at once, nothing read or held.
-    if (!signedInAs(store, context, now())) return signedOut(context);
-    if (!(await readBody(context, maxBody))) return fail(context, 413, "too-big", "Too big.");
-    const signedIn = signedInAs(store, context, now());
-    if (!signedIn) return signedOut(context);
-    context.set("session", signedIn.session);
-    context.set("account", signedIn.account);
-    context.header("Cache-Control", "no-store");
-    await next();
+    const before = signedInAs(store, context, now());
+    if (!before) return signedOut(context);
+    let ticket: MemoryTicket | null = null;
+    let limit = maxBody;
+    const accountId = before.account.id;
+    if (hold && context.req.raw.body !== null) {
+      const declared = Number(context.req.raw.headers.get("content-length") ?? "NaN");
+      // Past the limit it is refused below without reading; without a length it may be as big as allowed.
+      const size = Number.isFinite(declared) && declared >= 0 ? Math.min(declared, maxBody) : maxBody;
+      if ((sending.get(accountId) ?? 0) >= hold.perAccount) return busy(context);
+      ticket = hold.memory.take(2 * size);
+      if (!ticket) return busy(context);
+      // Never more than it holds room for.
+      limit = size;
+      sending.set(accountId, (sending.get(accountId) ?? 0) + 1);
+    }
+    try {
+      if (!(await readBody(context, limit))) return fail(context, 413, "too-big", "Too big.");
+      const signedIn = signedInAs(store, context, now());
+      if (!signedIn) return signedOut(context);
+      context.set("session", signedIn.session);
+      context.set("account", signedIn.account);
+      context.header("Cache-Control", "no-store");
+      await next();
+    } finally {
+      if (ticket) {
+        ticket.release();
+        const left = (sending.get(accountId) ?? 1) - 1;
+        if (left > 0) sending.set(accountId, left);
+        else sending.delete(accountId);
+      }
+    }
   };
 }
 

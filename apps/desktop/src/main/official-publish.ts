@@ -12,6 +12,7 @@ import { UserError } from "./messages";
 import { BROWSER_MODULE_ID, OFFICIAL_PREFIX } from "./registry";
 import { sha256Hex } from "./hash";
 import { compareModuleVersions } from "../shared/module-version";
+import { systemTool } from "./system-tool";
 
 // The dev build's publish flow for a built-in module (Settings > Development, dev builds only). Tavora's own modules
 // update from the catalogue only when signed by the pinned Tavora key, so this is where that signing happens. It builds
@@ -154,7 +155,7 @@ export const runCommand: Run = (command, args, { cwd, timeoutMs = 600_000, signa
     // Ends the whole tree: killing only a shell (Windows) or the leader (elsewhere) leaves pnpm and its builds running.
     function stop() {
       if (!child.pid) return;
-      if (windows) execFile("taskkill", ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true }, () => undefined);
+      if (windows) execFile(systemTool("taskkill"), ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true }, () => undefined);
       else {
         try {
           process.kill(-child.pid, "SIGTERM");

@@ -98,19 +98,22 @@ export default defineComponent({
     watch(() => [props.open, props.anchor, props.at?.x, props.at?.y, props.side, props.title, props.description, props.shortcut], place, { immediate: true });
     const dismiss = () => emit('dismiss');
     const key = (event: KeyboardEvent) => { if (event.key === 'Escape') dismiss(); };
-    onMounted(() => {
-      window.addEventListener('blur', dismiss);
-      window.addEventListener('resize', dismiss);
-      window.addEventListener('scroll', dismiss, true);
-      window.addEventListener('keydown', key, true);
-    });
+    // Only an open tooltip listens to the window: a list of closed ones adds nothing to every scroll and key.
+    let listening = false;
+    function listen(on: boolean) {
+      if (on === listening) return;
+      listening = on;
+      const change = on ? window.addEventListener.bind(window) : window.removeEventListener.bind(window);
+      change('blur', dismiss);
+      change('resize', dismiss);
+      change('scroll', dismiss, true);
+      change('keydown', key, true);
+    }
+    onMounted(() => watch(() => props.open, (open) => listen(!!open), { immediate: true }));
     onUnmounted(() => {
       generation++;
       track(false);
-      window.removeEventListener('blur', dismiss);
-      window.removeEventListener('resize', dismiss);
-      window.removeEventListener('scroll', dismiss, true);
-      window.removeEventListener('keydown', key, true);
+      listen(false);
     });
     function head() {
       const keys = props.shortcut ? h('span', { class: 'tavora-tooltip-keys' }, shortcutKeys(props.shortcut).map(key => h('kbd', key))) : null;

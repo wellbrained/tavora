@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { writeFileAtomic } from "./fsutil";
 import { decodeConsoleText } from "./windows-text";
+import { systemTool } from "./system-tool";
 
 /**
  * A game's own Steam icon, the `.ico` file Steam itself uses for the game's
@@ -96,7 +97,7 @@ export interface SteamDirOptions {
 function windowsRegistryPath(): Promise<string | null> {
   return new Promise((resolve) => {
     execFile(
-      "reg",
+      systemTool("reg"),
       ["query", "HKCU\\Software\\Valve\\Steam", "/v", "SteamPath"],
       { timeout: 3000, windowsHide: true, encoding: "buffer" },
       (error, stdout) => {

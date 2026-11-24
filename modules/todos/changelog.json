@@ -1,11 +1,21 @@
 [
   {
-    "version": "0.2.41",
+    "version": "0.2.42",
     "date": "2026-11-24",
     "notes": [
       "Delete finished to-dos now has Undo.",
       "Undo after Reset this page in Settings keeps what you changed on other pages.",
       "Your look settings keep what a newer version saved."
+    ]
+  },
+  {
+    "version": "0.2.41",
+    "date": "2026-11-24",
+    "notes": [
+      "Messages are easy to read again in the Liquid Glass style.",
+      "Screen readers now name the sliders in Settings.",
+      "A switched-off button no longer blocks the arrow keys.",
+      "Shortcut keys in tooltips are a little bigger."
     ]
   },
   {

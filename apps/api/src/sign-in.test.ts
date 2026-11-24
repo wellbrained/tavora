@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { describe, expect, it } from "vitest";
 import { AccountStore } from "./account-store.ts";
 import { optionalSignIn, requireSignIn, tooMany, type MaybeSignedInEnv, type SignedInEnv } from "./sign-in.ts";
+import { createUploadMemory } from "./upload-memory.ts";
 
 const NOW = Date.parse("2026-10-29T12:00:00Z");
 
@@ -67,6 +68,71 @@ describe("the sign-in gate", () => {
     expect(await (await ask(optional)).json()).toEqual({ id: null });
     expect(await (await ask(optional, `Bearer ${token}`)).json()).toEqual({ id: account.id });
     expect((await ask(optional, `Bearer ${"x".repeat(43)}`)).status).toBe(401);
+  });
+
+  it("holds big bodies in a shared budget and a few at a time per account, so slow uploads can't fill the service's memory (audit run 7)", async () => {
+    const store = new AccountStore(":memory:");
+    const mara = store.createAccount({ email: "mara@example.com" }, NOW);
+    const juno = store.createAccount({ email: "juno@example.com" }, NOW);
+    const maraToken = store.createSession(mara.id, "windows", NOW).token;
+    const junoToken = store.createSession(juno.id, "windows", NOW).token;
+    // A body is held twice while it is read and handed on, so 40 bytes count as 80.
+    const memory = createUploadMemory(200);
+    const app = new Hono<SignedInEnv>()
+      .use("*", requireSignIn(store, () => NOW, 64, { memory, perAccount: 1 }))
+      .post("/", async (context) => context.json({ length: (await context.req.arrayBuffer()).byteLength }));
+    const releases: (() => void)[] = [];
+    const stalled = (length: number) => {
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      releases.push(release);
+      return new ReadableStream<Uint8Array>({
+        async start(controller) {
+          await gate;
+          controller.enqueue(new Uint8Array(length));
+          controller.close();
+        },
+      });
+    };
+    const post = (token: string, length: number, body: ReadableStream<Uint8Array> | Uint8Array = stalled(length)) =>
+      app.request("http://tavora.test/", { method: "POST", headers: { authorization: `Bearer ${token}`, "content-length": String(length) }, body, duplex: "half" } as RequestInit);
+
+    const first = post(maraToken, 40);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    // Mara's second body waits for her first.
+    const second = await post(maraToken, 1, new Uint8Array(1));
+    expect(second.status).toBe(503);
+    expect(second.headers.get("retry-after")).toBe("30");
+    expect(await second.json()).toEqual({ error: "Tavora is busy right now. Try again in a minute.", reason: "unavailable" });
+    // Juno's doesn't fit next to it: 80 + 128 is more than 200.
+    expect((await post(junoToken, 64, new Uint8Array(64))).status).toBe(503);
+    // A smaller one does.
+    expect(await (await post(junoToken, 40, new Uint8Array(40))).json()).toEqual({ length: 40 });
+
+    releases[0]!();
+    expect(await (await first).json()).toEqual({ length: 40 });
+    // Everything is handed back once the answers are out.
+    expect(memory.take(200)).not.toBeNull();
+  });
+
+  it("hands back a body's memory when the route fails or the body is too big", async () => {
+    const store = new AccountStore(":memory:");
+    const account = store.createAccount({ email: "mara@example.com" }, NOW);
+    const { token } = store.createSession(account.id, "windows", NOW);
+    const memory = createUploadMemory(200);
+    const app = new Hono<SignedInEnv>().use("*", requireSignIn(store, () => NOW, 64, { memory, perAccount: 1 })).post("/", () => {
+      throw new Error("broken");
+    });
+    app.onError((_error, context) => context.text("broken", 500));
+    const post = (body: Uint8Array, length = body.length) =>
+      app.request("http://tavora.test/", { method: "POST", headers: { authorization: `Bearer ${token}`, "content-length": String(length) }, body });
+    expect((await post(new Uint8Array(10))).status).toBe(500);
+    expect((await post(new Uint8Array(65))).status).toBe(413);
+    // A body longer than its length said is read only as far as the room it took.
+    const longer = new ReadableStream<Uint8Array>({ start: (controller) => (controller.enqueue(new Uint8Array(40)), controller.close()) });
+    const lied = await app.request("http://tavora.test/", { method: "POST", headers: { authorization: `Bearer ${token}`, "content-length": "10" }, body: longer, duplex: "half" } as RequestInit);
+    expect(lied.status).toBe(413);
+    expect(memory.take(200)).not.toBeNull();
   });
 
   it("says how long to wait when there were too many requests", async () => {

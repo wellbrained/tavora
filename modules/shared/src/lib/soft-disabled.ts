@@ -12,6 +12,9 @@ import { REASON_ATTRIBUTE, SIDE_ATTRIBUTE } from "../title-tooltips"
 export const PRESS_KEYS: ReadonlySet<string> = new Set(["Enter", " ", "ArrowDown", "ArrowUp"])
 /** The two keys that use a switch, a checkbox or a menu row; the arrows still move the focus on. */
 export const ACTIVATE_KEYS: ReadonlySet<string> = new Set(["Enter", " "])
+/** What a switched-off button takes no notice of: Enter and Space, and the arrows only where they would open its menu. */
+export const BUTTON_KEY = (event: KeyboardEvent): boolean =>
+  ACTIVATE_KEYS.has(event.key) || ((event.key === "ArrowDown" || event.key === "ArrowUp") && event.currentTarget instanceof Element && event.currentTarget.hasAttribute("aria-haspopup"))
 /** Everything but Tab, Escape and the modifiers: a closed select also reacts to letters, the arrows, Home and End. */
 export const ANY_KEY = (event: KeyboardEvent): boolean =>
   !["Tab", "Escape", "Shift", "Control", "Alt", "Meta"].includes(event.key) && !event.ctrlKey && !event.metaKey && !event.altKey
@@ -54,7 +57,7 @@ export function stopSoft(event: Event) {
  */
 export function useSoftDisabled(input: () => SoftDisabledInput, options: SoftDisabledOptions = {}) {
   const attrs = useAttrs()
-  const keys = options.keys ?? PRESS_KEYS
+  const keys = options.keys ?? BUTTON_KEY
   const takes = (event: KeyboardEvent) => (typeof keys === "function" ? keys(event) : keys.has(event.key))
 
   const soft = () => isSoftDisabled(input(), attrs.title)

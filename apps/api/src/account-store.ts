@@ -126,6 +126,8 @@ export interface Session {
 }
 
 export type CodeRequest = { ok: true; code: string } | { ok: false; retryAfter: number };
+/** What removing a way in gave: the new sign-in of the one who asked (null when it had none), or why nothing changed. */
+export type MethodRemoved = { status: "ok"; token: string | null; session: Session | null } | { status: "last-method" };
 
 /**
  * Who asks for a code to an address: the account's own sign-in for the account's own address (`owner`), or anyone
@@ -529,9 +531,41 @@ export class AccountStore {
     this.db.prepare(`delete from key_requests where ${ontoPaused}`).run(accountId, accountId);
   }
 
-  /** Removes the email address, only while a Discord login remains. */
-  removeEmail(id: string): "ok" | "last-method" {
-    return Number(this.db.prepare("update accounts set email = null where id = ? and email is not null and discord_id is not null").run(id).changes) > 0 ? "ok" : "last-method";
+  /**
+   * Removes the email address, only while a Discord login remains. Like an email change, every sign-in ends and what they
+   * made for publishing goes (audit run 7): one made with the address, by someone who could read it, must not outlive it.
+   * The one asking (`rotate`) gets a new sign-in in place of its own.
+   */
+  removeEmail(id: string, rotate: string | null = null, now: number = Date.now()): MethodRemoved {
+    const old = this.account(id)?.email ?? null;
+    return this.removeMethod(id, rotate, now, () => {
+      if (Number(this.db.prepare("update accounts set email = null where id = ? and email is not null and discord_id is not null").run(id).changes) === 0) return false;
+      // Sign-in codes wait under the address with no account id.
+      if (old) this.db.prepare("delete from codes where address = ?").run(addressKey(old));
+      return true;
+    });
+  }
+
+  /** Ends every sign-in of the account after `remove` took a way in away, inside one transaction (removeEmail, removeDiscord). */
+  private removeMethod(id: string, rotate: string | null, now: number, remove: () => boolean): MethodRemoved {
+    let renewed: { token: string; session: Session } | null = null;
+    this.db.exec("begin");
+    try {
+      if (!remove()) {
+        this.db.exec("rollback");
+        return { status: "last-method" };
+      }
+      const current = rotate === null ? undefined : (this.db.prepare("select os, name from sessions where id = ? and account_id = ?").get(rotate, id) as { os: DeviceOs; name: string | null } | undefined);
+      this.db.prepare("delete from sessions where account_id = ?").run(id);
+      this.db.prepare("delete from codes where account_id = ?").run(id);
+      this.revokeMinted(id, "all", now);
+      if (current) renewed = this.createSession(id, current.os, now, current.name);
+      this.db.exec("commit");
+    } catch (error) {
+      this.db.exec("rollback");
+      throw error;
+    }
+    return { status: "ok", token: renewed?.token ?? null, session: renewed?.session ?? null };
   }
 
   /** Connects a Discord login, unless another account has it. Never merges accounts. */
@@ -542,9 +576,17 @@ export class AccountStore {
     return "ok";
   }
 
-  /** Disconnects Discord, only while an email address remains. */
-  removeDiscord(id: string): "ok" | "last-method" {
-    return Number(this.db.prepare("update accounts set discord_id = null, discord_name = null where id = ? and discord_id is not null and email is not null").run(id).changes) > 0 ? "ok" : "last-method";
+  /**
+   * Disconnects Discord, only while an email address remains. Every sign-in ends, as for removeEmail: one made with a Discord
+   * login someone else had stops working with it (audit run 7).
+   */
+  removeDiscord(id: string, rotate: string | null = null, now: number = Date.now()): MethodRemoved {
+    return this.removeMethod(
+      id,
+      rotate,
+      now,
+      () => Number(this.db.prepare("update accounts set discord_id = null, discord_name = null where id = ? and discord_id is not null and email is not null").run(id).changes) > 0,
+    );
   }
 
   // ── Discord logins waiting for a new account ───────────────────────────

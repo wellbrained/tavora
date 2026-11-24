@@ -1,11 +1,20 @@
 [
   {
-    "version": "0.3.36",
+    "version": "0.3.37",
     "date": "2026-11-24",
     "notes": [
       "Restore after a delete in another panel keeps what you drew meanwhile.",
       "The copy shortcut does nothing on an empty board.",
       "Your pictures' details keep what a newer version saved."
+    ]
+  },
+  {
+    "version": "0.3.36",
+    "date": "2026-11-24",
+    "notes": [
+      "Messages are easy to read again in the Liquid Glass style.",
+      "A switched-off button no longer blocks the arrow keys.",
+      "Shortcut keys in tooltips are a little bigger."
     ]
   },
   {

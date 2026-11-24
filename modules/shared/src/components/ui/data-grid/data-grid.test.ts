@@ -38,13 +38,14 @@ interface Mounted {
   commits: Array<[number, number, string]>
   clears: GridRange[]
   fills: FillPlan[]
+  resizes: Array<[number, number]>
 }
 
-async function mount(options: { rows?: number | Ref<number>; cols?: number; readonly?: boolean; frozenRows?: number; data?: Map<string, string> } = {}): Promise<Mounted> {
+async function mount(options: { rows?: number | Ref<number>; cols?: number; readonly?: boolean; frozenRows?: number; data?: Map<string, string>; columnWidths?: Map<number, number> } = {}): Promise<Mounted> {
   const data = options.data ?? new Map<string, string>()
   const selection = ref<GridSelection>(single(cell(0, 0)))
   const editing = ref<GridEdit | null>(null)
-  const result: Mounted = { root: null as unknown as HTMLElement, selection, editing, commits: [], clears: [], fills: [] }
+  const result: Mounted = { root: null as unknown as HTMLElement, selection, editing, commits: [], clears: [], fills: [], resizes: [] }
   const Host = defineComponent(() => () =>
     h(DataGrid, {
       rows: typeof options.rows === "object" ? options.rows.value : (options.rows ?? 10_000),
@@ -59,6 +60,8 @@ async function mount(options: { rows?: number | Ref<number>; cols?: number; read
       onCommit: (pos: { row: number; col: number }, text: string) => result.commits.push([pos.row, pos.col, text]),
       onClear: (range: GridRange) => result.clears.push(range),
       onFill: (plan: FillPlan) => result.fills.push(plan),
+      onResizeColumn: (col: number, width: number) => result.resizes.push([col, width]),
+      columnWidths: options.columnWidths,
     }),
   )
   app = createApp(Host)
@@ -221,5 +224,108 @@ describe("DataGrid", () => {
     expect(root.querySelector("[data-area=frozen-body] [data-cell='0:0']")).not.toBeNull()
     expect(root.querySelector("[data-area=body-body] [data-cell='0:0']")).toBeNull()
     expect(root.querySelector("[data-area=body-body] [data-cell='2:0']")).not.toBeNull()
+  })
+})
+
+// ── Pointer and focus (bug hunt 2026-11-24) ──────────────────────────────
+
+describe("DataGrid pointer and focus", () => {
+  // jsdom has no layout: the grid sits at the page's top left, 600 × 300.
+  beforeEach(() => {
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({ left: 0, top: 0, right: 600, bottom: 300, width: 600, height: 300, x: 0, y: 0, toJSON() {} } as DOMRect)
+  })
+
+  const pointer = (type: string, x: number, y: number) => {
+    const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 })
+    Object.defineProperty(event, "pointerId", { value: 1 })
+    return event
+  }
+
+  it("fills nothing when the system cancels the fill drag", async () => {
+    const grid = await mount()
+    grid.root.querySelector<HTMLElement>("[data-fill-handle]")!.dispatchEvent(pointer("pointerdown", 130, 50))
+    grid.root.dispatchEvent(pointer("pointermove", 130, 200))
+    await flush()
+    grid.root.dispatchEvent(pointer("pointercancel", 130, 200))
+    await flush()
+    expect(grid.fills).toEqual([])
+  })
+
+  it("fills nothing when Escape ends the fill drag", async () => {
+    const grid = await mount()
+    grid.root.querySelector<HTMLElement>("[data-fill-handle]")!.dispatchEvent(pointer("pointerdown", 130, 50))
+    grid.root.dispatchEvent(pointer("pointermove", 130, 200))
+    await flush()
+    await press(grid.root, "Escape")
+    grid.root.dispatchEvent(pointer("pointerup", 130, 200))
+    await flush()
+    expect(grid.fills).toEqual([])
+  })
+
+  it("still fills when the fill drag is let go", async () => {
+    const grid = await mount()
+    grid.root.querySelector<HTMLElement>("[data-fill-handle]")!.dispatchEvent(pointer("pointerdown", 130, 50))
+    grid.root.dispatchEvent(pointer("pointermove", 130, 200))
+    await flush()
+    grid.root.dispatchEvent(pointer("pointerup", 130, 200))
+    await flush()
+    expect(grid.fills).toHaveLength(1)
+  })
+
+  it("saves a resize that is let go", async () => {
+    const grid = await mount()
+    const edge = 56 + 96
+    grid.root.dispatchEvent(pointer("pointerdown", edge, 10))
+    grid.root.dispatchEvent(pointer("pointermove", edge + 80, 10))
+    grid.root.dispatchEvent(pointer("pointerup", edge + 80, 10))
+    await flush()
+    expect(grid.resizes).toEqual([[0, 176]])
+  })
+
+  it("keeps the old column width when the system cancels the resize", async () => {
+    const grid = await mount()
+    // Column A's right edge: the row numbers are 56 wide here (16 + 8 per digit of 10000), so A ends at 56 + 96.
+    const edge = 56 + 96
+    grid.root.dispatchEvent(pointer("pointerdown", edge, 10))
+    grid.root.dispatchEvent(pointer("pointermove", edge + 80, 10))
+    await flush()
+    grid.root.dispatchEvent(pointer("pointercancel", edge + 80, 10))
+    await flush()
+    expect(grid.resizes).toEqual([])
+  })
+
+  it("leaves the focus where the user clicked when an edit ends there", async () => {
+    const grid = await mount()
+    grid.root.focus()
+    await press(grid.root, "F2")
+    const other = document.createElement("input")
+    document.body.append(other)
+    other.focus()
+    await flush()
+    expect(grid.commits).toHaveLength(1)
+    expect(document.activeElement).toBe(other)
+    other.remove()
+  })
+
+  it("selects nothing when its scrollbar is pressed", async () => {
+    const grid = await mount()
+    // clientWidth is 600 in these tests: the box is a little wider, as with a scrollbar.
+    vi.spyOn(grid.root, "getBoundingClientRect").mockReturnValue({ left: 0, top: 0, right: 612, bottom: 312, width: 612, height: 312, x: 0, y: 0, toJSON() {} } as DOMRect)
+    grid.root.dispatchEvent(pointer("pointerdown", 605, 150))
+    grid.root.dispatchEvent(pointer("pointerup", 605, 150))
+    await flush()
+    expect(grid.selection.value.active).toEqual(cell(0, 0))
+  })
+
+  it("moves past a hidden column with Tab after an edit", async () => {
+    const grid = await mount({ columnWidths: new Map([[1, 0]]) })
+    await press(grid.root, "F2")
+    await press(grid.root.querySelector<HTMLTextAreaElement>("[data-grid-editor]")!, "Tab")
+    expect(grid.selection.value.active).toEqual(cell(0, 2))
+  })
+
+  it("reads a cell's text out as it is, $ signs included", async () => {
+    const grid = await mount({ data: new Map([["0:0", "Price $& $$5"]]) })
+    expect(grid.root.querySelector("[role=status]")!.textContent).toContain("Price $& $$5")
   })
 })

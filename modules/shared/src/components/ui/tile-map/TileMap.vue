@@ -11,7 +11,7 @@
 // a set of pins. The `layer` slot lies over the tiles and under the pins, in map pixels (it zooms with the map): a
 // picture the size of the map, such as a fog of war over the parts not explored yet.
 import { Check } from "@lucide/vue"
-import { computed, ref, shallowRef, type HTMLAttributes } from "vue"
+import { computed, ref, shallowRef, watch, type HTMLAttributes } from "vue"
 import { cn } from "../../../lib/utils"
 import { uiText } from "../text"
 import { ZoomPane } from "../zoom-pane"
@@ -63,14 +63,16 @@ function onViewChange(next: ZoomView, size: Size) {
 
 const pixelRatio = typeof devicePixelRatio === "number" ? devicePixelRatio : 1
 const baseLevel = computed(() => props.source.minLevel ?? 0)
-/** Tiles that failed to load (a sea tile a source leaves out); the level underneath shows there. */
+/** Tiles that failed to load (a sea tile a source leaves out), by picture address; the level underneath shows there. */
 const missing = ref(new Set<string>())
+// Another source (another map, a layer switched) draws its own tiles, whatever failed for the one before.
+watch(() => props.source, () => (missing.value = new Set()))
 const baseTiles = computed(() => visibleTiles({ x: 0, y: 0, zoom: 1 }, { width: props.source.size, height: props.source.size }, props.source, baseLevel.value, 0))
 const level = computed(() => tileLevel(view.value.zoom, props.source, pixelRatio))
 const tiles = computed(() => (level.value === baseLevel.value || !paneSize.value.width ? [] : visibleTiles(view.value, paneSize.value, props.source, level.value)))
-const shownTiles = computed(() => [...baseTiles.value, ...tiles.value].filter((tile) => !missing.value.has(tile.key)))
-function onTileError(key: string) {
-  missing.value = new Set([...missing.value, key])
+const shownTiles = computed(() => [...baseTiles.value, ...tiles.value].filter((tile) => !missing.value.has(props.source.url(tile.level, tile.x, tile.y))))
+function onTileError(url: string) {
+  missing.value = new Set([...missing.value, url])
 }
 
 // ── Pins ──
@@ -152,7 +154,7 @@ defineExpose({ showPins, camera, setCamera, fit: (options?: ViewOptions) => pane
         decoding="async"
         class="absolute max-w-none select-none"
         :style="{ left: `${tile.left}px`, top: `${tile.top}px`, width: `${tile.size}px`, height: `${tile.size}px` }"
-        @error="onTileError(tile.key)"
+        @error="onTileError(source.url(tile.level, tile.x, tile.y))"
       >
       <div v-if="$slots.layer" data-slot="tile-map-layer" class="pointer-events-none absolute inset-0">
         <slot name="layer" />

@@ -1,11 +1,20 @@
 [
   {
-    "version": "0.1.36",
+    "version": "0.1.37",
     "date": "2026-11-24",
     "notes": [
       "Tells you when a file couldn't be added, renamed or removed, instead of failing quietly.",
       "A file whose removal couldn't be saved stays and still opens.",
       "Your tabs keep what a newer version saved."
+    ]
+  },
+  {
+    "version": "0.1.36",
+    "date": "2026-11-24",
+    "notes": [
+      "Messages are easy to read again in the Liquid Glass style.",
+      "A switched-off button no longer blocks the arrow keys.",
+      "Shortcut keys in tooltips are a little bigger."
     ]
   },
   {

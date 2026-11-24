@@ -505,9 +505,13 @@ export class AccountClient {
 
   async disconnectDiscord(code: string): Promise<void> {
     if (this.pending?.kind !== "remove-discord") throw new UserError("account.error.noCode");
+    const sentWith = this.saved?.token;
     const answer = await this.call("POST", "/discord/remove", { code }, true);
     this.pending = null;
+    await this.renewed(answer, sentWith);
     await this.updated(answer);
+    // Every other device was signed out with it, and the keys paused: read them again.
+    await this.refresh().catch(() => undefined);
   }
 
   /** Removing the email needs a code sent to it, so a stolen sign-in cannot cut the owner out. */
@@ -520,9 +524,23 @@ export class AccountClient {
 
   async removeEmail(code: string): Promise<void> {
     if (this.pending?.kind !== "remove-email") throw new UserError("account.error.noCode");
+    const sentWith = this.saved?.token;
     const answer = await this.call("POST", "/email/remove", { code }, true);
     this.pending = null;
+    await this.renewed(answer, sentWith);
     await this.updated(answer);
+    await this.refresh().catch(() => undefined);
+  }
+
+  /**
+   * Takes the new sign-in an answer brings when the step ended every sign-in, this one too (changing or removing a way in,
+   * audit 2026-11-22 and run 7). Only while the sign-in it was sent with is still this PC's: an answer that comes late,
+   * after a switch to another account, never lands in that one. A service from before that sends none and keeps this one.
+   */
+  private async renewed(answer: Record<string, unknown>, sentWith: string | undefined): Promise<void> {
+    if (!this.saved || this.saved.token !== sentWith || !isToken(answer.token) || answer.token === sentWith) return;
+    this.saved = { ...this.saved, token: answer.token };
+    await this.keep();
   }
 
   /** Deletes the account by a fresh sign-in with its Discord login. Everything on the PC stays. */
@@ -794,14 +812,11 @@ export class AccountClient {
     if (pending?.kind !== "change-email" || !this.saved) throw new UserError("account.error.noCode");
     if (pending.proof === "code" && !currentCode) throw new UserError("account.error.wrongCurrentCode");
     const proof = pending.proof === "code" ? { currentCode } : pending.proof === "discord" ? { discord: await this.discord() } : {};
+    const sentWith = this.saved.token;
     const answer = await this.call("POST", "/email", { email: pending.email, code, ...proof, language: this.options.language() }, true);
     this.pending = null;
-    // The change ends every sign-in, this one too, and the answer brings this PC its new one (audit 2026-11-22). A service
-    // from before that sends none and keeps this one.
-    if (this.saved && isToken(answer.token) && answer.token !== this.saved.token) {
-      this.saved = { ...this.saved, token: answer.token };
-      await this.keep();
-    }
+    // The change ends every sign-in, this one too, and the answer brings this PC its new one (audit 2026-11-22).
+    await this.renewed(answer, sentWith);
     await this.updated({ account: { email: pending.email, ...(answer.account as Record<string, unknown> | undefined) } });
     // Every other device was signed out by the change, and the keys paused: read them again.
     await this.refresh().catch(() => undefined);

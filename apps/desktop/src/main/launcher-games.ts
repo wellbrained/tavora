@@ -3,6 +3,7 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { normalizeName } from "../shared/same-game";
 import { decodeConsoleText } from "./windows-text";
+import { systemTool } from "./system-tool";
 
 /**
  * Finds the games installed on this PC by looking at what the launchers leave
@@ -153,7 +154,7 @@ export function gamesFromEpic(manifests: readonly string[]): InstalledGame[] {
 function queryWindowsRegistry(key: string): Promise<string | null> {
   return new Promise((resolve) => {
     execFile(
-      "reg",
+      systemTool("reg"),
       ["query", key, "/s"],
       { timeout: 15_000, windowsHide: true, maxBuffer: 64 * 1024 * 1024, encoding: "buffer" },
       (error, stdout) => resolve(error ? null : decodeConsoleText(stdout)),
