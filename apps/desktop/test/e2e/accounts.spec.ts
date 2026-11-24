@@ -331,7 +331,7 @@ test("Tavora keeps a developer's publisher key, and tavora-pack without a key fi
     for (const args of [[project], ["publish", path.join(project, "out.zip")]]) {
       const run = await tavoraPack(args);
       expect(run.status).toBe(2);
-      expect(run.out).toContain("Publish from Tavora: Settings > Your modules");
+      expect(run.out).toContain("Publish from Tavora: Settings > Developer > Your modules");
     }
   } finally {
     await app.close();
