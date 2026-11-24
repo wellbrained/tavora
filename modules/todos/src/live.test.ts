@@ -267,3 +267,10 @@ describe("withFinished", () => {
     expect(withFinished(look, "vanish")).toEqual({ ...look, showFinished: false });
   });
 });
+
+describe("a newer version's look settings", () => {
+  it("are kept when the panel reads its looks", () => {
+    expect(JSON.parse(JSON.stringify(parseLook({ size: "m", shadow: 3 })))).toMatchObject({ size: "m", shadow: 3 });
+    expect(JSON.parse(JSON.stringify(parsePanelLook({ font: "nope", spacing: 2 })))).toMatchObject({ font: "inter", spacing: 2 });
+  });
+});

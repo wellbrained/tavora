@@ -137,7 +137,7 @@ export const de: Record<keyof typeof en, string> = {
   "save.saving": "Speichere…",
   "save.saved": "Gespeichert",
   "save.error": "Konnte nicht gespeichert werden",
-  "save.staysOpen": "Das Board lässt sich nicht speichern, also bleibt es offen",
+  "save.staysOpen": "Die Tafel lässt sich nicht speichern, also bleibt sie offen",
   "image.lock": "Bilder sperren",
   "image.unlock": "Bilder entsperren",
   "image.lockHint": "Gesperrte Bilder bleiben an ihrem Platz, während du darauf zeichnest",

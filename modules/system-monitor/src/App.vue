@@ -26,11 +26,17 @@ const openError = ref<string | null>(null);
 const dialogOpen = ref(false);
 const showingApps = ref(false);
 const stopFollowing: (() => void)[] = [];
+/** The panel went while it was still connecting: what arrives after that is let go again, not started. */
+let unmounted = false;
 
 onMounted(async () => {
   try {
     const connection = await connectModule({ texts: { en, de } });
     if (connection.status !== "ready" || !connection.sdk) throw connection.error;
+    if (unmounted) {
+      connection.dispose();
+      return;
+    }
     const connected = connection.sdk;
     // The components read the module's own translator; it follows the language the handle reports.
     setLanguage(connection.language);
@@ -38,7 +44,7 @@ onMounted(async () => {
     const started = createMonitor(connected);
     sdk.value = connected;
     monitor.value = started;
-    connected.lifecycle.onResume(() => void started.retry());
+    stopFollowing.push(connected.lifecycle.onResume(() => void started.retry()));
     stopFollowing.push(connected.panel.onDialogChange((open) => (dialogOpen.value = open)));
     addEventListener("keydown", onKey);
     stopFollowing.push(() => removeEventListener("keydown", onKey));
@@ -49,6 +55,7 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  unmounted = true;
   stopFollowing.forEach((fn) => fn());
   monitor.value?.stop();
 });

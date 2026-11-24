@@ -20,7 +20,7 @@ import type { TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, type ComponentPublicInstance } from "vue";
 import { copyText, decimalComma, EMPTY, evaluate, format, insert, press, pretty, reference, rounded, segments, type Entry } from "./calc";
 import { remember, restoreHistory, type Calculation } from "./history";
-import { BASIC, keyAction, pasteKeys, PLUS, type Key } from "./keys";
+import { BASIC, keyAction, meantElsewhere, pasteKeys, PLUS, type Key } from "./keys";
 import { createListsStore, type ListsStore } from "./lists";
 import { locale, setLanguage, t } from "./i18n";
 import { de, en } from "./locales";
@@ -261,8 +261,6 @@ function clearHistory(): void {
 
 // ── Keyboard and paste ───────────────────────────────────────────────
 
-/** Whether a key or paste is meant for a text field or a dialog rather than the calculator. */
-const elsewhere = (target: EventTarget | null) => target instanceof HTMLElement && !!target.closest("input, textarea, [role='dialog']");
 
 function onKeydown(event: KeyboardEvent): void {
   if (dialogOpen.value) {
@@ -271,7 +269,7 @@ function onKeydown(event: KeyboardEvent): void {
     if (event.key === "Escape" && !event.defaultPrevented && !inPopup) closeSettings();
     return;
   }
-  if (elsewhere(event.target)) return;
+  if (meantElsewhere(event.target, event.defaultPrevented)) return;
   if (handleUndoKey(event)) return;
   const action = keyAction(event, {
     selection: !!window.getSelection()?.toString(),
@@ -284,7 +282,7 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 function onPaste(event: ClipboardEvent): void {
-  if (dialogOpen.value || elsewhere(event.target)) return;
+  if (dialogOpen.value || meantElsewhere(event.target, event.defaultPrevented)) return;
   const text = event.clipboardData?.getData("text") ?? "";
   if (!text) return;
   event.preventDefault();

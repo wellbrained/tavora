@@ -1,5 +1,6 @@
 // The live view: what the panel hands to Tavora (panel.setLive) so the overlay page can show the list read-only
 // over the game while the full panel is closed. Pure functions, so the rules are easy to test.
+import { unknownFields } from "@tavora/official-ui/lib/utils";
 import type { JsonValue } from "@tavora/sdk";
 import { depths, type TodoList } from "./todos";
 
@@ -120,7 +121,9 @@ const hex = (value: unknown, fallback: string): string => (typeof value === "str
 /** A look from stored panel state: anything missing or out of range falls back or is pulled into range. */
 export function parseLook(raw: { [key: string]: unknown } | null | undefined): LiveLook {
   const d = LIVE_DEFAULTS;
+  // Settings a newer version added are kept as they are (unknownFields), so they are still there after a change here.
   return {
+    ...unknownFields<JsonValue>(raw, Object.keys(LIVE_DEFAULTS)),
     font: oneOf(
       LIVE_FONTS.map((font) => font.id),
       raw?.font,
@@ -162,6 +165,7 @@ export const PANEL_SIZES: Record<LiveSize, readonly [number, number]> = { xs: [1
 /** A panel look from stored panel state; anything unknown falls back to the default. */
 export function parsePanelLook(raw: { [key: string]: unknown } | null | undefined): PanelLook {
   return {
+    ...unknownFields<JsonValue>(raw, Object.keys(PANEL_LOOK_DEFAULTS)),
     font: oneOf(
       LIVE_FONTS.map((font) => font.id),
       raw?.font,

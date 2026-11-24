@@ -173,6 +173,19 @@ export function createBoardSaver(options: BoardSaverOptions) {
       // An earlier failure only counts while what is on the board is still not stored (Undo may have taken it back).
       if (!stopped && state.save === "error" && latest && signatureOf(latest) !== stored) throw new BoardNotSaved();
     },
+    /**
+     * What the board shows now, as a stored board, for bringing it back after another panel deleted it (nothing is saved
+     * meanwhile). Pictures added since keep their elements; their pixels are stored with the next save. Null before anything was drawn.
+     */
+    copy(): BoardData | null {
+      if (!latest) return null;
+      return {
+        ...document.data,
+        elements: JSON.parse(JSON.stringify(latest.elements.filter((element) => !element.isDeleted))) as JsonValue[],
+        background: latest.background,
+        grid: latest.grid,
+      };
+    },
     /** Lets go without saving what is left (the board is being deleted). */
     discard(): void {
       if (stopped === null) stopped = "discarded";

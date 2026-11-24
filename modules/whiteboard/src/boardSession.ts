@@ -80,6 +80,8 @@ export interface BoardSession extends Controls {
   discard(): void;
   /** The delete did not go through: saving goes on. */
   resume(): void;
+  /** What the board shows now, for bringing it back after another panel deleted it; null before anything was drawn. */
+  copy(): BoardData | null;
   /** Saves what is left and lets go of the page's listeners. */
   dispose(): Promise<void>;
 }
@@ -337,6 +339,7 @@ export function createBoardSession(options: SessionOptions): BoardSession {
     flush: () => saver.settled(),
     discard: () => saver.discard(),
     resume: () => saver.resume(),
+    copy: () => saver.copy(),
     async dispose() {
       disposed = true;
       removeEventListener("keydown", copyKey, true);

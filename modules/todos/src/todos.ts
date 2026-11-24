@@ -498,6 +498,36 @@ export function clearDone(data: TodoList, groupId: string): void {
   });
 }
 
+/** The finished tasks of a group that clearDone removes, as runs of neighbours with where each run was, for Undo. */
+export interface RemovedFinished {
+  groupId: string;
+  runs: { index: number; tasks: Task[] }[];
+}
+
+export function removedFinished(data: TodoList, groupId: string): RemovedFinished | null {
+  const group = data.groups.find((item) => item.id === groupId);
+  if (!group) return null;
+  const gone = new Set<string>();
+  const runs: RemovedFinished["runs"] = [];
+  group.tasks.forEach((task, index) => {
+    if (!task.done && !gone.has(task.parentId!)) return;
+    gone.add(task.id);
+    const last = runs.at(-1);
+    if (last && last.index + last.tasks.length === index) last.tasks.push(structuredClone(task));
+    else runs.push({ index, tasks: [structuredClone(task)] });
+  });
+  return runs.length ? { groupId, runs } : null;
+}
+
+/** Puts back what clearDone removed, each run where it was; false when its group is gone or one of them is back already. */
+export function restoreFinished(data: TodoList, removed: RemovedFinished): boolean {
+  const group = data.groups.find((item) => item.id === removed.groupId);
+  if (!group || removed.runs.some((run) => run.tasks.some((task) => findTask(data, task.id)))) return false;
+  for (const run of removed.runs) group.tasks.splice(clamp(run.index, 0, group.tasks.length), 0, ...structuredClone(run.tasks));
+  tidy(group.tasks);
+  return true;
+}
+
 /**
  * Moves a task with its sub-to-dos in front of another task, becoming that
  * task's sibling, or to the end of a group's top level when `beforeId` is

@@ -177,3 +177,41 @@ describe("files linked to their original", () => {
     expect(store.files.value).toEqual([]);
   });
 });
+
+describe("a list that can't be saved", () => {
+  const failSaves = (host: ReturnType<typeof createMemoryHost>["host"]) =>
+    host.answer("documents.put", () => {
+      throw new TavoraError({ code: "QUOTA_EXCEEDED", message: "disk full" });
+    });
+
+  it("says so when a new file can't be listed, and keeps nothing of it", async () => {
+    const { sdk, host } = createMemoryHost();
+    const store = await open(sdk);
+    failSaves(host);
+    await expect(store.add(pdf())).rejects.toMatchObject({ kind: "store" });
+    host.unanswer("documents.put");
+    expect(store.files.value).toEqual([]);
+    expect(await sdk.blobs.list()).toEqual([]);
+  });
+
+  it("says so when a rename can't be saved", async () => {
+    const { sdk, host } = createMemoryHost();
+    const store = await open(sdk);
+    const entry = await store.add(pdf());
+    failSaves(host);
+    await expect(store.rename(entry.id, "Map")).rejects.toMatchObject({ kind: "store" });
+    host.unanswer("documents.put");
+    expect(store.files.value[0]!.name).toBe("Guide.pdf");
+  });
+
+  it("keeps the file, still openable, when its removal can't be saved", async () => {
+    const { sdk, host } = createMemoryHost();
+    const store = await open(sdk);
+    const entry = await store.add(pdf());
+    failSaves(host);
+    await expect(store.remove(entry.id)).rejects.toMatchObject({ kind: "store" });
+    host.unanswer("documents.put");
+    expect(store.files.value.map((file) => file.id)).toEqual([entry.id]);
+    expect((await sdk.blobs.list()).map((blob) => blob.id)).toEqual([entry.id]);
+  });
+});

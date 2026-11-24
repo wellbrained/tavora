@@ -10,3 +10,8 @@ it("keeps a newer version's fields on a board, and still checks its own", () => 
   expect(JSON.parse(JSON.stringify(saved))).toMatchObject({ name: "Plan", layers: [{ id: "l1" }] });
   expect(board.background).not.toBe("url(x)");
 });
+
+it("keeps a newer version's fields on a board's stored files", () => {
+  const board = parseBoard({ files: { f1: { blobId: "0123456789abcdef0123456789abcdef", mimeType: "image/png", created: 1, crop: { x: 2 } } } } as JsonValue);
+  expect(JSON.parse(JSON.stringify(board.files))).toMatchObject({ f1: { blobId: "0123456789abcdef0123456789abcdef", crop: { x: 2 } } });
+});

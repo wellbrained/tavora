@@ -1,5 +1,15 @@
 [
   {
+    "version": "0.6.32",
+    "date": "2026-11-24",
+    "notes": [
+      "A new note with only a title or a picture stays when you leave it.",
+      "Links with a port, like localhost:3000, work.",
+      "The Open link hint shows Strg+Klick in German.",
+      "The order of your notes keeps what a newer version saved."
+    ]
+  },
+  {
     "version": "0.6.31",
     "date": "2026-11-24",
     "notes": [

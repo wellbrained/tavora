@@ -184,6 +184,22 @@ describe("two panels", () => {
     expect(stored(a.host, "board-start")).toMatchObject({ title: "Board 1", data: { name: "Board 1", elements: [{ id: "r1" }] } });
     expect(first.boards.map((board) => board.name)).toEqual(["Board 1"]);
   });
+
+  it("brings back what was drawn after another panel deleted the board, not only what was saved before", async () => {
+    const { a, b } = panels();
+    const first = await open(a.sdk);
+    await open(b.sdk);
+    first.current!.update((draft) => void (draft.elements = [{ id: "r1", type: "rectangle" }]));
+    await first.current!.flush();
+    // The view still holds a stroke drawn while "Deleted elsewhere" showed (its saver stops on the delete).
+    const view: OpenBoardView = { flush: vi.fn(async () => undefined), discard: vi.fn(), resume: vi.fn(), copy: () => ({ ...first.current!.data, elements: [{ id: "r1", type: "rectangle" }, { id: "after", type: "freedraw" }] }) };
+    first.attach(view);
+    b.host.documents.delete("board-start");
+    await vi.waitFor(() => expect(first.deleted).toBe(true));
+
+    await first.restoreDeleted();
+    expect(stored(a.host, "board-start")?.data.elements).toEqual([{ id: "r1", type: "rectangle" }, { id: "after", type: "freedraw" }]);
+  });
 });
 
 describe("deleting", () => {

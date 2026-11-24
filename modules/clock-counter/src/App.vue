@@ -8,7 +8,7 @@ import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { settingsDialogSize } from "@tavora/official-ui/components/ui/module-settings";
-import { Toaster, toast } from "@tavora/official-ui/components/ui/toast";
+import { handleUndoKey, Toaster, type Undoable } from "@tavora/official-ui/components/ui/toast";
 import { liftedDragImage, reducedMotion, useReorderMotion } from "@tavora/official-ui/components/ui/reorder";
 import type { TavoraSDK } from "@tavora/sdk";
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from "vue";
@@ -18,6 +18,7 @@ import ItemCard from "./ItemCard.vue";
 import ItemEditor from "./ItemEditor.vue";
 import SettingsSkeleton from "./SettingsSkeleton.vue";
 import { clocksRunning, count, find, groupOf, insert, lap, linkedGroups, MAX, move, moveTo, newItem, parseList, remove, resetClock, resetCounter, startPause, visualOrder, type Counter, type Item, type ItemKind, type ItemList } from "./items";
+import { offerDelete } from "./delete-offer";
 import { buildLiveState } from "./live";
 import { de, en } from "./locales";
 import { PANEL, UNDO_MS } from "./panel";
@@ -154,6 +155,8 @@ watch(editedItem, (item) => {
 });
 
 function onKey(event: KeyboardEvent): void {
+  // Ctrl+Z outside text fields takes back the newest delete.
+  if (handleUndoKey(event)) return;
   // Esc in an open list (a Select, say) closes only that.
   const inPopup = (event.target as Element | null)?.closest?.("[role=listbox], [role=menu], [role=dialog]");
   if (event.key === "Escape" && dialogOpen.value && !event.defaultPrevented && !inPopup) closeEditing();
@@ -280,55 +283,37 @@ watch(
 
 // ── Delete, with Undo ────────────────────────────────────────────────
 
-// The offer keeps its own time, so the hotkeys go when it ends even if its toast was closed early.
-const undo = shallowRef<{ item: Item; index: number; timer: ReturnType<typeof setTimeout>; toast: { dismiss: () => void } } | null>(null);
+// Each delete has its own offer (the kit's undoable): Undo or Ctrl+Z brings the item back with its hotkeys; once the
+// delete is final, also when the panel closes, its hotkeys go too.
+const offers = new Set<Undoable>();
 
-/** The undo time ran out: the item's hotkeys go too. */
+/** The delete is final: the item's hotkeys go too. */
 function forget(item: Item): void {
   void sdk.value?.hotkeys.remove(item.id).then(refreshHotkeys, () => undefined);
 }
 
 function removeItem(item: Item): void {
   const index = list.value.items.findIndex((other) => other.id === item.id);
-  if (undo.value) {
-    clearTimeout(undo.value.timer);
-    undo.value.toast.dismiss();
-    forget(undo.value.item);
-  }
   // Counters linked to it lose the link; Undo brings back the item, not their links. Its group hears of it too.
   const group = item.kind === "counter" ? groupOf(list.value, item.id) : null;
   void store.value?.apply([item.id, ...(group?.members.map((member) => member.id) ?? [])], (data) => remove(data, item.id));
   void hideOverGame(item.id).catch(() => undefined);
   if (editing.value === item.id) closeEditing();
-  const shown = toast({
+  const offer = offerDelete(item, index, {
     title: t("app.deleted", { label: item.label || t(`kind.${item.kind}`) }),
-    duration: UNDO_MS,
-    testid: "undo-toast",
-    actionTestid: "undo",
-    action: { label: t("undo"), onClick: runUndo },
+    restore: (kept, at) => {
+      // Checked on the list as it is now; the change itself may run again on a newer one.
+      if (find(list.value, kept.id) || list.value.items.length >= MAX.items) return false;
+      // Back with the same id, so its OBS link and hotkeys work again.
+      void store.value?.apply([kept.id], (data) => insert(data, kept, at));
+      rowFocus.restore(kept.id);
+    },
+    forget: (kept) => {
+      offers.delete(offer);
+      forget(kept);
+    },
   });
-  undo.value = { item: structuredClone(item), index, timer: setTimeout(() => dismissUndo(), UNDO_MS), toast: shown };
-}
-
-function dismissUndo(): void {
-  const offer = undo.value;
-  undo.value = null;
-  if (offer) {
-    clearTimeout(offer.timer);
-    offer.toast.dismiss();
-    forget(offer.item);
-  }
-}
-
-function runUndo(): void {
-  const offer = undo.value;
-  undo.value = null;
-  if (!offer) return;
-  clearTimeout(offer.timer);
-  offer.toast.dismiss();
-  // Back with the same id, so its OBS link and hotkeys work again.
-  void store.value?.apply([offer.item.id], (data) => insert(data, offer.item, offer.index));
-  rowFocus.restore(offer.item.id);
+  offers.add(offer);
 }
 
 // ── Calls that need the click ────────────────────────────────────────
@@ -550,13 +535,14 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   unmounted = true;
+  // The panel goes: its offers end (the deletes stay) and the deleted items' hotkeys go, while it is still connected.
+  for (const offer of [...offers]) offer.close();
   removeEventListener("keydown", onKey);
   cleanup.forEach((fn) => fn());
   clearInterval(ticker);
   clearTimeout(liveTimer);
   clearTimeout(sourcesTimer);
   clearTimeout(noticeTimer);
-  if (undo.value) clearTimeout(undo.value.timer);
 });
 </script>
 

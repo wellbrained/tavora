@@ -12,7 +12,7 @@ import {
   ORDER_ID,
   parseAppearance,
   parseNote,
-  parseOrder,
+  parseOrderDoc,
   SCRATCHPAD_ID,
   SCRATCHPAD_TITLE,
   titleFor,
@@ -82,7 +82,7 @@ export async function createNotesStore(sdk: TavoraSDK, options: { debounceMs?: n
   };
 
   /** The order the user put the notes in; notes not in it follow by age. */
-  const orderDoc = await openDocument(sdk, ORDER_ID, { parse: (raw) => ({ ids: parseOrder(raw) }), title: () => "Order" });
+  const orderDoc = await openDocument(sdk, ORDER_ID, { parse: parseOrderDoc, title: () => "Order" });
   const order = ref<string[]>(orderDoc.data.ids);
   orderDoc.onChange((event) => (order.value = event.data.ids));
 

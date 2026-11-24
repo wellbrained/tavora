@@ -55,7 +55,8 @@ function parseFiles(raw: JsonValue | undefined): Record<string, StoredFile> {
     if (id.length === 0 || id.length > 64 || value === null || typeof value !== "object" || Array.isArray(value)) continue;
     const { blobId, mimeType, created } = value;
     if (typeof blobId === "string" && BLOB_ID.test(blobId) && typeof mimeType === "string" && mimeType.length <= 40 && typeof created === "number" && Number.isFinite(created)) {
-      files[id] = { blobId, mimeType, created };
+      // A field a newer version added to the entry is kept as it is (unknownFields).
+      files[id] = { ...unknownFields<JsonValue>(value, ["blobId", "mimeType", "created"]), blobId, mimeType, created };
     }
   }
   return files;

@@ -10,7 +10,7 @@ import NoteEditor from "./NoteEditor.vue";
 import NoteList from "./NoteList.vue";
 import { setLanguage, t } from "./i18n";
 import { de, en } from "./locales";
-import { collectImageIds, emptyContent, nudged, reordered, SCRATCHPAD_ID, sections, UNTITLED, type NoteData, type NoteEntry, type RichText } from "./notes";
+import { collectImageIds, emptyContent, leftEmpty, nudged, reordered, SCRATCHPAD_ID, sections, UNTITLED, type NoteData, type NoteEntry, type RichText } from "./notes";
 import { createNotesStore, type NotesStore } from "./store";
 
 /** Below this width the list and the editor take turns. */
@@ -162,7 +162,7 @@ async function leaveCurrent(keep: string | null) {
   if (fresh && fresh !== keep) {
     freshId = null;
     const entry = store.value!.entries.value.get(fresh);
-    if (entry && !entry.text.trim()) await store.value!.remove(fresh).catch(() => undefined);
+    if (entry && leftEmpty(entry)) await store.value!.remove(fresh).catch(() => undefined);
   }
 }
 

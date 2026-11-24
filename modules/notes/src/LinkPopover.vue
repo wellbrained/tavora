@@ -25,7 +25,7 @@ const style = computed(() => ({ left: `${Math.max(8, Math.min(props.left, window
     data-testid="link-popover"
   >
     <span class="text-muted-foreground min-w-0 flex-1 truncate" :title="href" data-testid="link-href">{{ href }}</span>
-    <Button v-if="canOpen" variant="ghost" size="icon-sm" class="flex-none" data-testid="link-open" :aria-label="t('link.open')" :title="`${t('link.open')} (Ctrl+click)`" @click="emit('open')">
+    <Button v-if="canOpen" variant="ghost" size="icon-sm" class="flex-none" data-testid="link-open" :aria-label="t('link.open')" :title="t('link.openHint')" @click="emit('open')">
       <ExternalLink />
     </Button>
     <Button variant="ghost" size="icon-sm" class="flex-none" data-testid="link-edit" :aria-label="t('link.edit')" :title="t('link.edit')" @click="emit('edit')">

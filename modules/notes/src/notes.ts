@@ -103,6 +103,11 @@ export function parseNote(raw: JsonValue | null, now = new Date().toISOString())
   };
 }
 
+/** Whether a note made with New note was left as it came: no text, no title set by hand, no picture. It goes when left. */
+export function leftEmpty(entry: Pick<NoteEntry, "text" | "fixedTitle" | "images">): boolean {
+  return !entry.text.trim() && !entry.fixedTitle.trim() && entry.images.length === 0;
+}
+
 /** The note's plain text as paragraphs, shown when its stored formatting cannot be read. */
 export function contentFromText(text: string): RichText {
   const lines = text.split(/\r?\n/).slice(0, 5000);
@@ -211,6 +216,11 @@ export function parseOrder(raw: JsonValue | null): string[] {
   return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === "string") : [];
 }
 
+/** The stored order document: its ids, and whatever a newer version keeps next to them (unknownFields). */
+export function parseOrderDoc(raw: JsonValue | null): { ids: string[]; [key: string]: JsonValue } {
+  return { ...unknownFields<JsonValue>(raw, ["ids"]), ids: parseOrder(raw) };
+}
+
 /** The words relativeTime uses, and the locale for dates and times. */
 export interface TimeWords {
   justNow: string;
@@ -246,7 +256,8 @@ export function relativeTime(iso: string, now = Date.now(), words: TimeWords = E
 export function normalizeLink(input: string): string | null {
   const value = input.trim();
   if (!value) return null;
-  const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(value) ? value : `https://${value}`;
+  // Only "scheme://" or "mailto:" is a scheme: "localhost:3000" or "example.com:8080/path" is an address with a port.
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(value) || /^mailto:/i.test(value) ? value : `https://${value}`;
   try {
     const url = new URL(withScheme);
     return ["http:", "https:", "mailto:"].includes(url.protocol) ? url.href : null;

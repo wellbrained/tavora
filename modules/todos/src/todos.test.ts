@@ -24,6 +24,8 @@ import {
   parseList,
   pinnedTasks,
   removedBlock,
+  removedFinished,
+  restoreFinished,
   removedGroup,
   restoreGroup,
   canRestoreBlock,
@@ -464,5 +466,35 @@ describe("undoing a delete", () => {
     addTask(data, "g3", { id: "a", title: "A again", createdAt: AT }, "unused");
     expect(canRestoreGroup(data, again)).toBe(false);
     expect(restoreGroup(data, again)).toBe(false);
+  });
+});
+
+describe("deleting the finished to-dos of a group, with Undo", () => {
+  const list = () => {
+    const data = parseList(null);
+    addGroup(data, "g", "Run");
+    for (const [id, parentId] of [["a", null], ["a1", "a"], ["b", null], ["c", null], ["c1", "c"], ["d", null]] as const) addTask(data, "g", { id, title: id, createdAt: "", parentId }, "g");
+    setDone(data, "a", true, "t");
+    setDone(data, "c1", true, "t");
+    setDone(data, "d", true, "t");
+    return data;
+  };
+
+  it("puts every finished to-do back where it was", () => {
+    const data = list();
+    const before = structuredClone(data);
+    const removed = removedFinished(data, "g")!;
+    clearDone(data, "g");
+    expect(data.groups[0]!.tasks.map((task) => task.id)).toEqual(["b", "c"]);
+    expect(restoreFinished(data, removed)).toBe(true);
+    expect(data).toEqual(before);
+  });
+
+  it("can't put them back once one of them is back another way, or the group is gone", () => {
+    const data = list();
+    const removed = removedFinished(data, "g")!;
+    clearDone(data, "g");
+    deleteGroup(data, "g");
+    expect(restoreFinished(data, removed)).toBe(false);
   });
 });

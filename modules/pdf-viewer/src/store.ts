@@ -30,6 +30,24 @@ export async function createFilesStore(sdk: TavoraSDK, options: { /** The docume
 
   const find = (id: string) => files.value.find((file) => file.id === id);
 
+  /**
+   * Changes the list and waits for its save; rejects (a FileProblem for `name`) when the save failed. A failed save is
+   * told to `onError`, not to `flush`, and puts the list back as it was stored.
+   */
+  async function saved(change: Parameters<typeof doc.update>[0], name: string): Promise<void> {
+    let failure: unknown;
+    const stopErrors = doc.onError((error, kind) => {
+      if (kind === "save") failure = error;
+    });
+    try {
+      doc.update(change);
+      await doc.flush();
+    } finally {
+      stopErrors();
+    }
+    if (failure !== undefined) throw new FileProblem("store", failure instanceof Error ? failure.message : String(failure), name);
+  }
+
   /** Puts a file into the module's file store, after checking that it is a kind we show and that it fits. */
   async function store(file: Blob, name: string, type: string | null) {
     if (!type) throw new FileProblem("type", "type", name);
@@ -54,8 +72,13 @@ export async function createFilesStore(sdk: TavoraSDK, options: { /** The docume
       addedAt: info.createdAt,
       view: parseView(null, kindOf(info.type)),
     };
-    doc.update((data) => addFile(data, entry));
-    await doc.flush();
+    try {
+      await saved((data) => addFile(data, entry), name);
+    } catch (error) {
+      // Not listed, so nothing may stay behind: the stored copy goes again.
+      await sdk.blobs.delete(info.id).catch(() => undefined);
+      throw error;
+    }
     return entry;
   }
 
@@ -127,16 +150,14 @@ export async function createFilesStore(sdk: TavoraSDK, options: { /** The docume
     if (!link) return;
     const state = await sdk.files.check(link.ref);
     if (!state.found) return;
-    doc.update((data) => skipVersion(data, id, versionOf(state)));
-    await doc.flush();
+    await saved((data) => skipVersion(data, id, versionOf(state)), find(id)?.name ?? "");
   }
 
   /** Keep my copy: the file forgets its original, and so does Tavora. */
   async function unlink(id: string): Promise<void> {
     const link = find(id)?.link;
     if (!link) return;
-    doc.update((data) => dropLink(data, id));
-    await doc.flush();
+    await saved((data) => dropLink(data, id), find(id)?.name ?? "");
     await sdk.files.forget(link.ref).catch(() => undefined);
   }
 
@@ -156,16 +177,16 @@ export async function createFilesStore(sdk: TavoraSDK, options: { /** The docume
     },
     url: (id: string) => sdk.blobs.url(id),
     usage: () => sdk.blobs.usage(),
-    rename: (id: string, name: string) => {
-      doc.update((data) => renameFile(data, id, name));
-      return doc.flush();
-    },
-    /** Deletes the stored file and its entry, and drops the link to its original. */
+    /** Renames a file; rejects when the new name could not be saved (the old one shows again). */
+    rename: (id: string, name: string) => saved((data) => renameFile(data, id, name), find(id)?.name ?? name),
+    /**
+     * Takes the file off the list, then deletes the stored file and drops the link to its original. When the list
+     * can't be saved it rejects and the file stays, still there to open.
+     */
     async remove(id: string): Promise<void> {
       const file = find(id);
-      await sdk.blobs.delete(id);
-      doc.update((data) => removeFile(data, id));
-      await doc.flush();
+      await saved((data) => removeFile(data, id), file?.name ?? "");
+      await sdk.blobs.delete(id).catch(() => undefined);
       if (file?.link) await sdk.files.forget(file.link.ref).catch(() => undefined);
     },
     /** Remembers where the reader was in a file (saved a moment later). */

@@ -35,6 +35,8 @@ export interface OpenBoardView {
   discard(): void;
   /** The delete did not go through: what is drawn is stored again. */
   resume(): void;
+  /** What the board shows now, drawn after the last save included; null when nothing was drawn since it opened. */
+  copy?(): BoardData | null;
 }
 
 const isConflict = (error: unknown): boolean => error instanceof TavoraError && error.code === "CONFLICT";
@@ -167,8 +169,11 @@ export async function openBoardLibrary(sdk: TavoraSDK, options: BoardLibraryOpti
       return undo;
     },
 
-    /** After another panel deleted the open board: puts it back as this panel last saw it, and opens it. */
-    restoreDeleted: () => session.restoreDeleted(),
+    /**
+     * After another panel deleted the open board: puts it back as this panel shows it (what was drawn after the delete
+     * included, since nothing is saved meanwhile), and opens it.
+     */
+    restoreDeleted: () => session.restoreDeleted(view?.copy?.() ?? undefined),
 
     /** The ids of every stored file that a board uses, to find the ones nobody uses any more. */
     async usedFiles(): Promise<Set<string>> {

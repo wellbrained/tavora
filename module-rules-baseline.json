@@ -244,11 +244,6 @@
         "<Toggle v-model=\"bold\" label=\"Bold\" class=\"font-bold\">B</Toggle>": 1
       }
     },
-    "modules/playground/src/examples/tooltips/Values.vue": {
-      "kit-control": {
-        "<button v-for=\"(height, index) in bars\" :key=\"index\" class=\"bg-primary/30 hover:bg-primary focus-visible:bg-primary w-6 rounded-t-sm\" :style=\"{ height: height + '%' }\" :aria-label=\"'Day ' + (index + 1)\" v-bind=\"tipFor('chart')\" />": 1
-      }
-    },
     "modules/system-monitor/src/App.vue": {
       "all-caps": {
         "<h2 v-if=\"bothSections\" class=\"text-muted-foreground px-3 pt-1 text-[0.6875rem] font-medium tracking-wide uppercase\" data-testid=\"heading-connection\">{{ t(\"section.connection\") }}</h2>": 1,

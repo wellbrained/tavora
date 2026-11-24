@@ -29,7 +29,9 @@ import {
   moveGroup,
   openCount,
   parentAtEnd,
+  removedFinished,
   renameGroup,
+  restoreFinished,
   setGroupColor,
   type Group,
   type GroupColor,
@@ -177,6 +179,20 @@ function menuEntries(): MenuEntry[] {
   ];
 }
 
+/** Deletes the group's finished to-dos at once; Undo on the toast puts each back where it was. */
+function clearFinished() {
+  const groupId = props.group.id;
+  const removed = removedFinished(props.store.list.value, groupId);
+  if (!removed) return;
+  change((data) => clearDone(data, groupId));
+  const count = removed.runs.reduce((sum, run) => sum + run.tasks.length, 0);
+  panel.offerUndo(plural("app.finishedDeleted", count), () => {
+    // Checked on the list as it is now; the change itself may run again on a newer one (another panel saved first).
+    if (!restoreFinished(structuredClone(props.store.list.value), removed)) return false;
+    change((data) => void restoreFinished(data, removed));
+  });
+}
+
 /** The ⋯ button's menu opens below it; a right-click on the header opens the same menu below the header's end. */
 const menuOpen = ref(false);
 async function openMenu(anchor: Element) {
@@ -186,7 +202,7 @@ async function openMenu(anchor: Element) {
   if (choice === "rename") void startRename();
   else if (choice === "up") change((data) => moveGroup(data, props.group.id, -1));
   else if (choice === "down") change((data) => moveGroup(data, props.group.id, 1));
-  else if (choice === "clear-done") change((data) => clearDone(data, props.group.id));
+  else if (choice === "clear-done") clearFinished();
   else if (choice === "delete") emit("remove");
   else if (choice?.startsWith("color:")) {
     const option = choice.slice("color:".length);

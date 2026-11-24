@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.1.34",
+    "date": "2026-11-24",
+    "notes": [
+      "Your settings keep what a newer version saved.",
+      "Closing the panel right as it opens leaves nothing running."
+    ]
+  },
+  {
     "version": "0.1.33",
     "date": "2026-11-24",
     "notes": [

@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.2.41",
+    "date": "2026-11-24",
+    "notes": [
+      "Delete finished to-dos now has Undo.",
+      "Undo after Reset this page in Settings keeps what you changed on other pages.",
+      "Your look settings keep what a newer version saved."
+    ]
+  },
+  {
     "version": "0.2.40",
     "date": "2026-11-24",
     "notes": [

@@ -73,6 +73,15 @@ const KEYBOARD: Record<string, string> = {
   B: "b",
 };
 
+/**
+ * Whether a key or paste is meant for something else than the calculator: a text field, a dialog, an open menu (Enter
+ * on a value's Rename, Escape closing it), or something that already handled it (`handled`, the event's defaultPrevented).
+ */
+export function meantElsewhere(target: EventTarget | null, handled = false): boolean {
+  if (handled) return true;
+  return typeof HTMLElement !== "undefined" && target instanceof HTMLElement && !!target.closest("input, textarea, [role='dialog'], [role='menu']");
+}
+
 export type KeyPress = { key: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean };
 export type KeyAction = { type: "copy" } | { type: "key"; name: string };
 
@@ -82,7 +91,10 @@ export type KeyAction = { type: "copy" } | { type: "key"; name: string };
  */
 export function keyAction(press: KeyPress, context: { selection?: boolean; focusedControl?: boolean } = {}): KeyAction | null {
   if ((press.ctrlKey || press.metaKey) && press.key.toLowerCase() === "c" && !context.selection) return { type: "copy" };
-  if (press.ctrlKey || press.metaKey || press.altKey) return null;
+  // AltGr (Ctrl+Alt on Windows) and Option on a Mac type signs such as @ on many keyboards (German: AltGr+Q, Option+L):
+  // a sign typed that way counts as typed. A letter or a digit with Alt is someone else's shortcut.
+  const typedWithAlt = press.altKey && !press.metaKey && press.key.length === 1 && !/[\p{L}\p{N}]/u.test(press.key);
+  if ((press.ctrlKey || press.metaKey || press.altKey) && !typedWithAlt) return null;
   if (context.focusedControl && ["Enter", "Escape", "Backspace", "Delete"].includes(press.key)) return null;
   const name = KEYBOARD[press.key] ?? (/^[\d.+\-*/%()]$/.test(press.key) ? press.key : null);
   return name ? { type: "key", name } : null;

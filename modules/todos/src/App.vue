@@ -4,13 +4,15 @@
 // edited is each panel's own state.
 import { ChevronsDownUp, ChevronsUpDown, Settings as SettingsIcon } from "@lucide/vue";
 import { connectModule, errorMessage, useFocusRecovery } from "@tavora/official-ui";
+import { unknownFields } from "@tavora/official-ui/lib/utils";
 import { leaveRow } from "@tavora/official-ui/components/ui/animated-list";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { liftedDragImage, useReorderMotion } from "@tavora/official-ui/components/ui/reorder";
+import { settingsDialogSize } from "@tavora/official-ui/components/ui/module-settings";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
 import { handleUndoKey, Toaster, undoable, type Undoable, type UndoAnswer } from "@tavora/official-ui/components/ui/toast";
 import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
-import type { MenuOptions, TavoraSDK } from "@tavora/sdk";
+import type { JsonValue, MenuOptions, TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch, type ComponentPublicInstance } from "vue";
 import AddInput from "./AddInput.vue";
 import EditPlate from "./EditPlate.vue";
@@ -116,9 +118,12 @@ function offerUndo(message: string, run: () => UndoAnswer) {
 
 // ── Panel state ──────────────────────────────────────────────────────
 
+/** What a newer version keeps in the panel's state besides, saved back with it so it is still there. */
+let otherState: Record<string, JsonValue> = {};
+
 function savePanel() {
   // Plain values only: a Vue proxy cannot be sent to the host.
-  void sdk.value?.panel.setState({ finished: finished.value, collapsed: [...collapsed.value], folded: [...folded.value], live: { ...look.value }, panel: { ...panelLook.value } } satisfies PanelState);
+  void sdk.value?.panel.setState({ ...otherState, finished: finished.value, collapsed: [...collapsed.value], folded: [...folded.value], live: { ...look.value }, panel: { ...panelLook.value } } satisfies PanelState);
 }
 
 function setLook(next: LiveLook) {
@@ -143,7 +148,7 @@ const panelStyle = computed(() => {
 
 /** Opens the settings: the panel shows them big, in a dialog over the app, as every module's settings. */
 function openSettings() {
-  void sdk.value?.panel.openDialog({ width: 960, height: 680 }).catch((reason) => (error.value = errorMessage(reason)));
+  void sdk.value?.panel.openDialog(settingsDialogSize({ pages: 4 })).catch((reason) => (error.value = errorMessage(reason)));
 }
 
 function onKey(event: KeyboardEvent) {
@@ -221,6 +226,7 @@ onMounted(async () => {
       void todos.dispose().catch(() => undefined);
       return;
     }
+    otherState = unknownFields<JsonValue>(state, ["finished", "collapsed", "folded", "live", "panel", "hideDone", "liveBackground", "livePadding"]);
     const ids = (value: unknown) => (Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : []);
     // Panels saved by the version before had a "hide finished" switch instead.
     finished.value = state?.finished === "vanish" || (state?.finished === undefined && state?.hideDone === true) ? "vanish" : "stay";

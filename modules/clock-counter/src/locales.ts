@@ -2,7 +2,6 @@
 export const en = {
   loading: "Loading…",
   connectError: "Could not connect: {error}",
-  undo: "Undo",
   "store.saveError": "Could not save: {error}",
 
   "app.toolbar": "Clock & Counter controls",
@@ -179,7 +178,6 @@ export const en = {
 export const de: Record<keyof typeof en, string> = {
   loading: "Wird geladen…",
   connectError: "Keine Verbindung: {error}",
-  undo: "Rückgängig",
   "store.saveError": "Speichern ging nicht: {error}",
 
   "app.toolbar": "Steuerung von Clock & Counter",

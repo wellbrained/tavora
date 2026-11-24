@@ -62,12 +62,14 @@ function reset(id: string): () => void {
     panelLook.value = { ...PANEL_LOOK_DEFAULTS };
     return () => (panelLook.value = before);
   }
-  const before = look.value;
+  const keys = PAGE_KEYS[id as Exclude<Page, "panel">];
+  // Only this page's settings come back with Undo: what was changed on other pages meanwhile stays.
+  const before = Object.fromEntries(keys.map((key) => [key, look.value[key]])) as Partial<LiveLook>;
   // Finished to-dos is the panel's Keep finished to-dos, which a new panel has on.
   const fresh: LiveLook = { ...LIVE_DEFAULTS, showFinished: true };
-  const defaults = Object.fromEntries(PAGE_KEYS[id as Exclude<Page, "panel">].map((key) => [key, fresh[key]])) as Partial<LiveLook>;
+  const defaults = Object.fromEntries(keys.map((key) => [key, fresh[key]])) as Partial<LiveLook>;
   look.value = { ...look.value, ...defaults } as LiveLook;
-  return () => (look.value = before);
+  return () => (look.value = { ...look.value, ...before } as LiveLook);
 }
 
 const COLOR_NAMES = ["white", "yellow", "orange", "red", "pink", "violet", "blue", "teal", "green", "black"];

@@ -15,3 +15,10 @@ it("keeps a newer version's fields in the appearance", () => {
   expect(JSON.parse(JSON.stringify(appearance))).toMatchObject({ notes: { lineHeight: 2 }, sidebar: "left" });
   expect(appearance.notes.font).not.toBe("nope");
 });
+
+it("keeps a newer version's fields in the order of the notes", async () => {
+  const { parseOrderDoc } = await import("./notes");
+  const order = parseOrderDoc({ ids: ["a", 3, "b"], folders: ["x"] } as JsonValue);
+  order.ids = ["b", "a"];
+  expect(JSON.parse(JSON.stringify(order))).toEqual({ ids: ["b", "a"], folders: ["x"] });
+});

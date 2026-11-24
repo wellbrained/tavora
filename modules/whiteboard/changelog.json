@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.3.36",
+    "date": "2026-11-24",
+    "notes": [
+      "Restore after a delete in another panel keeps what you drew meanwhile.",
+      "The copy shortcut does nothing on an empty board.",
+      "Your pictures' details keep what a newer version saved."
+    ]
+  },
+  {
     "version": "0.3.35",
     "date": "2026-11-24",
     "notes": [

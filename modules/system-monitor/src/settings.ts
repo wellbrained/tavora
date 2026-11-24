@@ -4,7 +4,7 @@
 //    whether the traffic shows (off until the user turns it on; while off, Tavora reads none).
 //  - The connection watcher's own choices (on or off, the address pinged) are Tavora's, not kept here.
 import { SYSTEM_INTERVALS_MS, SYSTEM_MAX_DRIVES, type SystemInfo, type SystemInterval, type SystemWatchBlocks } from "@tavora/sdk";
-import { isRecord } from "@tavora/official-ui/lib/utils";
+import { isRecord, unknownFields } from "@tavora/official-ui/lib/utils";
 
 export const BLOCKS = ["cpu", "gpu", "ram", "drives"] as const;
 export type BlockId = (typeof BLOCKS)[number];
@@ -42,8 +42,9 @@ export const APP_KEY = "settings";
 export const defaultApp = (): AppSettings => ({ intervalMs: DEFAULT_INTERVAL, drives: null });
 export const defaultPanel = (): PanelSettings => ({ sections: { system: true, connection: true }, blocks: { cpu: true, gpu: true, ram: true, drives: true }, gpu: null, traffic: false });
 
+// Settings a newer version added are kept as they are (unknownFields), so they are still there after a change here.
 export function parseApp(raw: unknown): AppSettings {
-  const result = defaultApp();
+  const result: AppSettings = { ...unknownFields(raw, ["intervalMs", "drives"]), ...defaultApp() };
   if (!isRecord(raw)) return result;
   const interval = INTERVALS.find((ms) => ms === raw.intervalMs);
   if (interval) result.intervalMs = interval;
@@ -55,8 +56,10 @@ export function parseApp(raw: unknown): AppSettings {
 }
 
 export function parsePanel(raw: unknown): PanelSettings {
-  const result = defaultPanel();
+  const result: PanelSettings = { ...unknownFields(raw, ["sections", "blocks", "gpu", "traffic"]), ...defaultPanel() };
   if (!isRecord(raw)) return result;
+  result.sections = { ...unknownFields<boolean>(raw.sections, SECTIONS), ...result.sections };
+  result.blocks = { ...unknownFields<boolean>(raw.blocks, BLOCKS), ...result.blocks };
   if (isRecord(raw.sections)) {
     for (const id of SECTIONS) {
       const value = raw.sections[id];

@@ -123,7 +123,8 @@ function sessionOpened(session: BoardSession) {
   library.value?.attach(session);
   const offs = [session.onState((next) => (boardState.value = next)), session.onNotice(notify), session.onCopyShortcut(() => {
     // A picture is already being copied or saved: the shortcut is ignored until it is done.
-    if (!copying.value) void copyAsPicture();
+    // Nothing on the board (the Copy button is off then): the shortcut does nothing either.
+    if (!copying.value && boardState.value.ready && !boardState.value.empty) void copyAsPicture();
   })];
   stopSession = () => offs.forEach((off) => off());
 }
