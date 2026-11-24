@@ -27,6 +27,7 @@ import { MAX_CONTENT_SCALE, MIN_CONTENT_SCALE } from "../shared/overlay-content"
 import { backupsDir } from "./backup";
 import { keepCopy } from "./fsutil";
 import { SAVED_FILES, SavedFile } from "./saved-file";
+import { isRecord } from "../shared/is-record";
 
 export { MIN_OVERLAY_SIZE, type Rect };
 
@@ -380,7 +381,6 @@ export interface CopyOutcome {
 
 const INSTANCE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const validField = (value: unknown) => typeof value === "string" && value.length > 0 && value.length <= 128;
-const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 /** A window size that is a size: whole numbers, big enough to be a window, not absurd. */
 function validSize(value: unknown): SeenSize | null {
   if (typeof value !== "object" || value === null) return null;
@@ -421,7 +421,7 @@ function validScale(value: unknown): number | null {
 
 /** A saved overlay, or null when it can't be used. `oldKeys`: a file of version 1, whose `panel-` keys are not kept. */
 function readOverlay(entry: unknown, oldKeys = false): GameOverlay | null {
-  if (!isObject(entry)) return null;
+  if (!isRecord(entry)) return null;
   const { owner, moduleId, workspaceId, key } = entry;
   if (![owner, moduleId, workspaceId].every(validField)) return null;
   if (typeof key !== "string" || !OVERLAY_KEY.test(key) || (oldKeys && key.startsWith(RESERVED_KEY_PREFIX))) return null;
@@ -431,7 +431,7 @@ function readOverlay(entry: unknown, oldKeys = false): GameOverlay | null {
 }
 
 function readPanel(entry: unknown): InGamePanel | null {
-  if (!isObject(entry)) return null;
+  if (!isRecord(entry)) return null;
   const { owner, moduleId, workspaceId, instanceId } = entry;
   if (![owner, moduleId, workspaceId].every(validField)) return null;
   if (typeof instanceId !== "string" || !INSTANCE_ID.test(instanceId)) return null;
@@ -517,10 +517,10 @@ export class GameOverlayStore {
     const store = new GameOverlayStore(saved, old ? GameOverlayStore.readOld(raw, scopeOf, migrated) : GameOverlayStore.readSetups(raw), raw?.exclusiveHintShown === true, scopeOf);
     store.migrated = migrated;
     store.moved = old;
-    const layout = isObject(raw?.layout) ? raw.layout : {};
+    const layout = isRecord(raw?.layout) ? raw.layout : {};
     if (isGridSetting(layout.grid)) store.gridSetting = layout.grid;
     if (layout.toolbar !== undefined) store.toolbarSetting = normalizeToolbar(layout.toolbar);
-    for (const [gameId, size] of Object.entries(isObject(layout.seen) ? layout.seen : {}).slice(0, MAX_SEEN)) {
+    for (const [gameId, size] of Object.entries(isRecord(layout.seen) ? layout.seen : {}).slice(0, MAX_SEEN)) {
       const valid = validSize(size);
       if (valid && validField(gameId)) store.seen.set(gameId, valid);
     }
@@ -544,7 +544,7 @@ export class GameOverlayStore {
     ];
     const seen = new Set<string>();
     for (const entry of Array.isArray(raw?.setups) ? raw.setups : []) {
-      if (!isObject(entry) || !validField(entry.id) || seen.has(entry.id as string)) continue;
+      if (!isRecord(entry) || !validField(entry.id) || seen.has(entry.id as string)) continue;
       const id = entry.id as string;
       seen.add(id);
       let setup = setups.find((item) => item.id === id);
@@ -566,7 +566,7 @@ export class GameOverlayStore {
   /** The items of a file of version 4 or before, moved to setups. It kept at most eight of a game's own and eight general ones. */
   private static readOld(raw: Partial<GameOverlayFile>, scopeOf: (workspaceId: string) => OverlayScope, migrated: boolean): Setup[] {
     const scoped = (entry: unknown, workspaceId: string): OverlayScope => {
-      const scope = isObject(entry) ? entry.scope : undefined;
+      const scope = isRecord(entry) ? entry.scope : undefined;
       return scope === "all" || scope === "game" ? scope : scopeOf(workspaceId);
     };
     const counts = new Map<string, number>();

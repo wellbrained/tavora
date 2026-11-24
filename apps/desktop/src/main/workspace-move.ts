@@ -6,6 +6,7 @@ import { GAME_OVERLAYS_FILE } from "./game-overlays";
 import { HOTKEYS_FILE } from "./hotkeys";
 import { OVERLAYS_FILE } from "./overlays";
 import { LIBRARY_FILE, WORKSPACE_FILE } from "./saved-data";
+import { isRecord } from "../shared/is-record";
 
 // The Game → Workspace rename (decided 2026-10-27): an item on the rail is a workspace, a game workspace (linked to
 // a game) or a personal one. What Tavora saved before used the old names for it; this moves them to the new ones,
@@ -22,7 +23,6 @@ export const MOVED_VERSIONS = { [LIBRARY_FILE]: 2, [WORKSPACE_FILE]: 3, [GAME_OV
 
 type Json = Record<string, unknown>;
 
-const isObject = (value: unknown): value is Json => typeof value === "object" && value !== null && !Array.isArray(value);
 
 /** A copy of `value` with some keys renamed, in their old places. */
 function renameKeys(value: Json, names: Record<string, string>): Json {
@@ -35,7 +35,7 @@ function mapValues(value: Json, map: (item: unknown) => unknown): Json {
 
 /** Renames `gameId` to `workspaceId` in each record of a list. */
 function renameInList(list: unknown): unknown {
-  return Array.isArray(list) ? list.map((item) => (isObject(item) ? renameKeys(item, { gameId: "workspaceId" }) : item)) : list;
+  return Array.isArray(list) ? list.map((item) => (isRecord(item) ? renameKeys(item, { gameId: "workspaceId" }) : item)) : list;
 }
 
 /** Whether a file of this version still has the old names; a newer file is left alone. */
@@ -49,19 +49,19 @@ export function moveLibrary(saved: Json): Json | null {
   if (!isOld(saved.version, MOVED_VERSIONS[LIBRARY_FILE])) return null;
   const moved = renameKeys(saved, { games: "workspaces", lastGameId: "lastWorkspaceId", gameEndWorkspace: "gameEndWorkspaceId" });
   moved.version = MOVED_VERSIONS[LIBRARY_FILE];
-  if (isObject(moved.workspaces)) {
+  if (isRecord(moved.workspaces)) {
     moved.workspaces = mapValues(moved.workspaces, (entry) => {
-      if (!isObject(entry)) return entry;
+      if (!isRecord(entry)) return entry;
       const workspace = renameKeys(entry, { lastPlayedAt: "lastOpenedAt" });
       if (workspace.kind === "workspace") workspace.kind = "personal";
       return workspace;
     });
   }
-  if (isObject(moved.folders)) moved.folders = mapValues(moved.folders, (folder) => (isObject(folder) ? renameKeys(folder, { games: "workspaces" }) : folder));
-  if (Array.isArray(moved.root)) moved.root = moved.root.map((item) => (isObject(item) && item.kind === "game" ? { ...item, kind: "workspace" } : item));
+  if (isRecord(moved.folders)) moved.folders = mapValues(moved.folders, (folder) => (isRecord(folder) ? renameKeys(folder, { games: "workspaces" }) : folder));
+  if (Array.isArray(moved.root)) moved.root = moved.root.map((item) => (isRecord(item) && item.kind === "game" ? { ...item, kind: "workspace" } : item));
   if (moved.startup === "last-game") moved.startup = "last-workspace";
   // The folder the icon dialog last opened in.
-  if (isObject(moved.dialogFolders)) moved.dialogFolders = renameKeys(moved.dialogFolders, { "game-image": "workspace-image" });
+  if (isRecord(moved.dialogFolders)) moved.dialogFolders = renameKeys(moved.dialogFolders, { "game-image": "workspace-image" });
   return moved;
 }
 
@@ -122,7 +122,7 @@ export async function moveToWorkspaces(userData: string, log: (line: string) => 
     } catch {
       continue;
     }
-    const moved = isObject(saved) ? move(saved) : null;
+    const moved = isRecord(saved) ? move(saved) : null;
     if (moved) pending.push({ name, old, moved });
   }
   if (pending.length === 0) return [];

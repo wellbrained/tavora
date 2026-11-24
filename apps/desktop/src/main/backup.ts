@@ -1,6 +1,7 @@
-import { copyFile, cp, lstat, mkdir, readdir, rename, rm, stat } from "node:fs/promises";
+import { copyFile, cp, lstat, mkdir, readdir, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import { isOwnerId } from "@tavora/module-schema";
+import { pathExists } from "./fsutil";
 import { FILES_DIR } from "./module-files";
 import { DATA_FILES, hasLibrary } from "./saved-data";
 import { SWEEP_HOLD_FILE } from "./module-data";
@@ -44,15 +45,6 @@ async function sizeOf(target: string): Promise<number> {
   return total;
 }
 
-async function exists(target: string): Promise<boolean> {
-  try {
-    await stat(target);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export interface BackupOptions {
   userData: string;
   /** The folder modules keep pictures in, which may be outside userData; saved in the snapshot as FILES_DIR. */
@@ -83,7 +75,7 @@ export async function backupData(options: BackupOptions): Promise<BackupResult> 
   const target = path.join(root, day);
 
   if (!(await hasLibrary(userData))) return { status: "nothing" };
-  if (await exists(target)) return { status: "exists", dir: target };
+  if (await pathExists(target)) return { status: "exists", dir: target };
 
   const source = (name: string) => (name === FILES_DIR && options.moduleFiles ? options.moduleFiles : path.join(userData, name));
   // In a folder the user can reach, like Pictures\Tavora, only the modules' own folders are theirs to back up.
@@ -120,7 +112,7 @@ export async function backupData(options: BackupOptions): Promise<BackupResult> 
   await mkdir(partial, { recursive: true });
   try {
     for (const name of DATA_FILES) {
-      if (await exists(path.join(userData, name))) await copyFile(path.join(userData, name), path.join(partial, name));
+      if (await pathExists(path.join(userData, name))) await copyFile(path.join(userData, name), path.join(partial, name));
     }
     for (const name of dirs) {
       for (const part of await parts(name)) {
@@ -134,7 +126,7 @@ export async function backupData(options: BackupOptions): Promise<BackupResult> 
           if (link) log(`backup leaves out the link ${file}`);
           return !link;
         };
-        if (await exists(from)) await cp(from, path.join(partial, name, part), { recursive: true, filter: keep });
+        if (await pathExists(from)) await cp(from, path.join(partial, name, part), { recursive: true, filter: keep });
       }
     }
     await rename(partial, target);
@@ -145,7 +137,7 @@ export async function backupData(options: BackupOptions): Promise<BackupResult> 
 
   // While a start held storage back for a lost library (sweep-hold.json), the older backups may hold the only good copy:
   // none is pruned until the user's data is back.
-  if (!(await exists(path.join(userData, SWEEP_HOLD_FILE)))) await pruneBackups(root, options.keep ?? BACKUP_KEEP);
+  if (!(await pathExists(path.join(userData, SWEEP_HOLD_FILE)))) await pruneBackups(root, options.keep ?? BACKUP_KEEP);
   log(`backup ${day} made${withPictures ? "" : " (without pictures)"}`);
   return { status: "made", dir: target, withPictures };
 }

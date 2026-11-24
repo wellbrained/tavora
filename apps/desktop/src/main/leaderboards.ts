@@ -1,6 +1,7 @@
 import { apiReason, isLeaderboardId, isLeaderboardPeriod, LEADERBOARD_PERIODS, type ApiReason, type LeaderboardBoard } from "@tavora/module-schema";
 import { LIMITS, type LeaderboardMine, type LeaderboardPeriod, type LeaderboardRow, type LeaderboardStanding, type LeaderboardStatus, type LeaderboardSubmitResult, type LeaderboardTop } from "@tavora/sdk/protocol";
 import { HostError } from "./errors";
+import { isRecord } from "../shared/is-record";
 
 // The leaderboards connector (decided 2026-10-28, apps/api/src/leaderboards.ts has the service's side). A module
 // asks; Tavora's main process talks to the service with the user's sign-in, which never reaches the module, and
@@ -55,7 +56,6 @@ const NO_SERVICE: LeaderboardStatus = { online: false, signedIn: false, availabl
 const MAX_SUBMIT_BYTES = 30_000;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
-const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 const count = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : 0);
 /** The local calendar day (YYYY-MM-DD) of a time in milliseconds. */
 const dayOf = (at: number) => {
@@ -75,7 +75,7 @@ function declaration(board: LeaderboardBoard): Record<string, string> {
 
 /** One standing as the module gets it: the rank, the size of the board and the numbers of the board's kind; null where there is none. */
 function standing(value: unknown, kind: LeaderboardBoard["kind"]): LeaderboardStanding | null {
-  if (!isObject(value)) return null;
+  if (!isRecord(value)) return null;
   const numbers: Partial<LeaderboardStanding> =
     kind === "streak" ? { current: count(value.current), best: count(value.best) }
     : kind === "score" ? { value: count(value.value) }
@@ -88,7 +88,7 @@ const emptyPeriods = (): Record<LeaderboardPeriod, LeaderboardStanding | null> =
 
 /** A result with only the fields results have; anything else the module put in stays behind. */
 function resultFields(value: unknown): Record<string, unknown> {
-  const input = isObject(value) ? value : {};
+  const input = isRecord(value) ? value : {};
   const fields = Object.fromEntries(["id", "outcome", "value", "at", "day"].filter((key) => key in input).map((key) => [key, input[key]]));
   // Like the SDK: a result without a day belongs to the local day it ended on.
   if (!("day" in fields) && typeof fields.at === "number" && Number.isFinite(fields.at)) fields.day = dayOf(fields.at);
@@ -143,7 +143,7 @@ export class ModuleLeaderboards {
   }
 
   async submit(params: unknown): Promise<LeaderboardSubmitResult> {
-    const input = isObject(params) ? params : {};
+    const input = isRecord(params) ? params : {};
     const board = this.board(input.board);
     const results = input.results;
     if (!Array.isArray(results) || results.length === 0 || results.length > LIMITS.maxLeaderboardResults) {
@@ -168,7 +168,7 @@ export class ModuleLeaderboards {
   }
 
   async top(params: unknown): Promise<LeaderboardTop> {
-    const input = isObject(params) ? params : {};
+    const input = isRecord(params) ? params : {};
     const board = this.board(input.board);
     if (input.period !== undefined && !isLeaderboardPeriod(input.period)) throw new HostError("INVALID_PARAMS", `params.period must be one of ${LEADERBOARD_PERIODS.join(", ")}`);
     this.checkDay(input.day);
@@ -189,7 +189,7 @@ export class ModuleLeaderboards {
 
   /** The user's own standing on every board of the manifest, in every period. Signed out, or with accounts off, there is none. */
   async mine(params: unknown): Promise<LeaderboardMine> {
-    const input = isObject(params) ? params : {};
+    const input = isRecord(params) ? params : {};
     this.checkDay(input.day);
     const { boards, account, moduleId } = this.options;
     const none = () => ({ boards: boards.map((board) => ({ id: board.id, name: board.name, periods: emptyPeriods() })) });
@@ -207,7 +207,7 @@ export class ModuleLeaderboards {
       boards: boards.map((board) => {
         const periods = emptyPeriods();
         const found = listed.find((item) => item.id === board.id);
-        const given = found && isObject(found.periods) ? found.periods : {};
+        const given = found && isRecord(found.periods) ? found.periods : {};
         for (const period of LEADERBOARD_PERIODS) periods[period] = standing(given[period], board.kind);
         return { id: board.id, name: board.name, periods };
       }),

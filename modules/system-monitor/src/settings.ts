@@ -4,6 +4,7 @@
 //    whether the traffic shows (off until the user turns it on; while off, Tavora reads none).
 //  - The connection watcher's own choices (on or off, the address pinged) are Tavora's, not kept here.
 import { SYSTEM_INTERVALS_MS, SYSTEM_MAX_DRIVES, type SystemInfo, type SystemInterval, type SystemWatchBlocks } from "@tavora/sdk";
+import { isRecord } from "@tavora/official-ui/lib/utils";
 
 export const BLOCKS = ["cpu", "gpu", "ram", "drives"] as const;
 export type BlockId = (typeof BLOCKS)[number];
@@ -40,8 +41,6 @@ export const APP_KEY = "settings";
 
 export const defaultApp = (): AppSettings => ({ intervalMs: DEFAULT_INTERVAL, drives: null });
 export const defaultPanel = (): PanelSettings => ({ sections: { system: true, connection: true }, blocks: { cpu: true, gpu: true, ram: true, drives: true }, gpu: null, traffic: false });
-
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 
 export function parseApp(raw: unknown): AppSettings {
   const result = defaultApp();

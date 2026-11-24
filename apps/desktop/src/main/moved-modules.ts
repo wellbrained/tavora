@@ -1,7 +1,7 @@
-import { mkdir, readdir, readFile, rename, rmdir, stat } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, rmdir } from "node:fs/promises";
 import path from "node:path";
 import { isGameId, OFFICIAL_OWNER } from "@tavora/module-schema";
-import { writeFileAtomic } from "./fsutil";
+import { pathExists, writeFileAtomic } from "./fsutil";
 import { modulePartition, partitionDirName } from "./module-data";
 import { GAME_OVERLAYS_FILE } from "./game-overlays";
 import { HOTKEYS_FILE } from "./hotkeys";
@@ -47,7 +47,7 @@ export async function moveOfficialModules(userData: string, log: (line: string) 
       for (const game of await readdir(source).catch(() => [] as string[])) {
         if (!isGameId(game) && game !== APP_DATA_DIR) continue;
         const target = path.join(root, MOVED_MODULES_OWNER, to, game);
-        if (await exists(target)) {
+        if (await pathExists(target)) {
           log(`${to} already has data in ${game}; what ${from} saved there stays`);
           continue;
         }
@@ -61,7 +61,7 @@ export async function moveOfficialModules(userData: string, log: (line: string) 
       const game = name.slice(name.lastIndexOf("@") + 1).toLowerCase();
       if (!isGameId(game) || name.toLowerCase() !== partitionDirName(modulePartition(OFFICIAL_OWNER, from, game)).toLowerCase()) continue;
       const target = path.join(partitions, partitionDirName(modulePartition(MOVED_MODULES_OWNER, to, game)));
-      if (!(await exists(target))) await rename(path.join(partitions, name), target);
+      if (!(await pathExists(target))) await rename(path.join(partitions, name), target);
     }
   }
   await renameIn(path.join(userData, WORKSPACE_FILE), true);
@@ -116,9 +116,3 @@ async function renameIn(file: string, panels: boolean): Promise<void> {
   }
 }
 
-async function exists(target: string): Promise<boolean> {
-  return stat(target).then(
-    () => true,
-    () => false,
-  );
-}

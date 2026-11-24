@@ -5,6 +5,7 @@ import { GRID_SETTINGS, isAlignEdge, isGridSetting, type AlignEdge, type Canvas,
 import { isArrangeTo, type ArrangeTo } from "./layout-stack";
 import { normalizeButtons, type ToolbarSetting } from "./layout-toolbar";
 import type { AnchoredRect, Rect } from "./overlay-anchor";
+import { isRecord } from "./is-record";
 
 /** The picker entries of the All games and Everywhere setups (the others are games, by their workspace id). */
 export const LAYOUT_ALL_GAMES = "$all";
@@ -237,13 +238,12 @@ export const rectsOf = (message: { id: string; rect: Rect } | { rects: PlacedRec
 /** The most ids one message may name. */
 const MAX_IDS = 64;
 
-const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 const text = (value: unknown, max = 300): value is string => typeof value === "string" && value.length > 0 && value.length <= max;
 const coordinate = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && Math.abs(value) <= 100_000;
 
 /** A rectangle with plain numbers, or null. */
 export function parseRect(value: unknown): Rect | null {
-  if (!isObject(value)) return null;
+  if (!isRecord(value)) return null;
   const { x, y, width, height } = value;
   if (!coordinate(x) || !coordinate(y) || !coordinate(width) || !coordinate(height) || width < 0 || height < 0) return null;
   return { x, y, width, height };
@@ -265,7 +265,7 @@ function oneOrMany(raw: Record<string, unknown>): { id: string } | { ids: string
 }
 
 function parseChange(value: unknown): LayoutItemChange | null {
-  if (!isObject(value)) return null;
+  if (!isRecord(value)) return null;
   const change: LayoutItemChange = {};
   if (value.mode !== undefined) {
     if (value.mode !== "always" && value.mode !== "toggle") return null;
@@ -284,7 +284,7 @@ function parseChange(value: unknown): LayoutItemChange | null {
 
 /** What a renderer sent, or null when it is not a message the layout knows. */
 export function parseLayoutMessage(raw: unknown): LayoutMessage | null {
-  if (!isObject(raw) || typeof raw.type !== "string") return null;
+  if (!isRecord(raw) || typeof raw.type !== "string") return null;
   switch (raw.type) {
     case "game":
       return text(raw.gameId, 128) ? { type: "game", gameId: raw.gameId } : null;
@@ -320,8 +320,8 @@ export function parseLayoutMessage(raw: unknown): LayoutMessage | null {
         if (!Array.isArray(raw.rects) || raw.rects.length === 0 || raw.rects.length > MAX_IDS) return null;
         const rects: PlacedRect[] = [];
         for (const entry of raw.rects) {
-          const rect = isObject(entry) ? parseRect(entry.rect) : null;
-          if (!rect || !isObject(entry) || !text(entry.id) || rects.some((other) => other.id === entry.id)) return null;
+          const rect = isRecord(entry) ? parseRect(entry.rect) : null;
+          if (!rect || !isRecord(entry) || !text(entry.id) || rects.some((other) => other.id === entry.id)) return null;
           rects.push({ id: entry.id, rect });
         }
         return { type: raw.type as "drag" | "commit", rects } as LayoutMessage;

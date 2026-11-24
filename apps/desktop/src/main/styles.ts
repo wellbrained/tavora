@@ -10,6 +10,7 @@ import { candidates, glassOpacity, insetPanelTheme, moduleTheme, withRadius, typ
 import { OFFICIAL_PREFIX, type Provenance } from "./registry";
 import { CLASSIC_STYLE_ID, resolveFontId, resolveRadius, STYLE_RADIUS } from "../shared/styles";
 import { DEFAULT_FONT_ID, themeFont, UI_FONTS, type UiFontId } from "../shared/ui-fonts";
+import { isRecord } from "../shared/is-record";
 
 export const STYLE_MANIFEST = "tavora.style.json";
 
@@ -63,7 +64,6 @@ export type StyleCheck = { ok: true; style: StylePackage; hints: string[] } | { 
 type Fields = Record<string, unknown>;
 
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
-const isRecord = (value: unknown): value is Fields => typeof value === "object" && value !== null && !Array.isArray(value);
 const text = (value: unknown, max: number): value is string => typeof value === "string" && value.trim().length > 0 && value.length <= max;
 const optionalText = (value: unknown, max: number) => value === undefined || text(value, max);
 const unknownKeys = (record: Fields, allowed: readonly string[]) => Object.keys(record).filter((key) => !allowed.includes(key));

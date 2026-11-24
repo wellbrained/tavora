@@ -8,6 +8,7 @@ import { Fragment, Slice } from "@tiptap/pm/model";
 import { Plugin, PluginKey, type Transaction } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
 import { clipboardHasText, isAcceptedType } from "./images";
+import { isRecord } from "@tavora/official-ui/lib/utils";
 
 /** Longer text is pasted as plain paragraphs, without looking for links or Markdown in it. */
 export const PLAIN_PASTE_CHARS = 100_000;
@@ -41,8 +42,6 @@ export interface WhiteboardClip {
 }
 
 const EXTENSIONS: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif", "image/svg+xml": "svg" };
-
-const isRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value);
 
 /** A picture from a base64 data: URL, or null when it isn't one. */
 export function fileFromDataUrl(dataUrl: string, name: string): File | null {

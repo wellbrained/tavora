@@ -4,6 +4,7 @@
  */
 import { MEDIA_ACTIONS, type MediaAction, type MediaStatus } from "@tavora/sdk/protocol";
 import { HostError } from "./errors";
+import { isRecord } from "../shared/is-record";
 
 /** A session as the helper reports it, before Tavora adds the app's name and the cover. */
 export interface HelperSession {
@@ -39,7 +40,6 @@ export const MAX_COVER_BASE64 = Math.ceil((8 * 1024 * 1024) / 3) * 4;
 const STATUSES = new Set<MediaStatus>(["playing", "paused", "stopped", "changing", "closed"]);
 const COVER_TYPES = new Set(["image/jpeg", "image/png", "image/bmp", "image/gif", "image/webp", ""]);
 
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 const text = (value: unknown, max = MAX_TEXT): string | null => (typeof value === "string" ? value.slice(0, max) : null);
 const whole = (value: unknown): number | null | undefined =>
   value === null ? null : typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : undefined;

@@ -3,6 +3,14 @@ import { lstat, mkdir, open, readdir, readFile, rm, stat } from "node:fs/promise
 import path from "node:path";
 import { renameHeld } from "./rename-held";
 
+/** Whether the path can be looked at; any error, a missing path or one that can't be read, counts as no. */
+export async function pathExists(target: string): Promise<boolean> {
+  return stat(target).then(
+    () => true,
+    () => false,
+  );
+}
+
 /** The temp file writeFileAtomic writes first, `<file>.<12 hex>.tmp`, or a write at quit, `<file>.now` (saved-file.ts). */
 const TEMP_NAME = /^(.+)(?:\.[0-9a-f]{12}\.tmp|\.now)$/;
 

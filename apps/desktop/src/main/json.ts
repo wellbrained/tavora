@@ -3,6 +3,7 @@ import path from "node:path";
 import type { JsonValue } from "@tavora/sdk/protocol";
 import { HostError } from "./errors";
 import { keepCopy, keepCopyAt } from "./fsutil";
+import { isRecord } from "../shared/is-record";
 
 const MAX_DEPTH = 64;
 
@@ -119,8 +120,6 @@ export interface SavedFileRules {
 
 export type SavedRecord = Record<string, unknown>;
 
-export const isSavedRecord = (value: unknown): value is SavedRecord => typeof value === "object" && value !== null && !Array.isArray(value);
-
 /**
  * Reads one of the user's saved JSON files. Missing gives null. One that isn't a JSON object is set aside (renamed,
  * never overwritten), the user hears of it, and null comes back. One a newer Tavora wrote (its version is above
@@ -147,7 +146,7 @@ export async function checkSavedFile(file: string, bytes: Buffer | string, rules
   } catch {
     value = undefined;
   }
-  if (!isSavedRecord(value)) {
+  if (!isRecord(value)) {
     if (rules.leaveInPlace) await keepDamagedCopy(file, bytes, rules.notice !== false);
     else await setAside(file, rules.notice !== false);
     return null;
@@ -192,6 +191,6 @@ export async function forgetSealedFile(file: string): Promise<void> {
  * workspace and module storage keep them, so a PC on an older Tavora loses nothing a newer one saved (the cloud copy).
  */
 export function unknownFields(saved: unknown, known: readonly string[]): SavedRecord {
-  if (!isSavedRecord(saved)) return {};
+  if (!isRecord(saved)) return {};
   return Object.fromEntries(Object.entries(saved).filter(([key]) => !known.includes(key)));
 }

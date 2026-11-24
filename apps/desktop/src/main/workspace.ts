@@ -7,6 +7,7 @@ import { gridTemplate, type LayoutTemplate } from "../shared/layout-templates";
 import { LAYOUT_LIMITS, layoutPanels, parseSavedLayout, pruneLayout, templateLayout, vacateLayout, type SavedLayout } from "./layout";
 import { checkPanelContent, type PanelContent } from "./panel-content";
 import { SAVED_FILES, SavedFile } from "./saved-file";
+import { isRecord } from "../shared/is-record";
 
 export { INSTANCE_ID } from "./ids";
 
@@ -98,8 +99,6 @@ export function emptyWorkspaces(workspaceIds: readonly string[]): WorkspaceState
   return { version: 3, workspaces: Object.fromEntries(workspaceIds.map((id) => [id, emptyWorkspace()])) };
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 function parseSnapshot(raw: unknown, isInstalled: (moduleId: string) => boolean): Snapshot | null {
   if (!isRecord(raw) || !isRecord(raw.modules)) return null;

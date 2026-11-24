@@ -7,6 +7,7 @@ import { keepOverlayTextBox, readOverlayTextBox, type OverlayTextBoxSettings } f
 import type { JsonValue } from "@tavora/sdk";
 import { compile, COUNT, defaultText, legacyText, segments, TIME, type Member, type Segment } from "./template";
 import { DEFAULT_FORMAT, formatSeconds, isFormat } from "./time";
+import { isRecord } from "@tavora/official-ui/lib/utils";
 
 export const LIST_ID = "items";
 export const LIST_TITLE = "Clocks and counters";
@@ -172,7 +173,6 @@ export type ItemList = {
   items: Item[];
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 const text = (value: unknown, max: number, fallback = "") => (typeof value === "string" ? value.slice(0, max) : fallback);
 const whole = (value: unknown, min: number, max: number, fallback: number) =>
   typeof value === "number" && Number.isFinite(value) ? Math.min(max, Math.max(min, Math.round(value))) : fallback;

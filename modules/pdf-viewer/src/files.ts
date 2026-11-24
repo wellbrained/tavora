@@ -2,6 +2,7 @@
 // Every step runs again on a newer copy after a conflict (see `openDocument`), so each one is safe to repeat.
 
 import { BLOB_TYPES, type ReadOnlyFileState } from "@tavora/sdk";
+import { isRecord } from "@tavora/official-ui/lib/utils";
 
 export const FILES_ID = "files";
 /** The longest display name a file can have. */
@@ -58,8 +59,6 @@ export interface FilesData {
 }
 
 export const emptyFiles = (): FilesData => ({ files: [] });
-
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 
 export const kindOf = (type: string): FileKind => (type === "application/pdf" ? "pdf" : "image");
 

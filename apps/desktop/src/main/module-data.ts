@@ -1,8 +1,8 @@
-import { mkdir, readdir, readFile, rename, rm, rmdir, stat } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, rm, rmdir } from "node:fs/promises";
 import path from "node:path";
 import { isModuleId, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER } from "@tavora/module-schema";
 import { isWorkspaceId } from "./workspace-id";
-import { writeFileAtomic } from "./fsutil";
+import { pathExists, writeFileAtomic } from "./fsutil";
 import { keepNewerCopy, setAside, type SavedRecord } from "./json";
 import { SAVED_FILES, SavedFile } from "./saved-file";
 import { defaultFilesRoot } from "./module-files";
@@ -164,7 +164,7 @@ export async function migrateModuleData(userData: string, log: (line: string) =>
       // Owners never contain a dot and module ids always do.
       if (!isModuleId(name)) continue;
       const target = path.join(dataRoot, ownerOf(name), name);
-      if (await exists(target)) {
+      if (await pathExists(target)) {
         log(`module data of ${name} is already under its owner; the old copy stays in ${path.basename(dataRoot)}/${name}`);
         continue;
       }
@@ -179,7 +179,7 @@ export async function migrateModuleData(userData: string, log: (line: string) =>
     if (!match || !isModuleId(match[1]) || !isWorkspaceId(match[2])) continue;
     const [, moduleId, workspaceId] = match as unknown as [string, string, string];
     const target = path.join(partitions, partitionDirName(modulePartition(ownerOf(moduleId), moduleId, workspaceId)));
-    if (await exists(target)) {
+    if (await pathExists(target)) {
       log(`browser storage of ${moduleId} in ${workspaceId} is already under its owner; the old one stays`);
       continue;
     }
@@ -308,7 +308,7 @@ async function applyPending(userData: string, log: (line: string) => void, blobR
         // The settings shared by every workspace (storage.app) move like a workspace's.
         if (!isWorkspaceId(workspace) && workspace !== APP_DATA_DIR) continue;
         const target = path.join(root, to, moduleId, workspace);
-        if (await exists(target)) {
+        if (await pathExists(target)) {
           log(`${moduleId} already has data in ${workspace}; its local data there stays`);
           continue;
         }
@@ -322,7 +322,7 @@ async function applyPending(userData: string, log: (line: string) => void, blobR
       const match = /^module:local:([a-z0-9.-]+)@([a-z0-9-]+)$/.exec(safeDecode(name));
       if (!match || match[1] !== moduleId || !isWorkspaceId(match[2])) continue;
       const target = path.join(partitions, partitionDirName(modulePartition(to, moduleId, match[2])));
-      if (!(await exists(target))) await rename(path.join(partitions, name), target);
+      if (!(await pathExists(target))) await rename(path.join(partitions, name), target);
     }
   }
   for (const partition of pending.deletePartitions ?? []) {
@@ -331,13 +331,6 @@ async function applyPending(userData: string, log: (line: string) => void, blobR
     await rm(path.join(partitions, partitionDirName(partition)), { recursive: true, force: true });
   }
   await rm(path.join(userData, PENDING), { force: true });
-}
-
-async function exists(target: string): Promise<boolean> {
-  return stat(target).then(
-    () => true,
-    () => false,
-  );
 }
 
 function safeDecode(name: string): string {

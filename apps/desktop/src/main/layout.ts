@@ -4,6 +4,7 @@
 import type { LayoutGroup, LayoutNode, LayoutSplit, SavedLayout } from "../shared/host-api";
 import { templateWeight as weight, type LayoutTemplate } from "../shared/layout-templates";
 import { INSTANCE_ID } from "./ids";
+import { isRecord } from "../shared/is-record";
 
 export type { LayoutGroup, LayoutNode, LayoutSplit, SavedLayout } from "../shared/host-api";
 
@@ -12,8 +13,6 @@ export const LAYOUT_LIMITS = { depth: 12, nodes: 400, panels: 200, extent: 100_0
 
 type Fields = Record<string, unknown>;
 
-const isObject = (value: unknown): value is Fields =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 const extent = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= LAYOUT_LIMITS.extent;
 
@@ -37,7 +36,7 @@ export function parseSavedLayout(raw: unknown): SavedLayout | null {
 
 function checkLayout(raw: unknown, saved: boolean): SavedLayout | null {
   const only = (value: Fields, ...keys: string[]) => saved || Object.keys(value).every((key) => keys.includes(key));
-  if (!isObject(raw) || !only(raw, "width", "height", "direction", "root")) return null;
+  if (!isRecord(raw) || !only(raw, "width", "height", "direction", "root")) return null;
   if (!extent(raw.width) || !extent(raw.height)) return null;
   if (raw.direction !== "row" && raw.direction !== "column") return null;
   const seen = new Set<string>();
@@ -46,7 +45,7 @@ function checkLayout(raw: unknown, saved: boolean): SavedLayout | null {
   let focused = false;
 
   const node = (value: unknown, depth: number): LayoutNode | null => {
-    if (++nodes > LAYOUT_LIMITS.nodes || depth > LAYOUT_LIMITS.depth || !isObject(value) || !extent(value.size)) return null;
+    if (++nodes > LAYOUT_LIMITS.nodes || depth > LAYOUT_LIMITS.depth || !isRecord(value) || !extent(value.size)) return null;
     if (value.hidden !== undefined && value.hidden !== true) return null;
     const visibility = value.hidden ? { hidden: true as const } : {};
     if (value.kind === "split") {
