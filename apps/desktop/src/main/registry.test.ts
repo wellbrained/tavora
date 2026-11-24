@@ -47,7 +47,7 @@ describe("discoverModules", () => {
     const modules = await discoverModules({ official: [official], local: [local] }, problems);
     expect([...modules.keys()].sort()).toEqual(["community.example.plain", "tavora.board"]);
     expect(modules.get("tavora.board")?.manifest.permissions.webAssembly).toBe(true);
-    expect(problems).toMatchObject([{ folder: "greedy", message: "permissions.webAssembly is only for Tavora's own modules", kind: "webassembly" }]);
+    expect(problems).toMatchObject([{ folder: "greedy", message: "permissions.webAssembly is only for Tavora's own modules", kind: "invalid" }]);
   });
 
   it("refuses the tavora publisher outside the official folder", async () => {
