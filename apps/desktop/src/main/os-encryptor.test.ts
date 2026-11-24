@@ -8,8 +8,9 @@ const fake = vi.hoisted(() => ({
   backend: "gnome_libsecret",
   reEncrypt: 0,
   setUsePlainTextEncryption: vi.fn(),
-  isAsyncEncryptionAvailable: async () => fake.available,
+  isAsyncEncryptionAvailable: () => (fake.hang ? new Promise<boolean>(() => undefined) : Promise.resolve(fake.available)),
   getSelectedStorageBackend: () => fake.backend,
+  hang: false,
   encryptStringAsync: async (text: string) => Buffer.concat([Buffer.from("v10"), Buffer.from([...Buffer.from(text)].map((byte) => byte ^ 0x5a))]),
   decryptStringAsync: async (data: Buffer) => {
     if (data.subarray(0, 3).toString() !== "v10") throw new Error("not ours");
@@ -30,6 +31,7 @@ beforeEach(() => {
   fake.available = true;
   fake.backend = "gnome_libsecret";
   fake.reEncrypt = 0;
+  fake.hang = false;
 });
 
 describe("the system key store, async", () => {
@@ -42,19 +44,34 @@ describe("the system key store, async", () => {
     expect((await osEncryptor(false).encrypt("hello")).equals(scramble("hello"))).toBe(true);
   });
 
-  it("reads again when the key has moved", async () => {
+  it("reads again when the key has moved, and says the data should be sealed again", async () => {
     fake.reEncrypt = 1;
-    expect(await osEncryptor(false).decrypt(scramble("hi"))).toBe("hi");
+    const note = { stale: false };
+    expect(await osEncryptor(false).decrypt(scramble("hi"), note)).toBe("hi");
+    expect(note.stale).toBe(true);
   });
 
-  it("is not available before it is asked, and follows the system after", async () => {
+  it("asks again after a no, so a keyring unlocked later is found", async () => {
+    const encryptor = osEncryptor(false);
+    fake.available = false;
+    expect(await encryptor.ready()).toBe(false);
+    fake.available = true;
+    expect(await encryptor.ready()).toBe(true);
+  });
+
+  it("counts a key store that doesn't answer as not available, for that call", async () => {
+    fake.hang = true;
+    const encryptor = osEncryptor(false, 20);
+    expect(await encryptor.ready()).toBe(false);
+    fake.hang = false;
+    expect(await encryptor.ready()).toBe(true);
+  });
+
+  it("is not available before it is asked, and is the answer of the last ask after", async () => {
     const encryptor = osEncryptor(false);
     expect(encryptor.isAvailable()).toBe(false);
     expect(await encryptor.ready()).toBe(true);
     expect(encryptor.isAvailable()).toBe(true);
-    fake.available = false;
-    expect(await encryptor.ready()).toBe(false);
-    expect(encryptor.isAvailable()).toBe(false);
   });
 
   it("two checks at once give the same answer", async () => {

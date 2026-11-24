@@ -1180,7 +1180,7 @@ export class CopySync {
   async turnOn(folder: string | null = null): Promise<void> {
     if (this.on) return;
     if (this.swapOpen && !(this.swap.phase === "held" && !this.swap.open)) throw new UserError("cloudCopy.error.restartFirst");
-    if (!this.accountKeys.canKeep) throw new UserError("cloudCopy.error.cantKeep");
+    if (!(await this.accountKeys.keepable())) throw new UserError("cloudCopy.error.cantKeep");
     // Turned off or signed out from here on, it stays off.
     const turn = this.turn;
     this.use(folder);

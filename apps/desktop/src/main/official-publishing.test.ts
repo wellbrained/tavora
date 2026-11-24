@@ -56,6 +56,7 @@ function setup(options: Partial<OfficialPublishingOptions> = {}, publisher = fak
       saved = key;
     }),
     canRemember: () => true,
+    canRememberNow: async () => true,
     hasKey: () => saved !== null,
   };
   const changed = vi.fn();

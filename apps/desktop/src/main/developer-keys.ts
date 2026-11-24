@@ -222,7 +222,7 @@ export class DeveloperKeys {
     const accountKey = this.options.accountKey;
     if (!this.options.account.signedIn()) throw new UserError("account.error.signedOut");
     if (await guard(() => accountKey.forAccount())) return;
-    if (!accountKey.canKeep) throw new UserError("cloudCopy.error.cantKeep");
+    if (!(await accountKey.keepable())) throw new UserError("cloudCopy.error.cantKeep");
     const setUp = await guard(() => accountKey.setUp());
     if (setUp.status === "ask") {
       // Newer than any read still going.

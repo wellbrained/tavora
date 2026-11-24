@@ -28,6 +28,16 @@ describe("Discord secrets on disk", () => {
     expect(await loadDiscordSecrets(where, encryptor())).toEqual({ token: TOKEN, last: null, games: {} });
   });
 
+  it("removing the secrets right after a save still being sealed leaves no file", async () => {
+    const where = await file();
+    const slow: Encryptor = { ...encryptor(), encrypt: async (text) => (await new Promise((resolve) => setTimeout(resolve, 60)), encryptor().encrypt(text)) };
+    const store = new DiscordSecretsFile(where, slow);
+    const saving = store.save({ token: TOKEN });
+    const removing = store.save({ token: null });
+    await Promise.all([saving, removing]);
+    await expect(stat(where)).rejects.toThrow();
+  });
+
   it("deletes the file when nothing is left to keep", async () => {
     const where = await file();
     await saveDiscordSecrets(where, encryptor(), { token: null });

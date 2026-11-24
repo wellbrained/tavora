@@ -170,6 +170,7 @@ import { DeveloperKeys } from "./developer-keys";
 import { ModulePublisher } from "./module-publish";
 import { Pairing } from "./pairing";
 import { osEncryptor } from "./os-encryptor";
+import { settleSerial } from "./serial";
 import { SignIn } from "./sign-in";
 import { accountServiceUrl, serviceUrl } from "./service-url";
 import { LibraryWorkspaces } from "./workspace-lookup";
@@ -1119,8 +1120,8 @@ export class Host {
   static async create(options: HostOptions): Promise<Host> {
     const { userData } = options;
     const encryptor = osEncryptor(options.discord !== undefined);
-    // Checked once before anything reads it: the getters that can't wait (can this PC keep a sign-in?) use this answer.
-    await encryptor.ready();
+    // Asked in the background so the answer is there for the views; whatever seals or opens a file asks (and waits) itself.
+    void encryptor.ready();
     // The cloud copy comes first, as a newer copy is taken before anything reads the files. It needs only the saved
     // sign-in and the module files folder as saved; once the library is read, the folder is the library's.
     const signIn = Host.signIn(options, encryptor);
@@ -2825,6 +2826,7 @@ export class Host {
       rawDeviceName: thisDeviceName().raw,
       language,
       canKeepSignIn: () => encryptor.isAvailable(),
+      askCanKeepSignIn: () => encryptor.ready(),
       signIn,
       profile,
       onChange,
@@ -3920,7 +3922,7 @@ export class Host {
     // The connection log is written at quit (its dispose), here too when Quit comes before the window closes, and
     // quitting waits for it.
     this.connection.dispose();
-    await Promise.all([this.pageSaved(), this.closePanelPages(), this.savedData.flush(), this.connection.flush()]);
+    await Promise.all([this.pageSaved(), this.closePanelPages(), this.savedData.flush(), this.connection.flush(), settleSerial()]);
     await this.gameOverlays?.shutdown();
     await this.streaming?.shutdown();
     return this.savedData.flush();

@@ -6,6 +6,7 @@ import type { AccountDevice, AccountPending, AccountPrefix, AccountPublishToken,
 import type { Language, MessageKey } from "../shared/i18n";
 import { isIdPrefix } from "../shared/id-prefix";
 import type { Encryptor } from "./discord-store";
+import { Serial } from "./serial";
 import type { DiscordLoginResult } from "./discord-login";
 import { UserError } from "./messages";
 import { SavedFileHeld } from "./saved-file";
@@ -53,6 +54,7 @@ function savedAccount(value: unknown): SavedAccount | null {
  */
 export class AccountFile {
   private readonly sealed: SealedFile;
+  private readonly order = new Serial();
 
   constructor(
     file: string,
@@ -65,15 +67,22 @@ export class AccountFile {
   async load(): Promise<SavedAccount | null> {
     if (!(await this.encryptor.ready())) return null;
     // Missing, newer, damaged, can't be read now, or encrypted by another user or PC: signed out (the file is kept).
-    const read = await this.sealed.open(async (data) => savedAccount(JSON.parse(await this.encryptor.decrypt(Buffer.from(data, "base64")))));
-    return read.status === "opened" ? read.value : null;
+    const note = { stale: false };
+    const read = await this.sealed.open(async (data) => savedAccount(JSON.parse(await this.encryptor.decrypt(Buffer.from(data, "base64"), note))));
+    if (read.status !== "opened") return null;
+    // The system's key moved on: sealed again under the new one, once.
+    if (note.stale) await this.save(read.value).catch(() => undefined);
+    return read.value;
   }
 
   /** Writes the sign-in down; null removes the file. */
-  async save(account: SavedAccount | null): Promise<void> {
-    if (!account) return this.sealed.forget();
-    if (!(await this.encryptor.ready())) return;
-    await this.sealed.write({ data: (await this.encryptor.encrypt(JSON.stringify(account))).toString("base64") });
+  save(account: SavedAccount | null): Promise<void> {
+    // In the order asked: sealing takes a moment, and signing out must not be undone by a save asked before it.
+    return this.order.run(async () => {
+      if (!account) return this.sealed.forget();
+      if (!(await this.encryptor.ready())) return;
+      await this.sealed.write({ data: (await this.encryptor.encrypt(JSON.stringify(account))).toString("base64") });
+    });
   }
 }
 
@@ -113,6 +122,8 @@ export interface AccountClientOptions {
   rawDeviceName?: string;
   language: () => Language;
   canKeepSignIn: () => boolean;
+  /** Asks the system again (a keyring unlocked since start); without it `canKeepSignIn` is the answer. */
+  askCanKeepSignIn?: () => Promise<boolean>;
   /** The saved sign-in; the cloud copy and pairing hold the same one. */
   signIn: SignIn;
   onChange: (view: AccountView) => void;
@@ -880,7 +891,7 @@ export class AccountClient {
    * sealed-file.ts) stays for this run only, as where the system can't keep it.
    */
   private async keep(): Promise<void> {
-    if (!this.options.canKeepSignIn()) return;
+    if (!(await (this.options.askCanKeepSignIn ?? (async () => this.options.canKeepSignIn()))())) return;
     await this.options.signIn.persist(this.saved).catch((error: unknown) => {
       if (!(error instanceof SavedFileHeld)) throw error;
     });

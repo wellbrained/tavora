@@ -26,7 +26,7 @@ export interface OfficialPublishingOptions {
   /** The one publisher, made on first use and kept for the preview in between. */
   publisher: (trust: OfficialTrust) => OfficialPublisherPort;
   /** The Tavora key saved on this PC (sealed by the system). */
-  keys: Pick<OfficialKeyStore, "load" | "forget" | "save" | "canRemember" | "hasKey">;
+  keys: Pick<OfficialKeyStore, "load" | "forget" | "save" | "canRemember" | "canRememberNow" | "hasKey">;
   /** The system's open dialog for a key file; undefined when the developer closed it. */
   pickKeyFile: () => Promise<string | undefined>;
   language: () => Language;
@@ -161,7 +161,7 @@ export class OfficialPublishing {
         },
       );
       if (!trust.keyTrusted(fingerprint(key))) throw new UserError("officialPublish.error.wrongKey");
-      if (remember && keys.canRemember()) {
+      if (remember && (await keys.canRememberNow())) {
         await keys.save(key).catch(() => {
           throw new UserError("officialPublish.error.remember");
         });

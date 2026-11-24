@@ -166,6 +166,11 @@ export class AccountKey {
     return this.options.encryptor.isAvailable();
   }
 
+  /** Asks the system now (a keyring may have been unlocked since start); for what is about to write the key. */
+  keepable(): Promise<boolean> {
+    return this.options.encryptor.ready();
+  }
+
   /**
    * The account's key, for the account signed in now (its own, or one of no account it took). Signed out, only a key
    * of no account: one that is an account's waits for it (a cloud copy in a folder uses copyKey).
@@ -1034,7 +1039,7 @@ export class AccountKey {
    * signed in is no longer `who`: then it is not kept. Answers the slot it is in now.
    */
   private async write(place: Files, key: Buffer, owner: string | null, unproven: boolean, generation: number, who: string | null): Promise<Slot> {
-    if (!this.canKeep) throw new UserError("cloudCopy.error.cantKeep");
+    if (!(await this.keepable())) throw new UserError("cloudCopy.error.cantKeep");
     const stale = () => generation !== this.generation || this.options.account() !== who;
     if (stale()) throw new CopyError("signed-out");
     const isMain = place.keyFile === this.options.file;
@@ -1197,13 +1202,19 @@ function ownerOf(owner: unknown): string | null | undefined {
  */
 async function readKey(file: string, encryptor: Encryptor): Promise<KeyRead> {
   if (!(await encryptor.ready())) return (await exists(file)) ? { status: "blocked", file, reason: "unopened", owner: undefined } : { status: "missing" };
+  const note = { stale: false };
   const read = await new SealedFile(file).open(async (data, saved) => {
-    const key = Buffer.from(await encryptor.decrypt(Buffer.from(data, "base64")), "base64");
+    const key = Buffer.from(await encryptor.decrypt(Buffer.from(data, "base64"), note), "base64");
     if (key.length !== 32) throw new Error("not a key");
     return { key, owner: ownerOf(saved.account), unproven: saved.unproven === true };
   });
   switch (read.status) {
     case "opened":
+      // The system's key moved on: sealed again under the new one, once, with the same note next to it.
+      if (note.stale) {
+        const again = (await encryptor.encrypt(read.value.key.toString("base64"))).toString("base64");
+        await new SealedFile(file).write({ data: again, ...(read.saved.account !== undefined ? { account: read.saved.account } : {}), ...(read.value.unproven ? { unproven: true } : {}) }).catch(() => undefined);
+      }
       return { status: "opened", ...read.value };
     case "missing":
       return { status: "missing" };

@@ -9,6 +9,7 @@ import { AccountClient, AccountFile, deviceOs, type ProfileData, type SavedAccou
 import type { Encryptor } from "./discord-store";
 import { UserError } from "./messages";
 import { SavedFileHeld } from "./saved-file";
+import { settleSerial } from "./serial";
 import { SignIn } from "./sign-in";
 
 // Stands in for safeStorage: reversible, and never the plain text.
@@ -521,6 +522,32 @@ describe("a device still going by its network name", () => {
 });
 
 describe("the sign-in on disk", () => {
+  it("signing out right after a save still being sealed leaves no file, and quitting waits for it", async () => {
+    const where = path.join(await mkdtemp(path.join(os.tmpdir(), "tavora-account-order-")), "account.json");
+    const slow: Encryptor = { ...encryptor(), encrypt: async (text) => (await new Promise((resolve) => setTimeout(resolve, 60)), encryptor().encrypt(text)) };
+    const file = new AccountFile(where, slow);
+    const saving = file.save(SAVED);
+    const signingOut = file.save(null);
+    await settleSerial();
+    await Promise.all([saving, signingOut]);
+    await expect(stat(where)).rejects.toThrow();
+  });
+
+  it("seals a sign-in again, once, when the system says its key moved on", async () => {
+    const where = path.join(await mkdtemp(path.join(os.tmpdir(), "tavora-account-stale-")), "account.json");
+    await saveAccount(where, encryptor(), SAVED);
+    const before = await readFile(where, "utf8");
+    let encrypted = 0;
+    const moved: Encryptor = {
+      ...encryptor(),
+      encrypt: async (text) => (encrypted++, encryptor().encrypt(text)),
+      decrypt: async (data, note) => (note && (note.stale = true), encryptor().decrypt(data)),
+    };
+    expect(await loadAccount(where, moved)).toEqual(SAVED);
+    expect(encrypted).toBe(1);
+    expect(JSON.parse(await readFile(where, "utf8")).data).toBe(JSON.parse(before).data);
+  });
+
   const file = async () => path.join(await mkdtemp(path.join(os.tmpdir(), "tavora-account-")), "account.json");
 
   it("is kept encrypted and read back", async () => {

@@ -31,6 +31,11 @@ export class OfficialKeyStore {
     return this.encryptor.isAvailable();
   }
 
+  /** Asks the system now, for what is about to save a key (a keyring may have been unlocked since start). */
+  canRememberNow(): Promise<boolean> {
+    return this.encryptor.ready();
+  }
+
   /** Whether a key is saved here (it may still fail to open or stop being trusted). */
   hasKey(): boolean {
     return this.saved;
@@ -58,9 +63,12 @@ export class OfficialKeyStore {
       return null;
     }
     try {
-      const key = createPrivateKey(await this.encryptor.decrypt(sealed));
+      const note = { stale: false };
+      const key = createPrivateKey(await this.encryptor.decrypt(sealed, note));
       if (key.asymmetricKeyType !== "ed25519") throw new Error("not a publisher key");
       this.saved = true;
+      // The system's key moved on: sealed again under the new one, once.
+      if (note.stale) await this.save(key).catch(() => undefined);
       return key;
     } catch {
       await this.forget();
