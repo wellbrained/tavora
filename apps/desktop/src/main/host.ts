@@ -1119,9 +1119,14 @@ export class Host {
 
   /** The system's key store answered after the wait ran out: Settings, the Account page and the cloud copy read their state again. */
   private keyStoreChanged(): void {
-    this.account.keyStoreChanged();
-    this.discord.keyStoreChanged();
-    this.copySync.keyStoreChanged();
+    void (async () => {
+      // Signed in first: the keys and the cloud copy go by the account.
+      await this.account.keyStoreChanged().catch(() => undefined);
+      await this.discord.keyStoreChanged().catch(() => undefined);
+      // Key files that couldn't be opened without the key store are read again.
+      await this.copySync.accountKey.openAgainNow().catch(() => undefined);
+      this.copySync.keyStoreChanged();
+    })();
   }
 
   static async create(options: HostOptions): Promise<Host> {
@@ -2836,7 +2841,7 @@ export class Host {
       rawDeviceName: thisDeviceName().raw,
       language,
       canKeepSignIn: () => encryptor.isAvailable(),
-      askCanKeepSignIn: () => encryptor.ready(),
+      askCanKeepSignIn: () => encryptor.ready(true),
       signIn,
       profile,
       onChange,

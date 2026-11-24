@@ -23,6 +23,18 @@ export class SignIn {
     this.saved = this.options.enabled ? await this.options.load() : null;
   }
 
+  /**
+   * Reads the saved sign-in again when there is none (the key store answered late). A sign-in made meanwhile stays; true
+   * when one was found.
+   */
+  async loadIfSignedOut(): Promise<boolean> {
+    if (!this.options.enabled || this.saved) return false;
+    const read = await this.options.load();
+    if (this.saved || !read) return false;
+    this.saved = read;
+    return true;
+  }
+
   get current(): SavedAccount | null {
     return this.saved;
   }

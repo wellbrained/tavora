@@ -58,6 +58,8 @@ async function setup({ secrets = { token: null }, running = true, tokenStatus = 
   const saved: DiscordSecrets[] = [];
   const timers: (() => void)[] = [];
   const clock = { now: Date.now() };
+  /** What the file gives: empty while the key store can't be asked, the stored sign-in once it answers. */
+  const held: { secrets: DiscordSecrets } = { secrets };
   connector = new DiscordConnector({
     clientId: "99",
     connect: (events) => RpcClient.connect("99", events, running ? [discord.path] : ["/nonexistent/discord-ipc-0"]),
@@ -77,7 +79,7 @@ async function setup({ secrets = { token: null }, running = true, tokenStatus = 
       if (tokenStatus !== 200) return Response.json({ error: "invalid_client" }, { status: tokenStatus });
       return Response.json({ access_token: grant === "refresh_token" ? "fresh" : "good", refresh_token: "r1", expires_in: 604800 });
     }) as typeof fetch,
-    load: async () => secrets,
+    load: async () => held.secrets,
     save: async (next) => void saved.push(next),
     canSaveSignIn: true,
     // The working connection, as when Discord voice isn't paused (shared/discord-voice.ts).
@@ -90,10 +92,21 @@ async function setup({ secrets = { token: null }, running = true, tokenStatus = 
     clearTimer: () => undefined,
     now: () => clock.now,
   });
-  return { connector, fake: discord, requests, saved, timers, clock };
+  return { connector, fake: discord, requests, saved, timers, clock, held };
 }
 
 describe("DiscordConnector", () => {
+  it("a late yes from the key store reads the secrets that couldn't be read at start, and signs in with them", async () => {
+    const { connector, fake, held } = await setup();
+    const one = panel();
+    await connector.use("p1", one.listener);
+    expect(connector.state().status).toBe("signed-out");
+    held.secrets = SIGNED_IN;
+    await connector.keyStoreChanged();
+    await until(() => connector.state().status === "connected");
+    expect(fake.commands.some((c) => c.cmd === "AUTHENTICATE")).toBe(true);
+  });
+
   it("does nothing until a panel uses it", async () => {
     const { connector, fake } = await setup({ secrets: SIGNED_IN });
     expect(connector.view().status).toBe("off");

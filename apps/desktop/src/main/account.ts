@@ -55,8 +55,6 @@ function savedAccount(value: unknown): SavedAccount | null {
 export class AccountFile {
   private readonly sealed: SealedFile;
   private readonly order = new Serial();
-  /** Counts the saves and removals asked for, so a read that comes back late can tell the file changed since. */
-  private changes = 0;
 
   constructor(
     file: string,
@@ -68,29 +66,26 @@ export class AccountFile {
 
   async load(): Promise<SavedAccount | null> {
     if (!(await this.encryptor.ready())) return null;
-    // Missing, newer, damaged, can't be read now, or encrypted by another user or PC: signed out (the file is kept).
-    const note = { stale: false };
-    const seen = this.changes;
-    const read = await this.sealed.open(async (data) => savedAccount(JSON.parse(await this.encryptor.decrypt(Buffer.from(data, "base64"), note))));
-    if (read.status !== "opened") return null;
-    // The system's key moved on: sealed again under the new one, once. Only if nothing saved or removed the file since
-    // the read (a sign-out while it was opened must not be undone by it).
-    if (note.stale) {
-      await this.order
-        .run(async () => {
-          if (this.changes !== seen || !(await this.encryptor.ready())) return;
-          const data = (await this.encryptor.encrypt(JSON.stringify(read.value))).toString("base64");
-          // Sealing takes a moment: checked again, as a sign-out may have come in meanwhile.
-          if (this.changes === seen) await this.sealed.write({ data });
-        })
-        .catch(() => undefined);
-    }
-    return read.value;
+    // In the queue with the saves and removals: a sign-out asked meanwhile runs after the read (and the sealing again), so
+    // it is never undone, and a read never sees the file older than a save asked before it.
+    return this.order.run(async () => {
+      // Missing, newer, damaged, can't be read now, or encrypted by another user or PC: signed out (the file is kept).
+      const note = { stale: false };
+      const read = await this.sealed.open(async (data) => savedAccount(JSON.parse(await this.encryptor.decrypt(Buffer.from(data, "base64"), note))));
+      if (read.status !== "opened") return null;
+      // The system's key moved on: sealed again under the new one, once.
+      if (note.stale) {
+        await this.encryptor
+          .encrypt(JSON.stringify(read.value))
+          .then((sealed) => this.sealed.write({ data: sealed.toString("base64") }))
+          .catch(() => undefined);
+      }
+      return read.value;
+    });
   }
 
   /** Writes the sign-in down; null removes the file. */
   save(account: SavedAccount | null): Promise<void> {
-    this.changes++;
     // In the order asked: sealing takes a moment, and signing out must not be undone by a save asked before it.
     return this.order.run(async () => {
       if (!account) return this.sealed.forget();
@@ -347,6 +342,7 @@ export class AccountClient {
   async init(): Promise<void> {
     if (!this.options.enabled) return;
     await this.options.signIn.load();
+    this.started = true;
     this.changed();
     // Once at each start: the profile comes down or goes up, whichever is newer. Quietly; offline is fine.
     if (this.saved) void this.syncProfile(false).catch(() => undefined);
@@ -905,7 +901,12 @@ export class AccountClient {
    * sealed-file.ts) stays for this run only, as where the system can't keep it.
    */
   private async keep(): Promise<void> {
-    if (!(await (this.options.askCanKeepSignIn ?? (async () => this.options.canKeepSignIn()))())) return;
+    if (!(await (this.options.askCanKeepSignIn ?? (async () => this.options.canKeepSignIn()))())) {
+      // Kept for this run; written down when the key store answers late (keyStoreChanged).
+      this.keepPending = this.saved !== null;
+      return;
+    }
+    this.keepPending = false;
     await this.options.signIn.persist(this.saved).catch((error: unknown) => {
       if (!(error instanceof SavedFileHeld)) throw error;
     });
@@ -913,6 +914,7 @@ export class AccountClient {
 
   private async forget(): Promise<void> {
     this.saved = null;
+    this.keepPending = false;
     this.devices = null;
     this.pending = null;
     this.profileChoice = null;
@@ -937,8 +939,24 @@ export class AccountClient {
     this.options.onChange(this.view());
   }
 
-  /** The system's key store answered late (it can keep the sign-in after all): the page is told. */
-  keyStoreChanged(): void {
+  /** The sign-in is only in memory because the key store couldn't be asked when it was made; it is written down once it can. */
+  private keepPending = false;
+  /** Whether init has read the sign-in: before that, nothing is told (init reads what the key store says itself). */
+  private started = false;
+
+  /**
+   * The system's key store answered late (it can keep the sign-in after all): a sign-in that couldn't be read at start
+   * is read now, one that couldn't be written down is written, and the page is told.
+   */
+  async keyStoreChanged(): Promise<void> {
+    if (!this.options.enabled || !this.started) return;
+    if (this.saved) {
+      if (this.keepPending) await this.keep().catch(() => undefined);
+    } else if (await this.options.signIn.loadIfSignedOut().catch(() => false)) {
+      this.changed();
+      void this.syncProfile(false).catch(() => undefined);
+      void this.readDeveloper();
+    }
     this.changed();
   }
 

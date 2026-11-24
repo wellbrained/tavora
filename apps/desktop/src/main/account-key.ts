@@ -168,7 +168,7 @@ export class AccountKey {
 
   /** Asks the system now (a keyring may have been unlocked since start); for what is about to write the key. */
   keepable(): Promise<boolean> {
-    return this.options.encryptor.ready();
+    return this.options.encryptor.ready(true);
   }
 
   /**

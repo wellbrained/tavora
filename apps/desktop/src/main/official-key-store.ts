@@ -33,7 +33,7 @@ export class OfficialKeyStore {
 
   /** Asks the system now, for what is about to save a key (a keyring may have been unlocked since start). */
   canRememberNow(): Promise<boolean> {
-    return this.encryptor.ready();
+    return this.encryptor.ready(true);
   }
 
   /** Whether a key is saved here (it may still fail to open or stop being trusted). */

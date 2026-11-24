@@ -93,13 +93,91 @@ const signedInAnswer = (status: "signed-in" | "created") => () =>
   json({ status, token: TOKEN, device: "dev1", account: { email: "me@example.com", createdAt: SAVED.createdAt } });
 
 describe("signing in", () => {
-  it("a late yes from the key store pushes the account view with the sign-in kept", () => {
+  it("a late yes from the key store pushes the account view with the sign-in kept", async () => {
     const options = { canKeep: false };
     const { account, views } = client(service({}).fetchImpl, options);
+    await account.init();
     expect(account.view().canKeepSignIn).toBe(false);
     options.canKeep = true;
-    account.keyStoreChanged();
+    await account.keyStoreChanged();
     expect(views.at(-1)?.canKeepSignIn).toBe(true);
+  });
+
+  it("a late yes before init says nothing", async () => {
+    const { account, views } = client(service({}).fetchImpl);
+    await account.keyStoreChanged();
+    expect(views).toEqual([]);
+  });
+
+  it("a late yes reads the sign-in that couldn't be read at start, and signs in with it", async () => {
+    const answer = { ready: false };
+    const { fetchImpl } = service({ "GET /": () => json({ account: { email: "me@example.com", createdAt: SAVED.createdAt }, devices: [DEVICE] }), "GET /profile": () => json({ profile: null }) });
+    const views: AccountView[] = [];
+    const account = new AccountClient({
+      enabled: true,
+      baseUrl: "https://api.test/",
+      fetch: fetchImpl,
+      os: "windows",
+      language: () => "de",
+      canKeepSignIn: () => answer.ready,
+      signIn: new SignIn({ enabled: true, load: async () => (answer.ready ? SAVED : null), save: async () => undefined }),
+      onChange: (view) => views.push(view),
+      profile: { get: async () => EMPTY_PROFILE, apply: async () => undefined },
+    });
+    await account.init();
+    expect(account.view().account).toBeNull();
+    answer.ready = true;
+    await account.keyStoreChanged();
+    expect(account.view().account?.email).toBe("me@example.com");
+    expect(views.at(-1)?.account).not.toBeNull();
+  });
+
+  it("a sign-in made while the key store couldn't be asked is written down when it answers late", async () => {
+    const answer = { ready: false };
+    const { fetchImpl } = service({
+      "POST /code": () => json({ status: "sent" }, 202),
+      "POST /verify": signedInAnswer("signed-in"),
+      "GET /": () => json({ account: { email: "me@example.com", createdAt: SAVED.createdAt }, devices: [DEVICE] }),
+      "GET /profile": () => json({ profile: null }),
+    });
+    const kept: (SavedAccount | null)[] = [];
+    const account = new AccountClient({
+      enabled: true,
+      baseUrl: "https://api.test/",
+      fetch: fetchImpl,
+      os: "windows",
+      language: () => "de",
+      canKeepSignIn: () => answer.ready,
+      askCanKeepSignIn: async () => answer.ready,
+      signIn: new SignIn({ enabled: true, load: async () => null, save: async (value) => void kept.push(value) }),
+      onChange: () => undefined,
+      profile: { get: async () => EMPTY_PROFILE, apply: async () => undefined },
+    });
+    await account.init();
+    await account.sendCode("me@example.com");
+    await account.verify("123456");
+    expect(account.view().account).not.toBeNull();
+    expect(kept).toEqual([]);
+    answer.ready = true;
+    await account.keyStoreChanged();
+    expect(kept).toHaveLength(1);
+    expect(kept[0]?.email).toBe("me@example.com");
+  });
+
+  it("a load asked while an earlier save is still being sealed reads the newer sign-in, and the sealing again can't undo it", async () => {
+    const where = path.join(await mkdtemp(path.join(os.tmpdir(), "tavora-account-queue-")), "account.json");
+    await saveAccount(where, encryptor(), SAVED);
+    const NEWER = { ...SAVED, email: "new@example.com" };
+    const slow: Encryptor = {
+      ...encryptor(),
+      encrypt: async (text) => (await new Promise((resolve) => setTimeout(resolve, 40)), encryptor().encrypt(text)),
+      decrypt: async (data, note) => (note && (note.stale = true), encryptor().decrypt(data)),
+    };
+    const store = new AccountFile(where, slow);
+    const saving = store.save(NEWER);
+    const loading = store.load();
+    await Promise.all([saving, loading]);
+    expect(await loadAccount(where, encryptor())).toEqual(NEWER);
   });
 
   it("signed in while account.json can't be saved (it can't be read or moved): signed in for this run, and the window hears of it", async () => {

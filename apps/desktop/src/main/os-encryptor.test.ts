@@ -28,6 +28,7 @@ vi.mock("electron", () => ({ safeStorage: fake }));
 const { osEncryptor } = await import("./os-encryptor");
 
 beforeEach(() => {
+  fake.isAsyncEncryptionAvailable = () => (fake.hang ? new Promise<boolean>(() => undefined) : Promise.resolve(fake.available));
   fake.available = true;
   fake.backend = "gnome_libsecret";
   fake.reEncrypt = 0;
@@ -83,7 +84,24 @@ describe("the system key store, async", () => {
     expect(encryptor.isAvailable()).toBe(true);
     expect(told).toHaveBeenCalledTimes(1);
     expect(await encryptor.ready()).toBe(true);
-    fake.isAsyncEncryptionAvailable = () => Promise.resolve(fake.available);
+  });
+
+  it("a check that never answers is asked again when the user acts, or after a long while", async () => {
+    fake.isAsyncEncryptionAvailable = () => new Promise<boolean>(() => undefined);
+    const encryptor = osEncryptor(false, 10, undefined, 60);
+    expect(await encryptor.ready()).toBe(false);
+    // The keyring is unlocked since: the user acting (Turn on) asks again.
+    fake.isAsyncEncryptionAvailable = () => Promise.resolve(true);
+    expect(await encryptor.ready()).toBe(false);
+    expect(await encryptor.ready(true)).toBe(true);
+    // The same after the long wait, without the user acting.
+    const patient = osEncryptor(false, 10, undefined, 40);
+    fake.isAsyncEncryptionAvailable = () => new Promise<boolean>(() => undefined);
+    expect(await patient.ready()).toBe(false);
+    fake.isAsyncEncryptionAvailable = () => Promise.resolve(true);
+    expect(await patient.ready()).toBe(false);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(await patient.ready()).toBe(true);
   });
 
   it("is not available before it is asked, and is the answer of the last ask after", async () => {
