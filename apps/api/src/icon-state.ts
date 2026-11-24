@@ -1,4 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
+import { openStateDb } from "./sqlite.ts";
 
 /**
  * The one writable thing the service keeps: icons users have offered and
@@ -57,7 +58,7 @@ export class IconState {
   private readonly db: DatabaseSync;
 
   constructor(path: string) {
-    this.db = new DatabaseSync(path);
+    this.db = openStateDb(path);
     this.db.exec(`
       create table if not exists pending (
         sha256 text primary key, id text not null, name text not null, source text not null,

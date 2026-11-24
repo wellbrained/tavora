@@ -8,6 +8,7 @@ import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 import { banned, fail, requireSignIn, tooMany, type SignedInEnv } from "./sign-in.ts";
 import { checkReviewText } from "./review-filter.ts";
 import { sha256Hex } from "./hash.ts";
+import { openStateDb } from "./sqlite.ts";
 
 /**
  * Module ratings and reviews (decided 2026-10-21). A signed-in account rates a catalog module once,
@@ -117,7 +118,7 @@ export class ReviewStore {
   private readonly db: DatabaseSync;
 
   constructor(path: string) {
-    this.db = new DatabaseSync(path);
+    this.db = openStateDb(path);
     this.db.exec(`
       pragma journal_mode = wal;
       pragma foreign_keys = on;

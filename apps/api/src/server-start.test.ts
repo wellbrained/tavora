@@ -8,7 +8,7 @@ import { publishReadMs, ZIP_LIMITS } from "@tavora/pack";
 import { Hono } from "hono";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CatalogStore } from "./catalog.ts";
-import { backfillAtStart, HEADERS_TIMEOUT_MS, setServerTimeouts } from "./server-start.ts";
+import { backfillAtStart, guarded, HEADERS_TIMEOUT_MS, setServerTimeouts, shutDownOnSignals } from "./server-start.ts";
 
 const source = () => readFileSync(new URL("./server.ts", import.meta.url), "utf8");
 
@@ -135,5 +135,77 @@ describe("a request that stops sending its body", () => {
     socket.write("GET /next HTTP/1.1\r\nHost: x\r\n\r\n");
     await wait(40);
     expect(received.match(/HTTP\/1\.1 200/g)).toHaveLength(2);
+  });
+});
+
+describe("timers and shutdown (bug hunt)", () => {
+  it("keeps a timer's error to a log line, so a broken sweep never takes the service down", () => {
+    const log = { error: vi.fn() };
+    const sweep = guarded("Sweeping the conversations", () => {
+      throw new Error("database disk image is malformed");
+    }, log);
+    expect(() => sweep()).not.toThrow();
+    expect(log.error).toHaveBeenCalledWith(expect.stringContaining("Sweeping the conversations failed: database disk image is malformed"));
+  });
+
+  it("runs every sweep and snapshot of server.ts through that guard", () => {
+    expect(source()).toMatch(/guarded\("Sweeping the conversations"/);
+    expect(source()).toMatch(/guarded\("Writing down the account numbers"/);
+    expect(source()).toContain("shutDownOnSignals(");
+  });
+
+  it("on SIGTERM stops taking requests, lets the running one finish, closes the stores and exits 0", async () => {
+    let finish!: () => void;
+    const server = createServer((_request, response) => {
+      finish = () => response.end("done");
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const port = (server.address() as net.AddressInfo).port;
+    const handlers = new Map<string, () => void>();
+    const closed: string[] = [];
+    let exitCode: number | null = null;
+    const exited = new Promise<void>((resolve) => {
+      shutDownOnSignals({
+        servers: [server],
+        close: [() => closed.push("accounts"), () => closed.push("catalog")],
+        graceMs: 5000,
+        on: (signal, run) => void handlers.set(signal, run),
+        exit: (code) => {
+          exitCode = code;
+          resolve();
+        },
+        log: { log: () => {}, error: () => {} },
+      });
+    });
+    expect([...handlers.keys()].sort()).toEqual(["SIGINT", "SIGTERM"]);
+    const running = fetch(`http://127.0.0.1:${port}/`).then((response) => response.text());
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    handlers.get("SIGTERM")!();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    // Nothing new is taken, nothing is closed while the request runs.
+    await expect(fetch(`http://127.0.0.1:${port}/`)).rejects.toThrow();
+    expect(closed).toEqual([]);
+    expect(exitCode).toBeNull();
+    finish();
+    expect(await running).toBe("done");
+    await exited;
+    expect(closed).toEqual(["accounts", "catalog"]);
+    expect(exitCode).toBe(0);
+  });
+
+  it("gives up waiting after the grace period, still closing the stores", async () => {
+    const server = createServer(() => {});
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const port = (server.address() as net.AddressInfo).port;
+    const handlers = new Map<string, () => void>();
+    const closed: string[] = [];
+    const exited = new Promise<number>((resolve) =>
+      shutDownOnSignals({ servers: [server], close: [() => closed.push("accounts")], graceMs: 100, on: (signal, run) => void handlers.set(signal, run), exit: resolve, log: { log: () => {}, error: () => {} } }),
+    );
+    void fetch(`http://127.0.0.1:${port}/`).catch(() => {});
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    handlers.get("SIGINT")!();
+    expect(await exited).toBe(0);
+    expect(closed).toEqual(["accounts"]);
   });
 });

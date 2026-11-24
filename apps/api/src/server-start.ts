@@ -61,3 +61,74 @@ export function backfillAtStart(catalog: CatalogStore, log: Pick<Console, "log" 
     log.error(`[tavora-api] Couldn't fill the catalog's hashes at this start: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
+
+/** A timer's work with its errors kept to a log line: a throw in a setInterval callback would end the whole service. */
+export function guarded(what: string, run: () => void, log: Pick<Console, "error"> = console): () => void {
+  return () => {
+    try {
+      run();
+    } catch (error) {
+      log.error(`[tavora-api] ${what} failed: ${error instanceof Error ? error.message : "unknown error"}`);
+    }
+  };
+}
+
+/** How long a stop waits for the requests that are running (systemd waits 90 s before it kills). */
+export const SHUTDOWN_GRACE_MS = 20_000;
+
+/**
+ * Stops cleanly on SIGTERM (systemctl stop or restart, a deploy) and SIGINT: the servers take no new request, the running
+ * ones may finish for up to `graceMs`, then every store is closed (`close`, each on its own) and the process exits 0. A
+ * second signal meanwhile changes nothing. `on`, `exit` and `log` are for tests.
+ */
+export function shutDownOnSignals({
+  servers,
+  close,
+  graceMs = SHUTDOWN_GRACE_MS,
+  on = (signal, run) => void process.on(signal, run),
+  exit = (code) => process.exit(code),
+  log = console,
+}: {
+  servers: Server[];
+  close: (() => void)[];
+  graceMs?: number;
+  on?: (signal: "SIGTERM" | "SIGINT", run: () => void) => void;
+  exit?: (code: number) => void;
+  log?: Pick<Console, "log" | "error">;
+}): void {
+  let stopping = false;
+  const stop = (signal: string) => {
+    if (stopping) return;
+    stopping = true;
+    log.log(`[tavora-api] ${signal}: finishing the running requests, then stopping.`);
+    const closed = servers.map(
+      (server) =>
+        new Promise<void>((resolve) => {
+          server.close(() => resolve());
+          // Kept-alive connections that wait for their next request would hold close() up.
+          server.closeIdleConnections();
+        }),
+    );
+    let timer: NodeJS.Timeout | undefined;
+    const late = new Promise<void>((resolve) => {
+      timer = setTimeout(() => {
+        log.error(`[tavora-api] Requests still running after ${Math.round(graceMs / 1000)} s; stopping anyway.`);
+        for (const server of servers) server.closeAllConnections();
+        resolve();
+      }, graceMs);
+    });
+    void Promise.race([Promise.all(closed), late]).then(() => {
+      clearTimeout(timer);
+      for (const done of close) {
+        try {
+          done();
+        } catch (error) {
+          log.error(`[tavora-api] Closing a store failed: ${error instanceof Error ? error.message : "unknown error"}`);
+        }
+      }
+      exit(0);
+    });
+  };
+  on("SIGTERM", () => stop("SIGTERM"));
+  on("SIGINT", () => stop("SIGINT"));
+}

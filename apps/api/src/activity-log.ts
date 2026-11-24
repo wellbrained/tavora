@@ -1,4 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
+import { openStateDb } from "./sqlite.ts";
 
 /**
  * What the maintainer did in the admin (decided 2026-10-27): every change a POST to /api/* made, with what it touched, the
@@ -42,7 +43,7 @@ export class ActivityLog {
   private readonly db: DatabaseSync;
 
   constructor(file: string) {
-    this.db = new DatabaseSync(file);
+    this.db = openStateDb(file);
     this.db.exec(`
       create table if not exists activity (
         id integer primary key autoincrement, at integer not null, kind text not null,

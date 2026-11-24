@@ -5,7 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import { serve } from "@hono/node-server";
 import { AccountStore } from "./account-store.ts";
 import { CatalogStore } from "./catalog.ts";
-import { backfillAtStart, setServerTimeouts } from "./server-start.ts";
+import { backfillAtStart, guarded, setServerTimeouts, shutDownOnSignals } from "./server-start.ts";
 import { copyLimitsFromEnv, CopyStore } from "./cloud-copy.ts";
 import { createAdminApp } from "./admin-app.ts";
 import { ActivityLog } from "./activity-log.ts";
@@ -132,7 +132,7 @@ const reviews = accountStore ? new ReviewStore(path.join(stateDir, "reviews.sqli
 const conversations = accountStore ? new ConversationStore(path.join(stateDir, "conversations.sqlite")) : undefined;
 if (conversations) {
   // Idle conversations close after 30 days and closed ones go after 180 (unless reported); once an hour is plenty.
-  const sweepConversations = () => conversations.sweep(Date.now());
+  const sweepConversations = guarded("Sweeping the conversations", () => conversations.sweep(Date.now()));
   sweepConversations();
   setInterval(sweepConversations, 60 * 60_000).unref();
 }
@@ -149,9 +149,9 @@ const moduleRequests = new ModuleRequestStore(path.join(stateDir, "module-reques
 // Which requested games the game list knows; the list may be newer than the votes, and rows from before this have none.
 moduleRequests.refreshKnown(gameListKnows(db));
 const activity = new ActivityLog(path.join(stateDir, "activity.sqlite"));
-const snapshotAccounts = () => {
+const snapshotAccounts = guarded("Writing down the account numbers", () => {
   if (accountStore && !stats.hasSnapshot()) stats.snapshotAccounts(accountStore.activity(Date.now()));
-};
+});
 snapshotAccounts();
 setInterval(snapshotAccounts, 60 * 60_000).unref();
 // Installers downloaded from the GitHub releases: GitHub's running totals, once an hour (github-releases.ts).
@@ -212,11 +212,14 @@ const app = createApp({
   clientKey: testInbox ? () => `test-${testRequests++}` : (request) => (behindProxy ? clientOf(request.headers.get("x-forwarded-for")?.split(",")[0]) : null) ?? "shared",
 });
 
+// Every server this process runs, for the clean stop at the end.
+const servers: Server[] = [];
 const publicServer = serve({ fetch: app.fetch, port, hostname: "127.0.0.1" }, (info) => {
   console.log(`[tavora-api] listening on http://127.0.0.1:${info.port}`);
   sweepCopies();
 });
 setServerTimeouts(publicServer as Server);
+servers.push(publicServer as Server);
 
 // Tavora Admin (the review page and more): its own port of 127.0.0.1 that the web server never forwards, and a token.
 const adminToken = process.env.ADMIN_TOKEN?.trim();
@@ -250,9 +253,28 @@ if (adminToken && adminToken.length >= 24) {
     ...(maintainerEmail ? { ownerEmail: maintainerEmail } : {}),
     moderation: { ...(scanner ? { scanner } : {}), ...(mailer ? { mailer } : {}), mailDailyLimit },
   });
-  serve({ fetch: admin.fetch, port: adminPort, hostname: "127.0.0.1" }, (info) => {
+  const adminServer = serve({ fetch: admin.fetch, port: adminPort, hostname: "127.0.0.1" }, (info) => {
     console.log(`[tavora-api] Tavora Admin on http://127.0.0.1:${info.port} (local only)`);
   });
+  servers.push(adminServer as Server);
 } else {
   console.log("[tavora-api] No ADMIN_TOKEN of at least 24 characters: Tavora Admin is off, and nothing offered can be approved.");
 }
+
+// systemctl stop or restart (a deploy): the running requests finish, then the databases are closed.
+shutDownOnSignals({
+  servers,
+  close: [
+    () => accountStore?.close(),
+    () => copies?.close(),
+    () => catalog.close(),
+    () => reviews?.close(),
+    () => conversations?.close(),
+    () => leaderboards?.close(),
+    () => stats.close(),
+    () => moduleRequests.close(),
+    () => activity.close(),
+    () => state.close(),
+    () => db.close(),
+  ],
+});

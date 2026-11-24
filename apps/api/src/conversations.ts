@@ -11,6 +11,7 @@ import { banned, requireSignIn, tooMany, type SignedInEnv } from "./sign-in.ts";
 import { checkReviewText } from "./review-filter.ts";
 import { MIN_ACCOUNT_AGE_MS, ownsModule } from "./reviews.ts";
 import { BUILT_IN_TEXTS, CONTACT_KINDS, cleanContactValue, contactFromLegacy, contactToLegacy, type Contact, type ContactKind } from "../../desktop/src/shared/conversations.ts";
+import { openStateDb } from "./sqlite.ts";
 
 /**
  * Conversations (decided 2026-10-27, "Conversations" in the design doc). Two kinds exist and nothing else, so
@@ -157,7 +158,7 @@ export class ConversationStore {
   private readonly db: DatabaseSync;
 
   constructor(path: string) {
-    this.db = new DatabaseSync(path);
+    this.db = openStateDb(path);
     this.db.exec(`
       pragma journal_mode = wal;
       pragma foreign_keys = on;

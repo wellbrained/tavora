@@ -1,6 +1,7 @@
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { openStateDb } from "./sqlite.ts";
 
 /**
  * Plain daily totals (decided 2026-10-26): how often an installer was downloaded, the app and modules
@@ -48,7 +49,7 @@ export class StatsStore {
 
   constructor(file: string) {
     if (file !== ":memory:") mkdirSync(path.dirname(file), { recursive: true });
-    this.db = new DatabaseSync(file);
+    this.db = openStateDb(file);
     this.db.exec(`
       pragma journal_mode = wal;
       create table if not exists daily_counts (day text not null, kind text not null, key text not null, count integer not null, primary key (day, kind, key)) without rowid;

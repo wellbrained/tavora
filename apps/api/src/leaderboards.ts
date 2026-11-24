@@ -17,6 +17,7 @@ import { newLabel } from "./conversations.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 import { fail, optionalSignIn, signedOut, tooMany, type MaybeSignedInEnv } from "./sign-in.ts";
 import { checkReviewText } from "./review-filter.ts";
+import { openStateDb } from "./sqlite.ts";
 
 /**
  * Leaderboards (decided 2026-10-28, "Puzzle games: leaderboards and names"): a host feature any module can use. A module
@@ -342,7 +343,7 @@ export class LeaderboardStore {
 
   constructor(path: string, storedResults = LIMITS.storedResults) {
     this.storedResults = storedResults;
-    this.db = new DatabaseSync(path);
+    this.db = openStateDb(path);
     this.db.exec("pragma journal_mode = wal; pragma foreign_keys = on;");
     // The tables changed shape before anything was deployed: an older file is rebuilt, not migrated.
     const version = (this.db.prepare("pragma user_version").get() as { user_version: number }).user_version;

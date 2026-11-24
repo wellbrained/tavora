@@ -1,6 +1,7 @@
 import { randomBytes, randomInt, timingSafeEqual } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { sha256Hex } from "./hash.ts";
+import { openStateDb } from "./sqlite.ts";
 
 /**
  * Accounts: the only user data the service keeps (decided 2026-10-16). An
@@ -290,7 +291,7 @@ export class AccountStore {
   private askersSweptAt = 0;
 
   constructor(path: string) {
-    this.db = new DatabaseSync(path);
+    this.db = openStateDb(path);
     this.db.exec(`
       pragma foreign_keys = on;
       create table if not exists accounts (

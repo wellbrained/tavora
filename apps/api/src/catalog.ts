@@ -10,6 +10,7 @@ import { inspectPng, isWebp } from "./png.ts";
 import { FREE_AFTER_BYTES, freeMemory, MAX_MANIFEST_BYTES, MAX_SIGNATURE_BYTES, metadataProblem, UPLOAD_MEMORY_BYTES, uploadMemory } from "./upload-memory.ts";
 import { sha256Hex } from "./hash.ts";
 import { compareModuleVersions } from "../../desktop/src/shared/module-version.ts";
+import { openStateDb } from "./sqlite.ts";
 
 /**
  * The module catalog (Milestone E, docs/catalog-threat-model.md): community modules, each with the
@@ -472,7 +473,7 @@ export class CatalogStore {
     mkdirSync(this.shots, { recursive: true });
     this.lists = path.join(dir, "lists");
     mkdirSync(this.lists, { recursive: true });
-    this.db = new DatabaseSync(path.join(dir, "catalog.sqlite"));
+    this.db = openStateDb(path.join(dir, "catalog.sqlite"));
     this.db.exec(`
       pragma journal_mode = wal;
       create table if not exists modules (

@@ -7,6 +7,7 @@ import type { AccountStore } from "./account-store.ts";
 import { createRateLimiter, networkOf, type RateLimiter } from "./rate-limit.ts";
 import { requireSignIn, signedOut, stillSignedIn, tooMany, type SignedInEnv } from "./sign-in.ts";
 import { uploadMemory, type UploadMemory } from "./upload-memory.ts";
+import { openStateDb } from "./sqlite.ts";
 
 /**
  * The cloud copy (decided 2026-10-19): one copy of a user's Tavora data per account, which only the
@@ -170,6 +171,11 @@ export type AddPartsResult = "ok" | "copy-full" | "no-room";
 
 export class CopyStore {
   private readonly db: DatabaseSync;
+
+  /** Closes the database (the service's clean stop). */
+  close(): void {
+    this.db.close();
+  }
   private readonly totalLimit: number;
   private readonly freeBytes: (() => number | null) | undefined;
   private readonly freeFloor: number;
@@ -217,7 +223,7 @@ export class CopyStore {
     this.networkDayLimit = networkDayLimit;
     this.networkShare = networkShare;
     this.networkSalt = networkSalt;
-    this.db = new DatabaseSync(path);
+    this.db = openStateDb(path);
     // Freed pages go back to the disk after a version or a copy is dropped (set before the first table).
     this.db.exec("pragma auto_vacuum = incremental");
     this.db.exec(`

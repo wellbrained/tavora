@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { isGameId } from "@tavora/module-schema";
+import { openStateDb } from "./sqlite.ts";
 
 /**
  * "Ask for a module" (decided 2026-11-01): in Add a game, a game with no modules offers one click that says
@@ -126,13 +127,18 @@ export function gameListKnows(dataset: DatabaseSync): (key: string) => boolean {
 
 export class ModuleRequestStore {
   private readonly db: DatabaseSync;
+
+  /** Closes the database (the service's clean stop). */
+  close(): void {
+    this.db.close();
+  }
   private readonly salt: string;
 
   /** `salt`: the secret for vote networks (voteSalt); a new random one when absent, as for a test. */
   constructor(file: string, { salt = randomBytes(32).toString("hex") }: { salt?: string } = {}) {
     this.salt = salt;
     if (file !== ":memory:") mkdirSync(path.dirname(file), { recursive: true });
-    this.db = new DatabaseSync(file);
+    this.db = openStateDb(file);
     this.db.exec(`
       pragma journal_mode = wal;
       create table if not exists games (key text primary key, name text not null, steam_appid integer, game_id text, votes integer not null, first_at integer not null, last_at integer not null) without rowid;
