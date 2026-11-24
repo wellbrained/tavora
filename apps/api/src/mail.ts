@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { escapeHtml } from "../../desktop/src/shared/escape-html.ts";
 
 /**
  * How the service sends email. A provider is chosen just before accounts go
@@ -214,7 +215,6 @@ export function createTestInbox(limit = 100): TestInbox {
   };
 }
 
-const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
 
 /** The test inbox as a page (`/`) and as JSON (`/mails`, DELETE empties it) on its own local port. */
 export function createTestInboxApp(inbox: TestInbox) {

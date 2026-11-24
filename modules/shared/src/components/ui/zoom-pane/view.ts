@@ -1,6 +1,8 @@
 // The math behind ZoomPane: where the content sits and how big it is drawn.
 // A point of the content at (cx, cy) shows at (x + cx * zoom, y + cy * zoom) in the pane.
 
+import { clamp } from "../../../lib/utils"
+
 export interface ZoomView {
   x: number
   y: number
@@ -55,7 +57,6 @@ export type ZoomAlign = "start" | "center" | "end"
 /** What fitting fills: the whole content, or only its width (taller content then starts at its top). */
 export type ZoomFit = "whole" | "width"
 
-const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value))
 
 export function clampZoom(zoom: number, limits: ZoomLimits): number {
   return clamp(zoom, limits.min, limits.max)

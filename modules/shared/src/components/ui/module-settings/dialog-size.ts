@@ -2,6 +2,8 @@
 // A page's height here is what the dialog shows under its frame's header; Tavora adds the header.
 
 /** The dialog of a module with several pages: the same size in every module, so dialogs don't jump around. */
+import { clamp } from "../../../lib/utils";
+
 export const SETTINGS_DIALOG = { width: 960, height: 680 } as const;
 
 /** The menu on the left of a module with several pages (ModuleSettings draws it 200px wide: keep the two in step). */
@@ -14,7 +16,6 @@ const PAGE_AROUND = 88 + 24 + 24 + 48;
 /** A single page never gets shorter than this many rows. */
 export const SETTINGS_MIN_ROWS = 6;
 
-const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 /**
  * The size to ask for with `panel.openDialog(settingsDialogSize({ pages, rows }))`.

@@ -3,6 +3,7 @@ import { session, WebContentsView, type View } from "electron";
 import type { TavoraTheme } from "@tavora/sdk/protocol";
 import { writeFileAtomic } from "./fsutil";
 import { readJsonOrSetAside } from "./json";
+import { escapeHtml } from "../shared/escape-html";
 
 // While a workspace opens, its panels are shown under a cover: a tiny page of Tavora's own in the theme's background,
 // over the whole workspace. Pages only draw while they are shown, and a heavy one takes a few hundred ms for its
@@ -119,7 +120,6 @@ export interface CoverPageOptions {
 /** How far the panel's corner is rounded in the host UI (dock.css), as the loading card there: Classic's (panel-corners.ts `cover`). */
 export const COVER_RADIUS = 10;
 
-const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 /** Only plain CSS colour values reach the page's style. */
 const cssColor = (value: string, fallback: string) => (/^[#\w\s(),.%/-]+$/.test(value) ? value : fallback);
 

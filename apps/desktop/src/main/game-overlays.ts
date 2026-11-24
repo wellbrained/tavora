@@ -28,6 +28,7 @@ import { backupsDir } from "./backup";
 import { keepCopy } from "./fsutil";
 import { SAVED_FILES, SavedFile } from "./saved-file";
 import { isRecord } from "../shared/is-record";
+import { clamp } from "../shared/clamp";
 
 export { MIN_OVERLAY_SIZE, type Rect };
 
@@ -239,7 +240,6 @@ export const isLive = (panelInGame: boolean, moduleOverlays: number) => panelInG
 
 // ── Where an overlay sits ──────────────────────────────────────────────
 
-const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
 
 /** The rectangle a drag or resize makes: `rect` moved by (dx, dy), or with the edges in `edges` pulled, kept inside the game window. */
 export function dragRect(rect: Rect, game: Rect, edges: { left?: boolean; right?: boolean; top?: boolean; bottom?: boolean } | null, dx: number, dy: number): Rect {

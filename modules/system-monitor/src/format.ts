@@ -1,5 +1,7 @@
 // How the panel writes numbers. Pure, so it is tested on its own. Sizes use 1024 steps like Windows does, so a
 // 16 GB memory reads "16 GB" and a "1 TB" drive reads "931 GB", the same as Explorer.
+import { clamp } from "@tavora/official-ui/lib/utils";
+
 const GB = 1024 ** 3;
 const MB = 1024 ** 2;
 
@@ -14,10 +16,6 @@ export function num(value: number, decimals: number, language = "en"): string {
     formats.set(key, format);
   }
   return format.format(value);
-}
-
-export function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
 }
 
 /** "42", from 41.6: no decimals in the panel. */

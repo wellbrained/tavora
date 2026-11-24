@@ -3,6 +3,7 @@
 // Everything is in canvas units: the game window at a reference height of REFERENCE_HEIGHT (1080) and its own width, so
 // the same numbers work at any size the canvas is drawn at.
 import { MIN_OVERLAY_SIZE, REFERENCE_HEIGHT, type Rect } from "./overlay-anchor";
+import { clamp } from "./clamp";
 
 /** The grid menu: how many cells fit in the window's height; Off has none. */
 export const GRID_SETTINGS = ["fine", "normal", "coarse", "off"] as const;
@@ -47,7 +48,6 @@ export interface Edges {
   bottom?: boolean;
 }
 
-const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
 
 /** The places on one axis an edge can snap to: the canvas's edges and centre line, and the edges of the other items. */
 function targets(axis: "x" | "y", canvas: Canvas, others: readonly Rect[]): number[] {

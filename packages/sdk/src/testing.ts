@@ -74,6 +74,7 @@ export {
   type LayoutIssueKind,
   type TestPage,
 } from "./testing/checks.js";
+import { localDay } from "./local-day.js";
 
 type Table = Methods & HttpCalls;
 export type { CallName };
@@ -315,12 +316,6 @@ function checkRevision(existing: { revision: number } | undefined, ifRevision: n
   if (ifRevision === undefined) return;
   const current = existing?.revision ?? 0;
   if (current !== ifRevision) fail("CONFLICT", `document is at revision ${current}, not ${ifRevision}`, { revision: current });
-}
-
-function localDay(at: number): string {
-  const date = new Date(at);
-  const pad = (part: number) => String(part).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
 function randomId(): string {

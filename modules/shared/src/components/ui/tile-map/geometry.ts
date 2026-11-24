@@ -3,6 +3,7 @@
 // A world point (wx, wy) shows at (view.x + wx * view.zoom, view.y + view.zoom * wy) in the pane.
 
 import type { Size, ZoomView } from "../zoom-pane/view"
+import { clamp } from "../../../lib/utils"
 
 /** Where the map's pictures come from: square tiles, one at level 0, four at level 1, and so on. */
 export interface TileSource {
@@ -61,7 +62,6 @@ export interface PinGroup {
   highlighted: boolean
 }
 
-const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value))
 
 /**
  * The level whose pictures are at least as sharp as the screen: the least detailed one where one image pixel covers

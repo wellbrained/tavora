@@ -8,6 +8,7 @@
 // always follow it directly: a task and everything below it form a block
 // that moves as one.
 
+import { clamp } from "@tavora/official-ui/lib/utils";
 import type { JsonValue } from "@tavora/sdk";
 
 /** The document every To-Dos panel of a workspace shares. */
@@ -555,6 +556,3 @@ export function outdentTask(data: TodoList, taskId: string): void {
   tasks.splice(parentEnd - block.length, 0, ...block);
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max);
-}

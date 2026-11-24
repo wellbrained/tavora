@@ -10,6 +10,8 @@
 // converted once (migrateLegacy), when the game's real window size is first seen, so each lands exactly where it was.
 // Until then they are placed the old way (placeLegacy).
 
+import { clamp } from "./clamp";
+
 export interface Rect {
   x: number;
   y: number;
@@ -48,7 +50,6 @@ export const MAX_CONTENT_SCALE = 3;
 const HORIZONTAL: readonly HorizontalAnchor[] = ["left", "center", "right"];
 const VERTICAL: readonly VerticalAnchor[] = ["top", "middle", "bottom"];
 
-const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
 
 /** The smallest and biggest sizes in units of height that a saved rectangle may have. */
 const MIN_UNITS = 0.005;

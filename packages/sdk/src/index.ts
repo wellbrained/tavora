@@ -187,19 +187,13 @@ export type {
   ThemeToken,
   ToastPosition,
 } from "./protocol.js";
+import { localDay } from "./local-day.js";
 export { CLASSIC_STYLE, STYLE_LOOKS, STYLE_PARTS, STYLE_RANGES, STYLE_TAVORA, STYLE_VARIABLES, styleMarks } from "./protocol.js";
 export { TAB_OVERFLOW_TAVORA, TAB_OVERFLOWS, tabOverflowOf } from "./protocol.js";
 export { AUDIO_TYPES, BLOB_ID, BLOB_TYPES, DEFAULT_THEME_FONT, OVERLAY_FONT_PATH, DISCORD_COMMANDS, DISCORD_EVENTS, LIMITS, OVERLAY_KEY, PICTURE_TYPES, PROTOCOL_VERSION, MEDIA_ACTIONS, SYSTEM_INTERVALS_MS, SYSTEM_MAX_DRIVES, SYSTEM_PING_TARGET, OPTIONAL_THEME_TOKENS, THEME_TOKENS, TOAST_POSITIONS } from "./protocol.js";
 
 /** How long a menu may stay open; the host closes it itself when its panel goes. */
 const MENU_TIMEOUT_MS = 60 * 60_000;
-
-/** The local calendar day of a time, as YYYY-MM-DD: what a leaderboard result counts for without its own `day`. */
-function localDay(at: number): string {
-  const date = new Date(at);
-  const pad = (part: number) => String(part).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-}
 
 /** Version of this SDK package, sent to the host during the handshake. */
 export const SDK_VERSION = "0.4.10";

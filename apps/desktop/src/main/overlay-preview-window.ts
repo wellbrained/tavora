@@ -10,6 +10,7 @@ import { GAME_OVERLAY_ORIGIN, serveGameOverlay } from "./game-overlay-page";
 import type { PreviewRequest, PreviewWindow } from "./overlay-previews";
 import { lockContents, lockedSession } from "./game-overlay-window";
 import { InsertedCss } from "./inserted-css";
+import { escapeHtml } from "../shared/escape-html";
 
 export const PREVIEW_BACKGROUNDS = ["dark", "light", "checker"] as const;
 export type PreviewBackground = (typeof PREVIEW_BACKGROUNDS)[number];
@@ -17,7 +18,6 @@ export type PreviewBackground = (typeof PREVIEW_BACKGROUNDS)[number];
 /** The height of the footer with the background switch. */
 export const PREVIEW_FOOTER = 40;
 
-const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
 
 /**
  * The document behind and below the page: the chosen background, and the footer with the switch. Static markup made
