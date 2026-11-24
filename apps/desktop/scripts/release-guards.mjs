@@ -13,7 +13,8 @@ export function compareVersions(a, b) {
 
 /** The newest released version among tags like v0.4.0, or null if there is none. */
 export function lastReleased(tags) {
-  const versions = tags.map((tag) => /^v(\d+\.\d+\.\d+)$/.exec(tag)?.[1]).filter(Boolean);
+  // A stray tag that isn't a plain version (v01.2.3) is skipped, not a reason to stop the release.
+  const versions = tags.map((tag) => /^v(\d+\.\d+\.\d+)$/.exec(tag)?.[1]).filter((version) => version && parsePlainVersion(version) !== null);
   return versions.sort(compareVersions).at(-1) ?? null;
 }
 

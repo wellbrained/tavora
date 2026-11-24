@@ -4,6 +4,7 @@
 /apps/desktop/src/main/update-keys.ts @wellbrained
 /apps/desktop/src/main/update-signature.ts @wellbrained
 /apps/desktop/src/main/updates.ts @wellbrained
+/apps/desktop/src/shared/plain-version.ts @wellbrained
 
 # The server's receiver and setup: what a deploy key may publish.
 /deploy/server/ @wellbrained
