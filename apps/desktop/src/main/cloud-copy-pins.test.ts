@@ -52,7 +52,7 @@ vi.mock("node:fs/promises", async (original) => {
 const PINS = path.join(__dirname, "cloud-copy-pins");
 const UPDATE = process.env.UPDATE_SAVED_PINS === "1";
 const NOW = Date.parse("2026-11-23T10:00:00.000Z");
-const encryptor = { isAvailable: () => true, encrypt: (text: string) => Buffer.from(`sealed:${text}`), decrypt: (data: Buffer) => data.toString().replace(/^sealed:/, "") };
+const encryptor = { ready: async () => true, isAvailable: () => true, encrypt: async (text: string) => Buffer.from(`sealed:${text}`), decrypt: async (data: Buffer) => data.toString().replace(/^sealed:/, "") };
 
 /** The folders a run made, each shown by its name. */
 let places: [string, string][] = [];

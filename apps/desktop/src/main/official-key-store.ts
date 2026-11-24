@@ -26,7 +26,7 @@ export class OfficialKeyStore {
     this.saved = existsSync(this.file);
   }
 
-  /** Whether this PC can seal a key at all (no keyring on some Linux setups). */
+  /** Whether this PC can seal a key at all (no keyring on some Linux setups), as last checked (the start checks it). */
   canRemember(): boolean {
     return this.encryptor.isAvailable();
   }
@@ -38,9 +38,9 @@ export class OfficialKeyStore {
 
   /** Seals and saves the key; refuses when the system can't seal it, so it is never written in the clear. */
   async save(key: KeyObject): Promise<void> {
-    if (!this.canRemember()) throw new Error("this PC can't protect a saved key");
+    if (!(await this.encryptor.ready())) throw new Error("this PC can't protect a saved key");
     if (key.type !== "private" || key.asymmetricKeyType !== "ed25519") throw new Error("not a publisher key");
-    const sealed = this.encryptor.encrypt(key.export({ format: "pem", type: "pkcs8" }) as string);
+    const sealed = await this.encryptor.encrypt(key.export({ format: "pem", type: "pkcs8" }) as string);
     await writeFileAtomic(this.file, sealed);
     this.saved = true;
   }
@@ -49,7 +49,7 @@ export class OfficialKeyStore {
   async load(): Promise<KeyObject | null> {
     if (!this.saved && !existsSync(this.file)) return null;
     // The system's protection is off for now (a locked keyring): keep the file, ask for the key file this time.
-    if (!this.encryptor.isAvailable()) return null;
+    if (!(await this.encryptor.ready())) return null;
     // A file that can't be read right now (held by a virus scan) stays; only one that doesn't open is deleted.
     let sealed: Buffer;
     try {
@@ -58,7 +58,7 @@ export class OfficialKeyStore {
       return null;
     }
     try {
-      const key = createPrivateKey(this.encryptor.decrypt(sealed));
+      const key = createPrivateKey(await this.encryptor.decrypt(sealed));
       if (key.asymmetricKeyType !== "ed25519") throw new Error("not a publisher key");
       this.saved = true;
       return key;

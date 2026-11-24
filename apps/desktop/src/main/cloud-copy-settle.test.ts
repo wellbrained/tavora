@@ -46,7 +46,7 @@ afterEach(async () => {
   await cleanUp();
 });
 
-const encryptor = { isAvailable: () => true, encrypt: (text: string) => Buffer.from(`sealed:${text}`), decrypt: (data: Buffer) => data.toString().replace(/^sealed:/, "") };
+const encryptor = { ready: async () => true, isAvailable: () => true, encrypt: async (text: string) => Buffer.from(`sealed:${text}`), decrypt: async (data: Buffer) => data.toString().replace(/^sealed:/, "") };
 type Service = Awaited<ReturnType<typeof service>>;
 type Pc = Awaited<ReturnType<typeof pc>>;
 

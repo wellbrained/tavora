@@ -43,7 +43,7 @@ afterEach(async () => {
 
 type Service = Awaited<ReturnType<typeof service>>;
 type Pc = Awaited<ReturnType<typeof pc>>;
-const encryptor = { isAvailable: () => true, encrypt: (text: string) => Buffer.from(`sealed:${text}`), decrypt: (data: Buffer) => data.toString().replace(/^sealed:/, "") };
+const encryptor = { ready: async () => true, isAvailable: () => true, encrypt: async (text: string) => Buffer.from(`sealed:${text}`), decrypt: async (data: Buffer) => data.toString().replace(/^sealed:/, "") };
 const lib = (...ids: string[]) => JSON.stringify({ version: 2, workspaces: Object.fromEntries(ids.map((id) => [id, {}])) });
 const fileOf = (at: Pc, name: string) => (name.startsWith("module-blobs/") ? path.join(at.moduleFiles, ...name.split("/").slice(1)) : path.join(at.userData, ...name.split("/")));
 const read = (at: Pc, name: string) => readFile(fileOf(at, name), "utf8").catch(() => "<gone>");

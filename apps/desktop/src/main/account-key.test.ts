@@ -7,7 +7,7 @@ import { newCopyKey, openVault, recoveryKey, sealVault } from "./copy-crypto";
 
 afterEach(cleanUp);
 
-const encryptor = { isAvailable: () => true, encrypt: (text: string) => Buffer.from(`sealed:${text}`), decrypt: (data: Buffer) => data.toString().replace(/^sealed:/, "") };
+const encryptor = { ready: async () => true, isAvailable: () => true, encrypt: async (text: string) => Buffer.from(`sealed:${text}`), decrypt: async (data: Buffer) => data.toString().replace(/^sealed:/, "") };
 
 type Service = Awaited<ReturnType<typeof service>>;
 
@@ -20,7 +20,7 @@ async function onPc(cloud: Service, { keyStore = true, fetch = cloud.fetch, user
     legacyFile: path.join(userData, "cloud-copy-key.json"),
     // `kept`: the vault as last read and whether one was seen are kept on this PC, as the app does.
     ...(kept ? { cacheFile: path.join(userData, "account-vault.bin"), seenFile: path.join(userData, "account-vault-seen") } : {}),
-    encryptor: keyStore ? encryptor : { ...encryptor, isAvailable: () => false },
+    encryptor: keyStore ? encryptor : { ...encryptor, ready: async () => false, isAvailable: () => false },
     baseUrl: "http://tavora.test/v1/account",
     fetch,
     token: () => cloud.token,
@@ -140,7 +140,7 @@ describe("the account's key", () => {
     const cloud = await service();
     const a = await onPc(cloud);
     const old = newCopyKey();
-    await writeFile(path.join(a.userData, "cloud-copy-key.json"), JSON.stringify({ v: 1, data: encryptor.encrypt(old.toString("base64")).toString("base64") }));
+    await writeFile(path.join(a.userData, "cloud-copy-key.json"), JSON.stringify({ v: 1, data: (await encryptor.encrypt(old.toString("base64"))).toString("base64") }));
     expect((await a.key.load())?.equals(old)).toBe(true);
     expect((await a.key.load())?.equals(old)).toBe(true);
     expect(await a.key.setUp()).toEqual({ status: "ready", created: false });

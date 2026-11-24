@@ -1042,7 +1042,7 @@ export class AccountKey {
     if (isMain && this.mainBlocked) throw new CopyError("failed", "the key file can't be opened");
     const tag = isMain ? null : this.tagOfFile(path.basename(place.keyFile))!;
     if (tag !== null) await this.pruneOthers(tag);
-    const data = this.options.encryptor.encrypt(key.toString("base64")).toString("base64");
+    const data = (await this.options.encryptor.encrypt(key.toString("base64"))).toString("base64");
     // `account` and `unproven` sit next to the sealed key: older Tavoras read only `v` and `data`. A file there that
     // can't be read right now is never written over (sealed-file.ts).
     await new SealedFile(place.keyFile).write({ data, account: owner, ...(unproven ? { unproven } : {}) });
@@ -1196,9 +1196,9 @@ function ownerOf(owner: unknown): string | null | undefined {
  * blocked, and stays where it is.
  */
 async function readKey(file: string, encryptor: Encryptor): Promise<KeyRead> {
-  if (!encryptor.isAvailable()) return (await exists(file)) ? { status: "blocked", file, reason: "unopened", owner: undefined } : { status: "missing" };
-  const read = await new SealedFile(file).open((data, saved) => {
-    const key = Buffer.from(encryptor.decrypt(Buffer.from(data, "base64")), "base64");
+  if (!(await encryptor.ready())) return (await exists(file)) ? { status: "blocked", file, reason: "unopened", owner: undefined } : { status: "missing" };
+  const read = await new SealedFile(file).open(async (data, saved) => {
+    const key = Buffer.from(await encryptor.decrypt(Buffer.from(data, "base64")), "base64");
     if (key.length !== 32) throw new Error("not a key");
     return { key, owner: ownerOf(saved.account), unproven: saved.unproven === true };
   });

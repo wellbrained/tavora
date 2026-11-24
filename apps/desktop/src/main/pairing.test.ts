@@ -9,7 +9,7 @@ import { FOLDER_PAIRING_MS, FolderPairing, MAX_OPEN_ANSWERS, OPEN_ANSWER_MS, Pai
 
 afterEach(cleanUp);
 
-const encryptor = { isAvailable: () => true, encrypt: (text: string) => Buffer.from(`sealed:${text}`), decrypt: (data: Buffer) => data.toString().replace(/^sealed:/, "") };
+const encryptor = { ready: async () => true, isAvailable: () => true, encrypt: async (text: string) => Buffer.from(`sealed:${text}`), decrypt: async (data: Buffer) => data.toString().replace(/^sealed:/, "") };
 
 /** One PC: its account key and its pairing, through the service with `token` or through `folder`. */
 async function onPc(fetch: typeof globalThis.fetch, token: string | null, transport?: PairingTransport, extra: Partial<PairingOptions> = {}) {

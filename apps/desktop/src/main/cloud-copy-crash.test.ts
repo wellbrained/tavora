@@ -70,7 +70,7 @@ const skipFirstCut = (n: number) => !EVERY_FIRST_CUT && n % 5 !== 0;
 /** A cut deeper down, where a test cuts three starts in a row: every fifth one, and all of them with TAVORA_CRASH_ALL. */
 const skipDeeperCut = (n: number) => !process.env.TAVORA_CRASH_ALL && n % 5 !== 0;
 
-const encryptor = { isAvailable: () => true, encrypt: (text: string) => Buffer.from(`sealed:${text}`), decrypt: (data: Buffer) => data.toString().replace(/^sealed:/, "") };
+const encryptor = { ready: async () => true, isAvailable: () => true, encrypt: async (text: string) => Buffer.from(`sealed:${text}`), decrypt: async (data: Buffer) => data.toString().replace(/^sealed:/, "") };
 type Service = Awaited<ReturnType<typeof service>>;
 type Pc = Awaited<ReturnType<typeof pc>>;
 

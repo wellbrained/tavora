@@ -13,9 +13,10 @@ import { OFFICIAL_KEY_FILE, OfficialKeyStore } from "./official-key-store";
 
 // Stands in for safeStorage: reversible, and never the plain text.
 const encryptor = (available = true): Encryptor => ({
+  ready: async () => available,
   isAvailable: () => available,
-  encrypt: (text) => Buffer.from([...Buffer.from(text)].map((byte) => byte ^ 0x5a)),
-  decrypt: (data) => Buffer.from([...data].map((byte) => byte ^ 0x5a)).toString(),
+  encrypt: async (text) => Buffer.from([...Buffer.from(text)].map((byte) => byte ^ 0x5a)),
+  decrypt: async (data) => Buffer.from([...data].map((byte) => byte ^ 0x5a)).toString(),
 });
 
 let userData: string;

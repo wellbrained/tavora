@@ -15,7 +15,7 @@ const { FolderPairing, Pairing } = await import("./pairing");
 
 afterEach(cleanUp);
 
-const encryptor = { isAvailable: () => true, encrypt: (text: string) => Buffer.from(`sealed:${text}`), decrypt: (data: Buffer) => data.toString().replace(/^sealed:/, "") };
+const encryptor = { ready: async () => true, isAvailable: () => true, encrypt: async (text: string) => Buffer.from(`sealed:${text}`), decrypt: async (data: Buffer) => data.toString().replace(/^sealed:/, "") };
 const b64 = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64url");
 
 async function onPc(transport: InstanceType<typeof FolderPairing>) {

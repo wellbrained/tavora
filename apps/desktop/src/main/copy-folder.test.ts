@@ -256,7 +256,7 @@ describe("following a copy's line", () => {
 });
 
 describe("the cloud copy in a folder, as Tavora runs it", () => {
-  const encryptor = { isAvailable: () => true, encrypt: (text: string) => Buffer.from(`sealed:${text}`), decrypt: (data: Buffer) => data.toString().replace(/^sealed:/, "") };
+  const encryptor = { ready: async () => true, isAvailable: () => true, encrypt: async (text: string) => Buffer.from(`sealed:${text}`), decrypt: async (data: Buffer) => data.toString().replace(/^sealed:/, "") };
 
   function tavora(at: Awaited<ReturnType<typeof pc>>, now?: () => number) {
     const views: CloudCopyView[] = [];

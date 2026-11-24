@@ -36,10 +36,12 @@ const KEY = "0123456789abcdef0123456789abcdef";
 const PANEL = "11111111-1111-4111-8111-111111111111";
 const NOW = new Date("2026-11-23T10:00:00.000Z");
 
+const sealText = (text: string) => Buffer.from([...Buffer.from(text)].map((byte) => byte ^ 0x5a));
 const encryptor: Encryptor = {
+  ready: async () => true,
   isAvailable: () => true,
-  encrypt: (text) => Buffer.from([...Buffer.from(text)].map((byte) => byte ^ 0x5a)),
-  decrypt: (data) => Buffer.from([...data].map((byte) => byte ^ 0x5a)).toString(),
+  encrypt: async (text) => sealText(text),
+  decrypt: async (data) => Buffer.from([...data].map((byte) => byte ^ 0x5a)).toString(),
 };
 
 let dir: string;
@@ -356,11 +358,11 @@ function aiUsage(): AiUsageConnector {
 }
 
 /** A sealed file as Tavora writes it, its data sealed with the test's encryptor. */
-const sealedSample = (data: unknown) => JSON.stringify({ v: 1, data: encryptor.encrypt(JSON.stringify(data)).toString("base64") });
+const sealedSample = (data: unknown) => JSON.stringify({ v: 1, data: sealText(JSON.stringify(data)).toString("base64") });
 const SEALED: Record<string, string> = {
   account: sealedSample({ token: "s".repeat(24), email: "old@example.com", discord: "nik", createdAt: "2026-10-01T00:00:00.000Z" }),
   discord: sealedSample({ token: { accessToken: "x", refreshToken: "y", expiresAt: 2 }, last: null, games: {} }),
-  "account-key": JSON.stringify({ v: 1, data: encryptor.encrypt(Buffer.alloc(32, 1).toString("base64")).toString("base64"), account: null }),
+  "account-key": JSON.stringify({ v: 1, data: sealText(Buffer.alloc(32, 1).toString("base64")).toString("base64"), account: null }),
 };
 
 async function sampleText(store: Pinned): Promise<string> {

@@ -11,7 +11,7 @@ import { ANSWER_WAIT_MS, CLOCK_AHEAD_MS, FOLDER_PAIRING_MS, FolderPairing, MAX_O
 
 afterEach(cleanUp);
 
-const encryptor = { isAvailable: () => true, encrypt: (text: string) => Buffer.from(`sealed:${text}`), decrypt: (data: Buffer) => data.toString().replace(/^sealed:/, "") };
+const encryptor = { ready: async () => true, isAvailable: () => true, encrypt: async (text: string) => Buffer.from(`sealed:${text}`), decrypt: async (data: Buffer) => data.toString().replace(/^sealed:/, "") };
 const commit = () => pairingCommit(newPairingKey().publicKey).toString("base64url");
 
 /** A PC signed out, with the cloud copy in a folder: `transport` carries its pairing. */

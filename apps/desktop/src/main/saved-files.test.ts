@@ -48,9 +48,10 @@ const put = async (file: string, text: string) => {
 const copiesOf = async (file: string) => (await readdir(path.dirname(file))).filter((name) => name.startsWith(`${path.basename(file)}.`) && !name.endsWith(".tmp")).sort();
 
 const encryptor: Encryptor = {
+  ready: async () => true,
   isAvailable: () => true,
-  encrypt: (text) => Buffer.from([...Buffer.from(text)].map((byte) => byte ^ 0x5a)),
-  decrypt: (data) => {
+  encrypt: async (text) => Buffer.from([...Buffer.from(text)].map((byte) => byte ^ 0x5a)),
+  decrypt: async (data) => {
     const text = Buffer.from([...data].map((byte) => byte ^ 0x5a)).toString();
     if (!text.startsWith("{") && !/^[A-Za-z0-9+/=]+$/.test(text)) throw new Error("sealed by someone else");
     return text;

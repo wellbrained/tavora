@@ -87,16 +87,17 @@ async function files(): Promise<Record<string, string>> {
   return found;
 }
 
+const seal = (text: string) => Buffer.from(`sealed:${text}`).toString("base64");
 const encryptor: Encryptor = {
+  ready: async () => true,
   isAvailable: () => true,
-  encrypt: (text) => Buffer.from(`sealed:${text}`),
-  decrypt: (data) => {
+  encrypt: async (text) => Buffer.from(`sealed:${text}`),
+  decrypt: async (data) => {
     const text = data.toString();
     if (!text.startsWith("sealed:")) throw new Error("sealed by another user");
     return text.slice("sealed:".length);
   },
 };
-const seal = (text: string) => encryptor.encrypt(text).toString("base64");
 /** A sealed file whose data another Windows user sealed: it reads, but doesn't open here. */
 const OTHER_USER = JSON.stringify({ v: 1, data: Buffer.from("someone else's").toString("base64") });
 

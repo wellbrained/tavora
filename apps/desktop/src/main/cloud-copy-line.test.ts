@@ -477,7 +477,7 @@ describe("the line sealed in each folder list", () => {
 });
 
 describe("the line, as Tavora runs it", () => {
-  const encryptor = { isAvailable: () => true, encrypt: (text: string) => Buffer.from(`sealed:${text}`), decrypt: (data: Buffer) => data.toString().replace(/^sealed:/, "") };
+  const encryptor = { ready: async () => true, isAvailable: () => true, encrypt: async (text: string) => Buffer.from(`sealed:${text}`), decrypt: async (data: Buffer) => data.toString().replace(/^sealed:/, "") };
 
   function tavora(at: Awaited<ReturnType<typeof pc>>, folderStorage: (picked: string) => CopyStorage) {
     const views: CloudCopyView[] = [];

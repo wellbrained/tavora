@@ -6,9 +6,10 @@ import { DiscordSecretsFile, type DiscordSecrets, type Encryptor } from "./disco
 
 // Stands in for safeStorage: reversible, and never the plain text.
 const encryptor = (available = true): Encryptor => ({
+  ready: async () => available,
   isAvailable: () => available,
-  encrypt: (text) => Buffer.from([...Buffer.from(text)].map((byte) => byte ^ 0x5a)),
-  decrypt: (data) => Buffer.from([...data].map((byte) => byte ^ 0x5a)).toString(),
+  encrypt: async (text) => Buffer.from([...Buffer.from(text)].map((byte) => byte ^ 0x5a)),
+  decrypt: async (data) => Buffer.from([...data].map((byte) => byte ^ 0x5a)).toString(),
 });
 
 /** One read or write of discord.json, each by a store of its own, as at a start of Tavora. */
@@ -39,7 +40,7 @@ describe("Discord secrets on disk", () => {
     expect(await loadDiscordSecrets(where, encryptor())).toEqual({ token: null, last: null, games: {} });
     await saveDiscordSecrets(where, encryptor(), { token: TOKEN });
     expect(await loadDiscordSecrets(where, encryptor(false))).toEqual({ token: null, last: null, games: {} });
-    const broken: Encryptor = { ...encryptor(), decrypt: () => "not json" };
+    const broken: Encryptor = { ...encryptor(), decrypt: async () => "not json" };
     expect(await loadDiscordSecrets(where, broken)).toEqual({ token: null, last: null, games: {} });
   });
 
@@ -72,9 +73,9 @@ describe("Discord secrets on disk", () => {
   it("drops the Client Secret an older version kept, and writes the file again without it", async () => {
     const where = await file();
     const old = { secret: "s3cret_value", token: TOKEN, last: null, games: {} };
-    await writeFile(where, JSON.stringify({ v: 1, data: encryptor().encrypt(JSON.stringify(old)).toString("base64") }));
+    await writeFile(where, JSON.stringify({ v: 1, data: (await encryptor().encrypt(JSON.stringify(old))).toString("base64") }));
     expect(await loadDiscordSecrets(where, encryptor())).toEqual({ token: TOKEN, last: null, games: {} });
-    const again = JSON.parse(encryptor().decrypt(Buffer.from(JSON.parse(await readFile(where, "utf8")).data, "base64")));
+    const again = JSON.parse(await encryptor().decrypt(Buffer.from(JSON.parse(await readFile(where, "utf8")).data, "base64")));
     expect(again).toEqual({ token: TOKEN, last: null, games: {} });
     expect(again).not.toHaveProperty("secret");
   });

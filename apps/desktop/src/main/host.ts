@@ -1119,6 +1119,8 @@ export class Host {
   static async create(options: HostOptions): Promise<Host> {
     const { userData } = options;
     const encryptor = osEncryptor(options.discord !== undefined);
+    // Checked once before anything reads it: the getters that can't wait (can this PC keep a sign-in?) use this answer.
+    await encryptor.ready();
     // The cloud copy comes first, as a newer copy is taken before anything reads the files. It needs only the saved
     // sign-in and the module files folder as saved; once the library is read, the folder is the library's.
     const signIn = Host.signIn(options, encryptor);

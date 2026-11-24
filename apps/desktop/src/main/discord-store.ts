@@ -11,9 +11,12 @@ import { SealedFile } from "./sealed-file";
 // workspace remembers; Tavora moves those into the Discord module once (host.ts).
 
 export interface Encryptor {
+  /** Checks the system's key store (and caches the answer for `isAvailable`). Asked before anything is sealed or opened. */
+  ready(): Promise<boolean>;
+  /** The answer of the last `ready()`: false until it has run. For getters that can't wait. */
   isAvailable(): boolean;
-  encrypt(text: string): Buffer;
-  decrypt(data: Buffer): string;
+  encrypt(text: string): Promise<Buffer>;
+  decrypt(data: Buffer): Promise<string>;
 }
 
 export interface DiscordToken {
@@ -101,10 +104,10 @@ export class DiscordSecretsFile {
 
   async load(): Promise<DiscordSecrets> {
     const encryptor = this.encryptor;
-    if (!encryptor.isAvailable()) return EMPTY;
+    if (!(await encryptor.ready())) return EMPTY;
     // Missing, newer, damaged, can't be read now, or encrypted by another user or PC: start without (the file is kept).
-    const read = await this.sealed.open((data) => {
-      const value: unknown = JSON.parse(encryptor.decrypt(Buffer.from(data, "base64")));
+    const read = await this.sealed.open(async (data) => {
+      const value: unknown = JSON.parse(await encryptor.decrypt(Buffer.from(data, "base64")));
       if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("not Discord's secrets");
       return value as Record<string, unknown>;
     });
@@ -122,7 +125,7 @@ export class DiscordSecretsFile {
 
   async save(secrets: DiscordSecrets): Promise<void> {
     if (!secrets.token && !secrets.last && Object.keys(secrets.games ?? {}).length === 0) return this.sealed.forget();
-    if (!this.encryptor.isAvailable()) throw new Error("No secure storage on this PC.");
-    await this.sealed.write({ data: this.encryptor.encrypt(JSON.stringify(secrets)).toString("base64") });
+    if (!(await this.encryptor.ready())) throw new Error("No secure storage on this PC.");
+    await this.sealed.write({ data: (await this.encryptor.encrypt(JSON.stringify(secrets))).toString("base64") });
   }
 }
