@@ -1,13 +1,12 @@
 import type { KeyObject } from "node:crypto";
 import { lstat, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { folderKey, isReleaseVersion, manifestFiles, MAX_README_BYTES, validateChangelog, validateManifest, type ChangelogEntry, type ModuleManifest } from "@tavora/module-schema";
+import { folderKey, isReleaseVersion, manifestFiles, MAX_README_BYTES, validateChangelog, validateManifest, type ChangelogEntry, type ModuleManifest, compareModuleVersions } from "@tavora/module-schema";
 import { MANIFEST_FILE, packModule, PackError, PrivateKeyError, type Published } from "@tavora/pack";
 import type { AccountView, PrefixState, PublishProblem, PublishView, ReadmeBlock } from "../shared/host-api";
 import { suggestPrefix } from "../shared/id-prefix";
 import { parseReadme } from "./catalog-readme";
 import { writeFileAtomic } from "./fsutil";
-import { compareModuleVersions } from "./installer";
 import { UserError } from "./messages";
 
 // The Publish button (decided 2026-10-21, "Easier module publishing"): a dev module from a project folder

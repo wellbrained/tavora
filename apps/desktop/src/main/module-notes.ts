@@ -1,5 +1,4 @@
-import type { ChangelogEntry } from "@tavora/module-schema";
-import { compareModuleVersions } from "./installer";
+import { compareModuleVersions, type ChangelogEntry } from "@tavora/module-schema";
 
 // Which of a module's patch notes the user sees, and which are new to them.
 

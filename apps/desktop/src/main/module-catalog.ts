@@ -1,9 +1,8 @@
 import path from "node:path";
-import { translateManifest } from "@tavora/module-schema";
+import { translateManifest, compareModuleVersions } from "@tavora/module-schema";
 import type { CatalogListResult, CatalogPageResult, CatalogReviews, CatalogReviewsResult, ModulePageResult, ReleaseStatus } from "../shared/host-api";
 import { translate, type Language } from "../shared/i18n";
 import { askKey, type AskedGame } from "../shared/module-request";
-import { compareModuleVersions } from "../shared/module-version";
 import { catalogView, type CatalogClient, type CatalogScope } from "./catalog-client";
 import { parseReadme, readmeAllowsLink } from "./catalog-readme";
 import { CHECK_INTERVAL_MS, type CatalogUpdater } from "./catalog-updates";

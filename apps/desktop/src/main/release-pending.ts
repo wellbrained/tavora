@@ -3,7 +3,7 @@
 // and compared on this PC with the order the update check uses.
 import type { ReleaseCopy, ReleaseStatus } from "../shared/host-api";
 import type { CatalogEntry } from "./catalog-client";
-import { compareModuleVersions } from "./installer";
+import { compareModuleVersions, compareModuleVersions } from "@tavora/module-schema";
 
 /** At most this many copies are compared in one ask. */
 const MAX_COPIES = 200;

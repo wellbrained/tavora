@@ -13,7 +13,7 @@ import type { InstalledModule } from "../module-page";
 import { formatSize } from "../catalog-size";
 import { PLACEHOLDER_README } from "../catalog-placeholder";
 import { act, api, closeDialog, dialog, state } from "../host";
-import { compareModuleVersions } from "../../shared/module-version";
+import { compareModuleVersions, compareModuleVersions } from "@tavora/module-schema";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { useTask } from "@tavora/official-ui/use-task";
 import { FadeImage } from "@tavora/official-ui/components/ui/fade-image";

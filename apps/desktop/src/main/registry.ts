@@ -1,7 +1,6 @@
 import { readdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
-import { LOCAL_OWNER, manifestFiles, needsNewerTavora, OFFICIAL_OWNER, validateManifest, type ChangelogEntry, type ModuleManifest } from "@tavora/module-schema";
-import { compareModuleVersions } from "../shared/module-version";
+import { LOCAL_OWNER, manifestFiles, needsNewerTavora, OFFICIAL_OWNER, validateManifest, type ChangelogEntry, type ModuleManifest, compareModuleVersions } from "@tavora/module-schema";
 import { resolveAsset } from "./assets";
 import { readModuleChangelog } from "./module-changelog";
 import { moduleIconUrl } from "./module-icon";

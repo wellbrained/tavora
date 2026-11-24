@@ -6,7 +6,7 @@ import { computed } from "vue";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Expandable } from "@tavora/official-ui/components/ui/expandable";
 import type { CatalogPage } from "../../shared/host-api";
-import { compareModuleVersions } from "../../shared/module-version";
+import { compareModuleVersions, compareModuleVersions } from "@tavora/module-schema";
 import { state } from "../host";
 import { formatDate, t } from "../i18n";
 

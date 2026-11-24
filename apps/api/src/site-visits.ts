@@ -1,6 +1,7 @@
-import { existsSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 import { Reader, type CountryResponse } from "mmdb-lib";
+import { writeFileAtomicSync } from "./fs-atomic.ts";
 
 /**
  * Visits to mytavora.app (decided 2026-10-29), counted like everything else in stats.ts: plain daily totals,
@@ -80,8 +81,7 @@ export class CountryLookup {
       const data = gunzipSync(Buffer.from(await response.arrayBuffer()));
       // Read it before it replaces the old file, so a broken download never takes the lookup away.
       const reader = new Reader<CountryResponse>(data);
-      writeFileSync(`${this.file}.new`, data);
-      renameSync(`${this.file}.new`, this.file);
+      writeFileAtomicSync(this.file, data);
       this.reader = reader;
       return true;
     }

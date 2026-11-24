@@ -3,11 +3,10 @@ import { execFile } from "node:child_process";
 import { appendFile, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { isModuleId, validateChangelog, validateManifest } from "@tavora/module-schema";
+import { isModuleId, validateChangelog, validateManifest, compareModuleVersions } from "@tavora/module-schema";
 import { collectFiles, fingerprint, packModule, PackError, PrivateKeyError, readZip, SIGNATURE_FILE, type Published } from "@tavora/pack";
 import { assertNever } from "../shared/assert-never";
 import type { OfficialBuildStep, OfficialPublishOverview, OfficialPublishPreview, OfficialPublishRow, OfficialPublishRun, OfficialUploadStep } from "../shared/host-api";
-import { compareModuleVersions } from "../shared/module-version";
 import { UserError } from "./messages";
 import { BROWSER_MODULE_ID, OFFICIAL_PREFIX } from "./registry";
 

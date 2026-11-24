@@ -6,8 +6,7 @@
 // none of this runs and nothing is read or written.
 import { readdir, rm } from "node:fs/promises";
 import path from "node:path";
-import { isModuleId, isOfficialSigner, OFFICIAL_PINS, officialOn, type OfficialPins } from "@tavora/module-schema";
-import { compareModuleVersions } from "../shared/module-version";
+import { isModuleId, isOfficialSigner, OFFICIAL_PINS, officialOn, type OfficialPins, compareModuleVersions } from "@tavora/module-schema";
 import type { SavedRecord } from "./json";
 import { FolderChecks, type Verified } from "./module-folder-check";
 import { SAVED_FILES, SavedFile } from "./saved-file";
