@@ -1,7 +1,7 @@
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { accountLifecycle, type AccountLifecycle } from "./account-lifecycle.ts";
-import { cleanDeveloperName, DEVICE_OS, MAX_PREFIXES, NAME_HOLD_MS, normalizeEmail, type Account, type AccountStore, type CodeAsker, type DeviceOs, type StoredProfile } from "./account-store.ts";
+import { cleanDeveloperName, DEVICE_OS, MAX_PREFIXES, NAME_HOLD_MS, normalizeEmail, type Account, type AccountStore, type CodeAsker, type DeviceOs, type Session, type StoredProfile } from "./account-store.ts";
 import type { CatalogStore } from "./catalog.ts";
 import { OFFICIAL_PINS, type CatalogTrust, type OfficialPins } from "./catalog-trust.ts";
 import type { CopyStore } from "./cloud-copy.ts";
@@ -182,6 +182,8 @@ export const deviceName = (input: unknown): string | null => {
 };
 /** What the owner sees of their account: never the Discord id, only its username as a label. */
 const accountAnswer = (account: Account) => ({ email: account.email, discord: account.discord ? { name: account.discord.name } : null, createdAt: account.createdAt });
+/** The new sign-in an ended one got in its place (account-store.ts changeEmail, removeEmail, removeDiscord), for the answer. */
+const renewedAnswer = (renewed: { token: string | null; session: Session | null }) => (renewed.token && renewed.session ? { token: renewed.token, device: renewed.session.id } : {});
 const lastMethod = (context: Context) => context.json({ error: "An account keeps at least one way to sign in.", reason: "last-method" }, 409);
 const discordConnected = (context: Context) =>
   context.json({ error: "This account already has a Discord login; disconnect it first.", reason: "discord-connected" }, 409);
@@ -784,7 +786,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     if (account.email && !usedUp("sign-in")) await send(context, emailChangedMail(account.email, email, language));
     // The new address just proved itself from this network.
     store.rememberNetwork(email, networkOf(clientKey(context.req.raw)), now());
-    return context.json({ account: accountAnswer({ ...account, email }), ...(changed.token ? { token: changed.token, device: changed.session!.id } : {}) });
+    return context.json({ account: accountAnswer({ ...account, email }), ...renewedAnswer(changed) });
   });
 
   // Remove the email address: only while a Discord login remains, so the account can still be reached,
@@ -812,8 +814,11 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     if (typeof input.code !== "string" || !CODE.test(input.code)) return context.json({ error: "Send { code }.", reason: "bad-request" }, 400);
     if (!account.email) return context.json({ error: "This account has no email address.", reason: "no-email" }, 409);
     if (!store.checkCode(account.email, "remove-email", account.id, input.code, now(), true)) return wrongCode(context);
-    if (store.removeEmail(account.id) === "last-method") return lastMethod(context);
-    return context.json({ account: accountAnswer({ ...account, email: null }) });
+    // Every sign-in ends, this one too, which gets a new token in the answer (account-store.ts removeEmail), as for a change.
+    // A Tavora from before this doesn't read it and is signed out: it signs in again.
+    const removed = store.removeEmail(account.id, context.get("session").id, now());
+    if (removed.status === "last-method") return lastMethod(context);
+    return context.json({ account: accountAnswer({ ...account, email: null }), ...renewedAnswer(removed) });
   });
 
   // Delete the account: a fresh code to its address, then everything on the server goes at once.
@@ -973,8 +978,10 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     if (!account.discord) return noDiscord(context);
     if (!account.email) return lastMethod(context);
     if (!store.checkCode(account.email, "remove-discord", account.id, input.code, now(), true)) return wrongCode(context);
-    if (store.removeDiscord(account.id) === "last-method") return lastMethod(context);
-    return context.json({ account: accountAnswer({ ...account, discord: null }) });
+    // Every sign-in ends, this one too, as for removing the address: one made with a Discord login someone else had goes with it.
+    const removed = store.removeDiscord(account.id, context.get("session").id, now());
+    if (removed.status === "last-method") return lastMethod(context);
+    return context.json({ account: accountAnswer({ ...account, discord: null }), ...renewedAnswer(removed) });
   });
 
   // Delete the account by a fresh Discord sign-in with the login it has.

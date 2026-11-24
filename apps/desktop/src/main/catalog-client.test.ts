@@ -234,7 +234,7 @@ describe("CatalogClient.download", () => {
 });
 
 describe("CatalogClient.picture", () => {
-  const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from("picture bytes")]);
+  const png = Buffer.concat([Buffer.from("89504e470d0a1a0a0000000d494844520000001000000010", "hex"), Buffer.from("picture bytes")]);
   const shot = { sha256: createHash("sha256").update(png).digest("hex"), type: "png" as const, size: png.length };
   const client = (body: Buffer) => {
     const fake = fakeFetch(() => new Response(new Uint8Array(body)));
@@ -260,7 +260,7 @@ describe("CatalogClient.picture", () => {
 
 describe("CatalogClient.icon", () => {
   it("fetches the icon of a module from the last list once, and nothing for others", async () => {
-    const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from("icon bytes")]);
+    const png = Buffer.concat([Buffer.from("89504e470d0a1a0a0000000d494844520000001000000010", "hex"), Buffer.from("icon bytes")]);
     const icon = { sha256: createHash("sha256").update(png).digest("hex"), type: "png", size: png.length };
     const { impl, calls } = fakeFetch((url) => (url.includes("/pictures/") ? new Response(new Uint8Array(png)) : json({ modules: [entry({ icon })] })));
     const client = new CatalogClient({ baseUrl: "https://catalog.test", fetchImpl: impl });
@@ -274,7 +274,7 @@ describe("CatalogClient.icon", () => {
   });
 
   it("fetches an icon again a minute after it did not come", async () => {
-    const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from("icon bytes")]);
+    const png = Buffer.concat([Buffer.from("89504e470d0a1a0a0000000d494844520000001000000010", "hex"), Buffer.from("icon bytes")]);
     const icon = { sha256: createHash("sha256").update(png).digest("hex"), type: "png", size: png.length };
     let fails = 1;
     let now = 0;

@@ -271,10 +271,10 @@ describe("WorkspaceLibrary", () => {
     expect(workspaces.panels("valheim")).toEqual([]);
     expect(calls).toEqual([
       "library saved",
+      "files of Valheim",
       "drop notes-1",
       "state gone notes-1",
       "forgotten valheim",
-      "files of Valheim",
       "forget icon valheim",
       "clear persist:module:official:tavora.notes@valheim",
     ]);
@@ -291,7 +291,7 @@ describe("WorkspaceLibrary", () => {
     const { shelf, calls, userData } = await setup();
     await mkdir(path.join(userData, "Partitions", "browser@valheim"), { recursive: true });
     await shelf.deleteExpired([{ ...emptyLibrary().workspaces, id: "valheim", name: "Valheim" } as never]);
-    expect(calls).toEqual(["forgotten valheim", "files of Valheim", "forget icon valheim", "clear persist:browser@valheim"]);
+    expect(calls).toEqual(["files of Valheim", "forgotten valheim", "forget icon valheim", "clear persist:browser@valheim"]);
   });
 
   it("keeps a workspace in Trash for a later try when its files can't be deleted now, and deletes the others", async () => {
@@ -311,6 +311,9 @@ describe("WorkspaceLibrary", () => {
       expect(library.workspaces.satisfactory).toBeUndefined();
       expect(calls).toContain("forget icon satisfactory");
       expect(calls).not.toContain("forget icon valheim");
+      // Nothing of its layout, panels or settings was taken before the files failed: Restore still gives back a whole workspace.
+      expect(calls).not.toContain("forgotten valheim");
+      expect(calls).toContain("forgotten satisfactory");
       expect(errors).toHaveBeenCalledWith(expect.stringContaining("valheim"), expect.anything());
 
       // Deleted from Trash by hand: it stays there too, and the user hears it failed.

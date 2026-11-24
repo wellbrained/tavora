@@ -2,6 +2,7 @@
 // lists and sees another panel's change at once. Edits show at once and are saved a moment later on the newest stored
 // copy, so two panels changing the lists at the same time both keep their changes.
 import { errorMessage, useDocument } from "@tavora/official-ui";
+import { unknownFields } from "@tavora/official-ui/lib/utils";
 import { TavoraError, type JsonValue, type TavoraSDK } from "@tavora/sdk";
 import { computed, effectScope, ref } from "vue";
 import { HISTORY_KEY, parseHistory, type Calculation } from "./history";
@@ -15,7 +16,8 @@ export type Lists = { history: Calculation[]; values: Value[] };
 
 export function parseLists(raw: JsonValue | null): Lists {
   const stored = (raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {}) as Record<string, JsonValue | undefined>;
-  return { history: parseHistory(stored.history ?? null), values: parseValues(stored.values ?? null) };
+  // Fields a newer version added are kept as they are (unknownFields), so its data survives an edit made here.
+  return { ...unknownFields<JsonValue>(stored, ["history", "values"]), history: parseHistory(stored.history ?? null), values: parseValues(stored.values ?? null) };
 }
 
 /**
@@ -40,7 +42,8 @@ export type ListsStore = Awaited<ReturnType<typeof createListsStore>>;
 export async function createListsStore(sdk: TavoraSDK, options: { debounceMs?: number } = {}) {
   await migrateLists(sdk);
   // Detached: the panel closes the store itself (`dispose`), not whatever scope happens to be running here.
-  const doc = effectScope(true).run(() => useDocument(sdk, LISTS_ID, { parse: parseLists, title: () => LISTS_TITLE, debounceMs: options.debounceMs ?? 0 }))!;
+  const scope = effectScope(true);
+  const doc = scope.run(() => useDocument(sdk, LISTS_ID, { parse: parseLists, title: () => LISTS_TITLE, debounceMs: options.debounceMs ?? 0 }))!;
   const opened = await doc.ready;
   const history = computed<Calculation[]>(() => doc.data.value.history);
   const values = computed<Value[]>(() => doc.data.value.values);
@@ -70,6 +73,11 @@ export async function createListsStore(sdk: TavoraSDK, options: { debounceMs?: n
     },
     flush: () => doc.flush(),
     /** Saves what is left, then stops listening. */
-    dispose: () => opened.dispose(),
+    dispose: () => {
+      const saved = opened.dispose();
+      // The scope ends too, so a change that comes later (a blur, a timer) is dropped, not an error.
+      scope.stop();
+      return saved;
+    },
   };
 }

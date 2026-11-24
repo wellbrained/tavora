@@ -34,6 +34,19 @@ describe("useDocument", () => {
     await vi.waitFor(() => expect((a.host.documents.get("plan")?.data as unknown as Plan).items).toEqual(["one", "two", "three"]));
   });
 
+  it("drops an edit that comes after the scope ended, as its docs say, instead of throwing", async () => {
+    const { sdk, host } = createMemoryHost();
+    const scope = effectScope();
+    const plan = scope.run(() => useDocument(sdk, "plan", options))!;
+    await plan.ready;
+    plan.update((draft) => void draft.items.push("kept"));
+    scope.stop();
+    // A blur or a timer that fires after the panel went.
+    expect(() => plan.update((draft) => void draft.items.push("late"))).not.toThrow();
+    await vi.waitFor(() => expect((host.documents.get("plan")?.data as unknown as Plan).items).toEqual(["kept"]));
+    await expect(plan.flush()).resolves.toBeUndefined();
+  });
+
   it("holds an edit made before the document is loaded", async () => {
     const { sdk, host } = createMemoryHost();
     const plan = useDocument(sdk, "plan", options);

@@ -14,12 +14,29 @@
 /apps/desktop/scripts/check-fuses.mjs @wellbrained
 /scripts/deploy-client.mjs @wellbrained
 /scripts/release-sdk*.mjs @wellbrained
+# What those load as code (audit run 7): the Number job (write token) runs change-notes.mjs, and release.mjs loads the
+# rest in the process that reads the update signing key.
+/apps/desktop/scripts/change-notes.mjs @wellbrained
+/apps/desktop/scripts/installed-version.mjs @wellbrained
+/apps/desktop/src/shared/release-catalog.ts @wellbrained
+/apps/desktop/src/shared/patch-notes.ts @wellbrained
 # The app's package file: its electronFuses block and what the build ships (CODEOWNERS can't name only the block).
 /apps/desktop/package.json @wellbrained
+# The root package file (its release scripts, which the Number job also edits), and what decides the installed packages.
+/package.json @wellbrained
+/pnpm-workspace.yaml @wellbrained
+/pnpm-lock.yaml @wellbrained
+/patches/ @wellbrained
 
-# What signs Tavora's catalogue list.
+# What signs Tavora's catalogue list, and what it loads in the process that holds the catalogue key.
 /scripts/catalog-sign.ts @wellbrained
 /scripts/catalog-sign-review.ts @wellbrained
+/packages/pack/src/catalog-lists.ts @wellbrained
+/packages/pack/src/keys.ts @wellbrained
+/packages/pack/src/signature.ts @wellbrained
+/packages/module-schema/src/index.ts @wellbrained
+/packages/module-schema/src/api-reasons.ts @wellbrained
+/packages/sdk/src/protocol.ts @wellbrained
 
 # The server's receiver and setup: what a deploy key may publish.
 /deploy/server/ @wellbrained

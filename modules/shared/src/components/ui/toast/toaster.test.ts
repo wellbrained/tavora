@@ -245,3 +245,35 @@ describe("Toaster in the Tab order", () => {
     if (left) expect(left.getAttribute("inert")).toBe("");
   });
 });
+
+describe("Toaster spread out", () => {
+  const settle = async () => {
+    for (let step = 0; step < 6; step++) await nextTick();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+  };
+
+  // Closing the toast under the pointer removes it before the pointer ever "leaves" it: the stack must not stay spread
+  // out (and every other toast's time stay paused) until the pointer happens to cross another toast.
+  it("closes up again when the toast the pointer was on goes", async () => {
+    mount();
+    toast({ title: "One" });
+    toast({ title: "Two" });
+    const front = toast({ title: "Three" });
+    await settle();
+    // The toasts still listed (a leaving one may still be in the page while it animates out).
+    const layers = () => [...document.querySelectorAll<HTMLElement>(".tavora-toast-slot")].filter((slot) => toasts.value.some((item) => String(item.id) === slot.dataset.id));
+    // jsdom has no `inert` property, so Vue writes inert="false" there instead of leaving it out.
+    const inert = (slot: HTMLElement) => ![null, "false"].includes(slot.getAttribute("inert"));
+    layers().at(-1)!.querySelector<HTMLElement>(".tavora-toast-layer")!.dispatchEvent(new PointerEvent("pointerenter"));
+    await settle();
+    expect(layers().some(inert)).toBe(false);
+    front.dismiss();
+    await settle();
+    // The stack closes up after the same short wait as when the pointer leaves it.
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    await settle();
+    expect(layers()).toHaveLength(2);
+    // Closed up: the one behind the front toast takes no Tab stop again.
+    expect(inert(layers()[0]!)).toBe(true);
+  });
+});

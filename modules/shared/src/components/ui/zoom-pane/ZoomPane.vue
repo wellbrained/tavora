@@ -554,17 +554,17 @@ defineExpose({ fit, actualSize, zoomIn, zoomOut, moveOrigin, setView, showArea, 
       @pointerdown.stop
       @dblclick.stop
     >
-      <Button variant="ghost" size="icon-sm" :title="uiText.zoomOut" :aria-label="uiText.zoomOut" data-testid="zoom-out" @click="zoomOut">
+      <Button type="button" variant="ghost" size="icon-sm" :title="uiText.zoomOut" :aria-label="uiText.zoomOut" data-testid="zoom-out" @click="zoomOut">
         <Minus />
       </Button>
-      <Button variant="ghost" size="sm" class="text-muted-foreground min-w-12 px-1.5 tabular-nums" :title="uiText.zoomReset" :aria-label="uiText.zoomPercent.replace('{percent}', String(percent))" data-testid="zoom-percent" @click="actualSize">
+      <Button type="button" variant="ghost" size="sm" class="text-muted-foreground min-w-12 px-1.5 tabular-nums" :title="uiText.zoomReset" :aria-label="uiText.zoomPercent.replace('{percent}', String(percent))" data-testid="zoom-percent" @click="actualSize">
         {{ uiText.percent.replace('{percent}', String(percent)) }}
       </Button>
-      <Button variant="ghost" size="icon-sm" :title="uiText.zoomIn" :aria-label="uiText.zoomIn" data-testid="zoom-in" @click="zoomIn">
+      <Button type="button" variant="ghost" size="icon-sm" :title="uiText.zoomIn" :aria-label="uiText.zoomIn" data-testid="zoom-in" @click="zoomIn">
         <Plus />
       </Button>
       <Separator orientation="vertical" class="data-[orientation=vertical]:h-4 mx-0.5" />
-      <Button variant="ghost" size="icon-sm" :title="wholeLabel ?? uiText.zoomWhole" :aria-label="wholeLabel ?? uiText.zoomWhole" data-testid="zoom-whole" @click="fit({ glide: true })">
+      <Button type="button" variant="ghost" size="icon-sm" :title="wholeLabel ?? uiText.zoomWhole" :aria-label="wholeLabel ?? uiText.zoomWhole" data-testid="zoom-whole" @click="fit({ glide: true })">
         <Maximize />
       </Button>
       <slot name="extras" />

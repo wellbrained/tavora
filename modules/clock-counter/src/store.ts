@@ -14,7 +14,8 @@ export type ItemStore = Awaited<ReturnType<typeof createItemStore>>;
 
 export async function createItemStore(sdk: TavoraSDK, options: { debounceMs?: number } = {}) {
   // Detached: the panel closes the store itself (`dispose`), not whatever scope happens to be running here.
-  const doc = effectScope(true).run(() => useDocument(sdk, LIST_ID, { parse: parseList, title: () => LIST_TITLE, debounceMs: options.debounceMs ?? 0 }))!;
+  const scope = effectScope(true);
+  const doc = scope.run(() => useDocument(sdk, LIST_ID, { parse: parseList, title: () => LIST_TITLE, debounceMs: options.debounceMs ?? 0 }))!;
   const opened = await doc.ready;
   /** What the panel shows: the stored list plus changes still being saved. */
   const list = doc.data;
@@ -81,6 +82,11 @@ export async function createItemStore(sdk: TavoraSDK, options: { debounceMs?: nu
     },
     flush: () => doc.flush(),
     /** Saves what is left, then stops listening. */
-    dispose: () => opened.dispose(),
+    dispose: () => {
+      const saved = opened.dispose();
+      // The scope ends too, so a change that comes later (a blur, a timer) is dropped, not an error.
+      scope.stop();
+      return saved;
+    },
   };
 }

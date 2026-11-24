@@ -283,6 +283,8 @@ export class GameOverlays {
   /** When each overlay's page crashed lately, and the overlays whose page crashed so often they are left alone. */
   private readonly crashes = new Map<string, number[]>();
   private readonly stopped = new Set<string>();
+  /** When a failed look was last written to the log (one line per CRASH_SPAN_MS, not one per look). */
+  private lastTickWarning = 0;
   /** What each panel passes to panel.setLive, and who listens (live view windows); kept while the panel exists, in memory only. */
   private readonly liveStates = new Map<string, { owner: string; state: JsonValue }>();
   /** The one pending look after a state appeared or went, so a page calling panel.setLive in a loop costs one look. */
@@ -826,14 +828,23 @@ export class GameOverlays {
 
   /** Looks at the window in front and shows or hides every item accordingly. */
   tick(): void {
-    this.prune();
-    if (!this.active() || this.store.empty) {
-      this.closeAll();
-      this.see({ type: "off" });
-      this.keysFollow();
-      return;
+    try {
+      this.prune();
+      if (!this.active() || this.store.empty) {
+        this.closeAll();
+        this.see({ type: "off" });
+        this.keysFollow();
+        return;
+      }
+      this.look();
+    } catch (error) {
+      // A throw from a window or a panel's view must not leave the main process with an uncaught error at every look; the next look tries again.
+      const now = Date.now();
+      if (now - this.lastTickWarning >= CRASH_SPAN_MS) {
+        this.lastTickWarning = now;
+        console.warn(`[tavora] looking at the game overlays failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
-    return this.look();
   }
 
   /** Whether one of the service's own windows has the keyboard (a panel in the layer, or the layer's card). */

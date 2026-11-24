@@ -94,3 +94,12 @@ describe("createListsStore", () => {
     expect(a.host.documents.get(LISTS_ID)).toBeNull();
   });
 });
+
+it("drops a change that comes after dispose instead of throwing", async () => {
+  const { sdk, host } = createMemoryHost();
+  const store = await createListsStore(sdk, { debounceMs: 0 });
+  store.changeHistory(() => [{ expression: "1+1", result: "2" }]);
+  await store.dispose();
+  expect(() => store.changeHistory(() => [{ expression: "2+2", result: "4" }])).not.toThrow();
+  expect(JSON.stringify(host.documents.get(LISTS_ID)?.data)).not.toContain("2+2");
+});

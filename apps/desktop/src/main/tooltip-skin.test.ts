@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, realpath, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
-import { checkSkinRequest, contrast, MAX_SKIN_FILE, MAX_SKINS, SkinStore } from "./tooltip-skin";
+import { checkSkinRequest, contrast, MAX_PENDING_DEFINES, MAX_SKIN_FILE, MAX_SKINS, SkinStore } from "./tooltip-skin";
 
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(24)]);
 const WEBP = Buffer.concat([Buffer.from("RIFF"), Buffer.alloc(4), Buffer.from("WEBPVP8 "), Buffer.alloc(16)]);
@@ -167,6 +167,39 @@ describe("item-card skins", () => {
         store.forgetModule("m");
         expect(await late).toBeUndefined();
         expect(store.get("m", "b")).toBeUndefined();
+    });
+
+    it("keeps nothing of a define once it is done, refused or not, so names a module tries don't pile up (audit run 7)", async () => {
+        const store = new SkinStore();
+        const pending = () => (store as unknown as { calls: Map<string, number> }).calls.size;
+        for (let i = 0; i < 50; i++)
+            await expect(store.define("m", root, `try-${i}`, { colors: { surface: "#000000" } })).rejects.toThrow();
+        await store.define("m", root, "kept", { titleCaps: true });
+        await expect(store.define("m", root, "file", { font: "dist/fake.woff2" })).rejects.toThrow();
+        expect(pending()).toBe(0);
+        // One still reading its file is forgotten with its module.
+        const late = store.define("m", root, "late", { frame: { image: "dist/frame.png", slice: [1, 1, 1, 1] } });
+        expect(pending()).toBe(1);
+        store.forgetModule("m");
+        expect(pending()).toBe(0);
+        expect(await late).toBeUndefined();
+        // And the later of two defines still wins once the earlier one's entry is gone.
+        const first = store.define("m", root, "a", { frame: { image: "dist/frame.png", slice: [1, 1, 1, 1] } });
+        const second = await store.define("m", root, "a", { titleCaps: true });
+        expect(second).toBeDefined();
+        const third = store.define("m", root, "a", { frame: { image: "dist/frame-b.png", slice: [1, 1, 1, 1] } });
+        expect(await first).toBeUndefined();
+        expect(await third).toBeDefined();
+        expect(store.get("m", "a")!.skin.frame).toBeDefined();
+        expect(pending()).toBe(0);
+    });
+
+    it("refuses a define while too many are still being read", async () => {
+        const store = new SkinStore();
+        const reading = Array.from({ length: MAX_PENDING_DEFINES }, (_, i) => store.define(`m${i % 8}`, root, `s${i}`, { frame: { image: "dist/frame.png", slice: [1, 1, 1, 1] } }));
+        await expect(store.define("other", root, "one", { titleCaps: true })).rejects.toThrow(/too many skins/);
+        await Promise.allSettled(reading);
+        expect(await store.define("other", root, "one", { titleCaps: true })).toBeDefined();
     });
 
     it("keeps nothing of a skin that was refused", async () => {

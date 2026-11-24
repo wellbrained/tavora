@@ -1,6 +1,7 @@
 // The data side of the Whiteboard: what a stored board looks like and the pure rules for ids, names and size.
 // Kept free of React and Excalidraw so it can be unit tested.
 
+import { unknownFields } from "@tavora/official-ui/lib/utils";
 import { BLOB_ID, type JsonValue } from "@tavora/sdk";
 
 /** The stored file (see blobs) behind a picture on a board. */
@@ -63,7 +64,9 @@ function parseFiles(raw: JsonValue | undefined): Record<string, StoredFile> {
 /** Turns stored data into a valid board, whatever an older version or a bad write left there. */
 export function parseBoard(raw: JsonValue | null, now = new Date().toISOString()): BoardData {
   const value = raw !== null && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  // Fields a newer version added are kept as they are (unknownFields); the saver writes the board over what it read.
   return {
+    ...unknownFields<JsonValue>(value, ["version", "elements", "files", "name", "background", "grid", "createdAt"]),
     version: 1,
     elements: Array.isArray(value.elements) ? value.elements.filter((element) => element !== null && typeof element === "object" && !Array.isArray(element)) : [],
     files: parseFiles(value.files),

@@ -44,7 +44,7 @@ function split() {
     v-model="model"
     v-bind="split().frame"
     data-slot="number-field"
-    :id="field.id()"
+    :id="field.id() ?? (attrs.id as string | undefined)"
     :min="min"
     :max="max"
     :step="step"

@@ -55,10 +55,11 @@ export async function loadInstalledModules(options: InstalledModulesOptions): Pr
   // Each folder's files are checked against the owner's signature; unchanged folders by their stamp alone.
   const checks = new FolderChecks(path.join(options.userData, MODULE_CHECKS_FILE));
   const started = Date.now();
-  const changed = await applyOwners(modules, userRoot, records, checks);
+  const unsure: string[] = [];
+  const changed = await applyOwners(modules, userRoot, records, checks, unsure);
   if (checks.hashed > 0 || changed.length > 0) console.log(`[tavora] checked installed module folders: ${checks.hashed} of ${checks.looked} read and hashed, ${changed.length} changed, ${Date.now() - started} ms`);
   await checks.save();
-  const stopped = stopChanged(modules, changed, records, problems);
+  const stopped = new Map([...stopChanged(modules, changed, records, problems), ...stopUnsure(modules, unsure, records, problems)]);
   await addSignedHashes(modules, userRoot, records);
   const blocked = new Map([...stopped, ...stopBlocked(modules, userRoot, records, options.safety, problems)]);
   const catalog = new Set(
@@ -97,6 +98,30 @@ function stopChanged(modules: Map<string, InstalledModule>, ids: readonly string
       values: { name: module.manifest.name },
       about: { name: module.manifest.name, version: module.manifest.version, id },
       message: `${module.manifest.name} changed since it was installed: its files are not what its publisher signed. Reinstall it to use it again; its data stays.`,
+    });
+  }
+  return stopped;
+}
+
+/**
+ * Stops installed folders that could not be read to check them (a file another program held for longer than the
+ * waits). Not tampering: nothing is said about changed files, they just don't run this time, their panels wait, and the
+ * next start looks again.
+ */
+function stopUnsure(modules: Map<string, InstalledModule>, ids: readonly string[], records: OwnerRecords, problems: ModuleProblem[]): Map<string, InstalledModule> {
+  const stopped = new Map<string, InstalledModule>();
+  for (const id of ids) {
+    const module = modules.get(id);
+    const record = module && records[path.basename(module.root)];
+    if (!module || !record) continue;
+    modules.delete(id);
+    stopped.set(id, { ...module, owner: record.owner });
+    problems.push({
+      folder: path.basename(module.root),
+      path: module.root,
+      kind: "unreadable",
+      about: { name: module.manifest.name, version: module.manifest.version, id },
+      message: `${module.manifest.name}'s files can't be read right now, so it waits until the next start.`,
     });
   }
   return stopped;

@@ -105,3 +105,12 @@ describe("createItemStore", () => {
     await vi.waitFor(() => expect((find(other.list.value, "c") as { since: number | null }).since).toBe(1000));
   });
 });
+
+it("drops a change that comes after dispose instead of throwing", async () => {
+  const { sdk, host } = createMemoryHost();
+  const store = await createItemStore(sdk, { debounceMs: 0 });
+  store.apply(["c1"], (data) => void data.items.push(newItem("counter", "c1", "Kept")));
+  await store.dispose();
+  expect(() => store.apply(["c2"], (data) => void data.items.push(newItem("counter", "c2", "Late")))).not.toThrow();
+  expect(JSON.stringify(host.documents.get(LIST_ID)?.data)).not.toContain("Late");
+});

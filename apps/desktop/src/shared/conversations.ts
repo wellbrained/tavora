@@ -229,7 +229,7 @@ export function fillPlaceholders(text: string, values: Partial<Record<"module" |
 /** Plain text with blank-line paragraphs and *emphasis* as the one mark-up; everything else is shown as typed. */
 export function noteParagraphs(text: string): NoteParagraphs {
   return text
-    .split(/\n{2,}/)
+    .split(/(?:\r?\n){2,}/)
     .map((paragraph) => paragraph.trim())
     .filter(Boolean)
     .map((paragraph) =>

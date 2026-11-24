@@ -21,9 +21,9 @@ export function parseClaudeStatus(output: string): string | null {
 }
 
 /** Asks the Claude command line who is signed in to the profile in `directory`; null when it is not installed, fails or is slow. */
-export function readClaudeEmail(directory: string, timeoutMs = 5_000): Promise<string | null> {
-  const file = findCli({ win32: ["claude.exe", "claude.cmd"], other: ["claude"] });
-  if (!file) return Promise.resolve(null);
+export async function readClaudeEmail(directory: string, timeoutMs = 5_000): Promise<string | null> {
+  const file = await findCli({ win32: ["claude.exe", "claude.cmd"], other: ["claude"] });
+  if (!file) return null;
   return new Promise((resolve) => {
     let output = "";
     let child: ReturnType<typeof startCli>;

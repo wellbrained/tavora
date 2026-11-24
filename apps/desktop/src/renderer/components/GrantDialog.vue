@@ -142,15 +142,13 @@ async function allow() {
   busy.value = true;
   if (request.onRequest) {
     // Only this connector; the module's panels go on running and get it at once.
-    await act({ type: "connector-answer", id: request.onRequest.id, allow: true }, { quiet: true });
-    busy.value = false;
+    await act({ type: "connector-answer", id: request.onRequest.id, allow: true }, { quiet: true }).finally(() => (busy.value = false));
     if (!props.inPanel) closeDialog(request);
     return;
   }
   if (request.update) {
     // Exactly the version this dialog shows; the main process checks the zip again before it installs.
-    const result = await act({ type: "apply-module-update", moduleId: current.id, version: update.value?.version ?? "" }, { quiet: true });
-    busy.value = false;
+    const result = await act({ type: "apply-module-update", moduleId: current.id, version: update.value?.version ?? "" }, { quiet: true }).finally(() => (busy.value = false));
     if (!result.ok) {
       if (props.request === request) error.value = result.error;
       return;
@@ -164,8 +162,7 @@ async function allow() {
   const result = await act(
     { type: "grant-module", owner: current.owner, moduleId: current.id, network: [...hosts.value], connectors: [...connectors.value], folders: folders.value.map((folder) => folder.key), ...(withGame.value ? { withGame: true } : {}) },
     { quiet: true },
-  );
-  busy.value = false;
+  ).finally(() => (busy.value = false));
   if (!result.ok) {
     if (props.request === request) error.value = result.error;
     return;

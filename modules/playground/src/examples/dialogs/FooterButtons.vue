@@ -25,7 +25,7 @@ const tidying = ref(false);
         <Input model-value="https://tavora.app/n/waystone" readonly aria-label="Link" />
       </div>
       <DialogFooter>
-        <DialogButton close>Close</DialogButton>
+        <DialogButton close @click="exporting = false">Close</DialogButton>
         <DialogButton :icon="Copy" @click="toast({ title: 'Link copied' })">Copy link</DialogButton>
       </DialogFooter>
     </DialogContent>

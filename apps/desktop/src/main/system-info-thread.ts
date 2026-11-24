@@ -54,10 +54,14 @@ export interface SystemMonitorThreadOptions {
   /** Where the months of traffic that are over are kept (traffic.json); without it they are kept for this run only. */
   trafficStore?: TrafficStore;
   log?: (message: string, error: unknown) => void;
+  /** How long a question to the worker may stay unanswered (ASK_TIMEOUT_MS). */
+  askTimeoutMs?: number;
 }
 
 /** How long the worker stays after the last panel stopped watching: closing and opening a panel needs no new start. */
 export const IDLE_MS = 60_000;
+/** How long a question may wait for the worker: the traffic read has 30 s of its own inside the worker, the others none. */
+export const ASK_TIMEOUT_MS = 45_000;
 /** How long panels that watch wait for a new worker after one crashed. */
 export const RESTART_MS = 5_000;
 
@@ -73,7 +77,10 @@ export class SystemMonitorThread {
   private readonly held = new Map<number, Held>();
   private readonly asked = new Map<number, { resolve: (answer: never) => void; reject: (error: Error) => void }>();
   private nextId = 1;
+  /** Ends the worker a while after nothing needs it. */
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Starts a new worker a moment after one crashed, while panels still watch. */
+  private restartTimer: ReturnType<typeof setTimeout> | null = null;
   private trafficBook: TrafficBook | null = null;
 
   constructor(options: SystemMonitorThreadOptions) {
@@ -108,8 +115,27 @@ export class SystemMonitorThread {
   private ask<T>(question: "info" | "apps" | { type: "traffic"; ranges: TrafficRange[] }): Promise<T> {
     const id = this.nextId++;
     return new Promise<T>((resolve, reject) => {
-      this.asked.set(id, { resolve: resolve as (answer: never) => void, reject });
-      this.ensure().postMessage(typeof question === "string" ? { type: question, id } : { ...question, id });
+      // The worker first: when it can't start, nothing is left waiting for an answer that never comes.
+      let worker: WorkerLike;
+      try {
+        worker = this.ensure();
+      } catch (error) {
+        reject(error instanceof Error ? error : new Error(String(error)));
+        return;
+      }
+      const timer = setTimeout(() => {
+        if (this.asked.delete(id)) {
+          reject(new Error("the system-info worker did not answer in time"));
+          this.settle();
+        }
+      }, this.options.askTimeoutMs ?? ASK_TIMEOUT_MS);
+      timer.unref?.();
+      const done = <A>(finish: (value: A) => void) => (value: A) => {
+        clearTimeout(timer);
+        finish(value);
+      };
+      this.asked.set(id, { resolve: done(resolve as (answer: never) => void), reject: done(reject) });
+      worker.postMessage(typeof question === "string" ? { type: question, id } : { ...question, id });
       this.settle();
     });
   }
@@ -241,12 +267,21 @@ export class SystemMonitorThread {
     this.worker = null;
     this.failAsked(error);
     this.clearIdle();
+    this.clearRestart();
     if (!this.busy) return;
-    this.idleTimer = setTimeout(() => {
-      this.idleTimer = null;
-      if (!this.worker && this.busy) this.ensure();
+    this.restartTimer = setTimeout(() => {
+      this.restartTimer = null;
+      if (this.worker || !this.busy) return;
+      try {
+        this.ensure();
+      } catch (failed) {
+        this.options.log?.("system-info: the worker could not start again", failed);
+        return;
+      }
+      // Panels may have left, or an answer come, while it waited: the new worker is not kept for nothing.
+      this.settle();
     }, RESTART_MS);
-    this.idleTimer.unref?.();
+    this.restartTimer.unref?.();
   }
 
   private failAsked(error: Error): void {
@@ -274,6 +309,11 @@ export class SystemMonitorThread {
     this.idleTimer.unref?.();
   }
 
+  private clearRestart(): void {
+    if (this.restartTimer !== null) clearTimeout(this.restartTimer);
+    this.restartTimer = null;
+  }
+
   private clearIdle(): void {
     if (this.idleTimer !== null) clearTimeout(this.idleTimer);
     this.idleTimer = null;
@@ -281,6 +321,7 @@ export class SystemMonitorThread {
 
   private stop(): void {
     this.clearIdle();
+    this.clearRestart();
     const worker = this.worker;
     this.worker = null;
     this.failAsked(new Error("the system-info worker was stopped"));

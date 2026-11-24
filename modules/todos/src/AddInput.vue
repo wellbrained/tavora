@@ -5,6 +5,7 @@
 // on an empty line, Esc or clicking elsewhere closes it; what was typed is kept on a click elsewhere.
 import { Plus } from "@lucide/vue";
 import { cn } from "@tavora/official-ui";
+import { isComposing } from "@tavora/official-ui/lib/keys";
 import { nextTick, onMounted, ref } from "vue";
 
 const props = defineProps<{
@@ -45,6 +46,8 @@ async function submit() {
 }
 
 function onKey(event: KeyboardEvent) {
+  // Escape and Tab belong to text an input method is still composing.
+  if (isComposing(event)) return;
   if (event.key === "Escape" && (value.value || props.draft)) {
     event.stopPropagation();
     value.value = "";

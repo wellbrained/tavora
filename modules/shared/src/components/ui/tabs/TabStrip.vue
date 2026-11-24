@@ -182,6 +182,14 @@ function onRenameEnter(event: KeyboardEvent) {
   finishRename(true, true);
 }
 
+/** Escape drops the new name, unless it only cancels text an input method is still composing. */
+function onRenameEscape(event: KeyboardEvent) {
+  if (isComposing(event)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  finishRename(false, true);
+}
+
 function finishRename(keep: boolean, refocus: boolean) {
   const current = renaming.value;
   if (!current) return;
@@ -295,6 +303,7 @@ function endDrag(settled: boolean) {
     <!-- The arrows take no Tab stop and keep the focus where it is: the arrow keys walk the tabs already. -->
     <div v-if="mode === 'arrows' && outOfView.before" class="relative z-10 flex flex-none items-center pr-1">
       <Button
+        type="button"
         variant="ghost"
         size="icon-sm"
         tabindex="-1"
@@ -331,7 +340,7 @@ function endDrag(settled: boolean) {
               data-testid="tab-rename-input"
               @update:model-value="renameProblem = ''"
               @keydown.enter="onRenameEnter"
-              @keydown.esc.prevent.stop="finishRename(false, true)"
+              @keydown.esc="onRenameEscape"
               @blur="finishRename(true, false)"
             />
           </div>
@@ -373,6 +382,7 @@ function endDrag(settled: boolean) {
     </div>
     <div v-if="mode === 'arrows' && outOfView.after" class="relative z-10 flex flex-none items-center pl-1">
       <Button
+        type="button"
         variant="ghost"
         size="icon-sm"
         tabindex="-1"
@@ -388,7 +398,7 @@ function endDrag(settled: boolean) {
     <div v-else-if="mode === 'list' && hiddenTabs.length" class="relative z-10 flex flex-none items-center pl-1">
       <DropdownMenu>
         <DropdownMenuTrigger as-child>
-          <Button variant="ghost" size="sm" class="gap-0.5 px-1.5 text-xs tabular-nums" :aria-label="moreLabel" :title="moreLabel" data-testid="strip-hidden-tabs">
+          <Button type="button" variant="ghost" size="sm" class="gap-0.5 px-1.5 text-xs tabular-nums" :aria-label="moreLabel" :title="moreLabel" data-testid="strip-hidden-tabs">
             <ChevronDown aria-hidden="true" />{{ hiddenTabs.length }}
           </Button>
         </DropdownMenuTrigger>

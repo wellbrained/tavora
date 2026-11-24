@@ -101,13 +101,17 @@ export function isPublicAddress(address: string): boolean {
   if (family === 6) {
     const lower = address.toLowerCase();
     if (isPrivateHost(`[${lower}]`)) return false;
+    const first = parseInt(lower.split(":")[0] || "0", 16);
+    const second = parseInt(lower.split(":")[1] || "0", 16);
+    // The ranges first (audit run 7), so an IPv4 address written into one (ff02::1.2.3.4, 2002::8.8.8.8) doesn't make it public.
+    if ((first & 0xff00) === 0xff00) return false; // multicast
+    if ((first & 0xffc0) === 0xfec0) return false; // site-local (deprecated, still routed on some networks)
+    if (first === 0x2001 && (second === 0x0db8 || second === 0)) return false; // documentation, Teredo
+    if (first === 0x0100 || first === 0x2002) return false; // discard, 6to4
     // IPv4 written inside IPv6 (::ffff:a.b.c.d, ::a.b.c.d, 64:ff9b::a.b.c.d) is judged as the IPv4 address.
     const embedded = /(\d+\.\d+\.\d+\.\d+)$/.exec(lower);
     if (embedded) return isPublicAddress(embedded[1]!);
-    const first = parseInt(lower.split(":")[0] || "0", 16);
-    if ((first & 0xff00) === 0xff00) return false; // multicast
-    if (first === 0x2001 && parseInt(lower.split(":")[1] || "0", 16) === 0x0db8) return false; // documentation
-    if (first === 0 || first === 0x0100 || first === 0x2002 || first === 0x64) return false; // unspecified/mapped forms, discard, 6to4, NAT64
+    if (first === 0 || first === 0x64) return false; // unspecified/mapped forms, NAT64
     return true;
   }
   return false;

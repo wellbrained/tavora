@@ -10,7 +10,7 @@ const snapshot = (host: ReturnType<typeof createMemoryHost>["host"]) => {
   return { id: saved.id, title: saved.title, data: saved.data };
 };
 
-it("saves a stored document back the same, broken entries dropped", async () => {
+it("saves a stored document back the same, broken entries dropped and a newer version's fields kept", async () => {
   const { sdk, host } = createMemoryHost();
   await host.documents.put({
     id: LISTS_ID,
@@ -23,6 +23,7 @@ it("saves a stored document back the same, broken entries dropped", async () => 
   expect(snapshot(host)).toMatchInlineSnapshot(`
     {
       "data": {
+        "extra": true,
         "history": [
           {
             "expression": "1+1",

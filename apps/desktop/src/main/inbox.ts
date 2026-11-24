@@ -277,17 +277,23 @@ export class Inbox {
   }
 
   private async read(justSent: boolean): Promise<void> {
-    if (!this.o.token()) {
+    const token = this.o.token();
+    if (!token) {
       this.changed();
       return;
     }
+    // What was read belongs to the account it was asked for: if it signed out (or another signed in) meanwhile, the answer is dropped.
+    const stale = () => this.o.token() !== token;
     try {
       const list = await this.request("GET", "/v1/conversations");
       const raw = Array.isArray(list.conversations) ? list.conversations.slice(0, MAX_ITEMS) : [];
-      this.items = raw.map(parseItem).filter((item): item is ConversationItem => item !== null);
+      const items = raw.map(parseItem).filter((item): item is ConversationItem => item !== null);
       const inbox = (typeof list.inbox === "object" && list.inbox !== null ? list.inbox : {}) as Record<string, unknown>;
-      this.developer = inbox.developer === true;
+      const developer = inbox.developer === true;
       const settings = await this.request("GET", "/v1/conversations/settings").catch(() => null);
+      if (stale()) return;
+      this.items = items;
+      this.developer = developer;
       if (settings) {
         this.emailCopies = { on: settings.emailCopies === true, hasEmail: settings.hasEmail === true };
         this.contactDefault = readContact(settings.contact ?? { enabled: true });
@@ -297,6 +303,7 @@ export class Inbox {
       this.changed();
       return;
     }
+    if (stale()) return;
     this.notes(justSent);
     this.changed();
     await this.save();

@@ -144,7 +144,7 @@ function startResize(event: PointerEvent) {
       return {
         move: (_, delta) => (dragWidth.value = clampWidth(startWidth + delta.x)),
         drop() {
-          if (dragWidth.value !== null) void act({ type: "set-rail", width: dragWidth.value }).then(() => (dragWidth.value = null));
+          if (dragWidth.value !== null) void act({ type: "set-rail", width: dragWidth.value }).finally(() => (dragWidth.value = null));
         },
         cancel: () => (dragWidth.value = null),
       };
@@ -245,7 +245,8 @@ function onDragStart(event: DragEvent, item: Dragged) {
   const row = event.currentTarget as HTMLElement;
   liftedDragImage(event, row);
   motion.begin(item.id);
-  requestAnimationFrame(() => row.classList.add("drag-source"));
+  // Unless the drag already ended (dragend in the same frame), or the row would stay dimmed.
+  requestAnimationFrame(() => dragged.value?.id === item.id && dragged.value.kind === item.kind && row.classList.add("drag-source"));
 }
 
 function onDragEnd() {

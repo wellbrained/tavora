@@ -97,3 +97,12 @@ describe("createTodoStore", () => {
     expect(store.status.value).toBe("error");
   });
 });
+
+it("drops a change that comes after dispose instead of throwing", async () => {
+  const { sdk, host } = createMemoryHost();
+  const store = await createTodoStore(sdk, { debounceMs: 0 });
+  store.apply((data) => addTask(data, null, { id: "t1", title: "Kept", createdAt: "" }, "g1"));
+  await store.dispose();
+  expect(() => store.apply((data) => addTask(data, null, { id: "t2", title: "Late", createdAt: "" }, "g1"))).not.toThrow();
+  expect(JSON.stringify(host.documents.get(LIST_ID)?.data)).not.toContain("Late");
+});

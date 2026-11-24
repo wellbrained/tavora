@@ -11,7 +11,7 @@ import { isWebUrl } from "./browser-url";
 import { catalogGame } from "./catalog";
 import type { MessageKey } from "../shared/i18n";
 import { UserError } from "./messages";
-import { MAX_MODULE_ICON, pictureDataUrl } from "./module-icon";
+import { MAX_MODULE_ICON, MAX_PICTURE_PIXELS, pictureDataUrl } from "./module-icon";
 import { serviceUrl } from "./service-url";
 import { isPublisherName } from "./publisher-names";
 import { isSteamAppId } from "./steam-icons";
@@ -22,6 +22,8 @@ export const LIST_TIMEOUT_MS = 8000;
 export const DOWNLOAD_TIMEOUT_MS = 60_000;
 /** Most modules one listing is read for. */
 const MAX_MODULES = 500;
+/** Widest and tallest catalog icon, in pixels: what the catalog takes. */
+const MAX_ICON_PIXELS = 1024;
 /** An icon that did not come is not asked for again until this long after. */
 const ICON_RETRY_MS = 60_000;
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
@@ -482,13 +484,13 @@ export class CatalogClient {
   /**
    * A listed screenshot or icon as a data address for the host UI, or null when it cannot be had or is
    * not what the listing says (C10): read into memory with its listed size as a cap, then its SHA-256 and
-   * its own first bytes (a PNG or WebP of that type) are checked, like a module icon (G10).
+   * its own header (a PNG or WebP of that type, at most `maxPixels` wide and tall) are checked, like a module icon (G10).
    */
-  async picture(shot: CatalogScreenshot, maxBytes = MAX_SCREENSHOT_BYTES): Promise<string | null> {
+  async picture(shot: CatalogScreenshot, maxBytes = MAX_SCREENSHOT_BYTES, maxPixels = MAX_PICTURE_PIXELS): Promise<string | null> {
     try {
       const data = await this.read(`/v1/catalog/pictures/${shot.sha256}.${shot.type}`, shot.size, this.listTimeoutMs, `image/${shot.type}`);
       if (sha256Hex(data) !== shot.sha256) return null;
-      const url = pictureDataUrl(data, maxBytes);
+      const url = pictureDataUrl(data, maxBytes, maxPixels);
       return url?.startsWith(`data:image/${shot.type};`) ? url : null;
     } catch {
       return null;
@@ -503,7 +505,7 @@ export class CatalogClient {
     if (known) return known;
     const missing = this.missingIcons.get(shot.sha256);
     if (missing !== undefined && this.now() - missing < ICON_RETRY_MS) return null;
-    const url = await this.picture(shot, MAX_MODULE_ICON);
+    const url = await this.picture(shot, MAX_MODULE_ICON, MAX_ICON_PIXELS);
     if (url === null) {
       if (this.missingIcons.size >= MAX_MODULES) this.missingIcons.clear();
       this.missingIcons.set(shot.sha256, this.now());

@@ -10,6 +10,7 @@ import { COPY_LIMIT, copyLimitsFromEnv, CopyStore, FREE_FLOOR, MAX_MANIFEST_BYTE
 import { buildDataset, writeDatabase } from "./dataset.ts";
 import { createTestInbox } from "./mail.ts";
 import { createRateLimiter } from "./rate-limit.ts";
+import { UPLOAD_MEMORY_BYTES, uploadMemory } from "./upload-memory.ts";
 
 const db = writeDatabase(":memory:", buildDataset({ builtIns: [{ id: "elden-ring", name: "Elden Ring" }], wikidata: [], steam: [] }));
 const roomy = () => createRateLimiter({ limit: 1000, windowMs: 60_000 });
@@ -89,6 +90,26 @@ describe("the cloud copy", () => {
     expect((await copy("GET", "/manifest", token)).status).toBe(404);
     expect((await app.request("http://tavora.test/v1/account/copy")).status).toBe(401);
     expect((await copy("GET", "", "x".repeat(43))).status).toBe(401);
+  });
+
+  it("holds its bodies in the memory uploads share, and says to try again when there's no room (audit run 7)", async () => {
+    const { copy, signIn } = setup();
+    const token = await signIn("me@example.com");
+    const body = writeParts([part(500)]);
+    // Something else holds all but a little of it.
+    const other = uploadMemory.take(UPLOAD_MEMORY_BYTES - body.length);
+    try {
+      const refused = await copy("POST", "/parts", token, body);
+      expect(refused.status).toBe(503);
+      expect(((await refused.json()) as { reason: string }).reason).toBe("unavailable");
+    } finally {
+      other?.release();
+    }
+    expect(await (await copy("POST", "/parts", token, body)).json()).toEqual({ stored: 1 });
+    // Handed back once answered.
+    const all = uploadMemory.take(UPLOAD_MEMORY_BYTES);
+    expect(all).not.toBeNull();
+    all?.release();
   });
 
   it("stores parts and a version, and gives them back", async () => {

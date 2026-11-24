@@ -137,13 +137,15 @@ export class DocumentStore extends EventEmitter<{ change: [DocumentChange, unkno
       const existing = index.get(docId);
       if (!existing) return;
       checkRevision(existing, ifRevision as number | undefined);
-      index.delete(docId);
-      await this.persistIndex(index);
+      // The file first: when it can't be removed (held by another program) nothing has changed, and the caller hears of it.
       await rm(this.file(docId), { force: true });
+      index.delete(docId);
       // Gone: nothing of its file is kept (a document of the same id later starts afresh).
       this.files.delete(docId);
       this.checked.delete(docId);
       this.emit("change", { id: docId, revision: existing.revision, deleted: true }, origin);
+      // A failed index write is told after the document is gone for good.
+      await this.persistIndex(index);
     });
   }
 

@@ -214,8 +214,13 @@ each pattern.
   from content to footer. Put the content in one element so that holds. Don't add your own `gap-*` to `DialogContent`.
 - **Footer**: `<DialogFooter>` with `DialogButton`, the action last. A button that does something (Save, Import,
   Export, Add, Delete…) may carry `:icon`. A button that only closes (Cancel, Close, Done, OK) gets `close` and never
-  an icon, even when it is the primary one: `<DialogButton close>Done</DialogButton>`.
-- **Forms**: make the `form` `class="contents"` and put the `DialogFooter` inside it, so the Save button submits.
+  an icon, even when it is the primary one: `<DialogButton close>Done</DialogButton>`. `close` only marks the button
+  (secondary, no icon, `type="button"`); it doesn't close the dialog by itself, so wrap it in
+  `<DialogClose as-child>` or give it an `@click` that closes. `DialogFooter`'s own close button (`show-close-button`)
+  does close.
+- **Forms**: make the `form` `class="contents"` and put the `DialogFooter` inside it, so the Save button submits. A
+  `DialogButton` without `close` submits the form; a `close` one never does (it is `type="button"` unless you give it
+  another `type`).
 - **Closing**: Escape, a click outside and the X close a dialog. While work it waits for runs, pass `:busy` (`useTask`'s
   `busy`) to `DialogContent` (or `DialogScrollContent`, or the app's `ModalDialog`): nothing closes it and the X is off. Where closing would lose something (typed text), set
   `:dismissible="false"` and answer `@dismiss-attempt` (its `reason`: `escape`, `outside`, `close-button`), for example

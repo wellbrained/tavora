@@ -321,7 +321,7 @@ function dropMark(position: number): "before" | "after" | null {
         class="focus-visible:border-ring h-7 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 text-sm font-semibold outline-none"
         @blur="finishRename"
         @keydown.enter="!isComposing($event) && ($event.target as HTMLInputElement).blur()"
-        @keydown.escape="renaming = false"
+        @keydown.escape="!isComposing($event) && (renaming = false)"
       />
       <div v-else class="min-w-0 flex-1">
         <h2 class="max-w-full truncate px-1 text-sm font-semibold" style="width: fit-content" :title="t('group.renameHint')" data-testid="group-name" @dblclick="onNameDoubleClick">
