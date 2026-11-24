@@ -330,6 +330,18 @@ describe("after a block", () => {
     expect(conversations.get(fixed.id)).toMatchObject({ closeReason: "left" });
   });
 
+  it("blocks a conversation that is closed already, and says so (hunt L2)", async () => {
+    const { user, started, start, call, devToken, conversations } = setup();
+    const mara = user("mara@example.com");
+    const first = await started(mara.token);
+    await call("POST", `/v1/conversations/${first.id}/close`, devToken, { outcome: "fixed" });
+    const blocked = await call("POST", `/v1/conversations/${first.id}/block`, mara.token, {});
+    expect(blocked.status).toBe(200);
+    expect(((await blocked.json()) as Detail).conversation).toMatchObject({ state: "closed", closeReason: "blocked" });
+    expect(conversations.blockedFor(mara.account.id, "wellbrained.timer")).toBe(true);
+    expect(await (await start(mara.token)).json()).toMatchObject({ reason: "blocked" });
+  });
+
   it("still refuses a new conversation once the blocked one is deleted by both sides", async () => {
     const { user, started, start, call, devToken, conversations } = setup();
     const mara = user("mara@example.com");

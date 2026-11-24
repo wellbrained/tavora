@@ -72,6 +72,25 @@ describe("approving a new PC", () => {
     expect(await read(old)).toBeNull();
   });
 
+  it("lets only one of two old PCs answering at the same time win (hunt L3)", async () => {
+    const { json, signIn, read } = setup();
+    const desk = await signIn("me@example.com", "Desk");
+    const couch = await signIn("me@example.com", "Couch");
+    const fresh = await signIn("me@example.com", "Laptop");
+    const { id } = (await (await json("POST", "/pairing", { commit: key() }, fresh)).json()) as { id: string };
+    const [deskKey, couchKey] = [key(), key()];
+    const answers = await Promise.all([json("POST", `/pairing/${id}/answer`, { publicKey: deskKey }, desk), json("POST", `/pairing/${id}/answer`, { publicKey: couchKey }, couch)]);
+    expect(answers.map((answer) => answer.status)).toEqual([204, 409]);
+    expect(await read(fresh)).toMatchObject({ answer: { name: "Desk", publicKey: deskKey } });
+    // The new PC shows its key once, too.
+    const reveals = await Promise.all([json("POST", `/pairing/${id}/reveal`, { publicKey: key() }, fresh), json("POST", `/pairing/${id}/reveal`, { publicKey: key() }, fresh)]);
+    expect(reveals.map((reveal) => reveal.status)).toEqual([204, 409]);
+    const sealed = [randomBytes(61).toString("base64url"), randomBytes(61).toString("base64url")];
+    const keys = await Promise.all(sealed.map((one) => json("POST", `/pairing/${id}/key`, { sealed: one }, desk)));
+    expect(keys.map((sent) => sent.status)).toEqual([204, 409]);
+    expect(await read(fresh)).toMatchObject({ sealed: sealed[0] });
+  });
+
   it("tells the new PC when the other PC said no, and ends requests after ten minutes", async () => {
     const { json, signIn, read, wait } = setup();
     const old = await signIn("me@example.com", "Desk");

@@ -129,42 +129,60 @@ export function pairingRoutes({ accounts, clientKey, rateLimiter, now = Date.now
     return context.json(view);
   });
 
+  /**
+   * One step by one side: `ready` says whether it is this session's turn on the request. Asked before the body is read
+   * and again right before writing, since another PC may have taken the step while the body came in.
+   */
+  const step = (path: string, ready: (pairing: Pairing, session: Session) => boolean, take: (pairing: Pairing, session: Session, sent: Record<string, unknown>) => boolean) =>
+    app.post(path, async (context) => {
+      const check = () => {
+        const pairing = find(context);
+        if (!pairing || pairing.declined) return gone(context);
+        return ready(pairing, context.get("session")) ? pairing : turn(context);
+      };
+      const before = check();
+      if (before instanceof Response) return before;
+      const sent = await body(context);
+      if (!stillSignedIn(accounts, context)) return signedOut(context);
+      const pairing = check();
+      if (pairing instanceof Response) return pairing;
+      if (!sent || !take(pairing, context.get("session"), sent)) return bad(context);
+      return context.body(null, 204);
+    });
+  const isKey = (value: unknown): value is string => typeof value === "string" && KEY_TEXT.test(value);
+
   // 2. An old PC answers with its one-time key.
-  app.post("/:id/answer", async (context) => {
-    const pairing = find(context);
-    if (!pairing || pairing.declined) return gone(context);
-    const session = context.get("session");
-    if (pairing.from === session.id || pairing.answer) return turn(context);
-    const sent = await body(context);
-    if (!stillSignedIn(accounts, context)) return signedOut(context);
-    if (!sent || typeof sent.publicKey !== "string" || !KEY_TEXT.test(sent.publicKey)) return bad(context);
-    pairing.answer = { by: session.id, name: nameOf(session), publicKey: sent.publicKey };
-    return context.body(null, 204);
-  });
+  step(
+    "/:id/answer",
+    (pairing, session) => pairing.from !== session.id && !pairing.answer,
+    (pairing, session, sent) => {
+      if (!isKey(sent.publicKey)) return false;
+      pairing.answer = { by: session.id, name: nameOf(session), publicKey: sent.publicKey };
+      return true;
+    },
+  );
 
   // 3. The new PC shows its one-time key.
-  app.post("/:id/reveal", async (context) => {
-    const pairing = find(context);
-    if (!pairing || pairing.declined) return gone(context);
-    if (pairing.from !== context.get("session").id || !pairing.answer || pairing.reveal) return turn(context);
-    const sent = await body(context);
-    if (!stillSignedIn(accounts, context)) return signedOut(context);
-    if (!sent || typeof sent.publicKey !== "string" || !KEY_TEXT.test(sent.publicKey)) return bad(context);
-    pairing.reveal = sent.publicKey;
-    return context.body(null, 204);
-  });
+  step(
+    "/:id/reveal",
+    (pairing, session) => pairing.from === session.id && Boolean(pairing.answer) && !pairing.reveal,
+    (pairing, _session, sent) => {
+      if (!isKey(sent.publicKey)) return false;
+      pairing.reveal = sent.publicKey;
+      return true;
+    },
+  );
 
   // 4. The old PC's user said yes: the sealed key, for the new PC to take once.
-  app.post("/:id/key", async (context) => {
-    const pairing = find(context);
-    if (!pairing || pairing.declined) return gone(context);
-    if (pairing.answer?.by !== context.get("session").id || !pairing.reveal || pairing.sealed) return turn(context);
-    const sent = await body(context);
-    if (!stillSignedIn(accounts, context)) return signedOut(context);
-    if (!sent || typeof sent.sealed !== "string" || !SEALED_TEXT.test(sent.sealed)) return bad(context);
-    pairing.sealed = sent.sealed;
-    return context.body(null, 204);
-  });
+  step(
+    "/:id/key",
+    (pairing, session) => pairing.answer?.by === session.id && Boolean(pairing.reveal) && !pairing.sealed,
+    (pairing, _session, sent) => {
+      if (typeof sent.sealed !== "string" || !SEALED_TEXT.test(sent.sealed)) return false;
+      pairing.sealed = sent.sealed;
+      return true;
+    },
+  );
 
   // Either side ends it: the new PC cancels, or the old PC's user said no.
   app.delete("/:id", (context) => {
