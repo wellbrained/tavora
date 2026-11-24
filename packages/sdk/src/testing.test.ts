@@ -937,3 +937,112 @@ describe("tabOverflow in the theme", () => {
     expect(TAB_OVERFLOWS).toEqual(["list", "arrows"]);
   });
 });
+
+describe("params, checked as Tavora's bridge checks them", () => {
+  it("refuses overlay keys Tavora refuses, in every overlay call", async () => {
+    const { sdk } = createMemoryHost();
+    for (const call of [
+      () => sdk.overlay.publish("boss:1", { hp: 3 }),
+      () => sdk.overlay.remove("boss:1"),
+      () => sdk.overlay.copyLink("boss fight"),
+      () => sdk.overlay.resetLink("a/b"),
+      () => sdk.overlay.showOverGame("boss fight"),
+      () => sdk.overlay.hideOverGame(""),
+      () => sdk.overlay.preview("-starts-with-a-dash"),
+    ]) {
+      expect(await failure(call())).toMatchObject({ code: "INVALID_PARAMS" });
+    }
+    await expect(sdk.overlay.publish("boss-1", { hp: 3 })).resolves.toBeUndefined();
+  });
+
+  it("refuses a hotkey action, target or label Tavora refuses, before it takes the press", async () => {
+    const { sdk, host } = createMemoryHost({ gestures: "enforce" });
+    host.gesture();
+    expect(await failure(sdk.hotkeys.set("Start Pause!", "clock-1", "Clock"))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.hotkeys.set("start", "a/b", "Clock"))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.hotkeys.set("start", "clock-1", " "))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.hotkeys.set("start", "clock-1", "x".repeat(61)))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.hotkeys.set("start", "clock-1", "two\nlines"))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.hotkeys.remove("a/b"))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.hotkeys.remove("clock-1", "Start!"))).toMatchObject({ code: "INVALID_PARAMS" });
+    // The refused calls left the press for this one.
+    await expect(sdk.hotkeys.set("start", "clock-1", "Clock")).resolves.toBe("set");
+  });
+
+  it("refuses file extensions Tavora refuses in files.pickReadOnly", async () => {
+    const { sdk } = createMemoryHost();
+    for (const extensions of [[".ksd"], ["KSD"], [], Array.from({ length: 11 }, (_, i) => `e${i}`), ["a".repeat(13)]]) {
+      expect(await failure(sdk.files.pickReadOnly({ extensions }))).toMatchObject({ code: "INVALID_PARAMS" });
+    }
+    expect(await failure(sdk.files.pickReadOnly({ extensions: ["ksd"], near: { file: "nope" } }))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.files.pickReadOnly({ extensions: ["ksd"], near: { file: "a".repeat(32), up: 4 } }))).toMatchObject({ code: "INVALID_PARAMS" });
+    await expect(sdk.files.pickReadOnly({ extensions: ["ksd", "sav2"] })).resolves.toBeNull();
+    expect(await failure(sdk.files.forget("nope"))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.files.check("nope"))).toMatchObject({ code: "INVALID_PARAMS" });
+  });
+
+  it("refuses to delete a stored file by an id Tavora never made", async () => {
+    const { sdk } = createMemoryHost();
+    expect(await failure(sdk.blobs.delete("not-a-blob"))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.blobs.app.delete("not-a-blob"))).toMatchObject({ code: "INVALID_PARAMS" });
+    await expect(sdk.blobs.delete("0".repeat(32))).resolves.toBeUndefined();
+  });
+
+  it("grants every capability by default, folders too", async () => {
+    const { sdk, host } = createMemoryHost();
+    expect(host.handshake.capabilities).toContain("folders");
+    host.answer("folders.state", () => ({ found: true }));
+    await expect(sdk.folders.state("Documents/My Game")).resolves.toEqual({ found: true });
+  });
+
+  it("keeps a Settings press that comes before the handler for the first handler, as the SDK does", () => {
+    const { sdk, host } = createMemoryHost();
+    host.openSettings("clock-1");
+    const first = vi.fn();
+    const second = vi.fn();
+    sdk.panel.onOpenSettings(first);
+    sdk.panel.onOpenSettings(second);
+    expect(first).toHaveBeenCalledWith({ key: "clock-1" });
+    expect(second).not.toHaveBeenCalled();
+  });
+
+  it("asks for the stream-overlay connector on copyLink when the module asks for it on request", async () => {
+    const asked = createMemoryHost({ capabilities: [], onRequest: ["overlay"] });
+    await expect(asked.sdk.overlay.copyLink("a")).resolves.toBe("copied");
+    // Granted from then on.
+    await expect(asked.sdk.overlay.resetLink("a")).resolves.toBeUndefined();
+    const denied = createMemoryHost({ capabilities: [], onRequest: ["overlay"], consent: "deny" });
+    await expect(denied.sdk.overlay.copyLink("a")).resolves.toBe("denied");
+    expect(await failure(denied.sdk.overlay.resetLink("a"))).toMatchObject({ code: "PERMISSION_DENIED", capability: "overlay" });
+    // Without onRequest Tavora refuses it as without the grant.
+    const plain = createMemoryHost({ capabilities: [] });
+    expect(await failure(plain.sdk.overlay.copyLink("a"))).toMatchObject({ code: "PERMISSION_DENIED", capability: "overlay" });
+  });
+
+  it("keeps published state without the connector only for a key a game overlay shows, as Tavora does", async () => {
+    const { sdk, host } = createMemoryHost({ capabilities: [] });
+    await sdk.overlay.publish("a", { n: 1 });
+    expect(host.overlays).toEqual({});
+    await sdk.overlay.showOverGame("b");
+    await sdk.overlay.publish("b", { n: 2 });
+    expect(host.overlays).toEqual({ b: { n: 2 } });
+  });
+
+  it("checks overlay sources as Tavora does", async () => {
+    const { sdk, host } = createMemoryHost();
+    expect(await failure(sdk.overlay.setSources("nope" as never))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.overlay.setSources([{ key: "a", name: "   " }]))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.overlay.setSources([{ key: "a", name: "A", group: "yes" as never }]))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.overlay.setSources([{ key: "a", name: "A", size: { width: 0, height: 10 } }]))).toMatchObject({ code: "INVALID_PARAMS" });
+    await sdk.overlay.setSources([{ key: "a", name: "Two\nlines", size: { width: 10.4, height: 20.6 } }]);
+    expect(host.sources).toEqual([{ key: "a", name: "Two lines", size: { width: 10, height: 21 } }]);
+  });
+
+  it("measures a dialog title once it is trimmed, as Tavora does", async () => {
+    const { sdk, host } = createMemoryHost();
+    host.setDialog(true);
+    await sdk.panel.setDialogTitle(`  ${"x".repeat(200)}  `);
+    expect(host.dialogTitle).toBe("x".repeat(200));
+    expect(await failure(sdk.panel.setDialogTitle("   "))).toMatchObject({ code: "INVALID_PARAMS" });
+  });
+});

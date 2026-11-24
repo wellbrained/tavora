@@ -1,3 +1,16 @@
+## 0.4.11
+
+The memory host checks params as Tavora does, and two fixes in the store and the file calls. `MIN_TAVORA` stays (Tavora 0.21.43).
+
+- `files.read` reads files up to 50 MiB, as 0.3.3 said: it still refused anything over 32 MiB after reading it. An answer that isn't JSON (a Tavora without the address) now fails with a `TavoraError` too, not a `SyntaxError`. `MAX_READ_ONLY_FILE_BYTES` in `protocol.ts` is the limit; Tavora uses the same number.
+- `@tavora/sdk/store`: `session.rename(id)` of the open item while another panel has deleted it rejects with `ItemNotFoundError`. Before, it saved a blank item under the new name and dropped `deletedCopy`, so the text was lost. Bring it back with `restoreDeleted()` first.
+- `openResults`: `record` keeps a result whose `day` is `undefined`; before, Tavora refused the stored list (`INVALID_PARAMS`). The day is filled in from `at` when it is sent, as before.
+- `protocol.ts`: Tavora's own param checks, `checkModuleKey`, `checkOverlaySources`, `checkHotkeyLabel`, `checkActionId`, `checkDialogTitle`, `checkBlobId`, `checkFileReference` and `checkPickReadOnly` (each answers a `ParamCheck`), and `isPanelTypeId` and `isActionId`. Tavora's bridge and the memory host both use them.
+- `@tavora/sdk/testing`: the memory host refuses what Tavora refuses, so a module test can't pass with a call that fails in the app: overlay keys such as `"boss:1"` in every `overlay.*` call, a hotkey's action, target and label, `files.pickReadOnly` extensions such as `".ksd"`, ids for `blobs.delete` and the linked-file calls, overlay sources (a name of only spaces, `group`, `grows` and `size`), panel type ids, and a dialog title measured once it is trimmed. Refused calls leave a click unused, as in Tavora.
+- `@tavora/sdk/testing`: the default capabilities include `folders` ("all of them", as the option says). `onRequest` names capabilities the manifest asks for on request: `overlay.copyLink` then asks the user, and `consent: "deny"` makes it answer `"denied"`. Without the grant, `overlay.publish` keeps state only for a key a game overlay shows, as Tavora does.
+- `@tavora/sdk/testing`: a Settings press (`host.openSettings`) that comes before `panel.onOpenSettings` goes to the first handler, as the SDK does in Tavora.
+- `@tavora/sdk/testing`: `catalogProblems(en, de)` lists what differs between a module's English and German texts, without the kit; `pnpm check:modules` counts a test that calls it.
+
 ## 0.4.10
 
 A focus ring that fades in is no longer missed. `MIN_TAVORA` stays (Tavora 0.21.43).

@@ -1,7 +1,7 @@
 // Manifest v1 for tavora.module.json (apps/docs/reference/manifest.md). The JSON Schema
 // in schema/ describes the same rules for editors; tests keep the two in step.
 
-import { isWindowsDeviceName } from "@tavora/sdk/protocol";
+import { isActionId, isPanelTypeId, isWindowsDeviceName } from "@tavora/sdk/protocol";
 
 export interface ModuleViewport {
   /** The smallest size; with `wide`, the smallest while the panel is taller than wide or square. */
@@ -284,21 +284,14 @@ export function isHomepage(value: unknown): value is string {
 /** Most panel types one module may offer, and the longest short name a tab shows. */
 export const MAX_PANEL_TYPES = 16;
 export const MAX_PANEL_NAME = 24;
-const PANEL_TYPE_ID = /^[a-z][a-z0-9-]{0,31}$/;
 const PANEL_FIELDS = ["id", "name", "entry", "icon", "viewport", "continues", "inGame", "withGame"];
 
 /** Most hotkey actions one module may declare, and the longest name Tavora shows for one. */
 export const MAX_ACTIONS = 16;
 export const MAX_ACTION_NAME = 40;
-const ACTION_ID = /^[a-z][a-z0-9-]{0,31}$/;
 
-export function isActionId(value: unknown): value is string {
-  return typeof value === "string" && ACTION_ID.test(value);
-}
-
-export function isPanelTypeId(value: unknown): value is string {
-  return typeof value === "string" && PANEL_TYPE_ID.test(value);
-}
+// The id rules of panel types and actions come from the SDK, which Tavora's bridge and the memory host use too.
+export { isActionId, isPanelTypeId };
 
 /** A panel type with the module's own entry, icon and viewport filled in where the type has none. */
 export interface ResolvedPanelType {
@@ -468,8 +461,9 @@ export function isNetworkHost(value: unknown): value is string {
   const labels = value.split(".");
   if (labels.length < 2 || !labels.every((label) => HOST_LABEL.test(label))) return false;
   const last = labels.at(-1)!;
-  // A top-level label of digits only is an IP address (or not a name at all).
-  return !/^\d+$/.test(last) && !["localhost", "local", "internal", "arpa"].includes(last);
+  // A top-level label of digits only, or 0x and hex digits, is an IP address (or not a name at all): browsers read
+  // `169.254.169.0xfe` and `example.0x1f` as addresses.
+  return !/^(?:\d+|0x[0-9a-f]*)$/.test(last) && !["localhost", "local", "internal", "arpa"].includes(last);
 }
 
 /**
@@ -675,6 +669,8 @@ export const MAX_TRANSLATIONS = 32;
 export const LAST_TAVORA_WITHOUT_GAME_OVERLAYS = "0.20.50";
 /** The last Tavora that refuses a panel type's `inGame`; a manifest with it needs a newer `minTavora`. */
 export const LAST_TAVORA_WITHOUT_IN_GAME_PANELS = "0.21.2";
+/** The last Tavora that refuses a module's own top-level `inGame` (the field came in 0.21.5; per panel type it is older). */
+export const LAST_TAVORA_WITHOUT_MODULE_IN_GAME = "0.21.4";
 /** The last Tavora that refuses a panel type's `withGame`; a manifest with it needs a newer `minTavora`. */
 export const LAST_TAVORA_WITHOUT_WITH_GAME_PANELS = "0.24.130";
 /** The last Tavora that refuses `translations`; a manifest with them needs a newer `minTavora`. */
@@ -793,12 +789,13 @@ function isDimension(value: unknown): value is number {
   return Number.isInteger(value) && (value as number) > 0 && (value as number) <= MAX_VIEWPORT;
 }
 
-// Paths must be plain and relative inside the package: no "..", no
-// absolute paths, no backslashes, no URL schemes.
+// Paths must be plain and relative inside the package: no "..", no absolute paths, no backslashes, no URL schemes,
+// and nothing the zip, Windows or Tavora's own page addresses can't carry (% # ? * < > " |, control characters, a
+// part ending in a dot or space, a device name such as con).
 function isPackagePath(value: unknown): value is string {
   if (typeof value !== "string" || value.length === 0 || value.length > 256) return false;
-  if (value.startsWith("/") || value.includes("\\") || value.includes(":") || value.includes("\0")) return false;
-  return value.split("/").every((part) => part !== "" && part !== "." && part !== "..");
+  if (value.startsWith("/") || value.includes("\\") || value.includes(":") || /[%#?*<>"|\u0000-\u001f\u007f]/.test(value)) return false;
+  return value.split("/").every((part) => part !== "" && part !== "." && part !== ".." && !/[. ]$/.test(part) && !isWindowsDeviceName(part));
 }
 
 function checkViewport(viewport: unknown, at: string, errors: string[], wideAllowed: boolean): void {
@@ -1118,7 +1115,7 @@ export function validateManifest(input: unknown): ManifestResult {
   if (input.inGame !== undefined) {
     if (typeof input.inGame !== "boolean") errors.push("inGame must be true or false");
     else if (input.inGame && input.panels !== undefined) errors.push("inGame is for a module without panel types; set it on the panel types instead");
-    else if (input.inGame && !officialId(input) && !needsNewerTavora({ minTavora: typeof input.minTavora === "string" ? input.minTavora : "" }, LAST_TAVORA_WITHOUT_IN_GAME_PANELS)) errors.push(`inGame needs a minTavora newer than ${LAST_TAVORA_WITHOUT_IN_GAME_PANELS}, because older Tavoras refuse it`);
+    else if (input.inGame && !officialId(input) && !needsNewerTavora({ minTavora: typeof input.minTavora === "string" ? input.minTavora : "" }, LAST_TAVORA_WITHOUT_MODULE_IN_GAME)) errors.push(`inGame needs a minTavora newer than ${LAST_TAVORA_WITHOUT_MODULE_IN_GAME}, because older Tavoras refuse it`);
   }
   if (input.actions !== undefined) checkActions(input.actions, errors);
   if (input.translations !== undefined) checkTranslations(input, errors);
@@ -1181,6 +1178,8 @@ export function validateManifest(input: unknown): ManifestResult {
       else if (new Set(connectors).size !== connectors.length) errors.push("permissions.connectors lists a connector twice");
     }
     if ("webAssembly" in permissions && typeof permissions.webAssembly !== "boolean") errors.push("permissions.webAssembly must be true or false");
+    // The app refuses to load it for anyone else, so it is refused here, before it can be installed or published.
+    else if (permissions.webAssembly === true && !officialId(input)) errors.push("permissions.webAssembly is only for Tavora's own modules");
     if ("onRequest" in permissions) {
       const later = permissions.onRequest;
       const listed: unknown[] = Array.isArray(permissions.connectors) ? permissions.connectors : [];

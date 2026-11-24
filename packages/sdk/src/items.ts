@@ -103,7 +103,11 @@ export interface ItemSession<T> {
   pick(id: string | null): Promise<boolean>;
   /** Creates an item (`data` or `newItem()`), saves it and opens it. Resolves with its id. */
   create(data?: T, title?: string): Promise<string>;
-  /** Needs the `rename` option. The open item is changed through its handle, any other one is opened, changed and saved. */
+  /**
+   * Needs the `rename` option. The open item is changed through its handle, any other one is opened, changed and saved.
+   * Rejects with `ItemNotFoundError` for an item that does not exist, the open one too while it is `deleted` elsewhere
+   * (bring it back with `restoreDeleted` first; `deletedCopy` stays as it was).
+   */
   rename(id: string, title: string): Promise<void>;
   /**
    * Deletes an item, only if it has not been saved by another panel since the list was read (rejects with CONFLICT
@@ -495,6 +499,9 @@ export async function openItems<T>(sdk: TavoraSDK, options: OpenItemsOptions<T>)
     const { rename } = options;
     if (!rename) throw new Error("rename() needs the rename option");
     const change = (draft: T) => rename(draft, name);
+    // Deleted elsewhere, the open item's copy is a blank placeholder: renaming it would save a blank item under the new
+    // name and drop `deletedCopy`. It is missing like any other deleted item; `restoreDeleted` brings it back first.
+    if (id === currentId && deleted) throw new ItemNotFoundError(id);
     if (id === currentId && handle) {
       handle.update(change);
       await handle.flush();

@@ -60,25 +60,57 @@ describe("third-party notices", () => {
   });
 });
 
+describe("third-party notices when nothing was bundled", () => {
+  const plugin = () =>
+    moduleConfig({ root }).plugins!.find((p) => (p as { name?: string }).name === "tavora-third-party-notices") as { buildStart?(): void; generateBundle(o: unknown, bundle: object): void; closeBundle(): Promise<void> };
+
+  it("leaves dist/THIRD_PARTY_NOTICES.txt alone when a dev server closes", async () => {
+    mkdirSync(path.join(root, "dist"));
+    writeFileSync(path.join(root, "dist", "THIRD_PARTY_NOTICES.txt"), "the real one");
+    await plugin().closeBundle();
+    expect(readFileSync(path.join(root, "dist", "THIRD_PARTY_NOTICES.txt"), "utf8")).toBe("the real one");
+  });
+
+  it("starts every build in watch mode with an empty list of what was bundled", async () => {
+    install("left-pad", { LICENSE: "Copyright (c) Someone\nMIT text" });
+    writeFileSync(path.join(root, "node_modules", "left-pad", "package.json"), JSON.stringify({ name: "left-pad", version: "1.0.0", license: "MIT" }));
+    const p = plugin();
+    p.generateBundle({}, { "a.js": { type: "chunk", modules: { [path.join(root, "node_modules", "left-pad", "index.js")]: {} } } });
+    await p.closeBundle();
+    p.buildStart?.();
+    p.generateBundle({}, { "a.js": { type: "chunk", modules: {} } });
+    await p.closeBundle();
+    expect(readFileSync(path.join(root, "dist", "THIRD_PARTY_NOTICES.txt"), "utf8")).not.toContain("left-pad");
+  });
+});
+
 describe("notices", () => {
-  it("copies the licences after the build, from the module's folder and from the kit's", () => {
+  it("copies the licences after the build, from the module's folder and from the kit's", async () => {
     writeFileSync(path.join(root, "LICENSE"), "mine");
     install("vue", { LICENSE: "vue licence" });
     install("@tavora/official-ui", {});
     // The kit's own dependencies sit next to it, not in the module's node_modules.
     const kit = path.join(root, "node_modules", "@tavora", "official-ui");
     install("reka-ui", { "LICENSE.md": "reka licence" }, kit);
-    const plugin = moduleConfig({ root, notices: { MODULE: "./LICENSE", VUE: "vue", "REKA-UI": "reka-ui" } }).plugins!.at(-1) as { closeBundle(): void };
-    plugin.closeBundle();
+    const plugin = moduleConfig({ root, notices: { MODULE: "./LICENSE", VUE: "vue", "REKA-UI": "reka-ui" } }).plugins!.at(-1) as { closeBundle(): Promise<void> };
+    await plugin.closeBundle();
     expect(readFileSync(path.join(root, "dist", "MODULE-LICENSE.txt"), "utf8")).toBe("mine");
     expect(readFileSync(path.join(root, "dist", "VUE-LICENSE.txt"), "utf8")).toBe("vue licence");
     expect(readFileSync(path.join(root, "dist", "REKA-UI-LICENSE.txt"), "utf8")).toBe("reka licence");
   });
 
-  it("stops when a licence cannot be found", () => {
+  it("stops when a licence cannot be found", async () => {
     install("empty", {});
-    expect(() => noticeSource(root, "missing")).toThrow(/No licence file found for missing/);
-    expect(() => noticeSource(root, "empty")).toThrow(/No licence file found for empty/);
-    expect(() => noticeSource(root, "./LICENSE")).toThrow(/not found/);
+    await expect(noticeSource(root, "missing")).rejects.toThrow(/No licence file found for missing/);
+    await expect(noticeSource(root, "empty")).rejects.toThrow(/No licence file found for empty/);
+    await expect(noticeSource(root, "./LICENSE")).rejects.toThrow(/not found/);
+  });
+
+  it("finds MIT-LICENSE style names and never takes a folder or a picture", async () => {
+    install("dashed", { "MIT-LICENSE.txt": "mit" });
+    install("tricky", { "license.png": "x" });
+    mkdirSync(path.join(root, "node_modules", "tricky", "LICENSE"));
+    expect(await noticeSource(root, "dashed")).toBe(path.join(root, "node_modules", "dashed", "MIT-LICENSE.txt"));
+    await expect(noticeSource(root, "tricky")).rejects.toThrow(/No licence file found/);
   });
 });

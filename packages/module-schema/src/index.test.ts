@@ -2,7 +2,7 @@ import { glob, readFile } from "node:fs/promises";
 import { Ajv } from "ajv";
 import { describe, expect, it } from "vitest";
 import schema from "../schema/tavora.module.schema.json" with { type: "json" };
-import { allowsPersonalWorkspaces, BLOCKED_LOCAL_PORTS, catalogListingProblem, MAX_LISTED_GAMES, MAX_LISTED_VERSION, folderAccessProblem, folderKey, isFolderName, isFolderPath, isTavoraOwnFolder, isWindowsDeviceName, isLocalLowGameFolder, isLocalPort, LAST_TAVORA_WITHOUT_LOCAL_PORTS, LAST_TAVORA_WITHOUT_LOCALLOW_FOLDERS, parseFolderKey, splitFolderPath, localPortOf, CHANGELOG_LIMITS, connectorsAtAdd, continuingPanelType, firstKeyOf, isOfficialSigner, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, isReleaseVersion, LAST_TAVORA_WITHOUT_GAME_OVERLAYS, LAST_TAVORA_WITHOUT_BOARD_NAMES, LAST_TAVORA_WITHOUT_LEADERBOARDS, LAST_TAVORA_WITHOUT_PANEL_LAYOUT, LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES, LAST_TAVORA_WITHOUT_TRANSLATIONS, LAST_TAVORA_WITHOUT_WIDE_LAYOUT, LAST_TAVORA_WITHOUT_WITH_GAME_PANELS, needsNewerTavora, panelTypes, withGamePanelType, translateManifest, validateManifest, type ModuleManifest } from "./index";
+import { allowsPersonalWorkspaces, BLOCKED_LOCAL_PORTS, catalogListingProblem, MAX_LISTED_GAMES, MAX_LISTED_VERSION, folderAccessProblem, folderKey, isFolderName, isFolderPath, isTavoraOwnFolder, isWindowsDeviceName, isLocalLowGameFolder, isLocalPort, LAST_TAVORA_WITHOUT_LOCAL_PORTS, LAST_TAVORA_WITHOUT_LOCALLOW_FOLDERS, parseFolderKey, splitFolderPath, localPortOf, CHANGELOG_LIMITS, connectorsAtAdd, continuingPanelType, firstKeyOf, isOfficialSigner, manifestFiles, validateChangelog, isGameId, isModuleId, isOwnerId, isReleaseVersion, LAST_TAVORA_WITHOUT_GAME_OVERLAYS, LAST_TAVORA_WITHOUT_BOARD_NAMES, LAST_TAVORA_WITHOUT_LEADERBOARDS, LAST_TAVORA_WITHOUT_MODULE_IN_GAME, LAST_TAVORA_WITHOUT_PANEL_LAYOUT, LAST_TAVORA_WITHOUT_PERSONAL_WORKSPACES, LAST_TAVORA_WITHOUT_TRANSLATIONS, LAST_TAVORA_WITHOUT_WIDE_LAYOUT, LAST_TAVORA_WITHOUT_WITH_GAME_PANELS, needsNewerTavora, panelTypes, withGamePanelType, translateManifest, validateManifest, type ModuleManifest } from "./index";
 
 const valid = {
   id: "community.example.campaign-companion",
@@ -195,9 +195,14 @@ describe("validateManifest", () => {
   });
 
   it("accepts the WebAssembly permission as a true or false, and nothing else in its place", () => {
-    expect(validateManifest({ ...valid, permissions: { network: [], webAssembly: true } }).ok).toBe(true);
+    const official = { ...valid, id: "tavora.whiteboard" };
+    expect(validateManifest({ ...official, permissions: { network: [], webAssembly: true } }).ok).toBe(true);
     expect(validateManifest({ ...valid, permissions: { network: [], webAssembly: false } }).ok).toBe(true);
     expect(validateManifest({ ...valid, permissions: { network: [], webAssembly: "yes" } })).toEqual({ ok: false, errors: ["permissions.webAssembly must be true or false"] });
+  });
+
+  it("refuses the WebAssembly permission for a module that is not Tavora's own, since Tavora would never load it", () => {
+    expect(validateManifest({ ...valid, permissions: { network: [], webAssembly: true } })).toEqual({ ok: false, errors: ["permissions.webAssembly is only for Tavora's own modules"] });
   });
 
   it("rejects unknown fields and permissions instead of ignoring them", () => {
@@ -378,6 +383,27 @@ const cases: [string, unknown, boolean][] = [
   ["entry with scheme", { ...valid, entry: "https://x.example/index.html" }, false],
   ["entry with empty segment", { ...valid, entry: "dist//index.html" }, false],
   ["entry with null byte", { ...valid, entry: "dist/\u0000.html" }, false],
+  ["entry with a percent sign", { ...valid, entry: "dist/50%.html" }, false],
+  ["entry with a hash", { ...valid, entry: "dist/a#b.html" }, false],
+  ["entry with a question mark", { ...valid, entry: "dist/a?b.html" }, false],
+  ["entry with a star", { ...valid, entry: "dist/a*b.html" }, false],
+  ["entry with angle brackets", { ...valid, entry: "dist/<a>.html" }, false],
+  ["entry with a quote", { ...valid, entry: 'dist/a"b.html' }, false],
+  ["entry with a pipe", { ...valid, entry: "dist/a|b.html" }, false],
+  ["entry with a control character", { ...valid, entry: "dist/a\u0007b.html" }, false],
+  ["entry with a line break", { ...valid, entry: "dist/a\nb.html" }, false],
+  ["entry in a folder ending with a dot", { ...valid, entry: "dist./index.html" }, false],
+  ["entry in a folder ending with a space", { ...valid, entry: "dist /index.html" }, false],
+  ["entry named like a Windows device", { ...valid, entry: "dist/con.html" }, false],
+  ["entry in a folder named like a Windows device", { ...valid, entry: "dist/NUL/index.html" }, false],
+  ["entry named like a device with spaces", { ...valid, entry: "dist/COM1 .html" }, false],
+  ["entry named like a superscript device", { ...valid, entry: "dist/lpt\u00b9.html" }, false],
+  ["entry that only starts like a device", { ...valid, entry: "dist/console.html" }, true],
+  ["entry with a space in the middle", { ...valid, entry: "dist/my page.html" }, true],
+  ["icon with a hash", { ...valid, icon: "assets/a#b.png" }, false],
+  ["webAssembly from a community module", { ...valid, permissions: { network: [], webAssembly: true } }, false],
+  ["webAssembly from an official module", { ...valid, id: "tavora.whiteboard", permissions: { network: [], webAssembly: true } }, true],
+  ["webAssembly switched off", { ...valid, permissions: { network: [], webAssembly: false } }, true],
   ["script entry", { ...valid, entry: "dist/index.js" }, false],
   ["svg icon", { ...valid, icon: "icon.svg" }, false],
   ["icon outside package", { ...valid, icon: "../icon.png" }, false],
@@ -392,6 +418,12 @@ const cases: [string, unknown, boolean][] = [
   ["unknown viewport field", { ...valid, viewport: { minWidth: 320, minHeight: 240, x: 1 } }, false],
   ["missing permissions", { ...valid, permissions: undefined }, false],
   ["network host", { ...valid, permissions: { network: ["api.example.com"] } }, true],
+  ["network host that is a hex IPv4", { ...valid, permissions: { network: ["169.254.169.0xfe"] } }, false],
+  ["network host with hex pieces", { ...valid, permissions: { network: ["0x7f.0x1"] } }, false],
+  ["network host with a hex last label", { ...valid, permissions: { network: ["example.0x1f"] } }, false],
+  ["network host with a bare 0x last label", { ...valid, permissions: { network: ["example.0x"] } }, false],
+  ["network host with hex letters in a name", { ...valid, permissions: { network: ["example.0xyz"] } }, true],
+  ["network host with a hex first label", { ...valid, permissions: { network: ["0x7f.example.com"] } }, true],
   ["32 network hosts", { ...valid, permissions: { network: Array.from({ length: 32 }, (_, i) => `h${i}.example.com`) } }, true],
   ["33 network hosts", { ...valid, permissions: { network: Array.from({ length: 33 }, (_, i) => `h${i}.example.com`) } }, false],
   ["host twice", { ...valid, permissions: { network: ["api.example.com", "api.example.com"] } }, false],
@@ -483,7 +515,7 @@ const cases: [string, unknown, boolean][] = [
   ["panel viewport without a height", { ...valid, panels: [{ id: "planner", name: "Planner", viewport: { minWidth: 100 } }] }, false],
   ["panel continues as a string", { ...valid, panels: [{ id: "planner", name: "Planner", continues: "yes" }] }, false],
   ["panel inGame", { ...valid, minTavora: "0.21.3", panels: [{ id: "planner", name: "Planner", inGame: true }] }, true],
-  ["module inGame", { ...valid, minTavora: "0.21.3", inGame: true }, true],
+  ["module inGame", { ...valid, minTavora: "0.21.5", inGame: true }, true],
   ["panel inGame false", { ...valid, panels: [{ id: "planner", name: "Planner", inGame: false }] }, true],
   ["panel inGame as a string", { ...valid, minTavora: "0.21.3", panels: [{ id: "planner", name: "Planner", inGame: "yes" }] }, false],
   ["panel withGame", { ...valid, minTavora: "0.24.131", panels: [{ id: "history", name: "History", withGame: true }] }, true],
@@ -549,7 +581,15 @@ describe("panel types", () => {
   it("takes a module-level inGame only without panel types and with a newer minTavora", () => {
     expect(validateManifest({ ...valid, inGame: true }).ok).toBe(false);
     expect(validateManifest({ ...valid, minTavora: "0.21.3", inGame: true, panels: [{ id: "planner", name: "Planner" }] }).ok).toBe(false);
-    expect(validateManifest({ ...valid, minTavora: "0.21.3", inGame: true }).ok).toBe(true);
+    expect(validateManifest({ ...valid, minTavora: "0.21.5", inGame: true }).ok).toBe(true);
+  });
+
+  it("needs a minTavora newer than 0.21.4 for the module-level inGame, which 0.21.3 and 0.21.4 refuse as unknown", () => {
+    expect(validateManifest({ ...valid, minTavora: "0.21.3", inGame: true })).toEqual({ ok: false, errors: [expect.stringContaining("inGame needs a minTavora newer than 0.21.4")] });
+    expect(validateManifest({ ...valid, minTavora: "0.21.4", inGame: true }).ok).toBe(false);
+    expect(validateManifest({ ...valid, minTavora: "0.21.5", inGame: true }).ok).toBe(true);
+    expect(validateManifest({ ...valid, id: "tavora.planner", inGame: true }).ok).toBe(true);
+    expect(LAST_TAVORA_WITHOUT_MODULE_IN_GAME).toBe("0.21.4");
   });
 
   it("needs a minTavora newer than 0.21.2 for inGame, except Tavora's own modules", () => {

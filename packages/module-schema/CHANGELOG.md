@@ -2,6 +2,17 @@
 
 What changed in `@tavora/module-schema`, newest first.
 
+## 0.2.4
+
+Four kinds of manifest that passed this check but never worked in Tavora are refused now, as `0.1.11` did for folders: the check, the packer and the catalog say so before an install.
+
+- A top-level `inGame` (a module without panel types) needs a `minTavora` newer than `LAST_TAVORA_WITHOUT_MODULE_IN_GAME` (0.21.4): the field came in Tavora 0.21.5, and 0.21.3 and 0.21.4 refuse it. A panel type's `inGame` stays at 0.21.2.
+- Paths (`entry`, `icon`, `readme`, `screenshots`, `overlay`, a panel type's) refuse `% # ? * < > " |`, control characters, a part ending in a dot or space and a Windows device name (`con`, `nul`, `com1`…): Tavora couldn't load them or the packer refused them.
+- `permissions.webAssembly: true` is refused for a module whose id doesn't start with `tavora.`; Tavora never loaded one.
+- A network host whose last label is `0x` and hex digits (`169.254.169.0xfe`, `example.0x1f`) is refused, as digits-only ones were: browsers read them as addresses.
+- The JSON Schema follows all four, and its path rule no longer lets a line break through.
+- `isActionId` and `isPanelTypeId` come from `@tavora/sdk/protocol` (0.4.11) and work as before.
+
 ## 0.2.3
 
 - `isWindowsDeviceName` now comes from `@tavora/sdk/protocol` (0.4.6), which Tavora's document ids use too, so there is one rule for every name; it works as before. The package depends on `@tavora/sdk` for it.

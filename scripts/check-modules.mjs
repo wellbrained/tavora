@@ -25,7 +25,7 @@ export const RULES = {
   "suspend-flush": "Register lifecycle.onSuspend and onDispose and write the pending save there.",
   "view-flush": "Call flushViewMemory() in onSuspend and onDispose.",
   "panel-state-read": "Read the panel state back on start with panel.getState().",
-  catalogs: "Add a test that runs checkCatalogs(en, de) on the module's texts.",
+  catalogs: "Add a test that runs checkCatalogs(en, de) (the kit) or catalogProblems(en, de) (@tavora/sdk/testing) on the module's texts.",
   motion: "Use the kit's motion tokens and animate transform and opacity only.",
   "z-index": "No z-index of your own, except inside a canvas or map.",
   shadow: "No shadow of your own: areas separate by a surface step and border-border.",
@@ -728,7 +728,7 @@ const SAVES = /(?<![\w$])\w*(?:[sS]ave|[pP]ersist|[wW]rite)\w*\s*[(,)]|\.setStat
 /**
  * The breaks in one module: every file's, plus the rules about the module as a whole (a delayed save needs an
  * onSuspend flush, panel state is read back, ZoomPane views are flushed, the catalogs are tested).
- * `files`: [{ file, text }] of the module's src, tests included (they only count for checkCatalogs), and its pages
+ * `files`: [{ file, text }] of the module's src, tests included (they only count for checkCatalogs and catalogProblems), and its pages
  * (`*.html`, which name the entry scripts).
  */
 export function checkModule(files) {
@@ -770,8 +770,8 @@ export function checkModule(files) {
   if (has(/\bpanel\s*\.\s*setState\s*\(/) && !readsState) {
     for (const a of analysed) firstIn(a, /\bpanel\s*\.\s*setState\s*\(/g, "panel-state-read", "panel state is written but never read back", true);
   }
-  if (has(/\b(?:connectModule|bootstrapModule)\s*\(/) && !tests.some((t) => /\bcheckCatalogs\s*\(/.test(t.text))) {
-    for (const a of analysed) firstIn(a, /\b(?:connectModule|bootstrapModule)\s*\(/g, "catalogs", "no test runs checkCatalogs on the texts");
+  if (has(/\b(?:connectModule|bootstrapModule)\s*\(/) && !tests.some((t) => /\b(?:checkCatalogs|catalogProblems)\s*\(/.test(t.text))) {
+    for (const a of analysed) firstIn(a, /\b(?:connectModule|bootstrapModule)\s*\(/g, "catalogs", "no test runs checkCatalogs or catalogProblems on the texts");
   }
   // Key listeners on the whole window, in components and the code they share. A page's entry script (the one its HTML
   // loads, or one that calls createApp) and the component it mounts (App.vue: there, with handleUndoKey, is where the

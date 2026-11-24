@@ -5,7 +5,7 @@
 // "Update modules automatically" does one that asks for nothing new install at once (its panels
 // reload); every other update waits, fully checked, until the user says yes, and the installed
 // version keeps running until then. One that asks for new network hosts or connectors always waits.
-import { connectorsAtAdd, folderKey, withGamePanelType, type Connector, type ModuleManifest } from "@tavora/module-schema";
+import { connectorsAtAdd, folderKey, needsNewerTavora, withGamePanelType, type Connector, type ModuleManifest } from "@tavora/module-schema";
 import type { ModuleNote } from "../shared/host-api";
 import type { CatalogClient, CatalogEntry, CatalogVersion } from "./catalog-client";
 import type { Permissions } from "./grants";
@@ -77,7 +77,8 @@ export function findUpdates(
     if (!entry) continue;
     if (module.official ? !officialSigner(entry.owner, entry.zip.sha256) : firstKey(entry.owner) !== module.owner) continue;
     if (compareModuleVersions(entry.version, module.version) <= 0) continue;
-    if (entry.minTavora && compareModuleVersions(entry.minTavora, tavoraVersion) > 0) continue;
+    // The same rule as loading the module: a pre-release Tavora counts as its release.
+    if (entry.minTavora && needsNewerTavora({ minTavora: entry.minTavora }, tavoraVersion)) continue;
     updates.push(entry);
   }
   return updates;

@@ -9,6 +9,16 @@ import {
   APP_BLOB_PATH,
   BLOB_PATH,
   BLOB_TYPES,
+  checkActionId,
+  checkBlobId,
+  checkDialogTitle,
+  checkFileReference,
+  checkHotkeyLabel,
+  checkModuleKey,
+  checkOverlaySources,
+  checkPickReadOnly,
+  isPanelTypeId,
+  type ParamCheck,
   DOCUMENT_ID,
   DOCUMENT_ID_RULE_TAVORA,
   DOCUMENT_ID_ZERO_DEVICES_TAVORA,
@@ -21,7 +31,6 @@ import {
   METHOD_INFO,
   needsGesture,
   newDocumentIdProblem,
-  OVERLAY_KEY,
   supportsCall,
   PROTOCOL_VERSION,
   THEME_TOKENS,
@@ -57,6 +66,7 @@ import {
 } from "./protocol.js";
 
 export { TavoraError } from "./index.js";
+export { catalogProblems, type CheckCatalogsOptions } from "./testing/catalogs.js";
 export { themeFromPackage, themeOf, type ThemePackageJson, type ThemeVariationJson } from "./testing/themes.js";
 export { mountPanel, type MountedPanel, type MountPanelOptions, type StartingPanel, type StopPanel } from "./testing/mount.js";
 export {
@@ -93,6 +103,17 @@ export interface MemoryHostOptions {
   module?: { id: string; version: string };
   /** Capabilities the user granted. Default: all of them. */
   capabilities?: Capability[];
+  /**
+   * Capabilities the manifest asks for on request (`permissions.onRequest`) and the user has not granted yet. A call that
+   * needs one asks the user first, as Tavora does, instead of failing with PERMISSION_DENIED: today `overlay.copyLink`
+   * (the `overlay` capability of the `stream-overlay` connector). @since 0.4.11
+   */
+  onRequest?: Capability[];
+  /**
+   * What the user answers when a call asks for a capability on request (`onRequest`): `"allow"` (default) grants it from
+   * then on, `"deny"` makes the call answer as Tavora does then (`overlay.copyLink` gives `"denied"`). @since 0.4.11
+   */
+  consent?: "allow" | "deny";
   /**
    * `"ignore"` (default) lets every call through. `"enforce"` refuses calls that need a click or key press with
    * PERMISSION_DENIED unless the test made one first with `host.gesture()` or `host.click(fn)`. As in Tavora, the panel
@@ -245,6 +266,9 @@ export const ADD_DIALOG_MS = 10_000;
 /** Most panel types one call may name: as many as a manifest may declare (MAX_PANEL_TYPES in @tavora/module-schema). */
 const MAX_PANEL_TYPES = 16;
 
+/** Every capability, what the memory host grants unless a test says otherwise. */
+const ALL_CAPABILITIES: Capability[] = ["network", "aiUsage", "discord", "overlay", "systemInfo", "media", "leaderboards", "folders", "files", "clipboard", "sharedData"];
+
 /** Calls that answer with nothing when nobody scripted them. */
 const SILENT = new Set<CallName>([
   "files.forget", "files.showInFolder", "files.check", "links.open", "ui.tooltip.show", "ui.tooltip.move", "ui.tooltip.hide", "ui.tooltip.close", "ui.tooltip.defineSkin", "ui.showMenu",
@@ -268,6 +292,12 @@ const byteLength = (text: string) => encoder.encode(text).byteLength;
 
 function fail(code: ErrorCode, message: string, extra: { revision?: number; capability?: Capability } = {}): never {
   throw new TavoraError({ code, message, ...extra });
+}
+
+/** The params as Tavora's own check (`@tavora/sdk/protocol`) takes them, or its refusal. */
+function checked<T>(result: ParamCheck<T>): T {
+  if (!result.ok) fail(result.code, result.message);
+  return result.value;
 }
 
 function isJsonValue(value: unknown, depth = 0): value is JsonValue {
@@ -349,6 +379,8 @@ interface Shared {
   now: () => number;
   handshakeModule: { id: string; version: string };
   capabilities: Set<Capability>;
+  onRequest: Set<Capability>;
+  consent: "allow" | "deny";
   panelTypes: string[] | null;
   settings: Map<string, string>;
   appSettings: Map<string, string>;
@@ -387,6 +419,8 @@ interface Panel {
   live: JsonValue | null;
   sources: OverlaySource[];
   navigate: ((content: PanelContent) => void | Promise<void>) | null;
+  /** A Settings press that came before the page had a `panel.onOpenSettings` handler: the first handler gets it, as in the SDK. */
+  earlySettings: { key: string } | null;
   suspended: boolean;
   behind: boolean;
   listeners: Map<EventName, Set<(data: unknown) => void>>;
@@ -403,6 +437,7 @@ function deliver(panel: Panel, event: EventName, data: unknown): void {
   if (event === "lifecycle.behind") panel.behind = (data as { behind: boolean }).behind;
   if (event === "lifecycle.suspend") panel.suspended = true;
   if (event === "lifecycle.resume") panel.suspended = false;
+  if (event === "panel.openSettings" && !panel.listeners.get(event)?.size) panel.earlySettings = data as { key: string };
   for (const fn of [...(panel.listeners.get(event) ?? [])]) {
     try {
       fn(data);
@@ -616,10 +651,9 @@ const handlers: Handlers = {
     if (changed) deliver(panel, "panel.dialog", { open: next.open });
     return null;
   },
-  "panel.setDialogTitle": (panel, { title }) => {
-    const limit = panel.shared.limits.maxTitleLength;
-    if (title !== null && (typeof title !== "string" || !title.trim() || title.length > limit)) fail("INVALID_PARAMS", `params.title must be null or a string of 1 to ${limit} characters`);
-    if (panel.dialog.open) panel.dialogTitle = title === null ? null : title.trim();
+  "panel.setDialogTitle": (panel, params) => {
+    const title = checked(checkDialogTitle(record(params).title, panel.shared.limits.maxTitleLength));
+    if (panel.dialog.open) panel.dialogTitle = title;
     return null;
   },
   "panel.setLive": (panel, { state }) => {
@@ -669,14 +703,14 @@ const handlers: Handlers = {
   "blobs.list": ({ shared }) => [...shared.blobs.values()].map((blob) => ({ ...blob })),
   "blobs.usage": ({ shared }) => blobUsage(shared, shared.blobs),
   "blobs.delete": ({ shared }, { id }) => {
-    shared.blobs.delete(id);
+    shared.blobs.delete(checked(checkBlobId(id)));
     return null;
   },
   "blobs.app.put": ({ shared }, { file }) => putBlob(shared, shared.appBlobs, file, "every workspace together"),
   "blobs.app.list": ({ shared }) => [...shared.appBlobs.values()].map((blob) => ({ ...blob })),
   "blobs.app.usage": ({ shared }) => blobUsage(shared, shared.appBlobs),
   "blobs.app.delete": ({ shared }, { id }) => {
-    shared.appBlobs.delete(id);
+    shared.appBlobs.delete(checked(checkBlobId(id)));
     return null;
   },
   "clipboard.writeImage": (_panel, { png }) => {
@@ -725,6 +759,8 @@ const handlers: Handlers = {
     if (byteLength(serializeJson(state, "state")) > shared.limits.maxOverlayStateBytes) {
       fail("QUOTA_EXCEEDED", `an overlay is limited to ${shared.limits.maxOverlayStateBytes} bytes`);
     }
+    // As in Tavora: without the stream-overlay connector nothing reads a link, so state is kept only for a key a game overlay shows.
+    if (!shared.capabilities.has("overlay") && !shared.gameOverlays.has(key)) return null;
     if (!shared.overlays.has(key) && shared.overlays.size >= shared.limits.maxOverlays) fail("QUOTA_EXCEEDED", `a module may have at most ${shared.limits.maxOverlays} overlays`);
     shared.overlays.set(key, parse(JSON.stringify(state)));
     return null;
@@ -742,17 +778,9 @@ const handlers: Handlers = {
     return null;
   },
   "overlay.overGame": ({ shared }) => [...shared.gameOverlays],
-  "overlay.setSources": (panel, { sources }) => {
-    const { limits } = panel.shared;
-    if (!Array.isArray(sources) || sources.length > limits.maxOverlaySources) fail("QUOTA_EXCEEDED", `a panel may list at most ${limits.maxOverlaySources} sources`);
-    const keys = new Set<string>();
-    for (const source of sources) {
-      if (typeof source?.key !== "string" || !OVERLAY_KEY.test(source.key)) fail("INVALID_PARAMS", "each source needs a key of letters, digits, - and _");
-      if (keys.has(source.key)) fail("INVALID_PARAMS", `the key ${source.key} is listed twice`);
-      keys.add(source.key);
-      if (typeof source.name !== "string" || source.name.length === 0 || source.name.length > limits.maxOverlaySourceName) fail("INVALID_PARAMS", `each source needs a name of 1 to ${limits.maxOverlaySourceName} characters`);
-    }
-    panel.sources = parse(JSON.stringify(sources));
+  "overlay.setSources": (panel, params) => {
+    if (!("sources" in record(params))) fail("INVALID_PARAMS", "params.sources is required");
+    panel.sources = checked(checkOverlaySources(record(params).sources, panel.shared.limits));
     return null;
   },
   "hotkeys.list": ({ shared }) => shared.hotkeys.map((binding) => ({ ...binding })),
@@ -926,17 +954,51 @@ const CHECKS_BEFORE_PRESS: Partial<Record<CallName, (panel: Panel, params: unkno
   },
   "panels.open": (panel, params) => {
     const { type, content } = record(params);
-    if (typeof type !== "string" || !type) fail("INVALID_PARAMS", "params.type must be a panel type id of this module");
+    if (!isPanelTypeId(type)) fail("INVALID_PARAMS", "params.type must be a panel type id of this module");
     if (content !== undefined) checkContent(content, panel.shared.limits);
   },
   "panels.openMany": (_, params) => {
     const { types } = record(params);
-    if (!Array.isArray(types) || types.length === 0 || types.length > MAX_PANEL_TYPES || !types.every((type) => typeof type === "string" && type)) {
+    if (!Array.isArray(types) || types.length === 0 || types.length > MAX_PANEL_TYPES || !types.every(isPanelTypeId)) {
       fail("INVALID_PARAMS", `types must be 1 to ${MAX_PANEL_TYPES} panel types`);
     }
     if (new Set(types).size !== types.length) fail("INVALID_PARAMS", "types lists a panel type twice");
   },
+  // The bridge checks these params before anything else (bridge.ts), with the same functions.
+  "files.pickReadOnly": (_, params) => void checked(checkPickReadOnly(params)),
+  "files.forget": (_, params) => void checked(checkFileReference(record(params).id)),
+  "files.check": (_, params) => void checked(checkFileReference(record(params).id)),
+  "files.showInFolder": (_, params) => void checked(checkFileReference(record(params).id)),
+  "overlay.publish": (_, params) => void checked(checkModuleKey(record(params).key, "key")),
+  "overlay.remove": (_, params) => void checked(checkModuleKey(record(params).key, "key")),
+  "overlay.copyLink": (_, params) => void checked(checkModuleKey(record(params).key, "key")),
+  "overlay.resetLink": (_, params) => void checked(checkModuleKey(record(params).key, "key")),
+  "overlay.showOverGame": (_, params) => void checked(checkModuleKey(record(params).key, "key")),
+  "overlay.hideOverGame": (_, params) => void checked(checkModuleKey(record(params).key, "key")),
+  "overlay.preview": (_, params) => void checked(checkModuleKey(record(params).key, "key")),
+  "hotkeys.set": (panel, params) => {
+    const { action, target, label } = record(params);
+    checked(checkActionId(action));
+    checked(checkModuleKey(target, "target"));
+    checked(checkHotkeyLabel(label, panel.shared.limits.maxHotkeyLabel));
+  },
+  "hotkeys.remove": (_, params) => {
+    const { action, target } = record(params);
+    checked(checkModuleKey(target, "target"));
+    if (action !== undefined) checked(checkActionId(action));
+  },
 };
+
+/**
+ * A call that needs a capability the module asks for on request (`onRequest`) and wasn't granted: Tavora asks the user
+ * (ConnectorQuestions in panel-gate.ts). True when the call goes on, with the capability granted from then on; false
+ * when the user said no. Only `overlay.copyLink` asks so far.
+ */
+function askOnRequest(shared: Shared, capability: Capability): boolean {
+  if (shared.consent === "deny") return false;
+  shared.capabilities.add(capability);
+  return true;
+}
 
 async function invoke<M extends CallName>(panel: Panel, method: M, params?: Params<M>): Promise<Result<M>> {
   (panel.calls[method] ??= []).push(params);
@@ -945,12 +1007,15 @@ async function invoke<M extends CallName>(panel: Panel, method: M, params?: Para
 
   const { capability } = METHOD_INFO[method];
   if (!supportsCall(shared.version, method)) fail("UNKNOWN_METHOD", `unknown method ${method}`);
-  if (capability && !shared.capabilities.has(capability)) {
+  // overlay.copyLink asks for its connector after its params and the press, as in Tavora; every other call needs the grant first.
+  const asks = capability !== null && !shared.capabilities.has(capability) && method === "overlay.copyLink" && shared.onRequest.has(capability);
+  if (capability && !shared.capabilities.has(capability) && !asks) {
     fail("PERMISSION_DENIED", `${method} needs the "${capability}" permission`, { capability });
   }
   // A call's own checks that Tavora makes before it takes the press, so a refused call leaves the press unused.
   CHECKS_BEFORE_PRESS[method]?.(panel, params);
   if (panel.gestures === "enforce" && needsGesture(method, params) && !(method === "panel.setDialog" && useAddPass(panel))) takePress(panel, method);
+  if (asks && !askOnRequest(shared, capability)) return "denied" as Result<M>;
 
   const script = panel.scripts.get(method);
   if (script) return structuredClone(await (script as (params: unknown) => Result<M>)(params));
@@ -984,7 +1049,9 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
     version: options.version ?? LATEST_TAVORA,
     now: options.now ?? Date.now,
     handshakeModule: options.module ?? { id: "local.test.module", version: "1.0.0" },
-    capabilities: new Set(options.capabilities ?? ["network", "aiUsage", "discord", "overlay", "systemInfo", "media", "leaderboards", "files", "clipboard", "sharedData"]),
+    capabilities: new Set(options.capabilities ?? ALL_CAPABILITIES),
+    onRequest: new Set(options.onRequest ?? []),
+    consent: options.consent ?? "allow",
     panelTypes: options.panelTypes ?? null,
     settings: new Map(),
     appSettings: new Map(),
@@ -1023,6 +1090,7 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
     live: null,
     sources: [],
     navigate: null,
+    earlySettings: null,
     suspended: false,
     behind: false,
     listeners: new Map(),
@@ -1050,6 +1118,16 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
     if (event === "lifecycle.behind" && panel.behind) {
       try {
         listener({ behind: true });
+      } catch (error) {
+        console.error(`[tavora] ${event} listener failed`, error);
+      }
+    }
+    // As the SDK does: a Settings press that came before the first handler goes to it.
+    if (event === "panel.openSettings" && panel.earlySettings) {
+      const early = panel.earlySettings;
+      panel.earlySettings = null;
+      try {
+        listener(early);
       } catch (error) {
         console.error(`[tavora] ${event} listener failed`, error);
       }

@@ -2,6 +2,16 @@
 
 What changed in `@tavora/pack`, newest first.
 
+## 0.3.6
+
+- The Vite plugin keeps `dist/THIRD_PARTY_NOTICES.txt` when a dev server (`vite` without `build`) closes; before, it wrote an empty list over it. In `--watch`, each build lists only what it bundled.
+- A `package.json` that can't be read (a byte order mark, broken JSON) no longer stops the build: the package is reported as a problem (`unreadable`), as other package problems are. The same for a BOM in `third-party.json` and an entry there without `files`.
+- Licence files are found by more names: `MIT-LICENSE`, `LICENSE-MIT`, `COPYRIGHT` and REUSE's `LICENSES/<id>.txt`; a picture or other file that is not text (`license.png`) is never read into the notices. `notices` in the plugin's options finds the same names (`noticeSource` is async now).
+- The old `license: ["MIT", "Apache-2.0"]` form reads as `MIT OR Apache-2.0`. A string `contributors` or `maintainers` no longer gives the first letter as the holder, and `(url)` is cut only at the end of an author. Packages without a name or version are no longer merged into one.
+- A file named `__proto__` at the zip's root keeps its hash, and `packModule` checks the signature of the zip it made, so it never hands back one Tavora would refuse.
+- A zip holding a file and a folder of the same name (`a` and `a/b`, also in another case) is refused.
+- Packs with `@tavora/module-schema` 0.2.4.
+
 ## 0.3.5
 
 - A zip may no longer hold a file or folder named like a Windows device with a superscript digit (`COM¹`, `LPT³`) or `CONIN$` / `CONOUT$`, also with an extension. The rule is module-schema's `isWindowsDeviceName` (0.2.1).

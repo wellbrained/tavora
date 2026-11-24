@@ -112,6 +112,11 @@ describe("findUpdates", () => {
     expect(findUpdates([at("2.0.0", { owner: "f".repeat(32) })], installed, TAVORA)).toEqual([]);
   });
 
+  it("treats a pre-release Tavora like its release for minTavora, as loading a module does", () => {
+    expect(findUpdates([at("1.1.0", { minTavora: "0.20.5" })], installed, "0.20.5-beta.1").map((entry) => entry.version)).toEqual(["1.1.0"]);
+    expect(findUpdates([at("1.1.0", { minTavora: "0.20.6" })], installed, "0.20.5-beta.1")).toEqual([]);
+  });
+
   it("leaves out a version this Tavora cannot run, and modules that are not installed from the catalog", () => {
     expect(findUpdates([at("1.1.0", { minTavora: "0.19.0" })], installed, TAVORA)).toEqual([]);
     expect(findUpdates([at("1.1.0", { id: "wellbrained.other" })], installed, TAVORA)).toEqual([]);

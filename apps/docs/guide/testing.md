@@ -37,6 +37,30 @@ host.storage.set("view", "grid");
 
 `host.storage`, `host.appStorage` and `host.documents` let you fill and read what the module keeps. `host.state`, `host.content`, `host.maximized`, `host.dialog`, `host.live`, `host.overlays` and `host.saved` show what the panel set. `host.calls["ui.showMenu"]` lists the params of every call to a method, oldest first, and `host.log` lists every call in order.
 
+Every call checks its params the way Tavora does, with the same checks: an overlay key such as `"boss:1"`, a hotkey label over 60 characters or a file extension written `".ksd"` fails with `INVALID_PARAMS` here too, not only in Tavora.
+
+## Permissions
+
+By default the user granted every permission. `capabilities: ["network"]` grants only those; a call that needs another one fails with `PERMISSION_DENIED`. A module that asks for the stream-overlay connector on request (`permissions.onRequest`) passes `onRequest: ["overlay"]`: `overlay.copyLink` then asks the user, as Tavora does, and `consent: "deny"` makes them say no (it answers `"denied"`).
+
+```ts
+const { sdk } = createMemoryHost({ capabilities: [], onRequest: ["overlay"], consent: "deny" });
+await sdk.overlay.copyLink("clock"); // "denied"
+```
+
+## Texts
+
+`catalogProblems(en, de)` lists what differs between your English and German texts (a missing key, other `{placeholders}`, a `.one` without `.other`, an empty text), one sentence each:
+
+```ts
+import { catalogProblems } from "@tavora/sdk/testing";
+import { TEXTS } from "./texts";
+
+it("has every text in English and German", () => {
+  expect(catalogProblems(TEXTS.en, TEXTS.de)).toEqual([]);
+});
+```
+
 ## Events
 
 Raise what Tavora would send:

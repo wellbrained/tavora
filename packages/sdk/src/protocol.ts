@@ -927,6 +927,8 @@ export interface PickNear { file: string; up?: number }
  */
 export type ReadOnlyFileState = { found: true; size: number; modifiedAt: number } | { found: false; reason: "gone" | "unlinked" };
 export const READ_ONLY_FILE_PATH = '/_read-only-files/';
+/** The biggest file `files.read` gives: 50 MiB (32 MiB before Tavora 0.23.6). */
+export const MAX_READ_ONLY_FILE_BYTES = 50 * 1024 * 1024;
 /**
  * A file in a folder this module may read (permissions.folders): its path inside the folder joined by `/` (such as
  * `Saves/slot 1.sav`), its size in bytes, when it last changed (ms since 1970), and whether the module may read it
@@ -1417,6 +1419,116 @@ export const LIMITS = {
 
 /** Overlay keys and hotkey targets: the module's own ids, like document ids. */
 export const OVERLAY_KEY = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+
+/** Ids of a manifest's panel types and actions: a lowercase letter, then up to 31 lowercase letters, digits and `-`. */
+const MANIFEST_ID = /^[a-z][a-z0-9-]{0,31}$/;
+/** Whether `value` can be the id of a panel type in a manifest's `panels`. */
+export function isPanelTypeId(value: unknown): value is string {
+  return typeof value === "string" && MANIFEST_ID.test(value);
+}
+/** Whether `value` can be the id of an action in a manifest's `actions`. */
+export function isActionId(value: unknown): value is string {
+  return typeof value === "string" && MANIFEST_ID.test(value);
+}
+
+/**
+ * Why Tavora refuses a call's params, or the params as Tavora takes them. Tavora's bridge and the memory host of
+ * `@tavora/sdk/testing` check params with the same functions (`check*` below), so a module test refuses what Tavora
+ * refuses.
+ */
+export type ParamCheck<T> = { ok: true; value: T } | { ok: false; code: "INVALID_PARAMS" | "QUOTA_EXCEEDED"; message: string };
+
+const accept = <T>(value: T): ParamCheck<T> => ({ ok: true, value });
+const refuse = <T>(message: string, code: "INVALID_PARAMS" | "QUOTA_EXCEEDED" = "INVALID_PARAMS"): ParamCheck<T> => ({ ok: false, code, message });
+const isPlainObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** An overlay key (`params.key`) or a hotkey target (`params.target`): OVERLAY_KEY. */
+export function checkModuleKey(value: unknown, name: "key" | "target"): ParamCheck<string> {
+  return typeof value === "string" && OVERLAY_KEY.test(value) ? accept(value) : refuse(`params.${name} must be 1 to 64 letters, digits, - and _`);
+}
+
+/**
+ * overlay.setSources' list: at most LIMITS.maxOverlaySources entries, each with its own key, a name, and a size in plain
+ * numbers. `limits` lowers them (the memory host's `limits` option).
+ */
+export function checkOverlaySources(value: unknown, limits: { maxOverlaySources: number; maxOverlaySourceName: number } = LIMITS): ParamCheck<OverlaySource[]> {
+  if (!Array.isArray(value)) return refuse("params.sources must be a list");
+  if (value.length > limits.maxOverlaySources) return refuse(`a panel may list at most ${limits.maxOverlaySources} sources`, "QUOTA_EXCEEDED");
+  const seen = new Set<string>();
+  const sources: OverlaySource[] = [];
+  for (const entry of value) {
+    if (!isPlainObject(entry)) return refuse("params must be an object");
+    const key = checkModuleKey(entry.key, "key");
+    if (!key.ok) return key;
+    if (seen.has(key.value)) return refuse(`the key ${key.value} is listed twice`);
+    seen.add(key.value);
+    const name = entry.name;
+    if (typeof name !== "string" || name.trim().length === 0 || name.length > limits.maxOverlaySourceName) return refuse(`each source needs a name of 1 to ${limits.maxOverlaySourceName} characters`);
+    if (entry.group !== undefined && typeof entry.group !== "boolean") return refuse("a source's group must be true or false");
+    if (entry.grows !== undefined && typeof entry.grows !== "boolean") return refuse("a source's grows must be true or false");
+    // Control characters and line breaks become spaces: Tavora draws the name on one line, as plain text.
+    const source: OverlaySource = { key: key.value, name: name.replace(/[\u0000-\u001f\u007f]+/g, " ").trim() };
+    if (entry.group === true) source.group = true;
+    if (typeof entry.grows === "boolean") source.grows = entry.grows;
+    if (entry.size !== undefined) {
+      if (!isPlainObject(entry.size)) return refuse("params must be an object");
+      const side = (number: unknown) => (typeof number === "number" && Number.isFinite(number) && number > 0 && number <= 4000 ? Math.round(number) : null);
+      const width = side(entry.size.width);
+      const height = side(entry.size.height);
+      if (width === null || height === null) return refuse("a source's size must be a width and a height of 1 to 4000 pixels");
+      source.size = { width, height };
+    }
+    sources.push(source);
+  }
+  return accept(sources);
+}
+
+/** hotkeys.set's label: 1 to LIMITS.maxHotkeyLabel characters on one line, trimmed. */
+export function checkHotkeyLabel(value: unknown, max: number = LIMITS.maxHotkeyLabel): ParamCheck<string> {
+  if (typeof value !== "string" || value.trim() === "" || value.length > max || /[\u0000-\u001f]/.test(value)) {
+    return refuse(`params.label must be 1 to ${max} characters on one line`);
+  }
+  return accept(value.trim());
+}
+
+/** An action of the manifest's `actions` (hotkeys.set, hotkeys.remove); whether the manifest lists it is Tavora's to check. */
+export function checkActionId(value: unknown): ParamCheck<string> {
+  return isActionId(value) ? accept(value) : refuse("params.action must be one of the manifest's actions ids");
+}
+
+/** panel.setDialogTitle's title: null, or 1 to LIMITS.maxTitleLength characters once trimmed. */
+export function checkDialogTitle(value: unknown, max: number = LIMITS.maxTitleLength): ParamCheck<string | null> {
+  const text = typeof value === "string" ? value.trim() : value;
+  if (text === null) return accept(null);
+  if (typeof text !== "string" || text.length < 1 || text.length > max) return refuse(`params.title must be null or a string of 1 to ${max} characters`);
+  return accept(text);
+}
+
+/** The id of a stored file (blobs.delete, blobs.app.delete): BLOB_ID. */
+export function checkBlobId(value: unknown): ParamCheck<string> {
+  return typeof value === "string" && BLOB_ID.test(value) ? accept(value) : refuse("id must be the id of a stored file");
+}
+
+/** A linked file's id (files.read, files.forget, files.check, files.showInFolder): 32 lowercase hex characters. */
+export function checkFileReference(value: unknown): ParamCheck<string> {
+  return typeof value === "string" && /^[a-f0-9]{32}$/.test(value) ? accept(value) : refuse("Invalid file reference.");
+}
+
+/** files.pickReadOnly's params: 1 to 10 lowercase extensions without the dot, `multiple`, and where the picker starts (`near`). */
+export function checkPickReadOnly(value: unknown): ParamCheck<{ extensions: string[]; multiple: boolean; near?: PickNear }> {
+  if (!isPlainObject(value)) return refuse("params must be an object");
+  const { extensions, multiple, near } = value;
+  if (!Array.isArray(extensions) || !extensions.length || extensions.length > 10 || extensions.some((extension) => typeof extension !== "string" || !/^[a-z0-9]{1,12}$/.test(extension))) {
+    return refuse("Choose up to ten file extensions.");
+  }
+  if (multiple !== undefined && typeof multiple !== "boolean") return refuse("multiple must be true or false.");
+  if (near === undefined) return accept({ extensions: [...extensions] as string[], multiple: multiple === true });
+  if (!isPlainObject(near)) return refuse("params must be an object");
+  const up = near.up ?? 0;
+  if (typeof near.file !== "string" || !/^[a-f0-9]{32}$/.test(near.file)) return refuse("near.file must be a linked file id.");
+  if (typeof up !== "number" || !Number.isInteger(up) || up < 0 || up > 3) return refuse("near.up must be 0 to 3.");
+  return accept({ extensions: [...extensions] as string[], multiple: multiple === true, near: { file: near.file, up } });
+}
 
 /**
  * An overlay page reads what the module published from this address next to it, as server-sent events: each
