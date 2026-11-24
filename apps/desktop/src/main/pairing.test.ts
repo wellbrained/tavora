@@ -126,6 +126,8 @@ describe("approving a new PC through the service", () => {
     const id = b.pairing.view().approve!.id;
     await a.accountKey.startOver();
     await expect(b.pairing.decide(id, true)).rejects.toMatchObject({ key: "pairing.error.oldKey" });
+    // The request was turned down: the question does not come back.
+    expect(b.pairing.view().approve).toBeNull();
     expect(b.accountKey.trouble).toBe("unopened");
     await newPc.pairing.lookForAnswer();
     expect(newPc.accountKey.get()).toBeNull();

@@ -565,14 +565,13 @@ export class Pairing {
     this.refused.add(id);
     this.changed();
     const key = this.hasKey ? this.key() : null;
+    let oldKey = false;
     try {
       // Signed in, the key goes out only when it still opens the account's vault (another PC may have started over since).
       if (allow && key && this.accountKey.signedIn && !(await this.accountKey.fits())) {
         await answering.transport.end(id, true).catch(() => undefined);
-        this.changed();
-        throw new UserError("pairing.error.oldKey");
-      }
-      if (allow && key) await answering.transport.sendKey(id, b64(sealForPc(answering.key, answering.reveal, key)));
+        oldKey = true;
+      } else if (allow && key) await answering.transport.sendKey(id, b64(sealForPc(answering.key, answering.reveal, key)));
       else await answering.transport.end(id, true);
     } catch (error) {
       // Add did not get there (offline): the question shows again, so the user can try again before it expires. A No
@@ -583,6 +582,11 @@ export class Pairing {
         this.changed();
       }
       throw toUserError(error);
+    }
+    // Turned down for good: the question stays away, and the error shows once.
+    if (oldKey) {
+      this.changed();
+      throw new UserError("pairing.error.oldKey");
     }
     if (allow && !key) throw new UserError("pairing.error.gone");
     // Only an Add takes an answer off the count: after a No it stays, or every wrong code shown would be a free try.

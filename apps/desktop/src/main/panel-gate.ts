@@ -391,8 +391,12 @@ export class ConnectorQuestions {
     // The question is gone now; the module hears the answer once the grant is stored.
     const result = grant();
     questions.answer(id, result);
-    await result;
-    this.options.changed();
+    // The panels come back even when the grant couldn't be saved; the error goes on to the user.
+    try {
+      await result;
+    } finally {
+      this.options.changed();
+    }
   }
 
   /** A module's panels start again as another owner's (ModulePanels): a connector question its old page asked ends as not allowed. */

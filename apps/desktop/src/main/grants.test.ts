@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -33,6 +33,19 @@ describe("GrantStore", () => {
     });
     const again = await GrantStore.load(dir);
     expect(again.allowed(subject(["api.example.com", "cdn.example.com"]))).toEqual({ network: ["api.example.com", "cdn.example.com"], connectors: [], folders: [] });
+  });
+
+  it("takes a grant back in memory when it can't be saved", async () => {
+    const { dir, grants } = await store();
+    await grants.grant(subject(["api.example.com"]));
+    // A folder where the file goes: the write fails.
+    await rm(path.join(dir, GRANTS_FILE));
+    await mkdir(path.join(dir, GRANTS_FILE));
+    await expect(grants.grant(subject(["api.example.com", "cdn.example.com"]))).rejects.toBeDefined();
+    expect(grants.allowed(subject(["api.example.com", "cdn.example.com"]))).toEqual({ network: ["api.example.com"], connectors: [], folders: [] });
+    const other = subject(["x.example.com"], "1.0.0", KEY, "community.someone.other");
+    await expect(grants.grant(other)).rejects.toBeDefined();
+    expect(grants.get(KEY, "community.someone.other")).toBeUndefined();
   });
 
   it("never covers another publisher's module with the same id", async () => {

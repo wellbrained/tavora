@@ -30,6 +30,20 @@ import { DATA_FILES } from "./saved-data";
 export const COPY_LIMIT = 100 * 1024 * 1024;
 /** Files are cut into parts of at most this much, before compression and sealing. */
 export const PART_BYTES = 4 * 1024 * 1024;
+/**
+ * The least a part counts for against the limit. The same as MIN_PART_BYTES in apps/api/src/cloud-copy.ts (the service
+ * counts a copy that way); cloud-copy-size.test.ts keeps the two equal.
+ */
+export const MIN_PART_BYTES = 1024;
+/** A copy's size as the service counts it: every part (an empty file is one) for at least MIN_PART_BYTES. */
+export function countedSize(files: { size: number }[]): number {
+  let total = 0;
+  for (const { size } of files) {
+    const parts = Math.max(1, Math.ceil(size / PART_BYTES));
+    for (let index = 0; index < parts; index++) total += Math.max(MIN_PART_BYTES, Math.min(PART_BYTES, size - index * PART_BYTES));
+  }
+  return total;
+}
 /** The most one upload of sealed parts holds, with each part's id and length. The service takes a little more. */
 export const BATCH_BYTES = 8 * 1024 * 1024;
 /** Part ids asked for in one download. */
@@ -585,11 +599,12 @@ export class CloudCopy {
     const limit = this.storage.limit;
     let found = await scanCopy(roots);
     let pictures = true;
-    let total = found.reduce((sum, file) => sum + file.size, 0);
+    // Counted as the service does, so what fits here fits there too.
+    let total = countedSize(found);
     if (limit !== null && total > limit) {
       found = found.filter((file) => !file.picture);
       pictures = false;
-      total = found.reduce((sum, file) => sum + file.size, 0);
+      total = countedSize(found);
       if (total > limit) return { status: "too-big", size: total };
     }
     if (pictures === state.pictures && sameAsSynced(found, state)) return { status: "unchanged" };

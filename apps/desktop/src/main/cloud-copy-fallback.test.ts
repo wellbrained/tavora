@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CloudCopy, copyRoots, EMPTY_STATE, hasLocalChanges, lookCopyState, saveCopyState, scanCopy, type CopyState, type CopyStorage } from "./cloud-copy";
+import { CloudCopy, copyRoots, countedSize, EMPTY_STATE, hasLocalChanges, lookCopyState, saveCopyState, scanCopy, type CopyState, type CopyStorage } from "./cloud-copy";
 import { CopySync } from "./cloud-copy-sync";
 import { cleanUp, pc, service } from "./cloud-copy.test-helper";
 import { FolderStorage } from "./copy-folder";
@@ -444,7 +444,7 @@ describe("a stopped swap whose list of the incoming copy is gone", () => {
     await rm(path.join(b.userData, "cloud-copy-staging", "copy-list.json"));
     // Meanwhile another PC's version is over the limit with pictures, so it goes up without them.
     await writeFile(path.join(s.a.userData, "workspace.json"), '{"from":"copy, later"}');
-    const small = (await scanCopy(s.a.roots)).filter((file) => !file.picture).reduce((sum, file) => sum + file.size, 0);
+    const small = countedSize((await scanCopy(s.a.roots)).filter((file) => !file.picture));
     const limited = Object.create(new FolderStorage(s.folder), { limit: { value: small } }) as CopyStorage;
     expect(await newerFromA(s, {}, limited)).toMatchObject({ status: "uploaded", pictures: false });
     const one = await appStart(s.cloud, b);
@@ -608,7 +608,7 @@ describe("a stopped swap whose list of the incoming copy is gone", () => {
     await rm(list);
     // Another PC's newer version goes up without pictures (over the limit); this PC takes it.
     await writeFile(path.join(s.a.userData, "workspace.json"), '{"from":"copy B"}');
-    const small = (await scanCopy(s.a.roots)).filter((file) => !file.picture).reduce((sum, file) => sum + file.size, 0);
+    const small = countedSize((await scanCopy(s.a.roots)).filter((file) => !file.picture));
     expect(await newerFromA(s, {}, Object.create(new FolderStorage(s.folder), { limit: { value: small } }) as CopyStorage)).toMatchObject({ status: "uploaded", pictures: false });
     await (await appStart(s.cloud, b)).sync.keep("cloud");
     // That swap takes the pictures back first, then stops at workspace.json.

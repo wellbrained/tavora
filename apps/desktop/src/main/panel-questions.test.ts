@@ -15,7 +15,7 @@ const asker = media;
 const olderAsker = { owner: "abcd1234", manifest: { id: "wellbrained.media", permissions: { onRequest: ["media", "discord"] } } } as const;
 const copyLink = { name: "overlay.copyLink", capability: "overlay" } as const;
 
-function setup(options: { awaiting?: string[]; shown?: InstanceRecord[] } = {}) {
+function setup(options: { awaiting?: string[]; shown?: InstanceRecord[]; saveFails?: boolean } = {}) {
   const calls: string[] = [];
   const questions = new PendingQuestions({ installedOwner: (moduleId) => installed.get(moduleId)?.owner });
   const installed = new Installed({ modules: new Map([[media.manifest.id, media]]), blocked: new Map(), catalog: new Set(), info: new Map(), problems: [] }, (manifest) => manifest);
@@ -25,7 +25,12 @@ function setup(options: { awaiting?: string[]; shown?: InstanceRecord[] } = {}) 
   const connector = new ConnectorQuestions({
     questions,
     installed,
-    grants: { grant: async (module, what) => void calls.push(`grant ${module.manifest.id} ${what?.connectors.join(",")}`) },
+    grants: {
+      grant: async (module, what) => {
+        if (options.saveFails) throw new Error("disk full");
+        calls.push(`grant ${module.manifest.id} ${what?.connectors.join(",")}`);
+      },
+    },
     changed: () => (pushState(), panels.applyBounds()),
   });
   const panel = new PanelQuestions({ questions, connectors: connector, panels, shownPanels: () => options.shown ?? [], pushState });
@@ -55,6 +60,15 @@ describe("PanelQuestions", () => {
     expect(await answer).toBe(true);
     expect(calls.slice(2)).toEqual(["grant wellbrained.media media", "push", "bounds"]);
     expect(panel.asking("one")).toBe(false);
+  });
+
+  it("puts the panels back when the grant can't be saved", async () => {
+    const { connector, calls, questions } = setup({ saveFails: true });
+    const answer = connector.ask(asker, "media", copyLink);
+    expect(calls).toEqual(["push", "bounds"]);
+    await expect(connector.answer(questions.peek("connector")!.id, true)).rejects.toThrow("disk full");
+    expect(calls.slice(2)).toEqual(["push", "bounds"]);
+    await answer.catch(() => undefined);
   });
 
   it("grants nothing the module installed now doesn't ask for on request, and ignores an answer to an older question", async () => {

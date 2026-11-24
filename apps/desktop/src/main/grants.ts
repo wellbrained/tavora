@@ -180,9 +180,17 @@ export class GrantStore {
       what.withGame === true && ask.withGame === true
         ? { withGame: true, withGameFor: [...(manifest.games ?? [])] }
         : { ...(previous?.withGame !== undefined ? { withGame: previous.withGame } : {}), ...(previous?.withGameFor ? { withGameFor: previous.withGameFor } : {}) };
-    if (!this.owners.has(owner)) this.owners.set(owner, new Map());
+    const ownerHad = this.owners.has(owner);
+    if (!ownerHad) this.owners.set(owner, new Map());
     this.owners.get(owner)!.set(manifest.id, { version: manifest.version, grantedAt: this.now().toISOString(), network, connectors, folders, ...answer });
-    return this.save();
+    // A grant that can't be saved isn't active either: the user hears the error, so the module must not run as allowed.
+    return this.save().catch((error: unknown) => {
+      const modules = this.owners.get(owner);
+      if (previous) modules?.set(manifest.id, previous);
+      else modules?.delete(manifest.id);
+      if (!ownerHad && modules?.size === 0) this.owners.delete(owner);
+      throw error;
+    });
   }
 
   /**
