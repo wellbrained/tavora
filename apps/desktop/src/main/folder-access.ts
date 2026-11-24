@@ -13,6 +13,7 @@ import { folderKey, isFolderName, isLocalLowGameFolder, isModuleId, isOwnerId, K
 import type { FolderChange, FolderEntry, FolderListing, FolderState } from "@tavora/sdk/protocol";
 import { readBody } from "./clipboard-http";
 import { HostError } from "./errors";
+import { isInside, isInsideOrSame } from "./path-inside";
 import { SAVED_FILES, SavedFile } from "./saved-file";
 
 export const FOLDER_ACCESS_DIR = "folder-access";
@@ -94,12 +95,6 @@ export interface FolderPlaces {
 
 const win = process.platform === "win32";
 const same = (a: string) => (win ? a.toLowerCase() : a);
-/** Whether `inner` is `outer` or inside it. */
-function within(inner: string, outer: string): boolean {
-  const a = same(path.resolve(inner));
-  const b = same(path.resolve(outer));
-  return a === b || a.startsWith(b.endsWith(path.sep) ? b : b + path.sep);
-}
 
 const resolvedPlaces = new Map<string, { forms: string[]; at: number }>();
 /**
@@ -152,26 +147,26 @@ export function isRefusedFolder(folder: string, full: Partial<FolderPlaces> & Pi
   const homes = forms(full.home);
   // Below LocalLow (also where it really is, when it is a link), only a game's folder.
   for (const low of homes.flatMap((home) => forms(path.join(home, "AppData", "LocalLow")))) {
-    if (within(resolved, low) && !isLocalLowGameFolder(path.relative(low, resolved).split(path.sep))) return true;
+    if (isInsideOrSame(resolved, low) && !isLocalLowGameFolder(path.relative(low, resolved).split(path.sep))) return true;
   }
   for (const home of homes) {
-    if (within(home, resolved)) return true;
+    if (isInsideOrSame(home, resolved)) return true;
     // Another user's folder: inside the folder that holds the user's own (such as Users), but not inside the user's own.
     // Not when the user's folder sits right on a drive, where that would be the whole drive.
     const users = path.dirname(home);
-    if (same(path.parse(users).root) !== same(users) && within(resolved, users) && !within(resolved, home)) return true;
-    if (within(resolved, home)) {
+    if (same(path.parse(users).root) !== same(users) && isInsideOrSame(resolved, users) && !isInsideOrSame(resolved, home)) return true;
+    if (isInsideOrSame(resolved, home)) {
       const first = path.relative(home, resolved).split(path.sep)[0] ?? "";
       if (first.startsWith(".")) return true;
     }
-    if (within(resolved, path.join(home, "AppData")) && !within(resolved, path.join(home, "AppData", "LocalLow"))) return true;
+    if (isInsideOrSame(resolved, path.join(home, "AppData")) && !isInsideOrSame(resolved, path.join(home, "AppData", "LocalLow"))) return true;
   }
-  for (const closed of (full.closed ?? []).flatMap(forms)) if (within(resolved, closed)) return true;
+  for (const closed of (full.closed ?? []).flatMap(forms)) if (isInsideOrSame(resolved, closed)) return true;
   // A drive as one of Tavora's own folders would shut every folder on it: drives are refused on their own above.
   const own = (full.own ?? []).filter((place) => same(path.parse(path.resolve(place)).root) !== same(path.resolve(place)));
-  for (const data of [full.userData, ...own].flatMap(forms)) if (within(resolved, data) || within(data, resolved)) return true;
+  for (const data of [full.userData, ...own].flatMap(forms)) if (isInsideOrSame(resolved, data) || isInsideOrSame(data, resolved)) return true;
   const known = [...(full.known ?? []), ...Object.values(full.roots ?? {})].flatMap(forms);
-  return known.some((place) => within(place, resolved));
+  return known.some((place) => isInsideOrSame(place, resolved));
 }
 
 /** Where the manifest says the folder is: its root's folder, then the names below it. */
@@ -313,7 +308,7 @@ export function insidePath(relative: unknown): string[] | null {
 async function exactly(base: string, parts: string[]): Promise<string | null> {
   const full = path.join(base, ...parts);
   const real = await realpath(full).catch(() => null);
-  return real && same(real) === same(full) && within(real, base) && same(real) !== same(base) ? real : null;
+  return real && same(real) === same(full) && isInside(real, base) ? real : null;
 }
 
 /**

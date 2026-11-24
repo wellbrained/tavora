@@ -26,6 +26,7 @@ import { encodePng } from "../src/png.ts";
 import { checkReviewText } from "../src/review-filter.ts";
 import { ReviewStore } from "../src/reviews.ts";
 import { StatsStore, STAT_KINDS, utcDay } from "../src/stats.ts";
+import { isInsideOrSame } from "../../desktop/src/main/path-inside.ts";
 
 const DAY = 24 * 3_600_000;
 const HOUR = 3_600_000;
@@ -817,8 +818,7 @@ const hasData = (dir: string) => existsSync(dir) && readdirSync(dir).length > 0;
 /** Refuses folders that would be a disaster to delete: a root, the home folder, or anything holding the current folder. */
 function safeToDelete(dir: string): boolean {
   const target = path.resolve(dir);
-  const relation = path.relative(target, process.cwd());
-  const holdsCwd = relation === "" || (!relation.startsWith("..") && !path.isAbsolute(relation));
+  const holdsCwd = isInsideOrSame(process.cwd(), target);
   return path.parse(target).root !== target && target !== os.homedir() && !holdsCwd && target.split(path.sep).filter(Boolean).length >= 2;
 }
 

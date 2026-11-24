@@ -6,6 +6,7 @@ import { copyFile, lstat, mkdir, readdir, realpath, rename, rm, rmdir, stat, wri
 import path from "node:path";
 import { isGameId, isModuleId, isOwnerId } from "@tavora/module-schema";
 import { parseBlobFileName } from "./blobs";
+import { isInsideOrSame } from "./path-inside";
 
 /** Inside the place the user picks, the files go into a folder of their own with this name. */
 export const FILES_FOLDER_NAME = "Tavora";
@@ -29,11 +30,6 @@ export function defaultFilesRoot(userData: string): string {
 export type TargetProblem = "same" | "nested" | "inside-data" | "not-writable";
 
 const sameFolder = (a: string, b: string) => (process.platform === "win32" ? a.toLowerCase() === b.toLowerCase() : a === b);
-const inside = (child: string, parent: string) => {
-  const relative = path.relative(parent, child);
-  return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
-};
-const insideOrSame = (child: string, parent: string) => sameFolder(child, parent) || inside(child, parent) || (process.platform === "win32" && inside(child.toLowerCase(), parent.toLowerCase()));
 
 /**
  * Where `place` really is: its real path (links, and junctions on Windows, resolved), or for a place not made yet the
@@ -53,7 +49,7 @@ async function realPlace(place: string): Promise<string> {
 async function overlap(root: string, currentRoot: string): Promise<"same" | "nested" | null> {
   const [real, current] = await Promise.all([realPlace(root), realPlace(currentRoot)]);
   if (sameFolder(real, current)) return "same";
-  if (insideOrSame(real, current) || insideOrSame(current, real)) return "nested";
+  if (isInsideOrSame(real, current) || isInsideOrSame(current, real)) return "nested";
   return null;
 }
 
@@ -75,7 +71,7 @@ export async function filesTarget(
   if (before) return { problem: before };
   // Tavora's own data folder is no place for it, except the default folder itself.
   const [real, realDefault, realData] = await Promise.all([realPlace(root), realPlace(defaultRoot), realPlace(userData)]);
-  if (!sameFolder(real, realDefault) && insideOrSame(real, realData)) return { problem: "inside-data" };
+  if (!sameFolder(real, realDefault) && isInsideOrSame(real, realData)) return { problem: "inside-data" };
   try {
     await mkdir(root, { recursive: true });
     const probe = path.join(root, `.tavora-write-test-${process.pid}`);
@@ -140,7 +136,7 @@ export async function copyStoredFiles(from: string, to: string, files: readonly 
     await mkdir(path.dirname(target), { recursive: true });
     // A link inside the new folder (to a module's or a workspace's folder, or to the file itself) may lead back into
     // the old one: the "copy" would be the original, deleted once the move is done. A file there is never a link.
-    if (insideOrSame(await realPlace(path.dirname(target)), source)) throw new Error(`${path.dirname(target)} leads back into ${from}`);
+    if (isInsideOrSame(await realPlace(path.dirname(target)), source)) throw new Error(`${path.dirname(target)} leads back into ${from}`);
     const there = await lstat(target).catch(() => null);
     if (there && !there.isFile()) throw new Error(`${target} is no plain file`);
     if (there?.size !== file.bytes) {

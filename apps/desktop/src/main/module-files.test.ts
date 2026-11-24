@@ -51,6 +51,12 @@ describe("filesTarget", () => {
     expect(await filesTarget(path.dirname(custom), custom, userData)).toEqual({ problem: "same" });
   });
 
+  it("refuses a folder inside the one in use even when its name starts with two dots", async () => {
+    const custom = path.join(base, "elsewhere", FILES_FOLDER_NAME);
+    await mkdir(path.join(custom, "..notes"), { recursive: true });
+    expect(await filesTarget(path.join(custom, "..notes"), custom, userData)).toEqual({ problem: "nested" });
+  });
+
   it("refuses a link onto the folder in use, above it or into it, like the folder itself", async () => {
     const custom = path.join(base, "elsewhere", FILES_FOLDER_NAME);
     await mkdir(path.join(custom, "official"), { recursive: true });

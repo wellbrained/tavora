@@ -1,5 +1,6 @@
 import { realpath, stat } from "node:fs/promises";
 import path from "node:path";
+import { isInside } from "./path-inside";
 
 export const MODULE_SCHEME = "tavora-module";
 export const HOST_SCHEME = "tavora-host";
@@ -119,7 +120,7 @@ export async function resolveAsset(rootReal: string, urlPathname: string): Promi
   } catch {
     return null;
   }
-  if (!real.startsWith(rootReal + path.sep)) return null;
+  if (!isInside(real, rootReal)) return null;
 
   try {
     return (await stat(real)).isFile() ? real : null;

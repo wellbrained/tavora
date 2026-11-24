@@ -16,6 +16,7 @@ import { accountsAdminRoutes } from "./accounts-admin.ts";
 import { ActivityLog, type ActivityTarget } from "./activity-log.ts";
 import type { CopyStore } from "./cloud-copy.ts";
 import { mailLanguage } from "./mail.ts";
+import { isInside } from "../../desktop/src/main/path-inside.ts";
 import { moderationRoutes, type ModerationAdminOptions } from "./moderation-admin.ts";
 import { createNotifier, isUnpublishReason, unpublishedMail, UNPUBLISH_REASONS } from "./moderation-mail.ts";
 import type { ReviewStore } from "./reviews.ts";
@@ -112,7 +113,7 @@ export function createAdminApp({ token, statsToken, submissions, state, store, c
   const page = (name: string): Response => {
     const root = adminDir ? path.resolve(adminDir) : null;
     const file = root ? path.resolve(root, name) : null;
-    if (!root || !file || !file.startsWith(root + path.sep) || !/^[\w./-]+$/.test(name)) return new Response("Not found.", { status: 404 });
+    if (!root || !file || !isInside(file, root) || !/^[\w./-]+$/.test(name)) return new Response("Not found.", { status: 404 });
     try {
       if (!statSync(file).isFile()) throw new Error("not a file");
       const kept = name.startsWith("assets/") ? { "Cache-Control": "public, max-age=31536000, immutable" } : {};
