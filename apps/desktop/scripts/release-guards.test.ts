@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error - plain JavaScript module shared with scripts/release.mjs
-import { CHECKLIST, asksHandChecks, checkCi, checkDownload, checkInstalled, checkRelease, compareVersions, failedJobsHint, findDispatchedRun, lastReleased, readCiHashes, releaseFiles, releaseNotes, releaseRunTitle, releaseTitle } from "./release-guards.mjs";
+import { CHECKLIST, asksHandChecks, checkCi, checkDownload, checkInstalled, checkRefresh, checkRelease, clockProblem, compareVersions, failedJobsHint, feedFreshness, findDispatchedRun, issuedAfterLiveProblem, lastReleased, readCiHashes, refreshKeyProblem, releaseFiles, releaseNotes, releaseRunTitle, releaseTitle } from "./release-guards.mjs";
 
 const ready = { branch: "main", dirty: false, ahead: 0, behind: 0, tags: [] as string[], noteVersions: ["0.4.0"] };
 
@@ -206,5 +206,82 @@ describe("the split release (CI builds, the PC checks and uploads)", () => {
     expect(releaseNotes({ version: "0.24.0", notes: [] })).toMatch(/^Windows preview build of Tavora\./);
     expect(releaseNotes({ version: "1.0.0", notes: [] })).toMatch(/^Tavora for Windows\./);
     expect(releaseNotes({ version: "1.0.0", notes: [] })).not.toContain("preview");
+  });
+});
+
+describe("clockProblem", () => {
+  const server = "Tue, 24 Nov 2026 10:00:00 GMT";
+
+  it("takes a clock within 5 minutes of the update server's", () => {
+    expect(clockProblem(server, new Date("2026-11-24T10:00:00Z"))).toBeNull();
+    expect(clockProblem(server, new Date("2026-11-24T10:05:00Z"))).toBeNull();
+    expect(clockProblem(server, new Date("2026-11-24T09:55:00Z"))).toBeNull();
+  });
+
+  it("refuses one further off either way, and no server time at all", () => {
+    expect(clockProblem(server, new Date("2026-11-24T10:05:01Z"))).toMatch(/5 minutes ahead/);
+    expect(clockProblem(server, new Date("2026-11-24T09:30:00Z"))).toMatch(/30 minutes behind/);
+    expect(clockProblem(null, new Date())).toMatch(/no time/);
+    expect(clockProblem("soon", new Date())).toMatch(/no time/);
+  });
+});
+
+describe("issuedAfterLiveProblem", () => {
+  const live = `stable win-x64 2026-11-24T10:00:00Z 2026-12-24T10:00:00Z ${Buffer.alloc(64, 1).toString("base64")}`;
+
+  it("takes a statement issued after the live one, or any when the live feed has none", () => {
+    expect(issuedAfterLiveProblem(live, { issuedAt: "2026-11-24T10:00:01Z" })).toBeNull();
+    expect(issuedAfterLiveProblem(null, { issuedAt: "2020-01-01T00:00:00Z" })).toBeNull();
+  });
+
+  it("refuses one issued at the same time or before", () => {
+    expect(issuedAfterLiveProblem(live, { issuedAt: "2026-11-24T10:00:00Z" })).toMatch(/clock behind/);
+    expect(issuedAfterLiveProblem(live, { issuedAt: "2026-11-23T10:00:00Z" })).toMatch(/clock behind/);
+    expect(issuedAfterLiveProblem("stable win-x64", { issuedAt: "2026-11-24T10:00:00Z" })).toMatch(/no issue time/);
+  });
+});
+
+describe("checkRefresh", () => {
+  const clean = { branch: "main", dirty: false, ahead: 0, behind: 0, tags: ["v0.25.0", "v0.25.3"] };
+
+  it("takes a clean main and a live feed of the newest release", () => {
+    expect(checkRefresh("0.25.3", clean)).toEqual([]);
+  });
+
+  it("refuses another branch, changes, a main that isn't origin's, and a live feed that isn't the newest release", () => {
+    expect(checkRefresh("0.25.3", { ...clean, branch: "work", dirty: true, ahead: 1, behind: 2 })).toHaveLength(4);
+    expect(checkRefresh("0.25.0", clean)).toEqual([expect.stringMatching(/live feed is 0.25.0, but the newest release tag is 0.25.3/)]);
+    expect(checkRefresh(null, clean)).toEqual([expect.stringMatching(/no version/)]);
+  });
+});
+
+describe("refreshKeyProblem", () => {
+  const a = { release: "A", backup: "B" };
+
+  it("takes a key both the live release and the one before it pin", () => {
+    expect(refreshKeyProblem("A", [{ version: "0.25.3", pins: a }, { version: "0.25.0", pins: a }])).toBeNull();
+    expect(refreshKeyProblem("B", [{ version: "0.25.3", pins: a }, { version: "0.25.0", pins: { release: "B", backup: "C" } }])).toBeNull();
+    // A release from before signed updates pins nothing, so it takes any.
+    expect(refreshKeyProblem("A", [{ version: "0.25.3", pins: a }, { version: "0.24.58", pins: null }])).toBeNull();
+  });
+
+  it("refuses a key one of them doesn't pin", () => {
+    expect(refreshKeyProblem("A", [{ version: "0.25.3", pins: { release: "B", backup: "C" } }, { version: "0.25.0", pins: a }])).toMatch(/not one 0.25.3 pins/);
+    expect(refreshKeyProblem("C", [{ version: "0.25.3", pins: { release: "B", backup: "C" } }, { version: "0.25.0", pins: a }])).toMatch(/not one 0.25.0 pins/);
+  });
+});
+
+describe("feedFreshness", () => {
+  const value = `stable win-x64 2026-11-24T10:00:00Z 2026-12-24T10:00:00Z ${Buffer.alloc(64, 1).toString("base64")}`;
+
+  it("counts the whole days left and says when a refresh is due (fewer than 10)", () => {
+    expect(feedFreshness(value, new Date("2026-11-24T10:00:00Z"))).toEqual({ expiresAt: "2026-12-24T10:00:00Z", daysLeft: 30, due: false });
+    expect(feedFreshness(value, new Date("2026-12-14T10:00:00Z"))).toMatchObject({ daysLeft: 10, due: false });
+    expect(feedFreshness(value, new Date("2026-12-14T10:00:01Z"))).toMatchObject({ daysLeft: 9, due: true });
+    expect(feedFreshness(value, new Date("2026-12-25T10:00:00Z"))).toMatchObject({ daysLeft: -1, due: true });
+  });
+
+  it("says a feed without a second signature is due", () => {
+    expect(feedFreshness(null)).toEqual({ expiresAt: null, daysLeft: null, due: true });
   });
 });

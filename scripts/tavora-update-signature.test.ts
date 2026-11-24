@@ -1,14 +1,14 @@
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, sign as cryptoSign } from "node:crypto";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { createRequire } from "node:module";
-import { makeUpdateKey, signUpdate } from "../apps/desktop/src/main/update-signature";
+import { feedTime, makeUpdateKey, signUpdate } from "../apps/desktop/src/main/update-signature";
 // @ts-expect-error - plain JavaScript module shared with apps/desktop/scripts/release.mjs
-import { addSignatureToLatestYml, feedProblem, signLatestYml } from "../apps/desktop/scripts/update-feed.mjs";
+import { addSignatureToLatestYml, feedProblem, freshStatement, refreshLatestYml, signLatestYml } from "../apps/desktop/scripts/update-feed.mjs";
 // @ts-expect-error - plain JavaScript module shared with apps/desktop/scripts/release.mjs
 import { feedNoteProblem } from "../apps/desktop/scripts/release-notes.mjs";
 
@@ -41,9 +41,26 @@ function pinned(keys: { release: string; backup: string }): string {
   return write(readFileSync(pinsFile, "utf8").replace(/^ {2}release: ".*",$/m, `  release: "${keys.release}",`).replace(/^ {2}backup: ".*",$/m, `  backup: "${keys.backup}",`));
 }
 const pins = pinned({ release: release.publicKey, backup: backup.publicKey });
-function signed(privateKey = release.privateKey, keys = { release: release.publicKey, backup: backup.publicKey }): string {
-  return signLatestYml({ latestYml: LATEST, version: "1.0.1", file: installer, sha512, privateKey, pinned: keys }).text;
+type Statement = { channel: string; platform: string; issuedAt: string; expiresAt: string };
+function signed(privateKey = release.privateKey, keys = { release: release.publicKey, backup: backup.publicKey }, statement: Statement = freshStatement()): string {
+  return signLatestYml({ latestYml: LATEST, version: "1.0.1", file: installer, sha512, privateKey, pinned: keys, statement }).text;
 }
+const SIGNATURE2 = /^tavoraSignature2:.*\n/m;
+/** The feed without its second signature line, as releases before v2 wrote it. */
+const v1Only = (feed: string) => feed.replace(SIGNATURE2, "");
+/** A statement `days` from now (negative: in the past), good for `span` days. */
+const statementAt = (days: number, span = 30): Statement => {
+  const issued = new Date(Math.floor(Date.now() / 1000) * 1000 + days * 86_400_000);
+  return { channel: "stable", platform: "win-x64", issuedAt: feedTime(issued), expiresAt: feedTime(new Date(issued.getTime() + span * 86_400_000)) };
+};
+/** A second signature line signed over whatever these fields say, without the signer's own checks (to try the server's). */
+function forged2(statement: Statement, key = release.privateKey, update = { version: "1.0.1", file: installer, sha512 }): string {
+  const bytes = ["tavora-update-v2", update.version, update.file, update.sha512, statement.channel, statement.platform, statement.issuedAt, statement.expiresAt].join("\n");
+  const sig = cryptoSign(null, Buffer.from(bytes), key).toString("base64");
+  return `tavoraSignature2: '${[statement.channel, statement.platform, statement.issuedAt, statement.expiresAt, sig].join(" ")}'`;
+}
+/** A signed feed whose second line is `line`. */
+const withLine2 = (line: string, feed = signed()) => feed.replace(/^tavoraSignature2:.*$/m, line);
 function run(...args: string[]) {
   // The arguments travel in the environment: Windows mangles a newline inside a command-line argument, but not in a variable.
   const env: Record<string, string> = { ...(process.env as Record<string, string>), TAVORA_HELPER: helper, TAVORA_ARGC: String(args.length) };
@@ -52,7 +69,9 @@ function run(...args: string[]) {
   const result = spawnSync("bash", ["-c", script], { encoding: "utf8", env });
   return { ok: result.status === 0, out: result.stdout.trim(), err: result.stderr.trim() };
 }
-const verify = (feed: string, { keys = pins, version = "1.0.1", file = installer, digest = sha512 } = {}) => run("verify", keys, write(feed), version, file, digest);
+const verify = (feed: string, { keys = pins, version = "1.0.1", file = installer, digest = sha512, live = null as string | null } = {}) =>
+  run("verify", keys, write(feed), version, file, digest, ...(live === null ? [] : [write(live)]));
+const refreshCheck = (feed: string, live: string, { keys = pins, version = "1.0.1", file = installer, digest = sha512 } = {}) => run("refresh", keys, write(feed), version, file, digest, write(live));
 
 // latest.yml exactly as electron-builder writes it (app-builder-lib's updateInfoBuilder, builder-util's serializeToYaml).
 const desktopRequire = createRequire(path.join(repo, "apps/desktop/package.json"));
@@ -116,6 +135,10 @@ const FUZZED = SEPARATORS.flatMap((sep) => [
   `${sep}${withNotes}`,
 ]);
 
+/** A feed exactly as `pnpm release` signs it now (both lines), and its second signature line with the line feed. */
+const WITH_V2 = signed();
+const LINE2 = SIGNATURE2.exec(WITH_V2)![0];
+
 /** Every feed both checks are tried on: electron-builder's own, ones made to slip past, and the fuzzed ones. */
 const FEEDS: string[] = [
   ...Object.values(NOTES).map((notes) => signedFeed(built(notes))),
@@ -135,6 +158,20 @@ const FEEDS: string[] = [
   withNotes.replace(signatureLine, "tavoraSignature: AAAA"),
   CR_ATTACK,
   ...FUZZED,
+  // The second signature: where pnpm release puts it, and everywhere else.
+  WITH_V2,
+  WITH_V2.replace(LINE2, "").replace("\npath:", `\n${LINE2.trimEnd()}\npath:`),
+  WITH_V2.replace(LINE2, `${LINE2}${LINE2}`),
+  `${LINE2}${WITH_V2.replace(LINE2, "")}`,
+  `${WITH_V2.replace(LINE2, "")}${LINE2}`,
+  WITH_V2.replace(LINE2, LINE2.replace("stable", "preview")),
+  WITH_V2.replace(LINE2, LINE2.replace("win-x64", "win-arm64")),
+  WITH_V2.replace(LINE2, LINE2.replace(/Z /, ".000Z ")),
+  WITH_V2.replace(LINE2, LINE2.replace(/'\n$/, "' # note\n")),
+  WITH_V2.replace(LINE2, LINE2.replace("'", "").replace(/'\n$/, "\n")),
+  WITH_V2.replace(LINE2, LINE2.replace("tavoraSignature2:", "tavoraSignature2 :")),
+  WITH_V2.replace(/\n/g, "\r\n"),
+  ...SEPARATORS.flatMap((sep) => [WITH_V2.replace(LINE2, LINE2.replace(/\n$/, `${sep}\n`)), WITH_V2.replace(LINE2, LINE2.replace(/\n$/, `${sep}isAdminRightsRequired: true\n`))]),
 ];
 
 describe("what an installed Tavora reads from a feed the checks take", () => {
@@ -150,12 +187,14 @@ describe("what an installed Tavora reads from a feed the checks take", () => {
       taken++;
       const info = reader.load(feed) as Record<string, unknown>;
       const keys = Object.keys(info).sort();
-      expect(keys.filter((key) => key !== "releaseNotes")).toEqual(["files", "path", "releaseDate", "sha512", "tavoraSignature", "version"]);
+      expect(keys.filter((key) => key !== "releaseNotes" && key !== "tavoraSignature2")).toEqual(["files", "path", "releaseDate", "sha512", "tavoraSignature", "version"]);
       expect(info).toMatchObject({ version: "1.0.1", path: installer, sha512, tavoraSignature: signature });
       expect(info.files).toEqual([{ url: installer, sha512, size: 123456 }]);
       if ("releaseNotes" in info) expect(typeof info.releaseNotes).toBe("string");
+      // The second signature is always one plain string, never a Date or anything else YAML could make of it.
+      if ("tavoraSignature2" in info) expect(info.tavoraSignature2).toMatch(/^stable win-x64 \S+Z \S+Z \S{88}$/);
     }
-    expect(taken).toBeGreaterThanOrEqual(4);
+    expect(taken).toBeGreaterThanOrEqual(5);
   });
 });
 
@@ -172,8 +211,10 @@ describe.skipIf(!capable)("the update server and pnpm release agree", () => {
 
 describe.skipIf(!capable)("tavora-update-signature", { timeout: 30_000 }, () => {
   it("takes an update signed by the release or the backup key", () => {
-    expect(verify(signed())).toMatchObject({ ok: true, out: "signed by the release update key" });
-    expect(verify(signed(backup.privateKey))).toMatchObject({ ok: true, out: "signed by the backup update key" });
+    expect(verify(signed())).toMatchObject({ ok: true, out: expect.stringMatching(/^signed by the release update key\nfresh until \S+Z, signed by the release update key$/) });
+    expect(verify(signed(backup.privateKey))).toMatchObject({ ok: true, out: expect.stringMatching(/^signed by the backup update key\nfresh until \S+Z, signed by the backup update key$/) });
+    // Without the second line (it isn't required yet), as before.
+    expect(verify(v1Only(signed()))).toMatchObject({ ok: true, out: "signed by the release update key" });
   });
 
   it("refuses an unsigned update", () => {
@@ -201,7 +242,7 @@ describe.skipIf(!capable)("tavora-update-signature", { timeout: 30_000 }, () => 
 
   it("takes the feed as electron-builder writes it, release notes included", () => {
     const notes = signed().replace("releaseDate:", "releaseNotes: |\n  - Faster start\n\n  - Fewer clicks: the menu opens at once\nreleaseDate:");
-    expect(verify(notes)).toMatchObject({ ok: true, out: "signed by the release update key" });
+    expect(verify(notes)).toMatchObject({ ok: true, out: expect.stringMatching(/^signed by the release update key\n/) });
   });
 
   it("refuses a second installer in the files list, also one at an address", () => {
@@ -262,5 +303,78 @@ describe.skipIf(!capable)("tavora-update-signature", { timeout: 30_000 }, () => 
     expect(run("keys", pins).ok).toBe(true);
     expect(run("keys", pinned({ release: release.publicKey, backup: release.publicKey })).err).toContain("the same key");
     expect(run("keys", pinned({ release: "", backup: backup.publicKey })).ok).toBe(false);
+  });
+});
+
+describe.skipIf(!capable)("tavora-update-signature and the second signature", { timeout: 60_000 }, () => {
+  it("takes v1 and v2 by different pinned keys", () => {
+    const feed = withLine2(forged2(statementAt(0), backup.privateKey));
+    expect(verify(feed)).toMatchObject({ ok: true, out: expect.stringMatching(/^signed by the release update key\nfresh until \S+, signed by the backup update key$/) });
+  });
+
+  it("refuses a second signature by a key the app doesn't pin, or over other fields", () => {
+    expect(verify(withLine2(forged2(statementAt(0), stranger.privateKey))).err).toContain("second Tavora signature does not match");
+    expect(verify(withLine2(forged2(statementAt(0), release.privateKey, { version: "1.0.1", file: installer, sha512: otherSha512 }))).err).toContain("second Tavora signature does not match");
+    expect(verify(withLine2(forged2(statementAt(0), release.privateKey, { version: "1.0.2", file: installer, sha512 }))).err).toContain("second Tavora signature does not match");
+    const line = SIGNATURE2.exec(signed())![0].trimEnd();
+    const swapped = line.replace(/ (\S+Z) (\S+Z) /, (_all, issued, expires) => ` ${issued} ${feedTime(new Date(Date.parse(expires) + 1000))} `);
+    expect(verify(withLine2(swapped)).err).toContain("second Tavora signature does not match");
+  });
+
+  it("refuses a statement that has expired, is issued in the future or is good for too long", () => {
+    expect(verify(withLine2(forged2(statementAt(-40)))).err).toContain("expired at");
+    expect(verify(withLine2(forged2(statementAt(1)))).err).toContain("issued in the future");
+    expect(verify(withLine2(forged2(statementAt(0, 91)))).err).toContain("more than 90 days");
+    expect(verify(withLine2(forged2({ ...statementAt(0), expiresAt: statementAt(-1).issuedAt }))).err).toContain("expires before");
+    expect(verify(withLine2(forged2({ ...statementAt(0), expiresAt: "2099-02-30T10:00:00Z" }))).err).toContain("not a real UTC time");
+  });
+
+  it("takes a little clock leeway for the issue time", () => {
+    expect(verify(withLine2(forged2(statementAt(4 / (24 * 60))))).ok).toBe(true);
+  });
+
+  it("with the live feed, takes only a second signature issued after the live one's", () => {
+    const live = signed(release.privateKey, undefined, statementAt(-2));
+    expect(verify(signed(), { live }).ok).toBe(true);
+    expect(verify(signed(), { live: v1Only(live) }).ok).toBe(true);
+    expect(verify(signed(release.privateKey, undefined, statementAt(-3)), { live }).err).toContain("not later than the live one");
+    expect(verify(live, { live }).err).toContain("not later than the live one");
+    // A feed without the second line still goes on (it isn't required yet).
+    expect(verify(v1Only(signed()), { live }).ok).toBe(true);
+  });
+});
+
+describe.skipIf(!capable)("tavora-update-signature refresh", { timeout: 60_000 }, () => {
+  const live = signed(release.privateKey, undefined, statementAt(-20));
+  const fresh = () => refreshLatestYml({ latestYml: live, privateKey: release.privateKey, pinned: { release: release.publicKey, backup: backup.publicKey }, statement: statementAt(0) }).text as string;
+
+  it("takes the live feed with only a newer second signature, also on a live feed from before v2", () => {
+    expect(refreshCheck(fresh(), live)).toMatchObject({ ok: true, out: expect.stringMatching(/^signed by the release update key\nfresh until /) });
+    expect(refreshCheck(fresh(), v1Only(live)).ok).toBe(true);
+  });
+
+  it("refuses one that changes anything else, or carries no second signature", () => {
+    expect(refreshCheck(fresh().replace("releaseDate: '2026-11-14T10:00:00.000Z'", "releaseDate: '2026-11-15T10:00:00.000Z'"), live).err).toContain("changes more than the second signature");
+    expect(refreshCheck(fresh().replace("releaseDate:", "releaseNotes: |\n  - new\nreleaseDate:"), live).err).toContain("changes more than the second signature");
+    expect(refreshCheck(v1Only(fresh()), live).err).toContain("carries no second signature");
+  });
+
+  it("refuses an older or the same statement", () => {
+    expect(refreshCheck(live, live).err).toContain("not later than the live one");
+    const older = withLine2(forged2(statementAt(-25)), live);
+    expect(refreshCheck(older, live).err).toContain("not later than the live one");
+  });
+
+  it("refuses a version that isn't the live one, and no live feed", () => {
+    const otherLive = live.replace("version: 1.0.1", "version: 1.0.0");
+    expect(refreshCheck(fresh(), otherLive).err).toContain("1.0.1 is not the live version");
+    expect(run("refresh", pins, write(fresh()), "1.0.1", installer, sha512, path.join(dir, "missing.yml")).err).toContain("no live feed");
+    expect(run("refresh", pins, write(fresh()), "1.0.1", installer, sha512).err).toContain("usage");
+  });
+
+  it("still checks the signatures and the layout", () => {
+    const own = { release: stranger.publicKey, backup: backup.publicKey };
+    expect(refreshCheck(fresh(), live, { keys: pinned(own) }).err).toContain("under either pinned update key");
+    expect(refreshCheck(withLine2(forged2(statementAt(0), stranger.privateKey), live), live).err).toContain("second Tavora signature does not match");
   });
 });

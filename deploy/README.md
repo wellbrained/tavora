@@ -31,6 +31,8 @@ admin work and is never in a `TAVORA_*` setting.
 - Before each deploy the client asks the server `hello`. It stops when the key opened a shell (the old root
   key), belongs to another job, or the server's setup is older than this repo.
 - The update feed refuses a version that is not newer than the live one. A bad release is fixed by a newer one.
+  The one exception is a refresh ([Refresh the update feed](#refresh-the-update-feed)): the live version's
+  `latest.yml` again, byte for byte, with only a newer second signature.
 
 What a stolen deploy key can still do (accepted 2026-10-31): the API key runs code as the `tavora-api` service
 (that is what a deploy is), so it can read `production.env` (the Brevo key, the admin token, the Steam key) and every
@@ -175,3 +177,35 @@ leaked key stays trusted by every app that has not updated past the release that
 it refuses to sign with a key that release doesn't pin, refuses a release that changes both keys at once, and asks
 you to confirm any change of the pins. Until both keys are pinned, even `pnpm release --dry-run` stops early (the
 Release build would refuse to build); after that, a dry run needs no private key and shows what it would sign.
+
+## Refresh the update feed
+
+Each release signs `latest.yml` twice (decided 2026-11-24, vault `Github/Tavora/docs/update-signature-binding.md`):
+
+- `tavoraSignature`, as always: the version, the installer's name and its SHA-512. Every app since 0.24.105 checks it
+  before it installs; its bytes never change.
+- `tavoraSignature2`, on the line right after it: the same, plus the channel (`stable`), the platform (`win-x64`),
+  when it was signed and an expiry 30 days later. It tells an app that the feed it sees is still the newest, so a
+  server that keeps serving an old feed shows. Apps before it ignore the line. For now apps only log what they find; a
+  later release shows "Can't confirm you're up to date" once the expiry has passed (it never blocks an update).
+
+The server takes a second signature only from a pinned key, issued no more than 10 minutes ahead of its clock, not
+expired, at most 90 days long and issued after the live feed's. So `pnpm release` and `pnpm release:refresh` first
+check this PC's clock against the server's (within 5 minutes; fix it with Settings > Time > Sync now).
+
+When no release came out for about three weeks, sign the live feed again before the 30 days run out:
+
+```powershell
+pnpm release:refresh --status    # until when the live feed is vouched for; exit code 2 when fewer than 10 days are left
+pnpm release:refresh --dry-run   # checks and signs a local copy, uploads nothing
+pnpm release:refresh             # signs and uploads
+```
+
+The weekly reminder runs `--status` and opens a CoreHub todo when it says the feed is due; a release does the same job,
+so run whichever comes first. A refresh is guarded like a release: a clean `main` that matches `origin/main`, the
+`RELEASE-RUNNING` lock, `TAVORA_UPDATE_KEY` pointing at a key that both the live release and the one before it pin
+(their apps read the new statement), and the `tavora-updates` key. It reads the live `latest.yml`, checks both
+signatures there against the live release's pins, signs only the second line again and uploads `latest.yml` alone.
+The server (`tavora-receive refresh`) takes it only for the live version, when every other line is byte for byte the
+live one and the new statement is later; the installer stays as it is.
+

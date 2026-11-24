@@ -187,3 +187,79 @@ export function asksHandChecks(version) {
 /** Said after the upload: it can only be checked once the new version is public. */
 export const AFTER_RELEASE =
   "Last check, now that it is public: on an installed previous version, wait for or trigger the update and see that it installs this version.";
+
+/** How far this PC's clock may be from the update server's before it signs a feed statement (its issue time). */
+export const CLOCK_LEEWAY_MS = 5 * 60 * 1000;
+
+/**
+ * Why this PC's clock can't date a feed statement, or null: the update server's `Date` header (`serverDate`, as sent)
+ * must be within CLOCK_LEEWAY_MS of `now`. A statement dated ahead would hold back every later one; one dated behind
+ * would look old to apps at once. No header is a problem too: then nothing says the clock is right.
+ */
+export function clockProblem(serverDate, now = new Date()) {
+  const server = Date.parse(serverDate ?? "");
+  if (Number.isNaN(server)) return "The update server sent no time to check this PC's clock against.";
+  const off = now.getTime() - server;
+  if (Math.abs(off) <= CLOCK_LEEWAY_MS) return null;
+  const minutes = Math.round(Math.abs(off) / 60000);
+  return `This PC's clock is ${minutes} minutes ${off > 0 ? "ahead of" : "behind"} the update server's. Set the clock right (Windows: Settings > Time > Sync now) and try again.`;
+}
+
+/**
+ * Why a new feed statement can't follow the live feed's, or null: it must be issued later than the live second
+ * signature (`live`, the live latest.yml's tavoraSignature2 value, or null when it has none), as the server checks too.
+ */
+export function issuedAfterLiveProblem(live, statement) {
+  if (!live) return null;
+  const issued = /^\S+ \S+ (\S+) /.exec(live)?.[1];
+  if (!issued || Number.isNaN(Date.parse(issued))) return "The live latest.yml's second signature has no issue time this script can read.";
+  if (Date.parse(statement.issuedAt) > Date.parse(issued)) return null;
+  return `The live feed's second signature is issued ${issued}, not before this one (${statement.issuedAt}). Is this PC's clock behind?`;
+}
+
+/**
+ * Why `pnpm release:refresh` can't sign the live feed again, or an empty list: like a release it runs from a clean
+ * main that matches origin/main, and the live feed must be the version the newest release tag names (anything else
+ * means the feed isn't what this checkout released).
+ */
+export function checkRefresh(liveVersion, state) {
+  const problems = [];
+  if (state.branch !== "main") problems.push(`Refresh from main, not from "${state.branch}".`);
+  if (state.dirty) problems.push("There are uncommitted changes.");
+  if (state.behind > 0) problems.push(`main is ${state.behind} commit(s) behind origin/main; pull first.`);
+  if (state.ahead > 0) problems.push(`main is ${state.ahead} commit(s) ahead of origin/main; push (through a PR) first.`);
+  const last = lastReleased(state.tags);
+  if (!liveVersion) problems.push("The live feed names no version.");
+  else if (liveVersion !== last) problems.push(`The live feed is ${liveVersion}, but the newest release tag is ${last ?? "missing"}. Find out why before you sign it again.`);
+  return problems;
+}
+
+/**
+ * Why `signingPublicKey` can't sign the live feed again, or null. The apps that read the refreshed statement pin
+ * either the live release's keys (they run it and look for something newer) or the release before it (they are
+ * offered it), so the key must be one both pin (`pinSets`: the pins of those two tags, null for a tag from before
+ * signed updates).
+ */
+export function refreshKeyProblem(signingPublicKey, pinSets) {
+  for (const { version, pins } of pinSets) {
+    if (!pins) continue;
+    if (signingPublicKey !== pins.release && signingPublicKey !== pins.backup) {
+      return `The update key here is not one ${version} pins (release ${pins.release}, backup ${pins.backup}), so its apps would not take the new statement.`;
+    }
+  }
+  return null;
+}
+
+/** A refresh is due when the live statement has fewer days left than this (the weekly reminder's threshold). */
+export const REFRESH_DUE_DAYS = 10;
+
+/**
+ * What the weekly reminder says about the live feed (`signature2`: its tavoraSignature2 value, or null): until when it
+ * is vouched for, how many whole days are left, and whether a release or `pnpm release:refresh` is due.
+ */
+export function feedFreshness(signature2, now = new Date()) {
+  const expiresAt = signature2 ? /^\S+ \S+ \S+ (\S+) /.exec(signature2)?.[1] : null;
+  if (!expiresAt || Number.isNaN(Date.parse(expiresAt))) return { expiresAt: null, daysLeft: null, due: true };
+  const daysLeft = Math.floor((Date.parse(expiresAt) - now.getTime()) / 86_400_000);
+  return { expiresAt, daysLeft, due: daysLeft < REFRESH_DUE_DAYS };
+}

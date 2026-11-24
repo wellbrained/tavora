@@ -157,6 +157,113 @@ export function checkUpdate(update: DownloadedUpdate, sha512: string, pinned: un
   return signed;
 }
 
+// --- The second signature (docs: the vault's update-signature-binding.md, Option A) -------------------------------
+//
+// `tavoraSignature2` binds what v1 can't: the channel the feed is for, the platform, when the release key vouched for
+// the feed (issuedAt) and until when (expiresAt). It sits in latest.yml next to v1, which stays byte for byte as it is:
+// apps from 0.24.105 on rebuild the v1 bytes themselves and ignore keys they don't name, so the new line is invisible
+// to them. The feed line is one single-quoted string, so YAML reads it as text (an unquoted time would become a Date):
+//   tavoraSignature2: '<channel> <platform> <issuedAt> <expiresAt> <signature>'
+// over
+//   tavora-update-v2\n<version>\n<file>\n<sha512>\n<channel>\n<platform>\n<issuedAt>\n<expiresAt>
+
+/** The first line of what the second signature covers. */
+export const UPDATE_SIGNATURE2_FORMAT = "tavora-update-v2";
+/** The field in latest.yml that carries it. */
+export const UPDATE_SIGNATURE2_FIELD = "tavoraSignature2";
+/** The channels a feed can be for: latest.yml is `stable`; a preview channel would get a feed (and a v2 line) of its own. */
+export const UPDATE_CHANNELS = ["stable", "preview"] as const;
+export type UpdateChannel = (typeof UPDATE_CHANNELS)[number];
+/** The platforms an installer can be for. */
+export const UPDATE_PLATFORMS = ["win-x64"] as const;
+export type UpdatePlatform = (typeof UPDATE_PLATFORMS)[number];
+/** How long a release or a refresh vouches for the feed (Nik, 2026-11-24). */
+export const FEED_FRESH_DAYS = 30;
+/** The longest a signed statement may vouch for the feed: anything longer is refused, whoever signed it. */
+export const FEED_MAX_DAYS = 90;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** What the second signature covers on top of v1's fields. */
+export interface FeedStatement {
+  channel: UpdateChannel;
+  platform: UpdatePlatform;
+  /** UTC, `YYYY-MM-DDTHH:MM:SSZ`. */
+  issuedAt: string;
+  /** Same form; later than issuedAt, by at most FEED_MAX_DAYS. */
+  expiresAt: string;
+}
+
+const TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
+/** The signature2 value exactly: channel, platform, two times and 64 bytes of canonical base64. */
+const SIGNATURE2_VALUE = /^([a-z]+) ([a-z0-9-]+) (\S+) (\S+) ([A-Za-z0-9+/]{85}[AQgw]==)$/;
+
+/** A time in the one form the signature uses (UTC, whole seconds, `Z`), from a Date. */
+export function feedTime(date: Date): string {
+  return date.toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+
+/** Whether `value` is a real UTC time written the one way feedTime writes it (so 2026-02-30 is not). */
+function isFeedTime(value: unknown): value is string {
+  return typeof value === "string" && TIME.test(value) && !Number.isNaN(Date.parse(value)) && feedTime(new Date(value)) === value;
+}
+
+/** Why these fields can't be signed or checked as a v2 statement, or null. */
+export function statementProblem(statement: { channel: unknown; platform: unknown; issuedAt: unknown; expiresAt: unknown }): string | null {
+  if (!UPDATE_CHANNELS.includes(statement.channel as UpdateChannel)) return `the channel is not one of ${UPDATE_CHANNELS.join(", ")}`;
+  if (!UPDATE_PLATFORMS.includes(statement.platform as UpdatePlatform)) return `the platform is not one of ${UPDATE_PLATFORMS.join(", ")}`;
+  if (!isFeedTime(statement.issuedAt)) return "the issue time is not a UTC time like 2026-11-24T10:00:00Z";
+  if (!isFeedTime(statement.expiresAt)) return "the expiry is not a UTC time like 2026-12-24T10:00:00Z";
+  const span = Date.parse(statement.expiresAt) - Date.parse(statement.issuedAt);
+  if (span <= 0) return "the expiry is not after the issue time";
+  if (span > FEED_MAX_DAYS * DAY_MS) return `the expiry is more than ${FEED_MAX_DAYS} days after the issue time`;
+  return null;
+}
+
+/** Exactly what the second signature covers. Throws on fields that can't be signed. */
+export function signedUpdate2Bytes(update: SignedUpdate & FeedStatement): Buffer {
+  const problem = updateProblem(update) ?? statementProblem(update);
+  if (problem) throw new Error(`can't sign this update: ${problem}`);
+  const lines = [UPDATE_SIGNATURE2_FORMAT, update.version, update.file, update.sha512, update.channel, update.platform, update.issuedAt, update.expiresAt];
+  return Buffer.from(lines.join("\n"), "utf8");
+}
+
+/** The statement and its signature as the one value of the feed's tavoraSignature2 line (without the quotes). */
+export function signUpdate2(update: SignedUpdate & FeedStatement, privateKey: KeyObject): string {
+  if (privateKey.type !== "private" || privateKey.asymmetricKeyType !== "ed25519") throw new Error("the update key must be an Ed25519 private key");
+  const signature = sign(null, signedUpdate2Bytes(update), privateKey).toString("base64");
+  return [update.channel, update.platform, update.issuedAt, update.expiresAt, signature].join(" ");
+}
+
+/** The statement and signature in a tavoraSignature2 value, or why it is not one. A YAML Date or number is not. */
+export function readSignature2(value: unknown): { ok: true; statement: FeedStatement; signature: string } | { ok: false; reason: string } {
+  if (value === undefined || value === null || value === "") return { ok: false, reason: "latest.yml has no second Tavora signature" };
+  if (typeof value !== "string") return { ok: false, reason: "the second Tavora signature is not text" };
+  const match = SIGNATURE2_VALUE.exec(value);
+  if (!match) return { ok: false, reason: "the second Tavora signature is not channel, platform, issue time, expiry and 64 bytes of base64" };
+  const [, channel, platform, issuedAt, expiresAt, signature] = match;
+  const statement = { channel, platform, issuedAt, expiresAt };
+  const problem = statementProblem(statement);
+  if (problem) return { ok: false, reason: problem };
+  if (!isBase64Of(signature, 64)) return { ok: false, reason: "the second Tavora signature is not 64 bytes of base64" };
+  return { ok: true, statement: statement as FeedStatement, signature };
+}
+
+export type Signature2Check = { ok: true; key: UpdateKeyName; statement: FeedStatement } | { ok: false; reason: string };
+
+/** Which pinned key signed this tavoraSignature2 value for these fields, and what it says; or why it does not hold. */
+export function verifyUpdateSignature2(update: { version: unknown; file: unknown; sha512: unknown }, value: unknown, keys: PinnedUpdateKeys): Signature2Check {
+  const problem = updateProblem(update);
+  if (problem) return { ok: false, reason: problem };
+  const read = readSignature2(value);
+  if (!read.ok) return read;
+  const bytes = signedUpdate2Bytes({ ...(update as SignedUpdate), ...read.statement });
+  const signed = Buffer.from(read.signature, "base64");
+  for (const key of ["release", "backup"] as const) {
+    if (verify(null, bytes, keys[key], signed)) return { ok: true, key, statement: read.statement };
+  }
+  return { ok: false, reason: "the second Tavora signature does not match this version, file, SHA-512 and statement under either pinned key" };
+}
+
 /** SHA-512 of a file, base64, read as a stream. */
 export function sha512OfFile(file: string): Promise<string> {
   return new Promise((resolve, reject) => {

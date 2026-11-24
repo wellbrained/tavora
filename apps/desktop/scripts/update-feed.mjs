@@ -3,17 +3,85 @@
 // hash and build-provenance checks; scripts/update-check.mjs signs its throwaway test feeds with the same code.
 import { createPrivateKey } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { rawUpdatePublicKey, readPinnedUpdateKeys, signUpdate, UPDATE_SIGNATURE_FIELD, updateProblem, verifyUpdateSignature } from "../src/main/update-signature.ts";
+import {
+  FEED_FRESH_DAYS,
+  feedTime,
+  rawUpdatePublicKey,
+  readPinnedUpdateKeys,
+  signUpdate,
+  signUpdate2,
+  UPDATE_SIGNATURE2_FIELD,
+  UPDATE_SIGNATURE_FIELD,
+  updateProblem,
+  verifyUpdateSignature,
+  verifyUpdateSignature2,
+} from "../src/main/update-signature.ts";
 
 const SIGNATURE_LINE = new RegExp(`^${UPDATE_SIGNATURE_FIELD}:`, "m");
+const SIGNATURE2_LINE = new RegExp(`^${UPDATE_SIGNATURE2_FIELD}:`, "m");
+const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** The version and the signature latest.yml says, read line by line like the server does (deploy/server/tavora-receive). */
+/**
+ * The version and the signatures latest.yml says, read line by line like the server does (deploy/server/tavora-receive).
+ * `signature2` is the tavoraSignature2 value (channel, platform, times and signature), or null.
+ */
 export function readLatestYml(text) {
   const lines = String(text).split(/\r?\n/);
   const version = lines.find((line) => line.startsWith("version: "))?.slice("version: ".length) ?? null;
   const signatures = lines.filter((line) => SIGNATURE_LINE.test(line));
   const quoted = /^[^:]+: '([A-Za-z0-9+/=]*)'$/.exec(signatures[0] ?? "");
-  return { version, signature: signatures.length === 1 && quoted ? quoted[1] : null, signatureLines: signatures.length };
+  const second = lines.filter((line) => SIGNATURE2_LINE.test(line));
+  const quoted2 = /^[^:]+: '([A-Za-z0-9+/= :-]*)'$/.exec(second[0] ?? "");
+  return {
+    version,
+    signature: signatures.length === 1 && quoted ? quoted[1] : null,
+    signatureLines: signatures.length,
+    signature2: second.length === 1 && quoted2 ? quoted2[1] : null,
+    signature2Lines: second.length,
+  };
+}
+
+/** The installer's name and SHA-512 latest.yml names (its `path:` and `sha512:` lines), or null. */
+export function readFeedInstaller(text) {
+  const lines = String(text).split(/\r?\n/);
+  const file = lines.find((line) => line.startsWith("path: "))?.slice("path: ".length) ?? null;
+  const sha512 = lines.find((line) => line.startsWith("sha512: "))?.slice("sha512: ".length) ?? null;
+  return file && sha512 ? { file, sha512 } : null;
+}
+
+/**
+ * The live latest.yml and the server's clock (its `Date` header), for the release's and the refresh's checks. Throws
+ * when the feed doesn't answer; `text` is null when there is no feed yet (404).
+ */
+export async function fetchLiveFeed(base = "https://updates.mytavora.app") {
+  const response = await fetch(`${base}/latest.yml`, { headers: { "Cache-Control": "no-cache" }, signal: AbortSignal.timeout(30_000) });
+  if (response.status === 404) return { text: null, date: response.headers.get("date") };
+  if (!response.ok) throw new Error(`${base}/latest.yml answered ${response.status}`);
+  return { text: await response.text(), date: response.headers.get("date") };
+}
+
+/** A new v2 statement for the stable Windows feed: issued now (whole seconds), good for FEED_FRESH_DAYS. */
+export function freshStatement(now = new Date(), { channel = "stable", platform = "win-x64" } = {}) {
+  const issued = new Date(Math.floor(now.getTime() / 1000) * 1000);
+  return { channel, platform, issuedAt: feedTime(issued), expiresAt: feedTime(new Date(issued.getTime() + FEED_FRESH_DAYS * DAY_MS)) };
+}
+
+/**
+ * latest.yml with the second signature line right after the first (the server's layout check wants it exactly there).
+ * `replace`: a refresh swaps the one that is there; a release must not find one (it signs a feed fresh from the build).
+ */
+export function addSignature2ToLatestYml(text, value, { replace = false } = {}) {
+  const lines = String(text).split("\n");
+  if (!/^(stable|preview) [a-z0-9-]+ \S+ \S+ [A-Za-z0-9+/]{86}==$/.test(value)) throw new Error("not a tavoraSignature2 value");
+  const existing = lines.filter((line) => SIGNATURE2_LINE.test(line)).length;
+  if (existing && !replace) throw new Error(`latest.yml already has a ${UPDATE_SIGNATURE2_FIELD} line; it must come unsigned from the Release build`);
+  if (existing > 1) throw new Error(`latest.yml has more than one ${UPDATE_SIGNATURE2_FIELD} line`);
+  const kept = lines.filter((line) => !SIGNATURE2_LINE.test(line));
+  const at = kept.findIndex((line) => SIGNATURE_LINE.test(line));
+  if (at === -1) throw new Error(`latest.yml has no ${UPDATE_SIGNATURE_FIELD} line to put the second signature after`);
+  const eol = kept[at].endsWith("\r") ? "\r" : "";
+  kept.splice(at + 1, 0, `${UPDATE_SIGNATURE2_FIELD}: '${value}'${eol}`);
+  return kept.join("\n");
 }
 
 /**
@@ -85,16 +153,19 @@ export function checkPinChange(previous, current, signingPublicKey) {
 }
 
 /**
- * Signs a release's latest.yml for this installer and checks the result the way the app will: the signature read
+ * Signs a release's latest.yml for this installer and checks the result the way the app will: both signatures read
  * back from the new text must hold for this version, file and SHA-512 under the pinned keys. Throws otherwise.
+ * The v1 line is exactly what it was before v2 existed; v2 (`statement`: channel, platform, issuedAt, expiresAt; by
+ * default the stable Windows feed, issued now) goes on the line after it.
  */
-export function signLatestYml({ latestYml, version, file, sha512, privateKey, pinned }) {
+export function signLatestYml({ latestYml, version, file, sha512, privateKey, pinned, statement = freshStatement() }) {
   const update = { version, file, sha512 };
   const problem = updateProblem(update);
   if (problem) throw new Error(`can't sign: ${problem}`);
   const said = readLatestYml(latestYml).version;
   if (said !== version) throw new Error(`latest.yml says version ${said}, not ${version}`);
-  const text = addSignatureToLatestYml(latestYml, signUpdate(update, privateKey));
+  const v1 = addSignatureToLatestYml(latestYml, signUpdate(update, privateKey));
+  const text = addSignature2ToLatestYml(v1, signUpdate2({ ...update, ...statement }, privateKey));
   const keys = readPinnedUpdateKeys(pinned);
   if (!keys.ok) throw new Error(keys.problem);
   const layout = feedProblem(text, update);
@@ -102,7 +173,44 @@ export function signLatestYml({ latestYml, version, file, sha512, privateKey, pi
   const back = readLatestYml(text);
   const check = verifyUpdateSignature(update, back.signature, keys.keys);
   if (!check.ok) throw new Error(`the signed latest.yml does not check out: ${check.reason}`);
-  return { text, key: check.key };
+  const check2 = verifyUpdateSignature2(update, back.signature2, keys.keys);
+  if (!check2.ok) throw new Error(`the signed latest.yml does not check out: ${check2.reason}`);
+  return { text, key: check.key, statement: check2.statement };
+}
+
+/**
+ * The live latest.yml with only its second signature made new (`pnpm release:refresh`): the update key vouches again
+ * that this is still the newest version. Checks first that the live feed has the server's exact layout, that its v1
+ * signature holds under `pinned` and that a v2 line already there holds too; then that the new statement is for the
+ * same channel and platform and issued later. Every other line stays byte for byte. Throws otherwise.
+ */
+export function refreshLatestYml({ latestYml, privateKey, pinned, statement = freshStatement() }) {
+  const keys = readPinnedUpdateKeys(pinned);
+  if (!keys.ok) throw new Error(keys.problem);
+  const read = readLatestYml(latestYml);
+  const installer = readFeedInstaller(latestYml);
+  if (!read.version || !installer) throw new Error("the live latest.yml names no version or installer");
+  const update = { version: read.version, ...installer };
+  const layout = feedProblem(latestYml, update);
+  if (layout) throw new Error(`the live latest.yml is not the feed a release writes: ${layout}`);
+  const v1 = verifyUpdateSignature(update, read.signature, keys.keys);
+  if (!v1.ok) throw new Error(`the live latest.yml's signature does not check out: ${v1.reason}`);
+  let previous = null;
+  if (read.signature2Lines) {
+    const old = verifyUpdateSignature2(update, read.signature2, keys.keys);
+    if (!old.ok) throw new Error(`the live latest.yml's second signature does not check out: ${old.reason}`);
+    previous = old.statement;
+    if (statement.channel !== previous.channel || statement.platform !== previous.platform) {
+      throw new Error(`the live feed is for ${previous.channel} ${previous.platform}, not ${statement.channel} ${statement.platform}`);
+    }
+    if (Date.parse(statement.issuedAt) <= Date.parse(previous.issuedAt)) throw new Error(`the new statement (${statement.issuedAt}) is not later than the live one (${previous.issuedAt})`);
+  }
+  const text = addSignature2ToLatestYml(latestYml, signUpdate2({ ...update, ...statement }, privateKey), { replace: true });
+  const layoutAfter = feedProblem(text, update);
+  if (layoutAfter) throw new Error(`the update server would refuse it: ${layoutAfter}`);
+  const back = verifyUpdateSignature2(update, readLatestYml(text).signature2, keys.keys);
+  if (!back.ok) throw new Error(`the refreshed latest.yml does not check out: ${back.reason}`);
+  return { text, update, key: back.key, statement: back.statement, previous };
 }
 
 /**
@@ -122,7 +230,11 @@ export function feedProblem(text, { version, file, sha512 }, { signed = true } =
   let state = "";
   let entry = 0;
   let urls = 0;
+  // The second signature sits right after the first, nowhere else: a refresh swaps exactly that one line.
+  let afterSignature = false;
   for (const line of lines) {
+    const wasSignature = afterSignature;
+    afterSignature = false;
     if (state === "notes") {
       if (line === "" || /^ {2}[^ ]/.test(line)) continue;
       state = "";
@@ -140,7 +252,14 @@ export function feedProblem(text, { version, file, sha512 }, { signed = true } =
       return "latest.yml's files list must hold exactly this installer: its url, sha512 and size";
     }
     if (line === `version: ${version}`) count("version");
-    else if (/^tavoraSignature: '[A-Za-z0-9+/]{85}[AQgw]=='$/.test(line)) count("tavoraSignature");
+    else if (/^tavoraSignature: '[A-Za-z0-9+/]{85}[AQgw]=='$/.test(line)) {
+      count("tavoraSignature");
+      afterSignature = true;
+    } else if (/^tavoraSignature2: 'stable win-x64 \d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ \d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ [A-Za-z0-9+/]{85}[AQgw]=='$/.test(line)) {
+      // latest.yml is the stable Windows feed: a v2 line for anything else is refused like any unknown line.
+      if (!wasSignature) return "latest.yml's tavoraSignature2 line must come right after its tavoraSignature line";
+      count("tavoraSignature2");
+    }
     else if (line === "files:") {
       count("files");
       state = "files";
@@ -159,11 +278,14 @@ export function feedProblem(text, { version, file, sha512 }, { signed = true } =
     if (seen[key] !== 1) return `latest.yml must have exactly one ${key} line for this installer`;
   }
   if (!signed && seen.tavoraSignature) return "latest.yml already has a tavoraSignature line; it must come unsigned from the Release build";
+  if ((seen.tavoraSignature2 ?? 0) > 1) return "latest.yml has more than one tavoraSignature2 line";
   if ((seen.releaseNotes ?? 0) > 1) return "latest.yml has more than one releaseNotes";
   return null;
 }
 
 /** What a release signs, as lines to show (the dry run's "would sign"). */
-export function describeSigned({ version, file, sha512 }) {
-  return [`version  ${version}`, `file     ${file}`, `sha512   ${sha512}`];
+export function describeSigned({ version, file, sha512 }, statement = null) {
+  const lines = [`version  ${version}`, `file     ${file}`, `sha512   ${sha512}`];
+  if (statement) lines.push(`channel  ${statement.channel} ${statement.platform}`, `fresh    ${statement.issuedAt} to ${statement.expiresAt}`);
+  return lines;
 }

@@ -63,3 +63,26 @@ export function takeLock(file, version, now = new Date()) {
     },
   };
 }
+
+/**
+ * Takes the lock for the checkout at `repo` (the release's or the refresh's `label`) and frees it when the process
+ * exits, however it exits. Returns { file } or { problem } (no releases folder, or another release holds the lock).
+ * `worktrees`: what `git worktree list --porcelain` printed, to find the main checkout.
+ */
+export function holdLock(repo, label, worktrees, env = process.env) {
+  let main = null;
+  try {
+    main = mainCheckoutOf(worktrees);
+  } catch {}
+  const file = lockPath(repo, env, main);
+  // No lock means nothing would stop a merge during the release, so this stops instead of going on without one.
+  if (!file) {
+    return {
+      problem: "No releases folder found next to the main checkout or above this one, so there is nowhere to put the RELEASE-RUNNING lock. Create the releases folder, or set TAVORA_RELEASE_LOCK to the lock's path.",
+    };
+  }
+  const lock = takeLock(file, label);
+  if (lock.problem) return { problem: lock.problem };
+  process.on("exit", lock.release);
+  return { file };
+}

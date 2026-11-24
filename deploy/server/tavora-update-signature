@@ -3,7 +3,9 @@
 # (apps/desktop/src/main/update-signature.ts): latest.yml's tavoraSignature must be an Ed25519 signature, by one
 # of the two keys pinned in update-keys.ts, over
 #   tavora-update-v1\n<version>\n<installer file name>\n<sha512 base64>
-# so a stolen deploy key can't put an installer on the feed that Tavora's update key didn't sign. The signature
+# so a stolen deploy key can't put an installer on the feed that Tavora's update key didn't sign. A second line,
+# tavoraSignature2, may follow it (not required yet): the same fields plus the channel, the platform and when the
+# statement was issued and expires, so an app can tell a feed held back from a fresh one. The signature
 # doesn't cover the rest of latest.yml, so that must be exactly what electron-builder writes for this one installer
 # (feed_problem): an older Tavora would also follow an extra `files` entry, an address, `packages` or
 # `isAdminRightsRequired`.
@@ -12,8 +14,11 @@
 #
 #   tavora-update-signature keys <update-keys.ts>
 #       checks that the file pins two different keys (the setup runs this)
-#   tavora-update-signature verify <update-keys.ts> <latest.yml> <version> <installer> <sha512>
-#       exits 0 and prints which key signed it, or says why not (the layout or the signature) and exits 1
+#   tavora-update-signature verify <update-keys.ts> <latest.yml> <version> <installer> <sha512> [<live latest.yml>]
+#       exits 0 and prints which key signed it, or says why not (the layout or the signature) and exits 1; with the
+#       live feed, a second signature must be issued after the live one's
+#   tavora-update-signature refresh <update-keys.ts> <latest.yml> <version> <installer> <sha512> <live latest.yml>
+#       the same for a refresh: the live version's feed byte for byte, but for a newer second signature
 set -euo pipefail
 export LC_ALL=C
 
@@ -53,6 +58,8 @@ feed_problem() { # latest.yml version installer sha512
   fi
   awk -v version="$2" -v installer="$3" -v sha512="$4" '
     function fail(why) { print why; bad = 1; exit }
+    # The second signature sits right after the first, nowhere else: a refresh swaps exactly that one line.
+    { was_signature = after_signature; after_signature = 0 }
     state == "notes" { if ($0 == "" || $0 ~ /^  [^ ]/) next; state = "" }
     index($0, "://") { fail("latest.yml names an address (://); the feed only ever names the installer next to it") }
     /url:/ { if (++urls > 1) fail("latest.yml names more than one url") }
@@ -65,7 +72,13 @@ feed_problem() { # latest.yml version installer sha512
     }
     $0 == "version: " version { seen["version"]++; next }
     # Exactly the quoted canonical base64 of 64 bytes (17 + 1 + 88 + 1 characters, [AQgw] before the ==).
-    $0 ~ /^tavoraSignature: '"'"'[A-Za-z0-9+\/]+=='"'"'$/ && length($0) == 107 && substr($0, 104, 1) ~ /[AQgw]/ { seen["tavoraSignature"]++; next }
+    $0 ~ /^tavoraSignature: '"'"'[A-Za-z0-9+\/]+=='"'"'$/ && length($0) == 107 && substr($0, 104, 1) ~ /[AQgw]/ { seen["tavoraSignature"]++; after_signature = 1; next }
+    # The stable Windows feed'"'"'s statement: two UTC times and the quoted canonical base64 of 64 bytes (19 + 15 + 21 +
+    # 21 + 88 + 1 characters, [AQgw] before the ==). No {n} counts: mawk may not have them.
+    $0 ~ /^tavoraSignature2: '"'"'stable win-x64 [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z [A-Za-z0-9+\/]+=='"'"'$/ && length($0) == 165 && substr($0, 162, 1) ~ /[AQgw]/ {
+      if (!was_signature) fail("latest.yml'"'"'s tavoraSignature2 line must come right after its tavoraSignature line")
+      seen["tavoraSignature2"]++; next
+    }
     $0 == "files:" { seen["files"]++; state = "files"; entry = 0; next }
     $0 == "path: " installer { seen["path"]++; next }
     $0 == "sha512: " sha512 { seen["sha512"]++; next }
@@ -78,6 +91,7 @@ feed_problem() { # latest.yml version installer sha512
       if (urls != 1) { print "latest.yml must name the installer in exactly one url"; exit 1 }
       n = split("version tavoraSignature files path sha512 releaseDate", once, " ")
       for (i = 1; i <= n; i++) if (seen[once[i]] != 1) { print "latest.yml must have exactly one " once[i] " line for this installer"; exit 1 }
+      if (seen["tavoraSignature2"] > 1) { print "latest.yml has more than one tavoraSignature2 line"; exit 1 }
       if (seen["releaseNotes"] > 1) { print "latest.yml has more than one releaseNotes"; exit 1 }
     }
   ' "$1"
@@ -107,31 +121,78 @@ case "${1:-}" in
       die "this openssl ($(openssl version)) can't check Ed25519 signatures; it needs OpenSSL 3"
     echo 'two pinned update keys'
     ;;
-  verify)
-    [[ $# == 6 ]] || die 'usage: tavora-update-signature verify <update-keys.ts> <latest.yml> <version> <installer> <sha512>'
+  verify | refresh)
+    usage='usage: tavora-update-signature verify <update-keys.ts> <latest.yml> <version> <installer> <sha512> [<live latest.yml>] | refresh <same, live latest.yml required>'
+    [[ $# == 6 || $# == 7 ]] || die "$usage"
+    [[ "$1" == verify || $# == 7 ]] || die "$usage"
     keys="$(read_keys "$2")"
-    feed="$3" version="$4" installer="$5" sha512="$6"
+    feed="$3" version="$4" installer="$5" sha512="$6" live="${7:-}"
     # The same plain one-line fields the app accepts, so the signed text can't be read two ways.
     [[ "$version" =~ ^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$ ]] || die "not a plain x.y.z version: $version"
     [[ "$installer" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$ ]] || die "not a plain file name: $installer"
     [[ "$sha512" =~ ^$B64_64$ ]] || die 'the SHA-512 is not 64 bytes of base64'
     [[ "$(grep -c '^tavoraSignature:' "$feed" || true)" == 1 ]] || die 'latest.yml has no Tavora signature (or more than one)'
     problem="$(feed_problem "$feed" "$version" "$installer" "$sha512")" || die "${problem:-latest.yml is unreadable}"
-    signature="$(sed -nE "s|^tavoraSignature: '($B64_64)'\$|\\1|p" "$feed")"
+    # A refresh is the live feed again with only a newer second signature: the update key vouches that the live
+    # version is still the newest. Nothing else may change.
+    if [[ "$1" == refresh ]]; then
+      [[ -f "$live" ]] || die 'there is no live feed to refresh'
+      grep -qxF "version: $version" "$live" || die "$version is not the live version; a refresh only signs the live feed again"
+      grep -q '^tavoraSignature2:' "$feed" || die 'the refresh carries no second signature'
+      cmp -s <(grep -v '^tavoraSignature2:' "$live" || true) <(grep -v '^tavoraSignature2:' "$feed" || true) ||
+        die 'the refresh changes more than the second signature'
+    fi
+    signature="$(sed -nE "s|^tavoraSignature: '($B64_64)'\$|\1|p" "$feed")"
     [[ -n "$signature" ]] || die "latest.yml's Tavora signature is not 64 bytes of base64"
     work="$(mktemp -d)"
     trap 'rm -rf "$work"' EXIT
     printf 'tavora-update-v1\n%s\n%s\n%s' "$version" "$installer" "$sha512" > "$work/signed"
     printf '%s' "$signature" | openssl base64 -d -A > "$work/signature"
     (( $(wc -c < "$work/signature") == 64 )) || die "latest.yml's Tavora signature is not 64 bytes"
+    while read -r name key; do pem "$key" > "$work/$name.pem"; done <<< "$keys"
+    signer=""
     while read -r name key; do
-      pem "$key" > "$work/$name.pem"
       if openssl pkeyutl -verify -pubin -inkey "$work/$name.pem" -rawin -in "$work/signed" -sigfile "$work/signature" >/dev/null 2>&1; then
-        echo "signed by the $name update key"
-        exit 0
+        signer="$name"
+        break
       fi
     done <<< "$keys"
-    die "the Tavora signature does not match $version, $installer and its SHA-512 under either pinned update key"
+    [[ -n "$signer" ]] || die "the Tavora signature does not match $version, $installer and its SHA-512 under either pinned update key"
+    echo "signed by the $signer update key"
+    # The second signature (tavora-update-v2), when the feed has one; it isn't required yet. feed_problem took its line
+    # only as the stable Windows feed's, right after the first. It must be a real statement: issued now or before
+    # (10 minutes of clock leeway), not expired, at most 90 days long, later than the live feed's, and signed by a
+    # pinned key over
+    #   tavora-update-v2\n<version>\n<installer>\n<sha512>\n<channel>\n<platform>\n<issuedAt>\n<expiresAt>
+    if grep -q '^tavoraSignature2:' "$feed"; then
+      read -r channel platform issued expires signature2 <<< "$(sed -nE "s|^tavoraSignature2: '(.*)'\$|\1|p" "$feed")"
+      for time in "$issued" "$expires"; do
+        seconds="$(date -u -d "$time" +%s 2>/dev/null)" && [[ "$(date -u -d "@$seconds" +%Y-%m-%dT%H:%M:%SZ)" == "$time" ]] ||
+          die "the second Tavora signature's time $time is not a real UTC time"
+      done
+      issued_s="$(date -u -d "$issued" +%s)" expires_s="$(date -u -d "$expires" +%s)" now="$(date -u +%s)"
+      (( expires_s > issued_s )) || die 'the second Tavora signature expires before it was issued'
+      (( expires_s - issued_s <= 90 * 86400 )) || die 'the second Tavora signature is good for more than 90 days'
+      (( issued_s <= now + 600 )) || die "the second Tavora signature is issued in the future ($issued); is a clock wrong?"
+      (( expires_s > now )) || die "the second Tavora signature expired at $expires"
+      # The times have one spelling (checked above), so they compare as text.
+      if [[ -n "$live" && -f "$live" ]]; then
+        live_issued="$(sed -nE "s/^tavoraSignature2: '[a-z]+ [a-z0-9-]+ ([0-9TZ:-]+) .*'\$/\1/p" "$live" | head -n 1)"
+        [[ -z "$live_issued" || "$issued" > "$live_issued" ]] || die "the second Tavora signature ($issued) is not later than the live one ($live_issued)"
+      fi
+      printf 'tavora-update-v2\n%s\n%s\n%s\n%s\n%s\n%s\n%s' "$version" "$installer" "$sha512" "$channel" "$platform" "$issued" "$expires" > "$work/signed2"
+      printf '%s' "$signature2" | openssl base64 -d -A > "$work/signature2"
+      (( $(wc -c < "$work/signature2") == 64 )) || die "latest.yml's second Tavora signature is not 64 bytes"
+      signer2=""
+      while read -r name key; do
+        if openssl pkeyutl -verify -pubin -inkey "$work/$name.pem" -rawin -in "$work/signed2" -sigfile "$work/signature2" >/dev/null 2>&1; then
+          signer2="$name"
+          break
+        fi
+      done <<< "$keys"
+      [[ -n "$signer2" ]] || die "the second Tavora signature does not match $version, $installer, its SHA-512, $channel $platform and its times under either pinned update key"
+      echo "fresh until $expires, signed by the $signer2 update key"
+    fi
     ;;
-  *) die 'usage: tavora-update-signature keys <update-keys.ts> | verify <update-keys.ts> <latest.yml> <version> <installer> <sha512>' ;;
+  *) die 'usage: tavora-update-signature keys <update-keys.ts> | verify <update-keys.ts> <latest.yml> <version> <installer> <sha512> [<live latest.yml>] | refresh <update-keys.ts> <latest.yml> <version> <installer> <sha512> <live latest.yml>' ;;
 esac

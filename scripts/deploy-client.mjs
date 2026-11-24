@@ -3,6 +3,7 @@
 //
 //   node scripts/deploy-client.mjs hello [job ...]          checks the keys and the server setup (all jobs if none given)
 //   node scripts/deploy-client.mjs publish <job> <id> <tar> uploads a tar for one job
+// (`pnpm release:refresh` also uses refresh(), which signs the live update feed again.)
 //
 // Settings from the maintainer's environment: TAVORA_DEPLOY_HOST (the server's tailnet name, no user) and
 // one key per job (below). The old TAVORA_DEPLOY_SSH_KEY (a root key) is refused.
@@ -123,15 +124,27 @@ export function hello(job, env = process.env) {
 
 /** Uploads `file` (a tar) for `job` as release or version `id`; tavora-receive checks and publishes it. */
 export function publish(job, id, file, env = process.env) {
+  send("publish", job, id, file, env);
+}
+
+/**
+ * Uploads `file` (a tar with only latest.yml) to sign the live update feed of version `id` again (`pnpm
+ * release:refresh`); tavora-receive takes it only when nothing but the second signature changed.
+ */
+export function refresh(id, file, env = process.env) {
+  send("refresh", "updates", id, file, env);
+}
+
+function send(verb, job, id, file, env) {
   if (!/^[0-9a-z.-]{1,40}$/.test(id)) throw new Error(`Not a release id: ${id}`);
   if (!existsSync(file)) throw new Error(`No file ${file}`);
   const where = hello(job, env);
   const sha = createHash("sha256").update(readFileSync(file)).digest("hex");
   const input = openSync(file, "r");
   try {
-    const result = spawnSync("ssh.exe", sshArgs(where, `publish ${id} ${sha}`), { stdio: [input, "inherit", "inherit"] });
+    const result = spawnSync("ssh.exe", sshArgs(where, `${verb} ${id} ${sha}`), { stdio: [input, "inherit", "inherit"] });
     if (result.error) throw result.error;
-    if (result.status !== 0) throw new Error(`The server did not publish ${id} (exit ${result.status}); see its message above.`);
+    if (result.status !== 0) throw new Error(`The server did not ${verb} ${id} (exit ${result.status}); see its message above.`);
   } finally {
     closeSync(input);
   }

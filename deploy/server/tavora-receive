@@ -13,6 +13,8 @@
 #   hello                     prints the banner and the setup's file hashes (/etc/tavora-deploy/installed.sha256)
 #   publish <id> <sha256>     reads a tar from stdin, checks its SHA-256 and every entry, then publishes it;
 #                             <id> is the version (updates) or the release name yyyymmddhhmmss-<12 hex> (others)
+#   refresh <version> <sha256>  updates only: a tar with just latest.yml for the live version, the same byte for
+#                             byte but for a newer second signature (tavoraSignature2; `pnpm release:refresh`)
 # Nothing that is uploaded is ever run. An update is published only when Tavora's update key signed it
 # (tavora-update-signature, against the keys pinned in /etc/tavora-deploy/update-keys.ts).
 set -euo pipefail
@@ -45,9 +47,11 @@ if [[ "$request" == hello ]]; then
   exit 0
 fi
 
-[[ "$request" =~ ^publish\ ([0-9a-z.-]{1,40})\ ([0-9a-f]{64})$ ]] || die 'unknown request (expected: hello, or publish <id> <sha256>)'
-id="${BASH_REMATCH[1]}"
-sum="${BASH_REMATCH[2]}"
+[[ "$request" =~ ^(publish|refresh)\ ([0-9a-z.-]{1,40})\ ([0-9a-f]{64})$ ]] || die 'unknown request (expected: hello, publish <id> <sha256> or refresh <version> <sha256>)'
+mode="${BASH_REMATCH[1]}"
+id="${BASH_REMATCH[2]}"
+sum="${BASH_REMATCH[3]}"
+[[ "$mode" == publish || "$job" == updates ]] || die "only the update feed can be refreshed, not $job"
 if [[ "$job" == updates ]]; then
   [[ "$id" =~ ^(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})$ ]] || die "not a version: $id"
 else
@@ -143,6 +147,29 @@ case "$job" in
     root=/srv/tavora-updates
     installer="Tavora-Setup-$id.exe"
     id_re="$(printf '%s' "$id" | sed 's/\./\\./g')"
+    if [[ "$mode" == refresh ]]; then
+      # The live version's latest.yml again, with only a newer second signature: the update key vouches that this
+      # is still the newest version. The helper checks that nothing else changes; the installer stays as it is.
+      only '(\./)?latest\.yml'
+      [[ -s "$unpacked/latest.yml" ]] || die 'missing in the upload: latest.yml'
+      previous="$(grep -m1 '^version: ' "$root/latest.yml" 2>/dev/null | cut -d' ' -f2 || true)"
+      [[ "$previous" == "$id" ]] || die "$id is not the live version (${previous:-none}); a refresh only signs the live feed again"
+      [[ -s "$root/$installer" ]] || die "the live installer $installer is missing"
+      digest="$(openssl dgst -sha512 -binary "$root/$installer" | base64 -w0)"
+      /usr/local/sbin/tavora-update-signature refresh /etc/tavora-deploy/update-keys.ts "$unpacked/latest.yml" "$id" "$installer" "$digest" "$root/latest.yml" >/dev/null ||
+        die "latest.yml didn't pass the refresh check (see above); nothing was published"
+      line="$(grep -m1 '^tavoraSignature2:' "$unpacked/latest.yml")"
+      cp -p "$root/latest.yml" "$root/latest.yml.previous"
+      install -m 644 "$unpacked/latest.yml" "$root/latest.yml.new" && mv -f "$root/latest.yml.new" "$root/latest.yml"
+      served="$(curl --fail --silent --show-error --max-time 30 https://updates.mytavora.app/latest.yml | grep -m1 '^tavoraSignature2:' || true)"
+      if [[ "$served" != "$line" ]]; then
+        mv -f "$root/latest.yml.previous" "$root/latest.yml"
+        die "the feed doesn't answer with the new second signature; put the previous latest.yml back"
+      fi
+      rm -f "$root/latest.yml.previous"
+      printf 'Refreshed %s at https://updates.mytavora.app/latest.yml\n' "$id"
+      exit 0
+    fi
     only "(\./)?(Tavora-Setup-$id_re\.exe|Tavora-Setup-$id_re\.exe\.blockmap|latest\.yml)"
     for f in "$installer" "$installer.blockmap" latest.yml; do [[ -s "$unpacked/$f" ]] || die "missing in the upload: $f"; done
     grep -qxF "version: $id" "$unpacked/latest.yml" || die "latest.yml does not say version $id"
@@ -151,8 +178,9 @@ case "$job" in
     digest="$(openssl dgst -sha512 -binary "$unpacked/$installer" | base64 -w0)"
     grep -qxF "sha512: $digest" "$unpacked/latest.yml" || die "latest.yml's sha512 is not the installer's"
     grep -qxF "    sha512: $digest" "$unpacked/latest.yml" || die "latest.yml's files list has another sha512 than the installer's"
-    # Tavora's own signature, under one of the keys the setup pinned: an upload the update key didn't sign never goes live.
-    /usr/local/sbin/tavora-update-signature verify /etc/tavora-deploy/update-keys.ts "$unpacked/latest.yml" "$id" "$installer" "$digest" >/dev/null ||
+    # Tavora's own signature, under one of the keys the setup pinned: an upload the update key didn't sign never goes
+    # live. A second signature must be issued after the live feed's.
+    /usr/local/sbin/tavora-update-signature verify /etc/tavora-deploy/update-keys.ts "$unpacked/latest.yml" "$id" "$installer" "$digest" "$root/latest.yml" >/dev/null ||
       die "latest.yml didn't pass the update check (see above); nothing was published"
     # Only forward: a version that is not newer than the live one is refused (a bad release is fixed by a newer one).
     previous="$(grep -m1 '^version: ' "$root/latest.yml" 2>/dev/null | cut -d' ' -f2 || true)"
