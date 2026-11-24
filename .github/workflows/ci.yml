@@ -88,7 +88,8 @@ jobs:
 
   # Whether this run needs the e2e suite: always for release tags, by the checkbox when started by hand, and for a pull
   # request that changes the app, a module or the kit, the SDK, the packer, the manifest schema, the examples, the
-  # dependencies or this file. Twice a broken e2e test only showed up while a release was running (0.23.0, 0.23.9).
+  # bundled themes and styles (an unpackaged Tavora loads them from the repo), the shared tsconfig, the dependencies
+  # or this file. Twice a broken e2e test only showed up while a release was running (0.23.0, 0.23.9).
   # Change notes alone don't count. If GitHub can't list the files, the suite runs.
   # It also says whether the signed-update check runs (update-check, below): the same way, for a pull request that
   # touches the update chain (UPDATE_PATHS).
@@ -109,8 +110,8 @@ jobs:
           REF: ${{ github.ref }}
           PR: ${{ github.event.pull_request.number }}
           BY_HAND: ${{ inputs.e2e }}
-          PATHS: ^(apps/desktop/|modules/|examples/|packages/(sdk|pack|module-schema)/|patches/|package\.json$|pnpm-lock\.yaml$|pnpm-workspace\.yaml$|\.github/workflows/ci\.yml$)
-          UPDATE_PATHS: ^(apps/desktop/src/main/(updates|update-[a-z-]+)\.ts$|apps/desktop/src/shared/plain-version\.ts$|apps/desktop/scripts/(update-[a-z-]+|serve-feed|start-check|windows|release|after-pack)\.(mjs|cjs|ps1)$|apps/desktop/package\.json$|patches/|pnpm-lock\.yaml$|\.github/workflows/(ci|release-build)\.yml$)
+          PATHS: ^(apps/desktop/|modules/|examples/|themes/|styles/|packages/(sdk|pack|module-schema)/|patches/|package\.json$|tsconfig\.base\.json$|pnpm-lock\.yaml$|pnpm-workspace\.yaml$|\.github/workflows/ci\.yml$)
+          UPDATE_PATHS: ^(apps/desktop/src/main/(updates|update-[a-z-]+)\.ts$|apps/desktop/src/shared/plain-version\.ts$|apps/desktop/scripts/(update-[a-z-]+|serve-feed|start-check|installed-version|windows|release|after-pack)\.(mjs|cjs|ps1)$|apps/desktop/package\.json$|patches/|pnpm-lock\.yaml$|\.github/workflows/(ci|release-build)\.yml$)
         run: |
           if [[ "$REF" == refs/tags/* ]]; then run=true; update=true
           elif [[ "$EVENT" == workflow_dispatch ]]; then run=$BY_HAND; update=$BY_HAND

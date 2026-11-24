@@ -255,11 +255,17 @@ export function collectPullRequest(git, baseRef, headSha) {
   const notes = [];
   const dir = "apps/desktop/changes";
   // --no-renames: a file moved in here counts as added, so a renamed note can't skip the label rule.
-  const files = git("diff", "--name-only", "--no-renames", "--diff-filter=AM", mergeBase, headSha, "--", dir)
+  const changed = git("diff", "--name-only", "--no-renames", "--diff-filter=AM", mergeBase, headSha, "--", dir)
     .split("\n")
     .map((line) => line.trim())
-    .filter((file) => file.startsWith(`${dir}/`) && file.endsWith(".md") && !file.slice(dir.length + 1).includes("/") && file !== `${dir}/README.md`)
+    .filter((file) => file.startsWith(`${dir}/`) && file !== `${dir}/README.md`)
     .sort();
+  // The Number run reads only <name>.md right in changes/ (noteFiles): anything else would sit there, never numbered.
+  const isNote = (file) => file.endsWith(".md") && !file.slice(dir.length + 1).includes("/");
+  for (const file of changed.filter((file) => !isNote(file))) {
+    problems.push(`${file}: a change note is a .md file right in ${dir}/ (like lost-key.md); this one would never be numbered.`);
+  }
+  const files = changed.filter(isNote);
   for (const file of files) {
     const parsed = parseChangeNote(git("show", `${headSha}:${file}`), file);
     problems.push(...parsed.problems);

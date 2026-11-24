@@ -184,6 +184,27 @@ describe("collectPullRequest", { timeout: 60_000 }, () => {
     expect(checkPullRequest({ ...result, featureComplete: false })).toEqual([]);
   });
 
+  it("refuses a file in changes/ that no Number run would ever read: another ending, an upper-case .MD, a subfolder", () => {
+    const { git, write, version, commit } = repo();
+    version("0.5.0");
+    commit("start");
+    git("switch", "-q", "-c", "feature");
+    write("apps/desktop/changes/fix.txt", note("Text"));
+    write("apps/desktop/changes/Loud.MD", note("Loud"));
+    write("apps/desktop/changes/old/inner.md", note("Inner"));
+    write("apps/desktop/changes/fine.md", note("Fine"));
+    write("apps/desktop/changes/README.md", "# Change notes\n");
+    commit("pr");
+    const result = collectPullRequest(git, "main", "feature");
+    expect(result.notes.map((n: { file: string }) => n.file)).toEqual(["fine.md"]);
+    expect(result.problems).toEqual([
+      expect.stringContaining("apps/desktop/changes/Loud.MD"),
+      expect.stringContaining("apps/desktop/changes/fix.txt"),
+      expect.stringContaining("apps/desktop/changes/old/inner.md"),
+    ]);
+    expect(result.problems[0]).toContain("never be numbered");
+  });
+
   it("compares the version with where the branch left main, not with main's newer one", () => {
     const { git, write, version, commit } = repo();
     version("0.5.0");
