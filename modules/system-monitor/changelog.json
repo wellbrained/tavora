@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.1.34",
+    "date": "2026-11-24",
+    "notes": [
+      "A switched-off button no longer blocks the arrow keys.",
+      "Shortcut keys in tooltips are a little bigger."
+    ]
+  },
+  {
     "version": "0.1.33",
     "date": "2026-11-24",
     "notes": [

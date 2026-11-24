@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { createApp, defineComponent, h, nextTick, type App } from "vue"
+import { createApp, defineComponent, h, nextTick, ref, type App } from "vue"
 import { TileMap } from "."
 import type { TileSource } from "./geometry"
 
@@ -73,5 +73,25 @@ describe("TileMap in a hidden pane", () => {
     await flush()
     expect(tiles()).toEqual(before)
     expect(api.camera).toEqual(camera)
+  })
+})
+
+describe("TileMap tiles that fail", () => {
+  it("shows a tile of a new source again, even if the same tile failed for the old one", async () => {
+    const first: TileSource = { size: 1024, tileSize: 512, maxLevel: 1, url: (level, x, y) => `a/${level}/${x}-${y}` }
+    const second: TileSource = { size: 1024, tileSize: 512, maxLevel: 1, url: (level, x, y) => `b/${level}/${x}-${y}` }
+    const current = ref(first)
+    const root = document.createElement("div")
+    document.body.append(root)
+    app = createApp(defineComponent({ render: () => h(TileMap, { source: current.value, label: "Map", maxZoom: 1 }) }))
+    app.mount(root)
+    await flush()
+    const base = root.querySelector<HTMLImageElement>("img[src='a/0/0-0']")!
+    base.dispatchEvent(new Event("error"))
+    await flush()
+    expect(root.querySelector("img[src='a/0/0-0']")).toBeNull()
+    current.value = second
+    await flush()
+    expect(root.querySelector("img[src='b/0/0-0']")).not.toBeNull()
   })
 })

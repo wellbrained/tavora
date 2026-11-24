@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.1.36",
+    "date": "2026-11-24",
+    "notes": [
+      "Messages are easy to read again in the Liquid Glass style.",
+      "A switched-off button no longer blocks the arrow keys.",
+      "Shortcut keys in tooltips are a little bigger."
+    ]
+  },
+  {
     "version": "0.1.35",
     "date": "2026-11-24",
     "notes": [

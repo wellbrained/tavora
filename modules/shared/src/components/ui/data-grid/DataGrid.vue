@@ -348,6 +348,14 @@ function hitAt(clientX: number, clientY: number, clampInside = false): Hit | nul
   return { kind: "cell", row, col }
 }
 
+/** Whether a point is on the grid's own scrollbars (past its client area), which scroll and select nothing. */
+function onScrollbar(event: { clientX: number; clientY: number }): boolean {
+  const el = root.value
+  if (!el) return false
+  const box = el.getBoundingClientRect()
+  return event.clientX - box.left >= el.clientWidth || event.clientY - box.top >= el.clientHeight
+}
+
 /** The header edge under the pointer, if it is close enough to drag. */
 function edgeAt(clientX: number, clientY: number): { kind: "col" | "row"; index: number } | null {
   const el = root.value
@@ -393,6 +401,7 @@ const fillPreview = computed(() => (drag.value?.kind === "fill" && drag.value.pl
 
 function onPointerDown(event: PointerEvent) {
   if (event.button !== 0 && event.button !== 2) return
+  if (onScrollbar(event)) return
   if (editing.value && editor.value && event.target instanceof Node && editor.value.contains(event.target)) return
   const edge = event.button === 0 ? edgeAt(event.clientX, event.clientY) : null
   if (edge) {
@@ -518,12 +527,25 @@ function autoScroll() {
   autoScrollFrame = requestAnimationFrame(autoScroll)
 }
 
-function onPointerUp(event: PointerEvent) {
+/** Ends the drag of this pointer, if there is one: its kind, as it was. */
+function endDrag(pointerId: number): Drag | null {
   const current = drag.value
-  if (current && event.pointerId !== current.pointerId) return
+  if (current && pointerId !== current.pointerId) return null
   drag.value = null
   cancelAnimationFrame(autoScrollFrame)
-  if (root.value?.hasPointerCapture?.(event.pointerId)) root.value.releasePointerCapture(event.pointerId)
+  if (root.value?.hasPointerCapture?.(pointerId)) root.value.releasePointerCapture(pointerId)
+  return current
+}
+
+/** The system took the pointer away (or Escape was pressed): a fill or a resize is dropped, the old sizes stay. */
+function cancelDrag(pointerId = drag.value?.pointerId) {
+  if (pointerId === undefined) return
+  endDrag(pointerId)
+  liveSize.value = null
+}
+
+function onPointerUp(event: PointerEvent) {
+  const current = endDrag(event.pointerId)
   if (!current) return
   if (current.kind === "resize") {
     const live = liveSize.value
@@ -569,6 +591,12 @@ const filled = (row: number, col: number) => (props.filled ? props.filled(row, c
 
 function onKeyDown(event: KeyboardEvent) {
   if (event.target !== root.value) return
+  // Escape puts a fill or a resize on its way back as it was.
+  if (event.key === "Escape" && drag.value && drag.value.kind !== "select") {
+    event.preventDefault()
+    cancelDrag()
+    return
+  }
   emit("keydown", event)
   if (event.defaultPrevented) return
   const ctrl = event.ctrlKey || event.metaKey
@@ -658,7 +686,7 @@ watch(
 )
 
 /** Keeps the edit and moves the active cell with a key (or not at all), then gives the grid the focus back. */
-function commitEdit(move: { key: string; shift: boolean } | null) {
+function commitEdit(move: { key: string; shift: boolean } | null, refocus = true) {
   const current = editing.value
   if (!current) return
   // The field is newer than the model when a key follows the typing within the same tick.
@@ -666,13 +694,13 @@ function commitEdit(move: { key: string; shift: boolean } | null) {
   editing.value = null
   emit("commit", cell(current.row, current.col), text)
   if (move) {
-    const moved = moveByKey(selection.value, { key: move.key, shift: move.key === "Tab" || move.key === "Enter" ? move.shift : false }, { rows: props.rows, cols: props.cols, rowShown: (row) => rowAxis.value.size(row) > 0 })
+    const moved = moveByKey(selection.value, { key: move.key, shift: move.key === "Tab" || move.key === "Enter" ? move.shift : false }, { rows: props.rows, cols: props.cols, rowShown: (row) => rowAxis.value.size(row) > 0, colShown: (col) => colAxis.value.size(col) > 0 })
     if (moved) {
       selection.value = moved
       scrollToCell(moved.active)
     }
   }
-  nextTick(() => root.value?.focus({ preventScroll: true }))
+  if (refocus) nextTick(() => root.value?.focus({ preventScroll: true }))
 }
 
 function cancelEdit() {
@@ -717,7 +745,8 @@ function onEditorBlur(event: FocusEvent) {
   // Clicking elsewhere keeps the edit; a caller's own part of it (its formula bar, its suggestions) doesn't count.
   const next = event.relatedTarget
   if (next instanceof HTMLElement && next.closest("[data-grid-keep-edit]")) return
-  if (editing.value) commitEdit(null)
+  // The focus went to something else on the page (a search field, a button): it stays there.
+  if (editing.value) commitEdit(null, !(next instanceof Node) || !!root.value?.contains(next))
 }
 
 const editorBox = computed(() => {
@@ -750,7 +779,8 @@ const announcement = computed(() => {
   if (row >= props.rows || col >= props.cols) return ""
   const name = `${columnLabel(col)}${rowLabel(row)}`
   const shown = props.text(row, col)
-  return shown ? uiText.value.gridCell.replace("{cell}", name).replace("{text}", shown) : uiText.value.gridEmpty.replace("{cell}", name)
+  // Replaced with functions, so a "$&" or "$$" in a cell is read as it is.
+  return shown ? uiText.value.gridCell.replace("{cell}", () => name).replace("{text}", () => shown) : uiText.value.gridEmpty.replace("{cell}", () => name)
 })
 
 /** A drawn cell's element (to anchor a menu or a dropdown to), if it is in view. */
@@ -789,7 +819,7 @@ defineExpose({
     @pointerdown="onPointerDown"
     @pointermove="onPointerMove"
     @pointerup="onPointerUp"
-    @pointercancel="onPointerUp"
+    @pointercancel="cancelDrag($event.pointerId)"
     @dblclick="onDoubleClick"
     @contextmenu="onContextMenu"
     @keydown="onKeyDown"

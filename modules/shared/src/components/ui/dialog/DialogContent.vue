@@ -91,7 +91,14 @@ watch(root.open, async (open) => {
 function place() {
   const element = content()
   const rects = parents.value.filter(parent => parent.isConnected).map(parent => parent.getBoundingClientRect())
-  if (!element || !rects.length) return
+  if (!element) return
+  // The dialog it sat in closed first: it goes back to the middle of the window.
+  if (!rects.length) {
+    if (element.dataset.nested === undefined) return
+    delete element.dataset.nested
+    for (const name of ["top", "left", "translate", "maxHeight", "overflowY", "maxWidth"] as const) element.style[name] = ""
+    return
+  }
   const top = Math.max(...rects.map(rect => rect.top))
   const left = Math.max(...rects.map(rect => rect.left))
   const width = Math.max(0, Math.min(...rects.map(rect => rect.right)) - left - 2 * INSET)

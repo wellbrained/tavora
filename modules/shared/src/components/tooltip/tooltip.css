@@ -15,7 +15,7 @@
 
 /* Shortcut keys: the kit's key caps, small. */
 .tavora-tooltip-keys{display:inline-flex;gap:3px;flex:none}
-.tavora-tooltip kbd{font:11px/1 var(--tavora-font-mono,ui-monospace,monospace);color:color-mix(in srgb,var(--foreground,#f2ece0) 80%,transparent);background:var(--background,#171412);border:1px solid var(--border,#35302b);border-bottom-width:2px;border-radius:4px;padding:3px 5px}
+.tavora-tooltip kbd{font:12px/1 var(--tavora-font-mono,ui-monospace,monospace);color:color-mix(in srgb,var(--foreground,#f2ece0) 80%,transparent);background:var(--background,#171412);border:1px solid var(--border,#35302b);border-bottom-width:2px;border-radius:4px;padding:3px 5px}
 
 /* A divider runs edge to edge; label and value rows line their numbers up on the right. */
 .tavora-tooltip hr,.tavora-tooltip [data-slot=separator]{width:auto;height:1px;border:0;background:var(--tavora-tooltip-line);margin:8px -12px}

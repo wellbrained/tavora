@@ -7,15 +7,23 @@ import { Input } from "../input"
 
 const props = withDefaults(defineProps<{ length?: number; class?: HTMLAttributes["class"] }>(), { length: 6 })
 const model = defineModel<string>({ default: "" })
+
+/** What was typed, with digits past the code's length left off (a separator such as "123 456" stays). */
+function typed(value: string | number) {
+  const text = String(value)
+  let digits = 0
+  model.value = [...text].filter((char) => !/\d/.test(char) || ++digits <= props.length).join("")
+}
 </script>
 
 <template>
   <Input
-    v-model="model"
+    :model-value="model"
     :class="cn('w-40 tracking-widest tabular-nums', props.class)"
     inputmode="numeric"
     autocomplete="one-time-code"
     spellcheck="false"
     :maxlength="props.length + 1"
+    @update:model-value="typed"
   />
 </template>
