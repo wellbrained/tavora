@@ -1,4 +1,5 @@
-import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -56,6 +57,70 @@ describe("deleteModuleData", () => {
     await mkdir(path.join(elsewhere, "local", "local.a", "poe2"), { recursive: true });
     await deleteModuleData(userData, "poe2", elsewhere);
     expect(await readdir(path.join(elsewhere, "local", "local.a"))).toEqual([]);
+  });
+
+  it("leaves the user's own folders in the files folder alone, also ones named like the workspace", async () => {
+    const userData = await tempDir();
+    const blob = "0".repeat(32) + ".png";
+    // The user's own pictures, saved next to Tavora's (Pictures\Tavora). Each in a folder of its own, as Windows names
+    // are case-insensitive and some of these would be one folder there.
+    const own = [
+      ["Screenshots", "2025", "Valheim"],
+      ["Screenshots", "2025", "valheim"],
+      ["Builds", "valheim"],
+      // An owner and a module id, but in another case: not a folder Tavora made.
+      ["Local", "local.a", "valheim"],
+      ["local", "Local.A", "valheim"],
+      ["local", "local.a", "Valheim"],
+    ];
+    for (const segments of own) {
+      const pictures = await tempDir();
+      await mkdir(path.join(pictures, ...segments), { recursive: true });
+      await writeFile(path.join(pictures, ...segments, "base.png"), "mine");
+      // Tavora's own folder for the workspace goes.
+      await mkdir(path.join(pictures, "official", "tavora.notes", "valheim"), { recursive: true });
+      await writeFile(path.join(pictures, "official", "tavora.notes", "valheim", blob), "x");
+      await deleteModuleData(userData, "valheim", pictures);
+      expect(existsSync(path.join(pictures, ...segments, "base.png"))).toBe(true);
+      expect(await readdir(path.join(pictures, "official", "tavora.notes"))).toEqual([]);
+    }
+  });
+
+  it("never follows a link or junction out of the files folder", async () => {
+    const userData = await tempDir();
+    const pictures = await tempDir();
+    const outside = await tempDir();
+    await mkdir(path.join(outside, "valheim"), { recursive: true });
+    await writeFile(path.join(outside, "valheim", "0".repeat(32) + ".png"), "mine");
+    await mkdir(path.join(pictures, "local"), { recursive: true });
+    await symlink(outside, path.join(pictures, "local", "local.a"), "junction");
+    await deleteModuleData(userData, "valheim", pictures);
+    expect(existsSync(path.join(outside, "valheim", "0".repeat(32) + ".png"))).toBe(true);
+  });
+
+  it("sends Tavora's folder for the workspace to the Recycle Bin, and deletes only its own files when that can't be done", async () => {
+    const userData = await tempDir();
+    const pictures = await tempDir();
+    const blob = "0".repeat(32) + ".png";
+    const dir = path.join(pictures, "official", "tavora.notes", "valheim");
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, blob), "x");
+    const trashed: string[] = [];
+    await deleteModuleData(userData, "valheim", pictures, async (folder) => {
+      trashed.push(folder);
+      await rm(folder, { recursive: true });
+    });
+    expect(trashed).toEqual([dir]);
+    expect(existsSync(dir)).toBe(false);
+
+    // No Recycle Bin: Tavora's files go, and what the user put in there with them stays.
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, blob), "x");
+    await writeFile(path.join(dir, "my notes.txt"), "mine");
+    await deleteModuleData(userData, "valheim", pictures, async () => {
+      throw new Error("no recycle bin");
+    });
+    expect(await readdir(dir)).toEqual(["my notes.txt"]);
   });
 
   it("does nothing without module data and refuses unsafe ids", async () => {
@@ -246,6 +311,31 @@ describe("migrateModuleData", () => {
     expect(lines).toHaveLength(1);
   });
 
+  it("moves only Tavora's own folders in the files folder, never the user's", async () => {
+    const userData = await tempDir();
+    const pictures = await tempDir();
+    const blob = "0".repeat(32) + ".png";
+    // The user's folders whose names look like module ids.
+    await mkdir(path.join(pictures, "game.shots", "valheim"), { recursive: true });
+    await writeFile(path.join(pictures, "game.shots", "valheim", "base.png"), "mine");
+    await mkdir(path.join(pictures, "v1.2"), { recursive: true });
+    await writeFile(path.join(pictures, "v1.2", blob), "mine");
+    await mkdir(path.join(pictures, "empty.one"), { recursive: true });
+    const outside = await tempDir();
+    await mkdir(path.join(outside, "valheim"), { recursive: true });
+    await writeFile(path.join(outside, "valheim", blob), "mine");
+    await symlink(outside, path.join(pictures, "linked.one"), "junction");
+    // Files a module saved before modules had owners.
+    await mkdir(path.join(pictures, "local.me.tracker", "valheim"), { recursive: true });
+    await writeFile(path.join(pictures, "local.me.tracker", "valheim", blob), "x");
+
+    await migrateModuleData(userData, () => undefined, pictures);
+
+    expect((await readdir(pictures)).sort()).toEqual(["empty.one", "game.shots", "linked.one", "local", "v1.2"]);
+    expect(await readdir(path.join(pictures, "local"))).toEqual(["local.me.tracker"]);
+    expect(await readFile(path.join(pictures, "game.shots", "valheim", "base.png"), "utf8")).toBe("mine");
+  });
+
   it("does nothing on a fresh data folder", async () => {
     await expect(migrateModuleData(await tempDir())).resolves.toBeUndefined();
   });
@@ -282,6 +372,38 @@ describe("leftover module data", () => {
     await expect(deleteModuleDataOf(userData, "..", "wellbrained.tracker")).rejects.toThrow();
   });
 
+  it("deletes a module's files from the files folder only through folders Tavora made, to the Recycle Bin when it can", async () => {
+    const userData = await tempDir();
+    const pictures = await tempDir();
+    const blob = "0".repeat(32) + ".png";
+    // Linked to a folder of the user's: left alone.
+    const outside = await tempDir();
+    await mkdir(path.join(outside, "local.a", "valheim"), { recursive: true });
+    await writeFile(path.join(outside, "local.a", "valheim", blob), "mine");
+    await symlink(outside, path.join(pictures, "local"), "junction");
+    await deleteModuleDataOf(userData, "local", "local.a", pictures);
+    expect(existsSync(path.join(outside, "local.a", "valheim", blob))).toBe(true);
+
+    // Tavora's own folder goes to the Recycle Bin; without one, only Tavora's files go.
+    const dir = path.join(pictures, "official", "tavora.notes");
+    await mkdir(path.join(dir, "valheim"), { recursive: true });
+    await writeFile(path.join(dir, "valheim", blob), "x");
+    const trashed: string[] = [];
+    await deleteModuleDataOf(userData, "official", "tavora.notes", pictures, async (folder) => {
+      trashed.push(folder);
+      await rm(folder, { recursive: true });
+    });
+    expect(trashed).toEqual([dir]);
+    await mkdir(path.join(dir, "valheim"), { recursive: true });
+    await mkdir(path.join(dir, "_app"), { recursive: true });
+    await writeFile(path.join(dir, "valheim", blob), "x");
+    await writeFile(path.join(dir, "_app", blob), "x");
+    await writeFile(path.join(dir, "valheim", "mine.png"), "mine");
+    await deleteModuleDataOf(userData, "official", "tavora.notes", pictures);
+    expect(await readdir(dir)).toEqual(["valheim"]);
+    expect(await readdir(path.join(dir, "valheim"))).toEqual(["mine.png"]);
+  });
+
   it("moves local data to the signed owner at the next start, keeping a workspace the signed module already has", async () => {
     const userData = await tempDir();
     await seed(userData, "local", "wellbrained.tracker", "poe2", "local poe2");
@@ -313,20 +435,23 @@ describe("leftover module data", () => {
   it("treats a module's files (pictures) like its other data", async () => {
     const userData = await tempDir();
     const blob = (...parts: string[]) => path.join(userData, "module-blobs", ...parts);
+    // Named as the host names stored files (blobs.ts).
+    const a = "a".repeat(32) + ".png";
+    const b = "b".repeat(32) + ".png";
     // Saved before modules had owners.
     await mkdir(blob("tavora.notes", "poe2"), { recursive: true });
-    await writeFile(blob("tavora.notes", "poe2", "a.png"), "official");
+    await writeFile(blob("tavora.notes", "poe2", a), "official");
     await mkdir(blob("wellbrained.tracker", "poe2"), { recursive: true });
-    await writeFile(blob("wellbrained.tracker", "poe2", "b.png"), "local");
+    await writeFile(blob("wellbrained.tracker", "poe2", b), "local");
     await migrateModuleData(userData);
-    expect(await readFile(blob("official", "tavora.notes", "poe2", "a.png"), "utf8")).toBe("official");
-    expect(await readFile(blob("local", "wellbrained.tracker", "poe2", "b.png"), "utf8")).toBe("local");
+    expect(await readFile(blob("official", "tavora.notes", "poe2", a), "utf8")).toBe("official");
+    expect(await readFile(blob("local", "wellbrained.tracker", "poe2", b), "utf8")).toBe("local");
 
     // A module with only files left is listed, and its files move with Move.
     expect((await listModuleData(userData)).map((found) => `${found.owner}/${found.moduleId}`).sort()).toEqual(["local/wellbrained.tracker", "official/tavora.notes"]);
     await queueLocalDataMove(userData, "wellbrained.tracker", KEY);
     await migrateModuleData(userData);
-    expect(await readFile(blob(KEY, "wellbrained.tracker", "poe2", "b.png"), "utf8")).toBe("local");
+    expect(await readFile(blob(KEY, "wellbrained.tracker", "poe2", b), "utf8")).toBe("local");
     expect(await readdir(blob("local"))).toEqual([]);
 
     // Delete removes them.

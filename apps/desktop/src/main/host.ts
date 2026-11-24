@@ -766,6 +766,7 @@ export class Host {
     this.moduleLeftovers = new ModuleLeftovers({
       userData: options.userData,
       filesRoot: () => this.files.root(),
+      trash: options.hidden ? undefined : (dir: string) => shell.trashItem(dir),
       installed: this.installed,
       forget: (owner, moduleId) => {
         this.data.forgetModule(owner, moduleId);
@@ -972,6 +973,7 @@ export class Host {
       },
       panelState: this.data.panelState,
       files: this.files,
+      trash: options.hidden ? undefined : (dir: string) => shell.trashItem(dir),
       forgotten: (workspaceId) => {
         this.data.forgetWorkspace(workspaceId);
         this.streaming.forgetWorkspace(workspaceId);
@@ -1288,7 +1290,8 @@ export class Host {
     const held = await holdLeftovers(userData, libraryRead && workspaceRead && !copySync.dataHeld, leftovers).catch(() => leftovers);
     for (const dir of orphaned) if (!held.workspaces.has(partitionWorkspace(dir)!)) await rm(dir, { recursive: true, force: true });
     await host.data.panelState.prune(new Set([...livePanels, ...held.panels]));
-    for (const workspace of expired) await host.workspaceLibrary.deleteData(workspace);
+    // One whose files can't be deleted now (another program holds one) stays in Trash for the next start.
+    await host.workspaceLibrary.deleteExpired(expired);
     // Version 0.2.0 saved Steam covers here; they were replaced by Steam's own icons.
     await rm(path.join(userData, "steam-art"), { recursive: true, force: true });
     if (expired.length) host.saveLibrary();

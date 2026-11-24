@@ -2,7 +2,7 @@ import { LOCAL_OWNER, OFFICIAL_OWNER } from "@tavora/module-schema";
 import type { HostViewState } from "../shared/host-api";
 import type { Installed } from "./installed-modules";
 import { LibraryError } from "./library";
-import { deleteModuleDataOf, listModuleData, queueLocalDataMove } from "./module-data";
+import { deleteModuleDataOf, listModuleData, queueLocalDataMove, type Trash } from "./module-data";
 import { publisherOf } from "./publisher-names";
 import type { InstalledModule } from "./registry";
 
@@ -10,6 +10,8 @@ export interface ModuleLeftoversOptions {
   userData: string;
   /** Where modules keep their files now (module-files-folder.ts). */
   filesRoot: () => string;
+  /** Sends a folder in the files folder to the Recycle Bin; without it, only Tavora's files there are deleted. */
+  trash?: Trash | undefined;
   installed: Pick<Installed, "get">;
   /** What else keeps something per module (settings and documents, OBS pages, game overlays) forgets it. */
   forget: (owner: string, moduleId: string) => void;
@@ -54,7 +56,7 @@ export class ModuleLeftovers {
     const { installed, userData } = this.options;
     if (installed.get(moduleId)?.owner === owner) throw new LibraryError("error.dataInUse");
     this.options.forget(owner, moduleId);
-    for (const partition of await deleteModuleDataOf(userData, owner, moduleId, this.options.filesRoot())) await this.options.clearSession(partition);
+    for (const partition of await deleteModuleDataOf(userData, owner, moduleId, this.options.filesRoot(), this.options.trash)) await this.options.clearSession(partition);
     await this.refresh();
   }
 

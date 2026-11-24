@@ -1,6 +1,7 @@
-import { mkdir, readdir, readFile, rename, rm, rmdir } from "node:fs/promises";
+import { lstat, mkdir, readdir, readFile, rename, rm, rmdir } from "node:fs/promises";
 import path from "node:path";
 import { isModuleId, isOwnerId, LOCAL_OWNER, OFFICIAL_OWNER } from "@tavora/module-schema";
+import { parseBlobFileName } from "./blobs";
 import { isWorkspaceId } from "./workspace-id";
 import { pathExists, writeFileAtomic } from "./fsutil";
 import { keepNewerCopy, setAside, type SavedRecord } from "./json";
@@ -33,19 +34,79 @@ function dataRoots(userData: string, blobRoot = defaultFilesRoot(userData)): str
   return [path.join(userData, "module-data"), blobRoot];
 }
 
+/** Moves a folder to the Recycle Bin (Electron's shell.trashItem); throws when it can't. */
+export type Trash = (dir: string) => Promise<void>;
+
+/** The folders in the data folder only Tavora writes to, laid out `<owner>/<module>/<workspace>`. */
+const ownRoots = (userData: string) => [path.join(userData, "module-data"), path.join(userData, "read-only-files")];
+
+/**
+ * `parent/name` when it is a real folder with exactly that name: not a link or junction, and not a folder whose name
+ * only matches in another case (Windows names are case-insensitive, so a plain join would reach it).
+ */
+async function ownFolder(parent: string, name: string): Promise<string | null> {
+  const names = await readdir(parent).catch(() => [] as string[]);
+  if (!names.includes(name)) return null;
+  const dir = path.join(parent, name);
+  const info = await lstat(dir).catch(() => null);
+  return info?.isDirectory() && !info.isSymbolicLink() ? dir : null;
+}
+
+/** The real folders under `dir` (no links or junctions) whose names pass `pick`. */
+async function ownFolders(dir: string, pick: (name: string) => boolean): Promise<string[]> {
+  const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+  return entries.filter((entry) => entry.isDirectory() && !entry.isSymbolicLink() && pick(entry.name)).map((entry) => entry.name);
+}
+
+/** A file the host wrote into a module's files folder (blobs.ts): a stored file, or the temp file of a write cut off. */
+const isOwnFile = (name: string) => parseBlobFileName(name) !== null || /^[0-9a-f]{32}\.tmp$/.test(name);
+
+/**
+ * Removes one workspace's (or `_app`'s) folder in the files folder, which may be the user's Pictures\Tavora: only the
+ * files Tavora stored there, and the folder once it is empty. Whatever else is in it stays.
+ */
+async function removeOwnFiles(dir: string): Promise<void> {
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    if (entry.isFile() && isOwnFile(entry.name)) await rm(path.join(dir, entry.name), { force: true });
+  }
+  await rmdir(dir).catch(() => undefined);
+}
+
+/**
+ * A folder of Tavora's in the files folder goes to the Recycle Bin, so the user can get it back. Where that can't be
+ * done (no Recycle Bin there, or none given), `fallback` deletes only what Tavora put in it.
+ */
+async function removeFilesFolder(dir: string, trash: Trash | undefined, fallback: (dir: string) => Promise<void>): Promise<void> {
+  if (trash) {
+    try {
+      await trash(dir);
+      return;
+    } catch {
+      // Deleted below instead; a file that is held fails there too, and the caller hears of it.
+    }
+  }
+  await fallback(dir);
+}
+
 /**
  * Deletes what modules stored on disk for one workspace: settings, documents and
  * files of every module of every owner, installed or not. Web storage in each
- * module's browser session is cleared separately by the host.
+ * module's browser session is cleared separately by the host. Only folders Tavora made are touched: exactly
+ * `<owner>/<module id>/<workspace id>`, never through a link or junction. The files folder can be the user's own
+ * Pictures\Tavora, so there its folders go to the Recycle Bin (`trash`), or only Tavora's files in them are deleted.
  */
-export async function deleteModuleData(userData: string, workspaceId: string, blobRoot?: string): Promise<void> {
+export async function deleteModuleData(userData: string, workspaceId: string, blobRoot = defaultFilesRoot(userData), trash?: Trash): Promise<void> {
   if (!isWorkspaceId(workspaceId)) throw new Error("invalid workspace id");
-  for (const root of [...dataRoots(userData, blobRoot), path.join(userData, 'read-only-files')]) {
-    for (const owner of await readdir(root).catch(() => [] as string[])) {
-      const modules = await readdir(path.join(root, owner)).catch(() => [] as string[]);
-      await Promise.all(modules.map((module) => rm(path.join(root, owner, module, workspaceId), { recursive: true, force: true })));
+  const workspaceFolders = async function* (root: string) {
+    for (const owner of await ownFolders(root, isOwnerId)) {
+      for (const module of await ownFolders(path.join(root, owner), isModuleId)) {
+        const dir = await ownFolder(path.join(root, owner, module), workspaceId);
+        if (dir) yield dir;
+      }
     }
-  }
+  };
+  for (const root of ownRoots(userData)) for await (const dir of workspaceFolders(root)) await rm(dir, { recursive: true, force: true });
+  for await (const dir of workspaceFolders(blobRoot)) await removeFilesFolder(dir, trash, removeOwnFiles);
 }
 
 /**
@@ -159,10 +220,13 @@ export async function migrateModuleData(userData: string, log: (line: string) =>
   await applyPending(userData, log, blobRoot, isLoaded);
   const ownerOf = (moduleId: string) => (moduleId.startsWith(OFFICIAL_PREFIX) ? OFFICIAL_OWNER : LOCAL_OWNER);
 
+  const filesRoot = blobRoot ?? defaultFilesRoot(userData);
   for (const dataRoot of dataRoots(userData, blobRoot)) {
     for (const name of await readdir(dataRoot).catch(() => [] as string[])) {
       // Owners never contain a dot and module ids always do.
       if (!isModuleId(name)) continue;
+      // The files folder can be the user's own (Pictures\Tavora): only a folder laid out as Tavora left it moves.
+      if (dataRoot === filesRoot && !(await isOldFilesFolder(path.join(dataRoot, name)).catch(() => false))) continue;
       const target = path.join(dataRoot, ownerOf(name), name);
       if (await pathExists(target)) {
         log(`module data of ${name} is already under its owner; the old copy stays in ${path.basename(dataRoot)}/${name}`);
@@ -187,6 +251,24 @@ export async function migrateModuleData(userData: string, log: (line: string) =>
   }
 }
 
+/**
+ * Whether `dir` is a module's files folder from before modules had owners: a real folder (no link or junction) holding
+ * only workspace folders (and `_app`), real folders too, with nothing in them but files Tavora stored, at least one.
+ */
+async function isOldFilesFolder(dir: string): Promise<boolean> {
+  const info = await lstat(dir).catch(() => null);
+  if (!info?.isDirectory() || info.isSymbolicLink()) return false;
+  let stored = 0;
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    if (!entry.isDirectory() || entry.isSymbolicLink() || !(isWorkspaceId(entry.name) || entry.name === APP_DATA_DIR)) return false;
+    for (const file of await readdir(path.join(dir, entry.name), { withFileTypes: true })) {
+      if (!file.isFile() || !isOwnFile(file.name)) return false;
+      stored++;
+    }
+  }
+  return stored > 0;
+}
+
 /** Every (owner, module) that has settings, documents or files saved, in any workspace. */
 export async function listModuleData(userData: string, blobRoot?: string): Promise<{ owner: string; moduleId: string }[]> {
   const found = new Map<string, { owner: string; moduleId: string }>();
@@ -204,11 +286,26 @@ export async function listModuleData(userData: string, blobRoot?: string): Promi
 /**
  * Deletes the settings, documents and files one owner's module saved, in every workspace,
  * and answers with the browser sessions it had, for the host to clear (their
- * folders go with the next start's cleanup, see applyPending).
+ * folders go with the next start's cleanup, see applyPending). As deleteModuleData: only through folders Tavora
+ * made, and in the files folder to the Recycle Bin, or only Tavora's files.
  */
-export async function deleteModuleDataOf(userData: string, owner: string, moduleId: string, blobRoot?: string): Promise<string[]> {
+export async function deleteModuleDataOf(userData: string, owner: string, moduleId: string, blobRoot = defaultFilesRoot(userData), trash?: Trash): Promise<string[]> {
   if (!isOwnerId(owner) || !isModuleId(moduleId)) throw new Error("invalid owner or module id");
-  for (const root of [...dataRoots(userData, blobRoot), path.join(userData, 'read-only-files'), path.join(userData, 'folder-access')]) await rm(path.join(root, owner, moduleId), { recursive: true, force: true });
+  const moduleFolder = async (root: string) => {
+    const ownerDir = await ownFolder(root, owner);
+    return ownerDir ? ownFolder(ownerDir, moduleId) : null;
+  };
+  for (const root of [...ownRoots(userData), path.join(userData, "folder-access")]) {
+    const dir = await moduleFolder(root);
+    if (dir) await rm(dir, { recursive: true, force: true });
+  }
+  const files = await moduleFolder(blobRoot);
+  if (files) {
+    await removeFilesFolder(files, trash, async (dir) => {
+      for (const name of await ownFolders(dir, (name) => isWorkspaceId(name) || name === APP_DATA_DIR)) await removeOwnFiles(path.join(dir, name));
+      await rmdir(dir).catch(() => undefined);
+    });
+  }
   const partitions: string[] = [];
   for (const name of await readdir(path.join(userData, "Partitions")).catch(() => [] as string[])) {
     const match = /^module:([a-z0-9]+):([a-z0-9.-]+)@([a-z0-9-]+)$/.exec(safeDecode(name));

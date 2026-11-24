@@ -8,7 +8,7 @@ import { addOrRestoreWorkspace } from "./game-copy";
 import type { GameIcons } from "./game-icons";
 import type { Installed } from "./installed-modules";
 import { deleteTrashedWorkspace, isLive, LibraryError, placeOf, restoreWorkspace, trashWorkspace, untrashWorkspaces, type Library, type NewWorkspace, type WorkspaceEntry } from "./library";
-import { deleteModuleData, partitionsOf } from "./module-data";
+import { deleteModuleData, partitionsOf, type Trash } from "./module-data";
 import type { ModuleFilesFolder } from "./module-files-folder";
 import type { InstalledModule } from "./registry";
 import { importSteamGames } from "./steam-import";
@@ -61,6 +61,8 @@ export interface WorkspaceLibraryOptions {
   panelState: Pick<PanelStateStore, "remove">;
   /** Where modules keep their files; a workspace deleted for good takes its files with it. */
   files: Pick<ModuleFilesFolder, "noteWorkspaceDeleted">;
+  /** Sends a workspace's folder in the files folder (often Pictures\Tavora) to the Recycle Bin; without it, only Tavora's files there are deleted. */
+  trash?: Trash | undefined;
   /** Whatever else keeps something per workspace (module data, stream and game overlays, the Overlay page) forgets it. */
   forgotten: (workspaceId: string) => void;
   /** Clears a browser session's storage and cache, by partition (Electron's session). */
@@ -161,14 +163,43 @@ export class WorkspaceLibrary {
     const { library } = this.options;
     const workspaces = (strict ? ids : ids.filter((id) => library.workspaces[id]?.trashedAt)).map((id) => deleteTrashedWorkspace(library, id));
     this.options.saveLibrary();
-    for (const workspace of workspaces) await this.forgetData(workspace);
-    await this.clearSessions(workspaces.map((workspace) => workspace.id));
+    const errors = await this.forgetAll(workspaces);
+    if (errors.length === 0) return;
+    // Back in Trash: saved again, and the user hears that it failed.
+    this.options.saveLibrary();
+    throw errors[0];
   }
 
-  /** Deletes everything stored for a workspace that left the library for good (one whose time in Trash ran out). */
-  async deleteData(workspace: WorkspaceEntry): Promise<void> {
-    await this.forgetData(workspace);
-    await this.clearSessions([workspace.id]);
+  /**
+   * Deletes everything stored for the workspaces whose time in Trash ran out (purgeExpired), at the start. Never throws,
+   * so Tavora starts: one that can't be deleted now goes back to Trash and is tried again at the next start. The caller
+   * saves the library.
+   */
+  async deleteExpired(workspaces: readonly WorkspaceEntry[]): Promise<void> {
+    await this.forgetAll(workspaces).catch((error: unknown) => console.error("[tavora] clearing the browser storage of deleted workspaces failed", error));
+  }
+
+  /**
+   * Forgets the data of workspaces that left the library for good, one by one. A workspace whose data can't all be
+   * deleted now (a file another program holds) goes back to Trash as it was, so a later try finishes it, and the others
+   * still go. Answers with what went wrong.
+   */
+  private async forgetAll(workspaces: readonly WorkspaceEntry[]): Promise<unknown[]> {
+    const { library } = this.options;
+    const errors: unknown[] = [];
+    const gone: string[] = [];
+    for (const workspace of workspaces) {
+      try {
+        await this.forgetData(workspace);
+        gone.push(workspace.id);
+      } catch (error) {
+        console.error(`[tavora] deleting the data of workspace ${workspace.id} failed; it stays in Trash for a later try`, error);
+        library.workspaces[workspace.id] ??= workspace;
+        errors.push(error);
+      }
+    }
+    await this.clearSessions(gone);
+    return errors;
   }
 
   /** The user picks a picture for a workspace's icon; nothing when the dialog is closed. */
@@ -230,7 +261,7 @@ export class WorkspaceLibrary {
     await Promise.all(records.map((record) => panelState.remove(record.instanceId)));
     this.options.forgotten(workspace.id);
     // A folder the user chose can be gone (an unplugged drive): the workspace still goes, and they are told where its pictures may remain.
-    await files.noteWorkspaceDeleted(workspace.name, (root) => deleteModuleData(userData, workspace.id, root));
+    await files.noteWorkspaceDeleted(workspace.name, (root) => deleteModuleData(userData, workspace.id, root, this.options.trash));
     await this.options.icons.forget(workspace);
   }
 
