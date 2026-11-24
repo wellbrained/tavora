@@ -1,12 +1,13 @@
 import type { KeyObject } from "node:crypto";
 import { lstat, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { folderKey, isReleaseVersion, manifestFiles, MAX_README_BYTES, validateChangelog, validateManifest, type ChangelogEntry, type ModuleManifest, compareModuleVersions } from "@tavora/module-schema";
+import { folderKey, isReleaseVersion, manifestFiles, MAX_README_BYTES, validateChangelog, validateManifest, type ModuleManifest, compareModuleVersions } from "@tavora/module-schema";
 import { MANIFEST_FILE, packModule, PackError, PrivateKeyError, type Published } from "@tavora/pack";
 import type { AccountView, PrefixState, PublishProblem, PublishView, ReadmeBlock } from "../shared/host-api";
 import { suggestPrefix } from "../shared/id-prefix";
 import { parseReadme } from "./catalog-readme";
 import { writeFileAtomic } from "./fsutil";
+import { readProjectChangelog } from "./module-changelog";
 import { UserError } from "./messages";
 
 // The Publish button (decided 2026-10-21, "Easier module publishing"): a dev module from a project folder
@@ -158,7 +159,7 @@ export class ModulePublisher {
     view.module = { id, name, version, icon: this.options.icon(id) };
     view.asks = { network: [...manifest.permissions.network], connectors: [...(manifest.permissions.connectors ?? [])], folders: (manifest.permissions.folders ?? []).map(folderKey) };
     view.readme = await readReadme(project, manifest);
-    view.notes = (await readChangelog(project, manifest)).find((entry) => entry.version === version)?.notes ?? [];
+    view.notes = (await readProjectChangelog(project, manifest.changelog)).find((entry) => entry.version === version)?.notes ?? [];
 
     const [built, listed, prefixState] = await Promise.all([
       buildAge(project, manifest),
@@ -268,16 +269,6 @@ async function readReadme(project: string, manifest: ModuleManifest): Promise<Re
     return parseReadme(await readFile(file, "utf8"));
   } catch {
     return null;
-  }
-}
-
-async function readChangelog(project: string, manifest: ModuleManifest): Promise<ChangelogEntry[]> {
-  if (manifest.changelog === undefined) return [];
-  try {
-    const result = validateChangelog(JSON.parse(await readFile(path.join(project, manifest.changelog), "utf8")));
-    return result.ok ? result.entries : [];
-  } catch {
-    return [];
   }
 }
 

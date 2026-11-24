@@ -3,10 +3,11 @@ import { execFile } from "node:child_process";
 import { appendFile, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { isModuleId, validateChangelog, validateManifest, compareModuleVersions } from "@tavora/module-schema";
+import { isModuleId, validateManifest, compareModuleVersions } from "@tavora/module-schema";
 import { collectFiles, fingerprint, packModule, PackError, PrivateKeyError, readZip, SIGNATURE_FILE, type Published } from "@tavora/pack";
 import { assertNever } from "../shared/assert-never";
 import type { OfficialBuildStep, OfficialPublishOverview, OfficialPublishPreview, OfficialPublishRow, OfficialPublishRun, OfficialUploadStep } from "../shared/host-api";
+import { readProjectChangelog } from "./module-changelog";
 import { UserError } from "./messages";
 import { BROWSER_MODULE_ID, OFFICIAL_PREFIX } from "./registry";
 
@@ -751,13 +752,8 @@ export class OfficialPublisher {
 
   /** The patch notes the changelog has for this version; none when it has no entry or no changelog. */
   private async notes(moduleDir: string, changelog: string | undefined, version: string): Promise<string[]> {
-    if (!changelog) return [];
-    try {
-      const result = validateChangelog(JSON.parse(await readFile(path.join(moduleDir, changelog), "utf8")));
-      return result.ok ? (result.entries.find((entry) => entry.version === version)?.notes ?? []) : [];
-    } catch {
-      return [];
-    }
+    const entries = await readProjectChangelog(moduleDir, changelog || undefined);
+    return entries.find((entry) => entry.version === version)?.notes ?? [];
   }
 }
 
