@@ -1,10 +1,9 @@
 // The workspace's last results and named values, together in one document so every panel of the workspace shows the same
 // lists and sees another panel's change at once. Edits show at once and are saved a moment later on the newest stored
 // copy, so two panels changing the lists at the same time both keep their changes.
-import { errorMessage } from "@tavora/official-ui";
+import { errorMessage, useDocument } from "@tavora/official-ui";
 import { TavoraError, type JsonValue, type TavoraSDK } from "@tavora/sdk";
-import { openDocument } from "@tavora/sdk/store";
-import { ref, shallowRef } from "vue";
+import { computed, effectScope, ref } from "vue";
 import { HISTORY_KEY, parseHistory, type Calculation } from "./history";
 import { t } from "./i18n";
 import { parseValues, VALUES_KEY, type Value } from "./values";
@@ -40,21 +39,19 @@ export type ListsStore = Awaited<ReturnType<typeof createListsStore>>;
 
 export async function createListsStore(sdk: TavoraSDK, options: { debounceMs?: number } = {}) {
   await migrateLists(sdk);
-  const doc = await openDocument(sdk, LISTS_ID, { parse: parseLists, title: () => LISTS_TITLE, debounceMs: options.debounceMs ?? 0 });
-  const history = shallowRef<Calculation[]>(doc.data.history);
-  const values = shallowRef<Value[]>(doc.data.values);
+  // Detached: the panel closes the store itself (`dispose`), not whatever scope happens to be running here.
+  const doc = effectScope(true).run(() => useDocument(sdk, LISTS_ID, { parse: parseLists, title: () => LISTS_TITLE, debounceMs: options.debounceMs ?? 0 }))!;
+  const opened = await doc.ready;
+  const history = computed<Calculation[]>(() => doc.data.value.history);
+  const values = computed<Value[]>(() => doc.data.value.values);
   const error = ref<string | null>(null);
   /** Which list the last edit was in, for the words of a failed save. */
   let last: "history" | "values" = "history";
 
-  doc.onChange((event) => {
-    history.value = event.data.history;
-    values.value = event.data.values;
-  });
-  doc.onStatus((status) => {
+  opened.onStatus((status) => {
     if (status === "dirty" || status === "saving") error.value = null;
   });
-  doc.onError((reason, kind) => {
+  opened.onError((reason, kind) => {
     if (kind === "save") error.value = t(last === "history" ? "saveError" : "valuesError", { error: errorMessage(reason) });
   });
 
@@ -73,6 +70,6 @@ export async function createListsStore(sdk: TavoraSDK, options: { debounceMs?: n
     },
     flush: () => doc.flush(),
     /** Saves what is left, then stops listening. */
-    dispose: () => doc.dispose(),
+    dispose: () => opened.dispose(),
   };
 }
