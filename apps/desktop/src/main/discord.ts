@@ -466,6 +466,11 @@ export class DiscordConnector {
 
   // ── Telling ──────────────────────────────────────────────────────────
 
+  /** The system's key store answered late (it can keep the sign-in after all): the page is told. */
+  keyStoreChanged(): void {
+    this.emit();
+  }
+
   private emit(): void {
     if (this.emitTimer) return;
     this.emitTimer = this.setTimer(() => this.emitNow(), EMIT_MS);

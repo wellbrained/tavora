@@ -10,36 +10,50 @@ const ASK_LIMIT_MS = 10_000;
  *
  * Uses safeStorage's async calls (the sync ones go in Electron 46). They read and write the same bytes as the sync ones.
  */
-export function osEncryptor(test: boolean, limit = ASK_LIMIT_MS): Encryptor {
+export function osEncryptor(test: boolean, limit = ASK_LIMIT_MS, answeredLate?: () => void): Encryptor {
   // Test machines have no keyring; Linux's plain-text fallback stands in there (and only there).
   if (test && process.platform === "linux") safeStorage.setUsePlainTextEncryption(true);
   let available = false;
-  let checking: Promise<boolean> | null = null;
+  // The question to the system is still open; `wait` is what callers share while it is, and `gaveUp` that its wait ran out.
+  let open = false;
+  let gaveUp = false;
+  let wait: Promise<boolean> | null = null;
   const check = async (): Promise<boolean> => {
     // Linux without a keyring falls back to a fixed key, which protects nothing; Tavora then saves no sign-in.
     available = (await safeStorage.isAsyncEncryptionAvailable()) && (process.platform !== "linux" || test || safeStorage.getSelectedStorageBackend() !== "basic_text");
     return available;
   };
-  const ask = (): Promise<boolean> =>
-    new Promise((resolve) => {
+  const ask = (): Promise<boolean> => {
+    open = true;
+    gaveUp = false;
+    const asked: Promise<boolean> = new Promise((resolve) => {
       // A key store that doesn't answer (a prompt nobody sees, a stuck service) counts as not available for now.
-      const timer = setTimeout(() => resolve(false), limit);
+      const timer = setTimeout(() => {
+        gaveUp = true;
+        resolve(false);
+      }, limit);
       timer.unref();
-      const done = (answer: boolean) => {
+      void check().catch(() => false).then((answer) => {
         clearTimeout(timer);
+        open = false;
+        if (wait === asked) wait = null;
         resolve(answer);
-      };
-      check().then(done, () => done(false));
+        // The answer came after the wait ended: the views that showed "not available" are told.
+        if (gaveUp && answer) answeredLate?.();
+        gaveUp = false;
+      });
     });
+    return asked;
+  };
   return {
     // Asked when something needs it, not at start. Once it said yes it stays yes; after a no (a keyring locked for now)
-    // the next call asks again. One question at a time.
+    // the next call asks again. One question at a time; while one that timed out is still open, later calls say no at
+    // once instead of waiting for it again.
     ready: () => {
       if (available) return Promise.resolve(true);
-      checking ??= ask().finally(() => {
-        checking = null;
-      });
-      return checking;
+      if (open) return gaveUp ? Promise.resolve(false) : wait!;
+      wait = ask();
+      return wait;
     },
     isAvailable: () => available,
     encrypt: (text) => safeStorage.encryptStringAsync(text),

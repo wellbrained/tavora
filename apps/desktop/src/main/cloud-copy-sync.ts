@@ -373,6 +373,11 @@ export class CopySync {
     this.hooks?.onChange(this.view());
   }
 
+  /** The system's key store answered late (it can keep the key after all): the page is told. */
+  keyStoreChanged(): void {
+    this.changed();
+  }
+
   private asked(question: Question): boolean {
     return this.questions.has(question);
   }

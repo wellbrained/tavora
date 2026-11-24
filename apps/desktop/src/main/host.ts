@@ -1117,9 +1117,18 @@ export class Host {
     });
   }
 
+  /** The system's key store answered after the wait ran out: Settings, the Account page and the cloud copy read their state again. */
+  private keyStoreChanged(): void {
+    this.account.keyStoreChanged();
+    this.discord.keyStoreChanged();
+    this.copySync.keyStoreChanged();
+  }
+
   static async create(options: HostOptions): Promise<Host> {
     const { userData } = options;
-    const encryptor = osEncryptor(options.discord !== undefined);
+    // A key store that answers only after the wait ran out (a keyring unlocked later) is told to the views, once the host is there.
+    let started: Host | undefined;
+    const encryptor = osEncryptor(options.discord !== undefined, undefined, () => started?.keyStoreChanged());
     // Asked in the background so the answer is there for the views; whatever seals or opens a file asks (and waits) itself.
     void encryptor.ready();
     // The cloud copy comes first, as a newer copy is taken before anything reads the files. It needs only the saved
@@ -1229,6 +1238,7 @@ export class Host {
     const emblem = await Host.readEmblem(options);
 
     const host = new Host(options, { encryptor, signIn, copySync, installed, safetyLists, official, grants, connection, systemInfo, openTimes, emblem, styles }, library, workspaces, profile, windowState, themes, themeProblems, themeHints, savedData);
+    started = host;
     if (ownersNoted) host.workspaces.saveSoon();
     // What the user did while a cloud copy waited is safe in a backup, and this PC's data from before an older Tavora took
     // the copy up again: they hear where, in one message when it is both.

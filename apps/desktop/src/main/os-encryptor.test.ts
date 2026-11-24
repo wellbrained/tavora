@@ -63,8 +63,27 @@ describe("the system key store, async", () => {
     fake.hang = true;
     const encryptor = osEncryptor(false, 20);
     expect(await encryptor.ready()).toBe(false);
-    fake.hang = false;
+    expect(encryptor.isAvailable()).toBe(false);
+  });
+
+  it("while a timed-out check is still pending, later calls say no at once, and the late answer is told", async () => {
+    fake.hang = true;
+    let answer!: (value: boolean) => void;
+    fake.isAsyncEncryptionAvailable = () => new Promise<boolean>((resolve) => (answer = resolve));
+    const told = vi.fn();
+    const encryptor = osEncryptor(false, 20, told);
+    expect(await encryptor.ready()).toBe(false);
+    const started = Date.now();
+    expect(await encryptor.ready()).toBe(false);
+    expect(await encryptor.ready()).toBe(false);
+    expect(Date.now() - started).toBeLessThan(15);
+    expect(told).not.toHaveBeenCalled();
+    answer(true);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(encryptor.isAvailable()).toBe(true);
+    expect(told).toHaveBeenCalledTimes(1);
     expect(await encryptor.ready()).toBe(true);
+    fake.isAsyncEncryptionAvailable = () => Promise.resolve(fake.available);
   });
 
   it("is not available before it is asked, and is the answer of the last ask after", async () => {

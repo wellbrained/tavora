@@ -548,6 +548,30 @@ describe("the sign-in on disk", () => {
     expect(JSON.parse(await readFile(where, "utf8")).data).toBe(JSON.parse(before).data);
   });
 
+  it("signing out while the sign-in is being read: the sealed-again copy is not written back", async () => {
+    const where = path.join(await mkdtemp(path.join(os.tmpdir(), "tavora-account-stale-out-")), "account.json");
+    await saveAccount(where, encryptor(), SAVED);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const moved: Encryptor = {
+      ...encryptor(),
+      decrypt: async (data, note) => {
+        const text = await encryptor().decrypt(data);
+        await gate;
+        if (note) note.stale = true;
+        return text;
+      },
+    };
+    const account = new AccountFile(where, moved);
+    const loading = account.load();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const signingOut = account.save(null);
+    release();
+    await Promise.all([loading, signingOut]);
+    await settleSerial();
+    await expect(stat(where)).rejects.toThrow();
+  });
+
   const file = async () => path.join(await mkdtemp(path.join(os.tmpdir(), "tavora-account-")), "account.json");
 
   it("is kept encrypted and read back", async () => {

@@ -1202,19 +1202,15 @@ function ownerOf(owner: unknown): string | null | undefined {
  */
 async function readKey(file: string, encryptor: Encryptor): Promise<KeyRead> {
   if (!(await encryptor.ready())) return (await exists(file)) ? { status: "blocked", file, reason: "unopened", owner: undefined } : { status: "missing" };
-  const note = { stale: false };
+  // A key is never sealed again when the system's key moves on (no `note`): it isn't fetched again from the service, and
+  // the only local copy must stay in a form an older Tavora opens.
   const read = await new SealedFile(file).open(async (data, saved) => {
-    const key = Buffer.from(await encryptor.decrypt(Buffer.from(data, "base64"), note), "base64");
+    const key = Buffer.from(await encryptor.decrypt(Buffer.from(data, "base64")), "base64");
     if (key.length !== 32) throw new Error("not a key");
     return { key, owner: ownerOf(saved.account), unproven: saved.unproven === true };
   });
   switch (read.status) {
     case "opened":
-      // The system's key moved on: sealed again under the new one, once, with the same note next to it.
-      if (note.stale) {
-        const again = (await encryptor.encrypt(read.value.key.toString("base64"))).toString("base64");
-        await new SealedFile(file).write({ data: again, ...(read.saved.account !== undefined ? { account: read.saved.account } : {}), ...(read.value.unproven ? { unproven: true } : {}) }).catch(() => undefined);
-      }
       return { status: "opened", ...read.value };
     case "missing":
       return { status: "missing" };

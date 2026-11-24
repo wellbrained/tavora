@@ -63,12 +63,10 @@ export class OfficialKeyStore {
       return null;
     }
     try {
-      const note = { stale: false };
-      const key = createPrivateKey(await this.encryptor.decrypt(sealed, note));
+      // Never sealed again when the system's key moves on: this is the only copy, and an older Tavora must still open it.
+      const key = createPrivateKey(await this.encryptor.decrypt(sealed));
       if (key.asymmetricKeyType !== "ed25519") throw new Error("not a publisher key");
       this.saved = true;
-      // The system's key moved on: sealed again under the new one, once.
-      if (note.stale) await this.save(key).catch(() => undefined);
       return key;
     } catch {
       await this.forget();

@@ -62,6 +62,17 @@ describe("the Tavora key saved on this PC", () => {
     expect(damaged.hasKey()).toBe(false);
   });
 
+  it("never seals the key again when the system's key moved on: an older Tavora must still open it", async () => {
+    const { privateKey } = generateKeyPairSync("ed25519");
+    await new OfficialKeyStore(userData, encryptor()).save(privateKey);
+    const before = await readFile(file());
+    let encrypted = 0;
+    const moved: Encryptor = { ...encryptor(), encrypt: async (text) => (encrypted++, encryptor().encrypt(text)), decrypt: async (data, note) => (note && (note.stale = true), encryptor().decrypt(data)) };
+    expect(await new OfficialKeyStore(userData, moved).load()).not.toBeNull();
+    expect(encrypted).toBe(0);
+    expect((await readFile(file())).equals(before)).toBe(true);
+  });
+
   it("Forget key deletes it", async () => {
     const store = new OfficialKeyStore(userData, encryptor());
     await store.save(generateKeyPairSync("ed25519").privateKey);

@@ -55,6 +55,8 @@ function savedAccount(value: unknown): SavedAccount | null {
 export class AccountFile {
   private readonly sealed: SealedFile;
   private readonly order = new Serial();
+  /** Counts the saves and removals asked for, so a read that comes back late can tell the file changed since. */
+  private changes = 0;
 
   constructor(
     file: string,
@@ -68,15 +70,27 @@ export class AccountFile {
     if (!(await this.encryptor.ready())) return null;
     // Missing, newer, damaged, can't be read now, or encrypted by another user or PC: signed out (the file is kept).
     const note = { stale: false };
+    const seen = this.changes;
     const read = await this.sealed.open(async (data) => savedAccount(JSON.parse(await this.encryptor.decrypt(Buffer.from(data, "base64"), note))));
     if (read.status !== "opened") return null;
-    // The system's key moved on: sealed again under the new one, once.
-    if (note.stale) await this.save(read.value).catch(() => undefined);
+    // The system's key moved on: sealed again under the new one, once. Only if nothing saved or removed the file since
+    // the read (a sign-out while it was opened must not be undone by it).
+    if (note.stale) {
+      await this.order
+        .run(async () => {
+          if (this.changes !== seen || !(await this.encryptor.ready())) return;
+          const data = (await this.encryptor.encrypt(JSON.stringify(read.value))).toString("base64");
+          // Sealing takes a moment: checked again, as a sign-out may have come in meanwhile.
+          if (this.changes === seen) await this.sealed.write({ data });
+        })
+        .catch(() => undefined);
+    }
     return read.value;
   }
 
   /** Writes the sign-in down; null removes the file. */
   save(account: SavedAccount | null): Promise<void> {
+    this.changes++;
     // In the order asked: sealing takes a moment, and signing out must not be undone by a save asked before it.
     return this.order.run(async () => {
       if (!account) return this.sealed.forget();
@@ -921,6 +935,11 @@ export class AccountClient {
 
   private changed(): void {
     this.options.onChange(this.view());
+  }
+
+  /** The system's key store answered late (it can keep the sign-in after all): the page is told. */
+  keyStoreChanged(): void {
+    this.changed();
   }
 
   /** Sends one request to the service, with the sign-in when `auth` and there is one. Throws only when the service can't be reached. */

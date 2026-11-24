@@ -12,7 +12,7 @@ const encryptor = { ready: async () => true, isAvailable: () => true, encrypt: a
 type Service = Awaited<ReturnType<typeof service>>;
 
 /** The account's key on one PC of the test account (`userData`: the same PC again, as at the next start). */
-async function onPc(cloud: Service, { keyStore = true, fetch = cloud.fetch, userData: folder, kept = false, putBackAfterMs = 0 }: { keyStore?: boolean; fetch?: typeof globalThis.fetch; userData?: string; kept?: boolean; putBackAfterMs?: number } = {}) {
+async function onPc(cloud: Service, { keyStore = true, fetch = cloud.fetch, userData: folder, kept = false, putBackAfterMs = 0, sealer = encryptor }: { keyStore?: boolean; fetch?: typeof globalThis.fetch; userData?: string; kept?: boolean; putBackAfterMs?: number; sealer?: Omit<typeof encryptor, "decrypt"> & { decrypt: (data: Buffer, note?: { stale: boolean }) => Promise<string> } } = {}) {
   const userData = folder ?? (await pc({ "library.json": "{}" })).userData;
   const file = path.join(userData, "account-key.json");
   const key = new AccountKey({
@@ -20,7 +20,7 @@ async function onPc(cloud: Service, { keyStore = true, fetch = cloud.fetch, user
     legacyFile: path.join(userData, "cloud-copy-key.json"),
     // `kept`: the vault as last read and whether one was seen are kept on this PC, as the app does.
     ...(kept ? { cacheFile: path.join(userData, "account-vault.bin"), seenFile: path.join(userData, "account-vault-seen") } : {}),
-    encryptor: keyStore ? encryptor : { ...encryptor, ready: async () => false, isAvailable: () => false },
+    encryptor: keyStore ? sealer : { ...encryptor, ready: async () => false, isAvailable: () => false },
     baseUrl: "http://tavora.test/v1/account",
     fetch,
     token: () => cloud.token,
@@ -145,6 +145,19 @@ describe("the account's key", () => {
     expect((await a.key.load())?.equals(old)).toBe(true);
     expect(await a.key.setUp()).toEqual({ status: "ready", created: false });
     expect(JSON.parse(openVault(old, new Uint8Array(await (await vault(cloud)).arrayBuffer())).toString("utf8"))).toEqual({ v: 1 });
+  });
+
+  it("never seals the key file again when the system's key moved on: the only copy stays readable by an older Tavora", async () => {
+    const cloud = await service();
+    const a = await onPc(cloud);
+    await a.key.setUp();
+    const before = await readFile(a.file, "utf8");
+    let encrypted = 0;
+    const moved = { ...encryptor, encrypt: async (text: string) => (encrypted++, encryptor.encrypt(text)), decrypt: async (data: Buffer, note?: { stale: boolean }) => (note && (note.stale = true), encryptor.decrypt(data)) };
+    const again = await onPc(cloud, { userData: a.userData, sealer: moved });
+    expect((await again.key.load())?.equals(a.key.get()!)).toBe(true);
+    expect(encrypted).toBe(0);
+    expect(await readFile(a.file, "utf8")).toBe(before);
   });
 
   it("is never kept, or made, without the system's key store", async () => {
