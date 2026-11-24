@@ -239,3 +239,69 @@ describe("turned off while Use the cloud copy writes its answer", () => {
     expect(s.t.events.restarts).toBe(1);
   }, 60_000);
 });
+
+describe("an upload racing the turn-off", () => {
+  const stateAt = (s: Awaited<ReturnType<typeof setup>>) => path.join(s.a.userData, "cloud-copy.json");
+  async function onAtNextStart(s: Awaited<ReturnType<typeof setup>>) {
+    const next = tavora(s.cloud, s.a);
+    await next.sync.beforeLoad();
+    return next.sync.view().on;
+  }
+
+  it("no upload starts while the turn-off retries a busy state file, and nothing is written back", async () => {
+    const s = await setup();
+    const before = await s.remote();
+    await writeFile(path.join(s.a.userData, "workspace.json"), '{"from":"pc, changed"}');
+    let up: Promise<unknown> | null = null;
+    let busy = 2;
+    rmFailing = (file) => {
+      if (!file.endsWith("cloud-copy.json") || busy <= 0) return false;
+      busy--;
+      // Upload now (or the timer), while the turn-off waits for the busy file.
+      up ??= s.t.sync.sync(true).catch(() => undefined);
+      return true;
+    };
+    await s.t.sync.turnOff();
+    await up;
+    expect(up).not.toBeNull();
+    expect(await s.remote()).toBe(before);
+    expect(s.t.sync.view().on).toBe(false);
+    expect(await there(stateAt(s))).toBe(false);
+    expect(await onAtNextStart(s)).toBe(false);
+  }, 60_000);
+
+  it("a sync already past its checks that uploads during the removal writes nothing back, even when the fresh file is then busy", async () => {
+    const s = await setup();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    s.t.sync.attach({ flush: () => gate, onChange: () => undefined });
+    await writeFile(path.join(s.a.userData, "workspace.json"), '{"from":"pc, changed"}');
+    // Started before the turn-off: past its checks, waiting for the panels to save.
+    const up = s.t.sync.sync(true).catch(() => undefined);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    let racing = false;
+    let wrote = false;
+    meanwhile = async (to) => {
+      if (racing && to.endsWith("cloud-copy.json")) wrote = true;
+    };
+    let parkedTries = 0;
+    rmFailing = (file) => {
+      // The parked file is held for all but the last try (about 770 ms): the upload goes up meanwhile.
+      if (file.endsWith("cloud-copy-swapping.json") && parkedTries++ < 5) {
+        if (!racing) {
+          racing = true;
+          release();
+        }
+        return true;
+      }
+      // A state file written meanwhile is held by the virus scan.
+      return wrote && file.endsWith("cloud-copy.json");
+    };
+    await s.t.sync.turnOff();
+    await up;
+    rmFailing = () => false;
+    expect(s.t.sync.view().on).toBe(false);
+    expect(await there(stateAt(s))).toBe(false);
+    expect(await onAtNextStart(s)).toBe(false);
+  }, 60_000);
+});

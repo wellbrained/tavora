@@ -1904,7 +1904,8 @@ export class CopySync {
    * again, so the next start doesn't find the copy on. False when it was forgotten.
    */
   private async keepState(turn: number): Promise<boolean> {
-    if (turn !== this.turn) return false;
+    // A forget under way is waited for: one that goes through raises `turn`, so nothing is written back after it.
+    if (!(await this.goesOn(turn))) return false;
     await saveCopyState(this.stateFile, this.state);
     if (turn === this.turn) return true;
     await removeCopyState(this.stateFile);
@@ -1954,8 +1955,8 @@ export class CopySync {
       }
     }
     this.turn++;
-    // An upload that finished between the removal and `turn` wrote its state again.
-    if (!held) await removeCopyState(this.stateFile).catch(() => undefined);
+    // Only a fallback now (keepState waits for a forget under way): a state written meanwhile goes again.
+    if (!held) await retryHeld(() => removeCopyState(this.stateFile)).catch((error: unknown) => this.log(`cloud copy: state written during the turn-off stays: ${error instanceof Error ? error.message : String(error)}`));
     return held;
   }
 
