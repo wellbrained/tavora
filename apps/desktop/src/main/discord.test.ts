@@ -107,6 +107,57 @@ describe("DiscordConnector", () => {
     expect(fake.commands.some((c) => c.cmd === "AUTHENTICATE")).toBe(true);
   });
 
+  describe("a sign-in made while the key store couldn't be asked", () => {
+    /** Saving fails until `ready.yes`; a read gives nothing until then, as at start. */
+    async function blocked() {
+      const made = await setup();
+      const ready = { yes: false };
+      const written: DiscordSecrets[] = [];
+      const old: DiscordSecrets = { token: { accessToken: "x-old", refreshToken: "rx", expiresAt: Date.now() + 1e9 } };
+      const dep = (made.connector as unknown as { deps: { load(): Promise<DiscordSecrets>; save(s: DiscordSecrets): Promise<void> } }).deps;
+      dep.load = async () => (ready.yes ? old : { token: null });
+      dep.save = async (next) => {
+        if (!ready.yes && (next.token || next.last)) throw new Error("No secure storage on this PC.");
+        written.push(next);
+      };
+      await made.connector.use("p1", panel().listener);
+      return { ...made, ready, written };
+    }
+
+    it("is written on the late yes, and the old one isn't read over it", async () => {
+      const { connector, ready, written } = await blocked();
+      await connector.connectNow();
+      await until(() => connector.state().status === "connected");
+      expect(written).toEqual([]);
+      ready.yes = true;
+      await connector.keyStoreChanged();
+      expect(written.at(-1)?.token).toMatchObject({ accessToken: "good", refreshToken: "r1" });
+    });
+
+    it("a disconnect in the meantime is never undone by the late yes", async () => {
+      const { connector, ready, written } = await blocked();
+      await connector.connectNow();
+      await until(() => connector.state().status === "connected");
+      await connector.signOut();
+      ready.yes = true;
+      await connector.keyStoreChanged();
+      expect(written.some((s) => s.token)).toBe(false);
+      expect(written.at(-1)).toEqual({ token: null });
+    });
+
+    it("the newest sign-in wins", async () => {
+      const { connector, ready, written } = await blocked();
+      await connector.connectNow();
+      await until(() => connector.state().status === "connected");
+      await connector.signOut();
+      await connector.connectNow();
+      await until(() => connector.state().status === "connected");
+      ready.yes = true;
+      await connector.keyStoreChanged();
+      expect(written.filter((s) => s.token)).toHaveLength(1);
+    });
+  });
+
   it("does nothing until a panel uses it", async () => {
     const { connector, fake } = await setup({ secrets: SIGNED_IN });
     expect(connector.view().status).toBe("off");
