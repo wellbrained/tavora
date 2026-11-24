@@ -28,6 +28,17 @@ describe("SignIn", () => {
     expect(store.current).toEqual(SAVED);
   });
 
+  it("a late read doesn't bring back an old sign-in after a sign-in and sign-out made while it read", async () => {
+    let release: () => void = () => undefined;
+    const store = new SignIn({ enabled: true, load: () => new Promise((resolve) => (release = () => resolve(SAVED))), save: async () => undefined });
+    const reading = store.loadIfSignedOut();
+    store.current = { ...SAVED, email: "other@example.com" };
+    store.current = null;
+    release();
+    expect(await reading).toBe(false);
+    expect(store.current).toBeNull();
+  });
+
   it("reads and gives nothing while accounts are off", async () => {
     const { store, loads } = signIn(false);
     await store.load();

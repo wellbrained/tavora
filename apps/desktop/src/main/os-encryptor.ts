@@ -23,17 +23,22 @@ export function osEncryptor(test: boolean, limit = ASK_LIMIT_MS, answeredLate?: 
   let startedAt = 0;
   /** Which question is the current one; an older one that answers late still updates `available`, nothing else. */
   let turn = 0;
+  /** Questions to the system not answered yet; while two are, the user's acts ask no more (no stacked keyring prompts). */
+  let unanswered = 0;
   let wait: Promise<boolean> | null = null;
   const check = async (): Promise<boolean> => {
     // Linux without a keyring falls back to a fixed key, which protects nothing; Tavora then saves no sign-in.
-    available = (await safeStorage.isAsyncEncryptionAvailable()) && (process.platform !== "linux" || test || safeStorage.getSelectedStorageBackend() !== "basic_text");
-    return available;
+    const answer = (await safeStorage.isAsyncEncryptionAvailable()) && (process.platform !== "linux" || test || safeStorage.getSelectedStorageBackend() !== "basic_text");
+    // Once yes, it stays yes: an older question that answers no after a newer one said yes changes nothing.
+    available ||= answer;
+    return answer;
   };
   const ask = (): Promise<boolean> => {
     open = true;
     gaveUp = false;
     startedAt = Date.now();
     const mine = ++turn;
+    unanswered++;
     const asked: Promise<boolean> = new Promise((resolve) => {
       // A key store that doesn't answer (a prompt nobody sees, a stuck service) counts as not available for now.
       const timer = setTimeout(() => {
@@ -43,6 +48,7 @@ export function osEncryptor(test: boolean, limit = ASK_LIMIT_MS, answeredLate?: 
       timer.unref();
       void check().catch(() => false).then((answer) => {
         clearTimeout(timer);
+        unanswered--;
         const lateOne = answer && (mine !== turn || gaveUp);
         if (mine === turn) {
           open = false;
@@ -63,7 +69,7 @@ export function osEncryptor(test: boolean, limit = ASK_LIMIT_MS, answeredLate?: 
     // `again`: the user acted (Turn on, keep the sign-in), so a question that timed out is asked again now.
     ready: (again = false) => {
       if (available) return Promise.resolve(true);
-      if (open && !(gaveUp && (again || Date.now() - startedAt >= askAgainAfter))) return gaveUp ? Promise.resolve(false) : wait!;
+      if (open && !(gaveUp && unanswered < 2 && (again || Date.now() - startedAt >= askAgainAfter))) return gaveUp ? Promise.resolve(false) : wait!;
       wait = ask();
       return wait;
     },

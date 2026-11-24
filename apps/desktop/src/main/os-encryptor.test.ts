@@ -104,6 +104,32 @@ describe("the system key store, async", () => {
     expect(await patient.ready()).toBe(true);
   });
 
+  it("an older question that answers no after a newer one said yes leaves it yes", async () => {
+    let first: (answer: boolean) => void = () => undefined;
+    fake.isAsyncEncryptionAvailable = () => new Promise<boolean>((resolve) => (first = resolve));
+    const encryptor = osEncryptor(false, 10);
+    expect(await encryptor.ready()).toBe(false);
+    const stale = first;
+    fake.isAsyncEncryptionAvailable = () => Promise.resolve(true);
+    expect(await encryptor.ready(true)).toBe(true);
+    stale(false);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(encryptor.isAvailable()).toBe(true);
+    expect(await encryptor.ready()).toBe(true);
+  });
+
+  it("asks no more while two questions are still open, so keyring prompts don't stack", async () => {
+    let asked = 0;
+    fake.isAsyncEncryptionAvailable = () => {
+      asked++;
+      return new Promise<boolean>(() => undefined);
+    };
+    const encryptor = osEncryptor(false, 10);
+    expect(await encryptor.ready()).toBe(false);
+    for (let i = 0; i < 4; i++) expect(await encryptor.ready(true)).toBe(false);
+    expect(asked).toBe(2);
+  });
+
   it("is not available before it is asked, and is the answer of the last ask after", async () => {
     const encryptor = osEncryptor(false);
     expect(encryptor.isAvailable()).toBe(false);

@@ -1133,7 +1133,9 @@ export class Host {
     const { userData } = options;
     // A key store that answers only after the wait ran out (a keyring unlocked later) is told to the views, once the host is there.
     let started: Host | undefined;
-    const encryptor = osEncryptor(options.discord !== undefined, undefined, () => started?.keyStoreChanged());
+    // A late answer before the host exists is kept for it: the account reads its sign-in in init, but Discord doesn't.
+    let answeredEarly = false;
+    const encryptor = osEncryptor(options.discord !== undefined, undefined, () => (started ? started.keyStoreChanged() : (answeredEarly = true)));
     // Asked in the background so the answer is there for the views; whatever seals or opens a file asks (and waits) itself.
     void encryptor.ready();
     // The cloud copy comes first, as a newer copy is taken before anything reads the files. It needs only the saved
@@ -1244,6 +1246,7 @@ export class Host {
 
     const host = new Host(options, { encryptor, signIn, copySync, installed, safetyLists, official, grants, connection, systemInfo, openTimes, emblem, styles }, library, workspaces, profile, windowState, themes, themeProblems, themeHints, savedData);
     started = host;
+    if (answeredEarly) host.keyStoreChanged();
     if (ownersNoted) host.workspaces.saveSoon();
     // What the user did while a cloud copy waited is safe in a backup, and this PC's data from before an older Tavora took
     // the copy up again: they hear where, in one message when it is both.
