@@ -14,18 +14,18 @@ defineOptions({ inheritAttrs: false });
   <span class="footer-slot relative flex w-12 flex-none justify-center">
     <!-- Lights up while the rail item around it is hovered, also when the rail is collapsed. -->
     <span
-      class="footer-tile bg-card relative grid size-10 place-items-center overflow-hidden rounded-[10px] transition-[background-color,box-shadow] duration-150 [[data-rail-item]:hover_&]:bg-[color-mix(in_srgb,var(--foreground)_12%,var(--card))] [[data-rail-item]:hover_&]:shadow-[0_0_12px_0_color-mix(in_oklab,var(--primary)_30%,transparent)]"
+      class="footer-tile bg-card relative grid size-10 place-items-center overflow-hidden rounded-[8px] transition-[background-color,box-shadow] duration-150 [[data-rail-item]:hover_&]:bg-[color-mix(in_srgb,var(--foreground)_12%,var(--card))] [[data-rail-item]:hover_&]:shadow-[0_0_12px_0_color-mix(in_oklab,var(--primary)_30%,transparent)]"
       v-bind="$attrs"
     >
       <slot />
       <svg v-if="progress !== undefined" class="pointer-events-none absolute inset-0 size-full" viewBox="0 0 40 40" aria-hidden="true" data-testid="rail-tile-progress">
-        <rect x="1.25" y="1.25" width="37.5" height="37.5" rx="8.75" fill="none" stroke-width="2.5" class="stroke-[color-mix(in_oklab,var(--primary)_22%,transparent)]" />
+        <rect x="1.25" y="1.25" width="37.5" height="37.5" rx="6.75" fill="none" stroke-width="2.5" class="stroke-[color-mix(in_oklab,var(--primary)_22%,transparent)]" />
         <rect
           x="1.25"
           y="1.25"
           width="37.5"
           height="37.5"
-          rx="8.75"
+          rx="6.75"
           fill="none"
           stroke-width="2.5"
           stroke-linecap="round"

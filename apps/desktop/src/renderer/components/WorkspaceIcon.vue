@@ -27,7 +27,7 @@ const fontSize = computed(() => Math.max(12, Math.round(props.size * ([...text.v
 <template>
   <span
     class="relative inline-flex flex-none overflow-hidden shadow-[inset_0_0_0_1px_rgb(255_255_255/0.06)]"
-    :style="{ width: `${size}px`, height: `${size}px`, borderRadius: `${Math.round(size / 4)}px` }"
+    :style="{ width: `${size}px`, height: `${size}px`, borderRadius: `${Math.round(size / 5)}px` }"
     aria-hidden="true"
   >
     <img v-if="workspace.icon.kind === 'image'" class="size-full object-cover" :src="workspace.icon.url" alt="" draggable="false" />

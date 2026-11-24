@@ -15,7 +15,7 @@ const props = withDefaults(
     /** Corner radius of a square avatar in px, e.g. to sit evenly inside a rounded card. */
     radius?: number;
   }>(),
-  { size: 36, initials: "", square: false, radius: 10 },
+  { size: 36, initials: "", square: false, radius: 8 },
 );
 
 const initials = computed(() => props.initials.trim() || autoInitials(props.name));

@@ -601,7 +601,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
               </template>
               <span
                 v-else
-                class="rail-icon bg-card text-primary group-hover:bg-primary-fill group-hover:text-primary-fill-foreground flex size-10 flex-none items-center justify-center rounded-[10px]"
+                class="rail-icon bg-card text-primary group-hover:bg-primary-fill group-hover:text-primary-fill-foreground flex size-10 flex-none items-center justify-center rounded-[8px]"
               >
                 <Plus class="size-5" />
               </span>

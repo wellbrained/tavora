@@ -19,7 +19,7 @@ watch(
 <template>
   <span
     class="relative inline-flex flex-none overflow-hidden shadow-[inset_0_0_0_1px_rgb(255_255_255/0.06)]"
-    :style="{ width: `${size}px`, height: `${size}px`, borderRadius: `${Math.round(size / 4)}px` }"
+    :style="{ width: `${size}px`, height: `${size}px`, borderRadius: `${Math.round(size / 5)}px` }"
     aria-hidden="true"
   >
     <span v-if="icon && !failed" class="flex size-full items-center justify-center" :style="{ backgroundImage: backdropOf('onDark') }">

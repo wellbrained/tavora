@@ -58,7 +58,7 @@ defineOptions({ inheritAttrs: false });
         :aria-label="workspace.name"
         @click="emit('open')"
       >
-        <span class="rail-icon flex flex-none" :style="{ borderRadius: `${size / 4}px` }"><WorkspaceIcon :workspace="workspace" :size="size" /></span>
+        <span class="rail-icon flex flex-none" :style="{ borderRadius: `${Math.round(size / 5)}px` }"><WorkspaceIcon :workspace="workspace" :size="size" /></span>
         <span v-if="expanded" :class="cn('truncate font-medium', nested ? 'text-sm' : 'text-base')">{{ workspace.name }}</span>
         <Kbd v-if="shortcut" class="text-primary ml-auto flex-none" :data-testid="`${testid}-shortcut`">{{ shortcut }}</Kbd>
       </button>
