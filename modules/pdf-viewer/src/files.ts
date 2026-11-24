@@ -2,7 +2,7 @@
 // Every step runs again on a newer copy after a conflict (see `openDocument`), so each one is safe to repeat.
 
 import { BLOB_TYPES, type ReadOnlyFileState } from "@tavora/sdk";
-import { isRecord } from "@tavora/official-ui/lib/utils";
+import { isRecord, unknownFields } from "@tavora/official-ui/lib/utils";
 
 export const FILES_ID = "files";
 /** The longest display name a file can have. */
@@ -77,14 +77,14 @@ export function parseView(raw: unknown, kind: FileKind): FileView {
   const zoom = typeof value.zoom === "number" ? clampZoom(value.zoom) : 1;
   const fit: FitMode = value.fit === "width" || value.fit === "page" || value.fit === null ? value.fit : kind === "pdf" ? "width" : "page";
   const side: SideMode = value.side === "pages" || value.side === "contents" ? value.side : null;
-  return { page, zoom, fit, side };
+  return { ...unknownFields(value, ["page", "zoom", "fit", "side"]), page, zoom, fit, side };
 }
 
 const isCount = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0;
 
 export function parseLink(raw: unknown): FileLink | undefined {
   if (!isRecord(raw) || typeof raw.ref !== "string" || !/^[a-f0-9]{32}$/.test(raw.ref) || !isCount(raw.size) || !isCount(raw.modifiedAt)) return undefined;
-  return { ref: raw.ref, size: raw.size, modifiedAt: raw.modifiedAt, ...(typeof raw.skipped === "string" ? { skipped: raw.skipped } : {}) };
+  return { ...unknownFields(raw, ["ref", "size", "modifiedAt", "skipped"]), ref: raw.ref, size: raw.size, modifiedAt: raw.modifiedAt, ...(typeof raw.skipped === "string" ? { skipped: raw.skipped } : {}) };
 }
 
 /** One version of an original, as a short text to compare. */
@@ -107,7 +107,9 @@ export function parseFiles(raw: unknown): FilesData {
     seen.add(item.id);
     const kind = kindOf(item.type);
     const link = parseLink(item.link);
+    // Fields a newer version added are kept as they are (unknownFields), so its data survives an edit made here.
     files.push({
+      ...unknownFields(item, ["id", "previous", "link", "name", "type", "kind", "addedAt", "view"]),
       id: item.id,
       ...(typeof item.previous === "string" && item.previous && item.previous !== item.id ? { previous: item.previous } : {}),
       ...(link ? { link } : {}),
@@ -118,7 +120,7 @@ export function parseFiles(raw: unknown): FilesData {
       view: parseView(item.view, kind),
     });
   }
-  return { files };
+  return { ...unknownFields(raw, ["files"]), files };
 }
 
 // ── Changes (all safe to repeat)

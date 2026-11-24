@@ -52,6 +52,7 @@ function onKeydown(event: KeyboardEvent) {
     <Transition enter-active-class="tavora-clear-in" leave-active-class="tavora-clear-out">
       <Button
         v-if="model && !disabled"
+        type="button"
         size="icon-xs"
         variant="ghost"
         class="absolute right-2"

@@ -1,5 +1,6 @@
 // The user's named values, newest first, kept in the workspace's module storage so every panel of the workspace has them.
 // A sum holds a value by its name and looks up its number when it is worked out.
+import { unknownFields } from "@tavora/official-ui/lib/utils";
 import type { JsonValue } from "@tavora/sdk";
 import type { Lookup } from "./calc";
 
@@ -29,7 +30,7 @@ export function parseValues(raw: JsonValue | null): Value[] {
     if (typeof entry?.name !== "string" || typeof entry.value !== "string") continue;
     if (!isValidName(entry.name) || !Number.isFinite(Number(entry.value))) continue;
     if (values.some((value) => sameName(value.name, entry.name as string))) continue;
-    values.push({ name: entry.name, value: entry.value });
+    values.push({ ...unknownFields<JsonValue>(entry, ["name", "value"]), name: entry.name, value: entry.value });
   }
   return values.slice(0, MAX_VALUES);
 }

@@ -161,3 +161,29 @@ it("creates the same document for a new list", async () => {
   `);
   await store.dispose();
 });
+
+// A newer copy may add fields (the catalogue's, before a fallback to the shipped one): this version keeps them through an
+// edit and its save, while what it reads itself is still checked.
+it("keeps fields a newer version added when it changes and saves the list", async () => {
+  const { sdk, host } = createMemoryHost();
+  const newer: JsonValue = {
+    theme: "dark",
+    items: [
+      { id: "c1", kind: "counter", label: "Deaths", value: 3, sound: "ding", links: [{ target: "c2", amount: 2, note: "x" }], look: { color: "#ffffff", glow: true, wordsColor: "red" }, stream: { key: "g1", whole: true, text: "", look: {}, place: "top" } },
+      { id: "c2", kind: "counter", label: "Bosses", value: 1, links: [{ target: "c1", amount: 1 }] },
+      { id: "k1", kind: "stopwatch", label: "Run", counted: 5000, lapBase: "nope", splitColor: "#00ff00" },
+    ],
+  };
+  await host.documents.put({ id: LIST_ID, title: LIST_TITLE, data: newer });
+  const store = await createItemStore(sdk, { debounceMs: 0 });
+  store.apply(["c1"], (data) => void ((data.items[0] as { value: number }).value = 4));
+  await store.flush();
+  const saved = host.documents.get(LIST_ID)!.data as { theme: string; items: Record<string, unknown>[] };
+  expect(saved.theme).toBe("dark");
+  expect(saved.items[0]).toMatchObject({ value: 4, sound: "ding", links: [{ target: "c2", amount: 2, note: "x" }], look: { glow: true }, stream: { place: "top" } });
+  // What this version reads is still checked: a bad colour and a bad lap base are not kept.
+  expect((saved.items[0]!.look as Record<string, unknown>).wordsColor).toBeUndefined();
+  expect(saved.items[2]).toMatchObject({ splitColor: "#00ff00" });
+  expect(saved.items[2]!.lapBase).toBeUndefined();
+  await store.dispose();
+});

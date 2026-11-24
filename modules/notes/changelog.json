@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.6.31",
+    "date": "2026-11-24",
+    "notes": [
+      "Undo right after opening another note no longer brings back the last note's text.",
+      "Your notes keep what a newer version saved."
+    ]
+  },
+  {
     "version": "0.6.30",
     "date": "2026-11-24",
     "notes": [

@@ -45,6 +45,14 @@ function onRenameEnter(event: KeyboardEvent) {
   finishRename(true, event);
 }
 
+/** Escape drops the new name, unless it only cancels text an input method is still composing. */
+function onRenameEscape(event: KeyboardEvent) {
+  if (isComposing(event)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  finishRename(false);
+}
+
 /** The menu gives focus back to its button when it closes; during a rename the input keeps it. */
 function keepFocus(event: Event) {
   if (renaming.value) event.preventDefault();
@@ -69,7 +77,7 @@ function finishRename(save: boolean, event?: Event) {
     :aria-label="t('board.renameLabel')"
     data-testid="board-rename-input"
     @keydown.enter="onRenameEnter"
-    @keydown.esc.stop.prevent="finishRename(false)"
+    @keydown.esc="onRenameEscape"
     @blur="finishRename(true, $event)"
   />
   <!-- Kept (hidden) while renaming, so the menu can finish closing. -->

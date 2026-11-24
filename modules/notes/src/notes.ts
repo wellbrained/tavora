@@ -2,6 +2,7 @@
 // for titles, sorting and search. Kept free of Vue and Tiptap so it can be
 // unit tested.
 
+import { unknownFields } from "@tavora/official-ui/lib/utils";
 import { BLOB_ID, type JsonValue } from "@tavora/sdk";
 
 /** The one note every workspace has. It cannot be deleted, only cleared. */
@@ -86,7 +87,9 @@ export function formatMegabytes(bytes: number): string {
 export function parseNote(raw: JsonValue | null, now = new Date().toISOString()): NoteData {
   const value = raw !== null && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
   const content = value.content;
+  // Fields a newer version added are kept as they are (unknownFields), so its data survives an edit made here.
   return {
+    ...unknownFields<JsonValue>(value, ["version", "content", "text", "title", "images", "pinned", "createdAt"]),
     version: 1,
     content:
       content !== null && typeof content === "object" && !Array.isArray(content) && content.type === "doc"
@@ -300,6 +303,7 @@ export function sizePx(id: SizeId): number {
 function parseStyle(raw: JsonValue | undefined): TextStyle {
   const value = raw !== null && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
   return {
+    ...unknownFields<JsonValue>(value, ["font", "size"]),
     font: FONTS.find((font) => font.id === value.font)?.id ?? DEFAULT_STYLE.font,
     size: SIZES.find((size) => size.id === value.size)?.id ?? DEFAULT_STYLE.size,
   };
@@ -308,5 +312,5 @@ function parseStyle(raw: JsonValue | undefined): TextStyle {
 /** Turns what was stored into a valid appearance; unknown fonts and sizes fall back to the defaults. */
 export function parseAppearance(raw: JsonValue | null): Appearance {
   const value = raw !== null && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
-  return { notes: parseStyle(value.notes), scratchpad: parseStyle(value.scratchpad) };
+  return { ...unknownFields<JsonValue>(value, ["notes", "scratchpad"]), notes: parseStyle(value.notes), scratchpad: parseStyle(value.scratchpad) };
 }

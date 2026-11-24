@@ -34,7 +34,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@tavora/official-ui/components/ui/dropdown-menu";
-import type { JSONContent } from "@tiptap/core";
 import { Placeholder } from "@tiptap/extensions";
 import { EditorContent, useEditor } from "@tiptap/vue-3";
 import type { DocumentHandle } from "@tavora/sdk/store";
@@ -48,7 +47,6 @@ import { t } from "./i18n";
 import {
   cleanTitle,
   collectImageIds,
-  contentFromText,
   FONTS,
   fontStack,
   formatMegabytes,
@@ -66,6 +64,7 @@ import {
 import { useNoteImages } from "./noteImages";
 import { handleNotePaste } from "./paste";
 import { isTooBigToSave, type NotesStore } from "./store";
+import { showNote } from "./showNote";
 import { textExtensions } from "./textExtensions";
 
 const props = defineProps<{ store: NotesStore; noteId: string; entry: NoteEntry | undefined; narrow: boolean; look: TextStyle }>();
@@ -169,15 +168,6 @@ async function flush(): Promise<void> {
   await open.flush();
 }
 
-/** Shows a note's formatting; a stored note the editor cannot read shows its plain text instead of breaking the panel. */
-function showContent(instance: NonNullable<typeof editor.value>, note: NoteData) {
-  try {
-    instance.commands.setContent(note.content as JSONContent, { emitUpdate: false, errorOnInvalidContent: true });
-  } catch {
-    instance.commands.setContent(contentFromText(note.text) as JSONContent, { emitUpdate: false });
-  }
-}
-
 /** Holds a note's document: shows it and follows its save state. Runs again when another note is shown. */
 function bind(next: DocumentHandle<NoteData> | null) {
   for (const off of unbind.splice(0)) off();
@@ -192,7 +182,7 @@ function bind(next: DocumentHandle<NoteData> | null) {
   saveError.value = "";
   const instance = editor.value;
   if (!next || !instance) return;
-  showContent(instance, next.data);
+  showNote(instance, next.data);
   titleDraft.value = next.data.title;
   instance.setEditable(!props.store.deleted.value, false);
   loadedNote.value = boundId;
@@ -239,7 +229,7 @@ const stopFollowing = props.store.onChange((change) => {
   if (change.source !== "remote" || busy()) return;
   const { from, to } = instance.state.selection;
   if (!titleFocused) titleDraft.value = change.data.title;
-  showContent(instance, change.data);
+  showNote(instance, change.data);
   const end = instance.state.doc.content.size;
   instance.commands.setTextSelection({ from: Math.min(from, end), to: Math.min(to, end) });
 });
@@ -259,7 +249,7 @@ function reload() {
   if (!instance || !handle) return;
   contentDirty = false;
   titleDirty = false;
-  showContent(instance, handle.data);
+  showNote(instance, handle.data);
   titleDraft.value = handle.data.title;
 }
 

@@ -26,6 +26,7 @@ const props = defineProps<{
     :variant="variant ?? (close ? 'secondary' : 'default')"
     :size="size"
     :data-dialog-button="close ? 'close' : 'action'"
+    :type="close ? 'button' : undefined"
     :class="cn(close && '[&_svg]:hidden', props.class)"
   >
     <template v-if="!close">

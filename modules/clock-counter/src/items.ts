@@ -3,11 +3,11 @@
 // so it goes on through restarts and needs no saving while it runs. Every change here is a plain function of the
 // list, so a change made twice (after a save conflict) gives the same result.
 // The kit's plain entry for the overlay text box (no Vue), so this file stays plain data wherever it is read.
-import { keepOverlayTextBox, readOverlayTextBox, type OverlayTextBoxSettings } from "@tavora/official-ui/overlay-text";
+import { DEFAULT_OVERLAY_TEXT_BOX, keepOverlayTextBox, readOverlayTextBox, type OverlayTextBoxSettings } from "@tavora/official-ui/overlay-text";
 import type { JsonValue } from "@tavora/sdk";
 import { compile, COUNT, defaultText, legacyText, segments, TIME, type Member, type Segment } from "./template";
 import { DEFAULT_FORMAT, isFormat } from "./time";
-import { isRecord } from "@tavora/official-ui/lib/utils";
+import { isRecord, unknownFields } from "@tavora/official-ui/lib/utils";
 
 export const LIST_ID = "items";
 export const LIST_TITLE = "Clocks and counters";
@@ -190,10 +190,20 @@ export function defaultLook(): OverlayLook {
 
 const HEX = /^#[0-9a-f]{6}$/;
 
+// The fields this version reads, each checked; any other field is a newer version's and is kept as it was saved
+// (unknownFields), so its data survives an edit made here.
+const LOOK_KEYS = ["showLabel", "color", "outline", "font", "align", "wordsStep", "numberStep", "wordsSize", "numberSize", "text", "wordsColor", ...Object.keys(DEFAULT_OVERLAY_TEXT_BOX)];
+const STREAM_KEYS = ["key", "whole", "text", "look"];
+const LINK_KEYS = ["target", "amount"];
+/** Every field of either kind, so a field of the other kind (from a hand edit) is not kept either. */
+const ITEM_KEYS = ["id", "label", "look", "kind", "value", "step", "negative", "goal", "links", "stream", "format", "since", "counted", "duration", "repeat", "doneText", "laps", "showLastLap", "lapTimes", "lapBase", "lapsDropped"];
+const LIST_KEYS = ["items"];
+
 function parseLook(raw: unknown): OverlayLook {
   const look = isRecord(raw) ? raw : {};
   const color = typeof look.color === "string" && HEX.test(look.color) ? look.color : COLORS[0];
   const parsed: OverlayLook = {
+    ...unknownFields(look, LOOK_KEYS),
     showLabel: bool(look.showLabel, true),
     color,
     outline: bool(look.outline, true),
@@ -218,17 +228,17 @@ const STREAM_KEY = /^[A-Za-z0-9_-]{1,64}$/;
 
 function parseStream(raw: unknown): Stream | null {
   if (!isRecord(raw) || typeof raw.key !== "string" || !STREAM_KEY.test(raw.key)) return null;
-  return { key: raw.key, whole: bool(raw.whole, false), text: text(raw.text, MAX.text), look: parseLook(raw.look) };
+  return { ...unknownFields(raw, STREAM_KEYS), key: raw.key, whole: bool(raw.whole, false), text: text(raw.text, MAX.text), look: parseLook(raw.look) };
 }
 
 function parseItem(raw: unknown): Item | null {
   if (!isRecord(raw) || typeof raw.id !== "string" || raw.id.length === 0 || raw.id.length > 64) return null;
-  const base = { id: raw.id, label: text(raw.label, MAX.label), look: parseLook(raw.look) };
+  const base = { ...unknownFields(raw, ITEM_KEYS), id: raw.id, label: text(raw.label, MAX.label), look: parseLook(raw.look) };
   if (raw.kind === "counter") {
     const links = (Array.isArray(raw.links) ? raw.links : [])
       .filter(isRecord)
       .filter((link) => typeof link.target === "string" && link.target !== raw.id)
-      .map((link) => ({ target: link.target as string, amount: whole(link.amount, -MAX.value, MAX.value, 1) }))
+      .map((link) => ({ ...unknownFields(link, LINK_KEYS), target: link.target as string, amount: whole(link.amount, -MAX.value, MAX.value, 1) }))
       .slice(0, MAX.links);
     const negative = bool(raw.negative, false);
     return {
@@ -269,7 +279,7 @@ export function parseList(raw: JsonValue | null): ItemList {
   const ids = new Set(unique.map((item) => item.id));
   // Links only to counters that are still there.
   for (const item of unique) if (item.kind === "counter") item.links = item.links.filter((link) => ids.has(link.target) && unique.find((other) => other.id === link.target)?.kind === "counter");
-  return { items: unique };
+  return { ...unknownFields(raw, LIST_KEYS), items: unique };
 }
 
 export function newItem(kind: ItemKind, id: string, label: string): Item {

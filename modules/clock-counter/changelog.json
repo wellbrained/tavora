@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.1.46",
+    "date": "2026-11-24",
+    "notes": [
+      "Your clocks and counters keep what a newer version saved.",
+      "A change made just as the panel closes no longer shows an error."
+    ]
+  },
+  {
     "version": "0.1.45",
     "date": "2026-11-24",
     "notes": [

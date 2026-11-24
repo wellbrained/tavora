@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.33",
+    "date": "2026-11-24",
+    "notes": [
+      "Buttons in Settings never send a form by accident."
+    ]
+  },
+  {
     "version": "0.1.32",
     "date": "2026-11-24",
     "notes": [

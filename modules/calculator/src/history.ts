@@ -1,4 +1,5 @@
 // The last results, newest first, kept in the workspace's module storage so every panel of the workspace shows them.
+import { unknownFields } from "@tavora/official-ui/lib/utils";
 import type { JsonValue } from "@tavora/sdk";
 
 export type Calculation = {
@@ -19,7 +20,7 @@ export function parseHistory(raw: JsonValue | null): Calculation[] {
       const entry = item as Record<string, unknown> | null;
       return typeof entry?.expression === "string" && typeof entry.result === "string";
     })
-    .map(({ expression, result }) => ({ expression, result }))
+    .map((entry) => ({ ...unknownFields<JsonValue>(entry, ["expression", "result"]), expression: entry.expression, result: entry.result }))
     .slice(0, MAX_HISTORY);
 }
 

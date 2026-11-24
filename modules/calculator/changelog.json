@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.1.40",
+    "date": "2026-11-24",
+    "notes": [
+      "Your history, values and settings keep what a newer version saved.",
+      "Cancel and clear buttons never send a form by accident."
+    ]
+  },
+  {
     "version": "0.1.39",
     "date": "2026-11-24",
     "notes": [

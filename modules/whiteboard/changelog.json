@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.3.35",
+    "date": "2026-11-24",
+    "notes": [
+      "Your boards keep what a newer version saved.",
+      "Escape while typing a board name with an input method no longer cancels the rename."
+    ]
+  },
+  {
     "version": "0.3.34",
     "date": "2026-11-24",
     "notes": [

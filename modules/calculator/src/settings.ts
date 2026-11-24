@@ -1,5 +1,6 @@
 // The user's Calculator choices from the toolbar and its Settings dialog, the same in every workspace (kept in the module's app
 // storage).
+import { unknownFields } from "@tavora/official-ui/lib/utils";
 import type { JsonValue } from "@tavora/sdk";
 
 export type Mode = "basic" | "plus";
@@ -29,7 +30,9 @@ export function parseSettings(raw: JsonValue | null): Settings {
   const stored = (raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {}) as Record<string, unknown>;
   const length = HISTORY_LENGTHS.find((value) => value === stored.historyLength);
   const decimals = DECIMALS.find((value) => value === stored.decimals);
+  // Settings a newer version added are kept as they are (unknownFields); the panel saves them back with its own.
   return {
+    ...unknownFields<JsonValue>(stored, ["mode", "history", "historyLength", "decimals", "short"]),
     mode: stored.mode === "basic" || stored.mode === "plus" ? stored.mode : DEFAULT_SETTINGS.mode,
     history: typeof stored.history === "boolean" ? stored.history : DEFAULT_SETTINGS.history,
     historyLength: length ?? DEFAULT_SETTINGS.historyLength,

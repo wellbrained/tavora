@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.2.40",
+    "date": "2026-11-24",
+    "notes": [
+      "Your to-dos keep what a newer version saved.",
+      "Escape while typing with an input method (Japanese, Chinese, Korean) no longer clears a new to-do.",
+      "A change made just as the panel closes no longer shows an error."
+    ]
+  },
+  {
     "version": "0.2.39",
     "date": "2026-11-24",
     "notes": [

@@ -60,7 +60,7 @@ function resetPage() {
     <div class="flex min-w-0 flex-1 flex-col">
       <div ref="holder" class="flex min-h-0 flex-1 flex-col"><slot /></div>
       <footer class="text-muted-foreground flex h-12 flex-none items-center gap-2 border-t pr-6 pl-4 text-xs">
-        <Button v-if="reset && (resettable?.(page) ?? true)" variant="ghost" size="sm" class="text-muted-foreground" data-testid="settings-reset" @click="resetPage">
+        <Button v-if="reset && (resettable?.(page) ?? true)" type="button" variant="ghost" size="sm" class="text-muted-foreground" data-testid="settings-reset" @click="resetPage">
           <RotateCcw />
           {{ uiText.resetPage }}
         </Button>

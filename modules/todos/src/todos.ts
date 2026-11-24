@@ -8,7 +8,7 @@
 // always follow it directly: a task and everything below it form a block
 // that moves as one.
 
-import { clamp } from "@tavora/official-ui/lib/utils";
+import { clamp, unknownFields } from "@tavora/official-ui/lib/utils";
 import type { JsonValue } from "@tavora/sdk";
 
 /** The document every To-Dos panel of a workspace shares. */
@@ -91,13 +91,22 @@ function unique<T extends { id: string }>(items: T[]): T[] {
   return items.filter((item) => item.id !== "" && !seen.has(item.id) && seen.add(item.id));
 }
 
+/** The fields this version reads; any other field is a newer version's and is kept. */
+const LIST_KEYS = ["version", "groups"];
+const GROUP_KEYS = ["id", "name", "color", "tasks"];
+/** A task's fields, and the two an older version kept ("link", "steps"), which move into the task and are not kept. */
+const TASK_KEYS = ["id", "title", "done", "details", "pinned", "parentId", "createdAt", "doneAt", "link", "steps"];
+
 /** Turns stored data, or null for a new workspace, into a valid list. */
 export function parseList(raw: JsonValue | null): TodoList {
   const groups = isObject(raw ?? null) ? list((raw as JsonObject).groups) : [];
+  // Fields a newer version added are kept as they are (unknownFields), so its data survives an edit made here.
   return {
+    ...unknownFields<JsonValue>(raw, LIST_KEYS),
     version: 2,
     groups: unique(
       groups.slice(0, LIMITS.groups).map((group) => ({
+        ...unknownFields<JsonValue>(group, GROUP_KEYS),
         id: text(group.id, 64),
         name: text(group.name, MAX.groupName) || DEFAULT_GROUP,
         color: parseColor(group.color),
@@ -140,6 +149,7 @@ function parseTask(task: JsonObject): Task[] {
     });
   return [
     {
+      ...unknownFields<JsonValue>(task, TASK_KEYS),
       id,
       title: text(task.title, MAX.title),
       done,
