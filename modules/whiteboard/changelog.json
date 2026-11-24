@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.3.34",
+    "date": "2026-11-24",
+    "notes": [
+      "Tidied up inside. Nothing looks or works differently."
+    ]
+  },
+  {
     "version": "0.3.33",
     "date": "2026-11-21",
     "notes": [
