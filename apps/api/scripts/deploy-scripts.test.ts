@@ -329,7 +329,7 @@ exit 0`);
     fake(t, "debconf-set-selections", `cat >> "$LOG/debconf"`);
     fake(t, "id", `echo tavora-api`);
     fake(t, "timeout", `shift; exec "$@"`);
-    fake(t, "socat", `cat > /dev/null; echo PONG`);
+    fake(t, "socat", `[[ -e "$LOG/no-pong" ]] && exit 1; cat > /dev/null; echo PONG`);
     fake(t, "stat", `if grep -qE '^(start clamav-daemon|restart clamav-daemon)' "$LOG/systemctl" 2>/dev/null; then echo "\${FAKE_STAT_AFTER:-660 clamav}"; else echo "\${FAKE_STAT:-660 clamav}"; fi`);
     fake(t, "tavora-api-set-setting", `echo "$*" >> "$LOG/set-setting"`);
     return {
@@ -345,7 +345,7 @@ exit 0`);
   const WANTED_DROPIN = "# Written by tavora-api-clamav (Tavora): clamd's socket for the clamav group only.\n[Socket]\nSocketGroup=clamav\nSocketMode=0660\n";
 
   // Alerts for what clamd can't scan to the end, and the limits they compare with (above ZIP_LIMITS and the service's 20 MB streams).
-  const WANTED_LIMITS = "AlertExceedsMax yes\nAlertEncrypted yes\nStreamMaxLength 25M\nMaxFileSize 256M\nMaxScanSize 512M\nMaxRecursion 16\nMaxFiles 10000\n";
+  const WANTED_LIMITS = "AlertExceedsMax yes\nAlertEncrypted yes\nStreamMaxLength 25M\nMaxFileSize 100M\nMaxScanSize 400M\nMaxRecursion 16\nMaxFiles 10000\n";
   const CONF_660 = `LocalSocket @SOCK@\nLocalSocketMode 660\nLocalSocketGroup clamav\n${WANTED_LIMITS}`;
 
   it("gives clamd's socket unit a 660 clamav drop-in, edits clamd.conf too, and makes the socket again once", { timeout: 30_000 }, () => {
@@ -421,6 +421,19 @@ exit 0`);
     expect(result.status).not.toBe(0);
     expect(result.out).toContain("Can't read where clamav-daemon.socket listens");
     expect(restarts(t)).toEqual([]);
+  });
+
+  it("puts clamd.conf back and starts clamd again when clamd doesn't answer with the new settings", { timeout: 30_000 }, () => {
+    const { t, script, conf } = setup();
+    writeFileSync(path.join(t.log, "no-pong"), "");
+    const result = t.run(script);
+    expect(result.status).not.toBe(0);
+    expect(result.out).toContain("clamd.conf is back as it was");
+    expect(result.out).toContain("journalctl -u clamav-daemon");
+    expect(conf()).toBe("LocalSocket @SOCK@\nLocalSocketMode 666");
+    expect(restarts(t).filter((call) => call.startsWith("start"))).toHaveLength(2);
+    expect(t.read("set-setting")).toBe("");
+    expect(t.read("debconf")).toContain("clamav-daemon/StreamMaxLength string 25M");
   });
 
   it("stops before switching the service when the socket still isn't 660 clamav", { timeout: 30_000 }, () => {

@@ -113,6 +113,8 @@ set_conf() { # <name> <value>: the one line for <name> in clamd.conf, replaced o
   fi
 }
 before_conf="$(sha256sum < "$conf")"
+# A copy of clamd.conf as it was before this run: put back (and clamd restarted) if clamd doesn't come back with the new settings.
+cp -p "$conf" "$conf.tavora-prev"
 set_conf LocalSocketGroup clamav
 set_conf LocalSocketMode 660
 # Archives clamd can't scan to the end must not scan as clean: with these on, clamd reports one that is encrypted
@@ -123,13 +125,18 @@ set_conf AlertExceedsMax yes
 set_conf AlertEncrypted yes
 # The limits those alerts compare with, set on purpose and above the biggest legit upload: the service sends the whole zip
 # (at most 20 MB; a module zip is 50 MB at most, 200 MB unpacked, 2000 files, ZIP_LIMITS in packages/pack/src/zip.ts) and each file
-# in it on its own (at most 20 MB), so a normal module never goes over them. They are limits, not memory: clamd streams.
+# in it on its own (at most 20 MB), so a normal module never goes over them. MaxFileSize, MaxRecursion (16) and MaxFiles are
+# the packages' own values, MaxScanSize covers the 200 MB a module may unpack to, StreamMaxLength is what the filter reads.
 set_conf StreamMaxLength 25M
-set_conf MaxFileSize 256M
-set_conf MaxScanSize 512M
+set_conf MaxFileSize 100M
+set_conf MaxScanSize 400M
 set_conf MaxRecursion 16
 set_conf MaxFiles 10000
-[[ "$(sha256sum < "$conf")" == "$before_conf" ]] || changed=1
+# StreamMaxLength like the socket keys, so a package upgrade that rewrites clamd.conf keeps it.
+printf '%s
+' 'clamav-daemon clamav-daemon/StreamMaxLength string 25M' | debconf-set-selections 2>/dev/null || true
+conf_changed=0
+[[ "$(sha256sum < "$conf")" == "$before_conf" ]] || { changed=1; conf_changed=1; }
 if [[ "$socket_unit" == 1 ]]; then
   dropin=/etc/systemd/system/clamav-daemon.socket.d/tavora.conf
   wanted=$'# Written by tavora-api-clamav (Tavora): clamd\'s socket for the clamav group only.\n[Socket]\nSocketGroup=clamav\nSocketMode=0660\n'
@@ -140,7 +147,22 @@ if [[ "$socket_unit" == 1 ]]; then
     changed=1
   fi
 fi
-restart_failed() { echo "clamd did not start again with its socket for the clamav group; check: journalctl -u clamav-daemon -u clamav-daemon.socket"; exit 1; }
+# clamd didn't come back: the clamd.conf from before this run goes back, clamd starts again with it, and the run ends here.
+rollback() {
+  if [[ "$conf_changed" == 1 && -f "$conf.tavora-prev" ]]; then
+    cp -p "$conf.tavora-prev" "$conf"
+    echo "clamd did not come back with the new settings: clamd.conf is back as it was."
+    if [[ "$socket_unit" == 1 ]]; then
+      systemctl stop clamav-daemon.service clamav-daemon.socket || true
+      systemctl start clamav-daemon.socket clamav-daemon.service || true
+    else
+      systemctl restart clamav-daemon || true
+    fi
+  fi
+  echo "$1"
+  exit 1
+}
+restart_failed() { rollback "clamd did not start again with its socket for the clamav group; check: journalctl -u clamav-daemon -u clamav-daemon.socket"; }
 # Remade when the settings just changed, or when the socket isn't 660 clamav yet (a run cut off after the drop-in was
 # written, or a socket unit left listening while clamd was stopped): only while something holds the old socket.
 running=0
@@ -161,7 +183,7 @@ if [[ "$socket_unit" == 1 ]]; then systemctl enable --now clamav-daemon.socket c
 if id -nG tavora-api 2>/dev/null | tr ' ' '\n' | grep -qx clamav; then gpasswd -d tavora-api clamav >/dev/null; echo 'Took tavora-api out of the clamav group.'; fi
 # clamd needs a moment to load its signatures before it answers.
 for _ in $(seq 1 60); do [[ -S "$clamd" ]] && answers "$clamd" && break; sleep 2; done
-answers "$clamd" || { echo 'clamd is not answering yet; check: journalctl -u clamav-daemon'; exit 1; }
+answers "$clamd" || rollback 'clamd is not answering yet; check: journalctl -u clamav-daemon'
 [[ "$(socket_mode)" == '660 clamav' ]] || { echo "clamd's socket is $(socket_mode), not 660 clamav; check: systemctl cat clamav-daemon.socket (SocketMode, SocketGroup), and LocalSocketMode and LocalSocketGroup in $conf."; exit 1; }
 systemctl enable tavora-clamd-filter >/dev/null
 systemctl restart tavora-clamd-filter

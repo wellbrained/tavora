@@ -497,7 +497,7 @@ async function checkVirus(bytes: Buffer, files: readonly ZipFile[], { scanner, s
     if (result.clean) return null;
     // Only archives clamd couldn't scan to the end (encrypted, or over a limit): nothing was found, so it doesn't say "found".
     if (result.threats.every(unscannable)) {
-      return { ...reason("virus", "We couldn't scan all of it: it has an encrypted file, or a file that is too big or nested too deep. Please upload it without that.", `Not fully scanned: ${result.threats.slice(0, 5).join(", ")}`), kind: "unscannable" };
+      return { ...reason("virus", "We couldn't scan all of it (an encrypted or very large file), so a person takes a look.", `Not fully scanned: ${result.threats.slice(0, 5).join(", ")}`), kind: "unscannable" };
     }
     return reason("virus", "The virus scan found something.", `Found: ${result.threats.slice(0, 5).join(", ")}`);
   } catch (error) {
