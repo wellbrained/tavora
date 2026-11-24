@@ -489,6 +489,16 @@ ${"A".repeat(64)}
     expect((await busy.request("http://tavora.test/v1/catalog/publish", request())).status).toBe(429);
   });
 
+  it("lets a developer look at their waiting versions without spending their uploads", async () => {
+    const { developer, send, app } = setup({}, undefined, roomy(), createRateLimiter({ limit: 2, windowMs: 3_600_000 }));
+    const { key, token } = developer("dev@example.com");
+    for (let i = 0; i < 5; i++) {
+      const look = await app.request("http://tavora.test/v1/catalog/waiting", { headers: { authorization: `Bearer ${token}` } });
+      expect(look.status).toBe(200);
+    }
+    expect((await send(key, moduleZip(key, "wellbrained.timer", "1.0.0"))).status).toBe(201);
+  });
+
   it("takes new versions from a successor key named in the signed successions list, for the same account only (C7)", async () => {
     const { store, catalog, clock, developer, send, reason } = setup();
     const { key: lost, accountId } = developer("dev@example.com");

@@ -63,6 +63,8 @@ export interface PublishOptions {
   clientKey: (request: Request) => string;
   /** Uploads per client: 30 an hour by default. */
   rateLimiter?: RateLimiter;
+  /** Looking at and withdrawing waiting versions, per client: 120 an hour by default, apart from the uploads. */
+  waitingRateLimiter?: RateLimiter;
   limits?: Partial<PublishLimits>;
   now?: () => number;
   /** The catalogue public key the signed lists are checked against (CATALOGUE_PUBLIC_KEY outside tests). */
@@ -115,8 +117,10 @@ const sentToken = (context: Context) => bearerToken(context)?.startsWith(PUBLISH
 const PAUSED_KEY = "This publisher key was paused when your account's email changed. Link it again to publish with it.";
 
 /** The middleware and handler for POST /v1/catalog/publish. */
-export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits = {}, now = Date.now, catalogueKey, officialPins = OFFICIAL_PINS, maintainer, mail, scanner, memory = uploadMemory, readLimits = {}, scanLimitMs }: PublishOptions) {
+export function publishHandlers({ catalog, store, clientKey, rateLimiter, waitingRateLimiter, limits = {}, now = Date.now, catalogueKey, officialPins = OFFICIAL_PINS, maintainer, mail, scanner, memory = uploadMemory, readLimits = {}, scanLimitMs }: PublishOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 30, windowMs: 3_600_000 });
+  // An app that checks its waiting versions now and then must not use up the uploads.
+  const waitingLimiter = waitingRateLimiter ?? createRateLimiter({ limit: 120, windowMs: 3_600_000 });
   const { uploadsPerDay, accountBytes, catalogBytes, keepVersions, waitingPerAccount } = { ...PUBLISH_LIMITS, ...limits };
   const tooBig = (context: Context) => refuse(context, 413, "too-big", `A module zip may be at most ${ZIP_LIMITS.maxArchiveBytes / 1024 / 1024} MB.`);
   /** The accounts with an upload holding memory now: each gets one at a time, so one account can't hold the whole budget. */
@@ -502,7 +506,7 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
 
   /** The signed-in account's versions waiting for review, with their reasons. */
   const waiting = (context: Context) => {
-    const wait = limiter.check(clientKey(context.req.raw));
+    const wait = waitingLimiter.check(clientKey(context.req.raw));
     if (wait > 0) return tooMany(context, wait, "Too many requests. Wait a while and try again.");
     if (!catalog || !store) return refuse(context, 503, "unavailable", "Publishing is not available right now.");
     const by = uploader(store, context, now());
@@ -519,7 +523,7 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
 
   /** Takes one of the account's waiting versions back: its row and zip go. Only the account that uploaded it can. */
   const withdraw = async (context: Context) => {
-    const wait = limiter.check(clientKey(context.req.raw));
+    const wait = waitingLimiter.check(clientKey(context.req.raw));
     if (wait > 0) return tooMany(context, wait, "Too many requests. Wait a while and try again.");
     if (!catalog || !store) return refuse(context, 503, "unavailable", "Publishing is not available right now.");
     const by = uploader(store, context, now());

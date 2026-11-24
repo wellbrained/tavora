@@ -12,7 +12,8 @@ export interface AddedByHand {
 /**
  * The maintainer adds a zip by hand (scripts/catalog.ts `add`). Its id prefix goes to the account
  * the zip's key is linked to, as a publish would reserve it, because holding a prefix makes an
- * account the publisher of every module under it. A prefix another account holds is refused.
+ * account the publisher of every module under it. A prefix another account holds is refused, and so is one with
+ * modules under it that other keys signed.
  */
 export function addByHand(catalog: CatalogStore, accounts: AccountStore | undefined, bytes: Buffer, now = new Date()): AddedByHand {
   const checked = checkCatalogZip(bytes);
@@ -20,6 +21,11 @@ export function addByHand(catalog: CatalogStore, accounts: AccountStore | undefi
   const holder = accounts?.prefixHolder(prefix) ?? null;
   const keyAccount = accounts?.publisherKey(checked.owner)?.accountId ?? null;
   if (holder !== null && holder !== keyAccount) throw new CatalogError(`The id prefix "${prefix}" belongs to another account than the one this zip's key is linked to.`);
+  // Unheld, but with modules under it whose keys aren't this account's: publishing calls it taken (prefixCheck), so it
+  // isn't handed to this account here either.
+  if (accounts && holder === null && keyAccount !== null && catalog.ownersUnder(prefix).some((key) => accounts.publisherKey(key)?.accountId !== keyAccount)) {
+    throw new CatalogError(`The id prefix "${prefix}" has modules signed by other keys, so it can't go to the account this zip's key is linked to.`);
+  }
   const added = catalog.add(bytes, now, null, checked);
   const reserve = accounts !== undefined && holder === null && keyAccount !== null;
   if (reserve) accounts.reservePrefix(keyAccount, prefix, now.getTime());

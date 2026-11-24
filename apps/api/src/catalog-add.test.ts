@@ -48,6 +48,22 @@ describe("catalog add (by hand)", () => {
     expect(accounts.prefixCheck(linked("other@example.com").accountId, "community", catalog)).toBe("taken");
   });
 
+  it("refuses to hand an account a prefix whose modules other keys own, as publishing calls it taken", () => {
+    const { accounts, catalog, linked } = setup();
+    const stranger = generateKeyPairSync("ed25519").privateKey;
+    addByHand(catalog, accounts, moduleZip(stranger, "community.timer"), new Date(NOW));
+    const other = linked("other@example.com");
+    expect(() => addByHand(catalog, accounts, moduleZip(other.key, "community.notes"), new Date(NOW))).toThrow(/other keys/);
+    expect(accounts.prefixHolder("community")).toBeNull();
+    expect(catalog.modules().map((module) => module.id)).toEqual(["community.timer"]);
+    // The account whose key owns every module under it gets it.
+    const owner = linked("owner@example.com");
+    const mine = generateKeyPairSync("ed25519").privateKey;
+    addByHand(catalog, accounts, moduleZip(mine, "solo.timer"), new Date(NOW));
+    accounts.linkKey(owner.accountId, keyFingerprint(rawKey(mine)), rawKey(mine).toString("base64"), NOW);
+    expect(addByHand(catalog, accounts, moduleZip(mine, "solo.notes"), new Date(NOW))).toMatchObject({ reservedFor: owner.accountId });
+  });
+
   it("refuses a zip under a prefix another account holds, and adds nothing", () => {
     const { accounts, catalog, linked } = setup();
     const holder = linked("holder@example.com");
