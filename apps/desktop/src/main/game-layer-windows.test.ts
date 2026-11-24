@@ -234,7 +234,8 @@ describe("panels", () => {
     layer.show(scene([panel("p", lent)], { layer: LAYER }));
     expect(layer.ended("p")).toBe("panel");
     expect(lent).toEqual(["lend p", "back p"]);
-    expect(calls).not.toContain("p destroy");
+    // Its page may be gone while the window isn't: it goes, once.
+    expect(calls.filter((call) => call === "p destroy")).toHaveLength(1);
     layer.show(scene([panel("p", lent)], { layer: LAYER }));
     layer.show(scene([panel("p", lent)], { layer: LAYER }));
     expect(lent).toEqual(["lend p", "back p", "lend p"]);

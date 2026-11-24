@@ -40,7 +40,11 @@ type Older = {
     upload(key: Uint8Array, roots: unknown, state: unknown): Promise<{ status: string; state?: { version: number } }>;
     download(key: Uint8Array, roots: unknown, staging: string, synced?: number, seen?: object): Promise<{ version: number; marked?: boolean } | null>;
   };
-  FolderStorage: new (folder: string, options?: { now?: () => number }) => { remote(known?: number): Promise<{ version: number; follows?: boolean } | null> };
+  // `follows` is on `manifest(known)` since #930, on `remote(known)` before.
+  FolderStorage: new (folder: string, options?: { now?: () => number }) => {
+    remote(known?: number): Promise<{ version: number; follows?: boolean } | null>;
+    manifest?(known?: number): Promise<{ version: number; follows?: boolean } | null>;
+  };
   loadCopyState(file: string): Promise<{ version: number; marked?: boolean; files: object }>;
 };
 
@@ -110,7 +114,10 @@ describe.skipIf(!ref)(`the cloud copy code of ${ref ?? "an older Tavora"}`, () =
     const down = await new older.CloudCopy(new older.FolderStorage(dir)).download(key, b.roots, staging, k.version, { sealed: true, marked: true });
     expect(down).toMatchObject(marks ? { version: newest.version, marked: true } : { version: newest.version });
     expect(await readFile(path.join(staging, "library.json"), "utf8")).toBe("a6");
-    expect(await new older.FolderStorage(dir).remote(k.version)).toMatchObject({ version: newest.version, follows: true });
+    const storage = new older.FolderStorage(dir);
+    // Whichever of the two says it (`manifest` since #930, `remote` before; a release in between has `manifest` without it).
+    const seen = [await storage.manifest?.(k.version), await storage.remote(k.version)];
+    expect(seen.find((one) => one && "follows" in one)).toMatchObject({ version: newest.version, follows: true });
 
     // A month later it saves on top, and its clean-up checks the lists this Tavora wrote: it drops all but the newest five
     // marked ones. (One it couldn't check would stop it, and nothing would go.)

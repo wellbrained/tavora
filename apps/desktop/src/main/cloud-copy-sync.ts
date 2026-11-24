@@ -187,7 +187,11 @@ export class CopySync {
    * writes the status writes its own right after (a file's writes go one at a time, copy-files.ts): the answer waits for
    * it to settle (goesOn) before it goes on or stops.
    */
-  private readonly forgetting = new Set<Promise<void>>();
+  private readonly forgetting = new Set<Promise<unknown>>();
+  /** Forgets under way: no upload starts while one takes the copy off. */
+  private turningOff = 0;
+  /** How many turn-offs that failed put the status back: an answer that wrote its own meanwhile writes it again. */
+  private statusUndone = 0;
   /** How many turn-offs failed so far: an answer that waited for one sees it move (`goesOnUnlessOffFailed`). */
   private offFailures = 0;
   private timer: ReturnType<typeof setInterval> | undefined;
@@ -1138,11 +1142,11 @@ export class CopySync {
       if (this.problem === "key-blocked") this.problem = null;
       this.changed();
     }
-    if (!this.on || (this.waiting && !loud)) return;
+    if (!this.on || this.turningOff > 0 || (this.waiting && !loud)) return;
     if (this.asked("conflict") || this.dataHeld) throw new UserError("cloudCopy.error.conflict");
     await this.exclusive("uploading", async () => {
       // What ran before (a download at start) may have left a question.
-      if (!this.on || (this.waiting && !loud) || this.dataHeld) return;
+      if (!this.on || this.turningOff > 0 || (this.waiting && !loud) || this.dataHeld) return;
       const turn = this.turn;
       await this.hooks?.flush();
       // Turned off while the panels saved.
@@ -1734,8 +1738,13 @@ export class CopySync {
    */
   private async writeStatusFor(turn: number, status: SwapStatus): Promise<boolean> {
     if (!(await this.goesOn(turn))) return false;
+    const undone = this.statusUndone;
     await writeSwapStatus(this.statusFile, status);
-    if (await this.goesOn(turn)) return true;
+    if (await this.goesOn(turn)) {
+      // A turn-off asked meanwhile failed and put the status back as it was before this write: the answer stands.
+      if (this.statusUndone !== undone) await writeSwapStatus(this.statusFile, status);
+      return true;
+    }
     const forgotten = stepSwap(status, { type: "forgotten" });
     await writeSwapStatus(this.statusFile, forgotten);
     this.swap = forgotten;
@@ -1911,15 +1920,43 @@ export class CopySync {
     return false;
   }
 
-  /** The status as forgetting leaves it, on disk, then `turn` raised: from then on, work started before writes nothing. */
-  private async noteForgotten(): Promise<void> {
+  /**
+   * Takes the copy off on disk, in this order: the status as forgetting leaves it, the state files (the state, and the
+   * one parked while a copy waits to be used) tried again while they are briefly held, then `turn` raised: from then on,
+   * work started before writes nothing. Nothing is raised or forgotten until the files are gone, so a file that stays
+   * busy (a virus scan) can't leave a copy that shows as off and is on at the next start. Returns what held a file for a
+   * forget that goes on anyway (not the user's turn-off, which stops here, with the status as it was).
+   */
+  private async takeOff(byUser: boolean): Promise<unknown> {
+    let from: SwapStatus;
     try {
-      await this.moveFrom(await this.swapForAnswer(), { type: "forgotten" });
+      from = await this.swapForAnswer();
+      await this.moveFrom(from, { type: "forgotten" });
     } catch (error) {
       this.log(`cloud copy: can't note what to do with the unfinished copy: ${error instanceof Error ? error.message : String(error)}`);
       throw CopySync.userError("failed");
     }
+    let held: unknown = null;
+    try {
+      await retryHeld(() => removeCopyState(this.stateFile));
+      await retryHeld(() => removeCopyState(this.parkedFile));
+    } catch (error) {
+      if (!byUser) held = error;
+      else {
+        this.log(`cloud copy: can't remove the state to turn the copy off: ${error instanceof Error ? error.message : String(error)}`);
+        // Still on: the status goes back as it was, and an answer that wrote its own meanwhile writes it again (`statusUndone`).
+        await writeSwapStatus(this.statusFile, from).then(
+          () => (this.swap = from),
+          () => undefined,
+        );
+        this.statusUndone++;
+        throw new UserError("cloudCopy.error.offFailed");
+      }
+    }
     this.turn++;
+    // An upload that finished between the removal and `turn` wrote its state again.
+    if (!held) await removeCopyState(this.stateFile).catch(() => undefined);
+    return held;
   }
 
   /**
@@ -1928,30 +1965,19 @@ export class CopySync {
    */
   private async forget(problem: CloudCopyProblem | null, { byUser = false }: { byUser?: boolean } = {}): Promise<void> {
     // Written first. A swap stopped halfway is taken back at the next start; if that can't be noted, nothing is forgotten,
-    // as the next start would finish the swap over this PC's data.
-    const noted = this.noteForgotten();
-    this.forgetting.add(noted);
+    // as the next start would finish the swap over this PC's data. No upload starts while it goes (`turningOff`).
+    const taking = this.takeOff(byUser);
+    this.forgetting.add(taking);
+    this.turningOff++;
+    let held: unknown;
     try {
-      await noted;
+      held = await taking;
     } catch (error) {
       if (byUser) this.offFailures++;
       throw error;
     } finally {
-      this.forgetting.delete(noted);
-    }
-    // The state file goes before anything is forgotten here. A file that stays busy (a virus scan) would otherwise come
-    // back at the next start with the copy on and uploading. The user's turn-off then fails and the copy shows as still
-    // on, so pressing it again tries again; any other forget goes on and says what went wrong at the end.
-    let held: unknown = null;
-    try {
-      await retryHeld(() => removeCopyState(this.stateFile));
-    } catch (error) {
-      if (byUser) {
-        this.offFailures++;
-        this.log(`cloud copy: can't remove the state to turn the copy off: ${error instanceof Error ? error.message : String(error)}`);
-        throw new UserError("cloudCopy.error.offFailed");
-      }
-      held = error;
+      this.forgetting.delete(taking);
+      this.turningOff--;
     }
     this.copyOn = false;
     this.state = EMPTY_STATE;
@@ -1961,8 +1987,8 @@ export class CopySync {
     this.clear("conflict");
     this.clear("restartToTake");
     this.problem = problem;
+    // Any other forget goes on in memory when a file stays busy, and says so here.
     if (held) throw held;
-    await removeCopyState(this.parkedFile);
     await removeCopyFile(this.placeFile, "place");
     // Files lost at a start that couldn't judge are no one's question with the copy off.
     await rm(this.lostNoteFile, { force: true });
