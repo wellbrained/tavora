@@ -162,7 +162,7 @@ describe("the cloud copy", () => {
   });
 
   it("never numbers a new copy like a deleted one, so a PC that missed the delete can't write over it", async () => {
-    const { copy, signIn, copies, store } = setup();
+    const { copy, signIn, copies, store, clock } = setup();
     const token = await signIn("me@example.com");
     const a = part();
     await copy("POST", "/parts", token, writeParts([a]));
@@ -175,10 +175,10 @@ describe("the cloud copy", () => {
     // A PC that last saw version 2 of the deleted copy is refused.
     expect((await copy("PUT", "", token, swapBody(2, [a.id], new Uint8Array([4])))).status).toBe(409);
     // A deleted account takes the number with it.
-    const accountId = store.sessionByToken(token, Date.now())!.accountId;
+    const accountId = store.sessionByToken(token, clock.now)!.accountId;
     copies.remove(accountId, true);
     expect(copies.info(accountId)).toBeNull();
-    expect(copies.swap(accountId, 0, new Uint8Array([5]), [], Date.now())).toMatchObject({ ok: true, version: 1 });
+    expect(copies.swap(accountId, 0, new Uint8Array([5]), [], clock.now)).toMatchObject({ ok: true, version: 1 });
   });
 
   it("refuses a version whose parts are missing, and drops parts no version uses", async () => {
@@ -429,7 +429,8 @@ describe("the cloud copy", () => {
     expect(copies.addParts("a", tiny(1), 1000)).toBe("copy-full");
     // Another account has its own.
     expect(copies.addParts("b", tiny(1), 1000)).toBe("ok");
-  });
+    // Thousands of rows: past vitest's 5 s on a busy PC.
+  }, 30_000);
 
   it("reads only unused parts, through the small index, at most a page at a time, never the used ones or their bytes (audit 2026-11-22)", () => {
     const copies = testCopies(":memory:");

@@ -526,7 +526,7 @@ describe("Unsuspend", () => {
 describe("a suspended or banned developer and the waiting versions", () => {
   it("can neither list nor withdraw them, with a sign-in or a publish token", async () => {
     const ctx = setup();
-    const { post, developer, publish, publishToken, catalog, store } = ctx;
+    const { post, developer, publish, publishToken, catalog, store, clock } = ctx;
     const signedIn = store.createSession(developer.id, "windows", Date.parse("2026-10-26T12:00:00Z")).token;
     await publish(publishToken);
     const waiting = catalog.waitingVersions()[0]!;
@@ -538,7 +538,9 @@ describe("a suspended or banned developer and the waiting versions", () => {
       expect((await ctx.catalogCall("DELETE", `/waiting/${waiting.sha256}`, token)).status).toBe(401);
     }
     expect(catalog.waitingVersion(waiting.sha256)).not.toBeNull();
-    expect(store.publishTokenAccount(publishToken, Date.now())).toBeNull();
+    // At the test's own clock, where the token is still good: by the real one it runs out after a year, and this would
+    // pass without the suspension.
+    expect(store.publishTokenAccount(publishToken, clock.now)).toBeNull();
     await post("/api/accounts/unsuspend", { id: developer.id });
 
     // Banned: the token still identifies the account, and the routes say banned.

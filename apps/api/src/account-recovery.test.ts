@@ -234,14 +234,14 @@ describe("an upload under way when its token or sign-in ends", () => {
 
   it("publishes nothing once its token was removed meanwhile", async () => {
     const scan = held();
-    const { store, catalog, call, link, newToken, publish, account } = setup(scan.scanner);
+    const { store, catalog, call, link, newToken, publish, account, clock } = setup(scan.scanner);
     const { id, owner } = await account();
     const key = generateKeyPairSync("ed25519").privateKey;
     await link(owner, key);
     const token = await newToken(owner, "CI");
     const upload = publish(key, "1.0.0", token);
     await scan.running;
-    const tokenId = store.publishTokens(id, Date.now())[0]!.id;
+    const tokenId = store.publishTokens(id, clock.now)[0]!.id;
     expect((await call("DELETE", `/v1/account/publish-tokens/${tokenId}`, undefined, owner)).status).toBe(200);
     scan.release();
     const answer = await upload;
