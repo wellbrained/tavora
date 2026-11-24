@@ -86,6 +86,24 @@ describe("the system key store, async", () => {
     expect(await encryptor.ready()).toBe(true);
   });
 
+  it("tells when a quick no turns into a yes on a later ask, once", async () => {
+    const told = vi.fn();
+    const encryptor = osEncryptor(false, 1000, told);
+    fake.available = true;
+    expect(await encryptor.ready()).toBe(true);
+    expect(told).not.toHaveBeenCalled();
+
+    const later = osEncryptor(false, 1000, told);
+    fake.available = false;
+    expect(await later.ready()).toBe(false);
+    fake.available = true;
+    expect(await later.ready(true)).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(told).toHaveBeenCalledTimes(1);
+    expect(await later.ready()).toBe(true);
+    expect(told).toHaveBeenCalledTimes(1);
+  });
+
   it("a check that never answers is asked again when the user acts, or after a long while", async () => {
     fake.isAsyncEncryptionAvailable = () => new Promise<boolean>(() => undefined);
     const encryptor = osEncryptor(false, 10, undefined, 60);

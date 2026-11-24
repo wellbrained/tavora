@@ -26,6 +26,8 @@ export function osEncryptor(test: boolean, limit = ASK_LIMIT_MS, answeredLate?: 
   /** Questions to the system not answered yet; while two are, the user's acts ask no more (no stacked keyring prompts). */
   let unanswered = 0;
   let wait: Promise<boolean> | null = null;
+  /** A question was answered no, or given up on, and nobody was told that it turned yes since. */
+  let missed = false;
   const check = async (): Promise<boolean> => {
     // Linux without a keyring falls back to a fixed key, which protects nothing; Tavora then saves no sign-in.
     const answer = (await safeStorage.isAsyncEncryptionAvailable()) && (process.platform !== "linux" || test || safeStorage.getSelectedStorageBackend() !== "basic_text");
@@ -43,13 +45,17 @@ export function osEncryptor(test: boolean, limit = ASK_LIMIT_MS, answeredLate?: 
       // A key store that doesn't answer (a prompt nobody sees, a stuck service) counts as not available for now.
       const timer = setTimeout(() => {
         gaveUp = true;
+        missed = true;
         resolve(false);
       }, limit);
       timer.unref();
       void check().catch(() => false).then((answer) => {
         clearTimeout(timer);
         unanswered--;
-        const lateOne = answer && (mine !== turn || gaveUp);
+        if (!answer) missed = true;
+        // Yes after any earlier no or give-up (a late answer, or a re-ask that came in time): told once per flip.
+        const lateOne = answer && missed;
+        if (lateOne) missed = false;
         if (mine === turn) {
           open = false;
           if (wait === asked) wait = null;
