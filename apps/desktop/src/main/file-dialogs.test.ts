@@ -1,9 +1,27 @@
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { OpenDialogOptions, SaveDialogOptions } from "electron";
 import { describe, expect, it, vi } from "vitest";
+
+// A switch that makes the write of a temp file fail partway, as a full disk does.
+const failing = { on: false };
+vi.mock("node:fs/promises", async (original) => {
+  const actual = await original<typeof import("node:fs/promises")>();
+  return {
+    ...actual,
+    open: (async (...args: Parameters<typeof actual.open>) => {
+      const handle = await actual.open(...args);
+      if (failing.on && String(args[0]).endsWith(".tmp")) {
+        handle.writeFile = async () => {
+          throw Object.assign(new Error("disk full"), { code: "ENOSPC" });
+        };
+      }
+      return handle;
+    }) as typeof actual.open,
+  };
+});
 import { translate, type Language } from "../shared/i18n";
 import { HostError } from "./errors";
 import { FileDialogs } from "./file-dialogs";
@@ -112,6 +130,38 @@ describe("FileDialogs.forModule", () => {
     await dialogs.forModule("local:poe2").saveJson(Buffer.from('{"new":1}'), "Build");
     expect(await readFile(path.join(folder, "Build.json"), "utf8")).toBe('{"new":1}');
     expect((await readdir(folder)).filter((name) => name.endsWith(".tmp"))).toEqual([]);
+  });
+
+  it("keeps the old file and leaves no temp when the new one can't be written", async () => {
+    const { base, dialogs, answer } = await setup();
+    const folder = path.join(base, "Documents", "Tavora");
+    await mkdir(folder, { recursive: true });
+    await writeFile(path.join(folder, "Build.json"), "old");
+    answer(path.join(folder, "Build.json"));
+    failing.on = true;
+    try {
+      await expect(dialogs.forModule("local:poe2").saveJson(Buffer.from('{"new":1}'), "Build")).rejects.toMatchObject({ code: "ENOSPC" });
+    } finally {
+      failing.on = false;
+    }
+    expect(await readFile(path.join(folder, "Build.json"), "utf8")).toBe("old");
+    expect((await readdir(folder)).filter((name) => name.endsWith(".tmp"))).toEqual([]);
+  });
+
+  it("clears an old temp a crash left next to the file on the next save there, and leaves a new one", async () => {
+    const { base, dialogs, answer } = await setup();
+    const folder = path.join(base, "Documents", "Tavora");
+    await mkdir(folder, { recursive: true });
+    const stale = path.join(folder, "Build.json.0123456789ab.tmp");
+    const fresh = path.join(folder, "Build.json.ba9876543210.tmp");
+    const other = path.join(folder, "Other.json.0123456789ab.tmp");
+    for (const file of [stale, fresh, other]) await writeFile(file, "x");
+    const old = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    await utimes(stale, old, old);
+    await utimes(other, old, old);
+    answer(path.join(folder, "Build.json"));
+    await dialogs.forModule("local:poe2").saveJson(Buffer.from("{}"), "Build");
+    expect((await readdir(folder)).sort()).toEqual(["Build.json", "Build.json.ba9876543210.tmp", "Other.json.0123456789ab.tmp"]);
   });
 
   it("keeps each module's folder apart, under its owner and id, and falls back to Documents\\Tavora when it is gone", async () => {

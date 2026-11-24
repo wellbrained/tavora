@@ -86,7 +86,7 @@ function changeOwnerRecords(userData: string, change: (records: OwnerRecords) =>
  * what it found by each folder's stamp, so an unchanged folder is not hashed again. A record from before
  * `signedSha256` gets it here, in memory, from the files that were checked.
  */
-export async function applyOwners(modules: Map<string, InstalledModule>, userModulesRoot: string, records: OwnerRecords, checks: FolderChecks = new FolderChecks()): Promise<string[]> {
+export async function applyOwners(modules: Map<string, InstalledModule>, userModulesRoot: string, records: OwnerRecords, checks: FolderChecks = new FolderChecks(), unsure: string[] = []): Promise<string[]> {
   const changed: string[] = [];
   for (const [id, module] of modules) {
     if (module.provenance !== "local" || path.dirname(module.root) !== userModulesRoot) continue;
@@ -96,9 +96,9 @@ export async function applyOwners(modules: Map<string, InstalledModule>, userMod
     try {
       verified = await checks.check(module.root);
     } catch (error) {
-      // Still held by another program after the waits: not a mismatch, but unsure, so it stays stopped for this run only.
+      // Still held by another program after the waits: not a mismatch, but unsure, so it stays stopped for this run only (named in `unsure`, not `changed`).
       console.warn(`[tavora] couldn't read the files of ${id} to check them (${error instanceof Error ? error.message : String(error)}); it stays off until the next start`);
-      changed.push(id);
+      unsure.push(id);
       continue;
     }
     // The installer records the first key of the account as the owner, and the key that signed as `signer` when they differ.
