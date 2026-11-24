@@ -135,6 +135,46 @@ describe("the sign-in gate", () => {
     expect(memory.take(200)).not.toBeNull();
   });
 
+  it("refuses a declared length past the limit before booking any memory, even when there is none left", async () => {
+    const store = new AccountStore(":memory:");
+    const account = store.createAccount({ email: "mara@example.com" }, NOW);
+    const { token } = store.createSession(account.id, "windows", NOW);
+    const memory = createUploadMemory(200);
+    const all = memory.take(200)!;
+    const app = new Hono<SignedInEnv>().use("*", requireSignIn(store, () => NOW, 64, { memory, perAccount: 1 })).post("/", (context) => context.text("ok"));
+    const answer = await app.request("http://tavora.test/", { method: "POST", headers: { authorization: `Bearer ${token}`, "content-length": "65" }, body: new Uint8Array(65) });
+    expect(answer.status).toBe(413);
+    all.release();
+    expect(memory.take(200)).not.toBeNull();
+  });
+
+  it("cuts off a body that stops coming, or comes too slowly, and hands its memory back", async () => {
+    const store = new AccountStore(":memory:");
+    const account = store.createAccount({ email: "mara@example.com" }, NOW);
+    const { token } = store.createSession(account.id, "windows", NOW);
+    const memory = createUploadMemory(200);
+    const app = new Hono<SignedInEnv>()
+      .use("*", requireSignIn(store, () => NOW, 64, { memory, perAccount: 1 }, { idleMs: 50, graceMs: 100, bytesPerSecond: 1000 }))
+      .post("/", (context) => context.text("ok"));
+    const post = (body: ReadableStream<Uint8Array>) =>
+      app.request("http://tavora.test/", { method: "POST", headers: { authorization: `Bearer ${token}`, "content-length": "40" }, body, duplex: "half" } as RequestInit);
+    // One byte, then nothing.
+    const stopped = await post(new ReadableStream({ start: (controller) => void controller.enqueue(new Uint8Array(1)) }));
+    expect(stopped.status).toBe(408);
+    expect(((await stopped.json()) as { reason: string }).reason).toBe("invalid");
+    // A byte every 40 ms: never idle for 50 ms, but far behind 1000 bytes a second once the grace is over.
+    let sent = 0;
+    const trickle = new ReadableStream<Uint8Array>({
+      async pull(controller) {
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        if (++sent > 40) controller.close();
+        else controller.enqueue(new Uint8Array(1));
+      },
+    });
+    expect((await post(trickle)).status).toBe(408);
+    expect(memory.take(200)).not.toBeNull();
+  });
+
   it("says how long to wait when there were too many requests", async () => {
     const app = new Hono().get("/", (context) => tooMany(context, 30));
     const answer = await app.request("http://tavora.test/");

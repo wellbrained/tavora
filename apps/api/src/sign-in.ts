@@ -1,7 +1,7 @@
 import type { Context, MiddlewareHandler } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { Account, AccountStore, Session } from "./account-store.ts";
-import type { MemoryTicket, UploadMemory } from "./upload-memory.ts";
+import { readUpload, type MemoryTicket, type ReadLimits, type UploadMemory } from "./upload-memory.ts";
 
 /**
  * The one sign-in gate of the API, and the one shape of its refusals: `{ error, reason }`, where `reason`
@@ -36,6 +36,11 @@ export function tooMany(context: Context, wait: number, error = "Too many reques
   return fail(context, 429, "too-many", error);
 }
 
+/** A body past the route's limit. */
+function tooBig(context: Context): Response {
+  return fail(context, 413, "too-big", "Too big.");
+}
+
 /** No sign-in, or one that no longer works. */
 export function signedOut(context: Context): Response {
   return fail(context, 401, "signed-out", "Sign in again.");
@@ -62,40 +67,27 @@ export function signedInAs(store: SignInStore, context: Context, now: number): S
 /** The most requireSignIn reads of a body by default: every signed-in route but the big ones sends less. */
 export const SIGNED_IN_BODY = 64 * 1024;
 
+/** The body's declared length (Content-Length), or null when it names none. */
+function declaredLength(context: Context): number | null {
+  const declared = Number(context.req.raw.headers.get("content-length") ?? "NaN");
+  return Number.isSafeInteger(declared) && declared >= 0 ? declared : null;
+}
+
 /**
  * Reads the whole body, at most `max` bytes, and puts a request with those bytes in place of the one that streams in (as
- * Hono's bodyLimit does), so the route reads it as usual. False when it is bigger, or broke off.
+ * Hono's bodyLimit does), so the route reads it as usual. Like an upload (readUpload, CoreHub #596) it gives up on a body
+ * that stops coming for a while or falls far behind, so a trickle can't hold a request, or the memory booked for it, for long.
  */
-async function readBody(context: Context, max: number): Promise<boolean> {
+async function readBody(context: Context, max: number, limits: ReadLimits): Promise<"ok" | "too-big" | "too-slow"> {
   const raw = context.req.raw;
-  if (raw.body === null) return true;
-  const declared = Number(raw.headers.get("content-length") ?? "NaN");
-  if (Number.isFinite(declared) && declared > max) return false;
-  const reader = raw.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > max) {
-        await reader.cancel().catch(() => undefined);
-        return false;
-      }
-      chunks.push(value);
-    }
-  } catch {
-    return false;
-  }
-  const bytes = new Uint8Array(size);
-  let at = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, at);
-    at += chunk.byteLength;
-  }
-  context.req.raw = new Request(raw.url, { method: raw.method, headers: raw.headers, body: bytes });
-  return true;
+  if (raw.body === null) return "ok";
+  const declared = declaredLength(context);
+  if (declared !== null && declared > max) return "too-big";
+  // As much room as it said it needs, never more than allowed.
+  const read = await readUpload(raw, declared ?? max, limits);
+  if ("refused" in read) return read.refused;
+  context.req.raw = new Request(raw.url, { method: raw.method, headers: raw.headers, body: new Uint8Array(read.bytes) });
+  return "ok";
 }
 
 /**
@@ -123,9 +115,10 @@ function busy(context: Context): Response {
  * The sign-in is checked, then the body read, at most `maxBody` bytes (413 past it), then the sign-in checked again (audit
  * 2026-11-22): a body sent slowly can't hold a sign-in that was ended meanwhile (the email changed, the device was
  * removed) past that point, and a request without one is refused before anything is read. What a route writes after its own awaits checks again with stillSignedIn().
- * With `hold`, the body waits for room first (see BodyHold), and a 503 says when there is none.
+ * With `hold`, the body waits for room first (see BodyHold), and a 503 says when there is none. A length past the limit
+ * is refused before any room is booked. `readLimits`: how patient the read is (readUpload's, the catalog's by default).
  */
-export function requireSignIn(store: SignInStore, now: () => number = Date.now, maxBody = SIGNED_IN_BODY, hold?: BodyHold): MiddlewareHandler<SignedInEnv> {
+export function requireSignIn(store: SignInStore, now: () => number = Date.now, maxBody = SIGNED_IN_BODY, hold?: BodyHold, readLimits: ReadLimits = {}): MiddlewareHandler<SignedInEnv> {
   const sending = new Map<string, number>();
   return async (context, next) => {
     // Checked before the body too, so a request without a working sign-in is answered at once, nothing read or held.
@@ -134,10 +127,12 @@ export function requireSignIn(store: SignInStore, now: () => number = Date.now, 
     let ticket: MemoryTicket | null = null;
     let limit = maxBody;
     const accountId = before.account.id;
+    const declared = context.req.raw.body === null ? null : declaredLength(context);
+    // Too big by its own word: refused before anything is booked or read.
+    if (declared !== null && declared > maxBody) return tooBig(context);
     if (hold && context.req.raw.body !== null) {
-      const declared = Number(context.req.raw.headers.get("content-length") ?? "NaN");
-      // Past the limit it is refused below without reading; without a length it may be as big as allowed.
-      const size = Number.isFinite(declared) && declared >= 0 ? Math.min(declared, maxBody) : maxBody;
+      // Without a length it may be as big as allowed.
+      const size = declared ?? maxBody;
       if ((sending.get(accountId) ?? 0) >= hold.perAccount) return busy(context);
       ticket = hold.memory.take(2 * size);
       if (!ticket) return busy(context);
@@ -146,7 +141,9 @@ export function requireSignIn(store: SignInStore, now: () => number = Date.now, 
       sending.set(accountId, (sending.get(accountId) ?? 0) + 1);
     }
     try {
-      if (!(await readBody(context, limit))) return fail(context, 413, "too-big", "Too big.");
+      const read = await readBody(context, limit, readLimits);
+      if (read === "too-big") return tooBig(context);
+      if (read === "too-slow") return fail(context, 408, "invalid", "That took too long. Check your connection and try again.");
       const signedIn = signedInAs(store, context, now());
       if (!signedIn) return signedOut(context);
       context.set("session", signedIn.session);
