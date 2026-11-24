@@ -30,20 +30,35 @@ const saving = saver.busy;
 const saved = ref(false);
 let savedTimer: ReturnType<typeof setTimeout> | undefined;
 
+/** Typed during a save: one more save follows it. */
+let again = false;
+
 async function save() {
-  if (!dirty.value || saving.value) return;
+  if (!dirty.value) return;
+  if (saving.value) {
+    again = true;
+    return;
+  }
   const sent = { name: draft.value.name, initials: draft.value.initials };
   const result = await saver.run(() => act({ type: "save-profile", ...sent }));
   if (!result) {
+    again = false;
     if (saver.error.value) showToast(saver.error.value);
     return;
   }
-  if (!result.ok) return;
+  if (!result.ok) {
+    again = false;
+    return;
+  }
   // Main may have tidied the values (spaces in initials, length); what was typed during the save stays.
   if (draft.value.name === sent.name && draft.value.initials === sent.initials) draft.value = { name: profile.value.name, initials: profile.value.initials };
   saved.value = true;
   clearTimeout(savedTimer);
   savedTimer = setTimeout(() => (saved.value = false), 2000);
+  if (again) {
+    again = false;
+    void save();
+  }
 }
 defineExpose({ save });
 

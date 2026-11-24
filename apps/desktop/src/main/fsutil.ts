@@ -20,19 +20,19 @@ const TEMP_NAME = /^(.+)(?:\.[0-9a-f]{12}\.tmp|\.now)$/;
  * writes of the same file at once can't move each other's half-written one into place. A temp a crash left behind is
  * removed by sweepWriteLeftovers at the next start.
  */
-export async function writeFileAtomic(file: string, body: string | Uint8Array): Promise<void> {
-  await writeFileUnlessReplaced(file, body, () => true);
+export async function writeFileAtomic(file: string, body: string | Uint8Array, mode?: number): Promise<void> {
+  await writeFileUnlessReplaced(file, body, () => true, mode);
 }
 
 /**
  * writeFileAtomic, putting the new file in place only while `stillWanted` says yes (it is asked right before, so a
  * newer write that took its place meanwhile wins). Answers whether the file was written.
  */
-export async function writeFileUnlessReplaced(file: string, body: string | Uint8Array, stillWanted: () => boolean): Promise<boolean> {
+export async function writeFileUnlessReplaced(file: string, body: string | Uint8Array, stillWanted: () => boolean, mode?: number): Promise<boolean> {
   await mkdir(path.dirname(file), { recursive: true });
   const temp = `${file}.${randomBytes(6).toString("hex")}.tmp`;
   try {
-    const handle = await open(temp, "wx");
+    const handle = await open(temp, "wx", mode);
     try {
       await handle.writeFile(body);
       await handle.sync();
@@ -50,6 +50,26 @@ export async function writeFileUnlessReplaced(file: string, body: string | Uint8
 
 /** How old a temp must be to count as left over: a write takes moments, so no running write still owns one this old. */
 export const LEFTOVER_TEMP_AGE_MS = 60 * 60 * 1000;
+/**
+ * Removes the temp files an earlier write of `file` left next to it (a crash between the temp and the rename), once they
+ * are old enough that no write still owns them. For a file in a folder the user chose, where no start-up sweep looks.
+ * Never throws.
+ */
+export async function sweepTempsNextTo(file: string, clock: () => number = Date.now): Promise<void> {
+  const dir = path.dirname(file);
+  const name = path.basename(file);
+  try {
+    for (const entry of await readdir(dir)) {
+      if (!entry.startsWith(`${name}.`) || !/^\.[0-9a-f]{12}\.tmp$/.test(entry.slice(name.length))) continue;
+      const full = path.join(dir, entry);
+      const info = await lstat(full).catch(() => null);
+      if (info?.isFile() && clock() - info.mtimeMs > LEFTOVER_TEMP_AGE_MS) await rm(full, { force: true });
+    }
+  } catch {
+    // Best effort.
+  }
+}
+
 /**
  * The folders in the data folder that hold Tavora's own saved data, written with writeFileAtomic: module storage and
  * documents, panel state, game and Steam icons, the profile picture, the pictures of overlay layouts, the files a

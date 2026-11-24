@@ -155,7 +155,10 @@ async function afterChange() {
 
 <template>
   <div class="flex h-full min-h-0 flex-col" data-testid="conversation">
-    <p v-if="failure" class="text-destructive p-6 text-sm" role="alert">{{ failure }}</p>
+    <div v-if="failure && !item" class="flex flex-wrap items-center gap-3 p-6" role="alert">
+      <p class="text-destructive text-sm">{{ failure }}</p>
+      <Button size="sm" variant="secondary" data-testid="conversation-retry" @click="load">{{ t("inbox.retry") }}</Button>
+    </div>
     <p v-else-if="!item" class="text-muted-foreground p-6 text-sm" role="status">{{ t("contact.loading") }}</p>
     <template v-else>
       <header class="flex flex-wrap items-start gap-3 border-b px-5 py-4">
@@ -174,6 +177,12 @@ async function afterChange() {
           <Button size="sm" variant="ghost" data-testid="conversation-delete" @click="remove"><Trash2 /> {{ t("inbox.delete") }}</Button>
         </div>
       </header>
+
+      <!-- A reload that failed keeps the messages that are here. -->
+      <div v-if="failure" class="flex flex-wrap items-center gap-3 border-b px-5 py-2" role="alert" data-testid="conversation-reload-error">
+        <p class="text-destructive text-sm">{{ failure }}</p>
+        <Button size="sm" variant="secondary" data-testid="conversation-retry" @click="load">{{ t("inbox.retry") }}</Button>
+      </div>
 
       <div ref="thread" class="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4" data-testid="conversation-messages">
         <p v-if="previous" class="text-muted-foreground text-xs">

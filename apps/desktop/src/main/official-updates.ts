@@ -172,7 +172,8 @@ export class OfficialUpdates {
 
   /** Reads and checks a folder's files, unless it looks as it did when it was last checked. */
   private verify(dir: string): Promise<Verified | null> {
-    return this.checks.check(dir);
+    // A file still held by another program can't be vouched for now: the shipped copy runs, and the next start looks again.
+    return this.checks.check(dir).catch(() => null);
   }
 
   /**

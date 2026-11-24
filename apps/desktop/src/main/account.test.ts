@@ -481,6 +481,33 @@ describe("signed in", () => {
     expect(calls.at(-1)).toMatchObject({ method: "GET", auth: `Bearer ${renewed}` });
   });
 
+  it("keeps the new sign-in when a request sent with the old one answers 401 afterwards", async () => {
+    const renewed = "n".repeat(43);
+    const { fetchImpl: inner } = service({
+      "POST /email/code": () => json({ status: "sent", current: "email" }, 202),
+      "POST /email": () => json({ account: { email: "new@example.com", createdAt: SAVED.createdAt }, token: renewed, device: "dev2" }),
+      "GET /": () => json({ account: { email: "new@example.com" }, devices: [{ ...DEVICE, id: "dev2" }] }),
+    });
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input).includes("/v1/leaderboards")) {
+        await held;
+        return json({ error: "Signed out." }, 401);
+      }
+      return inner(input, init);
+    }) as typeof fetch;
+    const { account, kept } = client(fetchImpl, { saved: SAVED });
+    await account.init();
+    const board = account.leaderboardRequest("GET", "/x");
+    await account.sendEmailCode("new@example.com");
+    await account.changeEmail("111111", "222222");
+    release();
+    expect(await board).toMatchObject({ status: 401 });
+    expect(account.token()).toBe(renewed);
+    expect(kept.at(-1)).not.toBeNull();
+  });
+
   it("says which code was wrong and keeps the step", async () => {
     const { fetchImpl } = service({
       "POST /email/code": () => json({ status: "sent", current: "email" }, 202),

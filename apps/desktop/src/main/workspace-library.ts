@@ -255,13 +255,15 @@ export class WorkspaceLibrary {
   /** Everything stored for a deleted workspace but its browser sessions, so many can be deleted and the sessions cleared once. */
   private async forgetData(workspace: WorkspaceEntry): Promise<void> {
     const { workspaces, views, panelState, files, userData } = this.options;
+    // The files first: that is the part another program can hold (a picture open in a viewer), and when it fails the workspace
+    // goes back to Trash whole, with its layout and panels, so Restore still gives the user a working workspace.
+    // A folder the user chose can be gone (an unplugged drive): the workspace still goes, and they are told where its pictures may remain.
+    await files.noteWorkspaceDeleted(workspace.name, (root) => deleteModuleData(userData, workspace.id, root, this.options.trash));
     const records = workspaces.forgetWorkspace(workspace.id);
     // A panel of this workspace that was over its game closes with it.
     for (const record of records) views.drop(record.instanceId);
     await Promise.all(records.map((record) => panelState.remove(record.instanceId)));
     this.options.forgotten(workspace.id);
-    // A folder the user chose can be gone (an unplugged drive): the workspace still goes, and they are told where its pictures may remain.
-    await files.noteWorkspaceDeleted(workspace.name, (root) => deleteModuleData(userData, workspace.id, root, this.options.trash));
     await this.options.icons.forget(workspace);
   }
 

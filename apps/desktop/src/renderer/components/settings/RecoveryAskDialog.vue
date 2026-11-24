@@ -7,7 +7,7 @@ import { ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
 import { Input } from "@tavora/official-ui/components/ui/input";
-import { act, closeDialog, developerKeys, dialog, showToast } from "../../host";
+import { account, act, closeDialog, developerKeys, dialog, showToast } from "../../host";
 import { t } from "../../i18n";
 import ModalDialog from "../ModalDialog.vue";
 import PairingAsk from "./PairingAsk.vue";
@@ -34,9 +34,18 @@ function close() {
 watch(
   () => developerKeys.value?.status,
   (status) => {
-    if (status === "ask" || status === "loading") return;
-    close();
-    if (status === "ready" || status === "none") showToast(t("recoveryAsk.done"));
+    // Offline for a moment: the dialog stays, with what was typed in it.
+    if (status === "ready" || status === "none") {
+      close();
+      showToast(t("recoveryAsk.done"));
+    } else if (status === "signed-out") close();
+  },
+);
+// Signed out of the account: there is nothing to unlock any more.
+watch(
+  () => Boolean(account.value?.account),
+  (signedIn) => {
+    if (!signedIn) close();
   },
 );
 </script>

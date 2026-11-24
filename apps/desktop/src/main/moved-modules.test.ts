@@ -1,8 +1,9 @@
-import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { movedModule, MOVED_MODULES_OWNER, moveOfficialModules } from "./moved-modules";
+import { movedModule, MOVED_MODULES_OWNER, MOVES_PENDING_FILE, moveOfficialModules } from "./moved-modules";
 
 const OWNER = MOVED_MODULES_OWNER;
 
@@ -88,6 +89,69 @@ describe("Discord and AI Usage leaving Tavora", () => {
       { instanceId: "b", moduleId: "wellbrained.ai-usage", owner: "local" },
       { instanceId: "c", moduleId: "tavora.notes", owner: "official" },
     ]);
+  });
+
+  it("keep the panels moving when the data can't move, and move the data at the next start", async () => {
+    const userData = await mkdtemp(path.join(tmpdir(), "tavora-moved-"));
+    const data = path.join(userData, "module-data");
+    await put(path.join(data, "official", "tavora.discord", "valheim", "settings.json"), "old");
+    await put(path.join(userData, "workspace.json"), JSON.stringify({ version: 3, workspaces: { valheim: { instances: [{ instanceId: "a", moduleId: "tavora.discord", owner: "official" }], layout: null, snapshots: [] } } }));
+    // A file where the new owner's folder must go makes the move fail.
+    await put(path.join(data, OWNER), "in the way");
+    const lines: string[] = [];
+
+    await moveOfficialModules(userData, (line) => lines.push(line), path.join(userData, "module-files"));
+
+    expect(lines.some((line) => line.includes("will try again"))).toBe(true);
+    expect(await readFile(path.join(data, "official", "tavora.discord", "valheim", "settings.json"), "utf8")).toBe("old");
+    const workspace = JSON.parse(await readFile(path.join(userData, "workspace.json"), "utf8"));
+    expect(workspace.workspaces.valheim.instances[0].moduleId).toBe("wellbrained.discord");
+
+    await rm(path.join(data, OWNER));
+    await moveOfficialModules(userData, () => undefined, path.join(userData, "module-files"));
+    expect(await readFile(path.join(data, OWNER, "wellbrained.discord", "valheim", "settings.json"), "utf8")).toBe("old");
+    // Done: the note is gone.
+    expect(existsSync(path.join(userData, MOVES_PENDING_FILE))).toBe(false);
+  });
+
+  it("finishes a move that failed once even when the catalog module saved in the same workspace meanwhile", async () => {
+    const userData = await mkdtemp(path.join(tmpdir(), "tavora-moved-"));
+    const data = path.join(userData, "module-data");
+    const files = path.join(userData, "module-files");
+    await put(path.join(data, "official", "tavora.discord", "valheim", "settings.json"), "old");
+    await put(path.join(data, "official", "tavora.discord", "valheim", "extra.json"), "extra");
+    await put(path.join(data, OWNER), "in the way");
+    await moveOfficialModules(userData, () => undefined, files);
+    expect(existsSync(path.join(userData, MOVES_PENDING_FILE))).toBe(true);
+
+    // The way is free, and the catalog module has saved its own settings there.
+    await rm(path.join(data, OWNER));
+    await put(path.join(data, OWNER, "wellbrained.discord", "valheim", "settings.json"), "new");
+    await moveOfficialModules(userData, () => undefined, files);
+
+    const target = path.join(data, OWNER, "wellbrained.discord", "valheim");
+    expect(await readFile(path.join(target, "settings.json"), "utf8")).toBe("new");
+    expect(await readFile(path.join(target, "extra.json"), "utf8")).toBe("extra");
+    expect(existsSync(path.join(data, "official", "tavora.discord", "valheim", "extra.json"))).toBe(false);
+    expect(existsSync(path.join(userData, MOVES_PENDING_FILE))).toBe(false);
+  });
+
+  it("leave a link or a folder named in another case where it is", async () => {
+    const userData = await mkdtemp(path.join(tmpdir(), "tavora-moved-"));
+    const files = path.join(userData, "module-files");
+    // Another case: only a folder with exactly Tavora's names is Tavora's.
+    await put(path.join(files, "Official", "tavora.discord", "valheim", "shot.png"), "mine");
+    await moveOfficialModules(userData, () => undefined, files);
+    expect(await readFile(path.join(files, "Official", "tavora.discord", "valheim", "shot.png"), "utf8")).toBe("mine");
+
+    // A link: what it points at is not Tavora's to move.
+    const outside = await mkdtemp(path.join(tmpdir(), "tavora-outside-"));
+    await put(path.join(outside, "valheim", "shot.png"), "theirs");
+    await mkdir(path.join(userData, "module-data", "official"), { recursive: true });
+    await symlink(outside, path.join(userData, "module-data", "official", "tavora.discord"), "junction");
+    await moveOfficialModules(userData, () => undefined, files);
+    expect(await readFile(path.join(outside, "valheim", "shot.png"), "utf8")).toBe("theirs");
+    expect(await readdir(path.join(userData, "module-data"))).not.toContain(OWNER);
   });
 
   it("do nothing when there is nothing of theirs", async () => {

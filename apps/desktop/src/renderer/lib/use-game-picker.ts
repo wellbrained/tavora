@@ -132,7 +132,8 @@ export function useGamePicker(query: Ref<string>, options: GamePickerOptions = {
       return;
     }
     onlineTimer = setTimeout(async () => {
-      const result = await api.searchOnline(text);
+      // The call never rejects as written; if the bridge fails anyway, the list is the built-in one, as when offline.
+      const result = await api.searchOnline(text).catch((): OnlineSearchResult => ({ status: "unreachable", games: [] }));
       if (id !== onlineId) return;
       online.value = result.games;
       onlineStatus.value = result.status;

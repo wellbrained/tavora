@@ -841,6 +841,8 @@ export class PanelViews {
         }
         continue;
       }
+      // Lent to the layer, or opened in its dialog, while it waited: the view is in use there and must stay shown.
+      if (this.lent.has(instanceId) || this.inDialog(instanceId)) continue;
       // A picture that came to nothing leaves the panel in sight under a menu, since its slot would show empty. Under a
       // dialog or drag it steps aside all the same: it would draw over them.
       if (!images.has(instanceId) && wanted.status !== "all" && picturedIds.has(instanceId)) {

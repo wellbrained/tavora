@@ -46,6 +46,10 @@ describe("notes", () => {
     expect(fillPlaceholders("{module} by {developer}, {days} days {what}", { module: "Timer", days: "30" })).toBe("Timer by , 30 days {what}");
   });
 
+  it("splits paragraphs written with Windows line breaks too", () => {
+    expect(noteParagraphs("One\r\n\r\nTwo")).toEqual([[{ text: "One", em: false }], [{ text: "Two", em: false }]]);
+  });
+
   it("splits paragraphs and *emphasis* into plain pieces", () => {
     expect(noteParagraphs("One *two* three\n\nFour")).toEqual([
       [

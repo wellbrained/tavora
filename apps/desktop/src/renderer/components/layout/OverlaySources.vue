@@ -14,6 +14,7 @@ import { Input } from "@tavora/official-ui/components/ui/input";
 import { cn } from "@tavora/official-ui/lib/utils";
 import type { SourceBlock } from "../../../shared/layout-view";
 import { t } from "../../i18n";
+import { normalize } from "../../lib/search";
 import ModuleIcon from "../ModuleIcon.vue";
 import { send, view } from "./layout-state";
 
@@ -87,8 +88,8 @@ const all = computed<Row[]>(() => {
 
 /** The rows shown: the search only takes rows away. A header stays while it or one of its things matches. */
 const shown = computed<Row[]>(() => {
-  const text = query.value.trim().toLowerCase();
-  const matches = (row: Row) => `${row.name} ${row.sub ?? ""}`.toLowerCase().includes(text);
+  const text = normalize(query.value.trim());
+  const matches = (row: Row) => normalize(`${row.name} ${row.sub ?? ""}`).includes(text);
   if (!text) return all.value.filter((row) => row.type !== "thing" || !folded.value.has(row.panel));
   const headers = new Map(all.value.filter((row) => row.type === "header").map((row) => [row.panel, row]));
   return all.value.filter((row) => {
@@ -102,11 +103,11 @@ const count = computed(() => current.value?.items.length ?? 0);
 
 /** One quiet line when the search finds nothing to add but names a panel that can't be used here, with why. */
 const blockedLine = computed<string | null>(() => {
-  const text = query.value.trim().toLowerCase();
+  const text = normalize(query.value.trim());
   const state = current.value;
   if (!text || !state || shown.value.length) return null;
   for (const source of state.sources) {
-    if (!`${source.name} ${source.from}`.toLowerCase().includes(text)) continue;
+    if (!normalize(`${source.name} ${source.from}`).includes(text)) continue;
     const block: SourceBlock | null = source.block;
     if (block === null || block === "in-setup") continue;
     return t("overlays.layout.blockedLine", { name: source.name, reason: t(`overlays.layout.block.${block}`, { game: source.game ?? "" }) });

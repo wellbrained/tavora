@@ -31,8 +31,9 @@ const ARGS = ["app-server", "--listen", "stdio://"];
 
 /** Asks the Codex command for the allowance of the profile in `directory`. Throws when it fails or `signal` aborts. */
 export async function readCodexUsage(directory: string, version: string, signal: AbortSignal): Promise<CodexReading> {
-  const file = findCli({ win32: ["codex.exe", "codex.cmd"], other: ["codex"] });
+  const file = await findCli({ win32: ["codex.exe", "codex.cmd"], other: ["codex"] });
   if (!file) throw new CodexMissingError();
+  if (signal.aborted) throw new Error("Codex did not answer in time");
   // A profile uses its subscription login, never an API key the PC happens to have set.
   let child: ChildProcess;
   try {

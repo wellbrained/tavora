@@ -350,6 +350,31 @@ describe("leftover module data", () => {
     await mkdir(path.join(userData, "Partitions", `module%3A${owner}%3A${id}@${game}`), { recursive: true });
   }
 
+  it("moves queued local data only through real folders with exactly those names, never a link or a folder named in another case", async () => {
+    const userData = await tempDir();
+    const outside = await tempDir();
+    await mkdir(path.join(outside, "poe2"), { recursive: true });
+    await writeFile(path.join(outside, "poe2", "storage.json"), "not ours");
+    // The module's folder is a junction to somewhere else, and a game folder inside another module is one too.
+    await mkdir(path.join(userData, "module-data", "local"), { recursive: true });
+    await symlink(outside, path.join(userData, "module-data", "local", "wellbrained.tracker"), "junction");
+    await mkdir(path.join(userData, "module-data", "local", "wellbrained.other"), { recursive: true });
+    await symlink(path.join(outside, "poe2"), path.join(userData, "module-data", "local", "wellbrained.other", "poe2"), "junction");
+    // A folder that only matches in another case (Windows treats it as the same folder).
+    const cased = await tempDir();
+    await mkdir(path.join(cased, "module-data", "Local", "wellbrained.cased", "poe2"), { recursive: true });
+    for (const id of ["wellbrained.tracker", "wellbrained.other"]) await queueLocalDataMove(userData, id, KEY);
+    await queueLocalDataMove(cased, "wellbrained.cased", KEY);
+
+    await migrateModuleData(userData);
+    await migrateModuleData(cased);
+
+    const moved = (id: string, root = userData) => existsSync(path.join(root, "module-data", KEY, id));
+    expect([moved("wellbrained.tracker"), moved("wellbrained.other"), moved("wellbrained.cased", cased)]).toEqual([false, false, false]);
+    expect(await readFile(path.join(outside, "poe2", "storage.json"), "utf8")).toBe("not ours");
+    expect(existsSync(path.join(userData, "module-data", "local", "wellbrained.other", "poe2"))).toBe(true);
+  });
+
   it("lists what each owner's modules saved", async () => {
     const userData = await tempDir();
     await seed(userData, "local", "wellbrained.tracker", "poe2", "l");

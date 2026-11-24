@@ -20,6 +20,11 @@ const again = ref<ConversationItem | null>(null);
 const groups = computed(() => groupConversations(inbox.value.items ?? []));
 const empty = computed(() => (inbox.value.items ?? []).length === 0);
 
+// Opened for a conversation while the inbox is showing (a new one just sent): go there.
+watch(inboxOpen, (open) => {
+  if (open?.id) selected.value = open.id;
+});
+
 // Without a pick, the first one with news (or the newest) is shown.
 watch(
   () => inbox.value.items,

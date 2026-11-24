@@ -1,22 +1,76 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync } from "node:fs";
+import { access } from "node:fs/promises";
 import path from "node:path";
 
 // Starting the Claude and Codex command lines for the AI Usage connector: found on PATH, run with
 // fixed arguments and no shell, so nothing from a profile or a module can reach a command line.
 
+/** How long one PATH folder gets to answer: a folder on a network drive that is gone can hang for much longer. */
+const LOOK_MS = 1_500;
+/** How long "not installed" is believed before PATH is looked at again (the user may install the command meanwhile). */
+const MISSING_FOR_MS = 60_000;
+
+/**
+ * Folders that did not answer in time. A look that has started can't be cancelled and holds one of the few threads
+ * Node's file calls share, so a folder like that is never asked again (until Tavora restarts): asking again at every read
+ * would fill the pool and stall every other file call, saves included.
+ */
+const deadFolders = new Set<string>();
+/** Looks under way, so two reads at once ask a folder once. */
+const looking = new Map<string, Promise<boolean>>();
+/** What was found for a PATH, by its value: a found command is kept, "not installed" for a minute. */
+const found = new Map<string, { file: string | null; at: number }>();
+
+/** Forgets what findCli learned (tests). */
+export function forgetFoundClis(): void {
+  deadFolders.clear();
+  looking.clear();
+  found.clear();
+}
+
+/** Whether `file` exists, without blocking the main process; a folder that doesn't answer in time counts as no, and as dead. */
+function existsSoon(dir: string, file: string, waitMs: number): Promise<boolean> {
+  if (deadFolders.has(dir)) return Promise.resolve(false);
+  let pending = looking.get(file);
+  if (!pending) {
+    pending = new Promise<boolean>((resolve) => {
+      const timer = setTimeout(() => {
+        deadFolders.add(dir);
+        resolve(false);
+      }, waitMs);
+      timer.unref?.();
+      access(file).then(
+        () => resolve(true),
+        () => resolve(false),
+      ).finally(() => {
+        clearTimeout(timer);
+        looking.delete(file);
+      });
+    });
+    looking.set(file, pending);
+  }
+  return pending;
+}
+
 /** The first of `names` on PATH (or in npm's global folder and Claude's own install folder on Windows), or null. */
-export function findCli(names: { win32: string[]; other: string[] }, env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): string | null {
+export async function findCli(names: { win32: string[]; other: string[] }, env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform, waitMs = LOOK_MS): Promise<string | null> {
   const files = platform === "win32" ? names.win32 : names.other;
   const dirs = (env.PATH ?? env.Path ?? "").split(path.delimiter).filter(Boolean);
   if (platform === "win32" && env.APPDATA) dirs.push(path.join(env.APPDATA, "npm"));
   if (env.USERPROFILE ?? env.HOME) dirs.push(path.join((env.USERPROFILE ?? env.HOME)!, ".local", "bin"));
+  const key = `${platform}\0${files.join(",")}\0${dirs.join(path.delimiter)}`;
+  const kept = found.get(key);
+  if (kept && (kept.file !== null || Date.now() - kept.at < MISSING_FOR_MS)) return kept.file;
   for (const dir of dirs) {
     for (const name of files) {
       const file = path.join(dir, name);
-      if (existsSync(file)) return file;
+      if (await existsSoon(dir, file, waitMs)) {
+        found.set(key, { file, at: Date.now() });
+        return file;
+      }
     }
   }
+  found.set(key, { file: null, at: Date.now() });
   return null;
 }
 

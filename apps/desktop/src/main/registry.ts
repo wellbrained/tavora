@@ -179,7 +179,8 @@ export async function discoverModules(
         });
       const installed = await loadModule(candidate, provenance, tavoraVersion, (message, kind, about, values) => {
         // Tavora's own modules show no problems in Settings, but one that can't load keeps its panels waiting.
-        if (provenance === "local" || about?.id) report(message, kind, about, values);
+        // A manifest that can't be read right now is kept too: without it every panel waits, instead of being dropped.
+        if (provenance === "local" || about?.id || kind === "unreadable") report(message, kind, about, values);
       });
       if (!installed) continue;
       if (fromProject) {
@@ -306,6 +307,21 @@ async function candidates(dir: string, unreadable: () => void): Promise<string[]
   }
 }
 
+const HELD_CODES = new Set(["EBUSY", "EPERM", "EACCES"]);
+
+/** Reads a manifest, trying again while a virus scan or an indexer briefly holds it. */
+async function readManifest(file: string, waits: readonly number[] = [20, 50, 100, 200, 400]): Promise<string> {
+  for (const wait of waits) {
+    try {
+      return await readFile(file, "utf8");
+    } catch (error) {
+      if (!HELD_CODES.has((error as NodeJS.ErrnoException).code ?? "")) throw error;
+      await new Promise((resolve) => setTimeout(resolve, wait));
+    }
+  }
+  return readFile(file, "utf8");
+}
+
 async function loadModule(
   dir: string,
   provenance: Provenance,
@@ -314,7 +330,7 @@ async function loadModule(
 ): Promise<InstalledModule | undefined> {
   let raw: unknown;
   try {
-    raw = JSON.parse(await readFile(path.join(dir, MANIFEST), "utf8"));
+    raw = JSON.parse(await readManifest(path.join(dir, MANIFEST)));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
       console.warn(`[tavora] unreadable manifest in ${dir}`);

@@ -2281,6 +2281,7 @@ export const en = {
   "inbox.closesIn.other": "Closes in {count} days if nobody writes.",
   "inbox.follows": "This follows an earlier conversation.",
   "inbox.showEarlier": "Show it",
+  "inbox.retry": "Try again",
   "inbox.again": "Write a new request",
   "inbox.versions": "Sent from Tavora {tavora}, module {module}",
   "inbox.reply.placeholder": "Write a reply",

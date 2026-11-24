@@ -32,6 +32,8 @@ function onKey(event: KeyboardEvent) {
   // Escape closes, Tab moves between the buttons; neither can be a hotkey here.
   if (event.code === "Escape" || (event.code === "Tab" && !event.ctrlKey && !event.altKey && !event.metaKey)) return;
   if (event.code === "Enter" && picked.value) return;
+  // Enter and Space press the button they are on (Remove, Cancel), whatever was picked.
+  if ((event.code === "Enter" || event.code === "Space") && !event.ctrlKey && !event.altKey && !event.metaKey && event.target instanceof Element && event.target.closest("button")) return;
   event.preventDefault();
   event.stopPropagation();
   const result = hotkeyFromInput(event);
