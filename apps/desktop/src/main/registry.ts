@@ -327,8 +327,13 @@ async function loadModule(
   const result = validateManifest(raw);
   if (!result.ok) {
     console.warn(`[tavora] invalid module in ${dir}: ${result.errors.join("; ")}`);
-    const errors = result.errors.slice(0, 2).join("; ");
-    problem(errors, "invalid", { errors });
+    // WebAssembly from someone else's module keeps its own words on the Modules page, as before the manifest check refused it.
+    const webAssembly = result.errors.find((error) => error.startsWith("permissions.webAssembly is only"));
+    if (webAssembly) problem(webAssembly, "webassembly");
+    else {
+      const errors = result.errors.slice(0, 2).join("; ");
+      problem(errors, "invalid", { errors });
+    }
     return undefined;
   }
   if (tavoraVersion !== undefined && needsNewerTavora(result.manifest, tavoraVersion)) {

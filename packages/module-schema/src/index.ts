@@ -1,7 +1,7 @@
 // Manifest v1 for tavora.module.json (apps/docs/reference/manifest.md). The JSON Schema
 // in schema/ describes the same rules for editors; tests keep the two in step.
 
-import { isWindowsDeviceName } from "@tavora/sdk/protocol";
+import { isActionId, isPanelTypeId, isWindowsDeviceName } from "@tavora/sdk/protocol";
 
 export interface ModuleViewport {
   /** The smallest size; with `wide`, the smallest while the panel is taller than wide or square. */
@@ -284,21 +284,14 @@ export function isHomepage(value: unknown): value is string {
 /** Most panel types one module may offer, and the longest short name a tab shows. */
 export const MAX_PANEL_TYPES = 16;
 export const MAX_PANEL_NAME = 24;
-const PANEL_TYPE_ID = /^[a-z][a-z0-9-]{0,31}$/;
 const PANEL_FIELDS = ["id", "name", "entry", "icon", "viewport", "continues", "inGame", "withGame"];
 
 /** Most hotkey actions one module may declare, and the longest name Tavora shows for one. */
 export const MAX_ACTIONS = 16;
 export const MAX_ACTION_NAME = 40;
-const ACTION_ID = /^[a-z][a-z0-9-]{0,31}$/;
 
-export function isActionId(value: unknown): value is string {
-  return typeof value === "string" && ACTION_ID.test(value);
-}
-
-export function isPanelTypeId(value: unknown): value is string {
-  return typeof value === "string" && PANEL_TYPE_ID.test(value);
-}
+// The id rules of panel types and actions come from the SDK, which Tavora's bridge and the memory host use too.
+export { isActionId, isPanelTypeId };
 
 /** A panel type with the module's own entry, icon and viewport filled in where the type has none. */
 export interface ResolvedPanelType {
