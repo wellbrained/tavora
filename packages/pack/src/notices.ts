@@ -117,19 +117,31 @@ export function declaredLicence(pkg: Record<string, unknown>): string | null {
   };
   const single = one(pkg.license);
   if (single) return single.trim();
-  if (Array.isArray(pkg.licenses)) {
-    const ids = pkg.licenses.map(one).filter((id): id is string => id !== null);
-    if (ids.length) return ids.join(" OR ");
+  // The old forms: `license: ["MIT", "Apache-2.0"]` and `licenses: [{ type }]` both mean "one of these".
+  for (const list of [pkg.license, pkg.licenses]) {
+    if (!Array.isArray(list)) continue;
+    const ids = list.map(one).filter((id): id is string => id !== null && id.trim() !== "");
+    if (ids.length) return ids.map((id) => id.trim()).join(" OR ");
   }
   return null;
 }
 
 // -- Packages and their files -------------------------------------------------------------------------------------
 
-const LICENCE_FILE = /^(?:licen[cs]es?|copying|unlicense|notice)(?:[-_. ].*)?$/i;
-const NOT_A_LICENCE_FILE = /\.(?:js|mjs|cjs|ts|json|map|d\.ts|css|html)$/i;
+// LICENSE, LICENSE-MIT, MIT-LICENSE.txt, COPYING, COPYRIGHT, NOTICE.
+const LICENCE_FILE = /^(?:[a-z0-9.+]+[-_])?(?:licen[cs]es?|copying|copyright|unlicense|notice)(?:[-_. ].*)?$/i;
+// Code, and files that are not text: a licence is never one of them.
+const NOT_A_LICENCE_FILE = /\.(?:js|mjs|cjs|ts|json|map|d\.ts|css|html|png|jpe?g|gif|webp|avif|ico|bmp|svg|woff2?|ttf|otf|eot|wasm|zip|gz|tgz|br|pdf|node|exe|dll|so|dylib|bin)$/i;
+// The folder REUSE keeps its licences in: LICENSES/MIT.txt.
+const LICENCE_FOLDER = /^licen[cs]es$/i;
 
 const isLicenceFile = (name: string) => LICENCE_FILE.test(name) && !NOT_A_LICENCE_FILE.test(name);
+
+/** The first licence file in a package folder (not a folder of that name), as a path from it; null when there is none. */
+export function findLicenceFile(dir: string): string | null {
+  const names = readdirSync(dir, { withFileTypes: true }).filter((entry) => entry.isFile() && isLicenceFile(entry.name) && !/^notice/i.test(entry.name));
+  return names.map((entry) => entry.name).sort()[0] ?? null;
+}
 
 /**
  * The licence and notice files of a package folder, as paths from it: those in the folder, and those one folder down
@@ -141,7 +153,8 @@ export function licenceFiles(dir: string): string[] {
     if (entry.isFile() && isLicenceFile(entry.name)) found.push(entry.name);
     else if (entry.isDirectory() && entry.name !== "node_modules") {
       for (const inner of readdirSync(path.join(dir, entry.name), { withFileTypes: true })) {
-        if (inner.isFile() && isLicenceFile(inner.name)) found.push(`${entry.name}/${inner.name}`);
+        const wanted = LICENCE_FOLDER.test(entry.name) ? !NOT_A_LICENCE_FILE.test(inner.name) : isLicenceFile(inner.name);
+        if (inner.isFile() && wanted) found.push(`${entry.name}/${inner.name}`);
       }
     }
   }
@@ -155,9 +168,12 @@ export interface PackageInfo {
   pkg: Record<string, unknown>;
   /** Where in the repo it is used from (labels, for reports). */
   from?: Set<string>;
+  /** Why its package.json could not be read; then name and version are only what the folder says. */
+  unreadable?: string;
 }
 
-const readJson = (file: string): Record<string, unknown> => JSON.parse(readFileSync(file, "utf8"));
+/** JSON from a file, with a byte order mark (Windows editors add one) ignored. */
+const readJson = (file: string): Record<string, unknown> => JSON.parse(readFileSync(file, "utf8").replace(/^\uFEFF/, ""));
 
 /**
  * The npm packages a bundle contains, from the file or module ids its build lists: everything under a node_modules
@@ -176,9 +192,19 @@ export function packagesInPaths(ids: Iterable<string>): PackageInfo[] {
     const dir = file.slice(0, at + marker.length) + name;
     const manifest = path.join(dir, "package.json");
     if (!existsSync(manifest)) continue;
-    const pkg = readJson(manifest);
-    const key = `${pkg.name}@${pkg.version}`;
-    if (!found.has(key)) found.set(key, { name: String(pkg.name), version: String(pkg.version), dir: path.normalize(dir), pkg });
+    let pkg: Record<string, unknown>;
+    try {
+      pkg = readJson(manifest);
+      if (typeof pkg !== "object" || pkg === null || Array.isArray(pkg)) throw new Error("it is not an object");
+    } catch (error) {
+      const key = path.normalize(dir);
+      if (!found.has(key)) found.set(key, { name, version: "", dir: key, pkg: {}, unreadable: `its package.json cannot be read (${(error as Error).message})` });
+      continue;
+    }
+    // One entry per name and version; a package that names neither is told apart by its folder.
+    const named = typeof pkg.name === "string" && pkg.name !== "" && typeof pkg.version === "string" && pkg.version !== "";
+    const key = named ? `${pkg.name}@${pkg.version}` : path.normalize(dir);
+    if (!found.has(key)) found.set(key, { name: typeof pkg.name === "string" && pkg.name ? pkg.name : name, version: typeof pkg.version === "string" ? pkg.version : "", dir: path.normalize(dir), pkg });
   }
   return [...found.values()];
 }
@@ -205,9 +231,11 @@ THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH RE
 
 /** Who a package names as its author (or, failing that, its repository), for a standard licence text; null when it names nobody. */
 export function holderOf(pkg: Record<string, any>): string | null {
+  // Only a list has a first person: a string would give its first letter.
+  const first = (value: unknown): unknown => (Array.isArray(value) ? value[0] : undefined);
   const name = (value: unknown): string =>
-    typeof value === "string" ? value.replace(/\s*[<(].*$/, "").trim() : typeof (value as { name?: unknown } | null)?.name === "string" ? (value as { name: string }).name.trim() : "";
-  const author = name(pkg.author) || name(pkg.contributors?.[0]) || name(pkg.maintainers?.[0]);
+    typeof value === "string" ? value.replace(/(?:\s*(?:<[^>]*>|\([^)]*\)))+\s*$/, "").trim() : typeof (value as { name?: unknown } | null)?.name === "string" ? (value as { name: string }).name.trim() : "";
+  const author = name(pkg.author) || name(first(pkg.contributors)) || name(first(pkg.maintainers));
   if (author) return author;
   const repo: unknown = typeof pkg.repository === "string" ? pkg.repository : pkg.repository?.url;
   return typeof repo === "string" && repo ? `the authors of ${repo.replace(/^git\+/, "").replace(/\.git$/, "")}` : null;
@@ -241,7 +269,7 @@ export interface NoticeEntry {
 
 export interface NoticeProblem {
   package: string;
-  kind: "no-licence" | "unknown-licence" | "copyleft" | "no-text";
+  kind: "no-licence" | "unknown-licence" | "copyleft" | "no-text" | "unreadable";
   message: string;
 }
 
@@ -308,14 +336,22 @@ export function buildNotices({ packages, extra = [], overrides = {}, textDir = "
   };
   const entries: NoticeEntry[] = [];
   for (const pkg of packages) {
-    const id = `${pkg.name}@${pkg.version}`;
+    const id = pkg.version ? `${pkg.name}@${pkg.version}` : pkg.name;
+    if (pkg.unreadable) {
+      problems.push({ package: id, kind: "unreadable", message: pkg.unreadable });
+      entries.push({ name: pkg.name, version: pkg.version, license: "UNKNOWN", group: "libraries", source: "npm", texts: [] });
+      continue;
+    }
     const override = overrideFor(overrides, pkg.name);
     const license = override?.license ?? declaredLicence(pkg.pkg);
     const verdict = judged(id, license, allowed);
     const indexes: number[] = [];
     let hasLicenceFile = false;
     for (const file of licenceFiles(pkg.dir)) {
-      addTo(indexes, readFile(path.join(pkg.dir, file)));
+      const text = readFile(path.join(pkg.dir, file));
+      // A file with a NUL byte is not text (a picture named license): never part of the notices.
+      if (text.includes("\0")) continue;
+      addTo(indexes, text);
       // A NOTICE file alone isn't the licence.
       if (!/^notice/i.test(path.basename(file))) hasLicenceFile = true;
     }
@@ -397,14 +433,15 @@ export function renderNotices({ entries, texts }: { entries: NoticeEntry[]; text
 export function readThirdParty(dir: string): ExtraItem[] {
   const file = path.join(dir, "third-party.json");
   if (!existsSync(file)) return [];
-  const list = JSON.parse(readFileSync(file, "utf8")) as { name: string; version?: string; license: string; group?: NoticeGroup; files: string[] }[];
+  const list = readJson(file) as unknown as { name: string; version?: string; license: string; group?: NoticeGroup; files?: string[] }[];
   return list.map((item) => ({
     name: item.name,
     version: item.version ?? "",
     license: item.license,
     group: item.group ?? "libraries",
     source: "extra" as const,
-    texts: item.files.map((name) => readFileSync(path.join(dir, name), "utf8")),
+    // An entry without files has no text, which the notices report as a problem.
+    texts: (item.files ?? []).map((name) => readFileSync(path.join(dir, name), "utf8")),
   }));
 }
 

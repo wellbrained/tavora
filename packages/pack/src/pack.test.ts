@@ -5,7 +5,7 @@ import { tmpdir, userInfo } from "node:os";
 import path from "node:path";
 import { isOwnerId } from "@tavora/module-schema";
 import { describe, expect, it } from "vitest";
-import { fingerprint, loadExistingKey, packModule, PackError, PrivateKeyError, privateKeyFile, readZip, readZipEntry, SIGNATURE_FILE, signFiles, verifyFiles, writeZip, ZIP_LIMITS, zipDirectory, ZipError, type ZipFile } from "./index.ts";
+import { asSigner, fingerprint, loadExistingKey, packModule, PackError, PrivateKeyError, privateKeyFile, readZip, readZipEntry, SIGNATURE_FILE, signFiles, verifyFiles, writeZip, ZIP_LIMITS, zipDirectory, ZipError, type ZipFile } from "./index.ts";
 
 const manifest = {
   id: "wellbrained.tracker",
@@ -82,6 +82,18 @@ describe("packModule", () => {
     const linkedInside = await moduleFolder();
     await symlink(outside, path.join(linkedInside, "dist", "extra"), "junction");
     await expect(packModule(linkedInside, key())).rejects.toThrow(/link/);
+  });
+});
+
+describe("packModule and its signer", () => {
+  it("never hands back a zip whose signature does not verify", async () => {
+    const dir = await moduleFolder();
+    const real = key();
+    const signer = asSigner(real);
+    const bad = { ...signer, signPackage: async () => Buffer.alloc(64) };
+    await expect(packModule(dir, bad)).rejects.toThrow(PackError);
+    await expect(packModule(dir, bad)).rejects.toThrow(/signature/);
+    await rm(dir, { recursive: true });
   });
 });
 
@@ -209,6 +221,11 @@ describe("verifyFiles", () => {
     expect(verifyFiles([...files, { name: SIGNATURE_FILE, data: Buffer.from(JSON.stringify(swapped)) }])).toMatchObject({ ok: false });
     expect(verifyFiles([...files, { name: SIGNATURE_FILE, data: Buffer.from("{") }])).toMatchObject({ ok: false });
     expect(verifyFiles([...files, { name: SIGNATURE_FILE, data: Buffer.from(JSON.stringify({ ...signature, extra: 1 })) }])).toMatchObject({ ok: false });
+  });
+
+  it("signs and verifies a file named __proto__ like any other", () => {
+    const odd: ZipFile[] = [...files, { name: "__proto__", data: Buffer.from("x") }];
+    expect(verifyFiles([...odd, signFiles(odd, key())])).toMatchObject({ ok: true, signed: true });
   });
 
   it("gives another key another owner, so its data stays apart (S5)", () => {

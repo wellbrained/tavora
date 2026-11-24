@@ -56,7 +56,8 @@ export function signedBytes(publicKey: string, files: Record<string, string>): B
 
 /** Every file's SHA-256 (hex), by name: what a signature covers. */
 export function fileHashes(files: readonly ZipFile[]): Record<string, string> {
-  const hashes: Record<string, string> = {};
+  // No prototype, so a file named `__proto__` is a hash like any other.
+  const hashes: Record<string, string> = Object.create(null);
   for (const file of files) {
     if (file.name === SIGNATURE_FILE) throw new Error(`${SIGNATURE_FILE} is made by the pack command`);
     hashes[file.name] = sha256(file.data);

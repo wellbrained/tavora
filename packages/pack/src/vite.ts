@@ -4,7 +4,8 @@
 // plugin (Vue, React, Tailwind) stays in the module's own config and goes in through `plugins`. Nothing here imports
 // Vite, so the module's own copy of it is the only one; the result goes into Vite's `defineConfig`.
 
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { copyFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -42,8 +43,6 @@ export interface ModuleConfigOptions {
 /** What Vite resolves package exports with in a browser build (its `defaultClientConditions`), after `source`. */
 const CLIENT_CONDITIONS = ["module", "browser", "development|production"];
 
-const LICENCE_FILE = /^licen[cs]e(\.(md|txt))?$/i;
-
 /** The folder of an installed package, looking from each folder upwards; null when none has it. */
 function findPackage(name: string, from: string[]): string | null {
   for (const start of from) {
@@ -57,16 +56,17 @@ function findPackage(name: string, from: string[]): string | null {
 }
 
 /** The licence file a notice points to. */
-export function noticeSource(root: string, source: string): string {
+export async function noticeSource(root: string, source: string): Promise<string> {
   if (source.startsWith(".")) {
     const file = path.resolve(root, source);
     if (!existsSync(file)) throw new Error(`Licence file ${source} not found in ${root}`);
     return file;
   }
+  const { findLicenceFile } = await loadNotices();
   // Packages the kit brings along are found from the kit's own folder, wherever the package manager put it.
   const kit = findPackage("@tavora/official-ui", [root]);
   const folder = findPackage(source, kit ? [root, kit] : [root]);
-  const file = folder && readdirSync(folder).find((name) => LICENCE_FILE.test(name));
+  const file = folder && findLicenceFile(folder);
   if (!folder || !file) throw new Error(`No licence file found for ${source} (looked from ${root})`);
   return path.join(folder, file);
 }
@@ -75,10 +75,10 @@ export function noticeSource(root: string, source: string): string {
 function noticesPlugin(root: string, notices: Record<string, string>) {
   return {
     name: "tavora-notices",
-    closeBundle() {
+    async closeBundle() {
       const dist = path.join(root, "dist");
       mkdirSync(dist, { recursive: true });
-      for (const [name, source] of Object.entries(notices)) cpSync(noticeSource(root, source), path.join(dist, `${name}-LICENSE.txt`));
+      for (const [name, source] of Object.entries(notices)) await copyFile(await noticeSource(root, source), path.join(dist, `${name}-LICENSE.txt`));
     },
   };
 }
@@ -91,12 +91,20 @@ function noticesPlugin(root: string, notices: Record<string, string>) {
  */
 function thirdPartyNoticesPlugin(root: string) {
   const ids = new Set<string>();
+  // Set once a bundle was made: a dev server closing runs closeBundle too, with nothing bundled.
+  let bundled = false;
   return {
     name: "tavora-third-party-notices",
+    buildStart() {
+      ids.clear();
+      bundled = false;
+    },
     generateBundle(_options: unknown, bundle: Record<string, { type: string; modules?: Record<string, unknown> }>) {
+      bundled = true;
       for (const file of Object.values(bundle)) if (file.type === "chunk") for (const id of Object.keys(file.modules ?? {})) ids.add(id);
     },
     async closeBundle() {
+      if (!bundled) return;
       const { noticesFor } = await loadNotices();
       const read = (file: string): Record<string, unknown> | null => (existsSync(file) ? (JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>) : null);
       const info = read(path.join(root, "tavora.module.json")) ?? read(path.join(root, "package.json")) ?? {};

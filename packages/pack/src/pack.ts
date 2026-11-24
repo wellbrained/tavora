@@ -3,7 +3,7 @@ import { lstat, readdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { CHANGELOG_LIMITS, isReleaseVersion, manifestFiles, MAX_README_BYTES, validateChangelog, validateManifest, type ModuleManifest } from "@tavora/module-schema";
 import { hasKeyExtension, holdsPrivateKey, privateKeyMessage } from "./private-keys.ts";
-import { fileHashes, SIGNATURE_FILE, signatureFile } from "./signature.ts";
+import { fileHashes, SIGNATURE_FILE, signatureFile, verifyFiles } from "./signature.ts";
 import { asSigner, type Signer } from "./signer.ts";
 import { isSafeEntryName, readZip, writeZip, ZIP_LIMITS, ZipError, type ZipFile } from "./zip.ts";
 
@@ -144,8 +144,11 @@ export async function packModule(dir: string, key: KeyObject | Signer, options: 
   const zip = writeZip([...files, signatureFile(signer.publicKey, hashes, await signer.signPackage(hashes, manifestFile.data))]);
   if (zip.length > ZIP_LIMITS.maxArchiveBytes) throw new PackError("the zip is bigger than a module zip may be");
   try {
-    readZip(zip);
+    // What the host does with it: a zip it would refuse is never handed back.
+    const verified = verifyFiles(readZip(zip));
+    if (!verified.ok) throw new PackError(`Tavora would refuse this zip: ${verified.reason}`);
   } catch (error) {
+    if (error instanceof PackError) throw error;
     if (error instanceof ZipError) throw new PackError(`Tavora would refuse this zip: ${error.message}`);
     throw error;
   }
