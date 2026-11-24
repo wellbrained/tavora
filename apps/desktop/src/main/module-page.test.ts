@@ -5,7 +5,8 @@ import { MAX_README_BYTES, MAX_SCREENSHOT_BYTES } from "@tavora/module-schema";
 import { describe, expect, it } from "vitest";
 import { readModulePage, readModuleReadme, readModuleScreenshots } from "./module-page";
 
-const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(16)]);
+/** A PNG's signature and a header saying 16 x 16. */
+const PNG = Buffer.concat([Buffer.from("89504e470d0a1a0a0000000d494844520000001000000010", "hex"), Buffer.alloc(4)]);
 
 const folder = async () => realpath(await mkdtemp(path.join(tmpdir(), "tavora-page-")));
 

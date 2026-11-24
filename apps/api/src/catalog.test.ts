@@ -80,6 +80,28 @@ const webp = () => {
   return Buffer.concat([Buffer.from("RIFF"), size, body]);
 };
 
+/** A tiny WebP whose header says `width` x `height`, as each of the three kinds does; nothing in it would decode. */
+const webpOf = (kind: "VP8 " | "VP8L" | "VP8X", width: number, height: number) => {
+  let chunk: Buffer;
+  if (kind === "VP8L") {
+    chunk = Buffer.alloc(5);
+    chunk[0] = 0x2f;
+    chunk.writeUInt32LE(((width - 1) | ((height - 1) << 14)) >>> 0, 1);
+  } else if (kind === "VP8 ") {
+    chunk = Buffer.from([0, 0, 0, 0x9d, 0x01, 0x2a, 0, 0, 0, 0]);
+    chunk.writeUInt16LE(width, 6);
+    chunk.writeUInt16LE(height, 8);
+  } else {
+    chunk = Buffer.alloc(10);
+    chunk.writeUIntLE(width - 1, 4, 3);
+    chunk.writeUIntLE(height - 1, 7, 3);
+  }
+  const body = Buffer.concat([Buffer.from(`WEBP${kind}`), Buffer.from([chunk.length, 0, 0, 0]), chunk]);
+  const size = Buffer.alloc(4);
+  size.writeUInt32LE(body.length);
+  return Buffer.concat([Buffer.from("RIFF"), size, body]);
+};
+
 /** A PNG whose header says 4097 px wide: small as a file, too big as a picture. */
 const wide = () => {
   const bytes = png();
@@ -198,6 +220,11 @@ describe("adding to the catalog", () => {
     expect(catalog.index()[0]?.icon).toEqual({ sha256: sha(icon), type: "png", size: icon.length });
     expect(catalog.picture(sha(icon), "png")).toEqual(icon);
 
+    catalog.add(moduleZip({ version: "1.0.1", icon: { name: "icon.webp", data: webpOf("VP8L", 1024, 1024) } }));
+    expect(catalog.index()[0]?.icon).toMatchObject({ type: "webp" });
+    // A WebP icon is held to 1024 px like a PNG one (audit run 7).
+    catalog.add(moduleZip({ version: "1.0.2", icon: { name: "icon.webp", data: webpOf("VP8X", 1025, 10) } }));
+    expect(catalog.index()[0]?.icon).toBeNull();
     catalog.add(moduleZip({ version: "1.1.0", icon: { name: "icon.png", data: Buffer.from("<svg/>") } }));
     expect(catalog.index()[0]?.icon).toBeNull();
     expect(catalog.module("wellbrained.timer")?.readme).toBeNull();
@@ -218,6 +245,12 @@ describe("adding to the catalog", () => {
     const big = Buffer.concat([webp(), randomBytes(1024 * 1024)]);
     big.writeUInt32LE(big.length - 8, 4);
     refused(big, "shot.webp");
+    // A WebP is held to the same size as a PNG (audit run 7): a few bytes can say a picture of 16383 x 16383.
+    for (const kind of ["VP8 ", "VP8L", "VP8X"] as const) {
+      refused(webpOf(kind, 4097, 10), "shot.webp");
+      refused(webpOf(kind, 10, 4097), "shot.webp");
+    }
+    refused(webpOf("VP8X", 16_777_216, 10), "shot.webp");
     expect(() => catalog.add(moduleZip({ homepage: "javascript:alert(1)" }))).toThrow(CatalogError);
     expect(catalog.index()).toEqual([]);
   });

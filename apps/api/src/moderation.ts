@@ -395,6 +395,21 @@ function remoteScriptTag(text: string, attribute: "src" | "href", markup: boolea
   return null;
 }
 
+/**
+ * How often a global `pattern` matches in `text`, as `text.match(pattern).length` says, but one match at a time (audit run 7):
+ * match() holds every match in one array, millions for an 8 MiB file made of them, far past what the upload's memory counts.
+ */
+function countMatches(pattern: RegExp, text: string): number {
+  let count = 0;
+  pattern.lastIndex = 0;
+  for (let match = pattern.exec(text); match; match = pattern.exec(text)) {
+    count++;
+    // An empty match would stay put; match() steps on too.
+    if (match[0] === "") pattern.lastIndex++;
+  }
+  return count;
+}
+
 /** The warning signs in one code file's text. Exported for tests. */
 export function signsIn(name: string, source: string): { sign: Sign; detail: string }[] {
   const text = withoutKnownSnippets(source);
@@ -402,7 +417,7 @@ export function signsIn(name: string, source: string): { sign: Sign; detail: str
   const add = (sign: Sign, match: RegExpExecArray | null | undefined) => {
     if (match) found.push({ sign, detail: `${name}: ${around(text, match.index)}` });
   };
-  const count = (pattern: RegExp) => text.match(pattern)?.length ?? 0;
+  const count = (pattern: RegExp) => countMatches(pattern, text);
   const onCommentLine = commentLines(text);
 
   add("eval", /(?<![\w$.])eval\s*\(|(?:window|globalThis|self)\s*\.\s*eval\s*\(/.exec(text));

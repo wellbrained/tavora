@@ -58,6 +58,13 @@ describe("isPrivateHost", () => {
     }
   });
 
+  it("sees a private IPv4 address inside an IPv4-compatible or NAT64 one (audit run 7)", () => {
+    for (const url of ["http://[::127.0.0.1]/", "http://[::7f00:1]/", "http://[64:ff9b::127.0.0.1]/", "http://[64:ff9b::c0a8:101]/", "http://[::10.0.0.1]/"]) {
+      expect(isPrivateUrl(url), url).toBe(true);
+    }
+    for (const url of ["http://[::8.8.8.8]/", "http://[64:ff9b::808:808]/"]) expect(isPrivateUrl(url), url).toBe(false);
+  });
+
   it("sees through the number forms the URL parser normalises", () => {
     expect(isPrivateUrl("http://2130706433/")).toBe(true);
     expect(isPrivateUrl("http://0x7f.1/")).toBe(true);

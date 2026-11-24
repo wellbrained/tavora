@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { access } from "node:fs/promises";
 import path from "node:path";
+import { systemTool } from "./system-tool";
 
 // Starting the Claude and Codex command lines for the AI Usage connector: found on PATH, run with
 // fixed arguments and no shell, so nothing from a profile or a module can reach a command line.
@@ -90,7 +91,7 @@ export function startCli(file: string, args: readonly string[], options: { cwd: 
 /** Ends a command and whatever it started. */
 export function stopCli(child: ChildProcess): void {
   if (child.exitCode !== null || child.pid === undefined) return;
-  if (process.platform === "win32") spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" }).on("error", () => undefined);
+  if (process.platform === "win32") spawn(systemTool("taskkill"), ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" }).on("error", () => undefined);
   else child.kill();
 }
 

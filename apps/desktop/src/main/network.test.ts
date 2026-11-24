@@ -413,6 +413,16 @@ describe("isPublicAddress", () => {
     "64:ff9b::7f00:1",
     "2001:db8::1",
     "2002:7f00:1::",
+    // Audit run 7: an IPv4 address written into a multicast or 6to4 one is judged by the range first, and the old
+    // site-local and Teredo ranges are not public.
+    "ff02::1.2.3.4",
+    "ff0e::8.8.8.8",
+    "2002::8.8.8.8",
+    "2001:db8::8.8.8.8",
+    "fec0::1",
+    "feff::1",
+    "2001::1",
+    "2001:0:4136:e378:8000:63bf:3fff:fdd2",
     "not an address",
   ])("%s is not public", (address) => {
     expect(isPublicAddress(address)).toBe(false);
