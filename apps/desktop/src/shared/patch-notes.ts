@@ -32,55 +32,23 @@ export const PATCH_NOTES: readonly PatchNote[] = [
     date: "2026-11-24",
     title: "Your pictures stay put",
     notes: [
-      "Deleting a workspace no longer removes folders of your own in Pictures\\Tavora, even ones named like the game. Tavora's own pictures for it go to the Recycle Bin.",
-      "Folders of yours next to Tavora's pictures are no longer moved into a \"local\" folder when Tavora starts.",
+      "Deleting a workspace no longer removes folders of your own in PicturesTavora, even ones named like a game. Tavora's own pictures for it go to the Recycle Bin.",
+      "Your own folders next to Tavora's pictures are no longer moved into a \"local\" folder when Tavora starts.",
       "A file that's in use no longer stops Tavora from starting when Trash is emptied. That workspace stays in Trash and goes next time.",
-    ],
-    prs: [
-      { number: 957, title: "Keep the user's own folders when a workspace or module's data is deleted" },
-    ],
-    tags: ["module-files", "modules", "trash", "workspace", "workspaces"],
-  },
-  {
-    version: "0.25.3",
-    date: "2026-11-24",
-    title: "Safer cloud copy folder",
-    notes: [
-      "Adding a PC through your cloud copy folder answers the PC that asked first, so a request someone else put there can't get ahead of yours.",
+      "A panel that runs with your game starts again after a crash, and a panel in the game overlay comes back after its window closes on its own.",
+      "Cloud copy: turning it off now sticks, even when a virus scan holds a file for a moment. If it can't be turned off, you're told and it stays on.",
+      "Cloud copy: lots of small files are counted the way the cloud counts them, so it leaves pictures out when it needs to instead of getting stuck.",
+      "Adding a PC: through your cloud copy folder, the PC that asked first gets the answer, so a request someone else put there can't get ahead of yours. If your key is out of date, Add says so once.",
+      "Answering a connector question always brings your panels back, even if saving your answer didn't work.",
       "Deleting a folder copy never touches anything outside your folder.",
     ],
     prs: [
+      { number: 957, title: "Keep the user's own folders when a workspace or module's data is deleted" },
       { number: 952, title: "Security audit run 6: linear code check, linked copy folder, capped folder pairing" },
-    ],
-    tags: ["catalog", "cloud-copy", "modules", "privacy", "service", "website", "workspace"],
-  },
-  {
-    version: "0.25.2",
-    date: "2026-11-24",
-    title: "Steadier turn-off and in-game panels",
-    notes: [
-      "Turning the cloud copy off now sticks, even when a virus scan holds a file for a moment. If it can't be turned off, you're told and it stays on.",
-      "A panel that runs with your game starts again after a crash, even if it couldn't right away.",
-      "A panel in the game overlay comes back after its window closes on its own.",
-    ],
-    prs: [
       { number: 950, title: "Fix turn-off coming back after a busy file, failed panel restart, dead panel windows" },
-    ],
-    tags: ["cloud-copy", "in-game"],
-  },
-  {
-    version: "0.25.1",
-    date: "2026-11-24",
-    title: "Smoother cloud copy, adding a PC and connector answers",
-    notes: [
-      "A cloud copy with lots of small files now counts its size the way the cloud does, so it leaves pictures out when it needs to instead of getting stuck.",
-      "If your key is out of date, Add on another PC says so once and doesn't ask again.",
-      "Answering a connector question now always brings your panels back, even if saving your answer didn't work.",
-    ],
-    prs: [
       { number: 946, title: "Fix cloud copy size count, repeated Add question, panels after failed grant save" },
     ],
-    tags: ["cloud-copy", "privacy", "workspace"],
+    tags: ["catalog", "cloud-copy", "in-game", "module-files", "modules", "privacy", "service", "trash", "website", "workspace", "workspaces"],
   },
   {
     version: "0.25.0",
