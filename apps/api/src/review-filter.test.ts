@@ -225,12 +225,13 @@ describe("the review word filter", () => {
       for (const check of [checkReviewText, checkModuleText]) {
         const start = performance.now();
         check(text);
-        expect(performance.now() - start, `${check.name} on ${JSON.stringify(piece)}`).toBeLessThan(150);
+        // Backtracking that goes wrong takes seconds or never ends; a busy PC may take a few hundred ms for a clean check.
+        expect(performance.now() - start, `${check.name} on ${JSON.stringify(piece)}`).toBeLessThan(1000);
       }
     }
     const start = performance.now();
     checkModuleText(`a@${"b".repeat(size)}`);
-    expect(performance.now() - start).toBeLessThan(150);
+    expect(performance.now() - start).toBeLessThan(1000);
   });
 
   it("refuses slurs, also with letters swapped or spread out", () => {

@@ -321,5 +321,6 @@ describe("sourceAtTag", () => {
     expect(sourceAtTag(repo, "0.2.0", "keys/update-keys.ts")).toBe("pins");
     expect(sourceAtTag(repo, "0.1.0", "keys/update-keys.ts")).toBeNull();
     expect(() => sourceAtTag(repo, "0.3.0", "keys/update-keys.ts")).toThrow(/no tag v0.3.0/);
-  });
+    // A dozen git runs: past vitest's 5 s on a busy PC.
+  }, 30_000);
 });

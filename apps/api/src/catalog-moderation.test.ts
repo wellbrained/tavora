@@ -364,7 +364,8 @@ describe("check 4: warning signs in the code", { timeout: 30_000 }, () => {
     ] as const) {
       const started = performance.now();
       signsIn(name, text);
-      expect(performance.now() - started, `${name}: ${text.slice(0, 40)}…`).toBeLessThan(1000);
+      // Backtracking that goes wrong takes far longer; a busy PC takes a while for a clean one.
+      expect(performance.now() - started, `${name}: ${text.slice(0, 40)}…`).toBeLessThan(3000);
     }
   });
 

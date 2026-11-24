@@ -76,12 +76,13 @@ case "${1:-}" in
     ;;
 esac
 
+# The new token is shown before the restart is checked: it is saved either way, and stored nowhere else.
+if [[ "${1:-}" == admin-token ]]; then
+  echo "Admin token (shown once, save it now):"
+  echo "$token"
+  echo
+fi
 systemctl restart tavora-api
 sleep 2
 systemctl is-active --quiet tavora-api && echo "Saved ($shown). Service restarted and running." || { echo 'Service is not running; check: journalctl -u tavora-api'; exit 1; }
-if [[ "${1:-}" == admin-token ]]; then
-  echo
-  echo "Admin token (shown once, save it now):"
-  echo "$token"
-fi
 journalctl -u tavora-api -n 8 --no-pager | grep -E 'TAKEDOWN_CONTACT|MAINTAINER_EMAIL|ADMIN_TOKEN|review page|accounts|email|[Vv]irus scan' || true

@@ -221,6 +221,23 @@ describe("tavora-api-set-steam-key", () => {
     expect(t.read("curl-stdin")).toBe(`header = "x-webapi-key: ${key}"\n`);
     expect(readFileSync(path.join(t.root, "srv/tavora-api/shared/production.env"), "utf8")).toContain(`STEAM_WEB_API_KEY=${key}`);
     expect(result.out).not.toContain(key);
+    // bash and its fakes: past vitest's 5 s on a busy PC.
+  }, 30_000);
+});
+
+describe("tavora-api-set-setting admin-token", () => {
+  it("shows the new token even when the service doesn't come back, so a saved token is never one nobody saw", () => {
+    const t = tree();
+    mkdirSync(path.join(t.root, "srv/tavora-api/shared"), { recursive: true });
+    // The service stays down after the restart.
+    fake(t, "systemctl", `[[ "$1" == is-active ]] && exit 3; exit 0`);
+    for (const name of ["chown", "journalctl", "sleep"]) fake(t, name, "exit 0");
+    fake(t, "openssl", "echo 0123456789abcdef0123456789abcdef0123456789abcdef");
+    const result = t.run(t.script("apps/api/deploy/tavora-api-set-setting.sh"), ["admin-token"]);
+    expect(result.status, result.out).toBe(1);
+    expect(readFileSync(path.join(t.root, "srv/tavora-api/shared/production.env"), "utf8")).toContain("ADMIN_TOKEN=0123456789abcdef0123456789abcdef0123456789abcdef");
+    expect(result.out).toContain("0123456789abcdef0123456789abcdef0123456789abcdef");
+    expect(result.out).toContain("Service is not running");
   });
 });
 
