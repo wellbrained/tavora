@@ -640,6 +640,31 @@ describe("the day's emails", () => {
     expect([failed.status, await failed.json()]).toEqual([202, { status: "sent" }]);
   });
 
+  it("holds the day's emails when many codes are asked for at once (hunt M2)", async () => {
+    const sent: string[] = [];
+    // Each send takes a moment, so all the requests are inside one before any comes back.
+    const slow: Mailer = { send: async (mail) => void (await new Promise((resolve) => setTimeout(resolve, 5)), sent.push(mail.to)) };
+    // 26 a day: 6 for sign-in codes, 4 of them for new addresses.
+    const { call, store, clock } = setup({ mailer: slow, mailDailyLimit: 26 });
+    const answers = await Promise.all(Array.from({ length: 30 }, (_, n) => call("POST", "/code", { email: `p${n}@example.com` }, undefined, `203.0.${n}.1`)));
+    expect(answers.map((answer) => answer.status)).toEqual(Array.from({ length: 30 }, () => 202));
+    expect(sent).toHaveLength(4);
+    expect(store.mailsSent(new Date(clock.now).toISOString().slice(0, 10))).toBe(4);
+  });
+
+  it("gives a failed send's email back to the day", async () => {
+    const flaky: Mailer = {
+      send: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        throw new Error("down");
+      },
+    };
+    const { call, store, clock } = setup({ mailer: flaky, mailDailyLimit: 26 });
+    const answers = await Promise.all(Array.from({ length: 3 }, (_, n) => call("POST", "/code", { email: `p${n}@example.com` }, undefined, `203.0.${n}.1`)));
+    expect(answers.map((answer) => answer.status)).toEqual([502, 502, 502]);
+    expect(store.mailsSent(new Date(clock.now).toISOString().slice(0, 10))).toBe(0);
+  });
+
   it("keeps every pause within its bounds", async () => {
     // 50 a day: new addresses get 20; sends that take a minute count as 3 s.
     const { call, store, clock, pauses } = setup({ mailDailyLimit: 50, sendMs: 60_000, accounts: { random: () => 1, codeDayRateLimiter: roomy(), codeNetworkRateLimiter: roomy() } });
@@ -776,6 +801,34 @@ describe("the day's emails", () => {
     expect(inbox.mails().filter((mail) => mail.to === "me@example.com")).toHaveLength(3);
   });
 
+  it("counts an owner's code against the account's 5 only when the address's own limit lets it go (hunt M1)", async () => {
+    const { call, oldAccount, inbox, clock } = setup();
+    const token = oldAccount("me@example.com");
+    // 3 codes in 15 minutes to the address: the 4th and 5th press are refused, and use nothing up.
+    const presses = [];
+    for (let i = 0; i < 5; i++) presses.push((await call("POST", "/delete/code", {}, token)).status);
+    expect(presses).toEqual([202, 202, 202, 429, 429]);
+    // A while later the owner still has 2 of their 5 for the day.
+    clock.now += 16 * 60_000;
+    for (const path of ["/delete/code", "/discord/code"]) expect((await call("POST", path, {}, token)).status).toBe(202);
+    clock.now += 16 * 60_000;
+    expect((await call("POST", "/delete/code", {}, token)).status).toBe(429);
+    expect(inbox.mails().filter((mail) => mail.to === "me@example.com")).toHaveLength(5);
+  });
+
+  it("spends no reserved email on a delete code the address's own limit refuses (hunt M1)", async () => {
+    // 50 a day: 30 for sign-in codes, 20 reserved.
+    const { call, oldAccount, store, clock } = setup({ mailDailyLimit: 50 });
+    const token = oldAccount("me@example.com");
+    for (let i = 0; i < 3; i++) expect((await call("POST", "/delete/code", {}, token)).status).toBe(202);
+    const day = new Date(clock.now).toISOString().slice(0, 10);
+    while (store.mailsSent(day) < 30) store.countMail(day);
+    expect((await call("POST", "/delete/code", {}, token)).status).toBe(429);
+    expect(store.mailsSent(day)).toBe(30);
+    clock.now += 16 * 60_000;
+    expect((await call("POST", "/delete/code", {}, token)).status).toBe(202);
+  });
+
   it("limits codes for a new address: 3 changes a day per account, the day's shares, and new addresses' emails only", async () => {
     const { call, oldAccount, store, clock } = setup({ mailDailyLimit: 50 });
     const token = oldAccount("me@example.com");
@@ -833,6 +886,15 @@ describe("Brevo", () => {
       createBrevoMailer({ apiKey: "xkeysib-secret", from: "signin@mytavora.app", fetch: (async () => new Response(body, { status })) as unknown as typeof fetch });
     await expect(answer(402, "{}").send(mail)).rejects.toBeInstanceOf(MailLimitError);
     await expect(answer(400, '{"code":"not_enough_credits","message":"Not enough credits"}').send(mail)).rejects.toBeInstanceOf(MailLimitError);
+    // A short rate limit isn't the day's allowance.
+    for (const [status, body] of [
+      [429, '{"code":"too_many_requests","message":"Rate limit exceeded"}'],
+      [400, '{"code":"invalid_parameter","message":"Subject is over the length limit"}'],
+    ] as const) {
+      const failed = answer(status, body).send(mail);
+      await expect(failed).rejects.toThrow(`Brevo answered ${status}`);
+      await expect(failed).rejects.not.toBeInstanceOf(MailLimitError);
+    }
     const other = answer(401, '{"code":"unauthorized"}').send(mail);
     await expect(other).rejects.toThrow("Brevo answered 401");
     await expect(other).rejects.not.toThrow(/secret/);

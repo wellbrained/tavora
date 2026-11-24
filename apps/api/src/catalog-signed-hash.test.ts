@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { readZip, signedHash, signFiles, writeZip, type ZipFile } from "@tavora/pack";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { CatalogStore, REMOVED_ZIP } from "./catalog.ts";
 
 // S7: a version keeps the hash of what its zip's signature covers, so a block can name it as well as the zip's hash.
@@ -145,6 +145,19 @@ describe("filling the signed hash of older versions", () => {
     const catalog = new CatalogStore(path.join(dir, "catalog"));
     catalog.setState("signed_backfill_stalled", JSON.stringify([sha(zips[1]!)]));
     expect(catalog.backfillSignedHashes({ skipStalled: true })).toEqual({ filled: 3, skipped: [] });
+  });
+
+  it("starts over, with a warning, when the saved stalled zips can't be read", () => {
+    const { dir } = olderCatalog();
+    const catalog = new CatalogStore(path.join(dir, "catalog"));
+    catalog.setState("signed_backfill_stalled", "{broken");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      expect(catalog.backfillSignedHashes({ skipStalled: true })).toEqual({ filled: 3, skipped: [] });
+      expect(warn).toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("the command always tries a stalled zip", () => {

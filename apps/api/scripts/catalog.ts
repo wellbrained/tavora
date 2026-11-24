@@ -48,7 +48,10 @@ try {
   } else if (command === "list" && argument === undefined) {
     const modules = store.modules();
     if (modules.length === 0) console.log("The catalog is empty.");
-    for (const module of modules) console.log(`${module.id} ${module.latest} (${module.versions} versions, key ${module.owner})${module.listed ? "" : " delisted"}`);
+    for (const module of modules) {
+      const waiting = module.waiting ? `, ${module.waiting} waiting for review` : "";
+      console.log(`${module.id} ${module.latest ?? "(none listed)"} (${module.versions} versions${waiting}, key ${module.owner})${module.listed ? "" : " delisted"}`);
+    }
   } else {
     console.error(`Usage:\n  catalog add <module.zip | ->\n  catalog delist <module id>\n  catalog relist <module id>\n  catalog list\n  catalog backfill-signed\n  catalog set-list <${SIGNED_LISTS.join("|")}> <file.json | ->`);
     process.exitCode = 2;

@@ -145,6 +145,29 @@ describe("adding to the catalog", () => {
     ]);
   });
 
+  it("lists for the maintainer the newest listed version, and the waiting ones apart", () => {
+    const catalog = store();
+    const waiting = { reasons: [{ check: "virus", text: "The virus scan found something." }], language: "en", token: null };
+    catalog.add(moduleZip(), new Date("2026-10-18T10:00:00Z"), null, undefined, undefined, waiting);
+    expect(catalog.modules()).toEqual([{ id: "wellbrained.timer", owner: expect.any(String), listed: true, versions: 0, latest: null, waiting: 1 }]);
+    catalog.add(moduleZip({ version: "1.1.0" }), new Date("2026-10-19T10:00:00Z"));
+    catalog.add(moduleZip({ version: "1.2.0" }), new Date("2026-10-20T10:00:00Z"), null, undefined, undefined, waiting);
+    expect(catalog.modules()).toEqual([{ id: "wellbrained.timer", owner: expect.any(String), listed: true, versions: 1, latest: "1.1.0", waiting: 2 }]);
+  });
+
+  it("tells the maintainer the catalog is full again when the last notice didn't go out", () => {
+    const catalog = store();
+    const at = new Date("2026-10-18T10:00:00Z");
+    expect(catalog.markFull(at)).toBe(true);
+    expect(catalog.markFull(new Date("2026-10-18T11:00:00Z"))).toBe(false);
+    catalog.giveBackFullNotice(at);
+    expect(catalog.markFull(new Date("2026-10-18T12:00:00Z"))).toBe(true);
+    // Only the claim it was given for: a newer one stays.
+    catalog.giveBackFullNotice(at);
+    expect(catalog.markFull(new Date("2026-10-18T13:00:00Z"))).toBe(false);
+    expect(catalog.fullSince()).toBe(at.toISOString());
+  });
+
   it("stores a signed zip under its hash with this version's notes", () => {
     const catalog = store();
     const zip = moduleZip({ changelog: [{ version: "1.0.0", notes: ["First version."] }] });

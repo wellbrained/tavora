@@ -50,15 +50,20 @@ function setup(options: { mailer?: Mailer; mailDailyLimit?: number; linked?: boo
 }
 
 describe("reporting a catalog module", () => {
-  it("records a report of a listed zip, counts repeats, and hides nothing by itself", async () => {
-    const { catalog, clock, of, report } = setup();
+  it("records a report of a listed zip, counts one per account, and hides nothing by itself", async () => {
+    const { catalog, clock, of, report, store } = setup();
     const first = await report(of);
     expect(first.status).toBe(202);
     expect(await first.json()).toEqual({ status: "received" });
     clock.now += 60_000;
+    // The same account again counts no more.
     expect((await report(of)).status).toBe(202);
+    expect(catalog.reports()[0]!.count).toBe(1);
+    clock.now += 60_000;
+    const other = store.createSession(store.createAccount({ email: "other@example.com" }, clock.now).id, "windows", clock.now).token;
+    expect((await report(of, "application/json", other)).status).toBe(202);
     expect(catalog.reports()).toEqual([
-      expect.objectContaining({ sha256: of.sha256, id: "wellbrained.timer", name: "Timer", version: "1.0.0", owner: of.owner, count: 2, listed: true, firstAt: "2026-10-18T12:00:00.000Z", lastAt: "2026-10-18T12:01:00.000Z" }),
+      expect.objectContaining({ sha256: of.sha256, id: "wellbrained.timer", name: "Timer", version: "1.0.0", owner: of.owner, count: 2, listed: true, firstAt: "2026-10-18T12:00:00.000Z", lastAt: "2026-10-18T12:02:00.000Z" }),
     ]);
     expect(catalog.index()).toHaveLength(1);
   });
@@ -71,13 +76,12 @@ describe("reporting a catalog module", () => {
     expect((await report(of, "application/json", "x".repeat(30))).status).toBe(401);
     expect(catalog.reports()).toEqual([]);
 
-    expect((await report({ ...of, reason: "spam", note: "  Copy of another module  " })).status).toBe(202);
     expect((await report(of)).status).toBe(202);
-    expect(catalog.reporters(of.sha256)).toEqual([
-      { accountId: reporter.id, reason: "spam", note: "Copy of another module", at: clock.now },
-      { accountId: reporter.id, reason: null, note: null, at: clock.now },
-    ]);
-    expect(catalog.reports()[0]!.count).toBe(2);
+    clock.now += 60_000;
+    // Pressing again keeps one report, with the newest reason and note.
+    expect((await report({ ...of, reason: "spam", note: "  Copy of another module  " })).status).toBe(202);
+    expect(catalog.reporters(of.sha256)).toEqual([{ accountId: reporter.id, reason: "spam", note: "Copy of another module", at: clock.now }]);
+    expect(catalog.reports()[0]!.count).toBe(1);
 
     // Dismissing the report deletes the senders; deleting the account does too.
     expect(catalog.dismissReport(of.sha256)).toBe(true);
@@ -102,7 +106,7 @@ describe("reporting a catalog module", () => {
     for (const extra of [{ reason: "rude" }, { reason: 4 }, { note: "x".repeat(501) }, { note: 5 }]) expect((await report({ ...of, ...extra })).status).toBe(400);
     for (const reason of ["unsafe", "hateful", "adult", "spam", "broken", "other"]) expect((await report({ ...of, reason })).status).toBe(202);
     expect((await report({ ...of, note: "x".repeat(500) })).status).toBe(202);
-    expect(catalog.reports()[0]!.count).toBe(7);
+    expect(catalog.reports()[0]!.count).toBe(1);
   });
 
   it("takes only the module, the key and the zip's hash with a reason and note, so nothing else about the user rides along", async () => {
@@ -137,6 +141,26 @@ describe("reporting a catalog module", () => {
     clock.now += 86_400_001;
     await report(of);
     expect(inbox.mails()).toHaveLength(2);
+  });
+
+  it("tells the publisher on the next report when the notice failed, and sends one for reports at the same time", async () => {
+    let fail = true;
+    const sent: string[] = [];
+    const mailer: Mailer = {
+      send: async (mail) => {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        if (fail) throw new Error("smtp down");
+        sent.push(mail.to);
+      },
+    };
+    const { of, report, store, clock } = setup({ mailer });
+    expect((await report(of)).status).toBe(202);
+    expect(store.mailsSent("2026-10-18")).toBe(0);
+    fail = false;
+    const tokens = ["a", "b", "c"].map((name) => store.createSession(store.createAccount({ email: `${name}@example.com` }, clock.now).id, "windows", clock.now).token);
+    await Promise.all(tokens.map((token) => report(of, "application/json", token)));
+    expect(sent).toEqual(["dev@example.com"]);
+    expect(store.mailsSent("2026-10-18")).toBe(1);
   });
 
   it("records the report when the key has no account, the mail fails, or only the reserved mail is left", async () => {

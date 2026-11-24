@@ -56,13 +56,17 @@ export function reportHandlers({ catalog, accounts, clientKey, rateLimiter, now 
     const day = new Date(now()).toISOString().slice(0, 10);
     // Sign-in codes come first: a report notice never uses the emails kept for them.
     if (accounts.mailDailyLimit !== undefined && store.mailsSent(day) >= Math.max(0, accounts.mailDailyLimit - MAIL_RESERVED)) return;
-    if (!catalog.takeReportNotice(owner, new Date(now()))) return;
+    // Claimed and counted before the send, so reports at the same time send one; given back when it fails.
+    const at = new Date(now());
+    if (!catalog.takeReportNotice(owner, at)) return;
     const name = catalog.module(id)?.module.name ?? id;
+    store.countMail(day);
     try {
       await accounts.mailer.send(reportMail(email, { id, name }));
-      store.countMail(day);
     } catch {
-      // The report is recorded either way; the notice is best effort.
+      // The report is recorded either way; the notice is best effort, and the next report tries again.
+      store.uncountMail(day);
+      catalog.giveBackReportNotice(owner, at);
     }
   };
 

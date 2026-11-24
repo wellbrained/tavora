@@ -36,7 +36,14 @@ type StalledZips = Record<string, { deaths: number; at: number }>;
 
 /** The saved marks. An older service kept a plain list of hashes "for good": those read as never tried again yet, so they are. */
 function stalledZips(saved: string | null): StalledZips {
-  const value = JSON.parse(saved ?? "{}") as unknown;
+  let value: unknown;
+  try {
+    value = JSON.parse(saved ?? "{}");
+  } catch {
+    // A broken note must not stop every start: the backfill then tries every zip again.
+    console.warn("[tavora-api] The saved list of stalled zips can't be read; starting it over.");
+    return {};
+  }
   return Array.isArray(value) || typeof value !== "object" || value === null ? {} : (value as StalledZips);
 }
 
@@ -350,8 +357,12 @@ export interface CatalogModuleRow {
   id: string;
   owner: string;
   listed: boolean;
+  /** Listed versions: the ones Browse can offer. */
   versions: number;
-  latest: string;
+  /** The newest listed version; null while every version still waits for review. */
+  latest: string | null;
+  /** Versions waiting for review, apart from the listed ones. */
+  waiting: number;
 }
 
 /** A module as the admin panel lists it; versions newest first. */
@@ -1200,6 +1211,14 @@ export class CatalogStore {
       .prepare("select 1 from versions v join modules m on m.id = v.module_id where v.sha256 = ? and m.id = ? and (m.owner = ? or v.signer = ?) and m.listed = 1 and v.status = 'listed'")
       .get(input.sha256, input.id, input.owner, input.owner);
     if (!known) return false;
+    // One report per account and zip: pressing again only updates its reason and note.
+    const again = sender
+      ? (this.db.prepare("select id from report_senders where sha256 = ? and account_id = ? order by id desc limit 1").get(input.sha256, sender.accountId) as { id: number } | undefined)
+      : undefined;
+    if (again && sender) {
+      this.db.prepare("update report_senders set reason = ?, note = ?, at = ? where id = ?").run(sender.reason, sender.note, now.getTime(), again.id);
+      return true;
+    }
     const at = now.toISOString();
     this.db
       .prepare("insert into reports (sha256, module_id, owner, count, first_at, last_at) values (?, ?, ?, 1, ?, ?) on conflict (sha256) do update set count = count + 1, last_at = excluded.last_at")
@@ -1252,6 +1271,11 @@ export class CatalogStore {
     return true;
   }
 
+  /** The notice takeReportNotice said yes to at `at` didn't go out: the owner may be told again. */
+  giveBackReportNotice(owner: string, at: Date): void {
+    this.db.prepare("delete from report_notices where owner = ? and notified_at = ?").run(owner, at.toISOString());
+  }
+
   /**
    * Marks the catalog as full (an upload was refused for room) and says whether the maintainer may be
    * told now: at most once a day. Saying yes counts as telling.
@@ -1263,6 +1287,11 @@ export class CatalogStore {
     if (last && now.getTime() - Date.parse(last.value) < 86_400_000) return false;
     this.db.prepare("insert into catalog_state (name, value) values ('full_notified_at', ?) on conflict (name) do update set value = excluded.value").run(at);
     return true;
+  }
+
+  /** The notice markFull said yes to at `at` didn't go out: the maintainer may be told again. */
+  giveBackFullNotice(at: Date): void {
+    this.db.prepare("delete from catalog_state where name = 'full_notified_at' and value = ?").run(at.toISOString());
   }
 
   /** An upload fit again: the catalog is no longer full. */
@@ -1319,11 +1348,13 @@ export class CatalogStore {
     return (
       this.db
         .prepare(
-          `select m.id, m.owner, m.listed, count(v.seq) as versions,
-             (select version from versions where module_id = m.id order by seq desc limit 1) as latest
+          `select m.id, m.owner, m.listed,
+             sum(case when v.status = 'listed' then 1 else 0 end) as versions,
+             sum(case when v.status = 'waiting' then 1 else 0 end) as waiting,
+             (select version from versions where module_id = m.id and status = 'listed' order by seq desc limit 1) as latest
            from modules m join versions v on v.module_id = m.id group by m.id order by m.id`,
         )
-        .all() as unknown as { id: string; owner: string; listed: number; versions: number; latest: string }[]
+        .all() as unknown as { id: string; owner: string; listed: number; versions: number; waiting: number; latest: string | null }[]
     ).map((row) => ({ ...row, listed: row.listed === 1 }));
   }
 

@@ -1184,6 +1184,14 @@ export class AccountStore {
   }
 
   /**
+   * Gives back an email countMail counted for one that then didn't go out. A send is counted before it goes, so sends
+   * at the same time see each other against the day's limit. Never below 0.
+   */
+  uncountMail(day: string): void {
+    this.db.prepare("update mail_days set sent = sent - 1 where day = ? and sent > 0").run(day);
+  }
+
+  /**
    * Takes one of the day's notices about an account's publishing (catalog-publish.ts): false, counting nothing, when the
    * account had `perAccount` today or all accounts together `perDay`.
    */

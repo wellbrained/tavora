@@ -124,15 +124,22 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
 
   // Tells the maintainer by email, at most once a day; the review page shows it either way (C9).
   const tellFull = async (catalog: CatalogStore, store: AccountStore, at: number, usedBytes: number) => {
-    if (!catalog.markFull(new Date(at)) || !maintainer) return;
-    const day = new Date(at).toISOString().slice(0, 10);
+    const when = new Date(at);
+    if (!catalog.markFull(when) || !maintainer) return;
+    const day = when.toISOString().slice(0, 10);
     // Sign-in codes come first: this notice never uses the emails kept for them.
-    if (maintainer.mailDailyLimit !== undefined && store.mailsSent(day) >= Math.max(0, maintainer.mailDailyLimit - MAIL_RESERVED)) return;
+    if (maintainer.mailDailyLimit !== undefined && store.mailsSent(day) >= Math.max(0, maintainer.mailDailyLimit - MAIL_RESERVED)) {
+      catalog.giveBackFullNotice(when);
+      return;
+    }
+    // Claimed (markFull) and counted before the send, so uploads at the same time send one; given back when it fails.
+    store.countMail(day);
     try {
       await maintainer.mailer.send(catalogFullMail(maintainer.email, usedBytes, catalogBytes));
-      store.countMail(day);
     } catch {
-      // The review page still shows it; the email is best effort.
+      // The review page still shows it; the email is best effort, and the next refused upload tries again.
+      store.uncountMail(day);
+      catalog.giveBackFullNotice(when);
     }
   };
 
@@ -184,11 +191,13 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
     const room = via.mailDailyLimit === undefined ? null : noticeRoom(via.mailDailyLimit);
     if (room && store.mailsSent(day) + 1 > room.ceiling) return false;
     if (!store.takeNotice(day, accountId, NOTICES_PER_ACCOUNT, room?.perDay ?? Number.POSITIVE_INFINITY)) return false;
+    // Counted before the send, so sends at the same time see it; given back when it fails.
+    store.countMail(day);
     try {
       await via.mailer.send(message);
-      store.countMail(day);
       return true;
     } catch {
+      store.uncountMail(day);
       // Done all the same; the email is best effort.
       return false;
     }

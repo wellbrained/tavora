@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { catalogPublicKey, nextCatalogList, readZip, signCatalogList, signedHash, signFiles, writeZip, type Block, type ZipFile } from "@tavora/pack";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createAdminApp } from "./admin-app.ts";
 import { CatalogStore } from "./catalog.ts";
 import { createHostedStore } from "./hosted-store.ts";
@@ -89,6 +89,20 @@ describe("blocking a zip from the panel", () => {
     const { first, post, blocksWaiting } = setup();
     await post("/api/blocks", { sha256: first, reason: "Harmful." });
     expect(await blocksWaiting()).toMatchObject({ count: 1, section: "modules" });
+  });
+
+  it("keeps the block routes working when the saved staged blocks can't be read, and logs it", async () => {
+    const { catalog, first, get, post } = setup();
+    catalog.setState("staged_blocks", "{broken");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      expect(((await (await get("/api/blocks")).json()) as any).blocks).toEqual([]);
+      expect((await post("/api/blocks", { sha256: first, reason: "Harmful." })).status).toBe(200);
+      expect(((await (await get("/api/blocks")).json()) as any).blocks).toHaveLength(1);
+      expect(warn).toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("refuses a zip the catalog never had, and a reason the list can't hold", async () => {

@@ -32,7 +32,17 @@ export interface BlockToSign extends Block {
   stagedAt: string | null;
 }
 
-const staged = (catalog: CatalogStore): Staged[] => JSON.parse(catalog.getState(STAGED) ?? "[]") as Staged[];
+/** The blocks staged to sign. A saved list that can't be read counts as empty (and is logged), so the block routes still work. */
+function staged(catalog: CatalogStore): Staged[] {
+  try {
+    const value = JSON.parse(catalog.getState(STAGED) ?? "[]") as unknown;
+    if (!Array.isArray(value)) throw new Error("not a list");
+    return value.filter((entry): entry is Staged => typeof entry === "object" && entry !== null && typeof (entry as Staged).sha256 === "string");
+  } catch {
+    console.warn("[tavora-api] The staged blocks can't be read; showing none.");
+    return [];
+  }
+}
 const inForce = (trust: CatalogTrust | null): Block[] => trust?.signed("blocks")?.blocked ?? [];
 
 /**

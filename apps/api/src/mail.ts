@@ -46,8 +46,9 @@ export function createBrevoMailer(options: { apiKey: string; from: string; fetch
       });
       if (response.ok) return;
       const text = await response.text().catch(() => "");
-      // Brevo says "not enough credits" (or answers 402/429) when the plan's allowance is used up.
-      if (response.status === 402 || response.status === 429 || /credit|limit|quota/i.test(text)) throw new MailLimitError();
+      // Brevo answers 402 or says "not enough credits" when the plan's allowance is used up. A 429 is a short rate limit,
+      // not the day's end, so it fails like any other send.
+      if (response.status === 402 || /credit|quota/i.test(text)) throw new MailLimitError();
       // Never the key or the address in a log line: only the status.
       throw new Error(`Brevo answered ${response.status}`);
     },

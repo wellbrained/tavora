@@ -214,11 +214,13 @@ export function createNotifier(options: { store: AccountStore; mailer: Mailer; m
     async send(mail) {
       const day = new Date(now()).toISOString().slice(0, 10);
       if (options.mailDailyLimit !== undefined && options.store.mailsSent(day) >= Math.max(0, options.mailDailyLimit - MAIL_RESERVED)) return false;
+      // Counted before the send, so sends at the same time see it; given back when it fails.
+      options.store.countMail(day);
       try {
         await options.mailer.send(mail);
-        options.store.countMail(day);
         return true;
       } catch {
+        options.store.uncountMail(day);
         return false;
       }
     },
