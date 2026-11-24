@@ -80,7 +80,8 @@ export const STORE_VERSIONS = {
 } as const;
 
 // Not checked, as nothing of the user's is lost with them: window.json (where the window was), open-times.json (how
-// fast layouts open here), games-seen.json (when games were seen running), inbox.json (which notes were shown),
+// fast layouts open here), games-seen.json (when games were seen running), update-feed.json (the newest time a signed
+// update feed was seen at; a damaged one reads as none seen, newer fields are kept), inbox.json (which notes were shown),
 // publisher-names.json and catalog-lists.json (downloaded), the documents' index.json (rebuilt), picker.json (a hint),
 // a cloud copy swap's plan (swap-plan.json: written once as the swap begins, before its status, and made again from the
 // backup when both are damaged) and the note of files lost at a held start (cloud-copy-lost.json: a damaged one reads as

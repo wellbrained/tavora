@@ -774,6 +774,7 @@ export const en = {
   "settings.updates.failed": "Couldn't reach the update server. Try again soon.",
   "settings.updates.refused": "Tavora couldn't confirm {version} is really from Tavora, so it wasn't installed.",
   "settings.updates.upToDate": "You're up to date. Checked {date}.",
+  "settings.updates.unconfirmed": "Can't confirm you're up to date. Get the newest version at mytavora.app.",
   "settings.updates.idle": "Tavora checks on its own.",
   "settings.updates.checkNow": "Check now",
   "settings.diagnostics.copy": "Copy",

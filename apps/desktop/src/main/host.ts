@@ -111,9 +111,10 @@ import { OnlineSearch } from "./online";
 import { countAppUpdate } from "./usage-counts";
 import { askedName, sendModuleRequest } from "./module-request";
 import { PublisherNames, publisherOf } from "./publisher-names";
-import { PreviewUpdater, previewCheck, UpdateManager, type UpdaterLike } from "./updates";
+import { PreviewUpdater, previewCheck, UpdateManager, type UpdateInfoLike, type UpdaterLike } from "./updates";
 import { PINNED_UPDATE_KEYS } from "./update-keys";
 import { checkDownloadedUpdate } from "./update-signature";
+import { ENFORCE_FEED_FRESHNESS, FeedFreshnessCheck } from "./update-freshness";
 import { OfficialPublisher } from "./official-publish";
 import { OfficialPublishing } from "./official-publishing";
 import { OfficialKeyStore } from "./official-key-store";
@@ -1381,17 +1382,22 @@ export class Host {
    *
    * A downloaded version installs only when Tavora's signature checks out against the keys pinned in
    * update-keys.ts (update-signature.ts); a refused installer is deleted, and Tavora goes on with its version.
+   * Every answer from the feed also has its second signature checked (update-freshness.ts): logged only for now.
    */
   private async startUpdates(): Promise<void> {
     try {
       const updater: UpdaterLike = app.isPackaged
         ? ((await import("electron-updater")).autoUpdater as unknown as UpdaterLike)
         : new PreviewUpdater(app.getVersion(), { fail: process.env.TAVORA_FAKE_UPDATE_FAIL === "1" });
+      const feed = app.isPackaged ? new FeedFreshnessCheck({ userData: this.options.userData, pinned: PINNED_UPDATE_KEYS }) : null;
+      await feed?.load();
       this.updates = new UpdateManager({
         updater,
         verify: app.isPackaged
-          ? (info) => checkDownloadedUpdate(info, PINNED_UPDATE_KEYS, app.getVersion())
+          ? (info) => checkDownloadedUpdate(info, PINNED_UPDATE_KEYS, app.getVersion(), feed ? (installer) => feed.check(info, installer) : undefined)
           : previewCheck(process.env.TAVORA_FAKE_UPDATE_UNSIGNED === "1"),
+        ...(feed ? { checkFeed: (info: UpdateInfoLike) => feed.check(info) } : {}),
+        enforceFeed: ENFORCE_FEED_FRESHNESS,
         // The refused installer goes, with its blockmaps (refused-update.ts).
         onRefused: (info) => removeRefusedInstaller(info, app.isPackaged),
         autoDownload: this.library.autoUpdate,

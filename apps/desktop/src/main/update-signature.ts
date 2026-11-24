@@ -28,7 +28,8 @@ export interface SignedUpdate {
   sha512: string;
 }
 
-export type UpdateCheck = { ok: true; key: UpdateKeyName } | { ok: false; reason: string };
+/** `feed`: what the feed's second signature said for the downloaded file, when checkDownloadedUpdate was asked to check it. */
+export type UpdateCheck = { ok: true; key: UpdateKeyName; feed?: FeedFreshness } | { ok: false; reason: string };
 
 const FILE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/;
 // DER prefix of an Ed25519 public key in SubjectPublicKeyInfo form; the raw 32 bytes follow.
@@ -264,6 +265,56 @@ export function verifyUpdateSignature2(update: { version: unknown; file: unknown
   return { ok: false, reason: "the second Tavora signature does not match this version, file, SHA-512 and statement under either pinned key" };
 }
 
+/**
+ * How far this PC's clock may be off before a feed's times count against it: the expiry counts only this long after
+ * it passed, and a clock this far behind the issue time can't tell whether the feed expired at all.
+ */
+export const FEED_CLOCK_LEEWAY_MS = DAY_MS;
+
+/**
+ * What a feed's second signature says about it, for this app:
+ * - `fresh`: a pinned key vouched for it, for this channel and platform, not older than any statement this Tavora saw,
+ *   and its expiry hasn't passed (give or take FEED_CLOCK_LEEWAY_MS).
+ * - `expired`: all that, but the expiry passed more than FEED_CLOCK_LEEWAY_MS ago: the feed may be held back. Soft:
+ *   a newer signed version still installs; Tavora only can't confirm it is up to date.
+ * - `clock-behind`: all that, but this PC's clock is more than FEED_CLOCK_LEEWAY_MS before the issue time, so whether
+ *   the feed expired can't be told. Counts as fresh.
+ * - `refused`: no second signature, a broken one, one for another channel or platform, or one issued before the newest
+ *   statement this Tavora has seen (a replay).
+ */
+export type FeedFreshness =
+  | { status: "fresh" | "expired" | "clock-behind"; key: UpdateKeyName; statement: FeedStatement }
+  | { status: "refused"; reason: string };
+
+/** What the freshness check expects: the pins, this app's channel and platform, the newest issue time it saw, now. */
+export interface FeedExpectations {
+  pinned: unknown;
+  channel: UpdateChannel;
+  platform: string;
+  /** The newest issuedAt this Tavora verified before, or null. */
+  newestIssuedAt: string | null;
+  now: Date;
+}
+
+/** Whether a feed's second signature holds for these fields and this app, and whether the feed is fresh. */
+export function checkFeedFreshness(update: { version: unknown; file: unknown; sha512: unknown; signature2: unknown }, expect: FeedExpectations): FeedFreshness {
+  const keys = readPinnedUpdateKeys(expect.pinned);
+  if (!keys.ok) return { status: "refused", reason: keys.problem };
+  const signed = verifyUpdateSignature2(update, update.signature2, keys.keys);
+  if (!signed.ok) return { status: "refused", reason: signed.reason };
+  const { statement, key } = signed;
+  if (statement.channel !== expect.channel) return { status: "refused", reason: `the feed is for the ${statement.channel} channel, not ${expect.channel}` };
+  if (statement.platform !== expect.platform) return { status: "refused", reason: `the feed is for ${statement.platform}, not ${expect.platform}` };
+  // The replay check needs no clock: an older statement than one already verified is an old feed served again.
+  if (expect.newestIssuedAt !== null && Date.parse(statement.issuedAt) < Date.parse(expect.newestIssuedAt)) {
+    return { status: "refused", reason: `the feed was signed at ${statement.issuedAt}, before one this Tavora already saw (${expect.newestIssuedAt})` };
+  }
+  const now = expect.now.getTime();
+  if (now < Date.parse(statement.issuedAt) - FEED_CLOCK_LEEWAY_MS) return { status: "clock-behind", key, statement };
+  if (now > Date.parse(statement.expiresAt) + FEED_CLOCK_LEEWAY_MS) return { status: "expired", key, statement };
+  return { status: "fresh", key, statement };
+}
+
 /** SHA-512 of a file, base64, read as a stream. */
 export function sha512OfFile(file: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -275,8 +326,17 @@ export function sha512OfFile(file: string): Promise<string> {
   });
 }
 
-/** checkUpdate for the file the updater saved: hashes it first. A file that can't be read is refused. */
-export async function checkDownloadedUpdate(update: DownloadedUpdate, pinned: unknown, currentVersion: string): Promise<UpdateCheck> {
+/**
+ * checkUpdate for the file the updater saved: hashes it first. A file that can't be read is refused. `checkFeed`, when
+ * given, also checks the feed's second signature for that file's name and hash once v1 passed; its outcome comes back
+ * as `feed` and never changes `ok` here (the update manager decides what it means).
+ */
+export async function checkDownloadedUpdate(
+  update: DownloadedUpdate,
+  pinned: unknown,
+  currentVersion: string,
+  checkFeed?: (installer: { file: string; sha512: string }) => FeedFreshness,
+): Promise<UpdateCheck> {
   if (typeof update.downloadedFile !== "string" || update.downloadedFile === "") return { ok: false, reason: "the updater named no downloaded file" };
   let sha512: string;
   try {
@@ -284,5 +344,13 @@ export async function checkDownloadedUpdate(update: DownloadedUpdate, pinned: un
   } catch (error) {
     return { ok: false, reason: `the downloaded file can't be read (${error instanceof Error ? error.message : String(error)})` };
   }
-  return checkUpdate(update, sha512, pinned, currentVersion);
+  const check = checkUpdate(update, sha512, pinned, currentVersion);
+  if (!check.ok || !checkFeed) return check;
+  let feed: FeedFreshness;
+  try {
+    feed = checkFeed({ file: baseName(update.downloadedFile), sha512 });
+  } catch (error) {
+    feed = { status: "refused", reason: `the feed check failed (${error instanceof Error ? error.message : String(error)})` };
+  }
+  return { ...check, feed };
 }

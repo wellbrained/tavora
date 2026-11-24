@@ -698,7 +698,11 @@ export interface PanelBounds {
  * version carries what is new in it, from the update feed (empty when the feed has no notes).
  */
 export type UpdateState =
-  | { status: "idle"; checkedAt: string | null; failed: boolean }
+  /**
+   * failed: the last check didn't reach the feed ("check"), or reached it but couldn't confirm it is the newest
+   * ("unconfirmed": its second signature didn't check out or expired; only once that check is enforced).
+   */
+  | { status: "idle"; checkedAt: string | null; failed: false | "check" | "unconfirmed" }
   | { status: "checking" }
   /** failed: the last download broke off ("download") or its Tavora signature didn't check out ("refused"). */
   | { status: "available"; version: string; notes: string[]; failed: false | "download" | "refused" }

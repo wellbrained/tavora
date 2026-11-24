@@ -97,6 +97,7 @@ const WRITES: { file: string; what: string; calls: string[] }[] = [
   { file: "steam-icons.ts", what: "icons, not JSON", calls: ["fsutil.writeFileAtomic(path.join(iconDir, file))", "fsutil.writeFileAtomic(path.join(iconDir, file))", "fsutil.writeFileAtomic(path.join(iconDir, file))", "fsutil.writeFileAtomic(path.join(iconDir, file))", "fsutil.writeFileAtomic(path.join(iconDir, file))"] },
   { file: "steam-shortcuts.ts", what: "icons, not JSON", calls: ["fsutil.writeFileAtomic(path.join(iconDir, file))"] },
   { file: "storage.ts", what: "a panel's state file moved aside, for the owner that wrote it, when another owner's page writes", calls: ["rename(file, this.asideFile(instanceId, other))"] },
+  { file: "update-freshness.ts", what: "update-feed.json: the newest time a signed update feed was seen at (bookkeeping saved-versions.ts names)", calls: ["fsutil.writeFileAtomic(this.file)"] },
   { file: "user-profile.ts", what: "the profile picture, not JSON", calls: ["profile.savePicture(dir)", "profile.savePicture(dir)"] },
   { file: "workspace-move.ts", what: "the move to the workspace names at start, after keepNewerFiles, of files that still have the old names, and their backup", calls: ["fsutil.keepCopy(backup, name)", "fsutil.writeFileAtomic(path.join(userData, name))"] },
 ];
