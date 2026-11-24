@@ -310,7 +310,7 @@ describe("check 4: warning signs in the code", { timeout: 30_000 }, () => {
     ]) {
       expect(await flagged(text!, name), text).toBe("code");
     }
-  });
+  }, 120_000); // Runs the whole publish check for each of its 30+ cases; a busy CI runner needs more than 30 s.
 
   it("finds a script element's src only inside its own tag, as before", async () => {
     for (const [text, name] of [
