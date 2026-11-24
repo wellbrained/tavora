@@ -23,6 +23,14 @@
       "if": {
         "type": "object",
         "required": ["permissions"],
+        "properties": { "permissions": { "type": "object", "required": ["webAssembly"], "properties": { "webAssembly": { "const": true } } } }
+      },
+      "then": { "type": "object", "required": ["id"], "properties": { "id": { "type": "string", "pattern": "^tavora\\." } } }
+    },
+    {
+      "if": {
+        "type": "object",
+        "required": ["permissions"],
         "properties": {
           "permissions": {
             "type": "object",
@@ -627,7 +635,7 @@
         },
         "webAssembly": {
           "type": "boolean",
-          "description": "Lets the page compile WebAssembly. Only Tavora's own modules may ask for it; any other module that does is not loaded."
+          "description": "Lets the page compile WebAssembly. Only Tavora's own modules (id starting with tavora.) may ask for it; a manifest of any other module that sets it to true is refused."
         },
         "folders": {
           "type": "array",
@@ -742,8 +750,8 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 256,
-      "pattern": "^(?!/)(?!.*//)(?!(.*/)?\\.\\.?(/|$))[^\\\\:\\u0000]+$",
-      "description": "Relative path inside the package: no leading slash, no '.' or '..' segments, no backslashes or colons."
+      "pattern": "^(?!/)(?![\\s\\S]*//)(?!([\\s\\S]*/)?\\.\\.?(/|$))(?![\\s\\S]*[%#?*<>\"|\\u0000-\\u001f\\u007f])(?![\\s\\S]*[. ](/|$))(?!([\\s\\S]*/)?(?:[Cc][Oo][Nn]|[Pp][Rr][Nn]|[Aa][Uu][Xx]|[Nn][Uu][Ll]|[Cc][Oo][Nn][Ii][Nn]\\$|[Cc][Oo][Nn][Oo][Uu][Tt]\\$|[Cc][Oo][Mm][0-9¹²³]|[Ll][Pp][Tt][0-9¹²³]) *(\\.[^/]*)?(/|$))[^\\\\:]+$",
+      "description": "Relative path inside the package: no leading slash, no '.' or '..' segments, no backslashes or colons, none of % # ? * < > \" | or control characters, no part ending in a dot or space, and no part Windows keeps for a device (con, nul, com1...)."
     },
     "viewport": {
       "type": "object",
