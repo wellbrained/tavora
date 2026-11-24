@@ -27,6 +27,8 @@ import {
   type FileKind,
   type OpenedFile,
   READ_ONLY_FILE_PATH,
+  MAX_READ_ONLY_FILE_BYTES,
+  checkFileReference,
   FOLDER_READ_PATH,
   type FolderChange,
   type FolderListing,
@@ -196,7 +198,7 @@ export { AUDIO_TYPES, BLOB_ID, BLOB_TYPES, DEFAULT_THEME_FONT, OVERLAY_FONT_PATH
 const MENU_TIMEOUT_MS = 60 * 60_000;
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.4.10";
+export const SDK_VERSION = "0.4.11";
 
 /**
  * The oldest Tavora that has everything this SDK version offers, worked out from the table of calls
@@ -1263,11 +1265,18 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
       check: id => call('files.check',{id}),
       showInFolder: async id => { await call('files.showInFolder',{id}); },
       read: async id => {
-        if (!/^[a-f0-9]{32}$/.test(id)) throw new TavoraError({code:'INVALID_PARAMS',message:'Invalid file reference.'});
-        const response = await fetch(new URL(READ_ONLY_FILE_PATH+id,window.location.href),{method:'POST'});
-        if (!response.ok) { const body = await response.json() as {error:ErrorPayload}; throw new TavoraError(body.error); }
+        const reference = checkFileReference(id);
+        if (!reference.ok) throw new TavoraError({code:reference.code,message:reference.message});
+        let response: Response;
+        try { response = await fetch(new URL(READ_ONLY_FILE_PATH+id,window.location.href),{method:'POST'}); }
+        catch { throw new TavoraError({code:'INTERNAL',message:'could not read the file'}); }
+        if (!response.ok) {
+          const body = await response.json().catch(() => null) as {error?:ErrorPayload}|null;
+          throw new TavoraError(body?.error ?? {code:'INTERNAL',message:`could not read the file (${response.status})`});
+        }
         const bytes = new Uint8Array(await response.arrayBuffer());
-        if(bytes.byteLength>32*1024*1024) throw new TavoraError({code:'QUOTA_EXCEEDED',message:'File is too large.'});
+        // Tavora sends at most this much (32 MiB before Tavora 0.23.6).
+        if(bytes.byteLength>MAX_READ_ONLY_FILE_BYTES) throw new TavoraError({code:'QUOTA_EXCEEDED',message:'File is too large.'});
         return bytes;
       },
       exportJson: async (value, name = 'Build') => {

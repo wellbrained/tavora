@@ -278,7 +278,9 @@ export function openResults(sdk: TavoraSDK, options: OpenResultsOptions = {}): P
     async record(board, result) {
       if (closed) throw new TypeError("the result queue is disposed");
       if (fixed && !fixed.has(board)) throw new TypeError(`${board} is not a board of this queue`);
-      await change(board, (list) => (list.some((known) => known.id === result.id) ? list : [...list, structuredClone(result)]));
+      // Stored as JSON, which has no undefined: a `day: undefined` would make Tavora refuse the whole list (INVALID_PARAMS).
+      const stored = Object.fromEntries(Object.entries(result).filter(([, value]) => value !== undefined)) as LeaderboardResult;
+      await change(board, (list) => (list.some((known) => known.id === result.id) ? list : [...list, structuredClone(stored)]));
       void flush();
     },
     flush,

@@ -6,10 +6,11 @@ import { HostError } from './errors';
 import { writeFileAtomic } from './fsutil';
 import { keepNewerCopy, setAside } from './json';
 import { STORE_VERSIONS } from './saved-versions';
-import type { ReadOnlyFile, ReadOnlyFileState } from '@tavora/sdk/protocol';
+import { MAX_READ_ONLY_FILE_BYTES, type ReadOnlyFile, type ReadOnlyFileState } from '@tavora/sdk/protocol';
 
 export const READ_ONLY_FILES_DIR = 'read-only-files';
-export const MAX_READ_ONLY_BYTES = 50 * 1024 * 1024;
+/** The biggest file a module may link and read: the SDK's limit, so the page takes what Tavora serves. */
+export const MAX_READ_ONLY_BYTES = MAX_READ_ONLY_FILE_BYTES;
 const ID = /^[a-f0-9]{32}$/;
 /** One linked file. `version` is the file's format, kept on every entry: Tavora 0.24 refuses a file with anything else in it. */
 type Entry = { path: string; target: string; name: string; version?: number };

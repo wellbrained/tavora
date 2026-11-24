@@ -326,6 +326,25 @@ describe("other panels", () => {
     expect(names(session)).toEqual(["B"]);
   });
 
+  it("refuses to rename the open item while it is deleted elsewhere, and keeps its last copy", async () => {
+    const a = createMemoryHost();
+    const b = createMemoryHost({ share: a.host });
+    seed(a.host, "a", "A", ["kept"]);
+    const session = await openItems(a.sdk, options({ onAdd: "first" }));
+    expect(session.currentId).toBe("plan-a");
+    await b.sdk.documents.delete("plan-a");
+    await vi.waitFor(() => expect(session.deleted).toBe(true));
+    await expect(session.rename("plan-a", "A2")).rejects.toBeInstanceOf(ItemNotFoundError);
+    await wait(20);
+    // Not saved as a blank plan under the new name: the item stays deleted, and its copy can still come back.
+    expect(a.host.documents.get("plan-a")).toBeNull();
+    expect(session.deleted).toBe(true);
+    expect(session.deletedCopy).toEqual({ name: "A", items: ["kept"] });
+    await session.restoreDeleted();
+    expect(storedPlan(a.host, "plan-a")).toEqual({ name: "A", items: ["kept"] });
+    await session.dispose();
+  });
+
   it("restoreDeleted puts the last copy back, edits included, and opens it again", async () => {
     const a = createMemoryHost();
     const b = createMemoryHost({ share: a.host });

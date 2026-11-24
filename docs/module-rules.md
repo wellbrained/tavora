@@ -268,7 +268,7 @@ The UI Playground (Tavora features > Settings) shows one page, several pages and
 - **Texts**: every word the user sees goes through the translator, in English and German, following the Writing rules.
   That includes data labels (categories, regions, types, station names), fallback names ("Meal plan"), tab and window
   titles. No sentences glued together in templates (`{{ a }} · {{ b }}`); use one text with placeholders and `.one` /
-  `.other` for counts. A `checkCatalogs(en, de)` test covers every catalog. Stored data stays in one language; only
+  `.other` for counts. A `checkCatalogs(en, de)` test covers every catalog (a module without the kit: `expect(catalogProblems(en, de)).toEqual([])` from `@tavora/sdk/testing`). Stored data stays in one language; only
   the display is translated.
 - **Saving**: through the SDK store (`openDocument` in `@tavora/sdk/store`, `useDocument`, `useItemSession` in the
   kit). No own conflict handling. Files: `files.saveJson` / `files.openJson`; pictures: `pictures.save`; stored files:

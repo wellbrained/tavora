@@ -452,6 +452,8 @@ describe("module rules", () => {
     const connect = file("main.ts", 'import { de, en } from "./locales";\nconnectModule({ texts: { en, de } });');
     expect(rules([connect])).toEqual(["catalogs@main.ts:2"]);
     expect(rules([connect, file("locales.test.ts", "it('matches', () => checkCatalogs(en, de));")])).toEqual([]);
+    // A module without the kit checks them with the SDK's catalogProblems.
+    expect(rules([connect, file("texts.test.ts", "it('match', () => expect(catalogProblems(TEXTS.en, TEXTS.de)).toEqual([]));")])).toEqual([]);
   });
 
   it("font-size: the module's own text tokens under 12 px count where they are used", () => {

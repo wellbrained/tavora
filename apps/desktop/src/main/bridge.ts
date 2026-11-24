@@ -1,7 +1,16 @@
 import {
+  checkActionId,
+  checkBlobId,
+  checkDialogTitle,
+  checkFileReference,
+  checkHotkeyLabel,
+  checkModuleKey,
+  checkOverlaySources,
+  checkPickReadOnly,
+  isPanelTypeId,
   LIMITS,
-  OVERLAY_KEY,
   PROTOCOL_VERSION,
+  type ParamCheck,
   RESERVED_METHODS,
   type Capability,
   type DocumentChange,
@@ -41,7 +50,7 @@ import {
   type TavoraViewport,
   type TavoraWorkspace,
 } from "@tavora/sdk/protocol";
-import { isActionId, isFolderPath, isPanelTypeId, MAX_PANEL_TYPES } from "@tavora/module-schema";
+import { isFolderPath, MAX_PANEL_TYPES } from "@tavora/module-schema";
 import { measureWire } from "../shared/wire";
 import { HostError } from "./errors";
 import { serializeJson } from "./json";
@@ -290,52 +299,20 @@ function required(params: Record<string, unknown>, name: string): unknown {
 /** Longest address links.open accepts. */
 const LINK_MAX = 2048;
 
+/** The params as a shared check (@tavora/sdk/protocol) took them, or its refusal as a HostError. */
+function checked<T>(result: ParamCheck<T>): T {
+  if (!result.ok) throw new HostError(result.code, result.message);
+  return result.value;
+}
+
 /** An overlay key or hotkey target: the module's own id, like a document id. */
 function moduleKey(params: Record<string, unknown>, name: "key" | "target"): string {
-  const value = required(params, name);
-  if (typeof value !== "string" || !OVERLAY_KEY.test(value)) throw new HostError("INVALID_PARAMS", `params.${name} must be 1 to 64 letters, digits, - and _`);
-  return value;
-}
-
-/** The list of overlay.setSources, checked: at most LIMITS.maxOverlaySources entries, each with its own key, a name, and a size in plain numbers. */
-function overlaySources(value: unknown): OverlaySource[] {
-  if (!Array.isArray(value)) throw new HostError("INVALID_PARAMS", "params.sources must be a list");
-  if (value.length > LIMITS.maxOverlaySources) throw new HostError("QUOTA_EXCEEDED", `a panel may list at most ${LIMITS.maxOverlaySources} sources`);
-  const seen = new Set<string>();
-  return value.map((raw) => {
-    const entry = object(raw);
-    const key = moduleKey(entry, "key");
-    if (seen.has(key)) throw new HostError("INVALID_PARAMS", `the key ${key} is listed twice`);
-    seen.add(key);
-    const name = entry.name;
-    if (typeof name !== "string" || name.trim().length === 0 || name.length > LIMITS.maxOverlaySourceName) throw new HostError("INVALID_PARAMS", `each source needs a name of 1 to ${LIMITS.maxOverlaySourceName} characters`);
-    if (entry.group !== undefined && typeof entry.group !== "boolean") throw new HostError("INVALID_PARAMS", "a source's group must be true or false");
-    if (entry.grows !== undefined && typeof entry.grows !== "boolean") throw new HostError("INVALID_PARAMS", "a source's grows must be true or false");
-    const source: OverlaySource = { key, name: name.replace(/[ -]+/g, " ").trim() };
-    if (entry.group === true) source.group = true;
-    if (typeof entry.grows === "boolean") source.grows = entry.grows;
-    if (entry.size !== undefined) {
-      const size = object(entry.size);
-      const side = (number: unknown) => (typeof number === "number" && Number.isFinite(number) && number > 0 && number <= 4000 ? Math.round(number) : null);
-      const width = side(size.width);
-      const height = side(size.height);
-      if (width === null || height === null) throw new HostError("INVALID_PARAMS", "a source's size must be a width and a height of 1 to 4000 pixels");
-      source.size = { width, height };
-    }
-    return source;
-  });
-}
-
-function actionId(value: unknown): string {
-  if (!isActionId(value)) throw new HostError("INVALID_PARAMS", "params.action must be one of the manifest's actions ids");
-  return value;
+  return checked(checkModuleKey(required(params, name), name));
 }
 
 /** The id of a file the module linked (files.pickReadOnly). */
 function fileReference(params: unknown): string {
-  const id = object(params).id;
-  if (typeof id!=='string'|| !/^[a-f0-9]{32}$/.test(id)) throw new HostError('INVALID_PARAMS','Invalid file reference.');
-  return id;
+  return checked(checkFileReference(object(params).id));
 }
 
 /** The host's folders, or UNKNOWN_METHOD from a host that has none. */
@@ -349,15 +326,6 @@ function folderParam(params: unknown): string {
   const folder = object(params).folder;
   if (!isFolderPath(folder)) throw new HostError('INVALID_PARAMS','folder must be a path of permissions.folders, such as Documents/My Game.');
   return folder;
-}
-
-/** Where files.pickReadOnly starts: next to a linked file, up to three folders higher. Only a start, never access. */
-function pickNear(value: unknown): import('@tavora/sdk/protocol').PickNear | undefined {
-  if (value === undefined) return undefined;
-  const near = object(value), up = near.up ?? 0;
-  if (typeof near.file !== 'string' || !/^[a-f0-9]{32}$/.test(near.file)) throw new HostError('INVALID_PARAMS','near.file must be a linked file id.');
-  if (typeof up !== 'number' || !Number.isInteger(up) || up < 0 || up > 3) throw new HostError('INVALID_PARAMS','near.up must be 0 to 3.');
-  return { file: near.file, up };
 }
 
 /**
@@ -479,13 +447,9 @@ export const grantedCalls = (): string[] => Object.keys(grantedHandlers);
 
 const handlers = new Map<string, Handler>([
   ['files.pickReadOnly', async (s,params) => {
-    const extensions = object(params).extensions;
-    if (!Array.isArray(extensions) || !extensions.length || extensions.length>10 || extensions.some(e=>typeof e!=='string'|| !/^[a-z0-9]{1,12}$/.test(e))) throw new HostError('INVALID_PARAMS','Choose up to ten file extensions.');
-    const multiple = object(params).multiple;
-    if (multiple !== undefined && typeof multiple !== 'boolean') throw new HostError('INVALID_PARAMS','multiple must be true or false.');
-    const near = pickNear(object(params).near);
-    const picked = await s.context.readOnlyFiles.pick(extensions, multiple === true, near);
-    return multiple === true ? picked : (picked[0] ?? null);
+    const { extensions, multiple, near } = checked(checkPickReadOnly(params));
+    const picked = await s.context.readOnlyFiles.pick(extensions, multiple, near);
+    return multiple ? picked : (picked[0] ?? null);
   }],
   ['files.forget', async (s,params) => {
     const id = fileReference(params);
@@ -578,7 +542,7 @@ const handlers = new Map<string, Handler>([
   [
     "blobs.delete",
     async (s, params) => {
-      await s.context.data.blobs.delete(object(params).id);
+      await s.context.data.blobs.delete(checked(checkBlobId(object(params).id)));
       return null;
     },
   ],
@@ -587,7 +551,7 @@ const handlers = new Map<string, Handler>([
   [
     "blobs.app.delete",
     async (s, params) => {
-      await s.context.appBlobs.delete(object(params).id);
+      await s.context.appBlobs.delete(checked(checkBlobId(object(params).id)));
       return null;
     },
   ],
@@ -611,7 +575,7 @@ const handlers = new Map<string, Handler>([
   ["overlay.hideOverGame", (s, params) => (s.context.overlay.hideOverGame(moduleKey(object(params), "key")), null)],
   ["overlay.overGame", (s) => s.context.overlay.overGame()],
   // Needs neither a capability nor a click: it only names what this panel can show; Tavora draws the names as plain text.
-  ["overlay.setSources", (s, params) => (s.context.overlay.setSources(overlaySources(required(object(params), "sources"))), null)],
+  ["overlay.setSources", (s, params) => (s.context.overlay.setSources(checked(checkOverlaySources(required(object(params), "sources")))), null)],
   // Needs no capability: a window of Tavora's own shows the page, only after a click.
   // Shows Tavora's Overlay page (the module's panel dialog closes); the gesture is taken where the context is made (module-view.ts).
   ["overlay.openPage", async (s) => (await s.context.overlay.openPage(), null)],
@@ -624,13 +588,10 @@ const handlers = new Map<string, Handler>([
     "hotkeys.set",
     (s, params) => {
       const p = object(params);
-      const action = actionId(required(p, "action"));
+      const action = checked(checkActionId(required(p, "action")));
       const target = moduleKey(p, "target");
-      const label = required(p, "label");
-      if (typeof label !== "string" || label.trim() === "" || label.length > LIMITS.maxHotkeyLabel || /[\u0000-\u001f]/.test(label)) {
-        throw new HostError("INVALID_PARAMS", `params.label must be 1 to ${LIMITS.maxHotkeyLabel} characters on one line`);
-      }
-      return s.context.hotkeys.set(action, target, label.trim());
+      const label = checked(checkHotkeyLabel(required(p, "label")));
+      return s.context.hotkeys.set(action, target, label);
     },
   ],
   [
@@ -638,7 +599,7 @@ const handlers = new Map<string, Handler>([
     (s, params) => {
       const p = object(params);
       const target = moduleKey(p, "target");
-      s.context.hotkeys.remove(target, p.action === undefined ? null : actionId(p.action));
+      s.context.hotkeys.remove(target, p.action === undefined ? null : checked(checkActionId(p.action)));
       return null;
     },
   ],
@@ -703,12 +664,7 @@ const handlers = new Map<string, Handler>([
   [
     "panel.setDialogTitle",
     (s, params) => {
-      const title = required(object(params), "title");
-      const text = typeof title === "string" ? title.trim() : title;
-      if (text !== null && (typeof text !== "string" || text.length < 1 || text.length > LIMITS.maxTitleLength)) {
-        throw new HostError("INVALID_PARAMS", `params.title must be null or a string of 1 to ${LIMITS.maxTitleLength} characters`);
-      }
-      s.context.setDialogTitle(text);
+      s.context.setDialogTitle(checked(checkDialogTitle(required(object(params), "title"))));
       return null;
     },
   ],

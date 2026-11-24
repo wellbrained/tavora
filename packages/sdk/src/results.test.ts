@@ -35,6 +35,19 @@ describe("record and send", () => {
     queue.dispose();
   });
 
+  it("stores a result whose day is left undefined, and fills the day in when it sends", async () => {
+    const { sdk, host } = createMemoryHost();
+    ready(host);
+    const queue = await openResults(sdk);
+    const at = new Date(2026, 9, 30, 12).getTime();
+    // As a module without exactOptionalPropertyTypes (or plain JavaScript) may pass it.
+    await queue.record("daily", { id: "a", outcome: "won", at, day: undefined } as unknown as LeaderboardOutcomeResult);
+    expect(queued(host)).toEqual([{ id: "a", outcome: "won", at }]);
+    await queue.flush();
+    expect(sent(host)).toEqual([{ board: "daily", results: [{ id: "a", outcome: "won", at, day: "2026-10-30" }] }]);
+    queue.dispose();
+  });
+
   it("sends in batches of up to 50 per board", async () => {
     const { sdk, host } = createMemoryHost();
     const queue = await openResults(sdk);

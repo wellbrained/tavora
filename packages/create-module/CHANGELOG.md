@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.49
+
+- New projects start on `@tavora/sdk` 0.4.11: the memory host checks params as Tavora does, and `catalogProblems` checks a module's texts.
+
 ## 0.1.48
 
 - New projects start on `@tavora/sdk` 0.4.10: `checkFocus` waits out a ring's fade.
