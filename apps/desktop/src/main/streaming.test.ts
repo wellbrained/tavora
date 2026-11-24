@@ -109,6 +109,23 @@ describe("the hotkey dialog", () => {
     expect(heard).toEqual([]);
   });
 
+  it("sends a press to a panel in sight before one running out of sight with its game, though that was used later", async () => {
+    const { streaming, registered, heard, world, hotkeys } = await setup();
+    const hidden: HotkeyBinding[] = [];
+    world.panels.push({ moduleId: MODULE.manifest.id, usedAt: 5, inSight: () => false, hotkeyPressed: (binding) => hidden.push(binding) });
+    const asked = hotkeys.set("next", "item-1", "Next song");
+    streaming.answer(streaming.request()!.id, "set", "F8");
+    await asked;
+    streaming.sync();
+    registered.get("F8")!();
+    expect(heard).toEqual([{ action: "next", target: "item-1" }]);
+    expect(hidden).toEqual([]);
+    // With only that one, it still hears it (and the gate refuses what needs the user).
+    world.panels = [world.panels[1]!];
+    registered.get("F8")!();
+    expect(hidden).toEqual([{ action: "next", target: "item-1" }]);
+  });
+
   it("refuses a key used in the same workspace and keeps the dialog open", async () => {
     const { streaming, hotkeys } = await setup();
     const first = hotkeys.set("start-pause", "item-1", "Boss timer");

@@ -1086,6 +1086,11 @@ export class ModuleView implements PanelViewAdapter {
     return this;
   }
 
+  /** Not while it runs only with its game, out of sight (a hotkey press goes to a panel in sight first). */
+  inSight(): boolean {
+    return !(this.options.runsOnlyWithGame?.() ?? false);
+  }
+
   /** A still image of the page, to stand in for it while a menu is over it. */
   capture(): Promise<string | null> {
     return stillOf(this.view);

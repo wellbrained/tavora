@@ -272,18 +272,89 @@ function commentLines(text: string): (index: number) => boolean {
   };
 }
 
+/** In an HTML or SVG file, a `<script …>` tag longer than this is a warning sign itself: real ones are a few attributes. */
+const MAX_SCRIPT_TAG = 16 * 1024;
+
 /**
- * The first `<script …>` tag whose attributes match: `pattern` is sticky (y) and starts at `<script`. Each tag is read once;
- * a `<script` inside an earlier tag that had no match can't have one either, as its text is the end of that tag's.
+ * Where a tag whose attributes start at `from` ends: in an HTML or SVG file (`markup`) at its `>`, past any in a quoted
+ * value, and with a quote left open at the end of the text. In code, where `<script` is in a string, at the first `>`.
  */
-function scriptTagWith(text: string, pattern: RegExp): RegExpExecArray | null {
+function tagEnd(text: string, from: number, markup: boolean): number {
+  if (!markup) {
+    const end = text.indexOf(">", from);
+    return end === -1 ? text.length : end;
+  }
+  const stop = /[>"']/g;
+  stop.lastIndex = from;
+  for (let found = stop.exec(text); found; found = stop.exec(text)) {
+    if (found[0] === ">") return found.index;
+    const close = text.indexOf(found[0], found.index + 1);
+    if (close === -1) return text.length;
+    stop.lastIndex = close + 1;
+  }
+  return text.length;
+}
+
+const NAMED_ENTITY: Record<string, string> = { sol: "/", bsol: "\\", colon: ":", tab: "\t", newline: "\n", period: ".", num: "#" };
+const ENTITY = /&(?:#(\d{1,7});?|#x([0-9a-f]{1,6});?|([a-z]{2,8});)/iy;
+
+/**
+ * The first few characters of the address in the attribute value at `at` (before `end`), as a browser reads it: entities
+ * decoded, tabs and line breaks dropped, spaces before it trimmed, `\` as `/`. Only a few are read, so values that
+ * overlap (`src=src=src=…`) aren't each read to their end.
+ */
+function addressStart(text: string, at: number, end: number): string {
+  const quote = text[at] === '"' || text[at] === "'" ? text[at] : null;
+  let i = quote ? at + 1 : at;
+  let start = "";
+  while (i < end && start.length < 8) {
+    let char = text[i]!;
+    if (quote ? char === quote : /[\s>]/.test(char)) break;
+    i++;
+    if (char === "&") {
+      ENTITY.lastIndex = i - 1;
+      const entity = ENTITY.exec(text);
+      if (entity) {
+        const code = entity[1] ? Number(entity[1]) : entity[2] ? parseInt(entity[2], 16) : -1;
+        char = code >= 0 ? (code <= 0x10ffff ? String.fromCodePoint(code) : "�") : (NAMED_ENTITY[entity[3]!.toLowerCase()] ?? entity[0]);
+        i = ENTITY.lastIndex;
+      }
+    }
+    if (char === "\t" || char === "\n" || char === "\r") continue;
+    if (start === "" && char <= " ") continue;
+    start += char;
+  }
+  return start.toLowerCase().replaceAll("\\", "/");
+}
+
+/**
+ * The first `<script …>` tag whose `attribute` loads an address from the internet (`//host`, `http:` or `https:` in any
+ * form), or in an HTML or SVG file (`markup`) that is longer than any real one. Each tag is read once, up to its `>`
+ * (tagEnd), and each attribute's value only for its first characters, so a crafted file can't make this slow. A `<script`
+ * inside an earlier tag is part of that one.
+ */
+function remoteScriptTag(text: string, attribute: "src" | "href", markup: boolean): RegExpExecArray | null {
   const open = /<script\b/gi;
+  const named = new RegExp(`\\b${attribute}\\s*=\\s*`, "gi");
+  // The next `attribute=` at or after where it was last looked for, so the text is searched for it once in all.
+  let next: RegExpExecArray | null = null;
+  let searchedFrom = -1;
+  const nextFrom = (from: number): RegExpExecArray | null => {
+    if (next && next.index >= from) return next;
+    if (searchedFrom >= 0 && !next) return null;
+    named.lastIndex = Math.max(from, named.lastIndex);
+    searchedFrom = from;
+    next = named.exec(text);
+    return next;
+  };
   for (let tag = open.exec(text); tag; tag = open.exec(text)) {
-    pattern.lastIndex = tag.index;
-    const match = pattern.exec(text);
-    if (match) return match;
-    const end = text.indexOf(">", tag.index);
-    if (end === -1) return null;
+    const from = tag.index + tag[0].length;
+    const end = tagEnd(text, from, markup);
+    if (markup && end - from > MAX_SCRIPT_TAG) return tag;
+    for (let found = nextFrom(from); found && found.index < end; found = nextFrom(found.index + 1)) {
+      if (/^(?:https?:|\/\/)/.test(addressStart(text, found.index + found[0].length, end))) return tag;
+    }
+    if (end >= text.length) return null;
     open.lastIndex = end;
   }
   return null;
@@ -316,9 +387,10 @@ export function signsIn(name: string, source: string): { sign: Sign; detail: str
   add("remote-code", /\b(?:from|import)\s*["'`](?:https?:)?\/\/[^"'`]+["'`]/.exec(text));
   add("remote-code", /\bimportScripts\s*\(/.exec(text));
   add("remote-code", /createElement(?:NS)?\s*\(\s*(?:["'`]http:\/\/www\.w3\.org\/2000\/svg["'`]\s*,\s*)?["'`]script["'`]/.exec(text));
-  add("remote-code", scriptTagWith(text, /<script\b[^>]*\bsrc\s*=\s*["']?(?:https?:)?\/\//iy));
+  const markup = /\.(?:svg|x?html?)$/i.test(name);
+  add("remote-code", remoteScriptTag(text, "src", markup));
   add("remote-code", /new\s+(?:Shared)?Worker\s*\(\s*["'`](?:https?:|data:|blob:)/.exec(text));
-  if (/\.svg$/i.test(name) || /\.x?html?$/i.test(name)) add("remote-code", scriptTagWith(text, /<script\b[^>]*\bhref\s*=\s*["']?(?:https?:)?\/\//iy));
+  if (markup) add("remote-code", remoteScriptTag(text, "href", markup));
 
   if (count(/_0x[0-9a-f]{3,8}\b/g) >= 8) add("obfuscated", /_0x[0-9a-f]{3,8}\b/.exec(text));
   add("obfuscated", /eval\s*\(\s*function\s*\(\s*p\s*,\s*a\s*,\s*c\s*,\s*k\s*,\s*e\s*,\s*[dr]\s*\)/.exec(text));

@@ -443,11 +443,13 @@ export class FolderStorage implements CopyStorage {
     const lists: { file: ManifestFile; drop: boolean; parts: string[] }[] = [];
     const junk: ManifestFile[] = [];
     let newerMarked = 0;
+    // First, as it refuses a link in the manifests folder's place (folder-locked): nothing behind one is listed or removed.
+    const files = await this.manifests();
     for (const name of readable(await lookNames(this.manifestsDir)) ?? []) {
       const match = MANIFEST_NAME.exec(name);
       if (match && Number(match[1]) > MAX_VERSION && readable(await lookKind(path.join(this.manifestsDir, name))) === "file") await rm(path.join(this.manifestsDir, name), { force: true });
     }
-    for (const file of await this.manifests()) {
+    for (const file of files) {
       const looked = await lookOwnFile(path.join(this.manifestsDir, file.name));
       // One that is held may be in use: nothing is cleaned up this time.
       if (looked.status === "held") return;

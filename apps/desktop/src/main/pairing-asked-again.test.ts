@@ -341,6 +341,18 @@ it("reads no step file bigger than any Tavora writes, and cleans one up once it 
   old.pairing.dispose();
 });
 
+it("finds a real request behind many other files someone put in the pairing folder", { timeout: 60_000 }, async () => {
+  const { root } = await pc();
+  const folder = path.join(root, "OneDrive");
+  const dir = path.join(folder, "Tavora", "pairing");
+  await mkdir(dir, { recursive: true });
+  const now = Date.now();
+  // Names Tavora never reads, which a folder lists before any request's.
+  for (let i = 0; i < MAX_PAIRING_FILES + 44; i++) await writeFile(path.join(dir, `!${String(i).padStart(5, "0")}.txt`), "");
+  const { id } = await new FolderPairing(folder, "Laptop", () => now).ask(commit());
+  expect(await new FolderPairing(folder, "Desk", () => now).read()).toMatchObject({ id });
+});
+
 // Writes and cleans up a few hundred files, which takes a while on Windows under load.
 it("looks at only so many files in the pairing folder at a time", { timeout: 60_000 }, async () => {
   const { root } = await pc();

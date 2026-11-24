@@ -275,6 +275,20 @@ describe("check 4: warning signs in the code", { timeout: 30_000 }, () => {
       ['const page = `<script src="https://cdn.example/x.js"></script>`', "app.js"],
       ['<svg><script xlink:href="//cdn.example/x.js"/></svg>', "pic.svg"],
       ['<script type="text/javascript" href="https://cdn.example/x.js"></script>', "page.xhtml"],
+      // A > in a quoted value doesn't end the tag.
+      ['<script data-x=">" src="//cdn.example/x.js"></script>', "page.html"],
+      ["<script data-x='a>b' src=//cdn.example/x.js></script>", "page.html"],
+      // The address as a browser reads it: entities, spaces and tabs around it, backslashes, no slashes after https:.
+      ['<script src="&#47;&#47;cdn.example/x.js"></script>', "page.html"],
+      ['<script src="&#x2F;&sol;cdn.example/x.js"></script>', "page.html"],
+      ['<script src=" \t//cdn.example/x.js"></script>', "page.html"],
+      ['<script src="ht\ttps://cdn.example/x.js"></script>', "page.html"],
+      ['<script src="https:cdn.example/x.js"></script>', "page.html"],
+      ['<script src="HTTP&colon;cdn.example/x.js"></script>', "page.html"],
+      ['<script src="\\\\cdn.example/x.js"></script>', "page.html"],
+      ['<svg><script href="&#47;/cdn.example/x.js"/></svg>', "pic.svg"],
+      // A tag far longer than any real one.
+      [`<script data-pad="${"a".repeat(17 * 1024)}" src="app.js"></script>`, "page.html"],
     ]) {
       expect(await flagged(text!, name), text).toBe("code");
     }
@@ -285,6 +299,9 @@ describe("check 4: warning signs in the code", { timeout: 30_000 }, () => {
       ['<script>const src = "//cdn.example/x"</script>', "page.html"],
       ['<script src="app.js"></script><img src="//cdn.example/x.png">', "page.html"],
       ['<scripts src="//cdn.example/x.js">', "page.html"],
+      ['<script src="./app.js"></script><script src="/lib/x.js"></script>', "page.html"],
+      ['<script src="app.js?from=https://example.org"></script>', "page.html"],
+      ['<script data-x=">" src="app.js"></script>', "page.html"],
       // href on a script element counts only in svg and html files.
       ['const svg = \'<script href="//cdn.example/x.js"/>\'', "app.js"],
     ]) {
@@ -308,6 +325,12 @@ describe("check 4: warning signs in the code", { timeout: 30_000 }, () => {
       ["page.html", "<script ".repeat(size / 8)],
       ["pic.svg", "<script ".repeat(size / 8)],
       ["page.html", `<script ${"src ".repeat(size / 4)}`],
+      ["page.html", `<script>${"src=".repeat(size / 4)}`],
+      ["page.html", `<script a=">${"src=".repeat(size / 4)}`],
+      ["page.html", `<script a=b ${'src="&#32;'.repeat(size / 10)}`],
+      ["page.html", '<script a="b">'.repeat(size / 14)],
+      ["page.html", `<script src="${" ".repeat(size)}`],
+      ["pic.svg", `<script ${"href=".repeat(size / 5)}`],
       ["app.js", `//${"import(a;".repeat(size / 9)}`],
       ["app.js", `import(${spaces})`],
       ["app.js", `new${spaces}x`],

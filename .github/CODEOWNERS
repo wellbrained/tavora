@@ -13,6 +13,12 @@
 /apps/desktop/scripts/check-fuses.mjs @wellbrained
 /scripts/deploy-client.mjs @wellbrained
 /scripts/release-sdk*.mjs @wellbrained
+# The app's package file: its electronFuses block and what the build ships (CODEOWNERS can't name only the block).
+/apps/desktop/package.json @wellbrained
+
+# What signs Tavora's catalogue list.
+/scripts/catalog-sign.ts @wellbrained
+/scripts/catalog-sign-review.ts @wellbrained
 
 # The server's receiver and setup: what a deploy key may publish.
 /deploy/server/ @wellbrained

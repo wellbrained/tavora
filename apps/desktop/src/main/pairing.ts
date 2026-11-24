@@ -702,24 +702,31 @@ export class ServicePairing implements PairingTransport {
 const STEP_FILE = /^([0-9a-f]{16})\.(request|answer|reveal|key|declined)\.json$/;
 type Step = "request" | "answer" | "reveal" | "key" | "declined";
 /**
- * The biggest step file read. The biggest Tavora writes is a request or an answer: under 150 bytes and the PC's name,
- * which is its network name (at most 255 bytes) or a Mac's computer name. Anyone who can write the folder could put a
- * huge one there, read every 15 seconds; one over this is left as unreadable, and cleaned up once it is old.
+ * The biggest step file read. The biggest Tavora writes is a request or an answer: under 150 bytes and the PC's name
+ * (at most MAX_DEVICE_NAME characters, device-name.ts). Anyone who can write the folder could put a huge one there, read every 15
+ * seconds; one over this is left as unreadable, and cleaned up once it is old.
  */
 export const MAX_STEP_FILE = 8 * 1024;
 /**
- * The most names one look lists in the pairing folder. It holds a few files per PC that asks, and some copies a sync app
- * made; with more, the rest wait for a later look, as the ones listed are cleaned up.
+ * The most step files one look reads. The folder holds a few per PC that asks; with more, the rest wait for a later look,
+ * as the ones read are cleaned up once they run out or are old.
  */
 export const MAX_PAIRING_FILES = 256;
+/**
+ * The most names one look walks past to find step files. Other names (a sync app's copies, anything else put there) don't
+ * count toward MAX_PAIRING_FILES, so a few hundred of them, listed before the requests, don't hide them; Tavora never
+ * cleans them up, so only this many more could.
+ */
+export const MAX_PAIRING_NAMES = 10_000;
 
-/** Up to `max` names in `dir`, without listing the rest; none when it can't be read. */
-async function someNames(dir: string, max: number): Promise<string[]> {
+/** The step files in `dir`: up to MAX_PAIRING_FILES, among its first MAX_PAIRING_NAMES names; none when it can't be read. */
+async function stepNames(dir: string): Promise<string[]> {
   const names: string[] = [];
+  let walked = 0;
   try {
     for await (const entry of await opendir(dir)) {
-      names.push(entry.name);
-      if (names.length >= max) break;
+      if (STEP_FILE.test(entry.name)) names.push(entry.name);
+      if (names.length >= MAX_PAIRING_FILES || ++walked >= MAX_PAIRING_NAMES) break;
     }
   } catch {
     return [];
@@ -791,7 +798,7 @@ export class FolderPairing implements PairingTransport {
   }
 
   async read(skip: ReadonlySet<string> = new Set()): Promise<PairingRequest | null> {
-    const names = (await this.kind()) === "dir" ? await someNames(this.dir, MAX_PAIRING_FILES) : [];
+    const names = (await this.kind()) === "dir" ? await stepNames(this.dir) : [];
     const look = ++this.looks;
     const steps = new Map<string, Set<Step>>();
     for (const name of names) {

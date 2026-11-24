@@ -8,10 +8,19 @@ import os from "node:os";
  */
 export function friendlyDeviceName(hostname: string, computerName?: string | null): string {
   const named = computerName?.trim();
-  if (named) return named;
+  if (named) return capped(named);
   const host = hostname.trim();
-  return host.split(".")[0]?.trim() || host;
+  return capped(host.split(".")[0]?.trim() || host);
 }
+
+/**
+ * The longest name, in characters: a network name is at most 255 bytes anyway, and a Mac's computer name of any length
+ * goes into the files of adding a PC through a folder, which Tavora reads only up to a size (pairing.ts MAX_STEP_FILE).
+ */
+export const MAX_DEVICE_NAME = 255;
+
+/** At most MAX_DEVICE_NAME characters, cut between characters, never inside one. */
+const capped = (name: string) => (name.length <= MAX_DEVICE_NAME ? name : [...name].slice(0, MAX_DEVICE_NAME).join(""));
 
 /** The Mac's computer name from System Settings; null elsewhere or when it can't be read. */
 function macComputerName(): string | null {
