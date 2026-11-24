@@ -3,40 +3,39 @@
 // A new list keeps the parts that did not change, so rows that stay the same are not drawn again and an open menu
 // stays open when a save comes back.
 
-import { errorMessage } from "@tavora/official-ui";
+import { errorMessage, useDocument } from "@tavora/official-ui";
 import type { JsonValue, TavoraSDK } from "@tavora/sdk";
-import { openDocument, type DocumentChangeFn, type DocumentStatus } from "@tavora/sdk/store";
-import { ref, shallowRef } from "vue";
+import type { DocumentChangeFn } from "@tavora/sdk/store";
+import { computed, effectScope, ref } from "vue";
 import { t } from "./i18n";
 import { LIST_ID, LIST_TITLE, parseList, type TodoList } from "./todos";
 
 export type TodoStore = Awaited<ReturnType<typeof createTodoStore>>;
 
 export async function createTodoStore(sdk: TavoraSDK, options: { debounceMs?: number } = {}) {
-  const doc = await openDocument(sdk, LIST_ID, { parse: parseList, title: () => LIST_TITLE, debounceMs: options.debounceMs ?? 0 });
+  // Detached: the panel closes the store itself (`dispose`), not whatever scope happens to be running here.
+  const doc = effectScope(true).run(() => useDocument(sdk, LIST_ID, { parse: parseList, title: () => LIST_TITLE, debounceMs: options.debounceMs ?? 0 }))!;
+  const opened = await doc.ready;
   /** What the panel shows: the stored list plus changes still being saved. */
-  const list = shallowRef<TodoList>(doc.data);
+  const list = computed<TodoList>((previous) => (previous ? keepSame(previous, doc.data.value) : doc.data.value));
   const error = ref<string | null>(null);
-  const status = ref<DocumentStatus>(doc.status);
 
-  doc.onChange((event) => (list.value = keepSame(list.value, event.data)));
-  doc.onStatus((next) => {
-    status.value = next;
+  opened.onStatus((next) => {
     if (next === "dirty" || next === "saving") error.value = null;
   });
-  doc.onError((reason, kind) => {
+  opened.onError((reason, kind) => {
     if (kind === "save") error.value = t("store.saveError", { error: errorMessage(reason) });
   });
 
   return {
     list,
     error,
-    status,
+    status: doc.status,
     /** Changes the list at once and saves it soon. `change` runs again on a newer stored list, so it must not make ids. */
     apply: (change: DocumentChangeFn<TodoList>): void => doc.update(change),
     flush: () => doc.flush(),
     /** Saves what is left, then stops listening. */
-    dispose: () => doc.dispose(),
+    dispose: () => opened.dispose(),
   };
 }
 

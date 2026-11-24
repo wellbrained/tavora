@@ -5,7 +5,7 @@ import { insert, LIST_ID, LIST_TITLE, newItem, parseList, startPause, find, coun
 import { createItemStore } from "./store";
 
 // The shared package's index also brings in Vue components, which tests in Node can't load.
-vi.mock("@tavora/official-ui", async () => ({ ...(await import("../../shared/src/documents")), ...(await import("../../shared/src/i18n")) }));
+vi.mock("@tavora/official-ui", async () => ({ ...(await import("../../shared/src/documents")), ...(await import("../../shared/src/i18n")), ...(await import("../../shared/src/use-document")) }));
 
 /** Two panels of the same module on one shared document state. */
 function twoPanels() {

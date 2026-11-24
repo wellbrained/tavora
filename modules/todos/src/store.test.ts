@@ -5,7 +5,7 @@ import { createTodoStore, keepSame } from "./store";
 import { addTask, LIST_ID, LIST_TITLE, parseList, updateTask } from "./todos";
 
 // The shared package's index also brings in Vue components, which tests in Node can't load.
-vi.mock("@tavora/official-ui", async () => ({ ...(await import("../../shared/src/documents")), ...(await import("../../shared/src/i18n")) }));
+vi.mock("@tavora/official-ui", async () => ({ ...(await import("../../shared/src/documents")), ...(await import("../../shared/src/i18n")), ...(await import("../../shared/src/use-document")) }));
 
 describe("keepSame", () => {
   it("gives back the old value when nothing changed", () => {

@@ -1,10 +1,9 @@
 // Keeps this panel's copy of the list on top of the SDK's document store: changes show at once and are saved a moment
 // later, re-applied on the newest stored list, so two panels changing it at the same time both keep their changes.
 // After a save, the panel that made the change tells each touched item's overlay what it shows now.
-import { errorMessage } from "@tavora/official-ui";
+import { errorMessage, useDocument } from "@tavora/official-ui";
 import type { TavoraSDK } from "@tavora/sdk";
-import { openDocument } from "@tavora/sdk/store";
-import { ref, shallowRef } from "vue";
+import { effectScope, ref } from "vue";
 import { t } from "./i18n";
 import { find, groupOf, groupOverlayState, LIST_ID, LIST_TITLE, linkedGroups, overlayState, parseList, type Counter, type ItemList } from "./items";
 
@@ -14,9 +13,11 @@ export const counterName = (counter: Counter): string => counter.label || t("kin
 export type ItemStore = Awaited<ReturnType<typeof createItemStore>>;
 
 export async function createItemStore(sdk: TavoraSDK, options: { debounceMs?: number } = {}) {
-  const doc = await openDocument(sdk, LIST_ID, { parse: parseList, title: () => LIST_TITLE, debounceMs: options.debounceMs ?? 0 });
+  // Detached: the panel closes the store itself (`dispose`), not whatever scope happens to be running here.
+  const doc = effectScope(true).run(() => useDocument(sdk, LIST_ID, { parse: parseList, title: () => LIST_TITLE, debounceMs: options.debounceMs ?? 0 }))!;
+  const opened = await doc.ready;
   /** What the panel shows: the stored list plus changes still being saved. */
-  const list = shallowRef<ItemList>(doc.data);
+  const list = doc.data;
   const error = ref<string | null>(null);
   /** Whether the user allowed stream overlays; asked for on the first Copy OBS link, so it can turn true later. */
   const overlays = ref(sdk.host.capabilities.includes("overlay"));
@@ -54,15 +55,14 @@ export async function createItemStore(sdk: TavoraSDK, options: { debounceMs?: nu
     shown = new Set(keys);
   }
 
-  doc.onChange((event) => (list.value = event.data));
-  doc.onStatus((status) => {
+  opened.onStatus((status) => {
     if (status === "dirty" || status === "saving") error.value = null;
     else if (status === "idle") {
-      publish([...touched], doc.data);
+      publish([...touched], opened.data);
       touched.clear();
     } else touched.clear();
   });
-  doc.onError((reason, kind) => {
+  opened.onError((reason, kind) => {
     if (kind === "save") error.value = t("store.saveError", { error: errorMessage(reason) });
   });
 
@@ -73,7 +73,7 @@ export async function createItemStore(sdk: TavoraSDK, options: { debounceMs?: nu
     publish,
     publishKey,
     setShown,
-    status: () => doc.status,
+    status: () => opened.status,
     /** Changes the list at once and saves it soon; the overlays of the `touched` items hear of it after the save. `change` runs again on a newer stored list, so it must not make ids. */
     apply(items: string[], change: (data: ItemList) => void): void {
       for (const id of items) touched.add(id);
@@ -81,6 +81,6 @@ export async function createItemStore(sdk: TavoraSDK, options: { debounceMs?: nu
     },
     flush: () => doc.flush(),
     /** Saves what is left, then stops listening. */
-    dispose: () => doc.dispose(),
+    dispose: () => opened.dispose(),
   };
 }
