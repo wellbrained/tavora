@@ -9,6 +9,9 @@ const DIRECTION = { left: "left", right: "right", top: "above", bottom: "below" 
 export function applyDrop(api: DockviewApi, dragged: Dragged, target: DropTarget): boolean {
   const source = api.getGroup(dragged.groupId);
   if (!source) return false;
+  // The panel first: gone (closed mid-drag), nothing must be added, or an empty group would be left at the edge.
+  const panel = dragged.panelId ? api.getPanel(dragged.panelId) : undefined;
+  if (dragged.panelId && !panel) return false;
   let group: DockviewGroupPanel | undefined;
   let position: Position;
   let index: number | undefined;
@@ -23,12 +26,7 @@ export function applyDrop(api: DockviewApi, dragged: Dragged, target: DropTarget
   }
   if (!group) return false;
   const to = { group, position, ...(index === undefined ? {} : { index }) };
-  if (dragged.panelId) {
-    const panel = api.getPanel(dragged.panelId);
-    if (!panel) return false;
-    panel.api.moveTo(to);
-  } else {
-    source.api.moveTo(to);
-  }
+  if (panel) panel.api.moveTo(to);
+  else source.api.moveTo(to);
   return true;
 }

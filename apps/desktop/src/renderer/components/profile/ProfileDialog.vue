@@ -17,6 +17,7 @@ import AccountSection from "../settings/AccountSection.vue";
 import CloudCopySettings from "../settings/CloudCopySettings.vue";
 import MessagesSettings from "../settings/MessagesSettings.vue";
 import { SETTINGS_PAGE_TITLE } from "../settings/settings-page";
+import { followProfile } from "./draft";
 import { autoInitials } from "./initials";
 import { readPicture } from "./picture";
 import BannerPicker from "./BannerPicker.vue";
@@ -56,6 +57,14 @@ watch(profileOpen, (open) => {
     if (account.value?.account) void act({ type: "account-refresh" }, { quiet: true });
   } else void editor.value?.save();
 });
+// The profile changed underneath (the account's profile was taken, a sync): a field not typed in follows it, so the next
+// save does not bring the old name back.
+watch(
+  [() => profile.value.name, () => profile.value.initials],
+  ([name, initials], [wasName, wasInitials]) => {
+    if (profileOpen.value) draft.value = followProfile(draft.value, { name: wasName, initials: wasInitials }, { name, initials });
+  },
+);
 // Asked again while open (e.g. Sign in from a dialog on top): go there.
 watch(profileTarget, (target) => {
   if (profileOpen.value) section.value = target;
@@ -79,9 +88,18 @@ async function onFile(event: Event) {
   input.value = "";
   cropping.value = file ? await readPicture(file) : null;
 }
+const savingPicture = ref(false);
 async function savePicture(png: string) {
-  const result = await act({ type: "set-profile-picture", png });
-  if (result.ok) cropping.value = null;
+  if (savingPicture.value) return;
+  savingPicture.value = true;
+  const picture = cropping.value;
+  try {
+    const result = await act({ type: "set-profile-picture", png });
+    // Another picture picked meanwhile is not this one's to close.
+    if (result.ok && cropping.value === picture) cropping.value = null;
+  } finally {
+    savingPicture.value = false;
+  }
 }
 </script>
 

@@ -34,9 +34,10 @@ function close() {
 watch(
   () => developerKeys.value?.status,
   (status) => {
-    if (status === "ask" || status === "loading") return;
+    // Offline or signed out for a moment: the dialog stays, with what was typed in it.
+    if (status !== "ready" && status !== "none") return;
     close();
-    if (status === "ready" || status === "none") showToast(t("recoveryAsk.done"));
+    showToast(t("recoveryAsk.done"));
   },
 );
 </script>

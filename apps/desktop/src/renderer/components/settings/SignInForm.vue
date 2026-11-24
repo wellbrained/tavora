@@ -29,8 +29,9 @@ const creating = computed(() => (pending.value?.kind === "sign-in" && pending.va
 /** Why the last step failed, shown in the form next to what the user typed instead of as a toast. */
 const error = ref<string | null>(null);
 
-// A new step always starts with an empty code box and no old error.
-watch(pending, () => {
+// A new step always starts with an empty code box and no old error. The main process rebuilds `pending` on every account
+// change, so the step is compared by content.
+watch(() => (pending.value ? `${pending.value.kind}:${"step" in pending.value ? pending.value.step : ""}:${"email" in pending.value ? pending.value.email : ""}` : ""), () => {
   code.value = "";
   error.value = null;
 });

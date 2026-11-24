@@ -38,7 +38,7 @@ Update this page in the pull request that adds, removes or changes a flow.
 | Welcome | `pages/OnboardingPage.vue` | `steps \| signing-in \| finishing` (finishing runs once; back to `steps` when it fails) | `data-status` on `[data-testid=onboarding]` |
 | Host questions (link, new panel, game switch) | `LinkChoiceDialog`, `NavigationChoiceDialog`, `GameSwitchDialog` | shown → answered once (Cancel is a button and the dialog closing) | |
 | Update all's questions | `components/ModuleUpdates.vue`, `renderer/host.ts` (`updateQueue`, `askForUpdate`) | the updates that ask for more, one after another, only while the module library shows | |
-| Recovery key after sign-in | `renderer/host.ts` (`askForRecoveryKey`) | not asked → waits for a free slot → asked (the publishing setup asks it itself) | `[data-testid=recovery-ask]` |
+| Recovery key after sign-in | `renderer/host.ts` (`askForRecoveryKey`) | not asked → waits for a free slot (no dialog open, the slot and every other dialog on the page) → asked (the publishing setup asks it itself); once asked, the dialog closes only when this PC has the key (`ready`/`none`), not on offline or signed-out | `[data-testid=recovery-ask]` |
 | Official publish run | `renderer/official-publish.ts` | phase from the main process (below) | |
 | Panel tab | `components/workspace/PanelTab.vue` | the panel's `InstanceStatus` | `data-status` on the tab |
 | Licences page (Settings > About) | `settings/LicencesSection.vue` | one value: `loading → ready | failed` (the notices file the build wrote, read once through `api.licences()`; null means failed); each package is open or closed | `data-status` on `[data-testid=licences-page]` |

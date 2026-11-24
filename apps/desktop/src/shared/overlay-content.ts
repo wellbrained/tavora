@@ -74,7 +74,9 @@ export function resizeContentRect(before: Rect, after: Rect, natural: Size, scal
   const widthBy = Math.abs(after.width / before.width - 1);
   const heightBy = Math.abs(after.height / before.height - 1);
   const pad = 2 * CONTENT_PADDING * unit;
-  const wanted = widthBy > heightBy ? (after.width - pad) / (natural.width * unit) : (after.height - pad) / (natural.height * unit);
+  // Content with no size on the side that decides (not measured yet) gives no new scale: it stays.
+  const side = widthBy > heightBy ? natural.width : natural.height;
+  const wanted = side > 0 ? (widthBy > heightBy ? (after.width - pad) / (natural.width * unit) : (after.height - pad) / (natural.height * unit)) : scale;
   const next = contentScaleFor(wanted, natural, min);
   const size = contentFrameSize(natural, next, min);
   const width = size.width * unit;

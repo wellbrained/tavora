@@ -456,7 +456,8 @@ function askForRecoveryKey(): void {
   if (status !== "ask") return void (askAfterSignIn = false);
   // The publishing setup asks for it in its own key step: once is enough.
   if (dialogSlot.value?.kind === "developer-start") return void (askAfterSignIn = false);
-  if (dialog.value) return;
+  // Not over another dialog (Search, Pairing ...) either: it waits for them like the host's other questions do.
+  if (dialog.value || blockingDialogs() > 0) return;
   askAfterSignIn = false;
   dialog.value = { kind: "recovery-ask" };
 }
@@ -498,7 +499,10 @@ watch(dialogSlot, (open) => {
   // On every change: a free slot asks the recovery key question, the publishing setup taking it settles it.
   askForRecoveryKey();
 });
-watch(openDialogs, () => dialogQueue.next());
+watch(openDialogs, () => {
+  dialogQueue.next();
+  askForRecoveryKey();
+});
 /** A question that ended (answered, or its panel or game went away) must not show later, nor stay on screen. */
 const dropRequest = (kind: DialogRequest["kind"]) => dialogQueue.cancel((request) => request.kind === kind);
 

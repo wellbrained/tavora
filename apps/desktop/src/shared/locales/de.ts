@@ -2282,6 +2282,7 @@ export const de: Record<keyof typeof en, string> = {
   "inbox.closesIn.other": "Schließt in {count} Tagen, wenn niemand schreibt.",
   "inbox.follows": "Das folgt auf eine frühere Unterhaltung.",
   "inbox.showEarlier": "Anzeigen",
+  "inbox.retry": "Noch mal versuchen",
   "inbox.again": "Neue Anfrage schreiben",
   "inbox.versions": "Gesendet von Tavora {tavora}, Modul {module}",
   "inbox.reply.placeholder": "Antwort schreiben",

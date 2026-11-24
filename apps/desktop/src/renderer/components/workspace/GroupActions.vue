@@ -122,8 +122,10 @@ function hiddenItems(): MenuItem[] {
 
 /** The arrows step to the tab before or after the open one; the row follows it. */
 function step(by: 1 | -1) {
+  // Read now, not from the last measure (a frame behind), so a quick second press goes on from the tab the first one opened.
   const panels = props.params.group.panels;
-  panels[activeIndex.value + by]?.api.setActive();
+  const at = panels.findIndex((panel) => panel.id === props.params.group.activePanel?.id);
+  if (at >= 0) panels[at + by]?.api.setActive();
 }
 
 function items() {

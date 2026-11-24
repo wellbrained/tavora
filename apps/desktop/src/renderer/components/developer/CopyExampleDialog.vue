@@ -44,8 +44,7 @@ async function submit() {
   if (busy.value || !name.value.trim()) return;
   busy.value = true;
   error.value = null;
-  const result = await act({ type: "copy-example", moduleId: props.moduleId, name: name.value.trim(), folder: where.value === ELSEWHERE ? null : where.value }, { quiet: true });
-  busy.value = false;
+  const result = await act({ type: "copy-example", moduleId: props.moduleId, name: name.value.trim(), folder: where.value === ELSEWHERE ? null : where.value }, { quiet: true }).finally(() => (busy.value = false));
   if (!result.ok) error.value = result.error;
   else if (result.id) {
     closeDialog(shownRequest);

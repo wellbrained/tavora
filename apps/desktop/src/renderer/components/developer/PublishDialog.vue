@@ -69,10 +69,11 @@ const size = computed(() => {
 const version = ref("");
 const notesText = ref("");
 const writingNotes = ref(false);
+// The view is sent again on every change, so this follows the version suggested, not the problem object.
 watch(
-  versionProblem,
-  (found) => {
-    version.value = found?.next.patch ?? "";
+  () => versionProblem.value?.next.patch ?? "",
+  (next) => {
+    version.value = next;
   },
   { immediate: true },
 );
@@ -94,9 +95,11 @@ async function saveVersion() {
 // A new id, with the developer's own prefix: Check, then Claim it (or Use it, for a prefix held already).
 const newId = ref("");
 watch(
-  () => [prefixProblem.value?.prefix, module.value?.id, view.value?.ownPrefix] as const,
-  ([bad, id, own]) => {
-    if (bad && id) newId.value = `${own ?? bad}.${id.split(".").slice(1).join(".")}`;
+  () => JSON.stringify([prefixProblem.value?.prefix, module.value?.id, view.value?.ownPrefix]),
+  () => {
+    const bad = prefixProblem.value?.prefix;
+    const id = module.value?.id;
+    if (bad && id) newId.value = `${view.value?.ownPrefix ?? bad}.${id.split(".").slice(1).join(".")}`;
   },
   { immediate: true },
 );
