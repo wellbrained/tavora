@@ -22,6 +22,8 @@ type View = "list" | "grid";
 /** Everything the module shows, loaded before it reports "Connected". */
 interface Initial {
   tavora: TavoraSDK;
+  /** Stops following the host theme; for a load that is no longer wanted. */
+  dispose: () => void;
   workspace: TavoraWorkspace;
   viewport: TavoraViewport;
   theme: TavoraTheme;
@@ -31,6 +33,7 @@ interface Initial {
 }
 
 async function load(): Promise<Initial> {
+  // rules-allow: catalogs an end-to-end test fixture: its texts stay English, the same in every example, so one set of e2e tests covers them all
   const boot = await bootstrapModule();
   const tavora = boot.sdk;
   if (!tavora) throw boot.error;
@@ -42,7 +45,7 @@ async function load(): Promise<Initial> {
     tavora.documents.get<Note>("note"),
     tavora.panel.getState<{ view: View }>(),
   ]);
-  return { tavora, workspace, viewport, theme, count: count ?? 0, note, view: panel?.view ?? "list" };
+  return { tavora, dispose: boot.dispose, workspace, viewport, theme, count: count ?? 0, note, view: panel?.view ?? "list" };
 }
 
 
@@ -203,7 +206,8 @@ function Module({ initial }: { initial: Initial }) {
   );
 }
 
-function Page({ background, text, children }: { background: string; text: string; children: ReactNode }) {
+/** Tavora's default stylesheet gives the page the theme's colours until the module has its own. */
+function Page({ background, text, children }: { background?: string; text?: string; children: ReactNode }) {
   return (
     <main
       style={{
@@ -222,9 +226,10 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
+    // StrictMode runs this twice in development: the first load is let go of, not left listening.
     load().then(
-      (loaded) => !cancelled && setInitial(loaded),
-      (reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason)),
+      (loaded) => (cancelled ? loaded.dispose() : setInitial(loaded)),
+      (reason: unknown) => !cancelled && setError(reason instanceof Error ? reason.message : String(reason)),
     );
     return () => {
       cancelled = true;
@@ -233,7 +238,7 @@ function App() {
 
   if (initial) return <Module initial={initial} />;
   return (
-    <Page background="#171412" text="#f2ece0">
+    <Page>
       <p data-testid="status">{error ? `Could not connect: ${error}` : "Connecting…"}</p>
     </Page>
   );

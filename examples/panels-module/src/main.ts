@@ -186,6 +186,7 @@ function openAllButton(tavora: TavoraSDK, types: PanelType[]): HTMLButtonElement
 }
 
 async function main() {
+  // rules-allow: catalogs an end-to-end test fixture: its texts stay English, the same in every example, so one set of e2e tests covers them all
   const boot = await bootstrapModule();
   const tavora = boot.sdk;
   if (!tavora) throw boot.error;

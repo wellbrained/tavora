@@ -31,9 +31,11 @@ export default defineConfig(moduleConfig({ pages: ["index", "overlay"], plugins:
 
 `pages` are the HTML files in `src/` (default `["index"]`); `notices` copy licence files into `dist/` as `<NAME>-LICENSE.txt`, from a package name or a `./file` in your project. Also `publicDir`, `dedupe`, `alias`, `define` and `chunkSizeWarningLimit`. A project's `tsconfig.json` can extend `@tavora/pack/tsconfig.module.json`.
 
+Every build also writes `dist/THIRD_PARTY_NOTICES.txt`: each npm package the bundle holds, with its licence and its licence files' texts. Fonts, data or code you copied in yourself go in a `third-party.json` next to `tavora.module.json`: a list of `{ "name", "version"?, "license", "files": ["licences/font.txt"] }`. A package whose licence can't be found or read is a warning here, not an error.
+
 ## Pack
 
-`tavora-pack <module folder> --key <key file> [--out <file.zip>]` checks `tavora.module.json`, takes the manifest, the folder its `entry` page is in (usually `dist/`), the icon and the changelog, and writes a zip with a signature of every file. Build the module first. When `entry` sits next to the manifest, the whole folder goes in except dot files and `node_modules`. It stops, naming the file, when the zip would hold a private key: a `.pem`, `.key`, `.p12`, `.pfx` or `.ppk` file, the `--key` file, or a file holding a private key. Keep your key file outside the module folder.
+`tavora-pack <module folder> --key <key file> [--out <file.zip>]` checks `tavora.module.json`, takes the manifest, the folders its pages are in (`entry`, the `overlay` page and each panel type's `entry`; usually `dist/`), the icons, the readme, the screenshots and the changelog, and writes a zip with a signature of every file. Build the module first. When `entry` sits next to the manifest, the whole folder goes in except dot files and `node_modules`. It stops, naming the file, when the zip would hold a private key: a `.pem`, `.key`, `.p12`, `.pfx` or `.ppk` file, the `--key` file, or a file holding a private key. Keep your key file outside the module folder.
 
 ## Publish
 

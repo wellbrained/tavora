@@ -12,6 +12,7 @@ Four kinds of manifest that passed this check but never worked in Tavora are ref
 - A network host whose last label is `0x` and hex digits (`169.254.169.0xfe`, `example.0x1f`) is refused, as digits-only ones were: browsers read them as addresses.
 - The JSON Schema follows all four, and its path rule no longer lets a line break through.
 - `isActionId` and `isPanelTypeId` come from `@tavora/sdk/protocol` (0.4.11) and work as before.
+- `catalogListingProblem(manifest)`, with `MAX_LISTED_GAMES` (100) and `MAX_LISTED_VERSION` (64): why the catalog can't list a manifest (too many games, a version too long). The catalog checks it when a version is published; `validateManifest` doesn't, so an installed module keeps running. They came after 0.2.3 without an entry.
 
 ## 0.2.3
 

@@ -2,6 +2,13 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.51
+
+- New projects pass Tavora's module rules (`pnpm check:modules`) as they are made: every text the page shows is in `src/texts.ts`, in English and German, with a `src/texts.test.ts` (`npm test`, with vitest) that checks both match through `catalogProblems` from `@tavora/sdk/testing`. The status line is one text with placeholders, not two glued together.
+- When the page can't reach Tavora it says so in the user's language ("Can't reach Tavora. Open this module in Tavora to use it.") instead of showing the error's own words; the error goes to the console. The React starter also catches a failure after it connected, and the Vue and React starters let go of a connection made after the page was taken down.
+- The page sets `<html lang>` to the language it shows.
+- The steps it prints and the projects' comments name Settings > Developer > Project folders, as Tavora does; DEVELOP.md names Settings > Modules > Install zip.
+
 ## 0.1.50
 
 - New projects start on `@tavora/pack` 0.3.6: the notices survive a dev server and odd packages.

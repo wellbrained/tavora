@@ -5,7 +5,7 @@ import { userInfo } from "node:os";
 import path from "node:path";
 
 // Publisher keys in files, for publishing from CI. The pack command never makes a key; Tavora does, and
-// exports it for CI (Settings > Publishing > Publisher keys and CI).
+// exports it for CI (Settings > Developer > Publishing > Publisher keys and CI).
 
 /** A publisher's private key from a file, which must exist. */
 export async function loadExistingKey(file: string): Promise<{ key: KeyObject }> {

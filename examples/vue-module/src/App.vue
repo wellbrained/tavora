@@ -24,7 +24,9 @@ const view = ref<View>("list");
 
 const unsubscribe: (() => void)[] = [];
 let boot: ModuleBootstrap | undefined;
+let unmounted = false;
 onUnmounted(() => {
+  unmounted = true;
   unsubscribe.forEach((fn) => fn());
   boot?.dispose();
 });
@@ -39,7 +41,11 @@ async function loadNote(sdk: TavoraSDK) {
 
 onMounted(async () => {
   try {
-    boot = await bootstrapModule();
+    // rules-allow: catalogs an end-to-end test fixture: its texts stay English, the same in every example, so one set of e2e tests covers them all
+    const started = await bootstrapModule();
+    // Taken down while it connected: let go of it.
+    if (unmounted) return started.dispose();
+    boot = started;
     const sdk = boot.sdk;
     if (!sdk) throw boot.error;
     const [currentWorkspace, initialViewport, savedCount, noteText, panel] = await Promise.all([
@@ -113,7 +119,7 @@ const primary = computed(() => ({ background: colors.value?.accent, color: color
 </script>
 
 <template>
-  <main :style="{ background: colors?.background ?? '#171412', color: colors?.text ?? '#f2ece0' }">
+  <main :style="colors ? { background: colors.background, color: colors.text } : undefined">
     <h1>Vue Test Module</h1>
     <p v-if="!tavora" data-testid="status">{{ error ? `Could not connect: ${error}` : "Connecting…" }}</p>
     <template v-else>
@@ -132,6 +138,7 @@ const primary = computed(() => ({ background: colors.value?.accent, color: color
       <section>
         <h2>Clicks saved in this workspace</h2>
         <p data-testid="count">{{ count }}</p>
+        <!-- rules-allow: kit-control this example shows the SDK alone, without the kit; Tavora styles plain controls like its own -->
         <button type="button" data-testid="increment" :style="primary" @click="increment">Add a click</button>
       </section>
 
@@ -139,8 +146,10 @@ const primary = computed(() => ({ background: colors.value?.accent, color: color
         <h2>
           Shared note <small>revision <span data-testid="note-revision">{{ noteRevision }}</span></small>
         </h2>
+        <!-- rules-allow: kit-control this example shows the SDK alone, without the kit; Tavora styles plain controls like its own -->
         <textarea ref="note" data-testid="note" rows="3"></textarea>
         <p>
+          <!-- rules-allow: kit-control this example shows the SDK alone, without the kit; Tavora styles plain controls like its own -->
           <button type="button" data-testid="save-note" @click="saveNote">Save note</button>
           <span data-testid="note-status">{{ noteStatus }}</span>
         </p>
@@ -148,7 +157,9 @@ const primary = computed(() => ({ background: colors.value?.accent, color: color
 
       <section>
         <h2>This panel's view: <span data-testid="view">{{ view }}</span></h2>
+        <!-- rules-allow: kit-control this example shows the SDK alone, without the kit; Tavora styles plain controls like its own -->
         <button type="button" data-testid="view-list" @click="choose('list')">List</button>
+        <!-- rules-allow: kit-control this example shows the SDK alone, without the kit; Tavora styles plain controls like its own -->
         <button type="button" data-testid="view-grid" @click="choose('grid')">Grid</button>
       </section>
     </template>

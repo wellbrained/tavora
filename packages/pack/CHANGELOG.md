@@ -10,6 +10,7 @@ What changed in `@tavora/pack`, newest first.
 - The old `license: ["MIT", "Apache-2.0"]` form reads as `MIT OR Apache-2.0`. A string `contributors` or `maintainers` no longer gives the first letter as the holder, and `(url)` is cut only at the end of an author. Packages without a name or version are no longer merged into one.
 - A file named `__proto__` at the zip's root keeps its hash, and `packModule` checks the signature of the zip it made, so it never hands back one Tavora would refuse.
 - A zip holding a file and a folder of the same name (`a` and `a/b`, also in another case) is refused.
+- Its messages name Tavora's settings as the app does: Settings > Developer > Your modules, and Settings > Developer > Publishing > Publisher keys and CI.
 - Packs with `@tavora/module-schema` 0.2.4.
 
 ## 0.3.5

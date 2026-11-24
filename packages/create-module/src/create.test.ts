@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -90,6 +91,22 @@ describe("createModule", () => {
     expect(commandsFor(manager).install).toBe(expected[manager].develop.split("\n")[0]);
   });
 
+  it.each(TEMPLATES)("makes a %s project that passes Tavora's module rules (pnpm check:modules)", async (template) => {
+    await createModule({ dir: root, id: "example.notes", name: "Notes", template });
+    const check = path.resolve(import.meta.dirname, "../../../scripts/check-modules.mjs");
+    const result = spawnSync(process.execPath, [check, root], { encoding: "utf8" });
+    expect(`${result.stdout}${result.stderr}`, "breaks of the module rules").not.toMatch(/new breaks? of the module rules/);
+    expect(result.status).toBe(0);
+  });
+
+  it.each(TEMPLATES)("tells the %s project's user in their language when it can't reach Tavora, without the error's own words", async (template) => {
+    await createModule({ dir: root, id: "example.notes", name: "Notes", template });
+    const entry = template === "vanilla" ? "src/main.ts" : template === "react" ? "src/main.tsx" : "src/App.vue";
+    const code = await readFile(path.join(root, entry), "utf8");
+    expect(code).not.toMatch(/Not connected to Tavora: \$\{/);
+    expect(code).toContain('"notConnected"');
+  });
+
   it("keeps Vue's own template braces", async () => {
     await createModule({ dir: root, id: "example.notes", name: "Notes", template: "vue" });
     expect(await readFile(path.join(root, "src/App.vue"), "utf8")).toContain("{{ status }}");
@@ -141,24 +158,20 @@ describe("versions", () => {
   });
 });
 
-describe("the starter templates' text helper", () => {
-  /** Runs the page's own `text` function, cut out of the template source, with its types stripped. */
-  async function textHelper(template: "vanilla" | "react"): Promise<(key: string, params?: Record<string, string | number>) => string> {
-    const ts = await import("typescript");
-    const file = template === "vanilla" ? "src/main.ts" : "src/main.tsx";
-    const source = await lines(path.resolve(import.meta.dirname, "../templates", template, file));
-    const start = source.indexOf("const TEXTS");
-    const end = source.indexOf("\n\n", source.indexOf("const text ="));
-    const snippet = source.slice(start, end);
-    const js = ts.transpileModule(snippet, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
-    const body = `${js}\n return (key, params) => ${template === "react" ? 'text("en", key, params)' : "text(key, params)"};`;
-    return new Function(body)() as (key: string, params?: Record<string, string | number>) => string;
-  }
+describe("the starter templates' texts", () => {
+  it("fill {placeholders}, leave an unknown one as it is, and match in English and German", async () => {
+    const { text, TEXTS } = await import("../templates/shared/src/texts.ts");
+    const { catalogProblems } = await import("@tavora/sdk/testing");
+    expect(text("en", "status", { workspace: "Main", count: 3 })).toBe("You're in Main. Clicked 3 times here.");
+    expect(text("de", "status", { workspace: "Main" })).toBe("Du bist in Main. {count}-mal hier geklickt.");
+    expect(catalogProblems(TEXTS.en, TEXTS.de)).toEqual([]);
+  });
 
-  it.each(["vanilla", "react"] as const)("fills {placeholders} in %s, and leaves an unknown one as it is", async (template) => {
-    const text = await textHelper(template);
-    expect(text("here", { workspace: "Main" })).toBe("You're in Main.");
-    expect(text("clicked", { count: 3 })).toBe("Clicked 3 times here.");
-    expect(text("clicked", {})).toBe("Clicked {count} times here.");
+  it.each(TEMPLATES)("are the ones the %s project shows", async (template) => {
+    const files = await createModule({ dir: root, id: "example.notes", name: "Notes", template });
+    expect(files).toEqual(expect.arrayContaining(["src/texts.ts", "src/texts.test.ts"]));
+    const pkg = await json(path.join(root, "package.json"));
+    expect(pkg.scripts).toMatchObject({ test: "vitest run" });
+    expect(pkg.devDependencies).toHaveProperty("vitest");
   });
 });
