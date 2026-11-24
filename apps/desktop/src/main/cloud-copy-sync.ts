@@ -1840,11 +1840,7 @@ export class CopySync {
 
   /** Off on this PC: what it knew of the copy is forgotten; the copy stays for the other PCs, and the account's key stays here. */
   async turnOff(): Promise<void> {
-    await this.forget(null).catch((error: unknown) => {
-      // Only the user's own turn-off counts for an answer that waits for it (not a sign-out or a deleted copy).
-      this.offFailures++;
-      throw error;
-    });
+    await this.forget(null, { byUser: true });
   }
 
   /** Deletes the copy on the service and turns it off here. */
@@ -1852,10 +1848,7 @@ export class CopySync {
     await this.exclusive("checking", () => this.cloud.remove()).catch((error: unknown) => {
       throw CopySync.userError(this.noteProblem(error));
     });
-    await this.forget(null).catch((error: unknown) => {
-      this.offFailures++;
-      throw error;
-    });
+    await this.forget(null, { byUser: true });
     this.copy = null;
     this.changed();
   }
@@ -1924,13 +1917,20 @@ export class CopySync {
     this.turn++;
   }
 
-  private async forget(problem: CloudCopyProblem | null): Promise<void> {
+  /**
+   * `byUser`: the user's own turn-off. Only its failure counts for an answer that waits for it (not a sign-out or a
+   * deleted copy), and it is counted before the forget leaves `forgetting`, so `goesOn` always sees it.
+   */
+  private async forget(problem: CloudCopyProblem | null, { byUser = false }: { byUser?: boolean } = {}): Promise<void> {
     // Written first. A swap stopped halfway is taken back at the next start; if that can't be noted, nothing is forgotten,
     // as the next start would finish the swap over this PC's data.
     const noted = this.noteForgotten();
     this.forgetting.add(noted);
     try {
       await noted;
+    } catch (error) {
+      if (byUser) this.offFailures++;
+      throw error;
     } finally {
       this.forgetting.delete(noted);
     }
