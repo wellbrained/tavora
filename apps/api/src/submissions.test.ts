@@ -259,6 +259,18 @@ describe("approve, deny and takedown", () => {
     expect(store.file("diablo-iv")).toBeNull();
   });
 
+  it("takes down an approved replacement of a shipped icon without bringing the shipped one back", () => {
+    seedFiles.set("diablo-iv", { names: ["Diablo IV"], bytes: png(32, 9) });
+    submissions.setReplaceable("diablo-iv", true);
+    offer({ icon: b64(png(32, 11)) });
+    expect(submissions.approve(state.listPending()[0]!.sha256)).toEqual({ ok: true, id: "diablo-iv" });
+    expect(store.file("diablo-iv")).toEqual(png(32, 11));
+
+    expect(submissions.takedown("diablo-iv", false)).toBe(true);
+    expect(store.list()).toEqual([]);
+    expect(store.file("diablo-iv")).toBeNull();
+  });
+
   it("serves release icons and approved ones together, sorted, and takedown of an unknown game is false", () => {
     seedFiles.set("hades-2", { names: ["Hades II"], bytes: png(32, 9) });
     offer();

@@ -175,7 +175,9 @@ export function createSubmissions({ state, store, gameName, gamesNamed, now = ()
     takedown(id: string, block: boolean): boolean {
       const entry = store.list().find((icon) => icon.id === id);
       if (!entry) return false;
-      if (!state.removeApproved(id)) state.hide(id, now());
+      // Hidden too, not only removed: an approved icon may stand in for one that ships with the release, which would come back.
+      state.removeApproved(id);
+      state.hide(id, now());
       if (block) state.block(entry.sha256, "takedown", now());
       return true;
     },

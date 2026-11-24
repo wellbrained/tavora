@@ -99,6 +99,9 @@ const SUBMIT_REASONS = { 400: "bad-request", 409: "has-icon", 413: "too-big", 42
 /** A Steam import refusal: the English message and its reason code. */
 const steamFail = (context: Context, status: ContentfulStatusCode, reason: string, error: string) => context.json({ error, reason }, status);
 
+/** What the public lists that are the same for everyone may be cached for. */
+const SHARED_FIVE_MINUTES = "public, max-age=300";
+
 export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter, steamNetworkRateLimiter, icons = NO_ICONS, takedownContact, submissions, submitRateLimiter, accounts, catalog, publishRateLimiter, publishLimits, scanner, catalogueKey, officialPins = OFFICIAL_PINS, reportRateLimiter, maintainerEmail, reviewRateLimiter, conversationRateLimiter, leaderboardRateLimiter, stats, countryOf, siteRateLimiter, moduleRequests, moduleRequestRateLimiter, newGameRateLimiter, voteNetworkRateLimiter }: AppOptions) {
   const limiter = rateLimiter ?? createRateLimiter({ limit: 60, windowMs: 60_000 });
   // Enough for a whole Steam library in one sitting; the review queue's own cap (MAX_PENDING) still stops a flood.
@@ -183,8 +186,8 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     const wait = limiter.check(clientKey ? clientKey(context.req.raw) : "local");
     if (wait > 0) return tooMany(context, wait);
     if (!iconsAvailable) return fail(context, 503, "unavailable", "Icons are not available right now.");
-    context.header("Cache-Control", "public, max-age=300");
-    return context.json({ notice: ICON_NOTICE, takedown: takedownContact!.trim(), icons: icons.list() });
+    // Only on the answer itself: a list that failed must not be cached for everyone (onError).
+    return context.json({ notice: ICON_NOTICE, takedown: takedownContact!.trim(), icons: icons.list() }, 200, { "Cache-Control": SHARED_FIVE_MINUTES });
   });
 
   app.get("/v1/icons/:file", (context) => {
@@ -323,20 +326,18 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
   catalogApp.get("/", (context) => {
     const filter = catalogFilter(context.req.query("game"), context.req.query("personal"), context.req.query("workspace"));
     if (!filter) return fail(context, 400, "bad-request", "Ask for ?game=<game id>, ?personal=1 or neither.");
-    context.header("Cache-Control", "public, max-age=300");
     const summaries = ratings?.summaries();
     // Tavora's own modules are for the app's own update check only: asked for with ?include=official, never in the public index.
     const official = context.req.query("include") === "official";
     const successions = successionsOnce();
-    return context.json({ modules: catalog!.index(filter, { official }).map((entry) => listed(entry, summaries ?? new Map(), successions)) });
+    return context.json({ modules: catalog!.index(filter, { official }).map((entry) => listed(entry, summaries ?? new Map(), successions)) }, 200, { "Cache-Control": SHARED_FIVE_MINUTES });
   });
   catalogApp.get("/modules/:id", (context) => {
     const found = catalog!.module(context.req.param("id"));
     if (!found) return fail(context, 404, "not-found", "Not found.");
-    context.header("Cache-Control", "public, max-age=300");
     // Tavora's own modules have no developer to write to.
     const contact = accounts?.conversations && !isOfficialId(found.module.id) ? publicContact(accounts.conversations, accounts.store, found.module.id, found.module.owner) : undefined;
-    return context.json({ module: { ...listed(found.module), ...(contact ? { contact } : {}) }, versions: found.versions, readme: found.readme });
+    return context.json({ module: { ...listed(found.module), ...(contact ? { contact } : {}) }, versions: found.versions, readme: found.readme }, 200, { "Cache-Control": SHARED_FIVE_MINUTES });
   });
   // Sent once by the app after a user installed a module from Browse: only the module id.
   catalogApp.post("/installed", async (context) => {
@@ -526,6 +527,8 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
   app.onError((error, context) => {
     // Never include the request: it holds what the user typed.
     console.error(`[tavora-api] ${error instanceof Error ? error.message : "unknown error"}`);
+    // A route may have said its answer can be cached before it failed: an error never is.
+    context.header("Cache-Control", "no-store");
     return fail(context, 500, "internal", "Something went wrong.");
   });
   return app;

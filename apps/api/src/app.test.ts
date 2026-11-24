@@ -240,6 +240,20 @@ describe("icon endpoints", () => {
     }
   });
 
+  it("never lets a failed answer be cached as the shared list", async () => {
+    const broken = { list: () => { throw new Error("disk gone"); }, file: () => null };
+    const app = createApp({ db, icons: broken, takedownContact: "legal@example.test" });
+    const errors = console.error;
+    console.error = () => {};
+    try {
+      const response = await get(app, "/v1/icons");
+      expect(response.status).toBe(500);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+    } finally {
+      console.error = errors;
+    }
+  });
+
   it("offers nothing without a takedown contact", async () => {
     for (const contact of [undefined, "", "   "]) {
       const unmanned = createApp({ db, icons, ...(contact === undefined ? {} : { takedownContact: contact }) });
