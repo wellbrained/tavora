@@ -287,6 +287,23 @@ describe("check 4: warning signs in the code", { timeout: 30_000 }, () => {
       ['<script src="HTTP&colon;cdn.example/x.js"></script>', "page.html"],
       ['<script src="\\\\cdn.example/x.js"></script>', "page.html"],
       ['<svg><script href="&#47;/cdn.example/x.js"/></svg>', "pic.svg"],
+      // A quote only opens after `=`, and a script's own text is no tag: neither hides the tag after it.
+      ["<script a=it's></script><script b='>' src=//cdn.example/x.js></script>", "page.html"],
+      ['<script a"b></script><script c=">" src=//cdn.example/x.js></script>', "page.html"],
+      ["<script>var s=\"<script a='\";</script><script b='>' src=//cdn.example/x.js></script>", "page.html"],
+      ['<SCRIPT>x = "</scrip" + "<script a=\'"</SCRIPT ><script b=\'>\' src=//cdn.example/x.js></script>', "page.html"],
+      // A <script> that is no tag (in a comment, a textarea, an attribute, an SVG script) doesn't hide the one after it.
+      ["<!-- <script> --> <script src=//cdn.example/x.js></script>", "page.html"],
+      ['<textarea><script></textarea><script src="//cdn.example/x.js"></script>', "page.html"],
+      ['<div title="<script>"></div><script src="//cdn.example/x.js"></script>', "page.html"],
+      ['<svg><script><script href="//cdn.example/x.js"/></script></svg>', "pic.svg"],
+      // A tag whose first > is in a quoted value is held, whatever its src: real ones have none there.
+      ['<script data-x=">" src="app.js"></script>', "page.html"],
+      // One in a comment that leaves a quote open: held for that.
+      ["<!-- <script a=' --><script b='>' src=//cdn.example/x.js></script>", "page.html"],
+      // Entities with any number of leading zeros.
+      ['<script src="&#00000047;&#00000047;cdn.example/x.js"></script>', "page.html"],
+      ['<script src="&#x000002F;&#X000002f;cdn.example/x.js"></script>', "page.html"],
       // A tag far longer than any real one.
       [`<script data-pad="${"a".repeat(17 * 1024)}" src="app.js"></script>`, "page.html"],
     ]) {
@@ -301,7 +318,7 @@ describe("check 4: warning signs in the code", { timeout: 30_000 }, () => {
       ['<scripts src="//cdn.example/x.js">', "page.html"],
       ['<script src="./app.js"></script><script src="/lib/x.js"></script>', "page.html"],
       ['<script src="app.js?from=https://example.org"></script>', "page.html"],
-      ['<script data-x=">" src="app.js"></script>', "page.html"],
+      ['<script data-x="a=b" src="app.js"></script><script>if (a > b) x = "</p>"</script>', "page.html"],
       // href on a script element counts only in svg and html files.
       ['const svg = \'<script href="//cdn.example/x.js"/>\'', "app.js"],
     ]) {
@@ -331,6 +348,13 @@ describe("check 4: warning signs in the code", { timeout: 30_000 }, () => {
       ["page.html", '<script a="b">'.repeat(size / 14)],
       ["page.html", `<script src="${" ".repeat(size)}`],
       ["pic.svg", `<script ${"href=".repeat(size / 5)}`],
+      ["page.html", "<script x>".repeat(size / 10)],
+      ["page.html", "<script a='x'>".repeat(size / 14)],
+      ["page.html", '<script a="'.repeat(size / 11)],
+      ["page.html", "<script></script>".repeat(size / 17)],
+      ["page.html", `<script a=${" ".repeat(size)}x>`],
+      ["page.html", `<script src="&#${"0".repeat(size)}47;">`],
+      ["page.html", `<script src=&#x${"0".repeat(size)}`],
       ["app.js", `//${"import(a;".repeat(size / 9)}`],
       ["app.js", `import(${spaces})`],
       ["app.js", `new${spaces}x`],

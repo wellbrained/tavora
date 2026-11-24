@@ -276,27 +276,60 @@ function commentLines(text: string): (index: number) => boolean {
 const MAX_SCRIPT_TAG = 16 * 1024;
 
 /**
- * Where a tag whose attributes start at `from` ends: in an HTML or SVG file (`markup`) at its `>`, past any in a quoted
- * value, and with a quote left open at the end of the text. In code, where `<script` is in a string, at the first `>`.
+ * Where a tag whose attributes start at `from` ends: in an HTML or SVG file (`markup`) at its `>`, past any in a value
+ * quoted after `=` (as a browser reads it: a quote anywhere else is part of a name), and with a quote left open at the
+ * end of the text. In code, where `<script` is in a string, at the first `>`.
  */
 function tagEnd(text: string, from: number, markup: boolean): number {
   if (!markup) {
     const end = text.indexOf(">", from);
     return end === -1 ? text.length : end;
   }
-  const stop = /[>"']/g;
+  const stop = /=\s*(["'])|>/g;
   stop.lastIndex = from;
   for (let found = stop.exec(text); found; found = stop.exec(text)) {
     if (found[0] === ">") return found.index;
-    const close = text.indexOf(found[0], found.index + 1);
+    const close = text.indexOf(found[1]!, found.index + found[0].length);
     if (close === -1) return text.length;
     stop.lastIndex = close + 1;
   }
   return text.length;
 }
 
+/**
+ * In an HTML or SVG file, the first `<script` tag whose first `>` is inside a value quoted after `=`. A browser reads past
+ * that `>`, so a check that stops at it (or loses count of quotes) could take the rest of the tag for script text and
+ * miss its src. Real tags have no `>` in their attributes. Each tag is read up to its first `>` only, so this stays linear.
+ */
+function quotedCloseInScriptTag(text: string): RegExpExecArray | null {
+  const open = /<script\b/gi;
+  const quoted = /=\s*(["'])/g;
+  // The next quoted value at or after where it was last looked for (`from` only grows): the text is searched once in all.
+  let next: RegExpExecArray | null = null;
+  let searched = false;
+  const nextFrom = (from: number): RegExpExecArray | null => {
+    if (searched && (next === null || next.index >= from)) return next;
+    quoted.lastIndex = from;
+    searched = true;
+    return (next = quoted.exec(text));
+  };
+  for (let tag = open.exec(text); tag; tag = open.exec(text)) {
+    const end = text.indexOf(">", tag.index);
+    if (end === -1) return null;
+    let at = tag.index;
+    for (let found = nextFrom(at); found && found.index < end; found = nextFrom(at)) {
+      const close = text.indexOf(found[1]!, found.index + found[0].length);
+      if (close === -1 || close > end) return tag;
+      at = close + 1;
+    }
+    open.lastIndex = end;
+  }
+  return null;
+}
+
 const NAMED_ENTITY: Record<string, string> = { sol: "/", bsol: "\\", colon: ":", tab: "\t", newline: "\n", period: ".", num: "#" };
-const ENTITY = /&(?:#(\d{1,7});?|#x([0-9a-f]{1,6});?|([a-z]{2,8});)/iy;
+// Leading zeros don't count toward the digits: `&#00000047;` is `/` too.
+const ENTITY = /&(?:#0*(\d{1,7});?|#x0*([0-9a-f]{1,6});?|([a-z]{2,8});)/iy;
 
 /**
  * The first few characters of the address in the attribute value at `at` (before `end`), as a browser reads it: entities
@@ -331,7 +364,9 @@ function addressStart(text: string, at: number, end: number): string {
  * The first `<script …>` tag whose `attribute` loads an address from the internet (`//host`, `http:` or `https:` in any
  * form), or in an HTML or SVG file (`markup`) that is longer than any real one. Each tag is read once, up to its `>`
  * (tagEnd), and each attribute's value only for its first characters, so a crafted file can't make this slow. A `<script`
- * inside an earlier tag is part of that one.
+ * inside an earlier tag is part of that one. A script's own text is read for tags too: skipping it to `</script` would
+ * let a `<script>` in a comment, a textarea or an attribute skip the real tag after it. One there can't hide that tag
+ * either way, as what it is in ends with a `>` before the tag (or one in a quote, which quotedCloseInScriptTag holds).
  */
 function remoteScriptTag(text: string, attribute: "src" | "href", markup: boolean): RegExpExecArray | null {
   const open = /<script\b/gi;
@@ -389,6 +424,7 @@ export function signsIn(name: string, source: string): { sign: Sign; detail: str
   add("remote-code", /createElement(?:NS)?\s*\(\s*(?:["'`]http:\/\/www\.w3\.org\/2000\/svg["'`]\s*,\s*)?["'`]script["'`]/.exec(text));
   const markup = /\.(?:svg|x?html?)$/i.test(name);
   add("remote-code", remoteScriptTag(text, "src", markup));
+  if (markup) add("remote-code", quotedCloseInScriptTag(text));
   add("remote-code", /new\s+(?:Shared)?Worker\s*\(\s*["'`](?:https?:|data:|blob:)/.exec(text));
   if (markup) add("remote-code", remoteScriptTag(text, "href", markup));
 

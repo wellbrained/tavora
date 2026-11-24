@@ -703,7 +703,7 @@ const STEP_FILE = /^([0-9a-f]{16})\.(request|answer|reveal|key|declined)\.json$/
 type Step = "request" | "answer" | "reveal" | "key" | "declined";
 /**
  * The biggest step file read. The biggest Tavora writes is a request or an answer: under 150 bytes and the PC's name
- * (at most MAX_DEVICE_NAME characters, device-name.ts). Anyone who can write the folder could put a huge one there, read every 15
+ * (at most MAX_DEVICE_NAME code units, device-name.ts). Anyone who can write the folder could put a huge one there, read every 15
  * seconds; one over this is left as unreadable, and cleaned up once it is old.
  */
 export const MAX_STEP_FILE = 8 * 1024;

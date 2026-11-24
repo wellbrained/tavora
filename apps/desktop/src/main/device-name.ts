@@ -14,13 +14,32 @@ export function friendlyDeviceName(hostname: string, computerName?: string | nul
 }
 
 /**
- * The longest name, in characters: a network name is at most 255 bytes anyway, and a Mac's computer name of any length
- * goes into the files of adding a PC through a folder, which Tavora reads only up to a size (pairing.ts MAX_STEP_FILE).
+ * The longest name, in UTF-16 code units (a string's length): a network name is at most 255 bytes anyway, and a Mac's
+ * computer name of any length goes into the files of adding a PC through a folder, which Tavora reads only up to a size
+ * (pairing.ts MAX_STEP_FILE). Code units, not characters as you see them: one of those can be any length.
  */
 export const MAX_DEVICE_NAME = 255;
 
-/** At most MAX_DEVICE_NAME characters, cut between characters, never inside one. */
-const capped = (name: string) => (name.length <= MAX_DEVICE_NAME ? name : [...name].slice(0, MAX_DEVICE_NAME).join(""));
+const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+
+/**
+ * At most MAX_DEVICE_NAME long, cut between characters as you see them, so a family emoji or a flag isn't split. Only
+ * a single character longer than that on its own is cut inside, between code points.
+ */
+function capped(name: string): string {
+  if (name.length <= MAX_DEVICE_NAME) return name;
+  let kept = "";
+  for (const { segment } of graphemes.segment(name)) {
+    if (kept.length + segment.length > MAX_DEVICE_NAME) break;
+    kept += segment;
+  }
+  if (kept) return kept;
+  for (const point of name) {
+    if (kept.length + point.length > MAX_DEVICE_NAME) break;
+    kept += point;
+  }
+  return kept;
+}
 
 /** The Mac's computer name from System Settings; null elsewhere or when it can't be read. */
 function macComputerName(): string | null {

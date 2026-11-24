@@ -126,6 +126,21 @@ describe("the hotkey dialog", () => {
     expect(hidden).toEqual([{ action: "next", target: "item-1" }]);
   });
 
+  it("sends a press to a panel of the workspace shown before one of another workspace in sight, though that was used later", async () => {
+    const { streaming, registered, heard, world, hotkeys } = await setup();
+    world.panels[0] = { ...world.panels[0]!, workspaceId: "poe2" };
+    // Lent to the game layer from another workspace: in sight, and used last.
+    const lent: HotkeyBinding[] = [];
+    world.panels.push({ moduleId: MODULE.manifest.id, workspaceId: "elden-ring", usedAt: 9, inSight: () => true, hotkeyPressed: (binding) => lent.push(binding) });
+    const asked = hotkeys.set("next", "item-1", "Next song");
+    streaming.answer(streaming.request()!.id, "set", "F8");
+    await asked;
+    streaming.sync();
+    registered.get("F8")!();
+    expect(heard).toEqual([{ action: "next", target: "item-1" }]);
+    expect(lent).toEqual([]);
+  });
+
   it("refuses a key used in the same workspace and keeps the dialog open", async () => {
     const { streaming, hotkeys } = await setup();
     const first = hotkeys.set("start-pause", "item-1", "Boss timer");
