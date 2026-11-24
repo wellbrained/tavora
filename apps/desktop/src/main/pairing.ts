@@ -584,10 +584,7 @@ export class Pairing {
       throw toUserError(error);
     }
     // Turned down for good: the question stays away, and the error shows once.
-    if (oldKey) {
-      this.changed();
-      throw new UserError("pairing.error.oldKey");
-    }
+    if (oldKey) throw new UserError("pairing.error.oldKey");
     if (allow && !key) throw new UserError("pairing.error.gone");
     // Only an Add takes an answer off the count: after a No it stays, or every wrong code shown would be a free try.
     if (allow) await this.uncountAnswer(answering.transport, id);

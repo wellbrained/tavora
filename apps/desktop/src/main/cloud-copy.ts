@@ -5,7 +5,7 @@ import { cp, mkdir, open as openFile, rm, rmdir, writeFile } from "node:fs/promi
 import path from "node:path";
 import { isOwnerId } from "@tavora/module-schema";
 import { DATA_DIRS, PICTURE_DIRS } from "./backup";
-import { copyKeys, keyFingerprint, lineMark, manifestMark, open, PART_ID_BYTES, partId, seal, type CopyKeys } from "./copy-crypto";
+import { copyKeys, keyFingerprint, lineMark, manifestMark, open, PART_ID_BYTES, partId, SEAL_OVERHEAD, seal, type CopyKeys } from "./copy-crypto";
 import { lookCopyFile, removeCopyFile, writeCopyFile } from "./copy-files";
 import { look, lookBytes, lookNames, lookStat, unlessHeld, type Looked } from "./file-look";
 import type { SavedRecord } from "./json";
@@ -35,14 +35,33 @@ export const PART_BYTES = 4 * 1024 * 1024;
  * counts a copy that way); cloud-copy-size.test.ts keeps the two equal.
  */
 export const MIN_PART_BYTES = 1024;
-/** A copy's size as the service counts it: every part (an empty file is one) for at least MIN_PART_BYTES. */
-export function countedSize(files: { size: number }[]): number {
+/** The parts of files as the service counts them: each (an empty file is one) for its sealed size, at least MIN_PART_BYTES. */
+export function countedParts(files: { size: number }[]): number {
   let total = 0;
   for (const { size } of files) {
     const parts = Math.max(1, Math.ceil(size / PART_BYTES));
-    for (let index = 0; index < parts; index++) total += Math.max(MIN_PART_BYTES, Math.min(PART_BYTES, size - index * PART_BYTES));
+    for (let index = 0; index < parts; index++) total += Math.max(MIN_PART_BYTES, Math.min(PART_BYTES, size - index * PART_BYTES) + SEAL_OVERHEAD);
   }
   return total;
+}
+/**
+ * A copy's size as the service counts it, at most: the parts, and the sealed list, as large as it can be made of these
+ * files (placeholders as long as a hash, a part id or a mark; the line a folder adds too). Never less than the service says.
+ */
+export function countedSize(files: { path: string; size: number }[]): number {
+  const id = "0".repeat(64);
+  const list = {
+    v: 1,
+    version: 4_000_000_000,
+    base: 4_000_000_000,
+    parent: 4_000_000_000,
+    pictures: false,
+    files: files.map((file) => ({ path: file.path, size: file.size, sha256: id, parts: Array.from({ length: Math.max(1, Math.ceil(file.size / PART_BYTES)) }, () => id) })),
+    mark: id,
+    line: Array.from({ length: LINE_LENGTH }, () => 4_000_000_000),
+    lineMark: id,
+  };
+  return countedParts(files) + Buffer.byteLength(JSON.stringify(list)) + SEAL_OVERHEAD;
 }
 /** The most one upload of sealed parts holds, with each part's id and length. The service takes a little more. */
 export const BATCH_BYTES = 8 * 1024 * 1024;
@@ -685,11 +704,22 @@ export class CloudCopy {
     };
 
     // Parts of the last synced version are in the copy; if some went missing anyway, send everything once more.
-    const first = await attempt(new Set(Object.values(state.files).flatMap((file) => file.parts)));
-    if (first !== "missing-parts") return first;
-    const second = await attempt(new Set());
-    if (second === "missing-parts") throw new CopyError("failed", "parts went missing twice");
-    return second;
+    const send = async (): Promise<UploadResult> => {
+      const first = await attempt(new Set(Object.values(state.files).flatMap((file) => file.parts)));
+      if (first !== "missing-parts") return first;
+      const second = await attempt(new Set());
+      if (second === "missing-parts") throw new CopyError("failed", "parts went missing twice");
+      return second;
+    };
+    const result = await send();
+    // The service counted more than this PC did: once more without the pictures (the parts already sent are swept later).
+    if (result.status === "too-big" && pictures && found.some((file) => file.picture)) {
+      found = found.filter((file) => !file.picture);
+      pictures = false;
+      total = countedSize(found);
+      return send();
+    }
+    return result;
   }
 
   /** Whether the storage keeps marked manifests besides the current one (a folder; the service keeps only one). */

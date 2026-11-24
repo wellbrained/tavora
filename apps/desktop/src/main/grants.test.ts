@@ -48,6 +48,29 @@ describe("GrantStore", () => {
     expect(grants.get(KEY, "community.someone.other")).toBeUndefined();
   });
 
+  it("ends revoked in memory when a grant fails to save while the module is revoked", async () => {
+    const { dir, grants } = await store();
+    await grants.grant(subject(["api.example.com"]));
+    await rm(path.join(dir, GRANTS_FILE));
+    await mkdir(path.join(dir, GRANTS_FILE));
+    const failing = grants.grant(subject(["api.example.com", "cdn.example.com"]));
+    const revoked = grants.revoke(KEY, "community.someone.tracker").catch(() => undefined);
+    await expect(failing).rejects.toBeDefined();
+    await revoked;
+    expect(grants.allowed(subject(["api.example.com", "cdn.example.com"]))).toEqual({ network: [], connectors: [], folders: [] });
+  });
+
+  it("ends at the original when two grants both fail to save", async () => {
+    const { dir, grants } = await store();
+    await grants.grant(subject(["api.example.com"]));
+    await rm(path.join(dir, GRANTS_FILE));
+    await mkdir(path.join(dir, GRANTS_FILE));
+    const first = grants.grant(subject(["api.example.com", "a.example.com"])).catch(() => "failed");
+    const second = grants.grant(subject(["api.example.com", "b.example.com"])).catch(() => "failed");
+    expect(await Promise.all([first, second])).toEqual(["failed", "failed"]);
+    expect(grants.get(KEY, "community.someone.tracker")?.network).toEqual(["api.example.com"]);
+  });
+
   it("never covers another publisher's module with the same id", async () => {
     const { grants } = await store();
     await grants.grant(subject(["api.example.com"]));
@@ -175,6 +198,17 @@ describe("running while its game runs", () => {
   function withGame(version = "1.0.0", asks = true, network: string[] = []): GrantSubject {
     return { owner: KEY, manifest: { id: "community.someone.kings", version, permissions: { network }, ...(asks ? { panels } : {}) } };
   }
+
+  it("takes the games switch and a forgotten answer back when they can't be saved", async () => {
+    const { dir, grants } = await store();
+    await grants.setWithGame(withGame(), true);
+    await rm(path.join(dir, GRANTS_FILE));
+    await mkdir(path.join(dir, GRANTS_FILE));
+    await expect(grants.setWithGame(withGame(), false)).rejects.toBeDefined();
+    expect(grants.get(KEY, "community.someone.kings")?.withGame).toBe(true);
+    await expect(grants.forgetWithGame(withGame("1.0.0", false))).rejects.toBeDefined();
+    expect(grants.get(KEY, "community.someone.kings")?.withGame).toBe(true);
+  });
 
   it("is asked with the rest, granted on the yes, and kept with the other grants", async () => {
     const { dir, grants } = await store();

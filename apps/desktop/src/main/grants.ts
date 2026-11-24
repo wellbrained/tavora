@@ -168,28 +168,22 @@ export class GrantStore {
    * Only what the manifest asks for can be granted; what was granted before stays.
    */
   grant(subject: GrantSubject, what: Permissions = asked(subject.manifest)): Promise<void> {
-    const { owner, manifest } = subject;
-    const ask = asked(manifest);
-    const previous = this.get(owner, manifest.id);
-    const network = [...new Set([...(previous?.network ?? []), ...what.network.filter((host) => ask.network.includes(host))])];
-    const connectors = [...new Set([...(previous?.connectors ?? []), ...what.connectors.filter((name) => ask.connectors.includes(name))])];
-    const folders = [...new Set([...(previous?.folders ?? []), ...what.folders.filter((key) => ask.folders.includes(key))])];
-    // Granted when asked and shown, for the games it is made for now; else what the user answered before stays (a
-    // switch turned off too).
-    const answer: Pick<Grant, "withGame" | "withGameFor"> =
-      what.withGame === true && ask.withGame === true
-        ? { withGame: true, withGameFor: [...(manifest.games ?? [])] }
-        : { ...(previous?.withGame !== undefined ? { withGame: previous.withGame } : {}), ...(previous?.withGameFor ? { withGameFor: previous.withGameFor } : {}) };
-    const ownerHad = this.owners.has(owner);
-    if (!ownerHad) this.owners.set(owner, new Map());
-    this.owners.get(owner)!.set(manifest.id, { version: manifest.version, grantedAt: this.now().toISOString(), network, connectors, folders, ...answer });
-    // A grant that can't be saved isn't active either: the user hears the error, so the module must not run as allowed.
-    return this.save().catch((error: unknown) => {
-      const modules = this.owners.get(owner);
-      if (previous) modules?.set(manifest.id, previous);
-      else modules?.delete(manifest.id);
-      if (!ownerHad && modules?.size === 0) this.owners.delete(owner);
-      throw error;
+    return this.change(() => {
+      const { owner, manifest } = subject;
+      const ask = asked(manifest);
+      const previous = this.get(owner, manifest.id);
+      const network = [...new Set([...(previous?.network ?? []), ...what.network.filter((host) => ask.network.includes(host))])];
+      const connectors = [...new Set([...(previous?.connectors ?? []), ...what.connectors.filter((name) => ask.connectors.includes(name))])];
+      const folders = [...new Set([...(previous?.folders ?? []), ...what.folders.filter((key) => ask.folders.includes(key))])];
+      // Granted when asked and shown, for the games it is made for now; else what the user answered before stays (a
+      // switch turned off too).
+      const answer: Pick<Grant, "withGame" | "withGameFor"> =
+        what.withGame === true && ask.withGame === true
+          ? { withGame: true, withGameFor: [...(manifest.games ?? [])] }
+          : { ...(previous?.withGame !== undefined ? { withGame: previous.withGame } : {}), ...(previous?.withGameFor ? { withGameFor: previous.withGameFor } : {}) };
+      if (!this.owners.has(owner)) this.owners.set(owner, new Map());
+      this.owners.get(owner)!.set(manifest.id, { version: manifest.version, grantedAt: this.now().toISOString(), network, connectors, folders, ...answer });
+      return () => this.restore(owner, manifest.id, previous);
     });
   }
 
@@ -200,12 +194,14 @@ export class GrantStore {
   setWithGame(subject: GrantSubject, on: boolean): Promise<void> {
     const { owner, manifest } = subject;
     if (!asksWithGame(manifest)) return Promise.resolve();
-    const previous = this.get(owner, manifest.id);
-    const now = this.now().toISOString();
-    const { withGameFor: _games, ...base } = previous ?? { version: manifest.version, grantedAt: now, network: [], connectors: [], folders: [] };
-    if (!this.owners.has(owner)) this.owners.set(owner, new Map());
-    this.owners.get(owner)!.set(manifest.id, { ...base, ...(on ? { grantedAt: now, withGame: true, withGameFor: [...(manifest.games ?? [])] } : { withGame: false }) });
-    return this.save();
+    return this.change(() => {
+      const previous = this.get(owner, manifest.id);
+      const now = this.now().toISOString();
+      const { withGameFor: _games, ...base } = previous ?? { version: manifest.version, grantedAt: now, network: [], connectors: [], folders: [] };
+      if (!this.owners.has(owner)) this.owners.set(owner, new Map());
+      this.owners.get(owner)!.set(manifest.id, { ...base, ...(on ? { grantedAt: now, withGame: true, withGameFor: [...(manifest.games ?? [])] } : { withGame: false }) });
+      return () => this.restore(owner, manifest.id, previous);
+    });
   }
 
   /**
@@ -215,18 +211,23 @@ export class GrantStore {
    */
   async forgetWithGame(subject: GrantSubject): Promise<boolean> {
     const { owner, manifest } = subject;
-    const previous = this.get(owner, manifest.id);
-    if (asksWithGame(manifest) || previous?.withGame === undefined) return false;
-    const { withGame: _answer, withGameFor: _games, ...rest } = previous;
-    this.owners.get(owner)!.set(manifest.id, rest);
-    await this.save();
-    return true;
+    let forgot = false;
+    await this.change(() => {
+      const previous = this.get(owner, manifest.id);
+      if (asksWithGame(manifest) || previous?.withGame === undefined) return null;
+      const { withGame: _answer, withGameFor: _games, ...rest } = previous;
+      this.owners.get(owner)!.set(manifest.id, rest);
+      forgot = true;
+      return () => this.restore(owner, manifest.id, previous);
+    });
+    return forgot;
   }
 
   /** Takes back some of a module's grant, or all of it when `what` is left out. Takes effect at the next call. */
   revoke(owner: string, moduleId: string, what?: Permissions): Promise<void> {
+    return this.change(() => {
     const previous = this.get(owner, moduleId);
-    if (!previous) return Promise.resolve();
+    if (!previous) return null;
     const takenHosts = new Set(what?.network ?? previous.network);
     const takenConnectors = new Set(what?.connectors ?? previous.connectors);
     const takenFolders = new Set(what?.folders ?? previous.folders);
@@ -242,7 +243,42 @@ export class GrantStore {
     }
     else this.owners.get(owner)!.delete(moduleId);
     if (this.owners.get(owner)!.size === 0) this.owners.delete(owner);
-    return this.save();
+    // A revoke that can't be saved stays taken back in memory: that is the safe side.
+    return () => undefined;
+    });
+  }
+
+  /** Changes wait for each other, so each reads the state the last one left and a rollback undoes just its own. */
+  private chain: Promise<unknown> = Promise.resolve();
+
+  /**
+   * Runs `apply` once earlier changes are saved. It changes memory and returns how to undo that (or null when nothing
+   * changed); the change is saved, and undone when the save fails.
+   */
+  private change(apply: () => (() => void) | null): Promise<void> {
+    const run = this.chain.then(async () => {
+      const undo = apply();
+      if (!undo) return;
+      try {
+        await this.save();
+      } catch (error) {
+        undo();
+        throw error;
+      }
+    });
+    this.chain = run.catch(() => undefined);
+    return run;
+  }
+
+  /** Puts a module's stored grant back as it was (none: removed). */
+  private restore(owner: string, moduleId: string, previous: Grant | undefined): void {
+    if (previous) {
+      if (!this.owners.has(owner)) this.owners.set(owner, new Map());
+      this.owners.get(owner)!.set(moduleId, previous);
+    } else {
+      this.owners.get(owner)?.delete(moduleId);
+      if (this.owners.get(owner)?.size === 0) this.owners.delete(owner);
+    }
   }
 
   private save(): Promise<void> {
