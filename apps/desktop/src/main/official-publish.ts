@@ -3,7 +3,7 @@ import { execFile } from "node:child_process";
 import { appendFile, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { isModuleId, validateManifest, compareModuleVersions } from "@tavora/module-schema";
+import { isModuleId, validateManifest } from "@tavora/module-schema";
 import { collectFiles, fingerprint, packModule, PackError, PrivateKeyError, readZip, SIGNATURE_FILE, type Published } from "@tavora/pack";
 import { assertNever } from "../shared/assert-never";
 import type { OfficialBuildStep, OfficialPublishOverview, OfficialPublishPreview, OfficialPublishRow, OfficialPublishRun, OfficialUploadStep } from "../shared/host-api";
@@ -11,6 +11,7 @@ import { readProjectChangelog } from "./module-changelog";
 import { UserError } from "./messages";
 import { BROWSER_MODULE_ID, OFFICIAL_PREFIX } from "./registry";
 import { sha256Hex } from "./hash";
+import { compareModuleVersions } from "../shared/module-version";
 
 // The dev build's publish flow for a built-in module (Settings > Development, dev builds only). Tavora's own modules
 // update from the catalogue only when signed by the pinned Tavora key, so this is where that signing happens. It builds

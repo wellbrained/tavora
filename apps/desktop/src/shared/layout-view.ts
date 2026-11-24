@@ -1,7 +1,7 @@
 // What the Overlay page shows and what it may ask the main process to do. The page is two pieces of Tavora's own (the
 // page in the main window with the sidebar and the toolbar, and the layer on the canvas that takes the mouse); both get
 // the same LayoutView and answer with LayoutMessages, which the main process checks (parseLayoutMessage) before it acts.
-import { GRID_SETTINGS, isAlignEdge, isGridSetting, type AlignEdge, type Canvas, type GridSetting } from "./layout-math";
+import { isAlignEdge, isGridSetting, type AlignEdge, type Canvas, type GridSetting } from "./layout-math";
 import { isArrangeTo, type ArrangeTo } from "./layout-stack";
 import { normalizeButtons, type ToolbarSetting } from "./layout-toolbar";
 import type { AnchoredRect, Rect } from "./overlay-anchor";

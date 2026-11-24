@@ -13,7 +13,6 @@ import type { InstalledModule } from "../module-page";
 import { formatSize } from "../catalog-size";
 import { PLACEHOLDER_README } from "../catalog-placeholder";
 import { act, api, closeDialog, dialog, state } from "../host";
-import { compareModuleVersions, compareModuleVersions } from "@tavora/module-schema";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { useTask } from "@tavora/official-ui/use-task";
 import { FadeImage } from "@tavora/official-ui/components/ui/fade-image";
@@ -30,6 +29,7 @@ import ModuleDescription from "./ModuleDescription.vue";
 import ModuleVersions from "./ModuleVersions.vue";
 import ContactDeveloperDialog from "./messages/ContactDeveloperDialog.vue";
 import ReportModuleDialog from "./messages/ReportModuleDialog.vue";
+import { compareModuleVersions } from "../../shared/module-version";
 
 const props = withDefaults(defineProps<{ module: CatalogModuleView; installed: boolean; status?: ProgressButtonStatus; progress?: number | null; size?: string; error?: string; atReviews?: boolean; local?: InstalledModule }>(), { status: "idle", progress: null });
 const emit = defineEmits<{ close: []; install: []; add: [] }>();

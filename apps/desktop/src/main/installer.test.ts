@@ -4,9 +4,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fingerprint, readZip, SIGNATURE_FILE, signedHash, signFiles, writeZip, type ZipFile } from "@tavora/pack";
 import { describe, expect, it } from "vitest";
-import { applyOwners, compareModuleVersions, forgetOwner, installZip, readOwnerRecords, recoverInstalls } from "./installer";
+import { applyOwners, forgetOwner, installZip, readOwnerRecords, recoverInstalls } from "./installer";
 import { FolderChecks } from "./module-folder-check";
 import type { InstalledModule } from "./registry";
+import { compareModuleVersions } from "../shared/module-version";
 
 /** The Tavora version the installer runs as in these tests. */
 const TAVORA = "0.17.0";

@@ -6,7 +6,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, open, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { isModuleId, isOwnerId, LOCAL_OWNER, manifestFiles, needsNewerTavora, OFFICIAL_OWNER, validateManifest, type ModuleManifest, compareModuleVersions } from "@tavora/module-schema";
+import { isModuleId, isOwnerId, LOCAL_OWNER, manifestFiles, needsNewerTavora, OFFICIAL_OWNER, validateManifest, type ModuleManifest } from "@tavora/module-schema";
 import { MANIFEST_FILE, readZip, SIGNATURE_FILE, signedHash, verifyFiles, ZIP_LIMITS, ZipError, type ZipFile } from "@tavora/pack";
 import { COPY_STATUS_FILE } from "./cloud-copy-swap";
 import { HeldError, isDamaged, look, lookJson, lookNames, lookStat, unlessHeld } from "./file-look";
@@ -20,6 +20,7 @@ import { OFFICIAL_UPDATES_FILE, readOfficialRecords, type OfficialRecords, type 
 import { OFFICIAL_PREFIX, type InstalledModule, type ModuleProblem } from "./registry";
 import type { SafetyCheck } from "./safety-lists";
 import { sha256Hex } from "./hash";
+import { compareModuleVersions } from "../shared/module-version";
 
 
 export class InstallError extends UserError {}

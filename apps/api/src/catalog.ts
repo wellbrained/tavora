@@ -3,12 +3,13 @@ import { closeSync, createReadStream, fstatSync, mkdirSync, openSync, readFileSy
 import { open, stat, type FileHandle } from "node:fs/promises";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { allowsPersonalWorkspaces, catalogListingProblem, compareModuleVersions, folderKey, isGameId, isReleaseVersion, LOCAL_OWNER, manifestFiles, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, validateChangelog, validateManifest, type LeaderboardBoard, type ModuleManifest } from "@tavora/module-schema";
+import { allowsPersonalWorkspaces, catalogListingProblem, folderKey, isGameId, isReleaseVersion, LOCAL_OWNER, manifestFiles, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, validateChangelog, validateManifest, type LeaderboardBoard, type ModuleManifest } from "@tavora/module-schema";
 import { MANIFEST_FILE, privateKeyFile, readZip, SIGNATURE_FILE, signedHash, verifyFiles, ZIP_LIMITS, zipDirectory, zipDirectoryAt, ZipError, zipFiles, type ZipFile } from "@tavora/pack";
 import { writeFileAtomicSync } from "./fs-atomic.ts";
 import { inspectPng, isWebp } from "./png.ts";
 import { FREE_AFTER_BYTES, freeMemory, MAX_MANIFEST_BYTES, MAX_SIGNATURE_BYTES, metadataProblem, UPLOAD_MEMORY_BYTES, uploadMemory } from "./upload-memory.ts";
 import { sha256Hex } from "./hash.ts";
+import { compareModuleVersions } from "../../desktop/src/shared/module-version.ts";
 
 /**
  * The module catalog (Milestone E, docs/catalog-threat-model.md): community modules, each with the

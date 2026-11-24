@@ -6,11 +6,12 @@
 // it can be picked, and the Tavora default is always there to go back to.
 import { readdir, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
-import { isModuleId, isReleaseVersion, needsNewerTavora, compareModuleVersions } from "@tavora/module-schema";
+import { isModuleId, isReleaseVersion, needsNewerTavora } from "@tavora/module-schema";
 import { DEFAULT_THEME_FONT, OPTIONAL_THEME_TOKENS, THEME_TOKENS, type TabOverflow, type TavoraStyle, type TavoraTheme, type ThemeFont, type ThemeToken, type ToastPosition } from "@tavora/sdk/protocol";
 import { THEME } from "./games";
 import { OFFICIAL_PREFIX, type Provenance } from "./registry";
 import { isRecord } from "../shared/is-record";
+import { compareModuleVersions } from "../shared/module-version";
 
 export const THEME_MANIFEST = "tavora.theme.json";
 

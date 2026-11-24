@@ -9,7 +9,8 @@ import { connectorsAtAdd, folderKey, withGamePanelType, type Connector, type Mod
 import type { ModuleNote } from "../shared/host-api";
 import type { CatalogClient, CatalogEntry, CatalogVersion } from "./catalog-client";
 import type { Permissions } from "./grants";
-import { compareModuleVersions } from "@tavora/module-schema";
+import { compareModuleVersions } from "../shared/module-version";
+
 import type { CheckedZip, Installed } from "./installer";
 
 /** How often the catalog is asked for updates while Tavora runs. */

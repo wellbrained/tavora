@@ -156,7 +156,7 @@ export class ModuleLeaderboards {
     const answer = await this.request("POST", `/boards/${board.id}`, body);
     if (answer?.status !== 200) refused(answer);
     const strings = (value: unknown) => (Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []);
-    const rejected = Array.isArray(answer.body.rejected) ? answer.body.rejected.filter(isObject) : [];
+    const rejected = Array.isArray(answer.body.rejected) ? answer.body.rejected.filter(isRecord) : [];
     return {
       accepted: strings(answer.body.accepted),
       rejected: rejected.flatMap((item) =>
@@ -179,7 +179,7 @@ export class ModuleLeaderboards {
     const answer = await this.request("GET", `/boards/${board.id}?${query}`);
     if (!answer) return { rows: [] };
     if (answer.status !== 200) refused(answer);
-    const rows = Array.isArray(answer.body.rows) ? answer.body.rows.filter(isObject) : [];
+    const rows = Array.isArray(answer.body.rows) ? answer.body.rows.filter(isRecord) : [];
     return { rows: rows.map((row): LeaderboardRow => ({
       ...(standing(row, board.kind) as LeaderboardStanding),
       name: typeof row.name === "string" ? row.name : this.options.pseudonym(typeof row.label === "string" ? row.label : ""),
@@ -202,7 +202,7 @@ export class ModuleLeaderboards {
     const answer = await this.request("GET", `/mine${query.toString() ? `?${query}` : ""}`);
     if (!answer) return none();
     if (answer.status !== 200) refused(answer);
-    const listed = Array.isArray(answer.body.boards) ? answer.body.boards.filter(isObject) : [];
+    const listed = Array.isArray(answer.body.boards) ? answer.body.boards.filter(isRecord) : [];
     return {
       boards: boards.map((board) => {
         const periods = emptyPeriods();

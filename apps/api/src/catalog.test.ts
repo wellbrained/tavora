@@ -7,12 +7,12 @@ import { signFiles, writeZip, type ZipFile } from "@tavora/pack";
 import { describe, expect, it } from "vitest";
 import { AccountStore } from "./account-store.ts";
 import { createApp } from "./app.ts";
-import { compareModuleVersions } from "@tavora/module-schema";
 import { CatalogError, CatalogStore } from "./catalog.ts";
 import { buildDataset, writeDatabase } from "./dataset.ts";
 import { createTestInbox } from "./mail.ts";
 import { encodePng } from "./png.ts";
 import { createRateLimiter } from "./rate-limit.ts";
+import { compareModuleVersions } from "../../desktop/src/shared/module-version.ts";
 
 const db = writeDatabase(":memory:", buildDataset({ builtIns: [{ id: "elden-ring", name: "Elden Ring" }], wikidata: [], steam: [] }));
 const publisher = generateKeyPairSync("ed25519").privateKey;

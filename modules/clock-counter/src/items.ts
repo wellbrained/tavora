@@ -6,7 +6,7 @@
 import { keepOverlayTextBox, readOverlayTextBox, type OverlayTextBoxSettings } from "@tavora/official-ui/overlay-text";
 import type { JsonValue } from "@tavora/sdk";
 import { compile, COUNT, defaultText, legacyText, segments, TIME, type Member, type Segment } from "./template";
-import { DEFAULT_FORMAT, formatSeconds, isFormat } from "./time";
+import { DEFAULT_FORMAT, isFormat } from "./time";
 import { isRecord } from "@tavora/official-ui/lib/utils";
 
 export const LIST_ID = "items";

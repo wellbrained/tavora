@@ -5,8 +5,6 @@
 
 import { isRecord } from "../shared/is-record";
 
-type Json = Record<string, unknown>;
-
 
 /** An email the provider reports for the signed-in account: one plain address, no spaces, brackets, quotes or control characters. */
 export function parseEmail(value: unknown): string | null {
