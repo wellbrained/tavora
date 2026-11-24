@@ -10,7 +10,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { writeFileAtomic } from "./fsutil";
-import { checkFeedFreshness, UPDATE_SIGNATURE2_FIELD, type FeedFreshness, type UpdateChannel } from "./update-signature";
+import { checkFeedFreshness, FEED_CLOCK_LEEWAY_MS, UPDATE_SIGNATURE2_FIELD, type FeedFreshness, type UpdateChannel } from "./update-signature";
 
 /** Off in this release: the outcome is only logged. The enforcing release turns it on (and nothing else). */
 export const ENFORCE_FEED_FRESHNESS = false;
@@ -40,15 +40,36 @@ export function feedInstaller(info: FeedInfo): { file: unknown; sha512: unknown 
   return { file: info.path, sha512: info.sha512 };
 }
 
-/** The saved newest issue time from the file's text, or null for anything else (missing, damaged, another shape). */
-export function readNewestIssuedAt(text: string | null): string | null {
-  if (!text) return null;
+const isTime = (value: unknown): value is string => typeof value === "string" && !Number.isNaN(Date.parse(value));
+
+/** The saved file as an object, or {} for anything unreadable (missing, damaged, another shape). */
+function readState(text: string | null): Record<string, unknown> {
+  if (!text) return {};
   try {
-    const value = (JSON.parse(text) as { newestIssuedAt?: unknown } | null)?.newestIssuedAt;
-    return typeof value === "string" && !Number.isNaN(Date.parse(value)) ? value : null;
+    const parsed: unknown = JSON.parse(text);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
   } catch {
-    return null;
+    return {};
   }
+}
+
+/** The saved time of each channel: `channels`, and the first form's one `newestIssuedAt` as the stable channel's. */
+function readChannels(state: Record<string, unknown>): Record<string, string> {
+  const channels: Record<string, string> = {};
+  if (isTime(state.newestIssuedAt)) channels.stable = state.newestIssuedAt;
+  const saved = state.channels;
+  if (saved && typeof saved === "object" && !Array.isArray(saved)) {
+    for (const [channel, time] of Object.entries(saved)) if (isTime(time)) channels[channel] = time;
+  }
+  return channels;
+}
+
+/**
+ * The newest issue time saved for `channel`, or null. The file keeps one per channel (`channels`); `newestIssuedAt`
+ * is the stable channel's, the form this file first had, which is still written and read.
+ */
+export function readNewestIssuedAt(text: string | null, channel: string): string | null {
+  return readChannels(readState(text))[channel] ?? null;
 }
 
 /** One line for the update log. */
@@ -74,11 +95,13 @@ export interface FeedFreshnessOptions {
 }
 
 /**
- * Checks feeds and keeps the newest issue time a verified statement had, so an older one served again shows. The
- * file is one small JSON object; a newer Tavora may add fields, which this one keeps.
+ * Checks feeds and keeps the newest issue time a verified statement had, per channel, so an older one served again
+ * shows. The file is one small JSON object; a newer Tavora may add fields, which this one keeps. A statement dated
+ * further ahead of this PC's clock than FEED_CLOCK_LEEWAY_MS (`clock-behind`) is never kept: one such genuine statement
+ * served once (a dry run on a PC whose clock ran a year ahead) would otherwise make every real feed after it a replay.
  */
 export class FeedFreshnessCheck {
-  private newest: string | null = null;
+  private channels: Record<string, string> = {};
   private saved: Record<string, unknown> = {};
   private writing: Promise<void> = Promise.resolve();
   private readonly file: string;
@@ -95,16 +118,13 @@ export class FeedFreshnessCheck {
 
   /** Reads the saved state; anything unreadable counts as nothing seen yet. */
   async load(): Promise<void> {
-    const text = await readFile(this.file, "utf8").catch(() => null);
-    this.newest = readNewestIssuedAt(text);
-    try {
-      const parsed: unknown = text ? JSON.parse(text) : null;
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) this.saved = parsed as Record<string, unknown>;
-    } catch {}
+    this.saved = readState(await readFile(this.file, "utf8").catch(() => null));
+    this.channels = readChannels(this.saved);
   }
 
+  /** The newest issue time kept for this app's channel. */
   get newestIssuedAt(): string | null {
-    return this.newest;
+    return this.channels[FEED_CHANNEL] ?? null;
   }
 
   /**
@@ -112,12 +132,18 @@ export class FeedFreshnessCheck {
    * hash for a download) and remembers a newer verified issue time.
    */
   check(info: FeedInfo, installer: { file: unknown; sha512: unknown } = feedInstaller(info)): FeedFreshness {
+    const now = this.now();
     const result = checkFeedFreshness(
       { version: info.version, ...installer, signature2: info[UPDATE_SIGNATURE2_FIELD] },
-      { pinned: this.pinned, channel: FEED_CHANNEL, platform: this.platform, newestIssuedAt: this.newest, now: this.now() },
+      { pinned: this.pinned, channel: FEED_CHANNEL, platform: this.platform, newestIssuedAt: this.newestIssuedAt, now },
     );
-    if (result.status !== "refused" && (this.newest === null || Date.parse(result.statement.issuedAt) > Date.parse(this.newest))) {
-      this.newest = result.statement.issuedAt;
+    if (result.status === "refused" || result.status === "clock-behind") return result;
+    const { channel, issuedAt } = result.statement;
+    const newest = this.channels[channel];
+    // Never later than this PC's clock allows (clock-behind is that already; the check here says it outright).
+    if (Date.parse(issuedAt) > now.getTime() + FEED_CLOCK_LEEWAY_MS) return result;
+    if (newest === undefined || Date.parse(issuedAt) > Date.parse(newest)) {
+      this.channels[channel] = issuedAt;
       this.save();
     }
     return result;
@@ -129,7 +155,10 @@ export class FeedFreshnessCheck {
   }
 
   private save(): void {
-    const body = `${JSON.stringify({ ...this.saved, newestIssuedAt: this.newest }, null, 2)}\n`;
+    // `newestIssuedAt` stays the stable channel's, the first form of this file; `channels` holds every channel's.
+    const stable = this.channels.stable;
+    this.saved = { ...this.saved, channels: { ...this.channels }, ...(stable ? { newestIssuedAt: stable } : {}) };
+    const body = `${JSON.stringify(this.saved, null, 2)}\n`;
     this.writing = this.writing.then(() => writeFileAtomic(this.file, body)).catch(() => undefined);
   }
 }

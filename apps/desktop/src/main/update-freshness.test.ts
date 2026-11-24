@@ -96,9 +96,16 @@ describe("the helpers", () => {
     expect(feedInstaller({ path: "a.exe", sha512: "b" })).toEqual({ file: "a.exe", sha512: "b" });
   });
 
-  it("reads the saved time, and nothing from a damaged file", () => {
-    expect(readNewestIssuedAt('{"newestIssuedAt":"2026-11-24T10:00:00Z"}')).toBe("2026-11-24T10:00:00Z");
-    for (const text of [null, "", "{", "[]", "null", '{"newestIssuedAt":3}', '{"newestIssuedAt":"soon"}']) expect(readNewestIssuedAt(text)).toBeNull();
+  it("reads the saved time per channel, the first form (one time, the stable channel's) too, and nothing from a damaged file", () => {
+    expect(readNewestIssuedAt('{"channels":{"stable":"2026-11-25T10:00:00Z"},"newestIssuedAt":"2026-11-24T10:00:00Z"}', "stable")).toBe("2026-11-25T10:00:00Z");
+    expect(readNewestIssuedAt('{"channels":{"preview":"2026-11-26T10:00:00Z"}}', "preview")).toBe("2026-11-26T10:00:00Z");
+    expect(readNewestIssuedAt('{"channels":{"preview":"2026-11-26T10:00:00Z"}}', "stable")).toBeNull();
+    // The first form: one time, for the only channel there was.
+    expect(readNewestIssuedAt('{"newestIssuedAt":"2026-11-24T10:00:00Z"}', "stable")).toBe("2026-11-24T10:00:00Z");
+    expect(readNewestIssuedAt('{"newestIssuedAt":"2026-11-24T10:00:00Z"}', "preview")).toBeNull();
+    for (const text of [null, "", "{", "[]", "null", '{"newestIssuedAt":3}', '{"newestIssuedAt":"soon"}', '{"channels":{"stable":"soon"}}', '{"channels":[]}']) {
+      expect(readNewestIssuedAt(text, "stable")).toBeNull();
+    }
   });
 
   it("says each outcome in one log line, and which ones can't confirm Tavora is up to date", () => {
@@ -121,7 +128,7 @@ describe("FeedFreshnessCheck", () => {
     await first.load();
     expect(first.check(feedInfo(sign2(statement({ issuedAt: feedTime(at(DAY)), expiresAt: feedTime(at(31 * DAY)) })))).status).toBe("fresh");
     await first.flushed();
-    expect(JSON.parse(await readFile(path.join(userData, FEED_STATE_FILE), "utf8"))).toEqual({ newestIssuedAt: feedTime(at(DAY)) });
+    expect(JSON.parse(await readFile(path.join(userData, FEED_STATE_FILE), "utf8"))).toEqual({ channels: { stable: feedTime(at(DAY)) }, newestIssuedAt: feedTime(at(DAY)) });
 
     const next = new FeedFreshnessCheck({ userData, pinned, platform: "win-x64", now: () => at(2 * DAY) });
     await next.load();
@@ -153,7 +160,37 @@ describe("FeedFreshnessCheck", () => {
     await kept.load();
     kept.check(feedInfo(sign2()));
     await kept.flushed();
-    expect(JSON.parse(await readFile(path.join(newer, FEED_STATE_FILE), "utf8"))).toEqual({ newestIssuedAt: feedTime(at(0)), later: { kept: true } });
+    expect(JSON.parse(await readFile(path.join(newer, FEED_STATE_FILE), "utf8"))).toEqual({ channels: { stable: feedTime(at(0)) }, newestIssuedAt: feedTime(at(0)), later: { kept: true } });
+  });
+
+  it("goes on from the first saved form, and keeps another channel's time", async () => {
+    const userData = await folder();
+    await writeFile(path.join(userData, FEED_STATE_FILE), JSON.stringify({ newestIssuedAt: feedTime(at(DAY)), channels: { preview: feedTime(at(5 * DAY)) } }));
+    const feed = new FeedFreshnessCheck({ userData, pinned, platform: "win-x64", now: () => at(2 * DAY) });
+    await feed.load();
+    expect(feed.newestIssuedAt).toBe(feedTime(at(DAY)));
+    expect(feed.check(feedInfo(sign2())).status).toBe("refused");
+    feed.check(feedInfo(sign2(statement({ issuedAt: feedTime(at(2 * DAY)), expiresAt: feedTime(at(32 * DAY)) }))));
+    await feed.flushed();
+    expect(JSON.parse(await readFile(path.join(userData, FEED_STATE_FILE), "utf8"))).toEqual({ channels: { preview: feedTime(at(5 * DAY)), stable: feedTime(at(2 * DAY)) }, newestIssuedAt: feedTime(at(2 * DAY)) });
+  });
+
+  it("never saves a statement dated ahead of this PC's clock (beyond the leeway), so one served from the future can't block real feeds", async () => {
+    const userData = await folder();
+    const feed = new FeedFreshnessCheck({ userData, pinned, platform: "win-x64", now: () => at(0) });
+    await feed.load();
+    const ahead = statement({ issuedAt: feedTime(at(365 * DAY)), expiresAt: feedTime(at(395 * DAY)) });
+    expect(feed.check(feedInfo(sign2(ahead))).status).toBe("clock-behind");
+    expect(feed.newestIssuedAt).toBeNull();
+    await feed.flushed();
+    await expect(readFile(path.join(userData, FEED_STATE_FILE), "utf8")).rejects.toThrow();
+    // The real feed afterwards is fresh, not a "replay".
+    expect(feed.check(feedInfo(sign2())).status).toBe("fresh");
+    expect(feed.newestIssuedAt).toBe(feedTime(at(0)));
+    // Within the leeway it counts (and is saved): a clock a few hours behind the server's is normal.
+    const soon = statement({ issuedAt: feedTime(at(DAY)), expiresAt: feedTime(at(31 * DAY)) });
+    expect(feed.check(feedInfo(sign2(soon))).status).toBe("fresh");
+    expect(feed.newestIssuedAt).toBe(feedTime(at(DAY)));
   });
 
   it("checks a download against the file it saved, through checkDownloadedUpdate", async () => {
