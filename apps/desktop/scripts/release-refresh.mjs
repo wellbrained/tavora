@@ -16,9 +16,9 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { hello, refresh } from "../../../scripts/deploy-client.mjs";
+import { hello, localTar, refresh } from "../../../scripts/deploy-client.mjs";
 import { checkRefresh, clockProblem, compareVersions, feedFreshness, issuedAfterLiveProblem, refreshKeyProblem } from "./release-guards.mjs";
-import { holdLock } from "./release-lock.mjs";
+import { holdLock, stopOnSignals } from "./release-lock.mjs";
 import { describeSigned, fetchLiveFeed, freshStatement, loadUpdateSigningKey, readLatestYml, refreshLatestYml, releasePins, sourceAtTag } from "./update-feed.mjs";
 import { PINNED_UPDATE_KEYS } from "../src/main/update-keys.ts";
 import { rawUpdatePublicKey } from "../src/main/update-signature.ts";
@@ -40,8 +40,8 @@ function git(...args) {
   return result.stdout.trim();
 }
 const step = (text) => console.log(`\n== ${text}`);
-// Ctrl+C exits, so the exit handler frees RELEASE-RUNNING (release-lock.mjs holdLock).
-process.on("SIGINT", () => process.exit(130));
+// Ctrl+C, a closed window or a kill exits, so the exit handler frees RELEASE-RUNNING (release-lock.mjs holdLock).
+stopOnSignals(() => {});
 
 if (process.argv.includes("--status")) {
   let text = null;
@@ -100,6 +100,7 @@ if (problems.length) fail(`\nNot refreshing:\n  - ${problems.join("\n  - ")}\nNo
 if (!dryRun) {
   const lock = holdLock(repo, `${version} refresh`, git("worktree", "list", "--porcelain"));
   if (lock.problem) fail(`${lock.problem}\nNothing was signed or published.`);
+  if (lock.replaced) console.log(`Took over the release lock of a run that is gone (${lock.replaced}).`);
   console.log(`Release lock: ${lock.file}`);
 }
 
@@ -151,19 +152,20 @@ if (dryRun) {
 step(`Publishing the refreshed feed of ${version}`);
 const dir = mkdtempSync(path.join(tmpdir(), "tavora-refresh-"));
 const bundle = path.join(dir, "refresh.tar");
+let failed = null;
 try {
   writeFileSync(path.join(dir, "latest.yml"), refreshed.text);
-  // Windows' own tar (from Git Bash, `tar` is GNU tar, which reads C:\... as a host).
-  const tar = path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe");
-  const packed = spawnSync(tar, ["-cf", bundle, "-C", dir, "latest.yml"], { stdio: "inherit" });
-  // Thrown, not fail(): the finally below must delete the signed latest.yml whatever happens.
+  const tar = localTar();
+  const packed = spawnSync(tar.command, [...tar.flags, "-cf", bundle, "-C", dir, "latest.yml"], { stdio: "inherit", env: tar.env });
   if (packed.status !== 0) throw new Error("Can't pack latest.yml. Nothing was published.");
   refresh(version, bundle);
 } catch (error) {
-  fail(`${error.message}\nThe live feed stays as it was.`);
+  failed = error;
 } finally {
+  // The signed latest.yml goes whatever happens: fail() exits at once and would skip a finally around it.
   rmSync(dir, { recursive: true, force: true });
 }
+if (failed) fail(`${failed.message}\nThe live feed stays as it was.`);
 
 const after = await fetchLiveFeed(feed).catch(() => null);
 const served = after?.text ? readLatestYml(after.text).signature2 : null;

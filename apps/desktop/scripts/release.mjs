@@ -29,9 +29,9 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createInterface } from "node:readline/promises";
 import { AFTER_RELEASE, CHECKLIST, asksHandChecks, checkCi, checkDownload, checkInstalled, checkRelease, clockProblem, failedJobsHint, findDispatchedRun, issuedAfterLiveProblem, lastReleased, readCiHashes, releaseFiles, releaseNotes, releaseRunTitle, releaseTitle } from "./release-guards.mjs";
-import { hello, publish } from "../../../scripts/deploy-client.mjs";
+import { hello, localTar, publish } from "../../../scripts/deploy-client.mjs";
 import { installedVersion } from "./installed-version.mjs";
-import { holdLock } from "./release-lock.mjs";
+import { holdLock, stopOnSignals } from "./release-lock.mjs";
 import { checkPinChange, describeSigned, feedProblem, fetchLiveFeed, freshStatement, loadUpdateSigningKey, readLatestYml, releasePins, signLatestYml, sourceAtTag } from "./update-feed.mjs";
 import { PINNED_UPDATE_KEYS } from "../src/main/update-keys.ts";
 import { rawUpdatePublicKey, readPinnedUpdateKeys } from "../src/main/update-signature.ts";
@@ -71,11 +71,11 @@ if (!readPinnedUpdateKeys(PINNED_UPDATE_KEYS).ok) {
 }
 if (signing.problem) console.warn(`Dry run without signing: ${signing.problem}`);
 else if (signing.which === "backup") console.warn("Signing with the BACKUP update key. Make a new backup key afterwards (deploy/README.md, \"The update key\").");
-// Ctrl+C anywhere: stop this run's Release build on GitHub (once there is one), then exit, which removes the lock.
+// Ctrl+C, a closed window or a kill anywhere: stop this run's Release build on GitHub (once there is one), then exit,
+// which removes the lock.
 let activeRun = null;
-process.on("SIGINT", () => {
+stopOnSignals(() => {
   if (activeRun) cancelRun(activeRun);
-  process.exit(130);
 });
 
 // While a real release runs, nothing may merge into main (CLAUDE.md > Versioning): RELEASE-RUNNING says so, and goes
@@ -88,6 +88,7 @@ if (!dryRun) {
     console.error(`${lock.problem}\nNothing was built or published.`);
     process.exit(1);
   }
+  if (lock.replaced) console.log(`Took over the release lock of a run that is gone (${lock.replaced}).`);
   console.log(`Release lock: ${lock.file}`);
 }
 
@@ -345,11 +346,11 @@ if (!asksHandChecks(version)) {
 }
 
 step(`Publishing ${version} to ${feed}`);
-// One tar with the three files; Windows' own tar (from Git Bash, `tar` is GNU tar, which reads C:\... as a host).
+// One tar with the three files (deploy-client.mjs localTar: Windows' own tar there).
 const bundle = path.join(tmpdir(), `tavora-updates-${version}.tar`);
-const tar = path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe");
+const tar = localTar();
 try {
-  run(tar, ["-cf", bundle, "-C", releaseDir, ...feedFiles]);
+  run(tar.command, [...tar.flags, "-cf", bundle, "-C", releaseDir, ...feedFiles], { env: tar.env });
   publish("updates", version, bundle);
 } finally {
   rmSync(bundle, { force: true });
