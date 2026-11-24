@@ -8,7 +8,7 @@ import { closeSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, openSync, 
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { JOBS } from "../scripts/deploy-client.mjs";
+import { JOBS, localTar, sshCommand } from "../scripts/deploy-client.mjs";
 
 const repo = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const PATHS = ["deploy/server", "apps/api/deploy", "apps/desktop/src/main/update-keys.ts"];
@@ -45,8 +45,8 @@ try {
   // .gitattributes doesn't pin, so the server's checks (update-keys.ts) and the hashes would not match.
   const archive = path.join(work, "head.tar");
   run("git", ["-c", "core.autocrlf=false", "-c", "core.eol=lf", "archive", "--format=tar", "-o", archive, "HEAD", "--", ...PATHS]);
-  const tar = path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe");
-  run(tar, ["-xf", archive, "-C", tree]);
+  const tar = localTar();
+  run(tar.command, [...tar.flags, "-xf", archive, "-C", tree], { env: tar.env });
   for (const { user, keyVar } of Object.values(JOBS)) {
     const key = (process.env[keyVar] ?? "").trim();
     if (!key) fail(`Set ${keyVar} to the ${user} key first (deploy/README.md).`);
@@ -55,7 +55,7 @@ try {
   }
   writeFileSync(path.join(tree, "pc-address"), `${pc}\n`);
   const bundle = path.join(work, "setup.tar");
-  run(tar, ["-cf", bundle, "-C", tree, "."]);
+  run(tar.command, [...tar.flags, "-cf", bundle, "-C", tree, "."], { env: tar.env });
 
   const commit = run("git", ["rev-parse", "--short=12", "HEAD"]).trim();
   console.log(`Sending the server setup from ${commit} to root@${host} (deploy keys only from ${pc}).`);
@@ -63,7 +63,7 @@ try {
   const input = openSync(bundle, "r");
   try {
     const result = spawnSync(
-      "ssh.exe",
+      sshCommand(),
       ["-i", adminKey, "-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=15", "-T", `root@${host}`, remote],
       { stdio: [input, "inherit", "inherit"] },
     );

@@ -75,7 +75,9 @@ node scripts/deploy-client.mjs hello
 
 It sends only committed files. It needs the root admin key, `TAVORA_DEPLOY_HOST` and the four key settings
 (it sends their public halves). Another PC (the Mac) is added with `--pc-address <its tailnet address>`;
-that replaces the address for all four keys.
+that replaces the address for all four keys. The Node scripts (`send-server-setup.mjs`, `deploy-client.mjs`,
+`pnpm release:refresh`) run on Windows, macOS and Linux: Windows' own `ssh.exe` and `tar.exe` there, the system's
+`ssh` and `tar` elsewhere (on macOS without extended attributes). `pnpm release` itself needs Windows.
 
 ## First-time setup (maintainer, once)
 

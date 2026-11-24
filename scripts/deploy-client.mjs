@@ -95,6 +95,26 @@ export function committedHash(file) {
   return createHash("sha256").update(result.stdout).digest("hex");
 }
 
+/**
+ * The ssh to run: on Windows its own OpenSSH (ssh.exe, whose agent holds the keys; Git Bash's ssh has another agent),
+ * elsewhere the system's ssh.
+ */
+export function sshCommand(platform = process.platform) {
+  return platform === "win32" ? "ssh.exe" : "ssh";
+}
+
+/**
+ * The tar that packs an upload: on Windows its own tar.exe (from Git Bash, `tar` is GNU tar, which reads C:\\... as a
+ * host), elsewhere the system's. macOS's tar would pack each file's extended attributes (pax headers, or ._ files),
+ * which the server has no use for, so `flags` turn them off there (put them before the other arguments). Returns
+ * { command, flags, env } for spawnSync.
+ */
+export function localTar(platform = process.platform, env = process.env) {
+  if (platform === "win32") return { command: path.join(env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe"), flags: [], env };
+  if (platform === "darwin") return { command: "tar", flags: ["--no-xattrs", "--no-mac-metadata"], env: { ...env, COPYFILE_DISABLE: "1" } };
+  return { command: "tar", flags: [], env };
+}
+
 /** sshd's port for the deploy users only: port 22 on the tailnet may be Tailscale SSH, which would skip the restrictions. */
 export const DEPLOY_PORT = 2222;
 
@@ -106,7 +126,7 @@ function sshArgs({ key, user, host }, command) {
 export function hello(job, env = process.env) {
   const where = target(env, job);
   if (where.problems.length) throw new Error(where.problems.join("\n"));
-  const result = spawnSync("ssh.exe", sshArgs(where, "hello"), { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  const result = spawnSync(sshCommand(), sshArgs(where, "hello"), { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   if (result.error) throw result.error;
   if (result.status !== 0) {
     const detail = String(result.stderr).trim();
@@ -142,7 +162,7 @@ function send(verb, job, id, file, env) {
   const sha = createHash("sha256").update(readFileSync(file)).digest("hex");
   const input = openSync(file, "r");
   try {
-    const result = spawnSync("ssh.exe", sshArgs(where, `${verb} ${id} ${sha}`), { stdio: [input, "inherit", "inherit"] });
+    const result = spawnSync(sshCommand(), sshArgs(where, `${verb} ${id} ${sha}`), { stdio: [input, "inherit", "inherit"] });
     if (result.error) throw result.error;
     if (result.status !== 0) throw new Error(`The server did not ${verb} ${id} (exit ${result.status}); see its message above.`);
   } finally {

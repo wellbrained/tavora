@@ -1,5 +1,9 @@
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { JOBS, PROTOCOL, parseHello, staleSetup, target } from "./deploy-client.mjs";
+import { JOBS, PROTOCOL, localTar, parseHello, sshCommand, staleSetup, target } from "./deploy-client.mjs";
 
 const sha = (c: string) => c.repeat(64);
 
@@ -82,5 +86,28 @@ describe("staleSetup", () => {
     // New pins in the repo: the server must take them first.
     expect(staleSetup("updates", installed, (file) => (file === keys ? sha("1") : same(file)))).toEqual([keys]);
     expect(staleSetup("docs", installed, (file) => (file === keys ? sha("1") : same(file)))).toEqual([]);
+  });
+});
+
+describe("the local ssh and tar", () => {
+  it("uses Windows' own on Windows and the system's elsewhere (the Mac can deploy too)", () => {
+    expect(sshCommand("win32")).toBe("ssh.exe");
+    expect(sshCommand("darwin")).toBe("ssh");
+    expect(sshCommand("linux")).toBe("ssh");
+    expect(localTar("win32", { SystemRoot: "C:\\Windows" }).command).toBe(path.join("C:\\Windows", "System32", "tar.exe"));
+    expect(localTar("darwin", { PATH: "/usr/bin" })).toEqual({ command: "tar", flags: ["--no-xattrs", "--no-mac-metadata"], env: { PATH: "/usr/bin", COPYFILE_DISABLE: "1" } });
+    expect(localTar("linux", { PATH: "/usr/bin" })).toEqual({ command: "tar", flags: [], env: { PATH: "/usr/bin" } });
+  });
+
+  // The server refuses any name starting with a dot, and macOS's tar packs extended attributes (as ._ files or pax headers).
+  it.runIf(process.platform === "darwin")("packs no extended attributes on macOS", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "deploy-tar-"));
+    writeFileSync(path.join(dir, "latest.yml"), "version: 1.0.0\n");
+    expect(spawnSync("xattr", ["-w", "com.tavora.test", "yes", path.join(dir, "latest.yml")]).status).toBe(0);
+    const tar = localTar();
+    const bundle = path.join(dir, "out.tar");
+    expect(spawnSync(tar.command, [...tar.flags, "-cf", bundle, "-C", dir, "latest.yml"], { env: tar.env }).status).toBe(0);
+    expect(spawnSync(tar.command, ["-tf", bundle], { encoding: "utf8" }).stdout.trim().split("\n")).toEqual(["latest.yml"]);
+    expect(readFileSync(bundle, "latin1")).not.toMatch(/xattr|com\.tavora/);
   });
 });
