@@ -3,7 +3,7 @@
     "version": "0.1.37",
     "date": "2026-11-24",
     "notes": [
-      "Tells you when a file couldn't be added, renamed or removed, instead of failing quietly.",
+      "Tells you, naming the file, when it couldn't be added, renamed, removed or kept as your own copy, or a version couldn't be skipped, instead of failing quietly.",
       "A file whose removal couldn't be saved stays and still opens.",
       "Your tabs keep what a newer version saved."
     ]

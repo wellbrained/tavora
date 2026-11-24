@@ -4,7 +4,7 @@
     "date": "2026-11-24",
     "notes": [
       "Ctrl+Z brings back a clock or counter you just deleted.",
-      "A deleted item's hotkeys go once the delete is final, also when the panel closes first."
+      "A deleted clock or counter's hotkeys go once the delete is final, or the next time the panel opens if it was closed before that."
     ]
   },
   {

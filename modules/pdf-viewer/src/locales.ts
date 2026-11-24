@@ -43,6 +43,10 @@ export const en = {
   "add.tooBig": "“{name}” is bigger than {max}.",
   "add.full": "There's no room left for “{name}”. Remove a file first.",
   "add.error": "Couldn't add “{name}”: {error}",
+  "save.renameFailed": "Couldn't rename “{name}”. Try again.",
+  "save.removeFailed": "Couldn't remove “{name}”. Try again.",
+  "save.keepFailed": "Couldn't keep “{name}” as your own copy. Try again.",
+  "save.skipFailed": "Couldn't skip this version of “{name}”. Try again.",
 
   "original.changed": "The original file changed.",
   "original.reload": "Reload",
@@ -141,6 +145,10 @@ export const de: Record<keyof typeof en, string> = {
   "add.tooBig": "„{name}“ ist größer als {max}.",
   "add.full": "Für „{name}“ ist kein Platz mehr. Entferne zuerst eine Datei.",
   "add.error": "„{name}“ ließ sich nicht hinzufügen: {error}",
+  "save.renameFailed": "„{name}“ ließ sich nicht umbenennen. Versuch es noch mal.",
+  "save.removeFailed": "„{name}“ ließ sich nicht entfernen. Versuch es noch mal.",
+  "save.keepFailed": "„{name}“ ließ sich nicht als eigene Kopie behalten. Versuch es noch mal.",
+  "save.skipFailed": "Diese Version von „{name}“ ließ sich nicht überspringen. Versuch es noch mal.",
 
   "original.changed": "Die Originaldatei hat sich geändert.",
   "original.reload": "Neu laden",

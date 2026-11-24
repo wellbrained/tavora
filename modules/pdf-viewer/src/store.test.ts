@@ -83,6 +83,19 @@ describe("files linked to their original", () => {
     return { ...memory, original, forgotten, picked: { id: REF, name: "Rules.pdf", size: original.bytes.byteLength } };
   }
 
+  it("rejects a skip that can't be saved, so the panel asks about the version again and says why", async () => {
+    const { sdk, host, original, picked } = linkedHost();
+    const store = await open(sdk);
+    const entry = await store.addLinked(picked);
+    original.modifiedAt = 2000;
+    host.answer("documents.put", () => {
+      throw new TavoraError({ code: "QUOTA_EXCEEDED", message: "disk full" });
+    });
+    await expect(store.skip(entry.id)).rejects.toMatchObject({ kind: "store" });
+    host.unanswer("documents.put");
+    expect(store.find(entry.id)?.link?.skipped).toBeUndefined();
+  });
+
   it("keeps a copy with the version of the original it came from", async () => {
     const { sdk, picked } = linkedHost();
     const store = await open(sdk);

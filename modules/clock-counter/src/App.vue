@@ -19,6 +19,7 @@ import ItemEditor from "./ItemEditor.vue";
 import SettingsSkeleton from "./SettingsSkeleton.vue";
 import { clocksRunning, count, find, groupOf, insert, lap, linkedGroups, MAX, move, moveTo, newItem, parseList, remove, resetClock, resetCounter, startPause, visualOrder, type Counter, type Item, type ItemKind, type ItemList } from "./items";
 import { offerDelete } from "./delete-offer";
+import { sweepHotkeys } from "./hotkey-sweep";
 import { buildLiveState } from "./live";
 import { de, en } from "./locales";
 import { PANEL, UNDO_MS } from "./panel";
@@ -302,6 +303,7 @@ function removeItem(item: Item): void {
   const offer = offerDelete(item, index, {
     title: t("app.deleted", { label: item.label || t(`kind.${item.kind}`) }),
     restore: (kept, at) => {
+      offers.delete(offer);
       // Checked on the list as it is now; the change itself may run again on a newer one.
       if (find(list.value, kept.id) || list.value.items.length >= MAX.items) return false;
       // Back with the same id, so its OBS link and hotkeys work again.
@@ -522,6 +524,8 @@ onMounted(async () => {
     );
     sdk.value = connected;
     store.value = items;
+    // Hotkeys of items deleted while a panel was closing (it can't remove them then) or before a crash go now.
+    await sweepHotkeys(connected.hotkeys, items.list.value);
     await refreshHotkeys();
     await refreshOverGame();
     // What is over the game after a restart shows nothing until its state is published again.
@@ -535,7 +539,8 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   unmounted = true;
-  // The panel goes: its offers end (the deletes stay) and the deleted items' hotkeys go, while it is still connected.
+  // The panel goes: its offers end (the deletes stay) and the deleted items' hotkeys are let go where Tavora still takes
+  // the call; when it is closing, it doesn't, and the next start sweeps them (sweepHotkeys).
   for (const offer of [...offers]) offer.close();
   removeEventListener("keydown", onKey);
   cleanup.forEach((fn) => fn());

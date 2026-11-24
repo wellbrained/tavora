@@ -249,15 +249,27 @@ async function reloadActive() {
 async function skipActive() {
   const file = active.value;
   if (!file) return;
+  const before = statuses.value.get(file.id);
   statuses.value.set(file.id, "skipped");
-  await store.value?.skip(file.id).catch(() => undefined);
+  try {
+    await store.value?.skip(file.id);
+  } catch {
+    // Not saved: the question about this version comes back, and the user hears why.
+    if (before === undefined) statuses.value.delete(file.id);
+    else statuses.value.set(file.id, before);
+    notice(t("save.skipFailed", { name: file.name }));
+    void checkOriginal(file.id);
+  }
 }
 
 async function keepActive() {
   const file = active.value;
   if (!file) return;
   statuses.value.delete(file.id);
-  await store.value?.unlink(file.id).catch((reason) => notice(errorMessage(reason)));
+  await store.value?.unlink(file.id).catch(() => {
+    notice(t("save.keepFailed", { name: file.name }));
+    void checkOriginal(file.id);
+  });
 }
 
 async function removeActive() {
@@ -267,8 +279,8 @@ async function removeActive() {
     await store.value.remove(file.id);
     tabState.value = closeTab(tabState.value, file.id);
     statuses.value.delete(file.id);
-  } catch (reason) {
-    notice(errorMessage(reason));
+  } catch {
+    notice(t("save.removeFailed", { name: file.name }));
   }
 }
 
@@ -324,7 +336,8 @@ function askRename(id: string) {
 
 async function rename(id: string, name: string) {
   renaming.value = null;
-  await store.value?.rename(id, name).catch((reason) => notice(errorMessage(reason)));
+  const before = byId.value.get(id)?.name ?? name;
+  await store.value?.rename(id, name).catch(() => notice(t("save.renameFailed", { name: before })));
 }
 
 function askRemove(id: string) {
@@ -342,9 +355,9 @@ async function remove() {
     await store.value.remove(file.id);
     tabState.value = closeTab(tabState.value, file.id);
     removing.value = null;
-  } catch (reason) {
+  } catch {
     removing.value = null;
-    notice(errorMessage(reason));
+    notice(t("save.removeFailed", { name: file.name }));
   } finally {
     busy.value = false;
   }
