@@ -46,8 +46,9 @@ const status = computed(() => (playing.value ? t("rail.playing", { name: playing
       @click="openProfile()"
     >
       <template v-if="expanded">
-        <!-- A thin light edge and a soft shadow keep any picture apart from the glow behind it. -->
-        <span class="ring-foreground/25 relative flex-none rounded-[3px] shadow-md ring-1 shadow-black/30">
+        <!-- A thin light edge and a soft shadow keep any picture apart from the glow behind it. `flex`: as a line of text it would leave room
+             for letters below the picture, and the edge would sit a few px under it. -->
+        <span class="ring-foreground/25 relative flex flex-none rounded-[3px] shadow-md ring-1 shadow-black/30">
           <ProfileAvatar class="bg-card" :name="profile.name" :initials="profile.initials" :picture-url="profile.pictureUrl" :size="38" square :radius="3" />
         </span>
         <span class="relative flex min-w-0 flex-col">
