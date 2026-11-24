@@ -1747,7 +1747,7 @@ export class CopySync {
   }
 
   /**
-   * `goesOn`, and for an answer that ends in a restart: a turn-off asked meanwhile that failed (`offFailures` moved since
+   * `goesOn`, and for an answer that ends in a restart: a turn-off the user asked meanwhile that failed (`offFailures` moved since
    * `failures`) leaves the copy on, and the restart would only hide its message. So the answer stops here, standing on disk,
    * and says so; the next press restarts.
    */
@@ -1804,13 +1804,22 @@ export class CopySync {
         const putIn = new Set(plan.earlierIn ?? []);
         for (const list of lists) for (const name of await placesPutIn(this.stagedData, roots, plan.keepIn, list, plan.empty)) putIn.add(name);
         const next: SwapStatus = { phase: "swapping", plan: { ...plan, empty: await emptyPlacesSince(incoming, roots, plan.keepIn, copy, plan.empty), earlierIn: [...putIn] } };
+        // Turned off, or asked to be and not landed yet: nothing of this copy is written then (not its list, not the plan),
+        // and the status says undoing now.
+        const dropIncoming = () => rm(incoming, { recursive: true, force: true });
+        if (!(await this.goesOn(turn))) return dropIncoming().then(() => null);
         await mkdir(plan.keepIn, { recursive: true });
-        await writeCopyFile(path.join(plan.keepIn, INCOMING_LISTS), "incoming", { lists: [...lists, staged] });
-        // Turned off, or asked to be and not landed yet: the plan is not written then, and the status says undoing now. A
-        // turn-off asked after this check goes through writeStatusFor below.
-        if (!(await this.goesOn(turn))) return null;
+        const listsFile = path.join(plan.keepIn, INCOMING_LISTS);
+        await writeCopyFile(listsFile, "incoming", { lists: [...lists, staged] });
+        // Asked meanwhile: this copy's list goes again (the earlier lists stay as they were), so no file counts as put in
+        // by a copy that never went in.
+        if (!(await this.goesOn(turn))) {
+          if (lists.length > 0) await writeCopyFile(listsFile, "incoming", { lists });
+          else await removeCopyFile(listsFile, "incoming");
+          return dropIncoming().then(() => null);
+        }
         await writeFlushed(this.planFile, next.plan);
-        if (!(await this.writeStatusFor(turn, next))) return null;
+        if (!(await this.writeStatusFor(turn, next))) return dropIncoming().then(() => null);
         await rm(this.stagedData, { recursive: true, force: true });
         await renameHeld(incoming, this.stagedData);
         await removeCopyFile(this.oldListFile, "list");
@@ -1831,7 +1840,11 @@ export class CopySync {
 
   /** Off on this PC: what it knew of the copy is forgotten; the copy stays for the other PCs, and the account's key stays here. */
   async turnOff(): Promise<void> {
-    await this.forget(null);
+    await this.forget(null).catch((error: unknown) => {
+      // Only the user's own turn-off counts for an answer that waits for it (not a sign-out or a deleted copy).
+      this.offFailures++;
+      throw error;
+    });
   }
 
   /** Deletes the copy on the service and turns it off here. */
@@ -1839,7 +1852,10 @@ export class CopySync {
     await this.exclusive("checking", () => this.cloud.remove()).catch((error: unknown) => {
       throw CopySync.userError(this.noteProblem(error));
     });
-    await this.forget(null);
+    await this.forget(null).catch((error: unknown) => {
+      this.offFailures++;
+      throw error;
+    });
     this.copy = null;
     this.changed();
   }
@@ -1915,9 +1931,6 @@ export class CopySync {
     this.forgetting.add(noted);
     try {
       await noted;
-    } catch (error) {
-      this.offFailures++;
-      throw error;
     } finally {
       this.forgetting.delete(noted);
     }

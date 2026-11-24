@@ -563,6 +563,8 @@ describe("a stopped swap whose list of the incoming copy is gone", () => {
     await rm(path.join(b.userData, "cloud-copy-staging", "copy-list.json"));
     const planFile = path.join(b.userData, "cloud-copy-staging", "swap-plan.json");
     const before = await readFile(planFile, "utf8");
+    const listsFile = path.join((JSON.parse(before) as { keepIn: string }).keepIn, "incoming-lists.json");
+    const listsBefore = await readFile(listsFile, "utf8").catch(() => null);
     const one = await appStart(s.cloud, b);
     let off: Promise<void> | null = null;
     meanwhile = async (to) => {
@@ -575,6 +577,9 @@ describe("a stopped swap whose list of the incoming copy is gone", () => {
     await off;
     expect(one.events.restarts).toBe(0);
     expect(await readFile(planFile, "utf8")).toBe(before);
+    // The list of the copy that never went in is not kept, and nothing of it is left in staging.
+    expect(await readFile(listsFile, "utf8").catch(() => null)).toBe(listsBefore);
+    expect(await readdir(path.join(b.userData, "cloud-copy-staging"))).not.toContain("incoming");
     expect(JSON.parse(await readFile(path.join(b.userData, "cloud-copy-status.json"), "utf8"))).toMatchObject({ phase: "undoing" });
     const next = await appStart(s.cloud, b);
     expect(await bHasAll(b)).toEqual(B);

@@ -100,7 +100,7 @@ async function setup() {
 }
 
 /** Use the cloud copy, with the copy turned off while its answer is being written (and that turn-off made to fail, or not). */
-async function turnedOffDuringTheAnswer(s: Awaited<ReturnType<typeof setup>>, turnOffFails: boolean) {
+async function turnedOffDuringTheAnswer(s: Awaited<ReturnType<typeof setup>>, turnOffFails: boolean, by: "user" | "background" = "user") {
   let off: Promise<unknown> | null = null;
   meanwhile = async (to) => {
     if (off || !to.endsWith("cloud-copy-status.json")) return;
@@ -110,14 +110,19 @@ async function turnedOffDuringTheAnswer(s: Awaited<ReturnType<typeof setup>>, tu
       rmFailing = (file) => file.endsWith("cloud-copy-status.json");
     }
     // Not waited for in here: it writes the status right after the write under way.
-    off = s.t.sync.turnOff().then(
+    // A background forget (the copy was deleted, a new key) is not the user's turn-off.
+    off = (by === "user" ? s.t.sync.turnOff() : (s.t.sync as unknown as { forget(problem: string | null): Promise<void> }).forget("deleted")).then(
       () => "off",
       () => "failed",
     );
   };
+  let answerKey: string | null = null;
   const answer = await s.t.sync.restore().then(
     () => "resolved",
-    () => "failed",
+    (error: { key?: string }) => {
+      answerKey = error.key ?? null;
+      return "failed";
+    },
   );
   const turnOff = await off;
   failing = () => null;
@@ -127,13 +132,13 @@ async function turnedOffDuringTheAnswer(s: Awaited<ReturnType<typeof setup>>, tu
     (text) => (JSON.parse(text) as { phase: string }).phase,
     () => "idle",
   );
-  return { answer, turnOff, status };
+  return { answer, answerKey, turnOff, status };
 }
 
 describe("turned off while Use the cloud copy writes its answer", () => {
   it("off: nothing is left chosen, nothing restarts, and nothing goes up", async () => {
     const s = await setup();
-    expect(await turnedOffDuringTheAnswer(s, false)).toEqual({ answer: "resolved", turnOff: "off", status: "idle" });
+    expect(await turnedOffDuringTheAnswer(s, false)).toEqual({ answer: "resolved", answerKey: null, turnOff: "off", status: "idle" });
     expect(s.t.sync.view().on).toBe(false);
     expect(s.t.events.restarts).toBe(0);
     expect(s.t.sync.dataHeld).toBe(false);
@@ -143,18 +148,25 @@ describe("turned off while Use the cloud copy writes its answer", () => {
     expect(await s.remote()).toBe(before);
   }, 60_000);
 
-  it("couldn't be turned off: the answer says the copy is still on and nothing restarts, so the message can be read; the answer stands, so nothing goes up over the chosen copy", async () => {
+  it("couldn't be turned off: the answer says the copy is still on and nothing restarts; nothing goes up over the chosen copy; the next press restarts", async () => {
     const s = await setup();
-    expect(await turnedOffDuringTheAnswer(s, true)).toEqual({ answer: "failed", turnOff: "failed", status: "chosen" });
+    expect(await turnedOffDuringTheAnswer(s, true)).toEqual({ answer: "failed", answerKey: "cloudCopy.error.offFailed", turnOff: "failed", status: "chosen" });
     expect(s.t.sync.view().on).toBe(true);
-    // The user presses Use the cloud copy again to restart; until then nothing of this PC's goes up.
     expect(s.t.events.restarts).toBe(0);
-    await expect(s.t.sync.restore()).resolves.toBeUndefined();
-    expect(s.t.events.restarts).toBe(1);
     expect(s.t.sync.dataHeld).toBe(true);
     const before = await s.remote();
     await writeFile(path.join(s.a.userData, "workspace.json"), '{"from":"pc, after the answer"}');
     await s.t.sync.sync(true).catch(() => undefined);
     expect(await s.remote()).toBe(before);
+    // The user presses Use the cloud copy again: it restarts.
+    await expect(s.t.sync.restore()).resolves.toBeUndefined();
+    expect(s.t.events.restarts).toBe(1);
+  }, 60_000);
+
+  it("a background forget that fails (not the user's turn-off) doesn't stop the answer with the turn-off message", async () => {
+    const s = await setup();
+    const result = await turnedOffDuringTheAnswer(s, true, "background");
+    expect(result).toMatchObject({ answer: "resolved", answerKey: null, turnOff: "failed", status: "chosen" });
+    expect(s.t.events.restarts).toBe(1);
   }, 60_000);
 });
