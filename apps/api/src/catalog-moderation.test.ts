@@ -128,6 +128,17 @@ function setup(options: { scanner?: Scanner | undefined; maintainer?: string; wa
   return { store, catalog, dir, inbox, clock, developer, tokens, send, own, post, get, sha, zipFile, answer, verdict, admin, app };
 }
 
+/** The fastest of a few runs, in ms: a busy machine only makes some runs slow, while backtracking that goes wrong makes every run slow. */
+function fastest(work: () => void, runs = 3): number {
+  let best = Infinity;
+  for (let run = 0; run < runs; run++) {
+    const started = performance.now();
+    work();
+    best = Math.min(best, performance.now() - started);
+  }
+  return best;
+}
+
 describe("approving a version from before the listing limits", () => {
   it("refuses one the app would leave out of its list, and keeps it waiting", async () => {
     const { developer, send, post, sha, catalog, dir } = setup();
@@ -362,10 +373,8 @@ describe("check 4: warning signs in the code", { timeout: 30_000 }, () => {
       ["app.js", `Function(${spaces}x`],
       ["app.js", `atob(x); "${"A".repeat(size)}`],
     ] as const) {
-      const started = performance.now();
-      signsIn(name, text);
-      // Backtracking that goes wrong takes far longer; a busy PC takes a while for a clean one.
-      expect(performance.now() - started, `${name}: ${text.slice(0, 40)}…`).toBeLessThan(3000);
+      // Backtracking that goes wrong takes far longer on every run; a busy PC only slows some of them.
+      expect(fastest(() => void signsIn(name, text)), `${name}: ${text.slice(0, 40)}…`).toBeLessThan(3000);
     }
   });
 

@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from "node:fs"
+import { readdirSync, readFileSync } from "node:fs"
 import { join, relative } from "node:path"
 import { describe, expect, it } from "vitest"
 
@@ -10,10 +10,12 @@ const root = join(import.meta.dirname, "..")
 const folders = ["modules", join("apps", "desktop", "src")]
 
 function files(folder: string): string[] {
-  return readdirSync(folder).flatMap((name) => {
+  // withFileTypes: one directory read, no stat per file (stats are what makes this slow on Windows).
+  return readdirSync(folder, { withFileTypes: true }).flatMap((entry) => {
+    const name = entry.name
     if (name === "node_modules" || name === "dist") return []
     const path = join(folder, name)
-    return statSync(path).isDirectory() ? files(path) : /\.(vue|ts|tsx)$/.test(name) && !/\.test\.ts$/.test(name) ? [path] : []
+    return entry.isDirectory() ? files(path) : /\.(vue|ts|tsx)$/.test(name) && !/\.test\.ts$/.test(name) ? [path] : []
   })
 }
 
@@ -40,5 +42,6 @@ describe("focus rings", () => {
       files(join(root, folder)).flatMap((path) => ringsThatNeverShow(readFileSync(path, "utf8")).map((chunk) => `${relative(root, path)}: ${chunk.slice(0, 80)}`)),
     )
     expect(broken).toEqual([])
-  })
+    // This really reads ~1000 files; on a loaded or Windows machine that outlasts the default 5 s, so it gets its own limit.
+  }, 60_000)
 })

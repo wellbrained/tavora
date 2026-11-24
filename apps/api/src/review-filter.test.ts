@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { checkModuleText, checkReviewText } from "./review-filter.ts";
 
+/** The fastest of a few runs, in ms: a busy machine only makes some runs slow, while backtracking that goes wrong makes every run slow. */
+function fastest(work: () => void, runs = 3): number {
+  let best = Infinity;
+  for (let run = 0; run < runs; run++) {
+    const started = performance.now();
+    work();
+    best = Math.min(best, performance.now() - started);
+  }
+  return best;
+}
+
 describe("the review word filter", () => {
   it("lets honest reviews through, swearing included", () => {
     for (const text of [
@@ -223,15 +234,11 @@ describe("the review word filter", () => {
     for (const piece of ["@", "a@", "a@@", "@.", "a.a@", "a.", "a", "-", "aaaa.aaaa.", "a (dot) ", "。a", "a!", "a1", "a "]) {
       const text = fill(piece);
       for (const check of [checkReviewText, checkModuleText]) {
-        const start = performance.now();
-        check(text);
-        // Backtracking that goes wrong takes seconds or never ends; a busy PC may take a few hundred ms for a clean check.
-        expect(performance.now() - start, `${check.name} on ${JSON.stringify(piece)}`).toBeLessThan(1000);
+        // Backtracking that goes wrong takes seconds or never ends, on every run; a busy PC only slows some of them.
+        expect(fastest(() => check(text)), `${check.name} on ${JSON.stringify(piece)}`).toBeLessThan(1000);
       }
     }
-    const start = performance.now();
-    checkModuleText(`a@${"b".repeat(size)}`);
-    expect(performance.now() - start).toBeLessThan(1000);
+    expect(fastest(() => checkModuleText(`a@${"b".repeat(size)}`))).toBeLessThan(1000);
   });
 
   it("refuses slurs, also with letters swapped or spread out", () => {

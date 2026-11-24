@@ -1434,7 +1434,9 @@ describe("what anyone who can write the folder can do", () => {
   });
 
   it("follows no link or junction in its folder", async () => {
-    const key = newCopyKey();
+    // A fixed key: a part's shard (its name's first two letters) comes from the key, and a random one put the second
+    // upload's own part into the junction's shard about 1 run in 85, so the upload ran into the link and failed (folder-locked).
+    const key = Buffer.alloc(newCopyKey().length, 9);
     const onedrive = await folder();
     let now = Date.now();
     const storage = new FolderStorage(onedrive, { now: () => now });

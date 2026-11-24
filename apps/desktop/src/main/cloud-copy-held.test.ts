@@ -8,6 +8,9 @@ import { FolderStorage } from "./copy-folder";
 import { newCopyKey } from "./copy-crypto";
 import { cleanUp, pc, service } from "./cloud-copy.test-helper";
 
+// Each test sets up two or three PCs and the account service on real files (1-2.5 s alone): past the default 5 s on a busy machine.
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
+
 vi.mock("node:fs/promises", async (original) => {
   const real = await original<typeof import("node:fs/promises")>();
   return { ...real, open: vi.fn(real.open), readFile: vi.fn(real.readFile), rename: vi.fn(real.rename), stat: vi.fn(real.stat) };

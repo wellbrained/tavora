@@ -6,6 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CopySync } from "./cloud-copy-sync";
 import { cleanUp, pc, service } from "./cloud-copy.test-helper";
 
+// Each test sets up two or three PCs and the account service on real files (1-2.5 s alone): past the default 5 s on a busy machine.
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
+
 vi.mock("node:fs/promises", async (original) => {
   const real = await original<typeof import("node:fs/promises")>();
   return { ...real, readFile: vi.fn(real.readFile), rename: vi.fn(real.rename), rm: vi.fn(real.rm), stat: vi.fn(real.stat) };
