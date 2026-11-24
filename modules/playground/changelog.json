@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.65",
+    "date": "2026-11-24",
+    "notes": [
+      "Dragging a tab to the right in the Tabs specimen drops it where you let go, also with animations on."
+    ]
+  },
+  {
     "version": "0.1.64",
     "date": "2026-11-23",
     "notes": [
