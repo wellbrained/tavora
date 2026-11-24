@@ -679,6 +679,7 @@ export const en = {
   "cloudCopy.error.wrongKey": "That key doesn't fit your cloud copy.",
   "cloudCopy.error.unreadable": "Your newest cloud copy won't open with your key. Keep this PC's data instead.",
   "cloudCopy.error.noCopy": "There's no cloud copy yet.",
+  "cloudCopy.error.offFailed": "Couldn't turn the cloud copy off, so it's still on. Try again when you're ready.",
   "cloudCopy.error.otherAccount": "Your cloud copy belongs to another account. Sign in with that one first.",
   "cloudCopy.error.disk-full": "Your disk is full. Free up some space, then try again.",
   "cloudCopy.error.key-blocked": "Tavora can't open the key saved on this PC. Try again in a moment, or type your recovery key.",

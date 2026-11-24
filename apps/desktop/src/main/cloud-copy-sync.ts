@@ -188,6 +188,8 @@ export class CopySync {
    * it to settle (goesOn) before it goes on or stops.
    */
   private readonly forgetting = new Set<Promise<void>>();
+  /** How many turn-offs failed so far: an answer that waited for one sees it move (`goesOnUnlessOffFailed`). */
+  private offFailures = 0;
   private timer: ReturnType<typeof setInterval> | undefined;
 
   /** The copy on Tavora's service. */
@@ -1503,11 +1505,12 @@ export class CopySync {
     if (swap.phase === "swapping" || swap.phase === "undoing") {
       if (side === "cloud") return this.takeCopy(swap);
       const turn = this.turn;
+      const failures = this.offFailures;
       const back = stepSwap(swap, { type: "go-back" });
       if (!(await this.writeStatusFor(turn, back))) return;
       this.swap = back;
       await this.repairState(true, turn);
-      if (!(await this.goesOn(turn))) return;
+      if (!(await this.goesOnUnlessOffFailed(turn, failures))) return;
       return this.restart();
     }
     if (!this.on) {
@@ -1675,6 +1678,7 @@ export class CopySync {
   private async takeCopy(swap: SwapStatus): Promise<void> {
     if (swap.phase === "swapping" || swap.phase === "undoing") {
       const turn = this.turn;
+      const failures = this.offFailures;
       const from = swap.phase === "swapping" ? await this.restageForSwap(swap) : swap;
       // Turned off while the copy came down again (or at any point here): the forgetting stands, and nothing restarts.
       if (!from) return;
@@ -1682,10 +1686,11 @@ export class CopySync {
       if (!(await this.writeStatusFor(turn, next))) return;
       this.swap = next;
       await this.repairState(true, turn);
-      if (!(await this.goesOn(turn))) return;
+      if (!(await this.goesOnUnlessOffFailed(turn, failures))) return;
       return this.restart();
     }
     const turn = this.turn;
+    const failures = this.offFailures;
     await this.exclusive("downloading", async () => {
       try {
         if (!(await this.stageCurrent()) && turn === this.turn) throw new UserError("cloudCopy.error.noCopy");
@@ -1712,7 +1717,7 @@ export class CopySync {
       }
     });
     // Turned off while it downloaded: no restart; the start drops what was staged, as the copy is off.
-    if (!(await this.goesOn(turn))) return;
+    if (!(await this.goesOnUnlessOffFailed(turn, failures))) return;
     this.restart();
   }
 
@@ -1739,6 +1744,17 @@ export class CopySync {
   private async goesOn(turn: number): Promise<boolean> {
     while (this.forgetting.size > 0) await Promise.allSettled([...this.forgetting]);
     return turn === this.turn;
+  }
+
+  /**
+   * `goesOn`, and for an answer that ends in a restart: a turn-off asked meanwhile that failed (`offFailures` moved since
+   * `failures`) leaves the copy on, and the restart would only hide its message. So the answer stops here, standing on disk,
+   * and says so; the next press restarts.
+   */
+  private async goesOnUnlessOffFailed(turn: number, failures: number): Promise<boolean> {
+    if (!(await this.goesOn(turn))) return false;
+    if (this.offFailures !== failures) throw new UserError("cloudCopy.error.offFailed");
+    return true;
   }
 
   /** Why the copy can't be reached from here right now, for an answer that needs it. */
@@ -1790,8 +1806,9 @@ export class CopySync {
         const next: SwapStatus = { phase: "swapping", plan: { ...plan, empty: await emptyPlacesSince(incoming, roots, plan.keepIn, copy, plan.empty), earlierIn: [...putIn] } };
         await mkdir(plan.keepIn, { recursive: true });
         await writeCopyFile(path.join(plan.keepIn, INCOMING_LISTS), "incoming", { lists: [...lists, staged] });
-        // Turned off meanwhile: the status says undoing now, and stays so.
-        if (turn !== this.turn) return null;
+        // Turned off, or asked to be and not landed yet: the plan is not written then, and the status says undoing now. A
+        // turn-off asked after this check goes through writeStatusFor below.
+        if (!(await this.goesOn(turn))) return null;
         await writeFlushed(this.planFile, next.plan);
         if (!(await this.writeStatusFor(turn, next))) return null;
         await rm(this.stagedData, { recursive: true, force: true });
@@ -1898,6 +1915,9 @@ export class CopySync {
     this.forgetting.add(noted);
     try {
       await noted;
+    } catch (error) {
+      this.offFailures++;
+      throw error;
     } finally {
       this.forgetting.delete(noted);
     }

@@ -143,11 +143,13 @@ describe("turned off while Use the cloud copy writes its answer", () => {
     expect(await s.remote()).toBe(before);
   }, 60_000);
 
-  it("couldn't be turned off: the answer stands on disk and here, so nothing goes up over the chosen copy", async () => {
+  it("couldn't be turned off: the answer says the copy is still on and nothing restarts, so the message can be read; the answer stands, so nothing goes up over the chosen copy", async () => {
     const s = await setup();
-    expect(await turnedOffDuringTheAnswer(s, true)).toEqual({ answer: "resolved", turnOff: "failed", status: "chosen" });
+    expect(await turnedOffDuringTheAnswer(s, true)).toEqual({ answer: "failed", turnOff: "failed", status: "chosen" });
     expect(s.t.sync.view().on).toBe(true);
-    // The chosen copy goes in at the restart; until then nothing of this PC's goes up.
+    // The user presses Use the cloud copy again to restart; until then nothing of this PC's goes up.
+    expect(s.t.events.restarts).toBe(0);
+    await expect(s.t.sync.restore()).resolves.toBeUndefined();
     expect(s.t.events.restarts).toBe(1);
     expect(s.t.sync.dataHeld).toBe(true);
     const before = await s.remote();

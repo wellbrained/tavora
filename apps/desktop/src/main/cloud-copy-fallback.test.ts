@@ -556,6 +556,31 @@ describe("a stopped swap whose list of the incoming copy is gone", () => {
     expect(next.sync.view()).toMatchObject({ on: false, conflictKind: null });
   }, 60_000);
 
+  it("a turn-off asked while the copy comes down again: the plan is never written once it is asked (T2-bis)", async () => {
+    const s = await setup();
+    const { b } = s;
+    await stoppedSwap(s);
+    await rm(path.join(b.userData, "cloud-copy-staging", "copy-list.json"));
+    const planFile = path.join(b.userData, "cloud-copy-staging", "swap-plan.json");
+    const before = await readFile(planFile, "utf8");
+    const one = await appStart(s.cloud, b);
+    let off: Promise<void> | null = null;
+    meanwhile = async (to) => {
+      if (off || !to.endsWith("incoming-lists.json")) return;
+      // Asked, not landed: it is not waited for in here, so the plan's write would come before its status.
+      off = one.sync.turnOff();
+    };
+    await expect(one.sync.keep("cloud")).resolves.toBeUndefined();
+    expect(off).not.toBeNull();
+    await off;
+    expect(one.events.restarts).toBe(0);
+    expect(await readFile(planFile, "utf8")).toBe(before);
+    expect(JSON.parse(await readFile(path.join(b.userData, "cloud-copy-status.json"), "utf8"))).toMatchObject({ phase: "undoing" });
+    const next = await appStart(s.cloud, b);
+    expect(await bHasAll(b)).toEqual(B);
+    expect(next.sync.view()).toMatchObject({ on: false, conflictKind: null });
+  }, 60_000);
+
   it("keeps this PC's own file once the pictures came back, also after the list is lost a second time (B1-bis)", async () => {
     const s = await setup();
     const { b } = s;
