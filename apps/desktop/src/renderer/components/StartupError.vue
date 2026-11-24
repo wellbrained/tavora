@@ -3,6 +3,7 @@
 import { Check, Copy, RotateCw } from "@lucide/vue";
 import { ref, useTemplateRef } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { isGerman } from "../../shared/i18n-core";
 import { languageSet, setLanguage, t } from "../i18n";
 // Its own styles: when start.ts failed to load, they were never loaded.
 import "../styles.css";
@@ -10,7 +11,7 @@ import "../styles.css";
 const props = defineProps<{ reason: "error" | "noAnswer" | "crashed"; detail: string }>();
 
 // The language setting comes with the app's state; when that never arrived, the system's is the best guess.
-if (!languageSet) setLanguage(navigator.language.toLowerCase().startsWith("de") ? "de" : "en");
+if (!languageSet) setLanguage(isGerman(navigator.language) ? "de" : "en");
 
 const [message = "", ...stack] = props.detail.split("\n");
 const details = useTemplateRef<HTMLElement>("details");

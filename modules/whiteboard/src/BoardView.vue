@@ -4,6 +4,7 @@
 // (boardSession.ts) holds what the page shows of the board; it is handed up once, not re-sent piece by piece.
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import type { TavoraSDK } from "@tavora/sdk";
+import { isGerman } from "@tavora/sdk/bootstrap";
 import type { DocumentHandle } from "@tavora/sdk/store";
 import { createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -68,7 +69,7 @@ function render() {
   root.render(
     createElement(ExcalidrawRoot, {
       initialData,
-      langCode: language.value.toLowerCase().startsWith("de") ? "de-DE" : "en",
+      langCode: isGerman(language.value) ? "de-DE" : "en",
       theme: props.mode,
       saveState: save,
       saveText: save === "idle" ? "" : t(`save.${save}` as "save.saved"),

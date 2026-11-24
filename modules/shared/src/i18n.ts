@@ -3,6 +3,7 @@
 // keeps its own `en` and `de` catalogs; a text with a number has `.one` and
 // `.other` forms and is read with `plural`.
 
+import { isGerman } from "@tavora/sdk/bootstrap";
 import { ref, type Ref } from "vue";
 import { setUiLanguage } from "./components/ui/text";
 
@@ -23,9 +24,6 @@ export interface Translator<K extends string> {
 
 const fill = (text: string, params?: Params) =>
   params ? text.replace(/\{(\w+)\}/g, (match, name: string) => (name in params ? String(params[name]) : match)) : text;
-
-/** Anything but German is English, as in the host. */
-const isGerman = (language: string) => language.toLowerCase().split(/[-_]/)[0] === "de";
 
 export function createTranslator<K extends string>(en: Record<K, string>, de: Record<K, string>): Translator<K> {
   const language = ref("en");

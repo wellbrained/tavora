@@ -17,10 +17,13 @@ export function isLanguageSetting(value: unknown): value is LanguageSetting {
   return value === "system" || value === "en" || value === "de";
 }
 
+/** Whether a locale such as `de-DE` is German. */
+export const isGerman = (locale: string): boolean => locale.toLowerCase().split(/[-_]/)[0] === "de";
+
 /** The language for a system locale such as `de-DE`; anything Tavora has no translation for is English. */
 export function resolveLanguage(setting: LanguageSetting, systemLocale: string): Language {
   if (setting !== "system") return setting;
-  return systemLocale.toLowerCase().split(/[-_]/)[0] === "de" ? "de" : "en";
+  return isGerman(systemLocale) ? "de" : "en";
 }
 
 type Key = keyof typeof en;

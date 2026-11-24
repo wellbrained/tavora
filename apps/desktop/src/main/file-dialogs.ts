@@ -3,7 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { OpenDialogOptions, OpenDialogReturnValue, SaveDialogOptions, SaveDialogReturnValue } from "electron";
 import type { FileKind } from "@tavora/sdk/protocol";
-import { translate, type Language } from "../shared/i18n";
+import { isGerman, translate, type Language } from "../shared/i18n";
 import { HostError } from "./errors";
 import { readJsonText } from "./json-file-http";
 import type { DialogPlace, Library } from "./library";
@@ -187,7 +187,7 @@ export class FileDialogs {
   }
 
   private german(): boolean {
-    return this.options.language().startsWith("de");
+    return isGerman(this.options.language());
   }
 
   private label(kind: SaveKind): string {
