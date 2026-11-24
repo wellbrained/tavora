@@ -237,7 +237,7 @@ describe("issuedAfterLiveProblem", () => {
   it("refuses one issued at the same time or before", () => {
     expect(issuedAfterLiveProblem(live, { issuedAt: "2026-11-24T10:00:00Z" })).toMatch(/clock behind/);
     expect(issuedAfterLiveProblem(live, { issuedAt: "2026-11-23T10:00:00Z" })).toMatch(/clock behind/);
-    expect(issuedAfterLiveProblem("stable win-x64", { issuedAt: "2026-11-24T10:00:00Z" })).toMatch(/no issue time/);
+    expect(issuedAfterLiveProblem("stable win-x64", { issuedAt: "2026-11-24T10:00:00Z" })).toMatch(/can't read/i);
   });
 });
 
@@ -283,5 +283,13 @@ describe("feedFreshness", () => {
 
   it("says a feed without a second signature is due", () => {
     expect(feedFreshness(null)).toEqual({ expiresAt: null, daysLeft: null, due: true });
+  });
+});
+
+describe("the guards read the live second signature strictly (readSignature2)", () => {
+  it("never takes a time out of a value that isn't a real second signature", () => {
+    const sloppy = "stable win-x64 2026-11-24T10:00:00Z 2026-12-24T10:00:00Z not-a-signature";
+    expect(issuedAfterLiveProblem(sloppy, { issuedAt: "2026-11-25T10:00:00Z" })).toMatch(/can't read/i);
+    expect(feedFreshness(sloppy, new Date("2026-11-24T10:00:00Z"))).toEqual({ expiresAt: null, daysLeft: null, due: true });
   });
 });
