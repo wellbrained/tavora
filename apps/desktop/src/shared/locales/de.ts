@@ -681,7 +681,7 @@ export const de: Record<keyof typeof en, string> = {
   "cloudCopy.error.wrongKey": "Dieser Schlüssel passt nicht zu deiner Cloud-Kopie.",
   "cloudCopy.error.unreadable": "Deine neueste Cloud-Kopie lässt sich mit deinem Schlüssel nicht öffnen. Behalte stattdessen die Daten dieses PCs.",
   "cloudCopy.error.noCopy": "Es gibt noch keine Cloud-Kopie.",
-  "cloudCopy.error.offFailed": "Die Cloud-Kopie ließ sich nicht ausschalten, sie ist also noch an. Drück noch mal darauf, um neu zu starten.",
+  "cloudCopy.error.offFailed": "Die Cloud-Kopie ließ sich nicht ausschalten, sie ist also noch an. Versuch es noch mal.",
   "cloudCopy.error.otherAccount": "Deine Cloud-Kopie gehört zu einem anderen Konto. Melde dich zuerst damit an.",
   "cloudCopy.error.disk-full": "Dein Speicher ist voll. Mach etwas Platz frei und versuch es dann noch mal.",
   "cloudCopy.error.key-blocked": "Tavora kann den Schlüssel auf diesem PC nicht öffnen. Versuch es gleich nochmal oder gib deinen Wiederherstellungsschlüssel ein.",

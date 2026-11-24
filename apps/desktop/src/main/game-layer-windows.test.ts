@@ -228,13 +228,16 @@ describe("panels", () => {
     expect(calls.filter((call) => call.endsWith("focus"))).toEqual(["p2 focus"]);
   });
 
-  it("whose page ended give the view back and keep the window until the next look", () => {
+  it("whose page ended give the view back, forget the dead window and are lent into a new one at the next look", () => {
     const { layer } = rig();
     const lent: string[] = [];
     layer.show(scene([panel("p", lent)], { layer: LAYER }));
     expect(layer.ended("p")).toBe("panel");
     expect(lent).toEqual(["lend p", "back p"]);
     expect(calls).not.toContain("p destroy");
+    layer.show(scene([panel("p", lent)], { layer: LAYER }));
+    layer.show(scene([panel("p", lent)], { layer: LAYER }));
+    expect(lent).toEqual(["lend p", "back p", "lend p"]);
     // Any other window just goes.
     layer.show(scene([panel("p", lent), overlay("a")], { layer: LAYER }));
     expect(layer.ended("a")).toBe("window");

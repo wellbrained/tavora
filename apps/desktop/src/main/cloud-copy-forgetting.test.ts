@@ -135,6 +135,31 @@ async function turnedOffDuringTheAnswer(s: Awaited<ReturnType<typeof setup>>, tu
   return { answer, answerKey, turnOff, status };
 }
 
+describe("turning the copy off while its state file is busy", () => {
+  it("a file that lets go after a moment: the copy goes off and stays off at the next start", async () => {
+    const s = await setup();
+    let busyFor = 2;
+    rmFailing = (file) => file.endsWith("cloud-copy.json") && busyFor-- > 0;
+    await expect(s.t.sync.turnOff()).resolves.toBeUndefined();
+    expect(s.t.sync.view().on).toBe(false);
+    expect(await there(path.join(s.a.userData, "cloud-copy.json"))).toBe(false);
+    expect((await tavora(s.cloud, s.a).sync.beforeLoad(), tavora(s.cloud, s.a).sync.view().on)).toBe(false);
+  }, 60_000);
+
+  it("a file that stays busy: the turn-off fails, the copy shows as still on, and it is the same at the next start", async () => {
+    const s = await setup();
+    rmFailing = (file) => file.endsWith("cloud-copy.json");
+    await expect(s.t.sync.turnOff()).rejects.toMatchObject({ key: "cloudCopy.error.offFailed" });
+    expect(s.t.sync.view().on).toBe(true);
+    expect(await there(path.join(s.a.userData, "cloud-copy.json"))).toBe(true);
+    rmFailing = () => false;
+    // Pressing it again works once the file lets go.
+    await expect(s.t.sync.turnOff()).resolves.toBeUndefined();
+    expect(s.t.sync.view().on).toBe(false);
+    expect(await there(path.join(s.a.userData, "cloud-copy.json"))).toBe(false);
+  }, 60_000);
+});
+
 describe("turned off while Use the cloud copy writes its answer", () => {
   it("off: nothing is left chosen, nothing restarts, and nothing goes up", async () => {
     const s = await setup();

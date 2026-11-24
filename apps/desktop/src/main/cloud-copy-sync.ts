@@ -38,7 +38,7 @@ import { lookCopyFile, removeCopyFile, writeCopyFile } from "./copy-files";
 import { writeFileAtomic } from "./fsutil";
 import { COPY_STATUS_FILE, lookSwapPlan, lookSwapStatus, stepSwap, SWAP_IDLE, writeFlushed, writeSwapStatus, type SwapEvent, type SwapPlan, type SwapStatus } from "./cloud-copy-swap";
 import { DamagedFile, HeldError, isDamaged, look, lookJson, lookNames, lookStat, unlessHeld, type Looked } from "./file-look";
-import { renameHeld } from "./rename-held";
+import { renameHeld, retryHeld } from "./rename-held";
 import { wasSetAside, type SavedRecord } from "./json";
 import { UserError } from "./messages";
 import { DATA_FILES, LIBRARY_FILE, libraryFile, PC_SETTINGS } from "./saved-data";
@@ -1939,6 +1939,20 @@ export class CopySync {
     } finally {
       this.forgetting.delete(noted);
     }
+    // The state file goes before anything is forgotten here. A file that stays busy (a virus scan) would otherwise come
+    // back at the next start with the copy on and uploading. The user's turn-off then fails and the copy shows as still
+    // on, so pressing it again tries again; any other forget goes on and says what went wrong at the end.
+    let held: unknown = null;
+    try {
+      await retryHeld(() => removeCopyState(this.stateFile));
+    } catch (error) {
+      if (byUser) {
+        this.offFailures++;
+        this.log(`cloud copy: can't remove the state to turn the copy off: ${error instanceof Error ? error.message : String(error)}`);
+        throw new UserError("cloudCopy.error.offFailed");
+      }
+      held = error;
+    }
     this.copyOn = false;
     this.state = EMPTY_STATE;
     this.shownKey = null;
@@ -1947,7 +1961,7 @@ export class CopySync {
     this.clear("conflict");
     this.clear("restartToTake");
     this.problem = problem;
-    await removeCopyState(this.stateFile);
+    if (held) throw held;
     await removeCopyState(this.parkedFile);
     await removeCopyFile(this.placeFile, "place");
     // Files lost at a start that couldn't judge are no one's question with the copy off.

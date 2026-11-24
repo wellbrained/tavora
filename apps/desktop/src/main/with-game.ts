@@ -95,8 +95,8 @@ export interface WithGameRunnerDeps {
   start(run: WithGameRun): boolean;
   /** Lets go of the run's panel (a panel of the shown workspace stays open). */
   stop(run: WithGameRun): void;
-  /** The run's page crashed the first time this game session: it starts again. */
-  restart(run: WithGameRun): void;
+  /** The run's page crashed the first time this game session: it starts again. False when it couldn't start now, as for `start`. */
+  restart(run: WithGameRun): boolean;
 }
 
 function sameRun(a: WithGameRun, b: WithGameRun): boolean {
@@ -151,7 +151,11 @@ export class WithGameRunner {
     const key = crashKey(run);
     const count = (this.crashes.get(key)?.count ?? 0) + 1;
     this.crashes.set(key, { workspaceId: run.workspaceId, count });
-    if (count === 1) return this.deps.restart(run);
+    if (count === 1) {
+      // Not counted as running when it couldn't start (its type is gone, the module waits for an answer): the next sync tries again.
+      if (!this.deps.restart(run) && this.runs.get(instanceId) === run) this.runs.delete(instanceId);
+      return;
+    }
     this.runs.delete(instanceId);
     this.deps.stop(run);
   }
@@ -252,7 +256,7 @@ export class WithGamePanels {
       stop: (run) => this.stop(run),
       restart: (run) => {
         this.deps.panels().release(run.instanceId);
-        this.start(run);
+        return this.start(run);
       },
     });
   }

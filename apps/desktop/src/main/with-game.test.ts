@@ -15,7 +15,7 @@ function rig() {
   const runner = new WithGameRunner({
     start: (run) => (log.push(`start ${run.workspaceId} ${run.inLayout ? run.instanceId : "hidden"}`), true),
     stop: (run) => log.push(`stop ${run.workspaceId} ${run.inLayout ? run.instanceId : "hidden"}`),
-    restart: (run) => log.push(`restart ${run.workspaceId} ${run.inLayout ? run.instanceId : "hidden"}`),
+    restart: (run) => (log.push(`restart ${run.workspaceId} ${run.inLayout ? run.instanceId : "hidden"}`), true),
   });
   return { log, runner };
 }
@@ -132,13 +132,32 @@ describe("WithGameRunner", () => {
   it("doesn't count a panel that couldn't start as running, and tries again at the next sync", () => {
     const log: string[] = [];
     let ready = false;
-    const runner = new WithGameRunner({ start: (run) => (log.push(`start ${run.workspaceId}`), ready), stop: () => log.push("stop"), restart: () => log.push("restart") });
+    const runner = new WithGameRunner({ start: (run) => (log.push(`start ${run.workspaceId}`), ready), stop: () => log.push("stop"), restart: () => (log.push("restart"), true) });
     runner.sync(new Set(["kings"]), plan(["kings"]));
     expect(runner.all()).toEqual([]);
     ready = true;
     runner.sync(new Set(["kings"]), plan(["kings"]));
     expect(runner.all()).toHaveLength(1);
     expect(log).toEqual(["start kings", "start kings"]);
+  });
+
+  it("a crashed panel whose restart couldn't start isn't counted as running, and the next sync starts it", () => {
+    const log: string[] = [];
+    let ready = true;
+    const runner = new WithGameRunner({ start: (run) => (log.push(`start ${run.workspaceId}`), ready), stop: () => log.push("stop"), restart: () => (log.push("restart"), ready) });
+    const running = new Set(["kings"]);
+    const [run] = plan(["kings"]);
+    runner.sync(running, [run!]);
+    ready = false;
+    runner.crashed(run!.instanceId);
+    expect(runner.all()).toEqual([]);
+    ready = true;
+    runner.sync(running, [run!]);
+    expect(runner.all()).toHaveLength(1);
+    expect(log).toEqual(["start kings", "restart", "start kings"]);
+    // The crash stays counted: a second one leaves it off.
+    runner.crashed(run!.instanceId);
+    expect(runner.isOff(run!)).toBe(true);
   });
 
   it("ignores a crash of a panel that doesn't run with its game", () => {
