@@ -31,7 +31,7 @@ import TabsList from "./TabsList.vue";
 import TabsTrigger from "./TabsTrigger.vue";
 import { reducedMotion, useReorderMotion } from "../reorder";
 import { bindDrag } from "../../../lib/bind-drag";
-import { checkRename, dropPlace, moveTab, neighbourAfterClose, neighbourTab, revealBy, stepTab, tabsOutOfView, type StripTab } from "./tab-strip";
+import { checkRename, moveTab, neighbourAfterClose, neighbourTab, revealBy, stepTab, tabsOutOfView, type StripTab } from "./tab-strip";
 import { tabOverflow, type TabOverflow } from "./tab-overflow";
 
 const props = withDefaults(
@@ -257,10 +257,10 @@ function onPointerDown(event: PointerEvent, id: string) {
         if (next.clientX < box.left + 24) el.scrollLeft -= 12;
         else if (next.clientX > box.right - 24) el.scrollLeft += 12;
       }
-      const place = dropPlace(places(), next.clientX);
-      // No line where the drop would change nothing.
-      drop.value = place && moveTab(ids(), id, place.target, place.after).join("\n") !== ids().join("\n") ? place : null;
-      reorder.preview(drop.value ? { id: drop.value.target, after: drop.value.after } : null);
+      // Judged against the layout at the grab: live boxes include the dragged tab, which sits under the pointer, and the
+      // tabs that slid aside. No place where the drop would change nothing.
+      const place = reorder.over(next.clientX, next.clientY);
+      drop.value = place ? { target: place.id, after: place.after } : null;
     },
     drop() {
       const place = drop.value;

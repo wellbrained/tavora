@@ -33,17 +33,6 @@ export function neighbourAfterClose(ids: readonly string[], id: string): string 
   return ids[index + 1] ?? ids[index - 1] ?? null;
 }
 
-/** The tab a pointer at `x` is over (the nearest one past either end), and whether it is over that tab's right half. */
-export function dropPlace(boxes: readonly { id: string; left: number; right: number }[], x: number): { target: string; after: boolean } | null {
-  if (!boxes.length) return null;
-  const first = boxes[0]!;
-  const last = boxes[boxes.length - 1]!;
-  if (x <= first.left) return { target: first.id, after: false };
-  if (x >= last.right) return { target: last.id, after: true };
-  const over = boxes.find((box) => x >= box.left && x < box.right) ?? last;
-  return { target: over.id, after: x >= (over.left + over.right) / 2 };
-}
-
 export type RenameResult = { kind: "unchanged" } | { kind: "invalid"; problem: Exclude<NameProblem, null> } | { kind: "rename"; label: string };
 
 /** What a finished rename means: nothing (same name), a name that is not accepted, or the trimmed new name. */

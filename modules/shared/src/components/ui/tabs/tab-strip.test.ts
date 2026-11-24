@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkRename, dropPlace, moveTab, neighbourAfterClose, neighbourTab, revealBy, stepTab, tabsOutOfView } from "./tab-strip";
+import { checkRename, moveTab, neighbourAfterClose, neighbourTab, revealBy, stepTab, tabsOutOfView } from "./tab-strip";
 
 describe("moveTab", () => {
   const ids = ["a", "b", "c", "d"];
@@ -35,24 +35,6 @@ describe("neighbourAfterClose", () => {
     expect(neighbourAfterClose(["a", "b", "c"], "c")).toBe("b");
     expect(neighbourAfterClose(["a"], "a")).toBeNull();
     expect(neighbourAfterClose(["a", "b"], "x")).toBeNull();
-  });
-});
-
-describe("dropPlace", () => {
-  const boxes = [
-    { id: "a", left: 0, right: 100 },
-    { id: "b", left: 100, right: 200 },
-  ];
-  it("splits a tab into its left and right half", () => {
-    expect(dropPlace(boxes, 120)).toEqual({ target: "b", after: false });
-    expect(dropPlace(boxes, 180)).toEqual({ target: "b", after: true });
-  });
-  it("snaps to the first and last tab outside the row", () => {
-    expect(dropPlace(boxes, -20)).toEqual({ target: "a", after: false });
-    expect(dropPlace(boxes, 260)).toEqual({ target: "b", after: true });
-  });
-  it("has no place without tabs", () => {
-    expect(dropPlace([], 10)).toBeNull();
   });
 });
 
