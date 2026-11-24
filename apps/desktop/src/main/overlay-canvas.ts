@@ -8,7 +8,6 @@
 //      guide lines, and the dragging itself.
 // Nothing here touches the game. The views leave the window when the page is left.
 import { BrowserWindow, WebContentsView } from "electron";
-import { createHash } from "node:crypto";
 import { GAME_OVERLAY_SCHEME } from "./assets";
 import { GAME_OVERLAY_FRAME_URL, GAME_OVERLAY_ORIGIN, serveGameOverlay, type GameOverlaySource } from "./game-overlay-page";
 import { lockContents, lockedSession } from "./game-overlay-window";
@@ -17,6 +16,7 @@ import type { Rect } from "./game-overlays";
 import type { LayoutStills, LayoutView } from "../shared/layout-view";
 import { pageZoom } from "../shared/overlay-anchor";
 import { isOpen, noPopups, panelStep, popupsStep, type PopupsEvent, type PopupsOverPanels } from "../shared/popups-over-panels";
+import { sha256Hex } from "./hash";
 
 export interface OverlayCanvasOptions {
   /** Tavora's main window: the page is its host UI, and the views are added to it. */
@@ -234,7 +234,7 @@ export class OverlayCanvas implements LayoutWindow {
   }
 
   private createItem(frame: LayoutFrame): ItemView {
-    const name = createHash("sha256").update(frame.id).digest("hex").slice(0, 32);
+    const name = sha256Hex(frame.id).slice(0, 32);
     const session = lockedSession(`overlay-layout-${name}`, (url) => url.startsWith(`${GAME_OVERLAY_ORIGIN}/`));
     const entry: ItemView = {
       view: new WebContentsView({ webPreferences: { ...LOCKED, session } }),

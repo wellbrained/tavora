@@ -1,9 +1,9 @@
-import { createHash } from "node:crypto";
 import path from "node:path";
 import { isGameId } from "@tavora/module-schema";
 import { writeFileAtomic } from "./fsutil";
 import { normalizeName } from "../shared/same-game";
 import { hostedIconFileName, type IconResult } from "./steam-icons";
+import { sha256Hex } from "./hash";
 
 
 /**
@@ -123,7 +123,7 @@ export async function saveHostedIcon(iconDir: string, gameId: string, icon: Host
     const declared = Number(response.headers.get("content-length"));
     if (Number.isFinite(declared) && declared > MAX_HOSTED_ICON_BYTES) return { status: "none" };
     const bytes = new Uint8Array(await response.arrayBuffer());
-    if (!looksLikeIconPng(bytes) || createHash("sha256").update(bytes).digest("hex") !== icon.sha256) return { status: "none" };
+    if (!looksLikeIconPng(bytes) || sha256Hex(bytes) !== icon.sha256) return { status: "none" };
     const file = hostedIconFileName(gameId);
     await writeFileAtomic(path.join(iconDir, file), bytes);
     return { status: "saved", file };

@@ -205,5 +205,3 @@ export function createBoardSaver(options: BoardSaverOptions) {
     },
   };
 }
-
-export type BoardSaver = ReturnType<typeof createBoardSaver>;

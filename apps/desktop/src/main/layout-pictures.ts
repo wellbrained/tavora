@@ -1,10 +1,10 @@
 // The game pictures of the Overlay layout: one PNG per game in the data folder, taken on the user's click from the
 // game's window or picked from a file, kept on this PC, never sent anywhere, and removable. This file holds the files and
 // the matching of a window to capture; Electron's part (desktopCapturer, decoding a chosen image) lives in the host.
-import { createHash } from "node:crypto";
 import { mkdir, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { writeFileAtomic } from "./fsutil";
+import { sha256Hex } from "./hash";
 
 /** The folder inside the data folder, and the address prefix the host UI serves it under. */
 export const PICTURES_FOLDER = "overlay-pictures";
@@ -23,7 +23,7 @@ export function isPng(bytes: Uint8Array): boolean {
 
 /** The file name a game's picture is kept under: the game id is hashed, so it never needs to be a safe file name. */
 export function pictureName(gameId: string): string {
-  return `${createHash("sha256").update(gameId).digest("hex").slice(0, 24)}.png`;
+  return `${sha256Hex(gameId).slice(0, 24)}.png`;
 }
 
 export type SaveResult = "saved" | "not-a-picture" | "too-big";

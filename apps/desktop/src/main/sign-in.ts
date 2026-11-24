@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
 import type { SavedAccount } from "./account";
+import { sha256Hex } from "./hash";
 
 export interface SignInOptions {
   /** False in release builds until accounts go live: nothing is loaded and no token is ever given. */
@@ -70,5 +70,5 @@ export class SignIn {
 export function accountIdOf(account: Pick<SavedAccount, "createdAt">): string {
   const time = Date.parse(account.createdAt);
   const created = Number.isFinite(time) ? new Date(time).toISOString() : account.createdAt;
-  return createHash("sha256").update(`tavora-account:${created}`).digest("hex").slice(0, 32);
+  return sha256Hex(`tavora-account:${created}`).slice(0, 32);
 }

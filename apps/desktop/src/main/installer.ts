@@ -3,7 +3,7 @@
 // and checked in memory (readZip), the manifest validated and the signature
 // verified before anything is written, then the files go to a staging folder
 // that is renamed into place. Nothing from the zip is ever run.
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, open, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isModuleId, isOwnerId, LOCAL_OWNER, manifestFiles, needsNewerTavora, OFFICIAL_OWNER, validateManifest, type ModuleManifest, compareModuleVersions } from "@tavora/module-schema";
@@ -19,6 +19,7 @@ import { FolderChecks, readFolderOrThrow, verifyFolder, type Verified } from "./
 import { OFFICIAL_UPDATES_FILE, readOfficialRecords, type OfficialRecords, type OfficialUpdates } from "./official-updates";
 import { OFFICIAL_PREFIX, type InstalledModule, type ModuleProblem } from "./registry";
 import type { SafetyCheck } from "./safety-lists";
+import { sha256Hex } from "./hash";
 
 
 export class InstallError extends UserError {}
@@ -175,7 +176,7 @@ export interface CheckedZip extends Installed {
  */
 export async function checkZipData(zip: Buffer, { userModules, modules, tavoraVersion, expect, safety, official }: InstallOptions): Promise<CheckedZip> {
   if (zip.length > ZIP_LIMITS.maxArchiveBytes) throw new InstallError("error.installRefused", { reason: "the zip is too big" });
-  const sha256 = createHash("sha256").update(zip).digest("hex");
+  const sha256 = sha256Hex(zip);
   let files;
   try {
     files = readZip(zip);

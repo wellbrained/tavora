@@ -14,8 +14,6 @@
  */
 export type Overlay = { status: "closed" } | { status: "partial"; panels: ReadonlySet<string> } | { status: "all" };
 
-export type OverlayStatus = Overlay["status"];
-
 /**
  * How one panel stands toward the overlay; a panel not in the list is `live` (in its slot, drawn, nothing under it).
  * - `picturing`: its picture is being taken; it stays in sight until that picture is on screen. `picture`: the newest
@@ -28,8 +26,6 @@ export type PanelStep<P> =
   | { step: "picturing"; picture: P | null }
   | { step: "out"; picture: P | null }
   | { step: "settling"; picture: P };
-
-export type PanelStatus = PanelStep<unknown>["step"];
 
 export interface PopupsOverPanels<P> {
   /** Counts overlays opened and closed, so the work of one that ended never touches the next. */

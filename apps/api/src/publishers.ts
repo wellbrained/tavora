@@ -1,4 +1,4 @@
-import { createHash, createPublicKey, verify } from "node:crypto";
+import { createPublicKey, verify } from "node:crypto";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { LINK_CODE, type AccountStore } from "./account-store.ts";
@@ -6,6 +6,7 @@ import { OFFICIAL_PINS, type CatalogTrust, type OfficialPins } from "./catalog-t
 import { signedRevoked } from "./key-requests.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 import { tooMany } from "./sign-in.ts";
+import { sha256Hex } from "./hash.ts";
 
 /**
  * Publishers under /v1/publishers: which developer name a publisher key shows to users, and
@@ -22,7 +23,7 @@ const ED25519_SPKI = Buffer.from("302a300506032b6570032100", "hex");
 const FINGERPRINT = /^[0-9a-f]{32}$/;
 
 /** The owner id of a key, as in module data: the first 16 bytes of the SHA-256 of the raw public key, in hex. */
-export const keyFingerprint = (raw: Buffer) => createHash("sha256").update(raw).digest("hex").slice(0, 32);
+export const keyFingerprint = (raw: Buffer) => sha256Hex(raw).slice(0, 32);
 
 /** The raw 32-byte Ed25519 key in strict base64, or null. */
 function rawKey(value: unknown): Buffer | null {

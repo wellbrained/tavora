@@ -10,10 +10,10 @@
 //
 // The plan is pure (withGamePlan); WithGameRunner keeps what runs and starts and stops it; WithGamePanels is the host's
 // side of it (host.ts): the games running, the hidden panels' records and the watch on their pages' health.
-import { createHash } from "node:crypto";
 import type { InstanceStatus } from "../shared/host-api";
 import type { PanelViews } from "./panel-views";
 import type { InstanceRecord } from "./workspace";
+import { sha256Hex } from "./hash";
 
 /** An installed module allowed to run its `withGame` panel type while its game runs. */
 export interface WithGameModule {
@@ -49,7 +49,7 @@ export interface LayoutPanel {
  * publisher's module under the same id reads none of it.
  */
 export function withGameInstanceId(workspaceId: string, moduleId: string, owner: string): string {
-  const hex = createHash("sha256").update(`tavora.with-game\0${workspaceId}\0${moduleId}\0${owner}`).digest("hex");
+  const hex = sha256Hex(`tavora.with-game\0${workspaceId}\0${moduleId}\0${owner}`);
   // A name-based UUID: version 5, RFC 4122 variant.
   const variant = ((parseInt(hex[16]!, 16) & 0x3) | 0x8).toString(16);
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;

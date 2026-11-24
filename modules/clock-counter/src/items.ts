@@ -310,11 +310,6 @@ export function clocksRunning(items: readonly Item[], now: number): boolean {
   return items.some((item) => item.kind !== "counter" && readClock(item, now).running);
 }
 
-/** The clock's time as its format shows it. */
-export function clockText(clock: Clock, now: number): string {
-  return formatSeconds(readClock(clock, now).seconds, clock.format);
-}
-
 /** A finished countdown starts over from the full time; anything else starts or pauses. */
 export function startPause(clock: Clock, now: number): void {
   if (clock.kind === "countdown" && !clock.repeat && readClock(clock, now).done) {

@@ -3,9 +3,10 @@
 // code: a hash of a random number that stays on this PC and the game's key. So the service can count one vote
 // per PC and game, but can't tell which games came from the same PC. No cookies, no referrer, no sign-in.
 // Only called while Online features are on, and only because the user pressed the button.
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { askKey, type AskedGame } from "../shared/module-request";
 import { serviceUrl } from "./service-url";
+import { sha256Hex } from "./hash";
 
 export { askKey, type AskedGame };
 
@@ -17,7 +18,7 @@ export const newInstallId = (): string => randomBytes(32).toString("hex");
 
 /** The code sent for a game: never the install's number itself, so games asked from one PC can't be linked. */
 export function voterFor(installId: string, game: AskedGame): string {
-  return createHash("sha256").update(`${installId}|${askKey(game)}`).digest("hex");
+  return sha256Hex(`${installId}|${askKey(game)}`);
 }
 
 /**

@@ -386,6 +386,3 @@ export function parseLayoutMessage(raw: unknown): LayoutMessage | null {
       return null;
   }
 }
-
-/** The labels of the grid menu, in order. */
-export const GRID_CHOICES = GRID_SETTINGS;

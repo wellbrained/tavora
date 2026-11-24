@@ -1,9 +1,9 @@
-import { createHash } from "node:crypto";
 import { session, WebContentsView, type View } from "electron";
 import type { TavoraTheme } from "@tavora/sdk/protocol";
 import { writeFileAtomic } from "./fsutil";
 import { readJsonOrSetAside } from "./json";
 import { escapeHtml } from "../shared/escape-html";
+import { sha256Hex } from "./hash";
 
 // While a workspace opens, its panels are shown under a cover: a tiny page of Tavora's own in the theme's background,
 // over the whole workspace. Pages only draw while they are shown, and a heavy one takes a few hundred ms for its
@@ -42,7 +42,7 @@ export function holdFor(elapsed: number, fireAt: number): number {
 /** The panels a workspace opens with, by module and type: its times are kept per workspace and per such layout. */
 export function layoutKey(gameId: string, panels: readonly { moduleId: string; panelType?: string | null | undefined }[]): string {
   const types = panels.map((panel) => `${panel.moduleId}/${panel.panelType ?? ""}`).sort();
-  return createHash("sha256").update(JSON.stringify([gameId, types])).digest("hex").slice(0, 24);
+  return sha256Hex(JSON.stringify([gameId, types])).slice(0, 24);
 }
 
 /** How many past openings an estimate is made from. */

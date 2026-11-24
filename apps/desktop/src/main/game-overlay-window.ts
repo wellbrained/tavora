@@ -11,12 +11,12 @@
 // Arrange it grows by the frame's room around the panel, and the frame lies over the panel too: a drag never reaches
 // the panel's content, the keys stay with the frame, and the panel shows dimmed under it.
 import { BrowserWindow, WebContentsView, app, screen, session, type Session, type WebContents } from "electron";
-import { createHash } from "node:crypto";
 import { GAME_OVERLAY_SCHEME } from "./assets";
 import { dragRect, panelBounds, panelWindowRect, type Opacity, type OverGame, type Rect, type WindowMode } from "./game-overlays";
 import { GAME_OVERLAY_FRAME_URL, GAME_OVERLAY_ORIGIN, serveGameOverlay, type GameOverlaySource } from "./game-overlay-page";
 import { GAME_OVERLAY_FRAME_DOCUMENT } from "../shared/game-overlay-frame";
 import { InsertedCss } from "./inserted-css";
+import { sha256Hex } from "./hash";
 
 /** What the window needs of a panel it holds (implemented by ModuleView). */
 export interface OverlayPanel {
@@ -128,7 +128,7 @@ export class GameOverlayWindow {
   constructor(private readonly options: GameOverlayWindowOptions) {
     // No "persist:" prefix: nothing of the page is kept on disk. Each overlay has a session of its own, kept for as long
     // as Tavora runs, so a page that keeps crashing doesn't leave a new session behind every time.
-    const name = createHash("sha256").update(options.id).digest("hex").slice(0, 32);
+    const name = sha256Hex(options.id).slice(0, 32);
     const partition = `game-overlay-${name}`;
     const ses = lockedSession(partition, (url) => url.startsWith(`${GAME_OVERLAY_ORIGIN}/`));
     if (!options.panel) ses.protocol.handle(GAME_OVERLAY_SCHEME, (request) => serveGameOverlay(request, options.source));

@@ -25,6 +25,7 @@ import { leaderboardsAdminRoutes, type LeaderboardStore } from "./leaderboards.t
 import type { ModuleRequestStore } from "./module-requests.ts";
 import { statsRange, type StatsStore } from "./stats.ts";
 import type { Submissions } from "./submissions.ts";
+import { sha256Hex } from "./hash.ts";
 
 /**
  * Tavora Admin, the private panel: Overview, Updates, Modules, Review, Accounts and Status. The page is the
@@ -262,7 +263,7 @@ export function createAdminApp({ token, statsToken, submissions, state, store, c
     const id = /^([a-z0-9-]+)\.png$/.exec(context.req.param("file"))?.[1];
     const bytes = id && isIconId(id) ? store.file(id) : null;
     if (!bytes) return context.json({ error: "Not found." }, 404);
-    const kept = context.req.query("v") === createHash("sha256").update(bytes).digest("hex");
+    const kept = context.req.query("v") === sha256Hex(bytes);
     return new Response(bytes, { headers: { "Content-Type": "image/png", ...(kept ? { "Cache-Control": "private, max-age=31536000, immutable" } : {}) } });
   });
 

@@ -240,8 +240,6 @@ export interface LiveLook extends OverlayLook {
   veiled: boolean;
 }
 
-export type ItemLook = PanelLook | OverlayLook | LiveLook;
-
 export type ItemKind = "overlay" | "panel" | "live";
 
 /**

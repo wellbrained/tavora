@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { accountLifecycle, type AccountLifecycle } from "./account-lifecycle.ts";
@@ -15,6 +14,7 @@ import { requireSignIn, signedOut, stillSignedIn, tooMany, type SignedInEnv } fr
 import type { ReviewStore } from "./reviews.ts";
 import type { ConversationStore } from "./conversations.ts";
 import type { LeaderboardStore } from "./leaderboards.ts";
+import { sha256Hex } from "./hash.ts";
 
 /**
  * The account routes under /v1/account. Every answer that could tell whether
@@ -132,7 +132,7 @@ export const SEND_PAUSE = { startMs: 500, minMs: 50, maxMs: 3000 } as const;
 const DAY_MS = 24 * 60 * 60_000;
 const utcDay = (at: number) => new Date(at).toISOString().slice(0, 10);
 /** An address and who asks for it (account-store.ts codeGroup) as a limiter key: a hash, so memory holds no address. */
-const addressLimitKey = (email: string, group: string) => createHash("sha256").update(`share:${group}:${email}`).digest("hex");
+const addressLimitKey = (email: string, group: string) => sha256Hex(`share:${group}:${email}`);
 const nextUtcDay = (at: number) => {
   const date = new Date(at);
   return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + 1);

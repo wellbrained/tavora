@@ -1,10 +1,10 @@
-import { createHash } from "node:crypto";
 import { folderKey, validateChangelog } from "@tavora/module-schema";
 import type { ZipFile } from "@tavora/pack";
 import { type CatalogStore, type CheckedZip, copyHashes, type ReviewReason } from "./catalog.ts";
 import { checkModuleText } from "./review-filter.ts";
 import { FREE_AFTER_BYTES, freeMemory } from "./upload-memory.ts";
 import type { Scanner } from "./virus-scan.ts";
+import { sha256Hex } from "./hash.ts";
 
 /**
  * The automatic checks every new version runs before it lists (decided 2026-10-26, "Tavora Admin panel" in the
@@ -287,7 +287,7 @@ function signsIn(name: string, source: string): { sign: Sign; detail: string }[]
   if (text.length >= 500 && count(/[[\]()!+]/g) / text.length >= 0.8) found.push({ sign: "obfuscated", detail: `${name}: reads like JSFuck` });
   if (count(/String\.fromCharCode/g) >= 40) add("obfuscated", /String\.fromCharCode/.exec(text));
   if (/\batob\s*\(/.test(text)) {
-    const known = (match: RegExpExecArray) => KNOWN_DATA.has(createHash("sha256").update(match[0].slice(1, -1)).digest("hex"));
+    const known = (match: RegExpExecArray) => KNOWN_DATA.has(sha256Hex(match[0].slice(1, -1)));
     add("obfuscated", firstWhere(/(?<!base64,)["'`][A-Za-z0-9+/]{4000,}={0,2}["'`]/g, text, (match) => !known(match)));
   }
   return found;

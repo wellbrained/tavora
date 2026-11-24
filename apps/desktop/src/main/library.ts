@@ -576,10 +576,6 @@ export function setWorkspaceImage(library: Library, id: string, file: string): W
   return previous;
 }
 
-export function setShowNews(library: Library, id: string, show: boolean): void {
-  liveWorkspace(library, id).showNews = show;
-}
-
 export function markOpened(library: Library, id: string, now: Date): void {
   liveWorkspace(library, id).lastOpenedAt = now.toISOString();
   library.lastWorkspaceId = id;
@@ -1082,8 +1078,4 @@ function sanitizeIcon(icon: unknown, name: string): WorkspaceIcon {
     if (text) return { kind: "monogram", text };
   }
   return { kind: "monogram", text: monogram(name) };
-}
-
-export function isIconFile(file: string): boolean {
-  return ICON_FILE.test(file);
 }

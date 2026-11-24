@@ -4,7 +4,6 @@
 // the `publisher` field in the service's name form (C13), and a zip counts only once its SHA-256
 // matches the listing. After that the zip goes through the same installer as Install from zip, which
 // checks the publisher signature itself.
-import { createHash } from "node:crypto";
 import { apiReason, isConnector, MAX_FOLDERS, parseFolderKey, isGameId, isHomepage, isLanguageCode, isSupportEmail, isSupportLink, isModuleId, isNetworkEntry, MAX_LISTED_GAMES, MAX_LISTED_VERSION, MAX_NETWORK_HOSTS, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOTS, MAX_TRANSLATIONS, OFFICIAL_PINS, officialOn, translationsFor, type ApiReason, type Connector } from "@tavora/module-schema";
 import { ZIP_LIMITS } from "@tavora/pack";
 import type { CatalogListResult, CatalogModuleView, CatalogOwnReview, CatalogRating } from "../shared/host-api";
@@ -17,6 +16,7 @@ import { serviceUrl } from "./service-url";
 import { isPublisherName } from "./publisher-names";
 import { isSteamAppId } from "./steam-icons";
 import type { ListedGame } from "./workspace-game";
+import { sha256Hex } from "./hash";
 
 export const LIST_TIMEOUT_MS = 8000;
 export const DOWNLOAD_TIMEOUT_MS = 60_000;
@@ -438,7 +438,7 @@ export class CatalogClient {
    */
   async download(zip: CatalogEntry["zip"], onProgress?: (done: number, total: number) => void): Promise<Buffer> {
     const data = await this.read(`/v1/catalog/zips/${zip.sha256}.zip`, zip.size, this.downloadTimeoutMs, "application/zip", onProgress);
-    if (createHash("sha256").update(data).digest("hex") !== zip.sha256) throw new CatalogError("error.catalogBadZip");
+    if (sha256Hex(data) !== zip.sha256) throw new CatalogError("error.catalogBadZip");
     return data;
   }
 
@@ -487,7 +487,7 @@ export class CatalogClient {
   async picture(shot: CatalogScreenshot, maxBytes = MAX_SCREENSHOT_BYTES): Promise<string | null> {
     try {
       const data = await this.read(`/v1/catalog/pictures/${shot.sha256}.${shot.type}`, shot.size, this.listTimeoutMs, `image/${shot.type}`);
-      if (createHash("sha256").update(data).digest("hex") !== shot.sha256) return null;
+      if (sha256Hex(data) !== shot.sha256) return null;
       const url = pictureDataUrl(data, maxBytes);
       return url?.startsWith(`data:image/${shot.type};`) ? url : null;
     } catch {
@@ -577,7 +577,7 @@ export class CatalogClient {
   async reviewerPicture(reviewId: string, picture: { sha256: string; size: number }): Promise<string | null> {
     try {
       const data = await this.read(`/v1/catalog/reviews/${reviewId}/picture/${picture.sha256}.png`, picture.size, this.listTimeoutMs, "image/png");
-      if (createHash("sha256").update(data).digest("hex") !== picture.sha256) return null;
+      if (sha256Hex(data) !== picture.sha256) return null;
       const url = pictureDataUrl(data, MAX_REVIEWER_PICTURE);
       return url?.startsWith("data:image/png;") ? url : null;
     } catch {

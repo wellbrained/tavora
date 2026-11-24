@@ -3,12 +3,12 @@
 // files still carry that owner's signature) and for Tavora's own modules downloaded from the catalogue
 // (official-updates.ts). Hashing every file at every start would slow it down, so a check is kept with a stamp of the
 // folder (every file's name, size, change times and file id) and done again only when the stamp changes.
-import { createHash } from "node:crypto";
 import { lstat, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { validateManifest } from "@tavora/module-schema";
 import { MANIFEST_FILE, signedHash, verifyFiles, ZIP_LIMITS, type ZipFile } from "@tavora/pack";
 import { writeFileAtomic } from "./fsutil";
+import { sha256Hex } from "./hash";
 
 /** What the folder holds: its files (when read) and a stamp that changes when any of them does. */
 export interface FolderRead {
@@ -166,5 +166,5 @@ export class FolderChecks {
 }
 
 function stampHash(stamp: string): string {
-  return createHash("sha256").update(stamp).digest("hex");
+  return sha256Hex(stamp);
 }

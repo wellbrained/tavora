@@ -1,8 +1,8 @@
-import { createHash } from "node:crypto";
 import type { IconState, PendingRow } from "./icon-state.ts";
 import { LOCAL_PREFIX, slugify } from "./ids.ts";
 import { isIconId, type IconStore } from "./icons.ts";
 import { icoToPng, inspectPng, stripPng } from "./png.ts";
+import { sha256Hex } from "./hash.ts";
 
 /**
  * Icons offered by users' apps, and what happens to them. Only a signed-in
@@ -95,7 +95,7 @@ export function createSubmissions({ state, store, gameName, gamesNamed, now = ()
       if (!clean || !size) return { status: 400, error: "Send a PNG or an .ico of at most 256 px." };
       if (size.width < MIN_ICON_PIXELS || size.height < MIN_ICON_PIXELS) return { status: 400, error: `The icon must be at least ${MIN_ICON_PIXELS} px.` };
 
-      const sha256 = createHash("sha256").update(clean).digest("hex");
+      const sha256 = sha256Hex(clean);
       // Blocked files and accounts, a full queue and a game with enough offers already are quietly not kept.
       if (state.isBlocked(sha256) || state.isSenderBlocked(sender)) return { status: 202 };
       if (state.pendingCount() >= MAX_PENDING) return { status: 503, error: "Too many icons are waiting for review right now." };

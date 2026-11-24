@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import type { Context } from "hono";
 import { PUBLISH_STATEMENT, ZIP_LIMITS } from "@tavora/pack";
 import { PUBLISH_TOKEN_PREFIX, type AccountStore, type UnsentNotice } from "./account-store.ts";
@@ -13,6 +12,7 @@ import { signedStatement } from "./publishers.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 import { FREE_AFTER_BYTES, freeMemory, readUpload, uploadMemory, type MemoryTicket, type ReadLimits, type UploadMemory, zipPlan } from "./upload-memory.ts";
 import type { Scanner } from "./virus-scan.ts";
+import { sha256Hex } from "./hash.ts";
 
 /**
  * Publishing to the catalog (Milestone E, step 3): `tavora-pack publish` sends a zip it packed, with
@@ -293,7 +293,7 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, limits
       if (plan.problem) return refuse(context, 400, "invalid", plan.problem);
       if (!ticket.resize(plan.needed)) return busy(context);
       // Only the holder of a linked key gets a whole zip unpacked here.
-      const early = signerKey(store, context, plan.signer!, createHash("sha256").update(bytes).digest("hex"), signature, by.accountId);
+      const early = signerKey(store, context, plan.signer!, sha256Hex(bytes), signature, by.accountId);
       if (early instanceof Response) return early;
     }
 

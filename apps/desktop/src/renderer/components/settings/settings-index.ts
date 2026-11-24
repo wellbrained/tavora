@@ -42,9 +42,6 @@ export const ABOUT_SECTION = "about";
 /** Pages that open from a row on another page, with a way back; their parent stays lit in the menu. */
 export const SUB_PAGES = { workspaces: "games", trash: "games", "patch-notes": "about", licences: "about" } as const;
 
-/** The patch notes open from Updates & About or the version; the search doesn't find them. */
-export const PATCH_NOTES_SECTION = "patch-notes";
-
 /** The developer pages, as tabs under one menu entry. The first is Your modules. */
 export const DEVELOPER_TABS = ["development", "dev-folders", "dev-publishing", "dev-help"] as const;
 

@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { mkdir, readdir, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import { isModuleId, isOwnerId } from "@tavora/module-schema";
@@ -12,6 +11,7 @@ import { RawJson, SAVED_FILES, SavedFile } from "./saved-file";
 import { INSTANCE_ID } from "./ids";
 import { isWorkspaceId } from "./workspace-id";
 import { defaultFilesRoot } from "./module-files";
+import { sha256Hex } from "./hash";
 
 export { isJsonValue } from "./json";
 
@@ -342,7 +342,7 @@ const ASIDE_FOLDER = "aside";
 
 /** A short name for an owner, safe in a file name. */
 function ownerTag(owner: string): string {
-  return createHash("sha256").update(owner).digest("hex").slice(0, 16);
+  return sha256Hex(owner).slice(0, 16);
 }
 
 /** The panel a state file is of: `<instanceId>.json`, or `aside/<instanceId>.<owner tag>.json`. */

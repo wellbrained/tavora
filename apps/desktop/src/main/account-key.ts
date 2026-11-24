@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { constants } from "node:fs";
 import { copyFile, readdir, readFile, rename, rm, stat, utimes } from "node:fs/promises";
 import path from "node:path";
@@ -9,6 +8,7 @@ import { writeFileAtomic } from "./fsutil";
 import { forgetSealedFile } from "./json";
 import { UserError } from "./messages";
 import { SealedFile } from "./sealed-file";
+import { sha256Hex } from "./hash";
 
 // The account's key (decided 2026-10-20, "one recovery key"): one random 256-bit root key per account,
 // made on the first PC that needs it and shown to the user once as the recovery key. Everything the
@@ -1068,7 +1068,7 @@ export class AccountKey {
   /** A file-name-safe tag for an account (never one of the tags for keys moved aside). */
   private tagOf(account: string): string {
     const safe = /^[A-Za-z0-9_-]{1,64}$/.test(account) && !account.startsWith(UNPROVEN_TAG) && !account.startsWith(UNOPENED_TAG);
-    return safe ? account : createHash("sha256").update(account).digest("hex").slice(0, 32);
+    return safe ? account : sha256Hex(account).slice(0, 32);
   }
 
   /** The files of the key kept under `tag`, next to the copy's (account-key.<tag>.json, account-vault.<tag>.bin). */

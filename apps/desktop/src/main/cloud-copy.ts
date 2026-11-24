@@ -14,6 +14,7 @@ import { SAVED_FILES } from "./saved-file";
 import { OWNER_RECORDS_FILE } from "./installer";
 import { FILES_DIR } from "./module-files";
 import { DATA_FILES } from "./saved-data";
+import { sha256Hex } from "./hash";
 
 // The cloud copy (decided 2026-10-19): one copy of the user's Tavora data per
 // account, the same data as the daily backup, encrypted on this PC so only the
@@ -636,7 +637,7 @@ export class CloudCopy {
           batch.push({ id, data });
           batchBytes += framed;
         }
-        files[file.path] = { size: content.length, mtimeMs: file.mtimeMs, sha256: createHash("sha256").update(content).digest("hex"), parts };
+        files[file.path] = { size: content.length, mtimeMs: file.mtimeMs, sha256: sha256Hex(content), parts };
         done += file.size;
         progress?.(Math.min(done, work), work);
       }

@@ -1,7 +1,7 @@
-import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { inspectPng } from "./png.ts";
+import { sha256Hex } from "./hash.ts";
 
 /**
  * The game icons the service hosts: small PNG files in one folder, listed in
@@ -91,7 +91,7 @@ export function loadIconStore(dir: string, warn: (message: string) => void = () 
       warn(`icons: skipped ${id}: not a small well-formed PNG`);
       continue;
     }
-    if (createHash("sha256").update(bytes).digest("hex") !== sha256) {
+    if (sha256Hex(bytes) !== sha256) {
       warn(`icons: skipped ${id}: file does not match its recorded hash`);
       continue;
     }

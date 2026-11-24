@@ -4,13 +4,13 @@
 // session that reaches nothing else). One window per overlay. It works whether or not Game overlays or Stream overlays
 // are on, and is not part of the in-game layer: it is not on top, not click-through, and closes with Tavora.
 import { BrowserWindow, WebContentsView } from "electron";
-import { createHash } from "node:crypto";
 import { GAME_OVERLAY_SCHEME } from "./assets";
 import { GAME_OVERLAY_ORIGIN, serveGameOverlay } from "./game-overlay-page";
 import type { PreviewRequest, PreviewWindow } from "./overlay-previews";
 import { lockContents, lockedSession } from "./game-overlay-window";
 import { InsertedCss } from "./inserted-css";
 import { escapeHtml } from "../shared/escape-html";
+import { sha256Hex } from "./hash";
 
 export const PREVIEW_BACKGROUNDS = ["dark", "light", "checker"] as const;
 export type PreviewBackground = (typeof PREVIEW_BACKGROUNDS)[number];
@@ -51,7 +51,7 @@ export class OverlayPreviewWindow implements PreviewWindow {
     request: PreviewRequest,
     private readonly options: { hidden: boolean; labels: Record<PreviewBackground, string>; /** The interface font's stylesheet for the footer. */ fontCss?: () => string },
   ) {
-    const name = createHash("sha256").update(request.id).digest("hex").slice(0, 32);
+    const name = sha256Hex(request.id).slice(0, 32);
     const pageSession = lockedSession(`overlay-preview-${name}`, (url) => url.startsWith(`${GAME_OVERLAY_ORIGIN}/`));
     pageSession.protocol.handle(GAME_OVERLAY_SCHEME, (incoming) => serveGameOverlay(incoming, request.source));
     const chromeSession = lockedSession(`overlay-preview-chrome-${name}`, (url) => url.startsWith("data:"));

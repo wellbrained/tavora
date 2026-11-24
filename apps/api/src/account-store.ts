@@ -1,5 +1,6 @@
-import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
+import { randomBytes, randomInt, timingSafeEqual } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
+import { sha256Hex } from "./hash.ts";
 
 /**
  * Accounts: the only user data the service keeps (decided 2026-10-16). An
@@ -190,7 +191,6 @@ export interface PublishedModules {
 /** How long a checked Discord login waits for the user's yes to a new account. */
 export const DISCORD_TICKET_TTL_MS = 10 * 60_000;
 
-const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
 
 /**
  * What makes two developer names the same: case, spaces, dots, dashes and underscores do not
@@ -210,8 +210,8 @@ export function cleanDeveloperName(input: unknown): string | null {
 }
 // Codes and counters are kept by a hash of the address, so an address that
 // never became an account is not written down in the clear.
-const addressKey = (email: string) => sha256(`address:${email}`);
-const codeHash = (key: string, purpose: CodePurpose, code: string) => sha256(`code:${key}:${purpose}:${code}`);
+const addressKey = (email: string) => sha256Hex(`address:${email}`);
+const codeHash = (key: string, purpose: CodePurpose, code: string) => sha256Hex(`code:${key}:${purpose}:${code}`);
 /** A code that holds only for one thing, such as the current address's code for one new address: that goes into its hash. */
 const bound = (code: string, bind: string | undefined) => (bind === undefined ? code : `${code}:${bind}`);
 
@@ -553,13 +553,13 @@ export class AccountStore {
   holdDiscord(discord: DiscordLogin, now: number): string {
     this.db.prepare("delete from discord_tickets where expires_at <= ?").run(now);
     const ticket = randomBytes(32).toString("base64url");
-    this.db.prepare("insert into discord_tickets (ticket_hash, discord_id, discord_name, expires_at) values (?, ?, ?, ?)").run(sha256(`ticket:${ticket}`), discord.id, discord.name, now + DISCORD_TICKET_TTL_MS);
+    this.db.prepare("insert into discord_tickets (ticket_hash, discord_id, discord_name, expires_at) values (?, ?, ?, ?)").run(sha256Hex(`ticket:${ticket}`), discord.id, discord.name, now + DISCORD_TICKET_TTL_MS);
     return ticket;
   }
 
   /** The Discord login a ticket holds, without using it up; null when unknown or expired. */
   peekDiscord(ticket: string, now: number): DiscordLogin | null {
-    const row = this.db.prepare("select discord_id, discord_name, expires_at from discord_tickets where ticket_hash = ?").get(sha256(`ticket:${ticket}`)) as
+    const row = this.db.prepare("select discord_id, discord_name, expires_at from discord_tickets where ticket_hash = ?").get(sha256Hex(`ticket:${ticket}`)) as
       | { discord_id: string; discord_name: string; expires_at: number }
       | undefined;
     return row && row.expires_at > now ? { id: row.discord_id, name: row.discord_name } : null;
@@ -567,7 +567,7 @@ export class AccountStore {
 
   /** The Discord login a ticket holds, used up by taking it; null when unknown or expired. */
   takeDiscord(ticket: string, now: number): DiscordLogin | null {
-    const hash = sha256(`ticket:${ticket}`);
+    const hash = sha256Hex(`ticket:${ticket}`);
     const row = this.db.prepare("select discord_id, discord_name, expires_at from discord_tickets where ticket_hash = ?").get(hash) as
       | { discord_id: string; discord_name: string; expires_at: number }
       | undefined;
@@ -662,7 +662,7 @@ export class AccountStore {
     // Only while the sign-in that asks still exists, as for publish tokens; null otherwise.
     const made = this.db
       .prepare("insert into link_codes (code_hash, account_id, expires_at, session_id) select ?, ?, ?, ? where ? is null or exists (select 1 from sessions where id = ? and account_id = ?)")
-      .run(sha256(`link:${code}`), accountId, expiresAt, sessionId, sessionId, sessionId, accountId);
+      .run(sha256Hex(`link:${code}`), accountId, expiresAt, sessionId, sessionId, sessionId, accountId);
     return Number(made.changes) > 0 ? { code, expiresAt } : null;
   }
 
@@ -673,7 +673,7 @@ export class AccountStore {
 
   /** The account a link code was made for and the sign-in that asked for it, used up by taking it; null when unknown or expired. */
   takeLink(code: string, now: number): { accountId: string; sessionId: string | null } | null {
-    const hash = sha256(`link:${code}`);
+    const hash = sha256Hex(`link:${code}`);
     const row = this.db.prepare("select account_id, expires_at, session_id from link_codes where code_hash = ?").get(hash) as
       | { account_id: string; expires_at: number; session_id: string | null }
       | undefined;
@@ -1210,7 +1210,7 @@ export class AccountStore {
       .prepare(
         "insert into publish_tokens (id, account_id, token_hash, name, created_at, expires_at, session_id) select ?, ?, ?, ?, ?, ?, ? where ? is null or exists (select 1 from sessions where id = ? and account_id = ?)",
       )
-      .run(id, accountId, sha256(`publish:${token}`), name, now, expiresAt, sessionId, sessionId, sessionId, accountId);
+      .run(id, accountId, sha256Hex(`publish:${token}`), name, now, expiresAt, sessionId, sessionId, sessionId, accountId);
     if (Number(made.changes) === 0) return null;
     return { token, publishToken: { id, name, createdAt: now, expiresAt, lastUsedAt: null } };
   }
@@ -1231,7 +1231,7 @@ export class AccountStore {
   /** The account a publish token belongs to, while it is good; marks it used. */
   publishTokenAccount(token: string, now: number): { accountId: string; name: string } | null {
     if (!token.startsWith(PUBLISH_TOKEN_PREFIX)) return null;
-    const row = this.db.prepare("select id, account_id, name, expires_at from publish_tokens where token_hash = ?").get(sha256(`publish:${token}`)) as
+    const row = this.db.prepare("select id, account_id, name, expires_at from publish_tokens where token_hash = ?").get(sha256Hex(`publish:${token}`)) as
       | { id: string; account_id: string; name: string; expires_at: number }
       | undefined;
     if (!row || row.expires_at <= now) return null;
@@ -1446,13 +1446,13 @@ export class AccountStore {
     const id = randomBytes(12).toString("base64url");
     this.db
       .prepare("insert into sessions (id, token_hash, account_id, os, name, created_at, last_used_at) values (?, ?, ?, ?, ?, ?, ?)")
-      .run(id, sha256(`session:${token}`), accountId, os, name, now, now);
+      .run(id, sha256Hex(`session:${token}`), accountId, os, name, now, now);
     return { token, session: { id, accountId } };
   }
 
   /** The sign-in a token belongs to, or null when it is unknown or has gone unused for a year. */
   sessionByToken(token: string, now: number): Session | null {
-    const row = this.db.prepare("select id, account_id, last_used_at from sessions where token_hash = ?").get(sha256(`session:${token}`)) as
+    const row = this.db.prepare("select id, account_id, last_used_at from sessions where token_hash = ?").get(sha256Hex(`session:${token}`)) as
       | { id: string; account_id: string; last_used_at: number }
       | undefined;
     if (!row) return null;
@@ -1581,8 +1581,8 @@ interface CodeRowSql {
 }
 
 /** One network asking for codes to one address, as a hash, so memory holds no address. */
-const askerKey = (from: string, email: string) => sha256(`asker:${from}:${email}`);
+const askerKey = (from: string, email: string) => sha256Hex(`asker:${from}:${email}`);
 /** Who asked for a code, as the code keeps it: a hash of their network and the address. */
-const codeAskerKey = (from: string, email: string) => sha256(`code-asker:${from}:${email}`);
+const codeAskerKey = (from: string, email: string) => sha256Hex(`code-asker:${from}:${email}`);
 /** A network an address signed in from, as known_networks keeps it. */
-const knownKey = (from: string, email: string) => sha256(`known:${from}:${email}`);
+const knownKey = (from: string, email: string) => sha256Hex(`known:${from}:${email}`);

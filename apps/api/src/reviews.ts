@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -7,6 +7,7 @@ import type { CatalogStore } from "./catalog.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 import { banned, fail, requireSignIn, tooMany, type SignedInEnv } from "./sign-in.ts";
 import { checkReviewText } from "./review-filter.ts";
+import { sha256Hex } from "./hash.ts";
 
 /**
  * Module ratings and reviews (decided 2026-10-21). A signed-in account rates a catalog module once,
@@ -422,7 +423,7 @@ function reviewAnswer(review: StoredReview, accounts: AccountStore) {
       name,
       initials: name ? profile!.initials : null,
       // Fetched by the review it belongs to, and checked against this hash and size by the app.
-      picture: profile?.picture ? { sha256: createHash("sha256").update(profile.picture).digest("hex"), size: profile.picture.length } : null,
+      picture: profile?.picture ? { sha256: sha256Hex(profile.picture), size: profile.picture.length } : null,
     },
     reply: review.reply && !review.hidden ? { text: review.reply.text, updatedAt: new Date(review.reply.updatedAt).toISOString() } : null,
   };
@@ -480,7 +481,7 @@ export function reviewRoutes({ reviews, catalog, accounts, clientKey, writeRateL
     const review = REVIEW_ID.test(id) && sha ? reviews.review(id) : null;
     if (!review || review.text === null || review.hidden || !catalog.module(review.moduleId)) return fail(context, 404, "not-found", "Not found.");
     const picture = accounts.profile(review.accountId)?.picture;
-    if (!picture || createHash("sha256").update(picture).digest("hex") !== sha) return fail(context, 404, "not-found", "Not found.");
+    if (!picture || sha256Hex(picture) !== sha) return fail(context, 404, "not-found", "Not found.");
     return new Response(new Uint8Array(picture), {
       headers: { "Content-Type": "image/png", "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'", "Cache-Control": "public, max-age=86400" },
     });
