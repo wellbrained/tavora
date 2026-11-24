@@ -83,6 +83,15 @@ function ipv4Parts(address: string): number[] {
   return address.split(".").map(Number);
 }
 
+/** An IPv6 address in the short form the URL parser writes (64:ff9b:0:0:0:0:808:808 -> 64:ff9b::808:808). */
+function compressIpv6(address: string): string {
+  try {
+    return new URL(`http://[${address}]`).hostname.slice(1, -1);
+  } catch {
+    return address;
+  }
+}
+
 /**
  * Whether an IP address is on the public internet: not this PC, the local network, link-local,
  * shared (CGNAT), multicast, documentation, benchmarking or otherwise reserved ranges.
@@ -111,6 +120,14 @@ export function isPublicAddress(address: string): boolean {
     // IPv4 written inside IPv6 (::ffff:a.b.c.d, ::a.b.c.d, 64:ff9b::a.b.c.d) is judged as the IPv4 address.
     const embedded = /(\d+\.\d+\.\d+\.\d+)$/.exec(lower);
     if (embedded) return isPublicAddress(embedded[1]!);
+    // NAT64 well-known prefix in hex (64:ff9b::808:808, as DNS lookups return it): judged by the IPv4 address in it. The
+    // local-use prefix (64:ff9b:1::/48) stays refused, it is not the internet.
+    const nat64 = /^64:ff9b::([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(compressIpv6(lower));
+    if (nat64) {
+      const high = parseInt(nat64[1]!, 16);
+      const low = parseInt(nat64[2]!, 16);
+      return isPublicAddress(`${high >> 8}.${high & 255}.${low >> 8}.${low & 255}`);
+    }
     if (first === 0 || first === 0x64) return false; // unspecified/mapped forms, NAT64
     return true;
   }

@@ -429,6 +429,34 @@ describe("isPublicAddress", () => {
   });
 });
 
+describe("isPublicAddress with NAT64 (64:ff9b::/96)", () => {
+  // Node's DNS lookup hands back the hex form, so a DNS64 network must work with it.
+  it.each([
+    ["64:ff9b::808:808", true], // 8.8.8.8
+    ["64:ff9b::8.8.8.8", true],
+    ["64:ff9b::5db8:d822", true], // 93.184.216.34
+    ["64:ff9b:0:0:0:0:808:808", true],
+    ["64:FF9B::808:808", true],
+    ["64:ff9b::a01:203", false], // 10.1.2.3
+    ["64:ff9b::10.1.2.3", false],
+    ["64:ff9b::7f00:1", false], // 127.0.0.1
+    ["64:ff9b::a9fe:a9fe", false], // 169.254.169.254
+    ["64:ff9b::c0a8:1", false], // 192.168.0.1
+    ["64:ff9b::6440:1", false], // 100.64.0.1
+    ["64:ff9b::e000:1", false], // 224.0.0.1
+    ["64:ff9b::c000:201", false], // 192.0.2.1
+    ["64:ff9b::", false],
+    // Local-use prefix (RFC 8215): translators inside one network, not the internet.
+    ["64:ff9b:1::808:808", false],
+    ["64:ff9b:1:ffff::808:808", false],
+    // Not the well-known prefix.
+    ["64::808:808", false],
+    ["64:ff9a::808:808", false],
+  ])("%s -> %s", (address, expected) => {
+    expect(isPublicAddress(address)).toBe(expected);
+  });
+});
+
 describe("parseTestHosts", () => {
   it("reads name=address pairs and skips anything else", () => {
     expect([...parseTestHosts("A.tavora.test=127.0.0.1,bad,b.tavora.test=nope, c.tavora.test = ::1")]).toEqual([

@@ -32,18 +32,29 @@ export function pictureSize(bytes: Buffer): { type: "png" | "webp"; width: numbe
   if (bytes.length >= 24 && bytes.subarray(0, PNG.length).equals(PNG)) {
     return bytes.toString("latin1", 12, 16) === "IHDR" ? sized("png", bytes.readUInt32BE(16), bytes.readUInt32BE(20)) : null;
   }
-  if (bytes.length < 25 || bytes.toString("latin1", 0, 4) !== "RIFF" || bytes.toString("latin1", 8, 12) !== "WEBP") return null;
+  // As the service reads it (apps/api/src/png.ts, kept the same by webp-parity.test.ts): the RIFF size matches the file
+  // and the first chunk fits.
+  if (bytes.length < 20 || bytes.toString("latin1", 0, 4) !== "RIFF" || bytes.toString("latin1", 8, 12) !== "WEBP") return null;
+  if (bytes.readUInt32LE(4) + 8 !== bytes.length) return null;
   const kind = bytes.toString("latin1", 12, 16);
+  const length = bytes.readUInt32LE(16);
+  if (20 + length > bytes.length) return null;
   // VP8L: a signature byte, then 14 bits each of width and height, less one.
-  if (kind === "VP8L" && bytes[20] === 0x2f) {
+  if (kind === "VP8L") {
+    if (length < 5 || bytes[20] !== 0x2f) return null;
     const bits = bytes.readUInt32LE(21);
     return sized("webp", (bits & 0x3fff) + 1, ((bits >>> 14) & 0x3fff) + 1);
   }
   // VP8: a frame tag, the start code, then 14 bits each of width and height.
-  if (bytes.length < 30) return null;
-  if (kind === "VP8 " && bytes[23] === 0x9d && bytes[24] === 0x01 && bytes[25] === 0x2a) return sized("webp", bytes.readUInt16LE(26) & 0x3fff, bytes.readUInt16LE(28) & 0x3fff);
+  if (kind === "VP8 ") {
+    if (length < 10 || bytes[23] !== 0x9d || bytes[24] !== 0x01 || bytes[25] !== 0x2a) return null;
+    return sized("webp", bytes.readUInt16LE(26) & 0x3fff, bytes.readUInt16LE(28) & 0x3fff);
+  }
   // VP8X: flags and reserved bytes, then the canvas, 24 bits each, less one.
-  if (kind === "VP8X") return sized("webp", bytes.readUIntLE(24, 3) + 1, bytes.readUIntLE(27, 3) + 1);
+  if (kind === "VP8X") {
+    if (length < 10) return null;
+    return sized("webp", bytes.readUIntLE(24, 3) + 1, bytes.readUIntLE(27, 3) + 1);
+  }
   return null;
 }
 
