@@ -191,6 +191,21 @@ describe("checkUpdate", () => {
     expect(checkUpdate(signed, UPDATE.sha512, pinned, "0.99.99")).toEqual({ ok: true, key: "release" });
   });
 
+  it("refuses when this version is malformed: never newer, never equal", () => {
+    for (const current of ["", "1.0", "1.0.x", "01.0.0", "1.0.0-beta.1", "1.0.0\n", "NaN.NaN.NaN"]) {
+      expect(checkUpdate(signed, UPDATE.sha512, pinned, current)).toEqual({ ok: false, reason: `1.0.1 is not newer than this version (${current})` });
+    }
+  });
+
+  it("refuses a malformed feed version even when it is signed, whether or not this version is plain", () => {
+    for (const version of ["1.0", "1.0.x", "01.0.1", "1.0.1-beta.1", ""]) {
+      const odd = { version, file: UPDATE.file, sha512: UPDATE.sha512 };
+      expect(() => signUpdate(odd, release.privateKey)).toThrow(/can't sign/);
+      expect(checkUpdate({ ...signed, version }, UPDATE.sha512, pinned, "1.0.0").ok).toBe(false);
+      expect(checkUpdate({ ...signed, version }, UPDATE.sha512, pinned, version).ok).toBe(false);
+    }
+  });
+
   it("refuses without a signature, and with unusable pinned keys", () => {
     const { [UPDATE_SIGNATURE_FIELD]: _, ...unsigned } = signed;
     expect(checkUpdate(unsigned, UPDATE.sha512, pinned, "1.0.0")).toEqual({ ok: false, reason: "latest.yml has no Tavora signature" });

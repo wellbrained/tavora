@@ -5,9 +5,10 @@
 // downloaded, made by one of the two keys pinned in update-keys.ts.
 //
 // Used by the main process (updates.ts, host.ts) and by Node scripts (release.mjs, update-key.mjs, update-check.mjs),
-// so it imports nothing but Node's own modules.
+// so it imports nothing but Node's own modules and the dependency-free shared/plain-version.ts.
 import { createHash, createPublicKey, generateKeyPairSync, sign, verify, type KeyObject } from "node:crypto";
 import { createReadStream } from "node:fs";
+import { comparePlainVersions, parsePlainVersion } from "../shared/plain-version.ts";
 
 /** The first line of what is signed: a signature over anything else (a catalog list, a module) never counts here. */
 export const UPDATE_SIGNATURE_FORMAT = "tavora-update-v1";
@@ -29,7 +30,6 @@ export interface SignedUpdate {
 
 export type UpdateCheck = { ok: true; key: UpdateKeyName } | { ok: false; reason: string };
 
-const VERSION = /^(0|[1-9]\d{0,8})\.(0|[1-9]\d{0,8})\.(0|[1-9]\d{0,8})$/;
 const FILE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/;
 // DER prefix of an Ed25519 public key in SubjectPublicKeyInfo form; the raw 32 bytes follow.
 const ED25519_SPKI = Buffer.from("302a300506032b6570032100", "hex");
@@ -43,7 +43,7 @@ function isBase64Of(value: unknown, bytes: number): value is string {
 
 /** Why these fields can't be signed or checked, or null. Each field is one plain line, so the signed text can't be read two ways. */
 export function updateProblem(update: { version: unknown; file: unknown; sha512: unknown }): string | null {
-  if (typeof update.version !== "string" || !VERSION.test(update.version)) return `the version is not a plain x.y.z version`;
+  if (parsePlainVersion(update.version) === null) return `the version is not a plain x.y.z version`;
   if (typeof update.file !== "string" || !FILE.test(update.file)) return `the file name is not a plain file name`;
   if (!isBase64Of(update.sha512, 64)) return `the SHA-512 is not 64 bytes of base64`;
   return null;
@@ -115,14 +115,6 @@ export function verifyUpdateSignature(update: { version: unknown; file: unknown;
   return { ok: false, reason: "the Tavora signature does not match this version, file and SHA-512 under either pinned key" };
 }
 
-/** -1, 0 or 1 for two plain x.y.z versions. */
-function compareVersions(a: string, b: string): number {
-  const x = a.split(".").map(Number);
-  const y = b.split(".").map(Number);
-  for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return (x[i] ?? 0) < (y[i] ?? 0) ? -1 : 1;
-  return 0;
-}
-
 /** What the updater says it downloaded: the parsed latest.yml plus the downloaded file's path (electron-updater's update-downloaded event). */
 export interface DownloadedUpdate {
   version?: unknown;
@@ -158,7 +150,8 @@ export function checkUpdate(update: DownloadedUpdate, sha512: string, pinned: un
   const fields = { version: update.version, file: baseName(update.downloadedFile), sha512 };
   const signed = verifyUpdateSignature(fields, update[UPDATE_SIGNATURE_FIELD], keys.keys);
   if (!signed.ok) return signed;
-  if (!VERSION.test(currentVersion) || compareVersions(fields.version as string, currentVersion) <= 0) {
+  // Only a strictly newer plain x.y.z passes: a malformed version on either side is null, never "newer".
+  if (comparePlainVersions(fields.version, currentVersion) !== 1) {
     return { ok: false, reason: `${String(fields.version)} is not newer than this version (${currentVersion})` };
   }
   return signed;

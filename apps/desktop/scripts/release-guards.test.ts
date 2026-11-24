@@ -11,6 +11,10 @@ describe("compareVersions", () => {
     expect(compareVersions("0.3.2", "0.3.10")).toBe(-1);
     expect(compareVersions("0.4.0", "0.4.0")).toBe(0);
     expect(() => compareVersions("0.4", "0.4.0")).toThrow();
+    for (const bad of ["", "1.2.x", "01.2.3", "1.2.3-beta"]) {
+      expect(() => compareVersions(bad, "1.0.0")).toThrow(`Not a version: ${bad}`);
+      expect(() => compareVersions("1.0.0", bad)).toThrow(`Not a version: ${bad}`);
+    }
   });
 });
 

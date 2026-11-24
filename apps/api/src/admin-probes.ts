@@ -5,6 +5,7 @@
  * up to a cap and redirects are followed only on the same host, so none of these hosts can make the service read
  * without end or ask somewhere else.
  */
+import { compareVersionsLoose } from "../../desktop/src/shared/plain-version.ts";
 import { fetchSameOrigin, isUnfollowedRedirect, readCapped, readCappedJson } from "./capped-fetch.ts";
 
 export interface FeedInfo {
@@ -37,15 +38,7 @@ const FEED_BYTES = 64 * 1024;
 const VERSION_BYTES = 1024 * 1024;
 
 /** `1.2.10` > `1.2.9`; anything that is not major.minor.patch counts as 0.0.0. */
-export function compareVersions(a: string, b: string): number {
-  const parts = (version: string) => (/^(\d+)\.(\d+)\.(\d+)/.exec(version) ?? [, "0", "0", "0"]).slice(1).map(Number) as number[];
-  const [left, right] = [parts(a), parts(b)];
-  for (let index = 0; index < 3; index++) {
-    const difference = (left[index] ?? 0) - (right[index] ?? 0);
-    if (difference !== 0) return Math.sign(difference);
-  }
-  return 0;
-}
+export const compareVersions = compareVersionsLoose;
 
 /** Reads what the panel needs from electron-builder's latest.yml. */
 export function parseLatestYml(text: string): FeedInfo | null {

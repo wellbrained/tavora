@@ -1,17 +1,14 @@
 // The rules `pnpm release` checks before it builds or publishes anything. Kept
 // apart from the script so they can be tested.
 
+import { comparePlainVersions, parsePlainVersion } from "../src/shared/plain-version.ts";
 import { feedNoteProblem } from "./release-notes.mjs";
 
-const SEMVER = /^(\d+)\.(\d+)\.(\d+)$/;
-
-/** -1, 0 or 1; both must be major.minor.patch. */
+/** -1, 0 or 1; both must be major.minor.patch (the same strict reader the app's update check uses). Throws on anything else. */
 export function compareVersions(a, b) {
-  const pa = SEMVER.exec(a)?.slice(1).map(Number);
-  const pb = SEMVER.exec(b)?.slice(1).map(Number);
-  if (!pa || !pb) throw new Error(`Not a version: ${!pa ? a : b}`);
-  for (let i = 0; i < 3; i++) if (pa[i] !== pb[i]) return pa[i] < pb[i] ? -1 : 1;
-  return 0;
+  const order = comparePlainVersions(a, b);
+  if (order === null) throw new Error(`Not a version: ${parsePlainVersion(a) === null ? a : b}`);
+  return order;
 }
 
 /** The newest released version among tags like v0.4.0, or null if there is none. */
@@ -30,7 +27,7 @@ export function lastReleased(tags) {
  */
 export function checkRelease(version, state) {
   const problems = [];
-  if (!SEMVER.test(version)) return [`The app version "${version}" is not major.minor.patch.`];
+  if (parsePlainVersion(version) === null) return [`The app version "${version}" is not major.minor.patch.`];
   if (state.branch !== "main") problems.push(`Release from main, not from "${state.branch}".`);
   if (state.dirty) problems.push("There are uncommitted changes.");
   if (state.behind > 0) problems.push(`main is ${state.behind} commit(s) behind origin/main; pull first.`);
