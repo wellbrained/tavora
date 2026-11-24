@@ -32,398 +32,68 @@ export const PATCH_NOTES: readonly PatchNote[] = [
     date: "2026-11-24",
     title: "Steadier and safer",
     notes: [
-      "A big round of work under the hood: your cloud copy, sign-in and saved files are safer.",
+      "When you open the overlay in game, its card no longer flashes over a panel.",
+      "A panel that runs with your game, or feeds an overlay, keeps running when you close the in-game layer.",
+      "The running game's card no longer lists the modules that run with the game.",
+      "Tabs inside a module, like the PDF Viewer's files, follow Settings > Appearance > Too many tabs: a list or arrows. Dragging a tab to the right drops it where you let go.",
+      "Double-click the line under a panel with a list beside it: the panel fits its content, and the list still scrolls.",
+      "Move the open workspace to the Trash: its panels and overlays close and you're taken Home. Undo opens it again right where you were.",
+      "Game modules can put tags on a card's picture and show each stat at level 1, 2 and 3 side by side. A stat that doesn't change shows a faint dash.",
+      "Update all goes on when a module changes under it, instead of stopping.",
+      "Cloud copy: Tavora never writes over a file it can't read right now, keeps a copy of a damaged one, and asks which side to keep when another PC's save won, also after weeks away.",
+      "Cloud copy: a PC that missed many saves asks before catching up. When an older Tavora saves the copy, your other PCs ask too. Update Tavora there.",
+      "Cloud copy in a folder: whoever can write the folder can't make Tavora delete what your copy needs, or go back to an older copy without asking. Missing parts come back by themselves.",
+      "Use the cloud copy: an older Tavora can't upload over it before the restart, it works again after a restore lost its file list, and a failed turn-off now tells you the copy is still on.",
+      "If your newest copy won't open with your key, type the new key of the PC that started over, or keep this PC's data. A copy waiting for another account says so.",
+      "A full disk now says your disk is full, and when a restore keeps two backups you hear about both.",
+      "A slow key store no longer holds up the start. When it answers, Tavora picks up your sign-in and Discord connection, and keeps the ones you just made.",
+      "Signing out can't be undone by a sign-in that was still being refreshed, and Tavora remembers every account it saw on this PC.",
+      "If Tavora can't open your key, like while a virus scan holds it or after a newer Tavora saved it, it asks for your recovery key instead of replacing it. Starting over keeps the old key on this PC.",
+      "A development folder you add is still there after a restart, and a new project in it is found right away.",
+      "Moving your pictures to a folder that links back to where they are now is refused, so none get lost.",
+      "Leftovers from a save that was cut off are cleared away at the next start.",
+      "A module's hotkeys control your music only when you set them for play/pause, next or previous.",
+      "Started with a switch Tavora doesn't know, it closes and says so. Start it from its shortcut or the Start menu; `--disable-gpu` still works.",
+      "Adding a PC stops if the request changes on the way, and after too many tries in an hour your PC waits before it answers again. A request planted in the folder can't block it.",
+      "Access and connectors you allow go only to the module copy that asked. If a development folder takes its place meanwhile, nothing is granted.",
+      "Web pages in Tavora can't reach a Bluetooth, USB or other device.",
+      "Publishing: changing your email stops every publish token and pauses your keys; link a key again in Settings > Developer > Publishing. Signing a device out does the same for what it made. Someone else used your account? Change your email.",
+      "A paused key shows as paused, with Link again. Emails about your publishing that couldn't go out are listed under Emails not sent.",
     ],
     prs: [
       { number: 944, title: "Tavora 0.25: minor release note" },
-    ],
-  },
-  {
-    version: "0.24.163",
-    date: "2026-11-24",
-    title: "Discord sign-in kept after a slow start",
-    notes: [
-      "Connecting Discord while your computer's key store is still waking up is now saved as soon as it answers, so Tavora doesn't go back to your old account after a restart.",
-    ],
-    prs: [
       { number: 943, title: "Discord: keep a sign-in made while the key store was slow" },
-    ],
-    tags: ["discord"],
-  },
-  {
-    version: "0.24.162",
-    date: "2026-11-24",
-    title: "A slow keyring no longer holds things up",
-    notes: [
-      "If your system's key store is slow to answer, Tavora starts without waiting for it again and again.",
-      "When it answers later, Tavora picks up your saved sign-in and Discord connection, and keeps a Tavora sign-in you just made.",
-      "Signing out can't be undone by a sign-in that was still being refreshed.",
-    ],
-    prs: [
       { number: 942, title: "Key store follow-ups from #940: no key re-seal, guarded sign-in re-seal, one timeout per start" },
-    ],
-    tags: ["accounts", "cloud-copy", "discord"],
-  },
-  {
-    version: "0.24.161",
-    date: "2026-11-24",
-    title: "Clearer cloud copy turn-off",
-    notes: [
-      "If turning the cloud copy off fails while you use the cloud copy, Tavora now stays open and tells you the copy is still on.",
-    ],
-    prs: [
       { number: 941, title: "Cloud copy: show a failed turn-off; keep the swap plan back once a turn-off is asked" },
-    ],
-    tags: ["cloud-copy"],
-  },
-  {
-    version: "0.24.160",
-    date: "2026-11-24",
-    title: "Sturdier saved sign-ins",
-    notes: [
-      "Your saved sign-ins and keys open the same way as before.",
-    ],
-    prs: [
       { number: 940, title: "Saved sign-ins use the async safeStorage calls" },
-    ],
-    tags: ["accounts", "cloud-copy", "discord", "publishing"],
-  },
-  {
-    version: "0.24.159",
-    date: "2026-11-24",
-    title: "Tabs drop where you drag them",
-    notes: [
-      "Dragging a tab to the right now drops it where you let go, also with animations on.",
-    ],
-    prs: [
       { number: 939, title: "Fix tab drag to the right dropping nothing with animations on" },
-    ],
-    tags: ["pdf-viewer", "ui-kit"],
-  },
-  {
-    version: "0.24.158",
-    date: "2026-11-24",
-    title: "Safer cloud copy files",
-    notes: [
-      "Tavora never writes over a cloud copy file it can't read right now.",
-      "It keeps a copy of any cloud copy file that's damaged.",
-    ],
-    prs: [
       { number: 934, title: "The cloud copy's own files move to SavedFile (part 6, last piece)" },
-    ],
-    tags: ["cloud-copy", "saved-data"],
-  },
-  {
-    version: "0.24.157",
-    date: "2026-11-23",
-    title: "Overlay card stays clear",
-    notes: [
-      "When you open the overlay in game, its card no longer shows over a panel for a moment.",
-    ],
-    prs: [
       { number: 933, title: "e2e: the in-game layer over a stand-in game window" },
-    ],
-    tags: ["overlays"],
-  },
-  {
-    version: "0.24.156",
-    date: "2026-11-23",
-    title: "New projects found",
-    notes: [
-      "A project you create in a development folder right after Tavora looked at it is now found too.",
-    ],
-    prs: [
       { number: 931, title: "Steady tests on slow Windows runners; find projects made while watchers start" },
-    ],
-    tags: ["catalog", "service"],
-  },
-  {
-    version: "0.24.155",
-    date: "2026-11-23",
-    title: "Cloud copy in a folder asks before taking over",
-    notes: [
-      "If your last save lost against another PC's, Tavora asks which side to keep, also after weeks away.",
-      "Once your PC has seen a list with a line, renaming or deleting files in the folder can't make Tavora take another PC's copy without asking.",
-      "A PC that missed a lot of saves asks before catching up.",
-    ],
-    prs: [
       { number: 930, title: "Cloud copy in a folder: lineage inside the seal" },
-    ],
-    tags: ["cloud-copy", "privacy", "website"],
-  },
-  {
-    version: "0.24.154",
-    date: "2026-11-23",
-    title: "Keys stay safe",
-    notes: [
-      "Tavora no longer replaces a key or a sign-in it couldn't read, like while a virus scan held it.",
-      "If it can't open your key, or a newer Tavora saved it, Tavora asks for your recovery key. Starting over keeps the old key on this PC.",
-      "Signing in or out still works then. Tavora keeps the old sign-in aside.",
-    ],
-    prs: [
       { number: 929, title: "Sealed files and ai-usage.json move to SavedFile" },
-    ],
-    tags: ["accounts", "ai-usage", "cloud-copy", "discord", "publishing", "settings"],
-  },
-  {
-    version: "0.24.153",
-    date: "2026-11-23",
-    title: "Quieter game card",
-    notes: [
-      "The running game's card no longer names the modules that run with the game.",
-    ],
-    prs: [
       { number: 928, title: "Rail: drop the \"runs with the game\" line from the running game's card" },
-    ],
-    tags: ["games", "privacy", "website"],
-  },
-  {
-    version: "0.24.152",
-    date: "2026-11-23",
-    title: "Fit skips side lists",
-    notes: [
-      "Double-click the line under a panel with a list beside its content: the panel now fits the content, and the list keeps scrolling.",
-    ],
-    prs: [
       { number: 927, title: "Fit on double-click: pages can leave a side list out" },
-    ],
-    tags: ["workspace"],
-  },
-  {
-    version: "0.24.151",
-    date: "2026-11-23",
-    title: "Safer cloud copy in a folder",
-    notes: [
-      "Whoever can write your cloud copy's folder can't make Tavora delete what your copy still needs.",
-      "If newer copies go missing from the folder, or it's put back to an earlier day, Tavora asks before going back.",
-      "If your newest cloud copy won't open with your key, you can type the new key of the PC that started over, or keep this PC's data.",
-      "Parts of your copy that went missing from the folder come back by themselves.",
-      "Approving a new PC through the folder can't be blocked for good by a request someone planted there.",
-      "When a PC with an older Tavora saves the copy, your other PCs ask which side to keep. Update Tavora there.",
-    ],
-    prs: [
-      { number: 909, title: "Cloud copy in a folder: harden against folder writers (audit run 5)" },
-    ],
-    tags: ["cloud-copy", "privacy", "website"],
-  },
-  {
-    version: "0.24.150",
-    date: "2026-11-23",
-    title: "Tidier item cards",
-    notes: [
-      "On a card with a picture, the name and its badges line up with the tags on the picture.",
-    ],
-    prs: [
       { number: 926, title: "Item cards: the name row lines up with the picture's tags" },
-    ],
-    tags: ["ui-kit"],
-  },
-  {
-    version: "0.24.149",
-    date: "2026-11-23",
-    title: "Tags on item card pictures",
-    notes: [
-      "Game modules can put small tags on a card's picture, like its kind and rarity.",
-      "A stat that doesn't change at a level now shows a faint dash.",
-    ],
-    prs: [
       { number: 925, title: "Item cards: tags over the picture, faint \"–\" cells" },
-    ],
-    tags: ["privacy", "publishing", "sdk", "tooltips", "ui-kit", "website"],
-  },
-  {
-    version: "0.24.148",
-    date: "2026-11-23",
-    title: "A column per level on item cards",
-    notes: [
-      "Game modules can show each stat at level 1, 2 and 3 side by side on an item card, under their own headings.",
-    ],
-    prs: [
       { number: 924, title: "Item cards: extra value columns with headings" },
-    ],
-    tags: ["publishing", "sdk", "tooltips", "ui-kit", "website"],
-  },
-  {
-    version: "0.24.147",
-    date: "2026-11-23",
-    title: "Safer module questions",
-    notes: [
-      "A module's question for a connection shows only for the copy that asked, also in Tavora's window.",
-    ],
-    prs: [
-      { number: 916, title: "One session per panel: the connectors and their watches move out of ModuleView" },
-    ],
-    tags: ["modules", "privacy", "workspace"],
-  },
-  {
-    version: "0.24.146",
-    date: "2026-11-23",
-    title: "Smoother module updates",
-    notes: [
-      "Update all goes on with the next update when a module changes under it, instead of stopping.",
-      "Tavora remembers every account it saw on this PC, also when two sign-ins overlap.",
-    ],
-    prs: [
       { number: 918, title: "Review leftovers: Update all, stale panels, popup watch, seen-file race" },
-    ],
-    tags: ["accounts", "modules", "privacy"],
-  },
-  {
-    version: "0.24.145",
-    date: "2026-11-23",
-    title: "Safer module access",
-    notes: [
-      "Access you allow goes only to the module copy you saw. If a development folder takes its place meanwhile, nothing is granted and the question closes.",
-    ],
-    prs: [
+      { number: 916, title: "One session per panel: the connectors and their watches move out of ModuleView" },
       { number: 912, title: "Module access grants only the owner the dialog showed" },
-    ],
-    tags: ["modules", "privacy", "settings", "website"],
-  },
-  {
-    version: "0.24.144",
-    date: "2026-11-23",
-    title: "Safer connector questions",
-    notes: [
-      "A connector you allow goes only to the module copy that asked. If a development folder takes its place meanwhile, the question closes.",
-    ],
-    prs: [
       { number: 910, title: "Connector questions grant only the owner whose page asked" },
-    ],
-    tags: ["modules", "overlays", "privacy", "website", "workspace"],
-  },
-  {
-    version: "0.24.143",
-    date: "2026-11-22",
-    title: "Trash stops overlays",
-    notes: [
-      "Overlays of a workspace you move to the Trash stop right away.",
-    ],
-    prs: [
+      { number: 909, title: "Cloud copy in a folder: harden against folder writers (audit run 5)" },
       { number: 907, title: "Trash follow-ups: dedupe bulk ids, stop overlay panels of trashed workspaces, warn on dropped account change" },
-    ],
-    tags: ["workspace"],
-  },
-  {
-    version: "0.24.142",
-    date: "2026-11-22",
-    title: "Safer cloud copy restores",
-    notes: [
-      "After you pick Use the cloud copy, an older Tavora can't upload over it before the restart.",
-      "Use the cloud copy works again on a restore that stopped and lost its file list.",
-      "A copy waiting for another account says so, and lets you keep this PC's data.",
-      "A full disk now says your disk is full.",
-      "When a restore keeps two backups, you hear about both.",
-    ],
-    prs: [
-      { number: 894, title: "Cloud copy: leftovers from the #860/#880 reviews" },
-    ],
-    tags: ["cloud-copy", "settings"],
-  },
-  {
-    version: "0.24.141",
-    date: "2026-11-22",
-    title: "Trash, tidied up",
-    notes: [
-      "When you move the open workspace to Trash, its panels close and you're taken Home.",
-      "Undo opens it again right where you left it.",
-    ],
-    prs: [
       { number: 906, title: "Give the Host's concepts their own modules, part 3d: Trash leaves the open workspace, module leftovers, account wiring" },
-    ],
-    tags: ["accounts", "modules", "workspace"],
-  },
-  {
-    version: "0.24.140",
-    date: "2026-11-22",
-    title: "Development folders kept",
-    notes: [
-      "A development folder you add is still there after a restart.",
-    ],
-    prs: [
       { number: 905, title: "Give the Host's concepts their own modules, part 3c: workspace library, panel dialogs, profile and questions, window frame" },
-    ],
-    tags: ["modules", "workspace"],
-  },
-  {
-    version: "0.24.139",
-    date: "2026-11-22",
-    title: "Safer starts and moves",
-    notes: [
-      "Started with a switch Tavora doesn't know, it closes and says so. Start it from its own shortcut or the Start menu. `--disable-gpu` still works.",
-      "Moving your pictures to a folder that links back to where they are now is refused, so none get lost.",
-      "A module's hotkeys control your music only when you set them for play/pause, next or previous.",
-    ],
-    prs: [
       { number: 902, title: "Harden desktop edges: switch allowlist, real paths for the files move, no link loops in backups, media hotkeys" },
-    ],
-    tags: ["cloud-copy", "modules", "privacy", "sdk", "website"],
-  },
-  {
-    version: "0.24.138",
-    date: "2026-11-22",
-    title: "Taking your account back",
-    notes: [
-      "Changing your email now also stops every publish token and pauses your publisher keys. Link a key again in Settings > Developer > Publishing to use it.",
-      "Signing a device out from another one stops the publish tokens it made and pauses the keys it linked.",
-      "Someone else used your account? Change your email: that takes back everything, also what they made from a device that's gone.",
-      "A paused key shows as paused, with Link again.",
-      "Emails about your publishing that couldn't go out are listed under Emails not sent.",
-    ],
-    prs: [
       { number: 895, title: "Close the audit run 4 API leads and the review's follow-ups (recovery, codes, notices, copy parts, Steam)" },
-    ],
-    tags: ["accounts", "catalog", "cloud-copy", "privacy", "publishing", "service", "website"],
-  },
-  {
-    version: "0.24.137",
-    date: "2026-11-22",
-    title: "Tidier data folder",
-    notes: [
-      "Leftovers from a save that was cut off are cleared away at the next start.",
-    ],
-    prs: [
-      { number: 891, title: "Clear interrupted saves at start, require the update signature on the server, CODEOWNERS for the update keys" },
-    ],
-    tags: ["privacy", "website"],
-  },
-  {
-    version: "0.24.136",
-    date: "2026-11-22",
-    title: "Safer adding a PC",
-    notes: [
-      "Adding a PC from another one stops if the request changes on the way, so nobody in between can get your key.",
-      "Too many tries in an hour? Your PC says so and waits a bit before it answers again.",
-      "Web pages in Tavora can't reach a Bluetooth, USB or other device.",
-    ],
-    prs: [
+      { number: 894, title: "Cloud copy: leftovers from the #860/#880 reviews" },
       { number: 893, title: "Pairing: pin the commit, cap unclicked answers; refuse every device chooser" },
-    ],
-    tags: ["cloud-copy", "privacy", "settings", "website"],
-  },
-  {
-    version: "0.24.135",
-    date: "2026-11-22",
-    title: "Too many tabs in modules",
-    notes: [
-      "Tabs inside a module, like the PDF Viewer's files, now follow Settings > Appearance > Too many tabs: a list of the hidden ones, or arrows.",
-    ],
-    prs: [
+      { number: 892, title: "Deepen the in-game layer: decide what shows, hide the window mechanics" },
+      { number: 891, title: "Clear interrupted saves at start, require the update signature on the server, CODEOWNERS for the update keys" },
       { number: 889, title: "TabStrip follows Too many tabs (list or arrows)" },
     ],
-    tags: ["games", "pdf-viewer", "publishing", "sdk", "ui-kit", "website", "workspace"],
-  },
-  {
-    version: "0.24.134",
-    date: "2026-11-22",
-    title: "Panels stay on after the in-game layer",
-    notes: [
-      "A panel that runs with your game, or feeds an overlay, keeps running when you close the in-game layer while its workspace isn't open.",
-    ],
-    prs: [
-      { number: 892, title: "Deepen the in-game layer: decide what shows, hide the window mechanics" },
-    ],
-    tags: ["overlays", "workspace"],
+    tags: ["accounts", "ai-usage", "catalog", "cloud-copy", "discord", "games", "modules", "overlays", "pdf-viewer", "privacy", "publishing", "saved-data", "sdk", "service", "settings", "tooltips", "ui-kit", "website", "workspace"],
   },
   {
     version: "0.24.133",
