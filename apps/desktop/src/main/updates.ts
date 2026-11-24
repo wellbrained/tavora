@@ -1,8 +1,9 @@
 import type { UpdateState } from "../shared/host-api";
-import type { DownloadedUpdate, UpdateCheck } from "./update-signature";
+import { describeFreshness, unconfirmed, type FeedInfo } from "./update-freshness";
+import type { DownloadedUpdate, FeedFreshness, UpdateCheck } from "./update-signature";
 
-/** What electron-updater tells about a version it found or downloaded. */
-export interface UpdateInfoLike {
+/** What electron-updater tells about a version it found, didn't find (the feed's own version) or downloaded. */
+export interface UpdateInfoLike extends FeedInfo {
   version: string;
   /** The notes the release put into the feed: one string (one change per line), or one per version, or none. */
   releaseNotes?: string | { version: string; note: string | null }[] | null;
@@ -21,7 +22,9 @@ export interface UpdaterLike {
   requestHeaders?: Record<string, string> | null;
   on(event: "update-available", listener: (info: UpdateInfoLike) => void): unknown;
   on(event: "update-downloaded", listener: (info: DownloadedInfoLike) => void): unknown;
-  on(event: "update-not-available" | "checking-for-update", listener: () => void): unknown;
+  /** electron-updater sends the parsed feed along; the preview's end sends nothing. */
+  on(event: "update-not-available", listener: (info?: UpdateInfoLike) => void): unknown;
+  on(event: "checking-for-update", listener: () => void): unknown;
   on(event: "download-progress", listener: (progress: { percent: number }) => void): unknown;
   on(event: "error", listener: (error: Error) => void): unknown;
   checkForUpdates(): Promise<unknown>;
@@ -80,6 +83,17 @@ export interface UpdateManagerOptions {
    * (update-signature.ts). Only a version that passes becomes ready; nothing else is ever installed.
    */
   verify: (info: DownloadedInfoLike) => Promise<UpdateCheck>;
+  /**
+   * The feed's second signature (update-freshness.ts), checked on every answer from the feed: whether a pinned key
+   * vouched for it lately, for this channel and platform. Without it (dev builds) nothing is checked.
+   */
+  checkFeed?: (info: UpdateInfoLike) => FeedFreshness;
+  /**
+   * Off: the feed check is only logged (this release). On: a feed that can't be confirmed (or expired) makes a check
+   * end as idle with failed "unconfirmed", and a downloaded version whose feed is refused (not merely expired) is not
+   * installed.
+   */
+  enforceFeed?: boolean;
   /** A downloaded version was refused (the host deletes the file). */
   onRefused?: (info: DownloadedInfoLike) => void;
   /** Whether new versions download by themselves (a Settings switch). */
@@ -113,6 +127,8 @@ export class UpdateManager {
   private current: UpdateState = { status: "idle", checkedAt: null, failed: false };
   private readonly updater: UpdaterLike;
   private readonly verify: (info: DownloadedInfoLike) => Promise<UpdateCheck>;
+  private readonly checkFeed: ((info: UpdateInfoLike) => FeedFreshness) | null;
+  private readonly enforceFeed: boolean;
   private readonly onRefused: (info: DownloadedInfoLike) => void;
   private readonly onChange: (state: UpdateState) => void;
   private readonly onDownloaded: (version: string) => void;
@@ -138,6 +154,8 @@ export class UpdateManager {
   constructor(options: UpdateManagerOptions) {
     this.updater = options.updater;
     this.verify = options.verify;
+    this.checkFeed = options.checkFeed ?? null;
+    this.enforceFeed = options.enforceFeed ?? false;
     this.onRefused = options.onRefused ?? (() => {});
     this.onChange = options.onChange;
     this.onDownloaded = options.onDownloaded ?? (() => {});
@@ -176,7 +194,8 @@ export class UpdateManager {
     this.updater.on("update-available", (info) => {
       // A check that answers while the user's download runs (or is done) changes nothing.
       if (this.current.status === "downloading" || this.current.status === "ready") return;
-      this.log(`update ${info.version} available`);
+      // Report only here: a downloaded version's feed is checked again, for the file it saved, before it installs.
+      this.log(`update ${info.version} available${this.feedNote(this.feed(info))}`);
       const notes = readReleaseNotes(info.releaseNotes);
       // A failed download stays marked as failed until the user tries again, unless a newer version came out.
       const u = this.current;
@@ -197,16 +216,18 @@ export class UpdateManager {
       this.set({ ...u, percent });
     });
     this.updater.on("update-downloaded", (info) => void this.downloaded(info));
-    this.updater.on("update-not-available", () => {
-      this.log("up to date");
-      this.set(this.idle(false));
+    this.updater.on("update-not-available", (info) => {
+      // The one answer a server holding updates back would give: the feed's second signature says whether it is fresh.
+      const feed = info ? this.feed(info) : null;
+      this.log(`up to date${this.feedNote(feed)}`);
+      this.set(this.idle(this.enforceFeed && feed && unconfirmed(feed) ? "unconfirmed" : false));
     });
     this.updater.on("error", (error) => {
       this.log(`update error: ${error.message}`);
       this.errorEvents += 1;
       // A failed check goes back to idle. A download is never marked failed here: the error may come
       // from a check that ran during the download; the download's own call says when it failed.
-      if (this.current.status === "checking") this.set(this.idle(true));
+      if (this.current.status === "checking") this.set(this.idle("check"));
     });
   }
 
@@ -241,7 +262,7 @@ export class UpdateManager {
       await this.updater.checkForUpdates();
     } catch (error) {
       this.logFailure("check", error, errorEvents);
-      if (this.is("checking")) this.set(this.idle(true));
+      if (this.is("checking")) this.set(this.idle("check"));
     }
     // An answer without any event (nothing to compare) still ends the check.
     if (this.is("checking")) this.set(this.idle(false));
@@ -306,6 +327,11 @@ export class UpdateManager {
       check = { ok: false, reason: `the check failed (${error instanceof Error ? error.message : String(error)})` };
     }
     if (turn !== this.checkTurn) return;
+    // The feed's second signature for the file it saved: logged; once enforced, a refused one (not an expired one: a
+    // newer signed version always installs) is refused like a bad signature.
+    if (check.ok && check.feed && this.enforceFeed && check.feed.status === "refused") {
+      check = { ok: false, reason: describeFreshness(check.feed) };
+    }
     if (!check.ok) {
       this.log(`update ${info.version} refused: ${check.reason}`);
       this.onRefused(info);
@@ -313,9 +339,24 @@ export class UpdateManager {
       this.set({ status: "available", version: info.version, notes, failed: "refused" });
       return;
     }
-    this.log(`update ${info.version} signature checked (${check.key} key)`);
+    this.log(`update ${info.version} signature checked (${check.key} key)${this.feedNote(check.feed ?? null)}`);
     this.set({ status: "ready", version: info.version, notes });
     this.onDownloaded(info.version);
+  }
+
+  /** Checks the feed's second signature, if this manager does; a check that throws counts as refused. */
+  private feed(info: UpdateInfoLike): FeedFreshness | null {
+    if (!this.checkFeed) return null;
+    try {
+      return this.checkFeed(info);
+    } catch (error) {
+      return { status: "refused", reason: `the feed check failed (${error instanceof Error ? error.message : String(error)})` };
+    }
+  }
+
+  /** The feed check's outcome as the end of a log line: one line per answer, so the log's repeat filter still works. */
+  private feedNote(feed: FeedFreshness | null): string {
+    return feed ? `; ${describeFreshness(feed)}` : "";
   }
 
   /** Logs a call that failed, unless an "error" event since `errorEvents` already wrote the line. */
@@ -344,7 +385,7 @@ export class UpdateManager {
     return { status: "available", version: u.version, notes: u.notes, failed: "download" };
   }
 
-  private idle(failed: boolean): UpdateState {
+  private idle(failed: false | "check" | "unconfirmed"): UpdateState {
     return { status: "idle", checkedAt: this.now().toISOString(), failed };
   }
 

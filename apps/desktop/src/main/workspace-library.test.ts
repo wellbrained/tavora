@@ -2,11 +2,11 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { OnlineSearchResult } from "../shared/host-api";
 import { gridTemplate } from "../shared/layout-templates";
 import { Installed } from "./installed-modules";
-import { addWorkspace, emptyLibrary, isLive, trashWorkspace, type Library } from "./library";
+import { addWorkspace, emptyLibrary, isLive, purgeExpired, trashWorkspace, type Library } from "./library";
 import { PendingQuestions } from "./pending-questions";
 import type { InstalledModule } from "./registry";
 import { UndoShelf } from "./undo-shelf";
@@ -27,6 +27,8 @@ interface Setup {
   found?: OnlineSearchResult;
   /** The workspace open now, as the library's last one; Home when none. */
   open?: string;
+  /** Workspaces whose files can't be deleted now (a file another program holds). */
+  held?: string[];
 }
 
 async function setup(options: Setup = {}) {
@@ -87,7 +89,13 @@ async function setup(options: Setup = {}) {
       drop: (instanceId) => void calls.push(`drop ${instanceId}`),
     },
     panelState: { remove: async (instanceId) => void calls.push(`state gone ${instanceId}`) },
-    files: { noteWorkspaceDeleted: async (name, deleteFiles) => (calls.push(`files of ${name}`), deleteFiles(path.join(userData, "files"))) },
+    files: {
+      noteWorkspaceDeleted: async (name, deleteFiles) => {
+        calls.push(`files of ${name}`);
+        if (options.held?.includes(name)) throw Object.assign(new Error("EBUSY: resource busy or locked"), { code: "EBUSY" });
+        await deleteFiles(path.join(userData, "files"));
+      },
+    },
     forgotten: (workspaceId) => void calls.push(`forgotten ${workspaceId}`),
     clearSession: async (partition) => void calls.push(`clear ${partition}`),
   });
@@ -254,7 +262,7 @@ describe("WorkspaceLibrary", () => {
     workspaces.start("valheim", [record]);
     const files = path.join(userData, "files", "official", "tavora.notes", "valheim");
     await mkdir(files, { recursive: true });
-    await writeFile(path.join(files, "picture.png"), "");
+    await writeFile(path.join(files, `${"0".repeat(32)}.png`), "");
     for (const dir of ["module%3Aofficial%3Atavora.notes@valheim", "browser@satisfactory"]) await mkdir(path.join(userData, "Partitions", dir), { recursive: true });
 
     await shelf.delete(["valheim"], true);
@@ -282,8 +290,37 @@ describe("WorkspaceLibrary", () => {
   it("deletes the data of a workspace whose time in Trash ran out", async () => {
     const { shelf, calls, userData } = await setup();
     await mkdir(path.join(userData, "Partitions", "browser@valheim"), { recursive: true });
-    await shelf.deleteData({ ...emptyLibrary().workspaces, id: "valheim", name: "Valheim" } as never);
+    await shelf.deleteExpired([{ ...emptyLibrary().workspaces, id: "valheim", name: "Valheim" } as never]);
     expect(calls).toEqual(["forgotten valheim", "files of Valheim", "forget icon valheim", "clear persist:browser@valheim"]);
+  });
+
+  it("keeps a workspace in Trash for a later try when its files can't be deleted now, and deletes the others", async () => {
+    const library = emptyLibrary();
+    const long = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    for (const online of [{ id: "valheim", name: "Valheim" }, { id: "satisfactory", name: "Satisfactory" }]) {
+      addWorkspace(library, { online }, long);
+      trashWorkspace(library, online.id, long);
+    }
+    const { shelf, calls } = await setup({ library, held: ["Valheim"] });
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      // At the start: nothing throws, so Tavora starts.
+      const expired = purgeExpired(library, new Date());
+      await shelf.deleteExpired(expired);
+      expect(library.workspaces.valheim?.trashedAt).toBe(long.toISOString());
+      expect(library.workspaces.satisfactory).toBeUndefined();
+      expect(calls).toContain("forget icon satisfactory");
+      expect(calls).not.toContain("forget icon valheim");
+      expect(errors).toHaveBeenCalledWith(expect.stringContaining("valheim"), expect.anything());
+
+      // Deleted from Trash by hand: it stays there too, and the user hears it failed.
+      calls.length = 0;
+      await expect(shelf.delete(["valheim"], true)).rejects.toThrow("EBUSY");
+      expect(library.workspaces.valheim?.trashedAt).toBe(long.toISOString());
+      expect(calls.filter((call) => call === "library saved")).toHaveLength(2);
+    } finally {
+      errors.mockRestore();
+    }
   });
 
   it("puts a picture the user picks on a workspace's icon; nothing when the dialog is closed", async () => {

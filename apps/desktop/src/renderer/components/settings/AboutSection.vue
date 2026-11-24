@@ -39,7 +39,7 @@ const updateRow = computed(() => {
   if (u.status === "available" && u.failed === "refused") return { text: t("settings.updates.refused", { version: u.version }), button: t("update.popover.retry"), busy: false, run: "download-update" as const };
   if (u.status === "available" && u.failed) return { text: t("update.popover.failed"), button: t("update.popover.retry"), busy: false, run: "download-update" as const };
   if (u.status === "available") return { text: t("settings.updates.available", { version: u.version }), button: t("settings.updates.download"), busy: false, run: "download-update" as const };
-  const text = u.failed ? t("settings.updates.failed") : u.checkedAt ? t("settings.updates.upToDate", { date: formatDateTime(u.checkedAt) }) : t("settings.updates.idle");
+  const text = u.failed === "unconfirmed" ? t("settings.updates.unconfirmed") : u.failed ? t("settings.updates.failed") : u.checkedAt ? t("settings.updates.upToDate", { date: formatDateTime(u.checkedAt) }) : t("settings.updates.idle");
   return { text, button: t("settings.updates.checkNow"), busy: false, run: "check-for-updates" as const };
 });
 

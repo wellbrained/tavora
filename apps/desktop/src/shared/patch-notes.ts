@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.25.4",
+    date: "2026-11-24",
+    title: "Your pictures stay put",
+    notes: [
+      "Deleting a workspace no longer removes folders of your own in Pictures\\Tavora, even ones named like the game. Tavora's own pictures for it go to the Recycle Bin.",
+      "Folders of yours next to Tavora's pictures are no longer moved into a \"local\" folder when Tavora starts.",
+      "A file that's in use no longer stops Tavora from starting when Trash is emptied. That workspace stays in Trash and goes next time.",
+    ],
+    prs: [
+      { number: 957, title: "Keep the user's own folders when a workspace or module's data is deleted" },
+    ],
+    tags: ["module-files", "modules", "trash", "workspace", "workspaces"],
+  },
+  {
     version: "0.25.3",
     date: "2026-11-24",
     title: "Safer cloud copy folder",

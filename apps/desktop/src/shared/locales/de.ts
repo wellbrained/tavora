@@ -776,6 +776,7 @@ export const de: Record<keyof typeof en, string> = {
   "settings.updates.failed": "Der Update-Server ist nicht erreichbar. Versuch es gleich noch mal.",
   "settings.updates.refused": "Tavora konnte nicht bestätigen, dass {version} wirklich von Tavora ist, deshalb wurde es nicht installiert.",
   "settings.updates.upToDate": "Alles aktuell. Geprüft {date}.",
+  "settings.updates.unconfirmed": "Wir können gerade nicht prüfen, ob du aktuell bist. Die neueste Version gibt's auf mytavora.app.",
   "settings.updates.idle": "Tavora sucht von selbst.",
   "settings.updates.checkNow": "Jetzt prüfen",
   "settings.diagnostics.copy": "Kopieren",

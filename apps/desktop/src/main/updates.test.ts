@@ -532,7 +532,7 @@ describe("UpdateManager", () => {
     const { manager, updater } = make();
     updater.failCheck = true;
     await manager.check();
-    expect(manager.state).toEqual({ status: "idle", checkedAt: "2026-10-16T09:30:00.000Z", failed: true });
+    expect(manager.state).toEqual({ status: "idle", checkedAt: "2026-10-16T09:30:00.000Z", failed: "check" });
     updater.failCheck = false;
     await manager.check();
     expect(manager.state).toMatchObject({ status: "idle", failed: false });

@@ -111,9 +111,10 @@ import { OnlineSearch } from "./online";
 import { countAppUpdate } from "./usage-counts";
 import { askedName, sendModuleRequest } from "./module-request";
 import { PublisherNames, publisherOf } from "./publisher-names";
-import { PreviewUpdater, previewCheck, UpdateManager, type UpdaterLike } from "./updates";
+import { PreviewUpdater, previewCheck, UpdateManager, type UpdateInfoLike, type UpdaterLike } from "./updates";
 import { PINNED_UPDATE_KEYS } from "./update-keys";
 import { checkDownloadedUpdate } from "./update-signature";
+import { ENFORCE_FEED_FRESHNESS, FeedFreshnessCheck } from "./update-freshness";
 import { OfficialPublisher } from "./official-publish";
 import { OfficialPublishing } from "./official-publishing";
 import { OfficialKeyStore } from "./official-key-store";
@@ -766,6 +767,7 @@ export class Host {
     this.moduleLeftovers = new ModuleLeftovers({
       userData: options.userData,
       filesRoot: () => this.files.root(),
+      trash: options.hidden ? undefined : (dir: string) => shell.trashItem(dir),
       installed: this.installed,
       forget: (owner, moduleId) => {
         this.data.forgetModule(owner, moduleId);
@@ -972,6 +974,7 @@ export class Host {
       },
       panelState: this.data.panelState,
       files: this.files,
+      trash: options.hidden ? undefined : (dir: string) => shell.trashItem(dir),
       forgotten: (workspaceId) => {
         this.data.forgetWorkspace(workspaceId);
         this.streaming.forgetWorkspace(workspaceId);
@@ -1288,7 +1291,8 @@ export class Host {
     const held = await holdLeftovers(userData, libraryRead && workspaceRead && !copySync.dataHeld, leftovers).catch(() => leftovers);
     for (const dir of orphaned) if (!held.workspaces.has(partitionWorkspace(dir)!)) await rm(dir, { recursive: true, force: true });
     await host.data.panelState.prune(new Set([...livePanels, ...held.panels]));
-    for (const workspace of expired) await host.workspaceLibrary.deleteData(workspace);
+    // One whose files can't be deleted now (another program holds one) stays in Trash for the next start.
+    await host.workspaceLibrary.deleteExpired(expired);
     // Version 0.2.0 saved Steam covers here; they were replaced by Steam's own icons.
     await rm(path.join(userData, "steam-art"), { recursive: true, force: true });
     if (expired.length) host.saveLibrary();
@@ -1381,17 +1385,22 @@ export class Host {
    *
    * A downloaded version installs only when Tavora's signature checks out against the keys pinned in
    * update-keys.ts (update-signature.ts); a refused installer is deleted, and Tavora goes on with its version.
+   * Every answer from the feed also has its second signature checked (update-freshness.ts): logged only for now.
    */
   private async startUpdates(): Promise<void> {
     try {
       const updater: UpdaterLike = app.isPackaged
         ? ((await import("electron-updater")).autoUpdater as unknown as UpdaterLike)
         : new PreviewUpdater(app.getVersion(), { fail: process.env.TAVORA_FAKE_UPDATE_FAIL === "1" });
+      const feed = app.isPackaged ? new FeedFreshnessCheck({ userData: this.options.userData, pinned: PINNED_UPDATE_KEYS }) : null;
+      await feed?.load();
       this.updates = new UpdateManager({
         updater,
         verify: app.isPackaged
-          ? (info) => checkDownloadedUpdate(info, PINNED_UPDATE_KEYS, app.getVersion())
+          ? (info) => checkDownloadedUpdate(info, PINNED_UPDATE_KEYS, app.getVersion(), feed ? (installer) => feed.check(info, installer) : undefined)
           : previewCheck(process.env.TAVORA_FAKE_UPDATE_UNSIGNED === "1"),
+        ...(feed ? { checkFeed: (info: UpdateInfoLike) => feed.check(info) } : {}),
+        enforceFeed: ENFORCE_FEED_FRESHNESS,
         // The refused installer goes, with its blockmaps (refused-update.ts).
         onRefused: (info) => removeRefusedInstaller(info, app.isPackaged),
         autoDownload: this.library.autoUpdate,
