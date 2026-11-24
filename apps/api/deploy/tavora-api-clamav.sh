@@ -115,6 +115,20 @@ set_conf() { # <name> <value>: the one line for <name> in clamd.conf, replaced o
 before_conf="$(sha256sum < "$conf")"
 set_conf LocalSocketGroup clamav
 set_conf LocalSocketMode 660
+# Archives clamd can't scan to the end must not scan as clean: with these on, clamd reports one that is encrypted
+# (Heuristics.Encrypted.*) or goes over a limit below (Heuristics.Limits.Exceeded.*) as FOUND, and the service holds that
+# version for a person (apps/api/src/virus-scan.ts). AlertEncrypted covers AlertEncryptedArchive and AlertEncryptedDoc (ClamAV
+# 0.101 and later: Debian 12 has 1.0, Ubuntu 24.04 has 1.4), so no option here is one clamd doesn't know.
+set_conf AlertExceedsMax yes
+set_conf AlertEncrypted yes
+# The limits those alerts compare with, set on purpose and above the biggest legit upload: the service sends the whole zip
+# (at most 20 MB; a module zip is 50 MB at most, 200 MB unpacked, 2000 files, ZIP_LIMITS in packages/pack/src/zip.ts) and each file
+# in it on its own (at most 20 MB), so a normal module never goes over them. They are limits, not memory: clamd streams.
+set_conf StreamMaxLength 25M
+set_conf MaxFileSize 256M
+set_conf MaxScanSize 512M
+set_conf MaxRecursion 16
+set_conf MaxFiles 10000
 [[ "$(sha256sum < "$conf")" == "$before_conf" ]] || changed=1
 if [[ "$socket_unit" == 1 ]]; then
   dropin=/etc/systemd/system/clamav-daemon.socket.d/tavora.conf

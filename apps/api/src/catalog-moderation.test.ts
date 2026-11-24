@@ -15,6 +15,7 @@ import { createHostedStore } from "./hosted-store.ts";
 import { IconState } from "./icon-state.ts";
 import { createTestInbox } from "./mail.ts";
 import { moderationRoutes } from "./moderation-admin.ts";
+import { waitingMail } from "./moderation-mail.ts";
 import { signsIn } from "./moderation.ts";
 import { encodePng } from "./png.ts";
 import { keyFingerprint } from "./publishers.ts";
@@ -460,6 +461,27 @@ describe("check 5: the virus scan", () => {
     const { key } = developer("dev@example.com");
     const body = await answer(await send(key, moduleZip(key)));
     expect(body).toMatchObject({ http: 202, status: "waiting", reasons: [{ check: "virus", text: "The virus scan found something." }] });
+  });
+
+  it("says it couldn't scan all of a zip with an encrypted or over-limit archive, not that it found a virus, and mails that in both languages", async () => {
+    for (const threat of ["Heuristics.Encrypted.Zip in the zip", "Heuristics.Limits.Exceeded in the zip", "Heuristics.Limits.Exceeded.MaxFileSize in data.zip"]) {
+      const { developer, send, answer } = setup({ scanner: { scan: async () => ({ clean: false, threats: [threat] }) } });
+      const { key } = developer("dev@example.com");
+      const body = await answer(await send(key, moduleZip(key)));
+      expect(body).toMatchObject({ http: 202, status: "waiting", reasons: [{ check: "virus" }] });
+      expect(body.reasons![0]!.text).toContain("couldn't scan all of it");
+      expect(body.reasons![0]!.text).not.toMatch(/found/i);
+    }
+    const reason = { check: "virus", kind: "unscannable", text: "x" };
+    expect(waitingMail("a@b.c", { id: "a.b", name: "A", version: "1.0.0" }, [reason], "en").text).toContain("We couldn't scan all of it");
+    expect(waitingMail("a@b.c", { id: "a.b", name: "A", version: "1.0.0" }, [reason], "de").text).toContain("Wir konnten nicht alles scannen");
+  });
+
+  it("still says it found something when a real threat comes with an unscannable one", async () => {
+    const { developer, send, answer } = setup({ scanner: { scan: async () => ({ clean: false, threats: ["Heuristics.Encrypted.Zip in the zip", "Eicar-Test in app.js"] }) } });
+    const { key } = developer("dev@example.com");
+    const body = await answer(await send(key, moduleZip(key)));
+    expect(body.reasons![0]!.text).toBe("The virus scan found something.");
   });
 
   it("holds a zip when the scanner is broken, slow or not set up: a scan that did not run is not a clean one", async () => {

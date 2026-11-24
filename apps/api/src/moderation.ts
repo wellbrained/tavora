@@ -470,6 +470,13 @@ function checkCode(files: readonly ZipFile[]): ReviewReason | null {
 /** The longest a whole virus scan may take before the version waits instead. */
 export const SCAN_LIMIT_MS = 180_000;
 
+/**
+ * A threat that is no virus: clamd's alert (AlertExceedsMax, AlertEncrypted) that it could not look inside an archive. It names
+ * them Heuristics.Limits.Exceeded (newer versions add a suffix such as .MaxFileSize) and Heuristics.Encrypted.Zip, .PDF and so on,
+ * and the scanner adds " in <file>" after the name.
+ */
+export const unscannable = (threat: string): boolean => /^Heuristics\.(Limits\.Exceeded|Encrypted)(\.| |$)/.test(threat);
+
 async function checkVirus(bytes: Buffer, files: readonly ZipFile[], { scanner, scanLimitMs = SCAN_LIMIT_MS, holdWhileScanning }: ModerationOptions): Promise<ReviewReason | null> {
   if (!scanner) return reason("virus", "The virus scan couldn't run, so a person looks at it.", "No virus scanner is set up on the server");
   try {
@@ -488,6 +495,10 @@ async function checkVirus(bytes: Buffer, files: readonly ZipFile[], { scanner, s
     });
     const result = await Promise.race([scan, late]).finally(() => clearTimeout(timer));
     if (result.clean) return null;
+    // Only archives clamd couldn't scan to the end (encrypted, or over a limit): nothing was found, so it doesn't say "found".
+    if (result.threats.every(unscannable)) {
+      return { ...reason("virus", "We couldn't scan all of it: it has an encrypted file, or a file that is too big or nested too deep. Please upload it without that.", `Not fully scanned: ${result.threats.slice(0, 5).join(", ")}`), kind: "unscannable" };
+    }
     return reason("virus", "The virus scan found something.", `Found: ${result.threats.slice(0, 5).join(", ")}`);
   } catch (error) {
     return reason("virus", "The virus scan couldn't run, so a person looks at it.", `Scanner error: ${error instanceof Error ? error.message.slice(0, 200) : "unknown"}`);

@@ -187,6 +187,8 @@ export interface ReviewReason {
   check: string;
   text: string;
   detail?: string;
+  /** A kind of this check's reason that has its own line in the email (the virus scan's "couldn't scan all of it"). */
+  kind?: string;
 }
 
 /** What is kept with a version that waits for review. */
