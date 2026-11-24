@@ -20,19 +20,19 @@ const TEMP_NAME = /^(.+)(?:\.[0-9a-f]{12}\.tmp|\.now)$/;
  * writes of the same file at once can't move each other's half-written one into place. A temp a crash left behind is
  * removed by sweepWriteLeftovers at the next start.
  */
-export async function writeFileAtomic(file: string, body: string | Uint8Array): Promise<void> {
-  await writeFileUnlessReplaced(file, body, () => true);
+export async function writeFileAtomic(file: string, body: string | Uint8Array, mode?: number): Promise<void> {
+  await writeFileUnlessReplaced(file, body, () => true, mode);
 }
 
 /**
  * writeFileAtomic, putting the new file in place only while `stillWanted` says yes (it is asked right before, so a
  * newer write that took its place meanwhile wins). Answers whether the file was written.
  */
-export async function writeFileUnlessReplaced(file: string, body: string | Uint8Array, stillWanted: () => boolean): Promise<boolean> {
+export async function writeFileUnlessReplaced(file: string, body: string | Uint8Array, stillWanted: () => boolean, mode?: number): Promise<boolean> {
   await mkdir(path.dirname(file), { recursive: true });
   const temp = `${file}.${randomBytes(6).toString("hex")}.tmp`;
   try {
-    const handle = await open(temp, "wx");
+    const handle = await open(temp, "wx", mode);
     try {
       await handle.writeFile(body);
       await handle.sync();

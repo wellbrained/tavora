@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { OpenDialogOptions, SaveDialogOptions } from "electron";
@@ -101,6 +101,17 @@ describe("FileDialogs.forModule", () => {
     // Chosen with its extension, the dialog asked about it: it is replaced.
     answer(path.join(folder, "Build.JSON"));
     expect(await dialogs.forModule("local:poe2").saveJson(Buffer.from("{}"), "Build")).toBe("Build.JSON");
+  });
+
+  it("replaces a chosen file in one step, leaving no temp file", async () => {
+    const { base, dialogs, answer } = await setup();
+    const folder = path.join(base, "Documents", "Tavora");
+    await mkdir(folder, { recursive: true });
+    await writeFile(path.join(folder, "Build.json"), "old");
+    answer(path.join(folder, "Build.json"));
+    await dialogs.forModule("local:poe2").saveJson(Buffer.from('{"new":1}'), "Build");
+    expect(await readFile(path.join(folder, "Build.json"), "utf8")).toBe('{"new":1}');
+    expect((await readdir(folder)).filter((name) => name.endsWith(".tmp"))).toEqual([]);
   });
 
   it("keeps each module's folder apart, under its owner and id, and falls back to Documents\\Tavora when it is gone", async () => {

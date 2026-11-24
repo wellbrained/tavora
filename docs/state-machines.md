@@ -131,8 +131,9 @@ the pull request that makes it explicit.
   each, ended by blur too, with `data-gesture`. The rail and the canvas run on `bindDrag`, whose `phase` is that
   union's start; what each drag holds (`dragWidth`, `drag`, `band`) is still kept beside it.
 
-- **System info worker** (`main/system-info-thread.ts`): one timer for two meanings → `none | running | idle-stopping |
-  restart-waiting`.
+- **System info worker** (`main/system-info-thread.ts`): the worker, an idle timer and a restart timer (two slots, so a
+  restart wait and an idle stop can't cancel each other), and a time limit on every question to the worker → one phase
+  `none | running | idle-stopping | restart-waiting`.
 
 - **Document store internals** (`packages/sdk/src/store.ts`: `pending`, `paused`, `skipDelete`) → an internal phase that
   `DocumentStatus` is read from; only with a model-based test first, and `DocumentStatus` stays.

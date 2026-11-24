@@ -150,66 +150,83 @@ export class GameOverlayWindow {
       webPreferences: { session: ses, sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true, devTools: false },
     });
     const window = this.window;
-    window.removeMenu();
-    // Above full-screen windows too; the lowest level that is.
-    window.setAlwaysOnTop(true, "screen-saver");
-    window.setIgnoreMouseEvents(true);
-    // Visible to screen capture; setHideFromCapture hides it when the user asks.
-    if (options.hidden) window.setOpacity(0);
-    const contents = window.webContents;
-    lockContents(contents);
-    contents.on("did-finish-load", () => {
-      void this.applyOpacity();
-      // The page keeps the zoom it was given, but a load may reset it.
-      if (!this.options.panel && !contents.isDestroyed() && contents.getZoomFactor() !== this.zoom) contents.setZoomFactor(this.zoom);
-    });
-    contents.once("render-process-gone", () => this.end());
-    // A window holding a panel is never closed by the user (Alt+F4 while it has the keyboard): that would strand the panel.
-    // Closing the layer (or Stop showing in game) is how it leaves. Tavora's own destroy() does not go through this.
-    window.on("close", (event) => {
-      if (options.panel && !this.destroyed && !this.quitting) event.preventDefault();
-    });
-    app.on("before-quit", this.onQuit);
-    window.on("focus", () => this.options.activated?.());
-    window.once("closed", () => {
-      app.removeListener("before-quit", this.onQuit);
-      const unexpected = !this.destroyed;
-      this.destroyed = true;
-      // Closed by something other than destroy(): let go of the panel and tell the service, so no dead entry stays.
-      if (unexpected) {
-        this.release();
-        if (!this.frame.webContents.isDestroyed()) this.frame.webContents.close();
-        this.options.ended();
-      }
-    });
-    // A panel brings its own page; this window only holds it.
-    if (!options.panel) void contents.loadURL(GAME_OVERLAY_FRAME_URL).catch(() => this.end());
+    try {
+      window.removeMenu();
+      // Above full-screen windows too; the lowest level that is.
+      window.setAlwaysOnTop(true, "screen-saver");
+      window.setIgnoreMouseEvents(true);
+      // Visible to screen capture; setHideFromCapture hides it when the user asks.
+      if (options.hidden) window.setOpacity(0);
+      const contents = window.webContents;
+      lockContents(contents);
+      contents.on("did-finish-load", () => {
+        void this.applyOpacity();
+        // The page keeps the zoom it was given, but a load may reset it.
+        if (!this.options.panel && !contents.isDestroyed() && contents.getZoomFactor() !== this.zoom) contents.setZoomFactor(this.zoom);
+      });
+      contents.once("render-process-gone", () => this.end());
+      // A window holding a panel is never closed by the user (Alt+F4 while it has the keyboard): that would strand the panel.
+      // Closing the layer (or Stop showing in game) is how it leaves. Tavora's own destroy() does not go through this.
+      window.on("close", (event) => {
+        if (options.panel && !this.destroyed && !this.quitting) event.preventDefault();
+      });
+      app.on("before-quit", this.onQuit);
+      window.on("focus", () => this.options.activated?.());
+      window.once("closed", () => {
+        app.removeListener("before-quit", this.onQuit);
+        const unexpected = !this.destroyed;
+        this.destroyed = true;
+        // Closed by something other than destroy(): let go of the panel and tell the service, so no dead entry stays.
+        if (unexpected) {
+          this.release();
+          if (!this.frame.webContents.isDestroyed()) this.frame.webContents.close();
+          this.options.ended();
+        }
+      });
+      // A panel brings its own page; this window only holds it.
+      if (!options.panel) void contents.loadURL(GAME_OVERLAY_FRAME_URL).catch(() => this.end());
 
-    const frameSession = lockedSession(`game-overlay-frame-${name}`, (url) => url.startsWith("data:"));
-    this.frame = new WebContentsView({
-      webPreferences: { session: frameSession, preload: options.preload, sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true, devTools: false },
-    });
-    this.frame.setBackgroundColor("#00000000");
-    this.frame.setVisible(false);
-    // The frame goes above the panel: hidden in Use, and in Arrange it covers the panel, so a drag never ticks a box.
-    if (options.panel) {
-      options.panel.setVisible(true);
-      window.contentView.addChildView(options.panel.view);
-      this.tellPanel();
-      options.panel.suspend();
+      const frameSession = lockedSession(`game-overlay-frame-${name}`, (url) => url.startsWith("data:"));
+      this.frame = new WebContentsView({
+        webPreferences: { session: frameSession, preload: options.preload, sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true, devTools: false },
+      });
+      this.frame.setBackgroundColor("#00000000");
+      this.frame.setVisible(false);
+      // The frame goes above the panel: hidden in Use, and in Arrange it covers the panel, so a drag never ticks a box.
+      if (options.panel) {
+        options.panel.setVisible(true);
+        window.contentView.addChildView(options.panel.view);
+        this.tellPanel();
+        options.panel.suspend();
+      }
+      window.contentView.addChildView(this.frame);
+      const frame = this.frame.webContents;
+      lockContents(frame);
+      frame.on("did-finish-load", () => {
+        this.sendFrameText();
+        this.frameFont.forget();
+        this.refreshFont();
+      });
+      void frame.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(GAME_OVERLAY_FRAME_DOCUMENT)}`).catch(() => {});
+      frame.ipc.on("game-overlay:close", () => this.mode === "arrange" && options.closeRequested());
+      frame.ipc.on("game-overlay:layout", () => this.mode === "arrange" && options.layoutRequested());
+      frame.ipc.on("game-overlay:drag", (_event, phase: unknown, edge: unknown) => this.onDrag(phase, edge));
+    } catch (error) {
+      // A throw after the window was made must not leave it, its page and the quit listener behind.
+      this.destroyed = true;
+      app.removeListener("before-quit", this.onQuit);
+      try {
+        const { frame } = this as unknown as { frame?: WebContentsView };
+        if (frame && !frame.webContents.isDestroyed()) frame.webContents.close();
+        if (!window.isDestroyed()) {
+          if (!window.webContents.isDestroyed()) window.webContents.close();
+          window.destroy();
+        }
+      } catch {
+        // Cleaning up is best effort; the error that matters is thrown below.
+      }
+      throw error;
     }
-    window.contentView.addChildView(this.frame);
-    const frame = this.frame.webContents;
-    lockContents(frame);
-    frame.on("did-finish-load", () => {
-      this.sendFrameText();
-      this.frameFont.forget();
-      this.refreshFont();
-    });
-    void frame.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(GAME_OVERLAY_FRAME_DOCUMENT)}`).catch(() => {});
-    frame.ipc.on("game-overlay:close", () => this.mode === "arrange" && options.closeRequested());
-    frame.ipc.on("game-overlay:layout", () => this.mode === "arrange" && options.layoutRequested());
-    frame.ipc.on("game-overlay:drag", (_event, phase: unknown, edge: unknown) => this.onDrag(phase, edge));
   }
 
   /**

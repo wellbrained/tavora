@@ -1,12 +1,33 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync } from "node:fs";
+import { access } from "node:fs/promises";
 import path from "node:path";
 
 // Starting the Claude and Codex command lines for the AI Usage connector: found on PATH, run with
 // fixed arguments and no shell, so nothing from a profile or a module can reach a command line.
 
+/** How long one PATH folder gets to answer: a folder on a network drive that is gone can hang for much longer. */
+const LOOK_MS = 1_500;
+
+/** Whether `file` exists, without blocking the main process; a folder that doesn't answer in time counts as no. */
+async function existsSoon(file: string, waitMs: number): Promise<boolean> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      access(file).then(
+        () => true,
+        () => false,
+      ),
+      new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(false), waitMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** The first of `names` on PATH (or in npm's global folder and Claude's own install folder on Windows), or null. */
-export function findCli(names: { win32: string[]; other: string[] }, env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): string | null {
+export async function findCli(names: { win32: string[]; other: string[] }, env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform, waitMs = LOOK_MS): Promise<string | null> {
   const files = platform === "win32" ? names.win32 : names.other;
   const dirs = (env.PATH ?? env.Path ?? "").split(path.delimiter).filter(Boolean);
   if (platform === "win32" && env.APPDATA) dirs.push(path.join(env.APPDATA, "npm"));
@@ -14,7 +35,7 @@ export function findCli(names: { win32: string[]; other: string[] }, env: NodeJS
   for (const dir of dirs) {
     for (const name of files) {
       const file = path.join(dir, name);
-      if (existsSync(file)) return file;
+      if (await existsSoon(file, waitMs)) return file;
     }
   }
   return null;

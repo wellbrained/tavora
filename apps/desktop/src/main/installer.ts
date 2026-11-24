@@ -92,7 +92,15 @@ export async function applyOwners(modules: Map<string, InstalledModule>, userMod
     if (module.provenance !== "local" || path.dirname(module.root) !== userModulesRoot) continue;
     const record = records[path.basename(module.root)];
     if (record?.id !== id) continue;
-    const verified = await checks.check(module.root);
+    let verified: Verified | null;
+    try {
+      verified = await checks.check(module.root);
+    } catch (error) {
+      // Still held by another program after the waits: not a mismatch, but unsure, so it stays stopped for this run only.
+      console.warn(`[tavora] couldn't read the files of ${id} to check them (${error instanceof Error ? error.message : String(error)}); it stays off until the next start`);
+      changed.push(id);
+      continue;
+    }
     // The installer records the first key of the account as the owner, and the key that signed as `signer` when they differ.
     const signedBy = record.signer ?? record.owner;
     if (!verified || verified.id !== id || verified.signer !== signedBy || (record.signedSha256 !== undefined && record.signedSha256 !== verified.signedSha256)) {

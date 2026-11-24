@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -88,6 +88,36 @@ describe("Discord and AI Usage leaving Tavora", () => {
       { instanceId: "b", moduleId: "wellbrained.ai-usage", owner: "local" },
       { instanceId: "c", moduleId: "tavora.notes", owner: "official" },
     ]);
+  });
+
+  it("keep the panels moving when the data can't move, and move the data at the next start", async () => {
+    const userData = await mkdtemp(path.join(tmpdir(), "tavora-moved-"));
+    const data = path.join(userData, "module-data");
+    await put(path.join(data, "official", "tavora.discord", "valheim", "settings.json"), "old");
+    await put(path.join(userData, "workspace.json"), JSON.stringify({ version: 3, workspaces: { valheim: { instances: [{ instanceId: "a", moduleId: "tavora.discord", owner: "official" }], layout: null, snapshots: [] } } }));
+    // A file where the new owner's folder must go makes the move fail.
+    await put(path.join(data, OWNER), "in the way");
+    const lines: string[] = [];
+
+    await moveOfficialModules(userData, (line) => lines.push(line), path.join(userData, "module-files"));
+
+    expect(lines.some((line) => line.includes("will try again"))).toBe(true);
+    expect(await readFile(path.join(data, "official", "tavora.discord", "valheim", "settings.json"), "utf8")).toBe("old");
+    const workspace = JSON.parse(await readFile(path.join(userData, "workspace.json"), "utf8"));
+    expect(workspace.workspaces.valheim.instances[0].moduleId).toBe("wellbrained.discord");
+
+    await rm(path.join(data, OWNER));
+    await moveOfficialModules(userData, () => undefined, path.join(userData, "module-files"));
+    expect(await readFile(path.join(data, OWNER, "wellbrained.discord", "valheim", "settings.json"), "utf8")).toBe("old");
+  });
+
+  it("leave a link or a folder named in another case where it is", async () => {
+    const userData = await mkdtemp(path.join(tmpdir(), "tavora-moved-"));
+    const files = path.join(userData, "module-files");
+    // Another case: only a folder with exactly Tavora's names is Tavora's.
+    await put(path.join(files, "Official", "tavora.discord", "valheim", "shot.png"), "mine");
+    await moveOfficialModules(userData, () => undefined, files);
+    expect(await readFile(path.join(files, "Official", "tavora.discord", "valheim", "shot.png"), "utf8")).toBe("mine");
   });
 
   it("do nothing when there is nothing of theirs", async () => {

@@ -54,6 +54,31 @@ export async function readFolderOrThrow(root: string, read: boolean): Promise<Fo
   return (await walk(root, "")) ? { files, stamp: stamp.sort().join("\n") } : null;
 }
 
+const HELD_CODES = new Set(["EBUSY", "EPERM", "EACCES"]);
+const HELD_WAITS_MS = [20, 50, 100, 200, 400];
+
+/**
+ * readFolderOrThrow, trying again while a virus scan or an indexer briefly holds a file. A folder that is gone or isn't
+ * a module's answers null; one still held after the last wait throws, so it is not mistaken for one that changed.
+ */
+export async function readFolderHeld(root: string, read: boolean, waits: readonly number[] = HELD_WAITS_MS): Promise<FolderRead | null> {
+  for (const wait of waits) {
+    try {
+      return await readFolderOrThrow(root, read);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code ?? "";
+      if (!HELD_CODES.has(code)) return null;
+      await new Promise((resolve) => setTimeout(resolve, wait));
+    }
+  }
+  try {
+    return await readFolderOrThrow(root, read);
+  } catch (error) {
+    if (HELD_CODES.has((error as NodeJS.ErrnoException).code ?? "")) throw error;
+    return null;
+  }
+}
+
 /** What the signature check found in a folder. */
 export interface Verified {
   /** The key that signed it (its fingerprint). */
@@ -110,18 +135,24 @@ export class FolderChecks {
   looked = 0;
   hashed = 0;
 
-  constructor(private readonly file?: string) {}
+  constructor(
+    private readonly file?: string,
+    private readonly waits: readonly number[] = HELD_WAITS_MS,
+  ) {}
 
-  /** The signature check of `dir`'s files now; null when they are not exactly what a valid signature covers. */
+  /**
+   * The signature check of `dir`'s files now; null when they are not exactly what a valid signature covers. A file held
+   * by another program for longer than the waits throws (and nothing is kept): that is not a mismatch.
+   */
   async check(dir: string): Promise<Verified | null> {
     await this.load();
     this.used.add(dir);
     this.looked++;
-    const seen = await readFolder(dir, false);
+    const seen = await readFolderHeld(dir, false, this.waits);
     if (seen === null) return this.forget(dir);
     const cached = this.checks.get(dir);
     if (cached?.stamp === stampHash(seen.stamp)) return cached.verified;
-    const read = await readFolder(dir, true);
+    const read = await readFolderHeld(dir, true, this.waits);
     if (read === null) return this.forget(dir);
     this.hashed++;
     // What was read is what is checked; a folder that changed between the two is checked again next time.

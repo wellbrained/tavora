@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
+import { writeFileAtomic } from "./fsutil";
 import path from "node:path";
 import type { OpenDialogOptions, OpenDialogReturnValue, SaveDialogOptions, SaveDialogReturnValue } from "electron";
 import type { FileKind } from "@tavora/sdk/protocol";
@@ -224,7 +225,9 @@ export class FileDialogs {
     const file = chosen.toLowerCase().endsWith(`.${kind}`) ? chosen : `${chosen}.${kind}`;
     // The dialog asked before replacing the file the user chose; with the extension added, it was never asked about.
     try {
-      await writeFile(file, data, { flag: file === chosen ? "w" : "wx", ...(words.mode === undefined ? {} : { mode: words.mode }) });
+      // The file the user chose and the dialog confirmed is replaced in one step, so a crash or a full disk keeps the old one.
+      if (file === chosen) await writeFileAtomic(file, data, words.mode);
+      else await writeFile(file, data, { flag: "wx", ...(words.mode === undefined ? {} : { mode: words.mode }) });
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
       if (words.ownFile) throw new UserError("error.file.taken", { name: path.basename(file) });

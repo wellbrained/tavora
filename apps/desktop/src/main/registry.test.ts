@@ -242,6 +242,15 @@ describe("development folders", () => {
     await discoverModules({ development: [half] }, unreadable);
     expect(panelsWait(unreadable)("local.half")).toBe(true);
 
+    // A built-in module whose manifest can't be read keeps its panels waiting too (a directory where the file should be).
+    const shipped = await mkdtemp(path.join(tmpdir(), "tavora-shipped-"));
+    const busy = await makeModule(shipped, "notes", "tavora.notes");
+    await rm(path.join(busy, "tavora.module.json"));
+    await mkdir(path.join(busy, "tavora.module.json"));
+    const official: ModuleProblem[] = [];
+    await discoverModules({ official: [shipped] }, official);
+    expect(panelsWait(official)("tavora.notes")).toBe(true);
+
     // A module that names itself but can't load still waits, as before.
     const unbuilt = await makeModule(projects, "unbuilt", "example.unbuilt");
     await rm(path.join(unbuilt, "index.html"));

@@ -2,7 +2,7 @@ import { mkdir, readdir, readFile, rename, rmdir } from "node:fs/promises";
 import path from "node:path";
 import { isGameId, OFFICIAL_OWNER } from "@tavora/module-schema";
 import { pathExists, writeFileAtomic } from "./fsutil";
-import { modulePartition, partitionDirName } from "./module-data";
+import { modulePartition, ownPath, partitionDirName } from "./module-data";
 import { GAME_OVERLAYS_FILE } from "./game-overlays";
 import { HOTKEYS_FILE } from "./hotkeys";
 import { defaultFilesRoot } from "./module-files";
@@ -42,17 +42,31 @@ export function movedModule(moduleId: string): (typeof MOVED_MODULES)[number] | 
  */
 export async function moveOfficialModules(userData: string, log: (line: string) => void = () => undefined, blobRoot = defaultFilesRoot(userData)): Promise<void> {
   for (const { from, to } of MOVED_MODULES) {
+    // A move that fails (a file held by another program) is logged and tried again at the next start; it never stops the panels from moving.
+    const attempt = async (what: string, move: () => Promise<void>) => {
+      try {
+        await move();
+      } catch (error) {
+        log(`moving ${what} of ${from} to ${to} failed, will try again at the next start: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    };
     for (const root of [path.join(userData, "module-data"), blobRoot]) {
-      const source = path.join(root, OFFICIAL_OWNER, from);
+      // Only real folders with exactly these names (never a link, never one that matches in another case): the files root can be the user's own Pictures\Tavora.
+      const source = await ownPath(root, OFFICIAL_OWNER, from);
+      if (!source) continue;
       for (const game of await readdir(source).catch(() => [] as string[])) {
         if (!isGameId(game) && game !== APP_DATA_DIR) continue;
+        const folder = await ownPath(source, game);
+        if (!folder) continue;
         const target = path.join(root, MOVED_MODULES_OWNER, to, game);
         if (await pathExists(target)) {
           log(`${to} already has data in ${game}; what ${from} saved there stays`);
           continue;
         }
-        await mkdir(path.dirname(target), { recursive: true });
-        await rename(path.join(source, game), target);
+        await attempt(`the data in ${game}`, async () => {
+          await mkdir(path.dirname(target), { recursive: true });
+          await rename(folder, target);
+        });
       }
       await rmdir(source).catch(() => undefined);
     }
@@ -60,8 +74,10 @@ export async function moveOfficialModules(userData: string, log: (line: string) 
     for (const name of await readdir(partitions).catch(() => [] as string[])) {
       const game = name.slice(name.lastIndexOf("@") + 1).toLowerCase();
       if (!isGameId(game) || name.toLowerCase() !== partitionDirName(modulePartition(OFFICIAL_OWNER, from, game)).toLowerCase()) continue;
+      const folder = await ownPath(partitions, name);
+      if (!folder) continue;
       const target = path.join(partitions, partitionDirName(modulePartition(MOVED_MODULES_OWNER, to, game)));
-      if (!(await pathExists(target))) await rename(path.join(partitions, name), target);
+      if (!(await pathExists(target))) await attempt(`the browser storage in ${game}`, () => rename(folder, target));
     }
   }
   await renameIn(path.join(userData, WORKSPACE_FILE), true);
