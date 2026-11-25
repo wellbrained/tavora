@@ -196,6 +196,8 @@ export class WorkspaceLibrary {
       } catch (error) {
         console.error(`[tavora] deleting the data of workspace ${workspace.id} failed; it stays in Trash for a later try`, error);
         library.workspaces[workspace.id] ??= workspace;
+        // Its time in Trash ran out at this start: its layout waits aside in the workspace file, and comes with it.
+        this.options.workspaces.takeBackKept(workspace.id);
         errors.push(error);
       }
     }

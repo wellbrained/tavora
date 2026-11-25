@@ -404,6 +404,19 @@ export class Workspaces {
   }
 
   /**
+   * A workspace that went back to Trash after its time there ran out at this start, its files held by another program: the
+   * library lists it again, so it takes up the panels and layout the file kept aside for it (`unlisted`). Restored and
+   * opened in this run, it is whole, and the next save keeps its layout. Nothing changes for one that has its own already.
+   */
+  takeBackKept(workspaceId: string): void {
+    const kept = this.state.unlisted?.[workspaceId];
+    if (!isRecord(kept) || this.state.workspaces[workspaceId]) return;
+    this.state.workspaces[workspaceId] = parseWorkspace(kept, (moduleId) => this.options.isInstalled?.(moduleId) ?? true);
+    delete this.state.unlisted?.[workspaceId];
+    this.save();
+  }
+
+  /**
    * Gives a workspace that has no panels yet its starter: these panels side by side, one slot each. The host
    * UI docks them when the workspace opens. Nothing happens for a workspace that already has a panel.
    */

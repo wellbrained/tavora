@@ -10,7 +10,7 @@ import { addWorkspace, emptyLibrary, isLive, purgeExpired, trashWorkspace, type 
 import { PendingQuestions } from "./pending-questions";
 import type { InstalledModule } from "./registry";
 import { UndoShelf } from "./undo-shelf";
-import { emptyWorkspaces, Workspaces, type InstanceRecord } from "./workspace";
+import { emptyWorkspaces, loadWorkspace, saveWorkspace, Workspaces, type InstanceRecord, type WorkspaceState } from "./workspace";
 import { STARTER_MODULES, WorkspaceLibrary } from "./workspace-library";
 
 function module(id: string): InstalledModule {
@@ -31,13 +31,17 @@ interface Setup {
   held?: string[];
   /** Panels whose saved state can't be removed now. */
   heldState?: string[];
+  /** The workspace file as the start read it; empty workspaces for the library's by default. */
+  state?: WorkspaceState;
+  /** Where the workspaces save to; nowhere by default. */
+  save?: (state: WorkspaceState) => void;
 }
 
 async function setup(options: Setup = {}) {
   const calls: string[] = [];
   const synced = { count: 0 };
   const library = options.library ?? emptyLibrary();
-  const workspaces = new Workspaces(emptyWorkspaces(Object.keys(library.workspaces)), { save: () => undefined });
+  const workspaces = new Workspaces(options.state ?? emptyWorkspaces(Object.keys(library.workspaces)), { save: options.save ?? (() => undefined) });
   const modules = options.modules ?? STARTER_MODULES.map(module);
   const installed = new Installed({ modules: new Map(modules.map((item) => [item.manifest.id, item])), blocked: new Map(), catalog: new Set(), info: new Map(), problems: [] }, (manifest) => manifest);
   const userData = await mkdtemp(path.join(tmpdir(), "tavora-workspaces-"));
@@ -338,6 +342,48 @@ describe("WorkspaceLibrary", () => {
     } finally {
       errors.mockRestore();
     }
+  });
+
+  it("a workspace whose files couldn't be deleted at the start comes back whole: restored, opened and saved, it keeps its layout", async () => {
+    const library = emptyLibrary();
+    const long = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    addWorkspace(library, valheim, long);
+    const file = path.join(await mkdtemp(path.join(tmpdir(), "tavora-workspace-file-")), "workspace.json");
+    // Last run: Valheim has its panels and layout, and goes to Trash.
+    const before = new Workspaces(emptyWorkspaces(["valheim"]), { save: () => undefined });
+    const records = [
+      { instanceId: "00000000-0000-4000-8000-0000000000a1", moduleId: "official.notes" },
+      { instanceId: "00000000-0000-4000-8000-0000000000a2", moduleId: "official.todos" },
+    ];
+    before.start("valheim", records);
+    const layout = before.workspace("valheim").layout;
+    expect(layout).not.toBeNull();
+    await saveWorkspace(file, { version: 3, workspaces: { valheim: before.workspace("valheim") } });
+    trashWorkspace(library, "valheim", long);
+
+    // This start: its time in Trash ran out, so the library no longer lists it when the workspace file is read.
+    const expired = purgeExpired(library, new Date());
+    const state = await loadWorkspace(file, Object.keys(library.workspaces), () => true);
+    expect(state.unlisted?.valheim).toBeDefined();
+    let saving: Promise<void> = Promise.resolve();
+    const { shelf, workspaces } = await setup({ library, held: ["Valheim"], state, save: (next) => void (saving = saving.then(() => saveWorkspace(file, next))) });
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      await shelf.deleteExpired(expired, { sessions: false });
+    } finally {
+      errors.mockRestore();
+    }
+    expect(library.workspaces.valheim?.trashedAt).toBe(long.toISOString());
+
+    // Restored and opened in the same run, then saved.
+    shelf.restore(["valheim"], true);
+    expect(workspaces.panels("valheim")).toEqual(records);
+    expect(workspaces.workspace("valheim").layout).toEqual(layout);
+    workspaces.save();
+    await saving;
+    const saved = await loadWorkspace(file, Object.keys(library.workspaces), () => true);
+    expect(saved.workspaces.valheim?.instances).toEqual(records);
+    expect(saved.workspaces.valheim?.layout).toEqual(layout);
   });
 
   it("deletes a workspace whose files went even when a later step fails, so it never comes back empty (hunt 2026-11-25 A4)", async () => {
