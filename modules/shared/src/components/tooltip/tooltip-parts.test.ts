@@ -134,6 +134,8 @@ describe("Tooltip closing", () => {
       const fading = document.querySelector<HTMLElement>("[data-slot=tooltip-closing]")!
       expect(fading.getAttribute("data-closing")).toBe("true")
       expect(fading.getAttribute("aria-hidden")).toBe("true")
+      // No longer "ready": the fade-in rule would otherwise outweigh the fade-out (tooltip.css).
+      expect(fading.hasAttribute("data-ready")).toBe(false)
       expect(document.querySelector("[role=tooltip]")).toBeNull()
       vi.advanceTimersByTime(TOOLTIP_CLOSE_MS)
       await nextTick()

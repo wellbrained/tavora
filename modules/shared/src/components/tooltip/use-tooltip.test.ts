@@ -152,6 +152,21 @@ describe("useTooltip target options", () => {
     expect(tip.props.open).toBe(false)
   })
 
+  it("keeps a hover-opened card on a press of a toggle target, and closes it when the focus moves on", async () => {
+    const { tip, targets } = await mount(() => useTooltip<Card>(), () => [{ name: "Help" }], { toggle: true, focusable: true })
+    const target = targets[0]!
+    enter(target)
+    vi.advanceTimersByTime(180)
+    target.dispatchEvent(new Event("pointerdown"))
+    target.dispatchEvent(new MouseEvent("click"))
+    expect(tip.props.open).toBe(true)
+    leave(target)
+    expect(tip.props.open).toBe(true)
+    target.focus()
+    target.blur()
+    expect(tip.props.open).toBe(false)
+  })
+
   it("stays open on a press with keepOnPress", async () => {
     const { tip, targets } = await mount(() => useTooltip<Card>(), () => [{ name: "Copy" }], { keepOnPress: true })
     enter(targets[0]!)

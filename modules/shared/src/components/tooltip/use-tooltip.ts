@@ -167,6 +167,8 @@ export function useTooltip<T>(options: UseTooltipOptions & Partial<UseSharedTool
 
   /** Back to no card, without telling Tavora (it closed the card itself, or never showed it). */
   function forget() {
+    if (pressed) listenOutside(false);
+    pressed = false;
     sharedCard = null;
     current = null;
     state.status = 'idle';
@@ -185,9 +187,10 @@ export function useTooltip<T>(options: UseTooltipOptions & Partial<UseSharedTool
     forget();
   }
 
-  function showShared(element: Element, card: SharedCard, side: TooltipSide | undefined, pinned: boolean) {
+  function showShared(element: Element, card: SharedCard, target: TooltipTargetOptions, pinned: boolean) {
+    const side = target.side;
     const tooltip = sharedTooltip();
-    if (!tooltip) return options.fallback ? showInPanel(element, side) : hide();
+    if (!tooltip) return options.fallback ? showInPanel(element, side, target.as, target.align) : hide();
     if (!unsubscribe) unsubscribe = tooltip.onClose(({ id: closed }) => { if (closed === sharedCard?.id) forget(); });
     const pinnable = Boolean(options.pin) && !element.closest(CONTROLS);
     // A card that can be pinned keeps one id per card, so pinning it twice doesn't stack two copies.
@@ -199,7 +202,7 @@ export function useTooltip<T>(options: UseTooltipOptions & Partial<UseSharedTool
       .catch(() => {
         if (sharedCard?.id !== cardId) return;
         sharedCard = null;
-        if (options.fallback && current === element && element.isConnected) showInPanel(element, side);
+        if (options.fallback && current === element && element.isConnected) showInPanel(element, side, target.as, target.align);
         else forget();
       });
   }
@@ -208,8 +211,9 @@ export function useTooltip<T>(options: UseTooltipOptions & Partial<UseSharedTool
     const side = target.side;
     timer = undefined;
     const card = resolve(shown.value);
-    if (!element.isConnected || card === null) return hide();
-    if (given) return showShared(element, card as unknown as SharedCard, side, pinned);
+    // `when` asked again now: the text may have changed while the card waited.
+    if (!element.isConnected || card === null || (target.when && !target.when(element))) return hide();
+    if (given) return showShared(element, card as unknown as SharedCard, target, pinned);
     showInPanel(element, side, target.as, target.align);
   }
 
@@ -248,6 +252,8 @@ export function useTooltip<T>(options: UseTooltipOptions & Partial<UseSharedTool
     on(card, target = {}) {
       // A card a press opened stays when the pointer or the focus moves on; anything else closes it.
       const leave = (event: Event) => { if (event.currentTarget === current && !pressed) hide(); };
+      // The focus moving on closes even a card a press opened (Tab away from an info button).
+      const blur = (event: Event) => { if (event.currentTarget === current) hide(); };
       return {
         ...(target.focusable ? { tabindex: 0 } : {}),
         onPointerenter: (event: PointerEvent) => {
@@ -256,7 +262,7 @@ export function useTooltip<T>(options: UseTooltipOptions & Partial<UseSharedTool
         },
         onPointerleave: leave,
         onFocus: (event: FocusEvent) => { if (keyboardFocus(event.currentTarget as Element)) schedule(event.currentTarget as Element, card, target, 0); },
-        onBlur: leave,
+        onBlur: blur,
         // A press closes the card (it would cover what the press changed), except on a `toggle` target (the click
         // decides) or one that keeps it.
         onPointerdown: (event: PointerEvent) => { if (!target.toggle && !target.keepOnPress) leave(event); },
@@ -264,7 +270,13 @@ export function useTooltip<T>(options: UseTooltipOptions & Partial<UseSharedTool
         ...(target.toggle ? {
           onClick: (event: MouseEvent) => {
             const element = event.currentTarget as Element;
-            if (element === current && state.status === 'open' && pressed) return hide();
+            if (element === current && state.status === 'open') {
+              if (pressed) return hide();
+              // Opened by hovering: the press keeps it, as if the press had opened it.
+              pressed = true;
+              listenOutside(true);
+              return;
+            }
             schedule(element, card, target, 0, true);
             if (current === element) { pressed = true; listenOutside(true); }
           },
