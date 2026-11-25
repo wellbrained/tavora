@@ -39,6 +39,25 @@ describe("update and save", () => {
     expect(doc.revision).toBe(1);
   });
 
+  it("saves what toStored makes of the data, and keeps the parsed data in the panel", async () => {
+    const { sdk, host } = createMemoryHost();
+    await host.documents.put({ id: "plan", title: "Plan", data: { items: ["a", "newer:b"] } });
+    type Kept = Plan & { aside: string[] };
+    const doc = await openDocument<Kept>(sdk, "plan", {
+      parse: (raw) => {
+        const items = raw ? (raw as unknown as Plan).items : [];
+        return { items: items.filter((item) => !item.startsWith("newer:")), aside: items.filter((item) => item.startsWith("newer:")) };
+      },
+      toStored: ({ items, aside }) => ({ items: [...items, ...aside] }),
+      title: () => "Plan",
+      debounceMs: 0,
+    });
+    doc.update((draft) => void draft.items.push("c"));
+    await doc.flush();
+    expect(doc.data.items).toEqual(["a", "c"]);
+    expect(stored(host)).toEqual(["a", "c", "newer:b"]);
+  });
+
   it("accepts a returned replacement and never mutates the previous data", async () => {
     const { sdk } = createMemoryHost();
     const doc = await openDocument(sdk, "plan", options());

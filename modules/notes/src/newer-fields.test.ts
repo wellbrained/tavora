@@ -13,7 +13,8 @@ it("keeps a newer version's fields on a note", () => {
 it("keeps a newer version's fields in the appearance", () => {
   const appearance = parseAppearance({ notes: { font: "nope", lineHeight: 2 }, sidebar: "left" } as JsonValue);
   expect(JSON.parse(JSON.stringify(appearance))).toMatchObject({ notes: { lineHeight: 2 }, sidebar: "left" });
-  expect(appearance.notes.font).not.toBe("nope");
+  // A font a newer version added stays too, so the next change of the size here doesn't put the default over it.
+  expect(appearance.notes.font).toBe("nope");
 });
 
 it("keeps a newer version's fields in the order of the notes", async () => {

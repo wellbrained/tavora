@@ -24,7 +24,7 @@ import { BASIC, keyAction, meantElsewhere, pasteKeys, PLUS, type Key } from "./k
 import { createListsStore, type ListsStore } from "./lists";
 import { locale, setLanguage, t } from "./i18n";
 import { de, en } from "./locales";
-import { DECIMALS, DEFAULT_SETTINGS, HISTORY_LENGTHS, parseSettings, SETTINGS_KEY, type Mode, type Settings } from "./settings";
+import { DECIMALS, DEFAULT_SETTINGS, HISTORY_LENGTHS, parseSettings, saveSettings, SETTINGS_KEY, type Mode, type Settings } from "./settings";
 import SettingsDialog from "./SettingsDialog.vue";
 import ValueDialog from "./ValueDialog.vue";
 import { deleteValue, lookup, renameValue, restoreValue, saveValue, sameName, type Value } from "./values";
@@ -131,13 +131,20 @@ const decimals = computed({
 /** The history as long as the player picked. */
 const recent = computed(() => history.value.slice(0, settings.value.historyLength));
 
-/** Changes a toolbar choice and keeps it for every workspace. */
+/** The newest choice made here, so an older save that ends later doesn't put the panel back. */
+let choices = 0;
+
+/** Changes a toolbar choice and keeps it for every workspace; only what changed is saved, over the newest stored settings. */
 function choose(change: Partial<Settings>): void {
   settings.value = { ...settings.value, ...change };
   savedAt.value = Date.now();
-  void sdk.value?.storage.app
-    .set(SETTINGS_KEY, { ...settings.value })
-    .then(() => void (saveError.value = null))
+  const choice = ++choices;
+  if (!sdk.value) return;
+  void saveSettings(sdk.value, change)
+    .then((stored) => {
+      saveError.value = null;
+      if (choice === choices) settings.value = stored;
+    })
     .catch((reason: unknown) => {
       saveError.value = t("settingsError", { error: errorMessage(reason) });
     });
@@ -313,6 +320,16 @@ onMounted(async () => {
     setLanguage(connection.language);
     cleanup.push(connection.onLanguage(setLanguage), connection.dispose);
     settings.value = parseSettings(await connected.storage.app.get(SETTINGS_KEY));
+    // Back from hidden: a panel in another workspace may have changed the settings meanwhile.
+    cleanup.push(
+      connected.lifecycle.onResume(() => {
+        const choice = choices;
+        void connected.storage.app.get(SETTINGS_KEY).then(
+          (raw) => void (choice === choices && (settings.value = parseSettings(raw))),
+          () => undefined,
+        );
+      }),
+    );
     const stored = await createListsStore(connected);
     if (unmounted) {
       void stored.dispose().catch(() => undefined);

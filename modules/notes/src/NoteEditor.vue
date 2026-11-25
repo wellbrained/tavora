@@ -49,6 +49,8 @@ import {
   collectImageIds,
   FONTS,
   fontStack,
+  shownFont,
+  shownSize,
   formatMegabytes,
   MAX_FIXED_TITLE,
   SCRATCHPAD_ID,
@@ -527,13 +529,13 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
             <DropdownMenuLabel>{{ t("editor.font") }}</DropdownMenuLabel>
             <DropdownMenuItem v-for="font in FONTS" :key="font.id" :data-testid="`font-${font.id}`" @select.prevent="emit('setStyle', { font: font.id })">
               <span :style="{ fontFamily: font.stack }">{{ font.id === "inter" ? t("font.tavora") : font.name }}</span>
-              <Check v-if="look.font === font.id" class="ml-auto" :aria-label="t('editor.on')" />
+              <Check v-if="shownFont(look.font) === font.id" class="ml-auto" :aria-label="t('editor.on')" />
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuLabel>{{ t("editor.size") }}</DropdownMenuLabel>
             <DropdownMenuItem v-for="size in SIZES" :key="size.id" :data-testid="`size-${size.id}`" @select.prevent="emit('setStyle', { size: size.id })">
               {{ t(`size.${size.id}`) }}
-              <Check v-if="look.size === size.id" class="ml-auto" :aria-label="t('editor.on')" />
+              <Check v-if="shownSize(look.size) === size.id" class="ml-auto" :aria-label="t('editor.on')" />
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <p class="text-muted-foreground px-2 py-1.5 text-xs">{{ noteId === SCRATCHPAD_ID ? t("editor.appliesScratchpad") : t("editor.appliesNotes") }}</p>

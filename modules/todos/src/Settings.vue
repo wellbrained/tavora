@@ -21,6 +21,9 @@ import {
   LIVE_SIZES,
   PANEL_LOOK_DEFAULTS,
   PANEL_SIZES,
+  shownFont,
+  shownHeaders,
+  shownSize,
   type LiveHeaders,
   type LiveLook,
   type LiveSize,
@@ -88,7 +91,7 @@ function setPanel<K extends keyof PanelLook>(key: K, value: PanelLook[K] | undef
 /** A few of the user's own to-dos for the panel preview. */
 const sample = computed(() => props.state.rows.filter((row) => row.kind === "task").slice(0, 4));
 const panelStyle = computed(() => {
-  const [size, leading] = PANEL_SIZES[panelLook.value.size];
+  const [size, leading] = PANEL_SIZES[shownSize(panelLook.value.size)];
   return { fontFamily: fontStack(panelLook.value.font), fontSize: `${size}px`, lineHeight: `${leading}px` };
 });
 
@@ -114,7 +117,7 @@ watch([() => props.state, plate], draw, { deep: true });
       </template>
       <SettingsSection :title="t('live.cat.text')">
         <SettingsRow :label="t('live.font')">
-          <Select :model-value="panelLook.font" @update:model-value="setPanel('font', $event as PanelLook['font'])">
+          <Select :model-value="shownFont(panelLook.font)" @update:model-value="setPanel('font', $event as PanelLook['font'])">
             <SelectTrigger class="w-full" :aria-label="t('live.font')" data-testid="panel-font"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem v-for="font in LIVE_FONTS" :key="font.id" :value="font.id" :style="{ fontFamily: font.stack }">{{ fontName(font) }}</SelectItem>
@@ -122,7 +125,7 @@ watch([() => props.state, plate], draw, { deep: true });
           </Select>
         </SettingsRow>
         <SettingsRow :label="t('live.size')">
-          <SegmentedControl :model-value="panelLook.size" :label="t('live.size')" :options="SIZE_OPTIONS.map((option) => ({ ...option, testid: `panel-${option.testid}` }))" :class="fill" @update:model-value="setPanel('size', $event)" />
+          <SegmentedControl :model-value="shownSize(panelLook.size)" :label="t('live.size')" :options="SIZE_OPTIONS.map((option) => ({ ...option, testid: `panel-${option.testid}` }))" :class="fill" @update:model-value="setPanel('size', $event)" />
         </SettingsRow>
       </SettingsSection>
     </SettingsPage>
@@ -139,7 +142,7 @@ watch([() => props.state, plate], draw, { deep: true });
 
       <SettingsSection v-if="page === 'text'">
         <SettingsRow :label="t('live.font')">
-          <Select :model-value="look.font" @update:model-value="set('font', $event as LiveLook['font'])">
+          <Select :model-value="shownFont(look.font)" @update:model-value="set('font', $event as LiveLook['font'])">
             <SelectTrigger class="w-full" :aria-label="t('live.font')" data-testid="live-font"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem v-for="font in LIVE_FONTS" :key="font.id" :value="font.id" :style="{ fontFamily: font.stack }">{{ fontName(font) }}</SelectItem>
@@ -147,7 +150,7 @@ watch([() => props.state, plate], draw, { deep: true });
           </Select>
         </SettingsRow>
         <SettingsRow :label="t('live.size')">
-          <SegmentedControl :model-value="look.size" :label="t('live.size')" :options="SIZE_OPTIONS.map((option) => ({ ...option, testid: `live-${option.testid}` }))" :class="fill" @update:model-value="set('size', $event)" />
+          <SegmentedControl :model-value="shownSize(look.size)" :label="t('live.size')" :options="SIZE_OPTIONS.map((option) => ({ ...option, testid: `live-${option.testid}` }))" :class="fill" @update:model-value="set('size', $event)" />
           <Toggle :model-value="look.bold" :label="t('live.bold')" class="font-bold" data-testid="live-bold" @update:model-value="set('bold', $event)">B</Toggle>
         </SettingsRow>
         <SettingsRow :label="t('live.color')">
@@ -181,7 +184,7 @@ watch([() => props.state, plate], draw, { deep: true });
 
       <SettingsSection v-else>
         <SettingsRow :label="t('live.headers')">
-          <Select :model-value="look.headers" @update:model-value="set('headers', $event as LiveHeaders)">
+          <Select :model-value="shownHeaders(look.headers)" @update:model-value="set('headers', $event as LiveHeaders)">
             <SelectTrigger class="w-full" :aria-label="t('live.headers')" data-testid="live-headers"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem v-for="value in LIVE_HEADERS" :key="value" :value="value" :data-testid="`live-headers-${value}`">{{ t(`live.headers.${value}`) }}</SelectItem>

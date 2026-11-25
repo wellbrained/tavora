@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boardTitle, cleanName, formatMegabytes, isBoardId, MAX_BOARD_BYTES, MAX_NAME, newBoardId, uniqueName, parseBoard, sceneSignature, sizeLevel, sortBoards, WARN_BOARD_BYTES } from "./boards";
+import { boardTitle, cleanName, formatMegabytes, isBoardId, MAX_BOARD_BYTES, MAX_NAME, newBoardId, uniqueName, parseBoard, sceneSignature, sizeLevel, sortBoards, WARN_BOARD_BYTES, shownBackground } from "./boards";
 
 describe("parseBoard", () => {
   it("fills in a missing or damaged board", () => {
@@ -20,10 +20,14 @@ describe("parseBoard", () => {
     expect(sceneSignature([], "#fff", true)).not.toBe(sceneSignature([], "#fff", false));
   });
 
-  it("accepts only colours as a background", () => {
+  it("draws only colours as a background, and keeps any other text as it was saved", () => {
     expect(parseBoard({ background: "transparent" }, "T").background).toBe("transparent");
-    expect(parseBoard({ background: "url(javascript:alert(1))" }, "T").background).toBe("#ffffff");
-    expect(parseBoard({ background: "#12345g" }, "T").background).toBe("#ffffff");
+    expect(shownBackground("transparent")).toBe("transparent");
+    for (const background of ["url(javascript:alert(1))", "#12345g", "paper"]) {
+      expect(parseBoard({ background }, "T").background).toBe(background);
+      expect(shownBackground(background)).toBe("#ffffff");
+    }
+    expect(parseBoard({ background: "" }, "T").background).toBe("#ffffff");
   });
 });
 

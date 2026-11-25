@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.67",
+    "date": "2026-11-25",
+    "notes": [
+      "Built with the newest kit: newer data and choices stay when an older copy saves."
+    ]
+  },
+  {
     "version": "0.1.66",
     "date": "2026-11-25",
     "notes": [

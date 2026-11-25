@@ -5,7 +5,7 @@ import { errorMessage, useDocument } from "@tavora/official-ui";
 import type { TavoraSDK } from "@tavora/sdk";
 import { effectScope, ref } from "vue";
 import { t } from "./i18n";
-import { find, groupOf, groupOverlayState, LIST_ID, LIST_TITLE, linkedGroups, overlayState, parseList, type Counter, type ItemList } from "./items";
+import { find, groupOf, groupOverlayState, LIST_ID, LIST_TITLE, linkedGroups, overlayState, parseList, storedList, type Counter, type ItemList } from "./items";
 
 /** A counter's name in a group's default line. */
 export const counterName = (counter: Counter): string => counter.label || t("kind.counter");
@@ -15,7 +15,7 @@ export type ItemStore = Awaited<ReturnType<typeof createItemStore>>;
 export async function createItemStore(sdk: TavoraSDK, options: { debounceMs?: number } = {}) {
   // Detached: the panel closes the store itself (`dispose`), not whatever scope happens to be running here.
   const scope = effectScope(true);
-  const doc = scope.run(() => useDocument(sdk, LIST_ID, { parse: parseList, title: () => LIST_TITLE, debounceMs: options.debounceMs ?? 0 }))!;
+  const doc = scope.run(() => useDocument(sdk, LIST_ID, { parse: parseList, toStored: storedList, title: () => LIST_TITLE, debounceMs: options.debounceMs ?? 0 }))!;
   const opened = await doc.ready;
   /** What the panel shows: the stored list plus changes still being saved. */
   const list = doc.data;

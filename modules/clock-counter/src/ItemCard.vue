@@ -8,7 +8,7 @@ import { CountTo } from "@tavora/official-ui/components/ui/count-to";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { computed, inject, ref } from "vue";
 import { t } from "./i18n";
-import { canMove, goalReached, lapSplits, readClock, sourcesOf, type Clock, type Item } from "./items";
+import { canMove, goalReached, lapSplits, readClock, shownLinks, sourcesOf, type Clock, type Item } from "./items";
 import { ACTIVE_ROW, ROW_FADE } from "./active";
 import { PANEL } from "./panel";
 import { formatSeconds } from "./time";
@@ -64,9 +64,10 @@ const flashing = computed(() => !!reading.value?.done && props.item.kind === "co
 const label = (counter: { label: string }) => counter.label || t("kind.counter");
 const adds = computed(() => {
   const counter = props.item;
-  if (counter.kind !== "counter" || !counter.links.length) return "";
+  const links = counter.kind === "counter" ? shownLinks(panel.store.list.value, counter) : [];
+  if (!links.length) return "";
   const others = panel.store.list.value.items;
-  const list = counter.links.map((link) => `${link.amount < 0 ? "−" : "+"}${Math.abs(link.amount)} ${label(others.find((other) => other.id === link.target) ?? { label: "" })}`);
+  const list = links.map((link) => `${link.amount < 0 ? "−" : "+"}${Math.abs(link.amount)} ${label(others.find((other) => other.id === link.target) ?? { label: "" })}`);
   return t("item.adds", { list: list.join(", ") });
 });
 const from = computed(() => {

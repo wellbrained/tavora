@@ -33,6 +33,9 @@ import {
   overlayState,
   placeholderOf,
   setStream,
+  shownAlign,
+  shownFont,
+  shownLinks,
   SIZES,
   sizesOf,
   type Align,
@@ -221,8 +224,8 @@ const previewState = computed<OverlayState>(() => {
 
 // ── Overlay look ─────────────────────────────────────────────────────
 
-const font = computed({ get: () => look.value.font, set: (next: Font) => updateLook((value) => (value.font = next)) });
-const align = computed({ get: () => look.value.align, set: (next: Align) => updateLook((value) => (value.align = next)) });
+const font = computed({ get: () => shownFont(look.value.font), set: (next: Font) => updateLook((value) => (value.font = next)) });
+const align = computed({ get: () => shownAlign(look.value.align), set: (next: Align) => updateLook((value) => (value.align = next)) });
 const wordsColor = computed({ get: () => look.value.wordsColor ?? look.value.color, set: (next: string) => updateLook((value) => (value.wordsColor = next)) });
 const numberColor = computed({ get: () => look.value.color, set: (next: string) => updateLook((value) => (value.color = next)) });
 // The step is saved with the old step nearest to it, for the version before.
@@ -330,7 +333,7 @@ function saveGoal() {
 const counters = computed(() => panel.store.list.value.items.filter((item): item is Counter => item.kind === "counter" && item.id !== id.value));
 const links = computed(() =>
   props.item.kind === "counter"
-    ? props.item.links.map((link) => ({ ...link, label: counters.value.find((counter) => counter.id === link.target)?.label || t("kind.counter") }))
+    ? shownLinks(panel.store.list.value, props.item).map((link) => ({ ...link, label: counters.value.find((counter) => counter.id === link.target)?.label || t("kind.counter") }))
     : [],
 );
 const unlinked = computed(() => (props.item.kind === "counter" ? counters.value.filter((counter) => !(props.item as Counter).links.some((link) => link.target === counter.id)) : []));

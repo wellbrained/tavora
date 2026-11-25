@@ -44,6 +44,16 @@ async function setup(options: { synced?: Record<string, StoredFile>; problems?: 
 }
 
 describe("saving a drawing", () => {
+  it("keeps a background a newer version added while the board shows the default", async () => {
+    const { saver, read } = await setup({ data: { background: "paper" } });
+    saver.change(scene([rectangle()]));
+    await saver.flush();
+    expect(read()).toMatchObject({ background: "paper", elements: [{ type: "rectangle" }] });
+    saver.change(scene([rectangle()], { background: "#101010" }));
+    await saver.flush();
+    expect(read()?.background).toBe("#101010");
+  });
+
   it("does nothing for a drawing that is already stored", async () => {
     const { saver, panel, read } = await setup();
     const revision = panel.host.documents.get(ID)!.revision;

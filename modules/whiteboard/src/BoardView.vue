@@ -9,7 +9,7 @@ import type { DocumentHandle } from "@tavora/sdk/store";
 import { createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
-import type { BoardData } from "./boards";
+import { shownBackground, type BoardData } from "./boards";
 import { createBoardSession, type BoardSession, type BoardState, type View } from "./boardSession";
 import { watchHints, watchToolbar } from "./excalidrawDom";
 import ExcalidrawRoot, { type RootProps } from "./ExcalidrawRoot";
@@ -55,7 +55,7 @@ const start = data.elements.length > 0 ? props.view : undefined;
 const initialData: RootProps["initialData"] = {
   elements: data.elements as unknown as readonly ExcalidrawElement[],
   appState: {
-    viewBackgroundColor: data.background,
+    viewBackgroundColor: shownBackground(data.background),
     gridModeEnabled: data.grid,
     ...(start ? { scrollX: start.scrollX, scrollY: start.scrollY, zoom: { value: start.zoom as never } } : {}),
   },

@@ -2,11 +2,11 @@ import type { JsonValue } from "@tavora/sdk";
 import { createMemoryHost } from "@tavora/sdk/testing";
 import { expect, it, vi } from "vitest";
 import { createTodoStore } from "./store";
-import { LIST_ID, LIST_TITLE, parseList } from "./todos";
+import { LIST_ID, LIST_TITLE, parseList, setGroupColor, shownColor } from "./todos";
 
 vi.mock("@tavora/official-ui", async () => ({ ...(await import("../../shared/src/documents")), ...(await import("../../shared/src/i18n")), ...(await import("../../shared/src/use-document")) }));
 
-// A list as an older version saved it (steps, a source link, an unknown colour, a nameless group), opened and saved back.
+// A list as an older version saved it (steps, a source link, a nameless group) with a colour a newer one added, opened and saved back.
 const OLD: JsonValue = {
   groups: [
     { id: "g1", name: "", color: "puce", tasks: [{ id: "t1", title: "Old task", done: true, createdAt: "2026-01-01T00:00:00.000Z", link: "https://example.com", steps: [{ id: "s1", title: "Step", done: false }] }] },
@@ -26,7 +26,7 @@ it("saves a stored list back as the same document", async () => {
       "data": {
         "groups": [
           {
-            "color": "",
+            "color": "puce",
             "id": "g1",
             "name": "To-Dos",
             "tasks": [
@@ -115,4 +115,17 @@ it("still turns old steps into sub-to-dos once, without keeping the steps", () =
   expect(parseList(once as JsonValue)).toEqual(once);
   expect(JSON.stringify(once)).not.toContain('"steps"');
   expect(JSON.stringify(once)).not.toContain('"link"');
+});
+
+it("keeps a group colour a newer version added when the list is changed and saved", async () => {
+  const { sdk, host } = createMemoryHost();
+  await host.documents.put({ id: LIST_ID, title: LIST_TITLE, data: { version: 2, groups: [{ id: "g1", name: "Run", color: "gold", tasks: [] }, { id: "g2", name: "Loot", color: "", tasks: [] }] } });
+  const parsed = parseList(host.documents.get(LIST_ID)!.data);
+  expect(shownColor(parsed.groups[0]!.color)).toBe("");
+  const store = await createTodoStore(sdk, { debounceMs: 0 });
+  store.apply((list) => setGroupColor(list, "g2", "red"));
+  await store.flush();
+  const saved = host.documents.get(LIST_ID)!.data as { groups: { color: string }[] };
+  expect(saved.groups.map((group) => group.color)).toEqual(["gold", "red"]);
+  await store.dispose();
 });

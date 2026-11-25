@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { buildLiveState, buildPlateRows, LIVE_DEFAULTS, LIVE_MAX, PANEL_LOOK_DEFAULTS, parseLook, parsePanelLook, shorten, throttle, withFinished, type LiveLook } from "./live";
+import { buildLiveState, buildPlateRows, LIVE_DEFAULTS, LIVE_MAX, PANEL_LOOK_DEFAULTS, parseLook, parsePanelLook, shorten, shownFont, shownHeaders, shownSize, throttle, withFinished, type LiveLook } from "./live";
 import type { Group, Task, TodoList } from "./todos";
 
 const task = (id: string, extra: Partial<Task> = {}): Task => ({
@@ -177,7 +177,7 @@ describe("parseLook", () => {
 
   it("defaults everything", () => {
     expect(parseLook(undefined)).toEqual(LIVE_DEFAULTS);
-    expect(parseLook({ font: "comic", size: "huge", bold: 1, color: "red", headers: "x", backgroundColor: "#12345" })).toEqual(LIVE_DEFAULTS);
+    expect(parseLook({ font: 3, size: null, bold: 1, color: "red", headers: "", backgroundColor: "#12345" })).toEqual(LIVE_DEFAULTS);
     expect(numbers({ background: "x", padding: NaN })).toEqual({ background: 35, padding: 8 });
   });
 
@@ -244,7 +244,7 @@ describe("parsePanelLook", () => {
 
   it("falls back for panels saved before, or with unknown values", () => {
     expect(parsePanelLook(undefined)).toEqual(PANEL_LOOK_DEFAULTS);
-    expect(parsePanelLook({ font: "comic", size: "huge" })).toEqual(PANEL_LOOK_DEFAULTS);
+    expect(parsePanelLook({ font: 3, size: "" })).toEqual(PANEL_LOOK_DEFAULTS);
   });
 });
 
@@ -271,6 +271,17 @@ describe("withFinished", () => {
 describe("a newer version's look settings", () => {
   it("are kept when the panel reads its looks", () => {
     expect(JSON.parse(JSON.stringify(parseLook({ size: "m", shadow: 3 })))).toMatchObject({ size: "m", shadow: 3 });
-    expect(JSON.parse(JSON.stringify(parsePanelLook({ font: "nope", spacing: 2 })))).toMatchObject({ font: "inter", spacing: 2 });
+    expect(JSON.parse(JSON.stringify(parsePanelLook({ font: "nope", spacing: 2 })))).toMatchObject({ font: "nope", spacing: 2 });
+  });
+});
+
+describe("choices a newer version added", () => {
+  it("keeps them as they are and shows the defaults", () => {
+    const look = parseLook({ font: "serif", size: "xxl", headers: "box" });
+    expect(look).toMatchObject({ font: "serif", size: "xxl", headers: "box" });
+    expect([shownFont(look.font), shownSize(look.size), shownHeaders(look.headers)]).toEqual(["inter", "m", "name"]);
+    expect(parsePanelLook({ font: "serif", size: "xxl" })).toMatchObject({ font: "serif", size: "xxl" });
+    // What a hand edit left there that is no choice at all still falls back.
+    expect(parseLook({ font: 3, size: "" })).toMatchObject({ font: "inter", size: "m" });
   });
 });

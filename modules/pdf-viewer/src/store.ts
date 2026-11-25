@@ -4,7 +4,7 @@
 import { TavoraError, type ReadOnlyFile, type TavoraSDK } from "@tavora/sdk";
 import { openDocument } from "@tavora/sdk/store";
 import { ref } from "vue";
-import { addFile, cleanName, detectType, dropLink, emptyFiles, FILES_ID, kindOf, linkStatus, parseFiles, parseView, removeFile, renameFile, replaceCopy, setFileView, skipVersion, versionOf, type FileEntry, type FileLink, type FileView, type FilesData, type LinkStatus } from "./files";
+import { addFile, cleanName, detectType, dropLink, emptyFiles, FILES_ID, kindOf, linkStatus, parseFiles, parseView, removeFile, renameFile, replaceCopy, setFileView, skipVersion, storedFiles, versionOf, type FileEntry, type FileLink, type FileView, type FilesData, type LinkStatus } from "./files";
 
 /** A file that was not added, and why: its kind, its size, or the host (with its message). */
 export class FileProblem extends Error {
@@ -22,6 +22,7 @@ export type FilesStore = Awaited<ReturnType<typeof createFilesStore>>;
 export async function createFilesStore(sdk: TavoraSDK, options: { /** The document's name, in the reader's language. */ title: () => string; debounceMs?: number }) {
   const doc = await openDocument<FilesData>(sdk, FILES_ID, {
     parse: (raw) => (raw === null ? emptyFiles() : parseFiles(raw)),
+    toStored: storedFiles,
     title: options.title,
     ...(options.debounceMs === undefined ? {} : { debounceMs: options.debounceMs }),
   });

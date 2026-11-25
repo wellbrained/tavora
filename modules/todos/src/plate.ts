@@ -1,7 +1,7 @@
 // Draws the live view's plate: the overlay page over the game and the preview in the settings both use it, so the
 // preview looks exactly like the real thing. Styles are in plate.css.
 import type { JsonValue } from "@tavora/sdk";
-import { fontStack, LIVE_SIZES, parseLook, type LiveLook, type LiveRow, type LiveState } from "./live";
+import { fontStack, LIVE_SIZES, parseLook, shownSize, type LiveLook, type LiveRow, type LiveState } from "./live";
 import "./fonts.css";
 import "./plate.css";
 
@@ -53,7 +53,7 @@ export function plateStyle(look: LiveLook): { style: Record<string, string>; cla
       "--padding": `${look.padding}px`,
       "--text": look.color,
       "font-family": fontStack(look.font),
-      "font-size": `${LIVE_SIZES[look.size]}px`,
+      "font-size": `${LIVE_SIZES[shownSize(look.size)]}px`,
     },
     classes: { bold: look.bold, outline: look.outline, lines: look.headers === "line" },
   };

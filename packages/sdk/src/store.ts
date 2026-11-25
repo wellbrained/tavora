@@ -26,6 +26,11 @@ export interface OpenDocumentOptions<T> {
   parse(raw: JsonValue | null): T;
   title(data: T): string;
   /**
+   * What is saved for `data`. Default: `data` as it is. Use it to put back what `parse` kept aside, such as entries a newer
+   * version of the module wrote that this one can't read, in the place they were stored. @since 0.4.12
+   */
+  toStored?(data: T): JsonValue;
+  /**
    * `"reapply"` (default): an edit is a function applied again on the newest copy, so two panels' edits both survive.
    * `"mine"`: for an editor that owns the whole document; on a conflict the local copy wins, and while it has unsaved
    * edits another panel's change is only reported through `onChange`, never merged. A failed save keeps the local copy.
@@ -105,6 +110,7 @@ const isConflict = (error: unknown): boolean => error instanceof TavoraError && 
 
 export async function openDocument<T>(sdk: TavoraSDK, id: string, options: OpenDocumentOptions<T>): Promise<DocumentHandle<T>> {
   const { parse, title } = options;
+  const toStored = (data: T): JsonValue => (options.toStored ? options.toStored(data) : (data as JsonValue));
   const mine = options.merge === "mine";
   const debounceMs = options.debounceMs ?? DEFAULT_DEBOUNCE_MS;
 
@@ -214,7 +220,7 @@ export async function openDocument<T>(sdk: TavoraSDK, id: string, options: OpenD
             next = data;
           }
           try {
-            const saved = await sdk.documents.put({ id, title: title(next), data: next as JsonValue, ifRevision: base.revision });
+            const saved = await sdk.documents.put({ id, title: title(next), data: toStored(next), ifRevision: base.revision });
             stored = { data: next, revision: saved.revision };
             skipDelete = false;
             break;

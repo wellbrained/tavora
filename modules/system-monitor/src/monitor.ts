@@ -4,6 +4,7 @@
 // redrawn. The traffic, when shown, is read again with the first snapshot 5 minutes after the last read, so it too
 // pauses while the panel is hidden.
 import { errorMessage } from "@tavora/official-ui";
+import { patchStored } from "@tavora/official-ui/patch-stored";
 import { TavoraError, type JsonValue, type SystemConnection, type SystemConnectionSettings, type SystemInfo, type SystemInterval, type SystemOutage, type SystemSnapshot, type SystemTraffic, type TavoraSDK } from "@tavora/sdk";
 import { markRaw, ref, shallowRef } from "vue";
 import { createHistory, type History } from "./history";
@@ -190,9 +191,13 @@ export function createMonitor(sdk: TavoraSDK) {
     void watch();
   }
 
-  function saveApp(next: AppSettings): void {
-    app.value = next;
-    void sdk.storage.app.set(APP_KEY, next as unknown as JsonValue).catch(() => undefined);
+  /**
+   * Saves what changed over the newest stored settings. The rest is not written from this panel's copy (read at start): a panel in
+   * another workspace may have changed it since, or a newer version saved a value this one doesn't know.
+   */
+  function saveApp(change: Partial<AppSettings>): void {
+    app.value = { ...app.value, ...change };
+    void patchStored(sdk.storage.app, APP_KEY, change as Record<string, JsonValue>, { atomic: sdk.supports("storage.app.compareAndSet") }).catch(() => undefined);
     void watch();
   }
 
@@ -239,11 +244,11 @@ export function createMonitor(sdk: TavoraSDK) {
       cpuHistory.setInterval(intervalMs);
       gpuHistory.setInterval(intervalMs);
       ramHistory.setInterval(intervalMs);
-      saveApp({ ...app.value, intervalMs });
+      saveApp({ intervalMs });
     },
     /** The user's own choice of drives; once saved, newly seen drives are not added to it. */
     setDrives(drives: string[]): void {
-      saveApp({ ...app.value, drives });
+      saveApp({ drives });
     },
   };
 }

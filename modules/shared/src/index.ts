@@ -12,6 +12,7 @@ export { default as NameDialog } from "./components/NameDialog.vue";
 export { checkName, type NameProblem } from "./components/name-check";
 export { SegmentedControl, type SegmentedOption } from "./components/ui/segmented-control";
 export { useDocument, type UseDocument } from "./use-document";
+export { patchStored } from "./patch-stored";
 export { useItemSession, type UseItemSession } from "./use-item-session";
 export { errorMessage } from "./documents";
 export { createOptimistic, useOptimistic, useOptimisticKeyed, type Optimistic, type OptimisticOptions, type UseOptimistic, type UseOptimisticKeyed } from "./optimistic";

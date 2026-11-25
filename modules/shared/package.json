@@ -12,6 +12,7 @@
     "./i18n": "./src/i18n.ts",
     "./testing": "./src/testing.ts",
     "./optimistic": "./src/optimistic.ts",
+    "./patch-stored": "./src/patch-stored.ts",
     "./use-task": "./src/use-task.ts",
     "./focus-recovery": "./src/focus-recovery.ts",
     "./overlay-text": "./src/components/ui/overlay-text/plan.ts",

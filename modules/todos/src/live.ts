@@ -1,6 +1,6 @@
 // The live view: what the panel hands to Tavora (panel.setLive) so the overlay page can show the list read-only
 // over the game while the full panel is closed. Pure functions, so the rules are easy to test.
-import { unknownFields } from "@tavora/official-ui/lib/utils";
+import { choiceOf, keepChoice, unknownFields, type NewerChoice } from "@tavora/official-ui/lib/utils";
 import type { JsonValue } from "@tavora/sdk";
 import { depths, type TodoList } from "./todos";
 
@@ -35,14 +35,15 @@ export const LIVE_COLORS = ["#ffffff", "#facc15", "#fb923c", "#f87171", "#f472b6
 /** How the live view looks; stored per panel. */
 export interface LiveLook {
   [key: string]: JsonValue;
-  font: LiveFont;
-  size: LiveSize;
+  /** A font, size or headers a newer version added stays as it is; read them through `shownFont`, `shownSize` and `shownHeaders`. */
+  font: LiveFont | NewerChoice;
+  size: LiveSize | NewerChoice;
   bold: boolean;
   /** Text color, #rrggbb. */
   color: string;
   /** A dark outline around the text, so it stays readable on bright scenes. */
   outline: boolean;
-  headers: LiveHeaders;
+  headers: LiveHeaders | NewerChoice;
   /**
    * Finished to-dos stay in the list, ticked and struck through. It is the panel's Keep finished to-dos (`withFinished`):
    * still written with the look, so a version before that kept it on its own reads the same choice.
@@ -114,7 +115,12 @@ export interface LiveTexts {
 
 const clamp = (value: unknown, [min, max]: readonly [number, number], fallback: number): number =>
   typeof value === "number" && Number.isFinite(value) ? Math.min(max, Math.max(min, Math.round(value))) : fallback;
-const oneOf = <T extends string>(options: readonly T[], value: unknown, fallback: T): T => options.find((option) => option === value) ?? fallback;
+const FONT_IDS: readonly LiveFont[] = LIVE_FONTS.map((font) => font.id);
+const SIZE_IDS = Object.keys(LIVE_SIZES) as LiveSize[];
+/** The font, size and headers to show and use: the default for a newer version's, which stays stored as it is. */
+export const shownFont = (font: string): LiveFont => choiceOf(FONT_IDS, font, "inter");
+export const shownSize = (size: string): LiveSize => choiceOf(SIZE_IDS, size, "m");
+export const shownHeaders = (headers: string): LiveHeaders => choiceOf(LIVE_HEADERS, headers, "name");
 const bool = (value: unknown, fallback: boolean): boolean => (typeof value === "boolean" ? value : fallback);
 const hex = (value: unknown, fallback: string): string => (typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : fallback);
 
@@ -124,16 +130,12 @@ export function parseLook(raw: { [key: string]: unknown } | null | undefined): L
   // Settings a newer version added are kept as they are (unknownFields), so they are still there after a change here.
   return {
     ...unknownFields<JsonValue>(raw, Object.keys(LIVE_DEFAULTS)),
-    font: oneOf(
-      LIVE_FONTS.map((font) => font.id),
-      raw?.font,
-      d.font,
-    ),
-    size: oneOf(Object.keys(LIVE_SIZES) as LiveSize[], raw?.size, d.size),
+    font: keepChoice(FONT_IDS, raw?.font, "inter"),
+    size: keepChoice(SIZE_IDS, raw?.size, "m"),
     bold: bool(raw?.bold, d.bold),
     color: hex(raw?.color, d.color),
     outline: bool(raw?.outline, d.outline),
-    headers: oneOf(LIVE_HEADERS, raw?.headers, d.headers),
+    headers: keepChoice(LIVE_HEADERS, raw?.headers, "name"),
     showFinished: bool(raw?.showFinished, d.showFinished),
     backgroundColor: hex(raw?.backgroundColor, d.backgroundColor),
     background: clamp(raw?.background, LIVE_RANGE.background, d.background),
@@ -153,8 +155,9 @@ export function withFinished(look: LiveLook, finished: "stay" | "vanish"): LiveL
 /** How the panel itself shows to-dos: font and text size; stored per panel. */
 export interface PanelLook {
   [key: string]: JsonValue;
-  font: LiveFont;
-  size: LiveSize;
+  /** A newer version's font or size stays as it is; read them through `shownFont` and `shownSize`. */
+  font: LiveFont | NewerChoice;
+  size: LiveSize | NewerChoice;
 }
 
 export const PANEL_LOOK_DEFAULTS: PanelLook = { font: "inter", size: "m" };
@@ -166,16 +169,13 @@ export const PANEL_SIZES: Record<LiveSize, readonly [number, number]> = { xs: [1
 export function parsePanelLook(raw: { [key: string]: unknown } | null | undefined): PanelLook {
   return {
     ...unknownFields<JsonValue>(raw, Object.keys(PANEL_LOOK_DEFAULTS)),
-    font: oneOf(
-      LIVE_FONTS.map((font) => font.id),
-      raw?.font,
-      PANEL_LOOK_DEFAULTS.font,
-    ),
-    size: oneOf(Object.keys(LIVE_SIZES) as LiveSize[], raw?.size, PANEL_LOOK_DEFAULTS.size),
+    font: keepChoice(FONT_IDS, raw?.font, "inter"),
+    size: keepChoice(SIZE_IDS, raw?.size, "m"),
   };
 }
 
-export function fontStack(id: LiveFont): string {
+/** The CSS fonts for a font id; the first font for one a newer version added. */
+export function fontStack(id: string): string {
   return LIVE_FONTS.find((font) => font.id === id)?.stack ?? LIVE_FONTS[0].stack;
 }
 

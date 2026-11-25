@@ -67,7 +67,8 @@ export function parsePanel(raw: unknown): PanelSettings {
     }
   }
   // At least one section always shows.
-  if (!SECTIONS.some((id) => result.sections[id])) result.sections = defaultPanel().sections;
+  // A newer version's sections stay as they are.
+  if (!SECTIONS.some((id) => result.sections[id])) result.sections = { ...result.sections, ...defaultPanel().sections };
   if (isRecord(raw.blocks)) {
     const blocks = raw.blocks;
     for (const id of BLOCKS) {
@@ -76,7 +77,7 @@ export function parsePanel(raw: unknown): PanelSettings {
     }
   }
   // At least one block always shows.
-  if (!BLOCKS.some((id) => result.blocks[id])) result.blocks = defaultPanel().blocks;
+  if (!BLOCKS.some((id) => result.blocks[id])) result.blocks = { ...result.blocks, ...defaultPanel().blocks };
   if (typeof raw.gpu === "string") result.gpu = raw.gpu;
   if (typeof raw.traffic === "boolean") result.traffic = raw.traffic;
   return result;

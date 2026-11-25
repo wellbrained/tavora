@@ -2,7 +2,7 @@
 // for titles, sorting and search. Kept free of Vue and Tiptap so it can be
 // unit tested.
 
-import { unknownFields } from "@tavora/official-ui/lib/utils";
+import { choiceOf, keepChoice, unknownFields, type NewerChoice } from "@tavora/official-ui/lib/utils";
 import { BLOB_ID, type JsonValue } from "@tavora/sdk";
 
 /** The one note every workspace has. It cannot be deleted, only cleared. */
@@ -291,8 +291,9 @@ export const SIZES = [
 export type SizeId = (typeof SIZES)[number]["id"];
 
 export interface TextStyle {
-  font: FontId;
-  size: SizeId;
+  /** A font or size a newer version added stays as it is; pickers show it through `shownFont` and `shownSize`. */
+  font: FontId | NewerChoice;
+  size: SizeId | NewerChoice;
 }
 
 /** The look of the text in notes, and separately in the scratchpad. */
@@ -301,13 +302,22 @@ export interface Appearance {
   scratchpad: TextStyle;
 }
 
-export const DEFAULT_STYLE: TextStyle = { font: "inter", size: "medium" };
+const DEFAULT_FONT: FontId = "inter";
+const DEFAULT_SIZE: SizeId = "medium";
+export const DEFAULT_STYLE: TextStyle = { font: DEFAULT_FONT, size: DEFAULT_SIZE };
 
-export function fontStack(id: FontId): string {
+const FONT_IDS: readonly FontId[] = FONTS.map((font) => font.id);
+const SIZE_IDS: readonly SizeId[] = SIZES.map((size) => size.id);
+/** The font and size a picker shows: the default for one a newer version added (it stays saved as it is). */
+export const shownFont = (id: string): FontId => choiceOf(FONT_IDS, id, DEFAULT_FONT);
+export const shownSize = (id: string): SizeId => choiceOf(SIZE_IDS, id, DEFAULT_SIZE);
+
+/** The CSS fonts for a font id; the default's for one a newer version added. */
+export function fontStack(id: string): string {
   return FONTS.find((font) => font.id === id)?.stack ?? FONTS[0].stack;
 }
 
-export function sizePx(id: SizeId): number {
+export function sizePx(id: string): number {
   return SIZES.find((size) => size.id === id)?.px ?? 14;
 }
 
@@ -315,8 +325,9 @@ function parseStyle(raw: JsonValue | undefined): TextStyle {
   const value = raw !== null && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
   return {
     ...unknownFields<JsonValue>(value, ["font", "size"]),
-    font: FONTS.find((font) => font.id === value.font)?.id ?? DEFAULT_STYLE.font,
-    size: SIZES.find((size) => size.id === value.size)?.id ?? DEFAULT_STYLE.size,
+    // A font or size a newer version added stays as it is (shown as the default), so a change here doesn't put the default over it.
+    font: keepChoice(FONT_IDS, value.font, DEFAULT_FONT),
+    size: keepChoice(SIZE_IDS, value.size, DEFAULT_SIZE),
   };
 }
 

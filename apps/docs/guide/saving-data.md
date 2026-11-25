@@ -84,6 +84,19 @@ When another panel deletes the document, `onChange` gets `deleted: true`. Your u
 
 `parse(null)` must return a valid, empty value: it is what `plan.data` shows for a document that does not exist yet or was deleted by another panel, and the store never calls it with anything else for a missing document. A `parse` that throws for `null` is a mistake in the module; the store reports it as an error that says so (`parse(null) must return a valid empty value …`).
 
+A newer version of your module may write entries this one can't read, such as an item of a new kind. Don't drop them: an older copy (after a fallback, or on another PC) would save the list without them. Keep them aside in `parse` and put them back in `toStored`, which turns `data` into what is saved (default: `data` as it is). `readEntries` and `withKept` from `@tavora/official-ui/lib/utils` keep each one in its place:
+
+```ts
+const plan = await openDocument(sdk, "plan", {
+  parse: (raw) => {
+    const { entries, kept } = readEntries(isRecord(raw) ? raw.items : [], (entry) => readItem(entry)); // "newer" for a kind you don't know
+    return { items: entries, newer: kept };
+  },
+  toStored: ({ items, newer }) => ({ items: withKept(items, newer, (item) => item.id) }),
+  title: () => "Plan",
+});
+```
+
 An editor that owns the whole document can pass `merge: "mine"`:
 
 - Its copy wins a conflict.

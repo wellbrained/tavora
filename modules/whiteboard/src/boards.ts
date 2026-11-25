@@ -43,6 +43,9 @@ export const MAX_NAME = 60;
 
 export const DEFAULT_BACKGROUND = "#ffffff";
 
+/** The background the board draws: a colour or transparent; white for one a newer version added (it stays saved as it is). */
+export const shownBackground = (background: string): string => (/^#[0-9a-fA-F]{3,8}$|^transparent$/.test(background) ? background : DEFAULT_BACKGROUND);
+
 export function emptyBoard(now = new Date().toISOString()): BoardData {
   return { version: 1, elements: [], files: {}, name: "", background: DEFAULT_BACKGROUND, grid: false, createdAt: now };
 }
@@ -72,7 +75,8 @@ export function parseBoard(raw: JsonValue | null, now = new Date().toISOString()
     elements: Array.isArray(value.elements) ? value.elements.filter((element) => element !== null && typeof element === "object" && !Array.isArray(element)) : [],
     files: parseFiles(value.files),
     name: typeof value.name === "string" ? cleanName(value.name) : "",
-    background: typeof value.background === "string" && /^#[0-9a-fA-F]{3,8}$|^transparent$/.test(value.background) ? value.background : DEFAULT_BACKGROUND,
+    // A background a newer version added stays as it is (the board shows the default, see shownBackground).
+    background: typeof value.background === "string" && value.background.length > 0 && value.background.length <= 64 ? value.background : DEFAULT_BACKGROUND,
     grid: value.grid === true,
     createdAt: typeof value.createdAt === "string" ? value.createdAt : now,
   };

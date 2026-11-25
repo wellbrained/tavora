@@ -1,7 +1,7 @@
 import type { JsonValue } from "@tavora/sdk";
 import { createMemoryHost } from "@tavora/sdk/testing";
 import { expect, it, vi } from "vitest";
-import { LIST_ID, LIST_TITLE, parseList } from "./items";
+import { LIST_ID, LIST_TITLE, parseList, shownAlign, shownFont } from "./items";
 import { createItemStore } from "./store";
 
 vi.mock("@tavora/official-ui", async () => ({ ...(await import("../../shared/src/documents")), ...(await import("../../shared/src/i18n")), ...(await import("../../shared/src/use-document")) }));
@@ -185,5 +185,44 @@ it("keeps fields a newer version added when it changes and saves the list", asyn
   expect((saved.items[0]!.look as Record<string, unknown>).wordsColor).toBeUndefined();
   expect(saved.items[2]).toMatchObject({ splitColor: "#00ff00" });
   expect(saved.items[2]!.lapBase).toBeUndefined();
+  await store.dispose();
+});
+
+it("keeps items of a kind a newer version added, in their place, with the links to them", async () => {
+  const { sdk, host } = createMemoryHost();
+  const dice = { id: "d1", kind: "dice", label: "Roll", sides: 20 };
+  const data: JsonValue = {
+    items: [
+      { id: "c1", kind: "counter", label: "Deaths", value: 1, links: [{ target: "d1", amount: 2 }] },
+      dice,
+      { id: "c2", kind: "counter", label: "Bosses", value: 0 },
+    ],
+  };
+  await host.documents.put({ id: LIST_ID, title: LIST_TITLE, data });
+  const store = await createItemStore(sdk, { debounceMs: 0 });
+  expect(store.list.value.items.map((item) => item.id)).toEqual(["c1", "c2"]);
+  store.apply(["c1"], (list) => {
+    const counter = list.items[0]!;
+    if (counter.kind === "counter") counter.value = 5;
+  });
+  await store.flush();
+  const saved = host.documents.get(LIST_ID)!.data as { items: { id: string; links?: unknown }[] };
+  expect(saved.items.map((item) => item.id)).toEqual(["c1", "d1", "c2"]);
+  expect(saved.items[1]).toEqual(dice);
+  expect(saved.items[0]!.links).toEqual([{ target: "d1", amount: 2 }]);
+  await store.dispose();
+});
+
+it("keeps a font, an alignment and a time format a newer version added when an item is changed and saved", async () => {
+  const { sdk, host } = createMemoryHost();
+  const data: JsonValue = { items: [{ id: "k1", kind: "stopwatch", label: "Run", format: "{d}d {h}:{mm}", look: { font: "serif", align: "justify" } }] };
+  await host.documents.put({ id: LIST_ID, title: LIST_TITLE, data });
+  const store = await createItemStore(sdk, { debounceMs: 0 });
+  const look = store.list.value.items[0]!.look;
+  expect([shownFont(look.font), shownAlign(look.align)]).toEqual(["inter", "center"]);
+  store.apply(["k1"], (list) => void (list.items[0]!.label = "Speedrun"));
+  await store.flush();
+  const saved = host.documents.get(LIST_ID)!.data as { items: { label: string; format: string; look: { font: string; align: string } }[] };
+  expect(saved.items[0]).toMatchObject({ label: "Speedrun", format: "{d}d {h}:{mm}", look: { font: "serif", align: "justify" } });
   await store.dispose();
 });
