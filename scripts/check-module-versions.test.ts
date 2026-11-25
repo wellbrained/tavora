@@ -7,6 +7,9 @@ describe("check-module-versions", () => {
   it("finds the modules whose shipped files changed, and all of them for a kit change", () => {
     expect(touchedModules(["modules/notes/src/App.vue", "modules/notes/src/notes.test.ts", "apps/desktop/src/x.ts"], MODULES)).toEqual(["notes"]);
     expect(touchedModules(["modules/shared/src/lib/keys.ts"], MODULES)).toEqual(MODULES);
+    // The SDK is bundled into every module too; its tests and the other packages are not.
+    expect(touchedModules(["packages/sdk/src/store.ts"], MODULES)).toEqual(MODULES);
+    expect(touchedModules(["packages/sdk/src/store.test.ts", "packages/sdk/CHANGELOG.md", "packages/pack/src/cli.ts"], MODULES)).toEqual([]);
     expect(touchedModules(["modules/shared/src/lib/keys.test.ts", "modules/todos/README.md", "modules/README.md", "modules/todos/src/__snapshots__/a.snap"], MODULES)).toEqual([]);
   });
 

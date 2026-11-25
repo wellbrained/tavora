@@ -24,7 +24,10 @@ export interface UseItemSession<T> {
   loaded: Readonly<Ref<boolean>>;
   /** Resolves with the session when loaded; rejects when it cannot be opened (also in `error`). */
   ready: Promise<ItemSession<T>>;
-  /** Changes the open item, once it is open; does nothing for none. */
+  /**
+   * Changes the open item, once it is open; does nothing for none. Dropped while `deleted` (another panel deleted it): `current` is then the placeholder, and saving it
+   * would bring the item back blank. Call `restoreDeleted()` first.
+   */
   update(change: DocumentChangeFn<T>): void;
   pick(id: string | null): Promise<boolean>;
   create(data?: T, title?: string): Promise<string>;

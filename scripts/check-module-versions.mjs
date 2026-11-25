@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // A built-in module (modules/<name>, id tavora.*) that a pull request changes must raise its version in tavora.module.json:
 // built-in modules update from the catalogue without an app release, so their version is what tells two copies apart.
-// The kit (modules/shared) is bundled into every one of them, so a kit change asks for a raise of each.
+// The kit (modules/shared) and the SDK (packages/sdk/src) are bundled into every one of them, so a change there asks for a
+// raise of each.
 // Tests and Markdown don't end up in a build and don't count.
 //
 //   node scripts/check-module-versions.mjs <base> [head]     (CI: origin/main and the pull request's head)
@@ -11,11 +12,15 @@ import { pathToFileURL } from "node:url";
 /** Files that don't change what a module ships. */
 export const ignored = (file) => /\.test\.[cm]?[jt]sx?$/.test(file) || /(^|\/)__snapshots__\//.test(file) || file.endsWith(".md");
 
-/** The built-in modules whose shipped files changed: `modules/<name>/...`, and all of them for a kit change. */
+/** The built-in modules whose shipped files changed: `modules/<name>/...`, and all of them for a kit or SDK change. */
 export function touchedModules(files, modules) {
   const touched = new Set();
   for (const file of files) {
     if (ignored(file)) continue;
+    if (file.startsWith("packages/sdk/src/")) {
+      modules.forEach((module) => touched.add(module));
+      continue;
+    }
     const [top, name] = file.split("/");
     if (top !== "modules" || !name || !file.slice(`modules/${name}`.length).startsWith("/")) continue;
     if (name === "shared") modules.forEach((module) => touched.add(module));

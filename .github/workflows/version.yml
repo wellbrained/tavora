@@ -9,7 +9,8 @@ name: Version
 on:
   pull_request:
     branches: [main]
-    types: [opened, synchronize, reopened, labeled, unlabeled]
+    # edited: a pull request retargeted to main (after the one it was stacked on merged) is checked too.
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
 
 permissions:
   contents: read
@@ -32,6 +33,8 @@ jobs:
         run: node apps/desktop/scripts/change-notes.mjs check origin/main "$LABELED" "$HEAD_SHA"
       # A built-in module whose files (or the kit it bundles) changed raises its version (CLAUDE.md, "Built-in modules").
       - name: Check the built-in modules' versions
+        # Also when the change notes failed, so one run shows both problems.
+        if: ${{ !cancelled() }}
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: node scripts/check-module-versions.mjs origin/main "$HEAD_SHA"

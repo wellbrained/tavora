@@ -10,7 +10,7 @@ import NoteEditor from "./NoteEditor.vue";
 import NoteList from "./NoteList.vue";
 import { setLanguage, t } from "./i18n";
 import { de, en } from "./locales";
-import { collectImageIds, emptyContent, isBlank, leftEmpty, nudged, reordered, SCRATCHPAD_ID, sections, UNTITLED, type NoteData, type NoteEntry, type RichText } from "./notes";
+import { collectImageIds, emptyContent, leftEmpty, restoreCleared, nudged, reordered, SCRATCHPAD_ID, sections, UNTITLED, type NoteData, type NoteEntry, type RichText } from "./notes";
 import { createNotesStore, type NotesStore } from "./store";
 
 /** Below this width the list and the editor take turns. */
@@ -230,9 +230,10 @@ async function removeNote(entry: NoteEntry) {
     offerUndo(t("undo.cleared"), async () => {
       // What was typed since is saved first; when there is any, the old text can't come back over it.
       if (selectedId.value === SCRATCHPAD_ID) await editor.value?.flush();
-      if (!isBlank(notes.scratchpad.data)) return false;
-      setScratchpad(before.content, before.text);
-      if (selectedId.value === SCRATCHPAD_ID) editor.value?.reload();
+      // Checked inside the change, which runs again on a newer copy after a conflict: newer text there stays too.
+      const back = await restoreCleared(notes.scratchpad, before);
+      if (back && selectedId.value === SCRATCHPAD_ID) editor.value?.reload();
+      return back;
     });
     return;
   }
