@@ -40,7 +40,7 @@ async function setup(options: { synced?: Record<string, StoredFile>; problems?: 
     const doc = panel.host.documents.get(ID);
     return doc ? parseBoard(doc.data) : undefined;
   };
-  return { panel, other, document, saver, states, order, sync, read, open };
+  return { panel, other, document, saver, states, order, sync, stored, read, open };
 }
 
 describe("saving a drawing", () => {
@@ -260,6 +260,26 @@ describe("other panels", () => {
     await wait();
     expect(read()).toBeUndefined();
     expect(saver.state.save).toBe("idle");
+  });
+});
+
+describe("bringing a deleted board back", () => {
+  it("keeps the board's name, pictures, age and newer fields, with what it shows now on top", async () => {
+    const kept: StoredFile = { blobId: "a".repeat(32), mimeType: "image/png", created: 1 };
+    const undone: StoredFile = { blobId: "c".repeat(32), mimeType: "image/png", created: 2 };
+    const createdAt = "2026-01-02T03:04:05.000Z";
+    const { saver, panel, stored } = await setup({ synced: { f1: kept }, data: { createdAt, background: "paper", later: "keep me" } as Partial<BoardData> });
+    saver.change(scene([rectangle({ type: "image", fileId: "f1" })], { files: { f1: {} as never } }));
+    await saver.flush();
+
+    panel.host.documents.delete(ID);
+    await vi.waitFor(() => expect(saver.state.deleted).toBe(true));
+    // Drawn after the delete: a stroke, and Undo brought back a picture whose file is still stored.
+    saver.change(scene([rectangle({ type: "image", fileId: "f1" }), rectangle({ type: "image", fileId: "f2" }), rectangle()], { grid: true }));
+    stored.set("f2", undone);
+    const copy = saver.copy()!;
+    expect(copy).toMatchObject({ name: "Atlas", createdAt, background: "paper", grid: true, later: "keep me", files: { f1: kept, f2: undone } });
+    expect(copy.elements).toHaveLength(3);
   });
 });
 

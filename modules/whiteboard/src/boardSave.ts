@@ -98,8 +98,16 @@ export function createBoardSaver(options: BoardSaverOptions) {
   const stopErrors = document.onError((_, kind) => {
     if (kind === "save") failures++;
   });
+  /**
+   * The board's last real data: after a delete elsewhere the handle's `data` is an empty placeholder (no name, no
+   * pictures, fields a newer version added gone), so bringing the board back builds on this instead.
+   */
+  let base: BoardData = document.data;
   const stopChanges = document.onChange((event) => {
-    if (!event.deleted) return;
+    if (!event.deleted) {
+      base = event.data;
+      return;
+    }
     stopped = "deleted";
     clearTimeout(timer);
     timer = undefined;
@@ -192,14 +200,24 @@ export function createBoardSaver(options: BoardSaverOptions) {
     },
     /**
      * What the board shows now, as a stored board, for bringing it back after another panel deleted it (nothing is saved
-     * meanwhile). Pictures added since keep their elements; their pixels are stored with the next save. Null before anything was drawn.
+     * meanwhile): the board's last real data (name, when it was made, its pictures' stored files, fields a newer version
+     * added) with the drawing on top. Pictures added since keep their elements; their pixels are stored with the next save.
+     * Null before anything was drawn.
      */
     copy(): BoardData | null {
       if (!latest) return null;
+      const elements = latest.elements.filter((element) => !element.isDeleted);
+      // The stored files it had, plus those of pictures on the board that were stored since (or brought back by Undo).
+      const files = { ...base.files };
+      for (const id of pictureFileIds(elements)) {
+        const known = pictures.stored.get(id);
+        if (known) files[id] = known;
+      }
       return {
-        ...document.data,
-        elements: JSON.parse(JSON.stringify(latest.elements.filter((element) => !element.isDeleted))) as JsonValue[],
-        background: latest.background,
+        ...base,
+        elements: JSON.parse(JSON.stringify(elements)) as JsonValue[],
+        files,
+        background: latest.background === shownBackground(base.background) ? base.background : latest.background,
         grid: latest.grid,
       };
     },

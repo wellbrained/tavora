@@ -2,7 +2,8 @@ import type { JsonValue } from "@tavora/sdk";
 import { createMemoryHost, type MemoryHost, type MemoryHostOptions } from "@tavora/sdk/testing";
 import { describe, expect, it, vi } from "vitest";
 import { openBoardLibrary, type OpenBoardView } from "./board-library";
-import { emptyBoard, newBoardId, parseBoard, type BoardData } from "./boards";
+import { createBoardSaver } from "./boardSave";
+import { emptyBoard, newBoardId, parseBoard, type BoardData, type StoredFile } from "./boards";
 
 const words = () => ({ board: "Board", idea: "Idea board", screenshot: "Screenshot annotation" });
 
@@ -199,6 +200,38 @@ describe("two panels", () => {
 
     await first.restoreDeleted();
     expect(stored(a.host, "board-start")?.data.elements).toEqual([{ id: "r1", type: "rectangle" }, { id: "after", type: "freedraw" }]);
+  });
+  it("Restore keeps the board's name, pictures and age, with what the board shows now on top", async () => {
+    const { a, b } = panels();
+    const id = newBoardId();
+    const picture: StoredFile = { blobId: "a".repeat(32), mimeType: "image/png", created: 1 };
+    const createdAt = "2026-01-02T03:04:05.000Z";
+    const image = { id: "i1", type: "image", fileId: "f1", versionNonce: 1 };
+    seed(a.host, id, "Atlas", { elements: [image], files: { f1: picture }, createdAt, later: "keep me" } as Partial<BoardData>);
+    const first = await open(a.sdk);
+    await open(b.sdk);
+    expect(first.currentId).toBe(id);
+    // The board's real view: a saver on its document, as the page has.
+    const saver = createBoardSaver({
+      document: first.current!,
+      pictures: { sync: async () => ({ files: { f1: picture }, problems: [] }), stored: new Map([["f1", picture]]) },
+      delayMs: 0,
+    });
+    first.attach({ flush: () => saver.settled(), discard: () => saver.discard(), resume: () => saver.resume(), copy: () => saver.copy() });
+    saver.change({ elements: [image, { type: "rectangle", versionNonce: 2 }], background: "#ffffff", grid: false, files: {} });
+    await saver.flush();
+
+    b.host.documents.delete(id);
+    await vi.waitFor(() => expect(first.deleted).toBe(true));
+    // Drawn while "Deleted elsewhere" showed.
+    saver.change({ elements: [image, { type: "rectangle", versionNonce: 2 }, { type: "freedraw", versionNonce: 3 }], background: "#ffffff", grid: true, files: {} });
+
+    await first.restoreDeleted();
+    const back = stored(a.host, id)!;
+    expect(back.title).toBe("Atlas");
+    expect(back.data).toMatchObject({ name: "Atlas", createdAt, grid: true, files: { f1: picture }, later: "keep me" });
+    expect(back.data.elements.map((element) => (element as { type: string }).type)).toEqual(["image", "rectangle", "freedraw"]);
+    expect([...(await first.usedFiles())]).toEqual([picture.blobId]);
   });
 });
 
