@@ -21,7 +21,7 @@ export { useFocusRecovery, type FocusRecovery } from "./focus-recovery";
 export { copyImage, copyText } from "./clipboard";
 export { renderToImage, type RenderToImageOptions } from "./render-to-image";
 
-export{Tooltip,TooltipRows,useTooltip,type TooltipRow,type TooltipTrend,type TooltipWidth,type UseTooltip,type UseTooltipOptions,type UseSharedTooltipOptions,type TooltipTargetOptions,type TooltipCard}from"./components/tooltip";
+export{Tooltip,TooltipRows,useTooltip,isTruncated,type TooltipRow,type TooltipTrend,type TooltipWidth,type UseTooltip,type UseTooltipOptions,type UseSharedTooltipOptions,type TooltipTargetOptions,type TooltipCard}from"./components/tooltip";
 export{ItemCard,type ItemCardSkin}from"./components/ui/item-card";
 export{installTitleTooltips}from"./title-tooltips";
 /** Writes the views zoomable panes are waiting to save; call it from `onSuspend` and `onDispose`. */

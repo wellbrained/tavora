@@ -56,6 +56,30 @@ export interface TooltipTargetOptions {
    * card shows by keyboard too. Buttons and links don't need it.
    */
   focusable?: boolean;
+  /**
+   * For an info button whose only job is the tip: a press opens and closes it, with a finger too (touch has no hover),
+   * and it stays until the next press, a press elsewhere or Escape. Hovering and focusing still show it as usual.
+   */
+  toggle?: boolean;
+  /** A press leaves the card open, as for a copy button whose card turns into "Copied". */
+  keepOnPress?: boolean;
+  /** Shows the card only when this says so when it's about to show, such as `isTruncated` for a name cut short. */
+  when?: (element: Element) => boolean;
+  /**
+   * Whether the card names the target or describes it. By default a target without a name of its own (an icon button
+   * without `aria-label`) is named by it, any other described.
+   */
+  as?: 'label' | 'description';
+}
+
+/** Whether an element's text is cut short (ellipsis or a clamp), for `when`: only then does a card repeating it help. */
+export function isTruncated(element: Element): boolean {
+  return element.scrollWidth > element.clientWidth + 1 || element.scrollHeight > element.clientHeight + 1;
+}
+
+/** Whether an element has a name of its own for a screen reader: a label, a labelledby, or text. */
+function named(element: Element): boolean {
+  return Boolean(element.getAttribute('aria-label')?.trim() || element.getAttribute('aria-labelledby')?.trim() || element.textContent?.trim() || element.getAttribute('title')?.trim());
 }
 
 /**
@@ -119,11 +143,22 @@ export function useTooltip<T>(options: UseTooltipOptions & Partial<UseSharedTool
   let serial = 0;
   let unsubscribe: (() => void) | undefined;
 
+  /** How the card shows for the current target: describing it, or naming it (a target without a name of its own). */
+  let relation: 'aria-describedby' | 'aria-labelledby' = 'aria-describedby';
+  /** The card was opened by a press on a `toggle` target: it stays until the next press, a press elsewhere or Escape. */
+  let pressed = false;
   function describe(element: Element, on: boolean) {
-    const ids = (element.getAttribute('aria-describedby') ?? '').split(' ').filter(value => value && value !== id);
+    const ids = (element.getAttribute(relation) ?? '').split(' ').filter(value => value && value !== id);
     if (on) ids.push(id);
-    if (ids.length) element.setAttribute('aria-describedby', ids.join(' '));
-    else element.removeAttribute('aria-describedby');
+    if (ids.length) element.setAttribute(relation, ids.join(' '));
+    else element.removeAttribute(relation);
+  }
+  // A press anywhere but on the target closes a card a press opened.
+  const outside = (event: PointerEvent) => { if (pressed && current && !(event.target instanceof Node && current.contains(event.target))) hide(); };
+  function listenOutside(on: boolean) {
+    if (typeof document === 'undefined') return;
+    if (on) document.addEventListener('pointerdown', outside, true);
+    else document.removeEventListener('pointerdown', outside, true);
   }
 
   /** Back to no card, without telling Tavora (it closed the card itself, or never showed it). */
@@ -139,6 +174,8 @@ export function useTooltip<T>(options: UseTooltipOptions & Partial<UseSharedTool
     if (state.status === 'open') lastHidden = performance.now();
     if (current && inPanel.value) describe(current, false);
     inPanel.value = false;
+    if (pressed) listenOutside(false);
+    pressed = false;
     // Ends the hover only: a pinned card stays until you close it (sdk.ui.tooltip.hide).
     if (sharedCard) void sharedCard.tooltip.hide(sharedCard.id).catch(() => undefined);
     forget();
@@ -163,20 +200,22 @@ export function useTooltip<T>(options: UseTooltipOptions & Partial<UseSharedTool
       });
   }
 
-  function open(element: Element, side: TooltipSide | undefined, pinned: boolean) {
+  function open(element: Element, target: TooltipTargetOptions, pinned: boolean) {
+    const side = target.side;
     timer = undefined;
     const card = resolve(shown.value);
     if (!element.isConnected || card === null) return hide();
     if (given) return showShared(element, card as unknown as SharedCard, side, pinned);
-    showInPanel(element, side);
+    showInPanel(element, side, target.as);
   }
 
-  function showInPanel(element: Element, side: TooltipSide | undefined) {
+  function showInPanel(element: Element, side: TooltipSide | undefined, as?: 'label' | 'description') {
     const { left, top, right, bottom } = element.getBoundingClientRect();
     state.anchor = { left, top, right, bottom };
     state.side = side ?? options.side ?? 'bottom';
     state.status = 'open';
     inPanel.value = true;
+    relation = (as ?? (named(element) ? 'description' : 'label')) === 'label' ? 'aria-labelledby' : 'aria-describedby';
     describe(element, true);
   }
 
@@ -185,12 +224,12 @@ export function useTooltip<T>(options: UseTooltipOptions & Partial<UseSharedTool
     // Already showing for it, or on the way (unless the keyboard asks for it now).
     if (element === current && !pinned && (state.status === 'open' || (state.status === 'waiting' && wait > 0))) return;
     hide();
-    if (resolve(card) === null) return;
+    if (resolve(card) === null || (target.when && !target.when(element))) return;
     current = element;
     shown.value = card;
-    if (wait <= 0) return open(element, target.side, pinned);
+    if (wait <= 0) return open(element, target, pinned);
     state.status = 'waiting';
-    timer = setTimeout(() => open(element, target.side, pinned), wait);
+    timer = setTimeout(() => open(element, target, pinned), wait);
   }
 
   function hoverWait() {
@@ -202,7 +241,8 @@ export function useTooltip<T>(options: UseTooltipOptions & Partial<UseSharedTool
 
   return {
     on(card, target = {}) {
-      const leave = (event: Event) => { if (event.currentTarget === current) hide(); };
+      // A card a press opened stays when the pointer or the focus moves on; anything else closes it.
+      const leave = (event: Event) => { if (event.currentTarget === current && !pressed) hide(); };
       return {
         ...(target.focusable ? { tabindex: 0 } : {}),
         onPointerenter: (event: PointerEvent) => {
@@ -212,9 +252,18 @@ export function useTooltip<T>(options: UseTooltipOptions & Partial<UseSharedTool
         onPointerleave: leave,
         onFocus: (event: FocusEvent) => { if (keyboardFocus(event.currentTarget as Element)) schedule(event.currentTarget as Element, card, target, 0); },
         onBlur: leave,
-        onPointerdown: leave,
+        // A press closes the card (it would cover what the press changed), except on a `toggle` target (the click
+        // decides) or one that keeps it.
+        onPointerdown: (event: PointerEvent) => { if (!target.toggle && !target.keepOnPress) leave(event); },
         onKeydown: (event: KeyboardEvent) => { if (event.key === 'Escape' && event.currentTarget === current) hide(); },
-        ...(given && options.pin ? {
+        ...(target.toggle ? {
+          onClick: (event: MouseEvent) => {
+            const element = event.currentTarget as Element;
+            if (element === current && state.status === 'open' && pressed) return hide();
+            schedule(element, card, target, 0, true);
+            if (current === element) { pressed = true; listenOutside(true); }
+          },
+        } : given && options.pin ? {
           onClick: (event: MouseEvent) => {
             const element = event.currentTarget as Element;
             if (!element.closest(CONTROLS)) schedule(element, card, target, 0, true);

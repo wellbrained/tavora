@@ -18,6 +18,11 @@ describe("shortcutKeys", () => {
     expect(shortcutKeys("Ctrl + Mouse wheel")).toEqual(["Ctrl", "Mouse wheel"]);
   });
 
+  it("reads mod as Ctrl (Cmd on a Mac)", () => {
+    expect(shortcutKeys("mod+s")).toEqual(["Ctrl", "S"]);
+    expect(shortcutKeys("Mod+Shift+P")).toEqual(["Ctrl", "Shift", "P"]);
+  });
+
   it("names Ctrl in the language shown", () => {
     setUiLanguage("de");
     expect(shortcutKeys("Control+Shift+Tab")).toEqual(["Strg", "Shift", "Tab"]);

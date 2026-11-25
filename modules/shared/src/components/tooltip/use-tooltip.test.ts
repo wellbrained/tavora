@@ -2,7 +2,7 @@
 import type { TooltipContent } from "@tavora/sdk"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { createApp, defineComponent, h, nextTick, ref, type App } from "vue"
-import { useTooltip, type SharedTooltip, type UseTooltip } from "./use-tooltip"
+import { isTruncated, useTooltip, type SharedTooltip, type UseTooltip } from "./use-tooltip"
 
 // The helper behind every in-panel tooltip that isn't a title hint: one card for many targets.
 
@@ -25,7 +25,7 @@ async function mount<T>(make: () => UseTooltip<T>, cards: () => (T | null)[], ex
   app = createApp(defineComponent({
     setup() {
       tip = make()
-      return () => h("div", cards().map((card, index) => h("span", { key: index, "data-index": index, ...tip.on(card, extra) })))
+      return () => h("div", cards().map((card, index) => h("span", { key: index, "data-index": index, ...tip.on(card, extra) }, "Target")))
     },
   }))
   app.mount(host)
@@ -115,6 +115,72 @@ describe("useTooltip in the panel", () => {
     targets[0]!.dispatchEvent(Object.assign(new Event("pointerenter"), { pointerType: "touch" }))
     vi.advanceTimersByTime(500)
     expect(tip.props.open).toBe(false)
+  })
+})
+
+describe("useTooltip target options", () => {
+  it("names a target without a name of its own, and describes one with a name", async () => {
+    let tip!: UseTooltip<Card>
+    const host = document.createElement("div")
+    document.body.append(host)
+    app = createApp(defineComponent({ setup() { tip = useTooltip<Card>(); return () => h("div", [h("button", { id: "icon", ...tip.on({ name: "Save" }) }), h("button", { id: "text", ...tip.on({ name: "Save" }) }, "Save file")]) } }))
+    app.mount(host)
+    await nextTick()
+    const icon = host.querySelector<HTMLElement>("#icon")!, text = host.querySelector<HTMLElement>("#text")!
+    icon.focus()
+    expect(icon.getAttribute("aria-labelledby")).toBe(tip.props.id)
+    expect(icon.hasAttribute("aria-describedby")).toBe(false)
+    text.focus()
+    expect(icon.hasAttribute("aria-labelledby")).toBe(false)
+    expect(text.getAttribute("aria-describedby")).toBe(tip.props.id)
+  })
+
+  it("opens and closes with a press on a toggle target, a tap too, and closes on a press elsewhere", async () => {
+    const { tip, targets } = await mount(() => useTooltip<Card>(), () => [{ name: "Help" }], { toggle: true })
+    const target = targets[0]!
+    target.dispatchEvent(Object.assign(new Event("pointerenter"), { pointerType: "touch" }))
+    target.dispatchEvent(new Event("pointerdown"))
+    target.dispatchEvent(new MouseEvent("click"))
+    expect(tip.props.open).toBe(true)
+    leave(target)
+    expect(tip.props.open).toBe(true)
+    target.dispatchEvent(new MouseEvent("click"))
+    expect(tip.props.open).toBe(false)
+    target.dispatchEvent(new MouseEvent("click"))
+    expect(tip.props.open).toBe(true)
+    document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }))
+    expect(tip.props.open).toBe(false)
+  })
+
+  it("stays open on a press with keepOnPress", async () => {
+    const { tip, targets } = await mount(() => useTooltip<Card>(), () => [{ name: "Copy" }], { keepOnPress: true })
+    enter(targets[0]!)
+    vi.advanceTimersByTime(180)
+    targets[0]!.dispatchEvent(new Event("pointerdown"))
+    expect(tip.props.open).toBe(true)
+  })
+
+  it("shows only when `when` says so", async () => {
+    const fits = ref(true)
+    const { tip, targets } = await mount(() => useTooltip<Card>(), () => [{ name: "Long name" }], { when: () => !fits.value })
+    enter(targets[0]!)
+    vi.advanceTimersByTime(500)
+    expect(tip.props.open).toBe(false)
+    leave(targets[0]!)
+    fits.value = false
+    vi.advanceTimersByTime(500)
+    enter(targets[0]!)
+    vi.advanceTimersByTime(500)
+    expect(tip.props.open).toBe(true)
+  })
+
+  it("tells cut-short text by its scroll size", () => {
+    const el = document.createElement("span")
+    Object.defineProperty(el, "scrollWidth", { value: 200, configurable: true })
+    Object.defineProperty(el, "clientWidth", { value: 120, configurable: true })
+    expect(isTruncated(el)).toBe(true)
+    Object.defineProperty(el, "scrollWidth", { value: 120, configurable: true })
+    expect(isTruncated(el)).toBe(false)
   })
 })
 
