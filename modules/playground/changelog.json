@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.79",
+    "date": "2026-11-25",
+    "notes": [
+      "Dates: the month arrows are easier to see."
+    ]
+  },
+  {
     "version": "0.1.78",
     "date": "2026-11-25",
     "notes": [
