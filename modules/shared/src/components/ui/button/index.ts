@@ -16,7 +16,7 @@ const SCALE_PRESS =
   " [&.flex]:[@media(hover:hover)_and_(pointer:fine)_and_(prefers-reduced-motion:no-preference)]:not-aria-disabled:active:scale-100 [&.flex]:[@media(hover:hover)_and_(pointer:fine)_and_(prefers-reduced-motion:no-preference)]:not-aria-disabled:active:translate-y-px" +
   " [&.flex-1]:[@media(hover:hover)_and_(pointer:fine)_and_(prefers-reduced-motion:no-preference)]:not-aria-disabled:active:scale-100 [&.flex-1]:[@media(hover:hover)_and_(pointer:fine)_and_(prefers-reduced-motion:no-preference)]:not-aria-disabled:active:translate-y-px" +
   " [&.grow]:[@media(hover:hover)_and_(pointer:fine)_and_(prefers-reduced-motion:no-preference)]:not-aria-disabled:active:scale-100 [&.grow]:[@media(hover:hover)_and_(pointer:fine)_and_(prefers-reduced-motion:no-preference)]:not-aria-disabled:active:translate-y-px"
-const DIP_PRESS = "[@media(hover:hover)_and_(pointer:fine)_and_(prefers-reduced-motion:no-preference)]:not-aria-disabled:active:translate-y-px"
+export const DIP_PRESS = "[@media(hover:hover)_and_(pointer:fine)_and_(prefers-reduced-motion:no-preference)]:not-aria-disabled:active:translate-y-px"
 
 const PRESS =
   "[@media(hover:hover)_and_(pointer:fine)_and_(prefers-reduced-motion:no-preference)]:not-aria-disabled:active:translate-y-px not-aria-disabled:active:shadow-[inset_0_1px_3px_color-mix(in_srgb,black_25%,transparent)]"
