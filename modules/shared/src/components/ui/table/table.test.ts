@@ -115,7 +115,7 @@ describe("Table", () => {
       ),
     )
     const heading = q(root, "table-group").querySelector("th")!
-    expect(heading.getAttribute("scope")).toBe("colgroup")
+    expect(heading.getAttribute("scope")).toBe("rowgroup")
     expect(heading.getAttribute("colspan")).toBe("3")
     expect(heading.textContent).toBe("Defence")
     expect(q(root, "table-note").querySelector("td")!.getAttribute("colspan")).toBe("3")

@@ -22,7 +22,7 @@ const classes = computed(() =>
     "data-[state=selected]:bg-muted border-b transition-colors",
     props.current ? "bg-accent/60 font-medium" : "hover:bg-muted/50",
     props.tone && toneClass[props.tone],
-    props.marked && "[&>:first-child]:shadow-[inset_2px_0_var(--primary)] [&_[data-numeric]]:font-bold",
+    props.marked && "[&>:first-child]:shadow-[inset_2px_0_var(--primary)] rtl:[&>:first-child]:shadow-[inset_-2px_0_var(--primary)] [&_[data-numeric]]:font-bold",
     props.class,
   ),
 )

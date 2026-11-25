@@ -9,7 +9,7 @@ const props = defineProps<{ colspan: number; class?: HTMLAttributes["class"] }>(
 
 <template>
   <tr data-slot="table-group" class="border-b">
-    <th scope="colgroup" :colspan="colspan" :class="cn('text-muted-foreground px-2 pt-4 pb-1.5 text-start text-xs font-medium', props.class)">
+    <th scope="rowgroup" :colspan="colspan" :class="cn('text-muted-foreground px-2 pt-4 pb-1.5 text-start text-xs font-medium', props.class)">
       <slot />
     </th>
   </tr>
