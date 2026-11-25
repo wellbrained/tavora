@@ -771,6 +771,15 @@ export class CopySync {
     return true;
   }
 
+  /**
+   * A copy the user chose still waits to go in (the copy is off this run, or another account is signed in): turning the copy
+   * on would stage another one in its place while the status still says `chosen`, and the next start would take that one
+   * without asking. The user answers first (Keep this PC's lets go of it), or restarts with the copy's account.
+   */
+  private refuseWhileChosen(): void {
+    if (this.swap.phase === "chosen") throw new UserError("cloudCopy.error.chosenWaiting");
+  }
+
   private refuseDuringSwap(): void {
     if (this.swap.phase === "swapping" || this.swap.phase === "undoing") throw new CopyError("failed", "a copy is still being put in place");
   }
@@ -1204,6 +1213,7 @@ export class CopySync {
   async turnOn(folder: string | null = null): Promise<void> {
     if (this.on) return;
     if (this.swapOpen && !(this.swap.phase === "held" && !this.swap.open)) throw new UserError("cloudCopy.error.restartFirst");
+    this.refuseWhileChosen();
     if (!(await this.accountKeys.keepable())) throw new UserError("cloudCopy.error.cantKeep");
     // Turned off or signed out from here on, it stays off.
     const turn = this.turn;
@@ -1249,6 +1259,7 @@ export class CopySync {
   }
 
   private async goOnWithKey(here: boolean, turn: number): Promise<void> {
+    this.refuseWhileChosen();
     this.clear("askKey");
     try {
       if (!here) await this.accountKeys.useForCopy();
@@ -1305,6 +1316,7 @@ export class CopySync {
   /** With the account's key here: takes up a copy that exists (the user keeps one side), or starts a new one. */
   private async startCopy(turn: number): Promise<void> {
     if (this.swapOpen) throw new UserError("cloudCopy.error.restartFirst");
+    this.refuseWhileChosen();
     let staged: Staged | null = null;
     // A copy that isn't taken without asking (an unmarked list where marked ones are): nothing comes down before the
     // user chooses, as for any copy that is there.

@@ -191,6 +191,12 @@ function startOver() {
           <Button v-else size="sm" variant="secondary" :disabled="busy" @click="run({ type: 'cloud-copy-restart' })">{{ t("cloudCopy.newer.restart") }}</Button>
         </template>
       </Notice>
+      <Notice v-else-if="view.conflictKind === 'waiting' && view.conflict" variant="warning" class="my-4" :title="t('cloudCopy.waiting.title')" data-testid="cloud-copy-waiting">
+        {{ t("cloudCopy.waiting.text") }}
+        <template #action>
+          <Button size="sm" variant="secondary" :disabled="busy" @click="decide">{{ t("cloudCopy.conflict.title") }}</Button>
+        </template>
+      </Notice>
       <p class="text-muted-foreground border-b py-4 text-sm" data-testid="cloud-copy-off">
         {{ view.canKeepKey ? t("cloudCopy.off.description") : t("cloudCopy.cantKeep") }}
         <template v-if="view.devData"><br />{{ t("cloudCopy.dev.notice") }}</template>

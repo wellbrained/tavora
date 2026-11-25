@@ -659,6 +659,7 @@ export const en = {
   "cloudCopy.notice.dataKeptAside": "Your data from before the restore is saved in {folder}.",
   "cloudCopy.notice.bothKeptAside": "Your data from before the restore is saved in {data}, and what you changed while your cloud copy waited is in {changes}.",
   "cloudCopy.error.restartFirst": "Restart Tavora first, then turn your cloud copy on.",
+  "cloudCopy.error.chosenWaiting": "The cloud copy you picked is still waiting. Choose which data to keep first.",
   "cloudCopy.later": "Later",
   "cloudCopy.newer.title": "Newer data from your other PC",
   "cloudCopy.newer.text": "Restart Tavora to load it.",

@@ -264,6 +264,29 @@ describe("answering, settling and holding", () => {
     expect(after.sync.view().conflict).toBe(false);
   }, 60_000);
 
+  it("turning the copy on while a chosen copy waits is refused, and the chosen copy still goes in with its account", async () => {
+    const { cloud, b } = await chosen();
+    who = "someone-else";
+    const next = tavora(cloud, b);
+    await next.sync.beforeLoad();
+    expect(next.sync.view()).toMatchObject({ on: false, conflict: true, conflictKind: "waiting" });
+    const staging = path.join(b.userData, "cloud-copy-staging");
+    const before = { status: await read(b, "cloud-copy-status.json"), staged: (await readdir(staging, { recursive: true })).sort() };
+    // Settings > Turn on, as the other account: the user answers the waiting question first.
+    await expect(next.sync.turnOn()).rejects.toMatchObject({ key: "cloudCopy.error.chosenWaiting" });
+    expect(next.sync.view()).toMatchObject({ on: false, conflict: true, conflictKind: "waiting" });
+    expect(next.sync.dataHeld).toBe(true);
+    expect(await read(b, "cloud-copy-status.json")).toBe(before.status);
+    expect((await readdir(staging, { recursive: true })).sort()).toEqual(before.staged);
+    expect(await there(state(b))).toBe(false);
+    // Back with the copy's account, the copy the user chose goes in.
+    who = "me";
+    const after = tavora(cloud, b);
+    await after.sync.beforeLoad();
+    expect(await read(b, "workspace.json")).toBe(A["workspace.json"]);
+    expect(after.sync.dataHeld).toBe(false);
+  }, 60_000);
+
   it("Keep this PC's over a copy chosen under another account sticks once that account is back", async () => {
     const { cloud, a, b } = await chosen();
     // The chosen copy goes in: B is in step with A's version.

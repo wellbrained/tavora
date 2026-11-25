@@ -661,6 +661,7 @@ export const de: Record<keyof typeof en, string> = {
   "cloudCopy.notice.dataKeptAside": "Deine Daten von vor dem Wiederherstellen liegen in {folder}.",
   "cloudCopy.notice.bothKeptAside": "Deine Daten von vor dem Wiederherstellen liegen in {data}, und was du geändert hast, während deine Cloud-Kopie gewartet hat, in {changes}.",
   "cloudCopy.error.restartFirst": "Starte Tavora zuerst neu und schalte deine Cloud-Kopie dann ein.",
+  "cloudCopy.error.chosenWaiting": "Die Cloud-Kopie, die du gewählt hast, wartet noch. Wähl zuerst, welche Daten du behältst.",
   "cloudCopy.later": "Später",
   "cloudCopy.newer.title": "Neuere Daten von deinem anderen PC",
   "cloudCopy.newer.text": "Starte Tavora neu, um sie zu laden.",
