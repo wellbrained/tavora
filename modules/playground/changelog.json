@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.72",
+    "date": "2026-11-25",
+    "notes": [
+      "New Dates page: pick a day, and days with a mark such as solved or missed."
+    ]
+  },
+  {
     "version": "0.1.71",
     "date": "2026-11-25",
     "notes": [

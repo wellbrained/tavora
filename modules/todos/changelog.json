@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.2.48",
+    "date": "2026-11-25",
+    "notes": [
+      "A new calendar in the shared controls."
+    ]
+  },
+  {
     "version": "0.2.47",
     "date": "2026-11-25",
     "notes": [
