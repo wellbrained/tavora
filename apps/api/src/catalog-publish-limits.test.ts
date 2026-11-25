@@ -198,6 +198,32 @@ describe("reading an upload", () => {
     expect((await answer).status).toBe(201);
   });
 
+  it("answers too big, not busy, for a body sent without its size that can never fit with its block", async () => {
+    // 60 MiB: the 50 MiB block a body without a size is read into, and the zip's own needs (about 52 MiB), each fit; together not.
+    const memory = createUploadMemory(60 * 1024 * 1024);
+    const { app, developer } = withMemory(memory);
+    const dev = developer("dev@example.com");
+    const zip = moduleZip(dev.key, { extra: [{ name: "noise.bin", data: randomBytes(26 * 1024 * 1024) }] });
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(zip));
+        controller.close();
+      },
+    });
+    const answer = await app.request(
+      new Request(url, {
+        method: "POST",
+        headers: { "content-type": "application/zip", "x-tavora-signature": publishSignature(dev.key, zip), authorization: `Bearer ${dev.token}` },
+        body,
+        duplex: "half",
+      } as RequestInit),
+    );
+    expect(answer.status).toBe(413);
+    expect(await answer.json()).toMatchObject({ reason: "too-big" });
+    // Its memory is given back.
+    expect(memory.take(memory.budget)).not.toBeNull();
+  });
+
   it("never counts less than the block a read body still shows part of", async () => {
     const read = (size: number) =>
       readUpload(new Request(url, { method: "POST", body: new Uint8Array(size), duplex: "half" } as RequestInit), 1024 * 1024);

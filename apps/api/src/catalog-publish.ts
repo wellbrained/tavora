@@ -309,7 +309,10 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, waitin
       if (plan.needed > memory.budget) return refuse(context, 413, "too-big", "This module is too big for the catalog to check. Make it smaller.");
       if (plan.problem) return refuse(context, 400, "invalid", plan.problem);
       // Never less than the block behind the bytes (readUpload): a body shorter than its block may still be a view of it.
-      if (!ticket.resize(plan.needed - bytes.length + heldBytes(bytes))) return busy(context);
+      const needed = plan.needed - bytes.length + heldBytes(bytes);
+      // Only a body sent without its size is read into a block bigger than it: that one never fits, so it isn't "busy".
+      if (needed > memory.budget) return refuse(context, 413, "too-big", "This module is too big to check when it's sent without its size. Send it with a Content-Length header.");
+      if (!ticket.resize(needed)) return busy(context);
       // Only the holder of a linked key gets a whole zip unpacked here.
       const early = signerKey(store, context, plan.signer!, sha256Hex(bytes), signature, by.accountId);
       if (early instanceof Response) return early;
