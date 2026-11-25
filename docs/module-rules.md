@@ -144,15 +144,18 @@ themes; anything hard-coded breaks in one of them.
 - **Button icons and labels**: ask in this order and stop at the first yes (buttons and menu entries alike).
   1. Does it open options or go somewhere? A **trailing** icon: `ChevronDown` for a menu (Export ⌄), `ChevronRight`
      or `ArrowUpRight` for going to another page or site.
-  2. Is its symbol established and familiar (plus for Create/Add, trash for Delete, copy, search, download)? A
+  2. Does it need more input before it happens (a dialog, a picker, a file dialog)? An **ellipsis** in the label,
+     "Rename…", and no icon, also in a menu whose other entries have icons: give it `inset` so its text lines up with
+     theirs. A menu where no entry has an icon gets no `inset`. The text always ends in the real character `…`.
+  3. Is its symbol established and familiar (plus for Create/Add, trash for Delete, copy, search, download)? A
      **leading** icon.
-  3. Does it sit in a group of actions (a toolbar, a menu, a row of item actions)? A **leading** icon on each, so the
+  4. Does it sit in a group of actions (a toolbar, a menu, a row of item actions)? A **leading** icon on each, so the
      group scans by shape.
-  4. Does it need more input before it happens (a dialog, a picker, a file dialog)? An **ellipsis** in the label,
-     "Rename…", and no icon. The text always ends in the real character `…`.
   5. None of these: **text only** (Publish, Save, Done).
   Never more than one icon on a button, and never an icon only for decoration. "…" in a label means "asks you more"; a
-  status that is under way ("Saving…") is not a button label and keeps its ellipsis.
+  status that is under way ("Saving…") is not a button label and keeps its ellipsis. The chevron the kit puts on a
+  submenu trigger is not the entry's icon: the entry still gets its own leading icon (step 3 or 4). A trigger that is
+  only an icon (a "⋯" or settings button) may carry a `ChevronDown` beside it.
 - **Pictures**: a picture that fills its box gets a faint edge, so it doesn't melt into the card: `FadeImage` does it for
   `fit="cover"`, a bare `<img>` puts `tavora-picture-edge` on its rounded box. Not for icons with see-through parts.
 - **Line breaks**: headings balance their lines and paragraphs avoid a lone last word on their own (`details.css`); don't

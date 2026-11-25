@@ -1,9 +1,16 @@
 [
   {
-    "version": "0.3.50",
+    "version": "0.3.51",
     "date": "2026-11-25",
     "notes": [
       "Tooltips fade out when they close."
+    ]
+  },
+  {
+    "version": "0.3.50",
+    "date": "2026-11-25",
+    "notes": [
+      "The shared list with search shows its no-match note in a frame."
     ]
   },
   {

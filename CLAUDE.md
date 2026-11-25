@@ -22,7 +22,7 @@ Texts in the app are short and friendly, talking to the user as "you" (German: "
 - Plain, casual words ("Can't find this folder", "Thanks!"), never stiff or technical ones.
 - Write English and German together; both follow these rules.
 - Headings say plainly what is there ("Plans and prices", not "A closer look"). No eyebrow label above a heading, no numbers on sections that aren't steps, no slogans or taglines ("Built for teams that ship"), no rhythmic or contrasting pairs ("Hard to describe. Easy to recognize."), no metaphors or personification ("Three programs wearing one name"). This goes for the app, the docs site, patch notes and catalog texts; the website (`tavora-website`) keeps its own voice and is left out (Nik, 2026-11-25). Small uppercase labels that name a group of settings or menu entries are labels, not eyebrows, and stay.
-- Buttons and menu entries: a trailing chevron when they open options or go somewhere, a leading icon for a familiar symbol or in a group of actions, "…" when they ask for more input first, otherwise text only ([module rules](docs/module-rules.md), "Button icons and labels").
+- Buttons and menu entries: a trailing chevron when they open options or go somewhere, "…" and no icon when they ask for more input first (even among entries with icons), a leading icon for a familiar symbol or in a group of actions, otherwise text only ([module rules](docs/module-rules.md), "Button icons and labels").
 
 ## UI controls
 
