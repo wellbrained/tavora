@@ -184,9 +184,11 @@ export function createBoardSaver(options: BoardSaverOptions) {
      * a background a newer version stored (picking it changes nothing Excalidraw reports, so `change` can't see it).
      */
     pickBackground(background: string): void {
-      if (stopped || !latest) return;
+      if (!latest) return;
       latest = { ...latest, background };
       pickedBackground = background;
+      // Deleted elsewhere: kept for bringing the board back (copy), nothing is saved.
+      if (stopped) return;
       queued = "";
       schedule();
     },
@@ -217,7 +219,8 @@ export function createBoardSaver(options: BoardSaverOptions) {
         ...base,
         elements: JSON.parse(JSON.stringify(elements)) as JsonValue[],
         files,
-        background: latest.background === shownBackground(base.background) ? base.background : latest.background,
+        // As a save does: a pick stays as it is.
+        background: pickedBackground === null && latest.background === shownBackground(base.background) ? base.background : latest.background,
         grid: latest.grid,
       };
     },

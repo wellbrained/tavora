@@ -281,6 +281,19 @@ describe("bringing a deleted board back", () => {
     expect(copy).toMatchObject({ name: "Atlas", createdAt, background: "paper", grid: true, later: "keep me", files: { f1: kept, f2: undone } });
     expect(copy.elements).toHaveLength(3);
   });
+
+  it("keeps the default the user picked over a background a newer version added, also once picked after the delete", async () => {
+    const { saver, panel } = await setup({ data: { background: "paper" } });
+    saver.change(scene([rectangle()]));
+    await saver.flush();
+
+    panel.host.documents.delete(ID);
+    await vi.waitFor(() => expect(saver.state.deleted).toBe(true));
+    expect(saver.copy()?.background).toBe("paper");
+    // Picking white changes nothing Excalidraw reports: the board already shows white.
+    saver.pickBackground("#ffffff");
+    expect(saver.copy()?.background).toBe("#ffffff");
+  });
 });
 
 describe("letting go", () => {
