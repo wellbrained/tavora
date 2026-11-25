@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.25.20",
+    date: "2026-11-25",
+    title: "More table options for modules",
+    notes: [
+      "Module tables can be compact, keep their header in view and sort when you press a heading.",
+      "Your own row stands out, and better or worse numbers get their colour.",
+    ],
+    prs: [
+      { number: 985, title: "Kit Table: density, sticky header, fixed layout, numbers, row states, groups, sort" },
+    ],
+    tags: ["calculator", "clock-counter", "modules", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
+  },
+  {
     version: "0.25.19",
     date: "2026-11-25",
     title: "One card, two places",

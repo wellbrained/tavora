@@ -1,9 +1,16 @@
 [
   {
-    "version": "0.6.39",
+    "version": "0.6.40",
     "date": "2026-11-25",
     "notes": [
       "A new calendar in the shared controls."
+    ]
+  },
+  {
+    "version": "0.6.39",
+    "date": "2026-11-25",
+    "notes": [
+      "New table options in the shared controls."
     ]
   },
   {
