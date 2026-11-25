@@ -1,14 +1,16 @@
 // Bug hunt D (2026-11-25) M2: what the catalog refuses after an upload is checked before it is sent.
+import { crc32 } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { catalogUploadProblem, describeUploadProblem, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, UPLOAD_BUDGET_BYTES } from "./index";
 
-/** A PNG of this size: signature, IHDR, one IDAT and IEND (the checksums are the catalog's to check). */
+/** A PNG of this size: signature, IHDR, one IDAT and IEND with right checksums. */
 function png(width: number, height: number, extra = 0): Uint8Array {
   const chunk = (type: string, data: Uint8Array) => {
     const out = new Uint8Array(12 + data.length);
     new DataView(out.buffer).setUint32(0, data.length);
     out.set([...type].map((c) => c.charCodeAt(0)), 4);
     out.set(data, 8);
+    new DataView(out.buffer).setUint32(8 + data.length, crc32(out.subarray(4, 8 + data.length)));
     return out;
   };
   const header = new Uint8Array(13);
@@ -66,6 +68,11 @@ describe("catalogUploadProblem", () => {
     expect(catalogUploadProblem(manifest, files({ "shots/a.png": png(4097, 10) }), 1000)).toEqual({ kind: "screenshot", file: "shots/a.png" });
     expect(catalogUploadProblem(manifest, files({ "shots/b.webp": webp(4096, 4097) }), 1000)).toEqual({ kind: "screenshot", file: "shots/b.webp" });
     expect(catalogUploadProblem(manifest, files({ "shots/a.png": png(10, 10, MAX_SCREENSHOT_BYTES) }), 1000)).toEqual({ kind: "screenshot", file: "shots/a.png" });
+    // A damaged part, a header cut short or a missing picture: the catalog refuses these after the upload, so they are told before it.
+    const damaged = png(10, 10);
+    damaged[41] = damaged[41]! ^ 0xff;
+    expect(catalogUploadProblem(manifest, files({ "shots/a.png": damaged }), 1000)).toEqual({ kind: "screenshot", file: "shots/a.png" });
+    expect(catalogUploadProblem(manifest, files({ "shots/a.png": png(10, 10) }), 1000)).toBeNull();
   });
 
   it("refuses a module whose zip and files together go over the catalog's budget", () => {

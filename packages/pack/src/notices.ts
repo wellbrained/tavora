@@ -137,10 +137,16 @@ const LICENCE_FOLDER = /^licen[cs]es$/i;
 
 const isLicenceFile = (name: string) => LICENCE_FILE.test(name) && !NOT_A_LICENCE_FILE.test(name);
 
+/** By name without regard to case, so the order of a package's licence files is the same wherever it was unpacked (then by exact name). */
+const byNameNoCase = (a: string, b: string) => {
+  const [x, y] = [a.toLowerCase(), b.toLowerCase()];
+  return x < y ? -1 : x > y ? 1 : a < b ? -1 : a > b ? 1 : 0;
+};
+
 /** The first licence file in a package folder (not a folder of that name), as a path from it; null when there is none. */
 export function findLicenceFile(dir: string): string | null {
   const names = readdirSync(dir, { withFileTypes: true }).filter((entry) => entry.isFile() && isLicenceFile(entry.name) && !/^notice/i.test(entry.name));
-  return names.map((entry) => entry.name).sort()[0] ?? null;
+  return names.map((entry) => entry.name).sort(byNameNoCase)[0] ?? null;
 }
 
 /**
@@ -158,7 +164,7 @@ export function licenceFiles(dir: string): string[] {
       }
     }
   }
-  return found.sort();
+  return found.sort(byNameNoCase);
 }
 
 export interface PackageInfo {
@@ -433,15 +439,30 @@ export function renderNotices({ entries, texts }: { entries: NoticeEntry[]; text
 export function readThirdParty(dir: string): ExtraItem[] {
   const file = path.join(dir, "third-party.json");
   if (!existsSync(file)) return [];
-  const list = readJson(file) as unknown as { name: string; version?: string; license: string; group?: NoticeGroup; files?: string[] }[];
-  return list.map((item) => ({
+  const list: unknown = (() => {
+    try {
+      return JSON.parse(readFileSync(file, "utf8").replace(/^\uFEFF/, ""));
+    } catch (error) {
+      throw new Error(`third-party.json cannot be read (${(error as Error).message})`);
+    }
+  })();
+  if (!Array.isArray(list)) throw new Error("third-party.json must be a list of { name, license, files } entries");
+  const text = (value: unknown) => typeof value === "string" && value !== "";
+  return list.map((entry: unknown, index) => {
+    const item = (typeof entry === "object" && entry !== null && !Array.isArray(entry) ? entry : {}) as Record<string, unknown>;
+    if (!text(item.name)) throw new Error(`third-party.json entry ${index + 1} has no name`);
+    if (!text(item.license)) throw new Error(`third-party.json: ${String(item.name)} has no license`);
+    if (item.version !== undefined && typeof item.version !== "string") throw new Error(`third-party.json: the version of ${String(item.name)} must be text`);
+    if (item.files !== undefined && !(Array.isArray(item.files) && item.files.every(text))) throw new Error(`third-party.json: the files of ${String(item.name)} must be a list of file names`);
+    return { name: item.name as string, version: (item.version as string | undefined) ?? "", license: item.license as string, group: ((item.group as NoticeGroup | undefined) ?? "libraries") as NoticeGroup, files: (item.files as string[] | undefined) ?? [] };
+  }).map((item) => ({
     name: item.name,
-    version: item.version ?? "",
+    version: item.version,
     license: item.license,
-    group: item.group ?? "libraries",
+    group: item.group,
     source: "extra" as const,
     // An entry without files has no text, which the notices report as a problem.
-    texts: (item.files ?? []).map((name) => readFileSync(path.join(dir, name), "utf8")),
+    texts: item.files.map((name) => readFileSync(path.join(dir, name), "utf8")),
   }));
 }
 

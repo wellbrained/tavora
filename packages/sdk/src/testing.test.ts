@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { LIMITS, MIN_TAVORA, TAB_OVERFLOW_TAVORA, TAB_OVERFLOWS, tabOverflowOf, TavoraError } from "./index.js";
-import { METHOD_INFO, versionAtLeast } from "./protocol.js";
+import { LEADERBOARD_SUBMIT_MAX_BYTES, leaderboardSubmitBody, METHOD_INFO, versionAtLeast } from "./protocol.js";
 import { ADD_DIALOG_MS, createMemoryHost, GESTURE_MS, LATEST_TAVORA } from "./testing.js";
 
 const failure = (promise: Promise<unknown>) => promise.then(() => undefined, (error: unknown) => error);
@@ -545,6 +545,17 @@ describe("scripted answers", () => {
     expect(await sdk.storage.get("anything")).toBe("scripted");
   });
 
+  // Bug hunt leftovers (2026-11-25), D L3.
+  it("refuses an export of nothing, and an empty picture or file, as Tavora does", async () => {
+    const { sdk, host } = createMemoryHost({ limits: { maxClipboardImageBytes: 8 } });
+    expect(await failure(sdk.files.exportJson(undefined as never))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.pictures.save(new Blob([], { type: "image/png" })))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.clipboard.writeImage(new Blob([], { type: "image/png" })))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.pictures.save(new Blob(["123456789"], { type: "image/png" })))).toMatchObject({ code: "QUOTA_EXCEEDED" });
+    expect(await failure(sdk.blobs.put(new Blob([], { type: "image/png" })))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(host.saved).toEqual([]);
+  });
+
   it("answers the file, picture and blob calls like the host does, and records what was saved", async () => {
     const { sdk, host } = createMemoryHost();
     expect(await sdk.files.saveJson({ a: 1 }, "Build")).toEqual({ fileName: "Build.json" });
@@ -643,6 +654,27 @@ describe("leaderboards", () => {
     host.leaderboards.setStatus({ online: false });
     expect(await failure(sdk.leaderboards.submit("daily", [{ id: "b", outcome: "won", at: noon }]))).toMatchObject({ code: "NETWORK_ERROR" });
     expect(await sdk.leaderboards.hide()).toMatchObject({ shown: false });
+  });
+
+  // Bug hunt leftovers (2026-11-25): the body Tavora sends depends on the board's kind, so the limit does too.
+  it("refuses a submit past 30 KB by the board's kind, as Tavora does before it asks the service", async () => {
+    const size = (results: unknown[]) => new TextEncoder().encode(JSON.stringify(leaderboardSubmitBody({ kind: "score" }, results))).length;
+    const results = Array.from({ length: 100 }, (_, index) => ({ id: `r${index}`, outcome: "won" as const, at: 1, day: "2026-10-28" }));
+    // As big as a plain score board's submit may be.
+    results[99]!.id += "x".repeat(LEADERBOARD_SUBMIT_MAX_BYTES - size(results));
+    expect(size(results)).toBe(LEADERBOARD_SUBMIT_MAX_BYTES);
+    const boards = [
+      { id: "plain", name: "Plain", kind: "score" },
+      { id: "low", name: "Low", kind: "average", order: "low", minGames: 5 },
+    ];
+    const { sdk, host } = createMemoryHost({ leaderboards: boards, limits: { maxLeaderboardResults: 1000 } });
+    await sdk.leaderboards.show();
+    expect(await sdk.leaderboards.submit("plain", results)).toMatchObject({ accepted: expect.any(Array) });
+    // Its declaration (order, minGames) is longer, so the same results are too big for it.
+    expect(await failure(sdk.leaderboards.submit("low", results))).toMatchObject({ code: "INVALID_PARAMS" });
+    // Checked before the sign-in, like the params.
+    host.leaderboards.setStatus({ signedIn: false });
+    expect(await failure(sdk.leaderboards.submit("low", results))).toMatchObject({ code: "INVALID_PARAMS" });
   });
 
   it("takes scripted answers for top, mine and submit", async () => {

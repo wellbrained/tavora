@@ -25,7 +25,7 @@ import { commandOf } from "./command.ts";
 import { createKeyFile, loadExistingKey } from "./keys.ts";
 import { DEFAULT_API_URL, LinkError, linkKey } from "./link.ts";
 import { packModule, PackError } from "./pack.ts";
-import { CATALOG_RULES_URL, PublishError, publishZip, withdrawVersion } from "./publish.ts";
+import { CATALOG_RULES_URL, catalogWarning, PublishError, publishZip, withdrawVersion } from "./publish.ts";
 import { fingerprint } from "./signature.ts";
 
 const USAGE = [
@@ -142,6 +142,9 @@ async function main(): Promise<number> {
   await writeFile(out, zip);
   console.log(`Packed ${manifest.name} ${manifest.version} into ${out} (${zip.length} bytes)`);
   console.log(`Signed by publisher ${fingerprint(key)}`);
+  // Only a warning: a zip made to install by hand may go past what the catalog takes.
+  const warning = catalogWarning(zip);
+  if (warning) console.warn(`Warning: the catalog won't take this zip: ${warning}\nIt installs by hand as it is; fix this before you publish it.`);
   return 0;
 }
 

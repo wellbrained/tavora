@@ -2,6 +2,13 @@
 
 What changed in `@tavora/module-schema`, newest first.
 
+## 0.2.6
+
+- `catalogUploadProblem` checks every checksum of a PNG screenshot, as the catalog does, so a damaged picture is told before the upload.
+- Lengths in the manifest (names, descriptions, homepage, support link) count characters, an emoji as one, as the JSON Schema does.
+- `translateManifest` and `translationsFor` ignore names that only exist on every object (`constructor`, `toString`).
+- `isNetworkHost` also refuses `.lan`, `.localdomain`, `.home`, `.corp`, `.intranet` and `.private` hosts (in the JSON Schema too).
+
 ## 0.2.5
 
 - `catalogUploadProblem(manifest, files, zipBytes)`: why the catalog would refuse an upload, before it is sent. It checks `catalogListingProblem`, the readme (UTF-8 text of at most `MAX_README_BYTES`), the screenshots (a PNG or WebP by their own bytes, as named, at most `MAX_SCREENSHOT_BYTES` and the new `MAX_SCREENSHOT_PIXELS`, 4096) and the new `UPLOAD_BUDGET_BYTES` (88 MB for the zip and its files unpacked). `describeUploadProblem` words it in English. tavora-pack and Tavora's Publish screen use it; the catalog checks the same limits.

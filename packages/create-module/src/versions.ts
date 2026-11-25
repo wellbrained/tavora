@@ -1,6 +1,6 @@
 // SDK, pack and host versions used by the module starter.
 export const VERSIONS = {
-  sdk: "0.4.14",
-  pack: "0.3.7",
+  sdk: "0.4.15",
+  pack: "0.3.8",
   minTavora: "0.21.43",
 } as const;
