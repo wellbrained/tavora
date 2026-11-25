@@ -4,6 +4,7 @@ import {
   checkDialogTitle,
   checkDiscordImage,
   checkFileReference,
+  checkClipboardText,
   checkHotkeyLabel,
   checkModuleKey,
   checkOverlaySources,
@@ -261,6 +262,11 @@ export interface BridgeContext {
     preview(key: string): Promise<void>;
     /** overlay.openPage: shows Tavora's Overlay page and closes this panel's dialog. Needs a click (PERMISSION_DENIED otherwise). */
     openPage(): Promise<void>;
+  };
+  /** The system clipboard; text already checked. */
+  clipboard: {
+    /** Puts plain text on the clipboard. Throws PERMISSION_DENIED unless the panel just got a click or key press. */
+    writeText(text: string): Promise<void>;
   };
   /** Hotkeys of this module in this workspace (hotkeys.ts); actions and targets already checked. */
   hotkeys: {
@@ -579,6 +585,9 @@ const handlers = new Map<string, Handler>([
   ["overlay.preview", async (s, params) => (await s.context.overlay.preview(moduleKey(object(params), "key")), null)],
   // A module that asks for the connector on request may call it without the grant: Tavora asks the user then.
   ["overlay.copyLink", (s, params) => s.context.overlay.copyLink(moduleKey(object(params), "key"))],
+
+  // Needs no capability: only plain text goes out, one copy per click, and nothing can read the clipboard back.
+  ["clipboard.writeText", async (s, params) => (await s.context.clipboard.writeText(checked(checkClipboardText(required(object(params), "text")))), null)],
 
   ["hotkeys.list", (s, params) => (noParams(params), s.context.hotkeys.list())],
   [

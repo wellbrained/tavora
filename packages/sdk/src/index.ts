@@ -198,7 +198,7 @@ export { AUDIO_TYPES, BLOB_ID, BLOB_TYPES, DEFAULT_THEME_FONT, OVERLAY_FONT_PATH
 const MENU_TIMEOUT_MS = 60 * 60_000;
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.4.13";
+export const SDK_VERSION = "0.4.14";
 
 /**
  * The oldest Tavora that has everything this SDK version offers, worked out from the table of calls
@@ -454,6 +454,13 @@ export interface TavoraSDK {
      * picture. PNG only, a complete one, at most 20 MB and 16384 pixels on a side (INVALID_PARAMS, QUOTA_EXCEEDED).
      */
     writeImage(png: Blob): Promise<void>;
+    /**
+     * Puts plain text on the system clipboard, so the user can paste it anywhere. Call it from the click or key press
+     * that asked for it: the host refuses it otherwise (PERMISSION_DENIED), and one press copies once. Never empty, at
+     * most 1 MiB as UTF-8 (INVALID_PARAMS, QUOTA_EXCEEDED). Tavora 0.25.20 and newer: set `minTavora`, or check
+     * `sdk.supports("clipboard.writeText")` (the kit's `copyText` does, and falls back by itself).
+     */
+    writeText(text: string): Promise<void>;
   };
   files: {
     /**
@@ -1224,6 +1231,7 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
         const body = (await response.json().catch(() => null)) as { error?: ErrorPayload } | null;
         throw new TavoraError(body?.error ?? { code: "INTERNAL", message: `could not copy the picture (${response.status})` });
       },
+      writeText: async (text) => void (await call("clipboard.writeText", { text })),
     },
     folders: {
       state: (folder) => call("folders.state", { folder }),

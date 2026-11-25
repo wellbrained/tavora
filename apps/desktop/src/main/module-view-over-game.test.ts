@@ -101,7 +101,7 @@ const { BLOB_PATH, CLIPBOARD_PATH, FILE_OPEN_PATH, FILE_SAVE_PATH, JSON_EXPORT_P
 const over = (takesInput: boolean, look: Partial<OverGame> = {}): OverGame => ({ takesInput, opacity: 100, zoom: 1, ...look });
 
 /** What ModuleViewOptions groups: the connectors the session gates, and Tavora's dialogs. A test names them flat. */
-const CONNECTOR_KEYS = new Set(["networkHosts", "connectors", "folders", "aiUsage", "leaderboards", "systemInfo", "connection", "media", "discord", "overlay", "hotkeys", "testHosts"]);
+const CONNECTOR_KEYS = new Set(["networkHosts", "connectors", "folders", "aiUsage", "leaderboards", "systemInfo", "connection", "media", "discord", "overlay", "clipboard", "hotkeys", "testHosts"]);
 const FILE_KEYS = new Set(["savePicture", "saveJson", "openJson", "saveFile", "openFile", "pickReadOnly"]);
 
 function make(extra: Record<string, unknown> = {}) {
@@ -861,6 +861,7 @@ describe("guarded calls", () => {
     { name: "overlay.preview", overGame: true, call: (c) => c.overlay.preview("item-1") },
     { name: "overlay.openPage", overGame: true, call: (c) => c.overlay.openPage() },
     { name: "hotkeys.set", overGame: true, call: (c) => c.hotkeys.set("start", "item-1", "Timer") },
+    { name: "clipboard.writeText", overGame: false, call: (c) => c.clipboard.writeText("hello") },
     { name: "folders.choose", overGame: true, call: (c) => c.folders.choose("Documents/Game") },
     { name: "folders.showInFolder", overGame: true, call: (c) => c.folders.showInFolder("Documents/Game", "a.txt") },
     { name: "media.control", overGame: false, call: (c) => c.media.control("session-1", "play") },
@@ -896,6 +897,7 @@ describe("guarded calls", () => {
       showMenu: spies.showMenu,
       overlay: { copyLink: spies.copyLink, copyNeedsWindow: () => true, showOverGame: spies.showOverGame, preview: spies.preview, openPage: spies.openPage },
       hotkeys: { list: () => [], set: spies.setHotkey, remove: () => undefined },
+      clipboard: { writeText: () => undefined },
       folders: { granted: () => true, state: async () => ({ found: true }), list: async () => ({ files: [], truncated: false }), read: async () => Buffer.alloc(0), watch: async () => null, choose: spies.choose, reveal: spies.reveal },
       onOpenLink: spies.openLink,
       tooltip: { show: spies.tooltip, move: () => undefined, close: () => undefined, defineSkin: async () => undefined },

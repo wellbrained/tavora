@@ -224,6 +224,8 @@ export const en = {
   "ex.menus.RightClick.rule": "A menu opens next to the element it is for, never at the pointer.",
   "ex.menus.WaitingMenu": "Menu entry that takes a moment",
   "ex.menus.WaitingMenu.note": "The menu stays open while it works, then closes. Reload fails on purpose.",
+  "ex.menus.Share": "Share menu",
+  "ex.menus.Share.note": "Copy as text, copy as image or save as image, with a toast for each. In your own menu it's a Share row.",
 
   "ex.tooltips.FromTitle": "From a title",
   "ex.tooltips.FromTitle.note": "Any element. Works with a mouse and keyboard.",
@@ -758,6 +760,8 @@ export const de: Record<TextKey, string> = {
   "ex.menus.RightClick.rule": "Ein Menü öffnet sich neben dem Element, zu dem es gehört, nie am Mauszeiger.",
   "ex.menus.WaitingMenu": "Menüeintrag, der einen Moment braucht",
   "ex.menus.WaitingMenu.note": "Das Menü bleibt offen, bis er fertig ist, dann schließt es sich. Neu laden schlägt hier absichtlich fehl.",
+  "ex.menus.Share": "Teilen-Menü",
+  "ex.menus.Share.note": "Als Text kopieren, als Bild kopieren oder als Bild speichern, jeweils mit einer Meldung. Im eigenen Menü ist es eine Zeile Teilen.",
 
   "ex.tooltips.FromTitle": "Aus einem title",
   "ex.tooltips.FromTitle.note": "An jedem Element. Klappt mit Maus und Tastatur.",

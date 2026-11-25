@@ -16,6 +16,7 @@ import { checkGrant, GATED_CALLS, GESTURE_MS, grantAfterParams, grantedCapabilit
 const BEFORE = {
   "aiUsage.accounts": { grant: "aiUsage", grantFirst: true, systemMonitor: false, inSight: false, window: "never", press: "never" },
   "aiUsage.read": { grant: "aiUsage", grantFirst: true, systemMonitor: false, inSight: false, window: "never", press: "never" },
+  "clipboard.writeText": { grant: null, grantFirst: null, systemMonitor: false, inSight: true, window: "never", press: "always" },
   "discord.allowControl": { grant: "discord", grantFirst: true, systemMonitor: false, inSight: true, window: "never", press: "always" },
   "discord.command": { grant: "discord", grantFirst: true, systemMonitor: false, inSight: true, window: "never", press: "some" },
   "discord.connect": { grant: "discord", grantFirst: true, systemMonitor: false, inSight: true, window: "never", press: "always" },

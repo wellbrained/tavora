@@ -33,7 +33,7 @@ function session(options: { picked?: string[]; near?: string; last?: string; fai
     module: () => module,
     workspace: { id: "w1", displayName: "Planner", kind: "personal" } as never,
     hostVersion: "0.0.0",
-    connectors: { networkHosts: () => new Set(), connectors: () => new Set(), discord: { release: () => undefined } } as unknown as PanelConnectors,
+    connectors: { networkHosts: () => new Set(), connectors: () => new Set(), discord: { release: () => undefined }, clipboard: { writeText: (text: string) => void notes.push(`copy ${text}`) } } as unknown as PanelConnectors,
     pickReadOnly: async (request) => (notes.push(`dialog ${JSON.stringify(request)}`), options.picked ?? []),
     pickGame: () => "tavora-test-game",
     readOnlyFiles: () => files as unknown as ReadOnlyFiles,
@@ -87,6 +87,15 @@ describe("PanelSession: linking files (files.pickReadOnly)", () => {
     await context.readOnlyFiles!.pick(["sav"], false);
     await expect(context.readOnlyFiles!.pick(["sav"], false)).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
     expect(notes.filter((note) => note.startsWith("dialog"))).toHaveLength(1);
+  });
+});
+
+describe("PanelSession: clipboard.writeText", () => {
+  it("copies once per press, and nothing without one", async () => {
+    const { context, notes } = session();
+    await context.clipboard.writeText("first");
+    await expect(context.clipboard.writeText("second")).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+    expect(notes).toEqual(["copy first"]);
   });
 });
 

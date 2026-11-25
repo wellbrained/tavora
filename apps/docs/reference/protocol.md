@@ -104,6 +104,7 @@ Methods without params must be sent with `params` left out.
 | `overlay.publish` | `{ key, state }` | `null`; what the overlay for `key` shows now, on its stream link and over the game. Needs no capability since Tavora 0.20.51; before that it needed `overlay`. See [Stream overlays](#stream-overlays) (Tavora 0.19.26 and newer) |
 | `overlay.remove` | `{ key }` | `null`; the overlay shows nothing until it is published again, and keeps its link. Needs no capability since Tavora 0.20.51 |
 | `overlay.copyLink` | `{ key }` | `"copied"`: the link is on the clipboard; `"off"`: Stream overlays are off, and Tavora opened that setting. `"denied"`: the module asks for the connector on request and the user said no in Tavora's dialog (Tavora 0.19.32 and newer). Only right after a real click or key press in the panel, once per click (`PERMISSION_DENIED` otherwise) |
+| `clipboard.writeText` | `{ text }` | `null`; puts plain text on the clipboard. Not empty, at most 1 MiB as UTF-8 (`INVALID_PARAMS`, `QUOTA_EXCEEDED`). Only right after a real click or key press in the panel, once per press (`PERMISSION_DENIED` otherwise). Needs no capability. See [Clipboard](#clipboard) (Tavora 0.25.20 and newer) |
 | `overlay.resetLink` | `{ key }` | `null`; the overlay gets a new link and the old one stops working. Needs the `overlay` capability |
 | `overlay.showOverGame` | `{ key }` | `"shown"`: the overlay is over the game now, or already was; `"off"`: Game overlays are off, and Tavora opened Settings > Overlays; `"full"`: the setup it lands in already has 8 items. Needs no capability. Only right after a real click or key press in the panel, once per click (`PERMISSION_DENIED` otherwise); `INVALID_PARAMS` for a module without an `overlay` page. See [Game overlays](#game-overlays) (Tavora 0.20.51 and newer) |
 | `overlay.hideOverGame` | `{ key }` | `null`; takes this module's game overlay for `key` of the panel's workspace out of every setup it is in. Needs no click and no capability; nothing happens when there is none (Tavora 0.21.3 and newer) |
@@ -142,10 +143,11 @@ A module can keep pictures, PDF files and sounds that are too big for a document
 
 ### Clipboard
 
-`sdk.clipboard.writeImage(png)` puts a picture on the system clipboard so the user can paste it into any app. The PNG is sent to the module's own address, `POST /_clipboard/`, as the request body.
+`sdk.clipboard.writeImage(png)` puts a picture on the system clipboard so the user can paste it into any app. The PNG is sent to the module's own address, `POST /_clipboard/`, as the request body. `sdk.clipboard.writeText(text)` does the same for plain text, as a normal call (Tavora 0.25.20 and newer; check `sdk.supports("clipboard.writeText")`). The browser's own Clipboard API doesn't work in a panel: Tavora gives a panel no browser permissions. The kit's `copyText` and `copyImage` use these calls, and fall back by themselves on an older Tavora and outside Tavora.
 
 - **Only after the user did something:** it must follow a real click or key press in the module (within 2 seconds), and one press copies one picture; otherwise it is refused with `PERMISSION_DENIED`. Call it from the click handler of the button.
 - **Only a complete PNG:** the host checks every part of the file before using it (`INVALID_PARAMS` for anything else, such as a different format, a cut-off or damaged file, or a picture over 16384 pixels on a side or 100 million pixels), and a file over 20 MB is `QUOTA_EXCEEDED`.
+- **Text:** plain text only, not empty, at most 1 MiB as UTF-8 (`INVALID_PARAMS`, `QUOTA_EXCEEDED`). The same press rule applies: one press copies once, shared with the picture calls.
 - **Write only:** a module cannot read the clipboard.
 
 ### Saving pictures
@@ -325,7 +327,7 @@ When the user shows a panel in game (the [`inGame`](./manifest.md#panel-types) i
 
 A panel type with [`withGame`](./manifest.md#running-with-the-game) runs while one of the module's games runs, after the user allowed it: the panel of that type in the game's workspace, or a hidden one that is never placed in the layout. Its page loads and runs as usual (`getLaunch` says `restore`), is never shown and never paused (no `lifecycle.suspend`), also while Tavora's window is minimized. Chromium still slows timers of a page out of sight, so react to `folders.watch` events rather than polling. It ends with `lifecycle.dispose` when the game closes, like a closed panel.
 
-While it runs only for the game (the hidden panel, or the panel of a workspace not shown now), what needs the user fails with `PERMISSION_DENIED` ("… is not available while the panel runs with its game, out of sight") and nobody is told: every call that needs a click or key press (`links.open`, `panels.open`, `panels.openMany`, `panel.setMaximized`, `panel.openDialog`, `ui.showMenu`, `ui.tooltip.show`, `files.pickReadOnly`, `files.showInFolder`, `folders.choose`, `folders.showInFolder`, `hotkeys.set`, `overlay.copyLink`, `overlay.showOverGame`, `overlay.preview`, `overlay.openPage`, `leaderboards.show`, …). The save, open and clipboard addresses (`pictures.save`, `files.saveJson`, `files.openJson`, `files.save`, `files.open`, `files.exportJson`, clipboard writes) fail too, even after a click in another panel of the module. Show a toast or ask only in a panel the user has open. A page that crashes, or stays unresponsive for 10 seconds, starts once more; a second time in the same game session leaves it off until the game starts again. Tavora 0.24.131 and newer (`minTavora` newer than `0.24.130`).
+While it runs only for the game (the hidden panel, or the panel of a workspace not shown now), what needs the user fails with `PERMISSION_DENIED` ("… is not available while the panel runs with its game, out of sight") and nobody is told: every call that needs a click or key press (`links.open`, `panels.open`, `panels.openMany`, `panel.setMaximized`, `panel.openDialog`, `ui.showMenu`, `ui.tooltip.show`, `files.pickReadOnly`, `files.showInFolder`, `folders.choose`, `folders.showInFolder`, `hotkeys.set`, `overlay.copyLink`, `overlay.showOverGame`, `overlay.preview`, `overlay.openPage`, `clipboard.writeText`, `leaderboards.show`, …). The save, open and clipboard addresses (`pictures.save`, `files.saveJson`, `files.openJson`, `files.save`, `files.open`, `files.exportJson`, clipboard writes) fail too, even after a click in another panel of the module. Show a toast or ask only in a panel the user has open. A page that crashes, or stays unresponsive for 10 seconds, starts once more; a second time in the same game session leaves it off until the game starts again. Tavora 0.24.131 and newer (`minTavora` newer than `0.24.130`).
 
 ### Overlay preview
 
@@ -478,6 +480,7 @@ A Tavora older than **Since** throws `UNKNOWN_METHOD` for the call; `sdk.support
 | `blobs.put` | 0.12.0 |  |  |
 | `blobs.app.put` | 0.23.101 |  |  |
 | `clipboard.writeImage` | 0.14.1 |  | always |
+| `clipboard.writeText` | 0.25.20 |  | always |
 | `files.pickReadOnly` | 0.21.13 |  | always |
 | `files.forget` | 0.21.13 |  |  |
 | `files.check` | 0.23.6 |  |  |
@@ -586,7 +589,7 @@ Some methods need a capability the user grants. A module asks for it in its mani
 | `leaderboards.*` | `leaderboards` | granted for the `leaderboards` connector, see [Connectors](#connectors) |
 | `overlay.copyLink`, `overlay.resetLink` | `overlay` | granted for the `stream-overlay` connector, see [Stream overlays](#stream-overlays). `overlay.publish`, `overlay.remove`, `overlay.showOverGame`, `overlay.preview` and `overlay.openPage` need none |
 | `folders.state`, `folders.list`, `folders.read`, `folders.watch`, `folders.choose`, `folders.showInFolder` | `folders` | granted per folder of `permissions.folders`, see [Folders](#folders) |
-| `clipboard.writeText`, `clipboard.readText` | `clipboard` | reserved |
+| `clipboard.readText` | `clipboard` | reserved |
 | `sharedData.publish`, `sharedData.read`, `sharedData.subscribe` | `sharedData` | reserved |
 
 Without the capability every one of them fails with `PERMISSION_DENIED` and `capability`. The reserved ones cannot be granted yet and always fail that way, so a module can feature-detect them safely; their params and results are not specified yet.
@@ -608,6 +611,7 @@ Without the capability every one of them fails with `PERMISSION_DENIED` and `cap
 | `panels.openMany` | one call per click or key press, 1 to 16 types, each once |
 | Stored files (`blobs`) | 50 MB each, 500 MB per module and workspace (`blobs.app`: 500 MB per module); PNG, JPEG, GIF, WebP, PDF, MP3, Ogg and WAV only |
 | `clipboard.writeImage` | one PNG per click or key press, at most 20 MB, 16384 pixels on a side and 100 million pixels |
+| `clipboard.writeText` | one copy per click or key press, at most 1 MiB as UTF-8 |
 | `pictures.save` | the same as `clipboard.writeImage`; names up to 80 characters |
 | `files.saveJson`, `files.openJson` | one file per click or key press, JSON up to 8 MiB; names up to 80 characters |
 | `files.save`, `files.open` | one file per click or key press, `.csv` or `.xlsx` up to 8 MiB; names up to 80 characters |

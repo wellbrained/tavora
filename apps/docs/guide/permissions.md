@@ -63,6 +63,7 @@ Some calls need no grant but only work right after the user clicked or pressed a
 
 - `tavora.links.open(url)`: opens a web page in the workspace's Browser panel.
 - `tavora.clipboard.writeImage(png)`: copies a PNG.
+- `tavora.clipboard.writeText(text)`: copies plain text.
 - `tavora.pictures.save(png, name)`: saves a PNG where the user picks in Tavora's save dialog.
 - `tavora.ui.showMenu(...)`: a menu Tavora draws above every panel.
 - `tavora.overlay.copyLink(key)`: copies an overlay's link for OBS.

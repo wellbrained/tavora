@@ -3,6 +3,7 @@ import { bootstrapModule, type BootstrapStatus } from "@tavora/sdk/bootstrap";
 import { createTranslator, type Translator } from "./i18n";
 import { trackPanelSuspension } from "./components/ui/toast/visibility";
 import { setViewMemoryStore } from "./components/ui/zoom-pane/view-memory";
+import { setKitSdk } from "./kit-sdk";
 import { installTitleTooltips } from "./title-tooltips";
 import { applyKitTheme } from "./theme";
 
@@ -51,6 +52,8 @@ export async function connectModule<K extends string = string>(options: ConnectM
     translator.setLanguage(boot.language);
     // Zoomable views (ZoomPane with a persistKey) keep where they were left in the module's own storage.
     if (boot.sdk?.storage) setViewMemoryStore(boot.sdk.storage);
+    // copyText, copyImage and the share menu reach Tavora through it.
+    setKitSdk(boot.sdk);
     boot.onTheme(applyKitTheme);
     boot.onLanguage((language) => translator.setLanguage(language));
   }

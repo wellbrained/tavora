@@ -10,7 +10,7 @@
 // The history and the values are one document of the workspace, so every panel of the workspace shares them and sees
 // another panel's change at once.
 import { BookmarkPlus, Check, Copy, Delete, Ellipsis, Eraser, History, Pencil, Settings as SettingsIcon, Trash2 } from "@lucide/vue";
-import { connectModule, errorMessage, SegmentedControl, useFocusRecovery } from "@tavora/official-ui";
+import { connectModule, copyText as copyToClipboard, errorMessage, SegmentedControl, useFocusRecovery } from "@tavora/official-ui";
 import { settingsDialogSize } from "@tavora/official-ui/components/ui/module-settings";
 import { handleUndoKey, Toaster, undoable, type Undoable } from "@tavora/official-ui/components/ui/toast";
 import { Button } from "@tavora/official-ui/components/ui/button";
@@ -184,7 +184,7 @@ async function copy(): Promise<void> {
   const text = copyable.value;
   if (text === null) return;
   try {
-    await navigator.clipboard.writeText(text);
+    await copyToClipboard(text);
     copied.value = true;
     clearTimeout(copiedTimer);
     copiedTimer = setTimeout(() => (copied.value = false), 1500);

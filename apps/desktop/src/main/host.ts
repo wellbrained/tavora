@@ -3114,6 +3114,7 @@ export class Host {
           this.showOverlayPage(null);
         },
       },
+      clipboard: { writeText: (text) => clipboard.writeText(text) },
       hotkeys: this.streaming.hotkeysFor(module, workspace.id),
       ...(this.options.testNetworkHosts ? { testHosts: this.options.testNetworkHosts } : {}),
     };

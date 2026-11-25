@@ -115,6 +115,8 @@ export const GATED_CALLS = {
   "overlay.preview": windowed,
   "overlay.openPage": windowed,
 
+  "clipboard.writeText": clicked,
+
   "hotkeys.set": windowed,
   "links.open": windowed,
   "panels.open": windowed,

@@ -574,11 +574,18 @@ test("ui playground: lists its pages in a side menu, finds them, shows each exam
   expect(await inModule(app, PLAYGROUND, `getComputedStyle(${numbers}).userSelect`)).toBe("none");
   expect(await inModule(app, PLAYGROUND, `getComputedStyle(${numbers}).borderRightWidth`)).toBe("1px");
   expect(await inModule(app, PLAYGROUND, `getComputedStyle(${numbers}).textAlign`)).toBe("right");
-  // Copy puts the plain source on the clipboard, without the numbers.
-  await inModule(app, PLAYGROUND, `(() => { window.__copied = ""; Object.defineProperty(navigator, "clipboard", { value: { writeText: async (text) => { window.__copied = text; } }, configurable: true }); })()`);
+  // Copy puts the plain source on the PC's clipboard (through Tavora's clipboard.writeText, so after a real press), without the numbers.
+  const clipboardText = () => app.evaluate(({ clipboard }) => clipboard.readText());
+  await app.evaluate(({ clipboard }) => clipboard.clear());
+  await app.evaluate(({ webContents }, moduleId) => {
+    const target = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(`tavora-module://${moduleId}/`));
+    if (!target) throw new Error("no panel");
+    target.sendInputEvent({ type: "keyDown", keyCode: "F24" });
+    target.sendInputEvent({ type: "keyUp", keyCode: "F24" });
+  }, PLAYGROUND);
   await inModule(app, PLAYGROUND, `${box}.querySelector('[data-testid="copy-code"]').click()`);
-  await expect.poll(() => inModule<string>(app, PLAYGROUND, `window.__copied`)).toBe(await inModule<string>(app, PLAYGROUND, `${box}.querySelector('[data-testid="example-code"]').textContent`));
-  expect(await inModule<string>(app, PLAYGROUND, `window.__copied`)).toContain("<ComboboxInput");
+  await expect.poll(clipboardText).toBe(await inModule<string>(app, PLAYGROUND, `${box}.querySelector('[data-testid="example-code"]').textContent`));
+  expect(await clipboardText()).toContain("<ComboboxInput");
   // The code shown is the example's whole file: no prop of the playground's in it.
   expect(await inModule<string>(app, PLAYGROUND, `${box}.querySelector('[data-testid="example-code"]').textContent`)).not.toContain("defineProps");
   expect(await inModule(app, PLAYGROUND, `${box}.querySelector('[data-testid="show-code"]').getAttribute("aria-expanded")`)).toBe("true");

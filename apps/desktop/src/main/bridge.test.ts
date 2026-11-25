@@ -92,6 +92,7 @@ function makeContext(instanceId = INSTANCE, moduleId = "local.example.a"): Bridg
     showMenu: () => Promise.resolve(null),
     tooltip:{show:async()=>false,move:()=>{},close:()=>{},defineSkin:async()=>{}},
     overlay: { publish: () => {}, remove: () => {}, copyLink: () => Promise.resolve("copied"), resetLink: () => {}, showOverGame: () => Promise.resolve("shown"), hideOverGame: () => {}, overGame: () => [], setSources: () => {}, preview: () => Promise.resolve(), openPage: () => Promise.resolve() },
+    clipboard: { writeText: async () => {} },
     hotkeys: { list: () => [], set: () => Promise.resolve("cancelled"), remove: () => {} },
     fetch: () => Promise.reject(new Error("no network in this test")),
     readPage: () => Promise.reject(new Error("no pages in this test")),
@@ -542,6 +543,30 @@ describe("denied and malformed calls", () => {
       ok: false,
       error: { code: "INTERNAL", message: "internal error" },
     });
+  });
+});
+
+describe("clipboard.writeText", () => {
+  it("copies plain text with no capability, and passes on a refusal when the panel had no click", async () => {
+    const copied: string[] = [];
+    const p = await connected({ ...makeContext(), clipboard: { writeText: async (text) => void copied.push(text) } });
+    const text = "Hello ⚔️\nline two";
+    expect(await call(p, "clipboard.writeText", { text })).toMatchObject({ ok: true, result: null });
+    expect(copied).toEqual([text]);
+    const refused = await connected({ ...makeContext(), clipboard: { writeText: () => Promise.reject(new HostError("PERMISSION_DENIED", "no click")) } });
+    expect(await call(refused, "clipboard.writeText", { text: "hi" })).toMatchObject({ ok: false, error: { code: "PERMISSION_DENIED" } });
+  });
+
+  it("refuses empty text, text that isn't a string, and more than 1 MiB, before it copies", async () => {
+    const copied: string[] = [];
+    const p = await connected({ ...makeContext(), clipboard: { writeText: async (text) => void copied.push(text) } });
+    expect(await call(p, "clipboard.writeText", { text: "" })).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+    expect(await call(p, "clipboard.writeText", { text: 42 })).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+    expect(await call(p, "clipboard.writeText", {})).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+    // 1 MiB exactly is fine; one byte more (a two-byte letter at the end) is not.
+    expect(await call(p, "clipboard.writeText", { text: "a".repeat(1024 * 1024) })).toMatchObject({ ok: true });
+    expect(await call(p, "clipboard.writeText", { text: "a".repeat(1024 * 1024 - 1) + "é" })).toMatchObject({ ok: false, error: { code: "QUOTA_EXCEEDED" } });
+    expect(copied).toHaveLength(1);
   });
 });
 

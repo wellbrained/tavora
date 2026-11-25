@@ -14,6 +14,7 @@ import {
   checkDialogTitle,
   checkDiscordImage,
   checkFileReference,
+  checkClipboardText,
   checkHotkeyLabel,
   checkLeaderboardMine,
   checkLeaderboardSubmit,
@@ -289,7 +290,7 @@ const ALL_CAPABILITIES: Capability[] = ["network", "aiUsage", "discord", "overla
 const SILENT = new Set<CallName>([
   "files.forget", "files.showInFolder", "files.check", "links.open", "ui.tooltip.show", "ui.tooltip.move", "ui.tooltip.hide", "ui.tooltip.close", "ui.tooltip.defineSkin", "ui.showMenu",
   "systemInfo.watch", "systemInfo.clearConnectionLog", "media.watch", "media.control", "discord.connect", "discord.allowControl",
-  "discord.subscribe", "discord.unsubscribe", "overlay.resetLink", "overlay.preview", "clipboard.writeImage", "files.pickReadOnly",
+  "discord.subscribe", "discord.unsubscribe", "overlay.resetLink", "overlay.preview", "clipboard.writeImage", "clipboard.writeText", "files.pickReadOnly",
   "files.openJson", "files.open", "discord.image", "folders.watch", "folders.choose", "folders.showInFolder", "hotkeys.set", "overlay.copyLink", "overlay.showOverGame", "overlay.openPage", "panel.navigated",
 ]);
 const SILENT_ANSWER: Partial<Record<CallName, unknown>> = {
@@ -1002,6 +1003,7 @@ const CHECKS_BEFORE_PRESS: Partial<Record<CallName, (panel: Panel, params: unkno
   "overlay.showOverGame": (_, params) => void checked(checkModuleKey(record(params).key, "key")),
   "overlay.hideOverGame": (_, params) => void checked(checkModuleKey(record(params).key, "key")),
   "overlay.preview": (_, params) => void checked(checkModuleKey(record(params).key, "key")),
+  "clipboard.writeText": (panel, params) => void checked(checkClipboardText(record(params).text, panel.shared.limits.maxClipboardTextBytes)),
   "hotkeys.set": (panel, params) => {
     const { action, target, label } = record(params);
     checked(checkActionId(action));
@@ -1269,7 +1271,10 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
         delete: async (id) => void (await call("blobs.app.delete", { id })),
       },
     },
-    clipboard: { writeImage: async (png) => void (await call("clipboard.writeImage", { png })) },
+    clipboard: {
+      writeImage: async (png) => void (await call("clipboard.writeImage", { png })),
+      writeText: async (text) => void (await call("clipboard.writeText", { text })),
+    },
     folders: {
       state: (folder) => call("folders.state", { folder }),
       list: (folder) => call("folders.list", { folder }),

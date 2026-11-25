@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.54
+
+- New projects start on SDK 0.4.14.
+
 ## 0.1.53
 
 - New projects start on SDK 0.4.13 and tavora-pack 0.3.7.

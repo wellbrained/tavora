@@ -4,6 +4,7 @@
 // that can't be selected and a thin line between it and the code. Copy copies the plain source, without the numbers.
 // The code scrolls on its own and can be reached with Tab, so it scrolls by keyboard too.
 import { Check, Copy } from "@lucide/vue";
+import { copyText } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { toast } from "@tavora/official-ui/components/ui/toast";
 import { computed, onBeforeUnmount, ref } from "vue";
@@ -20,7 +21,7 @@ const copied = ref(false);
 let timer: ReturnType<typeof setTimeout> | undefined;
 async function copy() {
   try {
-    await navigator.clipboard.writeText(props.code);
+    await copyText(props.code);
     copied.value = true;
     clearTimeout(timer);
     timer = setTimeout(() => (copied.value = false), 1500);

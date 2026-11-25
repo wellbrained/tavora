@@ -34,7 +34,7 @@ import { saveDialogDirectory } from "./save-dialog-folder";
 import type { SystemMonitor, SystemSubscription } from "./system-info";
 
 /** What the bridge reaches of the connectors and pickers; the session makes it for each port (`connect`). */
-export type SessionContext = Pick<BridgeContext, "capabilities" | "fetch" | "readPage" | "aiUsage" | "leaderboards" | "systemInfo" | "media" | "discord" | "folders" | "readOnlyFiles" | "overlay" | "hotkeys">;
+export type SessionContext = Pick<BridgeContext, "capabilities" | "fetch" | "readPage" | "aiUsage" | "leaderboards" | "systemInfo" | "media" | "discord" | "folders" | "readOnlyFiles" | "overlay" | "clipboard" | "hotkeys">;
 
 /** The connectors of the module as this panel uses them, from the host (host.ts createView). The session gates them. */
 export interface PanelConnectors {
@@ -74,6 +74,8 @@ export interface PanelConnectors {
     /** Shows the Overlay page and closes this panel's dialog (overlay.openPage, already given its click). */
     openPage(): void;
   };
+  /** The system clipboard, written only through the gate. */
+  clipboard: { writeText(text: string): void };
   /** Hotkeys of this module in this workspace; `set` opens Tavora's hotkey dialog. */
   hotkeys: { list(): HotkeyBinding[]; set(action: string, target: string, label: string): Promise<HotkeySetResult>; remove(target: string, action: string | null): void };
   /** Test runs only: hosts mapped to a local server (network.ts). */
@@ -170,6 +172,13 @@ export class PanelSession {
       ...(connectors.folders ? { folders: this.foldersFor(page, connectors.folders) } : {}),
       readOnlyFiles: this.readOnlyFilesFor(page),
       overlay: this.overlayFor(),
+      clipboard: {
+        writeText: async (text) => {
+          // One click copies once, so a page cannot keep the clipboard to itself.
+          await this.gate.enter("clipboard.writeText");
+          connectors.clipboard.writeText(text);
+        },
+      },
       hotkeys: {
         list: () => connectors.hotkeys.list(),
         set: async (action, target, label) => {
