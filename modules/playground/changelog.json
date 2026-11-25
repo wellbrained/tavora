@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.80",
+    "date": "2026-11-25",
+    "notes": [
+      "List with search: a search with no match shows its note in a frame."
+    ]
+  },
+  {
     "version": "0.1.79",
     "date": "2026-11-25",
     "notes": [

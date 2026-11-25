@@ -199,7 +199,7 @@ useKeepFocus(fieldInput, () => !!props.search && props.autofocus)
     <div role="status" :class="shown.length ? 'sr-only' : 'min-h-0 flex-1'">
       <div v-if="!shown.length" :data-testid="part('none')">
         <slot name="empty">
-          <EmptyState :title="empty ?? uiText.noMatches" class="border-none py-6">
+          <EmptyState :title="empty ?? uiText.noMatches" class="py-6">
             <template #icon><Search :stroke-width="1.5" /></template>
           </EmptyState>
         </slot>

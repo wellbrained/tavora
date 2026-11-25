@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.51",
+    "date": "2026-11-25",
+    "notes": [
+      "The shared list with search shows its no-match note in a frame."
+    ]
+  },
+  {
     "version": "0.1.50",
     "date": "2026-11-25",
     "notes": [
