@@ -4,6 +4,7 @@ import { Chip } from "@tavora/official-ui/components/ui/chip";
 import { ref } from "vue";
 
 // Chips are the user's own words: remove one with its ×, or switch one on and off as a filter. Same corners and tints as Badge.
+// A text size from the scale (text-sm, text-base, text-lg) by class grows the whole chip with it.
 const tags = ref(["Speedrun", "Co-op", "Boss rush"]);
 const kinds = ref<Record<string, boolean>>({ Units: true, Spells: false, Buildings: true, Kings: false });
 </script>
@@ -30,6 +31,11 @@ const kinds = ref<Record<string, boolean>>({ Units: true, Spells: false, Buildin
       <Chip label="Default" removable />
       <Chip label="Large" size="lg" removable />
       <Chip label="Read only" size="lg" />
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <Chip label="text-sm" class="text-sm" removable />
+      <Chip label="text-base" class="text-base" removable />
+      <Chip label="text-lg" class="text-lg" removable><template #icon><Flame /></template></Chip>
     </div>
     <div class="flex flex-wrap items-center gap-2">
       <Chip v-for="(on, kind) in kinds" :key="kind" :label="kind" toggle :selected="on" @update:selected="kinds[kind] = $event" />

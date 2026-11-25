@@ -397,7 +397,7 @@ export const en = {
 
   "ex.status.Badges": "Badges",
   "ex.status.Chips": "Chips",
-  "ex.status.Chips.note": "Tags you can remove with their ×, or switch on and off as filters. In three sizes, with an icon or a colour dot.",
+  "ex.status.Chips.note": "Tags you can remove with their ×, or switch on and off as filters. In three sizes, with an icon or a colour dot. A bigger text size grows the whole chip.",
   "ex.status.StatusDot": "Status dot and word",
   "ex.status.Keys": "Keyboard keys",
 
@@ -940,7 +940,7 @@ export const de: Record<TextKey, string> = {
 
   "ex.status.Badges": "Badges",
   "ex.status.Chips": "Chips",
-  "ex.status.Chips.note": "Tags, die du mit ihrem × entfernst oder als Filter an- und ausschaltest. In drei Größen, mit Symbol oder Farbpunkt.",
+  "ex.status.Chips.note": "Tags, die du mit ihrem × entfernst oder als Filter an- und ausschaltest. In drei Größen, mit Symbol oder Farbpunkt. Mit größerer Schrift wächst der ganze Chip.",
   "ex.status.StatusDot": "Statuspunkt und Wort",
   "ex.status.Keys": "Tasten",
 

@@ -23,6 +23,8 @@ defineOptions({
 // - Backspace in an empty field marks the last chip, a second press removes it; ←/→ move the mark, Delete removes the
 //   marked chip, Escape or typing drops it. The chips' × are for the mouse; Tab goes from the field to the next control.
 // v-model is the list; `add` and `remove` say what changed, one tag each, for a module that replays edits.
+// A text size from the scale by class (text-sm, text-base, text-lg) sizes the chips, and they grow with it; what you
+// type is never smaller than the kit's body text.
 const props = withDefaults(defineProps<{
   suggestions?: readonly string[]
   free?: boolean
@@ -169,6 +171,7 @@ function onChipRemove(index: number) {
       data-slot="tag-input"
       :data-disabled="disabled ? '' : undefined"
       :class="cn(
+        size === 'lg' ? 'text-sm' : 'text-xs',
         'border-input dark:bg-input/10 flex w-full min-w-0 flex-wrap items-center gap-1 rounded-md border bg-transparent shadow-xs transition-[color,box-shadow]',
         'focus-within:border-ring focus-within:ring-ring/50 focus-within:ring-3',
         size === 'lg' ? 'min-h-[calc(var(--style-control-height,32px)+8px)] px-1.5 py-1.5' : 'min-h-[var(--style-control-height,32px)] px-1 py-1',
@@ -182,6 +185,7 @@ function onChipRemove(index: number) {
         :key="`${index}:${tag}`"
         :label="tag"
         :size="size"
+        class="text-[length:inherit]"
         :marked="mark === index"
         :removable="!disabled"
         :remove-tabbable="false"
@@ -199,8 +203,7 @@ function onChipRemove(index: number) {
         :maxlength="maxlength"
         :placeholder="tags.length && !full ? undefined : placeholder"
         :class="cn(
-          'placeholder:text-muted-foreground min-w-20 flex-1 bg-transparent px-1.5 text-base outline-none disabled:cursor-not-allowed',
-          size === 'lg' ? 'h-6' : 'h-5',
+          'placeholder:text-muted-foreground min-w-20 flex-1 bg-transparent px-1.5 text-[length:max(1em,var(--text-base))] leading-normal outline-none disabled:cursor-not-allowed',
           full && 'placeholder:text-xs',
         )"
         @keydown.capture="onKey"
