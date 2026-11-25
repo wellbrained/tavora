@@ -575,7 +575,8 @@ test("ui playground: lists its pages in a side menu, finds them, shows each exam
   expect(await inModule(app, PLAYGROUND, `getComputedStyle(${numbers}).borderRightWidth`)).toBe("1px");
   expect(await inModule(app, PLAYGROUND, `getComputedStyle(${numbers}).textAlign`)).toBe("right");
   // Copy puts the plain source on the PC's clipboard (through Tavora's clipboard.writeText, so after a real press), without the numbers.
-  const clipboardText = () => app.evaluate(({ clipboard }) => clipboard.readText());
+  // Windows keeps line breaks on the clipboard as CRLF; the page shows LF.
+  const clipboardText = async () => (await app.evaluate(({ clipboard }) => clipboard.readText())).replace(/\r\n/g, "\n");
   await app.evaluate(({ clipboard }) => clipboard.clear());
   await app.evaluate(({ webContents }, moduleId) => {
     const target = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith(`tavora-module://${moduleId}/`));
