@@ -21,7 +21,7 @@ import { ProgressButton, type ProgressButtonStatus } from "@tavora/official-ui/c
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import { formatDate, t } from "../i18n";
 import { folderLabel, foldersOf } from "../folder-label";
-import { ExternalLink, X } from "@lucide/vue";
+import { ArrowUpRight, X } from "@lucide/vue";
 import CatalogIcon from "./CatalogIcon.vue";
 import CatalogReviews from "./CatalogReviews.vue";
 import ModuleIcon from "./ModuleIcon.vue";
@@ -233,7 +233,7 @@ async function openHomepage() {
               </dl>
               <Button v-if="module.homepage" variant="link" class="mt-2 h-auto max-w-full justify-start gap-1.5 p-0" :disabled="opening" :title="module.homepage"
                 :aria-label="t('catalog.homepageLabel', { name: module.name })" data-testid="catalog-info-homepage" @click="openHomepage"
-              ><ExternalLink class="size-4 flex-none" /><span class="truncate">{{ homepageText }}</span></Button>
+              ><span class="truncate">{{ homepageText }}</span><ArrowUpRight class="size-4 flex-none" /></Button>
             </section>
 
             <section data-testid="catalog-info-access">
@@ -245,7 +245,7 @@ async function openHomepage() {
             </section>
 
             <section v-if="module.support" data-testid="catalog-info-support">
-              <Button size="sm" variant="outline" :disabled="opening" :aria-label="t('catalog.supportLabel', { name: module.name })" data-testid="catalog-info-support-button" @click="openSupport">{{ t("catalog.support") }}</Button>
+              <Button size="sm" variant="outline" :disabled="opening" :aria-label="t('catalog.supportLabel', { name: module.name })" data-testid="catalog-info-support-button" @click="openSupport">{{ t("catalog.support") }}<ArrowUpRight data-icon="end" /></Button>
               <p class="text-muted-foreground mt-1.5">{{ t("catalog.supportHint") }}</p>
             </section>
 

@@ -1,9 +1,16 @@
 [
   {
-    "version": "0.1.47",
+    "version": "0.1.48",
     "date": "2026-11-25",
     "notes": [
       "Tooltips fade out when they close."
+    ]
+  },
+  {
+    "version": "0.1.47",
+    "date": "2026-11-25",
+    "notes": [
+      "Save in the rename dialog is plain text now, without an icon."
     ]
   },
   {

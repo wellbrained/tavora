@@ -4,7 +4,7 @@
 // listed with its fix right here: the next version and its patch notes, an id with the developer's own
 // prefix (Check, then Claim it), or a build. Publish uploads exactly what this shows; the click is the
 // approval, so nothing asks again.
-import { CircleAlert, ExternalLink, Loader, TriangleAlert, Upload } from "@lucide/vue";
+import { ArrowUpRight, CircleAlert, Loader, TriangleAlert, Upload } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
@@ -149,7 +149,7 @@ function browse() {
       <p class="text-muted-foreground text-sm" data-testid="publish-done">{{ t(waiting ? "publish.waitingText" : "publish.doneText") }}</p>
       <DialogFooter>
         <DialogButton close variant="ghost" @click="close">{{ t("common.close") }}</DialogButton>
-        <DialogButton v-if="!waiting" :icon="ExternalLink" data-testid="publish-browse" @click="browse">{{ t("publish.browse") }}</DialogButton>
+        <DialogButton v-if="!waiting" data-testid="publish-browse" @click="browse">{{ t("publish.browse") }}<ArrowUpRight data-icon="end" /></DialogButton>
       </DialogFooter>
     </template>
 
@@ -264,7 +264,7 @@ function browse() {
 
       <DialogFooter>
         <DialogButton close :disabled="view.status === 'publishing'" data-testid="publish-cancel" @click="close">{{ t("common.cancel") }}</DialogButton>
-        <DialogButton :icon="Upload" :loading="view.status === 'publishing'" :disabled="busy || view.status !== 'ready' || view.problems.length > 0" data-testid="publish-upload" @click="run({ type: 'publish-upload' })">
+        <DialogButton :loading="view.status === 'publishing'" :disabled="busy || view.status !== 'ready' || view.problems.length > 0" data-testid="publish-upload" @click="run({ type: 'publish-upload' })">
           {{ view.status === "publishing" ? t("publish.publishing") : t("publish.publish") }}
         </DialogButton>
       </DialogFooter>

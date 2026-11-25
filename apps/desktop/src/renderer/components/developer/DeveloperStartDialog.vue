@@ -4,7 +4,7 @@
 // needed for Publish; the prefix and the project can wait, so they have Later. A step moves on by itself
 // once the account says it is done. Opened from Settings > Development, and by Publish or Save as zip
 // while publishing isn't set up (`then`: the module whose Publish opened it, reviewed at the end).
-import { CircleCheck, Code, Copy, FolderCode } from "@lucide/vue";
+import { CircleCheck, Code, Copy } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
@@ -212,7 +212,7 @@ watch(
         <Button variant="ghost" size="sm" data-testid="developer-start-copy" @click="copyCommand"><Copy /> {{ t("devStart.project.copy") }}</Button>
       </div>
       <DialogFooter>
-        <DialogButton variant="secondary" :icon="FolderCode" class="mr-auto" data-testid="developer-start-folder" @click="act({ type: 'add-development-folder' })">
+        <DialogButton variant="secondary" class="mr-auto" data-testid="developer-start-folder" @click="act({ type: 'add-development-folder' })">
           {{ t("devStart.project.pick") }}
         </DialogButton>
         <DialogButton close variant="ghost" data-testid="developer-start-later" @click="skip">{{ t("devStart.later") }}</DialogButton>

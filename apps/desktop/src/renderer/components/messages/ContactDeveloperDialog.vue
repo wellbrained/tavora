@@ -3,7 +3,7 @@
 // needs a sign-in; the developer never sees who wrote. The Tavora and module version are filled in and shown before
 // sending. If the developer chose another way (contactChoice), that is offered instead: a link opens with a warning
 // that it leaves Tavora and isn't anonymous, an email address or Discord name can be copied; Nobody says so.
-import { LogIn, MessageCircle, Send } from "@lucide/vue";
+import { ArrowUpRight, Copy, MessageCircle } from "@lucide/vue";
 import { computed, onMounted, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
@@ -84,7 +84,7 @@ function signIn() {
       <p class="text-sm">{{ t("contact.signIn") }}</p>
       <DialogFooter>
         <DialogButton close @click="emit('close')">{{ t("common.cancel") }}</DialogButton>
-        <DialogButton :icon="LogIn" data-testid="contact-sign-in" @click="signIn">{{ t("catalog.reviews.signInButton") }}</DialogButton>
+        <DialogButton data-testid="contact-sign-in" @click="signIn">{{ t("catalog.reviews.signInButton") }}</DialogButton>
       </DialogFooter>
     </template>
 
@@ -93,13 +93,13 @@ function signIn() {
       <template v-if="draft.value && draft.host">
         <p class="text-sm">{{ t(`contact.off.${draft.kind}` as MessageKey, { name }) }}</p>
         <Notice variant="warning">{{ t("contact.offWarning") }}</Notice>
-        <Button variant="secondary" class="justify-self-start" data-testid="contact-link" @click="openLink">{{ t("contact.offLink", { host: draft.host }) }}</Button>
+        <Button variant="secondary" class="justify-self-start" data-testid="contact-link" @click="openLink">{{ t("contact.offLink", { host: draft.host }) }}<ArrowUpRight data-icon="end" /></Button>
       </template>
       <template v-else-if="draft.value">
         <p class="text-sm">{{ t(`contact.off.${draft.kind}` as MessageKey, { name }) }}</p>
         <div class="flex items-center gap-2">
           <code class="bg-muted min-w-0 truncate rounded px-2 py-1 font-mono text-sm select-all" data-testid="contact-value">{{ draft.value }}</code>
-          <Button variant="secondary" size="sm" data-testid="contact-copy" @click="openLink">{{ t("contact.copy") }}</Button>
+          <Button variant="secondary" size="sm" data-testid="contact-copy" @click="openLink"><Copy />{{ t("contact.copy") }}</Button>
         </div>
         <p class="text-muted-foreground text-sm">{{ t("contact.offNotAnonymous") }}</p>
       </template>
@@ -134,7 +134,7 @@ function signIn() {
       </div>
       <DialogFooter>
         <DialogButton type="button" close @click="emit('close')">{{ t("common.cancel") }}</DialogButton>
-        <DialogButton type="submit" :icon="Send" :loading="busy" :disabled="busy || problem !== null" data-testid="contact-send">{{ t("contact.send") }}</DialogButton>
+        <DialogButton type="submit" :loading="busy" :disabled="busy || problem !== null" data-testid="contact-send">{{ t("contact.send") }}</DialogButton>
       </DialogFooter>
     </form>
   </ModalDialog>

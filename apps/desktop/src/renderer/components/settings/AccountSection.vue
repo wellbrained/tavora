@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { LogOut, Pencil, Trash2 } from "@lucide/vue";
 // Profile dialog > Account: the optional Tavora account. Signing in is an emailed
 // code or a Discord login in the browser, never a password (SignInForm.vue). The main process
 // talks to the service and keeps the sign-in; this page only sees the sign-in
@@ -305,8 +306,8 @@ function startDelete() {
               <span class="truncate font-medium">{{ deviceLabel(device) }}<span v-if="device.current" class="text-muted-foreground font-normal"> · {{ t("account.devices.thisPc") }}</span></span>
               <span class="text-muted-foreground text-sm">{{ t("account.devices.entry", { device: osName(device), date: formatDate(device.createdAt) }) }}</span>
             </span>
-            <Button variant="ghost" size="sm" :disabled="busy" :data-testid="`account-device-rename-${device.id}`" @click="renameDevice(device)">{{ t("account.devices.rename") }}</Button>
-            <Button v-if="!device.current" variant="danger" size="sm" :disabled="busy" @click="signOutDevice(device)">{{ t("account.signOut") }}</Button>
+            <Button variant="ghost" size="sm" :disabled="busy" :data-testid="`account-device-rename-${device.id}`" @click="renameDevice(device)"><Pencil />{{ t("account.devices.rename") }}</Button>
+            <Button v-if="!device.current" variant="danger" size="sm" :disabled="busy" @click="signOutDevice(device)"><LogOut />{{ t("account.signOut") }}</Button>
           </li>
         </AnimatedList>
       </div>
@@ -324,7 +325,7 @@ function startDelete() {
         </div>
       </form>
       <SettingRow v-else :label="t('account.delete.label')" :description="t('account.delete.description')">
-        <Button variant="destructive" :disabled="busy" data-testid="account-start-delete" @click="startDelete">{{ t("account.delete.label") }}</Button>
+        <Button variant="destructive" :disabled="busy" data-testid="account-start-delete" @click="startDelete"><Trash2 />{{ t("account.delete.label") }}</Button>
       </SettingRow>
       </SettingGroup>
     </template>

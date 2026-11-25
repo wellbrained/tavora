@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Images, Loader, LogIn, Upload } from "@lucide/vue";
+import { Images, Loader } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
@@ -191,8 +191,8 @@ async function share() {
         {{ t("shareIcons.progress", progress) }}
       </span>
       <DialogButton type="button" close :disabled="busy" @click="dialog = null">{{ empty ? t("common.close") : t("common.cancel") }}</DialogButton>
-      <DialogButton v-if="!empty && !signedIn" type="button" :icon="LogIn" data-testid="share-icons-sign-in-button" @click="signIn">{{ t("account.signIn") }}</DialogButton>
-      <DialogButton v-else-if="!empty" type="button" :icon="Upload" :loading="busy" data-testid="share-icons-submit" :disabled="busy || looking || count === 0" @click="share">
+      <DialogButton v-if="!empty && !signedIn" type="button" data-testid="share-icons-sign-in-button" @click="signIn">{{ t("account.signIn") }}</DialogButton>
+      <DialogButton v-else-if="!empty" type="button" :loading="busy" data-testid="share-icons-submit" :disabled="busy || looking || count === 0" @click="share">
         {{ t("shareIcons.submit", { count: Math.max(count, 1) }) }}
       </DialogButton>
     </DialogFooter>

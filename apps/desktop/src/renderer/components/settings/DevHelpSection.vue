@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Settings > Examples and help: the examples that ship with Tavora, to open or copy as a new project, and the way to
 // the docs and to GitHub.
-import { BookOpen, Bug, Copy, FolderOpen, MessageCircleQuestion } from "@lucide/vue";
+import { ArrowUpRight, Copy, FolderOpen } from "@lucide/vue";
 import { computed } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { act, dialog, state } from "../../host";
@@ -44,13 +44,13 @@ const examples = computed(() => state.value!.modules.filter((module) => module.o
     >
       <span class="flex flex-none flex-wrap justify-end gap-2">
         <Button variant="secondary" data-testid="developer-link-docs" @click="act({ type: 'open-developer-link', link: 'docs' })">
-          <BookOpen /> {{ t("settings.devLinks.docs") }}
+          {{ t("settings.devLinks.docs") }}<ArrowUpRight data-icon="end" />
         </Button>
         <Button variant="secondary" data-testid="developer-link-discussions" @click="act({ type: 'open-developer-link', link: 'discussions' })">
-          <MessageCircleQuestion /> {{ t("settings.devLinks.discussions") }}
+          {{ t("settings.devLinks.discussions") }}<ArrowUpRight data-icon="end" />
         </Button>
         <Button variant="secondary" data-testid="developer-link-issue" @click="act({ type: 'open-developer-link', link: 'issue' })">
-          <Bug /> {{ t("settings.devLinks.issue") }}
+          {{ t("settings.devLinks.issue") }}<ArrowUpRight data-icon="end" />
         </Button>
       </span>
     </SettingRow>

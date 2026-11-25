@@ -1,9 +1,16 @@
 [
   {
-    "version": "0.1.76",
+    "version": "0.1.77",
     "date": "2026-11-25",
     "notes": [
       "A new tooltip example: an info button you can tap, a copy button that says Copied, and long names that get their full name."
+    ]
+  },
+  {
+    "version": "0.1.76",
+    "date": "2026-11-25",
+    "notes": [
+      "Button and dialog examples follow the new icon and label rules; a few titles say plainly what they show."
     ]
   },
   {

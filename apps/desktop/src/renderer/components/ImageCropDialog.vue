@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Crop, Minus, Plus, Save } from "@lucide/vue";
+import { Crop, Minus, Plus } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Slider } from "@tavora/official-ui/components/ui/slider";
@@ -237,7 +237,7 @@ function onOpenChange(value: boolean) {
 
       <DialogFooter>
         <DialogButton close data-testid="crop-cancel" @click="emit('cancel')">{{ t("common.cancel") }}</DialogButton>
-        <DialogButton :icon="Save" :loading="saving || busy" data-testid="crop-save" :disabled="!image || saving || busy" @click="save">{{ t("common.save") }}</DialogButton>
+        <DialogButton :loading="saving || busy" data-testid="crop-save" :disabled="!image || saving || busy" @click="save">{{ t("common.save") }}</DialogButton>
       </DialogFooter>
     </DialogContent>
   </Dialog>

@@ -18,7 +18,7 @@ import type { IDockviewPanelProps } from "dockview-vue";
 import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { ProgressButton } from "@tavora/official-ui/components/ui/progress-button";
-import { ShieldAlert } from "@lucide/vue";
+import { ShieldAlert, Trash2 } from "@lucide/vue";
 import { useTask } from "@tavora/official-ui/use-task";
 import { act, dialog, frozen, installProgress, needsGrant, showToast, state, type GrantRequest } from "../../host";
 import { t } from "../../i18n";
@@ -175,7 +175,7 @@ onBeforeUnmount(() => dock.unregister(id, element.value!));
           </Button>
         </div>
       </template>
-      <Button v-if="!panel.paused" size="sm" variant="danger" data-testid="remove-unavailable-panel" @click="act({ type: 'close-panel', instanceId: id })">{{ t("panel.remove") }}</Button>
+      <Button v-if="!panel.paused" size="sm" variant="danger" data-testid="remove-unavailable-panel" @click="act({ type: 'close-panel', instanceId: id })"><Trash2 />{{ t("panel.remove") }}</Button>
     </div>
     <div v-else-if="panel?.browser?.error" class="flex size-full flex-col items-center justify-center gap-3 p-4 text-center" :data-testid="`browser-error-${id}`">
       <p class="font-medium">{{ t(`browser.error.${panel.browser.error.kind}`, { detail: panel.browser.error.detail }) }}</p>

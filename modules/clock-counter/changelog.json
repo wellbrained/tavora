@@ -1,9 +1,16 @@
 [
   {
-    "version": "0.1.58",
+    "version": "0.1.59",
     "date": "2026-11-25",
     "notes": [
       "Tooltips fade out when they close."
+    ]
+  },
+  {
+    "version": "0.1.58",
+    "date": "2026-11-25",
+    "notes": [
+      "Set and Change next to a hotkey end in … now, since they ask for the key first."
     ]
   },
   {

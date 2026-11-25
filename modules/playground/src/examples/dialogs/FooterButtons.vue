@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // The three footer patterns: an action and Close, Cancel and an action, only Done.
-import { Copy, Download, SlidersHorizontal, Share2, Upload } from "@lucide/vue";
+import { Copy, Download, SlidersHorizontal, Share2 } from "@lucide/vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Dialog, DialogButton, DialogContent, DialogFooter, DialogHeader } from "@tavora/official-ui/components/ui/dialog";
 import { Input } from "@tavora/official-ui/components/ui/input";
@@ -36,7 +36,7 @@ const tidying = ref(false);
       <Input placeholder="https://" aria-label="Build link" />
       <DialogFooter>
         <DialogButton close @click="importing = false">Cancel</DialogButton>
-        <DialogButton :icon="Upload" @click="importing = false">Import</DialogButton>
+        <DialogButton @click="importing = false">Import</DialogButton>
       </DialogFooter>
     </DialogContent>
   </Dialog>

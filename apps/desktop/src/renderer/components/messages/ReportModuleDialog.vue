@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import { Flag } from "@lucide/vue";
 // Report a catalog module to Tavora: a reason and an optional note. It needs a sign-in; Tavora keeps who reported
 // only while the report is open, and the developer is told only that the module was reported.
-import { Flag, LogIn } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
 import { Label } from "@tavora/official-ui/components/ui/label";
@@ -54,7 +54,7 @@ function signIn() {
       <p class="text-sm">{{ t("error.reportSignIn") }}</p>
       <DialogFooter>
         <DialogButton close @click="emit('close')">{{ t("common.cancel") }}</DialogButton>
-        <DialogButton :icon="LogIn" data-testid="report-sign-in" @click="signIn">{{ t("catalog.reviews.signInButton") }}</DialogButton>
+        <DialogButton data-testid="report-sign-in" @click="signIn">{{ t("catalog.reviews.signInButton") }}</DialogButton>
       </DialogFooter>
     </template>
     <form v-else class="contents" @submit.prevent="send">
@@ -73,7 +73,7 @@ function signIn() {
       </div>
       <DialogFooter>
         <DialogButton type="button" close @click="emit('close')">{{ t("common.cancel") }}</DialogButton>
-        <DialogButton type="submit" :icon="Flag" :loading="busy" :disabled="busy || tooLong" data-testid="report-send">{{ t("catalog.reportSend") }}</DialogButton>
+        <DialogButton type="submit" :loading="busy" :disabled="busy || tooLong" data-testid="report-send">{{ t("catalog.reportSend") }}</DialogButton>
       </DialogFooter>
     </form>
   </ModalDialog>

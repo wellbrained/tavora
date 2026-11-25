@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Trash2 } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import { Button } from "@tavora/official-ui/components/ui/button";
@@ -95,7 +96,7 @@ function removeSelected() {
         </label>
         <span class="text-muted-foreground text-sm tabular-nums" data-testid="workspaces-selected">{{ t("settings.workspaces.selected", { count: selected.length }) }}</span>
         <Button variant="danger" :disabled="!selected.length" data-testid="workspaces-remove" @click="removeSelected">
-          {{ t("settings.workspaces.remove") }}
+          <Trash2 />{{ t("settings.workspaces.remove") }}
         </Button>
       </div>
       <AnimatedList tag="ul" :animate="!filter.trim()" class="-mx-5" :aria-label="t('settings.workspaces.list')" data-testid="workspaces-list">

@@ -11,7 +11,7 @@
 // panel when it is added or still misses access, or the running panel that asks for a connector on request. Cancel then
 // closes the panels that wait for the answer; Allow lets the host start them (main/host.ts questionOf).
 // Running while its game runs (a panel type's `withGame`, main/with-game.ts) is asked here too, with the rest.
-import { Check, Cpu, Folder, Gamepad2, Gauge, Globe, Headphones, Monitor, Music, Radio, ShieldCheck, Trophy } from "@lucide/vue";
+import { Cpu, Folder, Gamepad2, Gauge, Globe, Headphones, Monitor, Music, Radio, ShieldCheck, Trophy } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
@@ -269,7 +269,7 @@ async function allow() {
       <DialogButton type="button" close autofocus data-testid="grant-cancel" @click="close()">
         {{ request.review ? t("grant.notNow") : t("common.cancel") }}
       </DialogButton>
-      <DialogButton type="button" :icon="Check" :loading="busy" data-testid="grant-allow" :disabled="busy" @click="allow">{{ update ? t("grant.updateAllow") : t("grant.allow") }}</DialogButton>
+      <DialogButton type="button" :loading="busy" data-testid="grant-allow" :disabled="busy" @click="allow">{{ update ? t("grant.updateAllow") : t("grant.allow") }}</DialogButton>
     </DialogFooter>
   </component>
 </template>

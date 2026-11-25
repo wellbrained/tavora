@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Trash2, Undo2 } from "@lucide/vue";
 // Settings > Games > Trash: removed workspaces, kept for 7 days. Tick several to restore or delete them together.
 import { computed, ref, watch } from "vue";
 import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
@@ -80,10 +81,10 @@ function deleteNow(workspaceId: string, name: string) {
         </label>
         <span class="text-muted-foreground text-sm tabular-nums">{{ t("settings.workspaces.selected", { count: trashTicked.size }) }}</span>
         <Button variant="secondary" :disabled="!trashTicked.size" data-testid="trash-restore-selected" @click="restoreTicked">
-          {{ t("settings.trash.restoreSelected") }}
+          <Undo2 />{{ t("settings.trash.restoreSelected") }}
         </Button>
         <Button variant="danger" :disabled="!trashTicked.size" data-testid="trash-delete-selected" @click="deleteTicked">
-          {{ t("settings.trash.deleteSelected") }}
+          <Trash2 />{{ t("settings.trash.deleteSelected") }}
         </Button>
       </div>
       <AnimatedList tag="ul">
@@ -112,10 +113,10 @@ function deleteNow(workspaceId: string, name: string) {
             <span class="text-muted-foreground text-sm">{{ t("settings.trash.deleteOn", { date: formatDate(entry.purgeAt) }) }}</span>
           </span>
           <Button variant="secondary" :data-testid="`restore-${entry.workspace.id}`" @click="act({ type: 'restore-workspace', workspaceId: entry.workspace.id })">
-            {{ t("settings.trash.restore") }}
+            <Undo2 />{{ t("settings.trash.restore") }}
           </Button>
           <Button variant="danger" :data-testid="`delete-${entry.workspace.id}`" @click="deleteNow(entry.workspace.id, entry.workspace.name)">
-            {{ t("settings.trash.deleteNow") }}
+            <Trash2 />{{ t("settings.trash.deleteNow") }}
           </Button>
         </li>
       </AnimatedList>

@@ -48,7 +48,7 @@ function finishWelcome() {
 - **Use your normal flows.** A step that imports a save opens the same import dialog as the menu, and afterwards says what came in ("Imported from Level.sav", the count). Opening panels uses `panels.openMany` (one click opens them all, laid out by your manifest's `panelLayout`), or one **Open** button per panel on older Tavora versions.
 - **Name the panel the user is in** in an "open panels" step ("You're here") instead of an Open button.
 
-## Look
+## Size and look
 
 - **Size**: `{ width: 640, height: 560 }` for every welcome, so they don't jump around. Tavora fits it into the workspace.
 - **Top**: "Welcome · Step 1 of 3" in small muted text and a `Progress` bar under it.

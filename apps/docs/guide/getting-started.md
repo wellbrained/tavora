@@ -171,7 +171,7 @@ Values you store must be JSON. Type parameters such as `get<number>()` are not c
 
 Settings go in `tavora.storage`, the user's work in `tavora.documents`, pictures in `tavora.blobs` and where a panel is scrolled to in `tavora.panel`. Which to use when, and how two open panels avoid overwriting each other, is in [Saving data](./saving-data.md).
 
-## More from the host
+## Other host calls
 
 | API | What it does |
 | --- | --- |
@@ -187,7 +187,7 @@ Settings go in `tavora.storage`, the user's work in `tavora.documents`, pictures
 
 What reaches outside the panel needs the user's yes first; see [Permissions and consent](./permissions.md). Following the theme and the language is in [Look and languages](./look-and-languages.md).
 
-## Made for one game
+## A module for one game
 
 A module made for one game, such as a build planner for Path of Exile 2, lists that game in its manifest:
 

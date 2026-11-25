@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Pencil, Plus, Trash2 } from "@lucide/vue";
 // Settings > Connections > AI accounts: the Claude and Codex accounts the AI Usage connector reads, by the folder of
 // the CLI profile that holds each login. Logins stay in those folders; the main process reads them and none of it
 // comes to this page or to a module. The modules allowed to read them are listed below this, in ConnectionsSection.
@@ -73,8 +74,8 @@ function removeAccount(account: AiUsageAccount) {
           <span class="truncate font-medium">{{ account.label }} <span class="text-muted-foreground font-normal">· {{ t(`aiUsage.provider.${account.provider}`) }}<template v-if="account.plan"> · {{ account.plan }}</template></span></span>
           <span class="text-muted-foreground truncate font-mono text-xs" :title="account.directory">{{ account.directory }}</span>
         </div>
-        <Button variant="ghost" size="sm" data-testid="ai-usage-edit" @click="startEdit(account)">{{ t("aiUsage.settings.edit") }}</Button>
-        <Button variant="danger" size="sm" data-testid="ai-usage-remove" @click="removeAccount(account)">{{ t("aiUsage.settings.remove") }}</Button>
+        <Button variant="ghost" size="sm" data-testid="ai-usage-edit" @click="startEdit(account)"><Pencil />{{ t("aiUsage.settings.edit") }}</Button>
+        <Button variant="danger" size="sm" data-testid="ai-usage-remove" @click="removeAccount(account)"><Trash2 />{{ t("aiUsage.settings.remove") }}</Button>
       </div>
     </li>
     <li v-if="view && accounts.length === 0 && editing !== 'new'" class="text-muted-foreground py-2 text-sm" data-testid="ai-usage-none">{{ t("aiUsage.settings.empty") }}</li>
@@ -103,6 +104,6 @@ function removeAccount(account: AiUsageAccount) {
     </div>
   </form>
   <div v-else class="py-2">
-    <Button variant="secondary" size="sm" data-testid="ai-usage-add" @click="startAdd">{{ t("aiUsage.settings.add") }}</Button>
+    <Button variant="secondary" size="sm" data-testid="ai-usage-add" @click="startAdd"><Plus />{{ t("aiUsage.settings.add") }}</Button>
   </div>
 </template>

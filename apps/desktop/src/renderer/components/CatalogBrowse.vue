@@ -22,7 +22,7 @@ import { t } from "../i18n";
 import { formatSize } from "../catalog-size";
 import { PLACEHOLDER_MODULES } from "../catalog-placeholder";
 import { cn } from "@tavora/official-ui/lib/utils";
-import { CircleCheck, Gamepad2, ShieldCheck, WifiOff } from "@lucide/vue";
+import { ChevronRight, CircleCheck, Gamepad2, ShieldCheck, WifiOff } from "@lucide/vue";
 import CatalogIcon from "./CatalogIcon.vue";
 import CatalogModuleDialog from "./CatalogModuleDialog.vue";
 import CatalogRating from "./CatalogRating.vue";
@@ -133,7 +133,7 @@ function settings() {
     <EmptyState v-if="problem" class="mt-8" role="status" :title="t(`catalog.problem.${problem}.title`)" :description="t(`catalog.problem.${problem}.text`)" :data-testid="`catalog-${problem}`">
       <template #icon><WifiOff /></template>
       <template #action>
-        <Button v-if="problem === 'off'" variant="secondary" data-testid="catalog-settings" @click="settings">{{ t("catalog.openSettings") }}</Button>
+        <Button v-if="problem === 'off'" variant="secondary" data-testid="catalog-settings" @click="settings">{{ t("catalog.openSettings") }}<ChevronRight data-icon="end" /></Button>
         <Button v-else variant="secondary" data-testid="catalog-retry" @click="load">{{ t("catalog.retry") }}</Button>
       </template>
     </EmptyState>

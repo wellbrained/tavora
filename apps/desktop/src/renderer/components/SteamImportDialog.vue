@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Download, Gamepad2, Search, Upload } from "@lucide/vue";
+import { Download, Gamepad2, Search } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
@@ -163,7 +163,6 @@ const status = (game: SteamGameView) => (game.status === "trash" ? t("steamImpor
         v-if="games.length > 0"
         type="button"
         variant="secondary"
-        :icon="Upload"
         data-testid="steam-share-only"
         :title="t('steamImport.shareOnlyHelp')"
         :disabled="busy || count === 0 || !state?.library.steamIcons"

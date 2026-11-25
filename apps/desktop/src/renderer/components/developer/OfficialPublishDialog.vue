@@ -118,7 +118,7 @@ function cancel() {
 
       <DialogFooter>
         <DialogButton close :disabled="busy || dialog.confirming" data-testid="official-publish-cancel" @click="cancel">{{ t("common.cancel") }}</DialogButton>
-        <DialogButton :icon="Upload" :disabled="busy || dialog.confirming" data-testid="official-publish-upload" @click="upload">
+        <DialogButton :disabled="busy || dialog.confirming" data-testid="official-publish-upload" @click="upload">
           {{ key.saved ? t("officialPublish.preview.upload") : t("officialPublish.preview.chooseKey") }}
         </DialogButton>
       </DialogFooter>

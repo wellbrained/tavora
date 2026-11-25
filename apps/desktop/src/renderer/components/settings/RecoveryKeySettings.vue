@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Copy } from "@lucide/vue";
 // Profile dialog > Account > Recovery key (and Settings > Developer > Publishing): the one key the user keeps. It opens the cloud copy and the
 // publisher keys Tavora keeps. A new PC gets it from another PC, or asks for it once. The key stays in the main process,
 // except while the user looks at it here. When the keys kept with the account on Tavora's service don't open with this
@@ -61,7 +62,7 @@ function rebuild() {
       <span class="text-muted-foreground text-sm">{{ t("recoveryKey.keepSafe") }}</span>
       <code class="bg-muted rounded px-3 py-2 font-mono text-sm tracking-wide break-all select-all" data-testid="recovery-key-text">{{ view.recoveryKey }}</code>
       <div class="flex gap-2">
-        <Button variant="secondary" :disabled="busy" @click="copyKey">{{ t("cloudCopy.key.copy") }}</Button>
+        <Button variant="secondary" :disabled="busy" @click="copyKey"><Copy />{{ t("cloudCopy.key.copy") }}</Button>
         <Button :disabled="busy" data-testid="recovery-key-saved" @click="run({ type: 'developer-recovery-key-saved' })">{{ t("cloudCopy.key.saved") }}</Button>
       </div>
     </div>

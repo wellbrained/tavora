@@ -135,7 +135,7 @@ It resolves with `{ stops, issues, complete }`: the stops in order, the findings
 
 By default a control that matches `:focus-visible` counts as having a ring, so a ring your CSS takes away goes unseen. Pass `strictRing: true` to count only a drawn outline or shadow, on the control or on the field around it (a number field draws its ring on its frame). A ring that fades in (the kit Button's takes 140 ms) counts once its fade has run to its end. A strict check also waits 150 ms after each Tab press; `ringSettleMs` changes that.
 
-## Put it together
+## Two ways to run the checks
 
 Two common setups. Both use the same checks.
 

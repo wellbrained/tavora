@@ -4,7 +4,7 @@
 // The main process lets every hotkey go while it is open, so keys set already can be caught here too.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
-import { Keyboard, Save, Trash2 } from "@lucide/vue";
+import { Keyboard, Trash2 } from "@lucide/vue";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import { hotkeyFromInput, hotkeyKeys } from "../../shared/hotkey-keys";
 import { act, state } from "../host";
@@ -82,7 +82,7 @@ function answer(choice: "set" | "remove" | "cancel") {
     <DialogFooter>
       <DialogButton v-if="request.current" type="button" variant="danger" :icon="Trash2" class="mr-auto" data-testid="hotkey-remove" @click="answer('remove')">{{ t("hotkey.remove") }}</DialogButton>
       <DialogButton type="button" close variant="ghost" data-testid="hotkey-cancel" @click="answer('cancel')">{{ t("common.cancel") }}</DialogButton>
-      <DialogButton type="button" :icon="Save" :disabled="!picked" data-testid="hotkey-save" @click="answer('set')">{{ t("hotkey.save") }}</DialogButton>
+      <DialogButton type="button" :disabled="!picked" data-testid="hotkey-save" @click="answer('set')">{{ t("hotkey.save") }}</DialogButton>
     </DialogFooter>
   </ModalDialog>
 </template>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Settings > Updates & About: this version (its patch notes are a page of their own), updates, backups and the
 // diagnostic info.
-import { ExternalLink, FileText, Info, Scale, ScrollText, ShieldCheck } from "@lucide/vue";
+import { ArrowUpRight, Copy, FileText, Info, Scale, ScrollText, ShieldCheck } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Progress } from "@tavora/official-ui/components/ui/progress";
@@ -86,7 +86,7 @@ async function copyDiagnostics() {
   </SettingGroup>
   <SettingGroup :title="t('settings.heading.help')">
     <SettingRow :label="t('settings.diagnostics.label')" :description="t('settings.diagnostics.description')" :details="t('settings.diagnostics.details')" setting="diagnostics" :highlighted="highlight === 'diagnostics'">
-      <Button variant="secondary" data-testid="copy-diagnostics" @click="copyDiagnostics">{{ copied ? t("settings.diagnostics.copied") : t("settings.diagnostics.copy") }}</Button>
+      <Button variant="secondary" data-testid="copy-diagnostics" @click="copyDiagnostics"><Copy />{{ copied ? t("settings.diagnostics.copied") : t("settings.diagnostics.copy") }}</Button>
     </SettingRow>
   </SettingGroup>
   <SettingGroup :title="t('settings.heading.legal')">
@@ -101,7 +101,7 @@ async function copyDiagnostics() {
       @open="emit('licences')"
     />
     <SettingRow v-for="legal in LEGAL" :key="legal.page" :label="t(`settings.${legal.page}.label`)" :description="t(`settings.${legal.page}.description`)" :setting="legal.page" :highlighted="highlight === legal.page" :icon="legal.icon">
-      <Button variant="secondary" :data-testid="`legal-${legal.page}`" @click="act({ type: 'open-legal-page', page: legal.page })"><ExternalLink />{{ t("settings.legal.open") }}</Button>
+      <Button variant="secondary" :data-testid="`legal-${legal.page}`" @click="act({ type: 'open-legal-page', page: legal.page })">{{ t("settings.legal.open") }}<ArrowUpRight data-icon="end" /></Button>
     </SettingRow>
   </SettingGroup>
 </template>

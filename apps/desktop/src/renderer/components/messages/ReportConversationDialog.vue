@@ -66,7 +66,7 @@ async function send() {
       </div>
       <DialogFooter>
         <DialogButton type="button" close @click="emit('close')">{{ t("common.cancel") }}</DialogButton>
-        <DialogButton type="submit" :icon="Flag" :loading="busy" :disabled="busy || tooLong" data-testid="report-conversation-send">{{ t("inbox.report") }}</DialogButton>
+        <DialogButton type="submit" :loading="busy" :disabled="busy || tooLong" data-testid="report-conversation-send">{{ t("inbox.report") }}</DialogButton>
       </DialogFooter>
     </form>
   </ModalDialog>

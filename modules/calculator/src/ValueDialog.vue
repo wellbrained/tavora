@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Save as… and Rename for a saved value: one name field, checked as you type. Saving under a name you already have
 // replaces that value (the dialog says so first); renaming onto another value's name is not allowed.
-import { BookmarkPlus, Pencil, Save } from "@lucide/vue";
+import { BookmarkPlus, Pencil } from "@lucide/vue";
 import { Dialog, DialogButton, DialogContent, DialogFooter, DialogHeader } from "@tavora/official-ui/components/ui/dialog";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { computed, ref } from "vue";
@@ -61,7 +61,7 @@ function submit() {
         </div>
         <DialogFooter>
           <DialogButton type="button" close @click="emit('cancel')">{{ t("cancel") }}</DialogButton>
-          <DialogButton type="submit" :icon="Save" :disabled="!name.trim() || !!problem" data-testid="value-submit">
+          <DialogButton type="submit" :disabled="!name.trim() || !!problem" data-testid="value-submit">
             {{ renaming !== undefined ? t("values.rename") : t("values.save") }}
           </DialogButton>
         </DialogFooter>
