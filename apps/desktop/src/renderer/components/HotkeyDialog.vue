@@ -4,7 +4,7 @@
 // The main process lets every hotkey go while it is open, so keys set already can be caught here too.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
-import { Keyboard, Save, Trash2 } from "@lucide/vue";
+import { Keyboard, Trash2 } from "@lucide/vue";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import { hotkeyFromInput, hotkeyKeys } from "../../shared/hotkey-keys";
 import { act, state } from "../host";

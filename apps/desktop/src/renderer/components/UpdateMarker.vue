@@ -3,7 +3,7 @@
 // interrupts: it breathes out twice when it shows up, a ring along its edge fills while the version downloads, and a
 // press opens a popover beside it with what is new, the download's progress and Restart now. Restarting is always the
 // user's press; otherwise the update installs when Tavora is closed.
-import { ArrowDownToLine, RefreshCw } from "@lucide/vue";
+import { ArrowDownToLine, Download, RefreshCw } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@tavora/official-ui/components/ui/popover";
@@ -121,7 +121,7 @@ const more = computed(() => !allNotes.value && (found.value?.notes.length ?? 0) 
         </template>
         <template v-else>
           <span class="flex-1" />
-          <Button size="sm" data-testid="update-popover-download" @click="act({ type: 'download-update' })">{{ failed ? t("update.popover.retry") : t("settings.updates.download") }}</Button>
+          <Button size="sm" data-testid="update-popover-download" @click="act({ type: 'download-update' })"><Download />{{ failed ? t("update.popover.retry") : t("settings.updates.download") }}</Button>
         </template>
       </div>
     </PopoverContent>

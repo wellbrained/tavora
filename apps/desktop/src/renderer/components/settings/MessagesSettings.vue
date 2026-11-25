@@ -47,7 +47,7 @@ function title(item: ConversationItem): string {
               {{ formatDate(item.closedAt ?? item.lastMessageAt) }}
             </span>
           </span>
-          <Button variant="ghost" size="sm" @click="openInbox(item.id)">{{ t("messagesSettings.open") }}</Button>
+          <Button variant="ghost" size="sm" @click="openInbox(item.id)">{{ t("messagesSettings.open") }}<ChevronRight data-icon="end" /></Button>
         </li>
       </AnimatedList>
     </div>

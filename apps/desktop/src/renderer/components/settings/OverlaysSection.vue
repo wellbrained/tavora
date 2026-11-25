@@ -236,7 +236,7 @@ watch(
               <Kbd v-for="key in hotkeyKeys(hotkey.accelerator, mac)" :key="key">{{ key }}</Kbd>
             </span>
             <Button variant="ghost" size="sm" :aria-label="t('streaming.hotkeys.removeLabel', { label: hotkey.label, action: hotkey.actionName })" @click="removeHotkey(hotkey)">
-              {{ t("streaming.hotkeys.remove") }}
+              <Trash2 />{{ t("streaming.hotkeys.remove") }}
             </Button>
           </li>
         </ul>

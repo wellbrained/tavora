@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.58",
+    "date": "2026-11-25",
+    "notes": [
+      "Set and Change next to a hotkey end in … now, since they ask for the key first."
+    ]
+  },
+  {
     "version": "0.1.57",
     "date": "2026-11-25",
     "notes": [

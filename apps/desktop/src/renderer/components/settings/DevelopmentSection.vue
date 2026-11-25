@@ -6,7 +6,7 @@
 // then, and Let's go shows them, kept in the library (so in backups and the cloud copy). Once we know publishing
 // isn't set up, a card offers the developer onboarding; on a new PC of a developer, a line points to the recovery key
 // on Publishing instead.
-import { CircleAlert, KeyRound, Loader, RefreshCw, Rocket, Upload } from "@lucide/vue";
+import { ChevronRight, CircleAlert, KeyRound, Loader, RefreshCw, Rocket, Upload } from "@lucide/vue";
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
@@ -161,8 +161,8 @@ onMounted(() => {
       <div v-if="!entries.length" class="flex flex-wrap items-center gap-x-6 gap-y-3 py-4" data-testid="dev-modules-none">
         <span class="text-muted-foreground min-w-0 flex-1 basis-56 text-sm">{{ t("devModules.none") }}</span>
         <span class="flex flex-none flex-wrap gap-2">
-          <Button variant="secondary" data-testid="dev-modules-to-folders" @click="emit('show', 'dev-folders')">{{ t("settings.section.dev-folders") }}</Button>
-          <Button variant="ghost" data-testid="dev-modules-to-examples" @click="emit('show', 'dev-help')">{{ t("settings.development-examples.label") }}</Button>
+          <Button variant="secondary" data-testid="dev-modules-to-folders" @click="emit('show', 'dev-folders')">{{ t("settings.section.dev-folders") }}<ChevronRight data-icon="end" /></Button>
+          <Button variant="ghost" data-testid="dev-modules-to-examples" @click="emit('show', 'dev-help')">{{ t("settings.development-examples.label") }}</Button><ChevronRight data-icon="end" />
         </span>
       </div>
       <ul v-else class="flex flex-col" :aria-label="t('settings.section.development')" data-testid="dev-modules" data-setting="module-contact">

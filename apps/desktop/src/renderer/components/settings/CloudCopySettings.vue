@@ -154,7 +154,7 @@ function startOver() {
       <span class="text-muted-foreground text-sm">{{ t("cloudCopy.key.text") }}</span>
       <code class="bg-muted rounded px-3 py-2 font-mono text-sm tracking-wide break-all select-all" data-testid="cloud-copy-key-text">{{ view.recoveryKey }}</code>
       <div class="flex gap-2">
-        <Button variant="secondary" :disabled="busy" @click="copyKey">{{ t("cloudCopy.key.copy") }}</Button>
+        <Button variant="secondary" :disabled="busy" @click="copyKey"><Copy />{{ t("cloudCopy.key.copy") }}</Button>
         <Button :disabled="busy" data-testid="cloud-copy-key-saved" @click="run({ type: 'cloud-copy-key-saved' })">{{ t("cloudCopy.key.saved") }}</Button>
       </div>
     </div>
@@ -232,7 +232,7 @@ function startOver() {
         <Button variant="secondary" :disabled="busy" data-testid="cloud-copy-off" @click="turnOff">{{ t("cloudCopy.turnOff.label") }}</Button>
       </SettingRow>
       <SettingRow :label="t('cloudCopy.delete.label')" :description="t(inFolder ? 'cloudCopy.delete.descriptionFolder' : 'cloudCopy.delete.description')">
-        <Button variant="destructive" :disabled="busy" data-testid="cloud-copy-delete" @click="remove">{{ t("cloudCopy.delete.label") }}</Button>
+        <Button variant="destructive" :disabled="busy" data-testid="cloud-copy-delete" <Trash2 />@click="remove">{{ t("cloudCopy.delete.label") }}</Button>
       </SettingRow>
     </template>
   </SettingGroup>

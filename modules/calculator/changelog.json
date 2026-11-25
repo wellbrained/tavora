@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.52",
+    "date": "2026-11-25",
+    "notes": [
+      "Save in the value dialog is plain text now, without an icon."
+    ]
+  },
+  {
     "version": "0.1.51",
     "date": "2026-11-25",
     "notes": [

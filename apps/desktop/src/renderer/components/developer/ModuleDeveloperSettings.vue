@@ -178,7 +178,7 @@ function removeToken(token: AccountPublishToken) {
         <span class="text-sm font-medium">{{ t("developer.prefix") }}</span>
         <template v-if="prefixes.held.length">
           <p class="mt-1 text-sm" data-testid="developer-prefixes-list">{{ prefixes.held.length === 1 ? t("developer.prefixLine", { prefix: prefixes.held[0]!.prefix }) : t("developer.prefixLines", { prefixes: prefixes.held.map((item) => item.prefix).join(", ") }) }}</p>
-          <Button v-if="!addingPrefix && prefixes.held.length < prefixes.max" variant="ghost" size="sm" class="mt-1 -ml-2" data-testid="developer-prefix-add" @click="addingPrefix = true">{{ t("developer.prefixAdd") }}</Button>
+          <Button v-if="!addingPrefix && prefixes.held.length < prefixes.max" variant="ghost" size="sm" class="mt-1 -ml-2" data-testid="developer-prefix-add" @click="addingPrefix = true"><Plus />{{ t("developer.prefixAdd") }}</Button>
         </template>
         <p v-else class="text-muted-foreground mt-1 text-xs" data-testid="developer-prefixes-none">{{ t("developer.noPrefixes") }}</p>
         <div v-if="!prefixes.held.length || addingPrefix" class="mt-2">
@@ -299,7 +299,7 @@ function removeToken(token: AccountPublishToken) {
           <span class="text-sm">{{ t("account.developer.linkHint", { time: formatDate(view.linkCode.expiresAt, { timeStyle: "short" }) }) }}</span>
           <div class="flex flex-wrap items-center gap-2">
             <code class="bg-muted rounded px-2 py-1 font-mono text-sm select-all" data-testid="account-link-command">{{ linkCommandText }}</code>
-            <Button variant="ghost" size="sm" data-testid="account-link-copy" @click="copyLinkCommand">{{ t("account.developer.copy") }}</Button>
+            <Button variant="ghost" size="sm" data-testid="account-link-copy" @click="copyLinkCommand"><Copy />{{ t("account.developer.copy") }}</Button>
             <Button variant="ghost" size="sm" :disabled="busy" data-testid="account-link-refresh" @click="run({ type: 'account-refresh' })">{{ t("account.developer.refresh") }}</Button>
           </div>
         </div>
@@ -312,7 +312,7 @@ function removeToken(token: AccountPublishToken) {
           <span class="text-sm">{{ t("account.developer.tokenNew", { name: view.newPublishToken.name }) }}</span>
           <div class="flex flex-wrap items-center gap-2">
             <code class="bg-muted rounded px-2 py-1 font-mono text-sm break-all select-all" data-testid="publish-token-secret">{{ view.newPublishToken.token }}</code>
-            <Button variant="ghost" size="sm" data-testid="publish-token-copy" @click="copyToken">{{ t("account.developer.copy") }}</Button>
+            <Button variant="ghost" size="sm" data-testid="publish-token-copy" @click="copyToken"><Copy />{{ t("account.developer.copy") }}</Button>
             <Button variant="secondary" size="sm" data-testid="publish-token-done" @click="run({ type: 'account-publish-token-saved' })">{{ t("account.developer.tokenDone") }}</Button>
           </div>
         </div>
@@ -328,7 +328,7 @@ function removeToken(token: AccountPublishToken) {
               }}
             </span>
             <Button variant="ghost" size="sm" :disabled="busy" :aria-label="t('account.developer.tokenRemoveLabel', { name: token.name })" @click="removeToken(token)">
-              {{ t("account.developer.tokenRemove") }}
+              <Trash2 />{{ t("account.developer.tokenRemove") }}
             </Button>
           </li>
         </AnimatedList>

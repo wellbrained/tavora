@@ -127,7 +127,7 @@ export const en = {
   "ex.motion.Curves.rule": "Curves come from the kit's tokens, never a hand-typed cubic-bezier or ease-in. --ease-spring is only for small things popping in (a dot, a tick, a small icon), never for a panel or a menu.",
   "ex.motion.Durations": "Durations",
   "ex.motion.Durations.rule": "Nothing in the interface runs longer than --duration-move.",
-  "ex.motion.Rules": "The rules",
+  "ex.motion.Rules": "Motion rules",
   "ex.motion.ReducedMotion": "Reduced motion",
 
   "ex.writing.FewWords": "Titles and buttons",
@@ -663,7 +663,7 @@ export const de: Record<TextKey, string> = {
   "ex.motion.Curves.rule": "Kurven kommen aus den Tokens des Kits, nie ein selbst getipptes cubic-bezier oder ease-in. --ease-spring nur für kleine Dinge, die aufpoppen (ein Punkt, ein Häkchen, ein kleines Icon), nie für ein Panel oder ein Menü.",
   "ex.motion.Durations": "Zeiten",
   "ex.motion.Durations.rule": "Nichts in der Oberfläche läuft länger als --duration-move.",
-  "ex.motion.Rules": "Die Regeln",
+  "ex.motion.Rules": "Regeln für Bewegung",
   "ex.motion.ReducedMotion": "Reduzierte Bewegung",
 
   "ex.writing.FewWords": "Titel und Buttons",

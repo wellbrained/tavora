@@ -264,7 +264,7 @@ const dateOf = (value: string) => (value && !Number.isNaN(Date.parse(value)) ? f
           <div class="mt-2 flex flex-wrap items-center gap-2">
             <span class="text-muted-foreground min-w-0 flex-1 text-xs">{{ t("catalog.reviews.public") }}</span>
             <span class="text-xs tabular-nums" :class="length > MAX_TEXT ? 'text-destructive' : 'text-muted-foreground'">{{ t("catalog.reviews.length", { count: length }) }}</span>
-            <Button v-if="mine" size="sm" variant="ghost" :disabled="busy || mineWaiting" data-testid="catalog-reviews-delete" @click="remove">{{ t("catalog.reviews.delete") }}</Button>
+            <Button v-if="mine" size="sm" variant="ghost" :disabled="busy || mineWaiting" data-testid="catalog-reviews-delete" @click="remove"><Trash2 />{{ t("catalog.reviews.delete") }}</Button>
             <Button size="sm" :disabled="!changed || length > MAX_TEXT" data-testid="catalog-reviews-post" @click="post">
               {{ mine ? t("catalog.reviews.update") : t("catalog.reviews.post") }}
             </Button>
@@ -314,7 +314,7 @@ const dateOf = (value: string) => (value && !Number.isNaN(Date.parse(value)) ? f
               <Button size="sm" variant="ghost" class="text-muted-foreground" :disabled="busy || replyShown.waiting(review.id)" data-testid="catalog-review-reply-start" @click="startReply(review)">
                 {{ replyShown.value(review.id) ? t("catalog.reviews.replyEdit") : t("catalog.reviews.reply") }}
               </Button>
-              <Button v-if="replyShown.value(review.id)" size="sm" variant="ghost" class="text-muted-foreground" :disabled="busy || replyShown.waiting(review.id)" @click="deleteReply(review)">{{ t("catalog.reviews.replyDelete") }}</Button>
+              <Button v-if="replyShown.value(review.id)" size="sm" variant="ghost" class="text-muted-foreground" :disabled="busy || replyShown.waiting(review.id)" @click="deleteReply(review)"><Trash2 />{{ t("catalog.reviews.replyDelete") }}</Button>
             </template>
             <Button size="sm" variant="ghost" class="text-muted-foreground" :aria-label="t('catalog.reviews.reportLabel', { name: nameOf(review) })" :data-testid="`catalog-review-report-${review.id}`" @click="reportAsk = review.id">
               {{ t("catalog.reviews.report") }}

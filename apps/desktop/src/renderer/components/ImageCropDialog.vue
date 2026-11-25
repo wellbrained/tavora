@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Crop, Minus, Plus, Save } from "@lucide/vue";
+import { Crop, Minus, Plus } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Slider } from "@tavora/official-ui/components/ui/slider";

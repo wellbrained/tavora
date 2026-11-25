@@ -73,8 +73,8 @@ function removeAccount(account: AiUsageAccount) {
           <span class="truncate font-medium">{{ account.label }} <span class="text-muted-foreground font-normal">· {{ t(`aiUsage.provider.${account.provider}`) }}<template v-if="account.plan"> · {{ account.plan }}</template></span></span>
           <span class="text-muted-foreground truncate font-mono text-xs" :title="account.directory">{{ account.directory }}</span>
         </div>
-        <Button variant="ghost" size="sm" data-testid="ai-usage-edit" @click="startEdit(account)">{{ t("aiUsage.settings.edit") }}</Button>
-        <Button variant="danger" size="sm" data-testid="ai-usage-remove" @click="removeAccount(account)">{{ t("aiUsage.settings.remove") }}</Button>
+        <Button variant="ghost" size="sm" data-testid="ai-usage-edit" @click="startEdit(account)"><Pencil />{{ t("aiUsage.settings.edit") }}</Button>
+        <Button variant="danger" size="sm" data-testid="ai-usage-remove" @click="removeAccount(account)"<Trash2 />>{{ t("aiUsage.settings.remove") }}</Button>
       </div>
     </li>
     <li v-if="view && accounts.length === 0 && editing !== 'new'" class="text-muted-foreground py-2 text-sm" data-testid="ai-usage-none">{{ t("aiUsage.settings.empty") }}</li>
@@ -103,6 +103,6 @@ function removeAccount(account: AiUsageAccount) {
     </div>
   </form>
   <div v-else class="py-2">
-    <Button variant="secondary" size="sm" data-testid="ai-usage-add" @click="startAdd">{{ t("aiUsage.settings.add") }}</Button>
+    <Button variant="secondary" size="sm" data-testid="ai-usage-add" @click="startAdd"<Plus />>{{ t("aiUsage.settings.add") }}</Button>
   </div>
 </template>

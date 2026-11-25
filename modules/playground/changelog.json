@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.76",
+    "date": "2026-11-25",
+    "notes": [
+      "Button and dialog examples follow the new icon and label rules; a few titles say plainly what they show."
+    ]
+  },
+  {
     "version": "0.1.75",
     "date": "2026-11-25",
     "notes": [

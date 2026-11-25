@@ -97,7 +97,7 @@ export const RELEASE_CATALOG: readonly CatalogGroup[] = [
   },
   {
     id: "look",
-    title: { en: "Make it yours", de: "Nach deinem Geschmack" },
+    title: { en: "Themes and settings", de: "Designs und Einstellungen" },
     items: [
       { en: "Pick a theme, in light or dark, or let it follow your PC.", de: "Wähl ein Design, hell oder dunkel, oder lass es deinem PC folgen." },
       { en: "Round the corners the way you like, or make a theme of your own.", de: "Runde die Ecken, wie du willst, oder bau dir ein eigenes Design." },
