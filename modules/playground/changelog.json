@@ -1,10 +1,17 @@
 [
   {
-    "version": "0.1.68",
+    "version": "0.1.69",
     "date": "2026-11-25",
     "notes": [
       "The tooltip specimens show their cards with useTooltip, and the chart bars in Values can be reached with Tab.",
       "A new specimen shows a big card in Tavora's tooltip, which you can pin."
+    ]
+  },
+  {
+    "version": "0.1.68",
+    "date": "2026-11-25",
+    "notes": [
+      "Grids keep an edit when Escape only ends typing with an input method."
     ]
   },
   {

@@ -2052,7 +2052,7 @@ export const de: Record<keyof typeof en, string> = {
   "overlays.card.closeHint": "Tavora im Spiel schließen",
   "overlays.toggleAction": "Ein- oder ausblenden",
   "overlays.exclusiveHint": "Stell das Spiel auf Rahmenlos, um Overlays zu sehen.",
-  "overlays.stopped": "Dieses Overlay funktioniert nicht mehr.",
+  "overlays.stopped": "Dieses Overlay funktioniert nicht mehr. Zeig es nochmal im Spiel, um es erneut zu versuchen.",
   "overlays.button.open": "Overlay",
   "overlays.rail.hint": "Ordne an, was über deinen Spielen zu sehen ist",
   "overlays.button.start": "Start",

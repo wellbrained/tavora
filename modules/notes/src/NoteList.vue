@@ -2,6 +2,7 @@
 // The list of notes: search, the scratchpad, pinned notes, then the rest.
 import { NotebookPen, PanelLeftClose, PanelLeftOpen, Pin, Plus, Search, X } from "@lucide/vue";
 import { cn, useFocusRecovery } from "@tavora/official-ui";
+import { isComposing } from "@tavora/official-ui/lib/keys";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { liftedDragImage, reducedMotion, useReorderMotion } from "@tavora/official-ui/components/ui/reorder";
@@ -118,7 +119,7 @@ function railTitle(entry: NoteEntry): string {
 }
 
 function onSearchKey(event: KeyboardEvent) {
-  if (event.key === "Escape" && query.value) {
+  if (event.key === "Escape" && query.value && !isComposing(event)) {
     event.stopPropagation();
     query.value = "";
   }

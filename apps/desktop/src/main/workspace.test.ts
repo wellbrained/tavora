@@ -7,6 +7,7 @@ import { LAYOUT_LIMITS, layoutPanels, type SavedLayout } from "./layout";
 import {
   emptyWorkspaces,
   freeName,
+  listedPanelIds,
   Workspaces,
   loadWorkspace,
   MAX_SNAPSHOTS,
@@ -46,6 +47,16 @@ describe("loadWorkspace", () => {
     expect(await loadWorkspace(await tempFile(), ["poe2", "satisfactory"], () => true)).toEqual(
       emptyWorkspaces(["poe2", "satisfactory"]),
     );
+  });
+
+  it("keeps the panels of a workspace that went back to Trash at the start, as the library lists it again (hunt 2026-11-25 A3)", async () => {
+    const file = await tempFile();
+    const panel = (instanceId: string) => ({ instances: [{ instanceId, moduleId: "local.example.a" }] });
+    await writeFile(file, JSON.stringify({ version: 2, workspaces: { poe2: panel(A), valheim: panel(B), gone: panel(C) } }));
+    // Read without the two whose Trash time ran out; valheim's files were held, so it is back in the library.
+    const state = await loadWorkspace(file, ["poe2"], () => true);
+    const listed = new Set(["poe2", "valheim"]);
+    expect(listedPanelIds(state, (id) => listed.has(id)).sort()).toEqual([A, B].sort());
   });
 
   it("reads a version 1 file, which has panels but no layout", async () => {

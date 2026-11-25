@@ -108,6 +108,31 @@ export function leftEmpty(entry: Pick<NoteEntry, "text" | "fixedTitle" | "images
   return !entry.text.trim() && !entry.fixedTitle.trim() && entry.images.length === 0;
 }
 
+/** Whether a note (the scratchpad, say) holds nothing: no text and no picture. Undo of Clear only puts the old text back then. */
+export function isBlank(note: Pick<NoteData, "text" | "images">): boolean {
+  return !note.text.trim() && note.images.length === 0;
+}
+
+/**
+ * Undo of Clear: puts the old text back into a note that is still blank, and saves it. False when something was written
+ * there since (also by another panel, seen on a save conflict): the new text stays and the old can't come back.
+ */
+export async function restoreCleared(
+  note: { update(change: (draft: NoteData) => void): void; flush(): Promise<void> },
+  before: Pick<NoteData, "content" | "text">,
+): Promise<boolean> {
+  let back = false;
+  note.update((draft) => {
+    back = isBlank(draft);
+    if (!back) return;
+    draft.content = before.content;
+    draft.images = collectImageIds(before.content);
+    draft.text = before.text;
+  });
+  await note.flush();
+  return back;
+}
+
 /** The note's plain text as paragraphs, shown when its stored formatting cannot be read. */
 export function contentFromText(text: string): RichText {
   const lines = text.split(/\r?\n/).slice(0, 5000);

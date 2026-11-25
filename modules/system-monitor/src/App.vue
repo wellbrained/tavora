@@ -5,6 +5,7 @@
 // footer as a dialog (panel.openDialog): the same page, big, showing Settings instead of the panel.
 import { Settings as SettingsIcon } from "@lucide/vue";
 import { connectModule, errorMessage } from "@tavora/official-ui";
+import { escapeCloses } from "@tavora/official-ui/lib/keys";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import type { TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
@@ -74,9 +75,8 @@ function openSettings(): void {
 }
 
 function onKey(event: KeyboardEvent): void {
-  // Esc in an open list (a Select, say) closes only that.
-  const inPopup = (event.target as Element | null)?.closest?.("[role=listbox], [role=menu], [role=dialog]");
-  if (event.key === "Escape" && dialogOpen.value && !event.defaultPrevented && !inPopup) void sdk.value?.panel.closeDialog();
+  // Esc in an open list (a Select, say) closes only that, and Esc that ends an input method's composition keeps what is typed.
+  if (dialogOpen.value && escapeCloses(event)) void sdk.value?.panel.closeDialog();
 }
 
 const sections = computed(() => monitor.value?.panel.value.sections ?? { system: true, connection: true });

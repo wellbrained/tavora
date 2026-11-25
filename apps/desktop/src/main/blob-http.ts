@@ -33,7 +33,7 @@ export async function serveBlobs(store: BlobStore, request: Request, url: URL, p
     if (!request.body) return failure(new HostError("INVALID_PARAMS", "send the file as the request body"));
     const length = Number(request.headers.get("content-length"));
     try {
-      return json(201, await store.put(request.body as unknown as AsyncIterable<Uint8Array>, Number.isFinite(length) && length > 0 ? length : undefined));
+      return json(201, await store.put(request.body, Number.isFinite(length) && length > 0 ? length : undefined));
     } catch (error) {
       return failure(error);
     }

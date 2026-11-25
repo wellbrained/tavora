@@ -1152,7 +1152,7 @@ describe("a page that crashes", () => {
     for (let i = 0; i < 3; i++) service.tick();
     expect(live()).toHaveLength(0);
     // Told once, in the user's words.
-    expect(world.notices).toEqual(["This overlay stopped working."]);
+    expect(world.notices).toEqual(["This overlay stopped working. Show it in the game again to try once more."]);
   });
 
   it("gets another chance when the user shows it again, or toggles it", async () => {
@@ -1412,6 +1412,30 @@ describe("a panel in the game", () => {
     panelWindows(world)[0]!.request.ended();
     expect(world.views.views.isLent(PANEL)).toBe(false);
     expect(service.hasPanel(PANEL)).toBe(true);
+  });
+
+  it("is no longer lent at every look once its window keeps dying over the game, until the user shows it again (hunt 2026-11-25 A15)", async () => {
+    const { service, world, key } = await setup();
+    add(service);
+    service.pressed(layerKey(key));
+    for (let i = 0; i < 2; i++) {
+      panelWindows(world).at(-1)!.request.ended();
+      service.tick();
+    }
+    const lends = () => world.views.log.filter((entry) => entry.startsWith("lend ")).length;
+    const lent = lends();
+    expect(lent).toBe(3);
+    panelWindows(world).at(-1)!.request.ended();
+    for (let i = 0; i < 3; i++) service.tick();
+    // Three times in a few minutes: it stays in its slot (with its crash screen), and the user is told once.
+    expect(lends()).toBe(lent);
+    expect(world.views.views.isLent(PANEL)).toBe(false);
+    expect(service.hasPanel(PANEL)).toBe(true);
+    expect(world.notices).toEqual(["This overlay stopped working. Show it in the game again to try once more."]);
+    // Show in game again gives it another chance.
+    expect(add(service)).toBe("shown");
+    service.tick();
+    expect(lends()).toBe(lent + 1);
   });
 
   it("keeps its setups and key when it can't be lent for a moment, and comes up on the next look", async () => {
@@ -1918,7 +1942,7 @@ describe("a panel's live view", () => {
       service.tick();
     }
     expect(liveWindows(world)).toHaveLength(0);
-    expect(world.notices).toEqual(["This overlay stopped working."]);
+    expect(world.notices).toEqual(["This overlay stopped working. Show it in the game again to try once more."]);
     add(service);
     expect(liveWindows(world)).toHaveLength(1);
   });

@@ -50,6 +50,7 @@ import {
   liveWindowId,
   looksExclusive,
   overlayId,
+  panelWindowId,
   startRect,
   placeItem,
   sameOverlay,
@@ -415,7 +416,7 @@ export class GameOverlays {
     const added = this.hasPanel(panel.instanceId) ? "exists" : this.store.addPanel(setup, panel, startRect(preferred, this.startArea()));
     if (added === "full" || added === "refused") return "full";
     // The user asked for it: a live view whose page crashed too often gets another chance.
-    this.revive(liveWindowId(panel.instanceId));
+    this.revivePanel(panel.instanceId);
     this.options.changed();
     this.tick();
     return "shown";
@@ -636,6 +637,12 @@ export class GameOverlays {
     this.stopped.delete(id);
   }
 
+  /** Forgets that a panel's live view or its window over the game crashed. */
+  private revivePanel(instanceId: string): void {
+    this.revive(liveWindowId(instanceId));
+    this.revive(panelWindowId(instanceId));
+  }
+
   private forget(test: (overlay: GameOverlay, setupId: string) => boolean): void {
     if (!this.drop(test)) return;
     this.tick();
@@ -662,7 +669,7 @@ export class GameOverlays {
     if (clearLive) this.clearLive(panel.instanceId);
     this.options.streaming.removeKeys((record) => record.action === OVERLAY_TOGGLE_ACTION && record.owner === panel.owner && record.moduleId === panel.moduleId && record.workspaceId === panel.workspaceId && record.target === panel.instanceId);
     this.toggled.delete(liveWindowId(panel.instanceId));
-    this.revive(liveWindowId(panel.instanceId));
+    this.revivePanel(panel.instanceId);
   }
 
   /** Takes the overlays matching `test` out of their setups; one in no setup any more loses its key. Whether any went. */
@@ -1081,9 +1088,13 @@ export class GameOverlays {
     return { request, lend: (open) => this.options.panels?.lend(panel.instanceId, panel.workspaceId, open, () => this.stopPanel(panel.instanceId)) ?? null };
   }
 
-  /** A window's page is gone. It is made again on the next look, unless that keeps happening (a panel's page is the panel's own). */
+  /**
+   * A window's page is gone. It is made again on the next look, unless that keeps happening. A panel's page is the
+   * panel's own (its slot shows the crash): one that keeps dying over the game is no longer lent at every look either,
+   * until the user shows it in the game again (hunt 2026-11-25 A15).
+   */
   private crashed(id: string): void {
-    if (this.windows.ended(id) === "panel") return;
+    this.windows.ended(id);
     const now = Date.now();
     const lately = [...(this.crashes.get(id) ?? []).filter((at) => now - at < CRASH_SPAN_MS), now];
     this.crashes.set(id, lately);
@@ -1223,7 +1234,7 @@ export class GameOverlays {
     if (ref.kind === "panel") {
       if (this.options.panels && !this.options.panels.info(ref.instanceId, item.workspaceId)) return false;
       if (this.store.restore(setupId, item, "panel", state.index) !== "added") return false;
-      this.revive(liveWindowId(ref.instanceId));
+      this.revivePanel(ref.instanceId);
       return true;
     }
     const module = this.options.installed.shown(ref.subject.moduleId);
@@ -1245,7 +1256,7 @@ export class GameOverlays {
     const preferred = this.options.panels?.info(panel.instanceId, panel.workspaceId)?.preferred ?? null;
     const added = this.store.addPanel(setupId, panel, startRect(preferred, this.startArea()));
     if (added === "added") {
-      this.revive(liveWindowId(panel.instanceId));
+      this.revivePanel(panel.instanceId);
       this.options.changed();
       this.tick();
     }

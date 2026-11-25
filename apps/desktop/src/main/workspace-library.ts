@@ -173,10 +173,11 @@ export class WorkspaceLibrary {
   /**
    * Deletes everything stored for the workspaces whose time in Trash ran out (purgeExpired), at the start. Never throws,
    * so Tavora starts: one that can't be deleted now goes back to Trash and is tried again at the next start. The caller
-   * saves the library.
+   * saves the library. `sessions: false` at the start: no session has been opened yet, and the caller removes their
+   * browser storage folders itself, which an opened session would hold (EBUSY on Windows).
    */
-  async deleteExpired(workspaces: readonly WorkspaceEntry[]): Promise<void> {
-    await this.forgetAll(workspaces).catch((error: unknown) => console.error("[tavora] clearing the browser storage of deleted workspaces failed", error));
+  async deleteExpired(workspaces: readonly WorkspaceEntry[], { sessions = true }: { sessions?: boolean } = {}): Promise<void> {
+    await this.forgetAll(workspaces, sessions).catch((error: unknown) => console.error("[tavora] clearing the browser storage of deleted workspaces failed", error));
   }
 
   /**
@@ -184,7 +185,7 @@ export class WorkspaceLibrary {
    * deleted now (a file another program holds) goes back to Trash as it was, so a later try finishes it, and the others
    * still go. Answers with what went wrong.
    */
-  private async forgetAll(workspaces: readonly WorkspaceEntry[]): Promise<unknown[]> {
+  private async forgetAll(workspaces: readonly WorkspaceEntry[], sessions = true): Promise<unknown[]> {
     const { library } = this.options;
     const errors: unknown[] = [];
     const gone: string[] = [];
@@ -198,7 +199,7 @@ export class WorkspaceLibrary {
         errors.push(error);
       }
     }
-    await this.clearSessions(gone);
+    if (sessions) await this.clearSessions(gone);
     return errors;
   }
 
@@ -260,11 +261,20 @@ export class WorkspaceLibrary {
     // A folder the user chose can be gone (an unplugged drive): the workspace still goes, and they are told where its pictures may remain.
     await files.noteWorkspaceDeleted(workspace.name, (root) => deleteModuleData(userData, workspace.id, root, this.options.trash));
     const records = workspaces.forgetWorkspace(workspace.id);
+    // Its layout is gone now, so nothing after this may put it back in Trash (it would come back empty, hunt 2026-11-25
+    // A4): each step is done as far as it goes, and what is left (a panel-state file held for a moment) is only logged.
+    const step = async (what: string, run: () => unknown) => {
+      try {
+        await run();
+      } catch (error) {
+        console.error(`[tavora] deleting workspace ${workspace.id}: ${what} failed; the rest went`, error);
+      }
+    };
     // A panel of this workspace that was over its game closes with it.
-    for (const record of records) views.drop(record.instanceId);
-    await Promise.all(records.map((record) => panelState.remove(record.instanceId)));
-    this.options.forgotten(workspace.id);
-    await this.options.icons.forget(workspace);
+    for (const record of records) await step("closing a panel over its game", () => views.drop(record.instanceId));
+    await Promise.all(records.map((record) => step("removing a panel's saved state", () => panelState.remove(record.instanceId))));
+    await step("forgetting its settings", () => this.options.forgotten(workspace.id));
+    await step("forgetting its icon", () => this.options.icons.forget(workspace));
   }
 
   /**

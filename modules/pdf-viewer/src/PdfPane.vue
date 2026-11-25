@@ -407,7 +407,7 @@ function onKey(event: KeyboardEvent) {
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
     event.preventDefault();
     void openSearch();
-  } else if (event.key === "Escape" && searching.value) {
+  } else if (event.key === "Escape" && searching.value && !isComposing(event)) {
     closeSearch();
   } else if (!event.defaultPrevented && !event.ctrlKey && !event.metaKey && !event.altKey && !typingIn(event.target)) {
     const target = pageKeys[event.key]?.();

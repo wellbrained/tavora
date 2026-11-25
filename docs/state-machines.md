@@ -91,7 +91,9 @@ Flows that still keep their state in several fields, most used first, with the p
 the pull request that makes it explicit.
 
 - **The overlays' crash breaker** (`main/game-overlay-service.ts` `crashes`, `stopped`, and the card's `cardCrashes` in
-  `main/game-layer-windows.ts`) → `healthy | crashed | stopped` per window.
+  `main/game-layer-windows.ts`) → `healthy | crashed | stopped` per window: overlays, live views and panel windows over
+  the game alike (a panel's slot shows its crash screen either way). `stopped` after `MAX_CRASHES` within
+  `CRASH_SPAN_MS`, told once; showing it in the game again, putting it in a setup or bringing it back → `healthy`.
 
 - **When popups and dialogs show over panels** (renderer `host.ts`: `panelsOut` with its cap timer, `heldPopups`, the
   one-tick `overlayRelease`) → one phase for the host page's side (`waiting | shown` per popup and for the page), read

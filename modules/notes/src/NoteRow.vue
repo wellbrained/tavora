@@ -65,6 +65,14 @@ function onRenameEnter(event: KeyboardEvent) {
   finishRename(true);
 }
 
+/** Escape drops the new name, unless it only ends an input method's composition. */
+function onRenameEscape(event: KeyboardEvent) {
+  if (isComposing(event)) return;
+  event.stopPropagation();
+  event.preventDefault();
+  finishRename(false);
+}
+
 /** The menu gives focus back to its button when it closes; wait so that does not end the rename at once. */
 function startRenameLater() {
   setTimeout(() => void startRename(), 120);
@@ -97,7 +105,7 @@ defineExpose({ startRename });
         data-testid="rename-input"
         class="bg-background border-ring placeholder:text-muted-foreground h-6 w-full min-w-0 rounded-sm border px-1 text-sm font-medium outline-none"
         @keydown.enter="onRenameEnter"
-        @keydown.esc.stop.prevent="finishRename(false)"
+        @keydown.esc="onRenameEscape"
         @dragstart.stop.prevent
         @blur="finishRename(true)"
       />

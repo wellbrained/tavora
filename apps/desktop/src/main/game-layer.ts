@@ -298,6 +298,8 @@ export function layerScene(input: SceneInput): LayerScene {
       const where = input.areaOf(setup);
       if (!where) continue;
       const id = panelWindowId(panel.instanceId);
+      // Its page kept crashing over the game: it stays in its slot until the user shows it again.
+      if (input.stopped.has(id)) continue;
       items.push({
         id,
         kind: "panel",

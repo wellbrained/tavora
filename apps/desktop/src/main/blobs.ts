@@ -50,7 +50,15 @@ export function sniffType(head: Uint8Array): BlobType | null {
 export interface BlobLimits {
   maxFileBytes: number;
   maxTotalBytes: number;
+  /** How long a file may stop coming before it is given up (BLOB_IDLE_MS). */
+  idleMs?: number;
 }
+
+/**
+ * How long an upload may stop coming before it is given up: a write holds the module's files and every move of the
+ * pictures folder until it ends, so one that never does must not hold them for good (hunt 2026-11-25 A6).
+ */
+export const BLOB_IDLE_MS = 30_000;
 
 export const BLOB_LIMITS: BlobLimits = { maxFileBytes: LIMITS.maxBlobBytes, maxTotalBytes: LIMITS.maxBlobsBytes };
 
@@ -124,7 +132,7 @@ export class BlobStore {
    * Stores what the stream delivers. Refused, with nothing left behind, when it is empty, larger than
    * one file may be, would take the module past its total, or is not a picture, PDF or sound of a kind we accept.
    */
-  put(body: AsyncIterable<Uint8Array>, declaredBytes?: number): Promise<BlobInfo> {
+  put(body: AsyncIterable<Uint8Array> | ReadableStream<Uint8Array>, declaredBytes?: number): Promise<BlobInfo> {
     if (this.locked()) return Promise.reject(this.moving());
     if (declaredBytes !== undefined && declaredBytes > this.limits.maxFileBytes) {
       return Promise.reject(this.tooLarge());
@@ -147,7 +155,7 @@ export class BlobStore {
       let type: BlobType | null = null;
       const head: number[] = [];
       try {
-        for await (const chunk of body) {
+        for await (const chunk of untilIdle(body, this.limits.idleMs ?? BLOB_IDLE_MS)) {
           written += chunk.byteLength;
           if (written > room) throw written > this.limits.maxFileBytes ? this.tooLarge() : this.tooMuch();
           for (let index = 0; head.length < HEAD_BYTES && index < chunk.byteLength; index++) head.push(chunk[index]!);
@@ -173,13 +181,23 @@ export class BlobStore {
     }).finally(ended);
   }
 
-  /** Removes a file; a missing one is not an error. An id that is not one of ours is refused. */
+  /**
+   * Removes a file; a missing one is not an error. An id that is not one of ours is refused. Refused like `put` while
+   * the folder moves: the move copies every file first, so a delete then would leave its copy in the new folder and the
+   * picture would come back (hunt 2026-11-25 A2).
+   */
   delete(id: unknown): Promise<void> {
     const valid = this.validId(id);
-    return this.queue.run(async () => {
-      const found = await this.find(valid);
-      if (found) await rm(found.file, { force: true });
-    });
+    if (this.locked()) return Promise.reject(this.moving());
+    // Counted from now, as a write: a move waits for it.
+    const ended = this.writes.begin();
+    return this.queue
+      .run(async () => {
+        if (this.locked()) throw this.moving();
+        const found = await this.find(valid);
+        if (found) await rm(found.file, { force: true });
+      })
+      .finally(ended);
   }
 
   /** Where a file is and what it is, for serving it. Null when there is no such file. */
@@ -248,5 +266,42 @@ export class BlobStore {
 
   private notAccepted(): HostError {
     return new HostError("INVALID_PARAMS", "only PNG, JPEG, GIF and WebP pictures, PDF files and MP3, Ogg and WAV sounds can be stored");
+  }
+}
+
+/**
+ * The pieces of `body`, given up with an error when none comes for `idleMs`. A request body (a web stream) is read and,
+ * on giving up, cancelled with its reader: a pending read of a stream that stalled never settles, and return() on its
+ * iterator would wait for it.
+ */
+async function* untilIdle(body: AsyncIterable<Uint8Array> | ReadableStream<Uint8Array>, idleMs: number): AsyncGenerator<Uint8Array> {
+  const stream = "getReader" in body ? body.getReader() : null;
+  const pieces = stream ? null : (body as AsyncIterable<Uint8Array>)[Symbol.asyncIterator]();
+  const next = (): Promise<IteratorResult<Uint8Array>> => (stream ? stream.read() : pieces!.next()) as Promise<IteratorResult<Uint8Array>>;
+  let ended = false;
+  try {
+    for (;;) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const idle = new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new HostError("INTERNAL", "the file stopped coming; try again")), idleMs);
+      });
+      let piece: IteratorResult<Uint8Array>;
+      try {
+        piece = await Promise.race([next(), idle]);
+      } finally {
+        clearTimeout(timer);
+      }
+      if (piece.done) {
+        ended = true;
+        return;
+      }
+      yield piece.value;
+    }
+  } finally {
+    // Ends the body too when it was given up or refused; its own wait is never awaited.
+    if (!ended) {
+      if (stream) void stream.cancel().catch(() => undefined);
+      else void Promise.resolve(pieces!.return?.()).catch(() => undefined);
+    }
   }
 }

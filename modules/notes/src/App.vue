@@ -3,14 +3,14 @@
 // is narrow. Every Notes panel of a workspace shows the same notes; which note a
 // panel shows is that panel's own state.
 import { connectModule, errorMessage } from "@tavora/official-ui";
-import { Toaster, toast } from "@tavora/official-ui/components/ui/toast";
+import { handleUndoKey, Toaster, toast, undoable } from "@tavora/official-ui/components/ui/toast";
 import type { TavoraSDK } from "@tavora/sdk";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import NoteEditor from "./NoteEditor.vue";
 import NoteList from "./NoteList.vue";
 import { setLanguage, t } from "./i18n";
 import { de, en } from "./locales";
-import { collectImageIds, emptyContent, leftEmpty, nudged, reordered, SCRATCHPAD_ID, sections, UNTITLED, type NoteData, type NoteEntry, type RichText } from "./notes";
+import { collectImageIds, emptyContent, leftEmpty, restoreCleared, nudged, reordered, SCRATCHPAD_ID, sections, UNTITLED, type NoteData, type NoteEntry, type RichText } from "./notes";
 import { createNotesStore, type NotesStore } from "./store";
 
 /** Below this width the list and the editor take turns. */
@@ -34,10 +34,8 @@ const width = ref(window.innerWidth);
 const narrow = computed(() => width.value < NARROW_PX);
 /** In a narrow panel: whether the list or the editor is showing. */
 const showList = ref(false);
-/** How long a notice or the Undo offer stays when left alone. */
+/** How long a notice stays when left alone. */
 const TOAST_MS = 10_000;
-/** The last delete or clear, which the user can still undo for a few seconds. */
-let undoToast: { dismiss: () => void } | null = null;
 /** A short message to the user, such as a picture that could not be added. */
 function showNotice(message: string) {
   toast({ title: message, duration: TOAST_MS, testid: "undo-toast" });
@@ -110,7 +108,9 @@ let unmounted = false;
 onMounted(async () => {
   addEventListener("resize", onResize);
   addEventListener("pagehide", flushNow);
-  cleanup.push(() => removeEventListener("resize", onResize), () => removeEventListener("pagehide", flushNow));
+  // Ctrl+Z outside the editor takes back the newest delete (in the editor it stays the editor's own undo).
+  addEventListener("keydown", handleUndoKey);
+  cleanup.push(() => removeEventListener("resize", onResize), () => removeEventListener("pagehide", flushNow), () => removeEventListener("keydown", handleUndoKey));
   try {
     const connection = await connectModule({ texts: { en, de } });
     if (connection.status !== "ready" || !connection.sdk) throw connection.error;
@@ -211,16 +211,11 @@ function setScratchpad(content: RichText, text: string) {
   });
 }
 
-function offerUndo(message: string, run: () => Promise<void>) {
-  undoToast?.dismiss();
-  undoToast = toast({
-    title: message,
-    duration: TOAST_MS,
-    testid: "undo-toast",
-    actionTestid: "undo",
-    action: { label: t("undo.undo"), onClick: () => void run().catch(() => undefined) },
-  });
+/** Each delete or clear gets its own offer to undo it (the kit's undoable): another one never takes it away. */
+function offerUndo(message: string, run: () => Promise<boolean | void>) {
+  undoable({ title: message, undo: run });
 }
+
 
 /** Deletes a note, or clears the scratchpad, at once; the user can undo it for a few seconds. */
 async function removeNote(entry: NoteEntry) {
@@ -233,8 +228,12 @@ async function removeNote(entry: NoteEntry) {
     setScratchpad(emptyContent(), "");
     if (open) editor.value?.reload();
     offerUndo(t("undo.cleared"), async () => {
-      setScratchpad(before.content, before.text);
-      if (selectedId.value === SCRATCHPAD_ID) editor.value?.reload();
+      // What was typed since is saved first; when there is any, the old text can't come back over it.
+      if (selectedId.value === SCRATCHPAD_ID) await editor.value?.flush();
+      // Checked inside the change, which runs again on a newer copy after a conflict: newer text there stays too.
+      const back = await restoreCleared(notes.scratchpad, before);
+      if (back && selectedId.value === SCRATCHPAD_ID) editor.value?.reload();
+      return back;
     });
     return;
   }

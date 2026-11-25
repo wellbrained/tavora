@@ -183,6 +183,8 @@ export async function createNotesStore(sdk: TavoraSDK, options: { debounceMs?: n
 
   /** Changes a note that may not be the shown one: opened, changed, saved and closed. */
   async function editNote(id: string, change: (draft: NoteData) => void): Promise<void> {
+    // The shown note was deleted in another panel: a rename or pin now would save a blank note under its id. Restore brings it back first.
+    if (id !== SCRATCHPAD_ID && session.currentId === id && session.deleted) return;
     const open = handleFor(id);
     if (open) {
       open.update(change);

@@ -258,6 +258,21 @@ describe("two panels", () => {
     expect(first.selectedId.value).toBe(id);
   });
 
+  it("doesn't save a blank note when the shown one is renamed or pinned after another panel deleted it", async () => {
+    const { a, b } = panels();
+    const first = await open(a.sdk);
+    const id = await first.create();
+    first.current.value!.update((draft) => void ((draft.text = "important"), (draft.content = textContent("important"))));
+    await first.current.value!.flush();
+    b.host.documents.delete(id);
+    await vi.waitFor(() => expect(first.deleted.value).toBe(true));
+    await first.rename(id, "Plan");
+    await first.setPinned(id, true);
+    expect(a.host.documents.get(id)).toBeNull();
+    await first.restoreDeleted();
+    expect(stored(a.host, id)?.text).toBe("important");
+  });
+
   it("follows the order the other panel set", async () => {
     const { a, b } = panels();
     const first = await open(a.sdk);

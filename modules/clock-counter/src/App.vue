@@ -4,6 +4,7 @@
 // keep their start time, so nothing is lost while it is hidden. Hotkeys arrive at the panel used last.
 import { Hash, Hourglass, Link, Plus, Timer } from "@lucide/vue";
 import { connectModule, errorMessage, onFontChange, useFocusRecovery } from "@tavora/official-ui";
+import { escapeCloses } from "@tavora/official-ui/lib/keys";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
@@ -158,9 +159,8 @@ watch(editedItem, (item) => {
 function onKey(event: KeyboardEvent): void {
   // Ctrl+Z outside text fields takes back the newest delete.
   if (handleUndoKey(event)) return;
-  // Esc in an open list (a Select, say) closes only that.
-  const inPopup = (event.target as Element | null)?.closest?.("[role=listbox], [role=menu], [role=dialog]");
-  if (event.key === "Escape" && dialogOpen.value && !event.defaultPrevented && !inPopup) closeEditing();
+  // Esc in an open list (a Select, say) closes only that, and Esc that ends an input method's composition keeps what is typed.
+  if (dialogOpen.value && escapeCloses(event)) closeEditing();
 }
 
 /** Adds an item. `settings` opens its settings to name it, which needs the click on the Add button itself. */

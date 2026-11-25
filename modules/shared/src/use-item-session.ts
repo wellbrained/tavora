@@ -24,7 +24,10 @@ export interface UseItemSession<T> {
   loaded: Readonly<Ref<boolean>>;
   /** Resolves with the session when loaded; rejects when it cannot be opened (also in `error`). */
   ready: Promise<ItemSession<T>>;
-  /** Changes the open item, once it is open; does nothing for none. */
+  /**
+   * Changes the open item, once it is open; does nothing for none. Dropped while `deleted` (another panel deleted it): `current` is then the placeholder, and saving it
+   * would bring the item back blank. Call `restoreDeleted()` first.
+   */
   update(change: DocumentChangeFn<T>): void;
   pick(id: string | null): Promise<boolean>;
   create(data?: T, title?: string): Promise<string>;
@@ -114,8 +117,10 @@ export function useItemSession<T>(sdk: TavoraSDK, options: OpenItemsOptions<T>):
     error,
     loaded,
     ready,
+    // While the open item is deleted elsewhere, `current` is the placeholder: an edit would save it as a blank item under the
+    // old id (and drop `deletedCopy`), so it is dropped; `restoreDeleted()` brings the item back first.
     update: (change) => {
-      if (session) return session.current?.update(change);
+      if (session) return session.deleted ? undefined : session.current?.update(change);
       // Not open yet: the change waits for it, like every other call here.
       void ready.then((opened) => {
         if (!disposed) opened.current?.update(change);

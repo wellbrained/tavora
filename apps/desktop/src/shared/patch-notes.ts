@@ -28,6 +28,37 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.25.14",
+    date: "2026-11-25",
+    title: "Steadier pictures and overlays",
+    notes: [
+      "A picture you delete while moving the pictures folder stays deleted.",
+      "An upload that stalls no longer blocks a module's files.",
+      "System info recovers on its own when Windows stops answering.",
+      "A panel that keeps crashing over your game stops coming back until you show it again.",
+      "Workspaces that couldn't be emptied from Trash keep their logins and panel data.",
+    ],
+    prs: [
+      { number: 979, title: "Fix the module-file, Trash and overlay findings of the 11-25 main hunt" },
+    ],
+    tags: ["overlays", "system-monitor", "workspace"],
+  },
+  {
+    version: "0.25.13",
+    date: "2026-11-25",
+    title: "Undo and typing fixes in the built-in modules",
+    notes: [
+      "Notes and Whiteboard give each delete or clear its own Undo; in Notes, Ctrl+Z takes it back too.",
+      "Undo of Clear scratchpad no longer writes over what you typed since.",
+      "Renaming or pinning a note another panel just deleted no longer saves it blank.",
+      "Escape that only ends typing with an input method (Japanese, Chinese, Korean) no longer closes settings, search or a rename.",
+    ],
+    prs: [
+      { number: 978, title: "Kit hunt fixes 2: own undo per delete, IME-safe Escape, no blank saves, module version check" },
+    ],
+    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "website", "whiteboard"],
+  },
+  {
     version: "0.25.12",
     date: "2026-11-25",
     title: "Newer module data stays",
