@@ -323,6 +323,18 @@ describe("letting go", () => {
     expect(read()?.elements).toHaveLength(2);
   });
 
+  it("resume saves a background picked while the delete was going on", async () => {
+    const { saver, read } = await setup({ data: { background: "paper" } });
+    saver.change(scene([rectangle()]));
+    await saver.flush();
+    saver.discard();
+    // Picking white changes nothing Excalidraw reports: the board already shows white.
+    saver.pickBackground("#ffffff");
+    saver.resume();
+    await saver.flush();
+    expect(read()?.background).toBe("#ffffff");
+  });
+
   it("resume leaves a board deleted elsewhere alone", async () => {
     const { saver, read, other } = await setup();
     await other.sdk.documents.delete(ID);

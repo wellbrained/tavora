@@ -234,6 +234,8 @@ export function createBoardSaver(options: BoardSaverOptions) {
     resume(): void {
       if (stopped !== "discarded") return;
       stopped = null;
+      // A pick made meanwhile changes nothing the signature sees, so it is saved like any pick.
+      if (pickedBackground !== null) queued = "";
       if (latest && signatureOf(latest) !== queued) schedule();
     },
     onState(fn: (state: SaverState) => void): () => void {
