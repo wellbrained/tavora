@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.57",
+    "date": "2026-11-25",
+    "notes": [
+      "Menus: rows follow the menu's rounded corners, and in Liquid Glass the row you point at is easy to see."
+    ]
+  },
+  {
     "version": "0.1.56",
     "date": "2026-11-25",
     "notes": [

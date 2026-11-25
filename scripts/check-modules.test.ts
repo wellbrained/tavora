@@ -197,6 +197,8 @@ const CASES: Record<string, { hit: [string, string][]; miss: [string, string][] 
     miss: [
       ["a.css", ".x { transition: opacity var(--duration-press) var(--ease-out-strong), transform var(--duration-press) var(--ease-out-strong); }"],
       ["a.css", ".x { transition: none; animation-name: pop; }"],
+      ["a.css", ".x { animation: flip var(--duration-play) var(--ease-play) both; } .y { animation: spin calc(var(--duration-play-long) * 4) var(--ease-loop) infinite; }"],
+      ["a.css", ".x { animation: fall var(--duration-celebrate) var(--ease-fall) forwards; }"],
       ["a.vue", vue('<div class="transition-opacity transition-[opacity,translate] duration-[var(--duration-menu)]">x</div>')],
       ["a.ts", 'const text = "A smooth transition, easing in.";'],
     ],
@@ -207,10 +209,17 @@ const CASES: Record<string, { hit: [string, string][]; miss: [string, string][] 
       ["a.vue", vue('<div class="absolute z-50">x</div>')],
       ["a.vue", vue('<div class="z-[2]">x</div>')],
       ["a.ts", "const s = { zIndex: 5 };"],
+      ["a.css", ".x { z-index: var(--my-layer); }"],
+      ["a.css", ".x { z-index: calc(var(--layer-floating) + 1); }"],
+      ["a.vue", vue('<div class="z-(--my-layer)">x</div>')],
+      ["a.vue", vue('<div class="-z-10">x</div>')],
     ],
     miss: [
-      ["a.css", ".x { z-index: auto; } .y { z-index: 0; }"],
+      ["a.css", ".x { z-index: auto; } .y { z-index: 0; } .z { z-index: -1; }"],
+      ["a.css", ".x { z-index: var(--layer-sticky); } .y { z-index: var(--layer-floating); }"],
       ["a.vue", vue('<div class="z-0 size-10">x</div>')],
+      ["a.vue", vue('<div class="absolute z-(--layer-overlay) -z-1">x</div>')],
+      ["a.vue", vue('<div class="z-[var(--layer-lift)] z-[-1] -z-[1]">x</div>')],
     ],
   },
   shadow: {
@@ -223,7 +232,9 @@ const CASES: Record<string, { hit: [string, string][]; miss: [string, string][] 
     ],
     miss: [
       ["a.css", ".x { box-shadow: none; } .y { box-shadow: var(--shadow-popover); }"],
+      ["a.css", ".x { box-shadow: var(--elevation-2); }"],
       ["a.vue", vue('<div class="shadow-none">x</div>')],
+      ["a.vue", vue('<div class="tavora-floating shadow-elevation-1">x</div>')],
       ["a.ts", 'const kind = "shadow";'],
     ],
   },

@@ -130,7 +130,7 @@ useEventListener(window, "resize", place)
       @pointer-down-outside="dismissal.onPointerDownOutside"
       :class="
         cn(
-          'tavora-dialog bg-background fixed top-[50%] left-[50%] z-50 grid w-full max-w-[min(420px,calc(100%-2rem))] max-h-[calc(100%-2rem)] overflow-y-auto overscroll-contain translate-x-[-50%] translate-y-[-50%] gap-6 rounded-lg border p-6 shadow-lg',
+          'tavora-dialog bg-background fixed top-[50%] left-[50%] z-(--layer-floating) grid w-full max-w-[min(420px,calc(100%-2rem))] max-h-[calc(100%-2rem)] overflow-y-auto overscroll-contain translate-x-[-50%] translate-y-[-50%] gap-6 rounded-lg border p-6 shadow-elevation-3',
           props.class,
         )"
     >

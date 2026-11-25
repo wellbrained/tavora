@@ -29,7 +29,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
       data-slot="select-content"
       v-bind="{ ...$attrs, ...forwarded }"
       :class="cn(
-        'bg-popover text-popover-foreground tavora-popup relative z-50 max-h-(--reka-select-content-available-height) min-w-[8rem] overflow-x-hidden overflow-y-auto overscroll-contain rounded-md border shadow-md',
+        'bg-popover text-popover-foreground tavora-popup relative z-(--layer-floating) max-h-(--reka-select-content-available-height) min-w-[8rem] overflow-x-hidden overflow-y-auto overscroll-contain rounded-md border shadow-elevation-2',
         position === 'popper'
           && 'data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1',
         props.class,

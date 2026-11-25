@@ -12,8 +12,8 @@ import { t } from "../../i18n";
       <figcaption class="text-muted-foreground text-xs"><code class="font-mono">bg-card border</code><br />{{ t("demo.depth.area") }}</figcaption>
     </figure>
     <figure class="flex flex-col gap-2">
-      <div class="bg-popover text-popover-foreground flex h-20 items-center justify-center rounded-md border text-sm shadow-md">Menu</div>
-      <figcaption class="text-muted-foreground text-xs"><code class="font-mono">bg-popover border shadow-md</code><br />{{ t("demo.depth.floating") }}</figcaption>
+      <div class="tavora-floating flex h-20 items-center justify-center text-sm">Menu</div>
+      <figcaption class="text-muted-foreground text-xs"><code class="font-mono">tavora-floating</code><br />{{ t("demo.depth.floating") }}</figcaption>
     </figure>
     <figure class="flex flex-col gap-2">
       <div class="flex h-20 items-center justify-center gap-2">

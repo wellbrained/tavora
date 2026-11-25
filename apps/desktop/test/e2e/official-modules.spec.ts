@@ -723,8 +723,8 @@ test.describe("ui playground pages", () => {
     const expected: Record<string, string[]> = {
       colours: ["Tokens", "TextOnSurface", "DoDont"],
       text: ["TypeScale", "Weights", "Numbers", "Capitals", "Mono"],
-      spacing: ["Scale", "Radius", "NestedCorners", "Depth"],
-      motion: ["Curves", "Durations", "Rules", "ReducedMotion"],
+      spacing: ["Scale", "Radius", "NestedCorners", "Depth", "Elevation", "Layers"],
+      motion: ["Curves", "Durations", "GameMotion", "Rules", "ReducedMotion"],
       writing: ["FewWords", "Descriptions", "PlainWords", "YouDu", "Names"],
     };
     for (const [id, names] of Object.entries(expected)) {
@@ -745,6 +745,11 @@ test.describe("ui playground pages", () => {
     await openPage(app, "spacing");
     expect(await inModule(app, PLAYGROUND, `document.querySelectorAll('[data-step]').length`)).toBe(4);
     await expect.poll(() => inModule(app, PLAYGROUND, `[...document.querySelectorAll('[data-step]')].every((el) => /\\d+px/.test(el.parentElement.textContent))`)).toBe(true);
+    // Elevation steps cast a shadow, and the layers read their numbers from the tokens.
+    expect(await inModule(app, PLAYGROUND, `[...document.querySelectorAll('[data-testid="elevation-step"]')].map((el) => getComputedStyle(el).boxShadow !== "none")`)).toEqual([true, true, true]);
+    await expect
+      .poll(() => inModule(app, PLAYGROUND, `["lift", "sticky", "overlay", "floating"].map((name) => document.querySelector('dd[data-token="--layer-' + name + '"]').textContent.trim())`))
+      .toEqual(["1", "10", "20", "50"]);
 
     // Motion: the times come from the tokens, and Play moves the dot (reduced motion jumps there at once).
     await openPage(app, "motion");

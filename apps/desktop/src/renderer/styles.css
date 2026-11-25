@@ -6,6 +6,8 @@
 @import "./fonts.css";
 /* The curves and durations every animation uses (shared with the modules). */
 @import "../../../../modules/shared/src/motion.css";
+/* Shadow steps for floating layers and the z-index layers (shared with the modules). */
+@import "../../../../modules/shared/src/elevation.css";
 /* Balanced titles, the play triangle, the edge around pictures (shared with the modules). */
 @import "../../../../modules/shared/src/details.css";
 /* How each part looks in a style other than Classic (shared with the modules). */

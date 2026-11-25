@@ -17,7 +17,7 @@ const instant = injectDialogInstant()
     data-slot="dialog-overlay"
     :data-instant="instant ? '' : undefined"
     v-bind="delegatedProps"
-    :class="cn('tavora-dialog-overlay fixed inset-0 z-50 bg-black/80', props.class)"
+    :class="cn('tavora-dialog-overlay fixed inset-0 z-(--layer-floating) bg-black/80', props.class)"
   >
     <slot />
   </DialogOverlay>

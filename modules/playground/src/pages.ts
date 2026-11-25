@@ -18,8 +18,8 @@ export const PAGES = [
   // Foundations
   { id: "colours", group: "foundations", keywords: "color tokens theme palette swatches tailwind class hex background foreground primary fill", examples: ["Tokens", "TextOnSurface", "DoDont"] },
   { id: "text", group: "foundations", keywords: "typography fonts headings caption mono numbers size weight tabular case capitals sentence", examples: ["TypeScale", "Weights", "Numbers", "Capitals", "Mono"] },
-  { id: "spacing", group: "foundations", keywords: "radius rounded corners nested gap padding margin scale grid depth shadow border surface elevation", examples: ["Scale", "Radius", "NestedCorners", "Depth"] },
-  { id: "motion", group: "foundations", keywords: "animation duration ease curve spring transition timing reduced press play", examples: ["Curves", "Durations", "Rules", "ReducedMotion"] },
+  { id: "spacing", group: "foundations", keywords: "radius rounded corners nested gap padding margin scale grid depth shadow border surface elevation floating layer layers stack stacking sticky overlay", examples: ["Scale", "Radius", "NestedCorners", "Depth", "Elevation", "Layers"] },
+  { id: "motion", group: "foundations", keywords: "animation duration ease curve spring transition timing reduced press play game shake flip confetti fall loop spin celebrate", examples: ["Curves", "Durations", "GameMotion", "Rules", "ReducedMotion"] },
   { id: "writing", group: "foundations", keywords: "texts words copy tone german english translation you du plain short friendly", examples: ["FewWords", "Descriptions", "PlainWords", "YouDu", "Names"] },
   // Actions
   { id: "buttons", group: "actions", keywords: "primary secondary ghost outline destructive danger remove link icon loading progress install split group menu toggle tile tiles add card square text link inline entity name toolbar arrow keys", examples: ["Variants", "Sizes", "WithIcons", "TextLinks", "ProgressButtons", "ActionTiles", "IconOnly", "ToggleButtons", "SplitButtons", "Toolbar", "WideButtons"] },

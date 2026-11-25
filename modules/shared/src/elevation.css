@@ -1,0 +1,67 @@
+/* Elevation and layers for the app and every module: how high a floating thing sits and which one is on top.
+   Imported by theme.css (the modules) and by the host's styles.css (the app).
+
+   Elevation: three steps of shadow, for floating layers only (areas separate by a surface step and a border).
+     1  a small control over a map or canvas (zoom buttons, a search field over the map, Leave focus)
+     2  a card or tip floating in a pane (Popover, Select, a map card)
+     3  menus, pickers, dialogs, something being dragged
+   Use them as `shadow-elevation-1|2|3` or `box-shadow: var(--elevation-1|2|3)`. They follow the style: Classic keeps
+   Tailwind's shadow-sm, -md and -lg; another style scales them by its depth, Hardware adds its top light and cast
+   shadow, Liquid Glass a light top edge and a soft wide shadow.
+
+   Layers: the z-index steps inside a pane. Use them as `z-(--layer-…)` or `z-index: var(--layer-…)`.
+     --layer-lift      one thing above its neighbours (a dragged node, a focused cell)
+     --layer-sticky    sticky headers
+     --layer-overlay   toolbars and controls drawn over a canvas or map
+     --layer-floating  tips, cards and notices in the pane; the kit's menus, popovers and dialogs sit here too */
+:root {
+  --elevation-1: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --elevation-2: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --elevation-3: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+
+  --layer-lift: 1;
+  --layer-sticky: 10;
+  --layer-overlay: 20;
+  --layer-floating: 50;
+}
+
+/* Any style but Classic: the same shadows, as strong as the style's depth (0 is flat, 1 is Classic's). */
+:root[data-style]:not([data-style="tavora.classic"]) {
+  --elevation-tint: color-mix(in srgb, black calc(var(--style-depth, 1) * 10%), transparent);
+  --elevation-1: 0 1px 3px 0 var(--elevation-tint), 0 1px 2px -1px var(--elevation-tint);
+  --elevation-2: 0 4px 6px -1px var(--elevation-tint), 0 2px 4px -2px var(--elevation-tint);
+  --elevation-3: 0 10px 15px -3px var(--elevation-tint), 0 4px 6px -4px var(--elevation-tint);
+}
+
+/* Raised (Hardware): the top light and cast shadow of the style's casing (looks.css), and a soft drop below. */
+:root[data-style][data-look-surface="raised"] {
+  --elevation-1: var(--style-bevel), var(--style-cast);
+  --elevation-2: var(--style-bevel), var(--style-cast), 0 12px 28px -14px color-mix(in srgb, black 30%, transparent);
+  --elevation-3: var(--style-bevel), var(--style-cast), 0 18px 40px -18px color-mix(in srgb, black 35%, transparent);
+}
+
+/* Glass: a light top edge and a soft, wide shadow that grows with the step. */
+:root[data-style][data-look-surface="glass"] {
+  --elevation-1: inset 0 1px 0 color-mix(in srgb, white 50%, transparent), 0 4px 12px -6px color-mix(in srgb, black 30%, transparent);
+  --elevation-2: inset 0 1px 0 color-mix(in srgb, white 60%, transparent), 0 10px 28px -12px color-mix(in srgb, black 32%, transparent);
+  --elevation-3: inset 0 1px 0 color-mix(in srgb, white 60%, transparent), 0 16px 40px -14px color-mix(in srgb, black 35%, transparent);
+}
+
+@theme inline {
+  --shadow-elevation-1: var(--elevation-1);
+  --shadow-elevation-2: var(--elevation-2);
+  --shadow-elevation-3: var(--elevation-3);
+}
+
+/* A floating surface a module draws itself (a card over its map, a tip, controls over a canvas): the popover's colours,
+   a border, the kit's corner and step 2. It takes the style's surface look (looks.css), as the kit's popovers do.
+   A small control over a map adds shadow-elevation-1, something being dragged shadow-elevation-3. */
+@layer components {
+  .tavora-floating {
+    background: var(--popover);
+    color: var(--popover-foreground);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--elevation-2);
+  }
+}

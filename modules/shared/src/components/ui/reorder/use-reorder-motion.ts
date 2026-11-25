@@ -221,7 +221,7 @@ export function liftedDragImage(event: DragEvent, element: HTMLElement) {
     node.removeAttribute("id")
   }
   const style = getComputedStyle(element)
-  copy.classList.add("shadow-lg", "scale-[1.03]")
+  copy.classList.add("shadow-elevation-3", "scale-[1.03]")
   copy.style.width = `${box.width}px`
   copy.style.height = `${box.height}px`
   copy.style.opacity = "1"

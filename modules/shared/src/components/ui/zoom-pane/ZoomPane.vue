@@ -547,13 +547,13 @@ defineExpose({ fit, actualSize, zoomIn, zoomOut, moveOrigin, setView, showArea, 
     @dblclick="onDoubleClick"
     @keydown="onKeyDown"
   >
-    <!-- First in the page so Tab reaches the zoom controls before the content, though they are drawn over its corner (z-10). -->
+    <!-- First in the page so Tab reaches the zoom controls before the content, though they are drawn over its corner (--layer-overlay). -->
     <div
       data-slot="zoom-controls"
       role="group"
       :aria-label="uiText.zoomControls"
       data-zoom-pane-ignore
-      class="bg-background/90 absolute z-10 right-2 bottom-2 flex cursor-default items-center gap-0.5 rounded-md border p-0.5 shadow-sm"
+      class="bg-background/90 absolute z-(--layer-overlay) right-2 bottom-2 flex cursor-default items-center gap-0.5 rounded-md border p-0.5 shadow-elevation-1"
       @pointerdown.stop
       @dblclick.stop
     >
@@ -586,7 +586,7 @@ defineExpose({ fit, actualSize, zoomIn, zoomOut, moveOrigin, setView, showArea, 
     <Transition enter-from-class="opacity-0" leave-to-class="opacity-0" enter-active-class="transition-opacity" leave-active-class="transition-opacity">
       <p
         v-if="hint"
-        class="bg-popover text-popover-foreground pointer-events-none absolute top-2 left-1/2 -translate-x-1/2 rounded-md border px-2 py-1 text-xs shadow-sm"
+        class="bg-popover text-popover-foreground pointer-events-none absolute top-2 left-1/2 -translate-x-1/2 rounded-md border px-2 py-1 text-xs shadow-elevation-1"
         aria-hidden="true"
       >
         {{ uiText.zoomHint }}

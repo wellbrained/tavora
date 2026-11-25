@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.1.89",
+    "date": "2026-11-25",
+    "notes": [
+      "Spacing and Motion: new examples for elevation, layers and game motion.",
+      "Menus: rows follow the menu's rounded corners, and in Liquid Glass the row you point at is easy to see."
+    ]
+  },
+  {
     "version": "0.1.88",
     "date": "2026-11-25",
     "notes": [

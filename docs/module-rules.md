@@ -77,6 +77,7 @@ classes where you use a control; never copy it.
 | Say why a control is off | `disabled-reason` next to `disabled` on `Button`, `Switch` / `SwitchField`, `Checkbox`, `Input`, `Select` (or its `SelectTrigger`), `DropdownMenuItem` and `ContextMenuItem`: the control stays hoverable and focusable, shows the reason in the kit tooltip and does nothing when used. A `Button` also does this with a `title` (or `hinted`, when you show the tooltip yourself) | a wrapper `span` with a `title` around a disabled control, a `title` on a native `disabled` control (it never shows), the reason in the label ("Pin (already pinned)") |
 | Floating panel | `Popover` | absolutely positioned `div` |
 | A card with links or buttons that opens on hover (a preview, an item you can act on, a card to pin) | `HoverCard` with `HoverCardTrigger` and `HoverCardContent` (the tooltip's look: `title`, `description`, `width`, `TooltipRows` inside), or for many targets `useHoverCard()`: `v-bind="card.on(item)"` on each target and one `<HoverCard v-bind="card.props">`. It opens after 400 ms on hover (at once along a row), at once by keyboard, and stays while the pointer is on the target or the card; Tab goes from the target into the card and on past it, Escape closes it and gives the focus back. `pinnable`: a click on a target that isn't a button or link pins the card, with a close X (on touch, a tap pins). `bare` takes an `ItemCard` with your own buttons between its parts. Anything in the card must also be reachable without it (touch and screen readers may never open it). Text only: a `Tooltip` | a `Tooltip` with buttons in it, own hover box that stays open, own pin and close button, `Popover` opened from `pointerenter` |
+| A card, tip or notice of your own floating in a pane (a card over a map, a node's tip), or small controls drawn over a map or canvas | The `tavora-floating` class: the popover's colours, a border, the kit's corner and elevation step 2, and the style's surface look (raised in Hardware, glass in Liquid Glass). Controls over a map add `shadow-elevation-1`. Stack it with `z-(--layer-floating)` (controls: `--layer-overlay`) | `bg-popover border rounded-md shadow-md`, a `z-20` or `z-50` of your own |
 | Dialog | `ConfirmDialog` (asks; only before what can't be put back, see [Deleting](#deleting)), `NameDialog` (asks for a name), else `Dialog` with `DialogHeader`, `DialogFooter`, `DialogButton` (see [Dialogs](#dialogs)) | own overlay |
 | Nothing here yet | `EmptyState` (one sentence, one action) | a bare `<p>` |
 | Loading with a known amount | `Progress` | "Loading…" in a `<p>` |
@@ -131,7 +132,17 @@ themes; anything hard-coded breaks in one of them.
   where it shows: from a gap of 8 px on, or when the inner part has no fill of its own, any step works. Don't change
   existing kit controls for it.
 - **Depth**: areas separate by a surface step and a 1 px `border-border`. Shadows only on floating layers and on the kit's Primary and Secondary buttons (a faint
-  top light, Primary also a hairline contact shadow); both come from the kit. No `z-index` of your own except inside a canvas or map.
+  top light, Primary also a hairline contact shadow); both come from the kit. A floating layer of your own takes an
+  elevation step (`modules/shared/src/elevation.css`), never `shadow-sm|md|lg` or a `box-shadow` of your own:
+  `shadow-elevation-1` (or `var(--elevation-1)`) for a small control over a map or canvas, `-2` for a card or tip
+  floating in a pane, `-3` for something dragged or a menu-like layer. The steps follow the style (Classic's are
+  Tailwind's sm, md and lg; other styles scale them by their depth, Hardware adds its casing light, Liquid Glass a
+  light top edge). Most of the time use the `tavora-floating` class, which brings step 2 and the style's surface too.
+- **Layers**: no `z-index` of your own. Inside a pane use the kit's layers, `z-(--layer-…)` or
+  `z-index: var(--layer-…)`: `--layer-lift` (one thing above its neighbours: a dragged node, a focused cell),
+  `--layer-sticky` (sticky headers), `--layer-overlay` (toolbars and controls drawn over a canvas or map) and
+  `--layer-floating` (tips, cards and notices in the pane; the kit's menus and dialogs sit there too). `-1` for a
+  decoration behind its own box is fine.
 - **Styles**: besides the theme's colours the user picks a style (Classic, Hardware, Liquid Glass, …) that changes how
   the kit's controls are shaped: keycaps or capsules, inset fields, inverted lists, small caps, a status light. Kit
   controls follow it by themselves, so a module built from them needs nothing. Build nothing that only looks right in
@@ -202,6 +213,15 @@ themes; anything hard-coded breaks in one of them.
   frame uses `usePageMotion`; don't hand-roll either. Neither moves for a key press or when a whole list is replaced.
   Waiting is the one thing that may repeat: a skeleton's slow pulse (`--duration-pulse`), and the same pulse on a busy row of a menu
   or Ctrl+K (`tavora-busy`), off for reduced motion.
+- **Game motion**: a game's board or overlay may move longer than the interface, with the kit's game tokens:
+  `--duration-play-quick` (400 ms: a row shaking at a wrong guess, start tiles), `--duration-play` (600 ms: a tile
+  turning over), `--duration-play-long` (1400 ms: a card folding open, a slow fade between covers),
+  `--duration-celebrate` (2400 ms: confetti, a "found it" highlight), with `--ease-play` (flips and shakes),
+  `--ease-fall` (only for things falling) and `--ease-loop` (linear, for a spin, a scrolling title or music bars; a
+  loop's length may be a `calc()` of a play duration). Only for rare moments (a win, a wrong guess, a reveal) or while
+  something plays. Never on kit controls, menus, dialogs, anything a key press starts or anything shown all day.
+  Reduced motion brings these to 0 like the rest, so what is left must be the finished state: no confetti frozen
+  in the middle of the board.
 - **Page base**: one stylesheet per module for `html, body, #app` (no margin, full height, theme colours), imported by
   every panel; a panel's own CSS adds to it and never repeats it.
 
@@ -414,7 +434,8 @@ Before you say it is done, check each item and name in your summary any you coul
 - [ ] Empty, loading and error states exist and use the kit; what loads is a `Skeleton` over the real template, a late picture a `FadeImage`.
 - [ ] Menus and tooltips anchor to their element; no hover-only actions.
 - [ ] Where a user would wonder why a control is off, it has a `disabled-reason`; no reason squeezed into a label.
-- [ ] Motion uses the kit's tokens, animates only `transform` and `opacity` (colours may fade), and leaves out anything a key starts.
+- [ ] Motion uses the kit's tokens, animates only `transform` and `opacity` (colours may fade), and leaves out anything a key starts; game motion only on a board or overlay and looks right with reduced motion.
+- [ ] Floating layers use `tavora-floating` or an elevation step, and stack with the kit's `--layer-*`; no shadow or z-index of your own.
 - [ ] Dialogs use the header, footer and `DialogButton` as in [Dialogs](#dialogs); a close-only button has no icon.
 - [ ] Settings use `ModuleSettings`, ask for their size with `settingsDialogSize`, have no Done button, and follow the [Settings](#settings) rules for descriptions, units and room (checked in German).
 - [ ] Keyboard: Tab reaches everything, Escape closes, focus ring visible.
@@ -428,7 +449,7 @@ Before you say it is done, check each item and name in your summary any you coul
 `pnpm check:modules` reads every module's source (`src/**/*.vue`, `.ts`, `.tsx`, `.css`, tests left out) and flags what
 this file forbids and a script can see: colour literals and hex fallbacks, palette colours, font names, text sizes and
 weights off the scale (also your own `--text-*` tokens), corners of your own, raw controls the kit has,
-`document.querySelector` in components, your own `z-index`, shadows, all caps and focus rings, motion outside the
+`document.querySelector` in components, your own `z-index` (anything but `auto`, `0`, `-1` and the kit's `--layer-*`), shadows, all caps and focus rings, motion outside the
 tokens, menus at the pointer and browser downloads. Per module it also flags a delayed save without an `onSuspend` and
 `onDispose` flush, a `persist-key` without `flushViewMemory()`, panel state that is never read back, texts without a
 `checkCatalogs` test, and key listeners on the whole window outside the page's entry script and the component it

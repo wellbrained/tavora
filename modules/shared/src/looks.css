@@ -63,7 +63,11 @@
   ) {
   background: linear-gradient(color-mix(in srgb, white 3%, var(--popover)), var(--popover));
   border: var(--style-border-width, 1px) solid color-mix(in srgb, var(--foreground) 10%, var(--border));
-  box-shadow: var(--style-bevel), var(--style-cast), 0 18px 40px -18px color-mix(in srgb, black 35%, transparent);
+  box-shadow: var(--elevation-3);
+}
+/* A popover or select is a card floating in the pane, one step lower than a menu or dialog (elevation.css). */
+:root[data-look-surface="raised"] :is([data-slot="popover-content"], [data-slot="select-content"]) {
+  box-shadow: var(--elevation-2);
 }
 :root[data-look-surface="raised"] [data-slot="item-card"] {
   background: linear-gradient(color-mix(in srgb, white 3%, var(--card)), var(--card));
@@ -84,9 +88,10 @@
   background: color-mix(in srgb, var(--popover) calc(var(--style-glass-opacity, 0.8) * 100%), transparent);
   backdrop-filter: blur(24px) saturate(1.6);
   border: var(--style-border-width, 1px) solid color-mix(in srgb, white 40%, transparent);
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, white 60%, transparent),
-    0 16px 40px -14px color-mix(in srgb, black 35%, transparent);
+  box-shadow: var(--elevation-3);
+}
+:root[data-look-surface="glass"] :is([data-slot="popover-content"], [data-slot="select-content"]) {
+  box-shadow: var(--elevation-2);
 }
 /* A toast is an inverted pill (--toast, --toast-foreground). On glass it is drawn in the popover's colour, so its text,
    buttons and icon glyphs take the popover's text colour too; otherwise dark text sits on a dark pane (light on light). */
@@ -96,7 +101,18 @@
   color: var(--popover-foreground);
 }
 /* Cards inside a panel stay solid in glass: a module can't see behind its own view (ADR 0004). */
-
+/* A floating surface a module draws itself (tavora-floating, elevation.css) takes the same raised or glass body as the
+   kit's popovers; its shadow stays the elevation step it was given. Unlike a card in the panel's flow (ADR 0004, above),
+   it floats over the module's own content, which the module can see, so glass may show that content blurred. */
+:root[data-look-surface="raised"] .tavora-floating {
+  background: linear-gradient(color-mix(in srgb, white 3%, var(--popover)), var(--popover));
+  border: var(--style-border-width, 1px) solid color-mix(in srgb, var(--foreground) 10%, var(--border));
+}
+:root[data-look-surface="glass"] .tavora-floating {
+  background: color-mix(in srgb, var(--popover) calc(var(--style-glass-opacity, 0.8) * 100%), transparent);
+  backdrop-filter: blur(24px) saturate(1.6);
+  border: var(--style-border-width, 1px) solid color-mix(in srgb, white 40%, transparent);
+}
 /* ---------- Tabs (the kit's Tabs and TabStrip; the dock's tab strip follows in the host's dock.css) ---------- */
 
 /* Keycap: each tab is a small key; the open one is pressed in (inverted), no sliding line. */
@@ -268,6 +284,21 @@
       color: inherit;
     }
   }
+}
+
+/* Glass: the theme's accent is about the tone of the see-through menu, so the highlighted row is a primary tint
+   instead. Rows that are already chosen keep their own tint (choice-row.ts). */
+:root[data-look-surface="glass"] :is(
+    [data-slot="popover-content"],
+    [data-slot="dropdown-menu-content"],
+    [data-slot="dropdown-menu-sub-content"],
+    [data-slot="context-menu-content"],
+    [data-slot="context-menu-sub-content"],
+    [data-slot="select-content"],
+    [data-slot="combobox-list"]
+  )
+  :is([data-highlighted], [data-state="open"]):not([data-state="checked"], [data-slot$="-content"]) {
+  background: color-mix(in srgb, var(--primary) 22%, transparent);
 }
 
 /* ---------- Labels: small headings, menu labels, tabs, button text ---------- */
@@ -498,9 +529,15 @@
     box-shadow: inset 0 1px 0 color-mix(in srgb, white 18%, transparent), 0 1px 3px color-mix(in srgb, black 18%, transparent);
   }
 }
-/* Glass lists: the chosen row is a soft rounded fill, no hard ring. */
-:root[data-look-surface="glass"] [data-state="checked"]:is([data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-checkbox-item"], [data-slot="context-menu-radio-item"], [data-slot="context-menu-checkbox-item"], [data-slot="select-item"], [data-slot="combobox-item"], [role="option"]) {
+/* Glass lists: the highlighted row is a primary tint (above), so the chosen row keeps its tint and gets a full ring
+   to stay apart from it. Menu rows keep their own corners (parallel to the menu's); the others round to md. */
+:root[data-look-surface="glass"] [data-state="checked"]:is([data-slot="dropdown-menu-radio-item"], [data-slot="context-menu-radio-item"], [data-slot="select-item"], [data-slot="combobox-item"], [role="option"]) {
+  box-shadow: inset 0 0 0 1.5px var(--primary);
+}
+:root[data-look-surface="glass"] [data-state="checked"]:is([data-slot="dropdown-menu-checkbox-item"], [data-slot="context-menu-checkbox-item"]) {
   box-shadow: none;
+}
+:root[data-look-surface="glass"] [data-state="checked"]:is([data-slot="select-item"], [data-slot="combobox-item"], [role="option"]) {
   border-radius: var(--radius-md);
 }
 /* Dialogs sit over a dark scrim: they need more body than a menu to stay bright and readable. */

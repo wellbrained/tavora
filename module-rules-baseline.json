@@ -240,11 +240,6 @@
         "const DEFAULTS = { seconds: true, twentyFour: true, size: \"m\", color: \"#ffffff\", every: \"15\" };": 1
       }
     },
-    "modules/playground/src/examples/spacing/Depth.vue": {
-      "shadow": {
-        "<div class=\"bg-popover text-popover-foreground flex h-20 items-center justify-center rounded-md border text-sm shadow-md\">Menu</div>": 1
-      }
-    },
     "modules/playground/src/examples/toggles/StyleTiles.vue": {
       "palette": {
         "<span :class=\"['absolute inset-x-2 rounded-sm bg-black/70', option.value === 'card' ? 'top-2 bottom-2' : option.value === 'bar' ? 'bottom-2 h-2' : 'top-1/2 h-1 -translate-y-1/2 bg-black/40']\" />": 2

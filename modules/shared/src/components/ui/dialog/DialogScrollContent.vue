@@ -55,13 +55,13 @@ function onPointerDownOutside(event: CustomEvent<{ originalEvent: PointerEvent }
   <DialogPortal>
     <DialogOverlay
       :data-instant="instant ? '' : undefined"
-      class="tavora-dialog-overlay fixed inset-0 z-50 grid place-items-center overflow-y-auto overscroll-contain bg-black/80"
+      class="tavora-dialog-overlay fixed inset-0 z-(--layer-floating) grid place-items-center overflow-y-auto overscroll-contain bg-black/80"
     >
       <DialogContent
         :data-instant="instant ? '' : undefined"
         :class="
           cn(
-            'tavora-dialog relative z-50 grid w-full max-w-lg my-8 gap-4 border border-border bg-background p-6 shadow-lg sm:rounded-lg md:w-full',
+            'tavora-dialog relative z-(--layer-floating) grid w-full max-w-lg my-8 gap-4 border border-border bg-background p-6 shadow-elevation-3 sm:rounded-lg md:w-full',
             props.class,
           )
         "

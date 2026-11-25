@@ -9,6 +9,8 @@
 @import "./fonts.css";
 /* The curves and durations every animation uses. */
 @import "./motion.css";
+/* Shadow steps for floating layers, the z-index layers inside a pane, and the floating-surface class. */
+@import "./elevation.css";
 /* Balanced titles, the play triangle, the edge around pictures. */
 @import "./details.css";
 /* How each part looks in a style other than Classic (data-look-* on <html>, set from the host's theme). */

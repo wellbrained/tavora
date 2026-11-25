@@ -920,6 +920,6 @@ describe("Tab order", () => {
     const content = root.querySelector("[data-testid=in-content]")!
     expect(controls.compareDocumentPosition(content) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     // Drawn on top of the content and the overlay, so it can still be pressed.
-    expect(controls.className).toContain("z-10")
+    expect(controls.className).toContain("z-(--layer-overlay)")
   })
 })

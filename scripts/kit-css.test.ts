@@ -27,3 +27,37 @@ describe("tooltip key caps", () => {
     expect(Number(/\.tavora-tooltip kbd\{font:(\d+)px/.exec(tooltip)?.[1])).toBeGreaterThanOrEqual(12)
   })
 })
+
+describe("elevation and layers", () => {
+  const elevation = readFileSync(join(kit, "elevation.css"), "utf8")
+  const rootVars = (css: string) => Object.fromEntries([...(/:root\s*\{([^}]*)\}/.exec(css)?.[1] ?? "").matchAll(/(--[\w-]+):\s*([^;]+);/g)].map(([, name, value]) => [name, value!.trim()]))
+
+  // Classic must look exactly as before the tokens: Tailwind v4's shadow-sm, shadow-md and shadow-lg.
+  it("keep Classic's shadows equal to Tailwind's sm, md and lg", () => {
+    const vars = rootVars(elevation)
+    expect(vars["--elevation-1"]).toBe("0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)")
+    expect(vars["--elevation-2"]).toBe("0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)")
+    expect(vars["--elevation-3"]).toBe("0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)")
+  })
+
+  // The rules checker (scripts/check-modules.mjs) allows exactly these names.
+  it("have the four layers in order", () => {
+    const vars = rootVars(elevation)
+    expect(["--layer-lift", "--layer-sticky", "--layer-overlay", "--layer-floating"].map((name) => Number(vars[name]))).toEqual([1, 10, 20, 50])
+  })
+
+  it("give Hardware and Glass their own steps", () => {
+    for (const surface of ["raised", "glass"]) {
+      const body = rulesFor(elevation, `[data-look-surface="${surface}"]`)
+      for (const step of [1, 2, 3]) expect(body, `${surface} ${step}`).toMatch(new RegExp(`--elevation-${step}:`))
+    }
+  })
+
+  // A popover or select is step 2 and menus and dialogs step 3, in the raised and glass looks too.
+  it("draw popovers one step below menus in the raised and glass looks", () => {
+    for (const surface of ["raised", "glass"]) {
+      expect(rulesFor(looks, `[data-look-surface="${surface}"]`, '[data-slot="popover-content"], [data-slot="select-content"]')).toContain("var(--elevation-2)")
+      expect(rulesFor(looks, `[data-look-surface="${surface}"]`, '[data-slot="dropdown-menu-content"]')).toContain("var(--elevation-3)")
+    }
+  })
+})

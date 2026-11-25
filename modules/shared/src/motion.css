@@ -3,7 +3,8 @@
 
    Curves: ease-out for things that appear, leave or answer a touch; ease-in-out for things that move across the screen.
    Never an ease-in on the interface: it starts slow, right when the eye is on it.
-   Durations: nothing in the interface is longer than --duration-move.
+   Durations: nothing in the interface is longer than --duration-move (game motion, at the end of :root, is not the
+   interface).
    How often decides how much: what people use many times a day stays instant or gets at most a quick fade (150 ms or
    less); playful motion (springs, drawing) is only for rare moments or as direct feedback to a click.
    Not for anything a key press starts (undo, nudges, hotkeys, switching by key), nor for what is shown all day.
@@ -37,6 +38,26 @@
   --duration-pulse: 1600ms;
   /* Items of a list sliding out of the way of one that is dragged, and settling into their place. */
   --duration-reorder: 200ms;
+
+  /* Game motion: longer than the interface may be, so only on a game's board or overlay, for rare moments (a win, a
+     wrong guess, a reveal) or while something plays (music bars, a spinning record). Never on kit controls, menus,
+     dialogs or anything a key press starts. Reduced motion brings these to 0 too (theme.css): what is left must be the
+     finished state, so a celebration ends where it should be seen (no confetti frozen in the middle of the board). */
+  /* A row shaking at a wrong guess, start tiles coming in. */
+  --duration-play-quick: 400ms;
+  /* A tile or card turning over. */
+  --duration-play: 600ms;
+  /* A card folding open, a slow fade between song covers. */
+  --duration-play-long: 1400ms;
+  /* Confetti, a "found it" highlight on a map. */
+  --duration-celebrate: 2400ms;
+  /* Flips and shakes: start and end calm. */
+  --ease-play: cubic-bezier(0.77, 0, 0.175, 1);
+  /* Something falling (confetti): it speeds up as it goes. Only for falling, never for the interface. */
+  --ease-fall: cubic-bezier(0.55, 0, 1, 0.45);
+  /* Things that repeat while something plays: a spin, a scrolling title, music bars. A loop's length may be one of the
+     play durations or a calc() of one. */
+  --ease-loop: linear;
 }
 
 /* Menus, dropdowns, selects and popovers grow out of the thing that opened them, never from their own middle

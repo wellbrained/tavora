@@ -13,7 +13,7 @@ const table = useTableContext()
   <thead
     data-slot="table-header"
     :data-sticky="table.stickyHeader() || undefined"
-    :class="cn('[&_tr]:border-b', table.stickyHeader() && 'bg-background sticky top-0 z-10 shadow-[inset_0_-1px_var(--border)] [&_tr]:border-b-0', props.class)"
+    :class="cn('[&_tr]:border-b', table.stickyHeader() && 'bg-background sticky top-0 z-(--layer-sticky) shadow-[inset_0_-1px_var(--border)] [&_tr]:border-b-0', props.class)"
   >
     <slot />
   </thead>

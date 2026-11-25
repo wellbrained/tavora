@@ -47,7 +47,7 @@ const open = defineModel<boolean>("open", { default: false })
 
 /** One row of the list, the same with a group around it or without. */
 const [DefineRow, Row] = createReusableTemplate<{ option: PickerOption<T> }>()
-const rowClass = cn("data-[highlighted]:bg-accent flex h-9 w-full cursor-default items-center gap-2 rounded-md px-3 text-left text-sm outline-none select-none", choiceRow, choiceHighlighted)
+const rowClass = cn("data-[highlighted]:bg-accent flex h-9 w-full cursor-default items-center gap-2 rounded-sm px-3 text-left text-sm outline-none select-none", choiceRow, choiceHighlighted)
 const query = ref("")
 const current = computed(() => props.options.find((option) => option.value === model.value) ?? (slots.current || slots.filters ? undefined : props.options[0]))
 const shown = computed(() => (props.search ? filterOptions(props.options, query.value) : props.options))
@@ -94,7 +94,7 @@ function pick(value: unknown) {
         align="start"
         :side-offset="6"
         :collision-padding="8"
-        :class="cn('bg-popover text-popover-foreground tavora-popup z-50 w-max max-w-[min(20rem,var(--reka-popover-content-available-width))] min-w-[min(var(--reka-popover-trigger-width),var(--reka-popover-content-available-width))] overflow-hidden rounded-lg border shadow-lg', search && 'min-w-[min(max(16rem,var(--reka-popover-trigger-width)),var(--reka-popover-content-available-width))]')"
+        :class="cn('bg-popover text-popover-foreground tavora-popup z-(--layer-floating) w-max max-w-[min(20rem,var(--reka-popover-content-available-width))] min-w-[min(var(--reka-popover-trigger-width),var(--reka-popover-content-available-width))] overflow-hidden rounded-lg border shadow-elevation-3', search && 'min-w-[min(max(16rem,var(--reka-popover-trigger-width)),var(--reka-popover-content-available-width))]')"
         :data-testid="part('menu')"
       >
         <ListboxRoot :model-value="model" highlight-on-hover @update:model-value="pick">

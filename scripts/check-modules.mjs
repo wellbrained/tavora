@@ -28,7 +28,7 @@ export const RULES = {
   "panel-state-read": "Read the panel state back on start with panel.getState().",
   catalogs: "Add a test that runs checkCatalogs(en, de) (the kit) or catalogProblems(en, de) (@tavora/sdk/testing) on the module's texts.",
   motion: "Use the kit's motion tokens and animate transform and opacity only.",
-  "z-index": "No z-index of your own, except inside a canvas or map.",
+  "z-index": "No z-index of your own: use the kit's layers, z-(--layer-lift|sticky|overlay|floating), or -1 for a decoration behind its box.",
   shadow: "No shadow of your own: areas separate by a surface step and border-border.",
   "all-caps": "Write it in sentence case; no all caps.",
   "focus-ring": "Keep the kit's focus ring; never remove it or draw your own.",
@@ -226,6 +226,10 @@ const COLOR_PROP = /^(?:--[\w-]+|color|background(?:-color)?|border(?:-(?:top|ri
 const SCALE = new Set([12, 13, 14, 16, 20]);
 const WEIGHTS = new Set(["400", "500", "600", "normal"]);
 const NEUTRAL_VALUES = /^(?:inherit|initial|unset|revert|revert-layer)$/;
+/** The kit's layers inside a pane (elevation.css). */
+const LAYERS = new Set(["--layer-lift", "--layer-sticky", "--layer-overlay", "--layer-floating"]);
+/** A z-index of no layer (auto, 0, -1 for a decoration behind its own box) or one of the kit's layers as `var(--layer-…)`. */
+const zIndexOk = (v) => /^(?:auto|0|-1)$/.test(v) || LAYERS.has(/^var\((--[\w-]+)\)$/.exec(v)?.[1]);
 const ALLOWED_TRANSITION = new Set(["transform", "opacity", "translate", "scale", "rotate", "none"]);
 
 /** A size in px, or null when it is not a fixed length (em, %, a variable). */
@@ -301,7 +305,7 @@ function checkDeclaration(property, value, at) {
     const lengths = (withoutCalls(v).match(/\d*\.?\d+(?:px|rem|em)\b/g) ?? []).filter((len) => parseFloat(len) > 0 && !(len.endsWith("px") && parseFloat(len) >= 999));
     if (lengths.length) add("radius", `border-radius ${lengths.join(" ")}`);
   }
-  if (prop === "z-index" && !/^(?:auto|0)$/.test(v) && !NEUTRAL_VALUES.test(v) && !v.startsWith("var(")) add("z-index", `z-index ${v}`);
+  if (prop === "z-index" && !zIndexOk(v) && !NEUTRAL_VALUES.test(v)) add("z-index", `z-index ${v}`);
   if (prop === "box-shadow" && v !== "none" && !NEUTRAL_VALUES.test(v) && withoutCalls(v).trim() !== "") add("shadow", "box-shadow");
   if (prop === "text-transform" && v === "uppercase") add("all-caps", "text-transform: uppercase");
   if (/^outline(?:-style|-width)?$/.test(prop) && /^(?:none|0)(?:\s|$)/.test(v)) add("focus-ring", `outline: ${v}`);
@@ -396,7 +400,14 @@ const CLASS_RULES = [
   { re: /(?<![\w-])font-\[(\d+)\]/g, check: (m) => (WEIGHTS.has(m[1]) ? null : { rule: "font-weight", message: m[0] }) },
   { re: /(?<![\w-])font-\[(?!var\(|\d)[^\]]*\]/g, check: (m) => ({ rule: "font-family", message: m[0] }) },
   { re: /(?<![\w-])rounded(?:-[a-z]{1,2})?-\[(?!var\()([^\]]*)\]/g, check: (m) => (/[1-9]\d*(?:\.\d+)?(?:px|rem|em)|0?\.\d*[1-9]\d*(?:px|rem|em)/.test(m[1]) ? { rule: "radius", message: m[0] } : null) },
-  { re: /(?<![\w-])-?z-(\d+|\[[^\]]+\])(?![\w-])/g, check: (m) => (/^(?:0|\[0\]|\[auto\])$/.test(m[1]) ? null : { rule: "z-index", message: m[0] }) },
+  {
+    re: /(?<![\w-])(-?)z-(\d+|\[[^\]]+\]|\([^)]+\))(?![\w-])/g,
+    check: (m) => {
+      const inner = m[2].replace(/^[[(](.*)[\])]$/, "$1");
+      const value = m[1] === "-" ? `-${inner}` : inner;
+      return zIndexOk(/^--/.test(value) ? `var(${value})` : value) ? null : { rule: "z-index", message: m[0] };
+    },
+  },
   { re: /(?<![\w-])(?:inset-)?shadow-(?:2xs|xs|sm|md|lg|xl|2xl|inner|\[[^\]]+\])(?![\w-])/g, check: (m) => ({ rule: "shadow", message: m[0] }) },
   { re: /(?<![\w-])(?:inset-)?shadow(?![\w-/:])/g, bare: true, check: (m) => ({ rule: "shadow", message: m[0] }) },
   { re: /(?<![\w-])uppercase(?![\w-])/g, bare: true, check: (m) => ({ rule: "all-caps", message: m[0] }) },

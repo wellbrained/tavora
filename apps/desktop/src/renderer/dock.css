@@ -3,7 +3,7 @@
 @import "dockview-vue/dist/styles/dockview.css";
 
 /* The dock keeps its layers to itself: its splitters (z-index 99, with their grip) never show through menus and
-   dialogs, which open on top of the page at z-50. */
+   dialogs, which open on top of the page at --layer-floating (50). */
 .dockview-theme-tavora {
   isolation: isolate;
   color-scheme: dark;
@@ -19,7 +19,7 @@
   --dv-icon-hover-background-color: var(--accent);
   --dv-floating-box-shadow: none;
   --dv-floating-border: 1px solid var(--border);
-  /* Below menus and dialogs (z-50). */
+  /* Below menus and dialogs (--layer-floating, 50). */
   --dv-overlay-z-index: 40;
   --dv-tab-font-size: inherit;
   --dv-border-radius: 0px;
