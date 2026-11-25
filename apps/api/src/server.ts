@@ -28,6 +28,7 @@ import { createSteamClient } from "./steam.ts";
 import { createSubmissions } from "./submissions.ts";
 import { scannerFromEnv } from "./virus-scan.ts";
 import { accountLifecycle } from "./account-lifecycle.ts";
+import { BackgroundWork } from "./background-work.ts";
 
 const port = Number(process.env.PORT ?? 4010);
 const datasetPath = process.env.TAVORA_GAMES_DB ?? "data/games.sqlite";
@@ -100,6 +101,8 @@ if (mailer && !testInbox && !behindProxy) console.warn("[tavora-api] TRUST_PROXY
 // New accounts a day, by email and Discord together (accounts.ts ACCOUNTS_PER_DAY when unset or not a whole number above 0).
 const accountLimit = Number(process.env.ACCOUNT_DAILY_LIMIT);
 const accountDailyLimit = Number.isInteger(accountLimit) && accountLimit > 0 ? accountLimit : undefined;
+// Mail sent after its answer went out; the clean stop waits for it.
+const background = new BackgroundWork();
 const accountStore = mailer ? new AccountStore(path.join(stateDir, "accounts.sqlite")) : undefined;
 // The cloud copies: their own file, which the daily backup leaves out (decided 2026-10-19; the PCs upload again).
 // All accounts' copies together stay under a total and leave free space on the state disk (COPY_TOTAL_LIMIT_GB, COPY_FREE_FLOOR_GB).
@@ -191,6 +194,7 @@ const app = createApp({
         accounts: {
           store: accountStore,
           mailer,
+          background,
           ...(copies ? { copies } : {}),
           ...(reviews ? { reviews } : {}),
           ...(conversations ? { conversations } : {}),
@@ -264,6 +268,8 @@ if (adminToken && adminToken.length >= 24) {
 // systemctl stop or restart (a deploy): the running requests finish, then the databases are closed.
 shutDownOnSignals({
   servers,
+  // Mail sent after its answer went out (the email change's warning to the old address).
+  pending: () => background.settled(),
   close: [
     () => accountStore?.close(),
     () => copies?.close(),

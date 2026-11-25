@@ -165,3 +165,16 @@ export function lockStatus(file, who = {}) {
   if (holder && holder.host === host && !isRunning(holder.pid)) return { state: "stale", line };
   return { state: "running", line };
 }
+
+/**
+ * What `pnpm release:lock-status` prints and its exit code. `file`: the lock's path, or null when it can't be found;
+ * `looked`: false when git couldn't be asked for the main checkout (then the releases folder next to it is unknown).
+ * Only `free` and `stale` exit 0, so a session that can't look waits (review of #976).
+ */
+export function lockReport(file, looked, who = {}) {
+  if (!looked || !file) return { text: `unknown (${!looked ? "git couldn't list the worktrees" : "no releases folder found"}): wait, or check for RELEASE-RUNNING by hand`, code: 1 };
+  const status = lockStatus(file, who);
+  if (status.state === "free") return { text: "free", code: 0 };
+  if (status.state === "stale") return { text: `stale (its release is gone; merging is fine, the next release takes it over): ${status.line}`, code: 0 };
+  return { text: `running: ${status.line}`, code: 1 };
+}

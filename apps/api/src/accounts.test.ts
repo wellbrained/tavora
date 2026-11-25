@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { AccountStore, CODE_TTL_MS, normalizeEmail, SESSION_IDLE_MS } from "./account-store.ts";
 import type { AccountOptions } from "./accounts.ts";
+import { BackgroundWork } from "./background-work.ts";
 import { createApp } from "./app.ts";
 import { buildDataset, writeDatabase } from "./dataset.ts";
 import { BREVO_URL, createBrevoMailer, createTestInbox, createTestInboxApp, MailLimitError, maskEmail, type Mailer } from "./mail.ts";
@@ -354,7 +355,8 @@ describe("signed in", () => {
           return inbox.send(mail);
         },
       };
-      const { call, clock, store } = setup({ mailer });
+      const background = new BackgroundWork();
+      const { call, clock, store } = setup({ mailer, accounts: { background } });
       await call("POST", "/code", { email: `old${fail}@example.com` });
       const verified = await call("POST", "/verify", { email: `old${fail}@example.com`, code: codeTo(inbox, `old${fail}@example.com`), os: "windows", create: true });
       const { token } = (await verified.json()) as { token: string };
@@ -370,8 +372,9 @@ describe("signed in", () => {
       expect(changed?.status).toBe(200);
       const renewed = ((await changed!.json()) as { token: string }).token;
       expect((await call("GET", "", undefined, renewed)).status).toBe(200);
-      // Counted while it goes, and given back when it fails.
+      // Counted while it goes, and given back when it fails; the clean stop waits for it.
       expect(store.mailsSent(day)).toBe(before + 1);
+      expect(background.size).toBe(1);
       release();
       await new Promise((resolve) => setTimeout(resolve, 10));
       expect(store.mailsSent(day)).toBe(fail ? before : before + 1);

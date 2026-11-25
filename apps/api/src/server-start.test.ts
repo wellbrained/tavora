@@ -7,6 +7,7 @@ import { serve } from "@hono/node-server";
 import { publishReadMs, ZIP_LIMITS } from "@tavora/pack";
 import { Hono } from "hono";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { BackgroundWork } from "./background-work.ts";
 import { CatalogStore } from "./catalog.ts";
 import { backfillAtStart, guarded, HEADERS_TIMEOUT_MS, setServerTimeouts, shutDownOnSignals } from "./server-start.ts";
 
@@ -223,6 +224,28 @@ describe("timers and shutdown (bug hunt)", () => {
     expect(await exited).toBe(0);
     expect(Date.now() - started).toBeLessThan(2000);
     agent.destroy();
+  });
+
+  it("waits for mail still going out before it closes the stores, within the grace time (review of #976)", async () => {
+    const server = createServer((_request, response) => response.end("done"));
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const handlers = new Map<string, () => void>();
+    const closed: string[] = [];
+    const background = new BackgroundWork();
+    let sendMail!: () => void;
+    background.add(new Promise<void>((resolve) => (sendMail = resolve)));
+    let exited = false;
+    const exit = new Promise<number>((resolve) =>
+      shutDownOnSignals({ servers: [server], pending: () => background.settled(), close: [() => closed.push("accounts")], graceMs: 5000, on: (signal, run) => void handlers.set(signal, run), exit: (code) => ((exited = true), resolve(code)), log: { log: () => {}, error: () => {} } }),
+    );
+    handlers.get("SIGTERM")!();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    // The server is closed, the mail still goes: the stores stay open for it.
+    expect(closed).toEqual([]);
+    expect(exited).toBe(false);
+    sendMail();
+    expect(await exit).toBe(0);
+    expect(closed).toEqual(["accounts"]);
   });
 
   it("gives up waiting after the grace period, still closing the stores", async () => {

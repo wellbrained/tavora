@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 // @ts-expect-error - plain JavaScript module shared with scripts/release.mjs
-import { holdLock, lockHolder, lockPath, lockStatus, mainCheckoutOf, stopOnSignals, takeLock } from "./release-lock.mjs";
+import { holdLock, lockHolder, lockPath, lockReport, lockStatus, mainCheckoutOf, stopOnSignals, takeLock } from "./release-lock.mjs";
 
 /** A folder like D:\Github\Tavora: a main checkout, a worktrees folder with a clone, and releases. */
 function home(): { root: string; main: string; clone: string } {
@@ -169,5 +169,16 @@ describe("holdLock", () => {
     expect(lockStatus(file, { host: "other-pc", isRunning: () => false })).toMatchObject({ state: "running" });
     writeFileSync(file, "0.25.4 2026-11-24T10:00:00.000Z\n");
     expect(lockStatus(file, who([]))).toMatchObject({ state: "running" });
+  });
+
+  it("says unknown and exits 1 when it can't look, so a merge waits (review of #976)", () => {
+    const { root } = home();
+    const file = path.join(root, "releases", "RELEASE-RUNNING");
+    expect(lockReport(file, false)).toMatchObject({ code: 1, text: expect.stringMatching(/^unknown/) });
+    expect(lockReport(null, true)).toMatchObject({ code: 1, text: expect.stringMatching(/^unknown/) });
+    expect(lockReport(file, true)).toEqual({ text: "free", code: 0 });
+    writeFileSync(file, "0.25.4 2026-11-24T10:00:00.000Z pid 4242@brain-pc\n");
+    expect(lockReport(file, true, { host: "brain-pc", isRunning: () => true })).toMatchObject({ code: 1, text: expect.stringMatching(/^running/) });
+    expect(lockReport(file, true, { host: "brain-pc", isRunning: () => false })).toMatchObject({ code: 0, text: expect.stringMatching(/^stale/) });
   });
 });

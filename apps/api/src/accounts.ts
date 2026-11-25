@@ -15,6 +15,7 @@ import type { ReviewStore } from "./reviews.ts";
 import type { ConversationStore } from "./conversations.ts";
 import type { LeaderboardStore } from "./leaderboards.ts";
 import { sha256Hex } from "./hash.ts";
+import type { BackgroundWork } from "./background-work.ts";
 
 /**
  * The account routes under /v1/account. Every answer that could tell whether
@@ -26,6 +27,8 @@ import { sha256Hex } from "./hash.ts";
 export interface AccountOptions {
   store: AccountStore;
   mailer: Mailer;
+  /** Where mail the answer doesn't wait for is kept, so the clean stop waits for it (sendLater). */
+  background?: BackgroundWork;
   /** Requests for a code per client: 10 an hour by default. */
   codeRateLimiter?: RateLimiter;
   /** Signed-out requests for a code per client, a day: 20 by default, so nobody spends the day's emails alone. */
@@ -347,13 +350,15 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
   const sendLater = (mail: Mail) => {
     const day = utcDay(now());
     store.countMail(day);
-    void mailer.send(mail).catch((error: unknown) => {
-      // The store may be closed by a clean stop meanwhile: the day's count then stays one too high.
+    const sent = mailer.send(mail).catch((error: unknown) => {
+      // The store may be closed meanwhile (a stop that ran out of time): the day's count then stays one too high.
       try {
         store.uncountMail(day);
       } catch {}
       console.warn(`[tavora-api] A notice mail could not be sent: ${error instanceof Error ? error.message : "unknown error"}`);
     });
+    // The clean stop waits for it, so a deploy right after the change still sends the warning.
+    options.background?.add(sent);
   };
 
   // Every account call: the general limit per client, and JSON only for a body,
@@ -390,6 +395,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const input = await body(context);
     const email = normalizeEmail(input.email);
     if (!email) return context.json({ error: "Send { email, language }.", reason: "bad-email" }, 400);
+    // Before the shares too: a day whose sign-in emails are used up answers 503 without spending one.
     if (usedUp("sign-in")) return usedUpAnswer(context);
     const at = now();
     const asker = stranger(context);
