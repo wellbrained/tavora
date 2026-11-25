@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.67",
+    "date": "2026-11-25",
+    "notes": [
+      "The tooltip specimens show their cards with useTooltip, and the chart bars in Values can be reached with Tab."
+    ]
+  },
+  {
     "version": "0.1.66",
     "date": "2026-11-25",
     "notes": [

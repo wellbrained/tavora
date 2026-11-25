@@ -2,19 +2,11 @@
 // A card put together from the tooltip's parts: a badge beside the title (`badge`, or the `badges` slot), small text at
 // the right (`meta`, or the `meta` slot), a line under the head (`divider`) and rows with a unit in a column of its own
 // (`unit`). With several values per row, `columns` puts headings over them; a "–" is drawn faint and each value can
-// have its own trend. `width="md"` makes room for the columns.
-import { Tooltip, TooltipRows, type TooltipRow } from "@tavora/official-ui";
+// have its own trend. `width="md"` makes room for the columns. One Tooltip shows whichever card `useTooltip` has.
+import { Tooltip, TooltipRows, useTooltip, type TooltipRow, type TooltipWidth } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
-import { computed, ref } from "vue";
+import { computed } from "vue";
 import { t } from "../../i18n";
-
-const tip = ref<{ open: string | null; anchor: { left: number; top: number; right: number; bottom: number } }>({ open: null, anchor: { left: 0, top: 0, right: 0, bottom: 0 } });
-function show(name: string, event: Event) {
-  const { left, top, right, bottom } = (event.currentTarget as HTMLElement).getBoundingClientRect();
-  tip.value = { open: name, anchor: { left, top, right, bottom } };
-}
-const hide = () => (tip.value.open = null);
-const tipFor = (name: string) => ({ onPointerenter: (e: Event) => show(name, e), onPointerleave: hide, onFocus: (e: Event) => show(name, e), onBlur: hide });
 
 const text = computed(() => ({
   fireball: t("demo.tipParts.fireball"),
@@ -39,21 +31,31 @@ const levelRows = computed<TooltipRow[]>(() => [
   { label: t("demo.tipParts.duration"), values: ["2", "–", "3"], unit: "s" },
   { label: t("demo.tipParts.stacks"), values: ["1", "2", "3"], trend: [undefined, "better", "better"] },
 ]);
+
+interface Card {
+  title: string;
+  badge: string;
+  meta?: string;
+  description?: string;
+  rows: TooltipRow[];
+  columns?: string[];
+  width?: TooltipWidth;
+}
+const cards = computed<Record<"skill" | "long" | "levels", Card>>(() => ({
+  skill: { title: text.value.fireball, badge: text.value.active, meta: text.value.level, rows: skillRows.value },
+  long: { title: text.value.longName, badge: text.value.passive, meta: text.value.replaced, rows: skillRows.value.slice(0, 2) },
+  levels: { title: text.value.venom, badge: text.value.powerUp, description: text.value.venomText, rows: levelRows.value, columns: rarities.value, width: "md" },
+}));
+const tip = useTooltip<Card>({ side: "right" });
 </script>
 
 <template>
   <div class="flex flex-wrap items-center gap-2">
-    <Button variant="outline" v-bind="tipFor('skill')" hinted>{{ text.fireball }}</Button>
-    <Button variant="outline" class="max-w-40" v-bind="tipFor('long')" hinted><span class="truncate">{{ text.longName }}</span></Button>
-    <Button variant="outline" v-bind="tipFor('levels')" hinted>{{ text.venom }}</Button>
+    <Button variant="outline" v-bind="tip.on(cards.skill)" hinted>{{ text.fireball }}</Button>
+    <Button variant="outline" class="max-w-40" v-bind="tip.on(cards.long)" hinted><span class="truncate">{{ text.longName }}</span></Button>
+    <Button variant="outline" v-bind="tip.on(cards.levels)" hinted>{{ text.venom }}</Button>
   </div>
-  <Tooltip :open="tip.open === 'skill'" :anchor="tip.anchor" side="right" :title="text.fireball" :badge="text.active" :meta="text.level" divider @dismiss="hide">
-    <TooltipRows :rows="skillRows" />
-  </Tooltip>
-  <Tooltip :open="tip.open === 'long'" :anchor="tip.anchor" side="right" :title="text.longName" :badge="text.passive" :meta="text.replaced" divider @dismiss="hide">
-    <TooltipRows :rows="skillRows.slice(0, 2)" />
-  </Tooltip>
-  <Tooltip :open="tip.open === 'levels'" :anchor="tip.anchor" side="right" width="md" :title="text.venom" :badge="text.powerUp" :description="text.venomText" divider @dismiss="hide">
-    <TooltipRows :rows="levelRows" :columns="rarities" />
+  <Tooltip v-bind="tip.props" :title="tip.content?.title" :badge="tip.content?.badge" :meta="tip.content?.meta" :description="tip.content?.description" :width="tip.content?.width" divider>
+    <TooltipRows v-if="tip.content" :rows="tip.content.rows" :columns="tip.content.columns" />
   </Tooltip>
 </template>
