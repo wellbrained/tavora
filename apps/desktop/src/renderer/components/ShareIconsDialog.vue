@@ -97,7 +97,6 @@ async function share() {
   await sharer.run(async () => {
     const keys = chosen.value.map((row) => row.key);
     let shared = 0;
-    let sentAny = false;
     progress.value = { done: 0, total: keys.length };
     try {
       for (let at = 0; at < keys.length; at += BATCH) {
@@ -105,12 +104,11 @@ async function share() {
         const action: HostAction = steam ? { type: "share-steam-icons", appids: part.map(Number) } : { type: "share-icons", workspaceIds: part };
         const result = await act(action, { quiet: true });
         if (!result.ok) {
-          // Once a turn went through, a later one with nothing left to send changes nothing.
-          if (sentAny) continue;
+          // Each turn holds other icons, so a failed one (offline, service trouble) keeps the dialog with its reason, also
+          // after an earlier turn went through: the icons shared so far leave the list, Share sends the rest again.
           answered.value = result.error;
           return;
         }
-        sentAny = true;
         shared += result.shared ?? 0;
         progress.value = { done: Math.min(at + BATCH, keys.length), total: keys.length };
         if (result.limited) {
@@ -123,7 +121,6 @@ async function share() {
     } finally {
       progress.value = null;
     }
-    if (!sentAny) return;
     closeDialog(props.request);
     showToast(shared ? t("shareIcons.thanks") : t("shareIcons.nothingNeeded"));
   });
@@ -137,6 +134,7 @@ async function share() {
     :icon="Images"
     testid="share-icons-dialog"
     :status="status"
+    :busy="busy"
     class="sm:max-w-[460px]"
     @close="dialog = null"
   >
