@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -155,6 +155,14 @@ describe("BlobStore.put", () => {
     await writeFile(path.join(dir, "0123456789abcdef0123456789abcdef.tmp"), "half");
     await store.list();
     expect((await readdir(dir)).filter((name) => name.endsWith(".tmp"))).toEqual([]);
+  });
+
+  it("leaves a .tmp file of another program alone: only its own temp files go (hunt 2026-11-25 A8)", async () => {
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "0123456789abcdef0123456789abcdef.tmp"), "half");
+    await writeFile(path.join(dir, "holiday.tmp"), "somebody's file");
+    await store.list();
+    expect(await readdir(dir)).toEqual(["holiday.tmp"]);
   });
 });
 

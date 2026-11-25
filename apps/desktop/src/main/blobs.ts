@@ -65,6 +65,9 @@ export const BLOB_LIMITS: BlobLimits = { maxFileBytes: LIMITS.maxBlobBytes, maxT
 /** Enough of a file to tell its kind. */
 const HEAD_BYTES = 16;
 
+/** The temp file put() writes first, `<id>.tmp`. */
+const TEMP_BLOB = /^[0-9a-f]{32}\.tmp$/;
+
 /** The files being written across all stores, so moving their folder can wait until none is on its way. */
 export class BlobWrites {
   private active = 0;
@@ -235,8 +238,9 @@ export class BlobStore {
     }
     const files: BlobInfo[] = [];
     for (const name of names) {
-      // Everything is stored one at a time, so a leftover temp file is from a write that was cut off.
-      if (name.endsWith(".tmp")) {
+      // Everything is stored one at a time, so a leftover temp file is from a write that was cut off. Only the ones put()
+      // makes (`<32 hex>.tmp`) go: another program's .tmp file in this folder (the user's pictures folder) is not ours.
+      if (TEMP_BLOB.test(name)) {
         await rm(path.join(dir, name), { force: true });
         continue;
       }

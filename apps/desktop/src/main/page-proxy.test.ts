@@ -36,9 +36,30 @@ it('pins the checked IP into the connection and rechecks a grant revoked during 
   expect(connect).toHaveBeenCalledWith({host:'1.1.1.1',port:443});
  }finally{proxy.close();}
 });
+it('tries the next address when the first one does not connect, and checks every address',async()=>{
+ const abort=new AbortController(),proxy=await createPageProxy({allowedHosts:()=>new Set(['public.test']),userAgent:'test'},abort.signal);
+ const target=net.createServer(),realConnect=net.connect;
+ await new Promise<void>(resolve=>target.listen(0,'127.0.0.1',resolve));
+ try{
+  const connect=vi.spyOn(net,'connect');
+  vi.mocked(lookup).mockResolvedValue([{address:'2606:4700::1',family:6},{address:'1.1.1.1',family:4}] as never);
+  connect.mockImplementation(((options:{host:string})=>{
+   if(options.host==='1.1.1.1')return realConnect({host:'127.0.0.1',port:(target.address() as net.AddressInfo).port});
+   const socket=new net.Socket();
+   queueMicrotask(()=>socket.destroy());
+   return socket;
+  }) as unknown as typeof net.connect);
+  expect(await request(proxy.port,'CONNECT public.test:443 HTTP/1.1\r\nHost: public.test\r\n\r\n')).toContain('200');
+  expect(connect.mock.calls.map(call=>(call[0] as unknown as {host:string}).host)).toEqual(['2606:4700::1','1.1.1.1']);
+  connect.mockClear();
+  vi.mocked(lookup).mockResolvedValue([{address:'1.1.1.1',family:4},{address:'10.0.0.1',family:4}] as never);
+  expect(await request(proxy.port,'CONNECT public.test:443 HTTP/1.1\r\nHost: public.test\r\n\r\n')).toBe('');
+  expect(connect).not.toHaveBeenCalled();
+ }finally{proxy.close();target.close();}
+});
 it('closes open proxy connections when its owner disconnects',async()=>{
  const abort=new AbortController(),proxy=await createPageProxy({allowedHosts:()=>new Set(),userAgent:'test'},abort.signal);
- const socket=net.createConnection({host:'127.0.0.1',port:proxy.port});
+ const socket=net.createConnection({host:'127.0.0.1',port:proxy.port});socket.on('error',()=>{});
  await new Promise<void>(resolve=>socket.once('connect',resolve));
  const closed=new Promise<void>(resolve=>socket.once('close',()=>resolve()));abort.abort();await closed;proxy.close();
  expect(socket.destroyed).toBe(true);

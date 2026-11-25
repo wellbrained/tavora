@@ -31,16 +31,26 @@ export async function createPageProxy(policy: FetchPolicy, signal: AbortSignal):
       // The grant can be revoked while DNS is resolving.
       checkTarget(url.href, policy);
       if (signal.aborted) throw Error("Page closed");
-      const upstream = net.connect({ host: addresses[0]!.address, port: 443 });
-      track(upstream);
-      upstream.once("connect", () => {
-        if (signal.aborted) return upstream.destroy();
-        client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
-        if (head.length) upstream.write(head);
-        client.pipe(upstream); upstream.pipe(client);
-      });
-      client.once("close", () => upstream.destroy());
+      // Every address was checked above; try them in turn, so one that doesn't answer (an IPv6 one, say) doesn't stop the page.
+      let attempt: net.Socket | undefined;
+      client.once("close", () => attempt?.destroy());
+      let upstream: net.Socket | undefined;
+      for (const { address } of addresses) {
+        if (signal.aborted || client.destroyed) throw Error("Page closed");
+        const socket = attempt = net.connect({ host: address, port: 443 });
+        track(socket);
+        const connected = await new Promise<boolean>(resolve => {
+          socket.once("connect", () => resolve(true));
+          socket.once("close", () => resolve(false));
+        });
+        if (connected) { upstream = socket; break; }
+      }
+      if (!upstream) throw Error("No address answered");
+      if (signal.aborted || client.destroyed) return upstream.destroy();
       upstream.once("close", () => client.destroy());
+      client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+      if (head.length) upstream.write(head);
+      client.pipe(upstream); upstream.pipe(client);
     })().catch(() => client.destroy());
   });
   await new Promise<void>((resolve, reject) => {

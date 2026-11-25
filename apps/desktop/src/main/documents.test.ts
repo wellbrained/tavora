@@ -140,6 +140,19 @@ describe("DocumentStore", () => {
     ]);
   });
 
+  it("tells others of a saved document even when the index can't be written (hunt 2026-11-25 A8)", async () => {
+    const store = new DocumentStore(dir);
+    await store.put({ id: "a", title: "A", data: 1 });
+    const listener = vi.fn();
+    store.on("change", listener);
+    // The index file can't be replaced: a folder stands in its place.
+    await rm(path.join(dir, "index.json"));
+    await mkdir(path.join(dir, "index.json"));
+    await expect(store.put({ id: "b", title: "B", data: 2 })).rejects.toThrow();
+    expect(listener).toHaveBeenCalledWith({ id: "b", revision: 1, deleted: false }, undefined);
+    expect(await store.get("b")).toMatchObject({ data: 2 });
+  });
+
   it("rebuilds a stale or missing index from the document files", async () => {
     const store = new DocumentStore(dir);
     await store.put({ id: "a", title: "A", data: 1 });

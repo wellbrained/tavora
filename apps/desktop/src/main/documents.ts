@@ -121,8 +121,10 @@ export class DocumentStore extends EventEmitter<{ change: [DocumentChange, unkno
       if (!this.checked.has(docId)) await this.read(docId);
       await this.saved(docId).write({ ...meta, data: new RawJson(serialized) });
       index.set(docId, summary);
-      await this.persistIndex(index);
+      // The document is saved by now: others hear of it even when the index can't be written (it is rebuilt from the
+      // files at the next start); the caller is told of that failure after.
       this.emit("change", { id: docId, revision: summary.revision, deleted: false }, origin);
+      await this.persistIndex(index);
       return summary;
     });
   }
