@@ -109,5 +109,9 @@ describe("slugOf", () => {
     expect(slugOf("  Über Tracker 2! ")).toBe("uber-tracker-2");
     expect(slugOf("3D Map")).toBe("3d-map");
     expect(slugOf("日本")).toBe("my-module");
+    // A folder named like a Windows device can't be made there (hunt 2026-11-25 A8).
+    expect(slugOf("CON")).toBe("con-module");
+    expect(slugOf("com1")).toBe("com1-module");
+    expect(slugOf("Console")).toBe("console");
   });
 });

@@ -1,6 +1,6 @@
 import { copyFile, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { validateManifest } from "@tavora/module-schema";
+import { isWindowsDeviceName, validateManifest } from "@tavora/module-schema";
 import packPackage from "@tavora/pack/package.json" with { type: "json" };
 import sdkPackage from "@tavora/sdk/package.json" with { type: "json" };
 import { MANIFEST } from "./registry";
@@ -59,6 +59,8 @@ export function slugOf(name: string): string {
     .replace(/^-+|-+$/g, "")
     .slice(0, 60)
     .replace(/-+$/, "");
+  // A folder Windows keeps for a device (con, nul, com1, …) can't be made there.
+  if (isWindowsDeviceName(slug)) return `${slug}-module`;
   return slug || "my-module";
 }
 

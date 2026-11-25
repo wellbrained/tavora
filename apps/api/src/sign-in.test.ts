@@ -181,6 +181,33 @@ describe("the sign-in gate", () => {
     expect(memory.take(200)).not.toBeNull();
   });
 
+  it("hands the bytes it read to the new request as they are, without a copy the ticket doesn't count (hunt 2026-11-25 E5)", async () => {
+    const store = new AccountStore(":memory:");
+    const account = store.createAccount({ email: "mara@example.com" }, NOW);
+    const { token } = store.createSession(account.id, "windows", NOW);
+    const app = new Hono<SignedInEnv>()
+      .use("*", requireSignIn(store, () => NOW, 64, { memory: createUploadMemory(200), perAccount: 1 }))
+      .post("/", async (context) => context.text(String((await context.req.arrayBuffer()).byteLength)));
+    const Original = globalThis.Request;
+    const bodies: unknown[] = [];
+    globalThis.Request = class extends Original {
+      constructor(input: ConstructorParameters<typeof Request>[0], init?: RequestInit) {
+        bodies.push(init?.body);
+        super(input, init);
+      }
+    } as typeof Request;
+    try {
+      const stream = new ReadableStream<Uint8Array>({ start: (controller) => (controller.enqueue(new Uint8Array(10)), controller.close()) });
+      const answer = await app.request("http://tavora.test/", { method: "POST", headers: { authorization: `Bearer ${token}`, "content-length": "10" }, body: stream, duplex: "half" } as RequestInit);
+      expect(await answer.text()).toBe("10");
+    } finally {
+      globalThis.Request = Original;
+    }
+    // The read buffer itself (a Buffer), not a Uint8Array made from it.
+    expect(bodies.filter((body) => body instanceof Uint8Array).every((body) => Buffer.isBuffer(body))).toBe(true);
+    expect(bodies.some((body) => Buffer.isBuffer(body))).toBe(true);
+  });
+
   it("cuts off a body that stops coming, or comes too slowly, and hands its memory back", async () => {
     const store = new AccountStore(":memory:");
     const account = store.createAccount({ email: "mara@example.com" }, NOW);

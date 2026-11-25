@@ -86,7 +86,9 @@ async function readBody(context: Context, max: number, limits: ReadLimits): Prom
   // As much room as it said it needs, never more than allowed.
   const read = await readUpload(raw, declared ?? max, limits);
   if ("refused" in read) return read.refused;
-  context.req.raw = new Request(raw.url, { method: raw.method, headers: raw.headers, body: new Uint8Array(read.bytes) });
+  // The bytes go in as they are: a copy of them first would hold the read buffer, that copy and the request's own copy at
+  // once, three times the body where the ticket counts two (hunt 2026-11-25 E5).
+  context.req.raw = new Request(raw.url, { method: raw.method, headers: raw.headers, body: read.bytes });
   return "ok";
 }
 

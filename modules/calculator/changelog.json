@@ -1,9 +1,23 @@
 [
   {
-    "version": "0.1.53",
+    "version": "0.1.55",
     "date": "2026-11-25",
     "notes": [
       "Tooltips fade out when they close."
+    ]
+  },
+  {
+    "version": "0.1.54",
+    "date": "2026-11-25",
+    "notes": [
+      "A new list with search in the shared controls."
+    ]
+  },
+  {
+    "version": "0.1.53",
+    "date": "2026-11-25",
+    "notes": [
+      "New chips and a tag field in the shared controls."
     ]
   },
   {

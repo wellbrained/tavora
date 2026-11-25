@@ -28,6 +28,64 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.25.27",
+    date: "2026-11-25",
+    title: "Lists you can search",
+    notes: [
+      "Modules can show a list with a search field on top that stays open, for picking what to add.",
+      "Type to search, use ↑ ↓ to move and Enter to take one.",
+      "The UI Playground shows it.",
+    ],
+    prs: [
+      { number: 990, title: "Listbox: an always-open list to pick from, with search on top" },
+    ],
+    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
+  },
+  {
+    version: "0.25.26",
+    date: "2026-11-25",
+    title: "Small fixes to pages, backups and files",
+    notes: [
+      "A page you import loads even when the first address of its site doesn't answer.",
+      "Tavora no longer deletes other programs' .tmp files from your pictures folder.",
+      "Two backups on the same day can't spoil each other any more.",
+      "A saved document still reaches your other panels when its list can't be updated right away.",
+      "A new project called con, nul or another name Windows keeps gets a folder name that works.",
+    ],
+    prs: [
+      { number: 997, title: "Hunt leftovers 11-25, main and API: page import addresses, backups, blobs, body memory" },
+    ],
+    tags: ["cloud-copy", "privacy", "service", "website"],
+  },
+  {
+    version: "0.25.25",
+    date: "2026-11-25",
+    title: "Chips and tags",
+    notes: [
+      "Modules can show tags you remove with a ×, or switch on and off as filters.",
+      "A new tag field: type, pick a suggestion or paste a list.",
+      "The UI Playground shows both.",
+    ],
+    prs: [
+      { number: 988, title: "Chip and TagInput: removable and toggle chips, a tag field with suggestions" },
+    ],
+    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
+  },
+  {
+    version: "0.25.24",
+    date: "2026-11-25",
+    title: "Plainer buttons and headings",
+    notes: [
+      "Dialog buttons like Save, Publish and Allow have no icon any more; Delete, Copy, Add and Download keep theirs.",
+      "Buttons that open a page or site end in an arrow, and buttons that ask for more first end in \"…\".",
+      "Plainer headings and welcome texts.",
+    ],
+    prs: [
+      { number: 992, title: "Buttons and headings follow the new rules" },
+    ],
+    tags: ["calculator", "catalog", "clock-counter", "cloud-copy", "games", "hotkeys", "icons", "notes", "overlays", "pdf-viewer", "privacy", "publishing", "settings", "ui-kit", "website", "workspace"],
+  },
+  {
     version: "0.25.23",
     date: "2026-11-25",
     title: "Copy and share",

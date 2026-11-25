@@ -55,6 +55,14 @@ describe("backupData", () => {
     expect(await readFile(path.join(dir, "library.json"), "utf8")).toContain("changed");
   });
 
+  it("two backups for the same day at once make one snapshot and don't spoil each other's work (hunt 2026-11-25 A8)", async () => {
+    await seed();
+    const results = await Promise.all([backupData({ userData: dir, now: at(2026, 10, 15) }), backupData({ userData: dir, now: at(2026, 10, 15) })]);
+    expect(results.map((result) => result.status).sort()).toEqual(["exists", "made"]);
+    expect(await list("backups")).toEqual(["2026-10-15"]);
+    expect(await list("backups/2026-10-15")).toContain("library.json");
+  });
+
   it("does nothing for a first start, before any library exists", async () => {
     expect(await backupData({ userData: dir, now: at(2026, 10, 15) })).toEqual({ status: "nothing" });
     expect(await list()).toEqual([]);

@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { copyFile, cp, lstat, mkdir, readdir, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import { isOwnerId } from "@tavora/module-schema";
@@ -68,11 +69,25 @@ export type BackupResult =
  * Nothing is read through the app's own code, so a bug there cannot spoil it.
  */
 export async function backupData(options: BackupOptions): Promise<BackupResult> {
+  const target = path.join(backupsDir(options.userData), dayName(options.now ?? new Date()));
+  // A second call for the same day while the first is still copying would build in the same folder and wipe its work.
+  if (running.has(target)) return { status: "exists", dir: target };
+  running.add(target);
+  try {
+    return await makeBackup(options, target);
+  } finally {
+    running.delete(target);
+  }
+}
+
+/** The snapshots being made right now. */
+const running = new Set<string>();
+
+async function makeBackup(options: BackupOptions, target: string): Promise<BackupResult> {
   const { userData } = options;
   const log = options.log ?? (() => {});
-  const root = backupsDir(userData);
-  const day = dayName(options.now ?? new Date());
-  const target = path.join(root, day);
+  const root = path.dirname(target);
+  const day = path.basename(target);
 
   if (!(await hasLibrary(userData))) return { status: "nothing" };
   if (await pathExists(target)) return { status: "exists", dir: target };
@@ -107,8 +122,7 @@ export async function backupData(options: BackupOptions): Promise<BackupResult> 
     }
   }
 
-  const partial = `${target}.partial`;
-  await rm(partial, { recursive: true, force: true });
+  const partial = `${target}.${randomBytes(4).toString("hex")}.partial`;
   await mkdir(partial, { recursive: true });
   try {
     for (const name of DATA_FILES) {
