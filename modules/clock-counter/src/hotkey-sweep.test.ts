@@ -1,7 +1,7 @@
 // The hotkeys of an item that is gone (deleted while the panel was closing, or before a crash) are let go when the
 // panel starts: closing a panel can't remove them, since Tavora refuses calls from a page that is going.
 import { expect, it, vi } from "vitest";
-import { newItem, type ItemList } from "./items";
+import { newItem, parseList, type ItemList } from "./items";
 import { sweepHotkeys } from "./hotkey-sweep";
 
 const list: ItemList = { items: [newItem("counter", "kept", "Deaths"), newItem("stopwatch", "run", "Run")] };
@@ -26,4 +26,10 @@ it("never fails the start: a list or a removal that is refused changes nothing",
   await expect(sweepHotkeys({ list: async () => Promise.reject(new Error("no")), remove: vi.fn() }, list)).resolves.toEqual([]);
   const remove = vi.fn(async () => Promise.reject(new Error("refused")));
   await expect(sweepHotkeys({ list: async () => [{ action: "up", target: "gone" }], remove }, list)).resolves.toEqual(["gone"]);
+});
+
+it("keeps the hotkeys of items kept for a newer version", async () => {
+  const remove = vi.fn(async () => undefined);
+  const kept = parseList({ items: [{ id: "kept", kind: "counter" }, { id: "dice", kind: "dice", label: "Roll" }] });
+  expect(await sweepHotkeys({ list: async () => [{ action: "roll", target: "dice" }, { action: "up", target: "gone" }], remove }, kept)).toEqual(["gone"]);
 });

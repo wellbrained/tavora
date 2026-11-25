@@ -20,7 +20,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowR
 import OutlineList from "./OutlineList.vue";
 import PdfPage from "./PdfPage.vue";
 import PdfThumbs from "./PdfThumbs.vue";
-import { clampZoom, shownFit, shownSide, type FileView, type FitMode, type SideMode } from "./files";
+import { clampZoom, fitToSave, shownFit, shownSide, type FileView, type FitMode, type SideMode } from "./files";
 import { t } from "./i18n";
 import { fitZoomAll, layoutPages, pageAtOffset, pagesInBand, PAGE_GAP, parsePageInput, stepZoom, type PageSize } from "./layout";
 import { namedPage, type LinkTarget } from "./links";
@@ -39,8 +39,10 @@ const outline = ref<OutlineNode[]>([]);
 const side = ref<SideMode>(shownSide(props.view.side));
 const zoom = ref(clampZoom(props.view.zoom));
 const fit = ref<FitMode>(shownFit(props.view.fit, "pdf"));
-/** The fit to save: what is stored while it is the one shown, so a newer version's fit (shown as the default) stays. */
-const savedFit = (mode: FitMode): FileView["fit"] => (mode === shownFit(props.view.fit, "pdf") ? props.view.fit : mode);
+/** Whether the reader picked a fit or zoom here; from then on that is saved, also when it is the default. */
+let picked = false;
+/** The fit to save: what is stored while it is the one shown and nobody picked one, so a newer version's fit (shown as the default) stays. */
+const savedFit = (mode: FitMode): FileView["fit"] => fitToSave(mode, props.view.fit, "pdf", picked);
 const page = ref(1);
 const pageField = ref("1");
 const root = ref<HTMLElement | null>(null);
@@ -441,6 +443,7 @@ function chooseSide(pressed: Exclude<SideMode, null>[]) {
 }
 
 function chooseFit(pressed: ("width" | "page")[]) {
+  picked = true;
   const next = pressed.find((mode) => mode !== fit.value);
   if (next) fitTo(next);
   else void setZoom(zoom.value, null);

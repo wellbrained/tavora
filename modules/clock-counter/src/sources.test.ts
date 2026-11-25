@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { insert, newItem, setStream, sizesOf, startPause, type Clock, type Counter, type ItemList } from "./items";
+import { insert, newItem, parseList, setStream, sizesOf, startPause, type Clock, type Counter, type ItemList } from "./items";
 import { buildSources, itemForKey, itemSize, overlayKey, VALUE_PX, type Measure } from "./sources";
 
 /** Every character is as wide as half its size, so the numbers are easy to work out. */
@@ -25,6 +25,12 @@ function linked(whole: boolean) {
 }
 
 describe("buildSources", () => {
+  it("keeps items kept for a newer version on the list, by name and without a size", () => {
+    const kept = parseList({ items: [{ id: "c", kind: "counter", label: "Deaths" }, { id: "d1", kind: "dice", label: "Roll" }, { id: "d2", kind: "dice" }] });
+    const sources = buildSources(kept, measure, name, NOW);
+    expect(sources.slice(1)).toEqual([{ key: "d1", name: "Roll" }, { key: "d2", name: "d2" }]);
+  });
+
   it("lists each clock and counter on its own, in the panel's order, with the size it needs", () => {
     const sources = buildSources(list(newItem("countdown", "b", "Boss"), newItem("counter", "c", "Deaths")), measure, name, NOW);
     expect(sources.map((source) => [source.key, source.name, source.group ?? false])).toEqual([

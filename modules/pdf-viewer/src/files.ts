@@ -29,6 +29,13 @@ export interface FileView {
 const isNewer = (value: unknown): value is NewerChoice => typeof value === "string" && value.length > 0 && value.length <= 64;
 /** How a file is fitted: a newer version's fit shows as this kind's default (and stays saved as it is). */
 export const shownFit = (fit: FileView["fit"], kind: FileKind): FitMode => (fit === "width" || fit === "page" || fit === null ? (fit as FitMode) : kind === "pdf" ? "width" : "page");
+/**
+ * The fit to save after the zoom changed: while it is the one shown for what is stored and the reader didn't pick one (a refit
+ * after the panel changed size), what is stored stays, so a newer version's fit lives on. A pick is saved as it is.
+ */
+export const fitToSave = (mode: FitMode, stored: FileView["fit"], kind: FileKind, picked: boolean): FileView["fit"] =>
+  !picked && mode === shownFit(stored, kind) ? stored : mode;
+
 /** What the side shows: nothing for a newer version's choice (it stays saved as it is). */
 export const shownSide = (side: FileView["side"]): SideMode => (side === "pages" || side === "contents" ? (side as SideMode) : null);
 

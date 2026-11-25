@@ -195,9 +195,21 @@ export function createMonitor(sdk: TavoraSDK) {
    * Saves what changed over the newest stored settings. The rest is not written from this panel's copy (read at start): a panel in
    * another workspace may have changed it since, or a newer version saved a value this one doesn't know.
    */
+  let saves = 0;
   function saveApp(change: Partial<AppSettings>): void {
     app.value = { ...app.value, ...change };
-    void patchStored(sdk.storage.app, APP_KEY, change as Record<string, JsonValue>, { atomic: sdk.supports("storage.app.compareAndSet") }).catch(() => undefined);
+    const save = ++saves;
+    void patchStored(sdk.storage.app, APP_KEY, change as Record<string, JsonValue>, { atomic: sdk.supports("storage.app.compareAndSet") })
+      .then((stored) => {
+        // What is stored now (another workspace's change included) is what the panel shows; a newer save here goes first.
+        if (save !== saves || stopped) return;
+        const next = parseApp(stored);
+        if (next.intervalMs !== app.value.intervalMs) for (const history of [cpuHistory, gpuHistory, ramHistory]) history.setInterval(next.intervalMs);
+        const changed = JSON.stringify(next) !== JSON.stringify(app.value);
+        app.value = next;
+        if (changed) void watch();
+      })
+      .catch(() => undefined);
     void watch();
   }
 

@@ -2,7 +2,7 @@
 // a read, an edit and the save, so nothing the newer one wrote is lost when it comes back.
 import { expect, it } from "vitest";
 import { createMemoryHost } from "@tavora/sdk/testing";
-import { FILES_ID, parseFiles, renameFile, replaceCopy, setFileView, shownFit, shownSide } from "./files";
+import { FILES_ID, parseFiles, renameFile, replaceCopy, setFileView, fitToSave, shownFit, shownSide } from "./files";
 import { createFilesStore } from "./store";
 
 it("keeps a newer version's fields on the list, its files and their views", () => {
@@ -41,4 +41,11 @@ it("keeps a fit and a side a newer version added when the view is saved, and sho
   setFileView(data, "f1", { page: 3 });
   expect(data.files[0]!.view).toMatchObject({ page: 3, fit: "height", side: "notes" });
   expect([shownFit(data.files[0]!.view.fit, "pdf"), shownSide(data.files[0]!.view.side)]).toEqual(["width", null]);
+});
+
+it("saves a fit the reader picks, also the default, but keeps a newer one through a refit", () => {
+  expect(fitToSave("width", "height", "pdf", false)).toBe("height");
+  expect(fitToSave("width", "height", "pdf", true)).toBe("width");
+  expect(fitToSave("page", "height", "pdf", false)).toBe("page");
+  expect(fitToSave(null, "height", "pdf", false)).toBeNull();
 });

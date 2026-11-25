@@ -291,6 +291,13 @@ export function parseList(raw: JsonValue | null): ItemList {
   return { ...unknownFields(raw, LIST_KEYS), items: unique, ...(kept.length ? { newerItems: kept } : {}) };
 }
 
+/** The items kept for a newer version, as id and name, so what hangs on their ids (hotkeys, overlay sources) stays too. */
+export function newerItems(list: ItemList): { id: string; label: string }[] {
+  return (list.newerItems ?? []).flatMap(({ entry }) =>
+    isRecord(entry) && typeof entry.id === "string" ? [{ id: entry.id, label: typeof entry.label === "string" ? entry.label.slice(0, MAX.label) : "" }] : [],
+  );
+}
+
 /** What is saved for a list: the items, with the kept ones of a newer version back in their place. */
 export function storedList(list: ItemList): JsonValue {
   const { newerItems, ...rest } = list;

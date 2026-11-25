@@ -4,7 +4,7 @@
 // that is not shown as a whole has no line of its own, so its counters are listed one by one. A source whose look grows with
 // the text says so (`grows`): its frame is then as big as `size` times the frame's scale, and follows it.
 import type { OverlaySource } from "@tavora/sdk";
-import { boxOf, counterShown, groupSegments, itemSegments, linkedGroups, readClock, shownFont, sizeScales, visualOrder, type Font, type Item, type ItemList, type OverlayLook } from "./items";
+import { boxOf, counterShown, groupSegments, itemSegments, linkedGroups, newerItems, readClock, shownFont, sizeScales, visualOrder, type Font, type Item, type ItemList, type OverlayLook } from "./items";
 import type { Segment } from "./template";
 import { formatSeconds } from "./time";
 
@@ -104,6 +104,9 @@ export function buildSources(list: ItemList, measure: Measure, nameOf: (item: It
     }
     if (sources.length >= MAX_SOURCES) break;
   }
+  // Items kept for a newer version stay on the Overlay page's list, by name only: this version can't draw or size them, so
+  // a frame of theirs keeps the size it has.
+  for (const item of newerItems(list)) if (sources.length < MAX_SOURCES) sources.push({ key: item.id, name: item.label || item.id });
   return sources;
 }
 

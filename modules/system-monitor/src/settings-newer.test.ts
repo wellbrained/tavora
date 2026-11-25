@@ -29,5 +29,7 @@ it("saves only the setting that changed, so another workspace's choice and a new
   monitor.setInterval(5000);
   await new Promise((resolve) => setTimeout(resolve, 10));
   expect(await sdk.storage.app.get(APP_KEY)).toEqual({ intervalMs: 5000, drives: ["D:"] });
+  // The panel shows what is stored now: the other workspace's drives too.
+  expect(monitor.app.value).toMatchObject({ intervalMs: 5000, drives: ["D:"] });
   monitor.stop();
 });
