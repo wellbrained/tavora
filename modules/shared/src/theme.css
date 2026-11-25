@@ -53,8 +53,9 @@
 
   --radius: 8px;
   /* How far every disabled kit control fades (Button, fields, menu rows, Calendar days, switches...): one value, so off
-     looks the same everywhere, with or without a reason. */
-  --disabled-opacity: 0.5;
+     looks the same everywhere, with or without a reason. 0.75 is the lowest that keeps a disabled button's text at 3:1
+     in every official theme (the Danger button in Tavora dark sets the limit; e2e accessibility.spec.ts checks it). */
+  --disabled-opacity: 0.75;
 }
 
 /* Bare transition-colors / transition-transform / transition-opacity use these: a press-sized fade on the strong
