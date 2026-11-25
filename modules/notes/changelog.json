@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.6.37",
+    "date": "2026-11-25",
+    "notes": [
+      "New item card pieces in the shared controls."
+    ]
+  },
+  {
     "version": "0.6.36",
     "date": "2026-11-25",
     "notes": [
