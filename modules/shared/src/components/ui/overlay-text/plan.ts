@@ -1,5 +1,6 @@
 // The sums behind OverlayText, without the page: how big the text is drawn in its box, whether it scrolls, and where a
 // scroll is at any moment. Plain functions of numbers, so every case is tested without a browser.
+import type { NewerChoice } from "../../../lib/utils"
 
 /**
  * How the box is sized, as in OBS. `grow`: the box is as big as the text, times a scale (in Tavora's frames the host keeps
@@ -117,21 +118,38 @@ export type OverlayTextBoxSettings = { box: OverlayTextBox; tooLong: OverlayText
 
 export const DEFAULT_OVERLAY_TEXT_BOX: OverlayTextBoxSettings = { box: "grow", tooLong: "scroll", speed: "normal", pause: DEFAULT_PAUSE, softEdges: true }
 
+/** What is saved for the box: a choice a newer version added stays as it is (`NewerChoice`), and `readOverlayTextBox` shows the default for it. */
+export type StoredOverlayTextBox = { box: OverlayTextBox | NewerChoice; tooLong: OverlayTextTooLong | NewerChoice; speed: OverlayTextSpeed | NewerChoice; pause: number; softEdges: boolean }
+
 type Saved = Partial<Record<keyof OverlayTextBoxSettings, unknown>>
 const known = <T>(values: readonly T[], value: unknown): value is T => values.includes(value as T)
+const newer = (value: unknown): value is NewerChoice => typeof value === "string" && value.length > 0 && value.length <= 64
+const MAX_PAUSE = 3600
+// Not the kit's `choiceOf` from lib/utils: that file pulls in the class helpers, and this one stays plain for an overlay page.
+const choiceOf = <T extends string>(values: readonly T[], value: string | undefined, fallback: T): T => (known(values, value) ? value : fallback)
 
-/** Only the settings in `saved` that make sense, so data keeps what was set and leaves out the rest (a module reads it with `readOverlayTextBox`). */
-export function keepOverlayTextBox(saved: Saved): Partial<OverlayTextBoxSettings> {
-  const kept: Partial<OverlayTextBoxSettings> = {}
-  if (known(OVERLAY_TEXT_BOXES, saved.box)) kept.box = saved.box
-  if (known(OVERLAY_TEXT_TOO_LONG, saved.tooLong)) kept.tooLong = saved.tooLong
-  if (known(OVERLAY_TEXT_SPEEDS, saved.speed)) kept.speed = saved.speed
-  if (known(OVERLAY_TEXT_PAUSES, saved.pause)) kept.pause = saved.pause
+/**
+ * Only the settings in `saved` that make sense, so data keeps what was set and leaves out the rest (a module reads it with
+ * `readOverlayTextBox`). A choice or pause a newer version added is kept as it is, so a save here doesn't put the default over it.
+ */
+export function keepOverlayTextBox(saved: Saved): Partial<StoredOverlayTextBox> {
+  const kept: Partial<StoredOverlayTextBox> = {}
+  if (known(OVERLAY_TEXT_BOXES, saved.box) || newer(saved.box)) kept.box = saved.box
+  if (known(OVERLAY_TEXT_TOO_LONG, saved.tooLong) || newer(saved.tooLong)) kept.tooLong = saved.tooLong
+  if (known(OVERLAY_TEXT_SPEEDS, saved.speed) || newer(saved.speed)) kept.speed = saved.speed
+  if (known(OVERLAY_TEXT_PAUSES, saved.pause) || (typeof saved.pause === "number" && Number.isFinite(saved.pause) && saved.pause >= 0 && saved.pause <= MAX_PAUSE)) kept.pause = saved.pause as number
   if (typeof saved.softEdges === "boolean") kept.softEdges = saved.softEdges
   return kept
 }
 
-/** The box's settings, with the defaults for what `saved` leaves out or doesn't make sense (data from before, an older panel's state). */
+/** The box's settings to show and use, with the defaults for what `saved` leaves out or this version doesn't know (the value stays saved as it is). */
 export function readOverlayTextBox(saved: Saved): OverlayTextBoxSettings {
-  return { ...DEFAULT_OVERLAY_TEXT_BOX, ...keepOverlayTextBox(saved) }
+  const kept = keepOverlayTextBox(saved)
+  return {
+    box: choiceOf(OVERLAY_TEXT_BOXES, kept.box, DEFAULT_OVERLAY_TEXT_BOX.box),
+    tooLong: choiceOf(OVERLAY_TEXT_TOO_LONG, kept.tooLong, DEFAULT_OVERLAY_TEXT_BOX.tooLong),
+    speed: choiceOf(OVERLAY_TEXT_SPEEDS, kept.speed, DEFAULT_OVERLAY_TEXT_BOX.speed),
+    pause: known(OVERLAY_TEXT_PAUSES, kept.pause) ? kept.pause : DEFAULT_OVERLAY_TEXT_BOX.pause,
+    softEdges: kept.softEdges ?? DEFAULT_OVERLAY_TEXT_BOX.softEdges,
+  }
 }

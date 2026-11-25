@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.64",
+    "date": "2026-11-25",
+    "notes": [
+      "The text box settings keep a choice a newer version added, instead of resetting it."
+    ]
+  },
+  {
     "version": "0.1.63",
     "date": "2026-11-25",
     "notes": [

@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.3.52",
+    "date": "2026-11-25",
+    "notes": [
+      "Picking the background you already see now saves it.",
+      "Moving the palette and getting interrupted puts it back.",
+      "Panel settings a newer version added stay."
+    ]
+  },
+  {
     "version": "0.3.51",
     "date": "2026-11-25",
     "notes": [

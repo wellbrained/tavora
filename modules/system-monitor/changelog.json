@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.50",
+    "date": "2026-11-25",
+    "notes": [
+      "Settings changed in another workspace show when you come back."
+    ]
+  },
+  {
     "version": "0.1.49",
     "date": "2026-11-25",
     "notes": [

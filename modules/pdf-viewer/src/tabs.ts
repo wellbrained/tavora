@@ -23,11 +23,16 @@ export function savedTabState(state: TabState): TabState {
   return { ...state, tabs: [...state.tabs], active: state.active };
 }
 
-/** Keeps only the tabs whose file still exists; if the shown one is gone, a neighbour is shown. */
-export function keepExisting(state: TabState, exists: (id: string) => boolean): TabState {
-  const tabs = state.tabs.filter(exists);
-  if (tabs.length === state.tabs.length) return state;
-  if (state.active !== null && tabs.includes(state.active)) return { ...state, tabs, active: state.active };
+/**
+ * Keeps only the tabs whose file still exists; if the shown one is gone, a neighbour is shown. A tab of a file a newer version
+ * keeps (`kept`: not shown here, but still stored) stays in the state, so it is there when that version comes back; it is
+ * never the shown one.
+ */
+export function keepExisting(state: TabState, exists: (id: string) => boolean, kept: (id: string) => boolean = () => false): TabState {
+  const tabs = state.tabs.filter((id) => exists(id) || kept(id));
+  const shown = state.active !== null && exists(state.active);
+  if (tabs.length === state.tabs.length && (shown || state.active === null)) return state;
+  if (shown) return { ...state, tabs, active: state.active };
   const at = state.active === null ? -1 : state.tabs.indexOf(state.active);
   const after = state.tabs.slice(at + 1).find(exists);
   const before = state.tabs.slice(0, Math.max(at, 0)).reverse().find(exists);

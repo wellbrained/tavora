@@ -25,5 +25,6 @@ export {
   type OverlayTextSpeed,
   type OverlayTextTooLong,
   type ScrollTiming,
+  type StoredOverlayTextBox,
   type Size as OverlayTextSize,
 } from "./plan"

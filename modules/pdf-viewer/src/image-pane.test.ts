@@ -69,6 +69,28 @@ describe("ImagePane", () => {
     expect(saved.mock.calls[0]![0]).toMatchObject({ fit: "page" });
   });
 
+  it("saves the fit when the reader picks Whole picture over a fit a newer version stored, though it is the one shown", async () => {
+    const saved = vi.fn();
+    const root = document.createElement("div");
+    document.body.append(root);
+    // A fit this version doesn't know shows as the picture's default (the whole picture).
+    app = createApp(defineComponent({ render: () => h(ImagePane, { url: "x.png", name: "x.png", view: { page: 1, zoom: 1, fit: "tiled", side: null }, onView: saved }) }));
+    app.mount(root);
+    const image = root.querySelector("[data-testid=image-view]") as HTMLImageElement;
+    Object.defineProperty(image, "naturalWidth", { value: 800 });
+    Object.defineProperty(image, "naturalHeight", { value: 600 });
+    image.dispatchEvent(new Event("load"));
+    for (let frame = 0; frame < 4; frame++) {
+      vi.advanceTimersByTime(20);
+      await flush();
+    }
+    saved.mockClear();
+    (root.querySelector("[data-testid=zoom-whole]") as HTMLElement).click();
+    vi.advanceTimersByTime(600);
+    await flush();
+    expect(saved).toHaveBeenCalledWith(expect.objectContaining({ fit: "page" }));
+  });
+
   it("says Show the whole picture on its Whole map button", async () => {
     const root = document.createElement("div");
     document.body.append(root);

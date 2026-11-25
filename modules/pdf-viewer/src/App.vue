@@ -84,7 +84,7 @@ onMounted(async () => {
       return;
     }
     const saved = parseTabState(await connected.panel.getState<unknown>());
-    tabState.value = keepExisting(saved, (id) => opened.find(id) !== undefined);
+    tabState.value = keepExisting(saved, (id) => opened.find(id) !== undefined, opened.keeps);
     // Asking about an id nobody linked tells whether this Tavora has the call at all; an older one doesn't know it.
     canLink.value = await connected.files.check("0".repeat(32)).then(
       () => true,
@@ -113,7 +113,7 @@ onBeforeUnmount(() => {
 watch(files, () => {
   if (!store.value) return;
   const renamed = new Map(files.value.flatMap((file) => (file.previous ? [[file.previous, file.id] as const] : [])));
-  const next = keepExisting(followRenamed(tabState.value, renamed), (id) => byId.value.has(id));
+  const next = keepExisting(followRenamed(tabState.value, renamed), (id) => byId.value.has(id), store.value.keeps);
   if (next !== tabState.value) tabState.value = next;
 });
 

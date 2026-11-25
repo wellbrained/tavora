@@ -3,6 +3,7 @@
 import type { JsonValue } from "@tavora/sdk";
 import { expect, it } from "vitest";
 import { parseBoard, shownBackground } from "./boards";
+import { otherPanelState, panelStateToSave } from "./panelState";
 
 it("keeps a newer version's fields on a board, and still checks its own", () => {
   const board = parseBoard({ version: 1, elements: [], name: "Plan", background: "url(x)", layers: [{ id: "l1" }] } as JsonValue);
@@ -15,4 +16,11 @@ it("keeps a newer version's fields on a board, and still checks its own", () => 
 it("keeps a newer version's fields on a board's stored files", () => {
   const board = parseBoard({ files: { f1: { blobId: "0123456789abcdef0123456789abcdef", mimeType: "image/png", created: 1, crop: { x: 2 } } } } as JsonValue);
   expect(JSON.parse(JSON.stringify(board.files))).toMatchObject({ f1: { blobId: "0123456789abcdef0123456789abcdef", crop: { x: 2 } } });
+});
+
+it("keeps what a newer version kept in the panel's state when the panel saves it", () => {
+  const other = otherPanelState({ selected: "a", views: {}, palette: { x: 1 }, grid: "dots", layers: [1] });
+  expect(other).toEqual({ grid: "dots", layers: [1] });
+  expect(panelStateToSave(other, { selected: "b", views: { b: 1 }, palette: { x: 2 } })).toEqual({ grid: "dots", layers: [1], selected: "b", views: { b: 1 }, palette: { x: 2 } });
+  expect(otherPanelState(null)).toEqual({});
 });

@@ -3,6 +3,7 @@
 
 import { TavoraError, type ReadOnlyFile, type TavoraSDK } from "@tavora/sdk";
 import { openDocument } from "@tavora/sdk/store";
+import { isRecord } from "@tavora/official-ui/lib/utils";
 import { ref } from "vue";
 import { addFile, cleanName, detectType, dropLink, emptyFiles, FILES_ID, kindOf, linkStatus, parseFiles, parseView, removeFile, renameFile, replaceCopy, setFileView, skipVersion, storedFiles, versionOf, type FileEntry, type FileLink, type FileView, type FilesData, type LinkStatus } from "./files";
 
@@ -162,9 +163,13 @@ export async function createFilesStore(sdk: TavoraSDK, options: { /** The docume
     await sdk.files.forget(link.ref).catch(() => undefined);
   }
 
+  /** Whether the id is a file of a type a newer version takes: not listed here, but stored, so its tabs are kept. */
+  const keeps = (id: string) => doc.data.newerFiles?.some(({ entry }) => isRecord(entry) && entry.id === id) ?? false;
+
   return {
     files,
     find,
+    keeps,
     add,
     addLinked,
     check,

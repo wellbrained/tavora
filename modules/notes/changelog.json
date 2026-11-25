@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.6.49",
+    "date": "2026-11-25",
+    "notes": [
+      "Dragging the sidebar edge or a picture's corner and getting interrupted puts it back.",
+      "Panel settings a newer version added stay."
+    ]
+  },
+  {
     "version": "0.6.48",
     "date": "2026-11-25",
     "notes": [

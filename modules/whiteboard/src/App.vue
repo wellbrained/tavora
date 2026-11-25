@@ -10,7 +10,7 @@ import { ArrowLeftRight, ArrowRight, ImagePlus, Minus, MoreHorizontal, Plus, Sti
 import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
 import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { toast, Toaster, undoable } from "@tavora/official-ui/components/ui/toast";
-import { TavoraError, type TavoraSDK, type TavoraTheme } from "@tavora/sdk";
+import { TavoraError, type JsonValue, type TavoraSDK, type TavoraTheme } from "@tavora/sdk";
 import type { DocumentHandle } from "@tavora/sdk/store";
 import { computed, defineAsyncComponent, h, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import BoardMenu from "./BoardMenu.vue";
@@ -24,6 +24,7 @@ import { pictureName } from "./copy";
 import { setLanguage, t } from "./i18n";
 import { de, en } from "./locales";
 import { DEFAULT_PALETTE, palettePlace, type PalettePlace } from "./palette";
+import { otherPanelState, panelStateToSave } from "./panelState";
 import { unusedFiles } from "./pictures";
 import { toolbarPlace, type ToolbarPlace } from "./toolbar";
 import type { ConnectorKind } from "./connectors";
@@ -76,6 +77,8 @@ const connectorOpen = ref(false);
 let connectorChoice: ConnectorKind | null = null;
 
 let views: Record<string, View> = {};
+/** What a newer version kept in the panel's state besides; saved back as it was. */
+let otherState: Record<string, JsonValue> = {};
 /** Whether the panel's state has been read; until then there is nothing of it to save. */
 let stateRead = false;
 let viewTimer: ReturnType<typeof setTimeout> | undefined;
@@ -101,7 +104,7 @@ function offerUndo(message: string, run: () => Promise<void>) {
 function saveSelection() {
   // Not before the panel's state is read: a panel hidden while it opens would write over its views with nothing.
   if (!stateRead) return;
-  void sdk.value?.panel.setState({ selected: shown.value?.id ?? null, views, palette: palette.value } as unknown as never).catch(() => undefined);
+  void sdk.value?.panel.setState(panelStateToSave(otherState, { selected: shown.value?.id ?? null, views, palette: palette.value }) as unknown as never).catch(() => undefined);
 }
 
 /** Shows the library's open board; `again` shows the same board anew, from what another panel saved. */
@@ -219,6 +222,7 @@ onMounted(async () => {
 
     const state = await connected.panel.getState<PanelState>();
     stateRead = true;
+    otherState = otherPanelState(state);
     views = state?.views && typeof state.views === "object" ? state.views : {};
     palette.value = palettePlace(state?.palette);
 

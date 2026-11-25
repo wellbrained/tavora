@@ -573,9 +573,15 @@ describe("the box of an overlay", () => {
   it("keeps a fixed box and its settings, and drops what it can't read", () => {
     expect(lookOf({ box: "fixed", tooLong: "cut", speed: "fast", pause: 0.5, softEdges: false })).toMatchObject({ box: "fixed", tooLong: "cut", speed: "fast", pause: 0.5, softEdges: false });
     expect(boxOf(lookOf({ pause: 0 })).pause).toBe(0);
-    const bad = lookOf({ box: "huge", tooLong: "wrap", speed: 9, pause: 0.7, softEdges: "yes" });
+    const bad = lookOf({ box: "", tooLong: 3, speed: 9, pause: -1, softEdges: "yes" });
     for (const key of ["box", "tooLong", "speed", "pause", "softEdges"]) expect(key in bad).toBe(false);
     expect(boxOf({ pause: 7 }).pause).toBe(2);
+  });
+
+  it("keeps a choice a newer version added as it is, and shows the default for it", () => {
+    const newer = lookOf({ box: "tiled", tooLong: "wrap", speed: "turbo", pause: 0.7 });
+    expect(newer).toMatchObject({ box: "tiled", tooLong: "wrap", speed: "turbo", pause: 0.7 });
+    expect(boxOf(newer)).toEqual({ box: "grow", tooLong: "scroll", speed: "normal", pause: 2, softEdges: true });
   });
 
   it("is written so the previous version still reads it: the box only adds fields, and the old ones stay", () => {

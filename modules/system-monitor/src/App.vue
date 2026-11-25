@@ -45,7 +45,12 @@ onMounted(async () => {
     const started = createMonitor(connected);
     sdk.value = connected;
     monitor.value = started;
-    stopFollowing.push(connected.lifecycle.onResume(() => void started.retry()));
+    stopFollowing.push(
+      connected.lifecycle.onResume(() => {
+        void started.retry();
+        void started.reloadApp();
+      }),
+    );
     stopFollowing.push(connected.panel.onDialogChange((open) => (dialogOpen.value = open)));
     addEventListener("keydown", onKey);
     stopFollowing.push(() => removeEventListener("keydown", onKey));

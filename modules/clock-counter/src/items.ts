@@ -3,7 +3,7 @@
 // so it goes on through restarts and needs no saving while it runs. Every change here is a plain function of the
 // list, so a change made twice (after a save conflict) gives the same result.
 // The kit's plain entry for the overlay text box (no Vue), so this file stays plain data wherever it is read.
-import { DEFAULT_OVERLAY_TEXT_BOX, keepOverlayTextBox, readOverlayTextBox, type OverlayTextBoxSettings } from "@tavora/official-ui/overlay-text";
+import { DEFAULT_OVERLAY_TEXT_BOX, keepOverlayTextBox, readOverlayTextBox, type OverlayTextBoxSettings, type StoredOverlayTextBox } from "@tavora/official-ui/overlay-text";
 import type { JsonValue } from "@tavora/sdk";
 import { compile, COUNT, defaultText, legacyText, segments, TIME, type Member, type Segment } from "./template";
 import { DEFAULT_FORMAT, isFormat } from "./time";
@@ -97,7 +97,7 @@ export type OverlayLook = {
   /** The same sizes as the version before knows them (S to XL, see OLD_STEPS); kept for it, and read when there are no steps. */
   wordsSize: OldStep;
   numberSize: OldStep;
-} & Partial<OverlayTextBoxSettings>;
+} & Partial<StoredOverlayTextBox>;
 // The box (the kit's OverlayText): the frame on the Overlay page grows with the text and is scaled by dragging a corner, or it is
 // a fixed box, with what a long text does in it. Each field is left out until it is set (read them through `boxOf`), and the
 // version before ignores them.
