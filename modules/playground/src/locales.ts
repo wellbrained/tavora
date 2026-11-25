@@ -320,6 +320,11 @@ export const en = {
   "ex.pick.Combobox.note": "Type to search.",
   "ex.pick.ComboboxFree": "Combobox with free text",
   "ex.pick.ComboboxFree.note": "The text is the value and the list only suggests: Enter keeps what you typed, the arrow keys and Enter pick a suggestion.",
+  "ex.pick.Tags": "Tags",
+  "ex.pick.Tags.note": "Type a tag and press Enter or a comma, or pick one you used before. Paste a list to add each part.",
+  "ex.pick.Tags.rule": "Backspace in an empty field picks the last tag, a second press removes it. The arrow keys move along the tags.",
+  "ex.pick.TagFilter": "Tags from a list",
+  "ex.pick.TagFilter.note": "Only what the list offers can be picked, like a filter. Large size.",
   "ex.pick.Picker": "Picker",
   "ex.pick.Picker.note": "A button with the list under it.",
   "ex.pick.PickerGroups": "Picker with groups",
@@ -391,6 +396,8 @@ export const en = {
   "ex.toggles.StyleTiles.note": "Pick one look out of a few by its picture.",
 
   "ex.status.Badges": "Badges",
+  "ex.status.Chips": "Chips",
+  "ex.status.Chips.note": "Tags you can remove with their ×, or switch on and off as filters. In three sizes, with an icon or a colour dot.",
   "ex.status.StatusDot": "Status dot and word",
   "ex.status.Keys": "Keyboard keys",
 
@@ -856,6 +863,11 @@ export const de: Record<TextKey, string> = {
   "ex.pick.Combobox.note": "Tippe, um zu suchen.",
   "ex.pick.ComboboxFree": "Combobox mit freiem Text",
   "ex.pick.ComboboxFree.note": "Der Text ist der Wert, die Liste schlägt nur vor: Enter übernimmt, was du getippt hast; mit den Pfeiltasten und Enter wählst du einen Vorschlag.",
+  "ex.pick.Tags": "Tags",
+  "ex.pick.Tags.note": "Tipp einen Tag und drück Enter oder ein Komma, oder nimm einen, den du schon benutzt hast. Füg eine Liste ein, um jeden Teil hinzuzufügen.",
+  "ex.pick.Tags.rule": "Die Rücktaste im leeren Feld wählt den letzten Tag, ein zweiter Druck entfernt ihn. Mit den Pfeiltasten gehst du die Tags entlang.",
+  "ex.pick.TagFilter": "Tags aus einer Liste",
+  "ex.pick.TagFilter.note": "Nur was die Liste anbietet, lässt sich wählen, wie bei einem Filter. Große Größe.",
   "ex.pick.Picker": "Picker",
   "ex.pick.Picker.note": "Ein Button mit der Liste darunter.",
   "ex.pick.PickerGroups": "Picker mit Gruppen",
@@ -927,6 +939,8 @@ export const de: Record<TextKey, string> = {
   "ex.toggles.StyleTiles.note": "Wähle einen von wenigen Looks über sein Bild.",
 
   "ex.status.Badges": "Badges",
+  "ex.status.Chips": "Chips",
+  "ex.status.Chips.note": "Tags, die du mit ihrem × entfernst oder als Filter an- und ausschaltest. In drei Größen, mit Symbol oder Farbpunkt.",
   "ex.status.StatusDot": "Statuspunkt und Wort",
   "ex.status.Keys": "Tasten",
 
