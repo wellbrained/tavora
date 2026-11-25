@@ -48,7 +48,7 @@ const copy = (to: string, mode: "replace" | "add") => send({ type: "copy-setup",
   >
     <ContextMenuItem v-if="shown('settings')" :disabled="row('settings').disabled" data-testid="layout-menu-settings" @select="row('settings').run()">
       <component :is="row('settings').icon" />
-      <span class="min-w-0 flex-1 truncate">{{ row("settings").label }}…</span>
+      <span class="min-w-0 flex-1 truncate">{{ row("settings").label }}</span>
     </ContextMenuItem>
     <ContextMenuSub>
       <ContextMenuSubTrigger :disabled="copyTargets.length === 0" data-testid="layout-menu-copy">
@@ -109,7 +109,7 @@ const copy = (to: string, mode: "replace" | "add") => send({ type: "copy-setup",
     </ContextMenuCheckboxItem>
     <ContextMenuItem data-testid="layout-menu-customize" @select="emit('customize')">
       <SlidersHorizontal />
-      <span class="min-w-0 flex-1 truncate">{{ t("overlays.layout.customizeToolbar") }}…</span>
+      <span class="min-w-0 flex-1 truncate">{{ t("overlays.layout.customizeToolbar") }}</span>
     </ContextMenuItem>
     <ContextMenuSeparator />
 

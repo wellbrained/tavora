@@ -34,7 +34,7 @@ export const en = {
   "row.previewNone": "No more text",
 
   "image.insert": "Insert image",
-  "image.choose": "Choose file…",
+  "image.choose": "Choose file",
   "image.quality": "Quality",
   "image.optimized": "Optimized",
   "image.optimizedHint": "Smaller files, still sharp",
@@ -161,7 +161,7 @@ export const de: Record<keyof typeof en, string> = {
   "row.previewNone": "Kein weiterer Text",
 
   "image.insert": "Bild einfügen",
-  "image.choose": "Datei auswählen…",
+  "image.choose": "Datei auswählen",
   "image.quality": "Qualität",
   "image.optimized": "Optimiert",
   "image.optimizedHint": "Kleinere Dateien, trotzdem scharf",

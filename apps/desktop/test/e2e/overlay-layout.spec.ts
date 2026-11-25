@@ -782,7 +782,7 @@ const keysOf = async (page: Page, setup: string) => {
   return (await state(page)).items.map((item) => item.id.split("\n").at(-1));
 };
 
-test("Copy to… lists the other games, copies right away to one without frames, asks before touching one that has some, and says what it left out", async () => {
+test("Copy to lists the other games, copies right away to one without frames, asks before touching one that has some, and says what it left out", async () => {
   const userData = await newUserData();
   await seedCopy(userData);
   const { app, page } = await launch(userData, [MODULES], { seed: false });
@@ -849,7 +849,7 @@ test("Copy to… lists the other games, copies right away to one without frames,
   expect(ids(GAME)).toEqual(["own", "shared", "extra"]);
 });
 
-test("Copy to… is off with a reason while the setup is empty", async () => {
+test("Copy to is off with a reason while the setup is empty", async () => {
   const userData = await newUserData();
   await seedCopy(userData);
   const { app, page } = await launch(userData, [MODULES], { seed: false });

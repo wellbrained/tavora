@@ -25,7 +25,7 @@ import {
         <ContextMenuSubContent class="w-44">
           <ContextMenuItem><Folder /> Act 1</ContextMenuItem>
           <ContextMenuItem><Folder /> Endgame</ContextMenuItem>
-          <ContextMenuItem><FolderPlus /> New folder…</ContextMenuItem>
+          <ContextMenuItem><FolderPlus /> New folder</ContextMenuItem>
         </ContextMenuSubContent>
       </ContextMenuSub>
       <ContextMenuSeparator />

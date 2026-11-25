@@ -643,7 +643,7 @@ test("ui playground: the name dialog selects its text, counts and locks while bu
     inModule(app, PLAYGROUND, `(() => { const input = ${q("name-input")}; input.value = ${JSON.stringify(value)}; input.dispatchEvent(new Event("input", { bubbles: true })); })()`);
 
   // The name is selected on open, the count shows the limit, and a name over it can't be confirmed.
-  await press("Rename…");
+  await press("Rename");
   await expect.poll(() => inModule(app, PLAYGROUND, `(() => { const i = ${q("name-input")}; return !!i && document.activeElement === i && i.selectionStart === 0 && i.selectionEnd === i.value.length; })()`)).toBe(true);
   expect(await inModule(app, PLAYGROUND, `${q("name-count")}.textContent.trim()`)).toBe("8 / 30");
   await type("x".repeat(31));

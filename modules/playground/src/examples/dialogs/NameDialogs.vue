@@ -25,7 +25,7 @@ function saveSlowly() {
 
 <template>
   <div class="flex flex-wrap items-center gap-2">
-    <Button variant="secondary" @click="renaming = true">Rename…</Button>
+    <Button variant="secondary" @click="renaming = true">Rename</Button>
     <Button variant="secondary" @click="renamingSlowly = true">Rename with a slow save…</Button>
     <Button variant="secondary" @click="pickedSave = ''; fromSave = true">New from a save…</Button>
   </div>

@@ -708,7 +708,7 @@ test("a user reports a module from Browse and from Settings, and only its id, ke
     await page.getByTestId("catalog-wellbrained.tracker").getByTestId("catalog-name").click();
     // No support link in this listing, so no Send feedback button.
     await expect(page.getByTestId("catalog-info-support")).toHaveCount(0);
-    await expect(page.getByTestId("catalog-report-wellbrained.tracker")).toHaveText("Report to Tavora…");
+    await expect(page.getByTestId("catalog-report-wellbrained.tracker")).toHaveText("Report to Tavora");
     await expect(page.getByTestId("catalog-info-report")).toContainText("Harmful, or breaks the rules.");
     await page.getByTestId("catalog-report-wellbrained.tracker").click();
     // A dialog asks for the reason first; the first one is picked.
@@ -726,7 +726,7 @@ test("a user reports a module from Browse and from Settings, and only its id, ke
     await page.getByTestId("rail-settings").click();
     await page.getByTestId("settings-nav-modules").click();
     await page.getByTestId("module-more-wellbrained.tracker").click();
-    await expect(page.getByTestId("report-module-wellbrained.tracker")).toHaveText("Report to Tavora…");
+    await expect(page.getByTestId("report-module-wellbrained.tracker")).toHaveText("Report to Tavora");
     await page.getByTestId("report-module-wellbrained.tracker").click();
     await page.getByTestId("report-send").click();
     await expect(hostToast(page)).toHaveText("Reported Tracker. Thanks!");

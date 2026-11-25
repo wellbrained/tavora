@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.6.59",
+    "date": "2026-11-25",
+    "notes": [
+      "Choose file in the image menu no longer ends in …."
+    ]
+  },
+  {
     "version": "0.6.58",
     "date": "2026-11-25",
     "notes": [

@@ -10,7 +10,7 @@ const name = ref("Waystone");
 <template>
   <Popover>
     <PopoverTrigger as-child>
-      <Button variant="secondary">Rename…</Button>
+      <Button variant="secondary">Rename</Button>
     </PopoverTrigger>
     <PopoverContent align="start" class="flex flex-col gap-2">
       <Input v-model="name" aria-label="Name" />

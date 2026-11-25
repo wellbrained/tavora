@@ -536,7 +536,7 @@ test("a cloud copy in a folder that went missing says so and offers another fold
     await a.page.getByTestId("cloud-copy-upload").click();
     const problem = a.page.getByTestId("cloud-copy-problem");
     await expect(problem).toContainText("Can't find your folder");
-    await expect(a.page.getByTestId("cloud-copy-retry")).toHaveText("Change folder…");
+    await expect(a.page.getByTestId("cloud-copy-retry")).toHaveText("Change folder");
   } finally {
     await a.app.close();
   }

@@ -22,6 +22,6 @@ vp create @tavora/module -- raid-timer --template vue --id example.raid-timer --
 
 The commands it prints, and the ones in the project's DEVELOP.md, are for the package manager that started it. Vite+ starts it through pnpm or npm, so the project's commands are theirs; `vp install` and `vp run dev` work too.
 
-The project builds with Vite, has a `dev` script that rebuilds on every change (add the folder in Tavora under **Settings > Developer > Project folders > Add folder…**; a folder with several projects in it works too). Publish it from Tavora with **Publish** under **Settings > Developer**. Its manifest sets `minTavora` to the oldest Tavora that has everything the SDK it starts with offers. The project's DEVELOP.md says the rest.
+The project builds with Vite, has a `dev` script that rebuilds on every change (add the folder in Tavora under **Settings > Developer > Project folders > Add folder**; a folder with several projects in it works too). Publish it from Tavora with **Publish** under **Settings > Developer**. Its manifest sets `minTavora` to the oldest Tavora that has everything the SDK it starts with offers. The project's DEVELOP.md says the rest.
 
 More in the [developer docs](https://docs.mytavora.app/guide/getting-started).

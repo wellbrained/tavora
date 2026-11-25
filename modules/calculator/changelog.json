@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.68",
+    "date": "2026-11-25",
+    "notes": [
+      "Save as no longer ends in …."
+    ]
+  },
+  {
     "version": "0.1.67",
     "date": "2026-11-25",
     "notes": [

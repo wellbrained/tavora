@@ -46,7 +46,7 @@ export const en = {
   "calc.thousand": "Thousand (k): 5k is 5,000",
   "calc.million": "Million (m): 5m is 5,000,000",
   "calc.billion": "Billion (b): 5b is 5,000,000,000",
-  "calc.saveAs": "Save as…",
+  "calc.saveAs": "Save as",
 
   "error.divide": "Can't divide by 0",
   "error.invalid": "That doesn't add up",
@@ -127,7 +127,7 @@ export const de: Record<keyof typeof en, string> = {
   "calc.thousand": "Tausend (k): 5k ist 5.000",
   "calc.million": "Million (m): 5m ist 5.000.000",
   "calc.billion": "Milliarde (b): 5b ist 5.000.000.000",
-  "calc.saveAs": "Speichern als…",
+  "calc.saveAs": "Speichern als",
 
   "error.divide": "Durch 0 geht nicht",
   "error.invalid": "Das geht nicht auf",

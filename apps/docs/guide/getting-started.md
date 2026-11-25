@@ -114,7 +114,7 @@ vp run dev
 
 With Vite+, use `vp run dev`, not `vp dev`: `vp dev` starts a dev server instead of building the module.
 
-In Tavora, open **Settings > Developer > Project folders**, choose **Add folder…** and pick the project folder, or the folder you keep all your module projects in: Tavora loads every project directly inside it, and finds new ones by itself. The module appears in Add module, and its panels reload by themselves every time `dev` rebuilds.
+In Tavora, open **Settings > Developer > Project folders**, choose **Add folder** and pick the project folder, or the folder you keep all your module projects in: Tavora loads every project directly inside it, and finds new ones by itself. The module appears in Add module, and its panels reload by themselves every time `dev` rebuilds.
 
 ## Talk to the host
 
