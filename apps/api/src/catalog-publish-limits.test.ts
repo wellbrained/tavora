@@ -17,7 +17,7 @@ import { SCAN_LIMIT_MS } from "./moderation.ts";
 import { encodePng } from "./png.ts";
 import { keyFingerprint } from "./publishers.ts";
 import { createRateLimiter } from "./rate-limit.ts";
-import { createUploadMemory, freeMemory, MAX_MANIFEST_BYTES, MAX_SIGNATURE_BYTES, readUpload, UPLOAD_MEMORY_BYTES, zipMemory, type UploadMemory } from "./upload-memory.ts";
+import { createUploadMemory, freeMemory, heldBytes, MAX_MANIFEST_BYTES, MAX_SIGNATURE_BYTES, readUpload, UPLOAD_MEMORY_BYTES, zipMemory, type UploadMemory } from "./upload-memory.ts";
 import type { Scanner } from "./virus-scan.ts";
 
 const db = writeDatabase(":memory:", buildDataset({ builtIns: [{ id: "elden-ring", name: "Elden Ring" }], wikidata: [], steam: [] }));
@@ -156,6 +156,56 @@ describe("reading an upload", () => {
     expect(refused.status).toBe(429);
     expect((await stalled).status).toBe(408);
     expect((await send(second, moduleZip(second.key))).status).toBe(201);
+  });
+
+  it("counts what a chunked upload of a small zip really holds while it is checked (audit run 2)", async () => {
+    let release!: () => void;
+    const seen: number[] = [];
+    let scanning!: () => void;
+    const started = new Promise<void>((resolve) => (scanning = resolve));
+    const scanner: Scanner = {
+      scan: (zip) => {
+        seen.push(zip.buffer.byteLength);
+        scanning();
+        return new Promise((resolve) => (release = () => resolve({ clean: true })));
+      },
+    };
+    const memory = createUploadMemory();
+    const { app, developer } = withMemory(memory, scanner);
+    const dev = developer("dev@example.com");
+    const zip = moduleZip(dev.key);
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(zip));
+        controller.close();
+      },
+    });
+    const answer = app.request(
+      new Request(url, {
+        method: "POST",
+        headers: { "content-type": "application/zip", "x-tavora-signature": publishSignature(dev.key, zip), authorization: `Bearer ${dev.token}` },
+        body,
+        duplex: "half",
+      } as RequestInit),
+    );
+    await started;
+    // The zip the checks hold is backed by its own bytes, not the 50 MB block it was read into, and the ticket counts at
+    // least that.
+    expect(seen).toEqual([zip.length]);
+    expect(memory.take(UPLOAD_MEMORY_BYTES - zipMemory(zip)! + 1)).toBeNull();
+    expect(memory.take(UPLOAD_MEMORY_BYTES - zipMemory(zip)!)).not.toBeNull();
+    release();
+    expect((await answer).status).toBe(201);
+  });
+
+  it("never counts less than the block a read body still shows part of", async () => {
+    const read = (size: number) =>
+      readUpload(new Request(url, { method: "POST", body: new Uint8Array(size), duplex: "half" } as RequestInit), 1024 * 1024);
+    const short = await read(1000);
+    expect("bytes" in short && [short.bytes.length, short.bytes.buffer.byteLength, heldBytes(short.bytes)]).toEqual([1000, 1000, 1000]);
+    // Most of the block: kept as a view rather than copied, and counted whole.
+    const long = await read(900 * 1024);
+    expect("bytes" in long && [long.bytes.length, heldBytes(long.bytes)]).toEqual([900 * 1024, 1024 * 1024]);
   });
 
   it("ends an upload that stops sending, and gives its memory back", async () => {

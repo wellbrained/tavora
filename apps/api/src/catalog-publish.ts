@@ -10,7 +10,7 @@ import { waitingMail, waitingNoticeMail } from "./moderation-mail.ts";
 import { reviewUpload, runChecks } from "./moderation.ts";
 import { signedStatement } from "./publishers.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
-import { FREE_AFTER_BYTES, freeMemory, readUpload, uploadMemory, type MemoryTicket, type ReadLimits, type UploadMemory, zipPlan } from "./upload-memory.ts";
+import { FREE_AFTER_BYTES, freeMemory, heldBytes, readUpload, uploadMemory, type MemoryTicket, type ReadLimits, type UploadMemory, zipPlan } from "./upload-memory.ts";
 import type { Scanner } from "./virus-scan.ts";
 import { sha256Hex } from "./hash.ts";
 
@@ -284,6 +284,8 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, waitin
     try {
       const read = await readUpload(context.req.raw, room, readLimits);
       if ("refused" in read) return read.refused === "too-big" ? tooBig(context) : refuse(context, 408, "invalid", "The upload took too long. Check your connection and try again.");
+      // A short body was copied out of a big block (one without a Content-Length): that block goes before the ticket shrinks.
+      if (room >= FREE_AFTER_BYTES && heldBytes(read.bytes) < room) freeMemory();
       return await accept(context, catalog, store, by, ticket, read.bytes, scans);
     } finally {
       if (oneAtATime) uploading.delete(by.accountId);
@@ -306,7 +308,8 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, waitin
     if (plan) {
       if (plan.needed > memory.budget) return refuse(context, 413, "too-big", "This module is too big for the catalog to check. Make it smaller.");
       if (plan.problem) return refuse(context, 400, "invalid", plan.problem);
-      if (!ticket.resize(plan.needed)) return busy(context);
+      // Never less than the block behind the bytes (readUpload): a body shorter than its block may still be a view of it.
+      if (!ticket.resize(plan.needed - bytes.length + heldBytes(bytes))) return busy(context);
       // Only the holder of a linked key gets a whole zip unpacked here.
       const early = signerKey(store, context, plan.signer!, sha256Hex(bytes), signature, by.accountId);
       if (early instanceof Response) return early;

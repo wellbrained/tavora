@@ -123,7 +123,7 @@ export async function readUpload(
       const late = new Promise<"late">((resolve) => (timer = setTimeout(() => resolve("late"), wait)));
       const next = await Promise.race([reader.read(), late]).finally(() => clearTimeout(timer));
       if (next === "late") return { refused: "too-slow" };
-      if (next.done) return { bytes: out.subarray(0, length) };
+      if (next.done) return { bytes: fitted(out, length) };
       if (length + next.value.length > maxBytes) return { refused: "too-big" };
       out.set(next.value, length);
       length += next.value.length;
@@ -134,6 +134,25 @@ export async function readUpload(
   } finally {
     void reader.cancel().catch(() => {});
   }
+}
+
+/**
+ * The first `length` bytes of a read block. A body that ended well short of its block (one sent without a Content-Length
+ * gets the biggest) is copied into a block of its own, so the big one is garbage at once and a ticket shrunk to the body
+ * holds what is really kept (audit run 2). A longer one stays a view, as copying it would hold nearly two blocks for a
+ * moment; heldBytes still counts its whole block.
+ */
+function fitted(block: Buffer, length: number): Buffer {
+  if (length === block.length) return block;
+  if (length > block.length / 2) return block.subarray(0, length);
+  const own = Buffer.allocUnsafeSlow(length);
+  block.copy(own, 0, 0, length);
+  return own;
+}
+
+/** What a buffer really keeps alive: the whole block behind it, which can be more than the bytes it shows. */
+export function heldBytes(bytes: Buffer): number {
+  return Math.max(bytes.length, bytes.buffer.byteLength);
 }
 
 /** Why a zip's manifest or signature file is too big to read, by its directory; null when they fit. */
