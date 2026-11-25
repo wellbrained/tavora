@@ -45,6 +45,7 @@ export const PAGES = [
   // Navigation
   { id: "tabs", group: "navigation", keywords: "tabs views strip close closable reorder drag rename middle-click scroll overflow add list arrows hidden more", examples: ["Tabs", "TabStrip", "TabIcon", "TabsCrowded", "TabOverflow"] },
   { id: "navlist", group: "navigation", keywords: "nav list categories settings sidebar sections menu plates", examples: ["Grouped", "Plates"] },
+  { id: "tree", group: "navigation", keywords: "tree view outline contents chapters folders branch expand collapse open close nested hierarchy chain levels indent guides", examples: ["Outline", "RichRows"] },
   // Canvas
   { id: "zoom", group: "canvas", keywords: "zoom pan drag pinch fit width scroll graph tree map canvas viewport double-click percent 100 whole extras view-only remember persist glide tooltip hide show hidden ausblenden einblenden", examples: ["WideContent", "AutoFitOff", "RememberView", "HideAndShow", "HundredExtras", "PersistView", "ViewOnly", "BoxTooltip", "FitWidth"] },
   { id: "map", group: "canvas", keywords: "map tiles pins markers cluster group dots spawns highlight world game zoom fog layer", examples: ["TileMap"] },

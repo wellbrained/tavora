@@ -55,6 +55,7 @@ classes where you use a control; never copy it.
 | Colour | `ColorPicker` | |
 | Show and hide a part | `Collapsible`, `Expandable` | native `<details>` |
 | List of items to choose or open | `NavList`, `ActionList`, `ActionRow` | a hand-built `ul` of buttons |
+| Entries inside entries (an outline, folders, a production chain) | `TreeView`: `items` (`id`, `label`, `children`, `icon`, `badge`, `disabled`), `label` for screen readers; `selection="single"` picks with `v-model` (the chevron opens), `"none"` picks nothing (a press opens); `select` on every press of a row (not its chevron); `v-model:expanded` (save it yourself) with `expandAll(items)` / `collapseAll()`, `default-expanded="all"`; `:guides="false"` drops the lines; the `row` slot draws your own row after the chevron (extend `TreeNode` for your data; `@click.stop` on a button inside). Arrow keys, Home/End, `*` and typing a letter are built in. Not yet: picking many, loading children later, checkboxes, dragging, a filter, long virtual lists | nested `ul`s with own chevrons, `aria-expanded` and keys; a `NavList` with `level` for something that folds |
 | Table of data | `Table` and its parts (`TableHeader`, `TableRow`, `TableHead`, `TableCell`, `TableCaption`, `TableGroup`, `TableNote`) | raw `<table>` with own CSS |
 | Table options: tight rows, header that stays, fixed columns, numbers, your row, better/worse values, groups, sorting | `Table density="compact"`, `sticky-header` (give it a height with `container-class`), `layout="fixed"`; `TableHead`/`TableCell` `align="end" numeric`; `TableRow current` (you), `selected`, `tone="positive \| negative \| warning \| muted"` (colours the numeric cells), `marked` (gold edge, bold numbers); `TableGroup :colspan` heading and `TableNote :colspan` under a group, each group in its own `TableBody`; `Table v-model:sort` with `TableHead sort-key` (and `sort-first="descending"` for scores) shows the sort and sets `aria-sort`, you sort the rows | `text-right tabular-nums` and padding classes on every cell, `bg-accent/60` on your row, own group heading rows, a Sort menu beside the table |
 | Cells to edit like a spreadsheet, or a big table to scroll, select and copy | `DataGrid` (virtual rows and columns, A/B/C and 1/2/3 headers, range selection and its keys, in-cell editor, fill handle, resizing, frozen rows and columns, a `cell` slot, `readonly`); values go in as functions and edits come out as events, so it never holds your data | a `Table` with inputs in its cells, own keyboard handling, own virtual scrolling |
@@ -98,7 +99,7 @@ classes where you use a control; never copy it.
 | A one-line text with `{placeholders}` | `TemplateInput` (marks the placeholders it knows; `insert` adds one at the cursor) | an `Input` with a hint about braces |
 | Welcome on first add (optional) | kit parts as in [module-welcome.md](../apps/docs/guide/module-welcome.md) (Palworld is the reference) | a tour, popups over the panel, own frame |
 
-Known gaps (ask before building, then add to the kit): number field with steps, tree, scroll area, input
+Known gaps (ask before building, then add to the kit): number field with steps, scroll area, input
 with a leading icon, a date or time field and a date picker (a field that opens the `Calendar`). Remove an entry here once the kit has it.
 
 ## 3. Look

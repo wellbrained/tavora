@@ -362,6 +362,15 @@
   }
 }
 
+/* A tree (TreeView) that opens or closes many branches at once (open all, close all) does it without motion: a dozen
+   sections growing together is noise, and the rows would jump about while they settle. The tree sets data-tree-instant for
+   that one change. */
+@layer components {
+  [data-tree-instant] .tavora-collapse[data-armed] {
+    animation: none !important;
+  }
+}
+
 /* Reduced motion keeps the fade and drops the movement. The rule that follows (theme.css, styles.css) stops every
    other animation; these few are kept on purpose, so a menu still arrives gently instead of blinking in. */
 @media (prefers-reduced-motion: reduce) {
