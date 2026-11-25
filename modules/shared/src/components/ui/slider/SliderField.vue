@@ -14,10 +14,13 @@ import { computed, nextTick, ref, useTemplateRef, watch, type HTMLAttributes } f
 import { isComposing } from "../../../lib/keys";
 import { cn } from "../../../lib/utils";
 import { Button } from "../button";
+import { leaveToolbar } from "../toolbar/context";
 import { Input } from "../input";
 import Slider from "./Slider.vue";
 import { uiLocale, uiText } from "../text";
 import { commitTyped, decimalCount } from "./slider-field";
+// Its buttons are parts of it, not stops of a Toolbar around it.
+leaveToolbar();
 
 const props = withDefaults(
   defineProps<{

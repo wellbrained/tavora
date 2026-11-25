@@ -14,9 +14,12 @@ import { computed, ref, watch } from "vue"
 import { ListboxContent, ListboxFilter, ListboxGroup, ListboxGroupLabel, ListboxItem, ListboxRoot, PopoverContent, PopoverPortal, PopoverRoot, PopoverTrigger } from "reka-ui"
 import { cn } from "../../../lib/utils"
 import { Button } from "../button"
+import { leaveToolbar } from "../toolbar/context"
 import { choiceHighlighted, choiceRow } from "../choice-row"
 import { filterOptions, sectionsOf } from "./options"
 import type { PickerOption } from "./types"
+// Its buttons are parts of it, not stops of a Toolbar around it.
+leaveToolbar()
 
 defineOptions({ inheritAttrs: false })
 

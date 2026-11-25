@@ -14,6 +14,9 @@
       "focus-ring": {
         "<div ref=\"scroller\" class=\"min-h-0 flex-1 overflow-y-auto p-2 outline-none\" tabindex=\"-1\">": 1
       },
+      "kit-control": {
+        "<header class=\"border-primary/25 bg-primary/5 flex h-10 flex-none items-center gap-1 border-b px-2\" role=\"toolbar\" :aria-label=\"t('app.toolbar')\">": 1
+      },
       "shadow": {
         "return drop.value?.id === rowId(row) && (drop.value.after ? \"shadow-[0_2px_0_0_var(--primary)]\" : \"shadow-[0_-2px_0_0_var(--primary)]\");": 2
       }
@@ -89,7 +92,8 @@
     },
     "modules/notes/src/ImageBar.vue": {
       "kit-control": {
-        "<Button v-for=\"choice in choices\" :key=\"choice.id\"": 1
+        "<Button v-for=\"choice in choices\" :key=\"choice.id\"": 1,
+        "<div class=\"bg-popover text-popover-foreground fixed z-50 flex items-center gap-0.5 rounded-md border p-1 text-xs shadow-lg\"": 1
       },
       "shadow": {
         "class=\"bg-popover text-popover-foreground fixed z-50 flex items-center gap-0.5 rounded-md border p-1 text-xs shadow-lg\"": 1
@@ -107,6 +111,9 @@
       }
     },
     "modules/notes/src/LinkPopover.vue": {
+      "kit-control": {
+        "<div class=\"bg-popover text-popover-foreground fixed z-50 flex max-w-[272px] items-center gap-0.5 rounded-md border py-1 pr-1 pl-2.5 text-xs shadow-lg\"": 1
+      },
       "shadow": {
         "class=\"bg-popover text-popover-foreground fixed z-50 flex max-w-[272px] items-center gap-0.5 rounded-md border py-1 pr-1 pl-2.5 text-xs shadow-lg\"": 1
       },
@@ -121,7 +128,8 @@
       },
       "kit-control": {
         "<Button v-else variant=\"ghost\" size=\"icon-sm\"": 1,
-        "<Button v-for=\"tool in group\" :key=\"tool.label\"": 1
+        "<Button v-for=\"tool in group\" :key=\"tool.label\"": 1,
+        "<div class=\"flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden\" role=\"toolbar\" :aria-label=\"t('editor.formatting')\">": 1
       },
       "radius": {
         "border-radius: 3px;": 1,
@@ -163,6 +171,9 @@
     "modules/pdf-viewer/src/PdfPane.vue": {
       "focus-ring": {
         "<div ref=\"root\" class=\"flex h-full min-h-0 flex-col outline-none\" tabindex=\"-1\" data-testid=\"pdf-pane\" @keydown=\"onKey\">": 1
+      },
+      "kit-control": {
+        "<div class=\"bg-card flex shrink-0 flex-wrap items-center gap-1 border-b px-2 py-1\" role=\"toolbar\" :aria-label=\"t('pdf.toolbar')\">": 1
       }
     },
     "modules/pdf-viewer/src/PdfThumbs.vue": {
@@ -289,6 +300,11 @@
     "modules/todos/src/AddInput.vue": {
       "focus-ring": {
         "'placeholder:text-muted-foreground focus-visible:border-ring h-8 w-full min-w-0 rounded-md border bg-transparent pr-2 text-sm outline-none',": 1
+      }
+    },
+    "modules/todos/src/App.vue": {
+      "kit-control": {
+        "<header class=\"border-primary/25 bg-primary/5 flex h-10 flex-none items-center gap-1 border-b px-2\"": 1
       }
     },
     "modules/todos/src/GroupSection.vue": {

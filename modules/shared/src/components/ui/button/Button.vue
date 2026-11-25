@@ -8,6 +8,8 @@ import { cn } from "../../../lib/utils"
 import { clsx } from "clsx"
 import { computed } from "vue"
 import { BUTTON_ICON_PADDING, buttonVariants, setsOwnPadding } from "."
+import { useToolbarJoin } from "../toolbar/context"
+import ToolbarItem from "../toolbar/ToolbarItem.vue"
 
 interface Props extends PrimitiveProps {
   variant?: ButtonVariants["variant"]
@@ -41,20 +43,26 @@ defineOptions({ inheritAttrs: false })
 /** The lighter icon side, unless the caller set its own padding. */
 const iconPadding = computed(() => (setsOwnPadding(clsx(props.class)) ? undefined : BUTTON_ICON_PADDING[props.size ?? "default"]))
 
-const soft = useSoftDisabled(() => ({ disabled: props.disabled, reason: props.disabledReason, hinted: props.hinted }))
+/** In a kit Toolbar it is one of the toolbar's arrow-key stops, and a switched-off one stays reachable (soft). */
+const { joined } = useToolbarJoin()
+
+const soft = useSoftDisabled(() => ({ disabled: props.disabled, reason: props.disabledReason, hinted: props.hinted || joined.value }))
 </script>
 
 <template>
-  <Primitive
-    data-slot="button"
-    :data-variant="variant ?? 'default'"
-    :data-size="size ?? 'default'"
-    :as="as"
-    :as-child="asChild"
-    v-bind="soft.attrs()"
-    :class="cn('tavora-button', buttonVariants({ variant, size, press, soft: soft.soft() }), iconPadding, props.class)"
-    :disabled="soft.disabled()"
-  >
-    <slot />
-  </Primitive>
+  <ToolbarItem :join="joined">
+    <Primitive
+      data-slot="button"
+      :data-variant="variant ?? 'default'"
+      :data-size="size ?? 'default'"
+      :as="as"
+      :as-child="asChild"
+      v-bind="soft.attrs()"
+      :data-disabled="joined ? undefined : soft.attrs()['data-disabled']"
+      :class="cn('tavora-button', buttonVariants({ variant, size, press, soft: soft.soft() }), iconPadding, props.class)"
+      :disabled="soft.disabled()"
+    >
+      <slot />
+    </Primitive>
+  </ToolbarItem>
 </template>

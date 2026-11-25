@@ -3,7 +3,10 @@ import type { ComboboxTriggerProps } from "reka-ui"
 import { ChevronDown } from "@lucide/vue"
 import { ComboboxTrigger, useForwardProps } from "reka-ui"
 import { Button } from "../button"
+import { leaveToolbar } from "../toolbar/context"
 import { uiText } from "../text"
+// Its buttons are parts of it, not stops of a Toolbar around it.
+leaveToolbar()
 
 // The chevron at the end of a field with a list (a ComboboxInput inside the same ComboboxAnchor): it opens the list, which
 // starts at the field's left edge. A button that opens a list of suggestions has the single down arrow.

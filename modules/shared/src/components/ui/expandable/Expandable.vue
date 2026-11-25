@@ -6,7 +6,10 @@ import type { HTMLAttributes } from "vue"
 import { computed, onBeforeUnmount, onMounted, ref, useId } from "vue"
 import { cn } from "../../../lib/utils"
 import { Button } from "../button"
+import { leaveToolbar } from "../toolbar/context"
 import { uiText } from "../text"
+// Its buttons are parts of it, not stops of a Toolbar around it.
+leaveToolbar()
 
 const props = withDefaults(defineProps<{
   /** Height of the cut content, in pixels. */

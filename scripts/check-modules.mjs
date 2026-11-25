@@ -527,6 +527,10 @@ function templateChecks(code, ctx) {
   for (const m of matches(new RegExp(`<Button\\b(?:[^>"']|"[^"]*"|'[^']*')*?\\s:?aria-pressed\\b`, "g"), code)) {
     out.push({ index: m.index, rule: "kit-control", message: "Button with aria-pressed: use Toggle or ToggleGroup" });
   }
+  // role="toolbar" promises one Tab stop and arrow keys; the kit's Toolbar keeps that promise.
+  for (const m of matches(new RegExp(`<(?!Toolbar\\b)[\\w-]+\\b(?:[^>"']|"[^"]*"|'[^']*')*?\\srole\\s*=\\s*["']toolbar["']`, "g"), code)) {
+    out.push({ index: m.index, rule: "kit-control", message: 'role="toolbar" of your own: use Toolbar' });
+  }
   for (const m of matches(new RegExp(`<a\\b(?:[^>"']|"[^"]*"|'[^']*')*?\\s:?download\\b`, "g"), code)) out.push({ index: m.index, rule: "file-save", message: "a download link" });
   for (const m of matches(/(?<=\s)(?::|v-bind:)?(?:[\w-]+-)?class\s*=\s*(?:"([^"]*)"|'([^']*)')/g, code)) {
     const value = m[1] ?? m[2];

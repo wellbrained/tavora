@@ -26,12 +26,15 @@ import { Maximize, Minus, Plus } from "@lucide/vue"
 import { computed, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from "vue"
 import { cn } from "../../../lib/utils"
 import { Button } from "../button"
+import { leaveToolbar } from "../toolbar/context"
 import { Separator } from "../separator"
 import { uiText } from "../text"
 import { zoomPaneKey } from "./context"
 import { createGlide } from "./glide"
 import { areaView, clampPan, clampZoom, containZoom, fitView, percentOf, type Size, stepZoom, type ViewOptions, type ZoomAlign, type ZoomArea, type ZoomBounds, type ZoomFit, zoomAt, type ZoomView } from "./view"
 import { createViewMemory, type SavedView, type ViewMemory } from "./view-memory"
+// Its buttons are parts of it, not stops of a Toolbar around it.
+leaveToolbar()
 
 const props = withDefaults(defineProps<{
   /** Smallest and largest zoom, in the pane's own units: 1 is the content's real size (not 100 %, see `hundred`). */

@@ -7,9 +7,12 @@ import { ref, type HTMLAttributes } from "vue"
 import { isComposing } from "../../../lib/keys"
 import { cn } from "../../../lib/utils"
 import { Button } from "../button"
+import { leaveToolbar } from "../toolbar/context"
 import { Input } from "../input"
 import { uiText } from "../text"
 import { clearsOnEscape } from "./escape"
+// Its buttons are parts of it, not stops of a Toolbar around it.
+leaveToolbar()
 
 defineOptions({ inheritAttrs: false })
 const props = withDefaults(defineProps<{

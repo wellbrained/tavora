@@ -7,9 +7,12 @@ import { ComboboxInput, useForwardPropsEmits } from "reka-ui"
 import { onMounted, ref } from "vue"
 import { cn } from "../../../lib/utils"
 import { Button } from "../button"
+import { leaveToolbar } from "../toolbar/context"
 import { useFieldControl } from "../field/use-field-control"
 import { uiText } from "../text"
 import { freeKeys } from "./free-keys"
+// Its buttons are parts of it, not stops of a Toolbar around it.
+leaveToolbar()
 
 defineOptions({
   inheritAttrs: false,

@@ -155,6 +155,7 @@ const CASES: Record<string, { hit: [string, string][]; miss: [string, string][] 
       ["a.vue", vue('<input v-model="query" type="search" @keydown.enter="a > b && go()" />')],
       ["a.vue", vue('<textarea v-model="body" />')],
       ["a.vue", vue('<Button variant="ghost" :aria-pressed="bold">B</Button>')],
+      ["a.vue", vue('<header class="flex gap-1" role="toolbar" aria-label="Map">x</header>')],
     ],
     miss: [
       ["a.vue", vue('<Button variant="ghost" @click="go">Go</Button><Select v-model="x" /><Table /><Collapsible />')],
@@ -163,6 +164,7 @@ const CASES: Record<string, { hit: [string, string][]; miss: [string, string][] 
       ["a.vue", vue('<input ref="title" v-model="title" />')],
       ["a.vue", vue('<input :type="kind" />')],
       ["a.vue", vue("<Toggle :pressed=\"bold\">B</Toggle>")],
+      ["a.vue", vue('<Toolbar label="Map" class="border-b"><Button>B</Button></Toolbar>')],
       ["a.ts", 'const html = "a <button> in a string of a .ts file";'],
     ],
   },

@@ -8,10 +8,13 @@
 import { Check, RotateCcw } from "@lucide/vue";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { Button } from "../button";
+import { leaveToolbar } from "../toolbar/context";
 import { NavList, type NavGroup } from "../nav-list";
 import { uiText } from "../text";
 import { usePageMotion } from "../motion";
 import { toast } from "../toast";
+// Its buttons are parts of it, not stops of a Toolbar around it.
+leaveToolbar();
 
 const props = defineProps<{
   groups: NavGroup[];
