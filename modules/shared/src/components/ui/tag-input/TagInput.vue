@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { HTMLAttributes } from "vue"
+// reka's own input, not the kit's ComboboxInput: that one brings a search icon, a clear button and a full-width box,
+// none of which belongs between the chips. Its free-mode keys (freeKeys) and Field wiring are used here the same way.
 import { ComboboxInput as ComboboxInputPrimitive } from "reka-ui"
 import { computed, nextTick, ref, watch } from "vue"
 import { cn } from "../../../lib/utils"
@@ -55,7 +57,7 @@ const field = useFieldControl({ element: input, value: () => (tags.value.length 
 
 const full = computed(() => props.max !== undefined && tags.value.length >= props.max)
 const shown = computed(() => (full.value ? [] : suggestionsFor(props.suggestions, tags.value, text.value)))
-const fresh = computed(() => (props.free && !full.value ? freshTag(text.value, tags.value, shown.value, props.maxlength) : ""))
+const fresh = computed(() => (props.free && !full.value ? freshTag(text.value, tags.value, props.suggestions, props.maxlength) : ""))
 const hasList = computed(() => shown.value.length > 0 || fresh.value !== "")
 const placeholder = computed(() => (full.value ? (props.fullText ?? uiText.value.tagsFull.replace("{max}", String(props.max))) : props.placeholder))
 
@@ -96,8 +98,7 @@ function setMark(next: number | null) {
 
 function onKey(event: KeyboardEvent) {
   const target = event.target as HTMLInputElement
-  const atStart = target.selectionStart === 0 && target.selectionEnd === 0
-  const result = chipKey(event, { mark: mark.value, count: tags.value.length, atStart })
+  const result = chipKey(event, { mark: mark.value, count: tags.value.length, empty: target.value === "" })
   if (result.handled) {
     event.preventDefault()
     event.stopImmediatePropagation()
@@ -107,6 +108,8 @@ function onKey(event: KeyboardEvent) {
   }
   if (mark.value !== null) mark.value = result.mark
   if (!props.free || full.value) return
+  // Nothing typed: Enter and the comma do what they would anywhere else (a form's Enter, for one).
+  if (!target.value.trim()) return
   if (event.key === "," && !event.isComposing) {
     event.preventDefault()
     add([target.value])
@@ -142,6 +145,7 @@ function onBoxDown(event: PointerEvent) {
   if (props.disabled || (event.target as Element).closest("input, button")) return
   event.preventDefault()
   input()?.focus()
+  openList()
 }
 
 function onChipRemove(index: number) {
@@ -163,11 +167,12 @@ function onChipRemove(index: number) {
     <ComboboxAnchor
       ref="anchor"
       data-slot="tag-input"
+      :data-disabled="disabled ? '' : undefined"
       :class="cn(
         'border-input dark:bg-input/10 flex w-full min-w-0 flex-wrap items-center gap-1 rounded-md border bg-transparent shadow-xs transition-[color,box-shadow]',
         'focus-within:border-ring focus-within:ring-ring/50 focus-within:ring-3',
         size === 'lg' ? 'min-h-[calc(var(--style-control-height,32px)+8px)] px-1.5 py-1.5' : 'min-h-[var(--style-control-height,32px)] px-1 py-1',
-        disabled && 'cursor-not-allowed opacity-(--disabled-opacity)',
+        disabled && 'cursor-not-allowed',
         props.class,
       )"
       @pointerdown="onBoxDown"

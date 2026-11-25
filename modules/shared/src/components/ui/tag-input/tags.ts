@@ -73,12 +73,12 @@ export type ChipKeyResult =
   | { handled: true, mark: number | null, remove?: number }
 
 /**
- * The chip keys, in a field whose caret is `atStart` (at the start with nothing selected) next to `count` chips:
+ * The chip keys, in a field (`empty` or not) next to `count` chips:
  * Backspace marks the last chip and, pressed again, removes it; Delete removes the marked one; ←/→ move the mark (→ past
  * the last chip goes back to the caret); Escape drops the mark. Any other key drops the mark and goes to the field.
  */
-export function chipKey(event: { key: string, isComposing?: boolean, keyCode?: number, ctrlKey?: boolean, metaKey?: boolean, altKey?: boolean, shiftKey?: boolean }, state: { mark: number | null, count: number, atStart: boolean }): ChipKeyResult {
-  const { count, atStart } = state
+export function chipKey(event: { key: string, isComposing?: boolean, keyCode?: number, ctrlKey?: boolean, metaKey?: boolean, altKey?: boolean, shiftKey?: boolean }, state: { mark: number | null, count: number, empty: boolean }): ChipKeyResult {
+  const { count, empty } = state
   const mark = state.mark !== null && state.mark < count ? state.mark : null
   if (isComposing(event) || MODIFIERS.has(event.key)) return { handled: false, mark }
   const plain = !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey
@@ -86,12 +86,12 @@ export function chipKey(event: { key: string, isComposing?: boolean, keyCode?: n
   switch (event.key) {
     case "Backspace":
       if (mark !== null) return { handled: true, mark: null, remove: mark }
-      return atStart ? { handled: true, mark: count - 1 } : { handled: false, mark: null }
+      return empty ? { handled: true, mark: count - 1 } : { handled: false, mark: null }
     case "Delete":
       return mark !== null ? { handled: true, mark: null, remove: mark } : { handled: false, mark: null }
     case "ArrowLeft":
       if (mark !== null) return { handled: true, mark: Math.max(0, mark - 1) }
-      return atStart ? { handled: true, mark: count - 1 } : { handled: false, mark: null }
+      return empty ? { handled: true, mark: count - 1 } : { handled: false, mark: null }
     case "ArrowRight":
       return mark !== null ? { handled: true, mark: mark + 1 < count ? mark + 1 : null } : { handled: false, mark: null }
     case "Escape":

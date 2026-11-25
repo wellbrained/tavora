@@ -867,7 +867,7 @@ export const de: Record<TextKey, string> = {
   "ex.pick.Tags.note": "Tipp einen Tag und drück Enter oder ein Komma, oder nimm einen, den du schon benutzt hast. Füg eine Liste ein, um jeden Teil hinzuzufügen.",
   "ex.pick.Tags.rule": "Die Rücktaste im leeren Feld wählt den letzten Tag, ein zweiter Druck entfernt ihn. Mit den Pfeiltasten gehst du die Tags entlang.",
   "ex.pick.TagFilter": "Tags aus einer Liste",
-  "ex.pick.TagFilter.note": "Nur was die Liste anbietet, lässt sich wählen, wie bei einem Filter. Große Größe.",
+  "ex.pick.TagFilter.note": "Nur was die Liste anbietet, lässt sich wählen, wie bei einem Filter. In groß.",
   "ex.pick.Picker": "Picker",
   "ex.pick.Picker.note": "Ein Button mit der Liste darunter.",
   "ex.pick.PickerGroups": "Picker mit Gruppen",

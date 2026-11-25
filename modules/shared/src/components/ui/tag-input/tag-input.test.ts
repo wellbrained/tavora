@@ -61,6 +61,25 @@ describe("TagInput", () => {
     expect(field.input.value).toBe("")
   })
 
+  it("leaves Enter alone in an empty field (a form around it still submits)", async () => {
+    const field = mount(["a"])
+    field.input.focus()
+    const enter = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })
+    field.input.dispatchEvent(enter)
+    await wait()
+    expect(enter.defaultPrevented).toBe(false)
+    expect(field.tags.value).toEqual(["a"])
+  })
+
+  it("doesn't mark a chip on Backspace while there is text", async () => {
+    const field = mount(["a"])
+    field.input.focus()
+    await field.type("x")
+    field.input.setSelectionRange(0, 0)
+    await field.press("Backspace")
+    expect(field.chips()[0]?.hasAttribute("data-marked")).toBe(false)
+  })
+
   it("splits a paste with commas into chips, up to max", async () => {
     const field = mount(["a"], { max: 3 })
     const paste = new Event("paste", { bubbles: true, cancelable: true }) as ClipboardEvent

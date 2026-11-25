@@ -34,14 +34,14 @@ describe("tags", () => {
 })
 
 describe("chipKey", () => {
-  const at = (mark: number | null, atStart = true, count = 3) => ({ mark, count, atStart })
+  const at = (mark: number | null, empty = true, count = 3) => ({ mark, count, empty })
 
   it("marks the last chip on Backspace at the start, and removes it on the second press", () => {
     expect(chipKey({ key: "Backspace" }, at(null))).toEqual({ handled: true, mark: 2 })
     expect(chipKey({ key: "Backspace" }, at(2))).toEqual({ handled: true, mark: null, remove: 2 })
   })
 
-  it("leaves Backspace to the text when the caret isn't at the start, or there are no chips", () => {
+  it("leaves Backspace to the text when the field has text, or there are no chips", () => {
     expect(chipKey({ key: "Backspace" }, at(null, false))).toEqual({ handled: false, mark: null })
     expect(chipKey({ key: "Backspace" }, at(null, true, 0))).toEqual({ handled: false, mark: null })
   })
@@ -70,6 +70,6 @@ describe("chipKey", () => {
   })
 
   it("forgets a mark past the chips that are left", () => {
-    expect(chipKey({ key: "Backspace" }, { mark: 5, count: 2, atStart: true })).toEqual({ handled: true, mark: 1 })
+    expect(chipKey({ key: "Backspace" }, { mark: 5, count: 2, empty: true })).toEqual({ handled: true, mark: 1 })
   })
 })
