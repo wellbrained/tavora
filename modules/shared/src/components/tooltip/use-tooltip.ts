@@ -106,7 +106,7 @@ export interface UseTooltip<T> {
 }
 
 const DELAY_MS = 180;
-const CONTROLS = 'button, a[href], input, select, textarea, [role=button], [role=link], [role=option], [role=menuitem], [role=tab], [role=switch], [role=checkbox], [role=radio]';
+export const CONTROLS = 'button, a[href], input, select, textarea, [role=button], [role=link], [role=option], [role=menuitem], [role=tab], [role=switch], [role=checkbox], [role=radio]';
 let instances = 0;
 
 const resolve = <T>(card: TooltipCard<T>): T | null => (typeof card === 'function' ? (card as () => T | null | undefined)() : card) ?? null;
@@ -114,14 +114,14 @@ const resolve = <T>(card: TooltipCard<T>): T | null => (typeof card === 'functio
 const FOCUS_KEYS = new Set(['Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End']);
 let keyboard = false;
 let watching = false;
-function watchInput(doc: Document) {
+export function watchInput(doc: Document) {
   if (watching) return;
   watching = true;
   doc.addEventListener('keydown', event => { if (FOCUS_KEYS.has(event.key)) keyboard = true; }, true);
   doc.addEventListener('pointerdown', () => { keyboard = false; }, true);
 }
 /** Whether the focus came from the keyboard. Where the browser can't tell, it counts as keyboard: a card too many is better than none. */
-function keyboardFocus(element: Element): boolean {
+export function keyboardFocus(element: Element): boolean {
   if (keyboard) return true;
   try { return element.matches(':focus-visible'); } catch { return true; }
 }

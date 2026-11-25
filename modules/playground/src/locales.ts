@@ -41,6 +41,7 @@ export const en = {
   "page.menus": "Menus",
   "page.tooltips": "Tooltips",
   "page.popovers": "Popovers",
+  "page.hovercards": "Hover cards",
   "page.dialogs": "Dialogs",
   "page.toasts": "Toasts",
   "page.fields": "Text fields",
@@ -72,6 +73,7 @@ export const en = {
   "intro.menus": "Every menu opens from a visible ⋯ button.",
   "intro.tooltips": "Hover help sits beside the control with a small gap, only its arrow pointing at it.",
   "intro.popovers": "A small panel next to a button for a quick edit.",
+  "intro.hovercards": "A card that opens on hover, like a tooltip, but you can move into it, click its buttons and pin it.",
   "intro.dialogs": "420 px wide: an icon, a title and one short line, then the buttons bottom right with the action last.",
   "intro.toasts": "A short message in a pill, where the user wants it (Settings > Appearance).",
   "intro.fields": "A Field ties a label, a hint and an error to its control. Errors show red text, not only a red border.",
@@ -265,6 +267,15 @@ export const en = {
 
   "ex.popovers.WithField": "Popover with a field",
   "ex.popovers.WithField.note": "Escape or a click outside closes it.",
+
+  "ex.hovercards.Pinnable": "Pin a card",
+  "ex.hovercards.Pinnable.note": "Hover the name or Tab to it. Click it to pin the card.",
+  "ex.hovercards.Pinnable.rule": "Use a hover card when the card holds buttons or links. For text only, use a tooltip.",
+  "ex.hovercards.ManyTargets": "One card for a list",
+  "ex.hovercards.ManyTargets.note": "Go along the names. Pin one, and the others wait until you close it.",
+  "ex.hovercards.ManyTargets.rule": "Whatever the card offers should also be reachable without it: touch and screen readers may never open it.",
+  "ex.hovercards.WithItemCard": "With an item card",
+  "ex.hovercards.WithItemCard.note": "An item card with a button of your own. Click the tower to pin it.",
 
   "ex.dialogs.NameDialogs": "Name dialogs",
   "ex.dialogs.NameDialogs.note": "A dialog rises a little as it fades in and leaves quicker; with reduced motion it only fades.",
@@ -601,6 +612,7 @@ export const de: Record<TextKey, string> = {
   "page.menus": "Menüs",
   "page.tooltips": "Tooltips",
   "page.popovers": "Popover",
+  "page.hovercards": "Hover-Karten",
   "page.dialogs": "Dialoge",
   "page.toasts": "Toasts",
   "page.fields": "Textfelder",
@@ -632,6 +644,7 @@ export const de: Record<TextKey, string> = {
   "intro.menus": "Jedes Menü öffnet sich über einen sichtbaren ⋯-Button.",
   "intro.tooltips": "Hilfe beim Darüberfahren sitzt mit kleinem Abstand neben dem Element, nur ihr Pfeil zeigt darauf.",
   "intro.popovers": "Ein kleines Feld neben einem Button für eine schnelle Änderung.",
+  "intro.hovercards": "Eine Karte, die beim Darüberfahren aufgeht wie ein Tooltip. Du kannst aber hineinfahren, ihre Buttons klicken und sie anheften.",
   "intro.dialogs": "420 px breit: ein Icon, ein Titel und eine kurze Zeile, dann die Buttons unten rechts, die Aktion zuletzt.",
   "intro.toasts": "Eine kurze Nachricht als Pille, dort, wo du sie haben willst (Einstellungen > Aussehen).",
   "intro.fields": "Ein Field verbindet Beschriftung, Hinweis und Fehler mit seinem Bedienelement. Fehler zeigen roten Text, nicht nur einen roten Rand.",
@@ -825,6 +838,15 @@ export const de: Record<TextKey, string> = {
 
   "ex.popovers.WithField": "Popover mit einem Feld",
   "ex.popovers.WithField.note": "Escape oder ein Klick daneben schließt es.",
+
+  "ex.hovercards.Pinnable": "Karte anheften",
+  "ex.hovercards.Pinnable.note": "Fahr über den Namen oder geh mit Tab hin. Klick darauf, um die Karte anzuheften.",
+  "ex.hovercards.Pinnable.rule": "Nimm eine Hover-Karte, wenn sie Buttons oder Links hat. Für reinen Text nimm einen Tooltip.",
+  "ex.hovercards.ManyTargets": "Eine Karte für eine Liste",
+  "ex.hovercards.ManyTargets.note": "Fahr über die Namen. Heftest du einen an, warten die anderen, bis du ihn schließt.",
+  "ex.hovercards.ManyTargets.rule": "Was die Karte bietet, sollte auch ohne sie erreichbar sein: Touch und Screenreader öffnen sie vielleicht nie.",
+  "ex.hovercards.WithItemCard": "Mit einer Gegenstandskarte",
+  "ex.hovercards.WithItemCard.note": "Eine Gegenstandskarte mit einem eigenen Button. Klick auf den Turm, um sie anzuheften.",
 
   "ex.dialogs.NameDialogs": "Namensdialoge",
   "ex.dialogs.NameDialogs.note": "Ein Dialog steigt beim Einblenden etwas auf und geht schneller; mit weniger Bewegung blendet er nur ein.",

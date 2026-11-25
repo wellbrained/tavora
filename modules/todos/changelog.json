@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.2.62",
+    "date": "2026-11-25",
+    "notes": [
+      "New hover card in the shared controls."
+    ]
+  },
+  {
     "version": "0.2.61",
     "date": "2026-11-25",
     "notes": [

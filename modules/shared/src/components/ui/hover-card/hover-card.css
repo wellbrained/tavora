@@ -1,0 +1,21 @@
+/* A HoverCard wears the tooltip's surface, edge, shadow and type (tooltip.css), so a tooltip that becomes a hover card
+   looks the same. What differs: Reka places it (no fixed position of its own), it takes the pointer, and it stacks
+   with the popovers. */
+.tavora-tooltip.tavora-hover-card{position:relative;z-index:50;pointer-events:auto;outline:none;transform-origin:var(--reka-popper-transform-origin,center)}
+.tavora-tooltip.tavora-hover-card[data-state=open]{animation:tavora-tooltip-in var(--duration-tooltip) var(--ease-out-strong)}
+/* Closing, it fades out quicker than it came, as the tooltip does (Reka keeps it on the page until that ends). */
+.tavora-tooltip.tavora-hover-card[data-state=closed]{animation:tavora-tooltip-out 100ms var(--ease-out-strong) forwards}
+@media (prefers-reduced-motion:reduce){.tavora-tooltip.tavora-hover-card[data-state=open]{animation:tavora-tooltip-fade 100ms linear!important}.tavora-tooltip.tavora-hover-card[data-state=closed]{animation:tavora-tooltip-fade-out 100ms linear forwards!important}}
+.tavora-hover-card[data-bare]{padding:0;border:0;background:transparent;box-shadow:none}
+.tavora-hover-card[data-bare]>[data-slot=item-card]:not([data-layout=unit]){box-shadow:inset 0 1px 0 #ffffff0a,0 8px 24px #000a,0 2px 6px #0006}
+
+/* Pinned: a small plain X in the top right corner; the title keeps clear of it. */
+.tavora-hover-card-pinned .tavora-tooltip-head,.tavora-hover-card-pinned .tavora-item-card-name{padding-right:24px}
+/* The kit's ghost icon button, placed in the corner. */
+.tavora-hover-card-close{position:absolute;top:6px;right:6px}
+/* On an item card (bare), the X sits on the card's own corner, on a soft backing so it reads over a picture. */
+.tavora-hover-card[data-bare] .tavora-hover-card-close{background:color-mix(in srgb,var(--popover) 75%,transparent)}
+
+/* The arrow: two strokes of the card's edge, filled with its surface, laid over the edge it leaves. */
+.tavora-hover-card-arrow{display:block;margin-top:-1px;overflow:visible}
+.tavora-hover-card-arrow path{fill:var(--tavora-tooltip-surface);stroke:var(--tavora-tooltip-line);stroke-width:1}
