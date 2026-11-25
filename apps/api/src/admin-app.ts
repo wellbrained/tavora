@@ -478,10 +478,11 @@ export function createAdminApp({ token, statsToken, submissions, state, store, c
         notified: request.notified,
       };
     });
-    // Keys reported as leaked whose request went with the account: only the key and when it was reported are kept.
-    const asked = new Set(requests.map((request) => request.old));
+    // Keys reported as leaked whose request went with the account: only the key and when it was reported are kept. Listed
+    // unless an open leaked request for the key says so already, also beside a plain request asked for it later (audit run 2).
+    const reported = new Set((accounts?.allKeyRequests() ?? []).filter((request) => request.leaked && request.declinedAt === null).map((request) => request.old));
     for (const leaked of accounts?.leakedKeys() ?? []) {
-      if (asked.has(leaked.fingerprint)) continue;
+      if (reported.has(leaked.fingerprint)) continue;
       requests.push({
         old: leaked.fingerprint,
         new: null,
@@ -511,8 +512,10 @@ export function createAdminApp({ token, statsToken, submissions, state, store, c
     const { old } = await json(context.req.raw);
     if (typeof old !== "string") return context.json({ error: "Send { old }." }, 400);
     // A signed one stays: turning it down would free a key the signed lists still revoke. Sign lists without it instead.
+    // An open request is turned down first; without one, the kept leak report is (declineKeyRequest).
     const request = accounts?.keyRequest(old) ?? null;
-    if (request ? keyRequestStatus(request, trust()) === "done" : signedRevoked(old, trust())) return context.json({ error: "This one is signed already." }, 409);
+    const open = request !== null && request.declinedAt === null ? request : null;
+    if (open ? keyRequestStatus(open, trust()) === "done" : signedRevoked(old, trust())) return context.json({ error: "This one is signed already." }, 409);
     return accounts?.declineKeyRequest(old, Date.now()) ? context.json({ ok: true }) : context.json({ error: "No open request for this key." }, 404);
   });
 

@@ -1069,12 +1069,18 @@ export class AccountStore {
 
   /**
    * The maintainer turns a request down, or a leaked report whose request went with its account; false when there is
-   * neither for the key. The caller checks first that it isn't signed yet (admin-app.ts).
+   * neither for the key. An open request goes first. A leak report kept in leaked_keys is forgotten only with a leaked
+   * request, or once no request is open, never with a plain request asked for the same key later (audit run 2). The
+   * caller checks first that it isn't signed yet (admin-app.ts).
    */
   declineKeyRequest(old: string, now: number): boolean {
-    const declined = Number(this.db.prepare("update key_requests set declined_at = ? where old = ? and declined_at is null").run(now, old).changes) > 0;
-    const forgotten = Number(this.db.prepare("delete from leaked_keys where fingerprint = ?").run(old).changes) > 0;
-    return declined || forgotten;
+    const open = this.db.prepare("select leaked from key_requests where old = ? and declined_at is null").get(old) as { leaked: number } | undefined;
+    if (open) {
+      this.db.prepare("update key_requests set declined_at = ? where old = ? and declined_at is null").run(now, old);
+      if (open.leaked === 1) this.db.prepare("delete from leaked_keys where fingerprint = ?").run(old);
+      return true;
+    }
+    return Number(this.db.prepare("delete from leaked_keys where fingerprint = ?").run(old).changes) > 0;
   }
 
   /** When a key was linked to an account, in ms, or null. */
