@@ -535,7 +535,7 @@ Every page, script and data request needs an exact granted domain and HTTPS on t
 standard port. Only GET/HEAD document, script, stylesheet and XHR requests are allowed;
 images, media, fonts, frames, sockets and other resource types are blocked. A mandatory
 session proxy resolves each connection, refuses any non-public address and connects
-to the checked IP, so a second DNS resolution cannot redirect it into the local network.
+to one of the checked IPs (the next one when an address does not answer), so a second DNS resolution cannot redirect it into the local network.
 Chromium still checks the destination's TLS certificate. Non-proxied WebRTC UDP is
 disabled. This session never uses the user's Browser session or system proxy.
 

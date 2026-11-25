@@ -57,6 +57,18 @@ it('tries the next address when the first one does not connect, and checks every
   expect(connect).not.toHaveBeenCalled();
  }finally{proxy.close();target.close();}
 });
+it('gives up on an address that never answers and tries the next one',async()=>{
+ const abort=new AbortController(),proxy=await createPageProxy({allowedHosts:()=>new Set(['public.test']),userAgent:'test'},abort.signal,50);
+ const target=net.createServer(),realConnect=net.connect;
+ await new Promise<void>(resolve=>target.listen(0,'127.0.0.1',resolve));
+ try{
+  const connect=vi.spyOn(net,'connect');
+  vi.mocked(lookup).mockResolvedValue([{address:'2606:4700::1',family:6},{address:'1.1.1.1',family:4}] as never);
+  connect.mockImplementation(((options:{host:string})=>options.host==='1.1.1.1'?realConnect({host:'127.0.0.1',port:(target.address() as net.AddressInfo).port}):new net.Socket()) as unknown as typeof net.connect);
+  expect(await request(proxy.port,'CONNECT public.test:443 HTTP/1.1\r\nHost: public.test\r\n\r\n')).toContain('200');
+  expect(connect).toHaveBeenCalledTimes(2);
+ }finally{proxy.close();target.close();}
+});
 it('closes open proxy connections when its owner disconnects',async()=>{
  const abort=new AbortController(),proxy=await createPageProxy({allowedHosts:()=>new Set(),userAgent:'test'},abort.signal);
  const socket=net.createConnection({host:'127.0.0.1',port:proxy.port});socket.on('error',()=>{});

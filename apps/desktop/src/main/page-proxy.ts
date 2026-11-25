@@ -5,7 +5,10 @@ import { checkTarget, isPublicAddress, type FetchPolicy } from "./network";
 import { trackOwnServer } from "./own-ports";
 
 /** Chromium's DNS is deliberately bypassed: each CONNECT uses a checked, pinned public IP. */
-export async function createPageProxy(policy: FetchPolicy, signal: AbortSignal): Promise<{ port: number; close(): void }> {
+/** How long one address gets to answer before the next is tried: one that drops packets would otherwise hold the page for ~20 s. */
+export const CONNECT_TRY_MS = 3000;
+
+export async function createPageProxy(policy: FetchPolicy, signal: AbortSignal, tryMs = CONNECT_TRY_MS): Promise<{ port: number; close(): void }> {
   const sockets = new Set<net.Socket>();
   let connections = 0, transferred = 0;
   const server = http.createServer((_req, res) => { res.writeHead(403).end(); });
@@ -39,10 +42,12 @@ export async function createPageProxy(policy: FetchPolicy, signal: AbortSignal):
         if (signal.aborted || client.destroyed) throw Error("Page closed");
         const socket = attempt = net.connect({ host: address, port: 443 });
         track(socket);
+        socket.setTimeout(tryMs, () => socket.destroy());
         const connected = await new Promise<boolean>(resolve => {
           socket.once("connect", () => resolve(true));
           socket.once("close", () => resolve(false));
         });
+        if (connected) socket.setTimeout(0);
         if (connected) { upstream = socket; break; }
       }
       if (!upstream) throw Error("No address answered");

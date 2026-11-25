@@ -123,7 +123,6 @@ async function makeBackup(options: BackupOptions, target: string): Promise<Backu
   }
 
   const partial = `${target}.${randomBytes(4).toString("hex")}.partial`;
-  await rm(partial, { recursive: true, force: true });
   await mkdir(partial, { recursive: true });
   try {
     for (const name of DATA_FILES) {
