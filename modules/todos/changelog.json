@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.2.65",
+    "date": "2026-11-25",
+    "notes": [
+      "New stat tiles, fact lists and bar charts in the shared controls."
+    ]
+  },
+  {
     "version": "0.2.64",
     "date": "2026-11-25",
     "notes": [

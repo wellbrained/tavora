@@ -87,9 +87,20 @@ describe("tooltipMaxWidth", () => {
 
 describe("TooltipRows", () => {
   it("keeps label and value rows as they were", async () => {
-    const dl = await rows({ rows: [{ label: "Damage", value: "142", trend: "better" }] })
+    const dl = await rows({ rows: [{ label: "Damage", value: "142" }] })
     expect(dl.getAttribute("style")).toBeNull()
-    expect(dl.innerHTML).toBe('<dt>Damage</dt><dd data-trend="better">142</dd>')
+    expect(dl.innerHTML).toBe("<dt>Damage</dt><dd>142</dd>")
+  })
+
+  it("marks a trend with an arrow and a word for screen readers, not colour alone", async () => {
+    const dl = await rows({ rows: [{ label: "Damage", value: "142", trend: "better" }, { label: "Stamina use", value: "+12%", trend: "worse" }] })
+    const [better, worse] = [...dl.querySelectorAll("dd")]
+    expect(better!.getAttribute("data-trend")).toBe("better")
+    expect(better!.querySelector("[data-slot=trend-mark]")?.getAttribute("aria-hidden")).toBe("true")
+    expect(better!.querySelector(".sr-only")?.textContent).toBe(" better")
+    expect(better!.textContent).toBe("142 better")
+    expect(worse!.querySelector("path")?.getAttribute("d")).not.toBe(better!.querySelector("path")?.getAttribute("d"))
+    expect(worse!.textContent).toBe("+12% worse")
   })
 
   it("gives a unit its own column, empty for rows without one", async () => {
@@ -106,7 +117,7 @@ describe("TooltipRows", () => {
     expect(dl.getAttribute("data-columns")).toBe("3")
     expect([...dl.querySelectorAll(".tavora-tooltip-rows-heading")].map((cell) => cell.textContent)).toEqual(["Common", "Rare", "Epic"])
     const cells = [...dl.querySelectorAll("dl > div:not(.tavora-tooltip-rows-head) dd")]
-    expect(cells.map((cell) => cell.textContent)).toEqual(["4", "–", "9", "3", "", ""])
+    expect(cells.map((cell) => cell.textContent)).toEqual(["4", "–", "9 better", "3", "", ""])
     expect(cells[1]!.hasAttribute("data-faint")).toBe(true)
     expect(cells[2]!.getAttribute("data-trend")).toBe("better")
     expect(cells[0]!.hasAttribute("data-trend")).toBe(false)

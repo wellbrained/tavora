@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.1.90",
+    "date": "2026-11-25",
+    "notes": [
+      "Stats & Charts: stat tiles, facts and bar charts, light and dark.",
+      "A trend in a tooltip now shows a small arrow, not only a colour."
+    ]
+  },
+  {
     "version": "0.1.89",
     "date": "2026-11-25",
     "notes": [

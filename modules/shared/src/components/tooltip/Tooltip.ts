@@ -143,7 +143,9 @@ export default defineComponent({
       for (let pass = 0; pass < 2; pass++) {
         await nextTick();
         if (version !== generation || !card.value) return;
-        const measured = card.value.getBoundingClientRect();
+        const box = card.value.getBoundingClientRect();
+        // Whole pixels up: a card held to its exact fractional width can lay out a hair narrower and break a word.
+        const measured = { width: Math.ceil(box.width), height: Math.ceil(box.height) };
         const placed = tooltipPlacement(anchor(), measured.width, measured.height, viewport, side, max, props.bare, props.align);
         position.value = placed;
         if (placed.width >= measured.width) break;
