@@ -329,6 +329,11 @@ export const en = {
   "ex.pick.Picker.note": "A button with the list under it.",
   "ex.pick.PickerGroups": "Picker with groups",
   "ex.pick.PickerGroups.note": "Options under their group's heading, badges in each row, and toggles above the list that narrow it.",
+  "ex.pick.Listbox": "List with search",
+  "ex.pick.Listbox.note": "Always open, for an Add dialog. Type to search, ↑ ↓ to move, Enter to add.",
+  "ex.pick.Listbox.rule": "A list you pick from right on the page is a Listbox, not a search field with buttons under it.",
+  "ex.pick.ListboxChosen": "List without search",
+  "ex.pick.ListboxChosen.note": "A short list that shows which one is chosen.",
   "ex.pick.DropdownIcons": "Dropdown icons",
   "ex.pick.DropdownIcons.rule": "A control where you pick a value has ⇕; a button that opens a menu of actions has ⌄. Never a down arrow on a picker.",
 
@@ -872,6 +877,11 @@ export const de: Record<TextKey, string> = {
   "ex.pick.Picker.note": "Ein Button mit der Liste darunter.",
   "ex.pick.PickerGroups": "Picker mit Gruppen",
   "ex.pick.PickerGroups.note": "Optionen unter der Überschrift ihrer Gruppe, Badges in jeder Zeile und Schalter über der Liste, die sie eingrenzen.",
+  "ex.pick.Listbox": "Liste mit Suche",
+  "ex.pick.Listbox.note": "Immer offen, für einen Hinzufügen-Dialog. Tipp zum Suchen, ↑ ↓ zum Wählen, Enter zum Hinzufügen.",
+  "ex.pick.Listbox.rule": "Eine Liste, aus der du direkt auf der Seite wählst, ist eine Listbox, kein Suchfeld mit Buttons darunter.",
+  "ex.pick.ListboxChosen": "Liste ohne Suche",
+  "ex.pick.ListboxChosen.note": "Eine kurze Liste, die zeigt, was gewählt ist.",
   "ex.pick.DropdownIcons": "Pfeile an Auswahlfeldern",
   "ex.pick.DropdownIcons.rule": "Wo du einen Wert wählst, steht ⇕; ein Button, der ein Menü mit Aktionen öffnet, hat ⌄. Nie ein Pfeil nach unten an einem Picker.",
 

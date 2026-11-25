@@ -243,7 +243,8 @@
       [data-slot="context-menu-radio-item"],
       [data-slot="context-menu-sub-trigger"],
       [data-slot="select-item"],
-      [data-slot="combobox-item"]
+      [data-slot="combobox-item"],
+      [data-slot="listbox-item"]
     ) {
     border-radius: var(--radius-sm);
     &:is([data-highlighted], [data-state="open"]) {

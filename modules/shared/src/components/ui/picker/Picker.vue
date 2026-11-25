@@ -15,6 +15,7 @@ import { ListboxContent, ListboxFilter, ListboxGroup, ListboxGroupLabel, Listbox
 import { cn } from "../../../lib/utils"
 import { Button } from "../button"
 import { choiceHighlighted, choiceRow } from "../choice-row"
+import { filterOptions, sectionsOf } from "./options"
 import type { PickerOption } from "./types"
 
 defineOptions({ inheritAttrs: false })
@@ -46,23 +47,9 @@ const [DefineRow, Row] = createReusableTemplate<{ option: PickerOption<T> }>()
 const rowClass = cn("data-[highlighted]:bg-accent flex h-9 w-full cursor-default items-center gap-2 rounded-md px-3 text-left text-sm outline-none select-none", choiceRow, choiceHighlighted)
 const query = ref("")
 const current = computed(() => props.options.find((option) => option.value === model.value) ?? (slots.current || slots.filters ? undefined : props.options[0]))
-const shown = computed(() => {
-  const text = query.value.trim().toLowerCase()
-  if (!props.search || !text) return props.options
-  return props.options.filter((option) => `${option.label} ${option.keywords ?? ""}`.toLowerCase().includes(text))
-})
+const shown = computed(() => (props.search ? filterOptions(props.options, query.value) : props.options))
 /** The shown options by group, in the order each group's first option comes; ungrouped ones first. */
-const sections = computed(() => {
-  const groups = new Map<string, PickerOption<T>[]>()
-  const loose = shown.value.filter((option) => !option.group)
-  for (const option of shown.value) {
-    if (!option.group) continue
-    const list = groups.get(option.group)
-    if (list) list.push(option)
-    else groups.set(option.group, [option])
-  }
-  return [...(loose.length ? [{ group: "", options: loose }] : []), ...[...groups].map(([group, options]) => ({ group, options }))]
-})
+const sections = computed(() => sectionsOf(shown.value))
 const part = (name: string) => (props.testid ? `${props.testid}-${name}` : undefined)
 
 watch(open, (isOpen) => {
