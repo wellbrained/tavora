@@ -1,5 +1,5 @@
-import { apiReason, isLeaderboardId, isLeaderboardPeriod, LEADERBOARD_PERIODS, type ApiReason, type LeaderboardBoard } from "@tavora/module-schema";
-import { LIMITS, type LeaderboardMine, type LeaderboardPeriod, type LeaderboardRow, type LeaderboardStanding, type LeaderboardStatus, type LeaderboardSubmitResult, type LeaderboardTop } from "@tavora/sdk/protocol";
+import { apiReason, LEADERBOARD_PERIODS, type ApiReason, type LeaderboardBoard } from "@tavora/module-schema";
+import { checkLeaderboardMine, checkLeaderboardSubmit, checkLeaderboardTop, type LeaderboardMine, type ParamCheck, type LeaderboardPeriod, type LeaderboardRow, type LeaderboardStanding, type LeaderboardStatus, type LeaderboardSubmitResult, type LeaderboardTop } from "@tavora/sdk/protocol";
 import { HostError } from "./errors";
 import { isRecord } from "../shared/is-record";
 
@@ -54,7 +54,6 @@ type Answer = { status: number; body: Record<string, unknown> };
 const NO_SERVICE: LeaderboardStatus = { online: false, signedIn: false, available: false, shown: false, name: null };
 /** The longest submit Tavora sends, in bytes; the service takes 32 KB. */
 const MAX_SUBMIT_BYTES = 30_000;
-const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 const count = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : 0);
 /** The local calendar day (YYYY-MM-DD) of a time in milliseconds. */
@@ -143,12 +142,9 @@ export class ModuleLeaderboards {
   }
 
   async submit(params: unknown): Promise<LeaderboardSubmitResult> {
-    const input = isRecord(params) ? params : {};
-    const board = this.board(input.board);
-    const results = input.results;
-    if (!Array.isArray(results) || results.length === 0 || results.length > LIMITS.maxLeaderboardResults) {
-      throw new HostError("INVALID_PARAMS", `params.results must be 1 to ${LIMITS.maxLeaderboardResults} results`);
-    }
+    const checked = this.checked(checkLeaderboardSubmit(params, this.boardIds()));
+    const board = this.board(checked.board);
+    const { results } = checked;
     // Only the fields a result has go on to the service; it checks each of them.
     const body = { board: declaration(board), results: results.map(resultFields) };
     if (Buffer.byteLength(JSON.stringify(body)) > MAX_SUBMIT_BYTES) throw new HostError("INVALID_PARAMS", "these results are too big for one call; send fewer at once");
@@ -168,14 +164,9 @@ export class ModuleLeaderboards {
   }
 
   async top(params: unknown): Promise<LeaderboardTop> {
-    const input = isRecord(params) ? params : {};
+    const input = this.checked(checkLeaderboardTop(params, this.boardIds()));
     const board = this.board(input.board);
-    if (input.period !== undefined && !isLeaderboardPeriod(input.period)) throw new HostError("INVALID_PARAMS", `params.period must be one of ${LEADERBOARD_PERIODS.join(", ")}`);
-    this.checkDay(input.day);
-    if (input.limit !== undefined && (!Number.isInteger(input.limit) || (input.limit as number) < 1 || (input.limit as number) > LIMITS.maxLeaderboardRows)) {
-      throw new HostError("INVALID_PARAMS", `params.limit must be a whole number from 1 to ${LIMITS.maxLeaderboardRows}`);
-    }
-    const query = new URLSearchParams({ ...declaration(board), ...(input.period === undefined ? {} : { period: input.period as string }), ...(input.day === undefined ? {} : { day: input.day as string }), ...(input.limit === undefined ? {} : { limit: String(input.limit) }) });
+    const query = new URLSearchParams({ ...declaration(board), ...(input.period === undefined ? {} : { period: input.period }), ...(input.day === undefined ? {} : { day: input.day }), ...(input.limit === undefined ? {} : { limit: String(input.limit) }) });
     const answer = await this.request("GET", `/boards/${board.id}?${query}`);
     if (!answer) return { rows: [] };
     if (answer.status !== 200) refused(answer);
@@ -189,13 +180,12 @@ export class ModuleLeaderboards {
 
   /** The user's own standing on every board of the manifest, in every period. Signed out, or with accounts off, there is none. */
   async mine(params: unknown): Promise<LeaderboardMine> {
-    const input = isRecord(params) ? params : {};
-    this.checkDay(input.day);
+    const input = this.checked(checkLeaderboardMine(params));
     const { boards, account, moduleId } = this.options;
     const none = () => ({ boards: boards.map((board) => ({ id: board.id, name: board.name, periods: emptyPeriods() })) });
     if (!account.enabled() || !account.isSignedIn()) return none();
     const query = new URLSearchParams({
-      ...(input.day === undefined ? {} : { day: input.day as string }),
+      ...(input.day === undefined ? {} : { day: input.day }),
       // A development copy has no boards on the service, so it says which it has.
       ...(moduleId.startsWith(TEST_PREFIX) ? { boards: JSON.stringify(boards.map((board) => ({ id: board.id, ...declaration(board) }))) } : {}),
     });
@@ -214,15 +204,19 @@ export class ModuleLeaderboards {
     };
   }
 
-  private checkDay(day: unknown): void {
-    if (day !== undefined && (typeof day !== "string" || !DAY.test(day))) throw new HostError("INVALID_PARAMS", "params.day must be a day as YYYY-MM-DD");
+  /** The params as the SDK's shared check (`@tavora/sdk/protocol`, the memory host's too) took them, or its refusal. */
+  private checked<T>(result: ParamCheck<T>): T {
+    if (!result.ok) throw new HostError(result.code, result.message);
+    return result.value;
   }
 
-  /** A board of the manifest by its id, or INVALID_PARAMS. */
-  private board(id: unknown): LeaderboardBoard {
-    const board = isLeaderboardId(id) ? this.options.boards.find((item) => item.id === id) : undefined;
-    if (!board) throw new HostError("INVALID_PARAMS", "params.board must be the id of a board in the manifest's leaderboards");
-    return board;
+  private boardIds(): string[] {
+    return this.options.boards.map((board) => board.id);
+  }
+
+  /** A board of the manifest by its id, which the shared check found there. */
+  private board(id: string): LeaderboardBoard {
+    return this.options.boards.find((item) => item.id === id)!;
   }
 
   /**

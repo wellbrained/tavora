@@ -85,6 +85,7 @@
       "type": "string",
       "maxLength": 128,
       "pattern": "^[a-z][a-z0-9]*(\\.[a-z0-9][a-z0-9-]*){1,4}$",
+      "not": { "pattern": "^(con|prn|aux|nul|com[0-9]|lpt[0-9])\\." },
       "description": "Unique module id: publisher.module-name, lowercase and dot-separated. Never change it after release: data and permissions are keyed on it.",
       "examples": [
         "community.example.campaign-companion"

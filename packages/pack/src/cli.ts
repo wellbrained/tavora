@@ -14,11 +14,14 @@
 //   For keys that sign outside Tavora (such as Tavora's own); keep the file safe and never commit it.
 // tavora-pack withdraw <file.zip | sha256>
 //   Takes back a version that is waiting for review (TAVORA_PUBLISH_TOKEN). No key needed.
+// A module folder named like a command (`link`) is packed when it is the only argument; `./link` always is.
 // Installed from npm as @tavora/pack; in Tavora's own repository: pnpm tavora-pack ...
 import { createHash } from "node:crypto";
+import { statSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
+import { commandOf } from "./command.ts";
 import { createKeyFile, loadExistingKey } from "./keys.ts";
 import { DEFAULT_API_URL, LinkError, linkKey } from "./link.ts";
 import { packModule, PackError } from "./pack.ts";
@@ -57,11 +60,12 @@ async function main(): Promise<number> {
     return 2;
   }
   const { values, positionals } = parsed;
-  const linking = positionals[0] === "link";
-  const publishing = positionals[0] === "publish";
-  const withdrawing = positionals[0] === "withdraw";
-  const making = positionals[0] === "key";
-  const command = linking || publishing || withdrawing || making;
+  const asked = commandOf(positionals, (name) => statSync(path.resolve(name), { throwIfNoEntry: false })?.isDirectory() === true);
+  const linking = asked === "link";
+  const publishing = asked === "publish";
+  const withdrawing = asked === "withdraw";
+  const making = asked === "key";
+  const command = asked !== null;
   if (values.help || positionals.length !== (command ? 2 : 1) || (command && values.out) || (!command && values.api)) {
     console.error(USAGE);
     return values.help ? 0 : 2;

@@ -4,11 +4,12 @@
 // sent, and the account's sign-in (Tavora's Publish button) or a publish token (CI): the key alone
 // publishes nothing (decided 2026-10-20). The secret key never leaves this PC.
 import { createHash, sign, type KeyObject } from "node:crypto";
-import { apiReason, type ApiReason } from "@tavora/module-schema";
+import { apiReason, catalogUploadProblem, describeUploadProblem, type ApiReason } from "@tavora/module-schema";
 import { DEFAULT_API_URL } from "./link.ts";
 import { verifyFiles } from "./signature.ts";
 import { asSigner, type Signer } from "./signer.ts";
-import { readZip, ZipError } from "./zip.ts";
+import { MANIFEST_FILE } from "./pack.ts";
+import { readZip, ZipError, type ZipFile } from "./zip.ts";
 
 /** What is signed: this line, then the zip's SHA-256 in hex. Nothing else Tavora signs starts like it. */
 export const PUBLISH_STATEMENT = "tavora-catalog-publish-1";
@@ -68,7 +69,7 @@ const MESSAGES: Partial<Record<ApiReason | "token-not-working", string>> = {
   "daily-limit": "Your account has published as many versions as it can today. Try again tomorrow.",
   "account-full": "Your modules take as much room in the catalog as an account may have.",
   "catalog-full": "The catalog has no room right now. Tavora has been told; try again later.",
-  "too-many": "Too many uploads from this connection. Wait a while and try again.",
+  "too-many": "Too many uploads right now, or another of yours is still running. Wait a while and try again.",
   "too-big": "The zip is too big for the catalog.",
   banned: `This account can't publish to the catalog any more. Check your email for why. What's not allowed: ${CATALOG_RULES_URL}`,
   declined: "Tavora declined this exact zip. Fix the problem and publish a new version.",
@@ -89,8 +90,10 @@ export async function publishZip(options: {
 }): Promise<Published> {
   // Checked here first, so a zip signed with another key fails with a clear message before any upload.
   let verified;
+  let files: ZipFile[];
   try {
-    verified = verifyFiles(readZip(options.zip));
+    files = readZip(options.zip);
+    verified = verifyFiles(files);
   } catch (error) {
     if (error instanceof ZipError) throw new PublishError(`That is not a module zip tavora-pack can read: ${error.message}.`);
     throw error;
@@ -99,6 +102,9 @@ export async function publishZip(options: {
   if (!verified.signed) throw new PublishError("The zip is not signed. Pack it with tavora-pack, which signs it with your publisher key.");
   const signer = asSigner(options.key);
   if (verified.owner !== signer.fingerprint) throw new PublishError("The zip was signed with another publisher key. Publish it with the key that packed it.");
+  // What the catalog would refuse only once all of it has arrived: said now, without sending it.
+  const problem = uploadProblem(files, options.zip.length);
+  if (problem) throw new PublishError(`The catalog won't take this zip: ${problem}`);
   if (!options.token) throw new PublishError(MESSAGES["sign-in-needed"]!);
   const sha256 = createHash("sha256").update(options.zip).digest("hex");
   const signature = (await signer.signPublish(options.zip, sha256)).toString("base64");
@@ -154,4 +160,28 @@ export async function withdrawVersion(options: { token: string | undefined; sha2
   if (apiReason(answer) === "not-waiting") throw new PublishError("None of your versions with this hash is waiting for review.");
   if (apiReason(answer) === "sign-in-needed") throw new PublishError(MESSAGES["token-not-working"]!);
   throw new PublishError(`The service refused the request (${response.status}).`);
+}
+
+/** Why the catalog would refuse this zip after the upload (catalogUploadProblem), in English; null when none of its checks stop it. */
+export function uploadProblem(files: readonly ZipFile[], zipBytes: number): string | null {
+  const data = files.find((file) => file.name === MANIFEST_FILE)?.data;
+  let manifest: { version?: unknown; games?: unknown; readme?: unknown; screenshots?: unknown };
+  try {
+    manifest = data ? JSON.parse(data.toString("utf8")) : {};
+  } catch {
+    // The packer wrote it; one that isn't JSON gets the catalog's own answer.
+    return null;
+  }
+  if (typeof manifest.version !== "string" || !Array.isArray(manifest.games)) return null;
+  const problem = catalogUploadProblem(
+    {
+      version: manifest.version,
+      games: manifest.games as string[],
+      readme: typeof manifest.readme === "string" ? manifest.readme : undefined,
+      screenshots: Array.isArray(manifest.screenshots) ? (manifest.screenshots as string[]) : undefined,
+    },
+    files,
+    zipBytes,
+  );
+  return problem ? describeUploadProblem(problem) : null;
 }

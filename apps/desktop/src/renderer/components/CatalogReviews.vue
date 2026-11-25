@@ -211,7 +211,8 @@ async function report(review: CatalogReviewView) {
   if (replyShown.waiting(review.id)) return;
   const fail = (message: string) => (reviewErrors.value = { ...reviewErrors.value, [review.id]: message });
   if (await run({ type: "report-catalog-review", reviewId: review.id }, fail)) reported.value = new Set([...reported.value, review.id]);
-  reportAsk.value = null;
+  // Only this review's question: Report on another one, pressed meanwhile, stays asked.
+  if (reportAsk.value === review.id) reportAsk.value = null;
 }
 
 function signIn() {

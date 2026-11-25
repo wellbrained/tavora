@@ -9,18 +9,28 @@ import type { ActionResult, HostAction, HostViewState } from "../../shared/host-
 const bridge = vi.hoisted(() => {
   const act = vi.fn<(action: HostAction) => Promise<ActionResult>>(async () => ({ ok: true }));
   // Every listener is taken and never called, every other call answers nothing: the test drives the slot and the state itself.
+  // A test can answer one call itself through `answers`.
+  const answers: Record<string, unknown> = {};
   const api = new Proxy({} as Record<string, unknown>, {
-    get: (_, key) => (key === "act" ? act : typeof key === "string" && key.startsWith("on") ? () => () => undefined : () => Promise.resolve(null)),
+    get: (_, key) => (key === "act" ? act : typeof key === "string" && key in answers ? answers[key] : typeof key === "string" && key.startsWith("on") ? () => () => undefined : () => Promise.resolve(null)),
   });
   (window as unknown as { tavoraHost: unknown }).tavoraHost = api;
   document.elementsFromPoint ??= () => [];
   if (!("PerformanceObserver" in globalThis)) (globalThis as Record<string, unknown>).PerformanceObserver = class { observe() {} disconnect() {} };
-  return { act };
+  return { act, answers };
 });
-// The dialog frame and its buttons as plain elements, so the test needs no popups.
+// The dialog frame and its buttons as plain elements, so the test needs no popups. `modal-dismiss` is Esc, the backdrop
+// or X: like the kit's, it closes nothing while the dialog is busy.
 vi.mock("./ModalDialog.vue", async () => {
   const { defineComponent, h } = await import("vue");
-  return { default: defineComponent({ emits: ["close"], setup: (_, { slots }) => () => h("div", slots.default?.()) }) };
+  return {
+    default: defineComponent({
+      props: { busy: Boolean },
+      emits: ["close"],
+      setup: (props, { slots, emit }) => () =>
+        h("div", { "data-busy": String(props.busy) }, [h("button", { "data-testid": "modal-dismiss", onClick: () => !props.busy && emit("close") }), slots.default?.()]),
+    }),
+  };
 });
 vi.mock("@tavora/official-ui/components/ui/dialog", async () => {
   const { defineComponent, h } = await import("vue");
@@ -34,9 +44,10 @@ vi.mock("@tavora/official-ui/components/ui/dialog", async () => {
   };
 });
 
-import { account, dialog, state, updateQueue, type GrantRequest, type PromptRequest, type ShareIconsRequest } from "../host";
+import { account, dialog, pairing, state, updateQueue, type GrantRequest, type PromptRequest, type ShareIconsRequest } from "../host";
 import CopyExampleDialog from "./developer/CopyExampleDialog.vue";
 import GrantDialog from "./GrantDialog.vue";
+import PairingDialog from "./PairingDialog.vue";
 import PromptDialog from "./PromptDialog.vue";
 import ShareIconsDialog from "./ShareIconsDialog.vue";
 
@@ -169,6 +180,72 @@ describe("a dialog that waits closes only itself", () => {
     button("share-icons-submit").click();
     await settle();
     expect(dialog.value).toBeNull();
+  });
+
+  it("share icons: a later turn that fails keeps the dialog with its reason, and Esc can't close it mid-share", async () => {
+    // One more game than a turn holds: two turns, the second one fails.
+    const ids = Array.from({ length: 51 }, (_, at) => `w${at}`);
+    const workspaces = Object.fromEntries(ids.map((id) => [id, { id, name: id, shareIcon: "data:image/png;base64,AA" }]));
+    state.value = { ...hostState(), library: { onboarded: false, workspaces } } as unknown as HostViewState;
+    const second = deferred<ActionResult>();
+    bridge.act.mockResolvedValueOnce({ ok: true, shared: 50 }).mockReturnValueOnce(second.promise);
+    const request: ShareIconsRequest = { kind: "share-icons", workspaceIds: ids };
+    account.value = { account: { id: "u1" } } as unknown as typeof account.value;
+    dialog.value = request;
+    mount(ShareIconsDialog, () => ({ request }));
+    await settle();
+    button("share-icons-submit").click();
+    await settle();
+    expect(root.querySelector("[data-busy]")!.getAttribute("data-busy")).toBe("true");
+    button("modal-dismiss").click();
+    await settle();
+    expect(dialog.value).toBe(request);
+    second.resolve({ ok: false, error: "Can't reach the service." });
+    await settle();
+    expect(dialog.value).toBe(request);
+    expect(button("share-icons-error").textContent).toBe("Can't reach the service.");
+  });
+
+  it("share icons: after a later Steam turn fails, Share sends only the games not shared yet", async () => {
+    const appids = Array.from({ length: 51 }, (_, at) => at + 1);
+    bridge.answers.steamShareIcons = async () => ({ status: "ok", games: appids.map((appid) => ({ appid, name: `Game ${appid}`, icon: "data:image/png;base64,AA" })) });
+    try {
+      bridge.act.mockResolvedValueOnce({ ok: true, shared: 50 }).mockResolvedValueOnce({ ok: false, error: "Can't reach the service." });
+      const request: ShareIconsRequest = { kind: "share-icons", workspaceIds: [], steam: appids };
+      account.value = { account: { id: "u1" } } as unknown as typeof account.value;
+      dialog.value = request;
+      mount(ShareIconsDialog, () => ({ request }));
+      await settle();
+      button("share-icons-submit").click();
+      await settle();
+      expect(button("share-icons-error").textContent).toBe("Can't reach the service.");
+      bridge.act.mockClear();
+      button("share-icons-submit").click();
+      await settle();
+      expect(bridge.act.mock.calls.map(([action]) => action)).toEqual([{ type: "share-steam-icons", appids: [51] }]);
+    } finally {
+      delete bridge.answers.steamShareIcons;
+    }
+  });
+});
+
+describe("the pairing question", () => {
+  afterEach(() => (pairing.value = null));
+
+  it("sends one answer: Esc after Add, before main takes the question away, refuses nothing", async () => {
+    const added = holdAct("pairing-decide");
+    pairing.value = { approve: { id: "p1", code: "123456", name: "Laptop" } } as unknown as typeof pairing.value;
+    mount(PairingDialog);
+    await settle();
+    button("pairing-add").click();
+    await settle();
+    button("modal-dismiss").click();
+    added.resolve({ ok: true });
+    await settle();
+    button("modal-dismiss").click();
+    await settle();
+    expect(bridge.act).toHaveBeenCalledTimes(1);
+    expect(bridge.act.mock.calls[0]![0]).toEqual({ type: "pairing-decide", id: "p1", allow: true });
   });
 });
 

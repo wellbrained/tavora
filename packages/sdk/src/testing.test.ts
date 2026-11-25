@@ -468,6 +468,7 @@ describe("workspace and ui", () => {
   });
 
   describe("anchors", () => {
+    const ITEMS = [{ type: "item" as const, id: "a", label: "A" }];
     const element = (box: { x: number; y: number; width: number; height: number }) =>
       ({ getBoundingClientRect: () => ({ ...box, left: box.x, top: box.y }) }) as unknown as Element;
 
@@ -477,17 +478,17 @@ describe("workspace and ui", () => {
       let current = box;
       const el = { getBoundingClientRect: () => current } as unknown as Element;
       current = { x: 1, y: 2, width: 3, height: 4 };
-      await sdk.ui.showMenu({ anchor: el, items: [], align: "end" });
-      expect(host.calls["ui.showMenu"]).toEqual([{ items: [], align: "end", at: { x: 1, y: 2, width: 3, height: 4 } }]);
+      await sdk.ui.showMenu({ anchor: el, items: ITEMS, align: "end" });
+      expect(host.calls["ui.showMenu"]).toEqual([{ items: ITEMS, align: "end", at: { x: 1, y: 2, width: 3, height: 4 } }]);
     });
 
     it("passes a box anchor and a bare `at` through", async () => {
       const { sdk, host } = createMemoryHost();
-      await sdk.ui.showMenu({ anchor: { x: 5, y: 6, width: 7, height: 8 }, items: [] });
-      await sdk.ui.showMenu({ at: { x: 1, y: 2 }, items: [] });
+      await sdk.ui.showMenu({ anchor: { x: 5, y: 6, width: 7, height: 8 }, items: ITEMS });
+      await sdk.ui.showMenu({ at: { x: 1, y: 2 }, items: ITEMS });
       expect(host.calls["ui.showMenu"]).toEqual([
-        { items: [], at: { x: 5, y: 6, width: 7, height: 8 } },
-        { items: [], at: { x: 1, y: 2 } },
+        { items: ITEMS, at: { x: 5, y: 6, width: 7, height: 8 } },
+        { items: ITEMS, at: { x: 1, y: 2 } },
       ]);
     });
 
@@ -511,7 +512,7 @@ describe("workspace and ui", () => {
 
   it("records menus and tooltips and answers them as scripted", async () => {
     const { sdk, host } = createMemoryHost();
-    const request = { items: [{ id: "a", label: "A" }], at: { x: 1, y: 2, width: 3, height: 4 } } as never;
+    const request = { items: [{ type: "item", id: "a", label: "A" }], at: { x: 1, y: 2, width: 3, height: 4 } } as never;
     expect(await sdk.ui.showMenu(request)).toBeNull();
     host.answer("ui.showMenu", () => "a");
     expect(await sdk.ui.showMenu(request)).toBe("a");
@@ -640,7 +641,7 @@ describe("leaderboards", () => {
       { board: "daily", results: [{ id: "a", outcome: "won", at: noon, day: "2026-10-28" }] },
     ]);
     host.leaderboards.setStatus({ online: false });
-    expect(await failure(sdk.leaderboards.submit("daily", []))).toMatchObject({ code: "NETWORK_ERROR" });
+    expect(await failure(sdk.leaderboards.submit("daily", [{ id: "b", outcome: "won", at: noon }]))).toMatchObject({ code: "NETWORK_ERROR" });
     expect(await sdk.leaderboards.hide()).toMatchObject({ shown: false });
   });
 
@@ -653,6 +654,65 @@ describe("leaderboards", () => {
     expect(await sdk.leaderboards.mine({ day: "2026-10-28" })).toEqual({ boards: [] });
     host.answer("leaderboards.submit", ({ results }) => ({ accepted: [], rejected: results.map((r) => ({ id: r.id, reason: "duplicate" as never })) }));
     expect((await sdk.leaderboards.submit("daily", [{ id: "z", outcome: "lost", at: 1 }])).rejected).toHaveLength(1);
+  });
+
+  // Bug hunt D (2026-11-25) M1: the memory host checks these params with Tavora's own functions (@tavora/sdk/protocol).
+  it("refuses the params Tavora refuses, scripted or not", async () => {
+    const { sdk, host } = createMemoryHost();
+    expect(await failure(sdk.leaderboards.top("daily", { limit: 1000 }))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.leaderboards.top("daily", { period: "decade" as never }))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.leaderboards.mine({ day: "yesterday" }))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.leaderboards.submit("daily", []))).toMatchObject({ code: "INVALID_PARAMS" });
+    host.answer("leaderboards.top", () => ({ rows: [] }));
+    expect(await failure(sdk.leaderboards.top("Daily"))).toMatchObject({ code: "INVALID_PARAMS" });
+  });
+
+  it("knows the manifest's boards: another one is refused, and mine lists each of them, signed out too", async () => {
+    const { sdk, host } = createMemoryHost({ leaderboards: [{ id: "daily", name: "Daily" }, { id: "best", name: "Best run" }] });
+    // Refused for the board before anything else, also while the user isn't shown yet.
+    expect(await failure(sdk.leaderboards.submit("weekly", [{ id: "a", outcome: "won", at: 1 }]))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.leaderboards.top("weekly"))).toMatchObject({ code: "INVALID_PARAMS" });
+    const empty = { day: null, week: null, month: null, year: null, all: null };
+    const listed = { boards: [{ id: "daily", name: "Daily", periods: empty }, { id: "best", name: "Best run", periods: empty }] };
+    expect(await sdk.leaderboards.mine()).toEqual(listed);
+    host.leaderboards.setStatus({ signedIn: false, online: false });
+    expect(await sdk.leaderboards.mine()).toEqual(listed);
+  });
+});
+
+describe("menus, tooltips and Discord pictures", () => {
+  const item = (label = "A", id = "a") => ({ type: "item" as const, id, label });
+
+  it("refuses a menu Tavora refuses: too many entries, a long label or hint, an unknown field", async () => {
+    const { sdk, host } = createMemoryHost();
+    const at = { x: 0, y: 0 };
+    const many = Array.from({ length: 101 }, (_, index) => item("A", `a${index}`));
+    expect(await failure(sdk.ui.showMenu({ at, items: many }))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.ui.showMenu({ at, items: [item("x".repeat(81))] }))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.ui.showMenu({ at, items: [{ ...item(), hint: "x".repeat(31) }] }))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.ui.showMenu({ at, items: [{ ...item(), color: "url(x)" }] }))).toMatchObject({ code: "INVALID_PARAMS" });
+    host.answer("ui.showMenu", () => "a");
+    expect(await failure(sdk.ui.showMenu({ at, items: [item(), item()] }))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await sdk.ui.showMenu({ at, items: Array.from({ length: 100 }, (_, index) => item("x".repeat(80), `a${index}`)) })).toBe("a");
+  });
+
+  it("refuses a tooltip or skin Tavora refuses", async () => {
+    const { sdk } = createMemoryHost();
+    const at = { x: 0, y: 0 };
+    expect(await failure(sdk.ui.tooltip.show({ id: "t", at, content: { title: "x".repeat(201) } }))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.ui.tooltip.show({ id: "t", at, content: { title: "T", look: "fancy" as never } }))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.ui.tooltip.show({ id: "t", at, content: { title: "T", image: "https://example.com/a.png" } }))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.ui.tooltip.hide("bad id!"))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.ui.tooltip.defineSkin("Card", {}))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.ui.tooltip.defineSkin("card", { colors: { surface: "gold" } }))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await sdk.ui.tooltip.show({ id: "t", at, content: { title: "T", look: "poe", image: "dist/a.png" } })).toBe(true);
+  });
+
+  it("refuses an empty or overlong Discord picture address", async () => {
+    const { sdk } = createMemoryHost();
+    expect(await failure(sdk.connectors.discord.image(""))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.connectors.discord.image(`https://cdn.discordapp.com/${"a".repeat(300)}`))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await sdk.connectors.discord.image("https://cdn.discordapp.com/avatars/1/2.png")).toBeNull();
   });
 });
 
@@ -743,8 +803,8 @@ describe("gestures", () => {
     host.gesture();
     await sdk.panel.setMaximized(true);
     host.gesture();
-    await sdk.ui.showMenu({ items: [], at: { x: 0, y: 0 } });
-    expect(await failure(sdk.ui.showMenu({ items: [], at: { x: 0, y: 0 } }))).toMatchObject({ code: "PERMISSION_DENIED" });
+    await sdk.ui.showMenu({ items: [{ type: "item", id: "a", label: "A" }], at: { x: 0, y: 0 } });
+    expect(await failure(sdk.ui.showMenu({ items: [{ type: "item", id: "a", label: "A" }], at: { x: 0, y: 0 } }))).toMatchObject({ code: "PERMISSION_DENIED" });
   });
 
   it("keeps one press, as Tavora does: presses don't add up, and one lasts GESTURE_MS", async () => {

@@ -3,7 +3,7 @@ import { closeSync, createReadStream, fstatSync, mkdirSync, openSync, readFileSy
 import { open, stat, type FileHandle } from "node:fs/promises";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { allowsPersonalWorkspaces, catalogListingProblem, folderKey, isGameId, isReleaseVersion, LOCAL_OWNER, manifestFiles, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, validateChangelog, validateManifest, type LeaderboardBoard, type ModuleManifest } from "@tavora/module-schema";
+import { allowsPersonalWorkspaces, catalogListingProblem, folderKey, isGameId, isReleaseVersion, LOCAL_OWNER, manifestFiles, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOT_PIXELS, validateChangelog, validateManifest, type LeaderboardBoard, type ModuleManifest } from "@tavora/module-schema";
 import { MANIFEST_FILE, privateKeyFile, readZip, SIGNATURE_FILE, signedHash, verifyFiles, ZIP_LIMITS, zipDirectory, zipDirectoryAt, ZipError, zipFiles, type ZipFile } from "@tavora/pack";
 import { writeFileAtomicSync } from "./fs-atomic.ts";
 import { inspectPng, isWebp } from "./png.ts";
@@ -112,8 +112,8 @@ const OFFICIAL_PREFIX = "tavora.";
 /** Whether a module id is one of Tavora's own (`tavora.*`); nothing is stored for it, the id says it. */
 export const isOfficialId = (id: string) => id.startsWith(OFFICIAL_PREFIX);
 const SHA256 = /^[0-9a-f]{64}$/;
-/** Widest and tallest screenshot the catalog takes, in pixels. */
-export const MAX_SCREENSHOT_PIXELS = 4096;
+/** Widest and tallest screenshot the catalog takes, in pixels (module-schema, so tavora-pack and the app check it first). */
+export { MAX_SCREENSHOT_PIXELS };
 
 export type ScreenshotType = "png" | "webp";
 

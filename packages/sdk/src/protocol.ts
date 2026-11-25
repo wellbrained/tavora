@@ -1530,6 +1530,430 @@ export function checkPickReadOnly(value: unknown): ParamCheck<{ extensions: stri
   return accept({ extensions: [...extensions] as string[], multiple: multiple === true, near: { file: near.file, up } });
 }
 
+/** discord.image's address: 1 to 300 characters; whether it is on Discord's image server is Tavora's to check (it answers null). */
+export function checkDiscordImage(value: unknown): ParamCheck<string> {
+  return typeof value === "string" && value.length > 0 && value.length <= 300 ? accept(value) : refuse("params.url must be an address on cdn.discordapp.com");
+}
+
+// ── Leaderboards ───────────────────────────────────────────────────────
+
+/** The periods a board can be read for. */
+export const LEADERBOARD_PERIODS = ["day", "week", "month", "year", "all"] as const satisfies readonly LeaderboardPeriod[];
+const LEADERBOARD_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+function checkLeaderboardDay(day: unknown): ParamCheck<string | undefined> {
+  return day === undefined || (typeof day === "string" && LEADERBOARD_DAY.test(day)) ? accept(day) : refuse("params.day must be a day as YYYY-MM-DD");
+}
+
+/** A board of the manifest's `leaderboards` by its id (`boards` lists their ids). */
+function checkLeaderboardBoard(value: unknown, boards: readonly string[]): ParamCheck<string> {
+  return typeof value === "string" && boards.includes(value) ? accept(value) : refuse("params.board must be the id of a board in the manifest's leaderboards");
+}
+
+/** leaderboards.submit's params: a board of the manifest and 1 to LIMITS.maxLeaderboardResults results. Each result is the service's to check. */
+export function checkLeaderboardSubmit(value: unknown, boards: readonly string[], max: number = LIMITS.maxLeaderboardResults): ParamCheck<{ board: string; results: unknown[] }> {
+  const input = isPlainObject(value) ? value : {};
+  const board = checkLeaderboardBoard(input.board, boards);
+  if (!board.ok) return board;
+  const results = input.results;
+  if (!Array.isArray(results) || results.length === 0 || results.length > max) return refuse(`params.results must be 1 to ${max} results`);
+  return accept({ board: board.value, results });
+}
+
+/** leaderboards.top's params: a board of the manifest, and optionally a period, a day and a limit of 1 to LIMITS.maxLeaderboardRows lines. */
+export function checkLeaderboardTop(value: unknown, boards: readonly string[], max: number = LIMITS.maxLeaderboardRows): ParamCheck<{ board: string; period?: LeaderboardPeriod; day?: string; limit?: number }> {
+  const input = isPlainObject(value) ? value : {};
+  const board = checkLeaderboardBoard(input.board, boards);
+  if (!board.ok) return board;
+  const { period, limit } = input;
+  if (period !== undefined && !LEADERBOARD_PERIODS.includes(period as LeaderboardPeriod)) return refuse(`params.period must be one of ${LEADERBOARD_PERIODS.join(", ")}`);
+  const day = checkLeaderboardDay(input.day);
+  if (!day.ok) return day;
+  if (limit !== undefined && (!Number.isInteger(limit) || (limit as number) < 1 || (limit as number) > max)) return refuse(`params.limit must be a whole number from 1 to ${max}`);
+  return accept({ board: board.value, ...(period === undefined ? {} : { period: period as LeaderboardPeriod }), ...(day.value === undefined ? {} : { day: day.value }), ...(limit === undefined ? {} : { limit: limit as number }) });
+}
+
+/** leaderboards.mine's params: optionally the day the periods are counted from. */
+export function checkLeaderboardMine(value: unknown): ParamCheck<{ day?: string }> {
+  const input = isPlainObject(value) ? value : {};
+  const day = checkLeaderboardDay(input.day);
+  if (!day.ok) return day;
+  return accept(day.value === undefined ? {} : { day: day.value });
+}
+
+// ── Menus, tooltips and item-card skins ────────────────────────────────
+
+/** Thrown inside the checks below; `refusing` turns it into their refusal. */
+class Refusal {
+  readonly message: string;
+  constructor(message: string) {
+    this.message = message;
+  }
+}
+function refusing<T>(check: () => T): ParamCheck<T> {
+  try {
+    return accept(check());
+  } catch (error) {
+    if (error instanceof Refusal) return refuse(error.message);
+    throw error;
+  }
+}
+const invalid = (message: string): never => {
+  throw new Refusal(message);
+};
+
+/** A menu as Tavora checked it, and the ids the user can pick: items that are not disabled, in submenus that are not disabled. */
+export interface CheckedMenu {
+  request: MenuRequest;
+  choices: ReadonlySet<string>;
+}
+
+const MENU_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/;
+/** A CSS colour without anything that could load or run: hex, a colour function of numbers, or transparent. */
+const MENU_COLOR = /^(?:#[0-9a-f]{3,8}|(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch)\([0-9.%\s,/+-]{1,60}\)|transparent)$/i;
+/** Largest offset or size accepted for a menu's `at`, in CSS pixels. */
+const MAX_MENU_COORDINATE = 100_000;
+
+/**
+ * ui.showMenu's params, rebuilt from known fields only: text stays text, colours are plain CSS colour values, at most
+ * LIMITS.maxMenuEntries entries (submenus included), labels up to LIMITS.maxMenuLabel and hints up to LIMITS.maxMenuHint.
+ */
+export function checkMenu(params: unknown): ParamCheck<CheckedMenu> {
+  return refusing(() => {
+    const record = (value: unknown, name: string): Record<string, unknown> => (isPlainObject(value) ? value : invalid(`${name} must be an object`));
+    const only = (value: Record<string, unknown>, allowed: string[], name: string) => {
+      const extra = Object.keys(value).filter((key) => !allowed.includes(key));
+      if (extra.length > 0) invalid(`${name} has unknown fields: ${extra.join(", ")}`);
+    };
+    const text = (value: unknown, max: number, name: string): string =>
+      typeof value !== "string" || value.trim() === "" || value.length > max ? invalid(`${name} must be text of 1 to ${max} characters`) : value;
+    const flag = (value: unknown, name: string): boolean | undefined => (value === undefined || typeof value === "boolean" ? value : invalid(`${name} must be true or false`));
+    const color = (value: unknown, name: string): string | undefined =>
+      value === undefined || (typeof value === "string" && MENU_COLOR.test(value)) ? value : invalid(`${name} must be a CSS colour such as #e5675a or oklch(0.7 0.17 150)`);
+    const coordinate = (value: unknown, name: string, optional: boolean): number | undefined => {
+      if (value === undefined && optional) return undefined;
+      return typeof value !== "number" || !Number.isFinite(value) || Math.abs(value) > MAX_MENU_COORDINATE ? invalid(`${name} must be a number of CSS pixels`) : value;
+    };
+    /** Keeps a field off the result when it was left out, so the copy holds only what the module sent. */
+    const defined = <R>(value: Record<string, unknown>): R => Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) as R;
+
+    const raw = record(params, "params");
+    only(raw, ["items", "at", "side", "align"], "params");
+    const ids = new Set<string>();
+    const choices = new Set<string>();
+    let count = 0;
+    const entries = (value: unknown, name: string, nested: boolean, enabled: boolean): MenuEntry[] => {
+      if (!Array.isArray(value) || value.length === 0) invalid(`${name} must be a list of at least one entry`);
+      return (value as unknown[]).map((item, index): MenuEntry => {
+        if (++count > LIMITS.maxMenuEntries) invalid(`a menu has at most ${LIMITS.maxMenuEntries} entries`);
+        const where = `${name}[${index}]`;
+        const entry = record(item, where);
+        switch (entry.type) {
+          case "separator":
+            only(entry, ["type"], where);
+            return { type: "separator" };
+          case "heading":
+            only(entry, ["type", "label"], where);
+            return { type: "heading", label: text(entry.label, LIMITS.maxMenuLabel, `${where}.label`) };
+          case "item": {
+            only(entry, ["type", "id", "label", "hint", "color", "checked", "radio", "disabled", "danger"], where);
+            if (typeof entry.id !== "string" || !MENU_ID.test(entry.id)) invalid(`${where}.id must be 1 to 64 letters, digits, ".", "_", ":" or "-"`);
+            const id = entry.id as string;
+            if (ids.has(id)) invalid(`${where}.id "${id}" is used twice`);
+            ids.add(id);
+            const disabled = flag(entry.disabled, `${where}.disabled`);
+            if (enabled && !disabled) choices.add(id);
+            return defined<MenuEntry>({
+              type: "item",
+              id,
+              label: text(entry.label, LIMITS.maxMenuLabel, `${where}.label`),
+              hint: entry.hint === undefined ? undefined : text(entry.hint, LIMITS.maxMenuHint, `${where}.hint`),
+              color: color(entry.color, `${where}.color`),
+              checked: flag(entry.checked, `${where}.checked`),
+              radio: flag(entry.radio, `${where}.radio`),
+              disabled,
+              danger: flag(entry.danger, `${where}.danger`),
+            });
+          }
+          case "submenu": {
+            if (nested) invalid(`${where}: a submenu holds no further submenus`);
+            only(entry, ["type", "label", "color", "disabled", "items"], where);
+            const disabled = flag(entry.disabled, `${where}.disabled`);
+            return defined<MenuEntry>({
+              type: "submenu",
+              label: text(entry.label, LIMITS.maxMenuLabel, `${where}.label`),
+              color: color(entry.color, `${where}.color`),
+              disabled,
+              items: entries(entry.items, `${where}.items`, true, enabled && !disabled),
+            });
+          }
+          default:
+            return invalid(`${where}.type must be "item", "separator", "heading" or "submenu"`);
+        }
+      });
+    };
+
+    const items = entries(raw.items, "params.items", false, true);
+    const at = record(raw.at, "params.at");
+    only(at, ["x", "y", "width", "height"], "params.at");
+    const width = coordinate(at.width, "params.at.width", true);
+    const height = coordinate(at.height, "params.at.height", true);
+    if ((width !== undefined && width < 0) || (height !== undefined && height < 0)) invalid("params.at.width and height must not be negative");
+    const side = raw.side;
+    if (side !== undefined && side !== "bottom" && side !== "top" && side !== "right" && side !== "left") invalid('params.side must be "bottom", "top", "right" or "left"');
+    const align = raw.align;
+    if (align !== undefined && align !== "start" && align !== "center" && align !== "end") invalid('params.align must be "start", "center" or "end"');
+    const request = defined<MenuRequest>({
+      items,
+      at: defined<MenuRequest["at"]>({ x: coordinate(at.x, "params.at.x", false)!, y: coordinate(at.y, "params.at.y", false)!, width, height }),
+      side: side as MenuRequest["side"],
+      align: align as MenuRequest["align"],
+    });
+    return { request, choices };
+  });
+}
+
+/** An item-card skin's name (`ui.tooltip.defineSkin`, a tooltip's `skin`): 1 to 32 of a-z, 0-9 and -. */
+export const TOOLTIP_SKIN_NAME = /^[a-z0-9-]{1,32}$/;
+const TOOLTIP_ID = /^[a-zA-Z0-9._:-]{1,64}$/;
+const TOOLTIP_HEX = /^#[0-9a-fA-F]{6}$/;
+/**
+ * A raster picture in the module's own bundle (`dist/…`): the item picture (PNG, JPEG, WebP or GIF), or a stat's icon,
+ * which is a mask and so only PNG or WebP (a JPEG would be a filled square, a GIF would animate).
+ */
+const TOOLTIP_IMAGE_PATH = /^dist\/(?:[a-zA-Z0-9_. -]+\/)*[a-zA-Z0-9_. -]+\.(?:png|jpe?g|webp|gif)$/i;
+const TOOLTIP_ICON_PATH = /\.(?:png|webp)$/i;
+const TOOLTIP_INVALID = "invalid tooltip content";
+
+const tooltipObject = (v: unknown, keys: string[]): Record<string, unknown> => {
+  if (!isPlainObject(v) || Object.keys(v).some((k) => !keys.includes(k))) invalid(TOOLTIP_INVALID);
+  return v as Record<string, unknown>;
+};
+const tooltipText = (v: unknown, max = 500): string => (typeof v !== "string" || !v.trim() || v.length > max ? invalid(TOOLTIP_INVALID) : v);
+const tooltipList = <T>(v: unknown, limit: number, fn: (v: unknown) => T): T[] => (!Array.isArray(v) || v.length > limit ? invalid(TOOLTIP_INVALID) : v.map(fn));
+const tooltipImage = (v: unknown, icon = false): string => {
+  const image = tooltipText(v, 500);
+  if (!TOOLTIP_IMAGE_PATH.test(image) || (icon && !TOOLTIP_ICON_PATH.test(image)) || image.split("/").includes("..")) invalid(TOOLTIP_INVALID);
+  return image;
+};
+const tooltipIdOf = (v: unknown): string => {
+  const id = tooltipText(tooltipObject(v, ["id"]).id, 64);
+  return TOOLTIP_ID.test(id) ? id : invalid(TOOLTIP_INVALID);
+};
+const tooltipAnchorOf = (v: unknown): TooltipAnchor => {
+  const o = tooltipObject(v, ["id", "at", "box"]);
+  const id = tooltipIdOf({ id: o.id });
+  const p = tooltipObject(o.at, ["x", "y"]);
+  for (const n of [p.x, p.y]) if (typeof n !== "number" || !Number.isFinite(n) || n < 0 || n > 100000) invalid(TOOLTIP_INVALID);
+  const anchor: TooltipAnchor = { id, at: { x: p.x as number, y: p.y as number } };
+  // The anchor element's box: an element partly scrolled out of the panel has a negative x or y.
+  if (o.box !== undefined) {
+    const b = tooltipObject(o.box, ["x", "y", "width", "height"]);
+    for (const n of [b.x, b.y, b.width, b.height]) if (typeof n !== "number" || !Number.isFinite(n) || Math.abs(n) > 100000) invalid(TOOLTIP_INVALID);
+    anchor.box = { x: b.x as number, y: b.y as number, width: b.width as number, height: b.height as number };
+  }
+  return anchor;
+};
+
+/** ui.tooltip.hide's and ui.tooltip.close's params: `{ id }`, 1 to 64 letters, digits and `._:-`. */
+export function checkTooltipId(params: unknown): ParamCheck<string> {
+  return refusing(() => tooltipIdOf(params));
+}
+
+/** ui.tooltip.move's params: the tooltip's id, where it points (`at`) and the anchor element's box. */
+export function checkTooltipAnchor(params: unknown): ParamCheck<TooltipAnchor> {
+  return refusing(() => tooltipAnchorOf(params));
+}
+
+/** ui.tooltip.show's params: the anchor and the card's content, rebuilt from known fields only (40,000 characters at most as JSON). */
+export function checkTooltip(params: unknown): ParamCheck<TooltipRequest> {
+  return refusing(() => {
+    const fail = (): never => invalid(TOOLTIP_INVALID);
+    const o = tooltipObject(params, ["id", "at", "box", "content", "pinned", "pinnable"]);
+    const anchor = tooltipAnchorOf({ id: o.id, at: o.at, ...(o.box === undefined ? {} : { box: o.box }) });
+    if (o.pinned !== undefined && typeof o.pinned !== "boolean") fail();
+    if (o.pinnable !== undefined && typeof o.pinnable !== "boolean") fail();
+    // A card that says it can't be pinned never pins: asking for both is a mistake, not something to guess at.
+    if (o.pinnable === false && o.pinned === true) fail();
+    const c = tooltipObject(o.content, ["title", "subtitle", "look", "tone", "image", "layout", "effect", "skin", "badges", "artTags", "requirements", "properties", "perHeading", "columns", "sections", "corner", "icons", "pips"]);
+    const content: TooltipContent = { title: tooltipText(c.title, 200) };
+    if (c.subtitle !== undefined) content.subtitle = tooltipText(c.subtitle, 300);
+    if (c.look !== undefined) {
+      if (!["neutral", "poe"].includes(c.look as string)) fail();
+      content.look = c.look as NonNullable<TooltipContent["look"]>;
+    }
+    if (c.tone !== undefined) {
+      if (!["normal", "magic", "rare", "unique"].includes(c.tone as string)) fail();
+      content.tone = c.tone as NonNullable<TooltipContent["tone"]>;
+    }
+    if (c.image !== undefined) content.image = tooltipImage(c.image);
+    if (c.layout !== undefined) {
+      if (!["rich", "card", "unit"].includes(c.layout as string)) fail();
+      content.layout = c.layout as NonNullable<TooltipContent["layout"]>;
+    }
+    // The card's effect text: one text, or up to 40 runs (some in the accent colour), 1,000 characters in all.
+    if (c.effect !== undefined) {
+      if (typeof c.effect === "string") content.effect = tooltipText(c.effect, 1000);
+      else {
+        let length = 0;
+        const runs = tooltipList(c.effect, 40, (r) => {
+          const run = tooltipObject(r, ["text", "accent"]);
+          if (typeof run.text !== "string" || !run.text || (length += run.text.length) > 1000) fail();
+          if (run.accent !== undefined && typeof run.accent !== "boolean") fail();
+          return { text: run.text as string, ...(run.accent === true ? { accent: true } : {}) };
+        });
+        if (!runs.length || !runs.some((r) => r.text.trim())) fail();
+        content.effect = runs;
+      }
+    }
+    if (c.skin !== undefined) {
+      if (typeof c.skin !== "string" || !TOOLTIP_SKIN_NAME.test(c.skin)) fail();
+      content.skin = c.skin as string;
+    }
+    if (c.badges !== undefined) content.badges = tooltipList(c.badges, 8, (v) => tooltipText(v, 100));
+    // Up to 3 tags over the card's picture, each up to 24 characters, with an optional colour (#rrggbb only, as it goes
+    // into a style on the page) and the bottom corner it sits in.
+    if (c.artTags !== undefined) {
+      content.artTags = tooltipList(c.artTags, 3, (v) => {
+        const t = tooltipObject(v, ["text", "color", "side"]);
+        if (t.color !== undefined && (typeof t.color !== "string" || !TOOLTIP_HEX.test(t.color))) fail();
+        if (t.side !== undefined && t.side !== "left" && t.side !== "right") fail();
+        return { text: tooltipText(t.text, 24), ...(t.color === undefined ? {} : { color: t.color as string }), ...(t.side === undefined ? {} : { side: t.side as "left" | "right" }) };
+      });
+      if (!content.artTags.length) fail();
+    }
+    const property = (v: unknown) => {
+      const p = tooltipObject(v, ["label", "value"]);
+      return { label: tooltipText(p.label, 100), value: tooltipText(p.value, 300) };
+    };
+    if (c.requirements !== undefined) content.requirements = tooltipList(c.requirements, 8, property);
+    // A stat may grow by `per` (a third column on the card); with it, its value may be empty (it only grows). Its `icon`
+    // is a picture in the module's bundle, by the same rules as `image`. The unit layout hangs a `suffix` past the value,
+    // kept as given. Its `more` are up to 3 extra values after it, each up to 40 characters; an empty one leaves its
+    // cell empty, and with one that isn't, the value may be empty too.
+    const stat = (v: unknown) => {
+      const p = tooltipObject(v, ["label", "value", "per", "icon", "suffix", "more"]);
+      const more = p.more === undefined ? undefined : tooltipList(p.more, 3, (cell) => (typeof cell !== "string" || cell.length > 40 ? fail() : cell));
+      if (more?.length === 0) fail();
+      const filled = more?.some((cell) => cell.trim()) ?? false;
+      if ((p.per !== undefined || filled) && (typeof p.value !== "string" || p.value.length > 300)) fail();
+      const row: NonNullable<TooltipContent["properties"]>[number] = p.per === undefined && !filled ? property({ label: p.label, value: p.value }) : { label: tooltipText(p.label, 100), value: p.value as string };
+      if (p.per !== undefined) row.per = tooltipText(p.per, 40);
+      if (more) row.more = more;
+      if (p.icon !== undefined) row.icon = tooltipImage(p.icon, true);
+      if (p.suffix !== undefined) row.suffix = tooltipText(p.suffix, 40);
+      return row;
+    };
+    if (c.properties !== undefined) content.properties = tooltipList(c.properties, 20, stat);
+    if (c.perHeading !== undefined) content.perHeading = tooltipText(c.perHeading, 60);
+    // The headings over the value column and each `more` column ("Lv 1", "Lv 2", …).
+    if (c.columns !== undefined) {
+      content.columns = tooltipList(c.columns, 4, (v) => tooltipText(v, 20));
+      if (!content.columns.length) fail();
+    }
+    let rows = 0;
+    if (c.sections !== undefined) {
+      content.sections = tooltipList(c.sections, 12, (v) => {
+        const s = tooltipObject(v, ["title", "rows"]);
+        return {
+          ...(s.title === undefined ? {} : { title: tooltipText(s.title, 100) }),
+          rows: tooltipList(s.rows, 60, (v) => {
+            if (++rows > 100) fail();
+            const r = tooltipObject(v, ["text", "badges", "status", "connected"]);
+            if (r.connected !== undefined && typeof r.connected !== "boolean") fail();
+            return {
+              text: tooltipText(r.text, 2000),
+              ...(r.badges === undefined ? {} : { badges: tooltipList(r.badges, 5, (v) => tooltipText(v, 40)) }),
+              ...(r.status === undefined ? {} : { status: tooltipText(r.status, 60) }),
+              ...(r.connected === undefined ? {} : { connected: r.connected as boolean }),
+            };
+          }),
+        };
+      });
+    }
+    // The unit layout's corner value, icon row and pips. Their pictures are masks or small pictures in the bundle, by the
+    // rules of a stat's icon.
+    if (c.corner !== undefined) {
+      const k = tooltipObject(c.corner, ["text", "icon"]);
+      content.corner = { text: tooltipText(k.text, 20), ...(k.icon === undefined ? {} : { icon: tooltipImage(k.icon, true) }) };
+    }
+    if (c.icons !== undefined) {
+      content.icons = tooltipList(c.icons, 12, (v) => {
+        const i = tooltipObject(v, ["image", "label", "count"]);
+        return { image: tooltipImage(i.image, true), label: tooltipText(i.label, 100), ...(i.count === undefined ? {} : { count: tooltipText(i.count, 8) }) };
+      });
+    }
+    if (c.pips !== undefined) {
+      const k = tooltipObject(c.pips, ["filled", "total", "extra"]);
+      const whole = (n: unknown, max: number) => (typeof n !== "number" || !Number.isInteger(n) || n < 0 || n > max ? fail() : n);
+      const total = whole(k.total, 10);
+      if (total < 1) fail();
+      content.pips = { filled: whole(k.filled, total), total, ...(k.extra === undefined ? {} : { extra: tooltipText(k.extra, 12) }) };
+    }
+    if (JSON.stringify(content).length > 40000) fail();
+    return { ...anchor, content, pinned: o.pinned === true, ...(o.pinnable === false ? { pinnable: false } : {}) };
+  });
+}
+
+/** The widest edge of a skin's frame picture, in its pixels (`frame.slice`). */
+export const MAX_SKIN_SLICE = 64;
+const SKIN_PATH = (ext: string) => new RegExp(`^dist\\/(?:[a-zA-Z0-9_. -]+\\/)*[a-zA-Z0-9_. -]+\\.(?:${ext})$`, "i");
+const SKIN_FRAME_PATH = SKIN_PATH("png|webp");
+const SKIN_FONT_PATH = SKIN_PATH("woff2");
+/** The colours a skin may set. */
+export const SKIN_COLOR_KEYS = ["surface", "text", "muted", "accent", "box", "boxText", "boxBorder", "bar"] as const;
+
+/**
+ * ui.tooltip.defineSkin's params: the skin's name, and its values with the right shapes. Whether its files are real
+ * pictures and fonts and its colours readable is Tavora's to check.
+ */
+export function checkTooltipSkin(params: unknown): ParamCheck<{ name: string; skin: TooltipSkin }> {
+  return refusing(() => {
+    const no = (message: string): never => invalid(`ui.tooltip.defineSkin: ${message}`);
+    const record = (v: unknown, keys: readonly string[], what: string): Record<string, unknown> => {
+      if (!isPlainObject(v)) no(`${what} must be an object`);
+      const o = v as Record<string, unknown>;
+      const unknown = Object.keys(o).find((k) => !keys.includes(k));
+      if (unknown !== undefined) no(`${what} has an unknown key "${unknown}"`);
+      return o;
+    };
+    const bundlePath = (v: unknown, pattern: RegExp, what: string): string =>
+      typeof v !== "string" || v.length > 500 || !pattern.test(v) || v.split("/").includes("..")
+        ? no(`${what} must be a path in your own dist/ folder (${pattern === SKIN_FONT_PATH ? ".woff2" : ".png or .webp"})`)
+        : v;
+    const o = record(params, ["name", "skin"], "the request");
+    if (typeof o.name !== "string" || !TOOLTIP_SKIN_NAME.test(o.name)) no("the name must be 1 to 32 of a-z, 0-9 and -");
+    const s = record(o.skin, ["frame", "colors", "font", "pixelArt", "titleCaps"], "the skin");
+    const skin: TooltipSkin = {};
+    if (s.frame !== undefined) {
+      const f = record(s.frame, ["image", "slice"], "frame");
+      const slice = f.slice;
+      if (!Array.isArray(slice) || slice.length !== 4 || !slice.every((n) => Number.isInteger(n) && n >= 0 && n <= MAX_SKIN_SLICE)) {
+        no(`frame.slice must be four whole numbers from 0 to ${MAX_SKIN_SLICE} (top, right, bottom, left)`);
+      }
+      skin.frame = { image: bundlePath(f.image, SKIN_FRAME_PATH, "frame.image"), slice: [...(slice as number[])] as [number, number, number, number] };
+    }
+    if (s.colors !== undefined) {
+      const c = record(s.colors, SKIN_COLOR_KEYS, "colors");
+      const colors: NonNullable<TooltipSkin["colors"]> = {};
+      for (const key of SKIN_COLOR_KEYS) {
+        const value = c[key];
+        if (value === undefined) continue;
+        if (typeof value !== "string" || !TOOLTIP_HEX.test(value)) no(`colors.${key} must be a colour like #1a2b3c`);
+        colors[key] = (value as string).toLowerCase();
+      }
+      skin.colors = colors;
+    }
+    if (s.font !== undefined) skin.font = bundlePath(s.font, SKIN_FONT_PATH, "font");
+    for (const key of ["pixelArt", "titleCaps"] as const) {
+      if (s[key] === undefined) continue;
+      if (typeof s[key] !== "boolean") no(`${key} must be true or false`);
+      skin[key] = s[key] as boolean;
+    }
+    return { name: o.name as string, skin };
+  });
+}
+
 /**
  * An overlay page reads what the module published from this address next to it, as server-sent events: each
  * message is `{ "state": <JSON or null> }`, the first one straight away (see watchOverlay).
@@ -1603,7 +2027,7 @@ export type MenuEntry =
     };
 
 export type { TooltipContent, TooltipAnchor, TooltipRequest, TooltipSkin, TooltipEffectRun, TooltipIcon, TooltipArtTag } from "./tooltip-types.js";
-import type { TooltipRequest, TooltipAnchor, TooltipSkin } from "./tooltip-types.js";
+import type { TooltipContent, TooltipRequest, TooltipAnchor, TooltipSkin } from "./tooltip-types.js";
 
 /** What ui.showMenu shows, and where. */
 export interface MenuRequest {

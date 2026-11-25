@@ -260,6 +260,20 @@ describe("ratings and reviews", () => {
     await settle();
     expect((row().querySelector('[data-testid="catalog-review-reply-start"]') as HTMLButtonElement).disabled).toBe(false);
   });
+
+  it("a report's answer closes only its own question, not one asked for another review meanwhile", async () => {
+    const sending = deferred<{ ok: boolean }>();
+    host.act.mockReturnValueOnce(sending.promise);
+    await mountReviews(reviews({ reviews: [review("r1", "First"), review("r2", "Second")] }));
+    await click("catalog-review-report-r1");
+    await click("catalog-review-report-send-r1");
+    await click("catalog-review-report-r2");
+    expect($("catalog-review-report-send-r2")).not.toBeNull();
+    sending.resolve(ok);
+    await settle();
+    expect(root.querySelector('[data-testid="catalog-review-r1"]')!.textContent).toContain("Thanks");
+    expect($("catalog-review-report-send-r2")).not.toBeNull();
+  });
 });
 
 // ── Contact choice ────────────────────────────────────────────────────────

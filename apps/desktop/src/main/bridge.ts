@@ -2,6 +2,7 @@ import {
   checkActionId,
   checkBlobId,
   checkDialogTitle,
+  checkDiscordImage,
   checkFileReference,
   checkHotkeyLabel,
   checkModuleKey,
@@ -431,11 +432,7 @@ const grantedHandlers: { readonly [K in GrantedCall]: GrantedHandler<unknown> } 
     },
   ),
   "discord.image": granted(
-    (params) => {
-      const url = required(object(params), "url");
-      if (typeof url !== "string" || url.length === 0 || url.length > 300) throw new HostError("INVALID_PARAMS", "params.url must be an address on cdn.discordapp.com");
-      return url;
-    },
+    (params) => checked(checkDiscordImage(required(object(params), "url"))),
     (s, url) => s.context.discord.image(url),
   ),
 

@@ -30,8 +30,9 @@ const isGame = computed(() => props.workspace.kind === "game");
 /** The catalog's modules made for this game, or null while they load (`loader` busy) and when the catalog can't be asked. */
 const made = ref<CatalogModuleView[] | null>(null);
 const loader = useTask({ mode: "latest" });
+// Plain values, compared one by one: main sends a fresh workspace object after every action, which must not ask again.
 watch(
-  () => [props.workspace.id, isGame.value] as const,
+  [() => props.workspace.id, isGame],
   async ([workspaceId, game]) => {
     made.value = null;
     // Always one run, so moving on (to a personal workspace, too) drops an answer still on its way.

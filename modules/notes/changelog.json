@@ -1,9 +1,16 @@
 [
   {
-    "version": "0.6.37",
+    "version": "0.6.38",
     "date": "2026-11-25",
     "notes": [
       "New item card pieces in the shared controls."
+    ]
+  },
+  {
+    "version": "0.6.37",
+    "date": "2026-11-25",
+    "notes": [
+      "Built with the newer SDK. Nothing changes for you."
     ]
   },
   {

@@ -553,6 +553,14 @@ describe("pnpm check:modules", () => {
     expect(findModules(repo("tavora").root, ["modules/dice"])).toEqual(["modules/dice"]);
   });
 
+  // Bug hunt D (2026-11-25) L12: CI's `pnpm check:modules` keeps the examples to the rules too.
+  it("checks the examples next to the modules", () => {
+    const { root } = repo("tavora");
+    mkdirSync(path.join(root, "examples", "vue-module"), { recursive: true });
+    writeFileSync(path.join(root, "examples", "vue-module", "tavora.module.json"), "{}");
+    expect(findModules(root)).toEqual(["modules/dice", "examples/vue-module"]);
+  });
+
   it("fails on a new break, passes once it is in the baseline, and fails again on the next one", () => {
     const { root, dir } = repo("modules");
     const first = run([], root);

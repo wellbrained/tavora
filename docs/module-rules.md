@@ -405,7 +405,7 @@ mounts (that is where the page's keydown with `handleUndoKey` goes). Text catalo
 skip the colour and motion rules, since a sentence like "Items #123" isn't a colour. It runs in CI and in `pnpm lint`.
 In `tavora-modules`, `pnpm check:modules` runs the same script from the `../tavora` checkout.
 
-- **Run it**: `pnpm check:modules` checks `modules/*` (in `tavora-modules`, every module folder); name folders to check
+- **Run it**: `pnpm check:modules` checks `modules/*` and `examples/*` (in `tavora-modules`, every module folder); name folders to check
   only those (`pnpm check:modules modules/todos`). Each break is one line: file and line, the rule, what it found and
   what to use instead.
 - **Known breaks** are in `module-rules-baseline.json`; only new ones fail. A break is known by its file, rule and the

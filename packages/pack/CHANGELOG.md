@@ -2,6 +2,12 @@
 
 What changed in `@tavora/pack`, newest first.
 
+## 0.3.7
+
+- `publish` says what the catalog would refuse only after the whole zip arrived, before sending it: a version longer than 64 characters, more than 100 games, a readme that isn't UTF-8 text of at most 20 KB, a screenshot that isn't the PNG or WebP it is named as (at most 1 MB and 4096 px), and a zip whose files unpacked take more than 88 MB with it (`catalogUploadProblem` in `@tavora/module-schema` 0.2.5).
+- The catalog's `too-many` answer now says that another upload from your account may still be running: it takes one at a time.
+- A module folder named `link`, `key`, `publish` or `withdraw` is packed when it is the only argument (`tavora-pack link --key k`), not read as that command.
+
 ## 0.3.6
 
 - The Vite plugin keeps `dist/THIRD_PARTY_NOTICES.txt` when a dev server (`vite` without `build`) closes; before, it wrote an empty list over it. In `--watch`, each build lists only what it bundled.
