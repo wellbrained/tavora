@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Pencil, Plus, Trash2 } from "@lucide/vue";
 // Settings > Connections > AI accounts: the Claude and Codex accounts the AI Usage connector reads, by the folder of
 // the CLI profile that holds each login. Logins stay in those folders; the main process reads them and none of it
 // comes to this page or to a module. The modules allowed to read them are listed below this, in ConnectionsSection.

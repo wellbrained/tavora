@@ -45,7 +45,7 @@ async function send() {
 </script>
 
 <template>
-  <ModalDialog :title="t('inbox.report.title')" :description="t('inbox.report.hint')" testid="report-conversation" :status="task.state.value.status" @close="emit('close')">
+  <ModalDialog :title="t('inbox.report.title')" :description="t('inbox.report.hint')" :icon="Flag" testid="report-conversation" :status="task.state.value.status" @close="emit('close')">
     <form class="contents" @submit.prevent="send">
       <div class="grid gap-4">
       <RadioGroup v-model="reason" class="gap-2" :aria-label="t('inbox.report.title')">
@@ -66,7 +66,7 @@ async function send() {
       </div>
       <DialogFooter>
         <DialogButton type="button" close @click="emit('close')">{{ t("common.cancel") }}</DialogButton>
-        <DialogButton type="submit" :icon="Flag" :loading="busy" :disabled="busy || tooLong" data-testid="report-conversation-send">{{ t("inbox.report") }}</DialogButton>
+        <DialogButton type="submit" :loading="busy" :disabled="busy || tooLong" data-testid="report-conversation-send">{{ t("inbox.report") }}</DialogButton>
       </DialogFooter>
     </form>
   </ModalDialog>

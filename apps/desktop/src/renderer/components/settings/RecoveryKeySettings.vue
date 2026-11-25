@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Copy } from "@lucide/vue";
 // Profile dialog > Account > Recovery key (and Settings > Developer > Publishing): the one key the user keeps. It opens the cloud copy and the
 // publisher keys Tavora keeps. A new PC gets it from another PC, or asks for it once. The key stays in the main process,
 // except while the user looks at it here. When the keys kept with the account on Tavora's service don't open with this

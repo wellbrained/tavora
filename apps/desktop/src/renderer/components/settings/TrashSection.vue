@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Trash2, Undo2 } from "@lucide/vue";
 // Settings > Games > Trash: removed workspaces, kept for 7 days. Tick several to restore or delete them together.
 import { computed, ref, watch } from "vue";
 import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";

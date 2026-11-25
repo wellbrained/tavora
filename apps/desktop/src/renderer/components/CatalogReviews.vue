@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Trash2 } from "@lucide/vue";
 // The Ratings and reviews section of a catalog module's page (decided 2026-10-21). It shows the
 // summary with its 5 to 1 star bars, the user's own rating, and the newest reviews with the
 // publisher's one reply. Rating needs a sign-in and the module installed, and never your own module;

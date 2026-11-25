@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Copy, Plus, Trash2 } from "@lucide/vue";
 // Settings > Publishing, once signed in: the public developer name and the id prefixes the account holds, and how
 // users reach the developer about modules without a choice of their own. Saving the name the first time also claims its prefix and makes the
 // publisher key (host.ts), so publishing from Tavora needs nothing more here; the keys (Export, Lost

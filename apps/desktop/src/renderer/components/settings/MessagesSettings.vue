@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronRight } from "@lucide/vue";
 // Profile dialog > Messages: the email copy switch, and the conversations that are closed (they leave the inbox
 // icon but stay readable here).
 import { computed } from "vue";

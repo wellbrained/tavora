@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Cloud } from "@lucide/vue";
 // The questions the cloud copy asks over the app: which side to keep when both
 // changed, a restart for newer data from another PC, and the wait at close.
 import { computed, ref, watch } from "vue";
@@ -67,7 +68,7 @@ function later() {
 </script>
 
 <template>
-  <ModalDialog v-if="copyQuestion" :title="title" :description="text" testid="cloud-copy-question" :busy="copyQuestion === 'closing'" @close="later">
+  <ModalDialog v-if="copyQuestion" :title="title" :description="text" :icon="Cloud" testid="cloud-copy-question" :busy="copyQuestion === 'closing'" @close="later">
     <template v-if="copyQuestion === 'conflict'">
       <p v-if="!onlyPc" class="text-muted-foreground text-sm">{{ t(unfinished ? "cloudCopy.unfinished.hint" : "cloudCopy.conflict.cloudHint") }}</p>
       <form v-if="canTypeKey && !replacing" class="flex flex-col gap-2" @submit.prevent="keyText.trim() && run({ type: 'cloud-copy-other-key', key: keyText })">

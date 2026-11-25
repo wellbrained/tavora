@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Flag } from "@lucide/vue";
 // Report a catalog module to Tavora: a reason and an optional note. It needs a sign-in; Tavora keeps who reported
 // only while the report is open, and the developer is told only that the module was reported.
 import { computed, ref } from "vue";
@@ -48,7 +49,7 @@ function signIn() {
 </script>
 
 <template>
-  <ModalDialog :title="t('report.title', { name: moduleName })" :description="t('catalog.reportHint')" testid="report-module-dialog" :status="task.state.value.status" @close="emit('close')">
+  <ModalDialog :title="t('report.title', { name: moduleName })" :description="t('catalog.reportHint')" :icon="Flag" testid="report-module-dialog" :status="task.state.value.status" @close="emit('close')">
     <template v-if="!signedIn">
       <p class="text-sm">{{ t("error.reportSignIn") }}</p>
       <DialogFooter>

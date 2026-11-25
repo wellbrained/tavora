@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { LogOut, Pencil, Trash2 } from "@lucide/vue";
 // Profile dialog > Account: the optional Tavora account. Signing in is an emailed
 // code or a Discord login in the browser, never a password (SignInForm.vue). The main process
 // talks to the service and keeps the sign-in; this page only sees the sign-in

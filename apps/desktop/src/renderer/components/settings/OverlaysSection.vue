@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Trash2 } from "@lucide/vue";
 // Settings > Overlays & Streaming. Over your game (only on PCs that can show it): the master switch and the global
 // options (the one key that opens the in-game layer, keep when you switch windows, the sidebar's side). Arranging
 // and pausing are in the workspace header's Overlay button; modules add overlays with "Show over game" and panels

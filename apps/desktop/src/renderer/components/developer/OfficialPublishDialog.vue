@@ -50,7 +50,7 @@ function cancel() {
 </script>
 
 <template>
-  <ModalDialog v-if="dialog.show !== 'none'" :title="title" class="sm:max-w-[520px]" testid="official-publish-dialog" :busy="uploading || busy" @close="cancel">
+  <ModalDialog v-if="dialog.show !== 'none'" :title="title" :icon="Upload" class="sm:max-w-[520px]" testid="official-publish-dialog" :busy="uploading || busy" @close="cancel">
     <!-- Building, signing or uploading: the steps, with the current one marked. -->
     <template v-if="dialog.show === 'steps'">
       <ol class="flex flex-col gap-2 text-sm" :aria-label="title" data-testid="official-publish-steps">
@@ -118,7 +118,7 @@ function cancel() {
 
       <DialogFooter>
         <DialogButton close :disabled="busy || dialog.confirming" data-testid="official-publish-cancel" @click="cancel">{{ t("common.cancel") }}</DialogButton>
-        <DialogButton :icon="Upload" :disabled="busy || dialog.confirming" data-testid="official-publish-upload" @click="upload">
+        <DialogButton :disabled="busy || dialog.confirming" data-testid="official-publish-upload" @click="upload">
           {{ key.saved ? t("officialPublish.preview.upload") : t("officialPublish.preview.chooseKey") }}
         </DialogButton>
       </DialogFooter>
