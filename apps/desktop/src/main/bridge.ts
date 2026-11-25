@@ -1,10 +1,10 @@
 import {
   checkActionId,
   checkBlobId,
+  checkClipboardText,
   checkDialogTitle,
   checkDiscordImage,
   checkFileReference,
-  checkClipboardText,
   checkHotkeyLabel,
   checkModuleKey,
   checkOverlaySources,

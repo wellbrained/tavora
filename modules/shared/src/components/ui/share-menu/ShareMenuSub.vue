@@ -3,13 +3,10 @@
 // options, so it has only the submenu arrow, no icon of its own.
 import { DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger } from "../dropdown-menu"
 import { uiText } from "../text"
-import type { ShareLabels, ShareSource } from "./share"
+import type { ShareMenuProps } from "./share"
 import ShareMenuItems from "./ShareMenuItems.vue"
 
-defineProps<ShareSource & {
-  /** The words, when the defaults don't fit: the row's `share` and the entries'. */
-  labels?: Partial<ShareLabels & { share: string }>
-}>()
+defineProps<ShareMenuProps>()
 </script>
 
 <template>

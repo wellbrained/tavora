@@ -5,13 +5,10 @@ import { ChevronDown } from "@lucide/vue"
 import { Button } from "../button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "../dropdown-menu"
 import { uiText } from "../text"
-import type { ShareLabels, ShareSource } from "./share"
+import type { ShareMenuProps } from "./share"
 import ShareMenuItems from "./ShareMenuItems.vue"
 
-defineProps<ShareSource & {
-  /** The words, when the defaults don't fit: the button's `share` and the rows'. */
-  labels?: Partial<ShareLabels & { share: string }>
-}>()
+defineProps<ShareMenuProps>()
 </script>
 
 <template>

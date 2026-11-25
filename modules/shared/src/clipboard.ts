@@ -28,7 +28,7 @@ export async function copyText(text: string): Promise<void> {
       // Falls through to the old way.
     }
   }
-  copyTheOldWay(text);
+  copyFromTextField(text);
 }
 
 /**
@@ -42,7 +42,7 @@ export async function copyImage(png: Blob): Promise<void> {
 }
 
 /** Copies from a hidden text field, then gives the focus back to where it was. */
-function copyTheOldWay(text: string): void {
+function copyFromTextField(text: string): void {
   const field = document.createElement("textarea");
   field.value = text;
   field.setAttribute("readonly", "");

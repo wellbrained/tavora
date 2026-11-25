@@ -1176,11 +1176,6 @@ export interface Methods {
    * a module that asks for it on request gets Tavora's consent dialog first).
    */
   "overlay.copyLink": { params: { key: string }; result: OverlayLinkResult };
-  /**
-   * Puts plain text on the system clipboard (at most `LIMITS.maxClipboardTextBytes` as UTF-8, never empty). Only right
-   * after a click or key press, one copy per press; there is no call to read the clipboard. Tavora 0.25.20+.
-   */
-  "clipboard.writeText": { params: { text: string }; result: null };
   /** Gives the overlay for `key` a new link; the old one stops working (capability `overlay`). */
   "overlay.resetLink": { params: { key: string }; result: null };
   /**
@@ -1214,6 +1209,11 @@ export interface Methods {
    * the user can't open themselves and tells the module nothing. Tavora 0.23.77 and newer.
    */
   "overlay.openPage": { params: undefined; result: null };
+  /**
+   * Puts plain text on the system clipboard (at most `LIMITS.maxClipboardTextBytes` as UTF-8, never empty). Only right
+   * after a click or key press, one copy per press; there is no call to read the clipboard. Tavora 0.25.20+.
+   */
+  "clipboard.writeText": { params: { text: string }; result: null };
   /** The hotkeys the user set for this module in the current workspace. Tavora 0.19.26 and newer. */
   "hotkeys.list": { params: undefined; result: HotkeyBinding[] };
   /**

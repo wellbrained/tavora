@@ -24,8 +24,8 @@ export const IMAGE_LIMITS = { side: 8192, pixels: 32_000_000 } as const;
 const KIT_FONTS = ["400", "500", "600", "700"].map((weight) => `${weight} 16px "Inter Variable"`);
 
 /** The scale actually used for a picture of this size: `wanted`, unless that would go past IMAGE_LIMITS. */
-export function imageScale(width: number, height: number, wanted = 2, limits: { side: number; pixels: number } = IMAGE_LIMITS): number {
-  return Math.min(wanted, limits.side / Math.max(width, height), Math.sqrt(limits.pixels / (width * height)));
+export function imageScale(width: number, height: number, wanted = 2): number {
+  return Math.min(wanted, IMAGE_LIMITS.side / Math.max(width, height), Math.sqrt(IMAGE_LIMITS.pixels / (width * height)));
 }
 
 /** Draws a picture and resolves with it as a PNG. Throws when the size isn't a positive number or the browser can't make it. */

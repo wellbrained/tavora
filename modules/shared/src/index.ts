@@ -19,7 +19,7 @@ export { createOptimistic, useOptimistic, useOptimisticKeyed, type Optimistic, t
 export { useTask, type Task, type TaskOptions, type TaskState, type TaskStatus } from "./use-task";
 export { useFocusRecovery, type FocusRecovery } from "./focus-recovery";
 export { copyImage, copyText } from "./clipboard";
-export { imageScale, renderToImage, IMAGE_LIMITS, type RenderToImageOptions } from "./render-to-image";
+export { renderToImage, type RenderToImageOptions } from "./render-to-image";
 
 export{Tooltip,TooltipRows,useTooltip,type TooltipRow,type TooltipTrend,type TooltipWidth,type UseTooltip,type UseTooltipOptions,type UseSharedTooltipOptions,type TooltipTargetOptions,type TooltipCard}from"./components/tooltip";
 export{ItemCard,type ItemCardSkin}from"./components/ui/item-card";

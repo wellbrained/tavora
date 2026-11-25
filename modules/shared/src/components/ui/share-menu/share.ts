@@ -23,6 +23,9 @@ export interface ShareLabels {
   saveImage: string
 }
 
+/** What ShareMenu and ShareMenuSub take: the sources, and the words when the defaults don't fit (`share` is the button or row). */
+export type ShareMenuProps = ShareSource & { labels?: Partial<ShareLabels & { share: string }> }
+
 /** One menu's share entries: `prepare` when they show, `forget` when they go, and the three actions for their rows. */
 export function createShare(source: () => ShareSource) {
   let picture: Promise<Blob> | undefined
@@ -45,45 +48,40 @@ export function createShare(source: () => ShareSource) {
     return picture ?? Promise.reject(new Error("There is no picture to share."))
   }
 
-  async function copyAsText(): Promise<void> {
-    const text = source().text
+  /** Runs one entry's work; a toast says how it went: `done` names it, null says nothing (the save dialog was closed). */
+  async function run(work: () => Promise<string | null>, failure: () => string): Promise<void> {
     try {
+      const done = await work()
+      if (done) toast({ title: done, variant: "success", testid: "toast-share-done" })
+    } catch {
+      toast({ title: failure(), description: uiText.value.shareTryAgain, variant: "error", testid: "toast-share-failed" })
+    } finally {
+      // The next picture is made again, so it shows what is there then.
+      forget()
+    }
+  }
+
+  const copyAsText = () =>
+    run(async () => {
+      const text = source().text
       if (!text) throw new Error("There is no text to share.")
       await copyText(await text())
-      toast({ title: uiText.value.shareCopied, variant: "success", testid: "toast-share-copied" })
-    } catch {
-      failed(uiText.value.shareCopyFailed)
-    }
-  }
+      return uiText.value.shareCopied
+    }, () => uiText.value.shareCopyFailed)
 
-  async function copyAsImage(): Promise<void> {
-    try {
+  const copyAsImage = () =>
+    run(async () => {
       await copyImage(await pictureNow())
-      toast({ title: uiText.value.shareCopied, variant: "success", testid: "toast-share-copied" })
-    } catch {
-      failed(uiText.value.shareCopyFailed)
-    } finally {
-      // The next copy makes the picture again, so it shows what is there then.
-      forget()
-    }
-  }
+      return uiText.value.shareCopied
+    }, () => uiText.value.shareCopyFailed)
 
-  async function saveAsImage(): Promise<void> {
-    try {
+  const saveAsImage = () =>
+    run(async () => {
       const saved = await savePicture(await pictureNow(), source().name)
-      if (saved) toast({ title: uiText.value.shareSavedAs.replace("{name}", saved.fileName), variant: "success", testid: "toast-share-saved" })
-    } catch {
-      failed(uiText.value.shareSaveFailed)
-    } finally {
-      forget()
-    }
-  }
+      return saved && uiText.value.shareSavedAs.replace("{name}", saved.fileName)
+    }, () => uiText.value.shareSaveFailed)
 
   return { prepare, forget, copyAsText, copyAsImage, saveAsImage }
-}
-
-function failed(title: string): void {
-  toast({ title, description: uiText.value.shareTryAgain, variant: "error", testid: "toast-share-failed" })
 }
 
 /** Tavora's save dialog (null when the user closed it); outside Tavora, while developing, a plain download. */
