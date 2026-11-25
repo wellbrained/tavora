@@ -3,6 +3,7 @@
 // them, so their values show by keyboard too.
 import { Tooltip, TooltipRows, useTooltip, type TooltipRow } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { Separator } from "@tavora/official-ui/components/ui/separator";
 
 const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const bars = [40, 55, 35, 80, 60, 45, 70];
@@ -30,6 +31,6 @@ const item = useTooltip<"bow">({ side: "right" });
   </div>
   <Tooltip v-bind="chart.props" :title="chart.content ?? ''"><TooltipRows :rows="chartRows" /></Tooltip>
   <Tooltip v-bind="item.props" title="Wolfbane Longbow" description="Ranged · Level 25" divider>
-    <TooltipRows :rows="itemRows" /><hr /><p>Arrows pierce the first enemy.</p>
+    <TooltipRows :rows="itemRows" /><Separator /><p>Arrows pierce the first enemy.</p>
   </Tooltip>
 </template>

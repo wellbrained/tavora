@@ -13,8 +13,9 @@ import { SwitchField } from "@tavora/official-ui/components/ui/switch";
 import { Toaster } from "@tavora/official-ui/components/ui/toast";
 import { isComposing } from "@tavora/official-ui/lib/keys";
 import type { TavoraSDK } from "@tavora/sdk";
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from "vue";
 import { flushViewsOnLifecycle } from "./lifecycleFlush";
+import { SDK } from "./sdk";
 import { exampleFor } from "./examples";
 import { maybe, setLanguage, t } from "./i18n";
 import type { TextKey } from "./locales";
@@ -33,6 +34,7 @@ const OLD_DEV_TOOLS_KEY = "devTools";
 const NARROW = "(max-width: 679px)";
 
 const sdk = shallowRef<TavoraSDK | null>(null);
+provide(SDK, sdk);
 const page = ref<PageId>(FIRST_PAGE);
 const query = ref("");
 const showDisabled = ref(false);

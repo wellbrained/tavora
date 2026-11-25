@@ -86,15 +86,18 @@ describe("useTooltip in the panel", () => {
     expect(tip.props.open).toBe(false)
   })
 
-  it("takes a card from a function only when it's about to show, and shows nothing for none", async () => {
-    const make = vi.fn(() => ({ name: "Bow" }))
+  it("asks a function for its card only when it's needed, keeps it up to date, and shows nothing for none", async () => {
+    const name = ref("Bow")
+    const make = vi.fn(() => ({ name: name.value }))
     const { tip, targets } = await mount(() => useTooltip<Card>(), () => [null])
     enter(targets[0]!)
     vi.advanceTimersByTime(500)
     expect(tip.props.open).toBe(false)
+    expect(make).not.toHaveBeenCalled()
     tip.show(targets[0]!, make, { side: "right" })
-    expect(make).toHaveBeenCalledOnce()
     expect(tip.props).toMatchObject({ open: true, side: "right" })
+    name.value = "Bogen"
+    expect(tip.content).toEqual({ name: "Bogen" })
   })
 
   it("closes when its target goes away", async () => {
@@ -160,6 +163,22 @@ describe("useTooltip with the shared tooltip", () => {
     await nextTick()
     host.querySelector("button")!.dispatchEvent(new MouseEvent("click"))
     expect(shared.show).not.toHaveBeenCalled()
+  })
+
+  it("takes the shared tooltip from a function once the panel is connected, and tries again after a failed show", async () => {
+    const { shared } = sharedTooltip()
+    const connected = ref<SharedTooltip | null>(null)
+    const { targets } = await mount(() => useTooltip({ shared: () => connected.value }), () => [card], { focusable: true })
+    targets[0]!.focus()
+    expect(shared.show).not.toHaveBeenCalled()
+    targets[0]!.blur()
+    connected.value = shared
+    shared.show.mockRejectedValueOnce(new Error("busy"))
+    targets[0]!.focus()
+    await vi.runAllTimersAsync()
+    targets[0]!.focus()
+    targets[0]!.dispatchEvent(new FocusEvent("focus"))
+    expect(shared.show).toHaveBeenCalledTimes(2)
   })
 
   it("forgets a card Tavora closed, and stops listening when the panel goes", async () => {

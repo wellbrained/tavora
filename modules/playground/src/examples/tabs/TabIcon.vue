@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // The #icon slot puts something before a tab's name; it stays while the tab is renamed.
 import { Link2 } from "@lucide/vue";
-import { Tooltip } from "@tavora/official-ui";
+import { Tooltip, useTooltip } from "@tavora/official-ui";
 import { TabStrip, type StripTab } from "@tavora/official-ui/components/ui/tabs";
 import { ref } from "vue";
 
@@ -9,12 +9,7 @@ const tabs = ref<StripTab[]>([{ id: "iron", label: "Iron", closable: true, renam
 const active = ref("iron");
 const feeds = (id: string) => (id === "iron" ? ["Copper"] : []);
 
-const tip = ref<{ open: boolean; anchor: { left: number; top: number; right: number; bottom: number } }>({ open: false, anchor: { left: 0, top: 0, right: 0, bottom: 0 } });
-function showTip(event: Event) {
-  const { left, top, right, bottom } = (event.currentTarget as HTMLElement).getBoundingClientRect();
-  tip.value = { open: true, anchor: { left, top, right, bottom } };
-}
-const hideTip = () => (tip.value.open = false);
+const tip = useTooltip<string>();
 </script>
 
 <template>
@@ -24,17 +19,13 @@ const hideTip = () => (tip.value.open = false);
         <Link2
           v-if="feeds(tab.id).length"
           class="text-primary size-3.5 flex-none"
-          tabindex="0"
           :aria-label="`Feeds ${feeds(tab.id).join(', ')}`"
           data-testid="plan-tab-feeds"
-          @pointerenter="showTip"
-          @pointerleave="hideTip"
-          @focus="showTip"
-          @blur="hideTip"
+          v-bind="tip.on(`Feeds ${feeds(tab.id).join(', ')}`, { focusable: true })"
         />
       </template>
     </TabStrip>
-    <Tooltip :open="tip.open" :anchor="tip.anchor" compact title="Feeds Copper" @dismiss="hideTip" />
+    <Tooltip v-bind="tip.props" compact :title="tip.content ?? ''" />
     <p class="text-muted-foreground text-xs">The icon stays while you rename the tab.</p>
   </div>
 </template>

@@ -39,12 +39,12 @@ function drawn(nodes: VNode[] | undefined): nodes is VNode[] {
 }
 
 /** How long after one tooltip goes away the next still counts as a follow-up, as in a row of toolbar buttons. */
-const WARM_MS = 400;
+export const TOOLTIP_WARM_MS = 400;
 let openTooltips = 0;
 let lastClosed = -Infinity;
 /** Whether a tooltip is open now or was a moment ago: the next one then comes without waiting or fading in. */
 export function tooltipsWarm(): boolean {
-  return openTooltips > 0 || performance.now() - lastClosed < WARM_MS;
+  return openTooltips > 0 || performance.now() - lastClosed < TOOLTIP_WARM_MS;
 }
 /** The wait before a tooltip shows. None once you are going along a row of them; `ms` for the first. */
 export function tooltipDelay(ms: number): number {

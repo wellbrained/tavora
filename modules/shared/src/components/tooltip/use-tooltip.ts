@@ -7,13 +7,21 @@
 //
 // With `shared: sdk.ui.tooltip` the card (a TooltipContent) shows in Tavora's shared tooltip instead, above the
 // workspace, so a big card is never cut off at the panel's edge; there is then no <Tooltip> in the panel.
-import type { TavoraSDK, TooltipContent } from '@tavora/sdk';
 import { getCurrentScope, onScopeDispose, reactive, shallowRef, type VNode } from 'vue';
-import { tooltipDelay } from './Tooltip';
+import { TOOLTIP_WARM_MS, tooltipDelay } from './Tooltip';
 import type { TooltipRect, TooltipSide } from './geometry';
 
-/** The part of `sdk.ui.tooltip` the helper uses. */
-export type SharedTooltip = Pick<TavoraSDK['ui']['tooltip'], 'show' | 'hide' | 'onClose'>;
+/** What the helper needs of a shared card (the SDK's TooltipContent has it): its title, and a subtitle if any. */
+export interface SharedCard { title: string; subtitle?: string }
+/**
+ * The part of `sdk.ui.tooltip` the helper uses, by its shape: the kit is also built into the app, which has no SDK.
+ * Pass `sdk.ui.tooltip` itself.
+ */
+export interface SharedTooltip<C = SharedCard> {
+  show(request: { id: string; anchor: Element; content: C; pinnable?: boolean; pinned?: boolean }): Promise<unknown>;
+  hide(id: string): Promise<unknown>;
+  onClose(fn: (event: { id: string }) => void): () => void;
+}
 
 export interface UseTooltipOptions {
   /** The wait before the first card shows on hover, in ms. 180 by default, as for title hints. */
@@ -22,9 +30,12 @@ export interface UseTooltipOptions {
   side?: TooltipSide;
 }
 
-export interface UseSharedTooltipOptions extends UseTooltipOptions {
-  /** Show the cards in Tavora's shared tooltip: pass `sdk.ui.tooltip`. */
-  shared: SharedTooltip;
+export interface UseSharedTooltipOptions<T extends SharedCard = SharedCard> extends UseTooltipOptions {
+  /**
+   * Show the cards in Tavora's shared tooltip: pass `sdk.ui.tooltip`, or a function that gives it once the panel is
+   * connected (`() => sdk.value?.ui.tooltip`); until then no card shows.
+   */
+  shared: SharedTooltip<T> | (() => SharedTooltip<T> | null | undefined);
   /**
    * A click on a target that isn't a control (a name in a table, a picture) pins its card, so you can read it while
    * you do something else. On buttons, links and menu rows a click only does what they do. Off by default.
@@ -42,7 +53,10 @@ export interface TooltipTargetOptions {
   focusable?: boolean;
 }
 
-/** A card, or a function that makes it when it's about to show (nothing: no card for this target). */
+/**
+ * A card, or a function that makes it (nothing: no card for this target). A function is asked again while its card
+ * shows, so a card that changes (another language, a live number) stays up to date in the panel.
+ */
 export type TooltipCard<T> = T | (() => T | null | undefined) | null | undefined;
 
 export interface UseTooltip<T> {
@@ -50,7 +64,7 @@ export interface UseTooltip<T> {
   on(card: TooltipCard<T>, options?: TooltipTargetOptions): Record<string, unknown>;
   /** Bind on the panel's one tooltip: `<Tooltip v-bind="tip.props">`. (Not needed with `shared`.) */
   readonly props: { open: boolean; anchor: TooltipRect; side: TooltipSide; id: string; onDismiss: () => void };
-  /** The card shown now, or the last one while it closes: fill the tooltip from it. */
+  /** The card shown now (or the last one): fill the tooltip from it. */
   readonly content: T | null;
   /** Shows a card for an element at once, as from the keyboard: for an element you don't bind `on` to. */
   show(element: Element, card: TooltipCard<T>, options?: TooltipTargetOptions): void;
@@ -59,8 +73,6 @@ export interface UseTooltip<T> {
 }
 
 const DELAY_MS = 180;
-/** As for the in-panel tooltip (Tooltip.ts): a card shown right after another counts as a follow-up and doesn't wait. */
-const WARM_MS = 400;
 const CONTROLS = 'button, a[href], input, select, textarea, [role=button], [role=link], [role=option], [role=menuitem], [role=tab], [role=switch], [role=checkbox], [role=radio]';
 let instances = 0;
 
@@ -82,19 +94,23 @@ function keyboardFocus(element: Element): boolean {
 }
 
 export function useTooltip<T = unknown>(options?: UseTooltipOptions): UseTooltip<T>;
-export function useTooltip<T extends TooltipContent = TooltipContent>(options: UseSharedTooltipOptions): UseTooltip<T>;
-export function useTooltip<T>(options: UseTooltipOptions & Partial<UseSharedTooltipOptions> = {}): UseTooltip<T> {
+export function useTooltip<T extends SharedCard = SharedCard>(options: UseSharedTooltipOptions<T>): UseTooltip<T>;
+export function useTooltip<T>(options: UseTooltipOptions & Partial<UseSharedTooltipOptions<SharedCard>> = {}): UseTooltip<T> {
   const id = `tavora-tip-${++instances}`;
   if (typeof document !== 'undefined') watchInput(document);
-  const shared = options.shared;
-  const state = reactive({ open: false, side: (options.side ?? 'bottom') as TooltipSide, anchor: { left: 0, top: 0, right: 0, bottom: 0 } as TooltipRect });
-  // The card as the module gave it: not made reactive, so its refs and objects stay as they are.
-  const shown = shallowRef<T | null>(null);
+  const given = options.shared;
+  const sharedTooltip = (): SharedTooltip<SharedCard> | null => (typeof given === 'function' ? given() : given) ?? null;
+  // One value for where the card is: none, waiting for the hover delay, or showing (here or in Tavora's tooltip).
+  const state = reactive({ status: 'idle' as 'idle' | 'waiting' | 'open', side: (options.side ?? 'bottom') as TooltipSide, anchor: { left: 0, top: 0, right: 0, bottom: 0 } as TooltipRect });
+  // The card as the module gave it (a function is asked again on each read): not made reactive.
+  const shown = shallowRef<TooltipCard<T>>(null);
   let current: Element | null = null;
-  let sharedId: string | null = null;
+  /** The shared card's id while it shows, and the tooltip it went to. */
+  let sharedCard: { id: string; tooltip: SharedTooltip<SharedCard> } | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let lastHidden = -Infinity;
   let serial = 0;
+  let unsubscribe: (() => void) | undefined;
 
   function describe(element: Element, on: boolean) {
     const ids = (element.getAttribute('aria-describedby') ?? '').split(' ').filter(value => value && value !== id);
@@ -103,57 +119,67 @@ export function useTooltip<T>(options: UseTooltipOptions & Partial<UseSharedTool
     else element.removeAttribute('aria-describedby');
   }
 
+  /** Back to no card, without telling Tavora (it closed the card itself, or never showed it). */
+  function forget() {
+    sharedCard = null;
+    current = null;
+    state.status = 'idle';
+  }
+
   function hide() {
     clearTimeout(timer);
     timer = undefined;
-    if (current && (state.open || sharedId)) lastHidden = performance.now();
-    if (current && !shared) describe(current, false);
-    if (shared && sharedId) void shared.hide(sharedId).catch(() => undefined);
-    sharedId = null;
-    current = null;
-    state.open = false;
+    if (state.status === 'open') lastHidden = performance.now();
+    if (current && !given) describe(current, false);
+    // Ends the hover only: a pinned card stays until you close it (sdk.ui.tooltip.hide).
+    if (sharedCard) void sharedCard.tooltip.hide(sharedCard.id).catch(() => undefined);
+    forget();
   }
 
-  function open(element: Element, content: T, side: TooltipSide | undefined, pinned: boolean) {
-    if (!element.isConnected) return hide();
-    current = element;
-    shown.value = content;
-    if (shared) {
-      const card = content as unknown as TooltipContent;
-      const pinnable = Boolean(options.pin) && !element.closest(CONTROLS);
-      // A card that can be pinned keeps one id per card, so pinning it twice doesn't stack two copies.
-      sharedId = pinnable ? `${id}-${`${card.title}-${card.subtitle ?? ''}`.replace(/[^\w-]+/g, '_').slice(0, 100)}` : `${id}-${++serial}`;
-      void shared.show({ id: sharedId, anchor: element, content: card, pinnable, ...(pinned && pinnable ? { pinned: true } : {}) }).catch(() => undefined);
-      return;
-    }
+  function showShared(element: Element, card: SharedCard, pinned: boolean) {
+    const tooltip = sharedTooltip();
+    if (!tooltip) return hide();
+    if (!unsubscribe) unsubscribe = tooltip.onClose(({ id: closed }) => { if (closed === sharedCard?.id) forget(); });
+    const pinnable = Boolean(options.pin) && !element.closest(CONTROLS);
+    // A card that can be pinned keeps one id per card, so pinning it twice doesn't stack two copies.
+    const cardId = pinnable ? `${id}-${`${card.title}-${card.subtitle ?? ''}`.replace(/[^\w-]+/g, '_').slice(0, 100)}` : `${id}-${++serial}`;
+    sharedCard = { id: cardId, tooltip };
+    state.status = 'open';
+    // Tavora couldn't show it: forget it, so the next hover tries again.
+    tooltip.show({ id: cardId, anchor: element, content: card, pinnable, ...(pinned && pinnable ? { pinned: true } : {}) })
+      .catch(() => { if (sharedCard?.id === cardId) forget(); });
+  }
+
+  function open(element: Element, side: TooltipSide | undefined, pinned: boolean) {
+    timer = undefined;
+    const card = resolve(shown.value);
+    if (!element.isConnected || card === null) return hide();
+    if (given) return showShared(element, card as unknown as SharedCard, pinned);
     const { left, top, right, bottom } = element.getBoundingClientRect();
     state.anchor = { left, top, right, bottom };
     state.side = side ?? options.side ?? 'bottom';
-    state.open = true;
+    state.status = 'open';
     describe(element, true);
   }
 
   /** Shows `card` for `element` after `wait` ms (at once for 0). */
   function schedule(element: Element, card: TooltipCard<T>, target: TooltipTargetOptions, wait: number, pinned = false) {
     // Already showing for it, or on the way (unless the keyboard asks for it now).
-    if (element === current && !pinned && (state.open || sharedId || (timer && wait > 0))) return;
-    const content = resolve(card);
+    if (element === current && !pinned && (state.status === 'open' || (state.status === 'waiting' && wait > 0))) return;
     hide();
-    if (content === null) return;
+    if (resolve(card) === null) return;
     current = element;
-    const go = () => { timer = undefined; open(element, content, target.side, pinned); };
-    if (wait <= 0) go();
-    else timer = setTimeout(go, wait);
+    shown.value = card;
+    if (wait <= 0) return open(element, target.side, pinned);
+    state.status = 'waiting';
+    timer = setTimeout(() => open(element, target.side, pinned), wait);
   }
 
   function hoverWait() {
-    // tooltipDelay knows the kit's in-panel cards; a shared card that just went counts too.
-    const wait = tooltipDelay(options.delay ?? DELAY_MS);
-    return performance.now() - lastHidden < WARM_MS ? 0 : wait;
+    // tooltipDelay knows the kit's in-panel cards; a card of this helper that just went counts too (shared ones).
+    return performance.now() - lastHidden < TOOLTIP_WARM_MS ? 0 : tooltipDelay(options.delay ?? DELAY_MS);
   }
 
-  let unsubscribe: (() => void) | undefined;
-  if (shared) unsubscribe = shared.onClose(({ id: closed }) => { if (closed === sharedId) { sharedId = null; current = null; } });
   if (getCurrentScope()) onScopeDispose(() => { hide(); unsubscribe?.(); });
 
   return {
@@ -168,9 +194,9 @@ export function useTooltip<T>(options: UseTooltipOptions & Partial<UseSharedTool
         onPointerleave: leave,
         onFocus: (event: FocusEvent) => { if (keyboardFocus(event.currentTarget as Element)) schedule(event.currentTarget as Element, card, target, 0); },
         onBlur: leave,
-        onPointerdown: (event: PointerEvent) => { if (event.currentTarget === current || timer) hide(); },
+        onPointerdown: leave,
         onKeydown: (event: KeyboardEvent) => { if (event.key === 'Escape' && event.currentTarget === current) hide(); },
-        ...(shared && options.pin ? {
+        ...(given && options.pin ? {
           onClick: (event: MouseEvent) => {
             const element = event.currentTarget as Element;
             if (!element.closest(CONTROLS)) schedule(element, card, target, 0, true);
@@ -181,10 +207,10 @@ export function useTooltip<T>(options: UseTooltipOptions & Partial<UseSharedTool
       };
     },
     get props() {
-      return { open: state.open, anchor: state.anchor, side: state.side, id, onDismiss: hide };
+      return { open: state.status === 'open' && !given, anchor: state.anchor, side: state.side, id, onDismiss: hide };
     },
     get content() {
-      return shown.value;
+      return resolve(shown.value);
     },
     show(element, card, target = {}) {
       schedule(element, card, target, 0);
