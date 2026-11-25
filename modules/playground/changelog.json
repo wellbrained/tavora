@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.1.78",
+    "date": "2026-11-25",
+    "notes": [
+      "List with search: an always-open list to pick from, with a search on top.",
+      "List without search: a short list that shows which one is chosen."
+    ]
+  },
+  {
     "version": "0.1.77",
     "date": "2026-11-25",
     "notes": [
