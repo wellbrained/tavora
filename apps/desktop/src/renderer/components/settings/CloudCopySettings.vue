@@ -232,7 +232,7 @@ function startOver() {
         <Button variant="secondary" :disabled="busy" data-testid="cloud-copy-off" @click="turnOff">{{ t("cloudCopy.turnOff.label") }}</Button>
       </SettingRow>
       <SettingRow :label="t('cloudCopy.delete.label')" :description="t(inFolder ? 'cloudCopy.delete.descriptionFolder' : 'cloudCopy.delete.description')">
-        <Button variant="destructive" :disabled="busy" data-testid="cloud-copy-delete" <Trash2 />@click="remove">{{ t("cloudCopy.delete.label") }}</Button>
+        <Button variant="destructive" :disabled="busy" data-testid="cloud-copy-delete" @click="remove"><Trash2 />{{ t("cloudCopy.delete.label") }}</Button>
       </SettingRow>
     </template>
   </SettingGroup>

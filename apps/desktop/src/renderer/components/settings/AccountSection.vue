@@ -306,7 +306,7 @@ function startDelete() {
               <span class="text-muted-foreground text-sm">{{ t("account.devices.entry", { device: osName(device), date: formatDate(device.createdAt) }) }}</span>
             </span>
             <Button variant="ghost" size="sm" :disabled="busy" :data-testid="`account-device-rename-${device.id}`" @click="renameDevice(device)"><Pencil />{{ t("account.devices.rename") }}</Button>
-            <Button v-if="!device.current" variant="danger" size="sm" :disabled="busy" <LogOut />@click="signOutDevice(device)">{{ t("account.signOut") }}</Button>
+            <Button v-if="!device.current" variant="danger" size="sm" :disabled="busy" @click="signOutDevice(device)"><LogOut />{{ t("account.signOut") }}</Button>
           </li>
         </AnimatedList>
       </div>
@@ -324,7 +324,7 @@ function startDelete() {
         </div>
       </form>
       <SettingRow v-else :label="t('account.delete.label')" :description="t('account.delete.description')">
-        <Button variant="destructive" :disabled="busy" data-testid="account-start-delete" <Trash2 />@click="startDelete">{{ t("account.delete.label") }}</Button>
+        <Button variant="destructive" :disabled="busy" data-testid="account-start-delete" @click="startDelete"><Trash2 />{{ t("account.delete.label") }}</Button>
       </SettingRow>
       </SettingGroup>
     </template>

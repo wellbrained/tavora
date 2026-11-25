@@ -162,7 +162,7 @@ onMounted(() => {
         <span class="text-muted-foreground min-w-0 flex-1 basis-56 text-sm">{{ t("devModules.none") }}</span>
         <span class="flex flex-none flex-wrap gap-2">
           <Button variant="secondary" data-testid="dev-modules-to-folders" @click="emit('show', 'dev-folders')">{{ t("settings.section.dev-folders") }}<ChevronRight data-icon="end" /></Button>
-          <Button variant="ghost" data-testid="dev-modules-to-examples" @click="emit('show', 'dev-help')">{{ t("settings.development-examples.label") }}</Button><ChevronRight data-icon="end" />
+          <Button variant="ghost" data-testid="dev-modules-to-examples" @click="emit('show', 'dev-help')">{{ t("settings.development-examples.label") }}<ChevronRight data-icon="end" /></Button>
         </span>
       </div>
       <ul v-else class="flex flex-col" :aria-label="t('settings.section.development')" data-testid="dev-modules" data-setting="module-contact">
