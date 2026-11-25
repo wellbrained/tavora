@@ -4,7 +4,7 @@
 // where it runs out of room; `wrap` lets it wrap instead, for a link inside a sentence. An `icon` goes in front of the
 // label and is part of the link. A real page link is `as="a"` with an `href`.
 import type { HTMLAttributes } from "vue"
-import { computed } from "vue"
+import { computed, useAttrs } from "vue"
 import { useSoftDisabled } from "../../../lib/soft-disabled"
 import { cn } from "../../../lib/utils"
 
@@ -23,7 +23,10 @@ const props = withDefaults(
 
 defineOptions({ inheritAttrs: false })
 
-// A link has no native `disabled`, so an `a` that is off is always the soft kind: announced as off, takes no click.
+const attrs = useAttrs()
+
+// A link has no native `disabled`, so an `a` that is off is always the soft kind: announced as off, takes no click,
+// and loses its `href` so it can't be opened in a new tab either.
 const soft = useSoftDisabled(() => ({ disabled: props.disabled, reason: props.disabledReason, hinted: props.as === "a" }))
 const off = computed(() => props.disabled)
 </script>
@@ -34,6 +37,7 @@ const off = computed(() => props.disabled)
     data-slot="text-link"
     :type="as === 'button' ? 'button' : undefined"
     v-bind="soft.attrs()"
+    :href="off ? undefined : attrs.href"
     :disabled="as === 'button' ? soft.disabled() : undefined"
     :class="
       cn(

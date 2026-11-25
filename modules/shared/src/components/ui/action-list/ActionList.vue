@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // A short list of things to do, each with an icon, a name and one line: for the empty-state `action` slot
-// or a panel's start page. The rows look like the ones in a menu (`DropdownMenuItem` with a description).
+// or a panel's start page. The rows look like the ones in a menu (`DropdownMenuItem` with a description); each is a `ListRow`.
 // Give each entry an `icon` component, or fill the `icon` slot for anything else, such as a picture.
 import type { Component } from "vue"
+import { ACTION_ICON_TILE } from "../action-row"
 import { ListRow } from "../list-row"
 
 export interface ActionEntry {
@@ -30,7 +31,7 @@ const emit = defineEmits<{ select: [id: string] }>()
       @click="emit('select', entry.id)"
     >
       <template v-if="entry.icon || $slots.icon" #leading>
-        <span data-slot="action-row-icon" class="border-border grid size-8 place-items-center rounded-md border text-primary [&_svg]:text-primary!" aria-hidden="true">
+        <span data-slot="action-row-icon" :class="ACTION_ICON_TILE" aria-hidden="true">
           <slot name="icon" :entry="entry"><component :is="entry.icon" v-if="entry.icon" /></slot>
         </span>
       </template>
