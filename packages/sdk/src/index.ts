@@ -457,7 +457,7 @@ export interface TavoraSDK {
     /**
      * Puts plain text on the system clipboard, so the user can paste it anywhere. Call it from the click or key press
      * that asked for it: the host refuses it otherwise (PERMISSION_DENIED), and one press copies once. Never empty, at
-     * most 1 MiB as UTF-8 (INVALID_PARAMS, QUOTA_EXCEEDED). Tavora 0.25.20 and newer: set `minTavora`, or check
+     * most 1 MiB as UTF-8 (INVALID_PARAMS, QUOTA_EXCEEDED). Tavora 0.25.22 and newer: set `minTavora`, or check
      * `sdk.supports("clipboard.writeText")` (the kit's `copyText` does, and falls back by itself).
      */
     writeText(text: string): Promise<void>;
