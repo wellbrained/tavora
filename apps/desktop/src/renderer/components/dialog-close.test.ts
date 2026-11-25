@@ -9,13 +9,15 @@ import type { ActionResult, HostAction, HostViewState } from "../../shared/host-
 const bridge = vi.hoisted(() => {
   const act = vi.fn<(action: HostAction) => Promise<ActionResult>>(async () => ({ ok: true }));
   // Every listener is taken and never called, every other call answers nothing: the test drives the slot and the state itself.
+  // A test can answer one call itself through `answers`.
+  const answers: Record<string, unknown> = {};
   const api = new Proxy({} as Record<string, unknown>, {
-    get: (_, key) => (key === "act" ? act : typeof key === "string" && key.startsWith("on") ? () => () => undefined : () => Promise.resolve(null)),
+    get: (_, key) => (key === "act" ? act : typeof key === "string" && key in answers ? answers[key] : typeof key === "string" && key.startsWith("on") ? () => () => undefined : () => Promise.resolve(null)),
   });
   (window as unknown as { tavoraHost: unknown }).tavoraHost = api;
   document.elementsFromPoint ??= () => [];
   if (!("PerformanceObserver" in globalThis)) (globalThis as Record<string, unknown>).PerformanceObserver = class { observe() {} disconnect() {} };
-  return { act };
+  return { act, answers };
 });
 // The dialog frame and its buttons as plain elements, so the test needs no popups. `modal-dismiss` is Esc, the backdrop
 // or X: like the kit's, it closes nothing while the dialog is busy.
@@ -202,6 +204,28 @@ describe("a dialog that waits closes only itself", () => {
     await settle();
     expect(dialog.value).toBe(request);
     expect(button("share-icons-error").textContent).toBe("Can't reach the service.");
+  });
+
+  it("share icons: after a later Steam turn fails, Share sends only the games not shared yet", async () => {
+    const appids = Array.from({ length: 51 }, (_, at) => at + 1);
+    bridge.answers.steamShareIcons = async () => ({ status: "ok", games: appids.map((appid) => ({ appid, name: `Game ${appid}`, icon: "data:image/png;base64,AA" })) });
+    try {
+      bridge.act.mockResolvedValueOnce({ ok: true, shared: 50 }).mockResolvedValueOnce({ ok: false, error: "Can't reach the service." });
+      const request: ShareIconsRequest = { kind: "share-icons", workspaceIds: [], steam: appids };
+      account.value = { account: { id: "u1" } } as unknown as typeof account.value;
+      dialog.value = request;
+      mount(ShareIconsDialog, () => ({ request }));
+      await settle();
+      button("share-icons-submit").click();
+      await settle();
+      expect(button("share-icons-error").textContent).toBe("Can't reach the service.");
+      bridge.act.mockClear();
+      button("share-icons-submit").click();
+      await settle();
+      expect(bridge.act.mock.calls.map(([action]) => action)).toEqual([{ type: "share-steam-icons", appids: [51] }]);
+    } finally {
+      delete bridge.answers.steamShareIcons;
+    }
   });
 });
 

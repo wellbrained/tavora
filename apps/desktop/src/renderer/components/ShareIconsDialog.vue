@@ -105,7 +105,13 @@ async function share() {
         const result = await act(action, { quiet: true });
         if (!result.ok) {
           // Each turn holds other icons, so a failed one (offline, service trouble) keeps the dialog with its reason, also
-          // after an earlier turn went through: the icons shared so far leave the list, Share sends the rest again.
+          // after an earlier turn went through. The icons shared so far leave the list (workspace icons by themselves, as
+          // they get one; Steam rows here), so Share sends only the rest again.
+          if (steam && at > 0) {
+            const sent = new Set(keys.slice(0, at));
+            steamRows.value = steamRows.value.filter((row) => !sent.has(row.key));
+            ticked.value = new Set([...ticked.value].filter((key) => !sent.has(key)));
+          }
           answered.value = result.error;
           return;
         }
