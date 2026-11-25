@@ -9,7 +9,7 @@ export { default as Chip } from "./Chip.vue"
 // Height, padding, icons and the × are in em: a text size from the scale given by class (text-sm, text-base, text-lg)
 // grows the whole chip with it. At the default text they come out at 16, 20 and 24 px.
 export const chipVariants = cva(
-  "inline-flex w-fit max-w-full shrink-0 items-center overflow-hidden rounded-sm border border-transparent font-medium whitespace-nowrap transition-colors [&_svg]:pointer-events-none [&_svg]:shrink-0",
+  "inline-flex w-fit max-w-full shrink-0 items-center overflow-hidden rounded-sm border border-transparent font-medium whitespace-nowrap transition-colors disabled:opacity-(--disabled-opacity) data-disabled:opacity-(--disabled-opacity) [&_svg]:pointer-events-none [&_svg]:shrink-0",
   {
     variants: {
       variant: {

@@ -7,7 +7,7 @@ import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { cn } from "../../../lib/utils"
 import { trendMark, trendWord, type TooltipTrend } from "../../tooltip/rows"
 import CountTo from "../count-to/CountTo.vue"
-import { uiLocale, writeNumber } from "../text"
+import { uiLocale, uiText, writeNumber } from "../text"
 import { STAT_STRIP, type StatTileVariant } from "./context"
 
 const props = defineProps<{
@@ -36,7 +36,9 @@ const strip = inject(STAT_STRIP, null)
 const variant = computed(() => props.variant ?? strip?.variant.value ?? "filled")
 
 const write = (value: number) => (props.format ? props.format(value) : writeNumber(value, uiLocale.value, props.compact))
-const text = computed(() => (typeof props.value === "number" ? write(props.value) : props.value))
+// No value yet (empty text, or a number that isn't one): a dash, read out as "No data yet".
+const missing = computed(() => props.value == null || props.value === "" || (typeof props.value === "number" && !Number.isFinite(props.value)))
+const text = computed(() => (missing.value ? "—" : typeof props.value === "number" ? write(props.value) : props.value))
 const full = computed(() => (props.compact && typeof props.value === "number" && !props.format ? writeNumber(props.value, uiLocale.value) : undefined))
 
 // The value is never cut. An invisible copy at the full size (20px) gives its natural width: wider than the tile, the
@@ -90,8 +92,9 @@ const trendColour = computed(() => (props.trend === "better" ? "text-success" : 
       :class="[small ? 'text-lg leading-[26px]' : 'text-xl', wrap ? '[overflow-wrap:anywhere]' : 'whitespace-nowrap']"
       :title="full"
     >
-      <CountTo v-if="animate && typeof value === 'number'" :value="value" :format="write" /><template v-else>{{ text }}</template>
-      <span v-if="unit" class="text-muted-foreground ml-0.5 text-sm font-medium">{{ unit }}</span>
+      <template v-if="missing"><span class="text-muted-foreground" aria-hidden="true">{{ text }}</span><span class="sr-only">{{ uiText.noData }}</span></template>
+      <CountTo v-else-if="animate && typeof value === 'number'" :value="value" :format="write" /><template v-else>{{ text }}</template>
+      <span v-if="unit && !missing" class="text-muted-foreground ml-0.5 text-sm font-medium">{{ unit }}</span>
       <span v-if="trend && !hint" :class="['ml-1 text-sm', trendColour]"><TrendArrow :trend="trend" /><TrendWord :trend="trend" /></span>
     </dd>
     <!-- The value at its full size, out of sight, to measure what it needs. -->

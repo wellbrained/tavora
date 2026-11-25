@@ -31,7 +31,7 @@ const props = withDefaults(
     showShare?: boolean
     /** Height in pixels of a vertical chart, labels included. */
     height?: number
-    /** Shown instead of the chart when there are no bars. */
+    /** Shown instead of the chart when there are no bars ("No data yet" when left out). */
     emptyTitle?: string
     emptyDescription?: string
     class?: string
@@ -163,7 +163,7 @@ const ring = "group-focus-visible:data-[active]:ring-ring group-focus-visible:da
     @keydown="onKey"
     @blur="hide"
   >
-    <EmptyState v-if="empty && emptyTitle" :title="emptyTitle" :description="emptyDescription" class="justify-center py-6" :style="vertical ? { height: `${height}px` } : undefined" />
+    <EmptyState v-if="empty" :title="emptyTitle ?? uiText.noData" :description="emptyDescription" class="justify-center py-6" :style="vertical ? { height: `${height}px` } : undefined" />
     <!-- Horizontal: label, track with its bar, count; one grid so the tracks start and end together. -->
     <div v-else-if="!vertical" role="list" class="grid grid-cols-[fit-content(40%)_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 text-xs tabular-nums">
       <div v-for="(bar, index) in shown" :key="index" role="listitem" :data-row="index" class="contents">

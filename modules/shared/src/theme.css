@@ -52,8 +52,9 @@
   --toast-foreground: #171412;
 
   --radius: 8px;
-  /* How far a disabled control fades: enough to read as off, while its text keeps 3:1 in every official theme. */
-  --disabled-opacity: 0.75;
+  /* How far every disabled kit control fades (Button, fields, menu rows, Calendar days, switches...): one value, so off
+     looks the same everywhere, with or without a reason. */
+  --disabled-opacity: 0.5;
 }
 
 /* Bare transition-colors / transition-transform / transition-opacity use these: a press-sized fade on the strong
@@ -180,16 +181,4 @@
 /* Over a game the panel is see-through and keeps no edge. */
 :root[data-look-content="inset"]:not(.over-game) body {
   box-shadow: inset 0 2px 10px color-mix(in srgb, black 55%, transparent);
-}
-
-/* Disabled buttons, inputs, text areas, chips and tag fields in the UI kit fade by --disabled-opacity instead of their own 50%, so "Save",
-   "Send code" or "Remove" stay readable while off. Switches keep the kit's 50%, so a disabled one never looks live.
-   Outside any layer on purpose, so it wins over the kit's disabled:opacity-50. */
-[data-slot="button"]:disabled,
-[data-slot="input"]:disabled,
-[data-slot="textarea"]:disabled,
-[data-slot="chip"]:disabled,
-[data-slot="chip"][data-disabled],
-[data-slot="tag-input"][data-disabled] {
-  opacity: var(--disabled-opacity);
 }

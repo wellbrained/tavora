@@ -123,7 +123,7 @@ describe("Calendar", () => {
     const { root, picks, heading } = mount({ max: "2026-11-25" })
     await nextTick()
     const december = root.querySelector('[data-slot="calendar-day"][data-value="2026-12-01"][data-outside-view]') as HTMLElement
-    expect(december.className).toContain("opacity-45")
+    expect(december.className).toContain("opacity-(--disabled-opacity)")
     december.click()
     await wait()
     expect(picks).toEqual([])
@@ -198,7 +198,7 @@ describe("Calendar", () => {
     await nextTick()
     expect(day("2026-11-19").className).toContain("bg-primary")
     expect(day("2026-11-19").className).not.toContain("bg-success")
-    expect(day("2026-11-27").className).toContain("opacity-45")
+    expect(day("2026-11-27").className).toContain("opacity-(--disabled-opacity)")
     expect(day("2026-11-27").className).not.toContain("bg-success")
   })
 
@@ -215,7 +215,7 @@ describe("Calendar", () => {
     for (const label of ["Previous month", "Next month"]) expect(button(label).className).not.toContain("text-muted-foreground")
     expect(button("Previous month").disabled).toBe(false)
     expect(button("Next month").disabled).toBe(true)
-    expect(button("Next month").className).toContain("disabled:opacity-50")
+    expect(button("Next month").className).toContain("disabled:opacity-(--disabled-opacity)")
   })
 
   it("can't pick a day isDisabled turns down", async () => {

@@ -46,6 +46,11 @@ describe("LineChart", () => {
     expect(chart().getAttribute("tabindex")).toBeNull()
   })
 
+  it("says there's no data yet when it has no words of its own for that", async () => {
+    const { chart } = await mount([], { emptyTitle: undefined })
+    expect(chart().querySelector("[data-slot=empty-state]")?.textContent).toContain("No data yet")
+  })
+
   it("draws a path per line, the second one dashed, in theme colours", async () => {
     const { host } = await mount([you, them])
     const paths = [...host.querySelectorAll("path")]

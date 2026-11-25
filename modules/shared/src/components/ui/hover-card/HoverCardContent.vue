@@ -3,7 +3,8 @@
 // through it. Pinned, it shows a close X in its corner and becomes a small dialog named after its title.
 import { X } from "@lucide/vue"
 import { PopoverArrow, PopoverContent, PopoverPortal } from "reka-ui"
-import { computed, onBeforeUnmount, watch } from "vue"
+import { computed, onBeforeUnmount, watch, type HTMLAttributes } from "vue"
+import { cn } from "../../../lib/utils"
 import { tooltipMaxWidth, type TooltipWidth } from "../../tooltip/Tooltip"
 import type { TooltipSide } from "../../tooltip/geometry"
 import "../../tooltip/tooltip.css"
@@ -11,6 +12,9 @@ import "./hover-card.css"
 import { Button } from "../button"
 import { uiText } from "../text"
 import { injectHoverCard } from "./context"
+
+// The card sits in a portal, so a `class`, `data-testid` or other attribute goes on the card itself.
+defineOptions({ inheritAttrs: false })
 
 const props = withDefaults(defineProps<{
   title?: string
@@ -26,6 +30,7 @@ const props = withDefaults(defineProps<{
   arrow?: boolean
   /** A name for the pinned card when it has no `title`, read by screen readers. */
   label?: string
+  class?: HTMLAttributes["class"]
 }>(), { align: "center", width: "sm", arrow: true })
 
 const controller = injectHoverCard("HoverCardContent")
@@ -76,6 +81,7 @@ function dismiss(reason: "escape" | "outside-press" | "focus-outside", event: Ev
 <template>
   <PopoverPortal>
     <PopoverContent
+      v-bind="$attrs"
       data-slot="hover-card"
       :data-pinned="controller.pinned ? 'true' : undefined"
       :data-bare="bare ? 'true' : undefined"
@@ -84,7 +90,7 @@ function dismiss(reason: "escape" | "outside-press" | "focus-outside", event: Ev
       :side-offset="arrow && !bare ? 5 : 10"
       :collision-padding="8"
       :arrow-padding="10"
-      :class="['tavora-tooltip tavora-hover-card', { 'tavora-hover-card-pinned': controller.pinned }]"
+      :class="cn('tavora-tooltip tavora-hover-card', controller.pinned && 'tavora-hover-card-pinned', props.class)"
       :style="{ maxWidth }"
       @open-auto-focus="prevent"
       @close-auto-focus="prevent"

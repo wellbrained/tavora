@@ -35,6 +35,16 @@ async function rows(props: { rows: TooltipRow[]; columns?: string[] }) {
   return host.querySelector("dl")!
 }
 
+describe("Tooltip attributes", () => {
+  it("puts a class and a test id on the card, next to its own class", async () => {
+    const el = await card({ title: "Save", class: "max-w-none my-tip", "data-testid": "save-tip" })
+    expect(el.dataset.testid).toBe("save-tip")
+    expect(el.classList.contains("tavora-tooltip")).toBe(true)
+    expect(el.classList.contains("my-tip")).toBe(true)
+    expect(el.getAttribute("role")).toBe("tooltip")
+  })
+})
+
 describe("Tooltip head", () => {
   it("keeps a plain title as it was: the title and the keys, nothing else", async () => {
     const el = await card({ title: "Save", shortcut: "Ctrl+S", description: "Saves the file." })

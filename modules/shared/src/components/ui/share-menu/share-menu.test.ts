@@ -144,6 +144,20 @@ describe("ShareMenu and ShareMenuSub", () => {
     expect(rows()).toEqual(["Copy as text"])
   })
 
+  it("puts its arrow after the word, and takes a look, a size, a class and a test id for its button", async () => {
+    mount(() => h("div", [
+      h(ShareMenu, { text: () => "hi" }),
+      h(ShareMenu, { text: () => "hi", testid: "share-board", variant: "ghost", size: "sm", class: "ml-auto" }),
+    ]))
+    await wait()
+    expect(row("share-menu").querySelector("svg")?.getAttribute("data-icon")).toBe("end")
+    const second = row("share-board")
+    expect(second.className).toContain("ml-auto")
+    expect(second.className).toContain("h-[calc(var(--style-control-height,32px)-4px)]")
+    expect(second.className).not.toContain("bg-secondary")
+    expect(document.querySelectorAll("[data-testid=share-menu]")).toHaveLength(1)
+  })
+
   it("ShareMenuSub is a Share row in a menu of your own", async () => {
     mount(() =>
       h(DropdownMenu, { open: true, modal: false }, () => [

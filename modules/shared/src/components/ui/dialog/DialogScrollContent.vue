@@ -72,7 +72,7 @@ function onPointerDownOutside(event: CustomEvent<{ originalEvent: PointerEvent }
         <LayerAnchor />
         <slot />
 
-        <DialogCloseX class="absolute top-4 right-4 p-0.5 transition-colors rounded-md hover:bg-secondary disabled:pointer-events-none disabled:opacity-50">
+        <DialogCloseX class="absolute top-4 right-4 p-0.5 transition-colors rounded-md hover:bg-secondary disabled:pointer-events-none disabled:opacity-(--disabled-opacity)">
           <X class="w-4 h-4" />
         </DialogCloseX>
       </DialogContent>

@@ -10,6 +10,7 @@ import Tooltip from "../../tooltip/Tooltip"
 import TooltipRows from "../../tooltip/TooltipRows"
 import type { TooltipRect } from "../../tooltip"
 import EmptyState from "../empty-state/EmptyState.vue"
+import { uiText } from "../text"
 import { allX, dateHeading, dateTickLabel, dateTicks, drawable, formatTime, nearestX, niceTicks, pointAt, stepX, timeTicks } from "./chart"
 import type { LineChartSeries } from "./chart"
 
@@ -32,7 +33,7 @@ const props = withDefaults(
     formatX?: (x: number) => string
     /** For dates and numbers; the language shown now when left out. */
     locale?: string
-    /** Shown instead of the chart when no line has a point. */
+    /** Shown instead of the chart when no line has a point ("No data yet" when left out). */
     emptyTitle?: string
     emptyDescription?: string
     class?: string
@@ -237,7 +238,7 @@ function onKey(event: KeyboardEvent) {
     @keydown="onKey"
     @blur="hide"
   >
-    <EmptyState v-if="empty && emptyTitle" :title="emptyTitle" :description="emptyDescription" class="h-full justify-center py-0" />
+    <EmptyState v-if="empty" :title="emptyTitle ?? uiText.noData" :description="emptyDescription" class="h-full justify-center py-0" />
     <svg v-else-if="width > 0" :width="width" :height="height" class="block" aria-hidden="true">
       <g v-for="tick in yAxis.ticks" :key="`y${tick.value}`">
         <line :x1="left" :x2="left + plotWidth" :y1="dy(tick.value)" :y2="dy(tick.value)" style="stroke: var(--border)" shape-rendering="crispEdges" />

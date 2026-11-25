@@ -59,8 +59,8 @@
   --toast-foreground: #171412;
 
   --radius: 8px;
-  /* How far a disabled control fades: enough to read as off, while its text keeps 3:1 in every official theme. */
-  --disabled-opacity: 0.75;
+  /* How far every disabled kit control fades: one value, so off looks the same everywhere, with or without a reason. */
+  --disabled-opacity: 0.5;
 }
 
 /* Bare transition-colors / transition-transform / transition-opacity use these: a press-sized fade on the strong
@@ -470,15 +470,6 @@ nav[data-expanded="true"] .footer-slot > [aria-hidden="true"] {
   .module-tile {
     @apply bg-background text-primary flex flex-none items-center justify-center rounded-lg border;
   }
-}
-
-/* Disabled buttons, inputs and text areas in the UI kit fade by --disabled-opacity instead of their own 50%, so "Save",
-   "Send code" or "Remove" stay readable while off. Switches keep the kit's 50%, so a disabled one never looks live.
-   Outside any layer on purpose, so it wins over the kit's disabled:opacity-50. */
-[data-slot="button"]:disabled,
-[data-slot="input"]:disabled,
-[data-slot="textarea"]:disabled {
-  opacity: var(--disabled-opacity);
 }
 
 /* Settings > Appearance: the theme list is long, so it shows a scrollbar, which the select list otherwise hides. */

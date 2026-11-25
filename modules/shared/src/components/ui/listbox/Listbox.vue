@@ -177,7 +177,7 @@ useKeepFocus(fieldInput, () => !!props.search && props.autofocus)
             :data-disabled="option.disabled ? '' : undefined"
             :data-state="option.value === model ? 'checked' : undefined"
             :data-testid="part(`option-${option.value}`)"
-            :class="cn('data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground flex min-h-9 w-full cursor-default items-center gap-3 rounded-md px-3 py-1.5 text-left text-sm select-none data-[disabled]:opacity-50', choiceRow, choiceHighlighted)"
+            :class="cn('data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground flex min-h-9 w-full cursor-default items-center gap-3 rounded-md px-3 py-1.5 text-left text-sm select-none data-[disabled]:opacity-(--disabled-opacity)', choiceRow, choiceHighlighted)"
             @pointermove="hover(option)"
             @mousedown.prevent="search || list?.focus({ preventScroll: true })"
             @click="pick(option)"
@@ -200,7 +200,7 @@ useKeepFocus(fieldInput, () => !!props.search && props.autofocus)
       <div v-if="!shown.length" :data-testid="part('none')">
         <slot name="empty">
           <EmptyState :title="empty ?? uiText.noMatches" class="py-6">
-            <template #icon><Search :stroke-width="1.5" /></template>
+            <template #icon><Search /></template>
           </EmptyState>
         </slot>
       </div>

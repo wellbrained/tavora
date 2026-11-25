@@ -52,6 +52,17 @@ describe("writeNumber", () => {
 })
 
 describe("StatTile", () => {
+  it("shows a dash, read out as no data yet, for a missing value", async () => {
+    for (const value of ["", Number.NaN]) {
+      const host = await mount(() => h(StatTile, { label: "Win rate", value, unit: "%" }))
+      const dd = host.querySelector("dd")!
+      expect(dd.textContent).toBe("—No data yet")
+      expect(dd.querySelector("[aria-hidden=true]")?.textContent).toBe("—")
+      app?.unmount()
+      app = undefined
+    }
+  })
+
   it("is a dl of its own when alone: the label names the value", async () => {
     const host = await mount(() => h(StatTile, { value: 1240, label: "Played" }))
     const tile = host.querySelector("[data-slot=stat-tile]")!

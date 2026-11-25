@@ -52,14 +52,14 @@ function split() {
     :format-options="formatOptions"
     :disabled="disabled"
     :class="cn(
-      'border-input dark:bg-input/10 focus-within:border-ring focus-within:ring-ring/50 inline-flex h-[var(--style-control-height,32px)] w-fit items-center overflow-hidden rounded-md border bg-transparent shadow-xs transition-[color,box-shadow] focus-within:ring-3 data-[disabled]:opacity-50',
+      'border-input dark:bg-input/10 focus-within:border-ring focus-within:ring-ring/50 inline-flex h-[var(--style-control-height,32px)] w-fit items-center overflow-hidden rounded-md border bg-transparent shadow-xs transition-[color,box-shadow] focus-within:ring-3 data-[disabled]:opacity-(--disabled-opacity)',
       props.class,
     )"
   >
     <NumberFieldDecrement
       data-slot="number-field-decrement"
       :aria-label="decreaseLabel ?? uiText.decrease"
-      class="text-muted-foreground hover:text-foreground flex size-[var(--style-control-height,32px)] flex-none items-center justify-center outline-none hover:bg-[color-mix(in_srgb,var(--foreground)_10%,var(--accent))] disabled:pointer-events-none disabled:opacity-50"
+      class="text-muted-foreground hover:text-foreground flex size-[var(--style-control-height,32px)] flex-none items-center justify-center outline-none hover:bg-[color-mix(in_srgb,var(--foreground)_10%,var(--accent))] disabled:pointer-events-none disabled:opacity-(--disabled-opacity)"
     >
       <Minus class="size-3.5" aria-hidden="true" />
     </NumberFieldDecrement>
@@ -73,7 +73,7 @@ function split() {
     <NumberFieldIncrement
       data-slot="number-field-increment"
       :aria-label="increaseLabel ?? uiText.increase"
-      class="text-muted-foreground hover:text-foreground flex size-[var(--style-control-height,32px)] flex-none items-center justify-center outline-none hover:bg-[color-mix(in_srgb,var(--foreground)_10%,var(--accent))] disabled:pointer-events-none disabled:opacity-50"
+      class="text-muted-foreground hover:text-foreground flex size-[var(--style-control-height,32px)] flex-none items-center justify-center outline-none hover:bg-[color-mix(in_srgb,var(--foreground)_10%,var(--accent))] disabled:pointer-events-none disabled:opacity-(--disabled-opacity)"
     >
       <Plus class="size-3.5" aria-hidden="true" />
     </NumberFieldIncrement>

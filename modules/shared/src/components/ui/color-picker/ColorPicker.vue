@@ -35,7 +35,7 @@ function isLight(hex: string): boolean {
 const count = computed(() => props.colors.length + (isCustom.value ? 1 : 0) + (props.allowCustom ? 1 : 0));
 const grid = computed(() => (props.columns ? { gridTemplateColumns: `repeat(${Math.min(props.columns, count.value)}, 1.5rem)` } : undefined));
 const hexForInput = computed(() => (/^#[0-9a-f]{6}$/i.test(model.value) ? model.value : "#000000"));
-const swatch = "grid size-6 flex-none cursor-pointer place-items-center rounded-full border outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 data-[state=checked]:ring-2 data-[state=checked]:ring-ring data-[state=checked]:ring-offset-1 data-[state=checked]:ring-offset-background";
+const swatch = "grid size-6 flex-none cursor-pointer place-items-center rounded-full border outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-(--disabled-opacity) data-[state=checked]:ring-2 data-[state=checked]:ring-ring data-[state=checked]:ring-offset-1 data-[state=checked]:ring-offset-background";
 </script>
 
 <template>
@@ -56,7 +56,7 @@ const swatch = "grid size-6 flex-none cursor-pointer place-items-center rounded-
     </RadioGroupItem>
     <label
       v-if="allowCustom"
-      :class="cn('border-input text-muted-foreground hover:text-foreground focus-within:outline-ring relative grid size-6 flex-none cursor-pointer place-items-center rounded-full border border-dashed focus-within:outline-2 focus-within:outline-offset-2', disabled && 'pointer-events-none opacity-50')"
+      :class="cn('border-input text-muted-foreground hover:text-foreground focus-within:outline-ring relative grid size-6 flex-none cursor-pointer place-items-center rounded-full border border-dashed focus-within:outline-2 focus-within:outline-offset-2', disabled && 'pointer-events-none opacity-(--disabled-opacity)')"
       :title="uiText.customColor"
     >
       <Plus class="size-3.5" aria-hidden="true" />

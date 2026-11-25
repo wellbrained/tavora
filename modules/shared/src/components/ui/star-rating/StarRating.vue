@@ -58,7 +58,7 @@ const fill = (star: number) => (shown.value >= star ? "full" : shown.value >= st
       :value="String(star)"
       :aria-label="starLabel ? starLabel(star) : String(star)"
       :data-fill="fill(star)"
-      class="focus-visible:ring-ring/50 rounded-sm p-0.5 outline-none transition-transform focus-visible:ring-3 enabled:hover:scale-110 disabled:cursor-not-allowed disabled:opacity-50"
+      class="focus-visible:ring-ring/50 rounded-sm p-0.5 outline-none transition-transform focus-visible:ring-3 enabled:hover:scale-110 disabled:cursor-not-allowed disabled:opacity-(--disabled-opacity)"
       @mouseenter="!disabled && (hovered = star)"
     >
       <StarIcon :class="cn(sizes[size], fill(star) === 'full' ? 'fill-current' : 'text-muted-foreground/40')" />

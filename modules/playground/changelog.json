@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.95",
+    "date": "2026-11-25",
+    "notes": [
+      "Disabled controls all fade the same way, and empty charts say there's no data yet."
+    ]
+  },
+  {
     "version": "0.1.94",
     "date": "2026-11-25",
     "notes": [

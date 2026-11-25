@@ -31,7 +31,7 @@ const field = useFieldControl({ element: () => element.value, value: () => model
     data-slot="textarea"
     v-bind="{ ...$attrs, ...field.attrs() }"
     :class="cn(
-      'border-input placeholder:text-muted-foreground aria-invalid:border-destructive dark:bg-input/10 flex field-sizing-content min-h-16 w-full rounded-md border bg-transparent px-3 py-2 text-base transition-[color,box-shadow] outline-none disabled:cursor-not-allowed disabled:opacity-50',
+      'border-input placeholder:text-muted-foreground aria-invalid:border-destructive dark:bg-input/10 flex field-sizing-content min-h-16 w-full rounded-md border bg-transparent px-3 py-2 text-base transition-[color,box-shadow] outline-none disabled:cursor-not-allowed disabled:opacity-(--disabled-opacity)',
       'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-3',
       props.class,
     )"

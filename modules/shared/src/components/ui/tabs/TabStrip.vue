@@ -402,7 +402,7 @@ function endDrag(settled: boolean) {
       <DropdownMenu>
         <DropdownMenuTrigger as-child>
           <Button type="button" variant="ghost" size="sm" class="gap-0.5 px-1.5 text-xs tabular-nums" :aria-label="moreLabel" :title="moreLabel" data-testid="strip-hidden-tabs">
-            <ChevronDown aria-hidden="true" />{{ hiddenTabs.length }}
+            {{ hiddenTabs.length }}<ChevronDown aria-hidden="true" data-icon="end" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent side="bottom" align="end" class="max-w-72 min-w-52" data-testid="strip-hidden-menu">

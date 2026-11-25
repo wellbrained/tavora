@@ -35,7 +35,7 @@ async function settle() {
 const card = () => document.querySelector<HTMLElement>("[data-slot=hover-card]")
 
 /** Targets bound with `card.on(spell)` and one HoverCard for them, with a link and a button in the card. */
-async function mountMany(options: Parameters<typeof useHoverCard>[0] = {}, spells: Spell[] = [{ name: "Frost Ward" }, { name: "Fireball" }]) {
+async function mountMany(options: Parameters<typeof useHoverCard>[0] = {}, spells: Spell[] = [{ name: "Frost Ward" }, { name: "Fireball" }], content: Record<string, unknown> = {}) {
   let hc!: UseHoverCard<Spell>
   const host = document.createElement("div")
   document.body.append(host)
@@ -45,7 +45,7 @@ async function mountMany(options: Parameters<typeof useHoverCard>[0] = {}, spell
       return () => h("div", [
         ...spells.map((spell, index) => h("span", { key: index, "data-index": index, ...hc.on(spell, { focusable: true }) }, spell.name)),
         h("button", { id: "after" }, "After"),
-        h(HoverCard, hc.props, () => h(HoverCardContent, { title: hc.content?.name }, () => [
+        h(HoverCard, hc.props, () => h(HoverCardContent, { title: hc.content?.name, ...content }, () => [
           h("a", { href: "#wiki", id: "wiki" }, "Open in the wiki"),
           h("button", { id: "add" }, "Add to build"),
         ])),
@@ -383,5 +383,17 @@ describe("HoverCard parts", () => {
     await wait()
     expect(menu.value).toBe(false)
     expect(hc.open).toBe(true)
+  })
+})
+
+describe("HoverCardContent attributes", () => {
+  it("puts a class and a test id on the card, where the class wins over the card's own", async () => {
+    const { targets } = await mountMany({}, undefined, { class: "w-96 spell-card", "data-testid": "spell-card" })
+    enter(targets[0]!)
+    vi.advanceTimersByTime(400)
+    await settle()
+    expect(card()?.dataset.testid).toBe("spell-card")
+    expect(card()?.classList.contains("spell-card")).toBe(true)
+    expect(card()?.classList.contains("tavora-hover-card")).toBe(true)
   })
 })

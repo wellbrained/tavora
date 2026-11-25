@@ -26,6 +26,13 @@ const rows: FactRow[] = [
 ]
 
 describe("FactList", () => {
+  it("says there's no data yet without rows, keeping its class", async () => {
+    const el = await mount({ rows: [], class: "mt-2" })
+    expect(el.dataset.slot).toBe("fact-list")
+    expect(el.textContent).toContain("No data yet")
+    expect(el.classList.contains("mt-2")).toBe(true)
+  })
+
   it("lines values up on the right, a unit in its own column", async () => {
     const dl = await mount({ rows })
     expect(dl.tagName).toBe("DL")

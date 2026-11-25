@@ -28,7 +28,7 @@ const boxAttrs = computed(() => {
     v-slot="{ modelValue }"
     data-slot="slider"
     :class="cn(
-      'relative flex w-full touch-none items-center select-none data-[disabled]:opacity-50 data-[orientation=vertical]:h-full data-[orientation=vertical]:min-h-40 data-[orientation=vertical]:w-auto data-[orientation=vertical]:flex-col',
+      'relative flex w-full touch-none items-center select-none data-[disabled]:opacity-(--disabled-opacity) data-[orientation=vertical]:h-full data-[orientation=vertical]:min-h-40 data-[orientation=vertical]:w-auto data-[orientation=vertical]:flex-col',
       props.class,
     )"
     v-bind="{ ...boxAttrs, ...forwarded }"
@@ -50,7 +50,7 @@ const boxAttrs = computed(() => {
       :aria-valuetext="valueText"
       :aria-label="attrs['aria-label'] as string | undefined"
       :aria-labelledby="attrs['aria-labelledby'] as string | undefined"
-      class="border-primary bg-background dark:bg-foreground block size-4 shrink-0 rounded-full border-2 transition-colors outline-none hover:border-[var(--primary-hover)] focus-visible:ring-ring/50 focus-visible:ring-3 disabled:pointer-events-none disabled:opacity-50"
+      class="border-primary bg-background dark:bg-foreground block size-4 shrink-0 rounded-full border-2 transition-colors outline-none hover:border-[var(--primary-hover)] focus-visible:ring-ring/50 focus-visible:ring-3 disabled:pointer-events-none disabled:opacity-(--disabled-opacity)"
     />
   </SliderRoot>
 </template>

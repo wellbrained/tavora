@@ -131,4 +131,14 @@ describe("BarChart", () => {
     expect(chart.textContent).toContain("No games yet")
     expect(chart.hasAttribute("tabindex")).toBe(false)
   })
+
+  it("says there's no data yet without bars and without its own words, in German too", async () => {
+    const { chart } = await mount({}, [])
+    expect(chart.querySelector("[data-slot=empty-state]")?.textContent).toContain("No data yet")
+    app?.unmount()
+    setUiLanguage("de")
+    const german = await mount({}, [])
+    expect(german.chart.textContent).toContain("Noch keine Daten")
+    setUiLanguage("en")
+  })
 })

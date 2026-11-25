@@ -3,6 +3,8 @@
 // `stacked` puts the label over the value, in as many columns as fit the width.
 import { defineComponent, h, type PropType } from "vue"
 import { cn } from "../../../lib/utils"
+import EmptyState from "../empty-state/EmptyState.vue"
+import { uiText } from "../text"
 import { renderRows, trendAt, trendMark, trendWord, type TooltipRow } from "../../tooltip/rows"
 
 /** One fact: the same row a tooltip shows with TooltipRows. */
@@ -34,6 +36,8 @@ export default defineComponent({
   },
   setup(props) {
     return () => {
+      // No facts: the kit's empty look, not a blank gap.
+      if (props.rows.length === 0) return h(EmptyState, { "data-slot": "fact-list", title: uiText.value.noData, class: cn("py-6", props.class as string) })
       if (props.layout === "stacked") {
         return h(
           "dl",

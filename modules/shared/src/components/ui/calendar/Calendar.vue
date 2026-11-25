@@ -88,7 +88,7 @@ function choose(day: string, event: MouseEvent | KeyboardEvent) {
  */
 function dayClass(day: string, outside: boolean): string {
   const today = day === todayDay.value && "font-semibold ring-2 ring-inset ring-ring"
-  if (isOff(day)) return cn("text-muted-foreground cursor-default opacity-45", today)
+  if (isOff(day)) return cn("text-muted-foreground cursor-default opacity-(--disabled-opacity)", today)
   const faded = outside && "opacity-60"
   if (day === model.value) return cn("bg-primary text-primary-foreground hover:bg-primary-hover font-semibold", faded, today)
   const mark = markOf(day)

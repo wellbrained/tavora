@@ -33,7 +33,7 @@ const reasonAttrs = () => (isSoftDisabled({ disabled: props.disabled, reason: pr
   <div data-slot="switch-field" v-bind="$attrs" :class="cn('flex items-start gap-3', props.class)">
     <Switch :id="switchId()" v-model="model" class="mt-px" :disabled="disabled" :disabled-reason="disabledReason" :aria-controls="controls" :aria-describedby="description ? `${switchId()}-description` : undefined" />
     <div class="flex min-w-0 flex-col gap-0.5">
-      <Label :for="switchId()" class="leading-5 font-normal" :class="disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'" v-bind="reasonAttrs()">{{ label }}</Label>
+      <Label :for="switchId()" class="leading-5 font-normal" :class="disabled ? 'cursor-not-allowed opacity-(--disabled-opacity)' : 'cursor-pointer'" v-bind="reasonAttrs()">{{ label }}</Label>
       <p v-if="description" :id="`${switchId()}-description`" class="text-muted-foreground text-xs">{{ description }}</p>
     </div>
   </div>

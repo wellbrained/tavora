@@ -70,7 +70,7 @@ function remove() {
     :class="classes"
     @click="flip"
   >
-    <Check v-if="selected" aria-hidden="true" :stroke-width="2.25" />
+    <Check v-if="selected" aria-hidden="true" />
     <slot name="icon" />
     <span class="min-w-0 truncate"><slot>{{ label }}</slot></span>
   </button>
@@ -98,7 +98,7 @@ function remove() {
       :disabled="disabled"
       @click.stop="remove"
     >
-      <X aria-hidden="true" :stroke-width="2" />
+      <X aria-hidden="true" />
     </button>
   </span>
 </template>

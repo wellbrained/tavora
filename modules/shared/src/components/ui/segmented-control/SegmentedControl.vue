@@ -37,8 +37,8 @@ const { joined } = useToolbarJoin(() => {
 const rootClass = () => cn("bg-background group/segmented relative inline-flex flex-none gap-0.5 rounded-lg border p-0.5", props.class);
 const itemClass = (option: SegmentedOption<T>) =>
   cn(
-    "text-muted-foreground hover:text-foreground focus-visible:outline-ring data-[state=checked]:text-primary relative h-7 rounded-sm border border-transparent px-3 text-sm font-medium whitespace-nowrap transition-[color] group-data-[indicator=jump]/segmented:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 disabled:pointer-events-none disabled:opacity-50",
-    "aria-disabled:hover:text-muted-foreground aria-disabled:cursor-default aria-disabled:opacity-50",
+    "text-muted-foreground hover:text-foreground focus-visible:outline-ring data-[state=checked]:text-primary relative h-7 rounded-sm border border-transparent px-3 text-sm font-medium whitespace-nowrap transition-[color] group-data-[indicator=jump]/segmented:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 disabled:pointer-events-none disabled:opacity-(--disabled-opacity)",
+    "aria-disabled:hover:text-muted-foreground aria-disabled:cursor-default aria-disabled:opacity-(--disabled-opacity)",
     option.icon && "inline-flex items-center justify-center gap-1.5 [&_svg]:pointer-events-none [&_svg]:shrink-0",
     option.icon && option.iconOnly && "px-2",
   );

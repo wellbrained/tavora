@@ -39,7 +39,7 @@ useAriaDisabled(() => box.value, soft.soft)
     :disabled="soft.disabled()"
     :data-armed="changed ? '' : undefined"
     :class="cn(
-      'tavora-check peer border-input data-[state=checked]:text-primary-foreground data-[state=checked]:border-primary data-[state=indeterminate]:text-primary-foreground data-[state=indeterminate]:border-primary aria-invalid:border-destructive size-4 shrink-0 rounded-sm border transition-colors duration-(--duration-press) ease-(--ease-out-strong) outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50',
+      'tavora-check peer border-input data-[state=checked]:text-primary-foreground data-[state=checked]:border-primary data-[state=indeterminate]:text-primary-foreground data-[state=indeterminate]:border-primary aria-invalid:border-destructive size-4 shrink-0 rounded-sm border transition-colors duration-(--duration-press) ease-(--ease-out-strong) outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-(--disabled-opacity) aria-disabled:cursor-not-allowed aria-disabled:opacity-(--disabled-opacity)',
       props.class,
     )"
     @update:model-value="changed = true"

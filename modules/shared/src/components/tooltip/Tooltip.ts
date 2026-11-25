@@ -1,4 +1,4 @@
-import { Comment, defineComponent, Fragment, h, Teleport, nextTick, onMounted, onUnmounted, ref, watch, type PropType, type VNode } from 'vue';
+import { Comment, defineComponent, Fragment, h, mergeProps, Teleport, nextTick, onMounted, onUnmounted, ref, watch, type PropType, type VNode } from 'vue';
 import { pointAnchor, tooltipPlacement, TOOLTIP_MAX_WIDTH, type TooltipAlign, type TooltipPoint, type TooltipRect, type TooltipSide } from './geometry';
 import { uiText } from '../ui/text';
 import { isMac } from '../../lib/platform';
@@ -61,6 +61,8 @@ export function tooltipDelay(ms: number): number {
 /** Presentational hover card shared by Vue, React and vanilla module adapters. */
 export default defineComponent({
   name: 'Tooltip',
+  // The card sits in a Teleport, so a `class`, `data-testid` or other attribute goes on the card itself.
+  inheritAttrs: false,
   props: {
     open: { type: Boolean, required: true },
     /** The box of the thing the card is for. The card sits beside it with a gap, its arrow pointing at it. */
@@ -100,7 +102,7 @@ export default defineComponent({
     arrow: { type: Boolean, default: true },
   },
   emits: ['dismiss'],
-  setup(props, { emit, slots }) {
+  setup(props, { attrs, emit, slots }) {
     const card = ref<HTMLElement | null>(null);
     const position = ref({ left: 0, top: 0, width: 360, side: 'bottom' as TooltipSide, arrow: 0 });
     const ready = ref(false);
@@ -201,13 +203,13 @@ export default defineComponent({
       const above = Boolean(props.title || drawn(slots.title?.()) || props.description);
       return [props.divider && drawn(content) && above ? h('hr', { class: 'tavora-tooltip-divider', 'aria-hidden': 'true' }) : null, content];
     }
-    return () => h(Teleport, { to: 'body' }, props.open || closing.value ? [h('section', {
+    return () => h(Teleport, { to: 'body' }, props.open || closing.value ? [h('section', mergeProps(attrs, {
       // A closing card is only a picture fading out: no longer the tooltip for anyone (id, role, a screen reader).
       ...(props.open ? { id: props.id, role: 'tooltip', 'data-slot': 'tooltip' } : { 'data-slot': 'tooltip-closing', 'aria-hidden': 'true' }), ref: card, 'data-side': position.value.side, 'data-tone': props.tone, // A closing card is no longer ready: its fade-out then wins over the fade-in (tooltip.css).
       'data-ready': ready.value && !closing.value ? 'true' : undefined, 'data-instant': instant.value ? 'true' : undefined, 'data-closing': !props.open && closing.value ? 'true' : undefined,
       'data-bare': props.bare ? 'true' : undefined,
       class: props.compact ? 'tavora-tooltip compact' : 'tavora-tooltip',
       style: { left: position.value.left + 'px', top: position.value.top + 'px', maxWidth: position.value.width + 'px', '--tavora-tooltip-arrow': position.value.arrow + 'px', visibility: ready.value ? 'visible' : 'hidden' },
-    }, [...head(), ...body(), props.arrow ? h('span', { class: 'tavora-tooltip-arrow', 'aria-hidden': 'true' }) : null])] : []);
+    }), [...head(), ...body(), props.arrow ? h('span', { class: 'tavora-tooltip-arrow', 'aria-hidden': 'true' }) : null])] : []);
   },
 });

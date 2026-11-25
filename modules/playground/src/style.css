@@ -8,7 +8,7 @@
       keeps that one. */
 @layer base {
   [data-off] :is(button, input, textarea, select):disabled {
-    opacity: 0.5;
+    opacity: var(--disabled-opacity);
   }
 }
 
@@ -16,7 +16,7 @@
       fades them only through a disabled prop), and the zoomable views and maps. */
 [data-off] [data-slot="slider"],
 [data-off] :is([data-slot="number-field"], [data-slot="tab-strip"]) {
-  opacity: 0.5;
+  opacity: var(--disabled-opacity);
 }
 [data-off] [role="option"],
 [data-off] :is([data-slot="zoom-pane"], [data-slot="tile-map"]) {
