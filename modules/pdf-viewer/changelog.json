@@ -1,9 +1,17 @@
 [
   {
-    "version": "0.1.53",
+    "version": "0.1.54",
     "date": "2026-11-25",
     "notes": [
       "Tooltips fade out when they close."
+    ]
+  },
+  {
+    "version": "0.1.53",
+    "date": "2026-11-25",
+    "notes": [
+      "Tabs of files a newer version keeps stay.",
+      "Picking the whole picture now saves it."
     ]
   },
   {

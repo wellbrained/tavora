@@ -10,3 +10,14 @@ it("keeps a newer version's fields in the panel's tabs", () => {
   state = keepExisting(state, (id) => id !== "b");
   expect(savedTabState(state)).toEqual({ tabs: ["c"], active: "c", split: true });
 });
+
+it("keeps the tab of a file a newer version keeps, and never shows it", () => {
+  const kept = (id: string) => id === "svg";
+  const state = parseTabState({ tabs: ["a", "svg", "gone", "b"], active: "svg" });
+  // The shown one is a file this version doesn't list: a neighbour is shown, the kept tab stays.
+  const next = keepExisting(state, (id) => id === "a" || id === "b", kept);
+  expect(next).toEqual({ tabs: ["a", "svg", "b"], active: "b" });
+  expect(keepExisting(parseTabState({ tabs: ["svg"], active: "svg" }), () => false, kept)).toEqual({ tabs: ["svg"], active: null });
+  // Without the kept check the tab goes (a file that is truly gone).
+  expect(keepExisting(state, (id) => id === "a" || id === "b").tabs).toEqual(["a", "b"]);
+});

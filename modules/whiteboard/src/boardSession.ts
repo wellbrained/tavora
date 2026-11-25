@@ -15,7 +15,7 @@ import { noteCard, pictureCard } from "./cards";
 import { connectorHeads, type ConnectorKind } from "./connectors";
 import { COPY_PADDING, copyScale, elementsToCopy } from "./copy";
 import { revised } from "./elements";
-import { isDrawingAt } from "./excalidrawDom";
+import { canvasBackgroundPick, isDrawingAt } from "./excalidrawDom";
 import { t } from "./i18n";
 import { createLockWatcher, lockSpots, type LockSpot } from "./locks";
 import { createPlacing } from "./placing";
@@ -248,6 +248,13 @@ export function createBoardSession(options: SessionOptions): BoardSession {
     event.stopPropagation();
     for (const fn of [...copyListeners]) fn();
   };
+  // A background picked in the palette is saved as picked, also when Excalidraw shows that colour already (see pickBackground).
+  const pickKey = (event: MouseEvent) => {
+    const state = api?.getAppState();
+    const color = state ? canvasBackgroundPick(event.target, state) : null;
+    if (color) saver.pickBackground(color);
+  };
+  document.addEventListener("click", pickKey, true);
   addEventListener("keydown", copyKey, true);
   addEventListener("pagehide", flushNow);
   document.addEventListener("visibilitychange", flushNow);
@@ -345,6 +352,7 @@ export function createBoardSession(options: SessionOptions): BoardSession {
       removeEventListener("keydown", copyKey, true);
       removeEventListener("pagehide", flushNow);
       document.removeEventListener("visibilitychange", flushNow);
+      document.removeEventListener("click", pickKey, true);
       locks.dispose();
       await saver.dispose();
       stopSaverState();

@@ -33,3 +33,14 @@ it("saves only the setting that changed, so another workspace's choice and a new
   expect(monitor.app.value).toMatchObject({ intervalMs: 5000, drives: ["D:"] });
   monitor.stop();
 });
+
+it("reads the app settings again when the panel is back, so another workspace's choice shows", async () => {
+  const { sdk } = createMemoryHost({ capabilities: ["systemInfo"] });
+  const monitor = createMonitor(sdk);
+  await monitor.start();
+  // Another panel changed them while this one was hidden.
+  await sdk.storage.app.set(APP_KEY, { intervalMs: 5000, drives: ["D:"] });
+  await monitor.reloadApp();
+  expect(monitor.app.value).toMatchObject({ intervalMs: 5000, drives: ["D:"] });
+  monitor.stop();
+});

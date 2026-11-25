@@ -127,21 +127,28 @@ export const ImageNode = Node.create<ImageOptions>({
           width = clampWidth(((startWidth + moveEvent.clientX - startX) / total) * 100);
           dom.style.width = width === null ? "" : `${width}%`;
         };
-        const stop = () => {
+        const finish = (keep: boolean) => {
           handle.removeEventListener("pointermove", move);
           handle.removeEventListener("pointerup", stop);
-          handle.removeEventListener("pointercancel", stop);
+          handle.removeEventListener("pointercancel", cancel);
+          const attrs = current.attrs as ImageAttrs;
+          if (!keep) {
+            // The system took the pointer away: the picture goes back to the width it had.
+            show();
+            return;
+          }
           const pos = getPos();
           if (typeof pos !== "number") return;
-          const attrs = current.attrs as ImageAttrs;
           if (attrs.width === width) return;
           const tr = editor.state.tr.setNodeMarkup(pos, undefined, { ...attrs, width });
           // Replacing the picture drops the selection; keep it selected.
           editor.view.dispatch(tr.setSelection(NodeSelection.create(tr.doc, pos)));
         };
+        const stop = () => finish(true);
+        const cancel = () => finish(false);
         handle.addEventListener("pointermove", move);
         handle.addEventListener("pointerup", stop);
-        handle.addEventListener("pointercancel", stop);
+        handle.addEventListener("pointercancel", cancel);
       });
 
       show();

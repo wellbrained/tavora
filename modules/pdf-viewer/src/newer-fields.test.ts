@@ -49,3 +49,11 @@ it("saves a fit the reader picks, also the default, but keeps a newer one throug
   expect(fitToSave("page", "height", "pdf", false)).toBe("page");
   expect(fitToSave(null, "height", "pdf", false)).toBeNull();
 });
+
+it("tells which ids are files a newer version keeps, for their tabs", async () => {
+  const { sdk, host } = createMemoryHost();
+  await host.documents.put({ id: FILES_ID, title: "Files", data: { files: [{ id: "f1", type: "application/pdf", name: "f1", addedAt: "" }, { id: "f2", type: "image/svg+xml", name: "Map", addedAt: "" }] } });
+  const store = await createFilesStore(sdk, { title: () => "Files", debounceMs: 0 });
+  expect([store.keeps("f2"), store.keeps("f1"), store.keeps("nope")]).toEqual([true, false, false]);
+  await store.dispose();
+});

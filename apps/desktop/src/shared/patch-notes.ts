@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.25.30",
+    date: "2026-11-25",
+    title: "Newer settings and interrupted drags in the built-in modules",
+    notes: [
+      "Clock & Counter, PDF Viewer, Whiteboard and Notes keep more of what a newer version saved, instead of resetting it.",
+      "System Monitor shows settings changed in another workspace when you come back.",
+      "An interrupted drag puts the Whiteboard palette, the Notes sidebar or a picture's size back.",
+    ],
+    prs: [
+      { number: 999, title: "Kit and module hunt leftovers: newer box choices, tabs, explicit picks, interrupted drags" },
+    ],
+    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
+  },
+  {
     version: "0.25.29",
     date: "2026-11-25",
     title: "Checks before you publish",

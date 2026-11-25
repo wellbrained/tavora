@@ -361,3 +361,12 @@ export function parseAppearance(raw: JsonValue | null): Appearance {
   const value = raw !== null && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
   return { ...unknownFields<JsonValue>(value, ["notes", "scratchpad"]), notes: parseStyle(value.notes), scratchpad: parseStyle(value.scratchpad) };
 }
+
+/** The panel's own state keys; anything else in it came from a newer version of the module. */
+export const PANEL_STATE_KEYS = ["selected", "sidebarWidth", "collapsed"] as const;
+
+/** What a newer version kept in the panel's state besides, to put back when this one saves it. */
+export const otherPanelState = (state: unknown): Record<string, JsonValue> => unknownFields<JsonValue>(state, PANEL_STATE_KEYS);
+
+/** The panel's state to save: this version's keys over what a newer one kept (its keys are never taken for ours). */
+export const panelStateToSave = (other: Record<string, JsonValue>, own: { selected: string; sidebarWidth: number; collapsed: boolean }) => ({ ...other, ...own });

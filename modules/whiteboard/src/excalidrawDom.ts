@@ -244,3 +244,16 @@ export function isDrawingAt(x: number, y: number): boolean {
       ?.matches("canvas") ?? false
   );
 }
+
+/**
+ * The colour a click picked for the board's own background, or null for any other click. With nothing selected and the select
+ * tool, the palette shows only the canvas background, so a colour swatch there is a pick for it (a swatch for a shape shows
+ * with a selection or a drawing tool). Excalidraw reports no change when the colour picked is the one already shown.
+ */
+export function canvasBackgroundPick(target: EventTarget | null, appState: { selectedElementIds: Record<string, unknown>; activeTool: { type: string } }): string | null {
+  if (!(target instanceof Element)) return null;
+  if (appState.activeTool.type !== "selection" || Object.keys(appState.selectedElementIds).length > 0) return null;
+  const swatch = target.closest<HTMLElement>('.App-menu__left [data-testid^="color-top-pick-"]');
+  const color = swatch?.dataset.testid?.slice("color-top-pick-".length);
+  return color ? color : null;
+}

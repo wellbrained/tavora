@@ -1,9 +1,17 @@
 [
   {
-    "version": "0.6.49",
+    "version": "0.6.50",
     "date": "2026-11-25",
     "notes": [
       "Tooltips fade out when they close."
+    ]
+  },
+  {
+    "version": "0.6.49",
+    "date": "2026-11-25",
+    "notes": [
+      "Dragging the sidebar edge or a picture's corner and getting interrupted puts it back.",
+      "Panel settings a newer version added stay."
     ]
   },
   {

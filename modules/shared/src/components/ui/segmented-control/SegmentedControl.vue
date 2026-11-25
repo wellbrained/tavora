@@ -16,6 +16,10 @@ import { isSoftOption, optionHint, type SegmentedOption } from "./options";
 // `class` is merged, so a caller can place the control (`absolute top-2 left-2`) over the root's own `relative`.
 const props = defineProps<{ options: SegmentedOption<T>[]; label: string; disabled?: boolean; class?: HTMLAttributes["class"] }>();
 const model = defineModel<T>({ required: true });
+const emit = defineEmits<{
+  /** The reader picked an option, also the one that is shown already (`v-model` only says a change). For a value that is stored as a newer version's and shown as this option. */
+  pick: [value: T];
+}>();
 
 const root = useTemplateRef("root");
 // A soft option (aria-disabled) counts as off too, so it gets no pill.
@@ -24,7 +28,9 @@ useSlidingIndicator(root, { selector: '[role="radio"][data-state="checked"]:not(
 /** Every way to a pick (click, Space, an arrow key landing) ends here, so a disabled option can't be picked. */
 function pick(value: unknown) {
   const option = props.options.find((candidate) => candidate.value === value);
-  if (option && !option.disabled) model.value = option.value;
+  if (!option || option.disabled) return;
+  model.value = option.value;
+  emit("pick", option.value);
 }
 </script>
 

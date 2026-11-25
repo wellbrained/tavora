@@ -4,14 +4,15 @@
 // panel shows is that panel's own state.
 import { connectModule, errorMessage } from "@tavora/official-ui";
 import { handleUndoKey, Toaster, toast, undoable } from "@tavora/official-ui/components/ui/toast";
-import type { TavoraSDK } from "@tavora/sdk";
+import type { JsonValue, TavoraSDK } from "@tavora/sdk";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import NoteEditor from "./NoteEditor.vue";
 import NoteList from "./NoteList.vue";
 import { setLanguage, t } from "./i18n";
 import { de, en } from "./locales";
-import { collectImageIds, emptyContent, leftEmpty, restoreCleared, nudged, reordered, SCRATCHPAD_ID, sections, UNTITLED, type NoteData, type NoteEntry, type RichText } from "./notes";
+import { collectImageIds, emptyContent, leftEmpty, otherPanelState, panelStateToSave, restoreCleared, nudged, reordered, SCRATCHPAD_ID, sections, UNTITLED, type NoteData, type NoteEntry, type RichText } from "./notes";
 import { createNotesStore, type NotesStore } from "./store";
+import { createResizeDrag } from "./resize-drag";
 
 /** Below this width the list and the editor take turns. */
 const NARROW_PX = 560;
@@ -59,8 +60,11 @@ interface PanelState {
   collapsed?: boolean;
 }
 
+/** What a newer version kept in the panel's state besides; saved back as it was. */
+let otherState: Record<string, JsonValue> = {};
+
 function saveLayout() {
-  void sdk.value?.panel.setState({ selected: selectedId.value, sidebarWidth: sidebarWidth.value, collapsed: collapsed.value } satisfies PanelState);
+  void sdk.value?.panel.setState(panelStateToSave(otherState, { selected: selectedId.value, sidebarWidth: sidebarWidth.value, collapsed: collapsed.value }) satisfies PanelState);
 }
 
 function toggleCollapsed() {
@@ -68,22 +72,17 @@ function toggleCollapsed() {
   saveLayout();
 }
 
-// Dragging the edge of the sidebar. The handle can also be moved with the arrow keys.
-let dragStart: { x: number; width: number } | null = null;
+// Dragging the edge of the sidebar. The handle can also be moved with the arrow keys. A pointer the system takes away puts the
+// width back and stores nothing.
+const sidebarDrag = createResizeDrag({
+  sizeAt: (started, by) => clampSidebar(started + by),
+  show: (width) => (sidebarWidth.value = width),
+  commit: () => saveLayout(),
+});
 
 function onResizeStart(event: PointerEvent) {
-  dragStart = { x: event.clientX, width: sidebarWidth.value };
+  sidebarDrag.start(event.clientX, sidebarWidth.value);
   (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-}
-
-function onResizeMove(event: PointerEvent) {
-  if (dragStart) sidebarWidth.value = clampSidebar(dragStart.width + event.clientX - dragStart.x);
-}
-
-function onResizeEnd() {
-  if (!dragStart) return;
-  dragStart = null;
-  saveLayout();
 }
 
 function onResizeKey(event: KeyboardEvent) {
@@ -128,6 +127,7 @@ onMounted(async () => {
       void notes.dispose().catch(() => undefined);
       return;
     }
+    otherState = otherPanelState(state);
     if (typeof state?.sidebarWidth === "number" && Number.isFinite(state.sidebarWidth)) sidebarWidth.value = clampSidebar(state.sidebarWidth);
     collapsed.value = state?.collapsed === true;
     notes.onBeforeSwitch(() => editor.value?.flush());
@@ -305,9 +305,9 @@ async function move(id: string, delta: -1 | 1) {
         :aria-valuemin="SIDEBAR_MIN"
         :aria-valuemax="SIDEBAR_MAX"
         @pointerdown.prevent="onResizeStart"
-        @pointermove="onResizeMove"
-        @pointerup="onResizeEnd"
-        @pointercancel="onResizeEnd"
+        @pointermove="sidebarDrag.move($event.clientX)"
+        @pointerup="sidebarDrag.end()"
+        @pointercancel="sidebarDrag.cancel()"
         @keydown="onResizeKey"
         @dblclick="resetSidebarWidth"
       />

@@ -44,6 +44,17 @@ async function setup(options: { synced?: Record<string, StoredFile>; problems?: 
 }
 
 describe("saving a drawing", () => {
+  it("saves the shown default when the user picks it over a background a newer version added", async () => {
+    const { saver, read } = await setup({ data: { background: "paper" } });
+    saver.change(scene([rectangle()]));
+    await saver.flush();
+    expect(read()?.background).toBe("paper");
+    // Picking white changes nothing Excalidraw reports: the board already shows white.
+    saver.pickBackground("#ffffff");
+    await saver.flush();
+    expect(read()?.background).toBe("#ffffff");
+  });
+
   it("keeps a background a newer version added while the board shows the default", async () => {
     const { saver, read } = await setup({ data: { background: "paper" } });
     saver.change(scene([rectangle()]));

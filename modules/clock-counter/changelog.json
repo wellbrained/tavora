@@ -1,9 +1,16 @@
 [
   {
-    "version": "0.1.64",
+    "version": "0.1.65",
     "date": "2026-11-25",
     "notes": [
       "Tooltips fade out when they close."
+    ]
+  },
+  {
+    "version": "0.1.64",
+    "date": "2026-11-25",
+    "notes": [
+      "The text box settings keep a choice a newer version added, instead of resetting it."
     ]
   },
   {

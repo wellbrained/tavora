@@ -72,6 +72,14 @@ describe("OverlayTextSettings", () => {
     expect(changes).toEqual([{ speed: "fast" }, { tooLong: "cut" }])
   })
 
+  it("says the pick even when it is the option already shown (a newer version's value shows as the default)", async () => {
+    // Stored: a box this version doesn't know; shown: the default, Grow. Picking Grow says so, so it is saved over the newer value.
+    const { testid, changes } = mount({ box: "grow", tooLong: "scroll", speed: "normal" })
+    testid("box-grow")!.click()
+    await nextTick()
+    expect(changes).toEqual([{ box: "grow" }])
+  })
+
   it("switches the box between growing and fixed", async () => {
     const { testid, changes } = mount()
     testid("box-fixed")!.click()

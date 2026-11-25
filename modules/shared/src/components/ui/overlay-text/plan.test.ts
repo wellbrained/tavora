@@ -109,7 +109,14 @@ describe("saved box settings", () => {
 
   it("keeps only what was set and makes sense, so data stays as it was saved", () => {
     expect(keepOverlayTextBox({ box: "fixed", pause: 0 })).toEqual({ box: "fixed", pause: 0 })
-    expect(keepOverlayTextBox({ box: "huge", tooLong: "wrap", speed: 9, pause: 0.7, softEdges: "yes" })).toEqual({})
+    expect(keepOverlayTextBox({ box: "", tooLong: 3, speed: 9, pause: -1, softEdges: "yes" })).toEqual({})
+    expect(keepOverlayTextBox({ pause: Number.NaN })).toEqual({})
     expect(readOverlayTextBox({ tooLong: "cut", softEdges: false, pause: 4.5 })).toMatchObject({ box: "grow", tooLong: "cut", softEdges: false, pause: 4.5 })
+  })
+
+  it("keeps a choice or pause a newer version added as it is, and shows the default for it", () => {
+    const newer = { box: "tiled", tooLong: "wrap", speed: "turbo", pause: 0.7, softEdges: true }
+    expect(keepOverlayTextBox(newer)).toEqual(newer)
+    expect(readOverlayTextBox(newer)).toEqual(DEFAULT_OVERLAY_TEXT_BOX)
   })
 })

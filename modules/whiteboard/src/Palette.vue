@@ -79,6 +79,16 @@ function up(event: PointerEvent) {
   if (gesture.moved) emit("place", live);
 }
 
+/** The system took the pointer away (a call, a gesture): the palette goes back to where it was and nothing is stored. */
+function cancel(event: PointerEvent) {
+  const gesture = drag;
+  if (!gesture || gesture.pointer !== event.pointerId) return;
+  drag = null;
+  live = gesture.from;
+  const found = parts.value;
+  if (found && props.board) placePalette(found.palette, props.board, live);
+}
+
 function fold() {
   emit("place", { ...live, collapsed: !live.collapsed });
 }
@@ -95,7 +105,7 @@ function putBack(event: MouseEvent) {
 <template>
   <template v-if="parts">
     <Teleport :to="parts.handle">
-      <div class="palette-grip" :title="t('palette.move')" data-testid="palette-handle" @pointerdown="down" @pointermove="move" @pointerup="up" @pointercancel="up" @dblclick="putBack">
+      <div class="palette-grip" :title="t('palette.move')" data-testid="palette-handle" @pointerdown="down" @pointermove="move" @pointerup="up" @pointercancel="cancel" @dblclick="putBack">
         <GripVertical class="size-3.5 flex-none opacity-50" aria-hidden="true" />
         <span class="flex-1 font-semibold">{{ t("palette.title") }}</span>
         <Button

@@ -62,6 +62,18 @@ describe("plain options", () => {
     expect(ariaProblems(root)).toEqual([])
   })
 
+  it("says every pick through `pick`, also a click on the option that is shown already (v-model only says a change)", async () => {
+    const said: string[] = []
+    const { picks, item } = mount(plain, { onPick: (next: string) => said.push(next) })
+    await wait()
+    item("list").click()
+    await wait()
+    item("grid").click()
+    await wait()
+    expect(picks).toEqual(["grid"])
+    expect(said).toEqual(["list", "grid"])
+  })
+
   it("pick on a click and on the arrow keys", async () => {
     const { picks, item, key } = mount(plain)
     await wait()

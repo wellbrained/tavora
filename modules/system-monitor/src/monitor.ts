@@ -196,6 +196,25 @@ export function createMonitor(sdk: TavoraSDK) {
    * another workspace may have changed it since, or a newer version saved a value this one doesn't know.
    */
   let saves = 0;
+
+  /** Back from hidden: reads the app settings again, since a panel in another workspace may have changed them meanwhile. */
+  async function reloadApp(): Promise<void> {
+    const before = saves;
+    let raw: JsonValue | null;
+    try {
+      raw = (await sdk.storage.app.get(APP_KEY)) ?? null;
+    } catch {
+      return;
+    }
+    // A change made here while reading is newer than what was read, and its own save shows what is stored.
+    if (stopped || before !== saves) return;
+    const next = parseApp(raw);
+    if (JSON.stringify(next) === JSON.stringify(app.value)) return;
+    if (next.intervalMs !== app.value.intervalMs) for (const history of [cpuHistory, gpuHistory, ramHistory]) history.setInterval(next.intervalMs);
+    app.value = next;
+    void watch();
+  }
+
   function saveApp(change: Partial<AppSettings>): void {
     app.value = { ...app.value, ...change };
     const save = ++saves;
@@ -231,6 +250,7 @@ export function createMonitor(sdk: TavoraSDK) {
     trafficStatus,
     start,
     retry,
+    reloadApp,
     stop,
     toggleBlock: (id: BlockId) => setPanel(toggleBlock(panel.value, id)),
     toggleSection: (id: SectionId) => setPanel(toggleSection(panel.value, id)),
