@@ -610,10 +610,10 @@ test("ui playground: lists its pages in a side menu, finds them, shows each exam
   // Every example is switched off from outside (a disabled, inert fieldset around it); none takes a prop for it.
   expect(await inModule(app, PLAYGROUND, `document.querySelectorAll('[data-slot="example-body"] > fieldset[disabled][inert]').length === document.querySelectorAll('[data-slot="example-body"]').length`)).toBe(true);
   expect(await inModule(app, PLAYGROUND, `[...${q("page-pick")}.querySelectorAll('[data-slot="example-body"] [role="combobox"], [data-slot="example-body"] input')].every((el) => el.matches(":disabled"))`)).toBe(true);
-  // Everything looks off too: a number field fades as a whole (its parts don't fade again).
+  // Everything looks off too: a number field fades as a whole by the shared --disabled-opacity (its parts don't fade again).
   await openPage(app, "numbers");
   const field = `${q("example-NumberField")}.querySelector('[data-slot="number-field"]')`;
-  expect(await inModule(app, PLAYGROUND, `getComputedStyle(${field}).opacity`)).toBe("0.5");
+  expect(await inModule(app, PLAYGROUND, `getComputedStyle(${field}).opacity`)).toBe("0.75");
   expect(await inModule(app, PLAYGROUND, `getComputedStyle(${field}.querySelector("button")).opacity`)).toBe("1");
   await openPage(app, "pick");
   // Show code still works while the examples are off.
