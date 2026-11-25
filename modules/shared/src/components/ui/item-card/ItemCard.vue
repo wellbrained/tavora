@@ -3,11 +3,25 @@
 // and, for a card or a unit, the same skin, with its files as URLs (Vite `?url` imports) instead of bundle paths.
 // Tavora's sizes: the title and the effect box are larger on a skinned card, everything else stays at the card's text
 // size, and the skin's font is only for the title and the effect box. A unit has the game's sizes, the skin's font
-// everywhere and no frame.
+// everywhere and no frame. The card is made of parts (./parts): put your own choice of them, or your own markup, in the
+// default slot to build a card of your own that still wears the layout's look and the skin.
 import type { TooltipContent } from "@tavora/sdk"
 import { computed, onBeforeUnmount, ref, watch, type CSSProperties } from "vue"
 import { ITEM_CARD_TYPE, UNIT_CARD_TYPE } from "../../tooltip/typography"
 import type { ItemCardSkin } from "."
+import { inlineValue, layoutOf, tagBadges } from "./content"
+import ItemCardArt from "./parts/ItemCardArt.vue"
+import ItemCardBar from "./parts/ItemCardBar.vue"
+import ItemCardEffect from "./parts/ItemCardEffect.vue"
+import ItemCardIcons from "./parts/ItemCardIcons.vue"
+import ItemCardName from "./parts/ItemCardName.vue"
+import ItemCardPips from "./parts/ItemCardPips.vue"
+import ItemCardPortrait from "./parts/ItemCardPortrait.vue"
+import ItemCardRequirements from "./parts/ItemCardRequirements.vue"
+import ItemCardSections from "./parts/ItemCardSections.vue"
+import ItemCardStats from "./parts/ItemCardStats.vue"
+import ItemCardType from "./parts/ItemCardType.vue"
+import ItemCardUnitStats from "./parts/ItemCardUnitStats.vue"
 import { cssUrl, holdSkinFont, releaseSkinFont } from "./skin-font"
 import "./item-card.css"
 
@@ -19,62 +33,9 @@ const props = defineProps<{
   requiresLabel?: string
 }>()
 
-const layout = computed(() => (props.content.layout === "card" || props.content.layout === "unit" ? props.content.layout : "rich"))
+const layout = computed(() => layoutOf(props.content))
 const skin = computed(() => (layout.value === "rich" ? undefined : props.skin))
-// A third stats column only when a stat of this card grows (`per`); the rich layout puts it after the value instead.
-const hasPer = computed(() => !!props.content.properties?.some((p) => p.per !== undefined))
-// Extra value columns after the value (`more`, as many as the longest row or the headings ask for, up to 3); the rich
-// layout puts them after the value instead.
-const extra = computed(() => Math.min(3, Math.max(0, (props.content.columns?.length ?? 0) - 1, ...(props.content.properties ?? []).map((p) => p.more?.length ?? 0))))
-const numberColumns = computed(() => 1 + extra.value + (hasPer.value ? 1 : 0))
-// An icon before a stat's label; when a stat of the card has one, every label keeps its room so the labels line up.
-const hasIcons = computed(() => !!props.content.properties?.some((p) => p.icon !== undefined))
-// Made absolute against the page, so the stylesheet's own address can't change what a relative path points at.
-const icons = computed(() =>
-  (props.content.properties ?? []).map((p) => {
-    if (!p.icon) return undefined
-    try {
-      return cssUrl(new URL(p.icon, document.baseURI).href)
-    } catch {
-      return undefined
-    }
-  }),
-)
-// The unit's corner pictogram is a mask like a stat's icon, made absolute the same way.
-const cornerIcon = computed(() => {
-  const icon = props.content.corner?.icon
-  if (!icon) return undefined
-  try {
-    return cssUrl(new URL(icon, document.baseURI).href)
-  } catch {
-    return undefined
-  }
-})
-// Only the unit layout hangs a suffix past the value; the others show it as part of it.
-const own = (p: { value: string; suffix?: string }) => p.value + (p.suffix ?? "")
-// The rich layout's stat in one line, "6 · 12 · 18 · +3": an empty extra value in between as "–", empty ones at the end
-// left out.
-const inline = (p: { value: string; per?: string; suffix?: string; more?: string[] }) => {
-  const cells = [own(p), ...(p.more ?? [])]
-  while (cells.length && !cells[cells.length - 1]!.trim()) cells.pop()
-  const values = cells.map((cell) => (cell.trim() ? cell : "–")).join(" · ")
-  return p.per === undefined ? values || own(p) : values ? `${values} · ${p.per}` : p.per
-}
-// Tags over the picture: a row in each bottom corner that has one ("right" when a tag doesn't say). A tag's colour is
-// "#rrggbb" only, as in the shared tooltip. Without a picture, and in the rich layout, their texts follow the badges.
-const HEX = /^#[0-9a-fA-F]{6}$/
-const tagRows = computed(() =>
-  (["left", "right"] as const)
-    .map((side) => ({ side, tags: (props.content.artTags ?? []).filter((tag) => (tag.side === "left" ? "left" : "right") === side) }))
-    .filter((row) => row.tags.length),
-)
-const tagStyle = (color: string | undefined) => (color && HEX.test(color) ? { color, borderColor: color } : undefined)
-const tagBadges = computed(() => [...(props.content.badges ?? []), ...(props.content.artTags ?? []).map((tag) => tag.text)])
-const cardBadges = computed(() => (props.content.image ? (props.content.badges ?? []) : tagBadges.value))
-const runs = computed(() => {
-  const effect = props.content.effect
-  return typeof effect === "string" ? [{ text: effect }] : (effect ?? [])
-})
+const badges = computed(() => tagBadges(props.content))
 
 // The skin's font: one FontFace per font URL on the page, shared by every card that uses it.
 const family = ref<string>()
@@ -141,100 +102,45 @@ const style = computed<CSSProperties>(() => {
     :data-pixel="skin?.pixelArt ? '' : undefined"
     :style="style"
   >
-    <template v-if="layout === 'card'">
-      <div v-if="content.image" class="tavora-item-card-art">
-        <img :src="content.image" alt="" />
-        <div v-if="tagRows.length" class="tavora-item-card-art-tags">
-          <div v-for="row in tagRows" :key="row.side" :data-side="row.side">
-            <span v-for="(tag, i) in row.tags" :key="i" class="tavora-item-card-art-tag" :style="tagStyle(tag.color)">{{ tag.text }}</span>
+    <slot>
+      <template v-if="layout === 'card'">
+        <ItemCardArt :content="content" />
+        <ItemCardName :content="content" />
+        <ItemCardType :content="content" />
+        <ItemCardEffect :content="content" />
+        <ItemCardStats :content="content" />
+        <ItemCardSections :content="content" />
+        <ItemCardRequirements :content="content" :label="requiresLabel" />
+      </template>
+      <template v-else-if="layout === 'unit'">
+        <!-- A game unit as the game shows it: the portrait sticks out at the top left over the title bar and the body. -->
+        <ItemCardPortrait :content="content" />
+        <ItemCardBar :content="content" />
+        <div class="tavora-item-card-unit-body">
+          <ItemCardType :content="content" />
+          <ItemCardEffect :content="content" unit />
+          <ItemCardUnitStats :content="content" />
+          <ItemCardSections :content="content" />
+          <ItemCardIcons :content="content" />
+          <ItemCardPips :content="content" />
+        </div>
+      </template>
+      <div v-else class="tavora-item-card-rich">
+        <img v-if="content.image" :src="content.image" alt="" />
+        <div>
+          <div class="tavora-item-card-heading">
+            <h3>{{ content.title }}</h3>
+            <span v-for="(badge, i) in badges" :key="i" class="tavora-item-card-badge">{{ badge }}</span>
           </div>
+          <ItemCardType :content="content" />
+          <ItemCardEffect :content="content" />
+          <dl v-if="content.properties?.length" class="tavora-item-card-props">
+            <template v-for="(p, i) in content.properties" :key="i"><dt>{{ p.label }}</dt><dd>{{ inlineValue(p) }}</dd></template>
+          </dl>
+          <ItemCardSections :content="content" />
+          <ItemCardRequirements :content="content" :label="requiresLabel" rich />
         </div>
       </div>
-      <div class="tavora-item-card-name">
-        <h3>{{ content.title }}</h3>
-        <div v-if="cardBadges.length" class="tavora-item-card-badges">
-          <span v-for="(badge, i) in cardBadges" :key="i" class="tavora-item-card-badge">{{ badge }}</span>
-        </div>
-      </div>
-      <p v-if="content.subtitle" class="tavora-item-card-type">{{ content.subtitle }}</p>
-      <p v-if="runs.length" class="tavora-item-card-effect"><template v-for="(run, i) in runs" :key="i"><span v-if="'accent' in run && run.accent" data-accent>{{ run.text }}</span><template v-else>{{ run.text }}</template></template></p>
-      <div v-if="content.properties?.length" class="tavora-item-card-stats" :data-per="hasPer ? '' : undefined" :data-columns="extra ? '' : undefined" :data-icons="hasIcons ? '' : undefined" :style="extra ? { '--ic-columns': String(numberColumns) } : undefined">
-        <!-- The heading row: `columns` over the value and the extra columns, `perHeading` over what a stat grows by. -->
-        <template v-if="content.columns?.length"><span /><template v-for="h in extra + 1" :key="`h${h}`"><span v-if="content.columns[h - 1]" class="tavora-item-card-per-heading">{{ content.columns[h - 1] }}</span><span v-else /></template><template v-if="hasPer"><span v-if="content.perHeading" class="tavora-item-card-per-heading">{{ content.perHeading }}</span><span v-else /></template></template>
-        <template v-else-if="hasPer && content.perHeading"><span /><span /><span v-for="h in extra" :key="`h${h}`" /><span class="tavora-item-card-per-heading">{{ content.perHeading }}</span></template>
-        <template v-for="(p, i) in content.properties" :key="i"><span class="tavora-item-card-label"><span v-if="hasIcons" class="tavora-item-card-icon" aria-hidden="true" :data-drawn="icons[i] ? '' : undefined" :style="icons[i] ? { '--ic-icon': icons[i] } : undefined" />{{ p.label }}</span><span class="tavora-item-card-value">{{ own(p) }}</span><span v-for="m in extra" :key="`m${m}`" class="tavora-item-card-more" :data-faint="p.more?.[m - 1] === '–' ? '' : undefined">{{ p.more?.[m - 1] ?? "" }}</span><span v-if="hasPer" class="tavora-item-card-per">{{ p.per ?? "" }}</span></template>
-      </div>
-      <section v-for="(s, i) in content.sections ?? []" :key="i" class="tavora-item-card-section">
-        <p v-if="s.title">{{ s.title }}</p>
-        <ul>
-          <li v-for="(r, j) in s.rows" :key="j" :data-connected="r.connected ? '' : undefined"><span>{{ r.text }}</span><span v-if="r.status || r.badges?.length">{{ [r.status, ...(r.badges ?? [])].filter(Boolean).join(" ") }}</span></li>
-        </ul>
-      </section>
-      <section v-if="content.requirements?.length" class="tavora-item-card-section">
-        <p v-if="requiresLabel">{{ requiresLabel }}</p>
-        <div class="tavora-item-card-stats"><template v-for="(r, i) in content.requirements" :key="i"><span class="tavora-item-card-label">{{ r.label }}</span><span class="tavora-item-card-value">{{ r.value }}</span></template></div>
-      </section>
-    </template>
-    <template v-else-if="layout === 'unit'">
-      <!-- A game unit as the game shows it: the portrait sticks out at the top left over the title bar and the body. -->
-      <div v-if="content.image" class="tavora-item-card-portrait"><img :src="content.image" alt="" /></div>
-      <div class="tavora-item-card-bar">
-        <h3>{{ content.title }}</h3>
-        <span v-if="content.corner" class="tavora-item-card-corner">
-          <span>{{ content.corner.text }}</span>
-          <span v-if="cornerIcon" class="tavora-item-card-corner-icon" aria-hidden="true" :style="{ '--ic-icon': cornerIcon }" />
-        </span>
-      </div>
-      <div class="tavora-item-card-unit-body">
-        <p v-if="content.subtitle" class="tavora-item-card-type">{{ content.subtitle }}</p>
-        <p v-if="runs.length" class="tavora-item-card-unit-effect"><template v-for="(run, i) in runs" :key="i"><span v-if="'accent' in run && run.accent" data-accent>{{ run.text }}</span><template v-else>{{ run.text }}</template></template></p>
-        <!-- Label, value lined up on its right edge, and the suffix hanging past it. -->
-        <div v-if="content.properties?.length" class="tavora-item-card-unit-stats">
-          <template v-for="(p, i) in content.properties" :key="i"><span>{{ p.label }}</span><span class="tavora-item-card-unit-value">{{ p.value }}</span><span class="tavora-item-card-unit-suffix">{{ p.suffix ?? "" }}</span></template>
-        </div>
-        <section v-for="(s, i) in content.sections ?? []" :key="i" class="tavora-item-card-section">
-          <p v-if="s.title">{{ s.title }}</p>
-          <ul>
-            <li v-for="(r, j) in s.rows" :key="j" :data-connected="r.connected ? '' : undefined"><span>{{ r.text }}</span><span v-if="r.status || r.badges?.length">{{ [r.status, ...(r.badges ?? [])].filter(Boolean).join(" ") }}</span></li>
-          </ul>
-        </section>
-        <div v-if="content.icons?.length" class="tavora-item-card-icons">
-          <span v-for="(icon, i) in content.icons" :key="i" class="tavora-item-card-unit-icon" role="img" :aria-label="icon.count ? `${icon.label} (${icon.count})` : icon.label">
-            <img v-if="icon.image" :src="icon.image" alt="" />
-            <span v-if="icon.count" class="tavora-item-card-count" aria-hidden="true">{{ icon.count }}</span>
-          </span>
-        </div>
-        <template v-if="content.pips">
-          <div class="tavora-item-card-pips" role="img" :aria-label="`${content.pips.filled} / ${content.pips.total}${content.pips.extra ? ' ' + content.pips.extra : ''}`">
-            <span v-for="i in content.pips.total" :key="i" class="tavora-item-card-pip" :data-on="i <= content.pips.filled ? '' : undefined" />
-          </div>
-          <div v-if="content.pips.extra" class="tavora-item-card-extra" aria-hidden="true">{{ content.pips.extra }}</div>
-        </template>
-      </div>
-    </template>
-    <div v-else class="tavora-item-card-rich">
-      <img v-if="content.image" :src="content.image" alt="" />
-      <div>
-        <div class="tavora-item-card-heading">
-          <h3>{{ content.title }}</h3>
-          <span v-for="(badge, i) in tagBadges" :key="i" class="tavora-item-card-badge">{{ badge }}</span>
-        </div>
-        <p v-if="content.subtitle" class="tavora-item-card-type">{{ content.subtitle }}</p>
-        <p v-if="runs.length" class="tavora-item-card-effect"><template v-for="(run, i) in runs" :key="i"><span v-if="'accent' in run && run.accent" data-accent>{{ run.text }}</span><template v-else>{{ run.text }}</template></template></p>
-        <dl v-if="content.properties?.length" class="tavora-item-card-props">
-          <template v-for="(p, i) in content.properties" :key="i"><dt>{{ p.label }}</dt><dd>{{ inline(p) }}</dd></template>
-        </dl>
-        <section v-for="(s, i) in content.sections ?? []" :key="i" class="tavora-item-card-section">
-          <p v-if="s.title">{{ s.title }}</p>
-          <ul>
-            <li v-for="(r, j) in s.rows" :key="j" :data-connected="r.connected ? '' : undefined"><span>{{ r.text }}</span><span v-if="r.status || r.badges?.length">{{ [r.status, ...(r.badges ?? [])].filter(Boolean).join(" ") }}</span></li>
-          </ul>
-        </section>
-        <section v-if="content.requirements?.length" class="tavora-item-card-section">
-          <p v-if="requiresLabel">{{ requiresLabel }}</p>
-          <dl class="tavora-item-card-props"><template v-for="(r, i) in content.requirements" :key="i"><dt>{{ r.label }}</dt><dd>{{ r.value }}</dd></template></dl>
-        </section>
-      </div>
-    </div>
+    </slot>
   </article>
 </template>

@@ -82,6 +82,10 @@ export default defineComponent({
     divider: Boolean,
     /** How wide the card may get: `sm` (280 px), `md`, `lg` or pixels. It never gets wider than the window. */
     width: { type: [String, Number] as PropType<TooltipWidth>, default: 'sm' },
+    /** The card brings its own surface (the kit's ItemCard, through ItemTooltip): no padding, background or edge here. */
+    bare: Boolean,
+    /** The arrow pointing at the element. Off where it can't take the card's colours (a skinned item card). */
+    arrow: { type: Boolean, default: true },
   },
   emits: ['dismiss'],
   setup(props, { emit, slots }) {
@@ -170,8 +174,9 @@ export default defineComponent({
     }
     return () => h(Teleport, { to: 'body' }, props.open ? [h('section', {
       id: props.id, ref: card, role: 'tooltip', 'data-slot': 'tooltip', 'data-side': position.value.side, 'data-tone': props.tone, 'data-ready': ready.value ? 'true' : undefined, 'data-instant': instant.value ? 'true' : undefined,
+      'data-bare': props.bare ? 'true' : undefined,
       class: props.compact ? 'tavora-tooltip compact' : 'tavora-tooltip',
       style: { left: position.value.left + 'px', top: position.value.top + 'px', maxWidth: position.value.width + 'px', '--tavora-tooltip-arrow': position.value.arrow + 'px', visibility: ready.value ? 'visible' : 'hidden' },
-    }, [...head(), ...body(), h('span', { class: 'tavora-tooltip-arrow', 'aria-hidden': 'true' })])] : []);
+    }, [...head(), ...body(), props.arrow ? h('span', { class: 'tavora-tooltip-arrow', 'aria-hidden': 'true' }) : null])] : []);
   },
 });

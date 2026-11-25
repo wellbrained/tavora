@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.1.70",
+    "date": "2026-11-25",
+    "notes": [
+      "One card, two places: the same item card in the panel's tooltip and in Tavora's.",
+      "Card from parts: an item card put together from its parts, with a line of your own."
+    ]
+  },
+  {
     "version": "0.1.69",
     "date": "2026-11-25",
     "notes": [
