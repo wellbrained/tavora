@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.66",
+    "date": "2026-11-25",
+    "notes": [
+      "A new Put together specimen shows a tooltip with a badge and a corner text beside its title, a line under it, units in their own column and values under headings."
+    ]
+  },
+  {
     "version": "0.1.65",
     "date": "2026-11-24",
     "notes": [

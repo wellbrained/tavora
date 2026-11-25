@@ -333,6 +333,7 @@ export const en = {
   "demo.lineChart.ratingOver": "Rating over time",
   "demo.lineChart.empty": "No games yet",
   "demo.lineChart.emptyHint": "Your rating shows up here after your first game.",
+  "demo.lineChart.oneGame": "One game",
   "demo.tipParts.fireball": "Fireball",
   "demo.tipParts.longName": "Chain Lightning of the Ancient Storm",
   "demo.tipParts.venom": "Venom Fang",
@@ -353,7 +354,6 @@ export const en = {
   "demo.tipParts.poison": "Poison",
   "demo.tipParts.duration": "Duration",
   "demo.tipParts.stacks": "Stacks",
-  "demo.lineChart.oneGame": "One game",
   "ex.numbers.NumberField": "Number field",
   "ex.numbers.NumberField.note": "Plus and minus, 1 to 99.",
 
@@ -830,6 +830,7 @@ export const de: Record<TextKey, string> = {
   "demo.lineChart.ratingOver": "Wertung im Lauf der Zeit",
   "demo.lineChart.empty": "Noch keine Spiele",
   "demo.lineChart.emptyHint": "Deine Wertung erscheint hier nach deinem ersten Spiel.",
+  "demo.lineChart.oneGame": "Ein Spiel",
   "demo.tipParts.fireball": "Feuerball",
   "demo.tipParts.longName": "Kettenblitz des uralten Sturms",
   "demo.tipParts.venom": "Giftzahn",
@@ -850,7 +851,6 @@ export const de: Record<TextKey, string> = {
   "demo.tipParts.poison": "Gift",
   "demo.tipParts.duration": "Dauer",
   "demo.tipParts.stacks": "Stapel",
-  "demo.lineChart.oneGame": "Ein Spiel",
   "ex.numbers.NumberField": "Zahlenfeld",
   "ex.numbers.NumberField.note": "Plus und Minus, 1 bis 99.",
 

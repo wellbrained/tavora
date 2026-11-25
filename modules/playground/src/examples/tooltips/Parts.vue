@@ -16,7 +16,7 @@ function show(name: string, event: Event) {
 const hide = () => (tip.value.open = null);
 const tipFor = (name: string) => ({ onPointerenter: (e: Event) => show(name, e), onPointerleave: hide, onFocus: (e: Event) => show(name, e), onBlur: hide });
 
-const head = computed(() => ({
+const text = computed(() => ({
   fireball: t("demo.tipParts.fireball"),
   longName: t("demo.tipParts.longName"),
   venom: t("demo.tipParts.venom"),
@@ -43,17 +43,17 @@ const levelRows = computed<TooltipRow[]>(() => [
 
 <template>
   <div class="flex flex-wrap items-center gap-2">
-    <Button variant="outline" v-bind="tipFor('skill')" hinted>{{ head.fireball }}</Button>
-    <Button variant="outline" class="max-w-40" v-bind="tipFor('long')" hinted><span class="truncate">{{ head.longName }}</span></Button>
-    <Button variant="outline" v-bind="tipFor('levels')" hinted>{{ head.venom }}</Button>
+    <Button variant="outline" v-bind="tipFor('skill')" hinted>{{ text.fireball }}</Button>
+    <Button variant="outline" class="max-w-40" v-bind="tipFor('long')" hinted><span class="truncate">{{ text.longName }}</span></Button>
+    <Button variant="outline" v-bind="tipFor('levels')" hinted>{{ text.venom }}</Button>
   </div>
-  <Tooltip :open="tip.open === 'skill'" :anchor="tip.anchor" side="right" :title="head.fireball" :badge="head.active" :meta="head.level" divider @dismiss="hide">
+  <Tooltip :open="tip.open === 'skill'" :anchor="tip.anchor" side="right" :title="text.fireball" :badge="text.active" :meta="text.level" divider @dismiss="hide">
     <TooltipRows :rows="skillRows" />
   </Tooltip>
-  <Tooltip :open="tip.open === 'long'" :anchor="tip.anchor" side="right" :title="head.longName" :badge="head.passive" :meta="head.replaced" divider @dismiss="hide">
+  <Tooltip :open="tip.open === 'long'" :anchor="tip.anchor" side="right" :title="text.longName" :badge="text.passive" :meta="text.replaced" divider @dismiss="hide">
     <TooltipRows :rows="skillRows.slice(0, 2)" />
   </Tooltip>
-  <Tooltip :open="tip.open === 'levels'" :anchor="tip.anchor" side="right" width="md" :title="head.venom" :badge="head.powerUp" :description="head.venomText" divider @dismiss="hide">
+  <Tooltip :open="tip.open === 'levels'" :anchor="tip.anchor" side="right" width="md" :title="text.venom" :badge="text.powerUp" :description="text.venomText" divider @dismiss="hide">
     <TooltipRows :rows="levelRows" :columns="rarities" />
   </Tooltip>
 </template>

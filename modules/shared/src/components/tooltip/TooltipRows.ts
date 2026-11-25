@@ -36,32 +36,29 @@ export default defineComponent({
     // Plain label and value rows keep the simple two-column grid from tooltip.css.
     const plain = computed(() => count.value === 1 && !unit.value && !props.columns?.length);
     const trendAt = (row: TooltipRow, index: number) => Array.isArray(row.trend) ? row.trend[index] : row.trend;
+    /** One value. A faint "–" only where rows have units or columns, so plain rows look as they always did. */
+    const cell = (row: TooltipRow, index: number, faint: boolean) => {
+      const text = cellsOf(row)[index] ?? '';
+      return h('dd', { 'data-trend': trendAt(row, index), 'data-faint': faint && text === FAINT ? 'true' : undefined }, text);
+    };
     return () => {
-      if (plain.value) return h('dl', { class: 'tavora-tooltip-rows' }, props.rows.flatMap(row => [
-        h('dt', row.label),
-        h('dd', { 'data-trend': trendAt(row, 0), 'data-faint': cellsOf(row)[0] === FAINT ? 'true' : undefined }, cellsOf(row)[0]),
-      ]));
-      const n = count.value;
-      const heads = props.columns?.length ? [
-        h('span', { class: 'tavora-tooltip-rows-corner', 'aria-hidden': 'true' }),
-        ...Array.from({ length: n }, (_, index) => h('span', { class: 'tavora-tooltip-rows-heading' }, props.columns![index] ?? '')),
-        unit.value ? h('span', { 'aria-hidden': 'true' }) : null,
-      ] : [];
+      if (plain.value) return h('dl', { class: 'tavora-tooltip-rows' }, props.rows.flatMap(row => [h('dt', row.label), cell(row, 0, false)]));
+      const n = count.value, indexes = Array.from({ length: n }, (_, index) => index);
+      // Each row is a div of a dt and its dd's (the grid reaches through it); the headings are a row of their own.
+      const heads = props.columns?.length ? h('div', { class: 'tavora-tooltip-rows-head' }, [
+        h('dt', { 'aria-hidden': 'true' }),
+        ...indexes.map(index => h('dd', { class: 'tavora-tooltip-rows-heading' }, props.columns![index] ?? '')),
+        unit.value ? h('dd', { 'aria-hidden': 'true' }) : null,
+      ]) : null;
       return h('dl', {
         class: 'tavora-tooltip-rows',
         'data-columns': n > 1 ? n : undefined,
         style: { gridTemplateColumns: `minmax(0,1fr) repeat(${n},auto)${unit.value ? ' auto' : ''}` },
-      }, [...heads, ...props.rows.flatMap(row => {
-        const cells = cellsOf(row);
-        return [
-          h('dt', row.label),
-          ...Array.from({ length: n }, (_, index) => {
-            const text = cells[index] ?? '';
-            return h('dd', { 'data-trend': trendAt(row, index), 'data-faint': text === FAINT ? 'true' : undefined }, text);
-          }),
-          unit.value ? h('dd', { class: 'tavora-tooltip-unit' }, row.unit ?? '') : null,
-        ];
-      })]);
+      }, [heads, ...props.rows.map(row => h('div', [
+        h('dt', row.label),
+        ...indexes.map(index => cell(row, index, true)),
+        unit.value ? h('dd', { class: 'tavora-tooltip-unit' }, row.unit ?? '') : null,
+      ]))]);
     };
   },
 });

@@ -29,6 +29,7 @@ export type TooltipWidth = 'sm' | 'md' | 'lg' | number;
 const WIDTHS: Record<Exclude<TooltipWidth, number>, number> = { sm: TOOLTIP_MAX_WIDTH, md: 360, lg: 520 };
 /** The widest a card of this width gets, before the window narrows it. */
 export function tooltipMaxWidth(width: TooltipWidth = 'sm'): number {
+  // 80 px is the narrowest a card gets beside its anchor (geometry.ts); a smaller number would only cut the text.
   return typeof width === 'number' ? Math.max(80, width) : WIDTHS[width] ?? TOOLTIP_MAX_WIDTH;
 }
 
@@ -74,7 +75,10 @@ export default defineComponent({
     badge: String,
     /** Small muted text at the right of the title, such as "Level 3". The `meta` slot takes anything. */
     meta: String,
-    /** A line under the title and description, between them and what you put in the card. */
+    /**
+     * A line under the title and description, between them and what you put in the card. Text that belongs under the
+     * line goes in the card as a `<p>` instead of `description`. Drawn only when there is something above and below it.
+     */
     divider: Boolean,
     /** How wide the card may get: `sm` (280 px), `md`, `lg` or pixels. It never gets wider than the window. */
     width: { type: [String, Number] as PropType<TooltipWidth>, default: 'sm' },
@@ -116,7 +120,7 @@ export default defineComponent({
       }
       ready.value = true;
     }
-    watch(() => [props.open, props.anchor, props.at?.x, props.at?.y, props.side, props.title, props.description, props.shortcut, props.badge, props.meta, props.width], place, { immediate: true });
+    watch(() => [props.open, props.anchor, props.at?.x, props.at?.y, props.side, props.title, props.description, props.shortcut, props.badge, props.meta, props.divider, props.width], place, { immediate: true });
     const dismiss = () => emit('dismiss');
     const key = (event: KeyboardEvent) => { if (event.key === 'Escape') dismiss(); };
     // Only an open tooltip listens to the window: a list of closed ones adds nothing to every scroll and key.
@@ -138,8 +142,8 @@ export default defineComponent({
     });
     /** The title line's own parts: badges after the title, meta text at the right. Null when it is the title alone. */
     function extras() {
-      // The badge looks like the kit's outline Badge, drawn by tooltip.css: title tooltips in React and plain modules
-      // use this card too, and shouldn't need the Badge component or Tailwind for it.
+      // The badge looks like the kit's outline Badge (ui/badge/index.ts), drawn by tooltip.css: title tooltips in React
+      // and plain modules use this card too, and shouldn't need the Badge component or Tailwind for it. Keep the two alike.
       const slotted = slots.badges?.(), slottedMeta = slots.meta?.();
       const badges = drawn(slotted) ? slotted : props.badge ? [h('span', { class: 'tavora-tooltip-badge', 'data-slot': 'badge' }, props.badge)] : null;
       const meta = drawn(slottedMeta) ? slottedMeta : props.meta;

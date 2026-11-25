@@ -105,10 +105,16 @@ describe("TooltipRows", () => {
     })
     expect(dl.getAttribute("data-columns")).toBe("3")
     expect([...dl.querySelectorAll(".tavora-tooltip-rows-heading")].map((cell) => cell.textContent)).toEqual(["Common", "Rare", "Epic"])
-    const cells = [...dl.querySelectorAll("dd")]
+    const cells = [...dl.querySelectorAll("dl > div:not(.tavora-tooltip-rows-head) dd")]
     expect(cells.map((cell) => cell.textContent)).toEqual(["4", "–", "9", "3", "", ""])
     expect(cells[1]!.hasAttribute("data-faint")).toBe(true)
     expect(cells[2]!.getAttribute("data-trend")).toBe("better")
     expect(cells[0]!.hasAttribute("data-trend")).toBe(false)
+    expect([...dl.children].every((child) => child.tagName === "DIV")).toBe(true)
+  })
+
+  it("leaves a dash in plain rows as it was", async () => {
+    const dl = await rows({ rows: [{ label: "Best", value: "–" }] })
+    expect(dl.querySelector("dd")!.hasAttribute("data-faint")).toBe(false)
   })
 })
