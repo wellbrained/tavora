@@ -197,7 +197,7 @@ export class CopySync {
   private timer: ReturnType<typeof setInterval> | undefined;
 
   /** The copy on Tavora's service. */
-  private readonly service: CopyStorage;
+  private readonly service: ServiceStorage;
   /** The account's key, which seals the copy; this PC may have it with the copy off. */
   private readonly accountKeys: AccountKey;
   /** Given by `attach`; until then the copy tells no one and flushes nothing. */
@@ -205,7 +205,7 @@ export class CopySync {
 
   constructor(private readonly options: CopySyncOptions) {
     const service = { baseUrl: options.serviceUrl, fetch: options.fetch ?? ((input, init) => fetch(input, init)), token: () => options.account.token() };
-    this.service = new ServiceStorage(service);
+    this.service = new ServiceStorage({ ...service, account: () => options.account.id() });
     this.accountKeys = new AccountKey({
       file: path.join(options.userData, "account-key.json"),
       legacyFile: path.join(options.userData, "cloud-copy-key.json"),
@@ -228,6 +228,15 @@ export class CopySync {
   private use(folder: string | null): void {
     this.folder = folder;
     this.cloud = new CloudCopy(this.storageFor(folder));
+  }
+
+  /**
+   * The copy where it is kept (`folder`, or the service for null), for one upload or download: on the service, each of its
+   * requests is bound to the account signed in now, so one that outlives a sign-out never goes out as the next account.
+   */
+  private bound(folder: string | null = this.folder): CloudCopy {
+    if (folder === null) return new CloudCopy(this.service.forAccount(this.options.account.id()));
+    return folder === this.folder ? this.cloud : new CloudCopy(this.storageFor(folder));
   }
 
   private storageFor(folder: string | null): CopyStorage {
@@ -645,7 +654,8 @@ export class CopySync {
    * staging folder. True when a copy is staged. A changed PC gets the keep-which-side question instead.
    */
   private async fetchNewer(turn: number): Promise<boolean> {
-    const remote = await this.cloud.remote();
+    const cloud = this.bound();
+    const remote = await cloud.remote();
     if (turn !== this.turn) return false;
     if (!remote) {
       // The copy was deleted (on another PC): it is off here too.
@@ -655,8 +665,8 @@ export class CopySync {
     this.copy = { size: remote.size, savedAt: remote.updatedAt };
     if (remote.version === this.state.version) {
       // Parts of this PC's own last save that went missing go back, or every other PC waits for them.
-      if (this.cloud.storage.arrivesLate) {
-        const put = await this.cloud.heal(this.key!, this.roots(), this.state, () => turn === this.turn).catch((error: unknown) => {
+      if (cloud.storage.arrivesLate) {
+        const put = await cloud.heal(this.key!, this.roots(), this.state, () => turn === this.turn).catch((error: unknown) => {
           this.log(`cloud copy: missing parts not put back: ${error instanceof Error ? error.message : String(error)}`);
           return 0;
         });
@@ -695,10 +705,11 @@ export class CopySync {
   private async stage(since = 0, chosen = false): Promise<Staged | null> {
     this.refuseDuringSwap();
     const turn = this.turn;
+    const cloud = this.bound();
     await rm(this.stagingDir, { recursive: true, force: true });
     let copy: Awaited<ReturnType<CloudCopy["download"]>>;
     try {
-      copy = await this.cloud.download(this.key!, this.roots(), this.stagedData, since, { sealed: this.state.sealed === true, marked: this.state.marked === true, listed: this.state.listed === true, chosen }, () => turn === this.turn);
+      copy = await cloud.download(this.key!, this.roots(), this.stagedData, since, { sealed: this.state.sealed === true, marked: this.state.marked === true, listed: this.state.listed === true, chosen }, () => turn === this.turn);
     } catch (error) {
       // The account's vault doesn't open with this PC's key either (another PC started over with a new key, or the
       // service sent something else): the copy goes off here, and turning it on asks for the new key. The key and the
@@ -725,7 +736,7 @@ export class CopySync {
     this.refuseDuringSwap();
     const list = await this.lookList();
     const staged = list.status === "present" ? list.value : null;
-    const remote = staged ? await this.cloud.remote() : null;
+    const remote = staged ? await this.bound().remote() : null;
     if (!staged || !remote || remote.version !== staged.version) return this.stage(0, true);
     // Held counts as not whole here: the user asked for this copy, so it simply comes down again.
     const whole = await look(() => this.stagedWhole(staged));
@@ -1148,11 +1159,13 @@ export class CopySync {
       // What ran before (a download at start) may have left a question.
       if (!this.on || this.turningOff > 0 || (this.waiting && !loud) || this.dataHeld) return;
       const turn = this.turn;
+      // Every request of this upload is for the account signed in now: after a sign-out it stops, and never goes on as the next one.
+      const cloud = this.bound();
       await this.hooks?.flush();
       // Turned off while the panels saved.
       if (turn !== this.turn) return;
       try {
-        const result = await this.cloud.upload(this.key!, this.roots(), this.state, (done, total) => this.uploaded(done, total));
+        const result = await cloud.upload(this.key!, this.roots(), this.state, (done, total) => this.uploaded(done, total));
         // Turned off while it went up: what it knew is forgotten, and stays so.
         if (turn !== this.turn) return;
         if (result.status === "uploaded") {
@@ -1198,7 +1211,7 @@ export class CopySync {
     const setUp = await this.exclusive("checking", async () => {
       if (folder !== null) await checkFolder(folder);
       // Signed out, a folder's copy keeps its key here; signed in, the key is the account's.
-      if (this.keyHere) return this.accountKeys.setUpHere((await this.cloud.remote()) !== null);
+      if (this.keyHere) return this.accountKeys.setUpHere((await this.bound().remote()) !== null);
       const setUp = await this.accountKeys.setUp();
       // The account's key seals the copy from now on (a key of another account's copy waits for it).
       if (setUp.status === "ready") await this.accountKeys.useForCopy();
@@ -1262,7 +1275,7 @@ export class CopySync {
     if (this.dataHeld) throw new UserError("cloudCopy.error.conflict");
     const turn = this.turn;
     const base = await this.exclusive("checking", async () => {
-      const remote = await this.cloud.remote();
+      const remote = await this.bound().remote();
       if (this.keyHere) await this.accountKeys.startOverHere();
       else {
         await this.accountKeys.startOver();
@@ -1298,7 +1311,7 @@ export class CopySync {
     let asks = false;
     try {
       staged = await this.exclusive("downloading", async () => {
-        const remote = await this.cloud.remote();
+        const remote = await this.bound().remote();
         if (!remote) return null;
         this.copy = { size: remote.size, savedAt: remote.updatedAt };
         return this.stage();
@@ -1360,7 +1373,9 @@ export class CopySync {
     if (this.waiting) throw new UserError("cloudCopy.error.conflict");
     // A copy on the service is its account's: signed out, it can't go into a folder (sealed with that account's key).
     if (this.folder === null && !this.accountKeys.signedIn) throw CopySync.userError("signed-out");
-    const from = this.cloud;
+    // Both ends are this account's, from here to the end of the move.
+    const from = this.bound();
+    const target = this.bound(folder);
     const problem = this.problem;
     const turn = this.turn;
     let moved = false;
@@ -1376,7 +1391,7 @@ export class CopySync {
         if (turn !== this.turn) return;
         await this.hooks?.flush();
         if (folder !== null) await checkFolder(folder);
-        to = new CloudCopy(this.storageFor(folder));
+        to = target;
         if (await to.remote()) throw new UserError("cloudCopy.error.moveTaken");
         ours = true;
         const result = await to.upload(this.key!, this.roots(), EMPTY_STATE, (done, total) => this.uploaded(done, total));
@@ -1612,7 +1627,7 @@ export class CopySync {
     if (!key) throw new UserError("cloudCopy.error.badKey");
     const turn = this.turn;
     const opens = await this.exclusive("checking", async () => {
-      const current = await this.cloud.storage.manifest();
+      const current = await this.bound().storage.manifest();
       if (!current) return false;
       try {
         openManifest(copyKeys(key), current.sealed);
@@ -1626,7 +1641,8 @@ export class CopySync {
     if (turn !== this.turn) return;
     if (!opens) throw new UserError("cloudCopy.error.wrongKey");
     await rm(this.stagingDir, { recursive: true, force: true });
-    const came = await this.exclusive("downloading", () => this.cloud.download(key, this.roots(), this.stagedData, 0, { chosen: true }, () => turn === this.turn)).catch(
+    const cloud = this.bound();
+    const came = await this.exclusive("downloading", () => cloud.download(key, this.roots(), this.stagedData, 0, { chosen: true }, () => turn === this.turn)).catch(
       async (error: unknown) => {
         await rm(this.stagingDir, { recursive: true, force: true });
         if (turn !== this.turn) return null;
@@ -1796,10 +1812,11 @@ export class CopySync {
     const roots = copyRoots(this.options.userData, plan.moduleFiles);
     const turn = this.turn;
     const incoming = path.join(this.stagingDir, "incoming");
+    const cloud = this.bound();
     return this.exclusive("downloading", async () => {
       let copy: Awaited<ReturnType<CloudCopy["download"]>>;
       try {
-        copy = await this.cloud.download(this.key!, roots, incoming, 0, { sealed: this.state.sealed === true, marked: this.state.marked === true, listed: this.state.listed === true, chosen: true }, () => turn === this.turn);
+        copy = await cloud.download(this.key!, roots, incoming, 0, { sealed: this.state.sealed === true, marked: this.state.marked === true, listed: this.state.listed === true, chosen: true }, () => turn === this.turn);
       } catch (error) {
         await rm(incoming, { recursive: true, force: true });
         if (turn !== this.turn) return null;
@@ -1859,7 +1876,8 @@ export class CopySync {
 
   /** Deletes the copy on the service and turns it off here. */
   async remove(): Promise<void> {
-    await this.exclusive("checking", () => this.cloud.remove()).catch((error: unknown) => {
+    const cloud = this.bound();
+    await this.exclusive("checking", () => cloud.remove()).catch((error: unknown) => {
       throw CopySync.userError(this.noteProblem(error));
     });
     await this.forget(null, { byUser: true });

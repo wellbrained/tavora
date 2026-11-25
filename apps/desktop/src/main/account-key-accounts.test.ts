@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { AccountKey } from "./account-key";
+import { CloudCopy, EMPTY_STATE, ServiceStorage } from "./cloud-copy";
 import { cleanUp, pc, service } from "./cloud-copy.test-helper";
 import { newCopyKey, openVault, recoveryKey, sealVault } from "./copy-crypto";
 import { CopySync } from "./cloud-copy-sync";
@@ -734,6 +735,57 @@ describe("an account's key file this run can't open", () => {
     const restarted = await onPc(cloud, fetch, signed, { userData: first.userData });
     await restarted.accountKey.load();
     expect(await restarted.accountKey.setUp()).toEqual({ status: "ready", created: false });
+  });
+});
+
+describe("an upload that outlives its account's sign-in", () => {
+  it("stops when another account signs in meanwhile: nothing goes out as that account, and its copy stays as it was", async () => {
+    const { cloud, a, b } = await twoAccounts();
+    // B has a copy of its own (from its other PC), at the same version A's copy is at.
+    const atB = await pc({ "library.json": "b's own" });
+    const asB = new CloudCopy(new ServiceStorage({ baseUrl: "http://tavora.test/v1/account", fetch: cloud.fetch, token: () => b.token }));
+    expect((await asB.upload(newCopyKey(), atB.roots, EMPTY_STATE)).status).toBe("uploaded");
+    const manifestOfB = async () => Buffer.from((await asB.storage.manifest())!.sealed).toString("hex");
+    const before = { remote: await asB.remote(), manifest: await manifestOfB() };
+    expect(before.remote?.version).toBe(1);
+
+    const signed: { now: Signed | null } = { now: a };
+    const copyRequests: { route: string; token: string }[] = [];
+    let here!: Awaited<ReturnType<typeof copyPc>>;
+    let switched = false;
+    const fetch = (async (url: string, init?: RequestInit) => {
+      const route = new URL(url).pathname;
+      const token = String((init?.headers as Record<string, string> | undefined)?.authorization ?? "").replace(/^Bearer /, "");
+      if (route.includes("/copy")) copyRequests.push({ route: `${init?.method ?? "GET"} ${route}`, token });
+      const response = await cloud.fetch(url, init);
+      // Between two requests of the upload, A signs out (as AccountFlows.signOut does) and B signs in.
+      if (!switched && route.endsWith("/copy/parts") && copyRequests.length > 0 && here?.sync.view().on) {
+        switched = true;
+        signed.now = null;
+        await here.sync.signedOut(a.id);
+        await here.changed();
+        signed.now = b;
+        await here.changed();
+      }
+      return response;
+    }) as typeof globalThis.fetch;
+    here = await copyPc(cloud, fetch, signed);
+    switched = true;
+    await here.sync.turnOn();
+    expect(here.sync.view().on).toBe(true);
+    expect((await new CloudCopy(new ServiceStorage({ baseUrl: "http://tavora.test/v1/account", fetch: cloud.fetch, token: () => a.token })).remote())?.version).toBe(1);
+
+    await writeFile(path.join(here.userData, "library.json"), "a2, changed on this PC");
+    copyRequests.length = 0;
+    switched = false;
+    await here.sync.sync().catch(() => undefined);
+
+    expect(switched).toBe(true);
+    expect(copyRequests.length).toBeGreaterThan(0);
+    expect(copyRequests.filter((request) => request.token === b.token)).toEqual([]);
+    expect(await asB.remote()).toEqual(before.remote);
+    expect(await manifestOfB()).toBe(before.manifest);
+    expect(here.sync.view().on).toBe(false);
   });
 });
 

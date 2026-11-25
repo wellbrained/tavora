@@ -472,6 +472,8 @@ export interface ServiceStorageOptions {
   fetch: typeof fetch;
   /** The sign-in token, or null when signed out. */
   token: () => string | null;
+  /** The account signed in now (sign-in.ts accountIdOf), which `forAccount` checks each request against. */
+  account?: () => string | null;
   timeoutMs?: number;
 }
 
@@ -480,11 +482,24 @@ export class ServiceStorage implements CopyStorage {
   readonly limit = COPY_LIMIT;
   readonly arrivesLate = false;
 
-  constructor(private readonly options: ServiceStorageOptions) {}
+  constructor(
+    private readonly options: ServiceStorageOptions,
+    /** Set by `forAccount`: the account every request has to be for, null for none. */
+    private readonly who?: string | null,
+  ) {}
+
+  /**
+   * This copy for `who` only, the account signed in when an upload or download starts: once another account, or none, is
+   * signed in, each of its requests is refused (signed-out), so nothing it sends ever goes out with another account's token.
+   */
+  forAccount(who: string | null): ServiceStorage {
+    return new ServiceStorage(this.options, who);
+  }
 
   private async request(method: string, route: string, body?: Uint8Array): Promise<Response> {
     const token = this.options.token();
     if (!token) throw new CopyError("signed-out");
+    if (this.who !== undefined && (this.who === null || this.options.account?.() !== this.who)) throw new CopyError("signed-out");
     let response: Response;
     try {
       response = await this.options.fetch(`${this.options.baseUrl}/copy${route}`, {
