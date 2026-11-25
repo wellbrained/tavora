@@ -1152,7 +1152,7 @@ describe("a page that crashes", () => {
     for (let i = 0; i < 3; i++) service.tick();
     expect(live()).toHaveLength(0);
     // Told once, in the user's words.
-    expect(world.notices).toEqual(["This overlay stopped working."]);
+    expect(world.notices).toEqual(["This overlay stopped working. Show it in the game again to try once more."]);
   });
 
   it("gets another chance when the user shows it again, or toggles it", async () => {
@@ -1431,7 +1431,7 @@ describe("a panel in the game", () => {
     expect(lends()).toBe(lent);
     expect(world.views.views.isLent(PANEL)).toBe(false);
     expect(service.hasPanel(PANEL)).toBe(true);
-    expect(world.notices).toEqual(["This overlay stopped working."]);
+    expect(world.notices).toEqual(["This overlay stopped working. Show it in the game again to try once more."]);
     // Show in game again gives it another chance.
     expect(add(service)).toBe("shown");
     service.tick();
@@ -1942,7 +1942,7 @@ describe("a panel's live view", () => {
       service.tick();
     }
     expect(liveWindows(world)).toHaveLength(0);
-    expect(world.notices).toEqual(["This overlay stopped working."]);
+    expect(world.notices).toEqual(["This overlay stopped working. Show it in the game again to try once more."]);
     add(service);
     expect(liveWindows(world)).toHaveLength(1);
   });

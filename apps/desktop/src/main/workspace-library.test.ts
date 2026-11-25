@@ -301,6 +301,13 @@ describe("WorkspaceLibrary", () => {
     expect(calls).toEqual(["files of Valheim", "forgotten valheim", "forget icon valheim", "clear persist:browser@valheim"]);
   });
 
+  it("opens no session of a deleted workspace at the start, whose folders the start removes itself (review of #979)", async () => {
+    const { shelf, calls, userData } = await setup();
+    await mkdir(path.join(userData, "Partitions", "browser@valheim"), { recursive: true });
+    await shelf.deleteExpired([{ ...emptyLibrary().workspaces, id: "valheim", name: "Valheim" } as never], { sessions: false });
+    expect(calls).toEqual(["files of Valheim", "forgotten valheim", "forget icon valheim"]);
+  });
+
   it("keeps a workspace in Trash for a later try when its files can't be deleted now, and deletes the others", async () => {
     const library = emptyLibrary();
     const long = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);

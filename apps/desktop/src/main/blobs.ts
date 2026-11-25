@@ -132,7 +132,7 @@ export class BlobStore {
    * Stores what the stream delivers. Refused, with nothing left behind, when it is empty, larger than
    * one file may be, would take the module past its total, or is not a picture, PDF or sound of a kind we accept.
    */
-  put(body: AsyncIterable<Uint8Array>, declaredBytes?: number): Promise<BlobInfo> {
+  put(body: AsyncIterable<Uint8Array> | ReadableStream<Uint8Array>, declaredBytes?: number): Promise<BlobInfo> {
     if (this.locked()) return Promise.reject(this.moving());
     if (declaredBytes !== undefined && declaredBytes > this.limits.maxFileBytes) {
       return Promise.reject(this.tooLarge());
@@ -269,26 +269,39 @@ export class BlobStore {
   }
 }
 
-/** The pieces of `body`, given up with an error when none comes for `idleMs`. */
-async function* untilIdle(body: AsyncIterable<Uint8Array>, idleMs: number): AsyncGenerator<Uint8Array> {
-  const pieces = body[Symbol.asyncIterator]();
+/**
+ * The pieces of `body`, given up with an error when none comes for `idleMs`. A request body (a web stream) is read and,
+ * on giving up, cancelled with its reader: a pending read of a stream that stalled never settles, and return() on its
+ * iterator would wait for it.
+ */
+async function* untilIdle(body: AsyncIterable<Uint8Array> | ReadableStream<Uint8Array>, idleMs: number): AsyncGenerator<Uint8Array> {
+  const stream = "getReader" in body ? body.getReader() : null;
+  const pieces = stream ? null : (body as AsyncIterable<Uint8Array>)[Symbol.asyncIterator]();
+  const next = (): Promise<IteratorResult<Uint8Array>> => (stream ? stream.read() : pieces!.next()) as Promise<IteratorResult<Uint8Array>>;
+  let ended = false;
   try {
     for (;;) {
       let timer: ReturnType<typeof setTimeout> | undefined;
       const idle = new Promise<never>((_resolve, reject) => {
         timer = setTimeout(() => reject(new HostError("INTERNAL", "the file stopped coming; try again")), idleMs);
       });
-      let next: IteratorResult<Uint8Array>;
+      let piece: IteratorResult<Uint8Array>;
       try {
-        next = await Promise.race([pieces.next(), idle]);
+        piece = await Promise.race([next(), idle]);
       } finally {
         clearTimeout(timer);
       }
-      if (next.done) return;
-      yield next.value;
+      if (piece.done) {
+        ended = true;
+        return;
+      }
+      yield piece.value;
     }
   } finally {
-    // Ends the body too, also when it stalled: its own wait is not awaited.
-    void Promise.resolve(pieces.return?.()).catch(() => undefined);
+    // Ends the body too when it was given up or refused; its own wait is never awaited.
+    if (!ended) {
+      if (stream) void stream.cancel().catch(() => undefined);
+      else void Promise.resolve(pieces!.return?.()).catch(() => undefined);
+    }
   }
 }

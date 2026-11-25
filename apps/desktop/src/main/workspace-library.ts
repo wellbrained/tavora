@@ -173,10 +173,11 @@ export class WorkspaceLibrary {
   /**
    * Deletes everything stored for the workspaces whose time in Trash ran out (purgeExpired), at the start. Never throws,
    * so Tavora starts: one that can't be deleted now goes back to Trash and is tried again at the next start. The caller
-   * saves the library.
+   * saves the library. `sessions: false` at the start: no session has been opened yet, and the caller removes their
+   * browser storage folders itself, which an opened session would hold (EBUSY on Windows).
    */
-  async deleteExpired(workspaces: readonly WorkspaceEntry[]): Promise<void> {
-    await this.forgetAll(workspaces).catch((error: unknown) => console.error("[tavora] clearing the browser storage of deleted workspaces failed", error));
+  async deleteExpired(workspaces: readonly WorkspaceEntry[], { sessions = true }: { sessions?: boolean } = {}): Promise<void> {
+    await this.forgetAll(workspaces, sessions).catch((error: unknown) => console.error("[tavora] clearing the browser storage of deleted workspaces failed", error));
   }
 
   /**
@@ -184,7 +185,7 @@ export class WorkspaceLibrary {
    * deleted now (a file another program holds) goes back to Trash as it was, so a later try finishes it, and the others
    * still go. Answers with what went wrong.
    */
-  private async forgetAll(workspaces: readonly WorkspaceEntry[]): Promise<unknown[]> {
+  private async forgetAll(workspaces: readonly WorkspaceEntry[], sessions = true): Promise<unknown[]> {
     const { library } = this.options;
     const errors: unknown[] = [];
     const gone: string[] = [];
@@ -198,7 +199,7 @@ export class WorkspaceLibrary {
         errors.push(error);
       }
     }
-    await this.clearSessions(gone);
+    if (sessions) await this.clearSessions(gone);
     return errors;
   }
 

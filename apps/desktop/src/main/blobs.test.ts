@@ -128,6 +128,28 @@ describe("BlobStore.put", () => {
     expect(await readdir(dir)).toEqual([]);
   });
 
+  it("cancels a request body that stopped coming, as a module's upload is a web stream (review of #979)", async () => {
+    const patient = new BlobStore(() => dir, { maxFileBytes: 100, maxTotalBytes: 150, idleMs: 50 });
+    let cancelled = false;
+    let sent = false;
+    const body = new ReadableStream<Uint8Array>({
+      pull: (controller) => {
+        if (!sent) {
+          sent = true;
+          controller.enqueue(PNG);
+          return;
+        }
+        // Then nothing ever comes.
+        return new Promise<void>(() => undefined);
+      },
+      cancel: () => void (cancelled = true),
+    });
+    await expect(patient.put(body)).rejects.toThrow(/stopped coming/);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(cancelled).toBe(true);
+    expect(await readdir(dir)).toEqual([]);
+  });
+
   it("removes leftovers of a write that was cut off", async () => {
     await store.put(pieces(PNG));
     await writeFile(path.join(dir, "0123456789abcdef0123456789abcdef.tmp"), "half");

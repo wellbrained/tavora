@@ -2050,7 +2050,7 @@ export const en = {
   "overlays.card.closeHint": "Close Tavora over game",
   "overlays.toggleAction": "Show or hide",
   "overlays.exclusiveHint": "Switch the game to borderless to see overlays.",
-  "overlays.stopped": "This overlay stopped working.",
+  "overlays.stopped": "This overlay stopped working. Show it in the game again to try once more.",
   "overlays.button.open": "Overlay",
   "overlays.rail.hint": "Arrange what shows over your games",
   "overlays.button.start": "Start",

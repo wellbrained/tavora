@@ -1279,7 +1279,8 @@ export class Host {
     if (!profileSaved) host.saveProfile().catch(() => undefined); // logged by saveProfile
     // One whose files can't be deleted now (another program holds one) stays in Trash for the next start. First, so such
     // a workspace is counted below and keeps its browser storage and its panels' saved state (hunt 2026-11-25 A3).
-    await host.workspaceLibrary.deleteExpired(expired);
+    // No session is opened for them: their folders are removed just below, and an open one would hold them.
+    await host.workspaceLibrary.deleteExpired(expired, { sessions: false });
     // Browser storage of workspaces that are gone, removed before any session opens it, and the saved state of panels
     // that are gone. What a lost library or workspace file may have listed is kept (holdLeftovers).
     const orphaned = await orphanedPartitions(userData, new Set(Object.keys(library.workspaces)));
@@ -1293,7 +1294,11 @@ export class Host {
     const stalePanels = (await readdir(path.join(userData, "panel-state")).catch(() => [] as string[])).filter((name) => name.endsWith(".json") && !livePanels.has(name.slice(0, -".json".length))).map((name) => name.slice(0, -".json".length));
     const leftovers = { workspaces: new Set(orphaned.map((dir) => partitionWorkspace(dir)!)), panels: new Set(stalePanels) };
     const held = await holdLeftovers(userData, libraryRead && workspaceRead && !copySync.dataHeld, leftovers).catch(() => leftovers);
-    for (const dir of orphaned) if (!held.workspaces.has(partitionWorkspace(dir)!)) await rm(dir, { recursive: true, force: true });
+    for (const dir of orphaned) {
+      if (held.workspaces.has(partitionWorkspace(dir)!)) continue;
+      // One folder another program holds is left for the next start; it never stops this one.
+      await rm(dir, { recursive: true, force: true }).catch((error: unknown) => console.warn(`[tavora] removing the browser storage ${path.basename(dir)} failed; tried again at the next start`, error));
+    }
     await host.data.panelState.prune(new Set([...livePanels, ...held.panels]));
     // Version 0.2.0 saved Steam covers here; they were replaced by Steam's own icons.
     await rm(path.join(userData, "steam-art"), { recursive: true, force: true });
