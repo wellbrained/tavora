@@ -1,5 +1,5 @@
 import { Comment, defineComponent, Fragment, h, Teleport, nextTick, onMounted, onUnmounted, ref, watch, type PropType, type VNode } from 'vue';
-import { pointAnchor, tooltipPlacement, TOOLTIP_MAX_WIDTH, type TooltipPoint, type TooltipRect, type TooltipSide } from './geometry';
+import { pointAnchor, tooltipPlacement, TOOLTIP_MAX_WIDTH, type TooltipAlign, type TooltipPoint, type TooltipRect, type TooltipSide } from './geometry';
 import { uiText } from '../ui/text';
 import { isMac } from '../../lib/platform';
 import './tooltip.css';
@@ -69,6 +69,8 @@ export default defineComponent({
     at: Object as PropType<TooltipPoint>,
     /** Where the card goes when there is room. */
     side: { type: String as PropType<TooltipSide>, default: 'bottom' },
+    /** Lines the card up with the element's start or end instead of its middle, for a hint on a whole row or field. */
+    align: { type: String as PropType<TooltipAlign>, default: 'center' },
     title: { type: String, default: '' },
     description: String,
     /** A keyboard shortcut beside the title, such as "Ctrl+D". */
@@ -136,19 +138,19 @@ export default defineComponent({
       // A closing card keeps its place while it fades out.
       if (!props.open) { if (!closing.value) ready.value = false; return; }
       const viewport = { width: innerWidth, height: innerHeight }, side = props.side, max = tooltipMaxWidth(props.width);
-      position.value = tooltipPlacement(anchor(), 0, 0, viewport, side, max, props.bare);
+      position.value = tooltipPlacement(anchor(), 0, 0, viewport, side, max, props.bare, props.align);
       // Measure, place, and measure again if a side placement made the card narrower and so taller.
       for (let pass = 0; pass < 2; pass++) {
         await nextTick();
         if (version !== generation || !card.value) return;
         const measured = card.value.getBoundingClientRect();
-        const placed = tooltipPlacement(anchor(), measured.width, measured.height, viewport, side, max, props.bare);
+        const placed = tooltipPlacement(anchor(), measured.width, measured.height, viewport, side, max, props.bare, props.align);
         position.value = placed;
         if (placed.width >= measured.width) break;
       }
       ready.value = true;
     }
-    watch(() => [props.open, props.anchor, props.at?.x, props.at?.y, props.side, props.title, props.description, props.shortcut, props.badge, props.meta, props.divider, props.width], place, { immediate: true });
+    watch(() => [props.open, props.anchor, props.at?.x, props.at?.y, props.side, props.align, props.title, props.description, props.shortcut, props.badge, props.meta, props.divider, props.width], place, { immediate: true });
     const dismiss = () => emit('dismiss');
     const key = (event: KeyboardEvent) => { if (event.key === 'Escape') dismiss(); };
     // Only an open tooltip listens to the window: a list of closed ones adds nothing to every scroll and key.

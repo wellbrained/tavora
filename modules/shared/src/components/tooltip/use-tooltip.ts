@@ -9,7 +9,7 @@
 // workspace, so a big card is never cut off at the panel's edge; there is then no <Tooltip> in the panel.
 import { getCurrentScope, onScopeDispose, reactive, shallowRef, type VNode } from 'vue';
 import { TOOLTIP_WARM_MS, tooltipDelay } from './Tooltip';
-import type { TooltipRect, TooltipSide } from './geometry';
+import type { TooltipAlign, TooltipRect, TooltipSide } from './geometry';
 
 /** What the helper needs of a shared card (the SDK's TooltipContent has it): its title, and a subtitle if any. */
 export interface SharedCard { title: string; subtitle?: string }
@@ -28,6 +28,8 @@ export interface UseTooltipOptions {
   delay?: number;
   /** Where the card goes when there is room. A target can ask for another side. */
   side?: TooltipSide;
+  /** Where the card lines up along its target: centred (the default), or with its start or end. */
+  align?: TooltipAlign;
 }
 
 export interface UseSharedTooltipOptions<T extends SharedCard = SharedCard> extends UseTooltipOptions {
@@ -51,6 +53,8 @@ export interface UseSharedTooltipOptions<T extends SharedCard = SharedCard> exte
 export interface TooltipTargetOptions {
   /** Where this target's card goes when there is room. */
   side?: TooltipSide;
+  /** Where this target's card lines up along it: centred, or with its start or end (a whole row, a field). */
+  align?: TooltipAlign;
   /**
    * Lets the keyboard reach a target that can't take the focus by itself (a chart bar, a cell, a picture), so its
    * card shows by keyboard too. Buttons and links don't need it.
@@ -92,7 +96,7 @@ export interface UseTooltip<T> {
   /** Bind on each target: `v-bind="tip.on(card)"`. */
   on(card: TooltipCard<T>, options?: TooltipTargetOptions): Record<string, unknown>;
   /** Bind on the panel's one tooltip: `<Tooltip v-bind="tip.props">`. (With `shared`, only for its `fallback`.) */
-  readonly props: { open: boolean; anchor: TooltipRect; side: TooltipSide; id: string; onDismiss: () => void };
+  readonly props: { open: boolean; anchor: TooltipRect; side: TooltipSide; align: TooltipAlign; id: string; onDismiss: () => void };
   /** The card shown now (or the last one): fill the tooltip from it. */
   readonly content: T | null;
   /** Shows a card for an element at once, as from the keyboard: for an element you don't bind `on` to. */
@@ -130,7 +134,7 @@ export function useTooltip<T>(options: UseTooltipOptions & Partial<UseSharedTool
   const given = options.shared;
   const sharedTooltip = (): SharedTooltip<SharedCard> | null => (typeof given === 'function' ? given() : given) ?? null;
   // One value for where the card is: none, waiting for the hover delay, or showing (here or in Tavora's tooltip).
-  const state = reactive({ status: 'idle' as 'idle' | 'waiting' | 'open', side: (options.side ?? 'bottom') as TooltipSide, anchor: { left: 0, top: 0, right: 0, bottom: 0 } as TooltipRect });
+  const state = reactive({ status: 'idle' as 'idle' | 'waiting' | 'open', side: (options.side ?? 'bottom') as TooltipSide, align: (options.align ?? 'center') as TooltipAlign, anchor: { left: 0, top: 0, right: 0, bottom: 0 } as TooltipRect });
   // The card as the module gave it (a function is asked again on each read): not made reactive.
   const shown = shallowRef<TooltipCard<T>>(null);
   let current: Element | null = null;
@@ -206,13 +210,14 @@ export function useTooltip<T>(options: UseTooltipOptions & Partial<UseSharedTool
     const card = resolve(shown.value);
     if (!element.isConnected || card === null) return hide();
     if (given) return showShared(element, card as unknown as SharedCard, side, pinned);
-    showInPanel(element, side, target.as);
+    showInPanel(element, side, target.as, target.align);
   }
 
-  function showInPanel(element: Element, side: TooltipSide | undefined, as?: 'label' | 'description') {
+  function showInPanel(element: Element, side: TooltipSide | undefined, as?: 'label' | 'description', align?: TooltipAlign) {
     const { left, top, right, bottom } = element.getBoundingClientRect();
     state.anchor = { left, top, right, bottom };
     state.side = side ?? options.side ?? 'bottom';
+    state.align = align ?? options.align ?? 'center';
     state.status = 'open';
     inPanel.value = true;
     relation = (as ?? (named(element) ? 'description' : 'label')) === 'label' ? 'aria-labelledby' : 'aria-describedby';
@@ -274,7 +279,7 @@ export function useTooltip<T>(options: UseTooltipOptions & Partial<UseSharedTool
       };
     },
     get props() {
-      return { open: state.status === 'open' && inPanel.value, anchor: state.anchor, side: state.side, id, onDismiss: hide };
+      return { open: state.status === 'open' && inPanel.value, anchor: state.anchor, side: state.side, align: state.align, id, onDismiss: hide };
     },
     get content() {
       return resolve(shown.value);

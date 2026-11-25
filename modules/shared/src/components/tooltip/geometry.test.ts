@@ -40,4 +40,12 @@ describe('tooltipPlacement',()=>{
   const p=tooltipPlacement(anchor,280,120,{width:480,height:600},'right',280,true);
   expect(p.width).toBe(280);expect(p.side).toBe('bottom');
  });
+ it('lines the card up with the start or end of a wide anchor, the arrow near that end',()=>{
+  const field={left:40,top:100,right:360,bottom:130};
+  const start=tooltipPlacement(field,150,40,view,'bottom',280,false,'start');
+  expect(start.left).toBe(40);expect(start.left+start.arrow).toBe(60);
+  const end=tooltipPlacement(field,150,40,view,'bottom',280,false,'end');
+  expect(end.left+150).toBe(360);expect(end.left+end.arrow).toBe(340);
+  expect(tooltipPlacement(field,150,40,view).left).toBe(125);
+ });
 });
