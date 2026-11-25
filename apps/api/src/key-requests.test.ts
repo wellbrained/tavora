@@ -308,20 +308,18 @@ describe("a key reported as leaked", () => {
     expect(store.allKeyRequests()).toEqual([]);
     store.linkKey(dev.accountId, dev.new, rawKey(dev.next).toString("base64"), clock.now + 2);
     expect(store.requestReplacement(dev.accountId, dev.old, dev.new, false, clock.now + 3)).toBe("ok");
-    // The review page shows the kept report beside the plain request.
-    const listed = (await (await adminCall("/api/keys")).json()) as { requests: { old: string; new: string | null; leaked: boolean; status: string }[] };
-    expect(listed.requests.map(({ old, new: next, leaked, status }) => ({ old, new: next, leaked, status }))).toEqual([
-      { old: dev.old, new: null, leaked: true, status: "waiting" },
-      { old: dev.old, new: dev.new, leaked: false, status: "waiting" },
-    ]);
+    // The review page shows one row for the key: the plain request, marked leaked by the kept report.
+    type Listed = { requests: { old: string; new: string | null; leaked: boolean; status: string }[] };
+    const rows = async () => ((await (await adminCall("/api/keys")).json()) as Listed).requests.map(({ old, new: next, leaked, status }) => ({ old, new: next, leaked, status }));
+    expect(await rows()).toEqual([{ old: dev.old, new: dev.new, leaked: true, status: "waiting" }]);
     // Turning the plain request down keeps the report.
     expect((await adminCall("/api/keys/decline", { old: dev.old })).status).toBe(200);
     expect(store.keyRequest(dev.old)).toMatchObject({ leaked: false, declinedAt: expect.any(Number) });
     expect(store.isLeakedKey(dev.old)).toBe(true);
     expect(store.leakedKeys()).toEqual([{ fingerprint: dev.old, requestedAt: clock.now }]);
     expect(((await (await adminCall("/api/keys/revocations.json")).json()) as Revocation[]).map((entry) => entry.fingerprint)).toEqual([dev.old]);
-    const after = (await (await adminCall("/api/keys")).json()) as { requests: { leaked: boolean; status: string }[] };
-    expect(after.requests).toEqual(expect.arrayContaining([expect.objectContaining({ leaked: true, status: "waiting" })]));
+    // Then the kept report stands for the key, on its own row.
+    expect(await rows()).toEqual([{ old: dev.old, new: null, leaked: true, status: "waiting" }]);
     store.unlinkKey(dev.accountId, dev.old);
     const other = await developer("other@example.com");
     expect(store.linkKey(other.accountId, dev.old, rawKey(dev.lost).toString("base64"), clock.now)).toBe("leaked");

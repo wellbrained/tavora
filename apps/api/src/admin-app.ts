@@ -463,7 +463,11 @@ export function createAdminApp({ token, statsToken, submissions, state, store, c
       /** Whether the account's address was told of the request as it is now; null when not known (from before, or a leaked report alone). */
       notified: boolean | null;
     };
-    const requests = (accounts?.allKeyRequests() ?? []).map((request): Row => {
+    // One row per key, so Decline on a row turns down what it shows (/api/keys/decline takes an open request first). A leak
+    // report kept for the key (leaked_keys) marks an open request for it as leaked, and stands in for a turned-down one.
+    const kept = new Set((accounts?.leakedKeys() ?? []).map((leaked) => leaked.fingerprint));
+    const all = accounts?.allKeyRequests() ?? [];
+    const requests = all.filter((request) => request.declinedAt === null || !kept.has(request.old)).map((request): Row => {
       const linkedAt = accounts?.keyLinkedAt(request.new) ?? null;
       return {
         old: request.old,
@@ -471,18 +475,18 @@ export function createAdminApp({ token, statsToken, submissions, state, store, c
         account: request.accountId,
         email: accounts?.account(request.accountId)?.email ?? null,
         developer: accounts?.developer(request.accountId)?.name ?? null,
-        leaked: request.leaked,
+        leaked: request.leaked || kept.has(request.old),
         requestedAt: new Date(request.requestedAt).toISOString(),
         newLinkedAt: linkedAt === null ? null : new Date(linkedAt).toISOString(),
         status: keyRequestStatus(request, lists),
         notified: request.notified,
       };
     });
-    // Keys reported as leaked whose request went with the account: only the key and when it was reported are kept. Listed
-    // unless an open leaked request for the key says so already, also beside a plain request asked for it later (audit run 2).
-    const reported = new Set((accounts?.allKeyRequests() ?? []).filter((request) => request.leaked && request.declinedAt === null).map((request) => request.old));
+    // Keys reported as leaked whose request went with the account (or with an email change): only the key and when it was
+    // reported are kept. Listed on their own unless an open request for the key shows them already.
+    const open = new Set(all.filter((request) => request.declinedAt === null).map((request) => request.old));
     for (const leaked of accounts?.leakedKeys() ?? []) {
-      if (reported.has(leaked.fingerprint)) continue;
+      if (open.has(leaked.fingerprint)) continue;
       requests.push({
         old: leaked.fingerprint,
         new: null,
