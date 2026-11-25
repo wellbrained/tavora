@@ -23,7 +23,7 @@ const tick = async () => { for (let i = 0; i < 4; i++) await nextTick(); await n
 
 describe("inertBehind", () => {
   it("shuts every branch except the way to the content, and puts it back", () => {
-    document.body.innerHTML = '<div id="page"><button>a</button></div><div id="layer"><div id="box"><i id="inside"></i><b id="beside"></b></div><u id="near"></u></div><div data-tooltip-layer="titles" id="tips"></div><div data-slot="toaster-host" id="toasts"></div><div id="was" inert></div>'
+    document.body.innerHTML = '<div id="page"><button>a</button></div><div id="layer"><div id="box"><i id="inside"></i><b id="beside"></b></div><u id="near"></u></div><div data-tooltip-layer="titles" id="tips"></div><div data-slot="toaster-host" id="toasts"></div><div data-slot="kit-announcer" id="said"></div><div id="was" inert></div>'
     const undo = inertBehind(document.getElementById("inside")!)
     const inert = (id: string) => document.getElementById(id)!.hasAttribute("inert")
     expect(inert("page")).toBe(true)
@@ -34,6 +34,7 @@ describe("inertBehind", () => {
     expect(inert("inside")).toBe(false)
     expect(inert("tips")).toBe(false)
     expect(inert("toasts")).toBe(false)
+    expect(inert("said")).toBe(false)
     undo()
     undo()
     expect(inert("page")).toBe(false)

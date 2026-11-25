@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.73",
+    "date": "2026-11-25",
+    "notes": [
+      "Buttons in the shared controls can say how it went: Copied, Saved, or a spinner while they work."
+    ]
+  },
+  {
     "version": "0.1.72",
     "date": "2026-11-25",
     "notes": [

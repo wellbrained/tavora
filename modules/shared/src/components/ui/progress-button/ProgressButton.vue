@@ -81,7 +81,7 @@ const overlay = "absolute inset-0 inline-flex items-center justify-center gap-[i
     </span>
     <!-- Every text takes the same cell, so the button is as wide as the widest. The ones not shown are only sized by a
          pseudo-element (never text), so the button's text is just what it says now. -->
-    <span class="relative inline-grid items-center justify-items-center">
+    <span class="relative inline-grid items-center justify-items-center gap-[inherit]">
       <span :class="[cell, status !== 'idle' && 'opacity-0']"><slot /></span>
       <span :class="[cell, sizer]" :data-label="busyLabel">
         <span v-if="status === 'busy'" :class="overlay" aria-hidden="true">{{ percent === null ? busyLabel : percentLabel }}</span>

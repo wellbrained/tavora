@@ -2,6 +2,7 @@ import type { VariantProps } from "class-variance-authority"
 import { cva } from "class-variance-authority"
 
 export { default as Button } from "./Button.vue"
+export { ACTION_TIMING, type ButtonAction, type ButtonActionState } from "./action"
 
 // A pressed button dips 1px and its shadows turn inward. `not-aria-disabled` keeps a soft (off but hoverable) button still.
 // How the whole button moves when pressed. Small buttons shrink to 97% and dip 1px (`scale`). On a wide button 3% is
@@ -97,6 +98,15 @@ export const BUTTON_ICON_PADDING: Partial<Record<NonNullable<ButtonVariants["siz
   xs: "has-[>svg:not([data-icon=end])]:pl-1.5 has-[>svg[data-icon=end]]:pr-1.5",
   sm: "has-[>svg:not([data-icon=end])]:pl-2.5 has-[>svg[data-icon=end]]:pr-2.5",
   lg: "has-[>svg:not([data-icon=end])]:pl-4 has-[>svg:not([data-icon=end])]:pr-4.5 has-[>svg[data-icon=end]]:pl-4.5 has-[>svg[data-icon=end]]:pr-4",
+}
+
+// The same lighter icon side for a button with an `action`, whose content sits one level down (it can't be found with
+// `has-[>svg]`): the button checks itself whether its content starts with an icon.
+export const ACTION_ICON_PADDING: Partial<Record<NonNullable<ButtonVariants["size"]>, string>> = {
+  default: "pl-2.5",
+  xs: "pl-1.5",
+  sm: "pl-2.5",
+  lg: "pl-4 pr-4.5",
 }
 
 /** A class split at the colons outside brackets: its variants (`max-[400px]`, `has-[>svg:not(.a)]`, `[&:hover]`…), then the utility. */

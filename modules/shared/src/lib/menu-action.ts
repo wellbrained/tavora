@@ -28,7 +28,7 @@ const isThenable = (value: unknown): value is PromiseLike<unknown> =>
 const messageOf = (cause: unknown) => (cause instanceof Error ? cause.message.trim() : "")
 
 /** The toast for an action that failed, in the shape of the app's other "didn't work" toasts: the error's own words below. */
-function actionFailed(message: string): void {
+export function actionFailed(message: string): void {
   toast({ title: uiText.value.actionFailed, description: message || undefined, variant: "error", duration: 6000, testid: "toast-action-failed" })
 }
 

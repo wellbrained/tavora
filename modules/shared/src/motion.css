@@ -370,6 +370,19 @@
   }
 }
 
+/* A button whose action runs long turns a spinner (Button `action`), only while that work runs: the user started it.
+   Reduced motion: it holds still, like the busy pulse. */
+@layer components {
+  .tavora-spin {
+    animation: tavora-spin 800ms linear infinite;
+  }
+  @keyframes tavora-spin {
+    to {
+      transform: rotate(1turn);
+    }
+  }
+}
+
 /* The plain fade. Outside the reduced-motion block, because the dialog overlay, the workspace page and the reduced
    rules below all use it. */
 @keyframes tavora-fade-in {

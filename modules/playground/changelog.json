@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.91",
+    "date": "2026-11-25",
+    "notes": [
+      "Buttons that say how it went: Copy says Copied, Save shows a spinner and then Saved, and a failure goes back with a message."
+    ]
+  },
+  {
     "version": "0.1.90",
     "date": "2026-11-25",
     "notes": [

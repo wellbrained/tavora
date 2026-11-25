@@ -6,8 +6,11 @@
 // returns the call that puts it back. The layer registry (layers.ts) calls it for the top layer that shuts the page, and
 // takes the next hold before it lets the last one go, so holds are counted and what was inert before is left as it was.
 
-/** Stays reachable: the hover hints, and the toasts (an Undo can be pressed while a dialog is open, as before). */
-const KEEP = "[data-tooltip-layer], [data-slot=toaster-host], script, style, link"
+/**
+ * Stays reachable: the hover hints, the toasts (an Undo can be pressed while a dialog is open, as before) and the kit's
+ * screen-reader region (a button in a dialog still says "Saved").
+ */
+const KEEP = "[data-tooltip-layer], [data-slot=toaster-host], [data-slot=kit-announcer], script, style, link"
 
 const holds = new Map<Element, { count: number; wasInert: boolean }>()
 
