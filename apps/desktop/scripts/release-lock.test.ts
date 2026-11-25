@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 // @ts-expect-error - plain JavaScript module shared with scripts/release.mjs
-import { holdLock, lockHolder, lockPath, mainCheckoutOf, stopOnSignals, takeLock } from "./release-lock.mjs";
+import { holdLock, lockHolder, lockPath, lockStatus, mainCheckoutOf, stopOnSignals, takeLock } from "./release-lock.mjs";
 
 /** A folder like D:\Github\Tavora: a main checkout, a worktrees folder with a clone, and releases. */
 function home(): { root: string; main: string; clone: string } {
@@ -154,5 +154,20 @@ describe("holdLock", () => {
     expect(handlers).toHaveLength(1);
     handlers[0]!();
     expect(existsSync(file)).toBe(false);
+  });
+
+  it("tells a session about to merge whether a release really runs, or only left its lock behind (hunt 2026-11-25 E9)", () => {
+    const { root } = home();
+    const file = path.join(root, "releases", "RELEASE-RUNNING");
+    const who = (running: number[]) => ({ host: "brain-pc", isRunning: (pid: number) => running.includes(pid) });
+    expect(lockStatus(file, who([]))).toEqual({ state: "free" });
+    writeFileSync(file, "0.25.4 2026-11-24T10:00:00.000Z pid 4242@brain-pc\n");
+    expect(lockStatus(file, who([4242]))).toEqual({ state: "running", line: "0.25.4 2026-11-24T10:00:00.000Z pid 4242@brain-pc" });
+    // Killed without its exit handler: the process is gone, nothing releases.
+    expect(lockStatus(file, who([]))).toMatchObject({ state: "stale" });
+    // Another PC's, or one that names no holder, can't be checked from here: wait.
+    expect(lockStatus(file, { host: "other-pc", isRunning: () => false })).toMatchObject({ state: "running" });
+    writeFileSync(file, "0.25.4 2026-11-24T10:00:00.000Z\n");
+    expect(lockStatus(file, who([]))).toMatchObject({ state: "running" });
   });
 });

@@ -1206,6 +1206,11 @@ export class AccountStore {
     return true;
   }
 
+  /** Gives back a notice takeNotice took for one that then didn't go out (hunt 2026-11-25 E7). Never below 0. */
+  giveBackNotice(day: string, accountId: string): void {
+    this.db.prepare("update notice_days set sent = sent - 1 where day = ? and account_id = ? and sent > 0").run(day, accountId);
+  }
+
   /** Keeps that a notice about the account's publishing couldn't go out (unsentNotices). */
   recordUnsentNotice(accountId: string, kind: UnsentNotice["kind"], module: { id: string; name: string; version: string }, at: number): void {
     this.db.prepare("insert into unsent_notices (account_id, kind, module_id, name, version, at) values (?, ?, ?, ?, ?, ?)").run(accountId, kind, module.id, module.name, module.version, at);

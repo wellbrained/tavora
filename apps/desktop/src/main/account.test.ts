@@ -508,6 +508,92 @@ describe("signed in", () => {
     expect(kept.at(-1)).not.toBeNull();
   });
 
+  /** A service that holds `POST <step>` (as while its mail goes out) and answers 401 to the old sign-in meanwhile. */
+  function heldStep(step: string, answer: () => Response) {
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    let stepSent: () => void = () => undefined;
+    const sent = new Promise<void>((resolve) => (stepSent = resolve));
+    const { fetchImpl: inner } = service({
+      "POST /email/code": () => json({ status: "sent", current: "email" }, 202),
+      "POST /email/remove/code": () => json({ status: "sent" }, 202),
+      "POST /discord/remove/code": () => json({ status: "sent" }, 202),
+      "GET /": () => json({ account: { email: "new@example.com" }, devices: [DEVICE] }),
+    });
+    const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      const auth = new Headers(init?.headers).get("authorization");
+      if (init?.method === "POST" && url.endsWith(`/v1/account${step}`)) {
+        stepSent();
+        await held;
+        return answer();
+      }
+      // The step already ended the old sign-in on the service.
+      if (auth === `Bearer ${SAVED.token}` && (url.includes("/v1/leaderboards") || url.endsWith("/v1/account"))) return json({ error: "Signed out." }, 401);
+      return inner(input, init);
+    }) as typeof fetch;
+    return { fetchImpl, release: () => release(), sent };
+  }
+
+  it("keeps the sign-in when a 401 for the old one lands before the change's answer brings the new one (hunt 2026-11-25 A1)", async () => {
+    const renewed = "n".repeat(43);
+    const { fetchImpl, release, sent } = heldStep("/email", () => json({ account: { email: "new@example.com", createdAt: SAVED.createdAt }, token: renewed, device: "dev2" }));
+    const { account, kept } = client(fetchImpl, { saved: SAVED });
+    await account.init();
+    await account.sendEmailCode("new@example.com");
+    const change = account.changeEmail("111111", "222222");
+    await sent;
+    // Both kinds of request: a module's leaderboard call and one of the account's own.
+    const board = account.leaderboardRequest("GET", "/x");
+    const read = account.refresh().then(() => null, (error: unknown) => error);
+    // Both 401s are in before the change answers.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    release();
+    await change;
+    expect(await board).toMatchObject({ status: 401 });
+    expect(await read).toMatchObject({ key: "account.error.signedOut" });
+    expect(account.token()).toBe(renewed);
+    expect(account.view().account).toMatchObject({ email: "new@example.com" });
+    expect(kept).not.toContain(null);
+    expect(kept.at(-1)).toMatchObject({ token: renewed });
+  });
+
+  it("keeps the sign-in through the same window when removing the email or the Discord login", async () => {
+    for (const [step, run] of [
+      ["/email/remove", async (account: AccountClient) => (await account.sendRemoveEmailCode(), account.removeEmail("111111"))],
+      ["/discord/remove", async (account: AccountClient) => (await account.sendDisconnectDiscordCode(), account.disconnectDiscord("111111"))],
+    ] as const) {
+      const renewed = "r".repeat(43);
+      const { fetchImpl, release, sent } = heldStep(step, () => json({ account: { email: "new@example.com", discord: null }, token: renewed }));
+      const { account, kept } = client(fetchImpl, { saved: { ...SAVED, discord: "nik" } });
+      await account.init();
+      const done = run(account);
+      await sent;
+      const board = account.leaderboardRequest("GET", "/x");
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      release();
+      await done;
+      expect(await board).toMatchObject({ status: 401 });
+      expect(account.token()).toBe(renewed);
+      expect(kept).not.toContain(null);
+    }
+  });
+
+  it("still signs out on that 401 when the change fails and the old sign-in stays the PC's", async () => {
+    const { fetchImpl, release, sent } = heldStep("/email", () => json({ error: "Signed out." }, 401));
+    const { account, kept } = client(fetchImpl, { saved: SAVED });
+    await account.init();
+    await account.sendEmailCode("new@example.com");
+    const change = account.changeEmail("111111", "222222").catch((error: unknown) => error);
+    await sent;
+    const board = account.leaderboardRequest("GET", "/x");
+    release();
+    expect(await change).toMatchObject({ key: "account.error.signedOut" });
+    expect(await board).toMatchObject({ status: 401 });
+    expect(account.token()).toBeNull();
+    expect(kept.at(-1)).toBeNull();
+  });
+
   it("says which code was wrong and keeps the step", async () => {
     const { fetchImpl } = service({
       "POST /email/code": () => json({ status: "sent", current: "email" }, 202),

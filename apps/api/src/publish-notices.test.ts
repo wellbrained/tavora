@@ -28,10 +28,12 @@ function moduleZip(key: KeyObject, id: string, version: string): Buffer {
   return writeZip([...files, signFiles(files, key)]);
 }
 
-function setup(mailDailyLimit: number | undefined, uploadsPerDay = 10) {
+/** `failing`: how many sends fail before the mail service works again. */
+function setup(mailDailyLimit: number | undefined, uploadsPerDay = 10, failing = { sends: 0 }) {
   const store = new AccountStore(":memory:");
   const catalog = new CatalogStore(mkdtempSync(path.join(tmpdir(), "tavora-notices-")));
   const inbox = createTestInbox();
+  const mailer = { send: async (mail: Parameters<typeof inbox.send>[0]) => (failing.sends-- > 0 ? Promise.reject(new Error("down")) : inbox.send(mail)) };
   const clock = { now: Date.parse("2026-11-22T12:00:00Z") };
   const app = createApp({
     db,
@@ -43,7 +45,7 @@ function setup(mailDailyLimit: number | undefined, uploadsPerDay = 10) {
     catalogueKey: catalogPublicKey(generateKeyPairSync("ed25519").privateKey),
     maintainerEmail: "maintainer@example.com",
     clientKey: (request) => request.headers.get("x-client") ?? "local",
-    accounts: { store, mailer: inbox, codeRateLimiter: roomy(), verifyRateLimiter: roomy(), now: () => clock.now, ...(mailDailyLimit === undefined ? {} : { mailDailyLimit }) },
+    accounts: { store, mailer, codeRateLimiter: roomy(), verifyRateLimiter: roomy(), now: () => clock.now, ...(mailDailyLimit === undefined ? {} : { mailDailyLimit }) },
   });
   /** A developer with a linked key and a version approved before, so every upload lists at once and mails a notice. */
   /** `discord`: an account with a Discord login and no address. */
@@ -113,5 +115,15 @@ describe("notices about publishing", () => {
     const dev = developer("alpha");
     for (let patch = 0; patch < NOTICES_PER_ACCOUNT + 3; patch++) expect((await dev.publish(`1.0.${patch}`)).status).toBe(201);
     expect(inbox.mails()).toHaveLength(NOTICES_PER_ACCOUNT);
+  });
+
+  it("gives back the account's notice when its send fails, and still lists it as unsent (hunt 2026-11-25 E7)", async () => {
+    const failing = { sends: 3 };
+    const { inbox, developer, developerSide } = setup(undefined, 20, failing);
+    const dev = developer("alpha");
+    for (let patch = 0; patch < NOTICES_PER_ACCOUNT + 3; patch++) expect((await dev.publish(`1.0.${patch}`)).status).toBe(201);
+    // The 3 that failed didn't spend the account's share: it still got all of its own.
+    expect(inbox.mails()).toHaveLength(NOTICES_PER_ACCOUNT);
+    expect((await developerSide(dev.token)).unsentNotices.map(({ version }) => version)).toEqual(["1.0.2", "1.0.1", "1.0.0"]);
   });
 });

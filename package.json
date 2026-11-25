@@ -17,6 +17,7 @@
     "perf:system-info": "pnpm --filter @tavora/desktop perf:system-info",
     "perf:media": "pnpm --filter @tavora/desktop perf:media",
     "release:fold": "pnpm --filter @tavora/desktop release:fold",
+    "release:lock-status": "pnpm --filter @tavora/desktop release:lock-status",
     "release:refresh": "pnpm --filter @tavora/desktop release:refresh",
     "release:sdk": "node scripts/release-sdk.mjs",
     "pack-module": "node --experimental-strip-types --disable-warning=ExperimentalWarning --conditions=source packages/pack/src/cli.ts",

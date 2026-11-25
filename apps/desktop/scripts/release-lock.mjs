@@ -144,3 +144,24 @@ export function holdLock(repo, label, worktrees, env = process.env, on = (event,
   on("exit", lock.release);
   return lock.replaced ? { file, replaced: lock.replaced } : { file };
 }
+
+/**
+ * What the lock at `file` says for a session about to merge (hunt 2026-11-25 E9): "free" (no lock), "running" (its
+ * holder runs, or it is held from another PC, or it names no holder: wait), or "stale" (it names a process on this PC
+ * that is gone, as after a kill that ran no exit handler: nothing is releasing, so merging is fine and the next
+ * release takes it over). `who`: { host, isRunning } (tests pass their own).
+ */
+export function lockStatus(file, who = {}) {
+  const host = who.host ?? hostname();
+  const isRunning = who.isRunning ?? processRuns;
+  let line;
+  try {
+    line = readFileSync(file, "utf8").trim();
+  } catch (error) {
+    if (error?.code === "ENOENT") return { state: "free" };
+    return { state: "running", line: `(can't read ${file}: ${error?.code ?? error?.message})` };
+  }
+  const holder = lockHolder(line);
+  if (holder && holder.host === host && !isRunning(holder.pid)) return { state: "stale", line };
+  return { state: "running", line };
+}

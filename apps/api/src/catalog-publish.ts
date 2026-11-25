@@ -202,6 +202,8 @@ export function publishHandlers({ catalog, store, clientKey, rateLimiter, waitin
       return true;
     } catch {
       store.uncountMail(day);
+      // The account's notice too: one that didn't go is kept as unsent, and the next may still go (hunt 2026-11-25 E7).
+      store.giveBackNotice(day, accountId);
       // Done all the same; the email is best effort.
       return false;
     }

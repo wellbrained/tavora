@@ -333,6 +333,11 @@ export class AccountClient {
   private newPublishToken: AccountView["newPublishToken"] = null;
   private prefixes: AccountView["prefixes"] = null;
   private prefixCheck: AccountView["prefixCheck"] = null;
+  /**
+   * The steps under way that end every sign-in and bring this PC a new one (changing or removing a way in). Until the
+   * answer lands, every other request still goes with the old sign-in, and its 401 is no reason to sign out (hunt 2026-11-25 A1).
+   */
+  private readonly renewing = new Set<Promise<unknown>>();
   private readonly baseUrl: string;
 
   constructor(private readonly options: AccountClientOptions) {
@@ -369,7 +374,7 @@ export class AccountClient {
     const sentWith = this.saved?.token;
     const response = await this.send(method, `/v1/leaderboards${path}`, body, true);
     const answer = (await response.json().catch(() => ({}))) as unknown;
-    if (response.status === 401 && this.stillSignedInWith(sentWith)) await this.forget();
+    if (response.status === 401) await this.signInGone(sentWith);
     return { status: response.status, body: typeof answer === "object" && answer !== null && !Array.isArray(answer) ? (answer as Record<string, unknown>) : {} };
   }
 
@@ -505,10 +510,8 @@ export class AccountClient {
 
   async disconnectDiscord(code: string): Promise<void> {
     if (this.pending?.kind !== "remove-discord") throw new UserError("account.error.noCode");
-    const sentWith = this.saved?.token;
-    const answer = await this.call("POST", "/discord/remove", { code }, true);
+    const answer = await this.renewal("/discord/remove", { code });
     this.pending = null;
-    await this.renewed(answer, sentWith);
     await this.updated(answer);
     // Every other device was signed out with it, and the keys paused: read them again.
     await this.refresh().catch(() => undefined);
@@ -524,10 +527,8 @@ export class AccountClient {
 
   async removeEmail(code: string): Promise<void> {
     if (this.pending?.kind !== "remove-email") throw new UserError("account.error.noCode");
-    const sentWith = this.saved?.token;
-    const answer = await this.call("POST", "/email/remove", { code }, true);
+    const answer = await this.renewal("/email/remove", { code });
     this.pending = null;
-    await this.renewed(answer, sentWith);
     await this.updated(answer);
     await this.refresh().catch(() => undefined);
   }
@@ -541,6 +542,34 @@ export class AccountClient {
     if (!this.saved || this.saved.token !== sentWith || !isToken(answer.token) || answer.token === sentWith) return;
     this.saved = { ...this.saved, token: answer.token };
     await this.keep();
+  }
+
+  /**
+   * Sends a step that ends every sign-in and takes the new one its answer brings. While it is under way, a 401 for the
+   * old sign-in waits for it (signInGone): the service already ended that one, and the new one is on its way.
+   */
+  private async renewal(path: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const sentWith = this.saved?.token;
+    const step = (async () => {
+      const answer = await this.call("POST", path, body, true, undefined, { renews: true });
+      await this.renewed(answer, sentWith);
+      return answer;
+    })();
+    this.renewing.add(step);
+    try {
+      return await step;
+    } finally {
+      this.renewing.delete(step);
+    }
+  }
+
+  /**
+   * A request sent with `sentWith` got a 401. The sign-in is forgotten only when it is still this PC's once every step
+   * that renews it has landed: a 401 that comes before an email change's answer is for the old sign-in, not the new one.
+   */
+  private async signInGone(sentWith: string | undefined, renews = false): Promise<void> {
+    if (!renews) while (this.renewing.size > 0) await Promise.allSettled([...this.renewing]);
+    if (this.stillSignedInWith(sentWith)) await this.forget();
   }
 
   /** Deletes the account by a fresh sign-in with its Discord login. Everything on the PC stays. */
@@ -812,11 +841,9 @@ export class AccountClient {
     if (pending?.kind !== "change-email" || !this.saved) throw new UserError("account.error.noCode");
     if (pending.proof === "code" && !currentCode) throw new UserError("account.error.wrongCurrentCode");
     const proof = pending.proof === "code" ? { currentCode } : pending.proof === "discord" ? { discord: await this.discord() } : {};
-    const sentWith = this.saved.token;
-    const answer = await this.call("POST", "/email", { email: pending.email, code, ...proof, language: this.options.language() }, true);
-    this.pending = null;
     // The change ends every sign-in, this one too, and the answer brings this PC its new one (audit 2026-11-22).
-    await this.renewed(answer, sentWith);
+    const answer = await this.renewal("/email", { email: pending.email, code, ...proof, language: this.options.language() });
+    this.pending = null;
     await this.updated({ account: { email: pending.email, ...(answer.account as Record<string, unknown> | undefined) } });
     // Every other device was signed out by the change, and the keys paused: read them again.
     await this.refresh().catch(() => undefined);
@@ -1018,7 +1045,7 @@ export class AccountClient {
     body?: unknown,
     auth = false,
     root = "/v1/account",
-    extra: { headers?: Record<string, string>; timeoutMs?: number } = {},
+    extra: { headers?: Record<string, string>; timeoutMs?: number; renews?: boolean } = {},
   ): Promise<Record<string, unknown>> {
     const sentWith = auth ? this.saved?.token : undefined;
     const response = await this.send(method, `${root}${path === "/" ? "" : path}`, body, auth, extra);
@@ -1027,7 +1054,7 @@ export class AccountClient {
     if (response.ok) return json;
     if (response.status === 401 && auth) {
       // Only the sign-in this request went with is gone: a newer one (after an email change) stays.
-      if (this.stillSignedInWith(sentWith)) await this.forget();
+      await this.signInGone(sentWith, extra.renews);
       throw new UserError("account.error.signedOut");
     }
     const reason = apiReason(json);

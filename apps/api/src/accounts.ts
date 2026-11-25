@@ -340,6 +340,22 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     }
   };
 
+  /**
+   * Sends a notice the answer doesn't wait for: counted and given back as `send` does, a failure only logged. For a
+   * step that already ended every sign-in, whose answer brings the new one (hunt 2026-11-25 E1).
+   */
+  const sendLater = (mail: Mail) => {
+    const day = utcDay(now());
+    store.countMail(day);
+    void mailer.send(mail).catch((error: unknown) => {
+      // The store may be closed by a clean stop meanwhile: the day's count then stays one too high.
+      try {
+        store.uncountMail(day);
+      } catch {}
+      console.warn(`[tavora-api] A notice mail could not be sent: ${error instanceof Error ? error.message : "unknown error"}`);
+    });
+  };
+
   // Every account call: the general limit per client, and JSON only for a body,
   // which a web page on another site cannot send without a preflight this
   // service refuses. A body is small: an address, a code and a language.
@@ -371,17 +387,21 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const client = clientKey(context.req.raw);
     const wait = codeLimiter.check(client);
     if (wait > 0) return tooMany(context, wait);
-    // A day's share per client and per network, so no one requester spends the day's emails. All or none, so a client
-    // its own share refuses doesn't go on spending its network's.
-    const dayWait = dayShares(context);
-    if (dayWait > 0) return tooMany(context, dayWait);
     const input = await body(context);
     const email = normalizeEmail(input.email);
     if (!email) return context.json({ error: "Send { email, language }.", reason: "bad-email" }, 400);
     if (usedUp("sign-in")) return usedUpAnswer(context);
     const at = now();
-    const account = store.accountByEmail(email);
     const asker = stranger(context);
+    // The address's own limit first, for every address alike, so a refused request spends none of the day's shares
+    // (hunt 2026-11-25 E3, as ownerShare does).
+    const codeWait = store.codeWait(email, at, asker);
+    if (codeWait > 0) return tooMany(context, codeWait);
+    // A day's share per client and per network, so no one requester spends the day's emails. All or none, so a client
+    // its own share refuses doesn't go on spending its network's.
+    const dayWait = dayShares(context);
+    if (dayWait > 0) return tooMany(context, dayWait);
+    const account = store.accountByEmail(email);
     // Once new addresses' share is used up, the rest of the sign-in emails is kept for accounts made before today, and
     // one address draws at most 3 codes from it, so accounts made for it can't spend it either. The 3 are counted apart
     // for the networks the address signed in from and for everyone else, and only for a request the address's limits let
@@ -459,12 +479,15 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const input = await body(context);
     const email = normalizeEmail(input.email);
     if (!email) return context.json({ error: "Send { email, language }.", reason: "bad-email" }, 400);
-    // The same day's shares as sign-in codes, for every address alike.
-    const dayWait = dayShares(context);
-    if (dayWait > 0) return tooMany(context, dayWait);
     if (usedUp("important")) return usedUpAnswer(context);
     const at = now();
     const asker = stranger(context);
+    // The address's own limit first, then the same day's shares as sign-in codes, for every address alike: a refused
+    // request spends no share (hunt 2026-11-25 E3).
+    const codeWait = store.codeWait(email, at, asker);
+    if (codeWait > 0) return tooMany(context, codeWait);
+    const dayWait = dayShares(context);
+    if (dayWait > 0) return tooMany(context, dayWait);
     const account = store.accountByEmail(email);
     // Once sign-in codes ran out, a suspended account's code comes out of the reserved emails like an owner's delete code
     // (drawReserve), asked only when the address's limits let the request through, so a refused one never spends it.
@@ -801,8 +824,9 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
       return context.json({ error: "That address already has a Tavora account.", reason: "email-taken" }, 409);
     }
     // The old address hears about it as well. Its share was counted with the codes (POST /email/code), and it never
-    // takes from the emails kept for delete codes: on a day whose sign-in emails ran out since, it is left out.
-    if (account.email && !usedUp("sign-in")) await send(context, emailChangedMail(account.email, email, language));
+    // takes from the emails kept for delete codes: on a day whose sign-in emails ran out since, it is left out. The answer
+    // doesn't wait for it: every sign-in already ended, and until the new one is in, this PC's other requests get 401.
+    if (account.email && !usedUp("sign-in")) sendLater(emailChangedMail(account.email, email, language));
     // The new address just proved itself from this network.
     store.rememberNetwork(email, networkOf(clientKey(context.req.raw)), now());
     return context.json({ account: accountAnswer({ ...account, email }), ...renewedAnswer(changed) });

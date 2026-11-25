@@ -100,6 +100,9 @@ export interface BodyHold {
   perAccount: number;
 }
 
+/** At most this much is read, without booking room, from a request that says it has no body. */
+const EMPTY_BODY = 64;
+
 /** How long a client that found no room waits, in seconds. */
 const BUSY_WAIT = 30;
 
@@ -130,7 +133,11 @@ export function requireSignIn(store: SignInStore, now: () => number = Date.now, 
     const declared = context.req.raw.body === null ? null : declaredLength(context);
     // Too big by its own word: refused before anything is booked or read.
     if (declared !== null && declared > maxBody) return tooBig(context);
-    if (hold && context.req.raw.body !== null) {
+    // Node hands every request but GET and HEAD a body stream, also a DELETE that sends none (no length, not chunked): such
+    // a request books nothing and reads at most a few bytes (hunt 2026-11-25 E2). Neither does one that says it is empty.
+    const unframed = declared === null && context.req.raw.headers.get("transfer-encoding") === null;
+    if (hold && context.req.raw.body !== null && unframed && !["POST", "PUT", "PATCH"].includes(context.req.method)) limit = Math.min(maxBody, EMPTY_BODY);
+    else if (hold && context.req.raw.body !== null && declared !== 0) {
       // Without a length it may be as big as allowed.
       const size = declared ?? maxBody;
       if ((sending.get(accountId) ?? 0) >= hold.perAccount) return busy(context);

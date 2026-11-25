@@ -148,6 +148,39 @@ describe("the sign-in gate", () => {
     expect(memory.take(200)).not.toBeNull();
   });
 
+  it("books no room and no slot for a request without a body, as turning off the cloud copy sends (hunt 2026-11-25 E2)", async () => {
+    const store = new AccountStore(":memory:");
+    const account = store.createAccount({ email: "mara@example.com" }, NOW);
+    const { token } = store.createSession(account.id, "windows", NOW);
+    const memory = createUploadMemory(200);
+    const app = new Hono<SignedInEnv>()
+      .use("*", requireSignIn(store, () => NOW, 64, { memory, perAccount: 1 }))
+      .delete("/", (context) => context.text("gone"))
+      .post("/", async (context) => context.text(String((await context.req.arrayBuffer()).byteLength)));
+    // Every byte of room is taken and the account's one slot is busy with a body that hasn't come in yet.
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const stalled = new ReadableStream<Uint8Array>({ start: async (controller) => (await gate, controller.enqueue(new Uint8Array(10)), controller.close()) });
+    const upload = app.request("http://tavora.test/", { method: "POST", headers: { authorization: `Bearer ${token}`, "content-length": "10" }, body: stalled, duplex: "half" } as RequestInit);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const rest = memory.take(180)!;
+    // Node gives a DELETE an empty stream although it says no length and isn't chunked.
+    const empty = new ReadableStream<Uint8Array>({ start: (controller) => controller.close() });
+    const removed = await app.request("http://tavora.test/", { method: "DELETE", headers: { authorization: `Bearer ${token}` }, body: empty, duplex: "half" } as RequestInit);
+    expect(removed.status).toBe(200);
+    expect(await removed.text()).toBe("gone");
+    // An empty POST too.
+    const nothing = await app.request("http://tavora.test/", { method: "POST", headers: { authorization: `Bearer ${token}`, "content-length": "0" }, body: new Uint8Array(0) });
+    expect(await nothing.text()).toBe("0");
+    // A chunked body says nothing about its size: it still needs room.
+    const chunked = new ReadableStream<Uint8Array>({ start: (controller) => (controller.enqueue(new Uint8Array(1)), controller.close()) });
+    expect((await app.request("http://tavora.test/", { method: "POST", headers: { authorization: `Bearer ${token}`, "transfer-encoding": "chunked" }, body: chunked, duplex: "half" } as RequestInit)).status).toBe(503);
+    release();
+    expect(await (await upload).text()).toBe("10");
+    rest.release();
+    expect(memory.take(200)).not.toBeNull();
+  });
+
   it("cuts off a body that stops coming, or comes too slowly, and hands its memory back", async () => {
     const store = new AccountStore(":memory:");
     const account = store.createAccount({ email: "mara@example.com" }, NOW);
