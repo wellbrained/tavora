@@ -68,7 +68,7 @@ function mount(extra: Record<string, unknown> = {}) {
 }
 
 describe("Calendar", () => {
-  it("shows the month with Monday first and only its own days", async () => {
+  it("shows the month with Monday first, its own days in full", async () => {
     const { root, day, heading } = mount()
     await nextTick()
     expect(heading()).toBe("November 2026")
@@ -79,6 +79,55 @@ describe("Calendar", () => {
     const firstWeek = root.querySelector("tbody tr")!
     expect(firstWeek.querySelectorAll('[data-slot="calendar-day"]')[6]?.getAttribute("data-value")).toBe("2026-11-01")
     expect(day("2026-11-01")).toBeTruthy()
+  })
+
+  it("keeps 6 weeks for a 4-, 5- and 6-week month, so its height stays the same", async () => {
+    // February 2027 starts on a Monday and fills 4 weeks, May 2028 5, July 2028 (starts on a Saturday) 6.
+    const { root, heading, month } = mount({ month: "2027-02" })
+    const rows = () => root.querySelectorAll("tbody tr").length
+    await nextTick()
+    expect(heading()).toBe("February 2027")
+    expect(rows()).toBe(6)
+    for (const [shown, name] of [["2028-05", "May 2028"], ["2028-07", "July 2028"]]) {
+      month.value = shown
+      await wait()
+      expect(heading()).toBe(name)
+      expect(rows()).toBe(6)
+      expect(root.querySelectorAll('[data-slot="calendar-day"]')).toHaveLength(42)
+    }
+  })
+
+  it("dims the days of the months around it and turns to their month when one is picked", async () => {
+    const { root, picked, picks, month, heading } = mount({ month: "2028-05" })
+    await nextTick()
+    const neighbour = (date: string) => root.querySelector(`[data-slot="calendar-day"][data-value="${date}"][data-outside-view]`) as HTMLElement
+    expect(neighbour("2028-06-01").className).toContain("text-muted-foreground")
+    expect(neighbour("2028-06-01").className).not.toContain("invisible")
+    expect(neighbour("2028-06-01").getAttribute("aria-label")).toBe("Thursday, 1 June 2028")
+    neighbour("2028-06-01").click()
+    await wait()
+    expect(picked.value).toBe("2028-06-01")
+    expect(picks).toEqual(["2028-06-01"])
+    expect(month.value).toBe("2028-06")
+    expect(heading()).toBe("June 2028")
+    // The day picked already, shown again as a neighbour, turns the month back too.
+    month.value = "2028-05"
+    await wait()
+    neighbour("2028-06-01").click()
+    await wait()
+    expect(heading()).toBe("June 2028")
+    expect(picks).toEqual(["2028-06-01", "2028-06-01"])
+  })
+
+  it("greys a neighbour day it can't pick and stays on the month", async () => {
+    const { root, picks, heading } = mount({ max: "2026-11-25" })
+    await nextTick()
+    const december = root.querySelector('[data-slot="calendar-day"][data-value="2026-12-01"][data-outside-view]') as HTMLElement
+    expect(december.className).toContain("opacity-45")
+    december.click()
+    await wait()
+    expect(picks).toEqual([])
+    expect(heading()).toBe("November 2026")
   })
 
   it("starts the week where it is asked to", async () => {

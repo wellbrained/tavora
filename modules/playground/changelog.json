@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.94",
+    "date": "2026-11-25",
+    "notes": [
+      "The calendar always shows 6 weeks, so it keeps its height from month to month."
+    ]
+  },
+  {
     "version": "0.1.93",
     "date": "2026-11-25",
     "notes": [

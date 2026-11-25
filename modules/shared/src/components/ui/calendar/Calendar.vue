@@ -3,6 +3,8 @@
 // "YYYY-MM", so a module never handles date objects. A day can carry a mark (a tinted cell and a few words read after the
 // date); `min`, `max` and `isDisabled` grey out days that can't be picked, and ‹ › stop at the months that hold them.
 // Today has a ring; `today` pins it (tests, daily puzzles). Weeks start on Monday unless `weekStartsOn` says otherwise.
+// Every month shows 6 weeks, so the calendar keeps its height: the gaps hold the days of the months before and after,
+// dimmed; picking one of them turns to its month.
 // Every pick, also of the day already picked, says so with `pick`; `v-model` holds the picked day.
 import { CalendarCell, CalendarCellTrigger, CalendarGrid, CalendarGridBody, CalendarGridHead, CalendarGridRow, CalendarHeadCell, CalendarHeader, CalendarHeading, CalendarNext, CalendarPrev, CalendarRoot, type DateValue } from "reka-ui"
 import { ChevronLeft, ChevronRight } from "@lucide/vue"
@@ -68,24 +70,33 @@ function settle(date: DateValue): DateValue {
 function onModel(next: DateValue | undefined) {
   if (next) model.value = next.toString()
 }
-/** A click or Enter/Space on a day. */
+/** A click or Enter/Space on a day. A day of the month before or after also turns to its month (reka only does that
+ * when the picked day changes, not when the day picked already is picked again). */
 function choose(day: string, event: MouseEvent | KeyboardEvent) {
   if (event instanceof KeyboardEvent && (event.ctrlKey || event.metaKey || event.altKey)) return
-  if (!isOff(day)) emit("pick", day)
+  if (isOff(day)) return
+  const date = toCalendarDate(day)
+  if (date && monthOf(date) !== monthOf(placeholder.value)) onPlaceholder(date)
+  emit("pick", day)
 }
 
 /**
  * One look per day, so nothing depends on which class Tailwind writes last: a day that can't be picked is greyed (its
  * mark too), the picked day is filled with primary (over its mark), a marked day has its tone, any other day a plain
- * hover. Today adds its ring and a bolder number to whichever it is.
+ * hover. Today adds its ring and a bolder number to whichever it is. A day of the month before or after (`outside`) is
+ * dimmed: a plain one in the muted text colour, a picked or marked one faded.
  */
-function dayClass(day: string): string {
+function dayClass(day: string, outside: boolean): string {
   const today = day === todayDay.value && "font-semibold ring-2 ring-inset ring-ring"
   if (isOff(day)) return cn("text-muted-foreground cursor-default opacity-45", today)
-  if (day === model.value) return cn("bg-primary text-primary-foreground hover:bg-primary-hover font-semibold", today)
+  const faded = outside && "opacity-60"
+  if (day === model.value) return cn("bg-primary text-primary-foreground hover:bg-primary-hover font-semibold", faded, today)
   const mark = markOf(day)
-  return cn(mark ? TONE_CLASSES[mark.tone].day : "hover:bg-[color-mix(in_srgb,var(--foreground)_10%,var(--accent))]", today)
+  if (mark) return cn(TONE_CLASSES[mark.tone].day, faded, today)
+  return cn("hover:bg-[color-mix(in_srgb,var(--foreground)_10%,var(--accent))]", outside && "text-muted-foreground", today)
 }
+/** Whether a day belongs to the month before or after the one shown. */
+const isOutside = (date: DateValue, shown: DateValue) => date.month !== shown.month || date.year !== shown.year
 
 </script>
 
@@ -103,6 +114,7 @@ function dayClass(day: string): string {
     :calendar-label="label"
     :disabled="disabled"
     weekday-format="narrow"
+    fixed-weeks
     prevent-deselect
     :class="cn('flex w-full flex-col gap-2', props.class)"
     @update:model-value="onModel"
@@ -135,12 +147,12 @@ function dayClass(day: string): string {
               :data-today="date.toString() === todayDay ? '' : undefined"
               :aria-current="date.toString() === todayDay ? 'date' : undefined"
               :aria-label="dayLabel(date.toString(), uiLocale, markOf(date.toString()))"
-              :class="cn('relative grid aspect-square w-full cursor-pointer place-items-center rounded-sm text-sm tabular-nums outline-none focus-visible:ring-ring/50 focus-visible:ring-3 data-outside-view:invisible', dayClass(date.toString()))"
+              :class="cn('relative grid aspect-square w-full cursor-pointer place-items-center rounded-sm text-sm tabular-nums outline-none focus-visible:ring-ring/50 focus-visible:ring-3', dayClass(date.toString(), isOutside(date, shown.value)))"
               @click="choose(date.toString(), $event)"
               @keydown.enter="choose(date.toString(), $event)"
               @keydown.space="choose(date.toString(), $event)"
             >
-              <slot name="day" :day="date.toString()" :number="date.day" :mark="markOf(date.toString())" :today="date.toString() === todayDay" :selected="cell.selected" :disabled="cell.disabled">
+              <slot name="day" :day="date.toString()" :number="date.day" :mark="markOf(date.toString())" :today="date.toString() === todayDay" :selected="cell.selected" :disabled="cell.disabled" :outside="cell.outsideView">
                 {{ cell.dayValue }}
               </slot>
             </CalendarCellTrigger>
