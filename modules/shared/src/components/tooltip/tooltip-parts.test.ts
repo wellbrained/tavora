@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-import { afterEach, beforeAll, describe, expect, it } from "vitest"
-import { createApp, h, nextTick, type App, type VNode } from "vue"
-import Tooltip, { tooltipMaxWidth } from "./Tooltip"
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest"
+import { createApp, h, nextTick, ref, type App, type VNode } from "vue"
+import Tooltip, { TOOLTIP_CLOSE_MS, tooltipMaxWidth } from "./Tooltip"
 import TooltipRows, { type TooltipRow } from "./TooltipRows"
 
 // The card's head parts (badge, meta, divider) and the rows' units and columns. A card without them must render as it
@@ -118,3 +118,37 @@ describe("TooltipRows", () => {
     expect(dl.querySelector("dd")!.hasAttribute("data-faint")).toBe(false)
   })
 })
+
+describe("Tooltip closing", () => {
+  it("fades out for a moment as a picture only, then leaves; the next tooltip ends the fade at once", async () => {
+    vi.useFakeTimers()
+    try {
+      const first = ref(true), second = ref(false)
+      const host = document.createElement("div")
+      document.body.append(host)
+      app = createApp({ render: () => [h(Tooltip, { open: first.value, anchor, title: "One" }), h(Tooltip, { open: second.value, anchor, title: "Two" })] })
+      app.mount(host)
+      await vi.runAllTimersAsync()
+      first.value = false
+      await nextTick()
+      const fading = document.querySelector<HTMLElement>("[data-slot=tooltip-closing]")!
+      expect(fading.getAttribute("data-closing")).toBe("true")
+      expect(fading.getAttribute("aria-hidden")).toBe("true")
+      expect(document.querySelector("[role=tooltip]")).toBeNull()
+      vi.advanceTimersByTime(TOOLTIP_CLOSE_MS)
+      await nextTick()
+      expect(document.querySelector("[data-slot=tooltip-closing]")).toBeNull()
+
+      first.value = true
+      await vi.runAllTimersAsync()
+      first.value = false
+      second.value = true
+      await nextTick()
+      expect(document.querySelector("[data-slot=tooltip-closing]")).toBeNull()
+      expect(document.querySelectorAll("[role=tooltip]")).toHaveLength(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+

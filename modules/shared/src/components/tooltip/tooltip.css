@@ -67,4 +67,7 @@
 .tavora-tooltip[data-side=left]{transform-origin:100% var(--tavora-tooltip-arrow)}
 .tavora-tooltip[data-ready=true]:not([data-instant=true]){animation:tavora-tooltip-in var(--duration-tooltip,125ms) var(--ease-out-strong,cubic-bezier(.23,1,.32,1))}
 @keyframes tavora-tooltip-in{from{opacity:0;transform:scale(.96)}}
-@media (prefers-reduced-motion:reduce){.tavora-tooltip[data-ready=true]:not([data-instant=true]){animation:tavora-tooltip-fade 100ms linear!important}@keyframes tavora-tooltip-fade{from{opacity:0}}}
+/* Closing, it fades and shrinks a little toward its arrow, quicker than it came (Tooltip.ts TOOLTIP_CLOSE_MS). */
+.tavora-tooltip[data-closing=true]{animation:tavora-tooltip-out 100ms var(--ease-out-strong,cubic-bezier(.23,1,.32,1)) forwards}
+@keyframes tavora-tooltip-out{to{opacity:0;transform:scale(.96)}}
+@media (prefers-reduced-motion:reduce){.tavora-tooltip[data-ready=true]:not([data-instant=true]){animation:tavora-tooltip-fade 100ms linear!important}.tavora-tooltip[data-closing=true]{animation:tavora-tooltip-fade-out 100ms linear forwards!important}@keyframes tavora-tooltip-fade{from{opacity:0}}@keyframes tavora-tooltip-fade-out{to{opacity:0}}}

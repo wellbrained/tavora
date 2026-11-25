@@ -44,6 +44,11 @@ function drawn(nodes: VNode[] | undefined): nodes is VNode[] {
 export const TOOLTIP_WARM_MS = 400;
 let openTooltips = 0;
 let lastClosed = -Infinity;
+/** How long a closing tooltip fades out (tooltip.css, tavora-tooltip-out). */
+export const TOOLTIP_CLOSE_MS = 100;
+/** Tooltips fading out now: the next one that opens ends them at once, so going along a row swaps without a fade. */
+const fading = new Set<() => void>();
+
 /** Whether a tooltip is open now or was a moment ago: the next one then comes without waiting or fading in. */
 export function tooltipsWarm(): boolean {
   return openTooltips > 0 || performance.now() - lastClosed < TOOLTIP_WARM_MS;
@@ -99,6 +104,10 @@ export default defineComponent({
     const ready = ref(false);
     /** Shown while another was open: it appears at once instead of fading in. */
     const instant = ref(false);
+    /** Closing: still drawn for a moment, fading out (tooltip.css), then gone. */
+    const closing = ref(false);
+    let closeTimer: ReturnType<typeof setTimeout> | undefined;
+    const finishClose = () => { clearTimeout(closeTimer); fading.delete(finishClose); closing.value = false; ready.value = false; };
     let counted = false;
     let generation = 0;
     function track(open: boolean) {
@@ -109,13 +118,23 @@ export default defineComponent({
     }
     // Synchronous, so a tooltip that closes as the next one opens is already counted as closed.
     watch(() => props.open, (open) => {
-      if (open) instant.value = tooltipsWarm();
+      if (open) {
+        instant.value = tooltipsWarm();
+        finishClose();
+        // Another tooltip still fading out goes at once: one card at a time, and a row of them swaps without a fade.
+        for (const end of [...fading]) end();
+      } else if (ready.value) {
+        closing.value = true;
+        fading.add(finishClose);
+        closeTimer = setTimeout(finishClose, TOOLTIP_CLOSE_MS);
+      }
       track(open);
     }, { immediate: true, flush: 'sync' });
     const anchor = () => props.anchor ?? pointAnchor(props.at ?? { x: 0, y: 0 });
     async function place() {
       const version = ++generation;
-      if (!props.open) { ready.value = false; return; }
+      // A closing card keeps its place while it fades out.
+      if (!props.open) { if (!closing.value) ready.value = false; return; }
       const viewport = { width: innerWidth, height: innerHeight }, side = props.side, max = tooltipMaxWidth(props.width);
       position.value = tooltipPlacement(anchor(), 0, 0, viewport, side, max, props.bare);
       // Measure, place, and measure again if a side placement made the card narrower and so taller.
@@ -147,6 +166,7 @@ export default defineComponent({
     onUnmounted(() => {
       generation++;
       track(false);
+      finishClose();
       listen(false);
     });
     /** The title line's own parts: badges after the title, meta text at the right. Null when it is the title alone. */
@@ -177,8 +197,9 @@ export default defineComponent({
       const above = Boolean(props.title || drawn(slots.title?.()) || props.description);
       return [props.divider && drawn(content) && above ? h('hr', { class: 'tavora-tooltip-divider', 'aria-hidden': 'true' }) : null, content];
     }
-    return () => h(Teleport, { to: 'body' }, props.open ? [h('section', {
-      id: props.id, ref: card, role: 'tooltip', 'data-slot': 'tooltip', 'data-side': position.value.side, 'data-tone': props.tone, 'data-ready': ready.value ? 'true' : undefined, 'data-instant': instant.value ? 'true' : undefined,
+    return () => h(Teleport, { to: 'body' }, props.open || closing.value ? [h('section', {
+      // A closing card is only a picture fading out: no longer the tooltip for anyone (id, role, a screen reader).
+      ...(props.open ? { id: props.id, role: 'tooltip', 'data-slot': 'tooltip' } : { 'data-slot': 'tooltip-closing', 'aria-hidden': 'true' }), ref: card, 'data-side': position.value.side, 'data-tone': props.tone, 'data-ready': ready.value ? 'true' : undefined, 'data-instant': instant.value ? 'true' : undefined, 'data-closing': !props.open && closing.value ? 'true' : undefined,
       'data-bare': props.bare ? 'true' : undefined,
       class: props.compact ? 'tavora-tooltip compact' : 'tavora-tooltip',
       style: { left: position.value.left + 'px', top: position.value.top + 'px', maxWidth: position.value.width + 'px', '--tavora-tooltip-arrow': position.value.arrow + 'px', visibility: ready.value ? 'visible' : 'hidden' },
