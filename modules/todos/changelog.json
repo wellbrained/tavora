@@ -1,9 +1,16 @@
 [
   {
-    "version": "0.2.58",
+    "version": "0.2.59",
     "date": "2026-11-25",
     "notes": [
       "Tooltips fade out when they close."
+    ]
+  },
+  {
+    "version": "0.2.58",
+    "date": "2026-11-25",
+    "notes": [
+      "Coloured chips get a coloured edge in the Hardware style."
     ]
   },
   {

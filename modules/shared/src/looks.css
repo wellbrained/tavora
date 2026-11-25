@@ -556,8 +556,9 @@
   background: color-mix(in srgb, var(--foreground) 16%, var(--card));
 }
 
-/* Hardware: badges are small keys with a coloured edge, not the soft tinted pills of Classic. */
-:root[data-look-buttons="keycap"] [data-slot="badge"]:is(.text-destructive, .text-success, .text-warning, .text-info) {
+/* Hardware: badges and chips are small keys with a coloured edge, not the soft tinted pills of Classic. Chips keep the
+   case they were typed in: they are the user's own words. */
+:root[data-look-buttons="keycap"] :is([data-slot="badge"], [data-slot="chip"]):is(.text-destructive, .text-success, .text-warning, .text-info) {
   background: transparent;
   border-color: color-mix(in srgb, currentColor 45%, transparent);
 }

@@ -142,8 +142,10 @@ themes; anything hard-coded breaks in one of them.
   kit gives that side 2 px less room (an icon before the text needs nothing; a button with its own `px-*` keeps it). A
   play triangle is nudged right on its own.
 - **Button icons and labels**: ask in this order and stop at the first yes (buttons and menu entries alike).
-  1. Does it open options or go somewhere? A **trailing** icon: `ChevronDown` for a menu (Export ⌄), `ChevronRight`
-     or `ArrowUpRight` for going to another page or site.
+  1. Does it open a menu or a submenu? A **trailing** chevron: `ChevronDown` for a menu (Export ⌄); a submenu entry
+     keeps the kit's chevron on the right. Only these get a chevron: a button or row that goes to another view or page,
+     or does something after the click, has none. A link that leaves Tavora for a website gets a trailing
+     `ArrowUpRight`.
   2. Is its symbol established and familiar (plus for Create/Add, trash for Delete, copy, search, download, pencil
      for Rename)? A **leading** icon.
   3. Does it sit in a group of actions (a toolbar, a menu, a row of item actions)? A **leading** icon on each, so the
