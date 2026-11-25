@@ -1,3 +1,11 @@
+## 0.4.13
+
+The memory host checks menus, tooltips, Discord pictures and leaderboards as Tavora does. `MIN_TAVORA` stays (Tavora 0.21.43).
+
+- `protocol.ts`: Tavora's own checks for `ui.showMenu` (`checkMenu`), `ui.tooltip.*` (`checkTooltip`, `checkTooltipAnchor`, `checkTooltipId`, `checkTooltipSkin`), `discord.image` (`checkDiscordImage`) and `leaderboards.submit`, `top` and `mine` (`checkLeaderboardSubmit`, `checkLeaderboardTop`, `checkLeaderboardMine`), with `LEADERBOARD_PERIODS`, `TOOLTIP_SKIN_NAME`, `MAX_SKIN_SLICE` and `SKIN_COLOR_KEYS`. Tavora's bridge and the memory host both use them.
+- `@tavora/sdk/testing`: the memory host refuses what Tavora refuses, scripted or not: a menu of more than 100 entries, a label over 80 or a hint over 30 characters, an unknown field or colour; a tooltip with an unknown `look`, a title over 200 characters or a picture outside `dist/`; a skin with a bad name or colour; an empty Discord picture address; `leaderboards.top` with a `limit` over 100 or an unknown period, `mine` with a `day` that isn't YYYY-MM-DD, and `submit` with no results.
+- `@tavora/sdk/testing`: the `leaderboards` option takes the manifest's boards (`id` and `name`). Then `submit` and `top` refuse another board with `INVALID_PARAMS`, before the sign-in, and `leaderboards.mine()` lists every board with empty periods, signed out too, as Tavora does. Without it any board id passes and `mine` lists none, as before. `submit` now says signed out before offline, as Tavora does.
+
 ## 0.4.12
 
 A newer module's data stays when an older copy saves. `MIN_TAVORA` stays (Tavora 0.21.43).

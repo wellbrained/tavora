@@ -37,7 +37,7 @@ host.storage.set("view", "grid");
 
 `host.storage`, `host.appStorage` and `host.documents` let you fill and read what the module keeps. `host.state`, `host.content`, `host.maximized`, `host.dialog`, `host.live`, `host.overlays` and `host.saved` show what the panel set. `host.calls["ui.showMenu"]` lists the params of every call to a method, oldest first, and `host.log` lists every call in order.
 
-Every call checks its params the way Tavora does, with the same checks: an overlay key such as `"boss:1"`, a hotkey label over 60 characters or a file extension written `".ksd"` fails with `INVALID_PARAMS` here too, not only in Tavora.
+Every call checks its params the way Tavora does, with the same checks: an overlay key such as `"boss:1"`, a hotkey label over 60 characters, a file extension written `".ksd"`, a menu of more than 100 entries, a tooltip with an unknown `look` or `leaderboards.top` with a `limit` over 100 fails with `INVALID_PARAMS` here too, not only in Tavora. A scripted call is checked too.
 
 ## Permissions
 
@@ -87,7 +87,7 @@ host.answer("storage.get", () => {
 });
 ```
 
-A script wins over the memory host, but a missing permission, a call that needs a click or a method an older Tavora doesn't have is refused first, like in Tavora. `host.unanswer(method)` takes a script away. `leaderboards` keeps a status you can change with `host.leaderboards.setStatus({ signedIn: false })`.
+A script wins over the memory host, but a missing permission, params Tavora refuses, a call that needs a click or a method an older Tavora doesn't have is refused first, like in Tavora. `host.unanswer(method)` takes a script away. `leaderboards` keeps a status you can change with `host.leaderboards.setStatus({ signedIn: false })`. Pass your manifest's boards as `leaderboards: [{ id: "daily", name: "Daily" }]`: then another board fails with `INVALID_PARAMS`, and `leaderboards.mine()` lists each of yours with no standing, as Tavora does before a result counts.
 
 ## Two panels
 

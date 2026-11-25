@@ -12,11 +12,20 @@ import {
   checkActionId,
   checkBlobId,
   checkDialogTitle,
+  checkDiscordImage,
   checkFileReference,
   checkHotkeyLabel,
+  checkLeaderboardMine,
+  checkLeaderboardSubmit,
+  checkLeaderboardTop,
+  checkMenu,
   checkModuleKey,
   checkOverlaySources,
   checkPickReadOnly,
+  checkTooltip,
+  checkTooltipAnchor,
+  checkTooltipId,
+  checkTooltipSkin,
   isPanelTypeId,
   type ParamCheck,
   DOCUMENT_ID,
@@ -48,6 +57,7 @@ import {
   type HttpCalls,
   type HotkeyBinding,
   type JsonValue,
+  type LeaderboardMine,
   type LeaderboardResult,
   type LeaderboardStatus,
   type LeaderboardSubmitResult,
@@ -130,6 +140,12 @@ export interface MemoryHostOptions {
   panelType?: string | null;
   /** The panel types of the manifest; `panels.open` refuses another one with INVALID_PARAMS. Default: any. */
   panelTypes?: string[];
+  /**
+   * The boards of the manifest's `leaderboards`, by `id` and `name`. As in Tavora, `leaderboards.submit` and
+   * `leaderboards.top` refuse another board with INVALID_PARAMS, and `leaderboards.mine` lists every one of them, with
+   * no standing where the user has none (signed out too). Default: any board id, and `mine` lists none. @since 0.4.13
+   */
+  leaderboards?: { id: string; name: string }[];
   /** Why the page loads. Default: `{ reason: "add" }`. */
   launch?: PanelLaunch;
   /**
@@ -382,6 +398,8 @@ interface Shared {
   onRequest: Set<Capability>;
   consent: "allow" | "deny";
   panelTypes: string[] | null;
+  /** The manifest's boards (`leaderboards` option), or null for any. */
+  boards: { id: string; name: string }[] | null;
   settings: Map<string, string>;
   appSettings: Map<string, string>;
   documents: Map<string, StoredDocument>;
@@ -802,14 +820,22 @@ const handlers: Handlers = {
     shared.leaderboard = { ...shared.leaderboard, shown: false, name: null };
     return { ...shared.leaderboard };
   },
+  // Their params were checked first (CHECKS_BEFORE_PRESS), as Tavora does.
   "leaderboards.submit": ({ shared }, { results }): LeaderboardSubmitResult => {
-    if (!shared.leaderboard.online) fail("NETWORK_ERROR", "Tavora's service can't be reached");
-    if (!shared.leaderboard.signedIn || !shared.leaderboard.shown) fail("PERMISSION_DENIED", "the user is signed out of Tavora or hasn't agreed to show their results yet");
-    if (results.length > shared.limits.maxLeaderboardResults) fail("INVALID_PARAMS", `at most ${shared.limits.maxLeaderboardResults} results at once`);
+    if (!shared.leaderboard.signedIn) fail("PERMISSION_DENIED", "the user is signed out of Tavora");
+    if (!shared.leaderboard.online) fail("NETWORK_ERROR", "can't reach Tavora's service");
+    if (!shared.leaderboard.shown) fail("PERMISSION_DENIED", "the user hasn't agreed to show their results yet (leaderboards.show)");
     return { accepted: results.map((result) => result.id), rejected: [] };
   },
-  "leaderboards.top": () => ({ rows: [] }),
-  "leaderboards.mine": () => ({ boards: [] }),
+  "leaderboards.top": ({ shared }) => {
+    if (!shared.leaderboard.online) fail("NETWORK_ERROR", "can't reach Tavora's service");
+    return { rows: [] };
+  },
+  // Every board of the manifest, in every period, as Tavora lists them: a standing only once a script gives one.
+  "leaderboards.mine": ({ shared }): LeaderboardMine => {
+    if (shared.leaderboard.signedIn && !shared.leaderboard.online) fail("NETWORK_ERROR", "can't reach Tavora's service");
+    return { boards: (shared.boards ?? []).map((board) => ({ ...board, periods: { day: null, week: null, month: null, year: null, all: null } })) };
+  },
 };
 
 function handshakeOf(panel: Panel): HandshakeResult {
@@ -987,7 +1013,25 @@ const CHECKS_BEFORE_PRESS: Partial<Record<CallName, (panel: Panel, params: unkno
     checked(checkModuleKey(target, "target"));
     if (action !== undefined) checked(checkActionId(action));
   },
+  "ui.showMenu": (_, params) => void checked(checkMenu(params)),
+  "ui.tooltip.show": (_, params) => void checked(checkTooltip(params)),
+  "ui.tooltip.move": (_, params) => void checked(checkTooltipAnchor(params)),
+  "ui.tooltip.hide": (_, params) => void checked(checkTooltipId(params)),
+  "ui.tooltip.close": (_, params) => void checked(checkTooltipId(params)),
+  "ui.tooltip.defineSkin": (_, params) => void checked(checkTooltipSkin(params)),
+  "discord.image": (_, params) => void checked(checkDiscordImage(record(params).url)),
+  "leaderboards.submit": ({ shared }, params) => void checked(checkLeaderboardSubmit(params, boardIds(shared, record(params).board), shared.limits.maxLeaderboardResults)),
+  "leaderboards.top": ({ shared }, params) => void checked(checkLeaderboardTop(params, boardIds(shared, record(params).board), shared.limits.maxLeaderboardRows)),
+  "leaderboards.mine": (_, params) => void checked(checkLeaderboardMine(params)),
 };
+
+/** A board id as a manifest may declare one (as in @tavora/module-schema). */
+const BOARD_ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+/** The boards a leaderboards call may name: the manifest's, or, without the `leaderboards` option, any board id. */
+function boardIds(shared: Shared, asked: unknown): string[] {
+  if (shared.boards) return shared.boards.map((board) => board.id);
+  return typeof asked === "string" && asked.length <= 32 && BOARD_ID.test(asked) ? [asked] : [];
+}
 
 /**
  * A call that needs a capability the module asks for on request (`onRequest`) and wasn't granted: Tavora asks the user
@@ -1053,6 +1097,7 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
     onRequest: new Set(options.onRequest ?? []),
     consent: options.consent ?? "allow",
     panelTypes: options.panelTypes ?? null,
+    boards: options.leaderboards?.map((board) => ({ id: board.id, name: board.name })) ?? null,
     settings: new Map(),
     appSettings: new Map(),
     documents: new Map(),

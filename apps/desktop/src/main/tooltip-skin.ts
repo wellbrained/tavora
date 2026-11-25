@@ -1,5 +1,5 @@
 import { open } from "node:fs/promises";
-import type { TooltipSkin } from "@tavora/sdk/protocol";
+import { checkTooltipSkin, SKIN_COLOR_KEYS, type TooltipSkin } from "@tavora/sdk/protocol";
 import { resolveAsset } from "./assets";
 import { HostError } from "./errors";
 
@@ -9,7 +9,6 @@ import { HostError } from "./errors";
  * `image`, and are checked by their first bytes; its colours must be readable. A skin that fails is refused with the
  * reason and never shown.
  */
-export const SKIN_NAME = /^[a-z0-9-]{1,32}$/;
 export const MAX_SKINS = 32;
 /** Defines all modules may have running at once (each reads its files first). */
 export const MAX_PENDING_DEFINES = 256;
@@ -17,12 +16,7 @@ export const MAX_PENDING_DEFINES = 256;
 export const MAX_SKIN_FILE = 512000;
 /** The most inlined skin data (data: URL characters) Tavora keeps for all modules together; each file counts once. */
 export const MAX_SKIN_DATA = 16 * 1024 * 1024;
-const MAX_SLICE = 64;
-const HEX = /^#[0-9a-fA-F]{6}$/;
-const PATH = (ext: string) => new RegExp(`^dist\\/(?:[a-zA-Z0-9_. -]+\\/)*[a-zA-Z0-9_. -]+\\.(?:${ext})$`, "i");
-const FRAME_PATH = PATH("png|webp");
-const FONT_PATH = PATH("woff2");
-const COLOR_KEYS = ["surface", "text", "muted", "accent", "box", "boxText", "boxBorder", "bar"] as const;
+const COLOR_KEYS = SKIN_COLOR_KEYS;
 
 /**
  * A skin's colours, the ones left out filled in; `boxBorder` (the effect box's edge) has no default: no edge. `bar` (the
@@ -43,59 +37,12 @@ function refuse(message: string): never {
     throw new HostError("INVALID_PARAMS", `ui.tooltip.defineSkin: ${message}`);
 }
 
-function record(v: unknown, keys: readonly string[], what: string): Record<string, unknown> {
-    if (!v || typeof v !== "object" || Array.isArray(v))
-        refuse(`${what} must be an object`);
-    const o = v as Record<string, unknown>;
-    const unknown = Object.keys(o).find(k => !keys.includes(k));
-    if (unknown !== undefined)
-        refuse(`${what} has an unknown key "${unknown}"`);
-    return o;
-}
-
-function bundlePath(v: unknown, pattern: RegExp, what: string): string {
-    if (typeof v !== "string" || v.length > 500 || !pattern.test(v) || v.split("/").includes(".."))
-        refuse(`${what} must be a path in your own dist/ folder (${pattern === FONT_PATH ? ".woff2" : ".png or .webp"})`);
-    return v;
-}
-
-/** The skin's name, and its values with the right shapes; files and contrast are checked by `SkinStore.define`. */
+/** The skin's name, and its values with the right shapes (the SDK's shared check); files and contrast are checked by `SkinStore.define`. */
 export function checkSkinRequest(v: unknown): { name: string; skin: TooltipSkin } {
-    const o = record(v, ["name", "skin"], "the request");
-    if (typeof o.name !== "string" || !SKIN_NAME.test(o.name))
-        refuse("the name must be 1 to 32 of a-z, 0-9 and -");
-    const s = record(o.skin, ["frame", "colors", "font", "pixelArt", "titleCaps"], "the skin");
-    const skin: TooltipSkin = {};
-    if (s.frame !== undefined) {
-        const f = record(s.frame, ["image", "slice"], "frame");
-        const slice = f.slice;
-        if (!Array.isArray(slice) || slice.length !== 4 || !slice.every(n => Number.isInteger(n) && n >= 0 && n <= MAX_SLICE))
-            refuse(`frame.slice must be four whole numbers from 0 to ${MAX_SLICE} (top, right, bottom, left)`);
-        skin.frame = { image: bundlePath(f.image, FRAME_PATH, "frame.image"), slice: [...slice] as [number, number, number, number] };
-    }
-    if (s.colors !== undefined) {
-        const c = record(s.colors, COLOR_KEYS, "colors");
-        const colors: NonNullable<TooltipSkin["colors"]> = {};
-        for (const key of COLOR_KEYS) {
-            const value = c[key];
-            if (value === undefined)
-                continue;
-            if (typeof value !== "string" || !HEX.test(value))
-                refuse(`colors.${key} must be a colour like #1a2b3c`);
-            colors[key] = value.toLowerCase();
-        }
-        skin.colors = colors;
-    }
-    if (s.font !== undefined)
-        skin.font = bundlePath(s.font, FONT_PATH, "font");
-    for (const key of ["pixelArt", "titleCaps"] as const) {
-        if (s[key] === undefined)
-            continue;
-        if (typeof s[key] !== "boolean")
-            refuse(`${key} must be true or false`);
-        skin[key] = s[key] as boolean;
-    }
-    return { name: o.name, skin };
+    const checked = checkTooltipSkin(v);
+    if (!checked.ok)
+        throw new HostError(checked.code, checked.message);
+    return checked.value;
 }
 
 function luminance(hex: string): number {
