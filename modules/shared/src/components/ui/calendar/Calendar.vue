@@ -110,11 +110,11 @@ function dayClass(day: string): string {
   >
     <CalendarHeader data-slot="calendar-header" class="flex items-center justify-between gap-2">
       <CalendarPrev as-child>
-        <Button variant="ghost" size="icon-sm" class="text-muted-foreground" :aria-label="uiText.previousMonth"><ChevronLeft /></Button>
+        <Button variant="ghost" size="icon" :aria-label="uiText.previousMonth"><ChevronLeft /></Button>
       </CalendarPrev>
       <CalendarHeading data-slot="calendar-heading" class="text-sm font-semibold" aria-live="polite" />
       <CalendarNext as-child>
-        <Button variant="ghost" size="icon-sm" class="text-muted-foreground" :aria-label="uiText.nextMonth"><ChevronRight /></Button>
+        <Button variant="ghost" size="icon" :aria-label="uiText.nextMonth"><ChevronRight /></Button>
       </CalendarNext>
     </CalendarHeader>
     <CalendarGrid v-for="shown in grid" :key="shown.value.toString()" data-slot="calendar-grid" class="w-full border-collapse select-none">

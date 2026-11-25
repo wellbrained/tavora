@@ -160,6 +160,15 @@ describe("Calendar", () => {
     expect(day("2026-10-01").getAttribute("tabindex")).toBeNull()
   })
 
+  it("draws the month arrows in the text colour, the one that can't be used at half strength", async () => {
+    const { button } = mount({ max: "2026-11-25" })
+    await nextTick()
+    for (const label of ["Previous month", "Next month"]) expect(button(label).className).not.toContain("text-muted-foreground")
+    expect(button("Previous month").disabled).toBe(false)
+    expect(button("Next month").disabled).toBe(true)
+    expect(button("Next month").className).toContain("disabled:opacity-50")
+  })
+
   it("can't pick a day isDisabled turns down", async () => {
     const { day, picks } = mount({ isDisabled: (date: string) => date.endsWith("-13") })
     await nextTick()

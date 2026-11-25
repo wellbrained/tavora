@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.25.28",
+    date: "2026-11-25",
+    title: "Easier month arrows",
+    notes: [
+      "The arrows that step a calendar to the previous or next month are easier to see.",
+    ],
+    prs: [
+      { number: 1002, title: "Calendar: month arrows in the text colour, like shadcn" },
+    ],
+    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
+  },
+  {
     version: "0.25.27",
     date: "2026-11-25",
     title: "Lists you can search",

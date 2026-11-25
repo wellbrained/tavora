@@ -1,9 +1,16 @@
 [
   {
-    "version": "0.1.79",
+    "version": "0.1.80",
     "date": "2026-11-25",
     "notes": [
       "A new tooltip example: an info button you can tap, a copy button that says Copied, and long names that get their full name."
+    ]
+  },
+  {
+    "version": "0.1.79",
+    "date": "2026-11-25",
+    "notes": [
+      "Dates: the month arrows are easier to see."
     ]
   },
   {
