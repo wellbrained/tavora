@@ -53,7 +53,8 @@ classes where you use a control; never copy it.
 | Colour | `ColorPicker` | |
 | Show and hide a part | `Collapsible`, `Expandable` | native `<details>` |
 | List of items to choose or open | `NavList`, `ActionList`, `ActionRow` | a hand-built `ul` of buttons |
-| Table of data | `Table` and its parts (`TableHeader`, `TableRow`, `TableCell`, `TableCaption`) | raw `<table>` with own CSS |
+| Table of data | `Table` and its parts (`TableHeader`, `TableRow`, `TableHead`, `TableCell`, `TableCaption`, `TableGroup`, `TableNote`) | raw `<table>` with own CSS |
+| Table options: tight rows, header that stays, fixed columns, numbers, your row, better/worse values, groups, sorting | `Table density="compact"`, `sticky-header` (give it a height with `container-class`), `layout="fixed"`; `TableHead`/`TableCell` `align="end" numeric`; `TableRow current` (you), `selected`, `tone="positive \| negative \| warning \| muted"` (colours the numeric cells), `marked` (gold edge, bold numbers); `TableGroup :colspan` heading and `TableNote :colspan` under a group, each group in its own `TableBody`; `Table v-model:sort` with `TableHead sort-key` (and `sort-first="descending"` for scores) shows the sort and sets `aria-sort`, you sort the rows | `text-right tabular-nums` and padding classes on every cell, `bg-accent/60` on your row, own group heading rows, a Sort menu beside the table |
 | Cells to edit like a spreadsheet, or a big table to scroll, select and copy | `DataGrid` (virtual rows and columns, A/B/C and 1/2/3 headers, range selection and its keys, in-cell editor, fill handle, resizing, frozen rows and columns, a `cell` slot, `readonly`); values go in as functions and edits come out as events, so it never holds your data | a `Table` with inputs in its cells, own keyboard handling, own virtual scrolling |
 | Tag, count, status word | `Badge` | muted `span` |
 | A number that changes while it is on screen (a count, a total) | `CountTo` / `useCountTo` (counts to the new value; not for a number that ticks every second or one being typed) | a plain `{{ n }}` that jumps |
@@ -133,6 +134,18 @@ themes; anything hard-coded breaks in one of them.
   12-14 px, 1 from 32 px), so don't set `stroke-width` yourself. An icon after a button's text gets `data-icon="end"`, so the
   kit gives that side 2 px less room (an icon before the text needs nothing; a button with its own `px-*` keeps it). A
   play triangle is nudged right on its own.
+- **Button icons and labels**: ask in this order and stop at the first yes (buttons and menu entries alike).
+  1. Does it open options or go somewhere? A **trailing** icon: `ChevronDown` for a menu (Export ⌄), `ChevronRight`
+     or `ArrowUpRight` for going to another page or site.
+  2. Is its symbol established and familiar (plus for Create/Add, trash for Delete, copy, search, download)? A
+     **leading** icon.
+  3. Does it sit in a group of actions (a toolbar, a menu, a row of item actions)? A **leading** icon on each, so the
+     group scans by shape.
+  4. Does it need more input before it happens (a dialog, a picker, a file dialog)? An **ellipsis** in the label,
+     "Rename…", and no icon. The text always ends in the real character `…`.
+  5. None of these: **text only** (Publish, Save, Done).
+  Never more than one icon on a button, and never an icon only for decoration. "…" in a label means "asks you more"; a
+  status that is under way ("Saving…") is not a button label and keeps its ellipsis.
 - **Pictures**: a picture that fills its box gets a faint edge, so it doesn't melt into the card: `FadeImage` does it for
   `fit="cover"`, a bare `<img>` puts `tavora-picture-edge` on its rounded box. Not for icons with see-through parts.
 - **Line breaks**: headings balance their lines and paragraphs avoid a lone last word on their own (`details.css`); don't
@@ -379,6 +392,7 @@ Before you say it is done, check each item and name in your summary any you coul
 - [ ] Looked at in Hardware and Liquid Glass too (the Playground's Style and Theme pickers show any page in them).
 - [ ] Looked at at the manifest's minimum size and, if set, the wide minimum.
 - [ ] Every visible text is in `en` and `de`; `checkCatalogs` passes; no glued sentences.
+- [ ] Every button and menu entry follows [Button icons and labels](#3-look) (trailing chevron, leading icon, "…" or text only); headings follow the Writing rules in `CLAUDE.md` (no eyebrows, slogans or clever headings).
 - [ ] Saves through the SDK store; panel state is read back after a reload.
 - [ ] `onSuspend` / `onDispose` flush; nothing is lost when the panel is hidden or closed mid-edit.
 - [ ] Each flow keeps one status value (no flags that can disagree); async work uses `useTask` or a run counter.

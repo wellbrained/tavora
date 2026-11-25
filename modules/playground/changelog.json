@@ -1,10 +1,18 @@
 [
   {
-    "version": "0.1.72",
+    "version": "0.1.73",
     "date": "2026-11-25",
     "notes": [
       "Text links: a name you can open, inside text or a list.",
       "List rows: a whole row as one button, with a picture, a second line and something at the end."
+    ]
+  },
+  {
+    "version": "0.1.72",
+    "date": "2026-11-25",
+    "notes": [
+      "Table: compact, sorted: a leaderboard you sort by pressing a heading, with your row standing out.",
+      "Table: groups and tones: group headings, notes, coloured numbers and a marked row."
     ]
   },
   {
