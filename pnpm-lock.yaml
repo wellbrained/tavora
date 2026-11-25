@@ -657,6 +657,9 @@ importers:
       '@fontsource-variable/jetbrains-mono':
         specifier: 5.3.0
         version: 5.3.0
+      '@internationalized/date':
+        specifier: 3.12.4
+        version: 3.12.4
       '@lucide/vue':
         specifier: 1.74.0
         version: 1.74.0(vue@3.5.45(@typescript/typescript6@6.0.2))

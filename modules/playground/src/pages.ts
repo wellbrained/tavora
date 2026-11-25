@@ -34,6 +34,7 @@ export const PAGES = [
   { id: "pick", group: "inputs", keywords: "radio segmented icon tooltip select empty choice none clear picker dropdown combobox autocomplete search pictures free text suggestions format groups badges filters", examples: ["RadioGroup", "Segmented", "SegmentedSliding", "SegmentedIcons", "SegmentedNone", "Select", "SelectDescribed", "SelectEmpty", "SelectPictures", "Combobox", "ComboboxFree", "Picker", "PickerGroups", "DropdownIcons"] },
   { id: "numbers", group: "inputs", keywords: "slider range number field stepper quantity plus minus editable type reset value box", examples: ["Slider", "SliderField", "SliderSpoken", "NumberField"] },
   { id: "colour-stars", group: "inputs", keywords: "color colour picker swatch custom palette stars rating review score", examples: ["Swatches", "CustomColour", "StarsShown", "StarSizes", "StarsPick"] },
+  { id: "dates", group: "inputs", keywords: "date day calendar month week today archive marks picker datum kalender tag monat", examples: ["PickDay", "DayMarks"] },
   { id: "toggles", group: "inputs", keywords: "toggle pressed bold italic underline format group style tiles looks pictures", examples: ["Toggles", "ToggleGroup", "StyleTiles"] },
   // Display
   { id: "status", group: "display", keywords: "badge chip tag status dot kbd shortcut keys", examples: ["Badges", "StatusDot", "Keys"] },

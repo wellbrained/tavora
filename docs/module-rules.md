@@ -82,13 +82,14 @@ classes where you use a control; never copy it.
 | Small chart | `Sparkline` (a tiny trend, no axes) | |
 | One or two lines over time (a rating over dates, a count over game time) | `LineChart`: `axis="time"` (x in seconds, written m:ss) or `axis="date"` (x as `Date.getTime()`); the values show in the kit tooltip beside the point you hover or reach with the arrow keys, Home and End; `y-min` / `y-max` fix the value axis (`0` for counts); `empty-title` is the empty state; the second line is dashed. No legend, zoom or other chart types | own SVG or canvas chart, a tooltip at the pointer |
 | Rating | `StarRating` | |
+| A month to pick a day from (an archive of daily puzzles, a date) | `Calendar` with `CalendarLegend` from `ui/calendar`: days go in and out as `"YYYY-MM-DD"` (`v-model`, `pick` on every pick, also of the same day), the month as `v-model:month` (`"YYYY-MM"`); `marks` tint a day in a kit tone (`success`, `destructive`, `warning`, `info`, `muted`) and give screen readers its words; `min`, `max` and `isDisabled` grey out days and stop ‹ ›; `today` pins the ringed day; weeks start on Monday (`weekStartsOn`). Words follow the app language | a month grid of your own, `Date` maths for the weekday offset, own swatches for a legend |
 | Module settings page | `ModuleSettings` and its parts; the menu with `settingsMenu` (own pages, then Overlays: Text, Look, In game, On stream) | own settings layout, own menu order or icons |
 | The text of an overlay (over the game, on stream) | `OverlayText`, or `mountOverlayText` on a page without Vue (from `ui/overlay-text`): the box grows with the text or is fixed, and a long text scrolls, shrinks or is cut off. Its settings are `OverlayTextSettings` (one section for the Look page; it says only what changed), and `@tavora/official-ui/overlay-text` reads and keeps what was saved without Vue. Sizes inside in `em`; in the module's source list, `grows` for a box that grows | a text scaled to fill its box, a marquee of your own, `transform: scale` on text, settings rows of your own for it |
 | A one-line text with `{placeholders}` | `TemplateInput` (marks the placeholders it knows; `insert` adds one at the cursor) | an `Input` with a hint about braces |
 | Welcome on first add (optional) | kit parts as in [module-welcome.md](../apps/docs/guide/module-welcome.md) (Palworld is the reference) | a tour, popups over the panel, own frame |
 
 Known gaps (ask before building, then add to the kit): number field with steps, tree, scroll area, input
-with a leading icon. Remove an entry here once the kit has it.
+with a leading icon, a date or time field and a date picker (a field that opens the `Calendar`). Remove an entry here once the kit has it.
 
 ## 3. Look
 
