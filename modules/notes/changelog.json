@@ -1,9 +1,16 @@
 [
   {
-    "version": "0.6.48",
+    "version": "0.6.49",
     "date": "2026-11-25",
     "notes": [
       "Tooltips fade out when they close."
+    ]
+  },
+  {
+    "version": "0.6.48",
+    "date": "2026-11-25",
+    "notes": [
+      "Built with the newer shared controls. Nothing changes for you."
     ]
   },
   {

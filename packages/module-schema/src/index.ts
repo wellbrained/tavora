@@ -315,15 +315,49 @@ function isReadmeText(bytes: Uint8Array | undefined): boolean {
   }
 }
 
-/** A picture's kind by its own bytes: a PNG (signature, first IHDR, IEND at the end) or a WebP (RIFF size, image chunk), at most `maxPixels` each way. */
+let crcTable: Uint32Array | undefined;
+/** The CRC-32 PNG chunks carry (this package runs in the browser too, so not node:zlib's). */
+function crc32(bytes: Uint8Array, from: number, to: number): number {
+  if (!crcTable) {
+    crcTable = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+      crcTable[n] = c >>> 0;
+    }
+  }
+  let crc = 0xffffffff;
+  for (let at = from; at < to; at++) crc = crcTable[(crc ^ bytes[at]!) & 0xff]! ^ (crc >>> 8);
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+/** Whether a PNG is well-formed as the catalog reads it: a first IHDR, every chunk's checksum right, picture data, and an empty IEND at the very end. */
+function pngSize(bytes: Uint8Array, view: DataView, fits: (width: number, height: number) => boolean): boolean {
+  let at = 8;
+  let sawData = false;
+  for (let first = true; at + 12 <= bytes.byteLength; first = false) {
+    const length = view.getUint32(at);
+    const type = String.fromCharCode(bytes[at + 4]!, bytes[at + 5]!, bytes[at + 6]!, bytes[at + 7]!);
+    const end = at + 12 + length;
+    if (end > bytes.byteLength || view.getUint32(end - 4) !== crc32(bytes, at + 4, end - 4)) return false;
+    if (first) {
+      if (type !== "IHDR" || length !== 13 || !fits(view.getUint32(at + 8), view.getUint32(at + 12))) return false;
+    } else if (type === "IDAT") {
+      sawData = true;
+    } else if (type === "IEND") {
+      return end === bytes.byteLength && length === 0 && sawData;
+    }
+    at = end;
+  }
+  return false;
+}
+
+/** A picture's kind by its own bytes: a PNG (signature, first IHDR, every checksum, IEND at the end) or a WebP (RIFF size, image chunk), at most `maxPixels` each way. */
 function pictureKind(bytes: Uint8Array, maxPixels: number): "png" | "webp" | null {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const text = (from: number, to: number) => String.fromCharCode(...bytes.subarray(from, to));
   const fits = (width: number, height: number) => width >= 1 && height >= 1 && width <= maxPixels && height <= maxPixels;
-  if (bytes.byteLength >= 45 && [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every((byte, at) => bytes[at] === byte)) {
-    if (view.getUint32(8) !== 13 || text(12, 16) !== "IHDR" || text(bytes.byteLength - 8, bytes.byteLength - 4) !== "IEND") return null;
-    return fits(view.getUint32(16), view.getUint32(20)) ? "png" : null;
-  }
+  if (bytes.byteLength >= 45 && [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every((byte, at) => bytes[at] === byte)) return pngSize(bytes, view, fits) ? "png" : null;
   if (bytes.byteLength < 20 || text(0, 4) !== "RIFF" || text(8, 12) !== "WEBP" || view.getUint32(4, true) + 8 !== bytes.byteLength) return null;
   const kind = text(12, 16);
   const length = view.getUint32(16, true);
@@ -349,7 +383,7 @@ const SUPPORT_EMAIL = /^[A-Za-z0-9._+-]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A
 
 /** Whether a support link is an https address with a host (without a sign-in) or a plain email address, at most MAX_SUPPORT_LENGTH characters. */
 export function isSupportLink(value: unknown): value is string {
-  if (typeof value !== "string" || value.length > MAX_SUPPORT_LENGTH) return false;
+  if (typeof value !== "string" || characters(value) > MAX_SUPPORT_LENGTH) return false;
   if (SUPPORT_EMAIL.test(value)) return true;
   return value.startsWith("https://") && isHomepage(value);
 }
@@ -361,7 +395,7 @@ export function isSupportEmail(value: string): boolean {
 
 /** Whether a homepage is an address Tavora opens: `http` or `https` with a host, at most MAX_HOMEPAGE_LENGTH characters. */
 export function isHomepage(value: unknown): value is string {
-  if (typeof value !== "string" || value.length > MAX_HOMEPAGE_LENGTH || !HOMEPAGE.test(value)) return false;
+  if (typeof value !== "string" || characters(value) > MAX_HOMEPAGE_LENGTH || !HOMEPAGE.test(value)) return false;
   try {
     const url = new URL(value);
     return (url.protocol === "https:" || url.protocol === "http:") && url.hostname !== "";
@@ -541,6 +575,9 @@ export function isConnector(value: unknown): value is Connector {
 export const MAX_NETWORK_HOSTS = 32;
 const HOST_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 
+/** Last labels that name this PC or a private network, never a public site (RFC 6761, 6762, 8375 and the ones networks use by habit). */
+const LOCAL_SUFFIXES = ["localhost", "local", "internal", "arpa", "lan", "localdomain", "home", "corp", "intranet", "private"];
+
 /**
  * A host a module may ask to reach (the decision log, module grants row of 2026-10-16): an exact,
  * lowercase public name such as `api.example.com`. No wildcards, ports, schemes, IP addresses or
@@ -553,7 +590,7 @@ export function isNetworkHost(value: unknown): value is string {
   const last = labels.at(-1)!;
   // A top-level label of digits only, or 0x and hex digits, is an IP address (or not a name at all): browsers read
   // `169.254.169.0xfe` and `example.0x1f` as addresses.
-  return !/^(?:\d+|0x[0-9a-f]*)$/.test(last) && !["localhost", "local", "internal", "arpa"].includes(last);
+  return !/^(?:\d+|0x[0-9a-f]*)$/.test(last) && !LOCAL_SUFFIXES.includes(last);
 }
 
 /**
@@ -819,7 +856,12 @@ const OFFICIAL_ID_PREFIX = "tavora.";
 export function translationsFor<T>(translations: Record<string, T> | undefined, language: string): T[] {
   const code = language.toLowerCase();
   const base = code.split("-")[0]!;
-  return [translations?.[code], base === code ? undefined : translations?.[base]].filter((translation): translation is T => translation !== undefined);
+  return [own(translations, code), base === code ? undefined : own(translations, base)].filter((translation): translation is T => translation !== undefined);
+}
+
+/** A record's own entry, never one it inherits (`constructor`, `toString`, `__proto__` are not translations or ids). */
+function own<T>(record: Record<string, T> | undefined, key: string): T | undefined {
+  return record !== undefined && Object.hasOwn(record, key) ? record[key] : undefined;
 }
 
 /**
@@ -839,9 +881,9 @@ export function translateManifest(manifest: ModuleManifest, language: string): M
   const translated: ModuleManifest = { ...manifest, name: pick((t) => t.name, manifest.name) };
   const description = pick((t) => t.description, manifest.description);
   if (description !== undefined) translated.description = description;
-  if (manifest.panels) translated.panels = manifest.panels.map((type) => ({ ...type, name: pick((t) => t.panels?.[type.id], type.name) }));
-  if (manifest.actions) translated.actions = manifest.actions.map((action) => ({ ...action, name: pick((t) => t.actions?.[action.id], action.name) }));
-  if (manifest.leaderboards) translated.leaderboards = { boards: manifest.leaderboards.boards.map((board) => ({ ...board, name: pick((t) => t.boards?.[board.id], board.name) })) };
+  if (manifest.panels) translated.panels = manifest.panels.map((type) => ({ ...type, name: pick((t) => own(t.panels, type.id), type.name) }));
+  if (manifest.actions) translated.actions = manifest.actions.map((action) => ({ ...action, name: pick((t) => own(t.actions, action.id), action.name) }));
+  if (manifest.leaderboards) translated.leaderboards = { boards: manifest.leaderboards.boards.map((board) => ({ ...board, name: pick((t) => own(t.boards, board.id), board.name) })) };
   return translated;
 }
 
@@ -872,7 +914,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isText(value: unknown, maxLength: number): value is string {
-  return typeof value === "string" && value.trim() !== "" && value.length <= maxLength;
+  return typeof value === "string" && value.trim() !== "" && characters(value) <= maxLength;
+}
+
+/** How many characters a text has, an emoji as one: the way JSON Schema's maxLength counts. */
+function characters(value: string): number {
+  let count = 0;
+  for (const _ of value) count++;
+  return count;
 }
 
 function isDimension(value: unknown): value is number {

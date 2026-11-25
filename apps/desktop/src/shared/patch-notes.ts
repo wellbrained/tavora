@@ -28,6 +28,21 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.25.29",
+    date: "2026-11-25",
+    title: "Checks before you publish",
+    notes: [
+      "Making a module zip tells you when the catalog won't take it, and a damaged screenshot is found before you upload.",
+      "Names with emoji count as one character each, as the module file's schema says.",
+      "Module addresses ending in .lan, .home or .corp are refused, since they only exist on a private network.",
+      "A module that names a host with one of those endings in its manifest is now refused; no module in the catalog does.",
+    ],
+    prs: [
+      { number: 1000, title: "SDK 0.4.15, pack 0.3.8, module-schema 0.2.6: hunt leftovers, tooling checks" },
+    ],
+    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "privacy", "publishing", "sdk", "system-monitor", "todos", "ui-kit", "website", "whiteboard"],
+  },
+  {
     version: "0.25.28",
     date: "2026-11-25",
     title: "Easier month arrows",

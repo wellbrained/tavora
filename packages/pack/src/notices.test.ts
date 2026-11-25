@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { buildNotices, declaredLicence, holderOf, licenceFiles, packagesInPaths, readThirdParty } from "./notices.ts";
+import { buildNotices, declaredLicence, findLicenceFile, holderOf, licenceFiles, packagesInPaths, readThirdParty } from "./notices.ts";
 
 let root: string;
 beforeEach(() => {
@@ -61,7 +61,29 @@ describe("readThirdParty", () => {
   });
 });
 
+describe("readThirdParty shapes (bug hunt 2026-11-25, D L5)", () => {
+  const write = (value: unknown) => writeFileSync(path.join(root, "third-party.json"), typeof value === "string" ? value : JSON.stringify(value));
+  it.each([
+    ["not a list", { name: "Font" }, /must be a list/],
+    ["an entry that is not an object", ["Font"], /entry 1 has no name/],
+    ["an entry without a name", [{ license: "MIT" }], /entry 1 has no name/],
+    ["an entry without a licence", [{ name: "Font" }], /Font has no license/],
+    ["files that are not a list of names", [{ name: "Font", license: "MIT", files: "f.txt" }], /files of Font/],
+    ["a version that is not text", [{ name: "Font", license: "MIT", version: 2 }], /version of Font/],
+    ["broken JSON", "[{", /cannot be read/],
+  ])("says what is wrong with %s", (_what, value, message) => {
+    write(value);
+    expect(() => readThirdParty(root)).toThrow(message);
+  });
+});
+
 describe("licence files", () => {
+  it("lists them in the same order whatever the case of their names (bug hunt 2026-11-25, D L4)", () => {
+    const dir = install("z", "{}", { "MIT-LICENSE": "m", "apache-license": "a", COPYING: "c", license: "l" });
+    expect(licenceFiles(dir)).toEqual(["apache-license", "COPYING", "license", "MIT-LICENSE"]);
+    expect(findLicenceFile(dir)).toBe("apache-license");
+  });
+
   it("finds MIT-LICENSE, COPYRIGHT and the files of a REUSE LICENSES folder", () => {
     const dir = install("x", "{}", { "MIT-LICENSE": "m", "LICENSE-MIT.txt": "m", COPYRIGHT: "c", "LICENSES/MIT.txt": "m", "README.md": "r", "docs/README.md": "r" });
     expect(licenceFiles(dir)).toEqual(["COPYRIGHT", "LICENSE-MIT.txt", "LICENSES/MIT.txt", "MIT-LICENSE"]);

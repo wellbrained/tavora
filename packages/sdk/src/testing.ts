@@ -18,6 +18,8 @@ import {
   checkHotkeyLabel,
   checkLeaderboardMine,
   checkLeaderboardSubmit,
+  leaderboardSubmitProblem,
+  type LeaderboardDeclared,
   checkLeaderboardTop,
   checkMenu,
   checkModuleKey,
@@ -146,7 +148,7 @@ export interface MemoryHostOptions {
    * `leaderboards.top` refuse another board with INVALID_PARAMS, and `leaderboards.mine` lists every one of them, with
    * no standing where the user has none (signed out too). Default: any board id, and `mine` lists none. @since 0.4.13
    */
-  leaderboards?: { id: string; name: string }[];
+  leaderboards?: ({ id: string; name: string } & Partial<LeaderboardDeclared>)[];
   /** Why the page loads. Default: `{ reason: "add" }`. */
   launch?: PanelLaunch;
   /**
@@ -401,6 +403,8 @@ interface Shared {
   panelTypes: string[] | null;
   /** The manifest's boards (`leaderboards` option), or null for any. */
   boards: { id: string; name: string }[] | null;
+  /** The same boards with what their kind says (`kind`, `daily`, `order`, `minGames`), for the size of a submit. */
+  declared: Map<string, LeaderboardDeclared>;
   settings: Map<string, string>;
   appSettings: Map<string, string>;
   documents: Map<string, StoredDocument>;
@@ -587,9 +591,17 @@ const DIALOG = { min: 240, max: 2000, width: 560, height: 640 } as const;
 
 type Handlers = { [M in CallName]?: (panel: Panel, params: Params<M>) => Result<M> | Promise<Result<M>> };
 
+/** A picture to copy or save: not empty, and not past the host's limit (it also checks every part of the PNG, which this host doesn't). */
+function checkPictureSize(png: Blob, max: number, what: string): void {
+  if (png.size === 0) fail("INVALID_PARAMS", `only a complete PNG picture can be ${what}`);
+  if (png.size > max) fail("QUOTA_EXCEEDED", `a picture to be ${what} is limited to ${max} bytes`);
+}
+
 /** blobs.put and blobs.app.put: the type is the Blob's own here, where the real host looks at the bytes. */
 function putBlob(shared: Shared, blobs: Map<string, BlobInfo>, file: Blob, scope: string): BlobInfo {
   if (!(BLOB_TYPES as readonly string[]).includes(file.type)) fail("INVALID_PARAMS", "only PNG, JPEG, GIF and WebP pictures, PDF files and MP3, Ogg and WAV sounds can be stored");
+  // An empty file is no picture: Tavora looks at the bytes, and there are none.
+  if (file.size === 0) fail("INVALID_PARAMS", "only PNG, JPEG, GIF and WebP pictures, PDF files and MP3, Ogg and WAV sounds can be stored");
   if (file.size > shared.limits.maxBlobBytes) fail("QUOTA_EXCEEDED", `a file is limited to ${shared.limits.maxBlobBytes} bytes`);
   const used = [...blobs.values()].reduce((sum, blob) => sum + blob.bytes, 0);
   if (used + file.size > shared.limits.maxBlobsBytes) fail("QUOTA_EXCEEDED", `files are limited to ${shared.limits.maxBlobsBytes} bytes per module and ${scope}`);
@@ -732,12 +744,14 @@ const handlers: Handlers = {
     shared.appBlobs.delete(checked(checkBlobId(id)));
     return null;
   },
-  "clipboard.writeImage": (_panel, { png }) => {
+  "clipboard.writeImage": (panel, { png }) => {
     if (png.type !== "image/png") fail("INVALID_PARAMS", "only a PNG picture can be copied");
+    checkPictureSize(png, panel.shared.limits.maxClipboardImageBytes, "copied");
     return null;
   },
   "pictures.save": (panel, { png, name = "" }) => {
     if (png.type !== "image/png") fail("INVALID_PARAMS", "only a PNG picture can be saved");
+    checkPictureSize(png, panel.shared.limits.maxClipboardImageBytes, "saved");
     const fileName = `${(name || "Picture").replace(/\.png$/i, "")}.png`;
     panel.saved.push({ kind: "picture", fileName, value: png });
     return { fileName };
@@ -764,9 +778,11 @@ const handlers: Handlers = {
     return null;
   },
   "files.exportJson": (panel, { value, name = "Build" }) => {
-    if (byteLength(JSON.stringify(value)) > 8 * 1024 * 1024) fail("QUOTA_EXCEEDED", "JSON exports may be at most 8 MiB");
+    const body = JSON.stringify(value);
+    if (body === undefined) fail("INVALID_PARAMS", "only JSON can be exported");
+    if (byteLength(body) > 8 * 1024 * 1024) fail("QUOTA_EXCEEDED", "JSON exports may be at most 8 MiB");
     const fileName = `${name.replace(/\.json$/i, "")}.json`;
-    panel.saved.push({ kind: "json", fileName, value: parse(JSON.stringify(value)) });
+    panel.saved.push({ kind: "json", fileName, value: parse(body) });
     return { fileName };
   },
   "files.read": (_panel, { id }) => {
@@ -1022,7 +1038,12 @@ const CHECKS_BEFORE_PRESS: Partial<Record<CallName, (panel: Panel, params: unkno
   "ui.tooltip.close": (_, params) => void checked(checkTooltipId(params)),
   "ui.tooltip.defineSkin": (_, params) => void checked(checkTooltipSkin(params)),
   "discord.image": (_, params) => void checked(checkDiscordImage(record(params).url)),
-  "leaderboards.submit": ({ shared }, params) => void checked(checkLeaderboardSubmit(params, boardIds(shared, record(params).board), shared.limits.maxLeaderboardResults)),
+  "leaderboards.submit": ({ shared }, params) => {
+    const submit = checked(checkLeaderboardSubmit(params, boardIds(shared, record(params).board), shared.limits.maxLeaderboardResults));
+    // The body's size depends on the board's kind, as in Tavora.
+    const tooBig = leaderboardSubmitProblem(shared.declared.get(submit.board) ?? { kind: "score" }, submit.results);
+    if (tooBig) fail("INVALID_PARAMS", tooBig);
+  },
   "leaderboards.top": ({ shared }, params) => void checked(checkLeaderboardTop(params, boardIds(shared, record(params).board), shared.limits.maxLeaderboardRows)),
   "leaderboards.mine": (_, params) => void checked(checkLeaderboardMine(params)),
 };
@@ -1100,6 +1121,7 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
     consent: options.consent ?? "allow",
     panelTypes: options.panelTypes ?? null,
     boards: options.leaderboards?.map((board) => ({ id: board.id, name: board.name })) ?? null,
+    declared: new Map((options.leaderboards ?? []).map((board) => [board.id, { ...board, kind: board.kind ?? "score" }])),
     settings: new Map(),
     appSettings: new Map(),
     documents: new Map(),

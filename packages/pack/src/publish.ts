@@ -162,6 +162,18 @@ export async function withdrawVersion(options: { token: string | undefined; sha2
   throw new PublishError(`The service refused the request (${response.status}).`);
 }
 
+/**
+ * What to warn about after a plain `tavora-pack <folder>`: why the catalog wouldn't take this zip (uploadProblem). A zip made
+ * to install by hand may go past those limits, so it is a warning there, not a failure. Null when it fits, or can't be read.
+ */
+export function catalogWarning(zip: Buffer): string | null {
+  try {
+    return uploadProblem(readZip(zip), zip.length);
+  } catch {
+    return null;
+  }
+}
+
 /** Why the catalog would refuse this zip after the upload (catalogUploadProblem), in English; null when none of its checks stop it. */
 export function uploadProblem(files: readonly ZipFile[], zipBytes: number): string | null {
   const data = files.find((file) => file.name === MANIFEST_FILE)?.data;

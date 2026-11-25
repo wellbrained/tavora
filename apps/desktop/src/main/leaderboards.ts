@@ -1,5 +1,5 @@
 import { apiReason, LEADERBOARD_PERIODS, type ApiReason, type LeaderboardBoard } from "@tavora/module-schema";
-import { checkLeaderboardMine, checkLeaderboardSubmit, checkLeaderboardTop, type LeaderboardMine, type ParamCheck, type LeaderboardPeriod, type LeaderboardRow, type LeaderboardStanding, type LeaderboardStatus, type LeaderboardSubmitResult, type LeaderboardTop } from "@tavora/sdk/protocol";
+import { checkLeaderboardMine, checkLeaderboardSubmit, leaderboardDeclaration, leaderboardSubmitBody, leaderboardSubmitProblem, checkLeaderboardTop, type LeaderboardMine, type ParamCheck, type LeaderboardPeriod, type LeaderboardRow, type LeaderboardStanding, type LeaderboardStatus, type LeaderboardSubmitResult, type LeaderboardTop } from "@tavora/sdk/protocol";
 import { HostError } from "./errors";
 import { isRecord } from "../shared/is-record";
 
@@ -52,25 +52,8 @@ type Answer = { status: number; body: Record<string, unknown> };
 
 /** While accounts are off there is no service to reach. */
 const NO_SERVICE: LeaderboardStatus = { online: false, signedIn: false, available: false, shown: false, name: null };
-/** The longest submit Tavora sends, in bytes; the service takes 32 KB. */
-const MAX_SUBMIT_BYTES = 30_000;
 
 const count = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : 0);
-/** The local calendar day (YYYY-MM-DD) of a time in milliseconds. */
-const dayOf = (at: number) => {
-  const date = new Date(at);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-};
-
-/** The declaration as the service reads it for a development copy (it uses the catalog's for the others). */
-function declaration(board: LeaderboardBoard): Record<string, string> {
-  return {
-    kind: board.kind,
-    ...(board.kind === "streak" && board.daily ? { daily: "1" } : {}),
-    ...((board.kind === "score" || board.kind === "average") && board.order === "low" ? { order: "low" } : {}),
-    ...((board.kind === "average" || board.kind === "rate") && board.minGames !== undefined ? { minGames: String(board.minGames) } : {}),
-  };
-}
 
 /** One standing as the module gets it: the rank, the size of the board and the numbers of the board's kind; null where there is none. */
 function standing(value: unknown, kind: LeaderboardBoard["kind"]): LeaderboardStanding | null {
@@ -84,15 +67,6 @@ function standing(value: unknown, kind: LeaderboardBoard["kind"]): LeaderboardSt
 }
 
 const emptyPeriods = (): Record<LeaderboardPeriod, LeaderboardStanding | null> => ({ day: null, week: null, month: null, year: null, all: null });
-
-/** A result with only the fields results have; anything else the module put in stays behind. */
-function resultFields(value: unknown): Record<string, unknown> {
-  const input = isRecord(value) ? value : {};
-  const fields = Object.fromEntries(["id", "outcome", "value", "at", "day"].filter((key) => key in input).map((key) => [key, input[key]]));
-  // Like the SDK: a result without a day belongs to the local day it ended on.
-  if (!("day" in fields) && typeof fields.at === "number" && Number.isFinite(fields.at)) fields.day = dayOf(fields.at);
-  return fields;
-}
 
 /** The reasons the service gives a result it did not take. */
 const REJECTED_REASONS: readonly ApiReason[] = ["invalid", "time", "archive", "day-taken", "full"];
@@ -145,9 +119,10 @@ export class ModuleLeaderboards {
     const checked = this.checked(checkLeaderboardSubmit(params, this.boardIds()));
     const board = this.board(checked.board);
     const { results } = checked;
-    // Only the fields a result has go on to the service; it checks each of them.
-    const body = { board: declaration(board), results: results.map(resultFields) };
-    if (Buffer.byteLength(JSON.stringify(body)) > MAX_SUBMIT_BYTES) throw new HostError("INVALID_PARAMS", "these results are too big for one call; send fewer at once");
+    // Only the fields a result has go on to the service; it checks each of them (the SDK's memory host checks the size the same way).
+    const tooBig = leaderboardSubmitProblem(board, results);
+    if (tooBig) throw new HostError("INVALID_PARAMS", tooBig);
+    const body = leaderboardSubmitBody(board, results);
     if (!this.options.account.isSignedIn()) refused({ status: 401, body: {} });
     const answer = await this.request("POST", `/boards/${board.id}`, body);
     if (answer?.status !== 200) refused(answer);
@@ -166,7 +141,7 @@ export class ModuleLeaderboards {
   async top(params: unknown): Promise<LeaderboardTop> {
     const input = this.checked(checkLeaderboardTop(params, this.boardIds()));
     const board = this.board(input.board);
-    const query = new URLSearchParams({ ...declaration(board), ...(input.period === undefined ? {} : { period: input.period }), ...(input.day === undefined ? {} : { day: input.day }), ...(input.limit === undefined ? {} : { limit: String(input.limit) }) });
+    const query = new URLSearchParams({ ...leaderboardDeclaration(board), ...(input.period === undefined ? {} : { period: input.period }), ...(input.day === undefined ? {} : { day: input.day }), ...(input.limit === undefined ? {} : { limit: String(input.limit) }) });
     const answer = await this.request("GET", `/boards/${board.id}?${query}`);
     if (!answer) return { rows: [] };
     if (answer.status !== 200) refused(answer);
@@ -187,7 +162,7 @@ export class ModuleLeaderboards {
     const query = new URLSearchParams({
       ...(input.day === undefined ? {} : { day: input.day }),
       // A development copy has no boards on the service, so it says which it has.
-      ...(moduleId.startsWith(TEST_PREFIX) ? { boards: JSON.stringify(boards.map((board) => ({ id: board.id, ...declaration(board) }))) } : {}),
+      ...(moduleId.startsWith(TEST_PREFIX) ? { boards: JSON.stringify(boards.map((board) => ({ id: board.id, ...leaderboardDeclaration(board) }))) } : {}),
     });
     const answer = await this.request("GET", `/mine${query.toString() ? `?${query}` : ""}`);
     if (!answer) return none();

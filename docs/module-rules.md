@@ -144,18 +144,16 @@ themes; anything hard-coded breaks in one of them.
 - **Button icons and labels**: ask in this order and stop at the first yes (buttons and menu entries alike).
   1. Does it open options or go somewhere? A **trailing** icon: `ChevronDown` for a menu (Export ⌄), `ChevronRight`
      or `ArrowUpRight` for going to another page or site.
-  2. Does it need more input before it happens (a dialog, a picker, a file dialog)? An **ellipsis** in the label,
-     "Rename…", and no icon, also in a menu whose other entries have icons: give it `inset` so its text lines up with
-     theirs. A menu where no entry has an icon gets no `inset`. The text always ends in the real character `…`.
-  3. Is its symbol established and familiar (plus for Create/Add, trash for Delete, copy, search, download)? A
-     **leading** icon.
-  4. Does it sit in a group of actions (a toolbar, a menu, a row of item actions)? A **leading** icon on each, so the
+  2. Is its symbol established and familiar (plus for Create/Add, trash for Delete, copy, search, download, pencil
+     for Rename)? A **leading** icon.
+  3. Does it sit in a group of actions (a toolbar, a menu, a row of item actions)? A **leading** icon on each, so the
      group scans by shape.
-  5. None of these: **text only** (Publish, Save, Done).
-  Never more than one icon on a button, and never an icon only for decoration. "…" in a label means "asks you more"; a
-  status that is under way ("Saving…") is not a button label and keeps its ellipsis. The chevron the kit puts on a
-  submenu trigger is not the entry's icon: the entry still gets its own leading icon (step 3 or 4). A trigger that is
-  only an icon (a "⋯" or settings button) may carry a `ChevronDown` beside it.
+  4. None of these: **text only** (Publish, Save, Done).
+  Never more than one icon on a button, and never an icon only for decoration. A label never ends in "…": a button or
+  menu entry that opens a dialog or picker says what it does ("Rename", "Import from save"), and the dialog that
+  opens makes the rest clear. A status that is under way ("Saving…") is not a button label and keeps its ellipsis.
+  A submenu or a selection behind an entry keeps the kit's chevron on the right, in addition to the entry's own
+  leading icon. A trigger that is only an icon (a "⋯" or settings button) may carry a `ChevronDown` beside it.
 - **Pictures**: a picture that fills its box gets a faint edge, so it doesn't melt into the card: `FadeImage` does it for
   `fit="cover"`, a bare `<img>` puts `tavora-picture-edge` on its rounded box. Not for icons with see-through parts.
 - **Line breaks**: headings balance their lines and paragraphs avoid a lone last word on their own (`details.css`); don't
@@ -402,7 +400,7 @@ Before you say it is done, check each item and name in your summary any you coul
 - [ ] Looked at in Hardware and Liquid Glass too (the Playground's Style and Theme pickers show any page in them).
 - [ ] Looked at at the manifest's minimum size and, if set, the wide minimum.
 - [ ] Every visible text is in `en` and `de`; `checkCatalogs` passes; no glued sentences.
-- [ ] Every button and menu entry follows [Button icons and labels](#3-look) (trailing chevron, leading icon, "…" or text only); headings follow the Writing rules in `CLAUDE.md` (no eyebrows, slogans or clever headings).
+- [ ] Every button and menu entry follows [Button icons and labels](#3-look) (trailing chevron, leading icon or text only; no "…" on labels); headings follow the Writing rules in `CLAUDE.md` (no eyebrows, slogans or clever headings).
 - [ ] Saves through the SDK store; panel state is read back after a reload.
 - [ ] `onSuspend` / `onDispose` flush; nothing is lost when the panel is hidden or closed mid-edit.
 - [ ] Each flow keeps one status value (no flags that can disagree); async work uses `useTask` or a run counter.

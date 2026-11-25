@@ -1,3 +1,10 @@
+## 0.4.15
+
+The memory host checks a few more things as Tavora does. `MIN_TAVORA` stays (Tavora 0.21.43).
+
+- `protocol.ts`: `leaderboardSubmitProblem`, `leaderboardSubmitBody`, `leaderboardDeclaration`, `leaderboardResultFields` and `LEADERBOARD_SUBMIT_MAX_BYTES`: the body of `leaderboards.submit` depends on the board's kind, and at most 30 KB of it goes to the service. Tavora and the memory host use them.
+- `@tavora/sdk/testing`: the `leaderboards` option can carry each board's `kind`, `daily`, `order` and `minGames`; `submit` then refuses results past 30 KB with INVALID_PARAMS, before the sign-in check. `files.exportJson(undefined)` answers INVALID_PARAMS instead of throwing. An empty picture or file, and a picture to copy or save past `LIMITS.maxClipboardImageBytes`, are refused.
+
 ## 0.4.14
 
 Modules can copy text. `MIN_TAVORA` stays (Tavora 0.21.43).

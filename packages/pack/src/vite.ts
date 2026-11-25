@@ -73,9 +73,18 @@ export async function noticeSource(root: string, source: string): Promise<string
 
 /** Copies the licences next to the built pages. */
 function noticesPlugin(root: string, notices: Record<string, string>) {
+  // Set once a bundle was made: a dev server closing runs closeBundle too, with nothing built, and makes no dist/.
+  let bundled = false;
   return {
     name: "tavora-notices",
+    buildStart() {
+      bundled = false;
+    },
+    generateBundle() {
+      bundled = true;
+    },
     async closeBundle() {
+      if (!bundled) return;
       const dist = path.join(root, "dist");
       mkdirSync(dist, { recursive: true });
       for (const [name, source] of Object.entries(notices)) await copyFile(await noticeSource(root, source), path.join(dist, `${name}-LICENSE.txt`));

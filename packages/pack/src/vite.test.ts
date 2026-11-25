@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -92,11 +92,19 @@ describe("notices", () => {
     // The kit's own dependencies sit next to it, not in the module's node_modules.
     const kit = path.join(root, "node_modules", "@tavora", "official-ui");
     install("reka-ui", { "LICENSE.md": "reka licence" }, kit);
-    const plugin = moduleConfig({ root, notices: { MODULE: "./LICENSE", VUE: "vue", "REKA-UI": "reka-ui" } }).plugins!.at(-1) as { closeBundle(): Promise<void> };
+    const plugin = moduleConfig({ root, notices: { MODULE: "./LICENSE", VUE: "vue", "REKA-UI": "reka-ui" } }).plugins!.at(-1) as { generateBundle(): void; closeBundle(): Promise<void> };
+    plugin.generateBundle();
     await plugin.closeBundle();
     expect(readFileSync(path.join(root, "dist", "MODULE-LICENSE.txt"), "utf8")).toBe("mine");
     expect(readFileSync(path.join(root, "dist", "VUE-LICENSE.txt"), "utf8")).toBe("vue licence");
     expect(readFileSync(path.join(root, "dist", "REKA-UI-LICENSE.txt"), "utf8")).toBe("reka licence");
+  });
+
+  it("makes no dist folder and looks for no licence when a dev server closes (bug hunt 2026-11-25, D L7)", async () => {
+    const plugin = moduleConfig({ root, notices: { MODULE: "./LICENSE" } }).plugins!.at(-1) as { closeBundle(): Promise<void> };
+    // There is no ./LICENSE: a build would stop here.
+    await plugin.closeBundle();
+    expect(existsSync(path.join(root, "dist"))).toBe(false);
   });
 
   it("stops when a licence cannot be found", async () => {

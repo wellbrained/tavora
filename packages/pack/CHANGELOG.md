@@ -2,6 +2,12 @@
 
 What changed in `@tavora/pack`, newest first.
 
+## 0.3.8
+
+- `tavora-pack <folder>` warns when the catalog wouldn't take the zip (the checks `publish` runs before sending). The zip is still made: it installs by hand.
+- A `third-party.json` that isn't a list of `{ name, license, files }` entries stops the build with a message that names the entry, instead of a crash.
+- Licence files of a package are read in the same order whatever the case of their names. The licence copy (`notices`) no longer runs when a dev server closes.
+
 ## 0.3.7
 
 - `publish` says what the catalog would refuse only after the whole zip arrived, before sending it: a version longer than 64 characters, more than 100 games, a readme that isn't UTF-8 text of at most 20 KB, a screenshot that isn't the PNG or WebP it is named as (at most 1 MB and 4096 px), and a zip whose files unpacked take more than 88 MB with it (`catalogUploadProblem` in `@tavora/module-schema` 0.2.5).

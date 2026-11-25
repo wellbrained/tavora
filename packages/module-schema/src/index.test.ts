@@ -327,6 +327,15 @@ const cases: [string, unknown, boolean][] = [
   ["an id starting with a Windows device name", { ...valid, id: "con.tool" }, false],
   ["an id starting with com1", { ...valid, id: "com1.a" }, false],
   ["an id with a device name after the first part", { ...valid, id: "tools.con" }, true],
+  // Bug hunt 2026-11-25, D L10: the schema counts characters, so the validator does too (an emoji is one).
+  ["a name of 80 emoji", { ...valid, name: "😀".repeat(80) }, true],
+  ["a name of 81 emoji", { ...valid, name: "😀".repeat(81) }, false],
+  ["a homepage of 300 characters with emoji in it", { ...valid, homepage: `https://example.com/${"😀".repeat(280)}` }, true],
+  // D L11: names only a private network has.
+  ["a host on a .lan", { ...valid, permissions: { network: ["printer.lan"] } }, false],
+  ["a host on .localdomain", { ...valid, permissions: { network: ["pc.localdomain"] } }, false],
+  ["a host on .home", { ...valid, permissions: { network: ["nas.home"] } }, false],
+  ["a host with lan inside a name", { ...valid, permissions: { network: ["lan.example.com"] } }, true],
   ["changelog", { ...valid, changelog: "changelog.json" }, true],
   ["changelog not json", { ...valid, changelog: "CHANGELOG.md" }, false],
   ["changelog outside the package", { ...valid, changelog: "../changelog.json" }, false],
@@ -843,6 +852,18 @@ describe("viewport.wide", () => {
     expect(validateManifest({ ...valid, viewport: { minWidth: 500, minHeight: 300 } }).ok).toBe(true);
   });
 });
+describe("translateManifest and inherited names (bug hunt 2026-11-25, D L9)", () => {
+  it("never takes Object.prototype members for a translation", () => {
+    const manifest = { ...valid, panels: [{ id: "constructor", name: "Main", entry: "dist/index.html" }], actions: [{ id: "toString", name: "Go" }], translations: { de: { name: "Hallo" } } } as unknown as ModuleManifest;
+    const translated = translateManifest(manifest, "de");
+    expect(translated.panels![0]!.name).toBe("Main");
+    expect(translated.actions![0]!.name).toBe("Go");
+    // A language named like an inherited member is no language either.
+    expect(translateManifest(manifest, "constructor")).toBe(manifest);
+    expect(translateManifest(manifest, "__proto__")).toBe(manifest);
+  });
+});
+
 describe("JSON Schema", () => {
   const ajv = new Ajv({ allErrors: true, strict: true });
   const validate = ajv.compile(schema);

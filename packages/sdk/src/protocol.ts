@@ -1595,6 +1595,53 @@ export function checkLeaderboardMine(value: unknown): ParamCheck<{ day?: string 
   return accept(day.value === undefined ? {} : { day: day.value });
 }
 
+/** The longest leaderboards.submit body Tavora sends, in bytes; the service takes 32 KB. */
+export const LEADERBOARD_SUBMIT_MAX_BYTES = 30_000;
+
+/** What a board's declaration needs to be sent with a submit: the manifest's board, as far as its kind says. */
+export interface LeaderboardDeclared {
+  kind: string;
+  daily?: boolean;
+  order?: string;
+  minGames?: number;
+}
+
+/** The board's declaration as the service reads it for a development copy (it uses the catalog's for the others). */
+export function leaderboardDeclaration(board: LeaderboardDeclared): Record<string, string> {
+  return {
+    kind: board.kind,
+    ...(board.kind === "streak" && board.daily ? { daily: "1" } : {}),
+    ...((board.kind === "score" || board.kind === "average") && board.order === "low" ? { order: "low" } : {}),
+    ...((board.kind === "average" || board.kind === "rate") && board.minGames !== undefined ? { minGames: String(board.minGames) } : {}),
+  };
+}
+
+/** The local calendar day of a time, as YYYY-MM-DD (the same as local-day.ts: this file is loaded by Node as it is, so it imports nothing). */
+function localDay(at: number): string {
+  const date = new Date(at);
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+/** A result with only the fields results have; a result without a day belongs to the local day it ended on. */
+export function leaderboardResultFields(value: unknown): Record<string, unknown> {
+  const input = isPlainObject(value) ? value : {};
+  const fields = Object.fromEntries(["id", "outcome", "value", "at", "day"].filter((key) => key in input).map((key) => [key, input[key]]));
+  if (!("day" in fields) && typeof fields.at === "number" && Number.isFinite(fields.at)) fields.day = localDay(fields.at);
+  return fields;
+}
+
+/** What leaderboards.submit sends the service for `board`: its declaration and each result's own fields. */
+export function leaderboardSubmitBody(board: LeaderboardDeclared, results: readonly unknown[]): { board: Record<string, string>; results: Record<string, unknown>[] } {
+  return { board: leaderboardDeclaration(board), results: results.map(leaderboardResultFields) };
+}
+
+/** Why a submit is too big for one call (its body, which depends on the board's kind, is over LEADERBOARD_SUBMIT_MAX_BYTES), or null. */
+export function leaderboardSubmitProblem(board: LeaderboardDeclared, results: readonly unknown[]): string | null {
+  const bytes = new TextEncoder().encode(JSON.stringify(leaderboardSubmitBody(board, results))).length;
+  return bytes > LEADERBOARD_SUBMIT_MAX_BYTES ? "these results are too big for one call; send fewer at once" : null;
+}
+
 // ── Menus, tooltips and item-card skins ────────────────────────────────
 
 /** Thrown inside the checks below; `refusing` turns it into their refusal. */
