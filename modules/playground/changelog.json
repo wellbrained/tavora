@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.1.72",
+    "date": "2026-11-25",
+    "notes": [
+      "Text links: a name you can open, inside text or a list.",
+      "List rows: a whole row as one button, with a picture, a second line and something at the end."
+    ]
+  },
+  {
     "version": "0.1.71",
     "date": "2026-11-25",
     "notes": [

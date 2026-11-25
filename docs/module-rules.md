@@ -35,7 +35,9 @@ classes where you use a control; never copy it.
 
 | You need | Use | Not |
 | --- | --- | --- |
-| Button, icon button, text link | `Button` (`default`, `secondary`, `outline`, `ghost`, `link`, `destructive`; sizes `xs` to `lg`, `icon*`) | raw `<button>` with own hover, focus or underline |
+| Button, icon button | `Button` (`default`, `secondary`, `outline`, `ghost`, `link`, `destructive`; sizes `xs` to `lg`, `icon*`) | raw `<button>` with own hover, focus or underline |
+| A name you can open inside text or a list (an item, a station, a recipe) | `TextLink`: takes the text's size and colour, turns primary and underlined on hover, cuts off with "…" (`wrap` inside a sentence); an `icon` slot in front; `as="a"` for a page link | a raw `<button>` with own hover, focus ring or underline; `Button variant="link"` (it has a fixed height) |
+| A whole list row you click (a search hit, a place, a channel, a sound to add) | `ListRow` in your own `<li>`: `leading`, label, `description`, `trailing` slots; `selected` (current row, sets `aria-current`, or `aria-selected` with `role="option"`), `highlighted` (a listbox's keyboard highlight), `as="div"` for a row that does nothing. For a start page's list of actions, `ActionList` | a raw `<button>` row with own hover or focus; a `Button variant="ghost"` stretched with `h-auto w-full justify-start` |
 | A button that starts work that takes a while (install, update, import) | `ProgressButton`: the button fills as the percent, or a stripe moves, then shows a tick | a disabled `Button` with a spinner or "Working…" next to it |
 | A row of things to add or start with one click, each with a picture (modules, templates) | `ActionTile`: a square tile with a picture, a name and a small +; `featured` gives the accent edge, `status`/`progress` make it the progress like a `ProgressButton`, and `kind="more"` is the dashed last tile ("+3 more") | a card grid of your own, a `Button` stretched into a square |
 | Group of buttons, toolbar | `ButtonGroup`, `Separator` between groups | a `div` with a 1 px `span` as divider |

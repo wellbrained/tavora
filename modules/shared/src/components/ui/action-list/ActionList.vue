@@ -3,8 +3,7 @@
 // or a panel's start page. The rows look like the ones in a menu (`DropdownMenuItem` with a description).
 // Give each entry an `icon` component, or fill the `icon` slot for anything else, such as a picture.
 import type { Component } from "vue"
-import { Button } from "../button"
-import { ActionRow } from "../action-row"
+import { ListRow } from "../list-row"
 
 export interface ActionEntry {
   id: string
@@ -21,23 +20,22 @@ const emit = defineEmits<{ select: [id: string] }>()
 
 <template>
   <div data-slot="action-list" class="flex max-w-[350px] flex-col gap-1">
-    <Button
+    <ListRow
       v-for="entry in entries"
       :key="entry.id"
-      type="button"
-      variant="ghost"
-      press="dip"
-      class="h-auto w-full justify-start gap-3 p-2.5 font-normal"
+      wrap
+      class="gap-3 p-2.5"
       :disabled="entry.disabled"
       :data-testid="entry.testid"
       @click="emit('select', entry.id)"
     >
-      <ActionRow :description="entry.description">
-        <template v-if="entry.icon || $slots.icon" #icon>
+      <template v-if="entry.icon || $slots.icon" #leading>
+        <span data-slot="action-row-icon" class="border-border grid size-8 place-items-center rounded-md border text-primary [&_svg]:text-primary!" aria-hidden="true">
           <slot name="icon" :entry="entry"><component :is="entry.icon" v-if="entry.icon" /></slot>
-        </template>
-        {{ entry.label }}
-      </ActionRow>
-    </Button>
+        </span>
+      </template>
+      <span class="font-semibold">{{ entry.label }}</span>
+      <template v-if="entry.description" #description>{{ entry.description }}</template>
+    </ListRow>
   </div>
 </template>
