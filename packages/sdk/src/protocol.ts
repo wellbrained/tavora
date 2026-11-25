@@ -1211,7 +1211,7 @@ export interface Methods {
   "overlay.openPage": { params: undefined; result: null };
   /**
    * Puts plain text on the system clipboard (at most `LIMITS.maxClipboardTextBytes` as UTF-8, never empty). Only right
-   * after a click or key press, one copy per press; there is no call to read the clipboard. Tavora 0.25.22+.
+   * after a click or key press, one copy per press; there is no call to read the clipboard. Tavora 0.25.23+.
    */
   "clipboard.writeText": { params: { text: string }; result: null };
   /** The hotkeys the user set for this module in the current workspace. Tavora 0.19.26 and newer. */
@@ -2404,7 +2404,7 @@ export const METHOD_INFO: Readonly<Record<CallName, MethodInfo>> = {
   "blobs.put": call("0.12.0"),
   "blobs.app.put": later("0.23.101"),
   "clipboard.writeImage": call("0.14.1", null, true),
-  "clipboard.writeText": later("0.25.22", null, true),
+  "clipboard.writeText": later("0.25.23", null, true),
   "files.pickReadOnly": call("0.21.13", null, true),
   "files.forget": call("0.21.13"),
   "files.check": later("0.23.6"),

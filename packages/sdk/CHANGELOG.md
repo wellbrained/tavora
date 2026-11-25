@@ -2,7 +2,7 @@
 
 Modules can copy text. `MIN_TAVORA` stays (Tavora 0.21.43).
 
-- `clipboard.writeText(text)` puts plain text on the clipboard, like `writeImage` does a picture: only right after a click or key press, one copy per press, never empty and at most 1 MiB as UTF-8 (`LIMITS.maxClipboardTextBytes`). It needs no capability, and there is still no way to read the clipboard. Tavora 0.25.22 and newer: check `sdk.supports("clipboard.writeText")` or set `minTavora`. The browser's `navigator.clipboard` doesn't work in a panel, as Tavora gives panels no browser permissions.
+- `clipboard.writeText(text)` puts plain text on the clipboard, like `writeImage` does a picture: only right after a click or key press, one copy per press, never empty and at most 1 MiB as UTF-8 (`LIMITS.maxClipboardTextBytes`). It needs no capability, and there is still no way to read the clipboard. Tavora 0.25.23 and newer: check `sdk.supports("clipboard.writeText")` or set `minTavora`. The browser's `navigator.clipboard` doesn't work in a panel, as Tavora gives panels no browser permissions.
 - `protocol.ts`: `checkClipboardText`, used by Tavora's bridge and the memory host. `clipboard.writeText` is no longer in `RESERVED_METHODS`; `clipboard.readText` still is.
 - `@tavora/sdk/testing`: the memory host answers `clipboard.writeText` with the same checks and press rule; `host.calls["clipboard.writeText"]` holds what was copied.
 
