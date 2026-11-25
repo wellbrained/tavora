@@ -237,7 +237,7 @@ function onOpenChange(value: boolean) {
 
       <DialogFooter>
         <DialogButton close data-testid="crop-cancel" @click="emit('cancel')">{{ t("common.cancel") }}</DialogButton>
-        <DialogButton :icon="Save" :loading="saving || busy" data-testid="crop-save" :disabled="!image || saving || busy" @click="save">{{ t("common.save") }}</DialogButton>
+        <DialogButton :loading="saving || busy" data-testid="crop-save" :disabled="!image || saving || busy" @click="save">{{ t("common.save") }}</DialogButton>
       </DialogFooter>
     </DialogContent>
   </Dialog>

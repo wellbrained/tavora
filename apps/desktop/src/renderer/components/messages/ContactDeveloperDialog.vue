@@ -3,7 +3,7 @@
 // needs a sign-in; the developer never sees who wrote. The Tavora and module version are filled in and shown before
 // sending. If the developer chose another way (contactChoice), that is offered instead: a link opens with a warning
 // that it leaves Tavora and isn't anonymous, an email address or Discord name can be copied; Nobody says so.
-import { LogIn, MessageCircle, Send } from "@lucide/vue";
+import { MessageCircle } from "@lucide/vue";
 import { computed, onMounted, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
@@ -84,7 +84,7 @@ function signIn() {
       <p class="text-sm">{{ t("contact.signIn") }}</p>
       <DialogFooter>
         <DialogButton close @click="emit('close')">{{ t("common.cancel") }}</DialogButton>
-        <DialogButton :icon="LogIn" data-testid="contact-sign-in" @click="signIn">{{ t("catalog.reviews.signInButton") }}</DialogButton>
+        <DialogButton data-testid="contact-sign-in" @click="signIn">{{ t("catalog.reviews.signInButton") }}</DialogButton>
       </DialogFooter>
     </template>
 
@@ -134,7 +134,7 @@ function signIn() {
       </div>
       <DialogFooter>
         <DialogButton type="button" close @click="emit('close')">{{ t("common.cancel") }}</DialogButton>
-        <DialogButton type="submit" :icon="Send" :loading="busy" :disabled="busy || problem !== null" data-testid="contact-send">{{ t("contact.send") }}</DialogButton>
+        <DialogButton type="submit" :loading="busy" :disabled="busy || problem !== null" data-testid="contact-send">{{ t("contact.send") }}</DialogButton>
       </DialogFooter>
     </form>
   </ModalDialog>

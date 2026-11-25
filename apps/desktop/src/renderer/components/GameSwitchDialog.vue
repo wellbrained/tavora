@@ -2,7 +2,7 @@
 // A game of the library just started and the user chose to be asked (Settings > General): switch to it?
 import { computed } from "vue";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
-import { ArrowRightLeft, Gamepad2 } from "@lucide/vue";
+import { Gamepad2 } from "@lucide/vue";
 import { act, closeDialog, dialog, state } from "../host";
 import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";
@@ -25,7 +25,7 @@ function choose(choice: "switch" | "cancel") {
   <ModalDialog :title="t('gameSwitch.title', { name })" :description="t('gameSwitch.message')" :icon="Gamepad2" testid="game-switch" @close="choose('cancel')">
     <DialogFooter>
       <DialogButton type="button" close variant="ghost" data-testid="game-switch-cancel" @click="choose('cancel')">{{ t("gameSwitch.notNow") }}</DialogButton>
-      <DialogButton type="button" :icon="ArrowRightLeft" autofocus data-testid="game-switch-confirm" @click="choose('switch')">{{ t("gameSwitch.switch") }}</DialogButton>
+      <DialogButton type="button" autofocus data-testid="game-switch-confirm" @click="choose('switch')">{{ t("gameSwitch.switch") }}</DialogButton>
     </DialogFooter>
   </ModalDialog>
 </template>

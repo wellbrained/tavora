@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Link, Save, Trash2 } from "@lucide/vue";
+import { Link, Trash2 } from "@lucide/vue";
 import { Dialog, DialogButton, DialogContent, DialogFooter, DialogHeader } from "@tavora/official-ui/components/ui/dialog";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { ref } from "vue";
@@ -45,7 +45,7 @@ function submit() {
             {{ t("link.remove") }}
           </DialogButton>
           <DialogButton type="button" close @click="emit('cancel')">{{ t("cancel") }}</DialogButton>
-          <DialogButton type="submit" :icon="Save" data-testid="link-submit">{{ t("link.save") }}</DialogButton>
+          <DialogButton type="submit" data-testid="link-submit">{{ t("link.save") }}</DialogButton>
         </DialogFooter>
       </form>
     </DialogContent>

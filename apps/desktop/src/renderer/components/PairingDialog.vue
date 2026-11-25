@@ -3,7 +3,7 @@
 import { computed, ref } from "vue";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
 import { useTask } from "@tavora/official-ui/use-task";
-import { Check, MonitorSmartphone } from "@lucide/vue";
+import { MonitorSmartphone } from "@lucide/vue";
 import { act, pairing, showToast } from "../host";
 import { t } from "../i18n";
 import ModalDialog from "./ModalDialog.vue";
@@ -35,7 +35,7 @@ async function decide(allow: boolean) {
     <code class="bg-muted self-start rounded px-3 py-2 font-mono text-2xl tracking-widest" data-testid="pairing-approve-code">{{ request.code }}</code>
     <DialogFooter>
       <DialogButton close variant="ghost" data-testid="pairing-refuse" :disabled="decider.busy.value" @click="decide(false)">{{ t("pairing.approve.refuse") }}</DialogButton>
-      <DialogButton :icon="Check" data-testid="pairing-add" :loading="decider.busy.value" :disabled="decider.busy.value" @click="decide(true)">{{ t("pairing.approve.add") }}</DialogButton>
+      <DialogButton data-testid="pairing-add" :loading="decider.busy.value" :disabled="decider.busy.value" @click="decide(true)">{{ t("pairing.approve.add") }}</DialogButton>
     </DialogFooter>
   </ModalDialog>
 </template>

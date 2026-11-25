@@ -1,7 +1,6 @@
 <script setup lang="ts">
 // Report a catalog module to Tavora: a reason and an optional note. It needs a sign-in; Tavora keeps who reported
 // only while the report is open, and the developer is told only that the module was reported.
-import { Flag, LogIn } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
 import { Label } from "@tavora/official-ui/components/ui/label";
@@ -49,12 +48,12 @@ function signIn() {
 </script>
 
 <template>
-  <ModalDialog :title="t('report.title', { name: moduleName })" :description="t('catalog.reportHint')" :icon="Flag" testid="report-module-dialog" :status="task.state.value.status" @close="emit('close')">
+  <ModalDialog :title="t('report.title', { name: moduleName })" :description="t('catalog.reportHint')" testid="report-module-dialog" :status="task.state.value.status" @close="emit('close')">
     <template v-if="!signedIn">
       <p class="text-sm">{{ t("error.reportSignIn") }}</p>
       <DialogFooter>
         <DialogButton close @click="emit('close')">{{ t("common.cancel") }}</DialogButton>
-        <DialogButton :icon="LogIn" data-testid="report-sign-in" @click="signIn">{{ t("catalog.reviews.signInButton") }}</DialogButton>
+        <DialogButton data-testid="report-sign-in" @click="signIn">{{ t("catalog.reviews.signInButton") }}</DialogButton>
       </DialogFooter>
     </template>
     <form v-else class="contents" @submit.prevent="send">
@@ -73,7 +72,7 @@ function signIn() {
       </div>
       <DialogFooter>
         <DialogButton type="button" close @click="emit('close')">{{ t("common.cancel") }}</DialogButton>
-        <DialogButton type="submit" :icon="Flag" :loading="busy" :disabled="busy || tooLong" data-testid="report-send">{{ t("catalog.reportSend") }}</DialogButton>
+        <DialogButton type="submit" :loading="busy" :disabled="busy || tooLong" data-testid="report-send">{{ t("catalog.reportSend") }}</DialogButton>
       </DialogFooter>
     </form>
   </ModalDialog>

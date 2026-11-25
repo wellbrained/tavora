@@ -61,7 +61,7 @@ function submit() {
         </div>
         <DialogFooter>
           <DialogButton type="button" close @click="emit('cancel')">{{ t("cancel") }}</DialogButton>
-          <DialogButton type="submit" :icon="Save" :disabled="!name.trim() || !!problem" data-testid="value-submit">
+          <DialogButton type="submit" :disabled="!name.trim() || !!problem" data-testid="value-submit">
             {{ renaming !== undefined ? t("values.rename") : t("values.save") }}
           </DialogButton>
         </DialogFooter>

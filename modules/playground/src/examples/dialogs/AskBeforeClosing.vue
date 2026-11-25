@@ -45,7 +45,7 @@ async function save() {
       <Textarea v-model="text" placeholder="Your note" aria-label="Note" :disabled="saver.busy.value" />
       <DialogFooter>
         <DialogButton close :disabled="saver.busy.value" @click="text.trim() ? (asking = true) : close()">Cancel</DialogButton>
-        <DialogButton :icon="Save" :loading="saver.busy.value" :disabled="saver.busy.value || !text.trim()" @click="save">Save</DialogButton>
+        <DialogButton :loading="saver.busy.value" :disabled="saver.busy.value || !text.trim()" @click="save">Save</DialogButton>
       </DialogFooter>
     </DialogContent>
   </Dialog>
