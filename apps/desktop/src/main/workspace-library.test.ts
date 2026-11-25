@@ -29,6 +29,8 @@ interface Setup {
   open?: string;
   /** Workspaces whose files can't be deleted now (a file another program holds). */
   held?: string[];
+  /** Panels whose saved state can't be removed now. */
+  heldState?: string[];
 }
 
 async function setup(options: Setup = {}) {
@@ -88,7 +90,12 @@ async function setup(options: Setup = {}) {
       close: (instanceId) => void calls.push(`close ${instanceId}`),
       drop: (instanceId) => void calls.push(`drop ${instanceId}`),
     },
-    panelState: { remove: async (instanceId) => void calls.push(`state gone ${instanceId}`) },
+    panelState: {
+      remove: async (instanceId) => {
+        if (options.heldState?.includes(instanceId)) throw Object.assign(new Error("EBUSY: resource busy or locked"), { code: "EBUSY" });
+        calls.push(`state gone ${instanceId}`);
+      },
+    },
     files: {
       noteWorkspaceDeleted: async (name, deleteFiles) => {
         calls.push(`files of ${name}`);
@@ -321,6 +328,25 @@ describe("WorkspaceLibrary", () => {
       await expect(shelf.delete(["valheim"], true)).rejects.toThrow("EBUSY");
       expect(library.workspaces.valheim?.trashedAt).toBe(long.toISOString());
       expect(calls.filter((call) => call === "library saved")).toHaveLength(2);
+    } finally {
+      errors.mockRestore();
+    }
+  });
+
+  it("deletes a workspace whose files went even when a later step fails, so it never comes back empty (hunt 2026-11-25 A4)", async () => {
+    const library = emptyLibrary();
+    const long = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    addWorkspace(library, valheim, long);
+    trashWorkspace(library, "valheim", long);
+    const held = "00000000-0000-4000-8000-0000000000aa";
+    const { shelf, calls, workspaces } = await setup({ library, heldState: [held] });
+    workspaces.start("valheim", [{ instanceId: held, moduleId: "official.notes" }]);
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      await shelf.delete(["valheim"], true);
+      expect(library.workspaces.valheim).toBeUndefined();
+      expect(calls).toContain("forget icon valheim");
+      expect(errors).toHaveBeenCalledWith(expect.stringContaining("saved state"), expect.anything());
     } finally {
       errors.mockRestore();
     }

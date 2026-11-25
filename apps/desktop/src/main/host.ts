@@ -194,6 +194,7 @@ import { discoverStyles } from "./styles";
 import { settleSerial, sweepWriteLeftovers } from "./fsutil";
 import {
   emptyWorkspace,
+  listedPanelIds,
   Workspaces,
   noteOwners,
   settlePanelTypes,
@@ -1276,10 +1277,13 @@ export class Host {
     });
     // The id is made once and kept, so a new profile is written straight away.
     if (!profileSaved) host.saveProfile().catch(() => undefined); // logged by saveProfile
+    // One whose files can't be deleted now (another program holds one) stays in Trash for the next start. First, so such
+    // a workspace is counted below and keeps its browser storage and its panels' saved state (hunt 2026-11-25 A3).
+    await host.workspaceLibrary.deleteExpired(expired);
     // Browser storage of workspaces that are gone, removed before any session opens it, and the saved state of panels
     // that are gone. What a lost library or workspace file may have listed is kept (holdLeftovers).
     const orphaned = await orphanedPartitions(userData, new Set(Object.keys(library.workspaces)));
-    const livePanels = new Set(Object.values(workspaces.workspaces).flatMap((workspace) => workspace.instances.map((i) => i.instanceId)));
+    const livePanels = new Set(listedPanelIds(workspaces, (id) => library.workspaces[id] !== undefined));
     // The hidden panels that run with their game keep what they saved, for every game workspace and module that has one.
     for (const module of host.modules.values()) {
       if (!withGamePanelType(module.manifest)) continue;
@@ -1291,8 +1295,6 @@ export class Host {
     const held = await holdLeftovers(userData, libraryRead && workspaceRead && !copySync.dataHeld, leftovers).catch(() => leftovers);
     for (const dir of orphaned) if (!held.workspaces.has(partitionWorkspace(dir)!)) await rm(dir, { recursive: true, force: true });
     await host.data.panelState.prune(new Set([...livePanels, ...held.panels]));
-    // One whose files can't be deleted now (another program holds one) stays in Trash for the next start.
-    await host.workspaceLibrary.deleteExpired(expired);
     // Version 0.2.0 saved Steam covers here; they were replaced by Steam's own icons.
     await rm(path.join(userData, "steam-art"), { recursive: true, force: true });
     if (expired.length) host.saveLibrary();

@@ -260,11 +260,20 @@ export class WorkspaceLibrary {
     // A folder the user chose can be gone (an unplugged drive): the workspace still goes, and they are told where its pictures may remain.
     await files.noteWorkspaceDeleted(workspace.name, (root) => deleteModuleData(userData, workspace.id, root, this.options.trash));
     const records = workspaces.forgetWorkspace(workspace.id);
+    // Its layout is gone now, so nothing after this may put it back in Trash (it would come back empty, hunt 2026-11-25
+    // A4): each step is done as far as it goes, and what is left (a panel-state file held for a moment) is only logged.
+    const step = async (what: string, run: () => unknown) => {
+      try {
+        await run();
+      } catch (error) {
+        console.error(`[tavora] deleting workspace ${workspace.id}: ${what} failed; the rest went`, error);
+      }
+    };
     // A panel of this workspace that was over its game closes with it.
-    for (const record of records) views.drop(record.instanceId);
-    await Promise.all(records.map((record) => panelState.remove(record.instanceId)));
-    this.options.forgotten(workspace.id);
-    await this.options.icons.forget(workspace);
+    for (const record of records) await step("closing a panel over its game", () => views.drop(record.instanceId));
+    await Promise.all(records.map((record) => step("removing a panel's saved state", () => panelState.remove(record.instanceId))));
+    await step("forgetting its settings", () => this.options.forgotten(workspace.id));
+    await step("forgetting its icon", () => this.options.icons.forget(workspace));
   }
 
   /**

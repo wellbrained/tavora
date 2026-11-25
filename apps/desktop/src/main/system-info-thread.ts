@@ -124,10 +124,16 @@ export class SystemMonitorThread {
         return;
       }
       const timer = setTimeout(() => {
-        if (this.asked.delete(id)) {
-          reject(new Error("the system-info worker did not answer in time"));
-          this.settle();
-        }
+        if (!this.asked.delete(id)) return;
+        const late = new Error("the system-info worker did not answer in time");
+        reject(late);
+        if (this.worker !== worker) return this.settle();
+        // A worker that doesn't answer is stuck in a call into Windows: it is ended, and panels that watch get a new one
+        // (lost), instead of every later question waiting it out too (hunt 2026-11-25 A7).
+        try {
+          worker.terminate();
+        } catch {}
+        this.lost(late);
       }, this.options.askTimeoutMs ?? ASK_TIMEOUT_MS);
       timer.unref?.();
       const done = <A>(finish: (value: A) => void) => (value: A) => {

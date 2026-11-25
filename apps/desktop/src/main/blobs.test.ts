@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { serveBlobs } from "./blob-http";
-import { BlobStore, sniffType } from "./blobs";
+import { BlobStore, BlobWrites, sniffType } from "./blobs";
 
 const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 1, 2, 3, 4]);
 const JPEG = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0, 16, 0x4a, 0x46, 0x49, 0x46, 0, 1, 1, 0, 0, 1, 0, 1]);
@@ -115,6 +115,19 @@ describe("BlobStore.put", () => {
     expect((await readdir(dir)).filter((name) => name.endsWith(".tmp"))).toEqual([]);
   });
 
+  it("gives up a file that stops coming, so it can't hold the module's files or a folder move (hunt 2026-11-25 A6)", async () => {
+    const writes = new BlobWrites();
+    const patient = new BlobStore(() => dir, { maxFileBytes: 100, maxTotalBytes: 150, idleMs: 50 }, () => false, "workspace", writes);
+    const stalled = patient.put((async function* () {
+      yield PNG;
+      await new Promise(() => undefined);
+    })());
+    await expect(stalled).rejects.toThrow(/stopped coming/);
+    expect(await writes.idle(10)).toBe(true);
+    expect(await patient.list()).toEqual([]);
+    expect(await readdir(dir)).toEqual([]);
+  });
+
   it("removes leftovers of a write that was cut off", async () => {
     await store.put(pieces(PNG));
     await writeFile(path.join(dir, "0123456789abcdef0123456789abcdef.tmp"), "half");
@@ -129,6 +142,32 @@ describe("BlobStore.delete and open", () => {
     await store.delete(info.id);
     await store.delete(info.id);
     expect(await store.list()).toEqual([]);
+  });
+
+  it("refuses a delete while the folder moves, also one that waited its turn, so the picture can't come back (hunt 2026-11-25 A2)", async () => {
+    let locked = false;
+    const writes = new BlobWrites();
+    const moving = new BlobStore(() => dir, { maxFileBytes: 100, maxTotalBytes: 150 }, () => locked, "workspace", writes);
+    const kept = await moving.put(pieces(PNG));
+    locked = true;
+    await expect(moving.delete(kept.id)).rejects.toThrow(/being moved/);
+    locked = false;
+    // A delete queued behind a write when the move begins: the move waits for it, and it is refused once its turn comes.
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const slow = moving.put((async function* () {
+      await gate;
+      yield GIF;
+    })());
+    const queued = moving.delete(kept.id);
+    expect(await writes.idle(10)).toBe(false);
+    locked = true;
+    release();
+    // The write had begun before the move: it ends as it would have.
+    const added = await slow;
+    await expect(queued).rejects.toThrow(/being moved/);
+    locked = false;
+    expect((await moving.list()).map((file) => file.id).sort()).toEqual([kept.id, added.id].sort());
   });
 
   it("refuses ids that are not ours, so no path can be built from them", async () => {

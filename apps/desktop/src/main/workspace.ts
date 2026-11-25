@@ -183,6 +183,20 @@ export async function loadWorkspace(
   return { ...unknownFields(saved, STATE_FIELDS), ...state, ...(Object.keys(unlisted).length ? { unlisted } : {}) };
 }
 
+/**
+ * The panels the workspace file holds for workspaces the library lists: those loaded, and those of a workspace kept
+ * aside (`unlisted`) that the library lists again, as one whose time in Trash ran out at this start but whose files
+ * couldn't be deleted, so it went back to Trash (hunt 2026-11-25 A3). Their saved state stays.
+ */
+export function listedPanelIds(state: WorkspaceState, listed: (workspaceId: string) => boolean): string[] {
+  const ids = Object.values(state.workspaces).flatMap((workspace) => workspace.instances.map((record) => record.instanceId));
+  for (const [workspaceId, kept] of Object.entries(state.unlisted ?? {})) {
+    if (!listed(workspaceId) || !isRecord(kept) || !Array.isArray(kept.instances)) continue;
+    for (const record of kept.instances) if (isRecord(record) && typeof record.instanceId === "string") ids.push(record.instanceId);
+  }
+  return ids;
+}
+
 /** A module's panel types as the workspace needs them: their ids, and the one older panels become. */
 export interface PanelTypesOf {
   ids: readonly string[];

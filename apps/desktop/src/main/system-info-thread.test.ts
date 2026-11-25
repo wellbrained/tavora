@@ -95,15 +95,35 @@ describe("the worker", () => {
     await expect(asked).resolves.toEqual(INFO);
   });
 
-  it("gives up on a question the worker never answers, and stops the idle worker after it", async () => {
+  it("gives up on a question the worker never answers, and ends that worker, which is stuck", async () => {
     const asked = thread.info();
     const caught = expect(asked).rejects.toThrow("did not answer");
     vi.advanceTimersByTime(ASK_TIMEOUT_MS);
     await caught;
-    const worker = latest();
-    expect(worker.terminated).toBe(false);
-    vi.advanceTimersByTime(IDLE_MS);
-    expect(worker.terminated).toBe(true);
+    expect(latest().terminated).toBe(true);
+    // Nothing watches: no new one starts.
+    vi.advanceTimersByTime(RESTART_MS * 2);
+    expect(workers).toHaveLength(1);
+  });
+
+  it("replaces a stuck worker while panels watch, so the snapshots go on (hunt 2026-11-25 A7)", async () => {
+    const panel = listener();
+    const subscription = thread.subscribe(panel.target);
+    subscription.watch(cpu());
+    const stuck = latest();
+    const caught = expect(thread.info()).rejects.toThrow("did not answer");
+    vi.advanceTimersByTime(ASK_TIMEOUT_MS);
+    await caught;
+    expect(stuck.terminated).toBe(true);
+    vi.advanceTimersByTime(RESTART_MS);
+    expect(workers).toHaveLength(2);
+    // The new worker knows the panel, and the next question goes to it.
+    expect(latest().received.map((message) => message.type)).toEqual(["subscribe", "watch"]);
+    const next = thread.info();
+    const question = latest().received.at(-1) as { id: number };
+    latest().send({ type: "info", id: question.id, info: INFO });
+    await expect(next).resolves.toEqual(INFO);
+    subscription.close();
   });
 
   it("fails the question, and stays idle, when the worker can't start", async () => {
