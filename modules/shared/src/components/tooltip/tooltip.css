@@ -4,6 +4,15 @@
 .tavora-tooltip p:first-child,.tavora-tooltip-head p{margin-top:0}
 .tavora-tooltip-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .tavora-tooltip-head+p{margin-top:3px}
+/* A title with badges or meta text beside it: badges follow the title, the meta text sits at the right before any keys, and
+   the title gives way (truncates) so they all stay on the line. */
+.tavora-tooltip-head[data-parts]{justify-content:flex-start}
+.tavora-tooltip-name{display:flex;align-items:center;gap:8px;min-width:0;flex:1 1 auto}
+.tavora-tooltip-head[data-parts] .tavora-tooltip-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tavora-tooltip-badges{display:inline-flex;align-items:center;gap:4px;flex:none}
+.tavora-tooltip-meta{flex:none;margin-left:auto;font-size:12px;line-height:1.35;white-space:nowrap;color:color-mix(in srgb,var(--foreground,#f2ece0) 72%,var(--popover,#201c19))}
+/* The kit's outline Badge, in plain CSS so the card needs no Tailwind (React and plain modules show it too). */
+.tavora-tooltip-badge{display:inline-flex;align-items:center;flex:none;box-sizing:border-box;padding:2px 6px;border:1px solid var(--border,#35302b);border-radius:4px;font-size:12px;font-weight:500;line-height:16px;white-space:nowrap;color:var(--foreground,#f2ece0)}
 .tavora-tooltip[data-tone=warning] .tavora-tooltip-title{color:var(--warning,#e3c75f)}.tavora-tooltip[data-tone=danger] .tavora-tooltip-title{color:var(--destructive,#e5675a)}
 
 /* The arrow: a square turned on its corner, half hidden behind the card's edge that faces the anchor. */
@@ -24,6 +33,13 @@
 .tavora-tooltip-rows dt{color:color-mix(in srgb,var(--foreground,#f2ece0) 72%,var(--popover,#201c19))}
 .tavora-tooltip-rows dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
 .tavora-tooltip-rows dd[data-trend=better]{color:var(--success,#8cbf7f)}.tavora-tooltip-rows dd[data-trend=worse]{color:var(--destructive,#e5675a)}
+/* Several values per row sit a little closer, under right-aligned headings; a unit hangs just after the values, left
+   aligned, so "12 %" and "3.5 min" keep their numbers in line. A "–" (nothing there, no change) is faint. */
+.tavora-tooltip-rows[data-columns]{column-gap:12px}
+.tavora-tooltip-rows-heading{text-align:right;font-size:12px;color:color-mix(in srgb,var(--foreground,#f2ece0) 60%,var(--popover,#201c19))}
+.tavora-tooltip-rows .tavora-tooltip-unit{text-align:left;margin-left:-12px;color:color-mix(in srgb,var(--foreground,#f2ece0) 72%,var(--popover,#201c19))}
+.tavora-tooltip-rows[data-columns] .tavora-tooltip-unit{margin-left:-8px}
+.tavora-tooltip-rows dd[data-faint]{color:color-mix(in srgb,var(--foreground,#f2ece0) 45%,var(--popover,#201c19))}
 
 /* A one-line label: tighter, the text as bright as a title. */
 .tavora-tooltip.compact{padding:6px 10px;border-radius:7px;font-size:13px}

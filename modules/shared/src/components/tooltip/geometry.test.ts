@@ -28,4 +28,10 @@ describe('tooltipPlacement',()=>{
    expect(card.left).toBeGreaterThanOrEqual(8);expect(card.right).toBeLessThanOrEqual(392);
   }
  });
+ it('is 280 px wide at most by default, wider when asked, never wider than the window',()=>{
+  const anchor={left:180,top:100,right:220,bottom:130};
+  expect(tooltipPlacement(anchor,0,40,{width:1200,height:600}).width).toBe(280);
+  expect(tooltipPlacement(anchor,0,40,{width:1200,height:600},'bottom',520).width).toBe(520);
+  expect(tooltipPlacement(anchor,0,40,view,'bottom',520).width).toBe(400-16);
+ });
 });

@@ -6,16 +6,21 @@ export interface TooltipPlacement{left:number;top:number;width:number;side:Toolt
 
 /** Space between the anchor and the card; the arrow fills half of it. */
 export const TOOLTIP_GAP=10;
-const MARGIN=8,EDGE=12,MAX_WIDTH=280;
+const MARGIN=8,EDGE=12;
+/** The widest a card gets by default (`width="sm"`). */
+export const TOOLTIP_MAX_WIDTH=280;
 const OPPOSITE:Record<TooltipSide,TooltipSide>={top:'bottom',bottom:'top',left:'right',right:'left'};
 
 /** A pointer position as an anchor: a box around the cursor, so the card never covers it. */
 export function pointAnchor(at:TooltipPoint):TooltipRect{return{left:at.x-4,top:at.y-4,right:at.x+12,bottom:at.y+20}}
 
-/** Puts a card of the given size beside `anchor`, never on it: on the preferred side, else the one with room, inside the viewport. */
-export function tooltipPlacement(anchor:TooltipRect,width:number,height:number,viewport:{width:number;height:number},prefer:TooltipSide='bottom'):TooltipPlacement{
+/**
+ * Puts a card of the given size beside `anchor`, never on it: on the preferred side, else the one with room, inside the viewport.
+ * `maxWidth` is the widest the card may get; the viewport still narrows it.
+ */
+export function tooltipPlacement(anchor:TooltipRect,width:number,height:number,viewport:{width:number;height:number},prefer:TooltipSide='bottom',maxWidth=TOOLTIP_MAX_WIDTH):TooltipPlacement{
  const room:Record<TooltipSide,number>={top:anchor.top-TOOLTIP_GAP-MARGIN,bottom:viewport.height-anchor.bottom-TOOLTIP_GAP-MARGIN,left:anchor.left-TOOLTIP_GAP-MARGIN,right:viewport.width-anchor.right-TOOLTIP_GAP-MARGIN};
- const cap=Math.min(MAX_WIDTH,viewport.width-2*MARGIN),w0=Math.min(cap,width||cap);
+ const cap=Math.min(maxWidth,viewport.width-2*MARGIN),w0=Math.min(cap,width||cap);
  const fits=(side:TooltipSide)=>side==='top'||side==='bottom'?room[side]>=height:room[side]>=Math.min(w0,220)&&height<=viewport.height-2*MARGIN;
  const order:TooltipSide[]=[prefer,OPPOSITE[prefer],...(prefer==='top'||prefer==='bottom'?['right','left']:['bottom','top']) as TooltipSide[]];
  const side=order.find(fits)??(room.bottom>=room.top?'bottom':'top');

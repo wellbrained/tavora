@@ -1,5 +1,5 @@
-import { defineComponent, h, Teleport, nextTick, onMounted, onUnmounted, ref, watch, type PropType } from 'vue';
-import { pointAnchor, tooltipPlacement, type TooltipPoint, type TooltipRect, type TooltipSide } from './geometry';
+import { Comment, defineComponent, Fragment, h, Teleport, nextTick, onMounted, onUnmounted, ref, watch, type PropType, type VNode } from 'vue';
+import { pointAnchor, tooltipPlacement, TOOLTIP_MAX_WIDTH, type TooltipPoint, type TooltipRect, type TooltipSide } from './geometry';
 import { uiText } from '../ui/text';
 import { isMac } from '../../lib/platform';
 import './tooltip.css';
@@ -23,6 +23,19 @@ export function shortcutKeys(shortcut: string): string[] {
 
 /** A path or address has no spaces to wrap at: let it wrap after each slash instead of inside a word. */
 const wrappable = (text: string) => /\s/.test(text) ? text : text.replace(/([\\/])/g, '$1​');
+
+/** How wide a card may get: `sm` (the default) for a few lines, `md` and `lg` for rows with several columns, or pixels. */
+export type TooltipWidth = 'sm' | 'md' | 'lg' | number;
+const WIDTHS: Record<Exclude<TooltipWidth, number>, number> = { sm: TOOLTIP_MAX_WIDTH, md: 360, lg: 520 };
+/** The widest a card of this width gets, before the window narrows it. */
+export function tooltipMaxWidth(width: TooltipWidth = 'sm'): number {
+  return typeof width === 'number' ? Math.max(80, width) : WIDTHS[width] ?? TOOLTIP_MAX_WIDTH;
+}
+
+/** Whether a slot drew something: a `v-if` that is off leaves only a comment. */
+function drawn(nodes: VNode[] | undefined): nodes is VNode[] {
+  return Boolean(nodes?.some(node => node.type === Comment ? false : node.type === Fragment ? drawn(node.children as VNode[]) : true));
+}
 
 /** How long after one tooltip goes away the next still counts as a follow-up, as in a row of toolbar buttons. */
 const WARM_MS = 400;
@@ -57,6 +70,14 @@ export default defineComponent({
     id: String,
     /** Smaller type and padding, for a one-line label. */
     compact: Boolean,
+    /** A short word in an outline badge beside the title, such as "Passive". The `badges` slot takes more. */
+    badge: String,
+    /** Small muted text at the right of the title, such as "Level 3". The `meta` slot takes anything. */
+    meta: String,
+    /** A line under the title and description, between them and what you put in the card. */
+    divider: Boolean,
+    /** How wide the card may get: `sm` (280 px), `md`, `lg` or pixels. It never gets wider than the window. */
+    width: { type: [String, Number] as PropType<TooltipWidth>, default: 'sm' },
   },
   emits: ['dismiss'],
   setup(props, { emit, slots }) {
@@ -82,20 +103,20 @@ export default defineComponent({
     async function place() {
       const version = ++generation;
       if (!props.open) { ready.value = false; return; }
-      const viewport = { width: innerWidth, height: innerHeight }, side = props.side;
-      position.value = tooltipPlacement(anchor(), 0, 0, viewport, side);
+      const viewport = { width: innerWidth, height: innerHeight }, side = props.side, max = tooltipMaxWidth(props.width);
+      position.value = tooltipPlacement(anchor(), 0, 0, viewport, side, max);
       // Measure, place, and measure again if a side placement made the card narrower and so taller.
       for (let pass = 0; pass < 2; pass++) {
         await nextTick();
         if (version !== generation || !card.value) return;
         const measured = card.value.getBoundingClientRect();
-        const placed = tooltipPlacement(anchor(), measured.width, measured.height, viewport, side);
+        const placed = tooltipPlacement(anchor(), measured.width, measured.height, viewport, side, max);
         position.value = placed;
         if (placed.width >= measured.width) break;
       }
       ready.value = true;
     }
-    watch(() => [props.open, props.anchor, props.at?.x, props.at?.y, props.side, props.title, props.description, props.shortcut], place, { immediate: true });
+    watch(() => [props.open, props.anchor, props.at?.x, props.at?.y, props.side, props.title, props.description, props.shortcut, props.badge, props.meta, props.width], place, { immediate: true });
     const dismiss = () => emit('dismiss');
     const key = (event: KeyboardEvent) => { if (event.key === 'Escape') dismiss(); };
     // Only an open tooltip listens to the window: a list of closed ones adds nothing to every scroll and key.
@@ -115,17 +136,38 @@ export default defineComponent({
       track(false);
       listen(false);
     });
+    /** The title line's own parts: badges after the title, meta text at the right. Null when it is the title alone. */
+    function extras() {
+      // The badge looks like the kit's outline Badge, drawn by tooltip.css: title tooltips in React and plain modules
+      // use this card too, and shouldn't need the Badge component or Tailwind for it.
+      const slotted = slots.badges?.(), slottedMeta = slots.meta?.();
+      const badges = drawn(slotted) ? slotted : props.badge ? [h('span', { class: 'tavora-tooltip-badge', 'data-slot': 'badge' }, props.badge)] : null;
+      const meta = drawn(slottedMeta) ? slottedMeta : props.meta;
+      return badges || meta ? { badges, meta } : null;
+    }
     function head() {
       const keys = props.shortcut ? h('span', { class: 'tavora-tooltip-keys' }, shortcutKeys(props.shortcut).map(key => h('kbd', key))) : null;
-      if (props.title) return [h('div', { class: 'tavora-tooltip-head' }, [h('div', { class: 'tavora-tooltip-title' }, props.title), keys]), props.description ? h('p', wrappable(props.description)) : null];
+      const slottedTitle = slots.title?.(), title = drawn(slottedTitle) ? slottedTitle : props.title, more = extras();
+      // The title truncates when badges or meta share its line, so they never get pushed out of the card.
+      if (title && more) return [h('div', { class: 'tavora-tooltip-head', 'data-parts': 'true' }, [
+        h('div', { class: 'tavora-tooltip-name' }, [h('div', { class: 'tavora-tooltip-title' }, title), more.badges ? h('span', { class: 'tavora-tooltip-badges' }, more.badges) : null]),
+        more.meta ? h('span', { class: 'tavora-tooltip-meta' }, more.meta) : null, keys,
+      ]), props.description ? h('p', wrappable(props.description)) : null];
+      if (title) return [h('div', { class: 'tavora-tooltip-head' }, [h('div', { class: 'tavora-tooltip-title' }, title), keys]), props.description ? h('p', wrappable(props.description)) : null];
       // A one-line hint is its own label: the text takes the title's place beside the keys.
       if (keys && props.description) return [h('div', { class: 'tavora-tooltip-head' }, [h('p', wrappable(props.description)), keys])];
       return [props.description ? h('p', wrappable(props.description)) : null];
+    }
+    /** What you put in the card, under a line when `divider` is on and there is something above and below it. */
+    function body() {
+      const content = slots.default?.();
+      const above = Boolean(props.title || drawn(slots.title?.()) || props.description);
+      return [props.divider && drawn(content) && above ? h('hr', { class: 'tavora-tooltip-divider', 'aria-hidden': 'true' }) : null, content];
     }
     return () => h(Teleport, { to: 'body' }, props.open ? [h('section', {
       id: props.id, ref: card, role: 'tooltip', 'data-slot': 'tooltip', 'data-side': position.value.side, 'data-tone': props.tone, 'data-ready': ready.value ? 'true' : undefined, 'data-instant': instant.value ? 'true' : undefined,
       class: props.compact ? 'tavora-tooltip compact' : 'tavora-tooltip',
       style: { left: position.value.left + 'px', top: position.value.top + 'px', maxWidth: position.value.width + 'px', '--tavora-tooltip-arrow': position.value.arrow + 'px', visibility: ready.value ? 'visible' : 'hidden' },
-    }, [...head(), slots.default?.(), h('span', { class: 'tavora-tooltip-arrow', 'aria-hidden': 'true' })])] : []);
+    }, [...head(), ...body(), h('span', { class: 'tavora-tooltip-arrow', 'aria-hidden': 'true' })])] : []);
   },
 });
