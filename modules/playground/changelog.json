@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.1.72",
+    "date": "2026-11-25",
+    "notes": [
+      "Table: compact, sorted: a leaderboard you sort by pressing a heading, with your row standing out.",
+      "Table: groups and tones: group headings, notes, coloured numbers and a marked row."
+    ]
+  },
+  {
     "version": "0.1.71",
     "date": "2026-11-25",
     "notes": [

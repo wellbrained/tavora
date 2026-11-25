@@ -133,7 +133,7 @@ describe("Table sort", () => {
   it("reports a press and shows aria-sort only on the sorted column", async () => {
     const sort = ref<TableSort | null>(null)
     const root = mount(() =>
-      h(Table, { sort: sort.value, "onUpdate:sort": (next: TableSort | null) => (sort.value = next) }, () =>
+      h(Table, { sort: sort.value, "onUpdate:sort": (next: TableSort | null | undefined) => (sort.value = next ?? null) }, () =>
         h(TableHeader, null, () =>
           h(TableRow, null, () => [h(TableHead, { sortKey: "name" }, () => "Name"), h(TableHead, { sortKey: "score", sortFirst: "descending" }, () => "Score"), h(TableHead, null, () => "Note")]),
         ),
