@@ -861,7 +861,7 @@ export const en = {
   "settings.modules.removeMessage": "It goes to the recycle bin. Its data stays, so adding it back brings everything back.",
   "settings.modules.removeMessageUsed": "It's used in {workspaces}, where its panels close. It goes to the recycle bin, and its data stays, so adding it back brings everything back.",
   "settings.modules.removeLabel": "Remove {name}",
-  "settings.modules.report": "Report to Tavora",
+  "settings.modules.report": "Report to Tavora…",
   "settings.modules.reportLabel": "Report {name}",
   "settings.modules.reported": "Reported {name}. Thanks!",
   "settings.modules.notes": "Patch notes",

@@ -863,7 +863,7 @@ export const de: Record<keyof typeof en, string> = {
   "settings.modules.removeMessage": "Es kommt in den Papierkorb. Seine Daten bleiben, also ist beim erneuten Hinzufügen alles wieder da.",
   "settings.modules.removeMessageUsed": "Es wird in {workspaces} genutzt, dort schließen seine Panels. Es kommt in den Papierkorb, und seine Daten bleiben, also ist beim erneuten Hinzufügen alles wieder da.",
   "settings.modules.removeLabel": "{name} entfernen",
-  "settings.modules.report": "An Tavora melden",
+  "settings.modules.report": "An Tavora melden…",
   "settings.modules.reportLabel": "{name} melden",
   "settings.modules.reported": "{name} gemeldet. Danke!",
   "settings.modules.notes": "Patch Notes",
