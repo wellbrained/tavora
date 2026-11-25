@@ -1243,6 +1243,7 @@ export class CopySync {
 
   /** The recovery key typed in when another PC made the account's key: checked against the account, then the copy goes on. */
   async enterKey(text: string): Promise<void> {
+    this.refuseWhileChosen();
     const here = this.keyHere;
     const turn = this.turn;
     await this.exclusive("checking", () => (here ? this.accountKeys.enterHere(text) : this.accountKeys.enter(text))).catch((error: unknown) => {
@@ -1255,7 +1256,8 @@ export class CopySync {
 
   /** Another PC sent the account's key (pairing.ts), and it is kept: a copy that waited for it goes on. */
   async keyArrived(): Promise<void> {
-    if (this.asked("askKey")) await this.goOnWithKey(this.keyHere, this.turn);
+    // While a chosen copy waits the key is kept and the copy waits on (refuseWhileChosen); the pairing that brought it goes on.
+    if (this.asked("askKey") && this.swap.phase !== "chosen") await this.goOnWithKey(this.keyHere, this.turn);
   }
 
   private async goOnWithKey(here: boolean, turn: number): Promise<void> {
