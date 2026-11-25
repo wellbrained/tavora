@@ -84,6 +84,20 @@ describe("useItemSession", () => {
     expect(broken.loaded.value).toBe(false);
   });
 
+  it("drops an edit while the open item is deleted elsewhere, so it isn't saved back blank", async () => {
+    const a = createMemoryHost();
+    const b = createMemoryHost({ share: a.host });
+    a.host.documents.put({ id: "plan-a", title: "A", data: { name: "A", items: ["kept"] } });
+    const plans = useItemSession(a.sdk, options);
+    await plans.ready;
+    await b.sdk.documents.delete("plan-a");
+    await vi.waitFor(() => expect(plans.deleted.value).toBe(true));
+    plans.update((draft) => void (draft as { items: string[] }).items.push("typed"));
+    await plans.flush();
+    expect(a.host.documents.get("plan-a")).toBeNull();
+    expect(plans.deletedCopy.value).toEqual({ name: "A", items: ["kept"] });
+  });
+
   it("shows busy and deleted, and brings a deleted item back", async () => {
     const a = createMemoryHost();
     const b = createMemoryHost({ share: a.host });

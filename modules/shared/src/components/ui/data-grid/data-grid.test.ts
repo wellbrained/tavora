@@ -141,6 +141,14 @@ describe("DataGrid", () => {
     expect(grid.editing.value).toBeNull()
   })
 
+  it("keeps the edit when Escape only ends an input method's composition (key code 229)", async () => {
+    const grid = await mount()
+    await press(grid.root, "F2")
+    const editor = grid.root.querySelector<HTMLTextAreaElement>("[data-grid-editor]")!
+    await press(editor, "Escape", { keyCode: 229 } as KeyboardEventInit)
+    expect(grid.editing.value).not.toBeNull()
+  })
+
   it("keeps a typed edit and moves on with an arrow, but not inside a formula", async () => {
     const grid = await mount()
     await press(grid.root, "a")

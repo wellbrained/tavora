@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.68",
+    "date": "2026-11-25",
+    "notes": [
+      "Grids keep an edit when Escape only ends typing with an input method."
+    ]
+  },
+  {
     "version": "0.1.67",
     "date": "2026-11-25",
     "notes": [

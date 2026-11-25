@@ -30,3 +30,8 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           LABELED: ${{ contains(github.event.pull_request.labels.*.name, 'feature-complete') }}
         run: node apps/desktop/scripts/change-notes.mjs check origin/main "$LABELED" "$HEAD_SHA"
+      # A built-in module whose files (or the kit it bundles) changed raises its version (CLAUDE.md, "Built-in modules").
+      - name: Check the built-in modules' versions
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/check-module-versions.mjs origin/main "$HEAD_SHA"

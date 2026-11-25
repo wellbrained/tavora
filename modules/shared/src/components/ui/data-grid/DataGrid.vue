@@ -22,6 +22,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type HTMLAttributes, type StyleValue } from "vue"
 import { useResizeObserver } from "@vueuse/core"
 import { useFocusRecovery } from "../../../focus-recovery"
+import { isComposing } from "../../../lib/keys"
 import { cn } from "../../../lib/utils"
 import { uiText } from "../text"
 import { columnName, hitIndex, makeAxis, scrollToShow, visibleRange, type Axis } from "./geometry"
@@ -716,7 +717,7 @@ function onEditorInput(event: Event) {
 
 function onEditorKeyDown(event: KeyboardEvent) {
   emit("editor-keydown", event)
-  if (event.defaultPrevented || event.isComposing) return
+  if (event.defaultPrevented || isComposing(event)) return
   const current = editing.value
   if (!current) return
   if (event.key === "Escape") {

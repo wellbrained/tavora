@@ -108,6 +108,11 @@ export function leftEmpty(entry: Pick<NoteEntry, "text" | "fixedTitle" | "images
   return !entry.text.trim() && !entry.fixedTitle.trim() && entry.images.length === 0;
 }
 
+/** Whether a note (the scratchpad, say) holds nothing: no text and no picture. Undo of Clear only puts the old text back then. */
+export function isBlank(note: Pick<NoteData, "text" | "images">): boolean {
+  return !note.text.trim() && note.images.length === 0;
+}
+
 /** The note's plain text as paragraphs, shown when its stored formatting cannot be read. */
 export function contentFromText(text: string): RichText {
   const lines = text.split(/\r?\n/).slice(0, 5000);

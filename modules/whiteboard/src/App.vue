@@ -9,7 +9,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { ArrowLeftRight, ArrowRight, ImagePlus, Minus, MoreHorizontal, Plus, StickyNote, Waypoints } from "@lucide/vue";
 import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
 import { Notice } from "@tavora/official-ui/components/ui/notice";
-import { toast, Toaster } from "@tavora/official-ui/components/ui/toast";
+import { toast, Toaster, undoable } from "@tavora/official-ui/components/ui/toast";
 import { TavoraError, type TavoraSDK, type TavoraTheme } from "@tavora/sdk";
 import type { DocumentHandle } from "@tavora/sdk/store";
 import { computed, defineAsyncComponent, h, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
@@ -90,9 +90,12 @@ function notify(message: string) {
   toast({ title: message, duration: NOTICE_MS });
 }
 
-/** A message with an Undo button. */
+/**
+ * A message with an Undo button: the kit's undoable, so each delete or clear has its own offer, and one that can't come back
+ * says so. Ctrl+Z stays Excalidraw's own undo on the board.
+ */
 function offerUndo(message: string, run: () => Promise<void>) {
-  toast({ title: message, duration: NOTICE_MS, action: { label: t("undo.undo"), onClick: () => void run().catch(() => undefined) } });
+  undoable({ title: message, undo: run, key: false });
 }
 
 function saveSelection() {

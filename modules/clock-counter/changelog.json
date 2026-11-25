@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.50",
+    "date": "2026-11-25",
+    "notes": [
+      "Escape that only ends typing with an input method (Japanese, Chinese, Korean) no longer closes the settings."
+    ]
+  },
+  {
     "version": "0.1.49",
     "date": "2026-11-25",
     "notes": [

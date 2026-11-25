@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.3.39",
+    "date": "2026-11-25",
+    "notes": [
+      "Each delete or clear gets its own Undo, and you hear when something can't come back."
+    ]
+  },
+  {
     "version": "0.3.38",
     "date": "2026-11-25",
     "notes": [
