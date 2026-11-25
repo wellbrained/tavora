@@ -109,7 +109,7 @@ async function share() {
           // they get one; Steam rows here), so Share sends only the rest again.
           if (steam && at > 0) {
             const sent = new Set(keys.slice(0, at));
-            steamRows.value = steamRows.value.filter((row) => !sent.has(row.key));
+            steamRows.value = (steamRows.value ?? []).filter((row) => !sent.has(row.key));
             ticked.value = new Set([...ticked.value].filter((key) => !sent.has(key)));
           }
           answered.value = result.error;
