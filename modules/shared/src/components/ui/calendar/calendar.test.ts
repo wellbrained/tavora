@@ -135,6 +135,31 @@ describe("Calendar", () => {
     expect(button("Previous month").disabled).toBe(true)
   })
 
+  it("picks with Space too", async () => {
+    const { day, picks } = mount()
+    await nextTick()
+    day("2026-11-12").dispatchEvent(new KeyboardEvent("keydown", { key: " ", code: "Space", bubbles: true }))
+    await nextTick()
+    expect(picks).toEqual(["2026-11-12"])
+  })
+
+  it("fills the picked day over its mark, and greys a marked day it can't pick", async () => {
+    const marks: Record<string, CalendarMark> = { "2026-11-19": { tone: "success", label: "Solved" }, "2026-11-27": { tone: "success", label: "Solved" } }
+    const { day } = mount({ marks, modelValue: "2026-11-19", max: "2026-11-25" })
+    await nextTick()
+    expect(day("2026-11-19").className).toContain("bg-primary")
+    expect(day("2026-11-19").className).not.toContain("bg-success")
+    expect(day("2026-11-27").className).toContain("opacity-45")
+    expect(day("2026-11-27").className).not.toContain("bg-success")
+  })
+
+  it("puts the one tab stop on the first day it can pick when min is mid-month", async () => {
+    const { root, day } = mount({ month: "2026-10", min: "2026-10-03" })
+    await nextTick()
+    expect([...root.querySelectorAll('[data-slot="calendar-day"][tabindex="0"]')].map((cell) => cell.getAttribute("data-value"))).toEqual(["2026-10-03"])
+    expect(day("2026-10-01").getAttribute("tabindex")).toBeNull()
+  })
+
   it("can't pick a day isDisabled turns down", async () => {
     const { day, picks } = mount({ isDisabled: (date: string) => date.endsWith("-13") })
     await nextTick()

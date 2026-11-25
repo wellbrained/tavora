@@ -10,7 +10,7 @@ import { computed, shallowRef, watch, type HTMLAttributes } from "vue"
 import { cn } from "../../../lib/utils"
 import { Button } from "../button"
 import { uiLocale, uiText } from "../text"
-import { dayLabel, firstMonth, localToday, monthOf, monthStart, toCalendarDate, type CalendarMark } from "./days"
+import { dayLabel, firstMonth, localToday, monthOf, monthStart, toCalendarDate, TONE_CLASSES, type CalendarMark } from "./days"
 
 type WeekStart = 0 | 1 | 2 | 3 | 4 | 5 | 6
 
@@ -41,30 +41,52 @@ const picked = computed(() => toCalendarDate(model.value))
 const minValue = computed(() => toCalendarDate(props.min))
 const maxValue = computed(() => toCalendarDate(props.max))
 
-// The day the keyboard is on; its month is the month shown. Asking for another month moves it to that month's first day.
-const placeholder = shallowRef<DateValue>(firstMonth({ month: month.value, picked: model.value, today: todayDay.value, min: props.min, max: props.max }))
+const markOf = (day: string): CalendarMark | undefined => props.marks?.[day]
+const isDateDisabled = (date: DateValue) => props.isDisabled?.(date.toString()) ?? false
+/** A day that can't be picked: the same days reka greys out (`data-disabled`). Days compare as "YYYY-MM-DD" text. */
+const isOff = (day: string) => props.disabled || (!!props.min && day < props.min) || (!!props.max && day > props.max) || (props.isDisabled?.(day) ?? false)
+
+// The day the keyboard is on; its month is the month shown. Asking for another month moves it to that month's first
+// day. It is kept on a day that can be picked: reka gives a month no tab stop at all when its first day is before `min`
+// (its first-focusable search skips the month), so the kit moves it there itself.
+const placeholder = shallowRef<DateValue>(settle(firstMonth({ month: month.value, picked: model.value, today: todayDay.value, min: props.min, max: props.max })))
 watch(month, (next) => {
   const start = monthStart(next)
-  if (start && monthOf(start) !== monthOf(placeholder.value)) placeholder.value = start
+  if (start && monthOf(start) !== monthOf(placeholder.value)) placeholder.value = settle(start)
 })
 function onPlaceholder(next: DateValue) {
-  placeholder.value = next
+  placeholder.value = settle(next)
   const shown = monthOf(next)
   if (month.value !== shown) month.value = shown
 }
-
-const isDateDisabled = (date: DateValue) => props.isDisabled?.(date.toString()) ?? false
+/** The first day from `date` to the end of its month that can be picked, or `date` when none can. */
+function settle(date: DateValue): DateValue {
+  for (let day = date; day.month === date.month; day = day.add({ days: 1 })) if (!isOff(day.toString())) return day
+  return date
+}
 
 function onModel(next: DateValue | undefined) {
   if (next) model.value = next.toString()
 }
-/** A click or Enter/Space on a day. reka's `data-disabled` covers min, max, isDisabled and a disabled calendar. */
+/** A click or Enter/Space on a day. */
 function choose(day: string, event: MouseEvent | KeyboardEvent) {
   if (event instanceof KeyboardEvent && (event.ctrlKey || event.metaKey || event.altKey)) return
-  if (!(event.currentTarget as HTMLElement | null)?.hasAttribute("data-disabled")) emit("pick", day)
+  if (!isOff(day)) emit("pick", day)
 }
 
-const markOf = (day: string): CalendarMark | undefined => props.marks?.[day]
+/**
+ * One look per day, so nothing depends on which class Tailwind writes last: a day that can't be picked is greyed (its
+ * mark too), the picked day is filled with primary (over its mark), a marked day has its tone, any other day a plain
+ * hover. Today adds its ring and a bolder number to whichever it is.
+ */
+function dayClass(day: string): string {
+  const today = day === todayDay.value && "font-semibold ring-2 ring-inset ring-ring"
+  if (isOff(day)) return cn("text-muted-foreground cursor-default opacity-45", today)
+  if (day === model.value) return cn("bg-primary text-primary-foreground hover:bg-primary-hover font-semibold", today)
+  const mark = markOf(day)
+  return cn(mark ? TONE_CLASSES[mark.tone].day : "hover:bg-[color-mix(in_srgb,var(--foreground)_10%,var(--accent))]", today)
+}
+
 </script>
 
 <template>
@@ -88,17 +110,17 @@ const markOf = (day: string): CalendarMark | undefined => props.marks?.[day]
   >
     <CalendarHeader data-slot="calendar-header" class="flex items-center justify-between gap-2">
       <CalendarPrev as-child>
-        <Button variant="ghost" size="icon-sm" class="text-muted-foreground" :aria-label="uiText.previousMonth"><ChevronLeft :stroke-width="1.5" /></Button>
+        <Button variant="ghost" size="icon-sm" class="text-muted-foreground" :aria-label="uiText.previousMonth"><ChevronLeft /></Button>
       </CalendarPrev>
-      <CalendarHeading data-slot="calendar-heading" class="text-sm font-semibold capitalize" aria-live="polite" />
+      <CalendarHeading data-slot="calendar-heading" class="text-sm font-semibold" aria-live="polite" />
       <CalendarNext as-child>
-        <Button variant="ghost" size="icon-sm" class="text-muted-foreground" :aria-label="uiText.nextMonth"><ChevronRight :stroke-width="1.5" /></Button>
+        <Button variant="ghost" size="icon-sm" class="text-muted-foreground" :aria-label="uiText.nextMonth"><ChevronRight /></Button>
       </CalendarNext>
     </CalendarHeader>
     <CalendarGrid v-for="shown in grid" :key="shown.value.toString()" data-slot="calendar-grid" class="w-full border-collapse select-none">
       <CalendarGridHead>
         <CalendarGridRow class="grid grid-cols-7 gap-1">
-          <CalendarHeadCell v-for="(day, i) in weekDays" :key="i" class="text-muted-foreground pb-0.5 text-center text-xs font-normal">{{ day }}</CalendarHeadCell>
+          <CalendarHeadCell v-for="(day, i) in weekDays" :key="i" class="text-muted-foreground text-center text-xs font-normal">{{ day }}</CalendarHeadCell>
         </CalendarGridRow>
       </CalendarGridHead>
       <CalendarGridBody class="mt-1 grid gap-1">
@@ -113,21 +135,7 @@ const markOf = (day: string): CalendarMark | undefined => props.marks?.[day]
               :data-today="date.toString() === todayDay ? '' : undefined"
               :aria-current="date.toString() === todayDay ? 'date' : undefined"
               :aria-label="dayLabel(date.toString(), uiLocale, markOf(date.toString()))"
-              :class="
-                cn(
-                  'relative grid aspect-square w-full cursor-pointer place-items-center rounded-sm text-sm tabular-nums outline-none',
-                  'hover:bg-[color-mix(in_srgb,var(--foreground)_10%,var(--accent))] focus-visible:ring-ring/50 focus-visible:ring-3',
-                  'data-[tone=success]:bg-success/20 data-[tone=success]:text-success data-[tone=success]:font-semibold',
-                  'data-[tone=destructive]:bg-destructive/20 data-[tone=destructive]:text-destructive data-[tone=destructive]:font-semibold',
-                  'data-[tone=warning]:bg-warning/20 data-[tone=warning]:text-warning data-[tone=warning]:font-semibold',
-                  'data-[tone=info]:bg-info/20 data-[tone=info]:text-info data-[tone=info]:font-semibold',
-                  'data-[tone=muted]:bg-muted data-[tone=muted]:text-muted-foreground',
-                  'data-today:font-semibold data-today:shadow-[inset_0_0_0_1.5px_var(--ring)]',
-                  'data-selected:bg-primary data-selected:text-primary-foreground data-selected:font-semibold data-selected:hover:bg-primary-hover',
-                  'data-disabled:text-muted-foreground data-disabled:cursor-default data-disabled:bg-transparent data-disabled:font-normal data-disabled:opacity-45 data-disabled:hover:bg-transparent',
-                  'data-outside-view:invisible',
-                )
-              "
+              :class="cn('relative grid aspect-square w-full cursor-pointer place-items-center rounded-sm text-sm tabular-nums outline-none focus-visible:ring-ring/50 focus-visible:ring-3 data-outside-view:invisible', dayClass(date.toString()))"
               @click="choose(date.toString(), $event)"
               @keydown.enter="choose(date.toString(), $event)"
               @keydown.space="choose(date.toString(), $event)"

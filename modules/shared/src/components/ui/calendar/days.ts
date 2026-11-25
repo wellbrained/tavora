@@ -6,6 +6,18 @@ import { CalendarDate, parseDate } from "@internationalized/date"
 export const CALENDAR_TONES = ["success", "destructive", "warning", "info", "muted"] as const
 export type CalendarTone = (typeof CALENDAR_TONES)[number]
 
+/**
+ * Each tone's classes, in one place: a marked day's soft wash with its number in the tone (hover deepens the wash), and
+ * the legend's swatch. Written out in full: Tailwind only finds class names that appear in the source as plain strings.
+ */
+export const TONE_CLASSES: Record<CalendarTone, { day: string; swatch: string }> = {
+  success: { day: "bg-success/20 hover:bg-success/30 text-success font-semibold", swatch: "bg-success" },
+  destructive: { day: "bg-destructive/20 hover:bg-destructive/30 text-destructive font-semibold", swatch: "bg-destructive" },
+  warning: { day: "bg-warning/20 hover:bg-warning/30 text-warning font-semibold", swatch: "bg-warning" },
+  info: { day: "bg-info/20 hover:bg-info/30 text-info font-semibold", swatch: "bg-info" },
+  muted: { day: "bg-muted hover:bg-accent text-muted-foreground", swatch: "bg-muted-foreground/40" },
+}
+
 /** A day's mark: its tint, and a few words screen readers read after the date ("Solved"). */
 export interface CalendarMark {
   tone: CalendarTone
