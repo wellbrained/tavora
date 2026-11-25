@@ -17,7 +17,7 @@ import { ACTIVE_GROUP, ROW_FADE } from "./active";
 import ItemCard from "./ItemCard.vue";
 import ItemEditor from "./ItemEditor.vue";
 import SettingsSkeleton from "./SettingsSkeleton.vue";
-import { clocksRunning, count, find, groupOf, insert, lap, linkedGroups, MAX, move, moveTo, newItem, parseList, remove, resetClock, resetCounter, startPause, visualOrder, type Counter, type Item, type ItemKind, type ItemList } from "./items";
+import { clocksRunning, count, find, groupOf, insert, lap, linkedGroups, MAX, move, moveTo, newItem, parseList, remove, resetClock, resetCounter, shownLinks, startPause, visualOrder, type Counter, type Item, type ItemKind, type ItemList } from "./items";
 import { offerDelete } from "./delete-offer";
 import { sweepHotkeys } from "./hotkey-sweep";
 import { buildLiveState } from "./live";
@@ -99,7 +99,7 @@ watch(
 /** The items an action on `id` changes: the item, and for a counter the counters it adds to. */
 function touchedBy(id: string): string[] {
   const item = find(list.value, id);
-  return item?.kind === "counter" ? [id, ...item.links.map((link) => link.target)] : [id];
+  return item?.kind === "counter" ? [id, ...shownLinks(list.value, item).map((link) => link.target)] : [id];
 }
 
 function act(action: string, id: string): void {

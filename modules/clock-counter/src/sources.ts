@@ -4,7 +4,7 @@
 // that is not shown as a whole has no line of its own, so its counters are listed one by one. A source whose look grows with
 // the text says so (`grows`): its frame is then as big as `size` times the frame's scale, and follows it.
 import type { OverlaySource } from "@tavora/sdk";
-import { boxOf, counterShown, groupSegments, itemSegments, linkedGroups, readClock, sizeScales, visualOrder, type Font, type Item, type ItemList, type OverlayLook } from "./items";
+import { boxOf, counterShown, groupSegments, itemSegments, linkedGroups, newerItems, readClock, shownFont, sizeScales, visualOrder, type Font, type Item, type ItemList, type OverlayLook } from "./items";
 import type { Segment } from "./template";
 import { formatSeconds } from "./time";
 
@@ -68,9 +68,9 @@ function lineSize(line: Segment[], look: OverlayLook, measure: Measure, lap: { t
   const scales = sizeScales(look);
   const number = VALUE_PX * scales.number;
   const words = VALUE_PX * scales.words;
-  const width = line.reduce((total, part) => total + measure(part.text, part.value ? number : words, part.value ? 700 : 600, look.font), 0);
+  const width = line.reduce((total, part) => total + measure(part.text, part.value ? number : words, part.value ? 700 : 600, shownFont(look.font)), 0);
   const tallest = Math.max(line.some((part) => part.value) ? number : 0, line.some((part) => !part.value) ? words : 0);
-  const lapWidth = lap ? measure(lap.text, number * LAP_SHARE, 500, look.font) : 0;
+  const lapWidth = lap ? measure(lap.text, number * LAP_SHARE, 500, shownFont(look.font)) : 0;
   return { width: Math.ceil(Math.max(width, lapWidth)), height: Math.ceil(tallest * LINE_HEIGHT + (lap ? number * LAP_SHARE * LINE_HEIGHT : 0)) };
 }
 
@@ -104,6 +104,9 @@ export function buildSources(list: ItemList, measure: Measure, nameOf: (item: It
     }
     if (sources.length >= MAX_SOURCES) break;
   }
+  // Items kept for a newer version stay on the Overlay page's list, by name only: this version can't draw or size them, so
+  // a frame of theirs keeps the size it has.
+  for (const item of newerItems(list)) if (sources.length < MAX_SOURCES) sources.push({ key: item.id, name: item.label || item.id });
   return sources;
 }
 

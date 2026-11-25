@@ -188,7 +188,8 @@ describe("the list", () => {
     insert(list, clock("stopwatch", { id: "w", laps: true }));
     insert(list, counter("k", { goal: 50 }));
     expect(parseList(JSON.parse(JSON.stringify(list)))).toEqual(list);
-    expect(parseList({ items: [{ id: "x", kind: "teapot" }, { kind: "counter" }, 5] })).toEqual({ items: [] });
+    // A kind a newer version added is kept aside (saved back in its place), broken entries are dropped.
+    expect(parseList({ items: [{ id: "x", kind: "teapot" }, { kind: "counter" }, 5] })).toEqual({ items: [], newerItems: [{ after: null, entry: { id: "x", kind: "teapot" } }] });
     expect(parseList(null)).toEqual({ items: [] });
   });
 

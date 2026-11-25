@@ -8,7 +8,7 @@
 // always follow it directly: a task and everything below it form a block
 // that moves as one.
 
-import { clamp, unknownFields } from "@tavora/official-ui/lib/utils";
+import { choiceOf, clamp, keepChoice, unknownFields, type NewerChoice } from "@tavora/official-ui/lib/utils";
 import type { JsonValue } from "@tavora/sdk";
 
 /** The document every To-Dos panel of a workspace shares. */
@@ -58,8 +58,8 @@ export interface Group {
   [key: string]: JsonValue;
   id: string;
   name: string;
-  /** Tints the group's header; "" for none. */
-  color: GroupColor;
+  /** Tints the group's header; "" for none. A colour a newer version added stays as it is and shows as none (`shownColor`). */
+  color: GroupColor | NewerChoice;
   tasks: Task[];
 }
 
@@ -116,10 +116,15 @@ export function parseList(raw: JsonValue | null): TodoList {
   };
 }
 
-/** A known color name, or "" for none and for anything an older version or a hand edit left there. */
-function parseColor(value: JsonValue | undefined): GroupColor {
-  return GROUP_COLORS.find((color) => color === value) ?? "";
+const COLOR_CHOICES: readonly GroupColor[] = ["", ...GROUP_COLORS];
+
+/** A known color name, a newer version's (kept), or "" for none and for anything else a hand edit left there. */
+function parseColor(value: JsonValue | undefined): GroupColor | NewerChoice {
+  return keepChoice(COLOR_CHOICES, value, "");
 }
+
+/** The colour a group shows: none for one a newer version added. */
+export const shownColor = (color: string): GroupColor => choiceOf(COLOR_CHOICES, color, "");
 
 /**
  * One stored task, followed by the sub-to-dos an older version kept as

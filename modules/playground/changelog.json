@@ -1,9 +1,17 @@
 [
   {
+    "version": "0.1.68",
+    "date": "2026-11-25",
+    "notes": [
+      "The tooltip specimens show their cards with useTooltip, and the chart bars in Values can be reached with Tab.",
+      "A new specimen shows a big card in Tavora's tooltip, which you can pin."
+    ]
+  },
+  {
     "version": "0.1.67",
     "date": "2026-11-25",
     "notes": [
-      "The tooltip specimens show their cards with useTooltip, and the chart bars in Values can be reached with Tab."
+      "Built with the newest kit: newer data and choices stay when an older copy saves."
     ]
   },
   {

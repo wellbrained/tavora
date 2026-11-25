@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ACCEPT_ATTRIBUTE, addFile, cleanName, detectType, formatBytes, NAME_LIMIT, linkStatus, parseFiles, removeFile, replaceCopy, renameFile, setFileView, sortPicked, type FileEntry, type FilesData } from "./files";
+import { ACCEPT_ATTRIBUTE, addFile, cleanName, detectType, formatBytes, NAME_LIMIT, linkStatus, parseFiles, removeFile, replaceCopy, renameFile, setFileView, shownSide, sortPicked, type FileEntry, type FilesData } from "./files";
 
 const entry = (id: string, patch: Partial<FileEntry> = {}): FileEntry => ({
   id,
@@ -90,13 +90,17 @@ describe("remembering page and zoom", () => {
     setFileView(data, "missing", { page: 2 });
   });
 
-  it("remembers what the side shows and drops what it does not know", () => {
+  it("remembers what the side shows, and keeps a newer version's choice", () => {
     const data: FilesData = { files: [entry("a")] };
     setFileView(data, "a", { side: "pages" });
     expect(data.files[0]!.view.side).toBe("pages");
     setFileView(data, "a", { side: "contents" });
     expect(data.files[0]!.view.side).toBe("contents");
-    setFileView(data, "a", { side: "nonsense" as never });
+    // One this version doesn't know (a newer one's) stays saved and shows nothing on the side.
+    setFileView(data, "a", { side: "nonsense" });
+    expect(data.files[0]!.view.side).toBe("nonsense");
+    expect(shownSide(data.files[0]!.view.side)).toBeNull();
+    setFileView(data, "a", { side: 3 as never });
     expect(data.files[0]!.view.side).toBeNull();
   });
 });

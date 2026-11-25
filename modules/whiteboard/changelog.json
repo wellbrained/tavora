@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.3.38",
+    "date": "2026-11-25",
+    "notes": [
+      "A background a newer version added stays on your board."
+    ]
+  },
+  {
     "version": "0.3.37",
     "date": "2026-11-24",
     "notes": [

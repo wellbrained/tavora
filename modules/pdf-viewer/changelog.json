@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.1.38",
+    "date": "2026-11-25",
+    "notes": [
+      "Files a newer version can open stay in your list.",
+      "A newer version's fit and side choices stay when you read on."
+    ]
+  },
+  {
     "version": "0.1.37",
     "date": "2026-11-24",
     "notes": [

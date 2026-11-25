@@ -33,6 +33,7 @@ import {
   renameGroup,
   restoreFinished,
   setGroupColor,
+  shownColor,
   type Group,
   type GroupColor,
   type Task,
@@ -69,6 +70,8 @@ provide(ROW_FOCUS, useFocusRecovery(tasksEl));
 
 /** "None" first, then each color. */
 const COLOR_OPTIONS: GroupColor[] = ["", ...GROUP_COLORS];
+/** The header's colour; none for one a newer version added (it stays saved as it is). */
+const tint = computed(() => shownColor(props.group.color));
 const colorName = (color: GroupColor) => (color ? t(`color.${color}`) : t("group.color.none"));
 
 const renaming = ref(false);
@@ -169,7 +172,7 @@ function menuEntries(): MenuEntry[] {
         id: `color:${option || "none"}`,
         label: colorName(option),
         color: option ? GROUP_TINTS[option] : "transparent",
-        checked: props.group.color === option,
+        checked: tint.value === option,
         radio: true,
       })),
     },
@@ -307,12 +310,12 @@ function dropMark(position: number): "before" | "after" | null {
       :class="
         cn(
           'group/header relative flex h-10 cursor-pointer items-center gap-1 pr-1 pl-1.5 select-none',
-          group.color ? 'tinted-header' : 'hover:bg-accent/40',
+          tint ? 'tinted-header' : 'hover:bg-accent/40',
           !collapsed && 'border-b',
         )
       "
-      :data-tint="group.color || undefined"
-      :style="group.color ? { '--tint': GROUP_TINTS[group.color] } : undefined"
+      :data-tint="tint || undefined"
+      :style="tint ? { '--tint': GROUP_TINTS[tint] } : undefined"
       data-testid="group-header"
       @click="onHeaderClick"
       @contextmenu="onHeaderContextMenu"

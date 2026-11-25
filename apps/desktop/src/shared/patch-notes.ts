@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.25.12",
+    date: "2026-11-25",
+    title: "Newer module data stays",
+    notes: [
+      "Clock & Counter and PDF Viewer keep items and files a newer version added, also when you edit with an older copy.",
+      "To-Dos, Clock & Counter, Notes, Whiteboard and PDF Viewer keep colours, fonts and other choices a newer version added.",
+      "Calculator and System Monitor settings changed in another workspace no longer go back when you change another one.",
+    ],
+    prs: [
+      { number: 977, title: "Kit hunt fixes 1: newer entries and choices stay, app settings save only what changed" },
+    ],
+    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "publishing", "sdk", "system-monitor", "todos", "ui-kit", "website", "whiteboard"],
+  },
+  {
     version: "0.25.11",
     date: "2026-11-25",
     title: "Richer tooltips for modules",

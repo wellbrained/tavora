@@ -20,7 +20,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowR
 import OutlineList from "./OutlineList.vue";
 import PdfPage from "./PdfPage.vue";
 import PdfThumbs from "./PdfThumbs.vue";
-import { clampZoom, type FileView, type FitMode, type SideMode } from "./files";
+import { clampZoom, fitToSave, shownFit, shownSide, type FileView, type FitMode, type SideMode } from "./files";
 import { t } from "./i18n";
 import { fitZoomAll, layoutPages, pageAtOffset, pagesInBand, PAGE_GAP, parsePageInput, stepZoom, type PageSize } from "./layout";
 import { namedPage, type LinkTarget } from "./links";
@@ -36,9 +36,13 @@ const status = ref<Status>("opening");
 const pdf = shallowRef<PDFDocumentProxy | null>(null);
 const sizes = ref<PageSize[]>([]);
 const outline = ref<OutlineNode[]>([]);
-const side = ref<SideMode>(props.view.side);
+const side = ref<SideMode>(shownSide(props.view.side));
 const zoom = ref(clampZoom(props.view.zoom));
-const fit = ref<FitMode>(props.view.fit);
+const fit = ref<FitMode>(shownFit(props.view.fit, "pdf"));
+/** Whether the reader picked a fit or zoom here; from then on that is saved, also when it is the default. */
+let picked = false;
+/** The fit to save: what is stored while it is the one shown and nobody picked one, so a newer version's fit (shown as the default) stays. */
+const savedFit = (mode: FitMode): FileView["fit"] => fitToSave(mode, props.view.fit, "pdf", picked);
 const page = ref(1);
 const pageField = ref("1");
 const root = ref<HTMLElement | null>(null);
@@ -230,7 +234,7 @@ async function setZoom(next: number, mode: FitMode) {
   const value = clampZoom(next);
   fit.value = mode;
   if (!element || value === zoom.value) {
-    emit("view", { zoom: value, fit: mode });
+    emit("view", { zoom: value, fit: savedFit(mode) });
     return;
   }
   const anchor = page.value;
@@ -240,7 +244,7 @@ async function setZoom(next: number, mode: FitMode) {
   await nextTick();
   if (size) element.scrollTop = layout.value.tops[anchor - 1]! + inside * size.height * value;
   measure();
-  emit("view", { zoom: value, fit: mode });
+  emit("view", { zoom: value, fit: savedFit(mode) });
 }
 
 /** Works out the fit again (the panel changed size). */
@@ -439,6 +443,7 @@ function chooseSide(pressed: Exclude<SideMode, null>[]) {
 }
 
 function chooseFit(pressed: ("width" | "page")[]) {
+  picked = true;
   const next = pressed.find((mode) => mode !== fit.value);
   if (next) fitTo(next);
   else void setZoom(zoom.value, null);

@@ -1,3 +1,9 @@
+## 0.4.12
+
+A newer module's data stays when an older copy saves. `MIN_TAVORA` stays (Tavora 0.21.43).
+
+- `@tavora/sdk/store`: `openDocument` takes `toStored(data)`, which turns the panel's data into what is saved. With it, `parse` can keep aside entries a newer version of the module wrote (an item of a kind this one doesn't know) and `toStored` puts them back in their place, so a save here doesn't drop them.
+
 ## 0.4.11
 
 The memory host checks params as Tavora does, and two fixes in the store and the file calls. `MIN_TAVORA` stays (Tavora 0.21.43).

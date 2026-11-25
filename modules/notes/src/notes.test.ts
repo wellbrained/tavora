@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanTitle, collectImageIds, contentFromText, formatMegabytes, fontStack, matches, normalizeLink, nudged, parseAppearance, parseNote, parseOrder, reordered, previewFor, relativeTime, sections, titleFor, type NoteEntry } from "./notes";
+import { cleanTitle, collectImageIds, contentFromText, formatMegabytes, fontStack, matches, shownFont, shownSize, normalizeLink, nudged, parseAppearance, parseNote, parseOrder, reordered, previewFor, relativeTime, sections, titleFor, type NoteEntry } from "./notes";
 
 function entry(id: string, patch: Partial<NoteEntry> = {}): NoteEntry {
   return { id, title: id, text: "", fixedTitle: "", images: [], pinned: false, createdAt: "2026-10-14T10:00:00.000Z", updatedAt: "2026-10-14T10:00:00.000Z", revision: 1, ...patch };
@@ -157,15 +157,16 @@ describe("normalizeLink", () => {
 });
 
 describe("parseAppearance", () => {
-  it("gives every part a valid font and size, with defaults for anything unknown", () => {
+  it("gives every part a font and size: defaults for anything broken, a newer version's kept as it is", () => {
     expect(parseAppearance(null)).toEqual({
       notes: { font: "inter", size: "medium" },
       scratchpad: { font: "inter", size: "medium" },
     });
     expect(parseAppearance({ notes: { font: "lora", size: "large" }, scratchpad: { font: "comic", size: 4 } })).toEqual({
       notes: { font: "lora", size: "large" },
-      scratchpad: { font: "inter", size: "medium" },
+      scratchpad: { font: "comic", size: "medium" },
     });
+    expect([shownFont("comic"), shownSize("huge"), fontStack("comic")]).toEqual(["inter", "medium", fontStack("inter")]);
     expect(parseAppearance([1] as never).notes.font).toBe("inter");
   });
 

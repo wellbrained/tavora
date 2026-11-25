@@ -1,7 +1,8 @@
 // The user's Calculator choices from the toolbar and its Settings dialog, the same in every workspace (kept in the module's app
 // storage).
 import { unknownFields } from "@tavora/official-ui/lib/utils";
-import type { JsonValue } from "@tavora/sdk";
+import { patchStored } from "@tavora/official-ui/patch-stored";
+import type { JsonValue, TavoraSDK } from "@tavora/sdk";
 
 export type Mode = "basic" | "plus";
 export type Decimals = "auto" | 0 | 1 | 2 | 3 | 4 | 5 | 6;
@@ -39,4 +40,13 @@ export function parseSettings(raw: JsonValue | null): Settings {
     decimals: decimals ?? DEFAULT_SETTINGS.decimals,
     short: typeof stored.short === "boolean" ? stored.short : DEFAULT_SETTINGS.short,
   };
+}
+
+/**
+ * Saves the settings that changed over the newest stored ones and returns what is stored now. The others are not written from
+ * this panel's copy: a panel in another workspace may have changed them, or a newer version saved a choice this one doesn't know.
+ */
+export async function saveSettings(sdk: TavoraSDK, change: Partial<Settings>): Promise<Settings> {
+  const atomic = sdk.supports("storage.app.compareAndSet");
+  return parseSettings(await patchStored(sdk.storage.app, SETTINGS_KEY, change as Record<string, JsonValue>, { atomic }));
 }

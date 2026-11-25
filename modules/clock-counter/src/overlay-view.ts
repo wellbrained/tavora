@@ -4,7 +4,7 @@
 // OverlayText: a look that grows with the text is drawn at its step times the frame's scale, a fixed box keeps the text at its
 // step and scrolls, shrinks or cuts off what is too long.
 import { mountOverlayText, type OverlayTextScaleBy } from "@tavora/official-ui/components/ui/overlay-text";
-import { boxOf, sizeScales, type OverlayState } from "./items";
+import { boxOf, shownAlign, shownFont, sizeScales, type OverlayState } from "./items";
 import { lineOf } from "./line";
 import { LAP_SHARE, VALUE_PX } from "./sources";
 import "./overlay-view.css";
@@ -50,11 +50,11 @@ export function mountOverlayView(root: HTMLElement, options: OverlayViewOptions)
     const shown = lineOf(state, now);
     root.style.setProperty("--color", look.color);
     root.style.setProperty("--words", look.wordsColor ?? look.color);
-    root.dataset.font = look.font;
+    root.dataset.font = shownFont(look.font);
     root.dataset.outline = String(look.outline);
     if (shown.flashing) root.dataset.done = "flash";
     else delete root.dataset.done;
-    const box = { ...boxOf(look), align: look.align };
+    const box = { ...boxOf(look), align: shownAlign(look.align) };
     const options = JSON.stringify(box);
     if (options !== boxed) {
       boxed = options;

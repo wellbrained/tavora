@@ -5,7 +5,7 @@
 import type { JsonValue } from "@tavora/sdk";
 import type { DocumentHandle } from "@tavora/sdk/store";
 import type { SaveState } from "./boardState";
-import { MAX_BOARD_BYTES, sceneSignature, type BoardData } from "./boards";
+import { MAX_BOARD_BYTES, sceneSignature, shownBackground, type BoardData } from "./boards";
 import { pictureFileIds, type createPictures } from "./pictures";
 
 /** How long drawing must pause before the board is saved. */
@@ -66,7 +66,7 @@ export function createBoardSaver(options: BoardSaverOptions) {
     `${sceneSignature(scene.elements, scene.background, scene.grid)}|${pictureFileIds(scene.elements)
       .filter((id) => scene.files[id] || pictures.stored.has(id))
       .join(",")}`;
-  const first = signatureOf({ elements: document.data.elements as unknown as SceneElement[], background: document.data.background, grid: document.data.grid, files: {} });
+  const first = signatureOf({ elements: document.data.elements as unknown as SceneElement[], background: shownBackground(document.data.background), grid: document.data.grid, files: {} });
 
   /** The newest drawing, kept outside the page's render so drawing never waits for it. */
   let latest: Scene | null = null;
@@ -129,7 +129,8 @@ export function createBoardSaver(options: BoardSaverOptions) {
           // Through JSON so the stored copy is plain data (Excalidraw leaves some fields undefined).
           elements: JSON.parse(JSON.stringify(scene.elements.filter((element) => !element.isDeleted))) as JsonValue[],
           files: synced.files,
-          background: scene.background,
+          // Unchanged here: what was stored stays, also a background a newer version added that the board shows as the default.
+          background: scene.background === shownBackground(document.data.background) ? document.data.background : scene.background,
           grid: scene.grid,
         };
         const bytes = JSON.stringify(next).length;

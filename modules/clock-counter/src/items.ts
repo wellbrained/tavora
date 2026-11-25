@@ -7,7 +7,7 @@ import { DEFAULT_OVERLAY_TEXT_BOX, keepOverlayTextBox, readOverlayTextBox, type 
 import type { JsonValue } from "@tavora/sdk";
 import { compile, COUNT, defaultText, legacyText, segments, TIME, type Member, type Segment } from "./template";
 import { DEFAULT_FORMAT, isFormat } from "./time";
-import { isRecord, unknownFields } from "@tavora/official-ui/lib/utils";
+import { choiceOf, isRecord, keepChoice, readEntries, unknownFields, withKept, type KeptEntry, type NewerChoice } from "@tavora/official-ui/lib/utils";
 
 export const LIST_ID = "items";
 export const LIST_TITLE = "Clocks and counters";
@@ -26,6 +26,10 @@ export const COLORS = ["#ffffff", "#facc15", "#fb923c", "#f87171", "#f472b6", "#
  * XL 20 px), scaled for the overlay so that M is the 48 px the number always had (VALUE_PX in sources.ts). A look keeps its step
  * under `wordsStep` and `numberStep`.
  */
+/** The font and alignment to draw with: the default for one a newer version added (it stays saved as it is). */
+export const shownFont = (font: string): Font => choiceOf(FONTS, font, "inter");
+export const shownAlign = (align: string): Align => choiceOf(ALIGNS, align, "center");
+
 export const SIZES = ["xs", "s", "m", "l", "xl"] as const;
 export type Size = (typeof SIZES)[number];
 export const SIZE_SCALE: Record<Size, number> = { xs: 12 / 14, s: 13 / 14, m: 1, l: 16 / 14, xl: 20 / 14 };
@@ -80,8 +84,9 @@ export type OverlayLook = {
   showLabel: boolean;
   color: string;
   outline: boolean;
-  font: Font;
-  align: Align;
+  /** A font or alignment a newer version added stays as it is; read them through `shownFont` and `shownAlign`. */
+  font: Font | NewerChoice;
+  align: Align | NewerChoice;
   /** What the overlay shows, with `{time}` (clocks) or `{count}` (counters); a group's text is in its `Stream`. Absent: the name before the value, as `showLabel` says. */
   text?: string;
   /** The words' colour; absent: the same as `color`. */
@@ -171,6 +176,8 @@ export type ItemKind = Item["kind"];
 
 export type ItemList = {
   items: Item[];
+  /** Items of a kind a newer version added, kept as they were saved and put back in their place on save (`storedList`). Not shown. */
+  newerItems?: KeptEntry[];
 };
 
 const text = (value: unknown, max: number, fallback = "") => (typeof value === "string" ? value.slice(0, max) : fallback);
@@ -207,8 +214,8 @@ function parseLook(raw: unknown): OverlayLook {
     showLabel: bool(look.showLabel, true),
     color,
     outline: bool(look.outline, true),
-    font: oneOf(FONTS, look.font, "inter"),
-    align: oneOf(ALIGNS, look.align, "center"),
+    font: keepChoice(FONTS, look.font, "inter"),
+    align: keepChoice(ALIGNS, look.align, "center"),
     ...readSizes(look),
     // The old steps stay as they were saved (the version before reads them); where there are none, the nearest to the new ones.
     wordsSize: oneOf(OLD_STEPS, look.wordsSize, "m"),
@@ -231,7 +238,7 @@ function parseStream(raw: unknown): Stream | null {
   return { ...unknownFields(raw, STREAM_KEYS), key: raw.key, whole: bool(raw.whole, false), text: text(raw.text, MAX.text), look: parseLook(raw.look) };
 }
 
-function parseItem(raw: unknown): Item | null {
+function parseItem(raw: unknown): Item | "newer" | null {
   if (!isRecord(raw) || typeof raw.id !== "string" || raw.id.length === 0 || raw.id.length > 64) return null;
   const base = { ...unknownFields(raw, ITEM_KEYS), id: raw.id, label: text(raw.label, MAX.label), look: parseLook(raw.look) };
   if (raw.kind === "counter") {
@@ -252,11 +259,13 @@ function parseItem(raw: unknown): Item | null {
       stream: parseStream(raw.stream),
     };
   }
-  if (raw.kind !== "countdown" && raw.kind !== "stopwatch") return null;
+  // A kind a newer version added: kept as it is (parseList), never dropped.
+  if (raw.kind !== "countdown" && raw.kind !== "stopwatch") return typeof raw.kind === "string" ? "newer" : null;
   return {
     ...base,
     kind: raw.kind,
-    format: isFormat(raw.format) ? raw.format : DEFAULT_FORMAT,
+    // A format a newer version can show stays as it is; this one shows its own default for it (formatSeconds).
+    format: isFormat(raw.format) || (typeof raw.format === "string" && raw.format.length > 0 && raw.format.length <= 64) ? raw.format : DEFAULT_FORMAT,
     since: typeof raw.since === "number" && Number.isFinite(raw.since) ? raw.since : null,
     counted: whole(raw.counted, 0, Number.MAX_SAFE_INTEGER, 0),
     duration: whole(raw.duration, 1000, MAX.durationMs, 5 * 60_000),
@@ -271,15 +280,28 @@ function parseItem(raw: unknown): Item | null {
   };
 }
 
-/** The stored list, with anything it can't read left out. */
+/** The stored list. Broken entries are left out; items of a kind a newer version added are kept aside in `newerItems`, with the links to them. */
 export function parseList(raw: JsonValue | null): ItemList {
-  const items = isRecord(raw) && Array.isArray(raw.items) ? raw.items.map(parseItem).filter((item): item is Item => item !== null) : [];
+  const { entries: items, kept } = readEntries(isRecord(raw) ? raw.items : [], parseItem);
   const seen = new Set<string>();
   const unique = items.filter((item) => !seen.has(item.id) && seen.add(item.id)).slice(0, MAX.items);
-  const ids = new Set(unique.map((item) => item.id));
-  // Links only to counters that are still there.
-  for (const item of unique) if (item.kind === "counter") item.links = item.links.filter((link) => ids.has(link.target) && unique.find((other) => other.id === link.target)?.kind === "counter");
-  return { ...unknownFields(raw, LIST_KEYS), items: unique };
+  const newer = new Set(kept.flatMap(({ entry }) => (isRecord(entry) && typeof entry.id === "string" ? [entry.id] : [])));
+  // Links only to counters that are still there, or to an item kept for a newer version (it may count there).
+  for (const item of unique) if (item.kind === "counter") item.links = item.links.filter((link) => newer.has(link.target) || unique.find((other) => other.id === link.target)?.kind === "counter");
+  return { ...unknownFields(raw, LIST_KEYS), items: unique, ...(kept.length ? { newerItems: kept } : {}) };
+}
+
+/** The items kept for a newer version, as id and name, so what hangs on their ids (hotkeys, overlay sources) stays too. */
+export function newerItems(list: ItemList): { id: string; label: string }[] {
+  return (list.newerItems ?? []).flatMap(({ entry }) =>
+    isRecord(entry) && typeof entry.id === "string" ? [{ id: entry.id, label: typeof entry.label === "string" ? entry.label.slice(0, MAX.label) : "" }] : [],
+  );
+}
+
+/** What is saved for a list: the items, with the kept ones of a newer version back in their place. */
+export function storedList(list: ItemList): JsonValue {
+  const { newerItems, ...rest } = list;
+  return { ...rest, items: withKept(list.items, newerItems ?? [], (item) => item.id) } as unknown as JsonValue;
 }
 
 export function newItem(kind: ItemKind, id: string, label: string): Item {
@@ -412,6 +434,10 @@ export function insert(list: ItemList, item: Item, index = list.items.length): v
   if (list.items.some((other) => other.id === item.id) || list.items.length >= MAX.items) return;
   list.items.splice(Math.min(index, list.items.length), 0, item);
 }
+
+/** A counter's links to counters this version shows: a link to an item kept for a newer version stays saved, but is not shown or counted. */
+export const shownLinks = (list: ItemList, counter: Counter): CounterLink[] =>
+  counter.links.filter((link) => list.items.some((other) => other.id === link.target && other.kind === "counter"));
 
 /** Removes an item, and the links to it. */
 export function remove(list: ItemList, id: string): void {

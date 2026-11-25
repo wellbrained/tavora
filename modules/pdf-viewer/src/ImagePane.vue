@@ -4,7 +4,7 @@
 import { ZoomPane } from "@tavora/official-ui/components/ui/zoom-pane";
 import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { nextTick, ref, watch } from "vue";
-import type { FileView } from "./files";
+import { shownFit, type FileView } from "./files";
 import { t } from "./i18n";
 
 const props = defineProps<{ url: string; name: string; view: FileView }>();
@@ -47,7 +47,9 @@ watch(
   () => [pane.value?.zoom, pane.value?.gliding] as const,
   ([zoom, gliding]) => {
     if (!ready || zoom === undefined || gliding) return;
-    emit("view", { zoom, fit: Math.abs(zoom - fitZoom) < 0.002 ? "page" : null });
+    const fit = Math.abs(zoom - fitZoom) < 0.002 ? "page" : null;
+    // While the fit is the one shown, what is stored stays (a newer version's fit shows as the default).
+    emit("view", { zoom, fit: fit === shownFit(props.view.fit, "image") ? props.view.fit : fit });
   },
 );
 

@@ -165,7 +165,7 @@ describe("group colors", () => {
     expect(data.groups.map((group) => group.color)).toEqual(["", ""]);
   });
 
-  it("are read back, and an old list, a wrong type or an unknown name means none", () => {
+  it("are read back; an old list or a wrong type means none, and a newer version's colour stays as it is (shown as none)", () => {
     const stored = {
       version: 1,
       groups: [
@@ -176,7 +176,7 @@ describe("group colors", () => {
         { id: "e", name: "E", color: "url(x)", tasks: [] },
       ],
     };
-    expect(parseList(stored as never).groups.map((group) => group.color)).toEqual(["violet", "", "", "", ""]);
+    expect(parseList(stored as never).groups.map((group) => group.color)).toEqual(["violet", "", "", "Blue", "url(x)"]);
   });
 });
 

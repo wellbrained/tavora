@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.6.34",
+    "date": "2026-11-25",
+    "notes": [
+      "A font or size a newer version added stays when you change the other one."
+    ]
+  },
+  {
     "version": "0.6.33",
     "date": "2026-11-24",
     "notes": [

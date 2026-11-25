@@ -19,7 +19,7 @@ import EditPlate from "./EditPlate.vue";
 import GroupSection, { type DropTarget } from "./GroupSection.vue";
 import { plural, setLanguage, t } from "./i18n";
 import { de, en } from "./locales";
-import { buildLiveState, fontStack, LIVE_DEFAULTS, PANEL_LOOK_DEFAULTS, PANEL_SIZES, parseLook, parsePanelLook, throttle, withFinished, type LiveLook, type LiveState, type PanelLook } from "./live";
+import { buildLiveState, fontStack, LIVE_DEFAULTS, PANEL_LOOK_DEFAULTS, PANEL_SIZES, parseLook, parsePanelLook, shownSize, throttle, withFinished, type LiveLook, type LiveState, type PanelLook } from "./live";
 import { LINGER_MS, PANEL, ROW_FOCUS, type Draft, type FinishedMode } from "./panel";
 import Settings from "./Settings.vue";
 import { createTodoStore, type TodoStore } from "./store";
@@ -142,7 +142,7 @@ function setPanelLook(next: PanelLook) {
 
 /** The font and text size the panel shows to-dos in (TaskRow reads them). */
 const panelStyle = computed(() => {
-  const [size, leading] = PANEL_SIZES[panelLook.value.size];
+  const [size, leading] = PANEL_SIZES[shownSize(panelLook.value.size)];
   return { "--todo-font": fontStack(panelLook.value.font), "--todo-text": `${size}px`, "--todo-leading": `${leading}px` };
 });
 

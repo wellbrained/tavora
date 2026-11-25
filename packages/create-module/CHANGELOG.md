@@ -2,6 +2,10 @@
 
 What changed in `@tavora/create-module`, newest first.
 
+## 0.1.52
+
+- New projects start on SDK 0.4.12.
+
 ## 0.1.51
 
 - New projects pass Tavora's module rules (`pnpm check:modules`) as they are made: every text the page shows is in `src/texts.ts`, in English and German, with a `src/texts.test.ts` (`npm test`, with vitest) that checks both match through `catalogProblems` from `@tavora/sdk/testing`. The status line is one text with placeholders, not two glued together.
