@@ -686,6 +686,8 @@ test("Home names a new Tavora version once, and its patch notes are one click aw
 test("trying the welcome from Settings (dev build) writes nothing", async () => {
   const { app, page, userData } = await launch();
   const library = path.join(userData, "library.json");
+  // A first start saves the running version as seen just after the window loads: wait for it, so it isn't counted as the welcome's write.
+  await expect.poll(async () => (JSON.parse(await readFile(library, "utf8")) as { seenVersion?: string | null }).seenVersion ?? null).not.toBeNull();
   const before = await readFile(library, "utf8");
   await page.getByTestId("rail-settings").click();
   await page.getByTestId("try-welcome").click();
