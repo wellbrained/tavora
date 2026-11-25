@@ -87,7 +87,7 @@ host.answer("storage.get", () => {
 });
 ```
 
-A script wins over the memory host, but a missing permission, params Tavora refuses, a call that needs a click or a method an older Tavora doesn't have is refused first, like in Tavora. `host.unanswer(method)` takes a script away. `leaderboards` keeps a status you can change with `host.leaderboards.setStatus({ signedIn: false })`. Pass your manifest's boards as `leaderboards: [{ id: "daily", name: "Daily" }]`: then another board fails with `INVALID_PARAMS`, and `leaderboards.mine()` lists each of yours with no standing, as Tavora does before a result counts.
+A script wins over the memory host, but a missing permission, params Tavora refuses, a call that needs a click or a method an older Tavora doesn't have is refused first, like in Tavora. `host.unanswer(method)` takes a script away. `leaderboards` keeps a status you can change with `host.leaderboards.setStatus({ signedIn: false })`. Pass your manifest's boards as `leaderboards: [{ id: "daily", name: "Daily" }]`: then another board fails with `INVALID_PARAMS`, and add each board's `kind`, `daily`, `order` and `minGames` (`{ id: "best", name: "Best", kind: "average", order: "low", minGames: 5 }`) so a submit over 30 KB is refused for that kind as in Tavora, and `leaderboards.mine()` lists each of yours with no standing, as Tavora does before a result counts.
 
 ## Two panels
 

@@ -42,7 +42,7 @@ A module lists what it needs in its [manifest](../reference/manifest.md). Nothin
 
 `permissions.network` names exact hosts:
 
-- HTTPS only, on the standard port, with lowercase public names. Wildcards, IP addresses, `localhost`, `.local` and `.internal` names are refused.
+- HTTPS only, on the standard port, with lowercase public names. Wildcards, IP addresses, `localhost`, `.local`, `.internal`, `.lan`, `.localdomain`, `.home`, `.corp`, `.intranet` and `.private` names are refused.
 - The main process resolves the name itself and connects only when every address is public, so a granted name cannot be pointed at the user's PC or local network (DNS rebinding).
 - Requests come from the main process, not from a browser session: no cookies, no browser sign-ins, no proxy credentials. A module cannot set `Cookie`, `Host`, `Origin`, `Referer`, `User-Agent`, `Proxy-*` or `Sec-*` headers, `Set-Cookie` is not passed back, and `Authorization` is dropped on a redirect to another host.
 - An answer is read to at most 5 MB after unpacking. A request takes at most 15 s including redirects, with at most 5 redirects and 6 requests per panel at a time, counted across the panel's bridge ports.
