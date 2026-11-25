@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.6.44",
+    "date": "2026-11-25",
+    "notes": [
+      "New chips and a tag field in the shared controls."
+    ]
+  },
+  {
     "version": "0.6.43",
     "date": "2026-11-25",
     "notes": [
