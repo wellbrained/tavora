@@ -50,6 +50,22 @@ describe("Picker", () => {
     expect(headings()).toEqual(["Stone"])
   })
 
+  it("draws the search as a field of its own, and its clear button empties it", async () => {
+    await mount({ search: "Search builds" })
+    const field = document.querySelector<HTMLInputElement>("[data-testid=pick-search]")!
+    expect(field.dataset.slot).toBe("input")
+    expect(field.className).toContain("border")
+    expect(document.querySelector("[data-testid=pick-search-clear]")).toBeNull()
+    field.value = "gold"
+    field.dispatchEvent(new Event("input"))
+    for (let tick = 0; tick < 4; tick++) await nextTick()
+    expect(rows()).toEqual(["gold"])
+    document.querySelector<HTMLButtonElement>("[data-testid=pick-search-clear]")!.click()
+    for (let tick = 0; tick < 4; tick++) await nextTick()
+    expect(field.value).toBe("")
+    expect(rows()).toHaveLength(4)
+  })
+
   it("fills the button, the rows, the headings and the room above the list from its slots", async () => {
     const root = await mount(
       {},

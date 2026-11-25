@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.2.67",
+    "date": "2026-11-25",
+    "notes": [
+      "Lists you pick from with a search show it as a field of its own."
+    ]
+  },
+  {
     "version": "0.2.66",
     "date": "2026-11-25",
     "notes": [

@@ -25,8 +25,11 @@ const current = computed(() => BUILDS.find((option) => option.value === build.va
 <template>
   <Picker v-model="build" label="Build" search="Search builds" empty="No build found" :options="options" class="w-full max-w-80">
     <template #current>
-      <span class="truncate font-medium">{{ current?.label }}</span>
-      <span class="text-muted-foreground flex-none text-xs">{{ current?.group }}</span>
+      <!-- A name and a smaller second text share one baseline. -->
+      <span class="flex min-w-0 flex-1 items-baseline gap-2">
+        <span class="truncate font-medium">{{ current?.label }}</span>
+        <span class="text-muted-foreground flex-none text-xs">{{ current?.group }}</span>
+      </span>
     </template>
     <template #filters>
       <div class="flex flex-wrap gap-1.5">

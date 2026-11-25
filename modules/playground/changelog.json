@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.93",
+    "date": "2026-11-25",
+    "notes": [
+      "Picker: the search is a field of its own, and \"Picker with groups\" keeps its two texts on one line."
+    ]
+  },
+  {
     "version": "0.1.92",
     "date": "2026-11-25",
     "notes": [

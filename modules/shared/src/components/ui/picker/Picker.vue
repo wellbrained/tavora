@@ -7,13 +7,17 @@
 // `options`), `option` (a row, e.g. with badges at its end), `group` (a heading, e.g. with an icon) and `filters` (above
 // the list, under the search: toggles that narrow `options`). Use `filters` with `search` (the field keeps the focus)
 // and with `current` (a filter may hide the picked option, and the button still shows it).
-import { ChevronsUpDown, Search } from "@lucide/vue"
+// A name with a smaller second text in `current` or `option` goes in one `items-baseline` span, so both share a baseline
+// (Playground: Picker with groups); the kit centres the slot as a whole, so icons stay centred.
+import { ChevronsUpDown, Search, X } from "@lucide/vue"
 import type { HTMLAttributes } from "vue"
 import { createReusableTemplate } from "@vueuse/core"
-import { computed, ref, watch } from "vue"
+import { computed, ref, useTemplateRef, watch } from "vue"
 import { ListboxContent, ListboxFilter, ListboxGroup, ListboxGroupLabel, ListboxItem, ListboxRoot, PopoverContent, PopoverPortal, PopoverRoot, PopoverTrigger } from "reka-ui"
 import { cn } from "../../../lib/utils"
 import { Button } from "../button"
+import { inputLook } from "../input/look"
+import { uiText } from "../text"
 import { leaveToolbar } from "../toolbar/context"
 import { choiceHighlighted, choiceRow } from "../choice-row"
 import { filterOptions, sectionsOf } from "./options"
@@ -31,7 +35,7 @@ const props = defineProps<{
   search?: string
   /** Shown when the search matches nothing. */
   empty?: string
-  /** Test ids for the menu parts: `<testid>-menu`, `-search`, `-filters`, `-option-<value>`, `-none`. */
+  /** Test ids for the menu parts: `<testid>-menu`, `-search`, `-search-clear`, `-filters`, `-option-<value>`, `-none`. */
   testid?: string
   disabled?: boolean
   class?: HTMLAttributes["class"]
@@ -54,6 +58,14 @@ const shown = computed(() => (props.search ? filterOptions(props.options, query.
 /** The shown options by group, in the order each group's first option comes; ungrouped ones first. */
 const sections = computed(() => sectionsOf(shown.value))
 const part = (name: string) => (props.testid ? `${props.testid}-${name}` : undefined)
+
+const filter = useTemplateRef<{ $el?: HTMLElement }>("filter")
+
+/** Empties the search and keeps the focus in it. */
+function clear() {
+  query.value = ""
+  filter.value?.$el?.focus()
+}
 
 watch(open, (isOpen) => {
   if (isOpen) query.value = ""
@@ -98,20 +110,41 @@ function pick(value: unknown) {
         :data-testid="part('menu')"
       >
         <ListboxRoot :model-value="model" highlight-on-hover @update:model-value="pick">
-          <div v-if="search" class="focus-within:border-ring relative w-full border-b transition-colors">
-            <Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+          <!-- The search is a field of its own, inset from the list's edges, with the clear button SearchInput has. -->
+          <div v-if="search" :class="cn('relative flex items-center p-2 pb-1', slots.filters && 'pb-0')">
+            <Search class="text-muted-foreground pointer-events-none absolute left-5 size-4" aria-hidden="true" />
             <ListboxFilter
+              ref="filter"
               v-model="query"
               auto-focus
-              class="placeholder:text-muted-foreground h-10 w-full bg-transparent pr-3 pl-9 text-sm focus-visible:outline-none"
+              data-slot="input"
+              :class="cn(...inputLook, 'pr-9 pl-9')"
               :placeholder="search"
               :aria-label="search"
               autocomplete="off"
               spellcheck="false"
               :data-testid="part('search')"
             />
+            <!-- The × turns in with a little spring and leaves quick (motion.css, .tavora-clear-in / -out). -->
+            <Transition enter-active-class="tavora-clear-in" leave-active-class="tavora-clear-out">
+              <Button
+                v-if="query"
+                type="button"
+                size="icon-xs"
+                variant="ghost"
+                class="absolute right-4"
+                :aria-label="uiText.clearSearch"
+                :title="uiText.clearSearch"
+                data-slot="search-input-clear"
+                :data-testid="part('search-clear')"
+                @mousedown.prevent
+                @click="clear"
+              >
+                <X aria-hidden="true" />
+              </Button>
+            </Transition>
           </div>
-          <div v-if="slots.filters" class="border-b px-2 py-2" :data-testid="part('filters')"><slot name="filters" /></div>
+          <div v-if="slots.filters" class="border-b p-2" :data-testid="part('filters')"><slot name="filters" /></div>
           <ListboxContent class="max-h-60 overflow-y-auto overscroll-contain p-1 outline-none" :aria-label="label">
             <DefineRow v-slot="{ option }">
               <ListboxItem
