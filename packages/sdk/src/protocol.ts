@@ -1616,6 +1616,13 @@ export function leaderboardDeclaration(board: LeaderboardDeclared): Record<strin
   };
 }
 
+/** The local calendar day of a time, as YYYY-MM-DD (the same as local-day.ts: this file is loaded by Node as it is, so it imports nothing). */
+function localDay(at: number): string {
+  const date = new Date(at);
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
 /** A result with only the fields results have; a result without a day belongs to the local day it ended on. */
 export function leaderboardResultFields(value: unknown): Record<string, unknown> {
   const input = isPlainObject(value) ? value : {};
@@ -2082,7 +2089,6 @@ export type MenuEntry =
 
 export type { TooltipContent, TooltipAnchor, TooltipRequest, TooltipSkin, TooltipEffectRun, TooltipIcon, TooltipArtTag } from "./tooltip-types.js";
 import type { TooltipContent, TooltipRequest, TooltipAnchor, TooltipSkin } from "./tooltip-types.js";
-import { localDay } from "./local-day.js";
 
 /** What ui.showMenu shows, and where. */
 export interface MenuRequest {
