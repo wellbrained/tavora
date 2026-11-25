@@ -69,7 +69,7 @@ const MESSAGES: Partial<Record<ApiReason | "token-not-working", string>> = {
   "daily-limit": "Your account has published as many versions as it can today. Try again tomorrow.",
   "account-full": "Your modules take as much room in the catalog as an account may have.",
   "catalog-full": "The catalog has no room right now. Tavora has been told; try again later.",
-  "too-many": "Another upload from your account is still running, or Tavora is busy. Wait a minute and try again.",
+  "too-many": "Too many uploads right now, or another of yours is still running. Wait a while and try again.",
   "too-big": "The zip is too big for the catalog.",
   banned: `This account can't publish to the catalog any more. Check your email for why. What's not allowed: ${CATALOG_RULES_URL}`,
   declined: "Tavora declined this exact zip. Fix the problem and publish a new version.",

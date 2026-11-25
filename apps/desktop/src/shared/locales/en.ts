@@ -545,7 +545,7 @@ export const en = {
   "publish.error.accountFull": "Your modules use all the room your account has for published modules.",
   "publish.error.catalogFull": "There is no more room for modules right now. We know about it. Try again later.",
   "publish.error.tooBig": "This module is too big to publish.",
-  "publish.error.busy": "Another upload of yours is still running, or Tavora is busy. Try again in {minutes} min.",
+  "publish.error.busy": "Too many uploads right now, or another of yours is still running. Try again in {minutes} min.",
   "publish.problem.versionLong": "Your version is longer than {max} characters. Pick a shorter one.",
   "publish.problem.games": "Your module names {count} games. The catalog takes at most {max}.",
   "publish.problem.readme": "{file} must be plain text of at most {kb} KB.",

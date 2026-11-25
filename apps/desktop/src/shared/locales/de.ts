@@ -547,7 +547,7 @@ export const de: Record<keyof typeof en, string> = {
   "publish.error.accountFull": "Deine Module belegen den ganzen Platz, den dein Konto für veröffentlichte Module hat.",
   "publish.error.catalogFull": "Gerade ist kein Platz mehr für Module. Wir wissen Bescheid. Versuch es später noch mal.",
   "publish.error.tooBig": "Dieses Modul ist zu groß zum Veröffentlichen.",
-  "publish.error.busy": "Ein anderer Upload von dir läuft noch, oder Tavora ist ausgelastet. Versuch es in {minutes} Min. noch einmal.",
+  "publish.error.busy": "Gerade zu viele Uploads, oder ein anderer von dir läuft noch. Versuch es in {minutes} Min. noch einmal.",
   "publish.problem.versionLong": "Deine Version ist länger als {max} Zeichen. Nimm eine kürzere.",
   "publish.problem.games": "Dein Modul nennt {count} Spiele. Der Katalog nimmt höchstens {max}.",
   "publish.problem.readme": "{file} muss reiner Text mit höchstens {kb} KB sein.",

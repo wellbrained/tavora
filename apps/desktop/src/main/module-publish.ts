@@ -220,7 +220,6 @@ export class ModulePublisher {
   }
 }
 
-/** What the screen says when packing stops: a private key in the folder gets its own words. */
 /** What the catalog would refuse, in the user's words. */
 function uploadProblem(problem: CatalogUploadProblem): UserError {
   switch (problem.kind) {
@@ -237,6 +236,7 @@ function uploadProblem(problem: CatalogUploadProblem): UserError {
   }
 }
 
+/** What the screen says when packing stops: a private key in the folder gets its own words. */
 function packProblem(error: PackError): UserError {
   return error instanceof PrivateKeyError ? new UserError("publish.error.privateKey", { file: error.file }) : new UserError("publish.error.pack", { message: error.message });
 }
