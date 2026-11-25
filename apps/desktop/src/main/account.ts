@@ -699,6 +699,10 @@ export class AccountClient {
       headers: { "X-Tavora-Signature": publishSignature(key, zip), "Accept-Language": this.options.language() },
       // Sending the zip, then the catalog's checks: longer for a bigger zip, so a slow line isn't cut off.
       timeoutMs: publishTimeoutMs(zip.length),
+    }).catch((error: unknown) => {
+      // The catalog takes one upload per account at a time, and says so as it says it is busy.
+      if (error instanceof UserError && error.key === "account.error.tooMany") throw new UserError("publish.error.busy", error.params);
+      throw error;
     });
     if (typeof answer.id !== "string" || typeof answer.version !== "string" || typeof answer.sha256 !== "string") throw new UserError("error.generic");
     // The upload reserved the prefix when it was new.

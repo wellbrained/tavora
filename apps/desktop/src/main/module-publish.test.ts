@@ -163,6 +163,21 @@ describe("ModulePublisher", () => {
     expect(reviewer.view()).toMatchObject({ status: "ready", error: translate("en", "publish.error.dailyLimit"), published: null });
   });
 
+  // Bug hunt D (2026-11-25) M2: what the catalog refuses only after the whole upload is said on the review screen.
+  it("says what the catalog would refuse before Publish: a readme that isn't text, a screenshot that isn't a picture", async () => {
+    const dir = await project({ ...MANIFEST, readme: "README.md", screenshots: ["shot.png"] });
+    await writeFile(path.join(dir, "README.md"), "Hi\u0000there");
+    await writeFile(path.join(dir, "shot.png"), "not a picture");
+    const { publisher: reviewer, uploads } = publisher();
+    await reviewer.open(dir);
+    expect(reviewer.view()).toMatchObject({ problems: [{ kind: "invalid", message: translate("en", "publish.problem.readme", { file: "README.md", kb: 20 }) }], size: null });
+    await writeFile(path.join(dir, "README.md"), "Hi there");
+    await reviewer.refresh();
+    expect(reviewer.view()).toMatchObject({ problems: [{ kind: "invalid", message: "shot.png must be a PNG or WebP of at most 1 MB and 4096 px." }] });
+    await expect(reviewer.publish()).rejects.toMatchObject({ key: "publish.error.notReady" });
+    expect(uploads).toHaveLength(0);
+  });
+
   it("stops with friendly words when a private key would go out with the module", async () => {
     const dir = await project({ ...MANIFEST, entry: "index.html" });
     await writeFile(path.join(dir, "index.html"), "<p>hi</p>");

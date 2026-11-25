@@ -1,5 +1,6 @@
 import { setFlagsFromString } from "node:v8";
 import { runInNewContext } from "node:vm";
+import { UPLOAD_BUDGET_BYTES } from "@tavora/module-schema";
 import { fingerprint, MANIFEST_FILE, PUBLISH_MIN_BYTES_PER_SECOND, PUBLISH_READ_GRACE_MS, publicKeyFromRaw, readZipEntry, SIGNATURE_FILE, zipDirectory } from "@tavora/pack";
 
 /**
@@ -8,9 +9,9 @@ import { fingerprint, MANIFEST_FILE, PUBLISH_MIN_BYTES_PER_SECOND, PUBLISH_READ_
  * anything is unpacked: an upload that doesn't fit now is asked to try again, and one that could never fit is refused.
  * The service itself takes about 100 MB and a check holds about a third more than this counts (hashes, text, garbage not yet
  * collected), which is what this leaves room for: measured under a real 256 MB cgroup limit from a 96 MB base. Raising this
- * means raising MemoryMax with it.
+ * means raising MemoryMax with it. tavora-pack and the app check it before an upload (UPLOAD_BUDGET_BYTES in module-schema).
  */
-export const UPLOAD_MEMORY_BYTES = 88 * 1024 * 1024;
+export const UPLOAD_MEMORY_BYTES = UPLOAD_BUDGET_BYTES;
 
 /** After holding at least this much, memory is handed back at once instead of whenever the collector gets to it. */
 export const FREE_AFTER_BYTES = 16 * 1024 * 1024;

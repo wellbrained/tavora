@@ -1,6 +1,7 @@
 // `pnpm check:modules [folder…]`: finds breaks of docs/module-rules.md in module source (`src/**/*.vue`, `.ts`, `.tsx`,
 // `.css`, without tests), so they don't depend on someone remembering the rulebook. With no folder it checks the
-// modules in `modules/` (or, where there is none, the module folders in the current folder, as in tavora-modules).
+// modules in `modules/` and the examples in `examples/` (or, where there is no `modules/`, the module folders in the
+// current folder, as in tavora-modules).
 // A folder is a module (it has a tavora.module.json) or holds modules.
 //
 // Known breaks are kept in module-rules-baseline.json in the current folder; only new ones fail (exit code 1).
@@ -802,7 +803,7 @@ const slash = (p) => p.split(path.sep).join("/");
 
 /** The module folders to check, relative to `root`: each folder given, or the modules in it. */
 export function findModules(root, folders = []) {
-  const asked = folders.length ? folders : [existsSync(path.join(root, "modules")) ? "modules" : "."];
+  const asked = folders.length ? folders : existsSync(path.join(root, "modules")) ? ["modules", ...(existsSync(path.join(root, "examples")) ? ["examples"] : [])] : ["."];
   const found = [];
   for (const folder of asked) {
     const dir = path.resolve(root, folder);

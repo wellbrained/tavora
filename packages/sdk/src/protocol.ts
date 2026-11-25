@@ -1585,7 +1585,10 @@ export function checkLeaderboardMine(value: unknown): ParamCheck<{ day?: string 
 
 /** Thrown inside the checks below; `refusing` turns it into their refusal. */
 class Refusal {
-  constructor(readonly message: string) {}
+  readonly message: string;
+  constructor(message: string) {
+    this.message = message;
+  }
 }
 function refusing<T>(check: () => T): ParamCheck<T> {
   try {

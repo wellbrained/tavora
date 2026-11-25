@@ -1,8 +1,8 @@
 import type { KeyObject } from "node:crypto";
 import { lstat, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { folderKey, isReleaseVersion, manifestFiles, MAX_README_BYTES, validateChangelog, validateManifest, type ModuleManifest } from "@tavora/module-schema";
-import { MANIFEST_FILE, packModule, PackError, PrivateKeyError, type Published } from "@tavora/pack";
+import { catalogUploadProblem, folderKey, isReleaseVersion, manifestFiles, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOT_PIXELS, validateChangelog, validateManifest, type CatalogUploadProblem, type ModuleManifest } from "@tavora/module-schema";
+import { MANIFEST_FILE, packModule, PackError, PrivateKeyError, readZip, type Published } from "@tavora/pack";
 import type { AccountView, PrefixState, PublishProblem, PublishView, ReadmeBlock } from "../shared/host-api";
 import { suggestPrefix } from "../shared/id-prefix";
 import { parseReadme } from "./catalog-readme";
@@ -199,6 +199,12 @@ export class ModulePublisher {
       view.problems.push({ kind: "invalid", message });
       return { view: { ...view, status: "ready" }, zip: null, key: null };
     }
+    // What the catalog refuses only once the whole upload has arrived: said here, before Publish.
+    const problem = catalogUploadProblem(manifest, readZip(zip), zip.length);
+    if (problem) {
+      view.problems.push({ kind: "invalid", message: this.options.translate(uploadProblem(problem)) });
+      return { view: { ...view, status: "ready" }, zip: null, key: null };
+    }
     view.size = zip.length;
     return { view: { ...view, status: "ready" }, zip, key: signer.key };
   }
@@ -215,6 +221,22 @@ export class ModulePublisher {
 }
 
 /** What the screen says when packing stops: a private key in the folder gets its own words. */
+/** What the catalog would refuse, in the user's words. */
+function uploadProblem(problem: CatalogUploadProblem): UserError {
+  switch (problem.kind) {
+    case "version":
+      return new UserError("publish.problem.versionLong", { max: problem.max });
+    case "games":
+      return new UserError("publish.problem.games", { count: problem.count, max: problem.max });
+    case "readme":
+      return new UserError("publish.problem.readme", { file: problem.file, kb: MAX_README_BYTES / 1024 });
+    case "screenshot":
+      return new UserError("publish.problem.screenshot", { file: problem.file, mb: MAX_SCREENSHOT_BYTES / 1024 / 1024, px: MAX_SCREENSHOT_PIXELS });
+    case "too-big":
+      return new UserError("publish.problem.tooBig", { mb: problem.maxBytes / 1024 / 1024 });
+  }
+}
+
 function packProblem(error: PackError): UserError {
   return error instanceof PrivateKeyError ? new UserError("publish.error.privateKey", { file: error.file }) : new UserError("publish.error.pack", { message: error.message });
 }

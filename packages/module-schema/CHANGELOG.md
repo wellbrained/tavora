@@ -2,6 +2,11 @@
 
 What changed in `@tavora/module-schema`, newest first.
 
+## 0.2.5
+
+- `catalogUploadProblem(manifest, files, zipBytes)`: why the catalog would refuse an upload, before it is sent. It checks `catalogListingProblem`, the readme (UTF-8 text of at most `MAX_README_BYTES`), the screenshots (a PNG or WebP by their own bytes, as named, at most `MAX_SCREENSHOT_BYTES` and the new `MAX_SCREENSHOT_PIXELS`, 4096) and the new `UPLOAD_BUDGET_BYTES` (88 MB for the zip and its files unpacked). `describeUploadProblem` words it in English. tavora-pack and Tavora's Publish screen use it; the catalog checks the same limits.
+- A module id whose first part is a name Windows keeps for a device (`con.tool`, `nul.x`, `com1.a`) is refused, in the check and the JSON Schema: the id is the install folder, so it could never be installed.
+
 ## 0.2.4
 
 Four kinds of manifest that passed this check but never worked in Tavora are refused now, as `0.1.11` did for folders: the check, the packer and the catalog say so before an install.

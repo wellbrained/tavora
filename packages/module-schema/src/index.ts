@@ -250,6 +250,95 @@ export function catalogListingProblem(manifest: { version: string; games: readon
 export const MAX_README_BYTES = 20 * 1024;
 /** Largest screenshot file the catalog takes and the app shows. */
 export const MAX_SCREENSHOT_BYTES = 1024 * 1024;
+/** Widest and tallest screenshot the catalog takes, in pixels. */
+export const MAX_SCREENSHOT_PIXELS = 4096;
+/**
+ * What the catalog can hold in memory while it checks one upload: the zip and every file unpacked, together. A bigger
+ * module is refused (413) after it was sent, so tavora-pack and Tavora's Publish screen check it first.
+ */
+export const UPLOAD_BUDGET_BYTES = 88 * 1024 * 1024;
+
+/**
+ * Why the catalog would refuse an upload of this module, before it is sent. `catalogListingProblem`, the readme (UTF-8
+ * text of at most MAX_README_BYTES) and the screenshots (a PNG or WebP by their own bytes, as named, at most
+ * MAX_SCREENSHOT_BYTES and MAX_SCREENSHOT_PIXELS) and UPLOAD_BUDGET_BYTES. The catalog checks more (a PNG's checksums,
+ * the virus scan), so null means only that none of these will stop it. `describeUploadProblem` words it in English.
+ */
+export type CatalogUploadProblem =
+  | { kind: "version"; max: number }
+  | { kind: "games"; count: number; max: number }
+  | { kind: "readme"; file: string }
+  | { kind: "screenshot"; file: string }
+  | { kind: "too-big"; maxBytes: number };
+
+export function catalogUploadProblem(
+  manifest: { version: string; games: readonly string[]; readme?: string | undefined; screenshots?: readonly string[] | undefined },
+  files: readonly { name: string; data: Uint8Array }[],
+  zipBytes: number,
+): CatalogUploadProblem | null {
+  if (manifest.version.length > MAX_LISTED_VERSION) return { kind: "version", max: MAX_LISTED_VERSION };
+  if (manifest.games.length > MAX_LISTED_GAMES) return { kind: "games", count: manifest.games.length, max: MAX_LISTED_GAMES };
+  const file = (name: string) => files.find((item) => item.name === name)?.data;
+  if (manifest.readme !== undefined && !isReadmeText(file(manifest.readme))) return { kind: "readme", file: manifest.readme };
+  for (const shot of manifest.screenshots ?? []) {
+    const data = file(shot);
+    if (!data || data.byteLength > MAX_SCREENSHOT_BYTES || pictureKind(data, MAX_SCREENSHOT_PIXELS) !== (shot.endsWith(".webp") ? "webp" : "png")) return { kind: "screenshot", file: shot };
+  }
+  const unpacked = files.reduce((sum, item) => sum + item.data.byteLength, 0);
+  if (zipBytes + unpacked > UPLOAD_BUDGET_BYTES) return { kind: "too-big", maxBytes: UPLOAD_BUDGET_BYTES };
+  return null;
+}
+
+/** A CatalogUploadProblem in English, as the catalog would say it. */
+export function describeUploadProblem(problem: CatalogUploadProblem): string {
+  switch (problem.kind) {
+    case "version":
+      return `Its version is longer than ${problem.max} characters. Use a shorter one.`;
+    case "games":
+      return `It names ${problem.count} games. A module in the catalog can name at most ${problem.max}.`;
+    case "readme":
+      return `Its readme ${problem.file} must be UTF-8 text of at most ${MAX_README_BYTES / 1024} KB.`;
+    case "screenshot":
+      return `Its screenshot ${problem.file} is not a ${problem.file.endsWith(".webp") ? "WebP" : "PNG"} of at most ${MAX_SCREENSHOT_BYTES / 1024 / 1024} MB and ${MAX_SCREENSHOT_PIXELS} px.`;
+    case "too-big":
+      return `It is too big for the catalog to check: the zip and its files unpacked may take at most ${problem.maxBytes / 1024 / 1024} MB together. Make it smaller.`;
+  }
+}
+
+/** Whether a readme is UTF-8 of at most MAX_README_BYTES without control characters other than tabs and line breaks. */
+function isReadmeText(bytes: Uint8Array | undefined): boolean {
+  if (!bytes || bytes.byteLength > MAX_README_BYTES) return false;
+  try {
+    return !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+  } catch {
+    return false;
+  }
+}
+
+/** A picture's kind by its own bytes: a PNG (signature, first IHDR, IEND at the end) or a WebP (RIFF size, image chunk), at most `maxPixels` each way. */
+function pictureKind(bytes: Uint8Array, maxPixels: number): "png" | "webp" | null {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const text = (from: number, to: number) => String.fromCharCode(...bytes.subarray(from, to));
+  const fits = (width: number, height: number) => width >= 1 && height >= 1 && width <= maxPixels && height <= maxPixels;
+  if (bytes.byteLength >= 45 && [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every((byte, at) => bytes[at] === byte)) {
+    if (view.getUint32(8) !== 13 || text(12, 16) !== "IHDR" || text(bytes.byteLength - 8, bytes.byteLength - 4) !== "IEND") return null;
+    return fits(view.getUint32(16), view.getUint32(20)) ? "png" : null;
+  }
+  if (bytes.byteLength < 20 || text(0, 4) !== "RIFF" || text(8, 12) !== "WEBP" || view.getUint32(4, true) + 8 !== bytes.byteLength) return null;
+  const kind = text(12, 16);
+  const length = view.getUint32(16, true);
+  if (20 + length > bytes.byteLength) return null;
+  if (kind === "VP8L" && length >= 5 && bytes[20] === 0x2f) {
+    const bits = view.getUint32(21, true);
+    return fits((bits & 0x3fff) + 1, ((bits >>> 14) & 0x3fff) + 1) ? "webp" : null;
+  }
+  if (kind === "VP8 " && length >= 10 && bytes[23] === 0x9d && bytes[24] === 0x01 && bytes[25] === 0x2a) return fits(view.getUint16(26, true) & 0x3fff, view.getUint16(28, true) & 0x3fff) ? "webp" : null;
+  if (kind === "VP8X" && length >= 10) {
+    const uint24 = (at: number) => view.getUint16(at, true) | (bytes[at + 2]! << 16);
+    return fits(uint24(24) + 1, uint24(27) + 1) ? "webp" : null;
+  }
+  return null;
+}
 export const MAX_HOMEPAGE_LENGTH = 300;
 // http or https, a host without a user name or password, and no spaces or control characters.
 const HOMEPAGE = /^https?:\/\/[^\s\u0000-\u001f/?#@\\]+(?:[/?#][^\s\u0000-\u001f\\]*)?$/;
@@ -396,7 +485,8 @@ export function isReleaseVersion(value: unknown): boolean {
 }
 
 export function isModuleId(value: unknown): value is string {
-  return typeof value === "string" && value.length <= 128 && MODULE_ID.test(value);
+  // The id is the module's install folder, so its first part can't be a name Windows keeps for a device (`con.tool`).
+  return typeof value === "string" && value.length <= 128 && MODULE_ID.test(value) && !isWindowsDeviceName(value);
 }
 
 /**
