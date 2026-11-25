@@ -181,6 +181,23 @@ describe("useTooltip with the shared tooltip", () => {
     expect(shared.show).toHaveBeenCalledTimes(2)
   })
 
+  it("shows the card in the panel instead when Tavora can't, with `fallback`", async () => {
+    const { shared } = sharedTooltip()
+    const connected = ref<SharedTooltip | null>(null)
+    const { tip, targets } = await mount(() => useTooltip({ shared: () => connected.value, fallback: true }), () => [card], { focusable: true, side: "right" })
+    targets[0]!.focus()
+    expect(tip.props).toMatchObject({ open: true, side: "right" })
+    expect(targets[0]!.getAttribute("aria-describedby")).toBe(tip.props.id)
+    targets[0]!.blur()
+    expect(tip.props.open).toBe(false)
+    connected.value = shared
+    shared.show.mockRejectedValueOnce(new Error("old Tavora"))
+    targets[0]!.focus()
+    expect(tip.props.open).toBe(false)
+    await vi.runAllTimersAsync()
+    expect(tip.props.open).toBe(true)
+  })
+
   it("forgets a card Tavora closed, and stops listening when the panel goes", async () => {
     const { shared, close } = sharedTooltip()
     const { targets } = await mount(() => useTooltip({ shared }), () => [card], { focusable: true })

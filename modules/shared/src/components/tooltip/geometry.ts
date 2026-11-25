@@ -16,15 +16,16 @@ export function pointAnchor(at:TooltipPoint):TooltipRect{return{left:at.x-4,top:
 
 /**
  * Puts a card of the given size beside `anchor`, never on it: on the preferred side, else the one with room, inside the viewport.
- * `maxWidth` is the widest the card may get; the viewport still narrows it.
+ * `maxWidth` is the widest the card may get; the viewport still narrows it. A `rigid` card (an item card, which has its
+ * own width) never gets narrower beside the anchor: it goes to a side with room for all of it instead.
  */
-export function tooltipPlacement(anchor:TooltipRect,width:number,height:number,viewport:{width:number;height:number},prefer:TooltipSide='bottom',maxWidth=TOOLTIP_MAX_WIDTH):TooltipPlacement{
+export function tooltipPlacement(anchor:TooltipRect,width:number,height:number,viewport:{width:number;height:number},prefer:TooltipSide='bottom',maxWidth=TOOLTIP_MAX_WIDTH,rigid=false):TooltipPlacement{
  const room:Record<TooltipSide,number>={top:anchor.top-TOOLTIP_GAP-MARGIN,bottom:viewport.height-anchor.bottom-TOOLTIP_GAP-MARGIN,left:anchor.left-TOOLTIP_GAP-MARGIN,right:viewport.width-anchor.right-TOOLTIP_GAP-MARGIN};
  const cap=Math.min(maxWidth,viewport.width-2*MARGIN),w0=Math.min(cap,width||cap);
- const fits=(side:TooltipSide)=>side==='top'||side==='bottom'?room[side]>=height:room[side]>=Math.min(w0,220)&&height<=viewport.height-2*MARGIN;
+ const fits=(side:TooltipSide)=>side==='top'||side==='bottom'?room[side]>=height:room[side]>=(rigid?w0:Math.min(w0,220))&&height<=viewport.height-2*MARGIN;
  const order:TooltipSide[]=[prefer,OPPOSITE[prefer],...(prefer==='top'||prefer==='bottom'?['right','left']:['bottom','top']) as TooltipSide[]];
  const side=order.find(fits)??(room.bottom>=room.top?'bottom':'top');
- const w=side==='left'||side==='right'?Math.max(80,Math.min(w0,room[side])):w0;
+ const w=(side==='left'||side==='right')&&!rigid?Math.max(80,Math.min(w0,room[side])):w0;
  const cx=(anchor.left+anchor.right)/2,cy=(anchor.top+anchor.bottom)/2;
  const clampX=(x:number)=>Math.max(MARGIN,Math.min(viewport.width-w-MARGIN,x)),clampY=(y:number)=>Math.max(MARGIN,Math.min(viewport.height-height-MARGIN,y));
  const left=side==='left'?anchor.left-TOOLTIP_GAP-w:side==='right'?anchor.right+TOOLTIP_GAP:clampX(cx-w/2);

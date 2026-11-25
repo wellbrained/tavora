@@ -15,7 +15,7 @@ export { default as ItemCardBar } from "./parts/ItemCardBar.vue"
 export { default as ItemCardUnitStats } from "./parts/ItemCardUnitStats.vue"
 export { default as ItemCardIcons } from "./parts/ItemCardIcons.vue"
 export { default as ItemCardPips } from "./parts/ItemCardPips.vue"
-export { layoutOf, type ItemCardLayout } from "./content"
+export { fromBundle, layoutOf, type ItemCardLayout } from "./content"
 
 /**
  * A skin for `ItemCard`: the same values as the one you give `sdk.ui.tooltip.defineSkin`, but `frame.image` and `font`

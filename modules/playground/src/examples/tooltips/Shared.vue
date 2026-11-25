@@ -2,7 +2,8 @@
 // One card (a TooltipContent), described once, in two places: the panel's own tooltip (ItemTooltip) and Tavora's
 // shared tooltip above the workspace, which a big card needs so it is never cut off at the panel's edge.
 // `useTooltip({ shared })` sends it there; with `pin`, a click on something that isn't a control (the name here) pins
-// the card. `shared` takes a function because the SDK comes once the panel is connected.
+// the card; with `fallback`, it shows in the panel when Tavora can't (outside Tavora, say). `shared` takes a function
+// because the SDK comes once the panel is connected.
 import type { TooltipContent } from "@tavora/sdk";
 import { useTooltip } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
@@ -20,7 +21,7 @@ const tower: TooltipContent = {
 
 const sdk = useSdk();
 const panel = useTooltip<TooltipContent>({ side: "right" });
-const shared = useTooltip({ shared: () => sdk.value?.ui.tooltip, pin: true });
+const shared = useTooltip<TooltipContent>({ shared: () => sdk.value?.ui.tooltip, pin: true, fallback: true });
 </script>
 
 <template>
@@ -30,4 +31,5 @@ const shared = useTooltip({ shared: () => sdk.value?.ui.tooltip, pin: true });
     <span class="text-sm underline decoration-dotted underline-offset-4" v-bind="shared.on(tower, { focusable: true })">Archer Tower</span>
   </div>
   <ItemTooltip v-bind="panel.props" :content="panel.content" />
+  <ItemTooltip v-bind="shared.props" :content="shared.content" />
 </template>

@@ -12,7 +12,7 @@ import { computed } from "vue"
 import Tooltip from "../../tooltip/Tooltip"
 import type { TooltipPoint, TooltipRect, TooltipSide } from "../../tooltip/geometry"
 import type { ItemCardSkin } from "."
-import { layoutOf } from "./content"
+import { layoutOf, skinColored } from "./content"
 import ItemCard from "./ItemCard.vue"
 
 const props = withDefaults(
@@ -39,8 +39,12 @@ const width = computed(() => {
   const layout = props.content ? layoutOf(props.content) : "card"
   return layout === "unit" ? "lg" : layout === "rich" ? "md" : "sm"
 })
-// A skin's own colours: the arrow can't wear them (nor its frame), so the card goes without one.
-const arrow = computed(() => !(props.skin?.colors?.surface && props.skin.colors.text && props.content && layoutOf(props.content) !== "rich"))
+// The arrow only where it takes the card's look: not on a unit (a shape of its own, no box), nor on a card in a skin's
+// colours or frame. The rich layout wears no skin.
+const arrow = computed(() => {
+  const layout = props.content ? layoutOf(props.content) : "card"
+  return layout === "rich" || (layout === "card" && !props.skin?.frame && !skinColored(props.skin))
+})
 </script>
 
 <template>

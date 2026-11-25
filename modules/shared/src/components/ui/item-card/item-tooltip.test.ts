@@ -2,7 +2,7 @@
 import type { TooltipContent } from "@tavora/sdk"
 import { afterEach, beforeAll, describe, expect, it } from "vitest"
 import { createApp, h, nextTick, type App } from "vue"
-import { ItemCard, ItemCardName, ItemCardStats, ItemTooltip, type ItemCardSkin } from "."
+import { fromBundle, ItemCard, ItemCardName, ItemCardStats, ItemTooltip, type ItemCardSkin } from "."
 
 // One card, described once (TooltipContent), in the panel's own tooltip; and cards put together from the item card's parts.
 
@@ -50,6 +50,15 @@ describe("ItemTooltip", () => {
     expect(document.querySelector(".tavora-tooltip-arrow")).toBeNull()
   })
 
+  it("leaves the arrow out on a unit and on a card in a skin's frame", async () => {
+    await render(() => h(ItemTooltip, { open: true, anchor, content: { ...card, layout: "unit" } }))
+    expect(document.querySelector(".tavora-tooltip-arrow")).toBeNull()
+    app!.unmount()
+    document.body.replaceChildren()
+    await render(() => h(ItemTooltip, { open: true, anchor, content: card, skin: { frame: { image: "frame.png", slice: [6, 6, 6, 6] } } }))
+    expect(document.querySelector(".tavora-tooltip-arrow")).toBeNull()
+  })
+
   it("puts what's in its slot into the card instead of the layout's parts", async () => {
     await render(() => h(ItemTooltip, { open: true, anchor, content: card }, () => [h(ItemCardName, { content: card }), h("p", { class: "own" }, "Mine")]))
     const el = document.querySelector("[data-slot=item-card]")!
@@ -68,5 +77,17 @@ describe("ItemCard parts", () => {
   it("draw nothing for what the card doesn't have", async () => {
     await render(() => h(ItemCard, { content: { title: "Bare", layout: "card" } }, () => [h(ItemCardStats, { content: { title: "Bare" } })]))
     expect(document.querySelector("[data-slot=item-card]")!.children).toHaveLength(0)
+  })
+})
+
+describe("fromBundle", () => {
+  it("turns the bundle's picture paths into addresses under the module's folder, and leaves addresses be", () => {
+    const content: TooltipContent = { title: "A", image: "dist/a.webp", corner: { text: "1", icon: "dist/c.png" }, icons: [{ label: "x", image: "dist/i.png" }, { label: "y", image: "data:image/png;base64,AA" }], properties: [{ label: "p", value: "1", icon: "https://cdn.example/p.png" }, { label: "q", value: "2" }] }
+    const local = fromBundle(content, "tavora-module://my.module/")
+    expect(local.image).toBe("tavora-module://my.module/dist/a.webp")
+    expect(local.corner?.icon).toBe("tavora-module://my.module/dist/c.png")
+    expect(local.icons?.map((icon) => icon.image)).toEqual(["tavora-module://my.module/dist/i.png", "data:image/png;base64,AA"])
+    expect(local.properties?.map((p) => p.icon)).toEqual(["https://cdn.example/p.png", undefined])
+    expect(content.image).toBe("dist/a.webp")
   })
 })

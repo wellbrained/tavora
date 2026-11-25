@@ -41,6 +41,11 @@ export interface UseSharedTooltipOptions<T extends SharedCard = SharedCard> exte
    * you do something else. On buttons, links and menu rows a click only does what they do. Off by default.
    */
   pin?: boolean;
+  /**
+   * When Tavora can't show the card (outside Tavora, an older one, the panel not connected yet), show it in the panel
+   * instead: bind `tip.props` to an ItemTooltip as well. Off by default.
+   */
+  fallback?: boolean;
 }
 
 export interface TooltipTargetOptions {
@@ -62,7 +67,7 @@ export type TooltipCard<T> = T | (() => T | null | undefined) | null | undefined
 export interface UseTooltip<T> {
   /** Bind on each target: `v-bind="tip.on(card)"`. */
   on(card: TooltipCard<T>, options?: TooltipTargetOptions): Record<string, unknown>;
-  /** Bind on the panel's one tooltip: `<Tooltip v-bind="tip.props">`. (Not needed with `shared`.) */
+  /** Bind on the panel's one tooltip: `<Tooltip v-bind="tip.props">`. (With `shared`, only for its `fallback`.) */
   readonly props: { open: boolean; anchor: TooltipRect; side: TooltipSide; id: string; onDismiss: () => void };
   /** The card shown now (or the last one): fill the tooltip from it. */
   readonly content: T | null;
@@ -107,6 +112,8 @@ export function useTooltip<T>(options: UseTooltipOptions & Partial<UseSharedTool
   let current: Element | null = null;
   /** The shared card's id while it shows, and the tooltip it went to. */
   let sharedCard: { id: string; tooltip: SharedTooltip<SharedCard> } | null = null;
+  /** The card shows in the panel (always without `shared`; with it, as its fallback). */
+  const inPanel = shallowRef(false);
   let timer: ReturnType<typeof setTimeout> | undefined;
   let lastHidden = -Infinity;
   let serial = 0;
@@ -130,35 +137,46 @@ export function useTooltip<T>(options: UseTooltipOptions & Partial<UseSharedTool
     clearTimeout(timer);
     timer = undefined;
     if (state.status === 'open') lastHidden = performance.now();
-    if (current && !given) describe(current, false);
+    if (current && inPanel.value) describe(current, false);
+    inPanel.value = false;
     // Ends the hover only: a pinned card stays until you close it (sdk.ui.tooltip.hide).
     if (sharedCard) void sharedCard.tooltip.hide(sharedCard.id).catch(() => undefined);
     forget();
   }
 
-  function showShared(element: Element, card: SharedCard, pinned: boolean) {
+  function showShared(element: Element, card: SharedCard, side: TooltipSide | undefined, pinned: boolean) {
     const tooltip = sharedTooltip();
-    if (!tooltip) return hide();
+    if (!tooltip) return options.fallback ? showInPanel(element, side) : hide();
     if (!unsubscribe) unsubscribe = tooltip.onClose(({ id: closed }) => { if (closed === sharedCard?.id) forget(); });
     const pinnable = Boolean(options.pin) && !element.closest(CONTROLS);
     // A card that can be pinned keeps one id per card, so pinning it twice doesn't stack two copies.
     const cardId = pinnable ? `${id}-${`${card.title}-${card.subtitle ?? ''}`.replace(/[^\w-]+/g, '_').slice(0, 100)}` : `${id}-${++serial}`;
     sharedCard = { id: cardId, tooltip };
     state.status = 'open';
-    // Tavora couldn't show it: forget it, so the next hover tries again.
+    // Tavora couldn't show it: show it in the panel (`fallback`), or forget it so the next hover tries again.
     tooltip.show({ id: cardId, anchor: element, content: card, pinnable, ...(pinned && pinnable ? { pinned: true } : {}) })
-      .catch(() => { if (sharedCard?.id === cardId) forget(); });
+      .catch(() => {
+        if (sharedCard?.id !== cardId) return;
+        sharedCard = null;
+        if (options.fallback && current === element && element.isConnected) showInPanel(element, side);
+        else forget();
+      });
   }
 
   function open(element: Element, side: TooltipSide | undefined, pinned: boolean) {
     timer = undefined;
     const card = resolve(shown.value);
     if (!element.isConnected || card === null) return hide();
-    if (given) return showShared(element, card as unknown as SharedCard, pinned);
+    if (given) return showShared(element, card as unknown as SharedCard, side, pinned);
+    showInPanel(element, side);
+  }
+
+  function showInPanel(element: Element, side: TooltipSide | undefined) {
     const { left, top, right, bottom } = element.getBoundingClientRect();
     state.anchor = { left, top, right, bottom };
     state.side = side ?? options.side ?? 'bottom';
     state.status = 'open';
+    inPanel.value = true;
     describe(element, true);
   }
 
@@ -207,7 +225,7 @@ export function useTooltip<T>(options: UseTooltipOptions & Partial<UseSharedTool
       };
     },
     get props() {
-      return { open: state.status === 'open' && !given, anchor: state.anchor, side: state.side, id, onDismiss: hide };
+      return { open: state.status === 'open' && inPanel.value, anchor: state.anchor, side: state.side, id, onDismiss: hide };
     },
     get content() {
       return resolve(shown.value);

@@ -46,9 +46,10 @@
 .tavora-tooltip-rows[data-columns] .tavora-tooltip-unit{margin-left:-8px}
 .tavora-tooltip-rows dd[data-faint]{color:color-mix(in srgb,var(--foreground,#f2ece0) 45%,var(--popover,#201c19))}
 
-/* A card with a surface of its own (ItemTooltip): the tooltip only places it, and lends it its shadow. */
+/* A card with a surface of its own (ItemTooltip): the tooltip only places it, and lends it its shadow (not to a unit,
+   which has a shape of its own and no box around it). */
 .tavora-tooltip[data-bare]{padding:0;border:0;background:transparent;box-shadow:none}
-.tavora-tooltip[data-bare]>[data-slot=item-card]{box-shadow:inset 0 1px 0 #ffffff0a,0 8px 24px #000a,0 2px 6px #0006}
+.tavora-tooltip[data-bare]>[data-slot=item-card]:not([data-layout=unit]){box-shadow:inset 0 1px 0 #ffffff0a,0 8px 24px #000a,0 2px 6px #0006}
 
 /* A one-line label: tighter, the text as bright as a title. */
 .tavora-tooltip.compact{padding:6px 10px;border-radius:7px;font-size:13px}

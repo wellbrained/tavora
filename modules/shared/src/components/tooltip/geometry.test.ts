@@ -34,4 +34,10 @@ describe('tooltipPlacement',()=>{
   expect(tooltipPlacement(anchor,0,40,{width:1200,height:600},'bottom',520).width).toBe(520);
   expect(tooltipPlacement(anchor,0,40,view,'bottom',520).width).toBe(400-16);
  });
+ it('never squeezes a rigid card beside the anchor: it goes where all of it fits',()=>{
+  const anchor={left:180,top:100,right:220,bottom:130};
+  expect(tooltipPlacement(anchor,280,120,{width:480,height:600},'right').width).toBeLessThan(280);
+  const p=tooltipPlacement(anchor,280,120,{width:480,height:600},'right',280,true);
+  expect(p.width).toBe(280);expect(p.side).toBe('bottom');
+ });
 });
