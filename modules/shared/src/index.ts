@@ -18,6 +18,8 @@ export { errorMessage } from "./documents";
 export { createOptimistic, useOptimistic, useOptimisticKeyed, type Optimistic, type OptimisticOptions, type UseOptimistic, type UseOptimisticKeyed } from "./optimistic";
 export { useTask, type Task, type TaskOptions, type TaskState, type TaskStatus } from "./use-task";
 export { useFocusRecovery, type FocusRecovery } from "./focus-recovery";
+export { usePaneKeys, isTypingTarget, type PaneKeyHandler, type PaneKeysOptions } from "./pane-keys";
+export { useSlotGrid, type SlotGrid, type SlotGridOptions, type SlotKey } from "./components/ui/slot-grid";
 export { copyImage, copyText } from "./clipboard";
 export { renderToImage, type RenderToImageOptions } from "./render-to-image";
 

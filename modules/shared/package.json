@@ -15,6 +15,7 @@
     "./patch-stored": "./src/patch-stored.ts",
     "./use-task": "./src/use-task.ts",
     "./focus-recovery": "./src/focus-recovery.ts",
+    "./pane-keys": "./src/pane-keys.ts",
     "./overlay-text": "./src/components/ui/overlay-text/plan.ts",
     "./theme.css": "./src/theme.css",
     "./components/*": "./src/components/*/index.ts",

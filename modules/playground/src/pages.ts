@@ -36,6 +36,7 @@ export const PAGES = [
   { id: "numbers", group: "inputs", keywords: "slider range number field stepper quantity plus minus editable type reset value box", examples: ["Slider", "SliderField", "SliderSpoken", "NumberField"] },
   { id: "colour-stars", group: "inputs", keywords: "color colour picker swatch custom palette stars rating review score", examples: ["Swatches", "CustomColour", "StarsShown", "StarSizes", "StarsPick"] },
   { id: "dates", group: "inputs", keywords: "date day calendar month week today archive marks picker datum kalender tag monat", examples: ["PickDay", "DayMarks"] },
+  { id: "boards", group: "inputs", keywords: "board slot slots grid tiles keyboard arrows roving tabindex focus pick locked hole wrap keys pane shortcut typing hotkey brett feld tasten", examples: ["Board", "Tiles", "PaneKeys"] },
   { id: "toggles", group: "inputs", keywords: "toggle pressed bold italic underline format group style tiles looks pictures", examples: ["Toggles", "ToggleGroup", "StyleTiles"] },
   // Display
   { id: "status", group: "display", keywords: "badge chip chips tag tags remove removable toggle filter pill status dot kbd shortcut keys", examples: ["Badges", "Chips", "StatusDot", "Keys"] },

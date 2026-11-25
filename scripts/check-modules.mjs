@@ -34,7 +34,7 @@ export const RULES = {
   "focus-ring": "Keep the kit's focus ring; never remove it or draw your own.",
   "menu-anchor": "Pass the element as anchor: ui.showMenu({ anchor: element }), never the pointer position.",
   "file-save": "Save through files.saveJson or pictures.save (Tavora's save dialog), not a browser download.",
-  "window-keys": "Listen for keys on your own element (a ref), not the whole window: the component may be shown twice.",
+  "window-keys": "Listen for keys with usePaneKeys(root, handler) or on your own element (a ref), not the whole window: the component may be shown twice.",
 };
 
 /** Problems with an allow comment itself. They are never kept in the baseline. */
