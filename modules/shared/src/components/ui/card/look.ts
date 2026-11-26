@@ -14,9 +14,15 @@ export const CARD_PADDING: Record<CardSize, string> = {
   lg: "gap-3 p-5",
 }
 
-/** A card you can press: the edge and fill answer the pointer, the keyboard ring is the kit's. */
+/** A card you press: the keyboard ring and the soft fade of its edge and fill (the dip names `translate`). */
 export const CARD_INTERACTIVE =
-  "cursor-pointer outline-none transition-[background-color,border-color,scale] duration-(--duration-press) ease-(--ease-out-strong) hover:border-input hover:bg-[color-mix(in_srgb,var(--foreground)_6%,var(--card))] focus-visible:ring-ring/50 focus-visible:border-ring focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-(--disabled-opacity) aria-disabled:cursor-not-allowed aria-disabled:opacity-(--disabled-opacity)"
+  "cursor-pointer outline-none transition-[background-color,border-color,translate] duration-(--duration-press) ease-(--ease-out-strong) focus-visible:ring-ring/50 focus-visible:border-ring focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-(--disabled-opacity) aria-disabled:cursor-not-allowed aria-disabled:opacity-(--disabled-opacity)"
+
+/** Hover on a card that works: the edge and fill answer the pointer. Left off while it is off. */
+export const CARD_HOVER = "hover:border-input hover:bg-[color-mix(in_srgb,var(--foreground)_6%,var(--card))]"
 
 /** A card that is picked: the primary edge and a soft tint. */
 export const CARD_SELECTED = "border-primary bg-primary/10 hover:border-primary hover:bg-primary/15"
+
+/** The same for a radio card, which says it with `data-state` (kept next to `CARD_SELECTED` so the two stay alike). */
+export const CARD_CHECKED = "data-[state=checked]:border-primary data-[state=checked]:bg-primary/10 data-[state=checked]:hover:border-primary data-[state=checked]:hover:bg-primary/15"

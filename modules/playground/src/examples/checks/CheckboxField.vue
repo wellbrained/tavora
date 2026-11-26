@@ -21,7 +21,7 @@ const adult = ref(false);
       <template #trailing>124</template>
     </CheckboxField>
     <CheckboxField v-model="layers.copper" label="Copper ore">
-      <template #leading><span class="size-3 rounded-sm bg-destructive" /></template>
+      <template #leading><span class="size-3 rounded-sm bg-foreground" /></template>
       <template #trailing>86</template>
     </CheckboxField>
     <CheckboxField v-model="layers.coal" label="Coal" size="sm">

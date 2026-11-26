@@ -149,3 +149,26 @@ describe("CheckCard and CheckboxField", () => {
     expect(on.value).toBe(true)
   })
 })
+
+describe("names and reasons", () => {
+  it("a CheckboxField names its box by the label only, not the line or the count", async () => {
+    const root = await mount(() => h(CheckboxField, { modelValue: false, label: "Iron ore", description: "Shows the nodes." }, { trailing: () => "124" }))
+    const box = root.querySelector("[data-slot=checkbox]") as HTMLElement
+    const name = root.querySelector("#" + CSS.escape(box.getAttribute("aria-labelledby")!))
+    expect(name?.textContent).toBe("Iron ore")
+  })
+
+  it("a CheckCard that is off says why on the card and does not tick", async () => {
+    const on = ref(false)
+    const root = await mount(() => h(CheckCard, { modelValue: on.value, "onUpdate:modelValue": (v: boolean) => (on.value = v), title: "Notes", disabled: true, disabledReason: "Not yet." }))
+    expect(root.querySelector("[data-slot=check-card]")?.getAttribute("data-tavora-reason")).toBe("Not yet.")
+    ;(root.querySelector("[data-slot=checkbox]") as HTMLElement).click()
+    await nextTick()
+    expect(on.value).toBe(false)
+  })
+
+  it("a Card that is off gets no hover look", async () => {
+    const root = await mount(() => h(Card, { interactive: true, disabled: true, disabledReason: "Sign in first." }))
+    expect(root.querySelector("[data-slot=card]")?.className).not.toContain("hover:border-input")
+  })
+})
