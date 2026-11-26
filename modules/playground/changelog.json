@@ -715,12 +715,5 @@
     "notes": [
       "Dropdowns where you pick a value show an up-and-down arrow, menus keep the down arrow. Both are side by side in Inputs."
     ]
-  },
-  {
-    "version": "0.1.2",
-    "date": "2026-10-31",
-    "notes": [
-      "The tile map shows a layer over the map and under the pins, such as a fog of war."
-    ]
   }
 ]
