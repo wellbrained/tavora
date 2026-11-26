@@ -9,7 +9,7 @@ import { leaveRow } from "@tavora/official-ui/components/ui/animated-list";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { liftedDragImage, useReorderMotion } from "@tavora/official-ui/components/ui/reorder";
 import { settingsDialogSize } from "@tavora/official-ui/components/ui/module-settings";
-import { Switch } from "@tavora/official-ui/components/ui/switch";
+import { SwitchField } from "@tavora/official-ui/components/ui/switch";
 import { handleUndoKey, Toaster, undoable, type Undoable, type UndoAnswer } from "@tavora/official-ui/components/ui/toast";
 import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
 import { Toolbar } from "@tavora/official-ui/components/ui/toolbar";
@@ -362,10 +362,16 @@ function dropTask() {
         <ChevronsDownUp v-else />
       </Button>
       <!-- A switch: on keeps finished to-dos in the list. In a small panel (over the game, say) only the switch stays, so the toolbar keeps its room for the count. -->
-      <label class="text-muted-foreground flex h-8 flex-none cursor-pointer items-center gap-2 rounded-md px-2 text-sm" :title="t(finished === 'stay' ? 'app.keepFinished.on' : 'app.keepFinished.off')">
-        <span :class="['hidden @min-[20rem]:inline', finished === 'stay' && 'text-foreground']">{{ t("app.keepFinished") }}</span>
-        <Switch :model-value="finished === 'stay'" :aria-label="t('app.keepFinished')" data-testid="finished-mode" :data-mode="finished" @update:model-value="toggleFinished" />
-      </label>
+      <SwitchField
+        :model-value="finished === 'stay'"
+        :label="t('app.keepFinished')"
+        placement="end"
+        class="text-muted-foreground w-auto flex-none gap-2"
+        :label-class="['hidden @min-[20rem]:inline', finished === 'stay' && 'text-foreground']"
+        :title="t(finished === 'stay' ? 'app.keepFinished.on' : 'app.keepFinished.off')"
+        :switch-attrs="{ 'data-testid': 'finished-mode', 'data-mode': finished }"
+        @update:model-value="toggleFinished"
+      />
       <Button variant="ghost" size="icon-sm" :aria-label="t('settings.title')" :title="t('settings.title')" data-testid="live-settings" @click="openSettings">
         <SettingsIcon />
       </Button>

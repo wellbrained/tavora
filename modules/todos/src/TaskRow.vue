@@ -8,7 +8,7 @@
 //
 // Every control sits in a box as tall as one title line (32 px), so all of
 // them share the first line's centre.
-import { ChevronRight, Ellipsis, GripVertical, Pin, Trash2 } from "@lucide/vue";
+import { Check, ChevronRight, Ellipsis, GripVertical, Pin, Trash2 } from "@lucide/vue";
 import { cn } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
@@ -63,6 +63,11 @@ const actions = taskActions(props.store, panel, rowFocus);
 const change = actions.change;
 const setTaskDone = (done: boolean) => actions.setDone(props.task, done);
 const remove = () => actions.remove(props.task);
+/** A click in the tick's area but beside the circle ticks it too (a click on the circle does it itself). */
+function onTickArea(event: MouseEvent) {
+  if ((event.target as HTMLElement).closest("[data-slot=checkbox]")) return;
+  setTaskDone(!props.task.done);
+}
 
 // ── Editing the title in place ───────────────────────────────────────
 
@@ -238,15 +243,18 @@ function choose(action: RowAction) {
           <ChevronRight :class="cn('size-3.5 transition-transform', !folded && 'rotate-90')" />
         </Button>
       </span>
-      <span class="flex h-8 flex-none items-center px-0.5">
+      <!-- The tick's hit area is a 32 px square around the circle (the control height), so it is easy to hit; a click anywhere in it ticks. It overlaps its neighbours by 4 px each side, so the row's layout stays as it was. -->
+      <span class="group/tick relative -mx-1 flex h-8 w-8 flex-none cursor-pointer items-center justify-center" data-testid="task-tick-area" @click="onTickArea">
         <!-- Round, so it reads as a to-do rather than a setting. -->
         <Checkbox
-          class="data-[state=checked]:before:-inset-[1.5px] hover:border-primary size-5 cursor-pointer rounded-full border-[1.5px] border-[color-mix(in_oklab,var(--primary)_45%,var(--muted-foreground))]"
+          class="data-[state=checked]:before:-inset-[1.5px] hover:border-primary group-hover/tick:border-primary size-5 cursor-pointer rounded-full border-[1.5px] border-[color-mix(in_oklab,var(--primary)_45%,var(--muted-foreground))]"
           :model-value="task.done"
           :aria-label="task.done ? t('task.notDone', { title: task.title }) : t('task.done', { title: task.title })"
           data-testid="task-done"
           @update:model-value="setTaskDone($event === true)"
         />
+        <!-- A faint tick in the circle while you hover the area, in the row's colour: what a click will do. -->
+        <Check v-if="!task.done" class="text-primary pointer-events-none absolute size-3 opacity-0 transition-opacity duration-(--duration-press) group-hover/tick:opacity-45" :stroke-width="3" aria-hidden="true" data-testid="task-tick-hint" />
       </span>
 
       <Popover :open="describing" @update:open="setDescribing">

@@ -204,6 +204,26 @@ describe("over the game", () => {
   });
 });
 
+describe("The tick's hit area", () => {
+  it("ticks from a click in the 32 px square around the circle, once, and shows a faint tick on hover", async () => {
+    const host = await mount();
+    host.documents.put({ id: LIST_ID, title: LIST_TITLE, data: { version: 2, groups: [{ id: "g", name: "Main", color: "", tasks: [task("t1", "Find the crypt")] }] } });
+    await settle();
+    const area = $("[data-testid=task-t1] [data-testid=task-tick-area]")!;
+    expect(area.className).toContain("h-8");
+    expect(area.className).toContain("w-8");
+    expect(area.querySelector("[data-testid=task-tick-hint]")).not.toBeNull();
+    // Beside the circle: it ticks. On the circle: it ticks once, not twice.
+    area.click();
+    await settle();
+    expect(stored(host).groups[0]!.tasks[0]!.done).toBe(true);
+    expect(area.querySelector("[data-testid=task-tick-hint]")).toBeNull();
+    $("[data-testid=task-t1] [data-testid=task-done]")!.click();
+    await settle();
+    expect(stored(host).groups[0]!.tasks[0]!.done).toBe(false);
+  });
+});
+
 describe("Keep finished to-dos", () => {
   const saved = async () => (await (current.sdk as TavoraSDK).panel.getState<{ finished: string; live: { showFinished: boolean } }>())!;
 
