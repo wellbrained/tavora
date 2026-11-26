@@ -6,10 +6,12 @@ name: Number
 # Runs one at a time, so two merges never get the same number. A push made with
 # GITHUB_TOKEN starts no workflow, so Checks is started by hand for the new commit:
 # `pnpm release` wants a green Checks run on the commit it builds.
+# It also keeps room in the modules' patch notes (scripts/trim-changelogs.mjs), so the
+# next pull request's entry stays within the limit.
 on:
   push:
     branches: [main]
-    paths: ["apps/desktop/changes/**"]
+    paths: ["apps/desktop/changes/**", "modules/*/changelog.json", "scripts/trim-changelogs.mjs"]
   workflow_dispatch:
 
 concurrency:
@@ -32,7 +34,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-      - name: Number the change notes
+      - name: Number the change notes and trim the modules' patch notes
         id: number
         run: |
           git config user.name "github-actions[bot]"
@@ -42,8 +44,10 @@ jobs:
             git fetch --quiet origin main
             git reset --quiet --hard origin/main
             message=$(node apps/desktop/scripts/change-notes.mjs apply)
-            if [ -z "$message" ]; then echo "No change notes to number."; exit 0; fi
-            git add -A apps/desktop/changes apps/desktop/package.json package.json apps/desktop/src/shared/patch-notes.ts
+            trimmed=$(node scripts/trim-changelogs.mjs)
+            if [ -z "$message$trimmed" ]; then echo "No change notes to number, no patch notes to trim."; exit 0; fi
+            message=${message:-$trimmed}
+            git add -A apps/desktop/changes apps/desktop/package.json package.json apps/desktop/src/shared/patch-notes.ts modules/*/changelog.json
             git commit --quiet -m "$message"
             if git push --quiet origin HEAD:main; then
               echo "$message" | head -1

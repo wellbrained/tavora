@@ -196,6 +196,8 @@ test("notes: what you typed just before the panel closed is still there", async 
   await inModule(app, NOTES, `${q("editor")}.focus()`);
   // Away at once, well within the note's save delay: the page saves as it closes.
   await typeInModule(app, NOTES, "Left at once");
+  // typeInModule can return before the page has the text: what counts as typed is what the editor shows.
+  await expect.poll(() => editorText(app)).toBe("Left at once");
   await openWorkspace(page, "satisfactory");
   // The old page is gone before the new one is read, so it can't stand in for it.
   await expect.poll(() => notesPages(app)).toBe(0);
@@ -206,6 +208,8 @@ test("notes: what you typed just before the panel closed is still there", async 
   // Quitting right after typing keeps it too.
   await inModule(app, NOTES, `(() => { const editor = ${q("editor")}; editor.focus(); getSelection().selectAllChildren(editor); getSelection().collapseToEnd(); })()`);
   await typeInModule(app, NOTES, " and quit");
+  // Without this the quit can overtake the keys, which a person typing can't.
+  await expect.poll(() => editorText(app)).toBe("Left at once and quit");
   await app.close();
   const again = await launch(userData);
   await openWorkspace(again.page, "poe2");

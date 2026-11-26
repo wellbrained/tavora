@@ -1,7 +1,7 @@
 import type { KeyObject } from "node:crypto";
 import { lstat, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { catalogUploadProblem, folderKey, isReleaseVersion, manifestFiles, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOT_PIXELS, validateChangelog, validateManifest, type CatalogUploadProblem, type ModuleManifest } from "@tavora/module-schema";
+import { catalogUploadProblem, CHANGELOG_LIMITS, folderKey, isReleaseVersion, manifestFiles, MAX_README_BYTES, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOT_PIXELS, validateChangelog, validateManifest, type CatalogUploadProblem, type ModuleManifest } from "@tavora/module-schema";
 import { MANIFEST_FILE, packModule, PackError, PrivateKeyError, readZip, type Published } from "@tavora/pack";
 import type { AccountView, PrefixState, PublishProblem, PublishView, ReadmeBlock } from "../shared/host-api";
 import { suggestPrefix } from "../shared/id-prefix";
@@ -386,7 +386,8 @@ export async function writeVersion(project: string, version: string, notes: stri
       if (!parsed.ok) throw new UserError("publish.error.badFile", { file: name });
       entries = parsed.entries.filter((entry) => entry.version !== version);
     }
-    const changelog = [{ version, date, notes: lines }, ...entries];
+    // A full changelog drops its oldest versions: Tavora reads no longer one.
+    const changelog = [{ version, date, notes: lines }, ...entries].slice(0, CHANGELOG_LIMITS.maxEntries);
     const checked = validateChangelog(changelog);
     if (!checked.ok) throw new UserError("publish.error.notes", { message: checked.errors[0] ?? "" });
     await writeFileAtomic(file, jsonText(changelog, /^([ \t]+)/m.exec(existing ?? "")?.[1] ?? "  "));

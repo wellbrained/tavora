@@ -17,6 +17,7 @@
 # What those load as code (audit run 7): the Number job (write token) runs change-notes.mjs, and release.mjs loads the
 # rest in the process that reads the update signing key.
 /apps/desktop/scripts/change-notes.mjs @wellbrained
+/scripts/trim-changelogs.mjs @wellbrained
 /apps/desktop/scripts/installed-version.mjs @wellbrained
 /apps/desktop/src/shared/release-catalog.ts @wellbrained
 /apps/desktop/src/shared/patch-notes.ts @wellbrained

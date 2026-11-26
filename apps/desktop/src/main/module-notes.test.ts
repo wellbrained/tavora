@@ -40,6 +40,8 @@ describe("Tavora's own modules", () => {
     const manifest = JSON.parse(readFileSync(path.join(root, name, "tavora.module.json"), "utf8"));
     expect(manifest.changelog).toBe("changelog.json");
     const result = validateChangelog(JSON.parse(readFileSync(path.join(root, name, manifest.changelog), "utf8")));
+    // The errors, not just "false": a changelog over its limit says so.
+    expect(result.ok ? [] : result.errors).toEqual([]);
     expect(result.ok && result.entries[0]?.version).toBe(manifest.version);
   });
 });

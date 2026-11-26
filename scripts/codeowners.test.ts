@@ -14,6 +14,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PRIVILEGED = [
   // The Number job (number.yml, contents: write) runs this on main.
   "apps/desktop/scripts/change-notes.mjs",
+  "scripts/trim-changelogs.mjs",
   // These read the update signing key.
   "apps/desktop/scripts/release.mjs",
   "apps/desktop/scripts/release-refresh.mjs",

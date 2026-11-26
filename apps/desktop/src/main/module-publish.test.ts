@@ -2,6 +2,7 @@ import { createHash, generateKeyPairSync } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { CHANGELOG_LIMITS } from "@tavora/module-schema";
 import { fingerprint, readZip, verifyFiles } from "@tavora/pack";
 import { afterEach, describe, expect, it } from "vitest";
 import type { PrefixState, PublishView } from "../shared/host-api";
@@ -225,6 +226,16 @@ describe("writeVersion", () => {
     expect(JSON.parse(await readFile(path.join(dir, "tavora.module.json"), "utf8"))).toMatchObject({ version: "1.3.0", changelog: "changelog.json" });
     expect(JSON.parse(await readFile(path.join(dir, "changelog.json"), "utf8"))).toEqual([{ version: "1.3.0", date: "2026-10-21", notes: ["New."] }]);
     expect(JSON.parse(await readFile(path.join(dir, "package.json"), "utf8")).version).toBe("9.9.9");
+  });
+
+  it("drops the oldest versions of a full changelog", async () => {
+    const dir = await project();
+    const full = Array.from({ length: CHANGELOG_LIMITS.maxEntries }, (_, index) => ({ version: `1.0.${CHANGELOG_LIMITS.maxEntries - index}`, notes: ["Old."] }));
+    await writeFile(path.join(dir, "changelog.json"), JSON.stringify(full));
+    await writeVersion(dir, "1.3.0", ["New."], "2026-10-21");
+    const entries = JSON.parse(await readFile(path.join(dir, "changelog.json"), "utf8"));
+    expect(entries).toHaveLength(CHANGELOG_LIMITS.maxEntries);
+    expect([entries[0].version, entries.at(-1).version]).toEqual(["1.3.0", "1.0.2"]);
   });
 
   it("replaces the notes of a version listed already, and refuses a changelog it can't read", async () => {

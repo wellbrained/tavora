@@ -232,6 +232,6 @@ Tell users what changed in `changelog.json`, which the starter makes and the man
 ]
 ```
 
-Users read them under the module in **Settings > Modules > Patch notes**. After an update, the notes newer than the version they had are marked New until they open them. Each line is plain text of at most 500 characters, at most 20 lines per version and 100 versions; Publishing refuses a changelog Tavora could not show. Needs Tavora 0.18.2 or newer, so set `minTavora` to at least `0.18.2`.
+Users read them under the module in **Settings > Modules > Patch notes**. After an update, the notes newer than the version they had are marked New until they open them. Each line is plain text of at most 500 characters, at most 20 lines per version and 100 versions; Publishing refuses a changelog Tavora could not show; **Save to project** drops the oldest version of a full one. Needs Tavora 0.18.2 or newer, so set `minTavora` to at least `0.18.2`.
 
 Something not working? See [Troubleshooting](./troubleshooting.md).
