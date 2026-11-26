@@ -8,12 +8,13 @@
 //
 // Personal: the field takes the new workspace's name, Enter adds it and opens it. Below it, the personal workspaces
 // there are, to open one instead. The dialog keeps its size either way.
-import { Loader, Search, UserRound } from "@lucide/vue";
+import { Loader, UserRound } from "@lucide/vue";
 import { computed, nextTick, ref, watch } from "vue";
 import { act, api, closeDialog, dialog, openPanels, state } from "../host";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import { Notice } from "@tavora/official-ui/components/ui/notice";
+import { PaletteFooter, PaletteSearch } from "@tavora/official-ui/components/ui/palette";
 import { SegmentedControl } from "@tavora/official-ui/components/ui/segmented-control";
 import { Skeleton } from "@tavora/official-ui/components/ui/skeleton";
 import { ListRow } from "@tavora/official-ui/components/ui/list-row";
@@ -27,7 +28,8 @@ import GamePickerList from "./GamePickerList.vue";
 import WorkspaceIcon from "./WorkspaceIcon.vue";
 
 const query = ref("");
-const input = ref<HTMLInputElement | null>(null);
+const field = ref<InstanceType<typeof PaletteSearch> | null>(null);
+const input = computed(() => field.value?.input ?? null);
 const list = ref<HTMLElement | null>(null);
 const shownRequest = dialog.value;
 const picker = useGamePicker(query, { covers: true, listId: "game-results", list, search: () => input.value, onEnter: (key) => pick(key) });
@@ -195,31 +197,25 @@ function onDialogKey(event: KeyboardEvent) {
     >
       <DialogTitle class="sr-only">{{ mode === "game" ? t("addGame.title") : t("addPersonal.new") }}</DialogTitle>
       <DialogDescription class="sr-only">{{ mode === "game" ? t("addGame.search") : t("addPersonal.placeholder") }}</DialogDescription>
-      <div class="relative flex flex-none items-center gap-3 border-b pr-3">
-        <component :is="mode === 'game' ? Search : UserRound" class="text-muted-foreground pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2" />
-        <input
-          id="game-search"
-          ref="input"
-          v-model="text"
-          class="placeholder:text-muted-foreground h-14 min-w-0 flex-1 bg-transparent pr-2 pl-12 text-base focus-visible:outline-none"
-          :placeholder="mode === 'game' ? t('addGame.search') : t('addPersonal.placeholder')"
-          :aria-label="mode === 'game' ? t('addGame.title') : t('addPersonal.new')"
-          :role="mode === 'game' ? 'combobox' : undefined"
-          :aria-expanded="mode === 'game' ? 'true' : undefined"
-          :aria-controls="mode === 'game' ? 'game-results' : undefined"
-          :aria-autocomplete="mode === 'game' ? 'list' : undefined"
-          :aria-activedescendant="mode === 'game' ? activeId : undefined"
-          autocomplete="off"
-          spellcheck="false"
-          maxlength="80"
-          :data-testid="mode === 'game' ? 'game-search' : 'personal-name'"
-          @keydown="onFieldKey"
-        />
+      <PaletteSearch
+        id="game-search"
+        ref="field"
+        v-model="text"
+        class="pr-3"
+        :list="mode === 'game' ? 'game-results' : undefined"
+        :active-id="activeId"
+        :placeholder="mode === 'game' ? t('addGame.search') : t('addPersonal.placeholder')"
+        :aria-label="mode === 'game' ? t('addGame.title') : t('addPersonal.new')"
+        maxlength="80"
+        :data-testid="mode === 'game' ? 'game-search' : 'personal-name'"
+        @keydown="onFieldKey"
+      >
+        <template v-if="mode === 'personal'" #icon><UserRound aria-hidden="true" /></template>
         <!-- Games come first; Personal is for the odd workspace that belongs to no game. -->
-        <SegmentedControl v-model="mode" :options="modes" :label="t('add.mode')" :disabled="adder.busy.value" data-testid="add-mode" />
-      </div>
+        <template #trailing><SegmentedControl v-model="mode" :options="modes" :label="t('add.mode')" :disabled="adder.busy.value" data-testid="add-mode" /></template>
+      </PaletteSearch>
 
-      <div ref="list" class="min-h-0 flex-1 overflow-y-auto py-2">
+      <div ref="list" class="min-h-0 flex-1 overflow-y-auto py-1">
         <Notice v-if="adder.error.value" variant="destructive" class="mx-4 mb-2" data-testid="add-game-error">{{ adder.error.value }}</Notice>
         <template v-if="mode === 'game'">
         <p v-if="!installedLoaded" class="text-muted-foreground flex items-center gap-2 px-5 pb-1 text-xs font-medium" role="status" data-testid="add-game-loading">
@@ -251,8 +247,7 @@ function onDialogKey(event: KeyboardEvent) {
         </template>
 
         <div v-else class="flex flex-col gap-1 px-2" data-testid="add-personal" :data-status="adder.state.value.status">
-          <ListRow v-if="typedName" class="bg-accent hover:bg-accent relative h-auto gap-3 rounded-lg px-3 py-2 font-medium" data-testid="create-personal" @click="addPersonal">
-            <span class="bg-primary absolute inset-y-1.5 left-0 w-0.5 rounded-full" aria-hidden="true" />
+          <ListRow v-if="typedName" highlighted size="lg" class="gap-3 rounded-lg px-3" data-testid="create-personal" @click="addPersonal">
             <template #leading><span class="bg-background text-primary flex size-7 flex-none items-center justify-center rounded-md" aria-hidden="true"><UserRound class="size-4" /></span></template>
             {{ typedName }}
             <template #description>{{ adder.busy.value ? t("addGame.adding") : t("addPersonal.new") }}</template>
@@ -264,11 +259,12 @@ function onDialogKey(event: KeyboardEvent) {
           <p v-else class="text-muted-foreground px-3 py-2 text-sm" data-testid="personal-type-name">{{ t("addPersonal.typeName") }}</p>
 
           <template v-if="personals.length">
-            <p class="text-muted-foreground px-3 pt-3 pb-1 text-xs font-medium">{{ t("addPersonal.yours") }}</p>
+            <p class="text-muted-foreground mt-1 flex h-7 items-center border-t px-3 pt-1 text-xs font-medium">{{ t("addPersonal.yours") }}</p>
             <ListRow
               v-for="workspace in personals"
               :key="workspace.id"
-              class="h-auto gap-3 rounded-lg px-3 py-2 font-medium"
+              size="lg"
+              class="gap-3 rounded-lg px-3"
               :data-testid="`open-personal-${workspace.id}`"
               @click="openPersonal(workspace.id)"
             >
@@ -280,21 +276,17 @@ function onDialogKey(event: KeyboardEvent) {
         </div>
       </div>
 
-      <div v-if="mode === 'personal'" class="text-muted-foreground flex flex-none items-center border-t px-4 py-2 text-xs">
-        <span aria-hidden="true"
-          ><Kbd class="font-sans">{{ t("search.key.enter") }}</Kbd> {{ t("addGame.hint.add") }} · <Kbd class="font-sans">{{ t("search.key.tab") }}</Kbd> {{ t("add.mode.game") }}</span
-        >
-      </div>
-      <div v-else class="text-muted-foreground flex flex-none flex-wrap items-center gap-x-4 gap-y-1 border-t px-4 py-2 text-xs">
-        <span aria-hidden="true"
-          ><template v-if="covers.length"><Kbd class="font-sans">←</Kbd> <Kbd class="font-sans">→</Kbd> </template><Kbd class="font-sans">↑</Kbd> <Kbd class="font-sans">↓</Kbd>
-          {{ t("addGame.hint.move") }} · <Kbd class="font-sans">{{ t("search.key.enter") }}</Kbd> {{ t("addGame.hint.add") }} · <Kbd class="font-sans">{{ t("search.key.tab") }}</Kbd>
-          {{ t("add.mode.personal") }}</span
-        >
-        <span class="ml-auto flex gap-4">
-          <TextLink class="text-primary" data-testid="open-steam-import" @click="dialog = { kind: 'steam-import' }">{{ t("addGame.steam") }}</TextLink>
-        </span>
-      </div>
+      <PaletteFooter v-if="mode === 'personal'" :hints="[{ keys: [t('search.key.enter')], label: t('addGame.hint.add') }, { keys: [t('search.key.tab')], label: t('add.mode.game') }]" />
+      <PaletteFooter
+        v-else
+        :hints="[
+          { keys: covers.length ? ['←', '→', '↑', '↓'] : ['↑', '↓'], label: t('addGame.hint.move') },
+          { keys: [t('search.key.enter')], label: t('addGame.hint.add') },
+          { keys: [t('search.key.tab')], label: t('add.mode.personal') },
+        ]"
+      >
+        <TextLink class="text-primary" data-testid="open-steam-import" @click="dialog = { kind: 'steam-import' }">{{ t("addGame.steam") }}</TextLink>
+      </PaletteFooter>
     </DialogContent>
   </Dialog>
 </template>

@@ -48,10 +48,12 @@ const HOVER_FILL = "bg-[color-mix(in_srgb,var(--foreground)_10%,var(--accent))]"
 
 /**
  * An option row says it is chosen with `aria-selected` (always set, as listboxes expect); any other with `aria-current`.
+ * A list whose `aria-selected` follows its highlight (a palette: PaletteItem) passes its own `aria-selected`, which wins.
  * Called from the template, so a `role` that changes later is read again (attributes aren't tracked by a computed).
  */
 function selection() {
-  return attrs.role === "option" ? { "aria-selected": props.selected ? "true" : "false" } : props.selected ? { "aria-current": props.navigation ? "page" : "true" } : {}
+  if (attrs.role === "option") return { "aria-selected": attrs["aria-selected"] !== undefined ? String(attrs["aria-selected"]) : props.selected ? "true" : "false" }
+  return props.selected ? { "aria-current": props.navigation ? "page" : "true" } : {}
 }
 </script>
 

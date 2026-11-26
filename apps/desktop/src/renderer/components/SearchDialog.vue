@@ -2,13 +2,12 @@
 // Ctrl+K: one box to jump to a workspace, open a module, use a saved layout,
 // run an action or find a setting. Arrow keys move, Enter runs, Escape
 // closes.
-import { Blocks, Home, LayoutPanelLeft, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings, SlidersHorizontal } from "@lucide/vue";
+import { Blocks, Home, LayoutPanelLeft, PanelLeftClose, PanelLeftOpen, Plus, Settings, SlidersHorizontal } from "@lucide/vue";
 import { computed, onBeforeUnmount, ref, shallowRef, watch, type Component } from "vue";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
-import { Kbd } from "@tavora/official-ui/components/ui/kbd";
+import { PaletteFooter, PaletteGroup, PaletteItem, PaletteList, PaletteSearch } from "@tavora/official-ui/components/ui/palette";
 import { useListNav } from "../lib/list-nav";
 import { rank, rankByName, startsOrIsWord } from "../lib/search";
-import { cn } from "@tavora/official-ui/lib/utils";
 import type { CatalogMatch, OnlineGame, OnlineSearchResult, WorkspaceView } from "../../shared/host-api";
 import { LAYOUT_TEMPLATES } from "../../shared/layout-templates";
 import { act, addModule, api, dialog, hiddenSettingIds, hiddenSettings, openSettings, searchOpen, searchStart, showOrAddPanel, showToast, state } from "../host";
@@ -33,8 +32,6 @@ interface Group {
   id: "workspaces" | "here" | "actions" | "settings" | "add";
   label: string;
   items: Item[];
-  /** Toned down: suggestions, not the user's own things. */
-  quiet?: boolean;
 }
 
 /** A comma-separated list from the locale files as search words. */
@@ -46,6 +43,8 @@ const splitWords = (text: string) =>
 
 const query = ref("");
 const list = ref<HTMLElement | null>(null);
+const results = ref<InstanceType<typeof PaletteList> | null>(null);
+watch(results, (component) => (list.value = (component?.$el as HTMLElement | undefined) ?? null));
 
 // Opening starts from what Home handed over; keys typed there while the box is still opening are added to it.
 // The dialog selects the text as it focuses the box; with text handed over from Home the next key would replace it,
@@ -270,7 +269,7 @@ const shown = computed<Group[]>(() => {
     .map((group) => ({ ...group, items: rank(group.items, text, (item) => ({ name: item.label, extra: item.keywords })) }))
     .filter((group) => group.items.length > 0);
   // Games to add come after everything the user already has.
-  if (addItems.value.length) ranked.push({ id: "add", label: t("addGame.title"), items: addItems.value, quiet: true });
+  if (addItems.value.length) ranked.push({ id: "add", label: t("addGame.title"), items: addItems.value });
   return ranked;
 });
 
@@ -316,57 +315,48 @@ const activeId = computed(() => {
     >
       <DialogTitle class="sr-only">{{ t("search.title") }}</DialogTitle>
       <DialogDescription class="sr-only">{{ t("search.description") }}</DialogDescription>
-      <div class="relative border-b">
-        <Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2" />
-        <input
-          v-model="query"
-          class="placeholder:text-muted-foreground h-14 w-full bg-transparent pr-4 pl-12 text-base focus-visible:outline-none"
-          :placeholder="t('search.placeholder')"
-          role="combobox"
-          :aria-label="t('search.title')"
-          aria-expanded="true"
-          aria-controls="search-results"
-          aria-autocomplete="list"
-          :aria-activedescendant="activeId"
-          autocomplete="off"
-          spellcheck="false"
-          maxlength="80"
-          data-testid="search-input"
-          @keydown="onKey"
-          @focus="onFocus"
-        />
-      </div>
+      <PaletteSearch
+        v-model="query"
+        list="search-results"
+        :active-id="activeId"
+        :placeholder="t('search.placeholder')"
+        :aria-label="t('search.title')"
+        maxlength="80"
+        data-testid="search-input"
+        @keydown="onKey"
+        @focus="onFocus"
+      />
 
       <span class="sr-only" role="status" data-testid="search-count">{{ resultsText }}</span>
-      <div id="search-results" ref="list" @mouseleave="resetHover" class="max-h-[min(420px,60vh)] overflow-y-auto p-2" role="listbox" :aria-label="t('search.results')">
+      <PaletteList id="search-results" ref="results" :label="t('search.results')" class="max-h-[min(420px,60vh)] overflow-y-auto" @mouseleave="resetHover">
         <p v-if="!flat.length" class="text-muted-foreground px-3 py-6 text-center" data-testid="search-empty">{{ t("search.empty", { query: query.trim() }) }}</p>
-        <div v-for="group in shown" :key="group.id" role="group" :aria-label="group.label" class="pb-1">
-          <div class="text-muted-foreground px-3 pt-2 pb-1 text-xs font-medium" aria-hidden="true">{{ group.label }}</div>
-          <div
+        <PaletteGroup v-for="group in shown" :key="group.id" :label="group.label">
+          <PaletteItem
             v-for="item in group.items"
             :id="optionId(item)"
             :key="item.id"
-            role="option"
-            :aria-selected="flat[active] === item"
-            :aria-busy="adding === item.id || undefined"
-            :class="cn('tavora-busy flex h-10 cursor-pointer items-center gap-3 rounded-lg px-3', group.quiet && 'text-muted-foreground', (flat[active] === item || adding === item.id) && 'bg-accent')"
+            :icon="item.workspace ? undefined : item.icon"
+            :label="item.label"
+            :match="query"
+            :active="flat[active] === item"
+            :busy="adding === item.id"
             :data-testid="`search-${item.id}`"
             @mousemove="onHover(flat.indexOf(item), $event)"
             @click="item.run()"
           >
-            <WorkspaceIcon v-if="item.workspace" :workspace="item.workspace" :size="24" />
-            <component :is="item.icon" v-else class="text-muted-foreground size-5 flex-none" />
-            <span class="min-w-0 flex-1 truncate">{{ item.label }}</span>
-            <span v-if="item.hint" class="text-muted-foreground flex-none text-xs">{{ item.hint }}</span>
-          </div>
-        </div>
-      </div>
+            <template v-if="item.workspace" #leading><WorkspaceIcon :workspace="item.workspace" :size="24" /></template>
+            <template v-if="item.hint" #trailing>{{ item.hint }}</template>
+          </PaletteItem>
+        </PaletteGroup>
+      </PaletteList>
 
-      <div class="text-muted-foreground flex gap-4 border-t px-4 py-2 text-xs" aria-hidden="true">
-        <span><Kbd class="font-sans">↑</Kbd> <Kbd class="font-sans">↓</Kbd> {{ t("search.hint.move") }}</span>
-        <span><Kbd class="font-sans">{{ t("search.key.enter") }}</Kbd> {{ t("search.hint.open") }}</span>
-        <span><Kbd class="font-sans">{{ t("search.key.esc") }}</Kbd> {{ t("search.hint.close") }}</span>
-      </div>
+      <PaletteFooter
+        :hints="[
+          { keys: ['↑', '↓'], label: t('search.hint.move') },
+          { keys: [t('search.key.enter')], label: t('search.hint.open') },
+          { keys: [t('search.key.esc')], label: t('search.hint.close') },
+        ]"
+      />
     </DialogContent>
   </Dialog>
 </template>

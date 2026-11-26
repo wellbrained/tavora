@@ -6,13 +6,17 @@
 // its reason at the end. The list fills the height it is given and scrolls inside it (or up to `maxHeight`).
 // The kit narrows by label and keywords and bolds what matched; with `:filter="false"` the page narrows and ranks the
 // options itself from `v-model:query`. `v-model` is optional: it marks the chosen row.
-// Slots, all optional: `option` (a row's content), `group` (a heading) and `empty` (when nothing is left).
+// `size="lg"` is the palette look (an "Add a recipe" picker in a dialog): the big frameless search with a line under it,
+// taller rows with bigger icons, a line between groups, and with `hints` the keys in a foot. Rows are PaletteItems, as
+// in the app's own palettes; an option's `icon` goes in front, `busy` shows a spinner while its pick is being done.
+// Slots, all optional: `option` (a row's content), `leading` (a picture in front of a row), `group` (a heading) and
+// `empty` (when nothing is left).
 import { Search } from "@lucide/vue"
 import { computed, nextTick, ref, useId, useTemplateRef, watch, type HTMLAttributes } from "vue"
 import { isComposing } from "../../../lib/keys"
 import { cn } from "../../../lib/utils"
-import { choiceHighlighted, choiceRow } from "../choice-row"
 import { EmptyState } from "../empty-state"
+import { PaletteFooter, PaletteGroup, PaletteItem, PaletteSearch, type PaletteHint } from "../palette"
 import { SearchInput } from "../search-input"
 import { uiText } from "../text"
 import { useKeepFocus } from "./keep-focus"
@@ -36,15 +40,23 @@ const props = withDefaults(defineProps<{
   autofocus?: boolean
   /** A height the list scrolls at ("16rem"), for a list that isn't in a column that sizes it. */
   maxHeight?: string
+  /** `lg`: the palette look, for a list that is the whole of a dialog. */
+  size?: "default" | "lg"
+  /**
+   * The keys, in a foot under the list (`size="lg"`): `true` for ↑ ↓ to move and Enter to pick, or your own (add
+   * "Esc to close" in a dialog).
+   */
+  hints?: boolean | PaletteHint[]
   /** Test ids for the parts: `<testid>-search`, `-list`, `-option-<value>`, `-none`. */
   testid?: string
   class?: HTMLAttributes["class"]
-}>(), { filter: true, autofocus: true })
+}>(), { filter: true, autofocus: true, size: "default", hints: false })
 const emit = defineEmits<{ pick: [value: T] }>()
 const model = defineModel<T>()
 const query = defineModel<string>("query", { default: "" })
 defineSlots<{
   option?: (props: { option: ListboxOption<T>, parts: LabelPart[], active: boolean }) => unknown
+  leading?: (props: { option: ListboxOption<T> }) => unknown
   group?: (props: { group: string }) => unknown
   empty?: () => unknown
 }>()
@@ -54,7 +66,12 @@ const listId = `${id}-list`
 const rowId = (index: number) => `${id}-option-${index}`
 const list = useTemplateRef<HTMLElement>("list")
 const field = useTemplateRef<InstanceType<typeof SearchInput>>("field")
-const fieldInput = () => (field.value?.$el as HTMLElement | undefined)?.querySelector("input")
+const bigField = useTemplateRef<InstanceType<typeof PaletteSearch>>("bigField")
+const fieldInput = () => bigField.value?.input ?? (field.value?.$el as HTMLElement | undefined)?.querySelector("input")
+const big = computed(() => props.size === "lg")
+const footHints = computed<PaletteHint[]>(() =>
+  props.hints === true ? [{ keys: ["↑", "↓"], label: uiText.value.paletteMove }, { keys: [uiText.value.enterKey], label: uiText.value.palettePick }] : props.hints || [],
+)
 const part = (name: string) => (props.testid ? `${props.testid}-${name}` : undefined)
 
 const shown = computed(() => (props.filter ? filterOptions(props.options, query.value) : props.options))
@@ -104,7 +121,7 @@ async function highlight(index: number | undefined): Promise<void> {
 }
 
 function pick(option: ListboxOption<T> | undefined): void {
-  if (!option || option.disabled) return
+  if (!option || option.disabled || option.busy) return
   if (model.value !== option.value) model.value = option.value
   emit("pick", option.value)
 }
@@ -126,9 +143,20 @@ useKeepFocus(fieldInput, () => !!props.search && props.autofocus)
 </script>
 
 <template>
-  <div v-bind="$attrs" data-slot="listbox" :class="cn('flex min-h-0 flex-col gap-3', props.class)">
+  <div v-bind="$attrs" data-slot="listbox" :data-size="size" :class="cn('flex min-h-0 flex-col', big ? 'gap-0' : 'gap-3', props.class)">
+    <PaletteSearch
+      v-if="search && big"
+      ref="bigField"
+      v-model="query"
+      :list="listId"
+      :active-id="activeId"
+      :placeholder="search"
+      :aria-label="label"
+      :data-testid="part('search')"
+      @keydown="onKeydown"
+    />
     <SearchInput
-      v-if="search"
+      v-else-if="search"
       ref="field"
       v-model="query"
       :placeholder="search"
@@ -150,50 +178,39 @@ useKeepFocus(fieldInput, () => !!props.search && props.autofocus)
       :aria-label="label"
       :tabindex="search ? -1 : 0"
       :aria-activedescendant="search ? undefined : activeId"
-      :class="cn('focus-visible:ring-ring/50 -mx-1 min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-md px-1 outline-none focus-visible:ring-[3px]', !shown.length && 'hidden')"
+      :class="cn('focus-visible:ring-ring/50 min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-md outline-none focus-visible:ring-[3px]', big ? 'p-2' : '-mx-1 px-1', !shown.length && 'hidden')"
       :style="maxHeight ? { maxHeight } : undefined"
       :data-testid="part('list')"
       @keydown="search ? undefined : onKeydown($event)"
     >
-      <template v-for="(section, at) in sections" :key="section.group">
-        <div
-          :role="section.group ? 'group' : undefined"
-          :aria-labelledby="section.group ? `${id}-group-${at}` : undefined"
-          class="not-first:mt-1 not-first:border-t not-first:pt-1"
+      <PaletteGroup v-for="section in sections" :key="section.group" :label="section.group || undefined">
+        <template v-if="section.group && $slots.group" #label><slot name="group" :group="section.group" /></template>
+        <PaletteItem
+          v-for="option in section.options"
+          :id="rowId(indexOf.get(option.value)!)"
+          :key="option.value"
+          data-slot="listbox-item"
+          :size="size"
+          :icon="option.icon"
+          :active="option.value === active"
+          :busy="option.busy"
+          :disabled="!!option.disabled"
+          :chosen="model === undefined ? undefined : option.value === model"
+          :data-testid="part(`option-${option.value}`)"
+          @pointermove="hover(option)"
+          @mousedown.prevent="search || list?.focus({ preventScroll: true })"
+          @click="pick(option)"
         >
-          <div v-if="section.group" :id="`${id}-group-${at}`" data-slot="listbox-group" class="text-muted-foreground flex h-7 items-center gap-2 px-3 text-xs font-medium">
-            <slot name="group" :group="section.group">{{ section.group }}</slot>
-          </div>
-          <div
-            v-for="option in section.options"
-            :id="rowId(indexOf.get(option.value)!)"
-            :key="option.value"
-            role="option"
-            data-slot="listbox-item"
-            :aria-selected="option.value === active"
-            :aria-checked="model === undefined ? undefined : option.value === model"
-            :aria-disabled="option.disabled ? true : undefined"
-            :data-highlighted="option.value === active ? '' : undefined"
-            :data-disabled="option.disabled ? '' : undefined"
-            :data-state="option.value === model ? 'checked' : undefined"
-            :data-testid="part(`option-${option.value}`)"
-            :class="cn('data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground flex min-h-[var(--style-control-height,32px)] w-full cursor-default items-center gap-3 rounded-md px-3 py-1.5 text-left text-sm select-none data-[disabled]:opacity-(--disabled-opacity)', choiceRow, choiceHighlighted)"
-            @pointermove="hover(option)"
-            @mousedown.prevent="search || list?.focus({ preventScroll: true })"
-            @click="pick(option)"
-          >
-            <slot name="option" :option="option" :parts="bold(option)" :active="option.value === active">
-              <span class="flex min-w-0 flex-1 flex-col">
-                <span class="truncate"><template v-for="(piece, n) in bold(option)" :key="n"><b v-if="piece.match" class="font-semibold">{{ piece.text }}</b><template v-else>{{ piece.text }}</template></template></span>
-                <span v-if="option.description" class="text-muted-foreground truncate text-xs">{{ option.description }}</span>
-              </span>
-              <span v-if="typeof option.disabled === 'string' || option.meta" class="text-muted-foreground flex-none text-xs tabular-nums">
-                {{ typeof option.disabled === "string" ? option.disabled : option.meta }}
-              </span>
-            </slot>
-          </div>
-        </div>
-      </template>
+          <template v-if="$slots.leading" #leading><slot name="leading" :option="option" /></template>
+          <slot name="option" :option="option" :parts="bold(option)" :active="option.value === active">
+            <template v-for="(piece, n) in bold(option)" :key="n"><b v-if="piece.match" class="font-semibold">{{ piece.text }}</b><template v-else>{{ piece.text }}</template></template>
+          </slot>
+          <template v-if="!$slots.option && option.description" #description>{{ option.description }}</template>
+          <template v-if="!$slots.option && (typeof option.disabled === 'string' || option.meta)" #trailing>
+            <span class="tabular-nums">{{ typeof option.disabled === "string" ? option.disabled : option.meta }}</span>
+          </template>
+        </PaletteItem>
+      </PaletteGroup>
     </div>
     <!-- Always there, so a screen reader hears it when the search leaves nothing. -->
     <div role="status" :class="shown.length ? 'sr-only' : 'min-h-0 flex-1'">
@@ -205,5 +222,6 @@ useKeepFocus(fieldInput, () => !!props.search && props.autofocus)
         </slot>
       </div>
     </div>
+    <PaletteFooter v-if="big && footHints.length" :hints="footHints" />
   </div>
 </template>

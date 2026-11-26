@@ -429,6 +429,11 @@ export const en = {
   "ex.pick.Listbox.rule": "A list you pick from right on the page is a Listbox, not a search field with buttons under it.",
   "ex.pick.ListboxChosen": "List without search",
   "ex.pick.ListboxChosen.note": "A short list that shows which one is chosen.",
+  "ex.pick.ListboxPalette": "Big search list",
+  "ex.pick.ListboxPalette.note": "A Listbox with size=\"lg\", for a picker that fills a dialog: big search, pictures, groups and the keys at the foot.",
+  "ex.pick.ListboxPalette.rule": "A picker that is a whole dialog is a Listbox with size=\"lg\", not your own field and rows.",
+  "ex.pick.PaletteParts": "Big search list, your own order",
+  "ex.pick.PaletteParts.note": "The parts, for a page that ranks and lights the rows itself. A picked row spins until it's done.",
   "ex.pick.DropdownIcons": "Dropdown icons",
   "ex.pick.DropdownIcons.rule": "A control where you pick a value has ⇕; a button that opens a menu of actions has ⌄. Never a down arrow on a picker.",
 
@@ -1146,6 +1151,11 @@ export const de: Record<TextKey, string> = {
   "ex.pick.Listbox.rule": "Eine Liste, aus der du direkt auf der Seite wählst, ist eine Listbox, kein Suchfeld mit Buttons darunter.",
   "ex.pick.ListboxChosen": "Liste ohne Suche",
   "ex.pick.ListboxChosen.note": "Eine kurze Liste, die zeigt, was gewählt ist.",
+  "ex.pick.ListboxPalette": "Große Suchliste",
+  "ex.pick.ListboxPalette.note": "Eine Listbox mit size=\"lg\", für eine Auswahl, die einen ganzen Dialog füllt: große Suche, Bilder, Gruppen und die Tasten unten.",
+  "ex.pick.ListboxPalette.rule": "Eine Auswahl, die ein ganzer Dialog ist, ist eine Listbox mit size=\"lg\", kein eigenes Feld mit eigenen Zeilen.",
+  "ex.pick.PaletteParts": "Große Suchliste, eigene Reihenfolge",
+  "ex.pick.PaletteParts.note": "Die Teile, für eine Seite, die ihre Zeilen selbst sortiert und hervorhebt. Eine gewählte Zeile dreht sich, bis sie fertig ist.",
   "ex.pick.DropdownIcons": "Pfeile an Auswahlfeldern",
   "ex.pick.DropdownIcons.rule": "Wo du einen Wert wählst, steht ⇕; ein Button, der ein Menü mit Aktionen öffnet, hat ⌄. Nie ein Pfeil nach unten an einem Picker.",
 

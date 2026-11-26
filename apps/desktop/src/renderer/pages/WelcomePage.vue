@@ -2,11 +2,12 @@
 // Home, between sessions: a search field that opens Ctrl+K, the running game (or the last one) to continue, the other
 // recent games, and beside it what happened while the user was away: module updates waiting for their OK, new
 // messages and a new version of Tavora. With nothing new that list is one quiet line.
-import { Plus, Search } from "@lucide/vue";
+import { Plus } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { TextLink } from "@tavora/official-ui/components/ui/text-link";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
+import { PaletteSearch } from "@tavora/official-ui/components/ui/palette";
 import WorkspaceIcon from "../components/WorkspaceIcon.vue";
 import { act, dialog, inbox, openInbox, openSearch, openSettings, state } from "../host";
 import { formatAgo, t } from "../i18n";
@@ -124,21 +125,18 @@ const away = computed<AwayItem[]>(() => {
       </header>
 
       <div class="flex min-w-0 flex-col @min-[1048px]:col-start-1 @min-[1048px]:row-start-2">
-        <label class="bg-card border-input focus-within:border-primary flex h-14 cursor-text items-center gap-3.5 rounded-xl border px-4.5 transition-colors">
-          <Search class="text-muted-foreground size-5 shrink-0" />
-          <input
-            v-model="typed"
-            class="placeholder:text-muted-foreground min-w-0 flex-1 bg-transparent text-base focus-visible:outline-none"
-            :placeholder="t('welcome.search')"
-            :aria-label="t('welcome.search')"
-            autocomplete="off"
-            spellcheck="false"
-            data-testid="welcome-search"
-            @input="handOver"
-            @keydown.enter.prevent="openSearch()"
-          />
-          <span class="flex shrink-0 gap-1" aria-hidden="true"><Kbd v-for="key in keyCaps('search')" :key="key">{{ key }}</Kbd></span>
-        </label>
+        <PaletteSearch
+          v-model="typed"
+          variant="field"
+          class="gap-3.5"
+          :placeholder="t('welcome.search')"
+          :aria-label="t('welcome.search')"
+          data-testid="welcome-search"
+          @input="handOver"
+          @keydown.enter.prevent="openSearch()"
+        >
+          <template #trailing><span class="flex gap-1" aria-hidden="true"><Kbd v-for="key in keyCaps('search')" :key="key">{{ key }}</Kbd></span></template>
+        </PaletteSearch>
         <ul class="mt-3 flex flex-wrap justify-center gap-2" :aria-label="t('welcome.quick')">
           <li v-for="item in quick" :key="item.id">
             <Button variant="outline" size="sm" class="text-muted-foreground hover:text-foreground rounded-full" :data-testid="`welcome-quick-${item.id}`" @click="item.run()">

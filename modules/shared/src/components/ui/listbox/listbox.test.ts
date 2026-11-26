@@ -98,7 +98,7 @@ describe("Listbox", () => {
   it("lists ungrouped options first, then groups under their heading, with description, meta and the reason a row is off", async () => {
     const { root } = await mount()
     expect(rows()).toEqual(["berlin", "bern", "bergen", "oslo", "bermuda"])
-    expect(root.querySelector("[data-slot=listbox-group]")?.textContent?.trim()).toBe("Islands")
+    expect(root.querySelector("[data-slot=palette-group-label]")?.textContent?.trim()).toBe("Islands")
     const berlin = root.querySelector("[data-testid=lb-option-berlin]")!
     expect(berlin.textContent).toContain("Germany")
     expect(berlin.textContent).toContain("±0 h")

@@ -1,3 +1,4 @@
+import type { Component } from "vue"
 import type { PickerOption } from "../picker/types"
 
 export interface ListboxOption<V extends string = string> extends PickerOption<V> {
@@ -10,4 +11,8 @@ export interface ListboxOption<V extends string = string> extends PickerOption<V
    * the row's end in place of `meta` ("Already added").
    */
   disabled?: boolean | string
+  /** An icon in front of the label, muted (a Lucide icon). For a picture, use the Listbox's `leading` slot. */
+  icon?: Component
+  /** Its pick is being done (added, looked up): a spinner at the row's end, and it takes no second pick meanwhile. */
+  busy?: boolean
 }

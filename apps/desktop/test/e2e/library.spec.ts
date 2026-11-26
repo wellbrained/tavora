@@ -163,17 +163,15 @@ test("the Add a game picker works from the keyboard", async () => {
   // The top match is highlighted at once; focus stays in the field.
   await expect(rows.first()).toHaveAttribute("aria-selected", "true");
   await expect(search).toHaveAttribute("aria-activedescendant", (await rows.first().getAttribute("id"))!);
-  await expect(rows.first().getByTestId("row-action")).toHaveText("Add ↵");
   await search.press("ArrowDown");
   await expect(rows.nth(1)).toHaveAttribute("aria-selected", "true");
   await expect(search).toHaveAttribute("aria-activedescendant", (await rows.nth(1).getAttribute("id"))!);
   await expect(search).toBeFocused();
   await search.press("ArrowUp");
   await expect(rows.first()).toHaveAttribute("aria-selected", "true");
-  // Hovering moves the highlight, and the Enter hint follows it.
+  // Hovering moves the highlight.
   await rows.nth(2).hover();
   await expect(rows.nth(2)).toHaveAttribute("aria-selected", "true");
-  await expect(rows.nth(2).locator("kbd")).toHaveCount(1);
   await rows.first().hover();
   await search.press("Enter");
   await expect(page.getByTestId("rail-workspace-elden-ring")).toHaveAttribute("aria-current", "page");

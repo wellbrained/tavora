@@ -1,14 +1,12 @@
 <script setup lang="ts">
 // The games in the Add a game picker. With nothing typed: the covers of the games played lately, then the rest of this
 // PC's games. Typed: one list, this PC's games first, then the built-in and online ones under More games, and the typed
-// name as the user's own game. Presentational: the owner keeps the lines (in the order to show them), the highlight (a
+// name as the user's own game under Not on the list. Rows are the kit's palette rows (PaletteItem). Presentational: the owner keeps the lines (in the order to show them), the highlight (a
 // key) and what a pick does. A hover highlights, a click picks the item clicked; focus stays in the search, so Enter
 // keeps working. Shared with the first-run welcome.
-import { Loader } from "@lucide/vue";
 import { computed, watch } from "vue";
-import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { GameCover } from "@tavora/official-ui/components/ui/game-cover";
-import { Kbd } from "@tavora/official-ui/components/ui/kbd";
+import { PaletteGroup, PaletteItem, PaletteList } from "@tavora/official-ui/components/ui/palette";
 import { cn } from "@tavora/official-ui/lib/utils";
 import { badgeLook } from "../badge";
 import { t } from "../i18n";
@@ -48,8 +46,8 @@ type Part = "pc" | "more" | "custom";
  */
 const runs = computed(() => {
   const partOf = (line: PickerLine): Part => (!line.row ? "custom" : props.typed && line.row.section !== "pc" ? "more" : "pc");
-  const heading = (part: Part) => (part === "custom" ? null : part === "more" ? t("addGame.moreGames") : props.typed || !props.covers.length ? t("addGame.onPc") : t("addGame.morePc"));
-  const result: { key: string; heading: string | null; lines: PickerLine[] }[] = [];
+  const heading = (part: Part) => (part === "custom" ? t("addGame.notListed") : part === "more" ? t("addGame.moreGames") : props.typed || !props.covers.length ? t("addGame.onPc") : t("addGame.morePc"));
+  const result: { key: string; heading: string; lines: PickerLine[] }[] = [];
   let last: Part | null = null;
   for (const line of props.lines) {
     const part = partOf(line);
@@ -64,8 +62,9 @@ const runs = computed(() => {
 const badges = computed(() => new Map([...props.covers, ...props.lines.flatMap((line) => line.row ?? [])].map((row) => [row.key, props.info(row)])));
 const modules = (row: PickerRow) => badges.value.get(row.key)?.modules ?? 0;
 const second = (row: PickerRow) => (props.adding === row.key ? t("addGame.adding") : row.workspaceId ? t("addGame.added") : (badges.value.get(row.key)?.when ?? null));
-/** A line's second line: its game's (see second), or for the typed name only while it is added. */
-const secondOf = (line: PickerLine) => (line.row ? second(line.row) : props.adding === line.key ? t("addGame.adding") : null);
+/** A line's second line: its game's (see second), or for the typed name what picking it does. */
+const secondOf = (line: PickerLine) => (line.row ? second(line.row) : props.adding === line.key ? t("addGame.adding") : t("addGame.customHint"));
+const modulesText = (count: number) => (count === 1 ? t("addGame.moduleOne") : t("addGame.moduleMany", { count }));
 
 /** A cover without art: the game's tile on its colour, as the rail draws it. */
 function toneOf(row: PickerRow) {
@@ -114,30 +113,38 @@ function onClick(key: string, event: MouseEvent) {
   emit("pick", key);
 }
 
-/** What every option has: its id, its state for the search, and hover and click by its key. */
-function option(key: string) {
-  const dimmed = props.adding !== null && props.adding !== key;
+/** Dimmed while another item is added. */
+const dimmed = (key: string) => props.adding !== null && props.adding !== key;
+
+/** What every option has: its id, and hover and click by its key. */
+function handlers(key: string) {
   return {
     id: optionId(props.id, key),
-    role: "option",
-    "aria-selected": key === props.active,
-    "aria-disabled": dimmed || undefined,
-    class: cn("cursor-pointer", key === props.active && "bg-accent", dimmed && "opacity-50"),
     onMousemove: (event: MouseEvent) => onMove(key, event),
     // A touch or a pen has no moves before its tap: the tap is aimed.
     onPointerdown: (event: PointerEvent) => event.pointerType !== "mouse" && (moved = false),
     onClick: (event: MouseEvent) => onClick(key, event),
   };
 }
+
+/** A cover tile is an option of its own look (a picture, not a row). */
+function cover(key: string) {
+  return {
+    ...handlers(key),
+    role: "option",
+    "aria-selected": key === props.active,
+    "aria-disabled": dimmed(key) || undefined,
+    class: cn("cursor-pointer", key === props.active && "bg-accent", dimmed(key) && "opacity-(--disabled-opacity)"),
+  };
+}
 </script>
 
 <template>
-  <!-- mousedown is kept from moving focus: the search keeps it, so the arrows and Enter still work after a click. -->
-  <div :id="id" role="listbox" :aria-label="label" :aria-busy="adding !== null" :class="cn('flex flex-col gap-1', adding !== null && 'pointer-events-none')" @mousedown.prevent @mousemove="onListMove">
-    <div v-if="covers.length" role="group" :aria-labelledby="`${id}-lately`" class="px-2 pb-2">
-      <p :id="`${id}-lately`" class="text-muted-foreground px-2 pt-1 pb-1 text-xs font-medium">{{ t("addGame.lately") }}</p>
+  <!-- The list keeps the focus in the search (PaletteList), so the arrows and Enter still work after a click. -->
+  <PaletteList :id="id" :label="label" :busy="adding !== null" :class="cn('gap-1 py-0', adding !== null && 'pointer-events-none')" @mousemove="onListMove">
+    <PaletteGroup v-if="covers.length" :label="t('addGame.lately')" class="pb-2">
       <div class="grid grid-cols-6 gap-1">
-        <div v-for="row in covers" :key="row.key" v-bind="option(row.key)" class="flex min-w-0 flex-col gap-1.5 rounded-lg p-2" :data-testid="`cover-${row.gameId ?? row.key}`">
+        <div v-for="row in covers" :key="row.key" v-bind="cover(row.key)" class="flex min-w-0 flex-col gap-1.5 rounded-lg p-2" :data-testid="`cover-${row.gameId ?? row.key}`">
           <GameCover :src="coverOf(row) ?? null" :loading="coverOf(row) === undefined" :busy="adding === row.key">
             <template #fallback>
               <span class="grid size-full place-items-center" :style="toneOf(row)">
@@ -151,36 +158,27 @@ function option(key: string) {
           </span>
         </div>
       </div>
-    </div>
+    </PaletteGroup>
 
-    <template v-for="run in runs" :key="run.key">
-      <div :role="run.heading ? 'group' : undefined" :aria-labelledby="run.heading ? `${id}-${run.key}` : undefined" class="px-2">
-        <p v-if="run.heading" :id="`${id}-${run.key}`" class="text-muted-foreground px-3 pt-1 pb-1 text-xs font-medium">{{ run.heading }}</p>
-        <div
-          v-for="line in run.lines"
-          :key="line.key"
-          v-bind="option(line.key)"
-          class="relative flex items-center gap-3 rounded-lg px-3 py-2"
-          :data-testid="line.row ? `${testPrefix}-${line.row.gameId ?? line.key}` : customTestid"
-        >
-          <span v-if="line.key === active" class="bg-primary absolute inset-y-1.5 left-0 w-0.5 rounded-full" aria-hidden="true" />
+    <PaletteGroup v-for="run in runs" :key="run.key" :label="run.heading">
+      <PaletteItem
+        v-for="line in run.lines"
+        :key="line.key"
+        v-bind="handlers(line.key)"
+        :active="line.key === active"
+        :busy="adding === line.key"
+        :disabled="dimmed(line.key)"
+        :data-testid="line.row ? `${testPrefix}-${line.row.gameId ?? line.key}` : customTestid"
+      >
+        <template #leading>
           <GameTile :id="line.row ? (line.row.gameId ?? line.key) : (custom ?? '')" :name="line.row?.name ?? custom ?? ''" :icon="line.row?.icon ?? null" :size="28" />
-          <span class="min-w-0 flex-1">
-            <span v-if="line.row" class="flex items-center gap-2">
-              <span class="truncate font-medium">{{ line.row.name }}</span>
-              <Badge v-if="modules(line.row) > 0" variant="secondary" :data-testid="`module-badge-${line.row.gameId ?? line.key}`">{{
-                modules(line.row) === 1 ? t("addGame.moduleOne") : t("addGame.moduleMany", { count: modules(line.row) })
-              }}</Badge>
-            </span>
-            <span v-else class="text-primary block truncate">{{ t("addGame.custom", { name: custom ?? "" }) }}</span>
-            <span v-if="secondOf(line)" class="text-muted-foreground block truncate text-xs">{{ secondOf(line) }}</span>
-          </span>
-          <Loader v-if="adding === line.key" class="text-muted-foreground size-4 flex-none animate-spin motion-reduce:animate-none" aria-hidden="true" />
-          <span v-else-if="line.key === active" class="text-muted-foreground flex flex-none items-center gap-1.5 text-xs" aria-hidden="true" data-testid="row-action"
-            >{{ line.row?.workspaceId ? t("addGame.actionOpen") : t("addGame.actionAdd") }} <Kbd class="font-sans">↵</Kbd></span
-          >
-        </div>
-      </div>
-    </template>
-  </div>
+        </template>
+        {{ line.row?.name ?? custom ?? "" }}
+        <template v-if="secondOf(line)" #description>{{ secondOf(line) }}</template>
+        <template v-if="line.row && modules(line.row) > 0" #trailing>
+          <span :data-testid="`module-badge-${line.row.gameId ?? line.key}`">{{ modulesText(modules(line.row)) }}</span>
+        </template>
+      </PaletteItem>
+    </PaletteGroup>
+  </PaletteList>
 </template>
