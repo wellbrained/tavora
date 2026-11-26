@@ -30,565 +30,88 @@ export const PATCH_NOTES: readonly PatchNote[] = [
   {
     version: "0.25.45",
     date: "2026-11-26",
-    title: "Controls that line up",
+    title: "Fixes and new module controls",
     notes: [
-      "Buttons, fields, pickers, toggles and list rows share three sizes, so a row of them lines up.",
-      "On/off buttons look the same everywhere, with or without words, and say why when they're off.",
-      "Lists you pick from, and lists down the side of a page, have slightly tighter rows.",
+      "Buttons, fields, lists and toggles share the same sizes and looks, so they line up, and everything that's off fades the same way.",
+      "Buttons say what happened: Copy turns into Copied and Save into Saved. A button that takes a moment shows a spinner and can't be pressed twice, and if it fails, a message says why.",
+      "Buttons and menu entries no longer end in \"…\", and buttons that open a website end in an arrow.",
+      "A calendar always shows 6 weeks, with the days of the months around it in grey.",
+      "Lists you pick from have a search field of their own and slightly tighter rows.",
+      "Empty charts and lists say there's no data yet instead of staying blank.",
+      "Tooltips fade out when they close, and a trend in a tooltip shows an arrow, not only a colour.",
+      "Game, workspace and rail tiles have slightly less rounded corners, and the edge around your picture in the open rail hugs it.",
+      "In Liquid Glass, the row you point at in a menu is easy to see.",
+      "Calculator: Copy puts the result on your clipboard.",
+      "Notes and Whiteboard: each delete or clear has its own Undo, and Ctrl+Z in Notes takes it back too. Undo of Clear scratchpad no longer writes over what you typed since.",
+      "Clock & Counter, Notes, PDF Viewer, To-Dos and Whiteboard keep items, colours and choices a newer version added, instead of resetting them.",
+      "Calculator and System Monitor keep settings you changed in another workspace.",
+      "An interrupted drag puts the Whiteboard palette, the Notes sidebar or a picture's size back.",
+      "Escape that only ends typing with an input method (Japanese, Chinese, Korean) no longer closes settings, search or a rename.",
+      "A panel that keeps crashing over your game stops coming back until you show it again.",
+      "Changing your email no longer signs you out right after, and signing out no longer leaves the old account's messages behind.",
+      "Removing your email or disconnecting Discord now signs out your other devices, like changing your email does.",
+      "Cloud copy: switching accounts during an upload no longer touches the other account's copy, and a copy that's still waiting asks which data to keep before you turn it on again.",
+      "Trash: a workspace that couldn't be deleted stays whole, with its panels, layout, logins and panel data, so you can still restore it.",
+      "Two backups on the same day can't spoil each other, saving over a file keeps the old one safe if something goes wrong, and a picture you delete while moving the pictures folder stays deleted.",
+      "Tavora no longer deletes other programs' .tmp files from your pictures folder.",
+      "Websites and modules that go online load on DNS64 networks, and a page you import loads even when the first address of its site doesn't answer.",
+      "Tavora no longer freezes when a folder on a disconnected drive is in your PATH, and System info recovers when Windows stops answering.",
+      "Modules whose files are busy for a moment, during a virus scan say, keep their panels and wait for the next start.",
+      "Messages: a new conversation opens right away, and if a reload fails you keep what you read.",
+      "A new game workspace's module tiles no longer flicker, and what you're typing stays put when Tavora refreshes your account.",
+      "Share icons says when a later batch fails, and Esc no longer closes it mid-share.",
+      "Enter and Space work on the buttons in the hotkey window, and typing \"uber\" in the overlay sources finds \"Über\".",
+      "Old data that couldn't move to Discord or AI Usage the first time is finished at the next start.",
+      "For module makers: new kit controls, among them a tree, a toolbar, a tag field and chips, hover cards you can pin, stat tiles, fact lists, bar charts, a calendar, an always-open list with search, text links, list rows, slot boards and item cards for panels and tooltips. Tables can be compact, sort and keep their header. The UI Playground shows them all.",
+      "For module makers: modules can copy text, share a result as text or a picture, and listen for keys in their own panel only.",
+      "For module makers: Publish and the zip tool say before uploading when the catalog would refuse a module, and when another upload is still running. Addresses ending in .lan, .home or .corp are refused, and names with emoji count one character each.",
+      "Removing your email or Discord login means linking your publisher keys again.",
+      "Tavora won't start with debugging switches hidden behind spaces, and module pictures that are far too large aren't shown.",
     ],
     prs: [
       { number: 1013, title: "Kit: one size scale, Toggle looks and sizes, same names, fill" },
-    ],
-    tags: ["calculator", "clock-counter", "cloud-copy", "games", "icons", "notes", "pdf-viewer", "privacy", "publishing", "system-monitor", "todos", "ui-kit", "whiteboard", "workspace"],
-  },
-  {
-    version: "0.25.44",
-    date: "2026-11-26",
-    title: "Same look for everything that's off",
-    notes: [
-      "Buttons, fields, menus and calendar days that are off all fade the same way.",
-      "Empty charts and fact lists say there's no data yet instead of staying blank.",
-      "The Share button is spaced like other menu buttons.",
-    ],
-    prs: [
       { number: 1012, title: "Kit audit quick fixes: one disabled look, empty charts, overlay classes, ShareMenu" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.43",
-    date: "2026-11-25",
-    title: "Calendar keeps its height",
-    notes: [
-      "A calendar always shows 6 weeks, so it no longer grows and shrinks between months. The days of the months around it are shown in grey, and you can pick them too.",
-    ],
-    prs: [
-      { number: 1010, title: "Calendar: always 6 weeks, neighbour days dimmed" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.42",
-    date: "2026-11-25",
-    title: "Cloud copy and Trash fixes",
-    notes: [
-      "Switching accounts while your cloud copy uploads no longer touches the other account's copy.",
-      "While a cloud copy you picked is still waiting, Tavora asks you to choose which data to keep before you turn the copy on again.",
-      "A workspace that couldn't be deleted from Trash comes back with its panels and layout when you restore it.",
-    ],
-    prs: [
       { number: 1011, title: "Audit fixes from #994: leaked keys, upload memory, cloud copy, Trash, Whiteboard" },
-    ],
-    tags: ["accounts", "catalog", "cloud-copy", "publishing", "service", "settings", "whiteboard", "workspace"],
-  },
-  {
-    version: "0.25.41",
-    date: "2026-11-25",
-    title: "Search in pick lists",
-    notes: [
-      "The search at the top of a pick list is now a field of its own.",
-    ],
-    prs: [
+      { number: 1010, title: "Calendar: always 6 weeks, neighbour days dimmed" },
       { number: 1009, title: "Picker: search as its own field, groups example on one baseline" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.40",
-    date: "2026-11-25",
-    title: "Buttons don't end in …",
-    notes: [
-      "Buttons and menu entries that open a dialog or a file picker, like Rename, Add folder and Restore, no longer end in \"…\".",
-    ],
-    prs: [
-      { number: 1006, title: "Buttons and menu entries don't end in …" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "privacy", "publishing", "ui-kit", "website", "whiteboard"],
-  },
-  {
-    version: "0.25.39",
-    date: "2026-11-25",
-    title: "Buttons that say how it went",
-    notes: [
-      "A Copy button now says Copied with a check, and Save says Saved.",
-      "A button that takes a moment shows a spinner and can't be pressed twice.",
-      "When it doesn't work, the button goes back and a message says why.",
-      "The UI Playground shows it.",
-    ],
-    prs: [
-      { number: 1004, title: "Button action: Copy → Copied, busy with a spinner, failed with a toast" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.38",
-    date: "2026-11-25",
-    title: "Numbers, facts and bars",
-    notes: [
-      "Modules can show numbers as tiles, label and value lists, and bar charts that work with the keyboard.",
-      "A trend in a tooltip now shows a small arrow, not only a colour.",
-      "The UI Playground has a new Stats & Charts page.",
-    ],
-    prs: [
-      { number: 996, title: "Kit: StatTile/StatStrip, FactList and BarChart, Stats & Charts page in the UI Playground" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.37",
-    date: "2026-11-25",
-    title: "Clearer menus",
-    notes: [
-      "In Liquid Glass, the row you point at in a menu is easy to see.",
-      "Menu rows have corners that follow the menu's own.",
-    ],
-    prs: [
       { number: 1007, title: "UI kit: elevation, layer and game-motion tokens" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard", "workspace"],
-  },
-  {
-    version: "0.25.36",
-    date: "2026-11-25",
-    title: "Boards you move through with the keys",
-    notes: [
-      "Modules can show a board of slots that is one Tab stop: the arrow keys move and pick, Home and End go along the row.",
-      "Locked slots can still be reached, and say why they're locked.",
-      "Modules can listen for keys in their own panel only, so a panel shown twice doesn't react twice.",
-      "The UI Playground shows it under Boards & Keys.",
-    ],
-    prs: [
+      { number: 1006, title: "Buttons and menu entries don't end in …" },
       { number: 1005, title: "Kit: slot grid and pane keys (useSlotGrid, usePaneKeys)" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.35",
-    date: "2026-11-25",
-    title: "Cards you can pin",
-    notes: [
-      "Modules can show a card on hover that holds buttons and links, and you can pin it.",
-      "Tab takes you into the card, and Escape closes it.",
-      "The UI Playground shows it on a new page.",
-    ],
-    prs: [
-      { number: 995, title: "Kit HoverCard: a card you can move into, click in and pin" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.34",
-    date: "2026-11-25",
-    title: "A tree for modules",
-    notes: [
-      "Modules get a tree: entries inside entries, with branches that open and close, and the arrow keys to move around.",
-      "The UI Playground shows it on a new Tree page.",
-    ],
-    prs: [
-      { number: 998, title: "UI kit: TreeView" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.33",
-    date: "2026-11-25",
-    title: "Toolbars with arrow keys",
-    notes: [
-      "Modules can put their tools in one row that you move along with the arrow keys.",
-      "The UI Playground shows how.",
-    ],
-    prs: [
-      { number: 991, title: "Kit Toolbar: one Tab stop, arrow keys along it" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.32",
-    date: "2026-11-25",
-    title: "Tooltips fade out",
-    notes: [
-      "Tooltips fade out when they close, instead of vanishing.",
-    ],
-    prs: [
-      { number: 989, title: "Tooltip: fade out, align, toggle for touch, keepOnPress, when, name or describe" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.31",
-    date: "2026-11-25",
-    title: "Chips in the Hardware style",
-    notes: [
-      "Coloured chips get the same coloured edge as badges in the Hardware style.",
-    ],
-    prs: [
-      { number: 1001, title: "Hardware style: coloured chips get Badge's coloured edge" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.30",
-    date: "2026-11-25",
-    title: "Newer settings and interrupted drags in the built-in modules",
-    notes: [
-      "Clock & Counter, PDF Viewer, Whiteboard and Notes keep more of what a newer version saved, instead of resetting it.",
-      "System Monitor shows settings changed in another workspace when you come back.",
-      "An interrupted drag puts the Whiteboard palette, the Notes sidebar or a picture's size back.",
-    ],
-    prs: [
-      { number: 999, title: "Kit and module hunt leftovers: newer box choices, tabs, explicit picks, interrupted drags" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.29",
-    date: "2026-11-25",
-    title: "Checks before you publish",
-    notes: [
-      "Making a module zip tells you when the catalog won't take it, and a damaged screenshot is found before you upload.",
-      "Names with emoji count as one character each, as the module file's schema says.",
-      "Module addresses ending in .lan, .home or .corp are refused, since they only exist on a private network.",
-      "A module that names a host with one of those endings in its manifest is now refused; no module in the catalog does.",
-    ],
-    prs: [
-      { number: 1000, title: "SDK 0.4.15, pack 0.3.8, module-schema 0.2.6: hunt leftovers, tooling checks" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "privacy", "publishing", "sdk", "system-monitor", "todos", "ui-kit", "website", "whiteboard"],
-  },
-  {
-    version: "0.25.28",
-    date: "2026-11-25",
-    title: "Easier month arrows",
-    notes: [
-      "The arrows that step a calendar to the previous or next month are easier to see.",
-    ],
-    prs: [
+      { number: 1004, title: "Button action: Copy → Copied, busy with a spinner, failed with a toast" },
       { number: 1002, title: "Calendar: month arrows in the text colour, like shadcn" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.27",
-    date: "2026-11-25",
-    title: "Lists you can search",
-    notes: [
-      "Modules can show a list with a search field on top that stays open, for picking what to add.",
-      "Type to search, use ↑ ↓ to move and Enter to take one.",
-      "The UI Playground shows it.",
-    ],
-    prs: [
-      { number: 990, title: "Listbox: an always-open list to pick from, with search on top" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.26",
-    date: "2026-11-25",
-    title: "Small fixes to pages, backups and files",
-    notes: [
-      "A page you import loads even when the first address of its site doesn't answer.",
-      "Tavora no longer deletes other programs' .tmp files from your pictures folder.",
-      "Two backups on the same day can't spoil each other any more.",
-      "A saved document still reaches your other panels when its list can't be updated right away.",
-      "A new project called con, nul or another name Windows keeps gets a folder name that works.",
-    ],
-    prs: [
+      { number: 1001, title: "Hardware style: coloured chips get Badge's coloured edge" },
+      { number: 1000, title: "SDK 0.4.15, pack 0.3.8, module-schema 0.2.6: hunt leftovers, tooling checks" },
+      { number: 999, title: "Kit and module hunt leftovers: newer box choices, tabs, explicit picks, interrupted drags" },
+      { number: 998, title: "UI kit: TreeView" },
       { number: 997, title: "Hunt leftovers 11-25, main and API: page import addresses, backups, blobs, body memory" },
-    ],
-    tags: ["cloud-copy", "privacy", "service", "website"],
-  },
-  {
-    version: "0.25.25",
-    date: "2026-11-25",
-    title: "Chips and tags",
-    notes: [
-      "Modules can show tags you remove with a ×, or switch on and off as filters.",
-      "A new tag field: type, pick a suggestion or paste a list.",
-      "The UI Playground shows both.",
-    ],
-    prs: [
-      { number: 988, title: "Chip and TagInput: removable and toggle chips, a tag field with suggestions" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.24",
-    date: "2026-11-25",
-    title: "Plainer buttons and headings",
-    notes: [
-      "Dialog buttons like Save, Publish and Allow have no icon any more; Delete, Copy, Add and Download keep theirs.",
-      "Buttons that open a page or site end in an arrow, and buttons that ask for more first end in \"…\".",
-      "Plainer headings and welcome texts.",
-    ],
-    prs: [
-      { number: 992, title: "Buttons and headings follow the new rules" },
-    ],
-    tags: ["calculator", "catalog", "clock-counter", "cloud-copy", "games", "hotkeys", "icons", "notes", "overlays", "pdf-viewer", "privacy", "publishing", "settings", "ui-kit", "website", "workspace"],
-  },
-  {
-    version: "0.25.23",
-    date: "2026-11-25",
-    title: "Copy and share",
-    notes: [
-      "Copy in the Calculator now puts the result on your clipboard.",
-      "Modules can copy text for you, and share a result as text or a picture.",
-    ],
-    prs: [
+      { number: 996, title: "Kit: StatTile/StatStrip, FactList and BarChart, Stats & Charts page in the UI Playground" },
+      { number: 995, title: "Kit HoverCard: a card you can move into, click in and pin" },
       { number: 993, title: "Kit: copyText, ShareMenu and renderToImage; Tavora clipboard.writeText (SDK 0.4.14)" },
-    ],
-    tags: ["calculator", "clock-counter", "modules", "notes", "pdf-viewer", "privacy", "publishing", "sdk", "system-monitor", "todos", "ui-kit", "website", "whiteboard", "workspace"],
-  },
-  {
-    version: "0.25.22",
-    date: "2026-11-25",
-    title: "A calendar for modules",
-    notes: [
-      "Modules can show a month to pick a day from, with marks such as solved or missed.",
-      "The UI Playground has a new Dates page to try it.",
-    ],
-    prs: [
+      { number: 992, title: "Buttons and headings follow the new rules" },
+      { number: 991, title: "Kit Toolbar: one Tab stop, arrow keys along it" },
+      { number: 990, title: "Listbox: an always-open list to pick from, with search on top" },
+      { number: 989, title: "Tooltip: fade out, align, toggle for touch, keepOnPress, when, name or describe" },
+      { number: 988, title: "Chip and TagInput: removable and toggle chips, a tag field with suggestions" },
       { number: 987, title: "Kit Calendar and CalendarLegend, Dates page in the UI Playground" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.21",
-    date: "2026-11-25",
-    title: "Links and list rows",
-    notes: [
-      "Modules get two new controls: a text link for names in text or lists, and a list row you click as a whole.",
-      "The UI Playground shows both.",
-    ],
-    prs: [
       { number: 986, title: "UI kit: TextLink and ListRow" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.20",
-    date: "2026-11-25",
-    title: "More table options for modules",
-    notes: [
-      "Module tables can be compact, keep their header in view and sort when you press a heading.",
-      "Your own row stands out, and better or worse numbers get their colour.",
-    ],
-    prs: [
       { number: 985, title: "Kit Table: density, sticky header, fixed layout, numbers, row states, groups, sort" },
-    ],
-    tags: ["calculator", "clock-counter", "modules", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.19",
-    date: "2026-11-25",
-    title: "One card, two places",
-    notes: [
-      "Modules can show the same item card in their panel's tooltip and in Tavora's.",
-      "Modules can build their own cards from the item card's parts.",
-      "The UI Playground shows both.",
-    ],
-    prs: [
       { number: 983, title: "Item card parts and ItemTooltip: one card, described once, in the panel or Tavora's tooltip" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.18",
-    date: "2026-11-25",
-    title: "Publish says more up front",
-    notes: [
-      "The Publish screen tells you before uploading when the catalog would refuse your module: a readme or screenshot it can't take, too many games, or a module that's too big.",
-      "If another upload of yours is still running, Publish says so.",
-    ],
-    prs: [
       { number: 982, title: "SDK 0.4.13, pack 0.3.7, module-schema 0.2.5: shared host checks, catalog limits before upload" },
-    ],
-    tags: ["accounts", "calculator", "catalog", "clock-counter", "modules", "notes", "pdf-viewer", "publishing", "sdk", "service", "system-monitor", "todos", "ui-kit", "website", "whiteboard"],
-  },
-  {
-    version: "0.25.17",
-    date: "2026-11-25",
-    title: "Steadier tiles and dialogs",
-    notes: [
-      "A new game workspace's module tiles no longer flicker while you work.",
-      "Share icons says so when a later batch fails, and Esc no longer closes it mid-share.",
-      "Adding another PC sends one answer, even if you press Esc right after Add.",
-      "Reporting a review no longer closes the question you opened on another one.",
-    ],
-    prs: [
       { number: 981, title: "Fix renderer bug hunt findings (11-25): start tiles, share icons, pairing, review report" },
-    ],
-    tags: ["catalog", "cloud-copy", "icons", "workspace"],
-  },
-  {
-    version: "0.25.16",
-    date: "2026-11-25",
-    title: "Tooltips in the UI Playground",
-    notes: [
-      "The chart's bars show their values when you Tab to them.",
-      "A new example shows a big card in Tavora's tooltip, and you can pin it.",
-    ],
-    prs: [
       { number: 980, title: "useTooltip(): one kit tooltip for many targets, in the panel or Tavora's shared tooltip" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.15",
-    date: "2026-11-25",
-    title: "Email change keeps you signed in",
-    notes: [
-      "Changing or removing your email or Discord login no longer signs this PC out by mistake.",
-    ],
-    prs: [
-      { number: 976, title: "Fix the email-change sign-out race and API findings of the 11-25 hunt" },
-    ],
-    tags: ["accounts", "catalog", "publishing", "service"],
-  },
-  {
-    version: "0.25.14",
-    date: "2026-11-25",
-    title: "Steadier pictures and overlays",
-    notes: [
-      "A picture you delete while moving the pictures folder stays deleted.",
-      "An upload that stalls no longer blocks a module's files.",
-      "System info recovers on its own when Windows stops answering.",
-      "A panel that keeps crashing over your game stops coming back until you show it again.",
-      "Workspaces that couldn't be emptied from Trash keep their logins and panel data.",
-    ],
-    prs: [
       { number: 979, title: "Fix the module-file, Trash and overlay findings of the 11-25 main hunt" },
-    ],
-    tags: ["overlays", "system-monitor", "workspace"],
-  },
-  {
-    version: "0.25.13",
-    date: "2026-11-25",
-    title: "Undo and typing fixes in the built-in modules",
-    notes: [
-      "Notes and Whiteboard give each delete or clear its own Undo; in Notes, Ctrl+Z takes it back too.",
-      "Undo of Clear scratchpad no longer writes over what you typed since.",
-      "Renaming or pinning a note another panel just deleted no longer saves it blank.",
-      "Escape that only ends typing with an input method (Japanese, Chinese, Korean) no longer closes settings, search or a rename.",
-    ],
-    prs: [
       { number: 978, title: "Kit hunt fixes 2: own undo per delete, IME-safe Escape, no blank saves, module version check" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "website", "whiteboard"],
-  },
-  {
-    version: "0.25.12",
-    date: "2026-11-25",
-    title: "Newer module data stays",
-    notes: [
-      "Clock & Counter and PDF Viewer keep items and files a newer version added, also when you edit with an older copy.",
-      "To-Dos, Clock & Counter, Notes, Whiteboard and PDF Viewer keep colours, fonts and other choices a newer version added.",
-      "Calculator and System Monitor settings changed in another workspace no longer go back when you change another one.",
-    ],
-    prs: [
       { number: 977, title: "Kit hunt fixes 1: newer entries and choices stay, app settings save only what changed" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "publishing", "sdk", "system-monitor", "todos", "ui-kit", "website", "whiteboard"],
-  },
-  {
-    version: "0.25.11",
-    date: "2026-11-25",
-    title: "Richer tooltips for modules",
-    notes: [
-      "Module tooltips can show a badge and a short note beside their title.",
-      "Numbers in a tooltip line up with their units, also in several columns under headings.",
-      "The UI Playground shows how to put one together.",
-    ],
-    prs: [
+      { number: 976, title: "Fix the email-change sign-out race and API findings of the 11-25 hunt" },
       { number: 975, title: "Tooltip parts: badge and meta beside the title, divider, units and columns in rows, width" },
-    ],
-    tags: ["ui-kit"],
-  },
-  {
-    version: "0.25.10",
-    date: "2026-11-25",
-    title: "Sharper tiles",
-    notes: [
-      "Game, workspace and rail tiles have slightly less rounded corners.",
-    ],
-    prs: [
       { number: 974, title: "Make the rail tiles slightly less rounded (20% instead of 25%)" },
-    ],
-    tags: ["accounts", "icons", "rail"],
-  },
-  {
-    version: "0.25.9",
-    date: "2026-11-25",
-    title: "Your picture fits its frame",
-    notes: [
-      "The edge around your picture in the open rail now hugs it, without a gap at the bottom.",
-    ],
-    prs: [
       { number: 973, title: "Fit the edge around the profile picture in the open rail" },
-    ],
-    tags: ["accounts"],
-  },
-  {
-    version: "0.25.8",
-    date: "2026-11-24",
-    title: "Websites on DNS64 networks",
-    notes: [
-      "Websites and modules that go online load again on networks that use DNS64 (some IPv6-only mobile and home networks).",
-      "A few texts in the account settings are shorter.",
-    ],
-    prs: [
       { number: 971, title: "Fix NAT64 hex addresses, shorten code-sent texts, align WebP readers" },
-    ],
-    tags: ["catalog", "icons", "modules", "privacy", "service"],
-  },
-  {
-    version: "0.25.7",
-    date: "2026-11-24",
-    title: "Safer account recovery",
-    notes: [
-      "Removing your email or disconnecting Discord now signs out your other devices, like changing your email does. Link your publisher keys again afterwards.",
-      "Module pictures that are far too large are no longer shown.",
-      "Tavora won't start with debugging switches hidden behind spaces.",
-    ],
-    prs: [
       { number: 963, title: "Fix the six leads of security audit run 7, plus cheap hardening" },
-    ],
-    tags: ["accounts", "ai-usage", "catalog", "cloud-copy", "games", "icons", "modules", "privacy", "publishing", "service", "system-monitor", "website"],
-  },
-  {
-    version: "0.25.6",
-    date: "2026-11-24",
-    title: "Steadier files and modules",
-    notes: [
-      "Your Tavora modules keep their panels when a virus scan holds their files for a moment.",
-      "Changing your email no longer signs you out right after.",
-      "Signing out no longer leaves the old account's messages behind.",
-      "A module's files being busy for a moment no longer stops it.",
-      "Saving over a file now keeps the old one safe if something goes wrong.",
-      "A workspace that can't be deleted yet stays whole in Trash, so you can still restore it.",
-      "Tavora no longer freezes when a folder on a disconnected drive is in your PATH.",
-      "A module whose files are busy for a moment waits for the next start instead of saying it changed.",
-      "Old data that couldn't move to Discord or AI Usage the first time is finished at the next start.",
-    ],
-    prs: [
       { number: 960, title: "Fix bug-hunt items 3-13 (desktop main process)" },
-    ],
-    tags: ["accounts", "ai-usage", "modules", "overlays", "system-monitor", "updates", "workspace"],
-  },
-  {
-    version: "0.25.5",
-    date: "2026-11-24",
-    title: "Fewer lost inputs",
-    notes: [
-      "A code, a name or an address you're typing stays put when Tavora refreshes your account in the background.",
-      "Messages: a new conversation opens right away, and if a reload fails you keep what you read and can try again.",
-      "Your profile name can't bring back an old name after you took your account's profile.",
-      "Enter and Space work on the buttons in the hotkey window.",
-      "Typing \"uber\" in the overlay sources finds \"Über\".",
-    ],
-    prs: [
       { number: 958, title: "Renderer bug hunt B: six Medium and the Low fixes" },
     ],
-    tags: ["accounts", "hotkeys", "overlays", "privacy", "publishing", "rail", "settings", "workspace"],
+    tags: ["accounts", "ai-usage", "calculator", "catalog", "clock-counter", "cloud-copy", "games", "hotkeys", "icons", "modules", "notes", "overlays", "pdf-viewer", "privacy", "publishing", "rail", "sdk", "service", "settings", "system-monitor", "todos", "ui-kit", "updates", "website", "whiteboard", "workspace"],
   },
   {
     version: "0.25.4",
