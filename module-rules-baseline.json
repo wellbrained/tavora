@@ -9,9 +9,6 @@
       "focus-ring": {
         "<div ref=\"scroller\" class=\"min-h-0 flex-1 overflow-y-auto p-2 outline-none\" tabindex=\"-1\">": 1
       },
-      "kit-control": {
-        "<header class=\"border-primary/25 bg-primary/5 flex h-10 flex-none items-center gap-1 border-b px-2\" role=\"toolbar\" :aria-label=\"t('app.toolbar')\">": 1
-      },
       "shadow": {
         "return drop.value?.id === rowId(row) && (drop.value.after ? \"shadow-[0_2px_0_0_var(--primary)]\" : \"shadow-[0_-2px_0_0_var(--primary)]\");": 2
       }
@@ -85,17 +82,6 @@
         "class=\"hover:bg-primary/40 focus-visible:bg-primary/60 absolute inset-y-0 -right-[3px] z-10 w-1.5 cursor-col-resize touch-none outline-none\"": 1
       }
     },
-    "modules/notes/src/ImageBar.vue": {
-      "kit-control": {
-        "<div class=\"bg-popover text-popover-foreground fixed z-50 flex items-center gap-0.5 rounded-md border p-1 text-xs shadow-lg\"": 1
-      },
-      "shadow": {
-        "class=\"bg-popover text-popover-foreground fixed z-50 flex items-center gap-0.5 rounded-md border p-1 text-xs shadow-lg\"": 1
-      },
-      "z-index": {
-        "class=\"bg-popover text-popover-foreground fixed z-50 flex items-center gap-0.5 rounded-md border p-1 text-xs shadow-lg\"": 1
-      }
-    },
     "modules/notes/src/ImageLightbox.vue": {
       "palette": {
         "class=\"flex h-full max-h-none w-full max-w-none items-center justify-center border-0 bg-black/80 p-4 sm:max-w-none\"": 1
@@ -104,24 +90,10 @@
         "onMounted(() => addEventListener(\"keydown\", onKey, true));": 1
       }
     },
-    "modules/notes/src/LinkPopover.vue": {
-      "kit-control": {
-        "<div class=\"bg-popover text-popover-foreground fixed z-50 flex max-w-[272px] items-center gap-0.5 rounded-md border py-1 pr-1 pl-2.5 text-xs shadow-lg\"": 1
-      },
-      "shadow": {
-        "class=\"bg-popover text-popover-foreground fixed z-50 flex max-w-[272px] items-center gap-0.5 rounded-md border py-1 pr-1 pl-2.5 text-xs shadow-lg\"": 1
-      },
-      "z-index": {
-        "class=\"bg-popover text-popover-foreground fixed z-50 flex max-w-[272px] items-center gap-0.5 rounded-md border py-1 pr-1 pl-2.5 text-xs shadow-lg\"": 1
-      }
-    },
     "modules/notes/src/NoteEditor.vue": {
       "focus-ring": {
         "class=\"note-title placeholder:text-muted-foreground mb-3 w-full min-w-0 border-b border-transparent bg-transparent pb-1 text-xl font-semibold outline-none\"": 1,
         "outline: none;": 1
-      },
-      "kit-control": {
-        "<div class=\"flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden\" role=\"toolbar\" :aria-label=\"t('editor.formatting')\">": 1
       },
       "radius": {
         "border-radius: 3px;": 1,
@@ -163,9 +135,6 @@
     "modules/pdf-viewer/src/PdfPane.vue": {
       "focus-ring": {
         "<div ref=\"root\" class=\"flex h-full min-h-0 flex-col outline-none\" tabindex=\"-1\" data-testid=\"pdf-pane\" @keydown=\"onKey\">": 1
-      },
-      "kit-control": {
-        "<div class=\"bg-card flex shrink-0 flex-wrap items-center gap-1 border-b px-2 py-1\" role=\"toolbar\" :aria-label=\"t('pdf.toolbar')\">": 1
       }
     },
     "modules/pdf-viewer/src/PdfThumbs.vue": {
@@ -281,11 +250,6 @@
     "modules/todos/src/AddInput.vue": {
       "focus-ring": {
         "'placeholder:text-muted-foreground focus-visible:border-ring h-8 w-full min-w-0 rounded-md border bg-transparent pr-2 text-sm outline-none',": 1
-      }
-    },
-    "modules/todos/src/App.vue": {
-      "kit-control": {
-        "<header class=\"border-primary/25 bg-primary/5 flex h-10 flex-none items-center gap-1 border-b px-2\"": 1
       }
     },
     "modules/todos/src/GroupSection.vue": {

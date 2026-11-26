@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.68",
+    "date": "2026-11-26",
+    "notes": [
+      "The toolbar and the search bar look like the other modules' toolbars, and the arrow keys move along them."
+    ]
+  },
+  {
     "version": "0.1.67",
     "date": "2026-11-26",
     "notes": [

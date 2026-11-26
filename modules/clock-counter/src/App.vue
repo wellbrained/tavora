@@ -11,6 +11,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { settingsDialogSize } from "@tavora/official-ui/components/ui/module-settings";
 import { handleUndoKey, Toaster, type Undoable } from "@tavora/official-ui/components/ui/toast";
 import { liftedDragImage, reducedMotion, useReorderMotion } from "@tavora/official-ui/components/ui/reorder";
+import { Toolbar } from "@tavora/official-ui/components/ui/toolbar";
 import type { TavoraSDK } from "@tavora/sdk";
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from "vue";
 import { plural, setLanguage, t } from "./i18n";
@@ -558,7 +559,7 @@ onBeforeUnmount(() => {
   <p v-else-if="!store" class="text-muted-foreground p-4 text-sm" data-testid="status">{{ t("loading") }}</p>
   <ItemEditor v-else-if="dialogOpen && editedItem" :key="editedItem.id" :title="dialogTitle ?? ''" :titled="titled" :item="editedItem" :start="startPage" :start-count="startCount" />
   <div v-else class="relative flex h-full min-h-0 flex-col" data-testid="clock-counter-app">
-    <header class="border-primary/25 bg-primary/5 flex h-10 flex-none items-center gap-1 border-b px-2" role="toolbar" :aria-label="t('app.toolbar')">
+    <Toolbar variant="bar" :label="t('app.toolbar')">
       <p class="min-w-0 flex-1 truncate px-1 text-xs" role="status">
         <span v-if="store.error.value || error" class="text-destructive">{{ store.error.value ?? error }}</span>
         <span v-else-if="notice" class="text-foreground" data-testid="notice">{{ notice }}</span>
@@ -576,7 +577,7 @@ onBeforeUnmount(() => {
           <DropdownMenuItem v-for="kind in KINDS" :key="kind" :data-testid="`pick-${kind}`" @select="addItem(kind, false)"><component :is="KIND_ICONS[kind]" />{{ t(`kind.${kind}`) }}</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-    </header>
+    </Toolbar>
 
     <div ref="scroller" class="min-h-0 flex-1 overflow-y-auto p-2 outline-none" tabindex="-1">
       <div v-if="!list.items.length" class="flex h-full flex-col items-center justify-center gap-3 px-4 py-10 text-center" data-testid="empty" data-focus-empty>

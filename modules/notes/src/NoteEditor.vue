@@ -34,6 +34,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@tavora/official-ui/components/ui/dropdown-menu";
+import { Toolbar } from "@tavora/official-ui/components/ui/toolbar";
 import { Placeholder } from "@tiptap/extensions";
 import { EditorContent, useEditor } from "@tiptap/vue-3";
 import type { DocumentHandle } from "@tavora/sdk/store";
@@ -493,7 +494,7 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
 
 <template>
   <section ref="root" class="flex h-full min-w-0 flex-col" :data-ctrl="ctrlHeld" :aria-label="t('editor.note')" data-testid="note-editor" :data-loaded="loadedNote ?? ''">
-    <header class="border-primary/25 bg-primary/5 flex h-10 flex-none items-center gap-1 border-b px-2">
+    <Toolbar variant="bar" :label="t('editor.toolbar')">
       <Button
         v-if="narrow"
         variant="ghost"
@@ -506,7 +507,7 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
       >
         <PanelLeftOpen />
       </Button>
-      <div class="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden" role="toolbar" :aria-label="t('editor.formatting')">
+      <div class="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden" role="group" :aria-label="t('editor.formatting')">
         <DropdownMenu>
           <DropdownMenuTrigger as-child>
             <Button variant="ghost" size="icon-sm" :aria-label="t('editor.textStyle')" :title="t('editor.textStyle')">
@@ -638,7 +639,7 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
       >
         <Pin />
       </Toggle>
-    </header>
+    </Toolbar>
     <div v-if="store.deleted.value" class="bg-muted flex flex-none items-center gap-2 border-b px-3 py-1.5 text-sm" role="status" data-testid="deleted-banner">
       <span class="text-muted-foreground min-w-0 flex-1 truncate">{{ t("editor.deleted") }}</span>
       <Button variant="outline" size="sm" data-testid="restore-note" @click="restoreDeleted">{{ t("editor.restore") }}</Button>

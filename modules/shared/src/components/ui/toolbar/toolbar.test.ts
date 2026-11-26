@@ -225,3 +225,73 @@ describe("Toolbar", () => {
     expect(document.activeElement).toBe(get("a"))
   })
 })
+
+describe("Toolbar looks", () => {
+  async function mountLook(props: Record<string, unknown>, below?: () => VNodeChild) {
+    const root = document.createElement("div")
+    document.body.append(root)
+    const slots: Record<string, () => VNodeChild> = { default: buttons("a", "b") }
+    if (below) slots.below = below
+    app = createApp({ render: () => h(Toolbar, { label: "Tools", ...props }, slots) })
+    app.mount(root)
+    await nextTick()
+    await wait()
+    const bar = root.querySelector("[role=toolbar]") as HTMLElement
+    const get = (id: string) => root.querySelector(`[data-testid=${id}]`) as HTMLElement
+    return { bar, get }
+  }
+  const classes = (element: Element) => element.className.split(/\s+/)
+
+  it("has no look of its own by default", async () => {
+    const { bar } = await mountLook({})
+    expect(bar.dataset.variant).toBe("plain")
+    expect(classes(bar)).not.toContain("bg-primary/5")
+    expect(classes(bar)).not.toContain("tavora-floating")
+  })
+
+  it("is a tinted strip as a bar, a control plus 8px tall, wrapping on asking", async () => {
+    const { bar } = await mountLook({ variant: "bar" })
+    expect(bar.dataset.variant).toBe("bar")
+    expect(classes(bar)).toEqual(expect.arrayContaining(["bg-primary/5", "border-primary/25", "border-b", "px-2", "min-h-[calc(var(--style-control-height,32px)+8px)]"]))
+    expect(classes(bar)).not.toContain("flex-wrap")
+    app!.unmount()
+    document.body.innerHTML = ""
+    const wrapped = await mountLook({ variant: "bar", wrap: true })
+    expect(classes(wrapped.bar)).toEqual(expect.arrayContaining(["flex-wrap", "py-1"]))
+  })
+
+  it("has a line at its right as a column bar", async () => {
+    const { bar } = await mountLook({ variant: "bar", orientation: "vertical" })
+    expect(classes(bar)).toEqual(expect.arrayContaining(["bg-primary/5", "border-r", "flex-col"]))
+    expect(classes(bar)).not.toContain("border-b")
+  })
+
+  it("puts the below rows under the tools, all in the one toolbar", async () => {
+    const { bar, get } = await mountLook({ variant: "bar" }, () => h("div", { "data-testid": "status" }, [h(Button, { "data-testid": "c" }, () => "c")]))
+    expect(classes(bar)).toEqual(expect.arrayContaining(["flex-col", "border-b", "p-2"]))
+    const row = bar.querySelector("[data-slot=toolbar-row]")!
+    expect(row.contains(get("a"))).toBe(true)
+    expect(row.nextElementSibling).toBe(get("status"))
+    // The row under the tools is still part of the arrow keys.
+    get("b").focus()
+    ;(document.activeElement as HTMLElement).dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true }))
+    await nextTick()
+    await wait()
+    expect(document.activeElement).toBe(get("c"))
+  })
+
+  it("stacks the below rows in a plain toolbar too, without a strip", async () => {
+    const { bar, get } = await mountLook({}, () => h("span", { "data-testid": "status" }, "3 shown"))
+    expect(bar.querySelector("[data-slot=toolbar-row]")!.nextElementSibling).toBe(get("status"))
+    expect(classes(bar)).toContain("flex-col")
+    expect(classes(bar)).not.toContain("bg-primary/5")
+  })
+
+  it("takes the floating surface over a map or canvas", async () => {
+    const { bar } = await mountLook({ variant: "floating", class: "absolute top-2 right-2" })
+    expect(bar.dataset.variant).toBe("floating")
+    expect(classes(bar)).toEqual(expect.arrayContaining(["tavora-floating", "p-1", "gap-0.5", "absolute"]))
+    expect(classes(bar)).not.toContain("gap-1")
+    expect(classes(bar)).not.toContain("bg-primary/5")
+  })
+})

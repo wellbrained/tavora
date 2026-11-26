@@ -6,6 +6,7 @@ import { isComposing } from "@tavora/official-ui/lib/keys";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { liftedDragImage, reducedMotion, useReorderMotion } from "@tavora/official-ui/components/ui/reorder";
+import { Toolbar } from "@tavora/official-ui/components/ui/toolbar";
 import { computed, nextTick, ref } from "vue";
 import { t } from "./i18n";
 import NoteRow from "./NoteRow.vue";
@@ -128,11 +129,11 @@ function onSearchKey(event: KeyboardEvent) {
 
 <template>
   <nav v-if="collapsed && !narrow" ref="root" class="flex h-full min-w-0 flex-col items-center" :aria-label="t('list.label')" data-testid="notes-rail">
-    <div class="border-primary/25 bg-primary/5 flex h-10 w-full flex-none items-center justify-center border-b">
+    <Toolbar variant="bar" class="w-full justify-center px-0" :label="t('list.toolbar')">
       <Button variant="ghost" size="icon-sm" data-testid="expand-sidebar" :aria-label="t('list.expand')" :title="t('list.expand')" @click="emit('toggleCollapsed')">
         <PanelLeftOpen />
       </Button>
-    </div>
+    </Toolbar>
     <Button variant="ghost" size="icon-sm" class="mt-2 flex-none" data-testid="new-note" :aria-label="t('list.new')" :title="t('list.new')" @click="emit('create')">
       <Plus />
     </Button>
@@ -160,7 +161,7 @@ function onSearchKey(event: KeyboardEvent) {
     </ul>
   </nav>
   <nav v-else ref="root" class="flex h-full min-w-0 flex-col" :aria-label="t('list.label')">
-    <div class="border-primary/25 bg-primary/5 flex h-10 flex-none items-center gap-1 border-b px-2">
+    <Toolbar variant="bar" :label="t('list.toolbar')">
       <label class="relative flex min-w-0 flex-1 items-center" data-focus-empty>
         <Search class="text-muted-foreground pointer-events-none absolute left-2 size-4" aria-hidden="true" />
         <input
@@ -189,7 +190,7 @@ function onSearchKey(event: KeyboardEvent) {
       <Button v-if="!narrow" variant="ghost" size="icon-sm" class="flex-none" data-testid="collapse-sidebar" :aria-label="t('list.collapse')" :title="t('list.collapse')" @click="emit('toggleCollapsed')">
         <PanelLeftClose />
       </Button>
-    </div>
+    </Toolbar>
 
     <div ref="listEl" class="min-h-0 flex-1 overflow-y-auto p-1">
       <template v-if="results">

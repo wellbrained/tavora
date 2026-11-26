@@ -542,6 +542,12 @@ function templateChecks(code, ctx) {
   for (const m of matches(new RegExp(`<(?!Toolbar\\b)[\\w-]+\\b(?:[^>"']|"[^"]*"|'[^']*')*?\\srole\\s*=\\s*["']toolbar["']`, "g"), code)) {
     out.push({ index: m.index, rule: "kit-control", message: 'role="toolbar" of your own: use Toolbar' });
   }
+  // The panel's tinted tool strip is Toolbar variant="bar"; a copy drifts from it (height, tint, keys).
+  for (const m of matches(new RegExp(`<(?!Toolbar\\b)[\\w-]+\\b(${ATTRS})>`, "g"), code)) {
+    const value = /(?:^|\s)class\s*=\s*(?:"([^"]*)"|'([^']*)')/.exec(m[1]);
+    const list = (value?.[1] ?? value?.[2] ?? "").split(/\s+/);
+    if (list.includes("bg-primary/5") && list.includes("border-b")) out.push({ index: m.index, rule: "kit-control", message: 'a tool strip of your own: use Toolbar variant="bar"' });
+  }
   for (const m of matches(new RegExp(`<a\\b(?:[^>"']|"[^"]*"|'[^']*')*?\\s:?download\\b`, "g"), code)) out.push({ index: m.index, rule: "file-save", message: "a download link" });
   for (const m of matches(/(?<=\s)(?::|v-bind:)?(?:[\w-]+-)?class\s*=\s*(?:"([^"]*)"|'([^']*)')/g, code)) {
     const value = m[1] ?? m[2];

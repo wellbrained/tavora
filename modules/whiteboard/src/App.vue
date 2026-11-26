@@ -10,6 +10,7 @@ import { ArrowLeftRight, ArrowRight, ImagePlus, Minus, MoreHorizontal, Plus, Sti
 import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
 import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { toast, Toaster, undoable } from "@tavora/official-ui/components/ui/toast";
+import { Toolbar } from "@tavora/official-ui/components/ui/toolbar";
 import { TavoraError, type JsonValue, type TavoraSDK, type TavoraTheme } from "@tavora/sdk";
 import type { DocumentHandle } from "@tavora/sdk/store";
 import { computed, defineAsyncComponent, h, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
@@ -405,7 +406,7 @@ async function addPicture(event: Event) {
   </div>
   <p v-else-if="!sdk || !shown" class="text-muted-foreground p-4 text-sm">{{ t("loading") }}</p>
   <div v-else class="whiteboard-app flex h-full min-h-0 flex-col" data-testid="whiteboard-app">
-    <header class="board-bar bg-primary/5 border-primary/25 flex flex-none items-center gap-2 border-b px-2 py-1">
+    <Toolbar variant="bar" class="gap-2" :label="t('board.toolbar')">
       <div class="board-switcher">
         <BoardMenu
           :boards="list"
@@ -467,7 +468,7 @@ async function addPicture(event: Event) {
           <DropdownMenuItem v-if="boardState.pictures.count > 0" @select="togglePictureLocks">{{ t(boardState.pictures.allLocked ? "image.unlock" : "image.lock") }}</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-    </header>
+    </Toolbar>
     <Notice v-if="deleted" variant="warning" class="mx-2 mt-2 flex-none" data-testid="board-deleted">
       {{ t("deleted.notice") }}
       <template #action>

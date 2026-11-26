@@ -4,6 +4,7 @@
 import { Maximize2, Trash2 } from "@lucide/vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Toggle } from "@tavora/official-ui/components/ui/toggle";
+import { Toolbar } from "@tavora/official-ui/components/ui/toolbar";
 import { computed } from "vue";
 import { t } from "./i18n";
 import type { ImageMode } from "./ImageNode";
@@ -25,11 +26,11 @@ const style = computed(() => ({ left: `${Math.max(8, Math.min(props.left, window
 </script>
 
 <template>
-  <div
-    class="bg-popover text-popover-foreground fixed z-50 flex items-center gap-0.5 rounded-md border p-1 text-xs shadow-lg"
+  <Toolbar
+    variant="floating"
+    class="fixed z-(--layer-floating) text-xs"
     :style="style"
-    role="toolbar"
-    :aria-label="t('image.bar')"
+    :label="t('image.bar')"
     data-image-bar
     data-testid="image-bar"
     @pointerdown.prevent
@@ -54,5 +55,5 @@ const style = computed(() => ({ left: `${Math.max(8, Math.min(props.left, window
     <Button variant="danger" size="icon-sm" class="flex-none" data-testid="image-remove" :aria-label="t('image.remove')" :title="t('image.remove')" @click="emit('remove')">
       <Trash2 />
     </Button>
-  </div>
+  </Toolbar>
 </template>

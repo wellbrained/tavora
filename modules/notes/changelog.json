@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.6.65",
+    "date": "2026-11-26",
+    "notes": [
+      "The toolbars, the link bar and the picture bar are one Tab stop each, and the arrow keys move along them. The link and picture bars take your style's look."
+    ]
+  },
+  {
     "version": "0.6.64",
     "date": "2026-11-26",
     "notes": [
