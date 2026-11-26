@@ -44,9 +44,9 @@ jobs:
             git fetch --quiet origin main
             git reset --quiet --hard origin/main
             message=$(node apps/desktop/scripts/change-notes.mjs apply)
-            trimmed=$(node scripts/trim-changelogs.mjs)
-            if [ -z "$message$trimmed" ]; then echo "No change notes to number, no patch notes to trim."; exit 0; fi
-            message=${message:-$trimmed}
+            trim_message=$(node scripts/trim-changelogs.mjs)
+            if [ -z "$message$trim_message" ]; then echo "No change notes to number, no patch notes to trim."; exit 0; fi
+            message=${message:-$trim_message}
             git add -A apps/desktop/changes apps/desktop/package.json package.json apps/desktop/src/shared/patch-notes.ts modules/*/changelog.json
             git commit --quiet -m "$message"
             if git push --quiet origin HEAD:main; then

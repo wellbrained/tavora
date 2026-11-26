@@ -30,6 +30,9 @@ describe("trim-changelogs", () => {
       writeFileSync(path.join(root, "modules", name, "changelog.json"), changelog(count));
     }
     mkdirSync(path.join(root, "modules", "shared"));
+    // A broken one is left alone and doesn't stop the others.
+    mkdirSync(path.join(root, "modules", "broken"));
+    writeFileSync(path.join(root, "modules", "broken", "changelog.json"), "{ nope");
     expect(trimAll(root)).toEqual(["long"]);
     expect(JSON.parse(readFileSync(path.join(root, "modules", "long", "changelog.json"), "utf8"))).toHaveLength(KEEP);
     expect(trimAll(root)).toEqual([]);

@@ -25,7 +25,14 @@ export function trimAll(root) {
   for (const name of readdirSync(path.join(root, "modules"))) {
     const file = path.join(root, "modules", name, "changelog.json");
     if (!existsSync(file)) continue;
-    const next = trimmed(readFileSync(file, "utf8"));
+    let next;
+    try {
+      next = trimmed(readFileSync(file, "utf8"));
+    } catch (error) {
+      // Said, not thrown: the Number job must still number the app's changes. Checks is red for the broken file.
+      console.error(`::warning::modules/${name}/changelog.json can't be read, left as it is: ${error.message}`);
+      continue;
+    }
     if (next === null) continue;
     writeFileSync(file, next);
     done.push(name);

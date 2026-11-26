@@ -14,8 +14,8 @@
 /apps/desktop/scripts/check-fuses.mjs @wellbrained
 /scripts/deploy-client.mjs @wellbrained
 /scripts/release-sdk*.mjs @wellbrained
-# What those load as code (audit run 7): the Number job (write token) runs change-notes.mjs, and release.mjs loads the
-# rest in the process that reads the update signing key.
+# What those load as code (audit run 7): the Number job (write token) runs change-notes.mjs and trim-changelogs.mjs,
+# and release.mjs loads the rest in the process that reads the update signing key.
 /apps/desktop/scripts/change-notes.mjs @wellbrained
 /scripts/trim-changelogs.mjs @wellbrained
 /apps/desktop/scripts/installed-version.mjs @wellbrained
