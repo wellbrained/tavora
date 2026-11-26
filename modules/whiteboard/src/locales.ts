@@ -115,7 +115,7 @@ export const de: Record<keyof typeof en, string> = {
   "card.imageFailed": "Dieses Bild konnte nicht gelesen werden.",
   "card.failed": "Das Bild konnte nicht hinzugefügt werden: {error}",
   "board.actions": "Tafelaktionen",
-  "board.toolbar": "Tafel-Werkzeuge",
+  "board.toolbar": "Tafelwerkzeuge",
   loading: "Whiteboard wird geladen…",
   retry: "Noch mal versuchen",
   "empty.hint": "Wähle oben ein Werkzeug und leg los",

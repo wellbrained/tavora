@@ -17,7 +17,7 @@ import { ToolbarRoot } from "reka-ui"
 import { computed, useId, useSlots, type HTMLAttributes } from "vue"
 import { cn } from "../../../lib/utils"
 import { provideToolbar, type ToolbarOrientation } from "./context"
-import { toolbarClasses, toolbarRowClasses, type ToolbarVariant } from "./variants"
+import { toolbarVariants, type ToolbarVariant } from "./variants"
 
 const props = withDefaults(defineProps<{
   /** Its name for screen readers, such as "Text style" or "Map". */
@@ -30,18 +30,32 @@ const props = withDefaults(defineProps<{
 }>(), { orientation: "horizontal", variant: "plain", wrap: false })
 
 const slots = useSlots()
-/** Rows under its tools (a search and filter header). */
-const stacked = computed(() => !!slots.below)
-const look = computed(() => toolbarClasses({ variant: props.variant, orientation: props.orientation, wrap: props.wrap, stacked: stacked.value }))
+/** Rows under its tools (a search and filter header). Read while rendering, since a `below` may come and go. */
+const stacked = () => !!slots.below
 
 const id = useId()
 provideToolbar({ id, orientation: computed(() => props.orientation) })
+
+/**
+ * Shift+Tab from a field in the toolbar leaves it (or goes to the tool before the field). Without this the toolbar's own
+ * element, which takes the Tab stop on the way in, would catch the focus and hand it to a tool after the field.
+ */
+function onShiftTab(event: KeyboardEvent, root: HTMLElement) {
+  const target = event.target
+  if (!(target instanceof HTMLElement) || target === root || target.hasAttribute("data-toolbar-item")) return
+  const before = root.tabIndex
+  root.tabIndex = -1
+  setTimeout(() => {
+    if (root.tabIndex === -1) root.tabIndex = before
+  })
+}
 
 /**
  * In a column, ↓ moves to the next item, also from a menu trigger, which would open its menu on ↓ in a row. Runs before
  * the trigger sees the key, and moves the focus itself; Enter and Space still open the menu.
  */
 function onKeydownCapture(event: KeyboardEvent) {
+  if (event.key === "Tab" && event.shiftKey && event.currentTarget instanceof HTMLElement) return onShiftTab(event, event.currentTarget)
   if (props.orientation !== "vertical" || event.key !== "ArrowDown" || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
   const target = event.target
   const root = event.currentTarget
@@ -67,11 +81,11 @@ function onKeydownCapture(event: KeyboardEvent) {
     data-slot="toolbar"
     :data-toolbar-id="id"
     :data-variant="variant"
-    :class="cn(look, props.class)"
+    :class="cn(toolbarVariants({ variant, orientation, wrap, stacked: stacked() }), props.class)"
     @keydown.capture="onKeydownCapture"
   >
-    <template v-if="stacked">
-      <div data-slot="toolbar-row" :class="toolbarRowClasses({ orientation, wrap })"><slot /></div>
+    <template v-if="stacked()">
+      <div data-slot="toolbar-row" :class="cn('flex min-w-0 items-center gap-1', orientation === 'vertical' && 'flex-col', wrap && 'flex-wrap')"><slot /></div>
       <slot name="below" />
     </template>
     <slot v-else />

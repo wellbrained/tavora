@@ -518,7 +518,7 @@ const setPageRef = (number: number) => (element: unknown) => {
 
     <template v-else>
       <Toolbar variant="bar" wrap :label="t('pdf.toolbar')">
-        <ToggleGroup :model-value="side ? [side] : []" :options="sideOptions" :label="t('pdf.pages') + ', ' + t('pdf.outline')" @update:model-value="chooseSide" />
+        <ToggleGroup variant="ghost" :model-value="side ? [side] : []" :options="sideOptions" :label="t('pdf.pages') + ', ' + t('pdf.outline')" @update:model-value="chooseSide" />
         <Button variant="ghost" size="icon" :disabled="page <= 1" :title="t('pdf.previous')" :aria-label="t('pdf.previous')" data-testid="pdf-prev" @click="goToPage(page - 1)">
           <ChevronUp />
         </Button>
@@ -537,14 +537,14 @@ const setPageRef = (number: number) => (element: unknown) => {
         <Button variant="ghost" size="icon" :title="t('pdf.zoomIn')" :aria-label="t('pdf.zoomIn')" data-testid="pdf-zoom-in" @click="setZoom(stepZoom(zoom, 1), null)">
           <Plus />
         </Button>
-        <ToggleGroup :model-value="fit ? [fit] : []" :options="fitOptions" :label="t('pdf.fitWidth') + ', ' + t('pdf.fitPage')" @update:model-value="chooseFit" />
+        <ToggleGroup variant="ghost" :model-value="fit ? [fit] : []" :options="fitOptions" :label="t('pdf.fitWidth') + ', ' + t('pdf.fitPage')" @update:model-value="chooseFit" />
         <span class="flex-1" />
-        <Toggle :model-value="searching" :label="t('pdf.search')" data-testid="pdf-search-toggle" @update:model-value="searching ? closeSearch() : openSearch()">
+        <Toggle variant="ghost" :model-value="searching" :label="t('pdf.search')" data-testid="pdf-search-toggle" @update:model-value="searching ? closeSearch() : openSearch()">
           <Search class="size-4" />
         </Toggle>
       </Toolbar>
 
-      <Toolbar v-if="searching" variant="bar" :label="t('pdf.searchField')" data-testid="pdf-search">
+      <Toolbar v-if="searching" variant="bar" :label="t('pdf.search')" data-testid="pdf-search">
         <Input
           ref="searchInput"
           v-model="query"

@@ -406,7 +406,7 @@ async function addPicture(event: Event) {
   </div>
   <p v-else-if="!sdk || !shown" class="text-muted-foreground p-4 text-sm">{{ t("loading") }}</p>
   <div v-else class="whiteboard-app flex h-full min-h-0 flex-col" data-testid="whiteboard-app">
-    <Toolbar variant="bar" class="gap-2" :label="t('board.toolbar')">
+    <Toolbar variant="bar" :label="t('board.toolbar')">
       <div class="board-switcher">
         <BoardMenu
           :boards="list"
@@ -457,8 +457,8 @@ async function addPicture(event: Event) {
       >
         {{ t(boardState.pictures.allLocked ? "image.unlock" : "image.lock") }}
       </Button>
-      <Button class="board-image-action" type="button" variant="outline" size="sm" :title="t('copy.hint')" data-testid="copy-picture" :disabled="boardState.empty || copying" :disabled-reason="boardState.empty ? t('board.nothingYet') : undefined" @click="copyAsPicture">{{ t("copy.button") }}</Button>
-      <Button class="board-image-action" type="button" variant="outline" size="sm" :title="t('savePicture.hint')" data-testid="save-picture" :disabled="boardState.empty || copying" :disabled-reason="boardState.empty ? t('board.nothingYet') : undefined" @click="saveAsPicture">{{ t("savePicture.button") }}</Button>
+      <Button class="board-image-action" type="button" variant="ghost" size="sm" :title="t('copy.hint')" data-testid="copy-picture" :disabled="boardState.empty || copying" :disabled-reason="boardState.empty ? t('board.nothingYet') : undefined" @click="copyAsPicture">{{ t("copy.button") }}</Button>
+      <Button class="board-image-action" type="button" variant="ghost" size="sm" :title="t('savePicture.hint')" data-testid="save-picture" :disabled="boardState.empty || copying" :disabled-reason="boardState.empty ? t('board.nothingYet') : undefined" @click="saveAsPicture">{{ t("savePicture.button") }}</Button>
       <DropdownMenu>
         <DropdownMenuTrigger as-child><Button class="board-actions-menu" variant="ghost" size="icon-sm" :aria-label="t('board.actions')" :title="t('board.actions')" data-testid="board-actions"><MoreHorizontal class="size-4" /></Button></DropdownMenuTrigger>
         <DropdownMenuContent align="end">

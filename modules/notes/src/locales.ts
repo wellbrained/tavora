@@ -203,7 +203,7 @@ export const de: Record<keyof typeof en, string> = {
   "editor.text": "Notiztext",
   "editor.allNotes": "Alle Notizen",
   "editor.formatting": "Formatierung",
-  "editor.toolbar": "Notiz-Werkzeuge",
+  "editor.toolbar": "Notizwerkzeuge",
   "editor.textStyle": "Textstil",
   "editor.moreFormatting": "Mehr Formatierung",
   "editor.on": "An",

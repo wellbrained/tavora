@@ -211,6 +211,23 @@ describe("Toolbar", () => {
     expect(document.activeElement).toBe(get("c"))
   })
 
+  it("lets Shift+Tab from a field leave the toolbar instead of landing on a tool after it", async () => {
+    const text = ref("")
+    const { root } = await mount(() => [
+      h(SearchInput, { modelValue: text.value, "onUpdate:modelValue": (next: string) => (text.value = next), "aria-label": "Find" }),
+      h(Button, { "data-testid": "a" }, () => "a"),
+    ])
+    const bar = root.querySelector("[role=toolbar]") as HTMLElement
+    const field = root.querySelector("input") as HTMLInputElement
+    expect(bar.tabIndex).toBe(0)
+    field.focus()
+    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true }))
+    // While the browser moves the focus back, the toolbar's own element is no stop; then it is again.
+    expect(bar.tabIndex).toBe(-1)
+    await wait()
+    expect(bar.tabIndex).toBe(0)
+  })
+
   it("keeps a field as a Tab stop of its own, out of the arrow keys", async () => {
     const text = ref("")
     const { root, get, key } = await mount(() => [
@@ -285,6 +302,32 @@ describe("Toolbar looks", () => {
     expect(bar.querySelector("[data-slot=toolbar-row]")!.nextElementSibling).toBe(get("status"))
     expect(classes(bar)).toContain("flex-col")
     expect(classes(bar)).not.toContain("bg-primary/5")
+  })
+
+  it("stacks and unstacks when its below rows come and go", async () => {
+    const root = document.createElement("div")
+    document.body.append(root)
+    const searching = ref(false)
+    app = createApp({
+      render: () =>
+        h(Toolbar, { label: "Tools", variant: "bar" }, {
+          default: buttons("a"),
+          ...(searching.value ? { below: () => h("div", { "data-testid": "find" }, "find") } : {}),
+        }),
+    })
+    app.mount(root)
+    await nextTick()
+    const bar = root.querySelector("[role=toolbar]") as HTMLElement
+    expect(bar.querySelector("[data-slot=toolbar-row]")).toBeNull()
+    searching.value = true
+    await nextTick()
+    expect(bar.querySelector("[data-slot=toolbar-row]")).not.toBeNull()
+    expect(bar.querySelector("[data-testid=find]")).not.toBeNull()
+    expect(classes(bar)).toContain("flex-col")
+    searching.value = false
+    await nextTick()
+    expect(bar.querySelector("[data-slot=toolbar-row]")).toBeNull()
+    expect(classes(bar)).not.toContain("flex-col")
   })
 
   it("takes the floating surface over a map or canvas", async () => {
