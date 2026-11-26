@@ -406,7 +406,7 @@ async function addPicture(event: Event) {
   </div>
   <p v-else-if="!sdk || !shown" class="text-muted-foreground p-4 text-sm">{{ t("loading") }}</p>
   <div v-else class="whiteboard-app flex h-full min-h-0 flex-col" data-testid="whiteboard-app">
-    <Toolbar variant="bar" :label="t('board.toolbar')">
+    <Toolbar variant="bar" :label="t('board.toolbar')" data-testid="board-toolbar">
       <div class="board-switcher">
         <BoardMenu
           :boards="list"
