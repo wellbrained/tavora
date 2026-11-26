@@ -159,7 +159,12 @@ export interface Developer {
 export interface LinkedKey {
   fingerprint: string;
   linkedAt: string;
+  /** The owner's own short note on what the key is for; null without one. Only the owner's app shows it. */
+  note: string | null;
 }
+
+/** The longest note on a publisher key. */
+export const MAX_KEY_NOTE = 60;
 
 /**
  * A developer's request to replace a lost or leaked publisher key with another key of the same
@@ -402,6 +407,8 @@ export class AccountStore {
     addColumn("link_codes", "session_id", "text");
     addColumn("publisher_keys", "session_id", "text");
     addColumn("publisher_keys", "paused_at", "integer");
+    // The owner's note on a key (setKeyNote). An older service ignores it and leaves it as it is.
+    addColumn("publisher_keys", "note", "text");
     // Who asked for a code (a hash of their network and the address; null for the account's own sign-in and older codes),
     // and the wrong tries from everyone else (CODE_OTHER_TRIES).
     addColumn("codes", "asker", "text");
@@ -748,8 +755,17 @@ export class AccountStore {
   /** The account's keys, paused ones too: they are still its own (revokeMinted). */
   keys(accountId: string): LinkedKey[] {
     return (
-      this.db.prepare("select fingerprint, linked_at from publisher_keys where account_id = ? order by linked_at, rowid").all(accountId) as unknown as { fingerprint: string; linked_at: number }[]
-    ).map((row) => ({ fingerprint: row.fingerprint, linkedAt: new Date(row.linked_at).toISOString() }));
+      this.db.prepare("select fingerprint, linked_at, note from publisher_keys where account_id = ? order by linked_at, rowid").all(accountId) as unknown as {
+        fingerprint: string;
+        linked_at: number;
+        note: string | null;
+      }[]
+    ).map((row) => ({ fingerprint: row.fingerprint, linkedAt: new Date(row.linked_at).toISOString(), note: row.note }));
+  }
+
+  /** Sets the account's note on one of its keys; null clears it. False when the account has no such key. */
+  setKeyNote(accountId: string, fingerprint: string, note: string | null): boolean {
+    return Number(this.db.prepare("update publisher_keys set note = ? where fingerprint = ? and account_id = ?").run(note, fingerprint, accountId).changes) > 0;
   }
 
   /** The fingerprints of the account's paused keys (revokeMinted): they sign nothing until linked again. */
@@ -1301,6 +1317,11 @@ export class AccountStore {
     if (this.isSuspended(row.account_id)) return null;
     this.db.prepare("update publish_tokens set last_used_at = ? where id = ?").run(now, row.id);
     return { accountId: row.account_id, name: row.name };
+  }
+
+  /** Gives one of the account's publish tokens another name; false when it has no such token. */
+  renamePublishToken(accountId: string, id: string, name: string): boolean {
+    return Number(this.db.prepare("update publish_tokens set name = ? where account_id = ? and id = ?").run(name, accountId, id).changes) > 0;
   }
 
   /** False when the account has no such token. */

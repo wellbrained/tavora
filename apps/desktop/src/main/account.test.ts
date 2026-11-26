@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fingerprint as packFingerprint, LINK_STATEMENT, packModule, PUBLISH_STATEMENT } from "@tavora/pack";
+import { OFFICIAL_PINS } from "@tavora/module-schema";
 import { describe, expect, it } from "vitest";
 import type { AccountView } from "../shared/host-api";
 import { AccountClient, AccountFile, deviceOs, type ProfileData, type SavedAccount } from "./account";
@@ -1034,7 +1035,7 @@ describe("the developer side", () => {
     const { account } = client(fetchImpl, { saved: SAVED });
     await account.init();
     await expect.poll(() => account.view().developer?.name).toBe("example-dev");
-    expect(account.view().publisherKeys).toEqual([{ fingerprint: FINGERPRINT, linkedAt: "2026-10-17T12:01:00.000Z" }]);
+    expect(account.view().publisherKeys).toEqual([{ fingerprint: FINGERPRINT, linkedAt: "2026-10-17T12:01:00.000Z", note: null }]);
   });
 
   it("reads paused keys and the emails the service couldn't send, and none from an older service", async () => {
@@ -1051,13 +1052,47 @@ describe("the developer side", () => {
     });
     const { account } = client(fetchImpl, { saved: SAVED });
     await account.init();
-    await expect.poll(() => account.view().pausedKeys).toEqual([paused]);
+    await expect.poll(() => account.view().pausedKeys).toEqual([{ ...paused, note: null }]);
     expect(account.view().unsentNotices).toEqual([notice]);
     // An older service sends neither.
     const older = client(service({}).fetchImpl, { saved: SAVED }).account;
     await older.init();
     await expect.poll(() => older.view().publisherKeys).toEqual([]);
     expect(older.view()).toMatchObject({ pausedKeys: [], unsentNotices: [] });
+  });
+
+  it("reads the owner's notes on keys, marks Tavora's own key, and drops a note that is too long", async () => {
+    const OFFICIAL = OFFICIAL_PINS.key;
+    const { fetchImpl } = service({
+      "GET /developer": () =>
+        developer([
+          { fingerprint: FINGERPRINT, linkedAt: "2026-10-17T12:01:00.000Z", note: "Nik's laptop" },
+          { fingerprint: OFFICIAL, linkedAt: "2026-10-30T12:01:00.000Z", note: null },
+          { fingerprint: "b".repeat(32), linkedAt: "2026-10-31T12:01:00.000Z", note: "x".repeat(61) },
+        ]),
+    });
+    const { account } = client(fetchImpl, { saved: SAVED });
+    await account.init();
+    await expect.poll(() => account.view().publisherKeys?.length).toBe(3);
+    expect(account.view().publisherKeys).toEqual([
+      { fingerprint: FINGERPRINT, linkedAt: "2026-10-17T12:01:00.000Z", note: "Nik's laptop" },
+      { fingerprint: OFFICIAL, linkedAt: "2026-10-30T12:01:00.000Z", note: null, official: true },
+      { fingerprint: "b".repeat(32), linkedAt: "2026-10-31T12:01:00.000Z", note: null },
+    ]);
+  });
+
+  it("sets and clears the note on a key", async () => {
+    const { calls, fetchImpl } = service({
+      ["PUT /keys/" + FINGERPRINT + "/note"]: (body) => developer([{ fingerprint: FINGERPRINT, linkedAt: "2026-10-17T12:01:00.000Z", note: String(body?.note) || null }]),
+    });
+    const { account } = client(fetchImpl, { saved: SAVED });
+    await account.init();
+    await account.setKeyNote(FINGERPRINT, " GitHub Actions ");
+    expect(calls.at(-1)).toMatchObject({ method: "PUT", body: { note: "GitHub Actions" }, auth: `Bearer ${TOKEN}` });
+    expect(account.view().publisherKeys).toEqual([{ fingerprint: FINGERPRINT, linkedAt: "2026-10-17T12:01:00.000Z", note: "GitHub Actions" }]);
+    await account.setKeyNote(FINGERPRINT, "  ");
+    expect(calls.at(-1)).toMatchObject({ body: { note: "" } });
+    expect(account.view().publisherKeys?.[0]?.note).toBeNull();
   });
 
   it("says when the name can change again, in the user's own words", async () => {
@@ -1106,7 +1141,7 @@ describe("the developer side", () => {
     await account.init();
     await account.linkPublisherKey(privateKey);
     expect(calls.find((call) => call.url.endsWith("/v1/publishers/link"))?.auth).toBeNull();
-    expect(account.view().publisherKeys).toEqual([{ fingerprint, linkedAt: "2026-10-20T12:00:00.000Z" }]);
+    expect(account.view().publisherKeys).toEqual([{ fingerprint, linkedAt: "2026-10-20T12:00:00.000Z", note: null }]);
   });
 
   it("asks to replace a lost key, and shows where each request stands", async () => {
@@ -1144,6 +1179,16 @@ describe("the developer side", () => {
     expect(JSON.stringify(account.view())).not.toContain(SECRET);
     await account.deletePublishToken("abc");
     expect(account.view().publishTokens).toEqual([]);
+  });
+
+  it("renames a publish token", async () => {
+    const token = { id: "abc", name: "Old", createdAt: "2026-11-01T00:00:00.000Z", expiresAt: "2027-11-01T00:00:00.000Z", lastUsedAt: null };
+    const { calls, fetchImpl } = service({ "PUT /publish-tokens/abc/name": (body) => json({ developer: null, keys: [], publishTokens: [{ ...token, name: body?.name }] }) });
+    const { account } = client(fetchImpl, { saved: SAVED });
+    await account.init();
+    await account.renamePublishToken("abc", " Release build ");
+    expect(calls.at(-1)).toMatchObject({ method: "PUT", body: { name: "Release build" }, auth: `Bearer ${TOKEN}` });
+    expect(account.view().publishTokens).toEqual([{ ...token, name: "Release build" }]);
   });
 
   it("publishes a module zip for tavora-pack with the sign-in", async () => {

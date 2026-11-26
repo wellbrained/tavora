@@ -113,6 +113,8 @@ const position = check<number>((value) => Number.isInteger(value) && (value as n
 const label = nullable(text(16));
 const code = matching(/^\d{6}$/);
 const fingerprint = matching(/^[0-9a-f]{32}$/);
+/** A publish token's name: 1 to 40 characters once trimmed. */
+const tokenName = check<string>((value) => typeof value === "string" && value.trim() !== "" && value.trim().length <= 40);
 const deviceId = matching(/^[A-Za-z0-9_-]{1,40}$/);
 /** A review or reply: at most 500 characters, which the service counts; here only a cap on its length. Null for none. */
 const reviewText = nullable(text(2000));
@@ -572,7 +574,11 @@ export function hostActionTable(c: HostChecks) {
     /** "I lost this key" or "It was leaked": its modules move to another key of the account once Tavora signs it. */
     "account-replace-key": { fingerprint, leaked: bool },
     /** Publish tokens, for publishing from CI: make one (its secret shown once), copy it, close it, remove one. */
-    "account-publish-token-create": { name: check<string>((value) => typeof value === "string" && value.trim() !== "" && value.trim().length <= 40) },
+    "account-publish-token-create": { name: tokenName },
+    /** A token's name changes; the token stays as it is. */
+    "account-publish-token-rename": { id: text(40), name: tokenName },
+    /** The note on a publisher key (what it is for); an empty one clears it. */
+    "account-key-note": { fingerprint, note: text(60) },
     "account-publish-token-copy": {},
     "account-publish-token-saved": {},
     "account-publish-token-delete": { id: text(40) },

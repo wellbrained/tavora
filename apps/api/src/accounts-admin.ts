@@ -120,7 +120,8 @@ export function accountsAdminRoutes({ accounts, catalog, reviews, copies, mailer
     const developer = accounts.developer(id);
     // A paused key (account-store.ts revokeMinted) says so: it signs nothing until the developer links it again.
     const paused = accounts.pausedKeys(id);
-    const keys = accounts.keys(id).map((key) => ({ ...key, paused: paused.has(key.fingerprint) }));
+    // The owner's notes on their keys stay with the owner.
+    const keys = accounts.keys(id).map(({ fingerprint, linkedAt }) => ({ fingerprint, linkedAt, paused: paused.has(fingerprint) }));
     const fingerprints = keys.map((key) => key.fingerprint);
     const listed = new Map((catalog?.adminModules() ?? []).map((module) => [module.id, module]));
     const moduleIds = catalog ? catalog.modulesOfAccount(id, fingerprints) : [];

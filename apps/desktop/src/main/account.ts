@@ -1,8 +1,8 @@
 import type { KeyObject } from "node:crypto";
-import { apiReason, type ApiReason } from "@tavora/module-schema";
+import { apiReason, OFFICIAL_PINS, officialOn, type ApiReason } from "@tavora/module-schema";
 import { linkRequest, publishSignature, publishTimeoutMs, publishZip, type Published } from "@tavora/pack";
 import { assertNever } from "../shared/assert-never";
-import type { AccountDevice, AccountPending, AccountPrefix, AccountPublishToken, AccountUnsentNotice, AccountView, ChangeEmailProof, DeviceOs, KeyRequestView, PrefixState } from "../shared/host-api";
+import type { AccountDevice, AccountLinkedKey, AccountPending, AccountPrefix, AccountPublishToken, AccountUnsentNotice, AccountView, ChangeEmailProof, DeviceOs, KeyRequestView, PrefixState } from "../shared/host-api";
 import type { Language, MessageKey } from "../shared/i18n";
 import { isIdPrefix } from "../shared/id-prefix";
 import type { Encryptor } from "./discord-store";
@@ -220,8 +220,8 @@ function heldPrefixes(value: unknown): { held: AccountPrefix[]; max: number } | 
 /** The account's developer side as the service answers it; null for anything off. */
 function developerSide(value: unknown): {
   developer: { name: string; nextChangeAt: string } | null;
-  keys: { fingerprint: string; linkedAt: string }[];
-  pausedKeys: { fingerprint: string; linkedAt: string }[];
+  keys: AccountLinkedKey[];
+  pausedKeys: AccountLinkedKey[];
   unsentNotices: AccountUnsentNotice[];
   tokens: AccountPublishToken[];
   requests: KeyRequestView[];
@@ -233,7 +233,14 @@ function developerSide(value: unknown): {
     (Array.isArray(list) ? list : [])
       .map((item) => (typeof item === "object" && item !== null ? (item as Record<string, unknown>) : {}))
       .filter((item) => typeof item.fingerprint === "string" && /^[0-9a-f]{32}$/.test(item.fingerprint) && isText(item.linkedAt, 40))
-      .map((item) => ({ fingerprint: item.fingerprint as string, linkedAt: item.linkedAt as string }));
+      // A service from before notes sends none: the key has no note then.
+      .map((item) => ({
+        fingerprint: item.fingerprint as string,
+        linkedAt: item.linkedAt as string,
+        note: isText(item.note, 60) ? item.note : null,
+        // Tavora's own key says so itself, so it needs no note.
+        ...(officialOn(OFFICIAL_PINS) && item.fingerprint === OFFICIAL_PINS.key ? { official: true } : {}),
+      }));
   const keys = keyList(raw.keys);
   // Older services pause no keys and keep no unsent emails: there are none then.
   const pausedKeys = keyList(raw.pausedKeys);
@@ -672,6 +679,18 @@ export class AccountClient {
   /** The token the shown one is, for copying it. */
   newPublishTokenText(): string | null {
     return this.newPublishToken?.token ?? null;
+  }
+
+  /** Gives a publish token another name; the token itself stays as it is. */
+  async renamePublishToken(id: string, name: string): Promise<void> {
+    this.ensure(true);
+    this.takeDeveloper(await this.call("PUT", `/publish-tokens/${encodeURIComponent(id)}/name`, { name: name.trim() }, true));
+  }
+
+  /** Sets the account's note on one of its publisher keys; an empty note clears it. */
+  async setKeyNote(fingerprint: string, note: string): Promise<void> {
+    this.ensure(true);
+    this.takeDeveloper(await this.call("PUT", `/keys/${encodeURIComponent(fingerprint)}/note`, { note: note.trim() }, true));
   }
 
   async deletePublishToken(id: string): Promise<void> {

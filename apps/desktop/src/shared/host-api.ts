@@ -291,13 +291,13 @@ export interface AccountView {
   profileChoice: { name: string; initials: string; picture: boolean } | null;
   /** The public name users see on modules signed with the account's linked keys, and when it can change again; null without one. */
   developer: { name: string; nextChangeAt: string } | null;
-  /** Publisher keys linked to the account (fingerprints only); null until read from the service. */
-  publisherKeys: { fingerprint: string; linkedAt: string }[] | null;
+  /** Publisher keys linked to the account (fingerprints only, and the owner's note on each); null until read from the service. */
+  publisherKeys: AccountLinkedKey[] | null;
   /**
    * Keys of the account paused when its email changed or a device was removed: still the account's, but they sign nothing
    * until linked again. Absent or null until read, and from a service from before them.
    */
-  pausedKeys?: { fingerprint: string; linkedAt: string }[] | null;
+  pausedKeys?: AccountLinkedKey[] | null;
   /** Emails about the account's publishing that the service couldn't send lately (a busy day), newest first. */
   unsentNotices?: AccountUnsentNotice[] | null;
   /** "I lost this key": requests to replace a linked key, and where each stands; null until read from the service. */
@@ -312,6 +312,15 @@ export interface AccountView {
   prefixes: { held: AccountPrefix[]; max: number } | null;
   /** The prefix checked last (Check, Claim it), and what the catalog said about it. */
   prefixCheck: { prefix: string; state: PrefixState } | null;
+}
+
+/** A publisher key linked to the account, with the owner's short note on what it is for (absent or null without one; absent from a service from before notes). */
+export interface AccountLinkedKey {
+  fingerprint: string;
+  linkedAt: string;
+  note?: string | null;
+  /** Tavora's own publisher key: it shows a fixed label instead of a note. */
+  official?: boolean;
 }
 
 /** A module id prefix (the part before the first dot) the account holds in the catalog. */

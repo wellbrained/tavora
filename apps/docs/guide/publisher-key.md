@@ -29,7 +29,7 @@ A lost or leaked key can be replaced by a new one only if it was linked to your 
 
 ## Publishing from CI
 
-A build server signs with your key as a file: press **Show** under **Settings > Developer > Publishing > Publisher keys and CI**, then **Export** next to the key, and pass the file to `@tavora/pack` with `--key <file>`. Publishing from CI also needs a publish token; [Publish from CI](./publishing.md#publish-from-ci) has the steps.
+A build server signs with your key as a file: press **Show** under **Settings > Developer > Publishing > Publisher keys and CI**, then **Export** next to the key, and pass the file to `@tavora/pack` with `--key <file>`. Publishing from CI also needs a publish token; [Publish from CI](./publishing.md#publish-from-ci) has the steps. With more than one key, give each a note (**Add note**) such as "Laptop" or "GitHub Actions", so you know which is which.
 
 **With the file and a token, anyone can publish as you**: keep both as CI secrets, never commit them, and export the key only where you need it.
 

@@ -1,7 +1,7 @@
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { accountLifecycle, type AccountLifecycle } from "./account-lifecycle.ts";
-import { cleanDeveloperName, DEVICE_OS, MAX_PREFIXES, NAME_HOLD_MS, normalizeEmail, type Account, type AccountStore, type CodeAsker, type DeviceOs, type Session, type StoredProfile } from "./account-store.ts";
+import { cleanDeveloperName, DEVICE_OS, MAX_KEY_NOTE, MAX_PREFIXES, NAME_HOLD_MS, normalizeEmail, type Account, type AccountStore, type CodeAsker, type DeviceOs, type Session, type StoredProfile } from "./account-store.ts";
 import type { CatalogStore } from "./catalog.ts";
 import { OFFICIAL_PINS, type CatalogTrust, type OfficialPins } from "./catalog-trust.ts";
 import type { CopyStore } from "./cloud-copy.ts";
@@ -582,6 +582,7 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     const keys = store.keys(accountId);
     return {
       developer: developer ? { name: developer.name, changedAt: new Date(developer.changedAt).toISOString(), nextChangeAt: new Date(developer.changedAt + NAME_HOLD_MS).toISOString() } : null,
+      // `note` is the owner's own note on the key (an older Tavora ignores it).
       keys: keys.filter((key) => !paused.has(key.fingerprint)),
       pausedKeys: keys.filter((key) => paused.has(key.fingerprint)),
       // Mails about this account's publishing that couldn't go out (catalog-publish.ts tellAccount), for Publishing to show.
@@ -716,12 +717,17 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     return context.json(developerAnswer(account.id));
   });
 
+  /** A publish token's name as typed: 1 to 40 characters, no control characters; null for anything else. */
+  const cleanTokenName = (raw: unknown): string | null => {
+    const name = typeof raw === "string" ? raw.trim() : "";
+    return !name || name.length > 40 || /[\u0000-\u001f\u007f]/.test(name) ? null : name;
+  };
+
   // A token for publishing from CI, shown this once; the service keeps only its hash.
   signedIn.post("/publish-tokens", async (context) => {
     const account = context.get("account");
-    const raw = (await body(context)).name;
-    const name = typeof raw === "string" ? raw.trim() : "";
-    if (!name || name.length > 40 || /[\u0000-\u001f\u007f]/.test(name)) return context.json({ error: "A token's name is 1 to 40 characters.", reason: "bad-name" }, 400);
+    const name = cleanTokenName((await body(context)).name);
+    if (!name) return context.json({ error: "A token's name is 1 to 40 characters.", reason: "bad-name" }, 400);
     if (!store.developer(account.id)) return context.json({ error: "Choose a developer name first.", reason: "no-developer-name" }, 409);
     // The store makes it only while this sign-in still exists (account-store.ts createPublishToken).
     const ended = gone(context);
@@ -732,8 +738,32 @@ export function accountRoutes(options: AccountOptions, limiter: RateLimiter, cli
     return context.json({ token: created.token, ...developerAnswer(account.id) }, 201);
   });
 
+  // A new name for a token, so the developer can tell their tokens apart; the token itself stays as it is.
+  signedIn.put("/publish-tokens/:id/name", async (context) => {
+    const name = cleanTokenName((await body(context)).name);
+    if (!name) return context.json({ error: "A token's name is 1 to 40 characters.", reason: "bad-name" }, 400);
+    const ended = gone(context);
+    if (ended) return ended;
+    if (!store.renamePublishToken(context.get("account").id, context.req.param("id") ?? "", name)) return context.json({ error: "Not found.", reason: "not-found" }, 404);
+    return context.json(developerAnswer(context.get("account").id));
+  });
+
   signedIn.delete("/publish-tokens/:id", (context) => {
     if (!store.deletePublishToken(context.get("account").id, context.req.param("id") ?? "")) return context.json({ error: "Not found.", reason: "not-found" }, 404);
+    return context.json(developerAnswer(context.get("account").id));
+  });
+
+  // The owner's short note on what a key is for ("Nik's laptop", "GitHub Actions"): private to the account. An empty note
+  // (or null) clears it.
+  signedIn.put("/keys/:fingerprint/note", async (context) => {
+    const raw = (await body(context)).note;
+    const note = raw === null || raw === undefined ? "" : typeof raw === "string" ? raw.trim() : null;
+    if (note === null || note.length > MAX_KEY_NOTE || /[\u0000-\u001f\u007f]/.test(note)) {
+      return context.json({ error: `A note is up to ${MAX_KEY_NOTE} characters.`, reason: "bad-request" }, 400);
+    }
+    const ended = gone(context);
+    if (ended) return ended;
+    if (!store.setKeyNote(context.get("account").id, context.req.param("fingerprint") ?? "", note || null)) return context.json({ error: "Not found.", reason: "not-found" }, 404);
     return context.json(developerAnswer(context.get("account").id));
   });
 

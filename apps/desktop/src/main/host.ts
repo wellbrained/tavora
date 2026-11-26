@@ -2353,6 +2353,8 @@ export class Host {
       },
       "account-publish-token-saved": () => this.account.publishTokenSaved(),
       "account-publish-token-delete": (action) => this.account.deletePublishToken(action.id),
+      "account-publish-token-rename": (action) => this.account.renamePublishToken(action.id, action.name),
+      "account-key-note": (action) => this.account.setKeyNote(action.fingerprint, action.note),
       "developer-key-create": async () => {
         await this.developerKeys.create();
       },

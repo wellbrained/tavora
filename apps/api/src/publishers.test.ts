@@ -161,6 +161,87 @@ describe("publish tokens", () => {
     expect((await request("DELETE", `/v1/account/publish-tokens/${id}`, undefined, token)).status).toBe(404);
     expect(store.publishTokenAccount(answer.token, Date.parse("2026-10-17T12:00:00Z"))).toBeNull();
   });
+
+  it("can be renamed by their owner only, and keep working under the new name", async () => {
+    const { request, signIn, store } = setup();
+    const token = await signIn("ci@example.com");
+    const other = await signIn("other@example.com");
+    for (const bearer of [token, other]) await request("PUT", "/v1/account/developer", { name: bearer === token ? "ci-dev" : "other-dev" }, bearer);
+    const made = (await (await request("POST", "/v1/account/publish-tokens", { name: "GitHub Actions" }, token)).json()) as { token: string; publishTokens: { id: string }[] };
+    const id = made.publishTokens[0]!.id;
+
+    const renamed = await request("PUT", `/v1/account/publish-tokens/${id}/name`, { name: "  Release build  " }, token);
+    expect(renamed.status).toBe(200);
+    expect(await renamed.json()).toMatchObject({ publishTokens: [{ id, name: "Release build" }] });
+    // The secret is the same one, and it publishes under the new name.
+    expect(store.publishTokenAccount(made.token, Date.parse("2026-10-17T12:00:00Z"))).toMatchObject({ name: "Release build" });
+
+    for (const name of ["", "   ", "x".repeat(41), "tab\there", 7, undefined]) {
+      expect(await (await request("PUT", `/v1/account/publish-tokens/${id}/name`, { name }, token)).json()).toMatchObject({ reason: "bad-name" });
+    }
+    // Another account can't rename it, and a token that isn't there is not found.
+    expect(await (await request("PUT", `/v1/account/publish-tokens/${id}/name`, { name: "Mine now" }, other)).json()).toMatchObject({ reason: "not-found" });
+    expect((await request("PUT", "/v1/account/publish-tokens/nope/name", { name: "x" }, token)).status).toBe(404);
+    expect((await request("PUT", `/v1/account/publish-tokens/${id}/name`, { name: "x" })).status).toBe(401);
+    expect(await (await request("GET", "/v1/account/developer", undefined, token)).json()).toMatchObject({ publishTokens: [{ id, name: "Release build" }] });
+  });
+});
+
+describe("notes on publisher keys", () => {
+  it("are the owner's own: set, changed and cleared, trimmed and limited, never shown to anyone else", async () => {
+    const { request, signIn, store } = setup();
+    const token = await signIn("dev@example.com");
+    const other = await signIn("other@example.com");
+    await request("PUT", "/v1/account/developer", { name: "example-dev" }, token);
+    await request("PUT", "/v1/account/developer", { name: "other-dev" }, other);
+    const code = async () => ((await (await request("POST", "/v1/account/keys/code", {}, token)).json()) as { code: string }).code;
+    const key = pair();
+    const second = pair();
+    await request("POST", "/v1/publishers/link", key.body(await code()));
+    await request("POST", "/v1/publishers/link", second.body(await code()));
+    const read = async () => ((await (await request("GET", "/v1/account/developer", undefined, token)).json()) as { keys: { fingerprint: string; note: string | null }[] }).keys;
+    const note = (fingerprint: string, body: unknown, bearer = token) => request("PUT", `/v1/account/keys/${fingerprint}/note`, body, bearer);
+
+    // A key has no note until one is set.
+    expect((await read()).map((item) => item.note)).toEqual([null, null]);
+
+    const set = await note(key.fingerprint, { note: "  Nik's laptop " });
+    expect(set.status).toBe(200);
+    expect(((await set.json()) as { keys: { fingerprint: string; note: string | null }[] }).keys).toEqual([
+      { fingerprint: key.fingerprint, linkedAt: "2026-10-17T12:00:00.000Z", note: "Nik's laptop" },
+      { fingerprint: second.fingerprint, linkedAt: "2026-10-17T12:00:00.000Z", note: null },
+    ]);
+    // Changing it again; linking the same key again keeps it.
+    expect((await note(key.fingerprint, { note: "GitHub Actions" })).status).toBe(200);
+    await request("POST", "/v1/publishers/link", key.body(await code()));
+    expect((await read())[0]!.note).toBe("GitHub Actions");
+
+    // Empty or null clears it; the limit is 60.
+    expect((await note(key.fingerprint, { note: "   " })).status).toBe(200);
+    expect((await read())[0]!.note).toBeNull();
+    expect((await note(key.fingerprint, { note: "a".repeat(60) })).status).toBe(200);
+    expect((await note(key.fingerprint, { note: null })).status).toBe(200);
+    expect((await read())[0]!.note).toBeNull();
+    for (const bad of [{ note: "a".repeat(61) }, { note: 7 }, { note: "tab\there" }, { note: ["x"] }]) {
+      expect(await (await note(key.fingerprint, bad)).json()).toMatchObject({ reason: "bad-request" });
+    }
+
+    // Another account's key (or none) is not found, and the note never reaches the public lookup.
+    await note(second.fingerprint, { note: "Private" });
+    expect(await (await note(second.fingerprint, { note: "Mine" }, other)).json()).toMatchObject({ reason: "not-found" });
+    expect((await note("0".repeat(32), { note: "x" })).status).toBe(404);
+    expect((await request("PUT", `/v1/account/keys/${key.fingerprint}/note`, { note: "x" })).status).toBe(401);
+    expect(await (await request("GET", `/v1/publishers/${second.fingerprint}`)).json()).toEqual({ name: "example-dev" });
+    expect(store.keys(store.accountOfKey(second.fingerprint)!).find((item) => item.fingerprint === second.fingerprint)!.note).toBe("Private");
+  });
+
+  it("read as null on a key that never had one, and can't be set on a key that isn't there", () => {
+    const store = new AccountStore(":memory:");
+    const account = store.createAccount({ email: "old@example.com" }, Date.now());
+    store.linkKey(account.id, "a".repeat(32), "key", Date.now());
+    expect(store.keys(account.id)).toEqual([{ fingerprint: "a".repeat(32), linkedAt: expect.any(String), note: null }]);
+    expect(store.setKeyNote(account.id, "b".repeat(32), "x")).toBe(false);
+  });
 });
 
 describe("linking a publisher key", () => {

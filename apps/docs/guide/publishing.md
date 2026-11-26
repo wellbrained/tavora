@@ -138,7 +138,9 @@ An account can publish 10 versions a day and keep 200 MB of zips in the catalog.
 A build server can publish too, with the `@tavora/pack` command line tool. It needs two secrets from **Settings > Developer > Publishing > Publisher keys and CI**:
 
 1. **Your key as a file.** Press **Export** next to the key and save it. Pass it with `--key <file>`.
-2. **A publish token.** Type a name (like "GitHub Actions") and press **Make a token**. Copy it right away: Tavora shows it only once. Put it in the `TAVORA_PUBLISH_TOKEN` environment variable.
+2. **A publish token.** Type a name under **Token name** (like "GitHub Actions") and press **Make a publish token**. Copy it right away: Tavora shows it only once. Put it in the `TAVORA_PUBLISH_TOKEN` environment variable. **Rename** next to a token changes its name later.
+
+Each key in that list can carry a short note, so you can tell them apart: press **Add note** (or **Edit note**) under the key and say what it is for, like "Laptop" or "GitHub Actions". Save it empty to remove it. Only you see your notes. Tavora's own key shows **Tavora official** instead.
 
 ::: code-group
 

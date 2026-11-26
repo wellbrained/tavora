@@ -1,18 +1,19 @@
 <script setup lang="ts">
-import { Copy, Plus, Trash2 } from "@lucide/vue";
+import { Copy, Pencil, Plus, Trash2 } from "@lucide/vue";
 // Settings > Publishing, once signed in: the public developer name and the id prefixes the account holds, and how
 // users reach the developer about modules without a choice of their own. Saving the name the first time also claims its prefix and makes the
 // publisher key (host.ts), so publishing from Tavora needs nothing more here; the keys (Export, Lost
 // it?, Unlink), key files, link codes and publish tokens are folded away under Publisher keys and CI.
 import { computed, ref, watch } from "vue";
 import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
+import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Field } from "@tavora/official-ui/components/ui/field";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import type { AccountPublishToken, HostAction } from "../../../shared/host-api";
 import { suggestPrefix } from "../../../shared/id-prefix";
 import type { Contact } from "../../../shared/conversations";
-import { account, act, confirmAction, developerKeys, inbox, showToast, submitAction } from "../../host";
+import { account, act, confirmAction, developerKeys, inbox, prompt, showToast, submitAction } from "../../host";
 import { formatDate, t } from "../../i18n";
 import SettingGroup from "../settings/SettingGroup.vue";
 import SettingRow from "../settings/SettingRow.vue";
@@ -68,11 +69,27 @@ const rows = computed(() => {
   const paused = view.value?.pausedKeys ?? [];
   const known = new Set([...linked, ...paused].map((key) => key.fingerprint));
   return [
-    ...linked.map((key) => ({ fingerprint: key.fingerprint, linkedAt: key.linkedAt, kept: kept.has(key.fingerprint), paused: false })),
-    ...paused.map((key) => ({ fingerprint: key.fingerprint, linkedAt: key.linkedAt, kept: kept.has(key.fingerprint), paused: true })),
-    ...[...kept].filter((fingerprint) => !known.has(fingerprint)).map((fingerprint) => ({ fingerprint, linkedAt: null, kept: true, paused: false })),
+    ...linked.map((key) => ({ fingerprint: key.fingerprint, linkedAt: key.linkedAt, note: key.note ?? null, official: key.official === true, kept: kept.has(key.fingerprint), paused: false })),
+    ...paused.map((key) => ({ fingerprint: key.fingerprint, linkedAt: key.linkedAt, note: key.note ?? null, official: key.official === true, kept: kept.has(key.fingerprint), paused: true })),
+    ...[...kept].filter((fingerprint) => !known.has(fingerprint)).map((fingerprint) => ({ fingerprint, linkedAt: null, note: null, official: false, kept: true, paused: false })),
   ];
 });
+type KeyRow = (typeof rows.value)[number];
+
+/** The owner's note on a key (what it is for): one short line, saved with the account. Empty clears it. */
+function editNote(row: KeyRow) {
+  prompt({
+    title: t("account.developer.noteTitle"),
+    label: t("account.developer.noteLabel"),
+    value: row.note ?? "",
+    maxLength: 60,
+    confirm: t("common.save"),
+    submit: async (note) => {
+      const result = await act({ type: "account-key-note", fingerprint: row.fingerprint, note: note.trim() }, { quiet: true });
+      return result.ok ? null : result.error;
+    },
+  });
+}
 /** Emails about your publishing the service couldn't send lately: you check those versions were yours. */
 const unsent = computed(() => view.value?.unsentNotices ?? []);
 const UNSENT_TEXT = { published: "account.developer.unsentPublished", waiting: "account.developer.unsentWaiting", withdrawn: "account.developer.unsentWithdrawn" } as const;
@@ -147,6 +164,20 @@ async function makeToken() {
 }
 async function copyToken() {
   if ((await act({ type: "account-publish-token-copy" })).ok) showToast(t("account.developer.tokenCopied"));
+}
+function renameToken(token: AccountPublishToken) {
+  prompt({
+    title: t("account.developer.tokenRenameTitle"),
+    label: t("account.developer.tokenName"),
+    value: token.name,
+    maxLength: 40,
+    confirm: t("common.save"),
+    submit: async (name) => {
+      if (!name.trim()) return t("error.name.empty");
+      const result = await act({ type: "account-publish-token-rename", id: token.id, name: name.trim() }, { quiet: true });
+      return result.ok ? null : result.error;
+    },
+  });
 }
 function removeToken(token: AccountPublishToken) {
   confirmAction({
@@ -230,7 +261,27 @@ function removeToken(token: AccountPublishToken) {
         <AnimatedList tag="ul" v-else class="mt-2" data-testid="developer-keys-list">
           <li v-for="row in rows" :key="row.fingerprint" :data-testid="`developer-key-${row.fingerprint}`">
             <div class="flex min-h-10 items-center gap-3">
-              <span class="flex-1 font-mono text-sm" :title="row.fingerprint">{{ row.fingerprint.slice(0, 16) }}…</span>
+              <div class="min-w-0 flex-1 py-1">
+                <div class="flex items-center gap-2">
+                  <span class="font-mono text-sm" :title="row.fingerprint">{{ row.fingerprint.slice(0, 16) }}…</span>
+                  <Badge v-if="row.official" variant="outline" :data-testid="`developer-key-official-${row.fingerprint}`">{{ t("account.developer.officialKey") }}</Badge>
+                </div>
+                <!-- A note is the owner's own, kept with the account: only a key the service knows can have one. -->
+                <div v-if="row.linkedAt && !row.official" class="flex items-center gap-1" :data-testid="`developer-key-note-${row.fingerprint}`">
+                  <span v-if="row.note" class="text-muted-foreground min-w-0 truncate text-sm" :title="row.note">{{ row.note }}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    :class="row.note ? '' : '-ml-2'"
+                    :disabled="busy"
+                    :aria-label="t(row.note ? 'account.developer.noteEditLabel' : 'account.developer.noteAddLabel', { key: row.fingerprint.slice(0, 16) })"
+                    data-testid="developer-key-note-edit"
+                    @click="editNote(row)"
+                  >
+                    <Pencil v-if="row.note" /><Plus v-else />{{ t(row.note ? "account.developer.noteEdit" : "account.developer.noteAdd") }}
+                  </Button>
+                </div>
+              </div>
               <!-- Paused: linked again with the key itself, or, when it is lost, replaced like a linked key. -->
               <template v-if="row.paused">
                 <span class="text-sm" :data-testid="`account-key-paused-${row.fingerprint}`">{{ t("account.developer.paused") }}</span>
@@ -328,14 +379,21 @@ function removeToken(token: AccountPublishToken) {
                   : t("account.developer.tokenUntil", { date: formatDate(token.expiresAt) })
               }}
             </span>
+            <Button variant="ghost" size="sm" :disabled="busy" :aria-label="t('account.developer.tokenRenameLabel', { name: token.name })" :data-testid="`publish-token-rename-${token.id}`" @click="renameToken(token)">
+              <Pencil />{{ t("account.developer.tokenRename") }}
+            </Button>
             <Button variant="ghost" size="sm" :disabled="busy" :aria-label="t('account.developer.tokenRemoveLabel', { name: token.name })" @click="removeToken(token)">
               <Trash2 />{{ t("account.developer.tokenRemove") }}
             </Button>
           </li>
         </AnimatedList>
-        <form class="mt-3 flex items-center gap-2" @submit.prevent="makeToken">
-          <Input v-model="tokenName" class="max-w-60" maxlength="40" autocomplete="off" spellcheck="false" :aria-label="t('account.developer.tokenName')" :placeholder="t('account.developer.tokenPlaceholder')" data-testid="publish-token-name" />
-          <Button type="submit" variant="secondary" :disabled="busy || !view?.developer || !tokenName.trim()" data-testid="publish-token-create">{{ t("account.developer.tokenCreate") }}</Button>
+        <form class="mt-3" @submit.prevent="makeToken">
+          <Field :label="t('account.developer.tokenName')">
+            <div class="flex gap-2">
+              <Input v-model="tokenName" class="max-w-60" maxlength="40" autocomplete="off" spellcheck="false" :placeholder="t('account.developer.tokenPlaceholder')" data-testid="publish-token-name" />
+              <Button type="submit" variant="secondary" :disabled="busy || !view?.developer || !tokenName.trim()" data-testid="publish-token-create">{{ t("account.developer.tokenCreate") }}</Button>
+            </div>
+          </Field>
         </form>
       </div>
     </div>
