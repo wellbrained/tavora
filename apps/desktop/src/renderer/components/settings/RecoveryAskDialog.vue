@@ -51,7 +51,7 @@ watch(
 </script>
 
 <template>
-  <ModalDialog :title="t('recoveryAsk.title')" :description="t('recoveryAsk.text')" class="sm:max-w-[480px]" :icon="KeyRound" testid="recovery-ask" @close="close">
+  <ModalDialog :title="t('recoveryAsk.title')" :description="t('recoveryAsk.text')" size="lg" :icon="KeyRound" testid="recovery-ask" @close="close">
     <div class="flex flex-col gap-4">
     <PairingAsk />
     <form class="flex flex-col gap-2" @submit.prevent="keyText.trim() && enter()">

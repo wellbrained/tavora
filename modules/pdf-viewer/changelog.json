@@ -1,9 +1,23 @@
 [
   {
-    "version": "0.1.68",
+    "version": "0.1.70",
     "date": "2026-11-26",
     "notes": [
       "The toolbar and the search bar look like the other modules' toolbars, and the arrow keys move along them."
+    ]
+  },
+  {
+    "version": "0.1.69",
+    "date": "2026-11-26",
+    "notes": [
+      "The shared controls gained cards and checkbox rows."
+    ]
+  },
+  {
+    "version": "0.1.68",
+    "date": "2026-11-26",
+    "notes": [
+      "Dialogs come in four set widths, so they line up everywhere."
     ]
   },
   {

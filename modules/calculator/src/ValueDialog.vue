@@ -38,7 +38,7 @@ function submit() {
 
 <template>
   <Dialog :open="true" @update:open="(open: boolean) => !open && emit('cancel')">
-    <DialogContent class="top-[12vh] translate-y-0 sm:max-w-[420px]" data-testid="value-dialog">
+    <DialogContent anchor="top" data-testid="value-dialog">
       <DialogHeader
         :icon="renaming !== undefined ? Pencil : BookmarkPlus"
         :title="renaming !== undefined ? t('values.renameTitle', { name: renaming }) : t('values.saveTitle')"

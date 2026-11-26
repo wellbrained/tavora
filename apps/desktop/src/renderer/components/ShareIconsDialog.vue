@@ -141,7 +141,7 @@ async function share() {
     testid="share-icons-dialog"
     :status="status"
     :busy="busy"
-    class="sm:max-w-[460px]"
+    size="md"
     @close="dialog = null"
   >
     <div class="flex flex-col gap-4">

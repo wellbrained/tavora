@@ -9,7 +9,7 @@ const reading = ref(false);
 <template>
   <Button variant="secondary" data-testid="long-dialog" @click="reading = true">Long dialog…</Button>
   <Dialog v-model:open="reading">
-    <DialogScrollContent class="sm:max-w-[420px]">
+    <DialogScrollContent>
       <DialogHeader title="Patch notes" description="A long text pushes the dialog past the window; the page scrolls." />
       <p v-for="n in 14" :key="n" class="text-muted-foreground text-sm">Line {{ n }}: a few friendly words about what changed, so there is something to scroll past.</p>
       <DialogFooter>

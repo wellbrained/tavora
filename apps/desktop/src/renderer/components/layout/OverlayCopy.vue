@@ -50,7 +50,7 @@ function copy(mode: "replace" | "add") {
     </DropdownMenuContent>
   </DropdownMenu>
   <Dialog :open="target !== null" @update:open="(open: boolean) => !open && (asking = null)">
-    <DialogContent v-if="target" class="top-[12vh] translate-y-0 gap-4 sm:max-w-[460px]" data-testid="layout-copy-dialog" :show-close-button="false">
+    <DialogContent v-if="target" anchor="top" class="gap-4" data-testid="layout-copy-dialog" :show-close-button="false">
       <DialogHeader>
         <DialogTitle class="text-lg">{{ t("overlays.copy.ask", { game: target.name, count: target.frames }) }}</DialogTitle>
         <DialogDescription>{{ t("overlays.copy.askText") }}</DialogDescription>

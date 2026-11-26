@@ -1,9 +1,24 @@
 [
   {
-    "version": "0.1.98",
+    "version": "0.1.100",
     "date": "2026-11-26",
     "notes": [
       "New examples: Tool strip and Floating toolbar, on the Buttons page."
+    ]
+  },
+  {
+    "version": "0.1.99",
+    "date": "2026-11-26",
+    "notes": [
+      "New Cards page: Card, choice cards and check cards.",
+      "The Checks page has a checkbox field."
+    ]
+  },
+  {
+    "version": "0.1.98",
+    "date": "2026-11-26",
+    "notes": [
+      "Dialogs come in four set widths, so they line up everywhere."
     ]
   },
   {
