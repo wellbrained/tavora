@@ -413,9 +413,10 @@ test("to-dos: groups, sub-to-dos, editing in place, objectives and finished task
       const input = ${q("description-input")};
       input.value = "Behind the waterfall";
       input.dispatchEvent(new Event("input", { bubbles: true }));
-      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, bubbles: true, cancelable: true }));
     })()`,
   );
+  // Its own turn, as a key press is: the kit field passes the text on a tick after the input event.
+  await inModule(app, TODOS, `${q("description-input")}.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, bubbles: true, cancelable: true }))`);
   await expectModuleText(app, TODOS, "task-details-preview", "Behind the waterfall");
 
   // Pinned tasks show up as current objectives.
