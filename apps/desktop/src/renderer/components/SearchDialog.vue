@@ -309,7 +309,7 @@ const activeId = computed(() => {
 <template>
   <Dialog v-model:open="searchOpen">
     <DialogContent
-      class="bg-card top-[12vh] w-[min(560px,calc(100vw-48px))] max-w-none translate-y-0 gap-0 overflow-hidden p-0 sm:max-w-none"
+      size="lg" anchor="top" class="bg-card gap-0 overflow-hidden p-0"
       data-testid="search"
       instant
       :show-close-button="false"

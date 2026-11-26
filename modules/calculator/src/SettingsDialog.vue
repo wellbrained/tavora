@@ -30,7 +30,7 @@ const groups = computed(() => [{ items: [{ id: PAGE, label: t("options.title"), 
     <SettingsRows v-model:decimals="decimals" v-model:history-length="historyLength" :short="short" @update:short="(on: boolean) => emit('update:short', on)" />
   </ModuleSettings>
   <Dialog v-else :open="true" @update:open="(open: boolean) => !open && emit('close')">
-    <DialogContent class="h-[min(32rem,calc(100vh-2rem))] gap-0 overflow-hidden p-0 sm:max-w-[420px]" data-testid="settings-dialog">
+    <DialogContent class="h-[min(32rem,calc(100vh-2rem))] gap-0 overflow-hidden p-0" data-testid="settings-dialog">
       <DialogTitle class="sr-only">{{ t("options.title") }}</DialogTitle>
       <DialogDescription class="sr-only">{{ t("options.about") }}</DialogDescription>
       <ModuleSettings :page="PAGE" :groups="groups" :label="t('options.title')" :reset="reset" :saved-at="savedAt">

@@ -24,7 +24,7 @@ function cancel() {
 <template>
   <Dialog :open="open" @update:open="(value: boolean) => !value && cancel()">
     <DialogContent
-      class="top-[12vh] translate-y-0 sm:max-w-[420px]"
+      anchor="top"
       :busy="busy"
       data-testid="confirm"
     >

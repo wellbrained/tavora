@@ -143,7 +143,7 @@ function browse() {
 </script>
 
 <template>
-  <ModalDialog v-if="view" :title="title" :icon="Upload" class="sm:max-w-[560px]" testid="publish-review" @close="close">
+  <ModalDialog v-if="view" :title="title" :icon="Upload" size="lg" testid="publish-review" @close="close">
     <!-- Published. -->
     <template v-if="view.status === 'published'">
       <p class="text-muted-foreground text-sm" data-testid="publish-done">{{ t(waiting ? "publish.waitingText" : "publish.doneText") }}</p>

@@ -277,6 +277,7 @@ each pattern.
 - **Header**: `<DialogHeader :icon="Share2" title="…" description="…" />`. The icon (Lucide) and the one-line
   description are optional; the close X on the right comes with it. `ConfirmDialog` and `NameDialog` take the same
   `icon`; `ConfirmDialog` picks one from its tone if you give none.
+- **Size**: `size` on `DialogContent` and `DialogScrollContent`: `sm` 360, `md` 420 (the default, leave it out), `lg` 560, `xl` 760. Pick the nearest one and never set a width of your own (`sm:max-w-[…]`, `w-[min(…)]`, `max-w-none`). `anchor="top"` puts a dialog near the top of the window instead of the middle: for a dialog whose height changes (a list, a search, steps), so the title stays put; it also keeps the dialog inside the window. `DialogContent` already caps its height and scrolls, so there is no `max-h-[…] overflow-y-auto` to add. Playground: Actions > Dialogs > Dialog sizes.
 - **Layout**: 24 px padding, no line above the footer or under the header, and the same gap from header to content as
   from content to footer. Put the content in one element so that holds. Don't add your own `gap-*` to `DialogContent`.
 - **Footer**: `<DialogFooter>` with `DialogButton`, the action last. A button that does something (Save, Import,

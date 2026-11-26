@@ -86,7 +86,7 @@ const status = (game: SteamGameView) => (game.status === "trash" ? t("steamImpor
     :description="t('steamImport.description')"
     :icon="Gamepad2"
     testid="steam-import-dialog"
-    class="sm:max-w-[500px]"
+    size="lg"
     :status="task.state.value.status"
     @close="dialog = null"
   >

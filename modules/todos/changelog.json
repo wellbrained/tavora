@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.2.72",
+    "date": "2026-11-26",
+    "notes": [
+      "Dialogs come in four set widths, so they line up everywhere."
+    ]
+  },
+  {
     "version": "0.2.71",
     "date": "2026-11-26",
     "notes": [
