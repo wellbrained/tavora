@@ -52,7 +52,7 @@ const tip = (words: string) => (props.label && props.label.trim().toLowerCase() 
       :title="tip(shown())"
       :aria-label="label || undefined"
       v-bind="soft.attrs()"
-      :data-disabled="joined ? undefined : soft.attrs()['data-disabled']"
+      :data-disabled="joined && soft.soft() ? undefined : soft.attrs()['data-disabled'] ?? (soft.disabled() ? '' : undefined)"
       :disabled="!!soft.disabled()"
       :class="cn(toggleVariants({ variant, size, iconOnly: shown() === '' }), props.class)"
     >

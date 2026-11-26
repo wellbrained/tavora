@@ -111,6 +111,21 @@ describe("Toggle", () => {
   })
 })
 
+describe("Toggle attributes", () => {
+  it("passes its attributes and listeners to the button, and a plain disabled one is marked off", async () => {
+    let downs = 0
+    const root = await mount(() =>
+      h(Toggle, { label: "Pin", disabled: true, "data-testid": "pin", style: "left: 4px", onMousedown: () => downs++ }, () => h(Pin)),
+    )
+    const button = root.querySelector("[data-testid=pin]") as HTMLButtonElement
+    expect(button.style.left).toBe("4px")
+    expect(button.disabled).toBe(true)
+    expect(button.hasAttribute("data-disabled")).toBe(true)
+    button.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))
+    expect(downs).toBe(1)
+  })
+})
+
 describe("ToggleGroup", () => {
   it("joins outline buttons and keeps ghost ones apart", async () => {
     const root = await mount(() => [

@@ -35,10 +35,8 @@ const props = defineProps<{
 
 const running = computed(() => !props.close && (props.busy || props.loading))
 
-/** While busy, a press does nothing: the click never reaches a handler, a form or a dialog close around it. */
-function onPress(event: Event) {
-  if (running.value) stopSoft(event)
-}
+// While busy, a press does nothing: the click never reaches a handler, a form or a dialog close around it. The listener
+// is only there while busy (an extra click listener makes Vue drop a click on a button that appeared that millisecond).
 </script>
 
 <template>
@@ -50,9 +48,8 @@ function onPress(event: Event) {
     :busy-label="busyLabel"
     :data-dialog-button="close ? 'close' : 'action'"
     :type="close ? 'button' : undefined"
-    v-bind="running ? { 'aria-busy': 'true' } : {}"
+    v-bind="running ? { 'aria-busy': 'true', onClickCapture: stopSoft } : {}"
     :class="cn(close && '[&_svg]:hidden', running && 'cursor-progress', props.class)"
-    @click.capture="onPress"
   >
     <template v-if="!close">
       <LoaderCircle v-if="running" class="tavora-spin" aria-hidden="true" />
