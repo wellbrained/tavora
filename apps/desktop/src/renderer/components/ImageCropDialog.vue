@@ -175,7 +175,7 @@ function onOpenChange(value: boolean) {
 
 <template>
   <Dialog :open="open" @update:open="onOpenChange">
-    <DialogContent class="sm:max-w-[360px]" data-testid="crop-dialog">
+    <DialogContent size="sm" data-testid="crop-dialog">
       <DialogHeader :icon="Crop" :title="title" :description="round ? t('crop.help.round') : t('crop.help.square')" />
 
       <div

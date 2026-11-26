@@ -1,9 +1,23 @@
 [
   {
-    "version": "0.2.72",
+    "version": "0.2.74",
     "date": "2026-11-26",
     "notes": [
       "New hover rows in the shared controls."
+    ]
+  },
+  {
+    "version": "0.2.73",
+    "date": "2026-11-26",
+    "notes": [
+      "The shared controls gained cards and checkbox rows."
+    ]
+  },
+  {
+    "version": "0.2.72",
+    "date": "2026-11-26",
+    "notes": [
+      "Dialogs come in four set widths, so they line up everywhere."
     ]
   },
   {

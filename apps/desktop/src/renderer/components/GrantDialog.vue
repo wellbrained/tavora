@@ -181,7 +181,7 @@ async function allow() {
   <component
     :is="inPanel ? 'section' : ModalDialog"
     v-if="module"
-    v-bind="inPanel ? { class: 'flex w-full max-w-[460px] flex-col gap-4', 'aria-labelledby': titleId, 'data-testid': 'grant-question' } : { title, icon: ShieldCheck, class: 'sm:max-w-[480px]', testid: 'grant-dialog' }"
+    v-bind="inPanel ? { class: 'flex w-full max-w-[460px] flex-col gap-4', 'aria-labelledby': titleId, 'data-testid': 'grant-question' } : { title, icon: ShieldCheck, size: 'lg', testid: 'grant-dialog' }"
     @close="close()"
   >
     <h2 v-if="inPanel" :id="titleId" class="text-lg font-semibold">{{ title }}</h2>

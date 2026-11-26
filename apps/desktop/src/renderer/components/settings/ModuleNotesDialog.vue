@@ -16,7 +16,7 @@ const emit = defineEmits<{ close: [] }>();
 <template>
   <Dialog :open="true" @update:open="(open: boolean) => !open && emit('close')">
     <DialogContent
-      class="bg-card flex max-h-[calc(100vh-48px)] w-[min(640px,calc(100vw-48px))] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none"
+      size="xl" class="bg-card flex max-h-[calc(100vh-48px)] flex-col gap-0 overflow-hidden p-0"
       :data-testid="`module-notes-dialog-${module.id}`"
       :show-close-button="false"
       :aria-describedby="undefined"

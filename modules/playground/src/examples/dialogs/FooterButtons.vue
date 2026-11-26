@@ -19,7 +19,7 @@ const tidying = ref(false);
     <Button variant="secondary" @click="tidying = true">Only Done…</Button>
   </div>
   <Dialog v-model:open="exporting">
-    <DialogContent class="top-[12vh] translate-y-0 sm:max-w-[420px]">
+    <DialogContent anchor="top">
       <DialogHeader :icon="Share2" title="Share this note" description="Pick how it leaves Tavora." />
       <div class="flex flex-col gap-2">
         <Input model-value="https://tavora.app/n/waystone" readonly aria-label="Link" />
@@ -31,7 +31,7 @@ const tidying = ref(false);
     </DialogContent>
   </Dialog>
   <Dialog v-model:open="importing">
-    <DialogContent class="top-[12vh] translate-y-0 sm:max-w-[420px]">
+    <DialogContent anchor="top">
       <DialogHeader :icon="Download" title="Import a build" description="Paste a build link or open a saved file." />
       <Input placeholder="https://" aria-label="Build link" />
       <DialogFooter>
@@ -41,7 +41,7 @@ const tidying = ref(false);
     </DialogContent>
   </Dialog>
   <Dialog v-model:open="tidying">
-    <DialogContent class="top-[12vh] translate-y-0 sm:max-w-[420px]">
+    <DialogContent anchor="top">
       <DialogHeader :icon="SlidersHorizontal" title="Settings" description="Changes save as you make them." />
       <div class="text-muted-foreground flex flex-col gap-1 text-sm">
         <span>Nothing to confirm here.</span>
